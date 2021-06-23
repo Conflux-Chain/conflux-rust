@@ -4,6 +4,7 @@
 
 pub mod block_retrieval;
 pub mod block_retrieval_response;
+pub mod consensus_msg;
 pub mod epoch_change;
 pub mod epoch_retrieval;
 pub mod proposal;

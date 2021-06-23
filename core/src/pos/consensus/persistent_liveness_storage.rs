@@ -14,7 +14,9 @@ use diem_config::config::NodeConfig;
 use diem_crypto::HashValue;
 use diem_logger::prelude::*;
 use diem_types::{
-    block_info::Round, epoch_change::EpochChangeProof, ledger_info::LedgerInfo,
+    block_info::{PivotBlockDecision, Round},
+    epoch_change::EpochChangeProof,
+    ledger_info::LedgerInfo,
     transaction::Version,
 };
 use executor_types::ExecutedTrees;
@@ -141,18 +143,21 @@ pub struct RootMetadata {
     pub accu_hash: HashValue,
     pub frozen_root_hashes: Vec<HashValue>,
     pub num_leaves: Version,
+    pub pivot_decision: Option<PivotBlockDecision>,
 }
 
 impl RootMetadata {
     pub fn new(
         num_leaves: u64, accu_hash: HashValue,
         frozen_root_hashes: Vec<HashValue>,
+        pivot_decision: Option<PivotBlockDecision>,
     ) -> Self
     {
         Self {
             num_leaves,
             accu_hash,
             frozen_root_hashes,
+            pivot_decision,
         }
     }
 
@@ -160,7 +165,12 @@ impl RootMetadata {
 
     #[cfg(any(test, feature = "fuzzing"))]
     pub fn new_empty() -> Self {
-        Self::new(0, *diem_crypto::hash::ACCUMULATOR_PLACEHOLDER_HASH, vec![])
+        Self::new(
+            0,
+            *diem_crypto::hash::ACCUMULATOR_PLACEHOLDER_HASH,
+            vec![],
+            None,
+        )
     }
 }
 
@@ -366,6 +376,7 @@ impl PersistentLivenessStorage for StorageWriteProxy {
             .get_startup_info()
             .expect("unable to read ledger info from storage")
             .expect("startup info is None");
+        diem_debug!("startup_info={:?}", startup_info);
         let ledger_recovery_data = LedgerRecoveryData::new(
             startup_info.latest_ledger_info.ledger_info().clone(),
         );
@@ -385,6 +396,11 @@ impl PersistentLivenessStorage for StorageWriteProxy {
                 root_executed_trees.txn_accumulator().num_leaves(),
                 root_executed_trees.state_id(),
                 frozen_root_hashes,
+                startup_info
+                    .latest_ledger_info
+                    .ledger_info()
+                    .pivot_decision()
+                    .cloned(),
             ),
             quorum_certs,
             highest_timeout_certificate,

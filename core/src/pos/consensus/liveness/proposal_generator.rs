@@ -17,6 +17,7 @@ use crate::pos::pow_handler::PowHandler;
 use cfx_types::H256;
 use diem_crypto::PrivateKey;
 use diem_infallible::Mutex;
+use diem_logger::debug as diem_debug;
 use diem_types::{
     block_info::PivotBlockDecision,
     chain_id::ChainId,
@@ -162,6 +163,43 @@ impl ProposalGenerator {
                 .pull_txns(self.max_block_size, exclude_payload)
                 .await
                 .context("Fail to retrieve txn")?;
+            diem_debug!(
+                "generate_proposal: Pull {} transactions",
+                payload.len()
+            );
+
+            let parent_block = if let Some(p) = pending_blocks.last() {
+                p.clone()
+            } else {
+                self.block_store.root()
+            };
+
+            // FIXME(lpl): For now, sending default H256 will return the first
+            // pivot decision.
+            let parent_decision = parent_block
+                .block_info()
+                .pivot_decision()
+                .map(|d| d.block_hash)
+                .unwrap_or_default();
+            match self.pow_handler.next_pivot_decision(parent_decision).await {
+                Some((height, block_hash)) => {
+                    let pivot_decision =
+                        PivotBlockDecision { height, block_hash };
+                    let raw_tx = RawTransaction::new_pivot_decision(
+                        self.author,
+                        0,
+                        pivot_decision,
+                        ChainId::default(), // FIXME(lpl): Set chain id.
+                    );
+                    let signed_tx = raw_tx
+                        .sign(&self.private_key, self.public_key.clone())?
+                        .into_inner();
+                    payload.push(signed_tx);
+                }
+                None => {
+                    warn!("pos progress without new pivot decision");
+                }
+            }
 
             (payload, timestamp.as_micros() as u64)
         };

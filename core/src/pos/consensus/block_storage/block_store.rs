@@ -148,13 +148,13 @@ impl BlockStore {
             root_qc.certified_block().version(),
             root_metadata.version(),
         );
-        assert_eq!(
-            root_qc.certified_block().executed_state_id(),
-            root_metadata.accu_hash,
-            "root qc state id {} doesn't match committed trees {}",
-            root_qc.certified_block().executed_state_id(),
-            root_metadata.accu_hash,
-        );
+        // assert_eq!(
+        //     root_qc.certified_block().executed_state_id(),
+        //     root_metadata.accu_hash,
+        //     "root qc state id {} doesn't match committed trees {}",
+        //     root_qc.certified_block().executed_state_id(),
+        //     root_metadata.accu_hash,
+        // );
 
         let result = StateComputeResult::new(
             root_metadata.accu_hash,
@@ -165,10 +165,10 @@ impl BlockStore {
             None,                     /* epoch_state */
             vec![],                   /* compute_status */
             vec![],                   /* txn_infos */
-            // TODO(lpl): Should this be None?
-            None,
+            root_metadata.pivot_decision,
         );
 
+        diem_debug!("BlockStore root block result = {:?}", result);
         let executed_root_block = ExecutedBlock::new(
             root_block,
             // Create a dummy state_compute_result with necessary fields filled
@@ -325,6 +325,7 @@ impl BlockStore {
     pub fn execute_and_insert_block(
         &self, block: Block,
     ) -> anyhow::Result<Arc<ExecutedBlock>> {
+        diem_debug!("execute_and_insert_block: block={:?}", block.id());
         if let Some(existing_block) = self.get_block(block.id()) {
             return Ok(existing_block);
         }
@@ -480,26 +481,28 @@ impl BlockStore {
             .block_info()
             .pivot_decision()
             .cloned();
+        diem_debug!(
+            "post_process_state_compute_result: parent={:?} parent_pivot={:?}",
+            parent_block_id,
+            parent_pivot_decision
+        );
 
         if state_compute_result.pivot_decision().is_none()
             && parent_pivot_decision.is_some()
         {
-            // TODO(lpl): Verify blocks to ensure executed blocks have expected
-            // pivot decision tx.
+            // No pivot decision tx is included.
             state_compute_result
                 .update_pivot_decision(parent_pivot_decision.clone().unwrap());
         }
 
         if parent_pivot_decision.is_some()
-            && !futures::executor::block_on(
-                self.pow_handler.validate_proposal_pivot_decision(
-                    parent_pivot_decision.unwrap().block_hash,
-                    state_compute_result
-                        .pivot_decision()
-                        .as_ref()
-                        .unwrap()
-                        .block_hash,
-                ),
+            && !self.pow_handler.validate_proposal_pivot_decision(
+                parent_pivot_decision.unwrap().block_hash,
+                state_compute_result
+                    .pivot_decision()
+                    .as_ref()
+                    .unwrap()
+                    .block_hash,
             )
         {
             return Err(Error::InternalError {

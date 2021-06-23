@@ -373,11 +373,23 @@ where V: VMExecutor
             )
             .expect("Failed to update state tree.");
 
-        for ((vm_output, txn), (state_tree_hash, blobs)) in itertools::zip_eq(
-            itertools::zip_eq(vm_outputs.into_iter(), transactions.iter())
-                .take(transaction_count),
-            itertools::zip_eq(txn_state_roots, txn_blobs),
-        ) {
+        for ((vm_output, txn), (mut state_tree_hash, blobs)) in
+            itertools::zip_eq(
+                itertools::zip_eq(vm_outputs.into_iter(), transactions.iter())
+                    .take(transaction_count),
+                itertools::zip_eq(txn_state_roots, txn_blobs),
+            )
+        {
+            // Not genesis transactions.
+            diem_debug!(
+                "process_vm_outputs: {} {:?}",
+                parent_trees.txn_accumulator().version(),
+                state_tree_hash
+            );
+            if parent_trees.txn_accumulator().version() != 0 {
+                // TODO(lpl): Remove state tree.
+                state_tree_hash = Default::default();
+            }
             let event_tree = {
                 let event_hashes: Vec<_> =
                     vm_output.events().iter().map(CryptoHash::hash).collect();
@@ -476,7 +488,10 @@ where V: VMExecutor
                 format_err!("Association account does not exist")
             })??;*/
             Some(EpochState {
-                epoch: 0, //configuration.epoch(),
+                // TODO(lpl): This is only used for genesis, and after executing
+                // the genesis block, the epoch number should be
+                // increased from 0 to 1.
+                epoch: 1, //configuration.epoch(),
                 verifier: (&validator_set).into(),
             })
         } else {
@@ -923,6 +938,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
 
             let parent_accu = parent_block_executed_trees.txn_accumulator();
 
+            diem_debug!("parent leaves: {}", parent_accu.num_leaves());
             let state_compute_result = output.compute_result(
                 parent_accu.frozen_subtree_roots().clone(),
                 parent_accu.num_leaves(),
@@ -969,9 +985,10 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
             });
         }
 
-        if num_txns_in_li == num_persistent_txns {
-            return Ok(self.cache.committed_txns_and_events());
-        }
+        // FIXME(lpl): Double check.
+        // if num_txns_in_li == num_persistent_txns {
+        //     return Ok(self.cache.committed_txns_and_events());
+        // }
 
         // All transactions that need to go to storage. In the above example,
         // this means all the transactions in A, B and C whose status ==
@@ -1132,7 +1149,7 @@ pub fn process_write_set(
                 match transaction {
                     Transaction::GenesisTransaction(_) => (),
                     Transaction::BlockMetadata(_) => {
-                        bail!("Write set should be a subset of read set.")
+                        bail!("BlockMetadata: Write set should be a subset of read set.")
                     }
                     Transaction::UserTransaction(txn) => match txn.payload() {
                         TransactionPayload::Module(_)
@@ -1141,8 +1158,9 @@ pub fn process_write_set(
                         | TransactionPayload::Election(_)
                         | TransactionPayload::Retire(_)
                         | TransactionPayload::PivotDecision(_) => {
-                            bail!("Write set should be a subset of read set.")
+                            bail!("Write set should be a subset of read set: {:?}.", txn)
                         }
+                        TransactionPayload::PivotDecision(_) => continue,
                         TransactionPayload::WriteSet(_) => (),
                     },
                 }

@@ -241,6 +241,7 @@ impl DiemDB {
             TRANSACTION_ACCUMULATOR_CF_NAME,
             TRANSACTION_BY_ACCOUNT_CF_NAME,
             TRANSACTION_INFO_CF_NAME,
+            LEDGER_INFO_BY_BLOCK_CF_NAME,
         ]
     }
 
@@ -523,11 +524,22 @@ impl DiemDB {
             .iter()
             .map(|txn_to_commit| txn_to_commit.account_states().clone())
             .collect::<Vec<_>>();
-        let state_root_hashes = self.state_store.put_account_state_sets(
-            account_state_sets,
+        let state_root_hashes = if first_version == 0 {
+            // Genesis transactions.
+            self.state_store.put_account_state_sets(
+                account_state_sets,
+                first_version,
+                &mut cs,
+            )?
+        } else {
+            // TODO(lpl): Remove state tree.
+            vec![Default::default(); txns_to_commit.len()]
+        };
+        diem_debug!(
+            "save_transactions_impl: {} {:?}",
             first_version,
-            &mut cs,
-        )?;
+            state_root_hashes
+        );
 
         // Event updates. Gather event accumulator root hashes.
         let event_root_hashes =
@@ -567,11 +579,15 @@ impl DiemDB {
                 .collect::<Result<Vec<_>>>()?;
         assert_eq!(txn_infos.len(), txns_to_commit.len());
 
-        let new_root_hash = self.ledger_store.put_transaction_infos(
+        let mut new_root_hash = self.ledger_store.put_transaction_infos(
             first_version,
             &txn_infos,
             &mut cs,
         )?;
+        if first_version != 0 {
+            // TODO(lpl): Remove StateTree.
+            new_root_hash = Default::default();
+        };
 
         Ok(new_root_hash)
     }
@@ -983,14 +999,14 @@ impl DbWriter for DiemDB {
             // If expected ledger info is provided, verify result root hash and
             // save the ledger info.
             if let Some(x) = ledger_info_with_sigs {
-                let expected_root_hash =
-                    x.ledger_info().transaction_accumulator_hash();
-                ensure!(
-                    new_root_hash == expected_root_hash,
-                    "Root hash calculated doesn't match expected. {:?} vs {:?}",
-                    new_root_hash,
-                    expected_root_hash,
-                );
+                // let expected_root_hash =
+                //     x.ledger_info().transaction_accumulator_hash();
+                // ensure!(
+                //     new_root_hash == expected_root_hash,
+                //     "Root hash calculated doesn't match expected. {:?} vs
+                // {:?}",     new_root_hash,
+                //     expected_root_hash,
+                // );
 
                 self.ledger_store.put_ledger_info(x, &mut cs)?;
                 if let Some(pos_state) = pos_state {

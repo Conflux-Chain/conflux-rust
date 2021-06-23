@@ -1,6 +1,6 @@
 [package]
 description = "Conflux blockgen library"
-homepage = "http://www.conflux-chain.io"
+homepage = "https://www.confluxnetwork.org"
 license = "GPL-3.0"
 name = "blockgen"
 version = "0.1.0"

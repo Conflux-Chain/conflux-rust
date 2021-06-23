@@ -129,7 +129,9 @@ fn id_and_transactions_from_block(
     block: &Block,
 ) -> (HashValue, Vec<Transaction>) {
     let id = block.id();
-    let mut transactions = vec![Transaction::BlockMetadata(block.into())];
+    // TODO(lpl): Do we need BlockMetadata?
+    // let mut transactions = vec![Transaction::BlockMetadata(block.into())];
+    let mut transactions = vec![];
     transactions.extend(
         block
             .payload()

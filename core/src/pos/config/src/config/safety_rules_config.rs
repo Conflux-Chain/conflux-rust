@@ -5,6 +5,7 @@ use crate::{
     config::{LoggerConfig, SecureBackend},
     keys::ConfigKey,
 };
+use cfx_types::U256;
 use diem_crypto::Uniform;
 use diem_types::{
     network_address::NetworkAddress,
@@ -32,7 +33,8 @@ pub struct SafetyRulesConfig {
     pub network_timeout_ms: u64,
     pub enable_cached_safety_data: bool,
 
-    pub vrf_private_key: Option<ConsensusVRFPrivateKey>,
+    pub vrf_private_key: Option<ConfigKey<ConsensusVRFPrivateKey>>,
+    pub vrf_proposal_threshold: U256,
 }
 
 impl Default for SafetyRulesConfig {
@@ -48,6 +50,7 @@ impl Default for SafetyRulesConfig {
             network_timeout_ms: 30_000,
             enable_cached_safety_data: true,
             vrf_private_key: None,
+            vrf_proposal_threshold: U256::MAX,
         }
     }
 }

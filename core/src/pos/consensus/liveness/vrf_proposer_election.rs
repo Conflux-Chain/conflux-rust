@@ -7,30 +7,35 @@ use consensus_types::common::{Author, Round};
 use cfx_types::U256;
 use consensus_types::block::{Block, VRF_SEED};
 use diem_crypto::{VRFPrivateKey, VRFProof};
-use diem_types::validator_config::ConsensusVRFPrivateKey;
+use diem_logger::debug as diem_debug;
+use diem_types::{
+    account_address::AccountAddress, validator_config::ConsensusVRFPrivateKey,
+};
 use parking_lot::Mutex;
 use std::collections::HashMap;
-
-/// FIXME(lpl): Set by validator count.
-pub const PROPOSAL_THRESHOLD: U256 = U256::MAX;
 
 /// The round proposer maps a round to author
 pub struct VrfProposer {
     author: Author,
     vrf_private_key: ConsensusVRFPrivateKey,
 
+    proposal_threshold: U256,
+
     current_round: Mutex<Round>,
     current_seed: Mutex<Vec<u8>>,
-    proposal_candidates: Mutex<Vec<Block>>,
+    proposal_candidates: Mutex<HashMap<AccountAddress, Block>>,
 }
 
 impl VrfProposer {
     pub fn new(
         author: Author, vrf_private_key: ConsensusVRFPrivateKey,
-    ) -> Self {
+        proposal_threshold: U256,
+    ) -> Self
+    {
         Self {
             author,
             vrf_private_key,
+            proposal_threshold,
             current_round: Mutex::new(0),
             current_seed: Mutex::new(VRF_SEED.to_vec()),
             proposal_candidates: Default::default(),
@@ -62,13 +67,13 @@ impl ProposerElection for VrfProposer {
             .to_hash()
             .unwrap();
         let vrf_number = U256::from_big_endian(vrf_output.as_ref());
-        vrf_number < PROPOSAL_THRESHOLD
+        vrf_number <= self.proposal_threshold
     }
 
     fn is_valid_proposal(&self, block: &Block) -> bool {
         let vrf_number =
             block.vrf_proof().unwrap().to_hash().unwrap().to_u256();
-        vrf_number <= PROPOSAL_THRESHOLD
+        vrf_number <= self.proposal_threshold
     }
 
     fn is_random_election(&self) -> bool { true }
@@ -77,8 +82,10 @@ impl ProposerElection for VrfProposer {
         if self.is_valid_proposal(&block)
             && block.round() == *self.current_round.lock()
         {
-            self.proposal_candidates.lock().push(block);
-            true
+            self.proposal_candidates
+                .lock()
+                .insert(block.author().unwrap(), block)
+                .is_none()
         } else {
             false
         }
@@ -88,7 +95,7 @@ impl ProposerElection for VrfProposer {
     fn choose_proposal_to_vote(&self) -> Option<Block> {
         let mut chosen_proposal = None;
         let mut min_vrf_number = U256::MAX;
-        for b in &*self.proposal_candidates.lock() {
+        for (_, b) in &*self.proposal_candidates.lock() {
             let vrf_number =
                 b.vrf_proof().unwrap().to_hash().unwrap().to_u256();
             if vrf_number < min_vrf_number {
@@ -96,6 +103,7 @@ impl ProposerElection for VrfProposer {
                 min_vrf_number = vrf_number
             }
         }
+        diem_debug!("choose_proposal_to_vote: {:?}", chosen_proposal);
         chosen_proposal
     }
 

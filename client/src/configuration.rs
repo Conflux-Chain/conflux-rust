@@ -31,6 +31,7 @@ use cfxcore::{
     consensus_parameters::*,
     light_protocol::LightNodeConfiguration,
     machine::Machine,
+    pos::pow_handler::POS_TERM_EPOCHS,
     spec::CommonParams,
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
@@ -152,11 +153,14 @@ build_config! {
         // Network section.
         (jsonrpc_local_tcp_port, (Option<u16>), None)
         (jsonrpc_local_http_port, (Option<u16>), None)
+        (jsonrpc_local_ws_port, (Option<u16>), None)
         (jsonrpc_ws_port, (Option<u16>), None)
         (jsonrpc_tcp_port, (Option<u16>), None)
         (jsonrpc_http_port, (Option<u16>), None)
+        (jsonrpc_http_threads, (Option<usize>), None)
         (jsonrpc_cors, (Option<String>), None)
         (jsonrpc_http_keep_alive, (bool), false)
+        (jsonrpc_ws_max_payload_bytes, (usize), 30 * 1024 * 1024)
         // The network_id, if unset, defaults to the chain_id.
         // Only override the network_id for local experiments,
         // when user would like to keep the existing blockchain data
@@ -256,6 +260,7 @@ build_config! {
         (storage_delta_mpts_node_map_vec_size, (u32), cfx_storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
         (storage_delta_mpts_slab_idle_size, (u32), cfx_storage::defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE)
         (storage_max_open_snapshots, (u16), cfx_storage::defaults::DEFAULT_MAX_OPEN_SNAPSHOTS)
+        (storage_max_open_mpt_count, (u32), cfx_storage::defaults::DEFAULT_MAX_OPEN_MPT)
         (strict_tx_index_gc, (bool), true)
         (sync_state_starting_epoch, (Option<u64>), None)
         (sync_state_epoch_gap, (Option<u64>), None)
@@ -279,6 +284,8 @@ build_config! {
         (candidate_pivot_waiting_timeout_ms, (u64), 10_000)
         (is_consortium, (bool), false)
         (pos_config_path, (Option<String>), Some("./pos_config/pos_config.toml".to_string()))
+        (pos_genesis_pivot_decision, (Option<H256>), None)
+        (vrf_proposal_threshold, (U256), U256::MAX)
 
         // Light node section
         (ln_epoch_request_batch_size, (Option<usize>), None)
@@ -504,6 +511,9 @@ impl Configuration {
         } else {
             self.raw_conf.enable_optimistic_execution
         };
+        // FIXME(lpl): This is needed to return a valid cross-checkpoint pivot
+        // decision for now.
+        assert_eq!(self.raw_conf.era_epoch_count % POS_TERM_EPOCHS, 0);
         let mut conf = ConsensusConfig {
             chain_id: self.chain_id_params(),
             inner_conf: ConsensusInnerConfig {
@@ -662,6 +672,7 @@ impl Configuration {
                 .raw_conf
                 .provide_more_snapshot_for_sync
                 .clone(),
+            max_open_mpt_count: self.raw_conf.storage_max_open_mpt_count,
         }
     }
 
@@ -747,9 +758,15 @@ impl Configuration {
             sync_expire_block_timeout: Duration::from_secs(
                 self.raw_conf.sync_expire_block_timeout_s,
             ),
-            allow_phase_change_without_peer: self
+            allow_phase_change_without_peer: if self.is_dev_mode() {
+                true
+            } else {
+                self.raw_conf.dev_allow_phase_change_without_peer
+            },
+            pos_genesis_pivot_decision: self
                 .raw_conf
-                .dev_allow_phase_change_without_peer,
+                .pos_genesis_pivot_decision
+                .expect("set to genesis if none"),
         }
     }
 
@@ -887,6 +904,7 @@ impl Configuration {
             get_logs_filter_max_limit: self.raw_conf.get_logs_filter_max_limit,
             dev_pack_tx_immediately: self.is_dev_mode()
                 && self.raw_conf.dev_block_interval_ms.is_none(),
+            max_payload_bytes: self.raw_conf.jsonrpc_ws_max_payload_bytes,
         }
     }
 
@@ -896,6 +914,7 @@ impl Configuration {
             self.raw_conf.jsonrpc_local_http_port,
             self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
+            self.raw_conf.jsonrpc_http_threads,
         )
     }
 
@@ -905,6 +924,14 @@ impl Configuration {
             self.raw_conf.jsonrpc_http_port,
             self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
+            self.raw_conf.jsonrpc_http_threads,
+        )
+    }
+
+    pub fn local_tcp_config(&self) -> TcpConfiguration {
+        TcpConfiguration::new(
+            Some((127, 0, 0, 1)),
+            self.raw_conf.jsonrpc_local_tcp_port,
         )
     }
 
@@ -912,8 +939,20 @@ impl Configuration {
         TcpConfiguration::new(None, self.raw_conf.jsonrpc_tcp_port)
     }
 
+    pub fn local_ws_config(&self) -> WsConfiguration {
+        WsConfiguration::new(
+            Some((127, 0, 0, 1)),
+            self.raw_conf.jsonrpc_local_ws_port,
+            self.raw_conf.jsonrpc_ws_max_payload_bytes,
+        )
+    }
+
     pub fn ws_config(&self) -> WsConfiguration {
-        WsConfiguration::new(None, self.raw_conf.jsonrpc_ws_port)
+        WsConfiguration::new(
+            None,
+            self.raw_conf.jsonrpc_ws_port,
+            self.raw_conf.jsonrpc_ws_max_payload_bytes,
+        )
     }
 
     pub fn execution_config(&self) -> ConsensusExecutionConfiguration {

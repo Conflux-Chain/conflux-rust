@@ -8,6 +8,7 @@ mod pos;
 /// This struct implement ClientShutdownTrait.
 pub struct ClientComponents<BlockGenT, Rest> {
     pub data_manager_weak_ptr: Weak<BlockDataManager>,
+    pub diem_handler: DiemHandle,
     pub blockgen: Option<Arc<BlockGenT>>,
     pub other_components: Rest,
 }
@@ -32,21 +33,34 @@ impl<BlockGenT: 'static + Stopable, Rest> ClientTrait
 {
     fn take_out_components_for_shutdown(
         &self,
-    ) -> (Weak<BlockDataManager>, Option<Arc<dyn Stopable>>) {
+    ) -> (
+        Weak<BlockDataManager>,
+        Arc<PowHandler>,
+        Option<Arc<dyn Stopable>>,
+    ) {
+        debug!("take_out_components_for_shutdown");
         let data_manager_weak_ptr = self.data_manager_weak_ptr.clone();
         let blockgen: Option<Arc<dyn Stopable>> = match self.blockgen.clone() {
             Some(blockgen) => Some(blockgen),
             None => None,
         };
 
-        (data_manager_weak_ptr, blockgen)
+        (
+            data_manager_weak_ptr,
+            self.diem_handler.pow_handler.clone(),
+            blockgen,
+        )
     }
 }
 
 pub trait ClientTrait {
     fn take_out_components_for_shutdown(
         &self,
-    ) -> (Weak<BlockDataManager>, Option<Arc<dyn Stopable>>);
+    ) -> (
+        Weak<BlockDataManager>,
+        Arc<PowHandler>,
+        Option<Arc<dyn Stopable>>,
+    );
 }
 
 pub mod client_methods {
@@ -71,13 +85,15 @@ pub mod client_methods {
 
     /// Returns whether the shutdown is considered clean.
     pub fn shutdown(this: Box<dyn ClientTrait>) -> bool {
-        let (ledger_db, maybe_blockgen) =
+        let (ledger_db, pow_handler, maybe_blockgen) =
             this.take_out_components_for_shutdown();
         drop(this);
         if let Some(blockgen) = maybe_blockgen {
             blockgen.stop();
             drop(blockgen);
         }
+        pow_handler.stop();
+        drop(pow_handler);
 
         // Make sure ledger_db is properly dropped, so rocksdb can be closed
         // cleanly
@@ -120,7 +136,7 @@ pub mod client_methods {
 }
 
 pub fn initialize_common_modules(
-    conf: &Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
+    conf: &mut Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     node_type: NodeType,
 ) -> Result<
     (
@@ -205,17 +221,7 @@ pub fn initialize_common_modules(
         }
     };
 
-    let mut consensus_conf = conf.consensus_config();
-    match node_type {
-        NodeType::Archive => {
-            consensus_conf.sync_state_starting_epoch = Some(0);
-        }
-        NodeType::Full | NodeType::Light => {
-            consensus_conf.sync_state_epoch_gap =
-                Some(CATCH_UP_EPOCH_LAG_THRESHOLD);
-        }
-        NodeType::Unknown => {}
-    }
+    let consensus_conf = conf.consensus_config();
     let vm = VmFactory::new(1024 * 32);
     let machine = Arc::new(new_machine_with_builtin(conf.common_params(), vm));
 
@@ -229,6 +235,9 @@ pub fn initialize_common_modules(
         conf.raw_conf.chain_id,
     );
     debug!("Initialize genesis_block={:?}", genesis_block);
+    if conf.raw_conf.pos_genesis_pivot_decision.is_none() {
+        conf.raw_conf.pos_genesis_pivot_decision = Some(genesis_block.hash());
+    }
 
     let pow_config = conf.pow_config();
     let pow = Arc::new(PowComputer::new(pow_config.use_octopus()));
@@ -243,9 +252,54 @@ pub fn initialize_common_modules(
         pow.clone(),
     ));
 
-    // FIXME(lpl): Pass in DiemDB.
+    let network = {
+        let mut network = NetworkService::new(network_config.clone());
+        network.start().unwrap();
+        Arc::new(network)
+    };
+
+    // initialize pos
+    let pos_config_path = match conf.raw_conf.pos_config_path.as_ref() {
+        Some(path) => Some(PathBuf::from(path)),
+        None => None,
+    };
+    let mut pos_config =
+        NodeConfig::load(pos_config_path.expect("empty pos config path"))
+            .expect("Failed to load node config");
+    let own_node_hash =
+        keccak(network.net_key_pair().expect("Error node key").public());
+    let self_pos_public_key = network.pos_public_key();
+    // TODO(lpl): Keep it properly and allow not running pos.
+    let (self_pos_private_key, self_vrf_private_key) = network_config
+        .config_path
+        .clone()
+        .map(|ref p| {
+            let (sk, vrf_sk) = load_pos_private_key(Path::new(&p)).unwrap();
+            (ConfigKey::new(sk), vrf_sk.map(|key| ConfigKey::new(key)))
+        })
+        .unwrap();
+    pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
+        author: from_consensus_public_key(
+            self_pos_public_key.as_ref().unwrap(),
+        ),
+        consensus_key: Some(self_pos_private_key.clone()),
+        execution_key: Some(self_pos_private_key),
+        waypoint: Some(pos_config.base.waypoint.waypoint()),
+    });
+    pos_config.consensus.safety_rules.vrf_private_key = self_vrf_private_key;
+    pos_config.consensus.safety_rules.export_consensus_key = true;
+    pos_config.consensus.safety_rules.vrf_proposal_threshold =
+        conf.raw_conf.vrf_proposal_threshold;
+    let diem_handler = start_pos_consensus(
+        &pos_config,
+        network.clone(),
+        own_node_hash,
+        conf.protocol_config(),
+        self_pos_public_key,
+    );
+    debug!("PoS initialized");
     let pos_connection = PosConnection::new(
-        Arc::new(FakeDiemDB {}) as Arc<dyn DBReaderForPoW>,
+        diem_handler.diem_db.clone() as Arc<dyn DBReaderForPoW>,
         conf.pos_config(),
     );
     // FIXME(lpl): Set CIP height.
@@ -276,6 +330,7 @@ pub fn initialize_common_modules(
         node_type,
         pos_verifier.clone(),
     ));
+    diem_handler.pow_handler.initialize(consensus.clone());
 
     let sync_config = conf.sync_graph_config();
 
@@ -289,32 +344,6 @@ pub fn initialize_common_modules(
         machine.clone(),
         pos_verifier.clone(),
     ));
-
-    let network = {
-        let mut network = NetworkService::new(network_config);
-        network.start().unwrap();
-        Arc::new(network)
-    };
-
-    // initialize pos
-    let pos_config_path = match conf.raw_conf.pos_config_path.as_ref() {
-        Some(path) => Some(PathBuf::from(path)),
-        None => None,
-    };
-    let pos_config =
-        NodeConfig::load(pos_config_path.expect("empty pos config path"))
-            .expect("Failed to load node config");
-    let own_node_hash =
-        keccak(network.net_key_pair().expect("Error node key").public());
-    let diem_handler = start_pos_consensus(
-        &pos_config,
-        None,
-        network.clone(),
-        own_node_hash,
-        conf.protocol_config(),
-    );
-    diem_handler.pow_handler.initialize(consensus.clone());
-
     let refresh_time =
         Duration::from_millis(conf.raw_conf.account_provider_refresh_time_ms);
 
@@ -363,7 +392,7 @@ pub fn initialize_common_modules(
 }
 
 pub fn initialize_not_light_node_modules(
-    conf: &Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
+    conf: &mut Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     node_type: NodeType,
 ) -> Result<
     (
@@ -376,6 +405,8 @@ pub fn initialize_not_light_node_modules(
         Option<HttpServer>,
         Option<HttpServer>,
         Option<TcpServer>,
+        Option<TcpServer>,
+        Option<WSServer>,
         Option<WSServer>,
         Runtime,
         DiemHandle,
@@ -400,7 +431,7 @@ pub fn initialize_not_light_node_modules(
         pubsub,
         runtime,
         diem_handler,
-    ) = initialize_common_modules(&conf, exit.clone(), node_type)?;
+    ) = initialize_common_modules(conf, exit.clone(), node_type)?;
 
     let light_provider = Arc::new(LightProvider::new(
         consensus.clone(),
@@ -540,8 +571,30 @@ pub fn initialize_not_light_node_modules(
         ),
     )?;
 
+    let debug_rpc_tcp_server = super::rpc::start_tcp(
+        conf.local_tcp_config(),
+        setup_debug_rpc_apis(
+            common_impl.clone(),
+            rpc_impl.clone(),
+            pubsub.clone(),
+            &conf,
+        ),
+        RpcExtractor,
+    )?;
+
     let rpc_tcp_server = super::rpc::start_tcp(
         conf.tcp_config(),
+        setup_public_rpc_apis(
+            common_impl.clone(),
+            rpc_impl.clone(),
+            pubsub.clone(),
+            &conf,
+        ),
+        RpcExtractor,
+    )?;
+
+    let debug_rpc_ws_server = super::rpc::start_ws(
+        conf.local_ws_config(),
         setup_public_rpc_apis(
             common_impl.clone(),
             rpc_impl.clone(),
@@ -576,7 +629,9 @@ pub fn initialize_not_light_node_modules(
         blockgen,
         debug_rpc_http_server,
         rpc_http_server,
+        debug_rpc_tcp_server,
         rpc_tcp_server,
+        debug_rpc_ws_server,
         rpc_ws_server,
         runtime,
         diem_handler,
@@ -765,13 +820,13 @@ use crate::{
 };
 pub use crate::{common::pos::DiemHandle, configuration::Configuration};
 use blockgen::BlockGenerator;
-use cfx_parameters::sync::CATCH_UP_EPOCH_LAG_THRESHOLD;
 use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use cfxcore::{
     block_data_manager::BlockDataManager,
     consensus::pos_handler::{FakeDiemDB, PosConnection, PosVerifier},
     machine::{new_machine_with_builtin, Machine},
+    pos::pow_handler::PowHandler,
     pow::PowComputer,
     spec::genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
     statistics::Statistics,
@@ -783,20 +838,24 @@ use cfxcore::{
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::public_to_address;
-use diem_config::config::NodeConfig;
+use diem_config::{
+    config::{NodeConfig, SafetyRulesTestConfig, TestConfig},
+    keys::ConfigKey,
+};
+use diem_types::account_address::{from_consensus_public_key, from_public_key};
 use jsonrpc_http_server::Server as HttpServer;
 use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WSServer;
 use keccak_hash::keccak;
 use keylib::KeyPair;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
-use network::NetworkService;
+use network::{service::load_pos_private_key, NetworkService};
 use parking_lot::{Condvar, Mutex};
 use runtime::Runtime;
 use secret_store::{SecretStore, SharedSecretStore};
 use std::{
     collections::HashMap,
-    path::PathBuf,
+    path::{Path, PathBuf},
     str::FromStr,
     sync::{Arc, Weak},
     thread,

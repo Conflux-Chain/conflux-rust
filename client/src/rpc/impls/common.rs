@@ -13,9 +13,7 @@ use crate::rpc::{
 };
 use bigdecimal::BigDecimal;
 use cfx_addr::Network;
-use cfx_parameters::{
-    consensus::ONE_CFX_IN_DRIP, staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
-};
+use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_types::{Address, H160, H256, H520, U128, U256, U512, U64};
 use cfxcore::{
     rpc_errors::invalid_params_check, BlockDataManager, ConsensusGraph,
@@ -533,17 +531,23 @@ impl RpcImpl {
     pub fn get_status(&self) -> RpcResult<RpcStatus> {
         let consensus_graph = self.consensus_graph();
 
-        let best_info = self.consensus.best_info();
-        let best_hash = best_info.best_block_hash;
-        let epoch_number = best_info.best_epoch_number;
-        let tx_count = self.tx_pool.total_unpacked();
+        let (best_info, block_number) = {
+            // keep read lock to maintain consistent view
+            let _inner = &*consensus_graph.inner.read();
 
-        let block_number = self
-            .consensus
-            .get_block_number(&best_hash)?
-            .ok_or("block_number is missing for best_hash")?
-            // The returned block_number of `best_hash` does not include `best_hash` itself.
-            + 1;
+            let best_info = self.consensus.best_info();
+
+            let block_number = self
+                .consensus
+                .get_block_number(&best_info.best_block_hash)?
+                .ok_or("block_number is missing for best_hash")?
+                // The returned block_number of `best_hash` does not include `best_hash` itself.
+                + 1;
+
+            (best_info, block_number)
+        };
+
+        let tx_count = self.tx_pool.total_unpacked();
 
         let latest_checkpoint = consensus_graph
             .get_height_from_epoch_number(EpochNumber::LatestCheckpoint.into())?
@@ -558,10 +562,10 @@ impl RpcImpl {
             .into();
 
         Ok(RpcStatus {
-            best_hash: H256::from(best_hash),
+            best_hash: best_info.best_block_hash.into(),
             block_number: block_number.into(),
             chain_id: best_info.chain_id.into(),
-            epoch_number: epoch_number.into(),
+            epoch_number: best_info.best_epoch_number.into(),
             latest_checkpoint,
             latest_confirmed,
             latest_state,
@@ -643,7 +647,8 @@ impl RpcImpl {
                 })?;
             let required_balance = tx.value
                 + tx.gas * tx.gas_price
-                + tx.storage_limit * ONE_CFX_IN_DRIP / 1024;
+                + U256::from(tx.storage_limit)
+                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
             ret.local_balance_enough = local_balance > required_balance;
             ret.state_balance_enough = state_balance > required_balance;
             ret.local_balance = local_balance;

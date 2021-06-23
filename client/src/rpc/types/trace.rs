@@ -9,7 +9,7 @@ use cfx_types::{H256, U256, U64};
 use cfxcore::{
     trace::trace::{
         Action as VmAction, ActionType as VmActionType, BlockExecTraces,
-        Call as VmCall, CallResult, Create as VmCreate,
+        Call as VmCall, CallResult as VmCallResult, Create as VmCreate,
         CreateResult as VmCreateResult, ExecTrace,
         InternalTransferAction as VmInternalTransferAction,
         LocalizedTrace as PrimitiveLocalizedTrace, Outcome,
@@ -41,7 +41,7 @@ impl Action {
             VmAction::Create(x) => {
                 Action::Create(Create::try_from(x, network)?)
             }
-            VmAction::CallResult(x) => Action::CallResult(x),
+            VmAction::CallResult(x) => Action::CallResult(x.into()),
             VmAction::CreateResult(x) => {
                 Action::CreateResult(CreateResult::try_from(x, network)?)
             }
@@ -89,6 +89,24 @@ impl Call {
             input: call.input.into(),
             call_type: call.call_type,
         })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CallResult {
+    pub outcome: Outcome,
+    pub gas_left: U256,
+    pub return_data: Bytes,
+}
+
+impl From<VmCallResult> for CallResult {
+    fn from(result: VmCallResult) -> Self {
+        Self {
+            outcome: result.outcome,
+            gas_left: result.gas_left,
+            return_data: result.return_data.into(),
+        }
     }
 }
 

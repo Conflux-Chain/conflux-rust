@@ -13,7 +13,9 @@ use crate::{
 use diem_config::config::{SafetyRulesConfig, SafetyRulesService};
 use diem_infallible::RwLock;
 use diem_secure_storage::{KVStorage, Storage};
-use diem_types::validator_config::ConsensusVRFPrivateKey;
+use diem_types::{
+    validator_config::ConsensusVRFPrivateKey, waypoint::Waypoint,
+};
 use std::{convert::TryInto, net::SocketAddr, sync::Arc};
 
 pub fn storage(config: &SafetyRulesConfig) -> PersistentSafetyStorage {
@@ -83,7 +85,7 @@ impl SafetyRulesManager {
                 storage,
                 verify_vote_proposal_signature,
                 export_consensus_key,
-                config.vrf_private_key.clone(),
+                config.vrf_private_key.as_ref().map(|key| key.private_key()),
             ),
             SafetyRulesService::Serializer => Self::new_serializer(
                 storage,

@@ -691,22 +691,24 @@ impl ConsensusNewBlockHandler {
             .pos_verifier
             .is_enabled_at_height(inner.arena[new].height)
         {
-            let pos_reference = self
-                .data_man
-                .pos_reference_by_hash(&inner.arena[new].hash)
-                .expect("header exist")
-                .expect("pos reference checked in sync graph");
-            let pivot_decision = self
-                .pos_verifier
-                .get_pivot_decision(&pos_reference)
-                .expect("pos validity checked in sync graph");
+            let pivot_decision = inner
+                .get_pos_reference_pivot_decision(&inner.arena[new].hash)
+                .expect("pos reference checked");
             match inner.hash_to_arena_indices.get(&pivot_decision) {
-                // TODO(peilun): Double check this case.
-                None => return false,
+                // FIXME(peilun): Pivot decision is before checkpoint or fake.
+                // Use the existence of header to check for now.
+                None => {
+                    warn!("Possibly partial invalid due to pos_reference's pivot decision not in consensus graph");
+                    return self
+                        .data_man
+                        .block_header_by_hash(&pivot_decision)
+                        .is_some();
+                }
                 Some(pivot_decision_arena_index) => {
                     if inner.lca(new, *pivot_decision_arena_index)
                         != *pivot_decision_arena_index
                     {
+                        warn!("Partial invalid due to not in the subtree of pos_reference's pivot decision");
                         // Not in the subtree of pivot_decision, mark as partial
                         // invalid.
                         return false;
@@ -1035,8 +1037,13 @@ impl ConsensusNewBlockHandler {
                     inner, me, &anticone,
                 );
 
-            inner.arena[me].data.force_confirm =
-                inner.compute_force_confirm(Some(&timer_chain_tuple));
+            inner.arena[me].data.force_confirm = inner
+                .compute_block_force_confirm(
+                    &timer_chain_tuple,
+                    self.data_man
+                        .pos_reference_by_hash(&inner.arena[me].hash)
+                        .expect("header exist"),
+                );
             debug!(
                 "Force confirm block index {} in the past view of block index={}",
                 inner.arena[me].data.force_confirm, me
@@ -1149,6 +1156,9 @@ impl ConsensusNewBlockHandler {
         let mut fork_at;
         let old_pivot_chain_len = inner.pivot_chain.len();
 
+        // Update consensus inner with a possibly new pos_reference.
+        inner.update_pos_pivot_decision(me);
+
         // Now we are going to maintain the timer chain.
         let diff = inner.arena[me].data.past_view_timer_longest_difficulty
             + inner.get_timer_difficulty(me);
@@ -1208,7 +1218,7 @@ impl ConsensusNewBlockHandler {
         }
 
         meter.aggregate_total_weight_in_past(my_weight);
-        let force_confirm = inner.compute_force_confirm(None);
+        let force_confirm = inner.compute_global_force_confirm();
         let force_height = inner.arena[force_confirm].height;
         let last = inner.pivot_chain.last().cloned().unwrap();
         let force_lca = inner.lca(force_confirm, last);

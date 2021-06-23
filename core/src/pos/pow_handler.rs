@@ -8,8 +8,9 @@ use pow_types::PowInterface;
 use std::{collections::HashMap, sync::Arc};
 use tokio::runtime::Handle;
 
-pub const POS_TERM_EPOCHS: u64 = 60;
-pub const POW_CONFIRM_DELAY_EPOCH: u64 = 60;
+// FIXME(lpl): Decide the value.
+pub const POS_TERM_EPOCHS: u64 = 50;
+pub const POW_CONFIRM_DELAY_EPOCH: u64 = 50;
 
 pub struct PowHandler {
     executor: Handle,
@@ -28,9 +29,18 @@ impl PowHandler {
         *self.pow_consensus.write() = Some(pow_consensus);
     }
 
+    pub fn stop(&self) {
+        let mut pow_consensus = &mut *self.pow_consensus.write();
+        info!(
+            "Stop PowHandler: current consensus strong_count={}",
+            Arc::strong_count(pow_consensus.as_ref().unwrap())
+        );
+        *pow_consensus = None;
+    }
+
     fn next_pivot_decision_impl(
         pow_consensus: Arc<ConsensusGraph>, parent_decision: &H256,
-    ) -> Option<H256> {
+    ) -> Option<(u64, H256)> {
         pow_consensus
             .inner
             .read()
@@ -45,7 +55,7 @@ impl PowHandler {
         pow_consensus
             .inner
             .read()
-            .is_ancestor_of(parent_decision, me_decision)
+            .validate_pivot_decision(parent_decision, me_decision)
     }
 
     fn get_committee_candidates_impl(
@@ -59,7 +69,9 @@ impl PowHandler {
 // `None`?
 #[async_trait]
 impl PowInterface for PowHandler {
-    async fn next_pivot_decision(&self, parent_decision: H256) -> Option<H256> {
+    async fn next_pivot_decision(
+        &self, parent_decision: H256,
+    ) -> Option<(u64, H256)> {
         let pow_consensus = self.pow_consensus.read().clone();
         if pow_consensus.is_none() {
             return None;
@@ -74,24 +86,22 @@ impl PowInterface for PowHandler {
         cb_receiver.await.expect("callback error")
     }
 
-    async fn validate_proposal_pivot_decision(
+    fn validate_proposal_pivot_decision(
         &self, parent_decision: H256, me_decision: H256,
     ) -> bool {
         let pow_consensus = self.pow_consensus.read().clone();
         if pow_consensus.is_none() {
             return true;
         }
-        let (callback, cb_receiver) = oneshot::channel();
         let pow_consensus = pow_consensus.unwrap();
-        self.executor.spawn(async move {
-            let r = Self::validate_proposal_pivot_decision_impl(
-                pow_consensus,
-                &parent_decision,
-                &me_decision,
-            );
-            callback.send(r);
-        });
-        cb_receiver.await.expect("callback error")
+        debug!("before spawn pivot_decision");
+        let r = Self::validate_proposal_pivot_decision_impl(
+            pow_consensus,
+            &parent_decision,
+            &me_decision,
+        );
+        debug!("after spawn pivot_decision");
+        r
     }
 
     async fn get_committee_candidates(&self) -> HashMap<AccountAddress, u64> {

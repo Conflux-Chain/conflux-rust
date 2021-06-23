@@ -5,10 +5,10 @@
 mod context;
 mod executed;
 mod executive;
-mod internal_contract;
-
 #[cfg(test)]
 mod executive_tests;
+mod internal_contract;
+mod vm_exec;
 
 trait CollateralCheckResultToVmResult {
     fn into_vm_result(self) -> Result<(), vmError>;
@@ -29,9 +29,11 @@ impl CollateralCheckResultToVmResult for CollateralCheckResult {
 }
 
 pub use self::{
+    context::InternalRefContext,
     executed::*,
     executive::{
-        contract_address, Executive, ExecutiveGeneric, TransactOptions,
+        contract_address, Executive, ExecutiveGeneric, ExecutiveResult,
+        TransactOptions,
     },
     internal_contract::{
         function, suicide, ABIDecodeError, InternalContractMap,

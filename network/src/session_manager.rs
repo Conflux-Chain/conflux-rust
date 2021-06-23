@@ -9,6 +9,8 @@ use crate::{
     session::{Session, PACKET_HEADER_VERSION},
     NetworkIoMessage,
 };
+use diem_crypto::ed25519::Ed25519PublicKey;
+use diem_types::validator_config::ConsensusPublicKey;
 use io::IoContext;
 use mio::net::TcpStream;
 use parking_lot::RwLock;
@@ -48,6 +50,8 @@ pub struct SessionManager {
     node_id_index: RwLock<HashMap<NodeId, usize>>,
     ip_limit: RwLock<Box<dyn SessionIpLimit>>,
     tag_index: RwLock<SessionTagIndex>,
+    /// pos public key
+    pub self_pos_public_key: Option<ConsensusPublicKey>,
 }
 
 impl SessionManager {
@@ -55,6 +59,7 @@ impl SessionManager {
     pub fn new(
         offset: usize, capacity: usize, max_ingress_sessions: usize,
         ip_limit_config: &SessionIpLimitConfig,
+        self_pos_public_key: Option<ConsensusPublicKey>,
     ) -> Self
     {
         SessionManager {
@@ -66,6 +71,7 @@ impl SessionManager {
             node_id_index: RwLock::new(HashMap::new()),
             ip_limit: RwLock::new(new_session_ip_limit(ip_limit_config)),
             tag_index: Default::default(),
+            self_pos_public_key,
         }
     }
 
@@ -204,6 +210,7 @@ impl SessionManager {
             PACKET_HEADER_VERSION,
             index,
             host,
+            self.self_pos_public_key.clone(),
         ) {
             Err(e) => {
                 debug!(

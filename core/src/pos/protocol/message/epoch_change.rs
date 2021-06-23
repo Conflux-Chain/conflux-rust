@@ -16,7 +16,7 @@ use std::mem::discriminant;
 
 impl Handleable for EpochChangeProof {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        let peer_address = AccountAddress::new(ctx.peer_hash.into());
+        let peer_address = ctx.get_peer_account_address();
         let msg = ConsensusMsg::EpochChangeProof(Box::new(self));
         ctx.manager
             .network_task

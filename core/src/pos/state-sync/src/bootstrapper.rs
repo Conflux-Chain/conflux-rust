@@ -6,6 +6,7 @@ use crate::{
     executor_proxy::{ExecutorProxy, ExecutorProxyTrait},
 };
 use diem_config::{config::NodeConfig, network_id::NodeNetworkId};
+use diem_logger::debug as diem_debug;
 use diem_types::waypoint::Waypoint;
 use executor_types::ChunkExecutor;
 use futures::channel::mpsc;

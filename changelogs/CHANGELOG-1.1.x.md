@@ -1,10 +1,30 @@
+# 1.1.4
+
+## Improvements
+
+### RPC Improvements
+- Add a new RPC `cfx_getAccountPendingTransactions` to get pending transactions of a given account.
+- Make VM tracer records reasons for a fail execution. 
+- Make `cfx_estimateGasAndCollateral` return an error stack in case an error happens in sub-call.
+- Use random miner address in virtual calls (`cfx_call` and `cfx_estimateGasAndCollateral`) 
+    instead of a special null address.
+
+### Configuration Improvements
+- Allow setting maximum WebSocket response payload size using `jsonrpc_ws_max_payload_bytes`. The default is 30MB.
+
+## Bug fixes
+- Fix a bug that causes repacking useless transactions.
+- Fix a bug that causes the configuration `sync_state_starting_epoch` not effective on archive nodes.
+- Fix a bug that may make `cfx_getStatus` return unexpected error.
+
+
 # 1.1.3
 
 ## Improvements
 
 ### RPC Improvements
-- Include `blockHash`, `epochHash`, `epochNumber`, `transaction_hash`, and `transactionPosition` for trace RPCs.
-Note that the data format returned by `trace_block` is incompatible with old versions.
+- Include `blockHash`, `epochHash`, `epochNumber`, `transactionHash`, and `transactionPosition` for trace RPCs.
+  Note that the data format returned by `trace_block` is incompatible with old versions.
 - Add new field `offset` in log filters used in `cfx_getLogs`.
   If specified, the response will skip the **last** `offset` logs.
   For instance, with 10 matching logs (`0..9`) and `offset=0x1, limit=0x5`, the response will contain logs `4..8`.
@@ -13,6 +33,15 @@ Note that the data format returned by `trace_block` is incompatible with old ver
 - Add a new parameter `subscription_epoch` to the `epochs` pubsub.
   The supported values are `"latest_mined"` (default) and `"latest_state"`.
 - Add `cfx_getAccountPendingInfo` to get pending transaction info for some account for better investigating pending tx problems.
+
+### Configuration Improvements
+- Allow immediately packing sent transactions in `dev` mode by keeping `dev_block_interval_ms` unset.
+  Note that setting `dev_block_interval_ms` will disable this immediate packing and generate blocks only periodically.
+### Performance Improvements
+- Optimize the state implementation for better cache performance.
+
+### Bug fix
+- Fix a bug that makes running nodes in `dev` mode not generate blocks automatically.
 
 # 1.1.2
 
@@ -36,10 +65,8 @@ Note that the data format returned by `trace_block` is incompatible with old ver
 - Use hex encoding for the returned bytes in trace-related RPCs.
 - Add new fields `latestCheckpoint`, `latestConfirmed`, and `latestState` in `cfx_getStatus`.
 - Improve some RPC error reporting.
-  
 ### Performance Optimization
 - Reduce the memory usage for maintaining more snapshots with the configuration `additional_maintained_snapshot_count`.
-  
 ## Bug Fixes
 - Fix a possible OOM error when a full node is catching up.
 - Fix a possible OOM error in transaction pool when an archive node is catching up.

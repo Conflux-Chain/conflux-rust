@@ -68,7 +68,8 @@ impl BlockInfo {
             epoch,
             round,
             id,
-            executed_state_id,
+            // TODO(lpl): Cleanup.
+            executed_state_id: Default::default(),
             version,
             timestamp_usecs,
             next_epoch_state,
@@ -175,7 +176,7 @@ impl Display for BlockInfo {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "BlockInfo: [epoch: {}, round: {}, id: {}, executed_state_id: {}, version: {}, timestamp (us): {}, next_epoch_state: {}]",
+            "BlockInfo: [epoch: {}, round: {}, id: {}, executed_state_id: {}, version: {}, timestamp (us): {}, next_epoch_state: {}, pivot: {:?}]",
             self.epoch(),
             self.round(),
             self.id(),
@@ -183,6 +184,7 @@ impl Display for BlockInfo {
             self.version(),
             self.timestamp_usecs(),
             self.next_epoch_state.as_ref().map_or("None".to_string(), |epoch_state| format!("{}", epoch_state)),
+            self.pivot,
         )
     }
 }
