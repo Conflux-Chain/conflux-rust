@@ -80,7 +80,7 @@ impl<'a> Exec for InternalContractExec<'a> {
         let result = if self.params.call_type != CallType::Call
             && self.params.call_type != CallType::StaticCall
         {
-            Err(VmError::InternalContract("Incorrect call type."))
+            Err(VmError::InternalContract("Incorrect call type.".into()))
         } else {
             let mut context = context.internal_ref();
             self.internal.execute(&self.params, &mut context, tracer)

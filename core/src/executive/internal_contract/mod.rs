@@ -63,7 +63,9 @@ pub trait InternalContractTrait: Send + Sync + ActivateAtTrait {
         let solidity_fn = func_table
             .get(&fn_sig)
             .filter(|&func| func.activate_at(context.env.number, context.spec))
-            .ok_or(vm::Error::InternalContract("unsupported function"))?;
+            .ok_or(vm::Error::InternalContract(
+                "unsupported function".into(),
+            ))?;
 
         solidity_fn.execute(call_params, params, context, tracer)
     }

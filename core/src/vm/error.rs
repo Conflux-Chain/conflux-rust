@@ -105,7 +105,7 @@ pub enum Error {
     /// Built-in contract failed on given input
     BuiltIn(&'static str),
     /// Internal contract failed
-    InternalContract(&'static str),
+    InternalContract(String),
     /// When execution tries to modify the state in static context
     MutableCallInStaticContext,
     /// Error from storage.
@@ -136,7 +136,9 @@ impl From<DbError> for Error {
 }
 
 impl From<ABIDecodeError> for Error {
-    fn from(err: ABIDecodeError) -> Self { Error::InternalContract(err.0) }
+    fn from(err: ABIDecodeError) -> Self {
+        Error::InternalContract(format!("ABI decode error: {}", err.0))
+    }
 }
 
 impl fmt::Display for Error {
@@ -178,7 +180,7 @@ impl fmt::Display for Error {
             }
             ExceedStorageLimit => write!(f, "Exceed storage limit"),
             BuiltIn(name) => write!(f, "Built-in failed: {}", name),
-            InternalContract(name) => {
+            InternalContract(ref name) => {
                 write!(f, "InternalContract failed: {}", name)
             }
             StateDbError(ref msg) => {
