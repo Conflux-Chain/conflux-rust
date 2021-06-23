@@ -686,7 +686,7 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("Incorrect call type.")
+        vm::Error::InternalContract("Incorrect call type.".into())
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -714,7 +714,7 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("invalid deposit amount")
+        vm::Error::InternalContract("invalid deposit amount".into())
     );
 
     // deposit 10^18, it should work fine
@@ -760,7 +760,7 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("None call data")
+        vm::Error::InternalContract("ABI decode error: None call data".into())
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -793,7 +793,9 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("Incomplete static input parameter")
+        vm::Error::InternalContract(
+            "ABI decode error: Incomplete static input parameter".into()
+        )
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -855,7 +857,7 @@ fn test_deposit_withdraw_lock() {
     assert_eq!(
         result.unwrap_err(),
         vm::Error::InternalContract(
-            "not enough withdrawable staking balance to withdraw"
+            "not enough withdrawable staking balance to withdraw".into()
         )
     );
     assert_eq!(
@@ -889,7 +891,7 @@ fn test_deposit_withdraw_lock() {
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("invalid unlock_block_number")
+        vm::Error::InternalContract("invalid unlock_block_number".into())
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -996,7 +998,7 @@ fn test_deposit_withdraw_lock() {
     assert_eq!(
         result.unwrap_err(),
         vm::Error::InternalContract(
-            "not enough withdrawable staking balance to withdraw"
+            "not enough withdrawable staking balance to withdraw".into()
         )
     );
     assert_eq!(

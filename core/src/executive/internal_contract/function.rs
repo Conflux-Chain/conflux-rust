@@ -115,7 +115,7 @@ impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
     ) -> vm::Result<()> {
         if !Self::PAYABLE && !params.value.value().is_zero() {
             return Err(vm::Error::InternalContract(
-                "should not transfer balance to Staking contract",
+                "should not transfer balance to Staking contract".into(),
             ));
         }
 
