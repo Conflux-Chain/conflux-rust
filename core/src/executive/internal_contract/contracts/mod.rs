@@ -3,8 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 mod admin;
+#[allow(unused)]
+mod pos;
 mod sponsor;
 mod staking;
+
 mod macros {
     #[cfg(test)]
     pub use crate::check_signature;
