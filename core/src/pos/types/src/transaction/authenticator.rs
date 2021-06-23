@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::account_address::AccountAddress;
-use anyhow::{ensure, Error, Result, bail};
+use anyhow::{bail, ensure, Error, Result};
 use diem_crypto::{
     bls::{BLSPrivateKey, BLSPublicKey, BLSSignature},
     ed25519::{Ed25519PublicKey, Ed25519Signature},
@@ -77,7 +77,7 @@ pub enum TransactionAuthenticator {
     MultiBLS {
         public_keys: Vec<BLSPublicKey>,
         signatures: Vec<BLSSignature>,
-    }// ... add more schemes here
+    }, // ... add more schemes here
 }
 
 impl TransactionAuthenticator {
@@ -118,8 +118,13 @@ impl TransactionAuthenticator {
         }
     }
 
-    pub fn multi_bls(public_keys: Vec<BLSPublicKey>, signatures: Vec<BLSSignature>) -> Self {
-        Self::MultiBLS { public_keys, signatures }
+    pub fn multi_bls(
+        public_keys: Vec<BLSPublicKey>, signatures: Vec<BLSSignature>,
+    ) -> Self {
+        Self::MultiBLS {
+            public_keys,
+            signatures,
+        }
     }
 
     /// Return Ok if the authenticator's public key matches its signature, Err

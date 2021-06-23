@@ -201,7 +201,7 @@ impl Display for BlockInfo {
     CryptoHasher,
 )]
 pub struct PivotBlockDecision {
-    // pub height: u64,
+    pub height: u64,
     pub block_hash: H256,
 }
 

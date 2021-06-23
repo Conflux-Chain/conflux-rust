@@ -37,7 +37,8 @@ use consensus_types::{
 use diem_infallible::checked;
 use diem_logger::prelude::*;
 use diem_types::{
-    epoch_state::EpochState, validator_verifier::ValidatorVerifier,
+    block_info::PivotBlockDecision, chain_id::ChainId, epoch_state::EpochState,
+    transaction::RawTransaction, validator_verifier::ValidatorVerifier,
 };
 use fail::fail_point;
 #[cfg(test)]
@@ -46,9 +47,6 @@ use safety_rules::TSafetyRules;
 use serde::Serialize;
 use std::{sync::Arc, time::Duration};
 use termion::color::*;
-use diem_types::transaction::RawTransaction;
-use diem_types::block_info::PivotBlockDecision;
-use diem_types::chain_id::ChainId;
 
 #[derive(Serialize, Clone)]
 pub enum UnverifiedEvent {
@@ -284,17 +282,12 @@ impl RoundManager {
     }
 
     async fn broadcast_pivot_decision(&self) -> anyhow::Result<()> {
-        let parent_block = self.block_store.highest_quorum_cert().certified_block();
+        let parent_block =
+            self.block_store.highest_quorum_cert().certified_block();
         // TODO(lpl): Check if this may happen.
-        if self
-            .block_store
-            .path_from_root(parent_block.id())
-            .is_none() {
-                bail!(
-                        "HQC {} already pruned",
-                    parent_block
-                    );
-            }
+        if self.block_store.path_from_root(parent_block.id()).is_none() {
+            bail!("HQC {} already pruned", parent_block);
+        }
 
         // FIXME(lpl): For now, sending default H256 will return the first
         // pivot decision.
@@ -313,26 +306,25 @@ impl RoundManager {
                 None => {
                     // TODO(lpl): Handle the error from outside.
                     // FIXME(lpl): Wait with a deadline.
-                    let sleep_duration =
-                        std::time::Duration::from_millis(100);
+                    let sleep_duration = std::time::Duration::from_millis(100);
                     self.time_service.sleep(sleep_duration);
                 }
             }
         };
-        self.safety_rules.sign_proposal()
 
         let raw_tx = RawTransaction::new_pivot_decision(
             self.author,
             0,
             PivotBlockDecision {
-                block_hash: pivot_decision,
+                block_hash: pivot_decision.1,
+                height: pivot_decision.0,
             },
             ChainId::default(), // FIXME(lpl): Set chain id.
         );
         let signed_tx = raw_tx
             .sign(&self.private_key, self.public_key.clone())?
             .into_inner();
-        self.network.broadcast(ConsensusMsg::PivotDecisionMsg())
+        // self.network.broadcast(ConsensusMsg::PivotDecisionMsg())
     }
 
     async fn generate_proposal(
