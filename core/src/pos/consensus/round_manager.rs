@@ -190,7 +190,8 @@ pub struct RoundManager {
     block_store: Arc<BlockStore>,
     round_state: RoundState,
     proposer_election: Box<dyn ProposerElection + Send + Sync>,
-    proposal_generator: ProposalGenerator,
+    // None if this is not a validator.
+    proposal_generator: Option<ProposalGenerator>,
     safety_rules: MetricsSafetyRules,
     network: NetworkSender,
     txn_manager: Arc<dyn TxnManager>,
@@ -203,7 +204,7 @@ impl RoundManager {
         epoch_state: EpochState, block_store: Arc<BlockStore>,
         round_state: RoundState,
         proposer_election: Box<dyn ProposerElection + Send + Sync>,
-        proposal_generator: ProposalGenerator,
+        proposal_generator: Option<ProposalGenerator>,
         safety_rules: MetricsSafetyRules, network: NetworkSender,
         txn_manager: Arc<dyn TxnManager>,
         storage: Arc<dyn PersistentLivenessStorage>, sync_only: bool,
@@ -266,16 +267,18 @@ impl RoundManager {
             self.proposer_election.next_round(new_round_event.round);
             self.round_state.setup_proposal_timeout();
         }
-        if self.proposer_election.is_valid_proposer(
-            self.proposal_generator.author(),
-            new_round_event.round,
-        ) {
-            let proposal_msg = ConsensusMsg::ProposalMsg(Box::new(
-                self.generate_proposal(new_round_event).await?,
-            ));
-            let mut network = self.network.clone();
-            network.broadcast(proposal_msg).await;
-            counters::PROPOSALS_COUNT.inc();
+        if let Some(ref proposal_generator) = self.proposal_generator {
+            if self.proposer_election.is_valid_proposer(
+                proposal_generator.author(),
+                new_round_event.round,
+            ) {
+                let proposal_msg = ConsensusMsg::ProposalMsg(Box::new(
+                    self.generate_proposal(new_round_event).await?,
+                ));
+                let mut network = self.network.clone();
+                network.broadcast(proposal_msg).await;
+                counters::PROPOSALS_COUNT.inc();
+            }
         }
         Ok(())
     }
@@ -287,6 +290,8 @@ impl RoundManager {
         // per round
         let proposal = self
             .proposal_generator
+            .as_mut()
+            .expect("checked by process_new_round_event")
             .generate_proposal(new_round_event.round)
             .await?;
         let signed_proposal = self.safety_rules.sign_proposal(proposal)?;
@@ -495,6 +500,10 @@ impl RoundManager {
             );
         }
 
+        if !self.is_validator() {
+            return Ok(());
+        }
+
         let (use_last_vote, mut timeout_vote) =
             match self.round_state.vote_sent() {
                 Some(vote) if vote.vote_data().proposed().round() == round => {
@@ -502,8 +511,11 @@ impl RoundManager {
                 }
                 _ => {
                     // Didn't vote in this round yet, generate a backup vote
-                    let nil_block =
-                        self.proposal_generator.generate_nil_block(round)?;
+                    let nil_block = self
+                        .proposal_generator
+                        .as_ref()
+                        .expect("checked in is_validator")
+                        .generate_nil_block(round)?;
                     diem_debug!(
                         self.new_log(LogEvent::VoteNIL),
                         "Planning to vote for a NIL block {}",
@@ -543,19 +555,29 @@ impl RoundManager {
     ) -> anyhow::Result<()> {
         if let Some(proposal) = self.proposer_election.choose_proposal_to_vote()
         {
-            // Vote for proposal
-            let vote = self
-                .execute_and_vote(proposal)
-                .await
-                .context("[RoundManager] Process proposal")?;
-            diem_debug!(self.new_log(LogEvent::Vote), "{}", vote);
+            if self.is_validator() {
+                // Vote for proposal
+                let vote = self
+                    .execute_and_vote(proposal)
+                    .await
+                    .context("[RoundManager] Process proposal")?;
+                diem_debug!(self.new_log(LogEvent::Vote), "{}", vote);
 
-            self.round_state.record_vote(vote.clone());
-            let vote_msg = VoteMsg::new(vote, self.block_store.sync_info());
-            self.network
-                .broadcast(ConsensusMsg::VoteMsg(Box::new(vote_msg)))
-                .await;
-            Ok(())
+                self.round_state.record_vote(vote.clone());
+                let vote_msg = VoteMsg::new(vote, self.block_store.sync_info());
+                self.network
+                    .broadcast(ConsensusMsg::VoteMsg(Box::new(vote_msg)))
+                    .await;
+                Ok(())
+            } else {
+                // Not a validator, just execute the block and wait for votes.
+                self.block_store
+                    .execute_and_insert_block(proposal)
+                    .context(
+                        "[RoundManager] Failed to execute_and_insert the block",
+                    )?;
+                Ok(())
+            }
         } else {
             // No proposal to vote. Send Timeout earlier.
             self.process_local_timeout(round).await
@@ -713,7 +735,6 @@ impl RoundManager {
         fail_point!("consensus::process_vote_msg", |_| {
             Err(anyhow::anyhow!("Injected error in process_vote_msg"))
         });
-        // Check whether this validator is a valid recipient of the vote.
         if self
             .ensure_round_and_sync_up(
                 vote_msg.vote().vote_data().proposed().round(),
@@ -750,17 +771,21 @@ impl RoundManager {
             vote_state = vote.vote_data().proposed().executed_state_id(),
         );
 
-        if !vote.is_timeout() && !self.proposer_election.is_random_election() {
-            // Unlike timeout votes regular votes are sent to the leaders of the
-            // next round only.
-            let next_round = round + 1;
-            ensure!(
+        if !vote.is_timeout() {
+            if let Some(ref proposal_generator) = self.proposal_generator {
+                if !self.proposer_election.is_random_election() {
+                    // Unlike timeout votes regular votes are sent to the
+                    // leaders of the next round only.
+                    let next_round = round + 1;
+                    ensure!(
                 self.proposer_election
-                    .is_valid_proposer(self.proposal_generator.author(), next_round),
+                    .is_valid_proposer(proposal_generator.author(), next_round),
                 "[RoundManager] Received {}, but I am not a valid proposer for round {}, ignore.",
                 vote,
                 next_round
             );
+                }
+            }
         }
         let block_id = vote.vote_data().proposed().id();
         // Check if the block already had a QC
@@ -893,5 +918,11 @@ impl RoundManager {
         LogSchema::new(event)
             .round(self.round_state.current_round())
             .epoch(self.epoch_state.epoch)
+    }
+
+    fn is_validator(&self) -> bool {
+        let r = self.proposal_generator.is_some();
+        diem_debug!("Check validator: r={}", r);
+        r
     }
 }
