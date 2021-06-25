@@ -500,7 +500,7 @@ dependencies = [
 [[package]]
 name = "bls-signatures"
 version = "0.10.0"
-source = "git+https://github.com/Conflux-Chain/bls-signatures.git?branch=update_rand#0e76e7b5e449b87e0fc6073e6ddda2e2946fa9fb"
+source = "git+https://github.com/Conflux-Chain/bls-signatures.git?branch=temp_fast_decode#bcc2a581d13a3bfdf52590363df6ce8606960d71"
 dependencies = [
  "fff",
  "groupy",
