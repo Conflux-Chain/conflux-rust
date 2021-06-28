@@ -42,7 +42,7 @@ use crate::{
     common::delegate_convert,
     rpc::{
         error_codes::{
-            call_execution_error, invalid_params,
+            call_execution_error, invalid_params, pivot_assumption_failed,
             request_rejected_in_catch_up_mode,
         },
         impls::{
@@ -787,16 +787,19 @@ impl RpcImpl {
     }
 
     fn prepare_block_receipts(
-        &self, block_hash: H256, maybe_pivot_hash: Option<H256>,
+        &self, block_hash: H256, pivot_assumption: H256,
     ) -> RpcResult<Option<Vec<RpcReceipt>>> {
         let exec_info = match self.get_block_execution_info(&block_hash)? {
-            None => return Ok(None),
+            None => return Ok(None), // not executed
             Some(res) => res,
         };
 
         // pivot chain reorg
-        if matches!(maybe_pivot_hash, Some(h) if h != exec_info.pivot_hash) {
-            return Ok(None);
+        if pivot_assumption != exec_info.pivot_hash {
+            bail!(pivot_assumption_failed(
+                pivot_assumption,
+                exec_info.pivot_hash
+            ));
         }
 
         let mut rpc_receipts = vec![];
@@ -1357,9 +1360,9 @@ impl RpcImpl {
     ) -> RpcResult<TokenSupplyInfo> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
         let state = self.consensus.get_state_by_epoch_number(epoch, "epoch")?;
-        let total_issued = *state.total_issued_tokens();
-        let total_staking = *state.total_staking_tokens();
-        let total_collateral = *state.total_storage_tokens();
+        let total_issued = state.total_issued_tokens();
+        let total_staking = state.total_staking_tokens();
+        let total_collateral = state.total_storage_tokens();
         let two_year_unlock_address = genesis_contract_address_two_year();
         let four_year_unlock_address = genesis_contract_address_four_year();
         let two_year_locked = state
@@ -1416,23 +1419,62 @@ impl RpcImpl {
         Ok(())
     }
 
+    fn get_block_epoch_number(&self, h: &H256) -> Option<u64> {
+        // try to get from memory
+        if let Some(e) = self.consensus.get_block_epoch_number(h) {
+            return Some(e);
+        }
+
+        // try to get from db
+        self.consensus.get_data_manager().block_epoch_number(h)
+    }
+
     fn epoch_receipts(
-        &self, epoch: EpochNumber,
+        &self, epoch: BlockHashOrEpochNumber,
     ) -> RpcResult<Option<Vec<Vec<RpcReceipt>>>> {
         info!("RPC Request: cfx_getEpochReceipts({:?})", epoch);
 
-        let hashes = self.consensus.get_block_hashes_by_epoch(epoch.into())?;
-        let pivot_hash = *hashes.last().ok_or("Inconsistent state")?;
+        let hashes = match epoch {
+            BlockHashOrEpochNumber::EpochNumber(e) => {
+                self.consensus.get_block_hashes_by_epoch(e.into())?
+            }
+            BlockHashOrEpochNumber::BlockHash(h) => {
+                if self
+                    .consensus
+                    .get_data_manager()
+                    .block_header_by_hash(&h)
+                    .is_none()
+                {
+                    bail!(invalid_params("block_hash", "block not found"));
+                }
 
+                let e = match self.get_block_epoch_number(&h) {
+                    Some(e) => e,
+                    None => return Ok(None), // not executed
+                };
+
+                let hashes = self.consensus.get_block_hashes_by_epoch(
+                    primitives::EpochNumber::Number(e),
+                )?;
+
+                // if the provided hash is not the pivot hash, abort
+                let pivot_hash = *hashes.last().ok_or("Inconsistent state")?;
+
+                if h != pivot_hash {
+                    bail!(pivot_assumption_failed(h, pivot_hash));
+                }
+
+                hashes
+            }
+        };
+
+        let pivot_hash = *hashes.last().ok_or("Inconsistent state")?;
         let mut epoch_receipts = vec![];
 
         for h in hashes {
             epoch_receipts.push(
-                match self.prepare_block_receipts(h, Some(pivot_hash))? {
-                    // if the block is not executed yet, or there was a chain
-                    // reorg during processing that might cause inconsistency,
-                    // we return `null` and expect the client to retry
-                    None => return Ok(None),
+                match self.prepare_block_receipts(h, pivot_hash)? {
+                    None => return Ok(None), // not executed
                     Some(rs) => rs,
                 },
             );
@@ -1619,7 +1661,7 @@ impl LocalRpc for LocalRpcImpl {
         to self.rpc_impl {
             fn current_sync_phase(&self) -> JsonRpcResult<String>;
             fn consensus_graph_state(&self) -> JsonRpcResult<ConsensusGraphStates>;
-            fn epoch_receipts(&self, epoch: EpochNumber) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
+            fn epoch_receipts(&self, epoch: BlockHashOrEpochNumber) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
             fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
             fn send_transaction(
                 &self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<H256>;

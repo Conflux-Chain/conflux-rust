@@ -188,11 +188,11 @@ pub trait StateOpsTrait {
         &mut self, address: &Address, current_block_number: u64,
     ) -> DbResult<()>;
 
-    fn total_issued_tokens(&self) -> &U256;
+    fn total_issued_tokens(&self) -> U256;
 
-    fn total_staking_tokens(&self) -> &U256;
+    fn total_staking_tokens(&self) -> U256;
 
-    fn total_storage_tokens(&self) -> &U256;
+    fn total_storage_tokens(&self) -> U256;
 
     fn remove_contract(&mut self, address: &Address) -> DbResult<()>;
 
