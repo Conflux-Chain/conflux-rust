@@ -21,6 +21,7 @@ NUM_BLOCKS = 100
 class PubSubTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 3
+        self.conf_parameters["log_level"] = '"trace"'
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)

@@ -83,8 +83,8 @@ class PubSubTest(ConfluxTestFramework):
             generated = self.generate_chain(root_hash, PREFIX_LEN)
 
             # collect results from subscription
-            epochs = [e async for e in sub_full.iter(2)]
-            assert_equal(epochs, [e async for e in sub_light.iter(2)])
+            epochs = [e async for e in sub_full.iter()]
+            assert_equal(epochs, [e async for e in sub_light.iter()])
 
             # check hashes
             hashes = flatten([e["epochHashesOrdered"] for e in epochs])
@@ -104,8 +104,8 @@ class PubSubTest(ConfluxTestFramework):
             generated = self.generate_chain(fork_hash, SHORT_FORK_LEN)
 
             # collect results from subscription
-            epochs = [e async for e in sub_full.iter(2)]
-            assert_equal(epochs, [e async for e in sub_light.iter(2)])
+            epochs = [e async for e in sub_full.iter()]
+            assert_equal(epochs, [e async for e in sub_light.iter()])
 
             # check hashes
             hashes = flatten([e["epochHashesOrdered"] for e in epochs])
@@ -120,8 +120,8 @@ class PubSubTest(ConfluxTestFramework):
             generated = self.generate_chain(fork_hash, LONG_FORK_LEN)
 
             # collect results from subscription
-            epochs = [e async for e in sub_full.iter(2)]
-            assert_equal(epochs, [e async for e in sub_light.iter(2)])
+            epochs = [e async for e in sub_full.iter()]
+            assert_equal(epochs, [e async for e in sub_light.iter()])
 
             # check hashes
             hashes = flatten([e["epochHashesOrdered"] for e in epochs])
