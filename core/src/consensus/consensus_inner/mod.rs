@@ -3828,10 +3828,12 @@ impl ConsensusGraphInner {
                 {
                     // FIXME(lpl): Use confirmed epoch with a delay in
                     // pos-finality spec.
-                    let new_decision_height = (confirmed_height
-                        .saturating_sub(POW_CONFIRM_DELAY_EPOCH))
-                        / POS_TERM_EPOCHS
-                        * POS_TERM_EPOCHS;
+                    let new_decision_height =
+                        (confirmed_height.saturating_sub(
+                            self.inner_conf
+                                .pos_pivot_decision_defer_epoch_count,
+                        )) / POS_TERM_EPOCHS
+                            * POS_TERM_EPOCHS;
                     if new_decision_height <= parent_decision_height {
                         None
                     } else {
