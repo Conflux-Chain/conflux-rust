@@ -168,6 +168,7 @@ impl NetworkSender {
             diem_error!("Error broadcasting to self: {:?}", err);
         }
 
+        /*
         // Get the list of validators excluding our own account address. Note
         // the ordering is not important in this case.
         let self_author = self.author;
@@ -185,6 +186,12 @@ impl NetworkSender {
             .network_sender
             .send_to_many(public_keys.into_iter(), &msg)
         {
+            diem_error!(error = ?err, "Error broadcasting message");
+        }
+         */
+        // TODO(lpl): It may be sufficient to broadcast some messages to only
+        // validators.
+        if let Err(err) = self.network_sender.send_to_all_others(&msg) {
             diem_error!(error = ?err, "Error broadcasting message");
         }
     }

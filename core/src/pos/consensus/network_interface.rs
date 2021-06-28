@@ -108,6 +108,24 @@ impl ConsensusNetworkSender {
         Ok(())
     }
 
+    /// Send a msg to all connected PoS nodes. They may or may not be
+    /// validators.
+    pub fn send_to_all_others(
+        &mut self, msg: &dyn Message,
+    ) -> Result<(), anyhow::Error> {
+        // The node itself is not included in pos_peer_mapping.
+        for peer_hash in self.protocol_handler.pos_peer_mapping.read().values()
+        {
+            if let Some(peer) = self.protocol_handler.peers.get(peer_hash) {
+                let peer_id = peer.read().get_id();
+                self.send_message_with_peer_id(&peer_id, msg);
+            } else {
+                warn!("peer_hash {:?} does not exist", peer_hash);
+            }
+        }
+        Ok(())
+    }
+
     /// Send a RPC to the destination peer using the `CONSENSUS_RPC_PROTOCOL`
     /// ProtocolId.
     pub async fn send_rpc(
@@ -143,16 +161,12 @@ impl ConsensusNetworkSender {
     pub fn send_message_with_peer_id(
         &self, peer_id: &NodeId, msg: &dyn Message,
     ) {
-        if self
-            .network
-            .with_context(
-                self.protocol_handler.clone(),
-                HSB_PROTOCOL_ID,
-                |io| msg.send(io, peer_id),
-            )
-            .is_err()
-        {
-            warn!("Error sending message!");
+        if let Err(e) = self.network.with_context(
+            self.protocol_handler.clone(),
+            HSB_PROTOCOL_ID,
+            |io| msg.send(io, peer_id),
+        ) {
+            warn!("Error sending message: err={:?}", e);
         }
     }
 }
