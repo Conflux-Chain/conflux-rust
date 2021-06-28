@@ -4,13 +4,23 @@ use crate::transaction::authenticator::AuthenticationKey;
 use diem_crypto::{
     ed25519::Ed25519PublicKey,
     hash::{CryptoHasher, HashValue},
-    x25519,
+    x25519, ValidCryptoMaterial,
 };
 
+use crate::validator_config::ConsensusPublicKey;
 pub use move_core_types::account_address::AccountAddress;
 
 pub fn from_public_key(public_key: &Ed25519PublicKey) -> AccountAddress {
     AuthenticationKey::ed25519(public_key).derived_address()
+}
+
+pub fn from_consensus_public_key(
+    public_key: &ConsensusPublicKey,
+) -> AccountAddress {
+    let h = *HashValue::sha3_256_of(&public_key.to_bytes());
+    let mut array = [0u8; AccountAddress::LENGTH];
+    array.copy_from_slice(&h[h.len() - AccountAddress::LENGTH..]);
+    AccountAddress::new(array)
 }
 
 // Note: This is inconsistent with current types because AccountAddress is

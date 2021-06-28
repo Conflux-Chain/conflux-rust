@@ -6,8 +6,9 @@ use consensus_types::{
     block::Block, block_data::BlockData, timeout::Timeout, vote::Vote,
     vote_proposal::MaybeSignedVoteProposal,
 };
-use diem_crypto::ed25519::Ed25519Signature;
-use diem_types::epoch_change::EpochChangeProof;
+use diem_types::{
+    epoch_change::EpochChangeProof, validator_config::ConsensusSignature,
+};
 
 /// Interface for SafetyRules
 pub trait TSafetyRules {
@@ -37,5 +38,5 @@ pub trait TSafetyRules {
     /// timeout message.
     fn sign_timeout(
         &mut self, timeout: &Timeout,
-    ) -> Result<Ed25519Signature, Error>;
+    ) -> Result<ConsensusSignature, Error>;
 }

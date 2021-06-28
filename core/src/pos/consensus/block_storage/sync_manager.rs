@@ -139,6 +139,7 @@ impl BlockStore {
     async fn fetch_quorum_cert(
         &self, qc: QuorumCert, retriever: &mut BlockRetriever,
     ) -> anyhow::Result<()> {
+        debug!("fetch_quorum_cert: qc={:?}", qc);
         let mut pending = vec![];
         let mut retrieve_qc = qc.clone();
         loop {

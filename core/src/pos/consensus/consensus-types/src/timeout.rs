@@ -4,7 +4,9 @@
 use crate::common::Round;
 use diem_crypto::ed25519::Ed25519Signature;
 use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
-use diem_types::validator_signer::ValidatorSigner;
+use diem_types::{
+    validator_config::ConsensusSignature, validator_signer::ValidatorSigner,
+};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
@@ -36,7 +38,7 @@ impl Timeout {
 
     pub fn round(&self) -> Round { self.round }
 
-    pub fn sign(&self, signer: &ValidatorSigner) -> Ed25519Signature {
+    pub fn sign(&self, signer: &ValidatorSigner) -> ConsensusSignature {
         signer.sign(self)
     }
 }

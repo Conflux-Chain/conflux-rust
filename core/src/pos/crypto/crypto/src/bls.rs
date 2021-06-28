@@ -21,6 +21,10 @@ use std::convert::TryFrom;
 
 #[cfg(mirai)]
 use crate::tags::ValidatedPublicKeyTag;
+use std::fmt::{self, Formatter};
+
+/// Private key length in bytes. The actual key length should be 255 bits.
+pub const BLS_PRIVATE_KEY_LENGTH: usize = 32;
 
 #[cfg(not(mirai))]
 struct ValidatedPublicKeyTag {}
@@ -30,12 +34,12 @@ struct ValidatedPublicKeyTag {}
 pub struct BLSPrivateKey(RawPrivateKey);
 
 /// BLS signature public key
-#[derive(DeserializeKey, Clone, SerializeKey, Debug, PartialEq)]
+#[derive(DeserializeKey, Clone, SerializeKey, PartialEq)]
 pub struct BLSPublicKey(RawPublicKey);
 
 // TODO(lpl): Signature aggregation.
 /// BLS signature wrapper
-#[derive(DeserializeKey, Clone, SerializeKey, Debug, PartialEq)]
+#[derive(DeserializeKey, Clone, SerializeKey, PartialEq)]
 pub struct BLSSignature(RawSignature);
 
 impl SigningKey for BLSPrivateKey {
@@ -185,9 +189,56 @@ impl ValidCryptoMaterial for BLSSignature {
     fn to_bytes(&self) -> Vec<u8> { self.0.as_bytes() }
 }
 
+impl fmt::Display for BLSPublicKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_encoded_string().map_err(|_| fmt::Error)?)
+    }
+}
+
 impl Uniform for BLSPrivateKey {
     fn generate<R>(rng: &mut R) -> Self
     where R: ::rand::RngCore + ::rand::CryptoRng {
         BLSPrivateKey(RawPrivateKey::generate(rng))
+    }
+}
+
+impl fmt::Debug for BLSPublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "BLSPublicKey({})", self)
+    }
+}
+
+impl fmt::Display for BLSSignature {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_encoded_string().map_err(|_| fmt::Error)?)
+    }
+}
+
+impl fmt::Debug for BLSSignature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "BLSSignature({})", self)
+    }
+}
+
+mod test {
+    use crate as diem_crypto;
+    use crate::{
+        bls::{BLSPrivateKey, BLSSignature},
+        SigningKey, Uniform, ValidCryptoMaterial,
+    };
+    use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
+    use serde::{Deserialize, Serialize};
+    use std::{convert::TryFrom, time::Instant};
+
+    #[derive(Debug, CryptoHasher, BCSCryptoHash, Serialize, Deserialize)]
+    pub struct TestDiemCrypto(pub String);
+    #[test]
+    fn test_bls_sig_decode() {
+        let sk = BLSPrivateKey::generate(&mut rand::thread_rng());
+        let sig = sk.sign(&TestDiemCrypto("".to_string()));
+        let sig_bytes = sig.to_bytes();
+        let start = Instant::now();
+        let _decoded = BLSSignature::try_from(sig_bytes.as_slice()).unwrap();
+        println!("Time elapsed: {} us", start.elapsed().as_micros());
     }
 }

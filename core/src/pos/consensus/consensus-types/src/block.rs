@@ -7,7 +7,7 @@ use crate::{
     quorum_cert::QuorumCert,
 };
 use anyhow::{bail, ensure, format_err};
-use diem_crypto::{ed25519::Ed25519Signature, hash::CryptoHash, HashValue};
+use diem_crypto::{hash::CryptoHash, HashValue};
 use diem_infallible::duration_since_epoch;
 use diem_types::{
     account_address::AccountAddress,
@@ -16,6 +16,7 @@ use diem_types::{
     epoch_state::EpochState,
     ledger_info::LedgerInfo,
     transaction::Version,
+    validator_config::ConsensusSignature,
     validator_signer::ValidatorSigner,
     validator_verifier::ValidatorVerifier,
 };
@@ -43,7 +44,7 @@ pub struct Block {
     block_data: BlockData,
     /// Signature that the hash of this block has been authored by the owner of
     /// the private key, this is only set within Proposal blocks
-    signature: Option<Ed25519Signature>,
+    signature: Option<ConsensusSignature>,
 }
 
 impl fmt::Debug for Block {
@@ -88,7 +89,7 @@ impl Block {
 
     pub fn round(&self) -> Round { self.block_data.round() }
 
-    pub fn signature(&self) -> Option<&Ed25519Signature> {
+    pub fn signature(&self) -> Option<&ConsensusSignature> {
         self.signature.as_ref()
     }
 
@@ -146,7 +147,7 @@ impl Block {
     // Block types.
     pub fn new_for_testing(
         id: HashValue, block_data: BlockData,
-        signature: Option<Ed25519Signature>,
+        signature: Option<ConsensusSignature>,
     ) -> Self
     {
         Block {
@@ -193,7 +194,7 @@ impl Block {
     }
 
     pub fn new_proposal_from_block_data_and_signature(
-        block_data: BlockData, signature: Ed25519Signature,
+        block_data: BlockData, signature: ConsensusSignature,
     ) -> Self {
         Block {
             id: block_data.hash(),
@@ -286,7 +287,7 @@ impl<'de> Deserialize<'de> for Block {
         #[serde(rename = "Block")]
         struct BlockWithoutId {
             block_data: BlockData,
-            signature: Option<Ed25519Signature>,
+            signature: Option<ConsensusSignature>,
         }
 
         let BlockWithoutId {

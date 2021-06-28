@@ -15,10 +15,7 @@ use consensus_types::{
 
 use crate::pos::pow_handler::PowHandler;
 use cfx_types::H256;
-use diem_crypto::{
-    ed25519::{Ed25519PrivateKey, Ed25519PublicKey},
-    PrivateKey,
-};
+use diem_crypto::PrivateKey;
 use diem_infallible::Mutex;
 use diem_logger::debug as diem_debug;
 use diem_types::{
@@ -26,6 +23,7 @@ use diem_types::{
     chain_id::ChainId,
     contract_event::ContractEvent,
     transaction::{ChangeSet, RawTransaction},
+    validator_config::{ConsensusPrivateKey, ConsensusPublicKey},
     write_set::WriteSet,
 };
 use move_core_types::language_storage::TypeTag;
@@ -63,8 +61,8 @@ pub struct ProposalGenerator {
     // Handle the interaction with PoW consensus.
     pow_handler: Arc<dyn PowInterface>,
     // FIXME(lpl): Where to put them?
-    private_key: Ed25519PrivateKey,
-    public_key: Ed25519PublicKey,
+    private_key: ConsensusPrivateKey,
+    public_key: ConsensusPublicKey,
 }
 
 impl ProposalGenerator {
@@ -72,7 +70,7 @@ impl ProposalGenerator {
         author: Author, block_store: Arc<dyn BlockReader + Send + Sync>,
         txn_manager: Arc<dyn TxnManager>, time_service: Arc<dyn TimeService>,
         max_block_size: u64, pow_handler: Arc<dyn PowInterface>,
-        private_key: Ed25519PrivateKey, public_key: Ed25519PublicKey,
+        private_key: ConsensusPrivateKey, public_key: ConsensusPublicKey,
     ) -> Self
     {
         Self {

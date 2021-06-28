@@ -21,7 +21,6 @@ use crate::{
 };
 use anyhow::{ensure, format_err, Error, Result};
 use diem_crypto::{
-    ed25519::*,
     hash::{CryptoHash, EventAccumulatorHasher},
     multi_ed25519::{MultiEd25519PublicKey, MultiEd25519Signature},
     traits::SigningKey,
@@ -53,7 +52,12 @@ pub use script::{
     TransactionScriptABI, TypeArgumentABI,
 };
 
-use crate::block_info::PivotBlockDecision;
+use crate::{
+    block_info::PivotBlockDecision,
+    validator_config::{
+        ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
+    },
+};
 use std::ops::Deref;
 pub use transaction_argument::{
     parse_transaction_argument, TransactionArgument,
@@ -289,7 +293,7 @@ impl RawTransaction {
     /// For a transaction that has just been signed, its signature is expected
     /// to be valid.
     pub fn sign(
-        self, private_key: &Ed25519PrivateKey, public_key: Ed25519PublicKey,
+        self, private_key: &ConsensusPrivateKey, public_key: ConsensusPublicKey,
     ) -> Result<SignatureCheckedTransaction> {
         let signature = private_key.sign(&self);
         Ok(SignatureCheckedTransaction(SignedTransaction::new(
@@ -487,12 +491,12 @@ impl fmt::Debug for SignedTransaction {
 
 impl SignedTransaction {
     pub fn new(
-        raw_txn: RawTransaction, public_key: Ed25519PublicKey,
-        signature: Ed25519Signature,
+        raw_txn: RawTransaction, public_key: ConsensusPublicKey,
+        signature: ConsensusSignature,
     ) -> SignedTransaction
     {
         let authenticator =
-            TransactionAuthenticator::ed25519(public_key, signature);
+            TransactionAuthenticator::bls(public_key, signature);
         SignedTransaction {
             raw_txn,
             authenticator,

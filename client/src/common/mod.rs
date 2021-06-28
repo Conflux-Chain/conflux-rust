@@ -275,7 +275,9 @@ pub fn initialize_common_modules(
             ConfigKey::new(load_pos_private_key(Path::new(&p)).unwrap())
         });
     pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
-        author: from_public_key(self_pos_public_key.as_ref().unwrap()),
+        author: from_consensus_public_key(
+            self_pos_public_key.as_ref().unwrap(),
+        ),
         consensus_key: self_pos_private_key.clone(),
         execution_key: self_pos_private_key,
         waypoint: Some(pos_config.base.waypoint.waypoint()),
@@ -832,7 +834,7 @@ use diem_config::{
     config::{NodeConfig, SafetyRulesTestConfig, TestConfig},
     keys::ConfigKey,
 };
-use diem_types::account_address::from_public_key;
+use diem_types::account_address::{from_consensus_public_key, from_public_key};
 use jsonrpc_http_server::Server as HttpServer;
 use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WSServer;

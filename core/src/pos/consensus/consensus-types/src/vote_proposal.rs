@@ -2,13 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::block::Block;
-use diem_crypto::{
-    ed25519::Ed25519Signature, hash::TransactionAccumulatorHasher,
-};
+use diem_crypto::hash::TransactionAccumulatorHasher;
 use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
 use diem_types::{
     block_info::PivotBlockDecision, epoch_state::EpochState,
-    proof::AccumulatorExtensionProof,
+    proof::AccumulatorExtensionProof, validator_config::ConsensusSignature,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -82,7 +80,7 @@ pub struct MaybeSignedVoteProposal {
     /// The signature of this proposal's hash from Diem Execution Correctness
     /// service. It is an `Option` because the LEC can be configured to not
     /// sign the vote hash.
-    pub signature: Option<Ed25519Signature>,
+    pub signature: Option<ConsensusSignature>,
 }
 
 impl Deref for MaybeSignedVoteProposal {

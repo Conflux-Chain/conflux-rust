@@ -22,7 +22,8 @@ use consensus_types::{
 };
 use diem_crypto::ed25519::Ed25519PublicKey;
 use diem_types::{
-    account_address::AccountAddress, epoch_change::EpochChangeProof, PeerId,
+    account_address::AccountAddress, epoch_change::EpochChangeProof,
+    validator_config::ConsensusPublicKey, PeerId,
 };
 use futures::channel::oneshot;
 use network::{node_table::NodeId, NetworkService};
@@ -74,7 +75,7 @@ impl ConsensusNetworkSender {
     /// Send a single message to the destination peer using the
     /// `CONSENSUS_DIRECT_SEND_PROTOCOL` ProtocolId.
     pub fn send_to(
-        &mut self, recipient: Ed25519PublicKey, msg: &dyn Message,
+        &mut self, recipient: ConsensusPublicKey, msg: &dyn Message,
     ) -> Result<(), anyhow::Error> {
         if let Some(peer_hash) = self
             .protocol_handler
@@ -97,7 +98,7 @@ impl ConsensusNetworkSender {
     /// Send a single message to the destination peers using the
     /// `CONSENSUS_DIRECT_SEND_PROTOCOL` ProtocolId.
     pub fn send_to_many(
-        &mut self, recipients: impl Iterator<Item = Ed25519PublicKey>,
+        &mut self, recipients: impl Iterator<Item = ConsensusPublicKey>,
         msg: &dyn Message,
     ) -> Result<(), anyhow::Error>
     {

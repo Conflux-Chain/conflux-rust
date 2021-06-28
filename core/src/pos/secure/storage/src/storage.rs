@@ -5,8 +5,9 @@ use crate::{
     KVStorage, NamespacedStorage, OnDiskStorage, PublicKeyResponse,
     VaultStorage,
 };
-use diem_crypto::ed25519::{
-    Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature,
+use diem_crypto::PrivateKey;
+use diem_types::validator_config::{
+    ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
 };
 use enum_dispatch::enum_dispatch;
 use serde::{de::DeserializeOwned, Serialize};

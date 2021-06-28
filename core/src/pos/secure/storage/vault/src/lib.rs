@@ -6,11 +6,10 @@
 pub mod dev;
 
 use diem_crypto::{
-    ed25519::{
-        Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature,
-        ED25519_PRIVATE_KEY_LENGTH,
-    },
-    PrivateKey,
+    bls::BLS_PRIVATE_KEY_LENGTH, PrivateKey, ValidCryptoMaterial,
+};
+use diem_types::validator_config::{
+    ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -310,7 +309,7 @@ impl Client {
 
     pub fn export_ed25519_key(
         &self, name: &str, version: Option<u32>,
-    ) -> Result<Ed25519PrivateKey, Error> {
+    ) -> Result<ConsensusPrivateKey, Error> {
         let request = self.agent.get(&format!(
             "{}/v1/transit/export/signing-key/{}",
             self.host, name
@@ -320,8 +319,8 @@ impl Client {
         process_transit_export_response(name, version, resp)
     }
 
-    pub fn import_ed25519_key(
-        &self, name: &str, key: &Ed25519PrivateKey,
+    pub fn import_consensus_key(
+        &self, name: &str, key: &ConsensusPrivateKey,
     ) -> Result<(), Error> {
         let backup =
             base64::encode(serde_json::to_string(&KeyBackup::new(key))?);
@@ -344,9 +343,9 @@ impl Client {
         process_transit_list_response(resp)
     }
 
-    pub fn read_ed25519_key(
+    pub fn read_consensus_key(
         &self, name: &str,
-    ) -> Result<Vec<ReadResponse<Ed25519PublicKey>>, Error> {
+    ) -> Result<Vec<ReadResponse<ConsensusPublicKey>>, Error> {
         let request = self
             .agent
             .get(&format!("{}/v1/transit/keys/{}", self.host, name));
@@ -373,9 +372,9 @@ impl Client {
     /// key name.
     pub fn trim_key_versions(
         &self, name: &str,
-    ) -> Result<Ed25519PublicKey, Error> {
+    ) -> Result<ConsensusPublicKey, Error> {
         // Read all keys and versions
-        let all_pub_keys = self.read_ed25519_key(name)?;
+        let all_pub_keys = self.read_consensus_key(name)?;
 
         // Find the maximum and minimum versions
         let max_version = all_pub_keys
@@ -439,7 +438,7 @@ impl Client {
 
     pub fn sign_ed25519(
         &self, name: &str, data: &[u8], version: Option<u32>,
-    ) -> Result<Ed25519Signature, Error> {
+    ) -> Result<ConsensusSignature, Error> {
         let data = if let Some(version) = version {
             json!({ "input": base64::encode(&data), "key_version": version })
         } else {
@@ -635,7 +634,7 @@ pub fn process_transit_create_response(
 /// Processes the response returned by a transit key export vault request.
 pub fn process_transit_export_response(
     name: &str, version: Option<u32>, resp: Response,
-) -> Result<Ed25519PrivateKey, Error> {
+) -> Result<ConsensusPrivateKey, Error> {
     if resp.ok() {
         let export_key: ExportKeyResponse =
             serde_json::from_str(&resp.into_string()?)?;
@@ -654,9 +653,9 @@ pub fn process_transit_export_response(
 
         let composite_key = base64::decode(composite_key)?;
         if let Some(composite_key) =
-            composite_key.get(0..ED25519_PRIVATE_KEY_LENGTH)
+            composite_key.get(0..BLS_PRIVATE_KEY_LENGTH)
         {
-            Ok(Ed25519PrivateKey::try_from(composite_key)?)
+            Ok(ConsensusPrivateKey::try_from(composite_key)?)
         } else {
             Err(Error::InternalError(
                 "Insufficient key length returned by vault export key request"
@@ -690,7 +689,7 @@ pub fn process_transit_list_response(
 /// Processes the response returned by a transit key read vault request.
 pub fn process_transit_read_response(
     name: &str, resp: Response,
-) -> Result<Vec<ReadResponse<Ed25519PublicKey>>, Error> {
+) -> Result<Vec<ReadResponse<ConsensusPublicKey>>, Error> {
     match resp.status() {
         200 => {
             let read_key: ReadKeyResponse =
@@ -699,7 +698,7 @@ pub fn process_transit_read_response(
             for (version, value) in read_key.data.keys {
                 read_resp.push(ReadResponse::new(
                     value.creation_time,
-                    Ed25519PublicKey::try_from(
+                    ConsensusPublicKey::try_from(
                         base64::decode(&value.public_key)?.as_slice(),
                     )?,
                     version,
@@ -731,7 +730,7 @@ pub fn process_transit_restore_response(resp: Response) -> Result<(), Error> {
 /// Processes the response returned by a transit key sign vault request.
 pub fn process_transit_sign_response(
     resp: Response,
-) -> Result<Ed25519Signature, Error> {
+) -> Result<ConsensusSignature, Error> {
     if resp.ok() {
         let signature: SignatureResponse =
             serde_json::from_str(&resp.into_string()?)?;
@@ -740,7 +739,7 @@ pub fn process_transit_sign_response(
         let signature = signature_pieces
             .get(2)
             .ok_or_else(|| Error::SerializationError(signature.into()))?;
-        Ok(Ed25519Signature::try_from(
+        Ok(ConsensusSignature::try_from(
             base64::decode(&signature)?.as_slice(),
         )?)
     } else {
@@ -812,7 +811,7 @@ pub struct KeyBackup {
 }
 
 impl KeyBackup {
-    pub fn new(key: &Ed25519PrivateKey) -> Self {
+    pub fn new(key: &ConsensusPrivateKey) -> Self {
         let mut key_bytes = key.to_bytes().to_vec();
         let pub_key_bytes = key.public_key().to_bytes();
         key_bytes.extend(&pub_key_bytes);

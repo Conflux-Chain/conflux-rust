@@ -1,6 +1,9 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use diem_crypto::ed25519::{
+    Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature,
+};
 use diem_types::{
     account_address::AccountAddress, transaction::SignedTransaction,
 };

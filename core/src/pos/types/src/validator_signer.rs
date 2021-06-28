@@ -1,12 +1,14 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::account_address::AccountAddress;
+use crate::{
+    account_address::AccountAddress,
+    validator_config::{
+        ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
+    },
+};
 use diem_crypto::{
-    ed25519::{Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature},
-    hash::CryptoHash,
-    test_utils::TEST_SEED,
-    PrivateKey, SigningKey, Uniform,
+    hash::CryptoHash, test_utils::TEST_SEED, PrivateKey, SigningKey, Uniform,
 };
 use rand::{rngs::StdRng, SeedableRng};
 use serde::ser::Serialize;
@@ -19,11 +21,13 @@ use std::convert::TryFrom;
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Clone))]
 pub struct ValidatorSigner {
     author: AccountAddress,
-    private_key: Ed25519PrivateKey,
+    private_key: ConsensusPrivateKey,
 }
 
 impl ValidatorSigner {
-    pub fn new(author: AccountAddress, private_key: Ed25519PrivateKey) -> Self {
+    pub fn new(
+        author: AccountAddress, private_key: ConsensusPrivateKey,
+    ) -> Self {
         ValidatorSigner {
             author,
             private_key,
@@ -33,7 +37,7 @@ impl ValidatorSigner {
     /// Constructs a signature for `message` using `private_key`.
     pub fn sign<T: Serialize + CryptoHash>(
         &self, message: &T,
-    ) -> Ed25519Signature {
+    ) -> ConsensusSignature {
         self.private_key.sign(message)
     }
 
@@ -41,14 +45,14 @@ impl ValidatorSigner {
     pub fn author(&self) -> AccountAddress { self.author }
 
     /// Returns the public key associated with this signer.
-    pub fn public_key(&self) -> Ed25519PublicKey {
+    pub fn public_key(&self) -> ConsensusPublicKey {
         self.private_key.public_key()
     }
 
     /// Returns the private key associated with this signer. Only available for
     /// testing purposes.
     #[cfg(any(test, feature = "fuzzing"))]
-    pub fn private_key(&self) -> &Ed25519PrivateKey { &self.private_key }
+    pub fn private_key(&self) -> &ConsensusPrivateKey { &self.private_key }
 }
 
 impl ValidatorSigner {
@@ -61,7 +65,7 @@ impl ValidatorSigner {
             StdRng::from_seed(opt_rng_seed.into().unwrap_or(TEST_SEED));
         Self::new(
             AccountAddress::random(),
-            Ed25519PrivateKey::generate(&mut rng),
+            ConsensusPrivateKey::generate(&mut rng),
         )
     }
 
@@ -70,7 +74,7 @@ impl ValidatorSigner {
     pub fn from_int(num: u8) -> Self {
         let mut address = [0; AccountAddress::LENGTH];
         address[0] = num;
-        let private_key = Ed25519PrivateKey::generate_for_testing();
+        let private_key = ConsensusPrivateKey::generate_for_testing();
         Self::new(AccountAddress::try_from(&address[..]).unwrap(), private_key)
     }
 }
@@ -82,17 +86,17 @@ pub mod proptests {
     use proptest::{prelude::*, sample, strategy::LazyJust};
 
     #[allow(clippy::redundant_closure)]
-    pub fn arb_signing_key() -> impl Strategy<Value = Ed25519PrivateKey> {
+    pub fn arb_signing_key() -> impl Strategy<Value = ConsensusPrivateKey> {
         prop_oneof![
             // The no_shrink here reflects that particular keypair choices out
             // of random options are irrelevant.
-            LazyJust::new(|| Ed25519PrivateKey::generate_for_testing()),
-            LazyJust::new(|| Ed25519PrivateKey::genesis()),
+            LazyJust::new(|| ConsensusPrivateKey::generate_for_testing()),
+            LazyJust::new(|| ConsensusPrivateKey::genesis()),
         ]
     }
 
     pub fn signer_strategy(
-        signing_key_strategy: impl Strategy<Value = Ed25519PrivateKey>,
+        signing_key_strategy: impl Strategy<Value = ConsensusPrivateKey>,
     ) -> impl Strategy<Value = ValidatorSigner> {
         signing_key_strategy.prop_map(|signing_key| {
             ValidatorSigner::new(AccountAddress::random(), signing_key)
@@ -109,20 +113,20 @@ pub mod proptests {
         prop_oneof![
             rand_signer(),
             LazyJust::new(|| {
-                let genesis_key = Ed25519PrivateKey::genesis();
+                let genesis_key = ConsensusPrivateKey::genesis();
                 ValidatorSigner::new(AccountAddress::random(), genesis_key)
             })
         ]
     }
 
     fn select_keypair(
-        keys: Vec<Ed25519PrivateKey>,
-    ) -> impl Strategy<Value = Ed25519PrivateKey> {
+        keys: Vec<ConsensusPrivateKey>,
+    ) -> impl Strategy<Value = ConsensusPrivateKey> {
         sample::select(keys)
     }
 
     pub fn mostly_in_keypair_pool(
-        keys: Vec<Ed25519PrivateKey>,
+        keys: Vec<ConsensusPrivateKey>,
     ) -> impl Strategy<Value = ValidatorSigner> {
         prop::strategy::Union::new_weighted(vec![
             (9, signer_strategy(select_keypair(keys)).boxed()),

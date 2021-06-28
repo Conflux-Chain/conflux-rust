@@ -5,7 +5,7 @@ use crate::{
     account_address::AccountAddress,
     network_address::{encrypted::EncNetworkAddress, NetworkAddress},
 };
-use diem_crypto::ed25519::Ed25519PublicKey;
+use diem_crypto::bls::{BLSPrivateKey, BLSPublicKey, BLSSignature};
 use move_core_types::move_resource::MoveResource;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
@@ -36,7 +36,7 @@ impl MoveResource for ValidatorOperatorConfigResource {
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct ValidatorConfig {
-    pub consensus_public_key: Ed25519PublicKey,
+    pub consensus_public_key: ConsensusPublicKey,
     /// This is an bcs serialized Vec<EncNetworkAddress>
     pub validator_network_addresses: Vec<u8>,
     /// This is an bcs serialized Vec<NetworkAddress>
@@ -45,7 +45,7 @@ pub struct ValidatorConfig {
 
 impl ValidatorConfig {
     pub fn new(
-        consensus_public_key: Ed25519PublicKey,
+        consensus_public_key: ConsensusPublicKey,
         validator_network_addresses: Vec<u8>,
         fullnode_network_addresses: Vec<u8>,
     ) -> Self
@@ -69,3 +69,8 @@ impl ValidatorConfig {
         bcs::from_bytes(&self.validator_network_addresses)
     }
 }
+
+// TODO(lpl): Put this in a proper place.
+pub type ConsensusPublicKey = BLSPublicKey;
+pub type ConsensusPrivateKey = BLSPrivateKey;
+pub type ConsensusSignature = BLSSignature;

@@ -8,7 +8,6 @@ pub use error::Error;
 
 use anyhow::Result;
 use diem_crypto::{
-    ed25519::Ed25519Signature,
     hash::{TransactionAccumulatorHasher, SPARSE_MERKLE_PLACEHOLDER_HASH},
     HashValue,
 };
@@ -23,6 +22,7 @@ use diem_types::{
         Transaction, TransactionInfo, TransactionListWithProof,
         TransactionStatus, Version,
     },
+    validator_config::ConsensusSignature,
 };
 use scratchpad::ProofRead;
 use serde::{Deserialize, Serialize};
@@ -134,7 +134,7 @@ pub struct StateComputeResult {
     transaction_info_hashes: Vec<HashValue>,
 
     /// The signature of the VoteProposal corresponding to this block.
-    signature: Option<Ed25519Signature>,
+    signature: Option<ConsensusSignature>,
 
     /// Tracks the last pivot selection of a proposed block
     pivot_decision: Option<PivotBlockDecision>,
@@ -219,9 +219,9 @@ impl StateComputeResult {
 
     pub fn has_reconfiguration(&self) -> bool { self.epoch_state.is_some() }
 
-    pub fn signature(&self) -> &Option<Ed25519Signature> { &self.signature }
+    pub fn signature(&self) -> &Option<ConsensusSignature> { &self.signature }
 
-    pub fn set_signature(&mut self, sig: Ed25519Signature) {
+    pub fn set_signature(&mut self, sig: ConsensusSignature) {
         self.signature = Some(sig);
     }
 }

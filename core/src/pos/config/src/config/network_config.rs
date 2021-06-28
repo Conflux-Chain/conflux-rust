@@ -7,7 +7,7 @@ use crate::{
     network_id::NetworkId,
     utils,
 };
-use diem_crypto::{x25519, Uniform};
+use diem_crypto::{x25519, Uniform, ValidCryptoMaterial};
 use diem_network_address_encryption::Encryptor;
 use diem_secure_storage::{CryptoStorage, KVStorage, Storage};
 use diem_types::{

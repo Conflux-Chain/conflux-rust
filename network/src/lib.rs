@@ -70,6 +70,7 @@ use crate::{
 };
 use cfx_addr::Network;
 use diem_crypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};
+use diem_types::validator_config::ConsensusPublicKey;
 use ipnetwork::{IpNetwork, IpNetworkError};
 use keylib::Secret;
 use priority_send_queue::SendQueuePriority;
@@ -275,7 +276,7 @@ pub trait NetworkProtocolHandler: Sync + Send {
     fn on_peer_connected(
         &self, io: &dyn NetworkContext, node_id: &NodeId,
         peer_protocol_version: ProtocolVersion,
-        pos_public_key: Option<Ed25519PublicKey>,
+        pos_public_key: Option<ConsensusPublicKey>,
     );
 
     fn on_peer_disconnected(&self, io: &dyn NetworkContext, node_id: &NodeId);

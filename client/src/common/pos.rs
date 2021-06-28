@@ -17,8 +17,11 @@ use diem_crypto::ed25519::Ed25519PublicKey;
 use diem_logger::prelude::*;
 use diem_metrics::metric_server;
 use diem_types::{
-    account_address::{from_public_key, AccountAddress},
+    account_address::{
+        from_consensus_public_key, from_public_key, AccountAddress,
+    },
     block_info::PivotBlockDecision,
+    validator_config::ConsensusPublicKey,
     PeerId,
 };
 use diemdb::DiemDB;
@@ -52,7 +55,7 @@ pub struct DiemHandle {
 pub fn start_pos_consensus(
     config: &NodeConfig, network: Arc<NetworkService>, own_node_hash: H256,
     protocol_config: ProtocolConfiguration,
-    own_pos_public_key: Option<Ed25519PublicKey>,
+    own_pos_public_key: Option<ConsensusPublicKey>,
 ) -> DiemHandle
 {
     crash_handler::setup_panic_handler();
@@ -118,7 +121,7 @@ fn setup_chunk_executor(db: DbReaderWriter) -> Box<dyn ChunkExecutor> {
 pub fn setup_pos_environment(
     node_config: &NodeConfig, network: Arc<NetworkService>,
     own_node_hash: H256, protocol_config: ProtocolConfiguration,
-    own_pos_public_key: Option<Ed25519PublicKey>,
+    own_pos_public_key: Option<ConsensusPublicKey>,
 ) -> DiemHandle
 {
     // TODO(lpl): Handle port conflict.
@@ -222,7 +225,7 @@ pub fn setup_pos_environment(
         consensus_reconfig_events,
         own_pos_public_key.map_or_else(
             || AccountAddress::random(),
-            |public_key| from_public_key(&public_key),
+            |public_key| from_consensus_public_key(&public_key),
         ),
     );
     debug!("Consensus started in {} ms", instant.elapsed().as_millis());

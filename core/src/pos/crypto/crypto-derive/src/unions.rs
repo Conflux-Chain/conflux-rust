@@ -304,11 +304,11 @@ pub fn impl_enum_signature(
                 }
             }
 
-            fn to_bytes(&self) -> Vec<u8> {
-                match self {
-                    #to_bytes_arms
-                }
-            }
+            // fn to_bytes(&self) -> Vec<u8> {
+            //     match self {
+            //         #to_bytes_arms
+            //     }
+            // }
         }
 
         impl diem_crypto::private::Sealed for #name {}
