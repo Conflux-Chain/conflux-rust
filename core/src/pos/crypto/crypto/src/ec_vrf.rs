@@ -1,12 +1,14 @@
 use crate::{
-    CryptoMaterialError, HashValue, PrivateKey, PublicKey, VRFPrivateKey,
-    VRFProof, VRFPublicKey, ValidCryptoMaterial, ValidCryptoMaterialStringExt,
+    CryptoMaterialError, HashValue, PrivateKey, PublicKey, Uniform,
+    VRFPrivateKey, VRFProof, VRFPublicKey, ValidCryptoMaterial,
+    ValidCryptoMaterialStringExt,
 };
 use anyhow::{anyhow, Result};
 use diem_crypto_derive::{
     DeserializeKey, SerializeKey, SilentDebug, SilentDisplay,
 };
 use lazy_static::lazy_static;
+use openssl::{ec, nid::Nid};
 use parking_lot::Mutex;
 use std::convert::TryFrom;
 use vrf::{
@@ -27,7 +29,15 @@ lazy_static! {
 struct ValidatedPublicKeyTag {}
 
 /// Elliptic Curve VRF private key
-#[derive(DeserializeKey, SerializeKey, SilentDebug, SilentDisplay)]
+#[derive(
+    DeserializeKey,
+    Clone,
+    SerializeKey,
+    SilentDebug,
+    SilentDisplay,
+    Eq,
+    PartialEq,
+)]
 pub struct EcVrfPrivateKey(Vec<u8>);
 
 /// Elliptic Curve VRF public key
@@ -162,4 +172,19 @@ impl ValidCryptoMaterial for EcVrfPublicKey {
 
 impl ValidCryptoMaterial for EcVrfProof {
     fn to_bytes(&self) -> Vec<u8> { self.0.clone() }
+}
+
+// TODO(lpl): Double check the correctness of key generation.
+// Reuse ec group in VRF_CONTEXT?
+impl Uniform for EcVrfPrivateKey {
+    fn generate<R>(rng: &mut R) -> Self
+    where R: ::rand::RngCore + ::rand::CryptoRng {
+        let ec_group = ec::EcGroup::from_curve_name(Nid::SECP256K1).unwrap();
+        Self(
+            ec::EcKey::generate(&ec_group)
+                .unwrap()
+                .private_key()
+                .to_vec(),
+        )
+    }
 }

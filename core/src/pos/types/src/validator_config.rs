@@ -5,7 +5,10 @@ use crate::{
     account_address::AccountAddress,
     network_address::{encrypted::EncNetworkAddress, NetworkAddress},
 };
-use diem_crypto::bls::{BLSPrivateKey, BLSPublicKey, BLSSignature};
+use diem_crypto::{
+    bls::{BLSPrivateKey, BLSPublicKey, BLSSignature},
+    ec_vrf::{EcVrfPrivateKey, EcVrfProof, EcVrfPublicKey},
+};
 use move_core_types::move_resource::MoveResource;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
@@ -37,6 +40,8 @@ impl MoveResource for ValidatorOperatorConfigResource {
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct ValidatorConfig {
     pub consensus_public_key: ConsensusPublicKey,
+    /// None if the leader election does not need VRF.
+    pub vrf_public_key: Option<ConsensusVRFPublicKey>,
     /// This is an bcs serialized Vec<EncNetworkAddress>
     pub validator_network_addresses: Vec<u8>,
     /// This is an bcs serialized Vec<NetworkAddress>
@@ -46,12 +51,14 @@ pub struct ValidatorConfig {
 impl ValidatorConfig {
     pub fn new(
         consensus_public_key: ConsensusPublicKey,
+        vrf_public_key: Option<ConsensusVRFPublicKey>,
         validator_network_addresses: Vec<u8>,
         fullnode_network_addresses: Vec<u8>,
     ) -> Self
     {
         ValidatorConfig {
             consensus_public_key,
+            vrf_public_key,
             validator_network_addresses,
             fullnode_network_addresses,
         }
@@ -74,3 +81,6 @@ impl ValidatorConfig {
 pub type ConsensusPublicKey = BLSPublicKey;
 pub type ConsensusPrivateKey = BLSPrivateKey;
 pub type ConsensusSignature = BLSSignature;
+pub type ConsensusVRFPublicKey = EcVrfPublicKey;
+pub type ConsensusVRFPrivateKey = EcVrfPrivateKey;
+pub type ConsensusVRFProof = EcVrfProof;

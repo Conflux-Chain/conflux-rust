@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{account_address::AccountAddress, on_chain_config::ValidatorSet};
-use diem_crypto::{hash::CryptoHash, Signature, VerifyingKey};
+use diem_crypto::{hash::CryptoHash, Signature, VRFPublicKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt};
 use thiserror::Error;
 
-use crate::validator_config::{ConsensusPublicKey, ConsensusSignature};
+use crate::validator_config::{
+    ConsensusPublicKey, ConsensusSignature, ConsensusVRFProof,
+    ConsensusVRFPublicKey,
+};
 #[cfg(any(test, feature = "fuzzing"))]
 use anyhow::{ensure, Result};
 #[cfg(any(test, feature = "fuzzing"))]
@@ -40,6 +43,8 @@ pub enum VerifyError {
     #[error("Signature is invalid")]
     /// The signature does not match the hash.
     InvalidSignature,
+    #[error("Invalid VRF proof")]
+    InvalidVrfProof,
 }
 
 /// Helper struct to manage validator information for validation
@@ -47,13 +52,20 @@ pub enum VerifyError {
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct ValidatorConsensusInfo {
     public_key: ConsensusPublicKey,
+    /// None if we do not need VRF.
+    vrf_public_key: Option<ConsensusVRFPublicKey>,
     voting_power: u64,
 }
 
 impl ValidatorConsensusInfo {
-    pub fn new(public_key: ConsensusPublicKey, voting_power: u64) -> Self {
+    pub fn new(
+        public_key: ConsensusPublicKey,
+        vrf_public_key: Option<ConsensusVRFPublicKey>, voting_power: u64,
+    ) -> Self
+    {
         ValidatorConsensusInfo {
             public_key,
+            vrf_public_key,
             voting_power,
         }
     }
@@ -148,10 +160,14 @@ impl ValidatorVerifier {
     /// quorum voting power 1.
     pub fn new_single(
         author: AccountAddress, public_key: ConsensusPublicKey,
-    ) -> Self {
+        vrf_public_key: Option<ConsensusVRFPublicKey>,
+    ) -> Self
+    {
         let mut author_to_validator_info = BTreeMap::new();
-        author_to_validator_info
-            .insert(author, ValidatorConsensusInfo::new(public_key, 1));
+        author_to_validator_info.insert(
+            author,
+            ValidatorConsensusInfo::new(public_key, vrf_public_key, 1),
+        );
         Self::new(author_to_validator_info)
     }
 
@@ -173,6 +189,22 @@ impl ValidatorVerifier {
                 }
             }
             None => Err(VerifyError::UnknownAuthor),
+        }
+    }
+
+    /// Verify the correctness of a signature of a message by a known author.
+    pub fn verify_vrf(
+        &self, author: AccountAddress, seed: &[u8], proof: &ConsensusVRFProof,
+    ) -> std::result::Result<(), VerifyError> {
+        match self.get_vrf_public_key(&author) {
+            Some(Some(public_key)) => {
+                if public_key.verify_proof(seed, proof).is_err() {
+                    Err(VerifyError::InvalidVrfProof)
+                } else {
+                    Ok(())
+                }
+            }
+            _ => Err(VerifyError::UnknownAuthor),
         }
     }
 
@@ -276,6 +308,15 @@ impl ValidatorVerifier {
             .map(|validator_info| validator_info.public_key.clone())
     }
 
+    /// Returns the VRF public key for this address.
+    pub fn get_vrf_public_key(
+        &self, author: &AccountAddress,
+    ) -> Option<Option<ConsensusVRFPublicKey>> {
+        self.address_to_validator_info
+            .get(&author)
+            .map(|validator_info| validator_info.vrf_public_key.clone())
+    }
+
     /// Returns the voting power for this address.
     pub fn get_voting_power(&self, author: &AccountAddress) -> Option<u64> {
         self.address_to_validator_info
@@ -341,6 +382,7 @@ impl From<&ValidatorSet> for ValidatorVerifier {
                     *validator.account_address(),
                     ValidatorConsensusInfo::new(
                         validator.consensus_public_key().clone(),
+                        validator.vrf_public_key().clone(),
                         validator.consensus_voting_power(),
                     ),
                 );
@@ -360,6 +402,7 @@ impl From<&ValidatorVerifier> for ValidatorSet {
                     crate::validator_info::ValidatorInfo::new_with_test_network_keys(
                         addr,
                         verifier.get_public_key(&addr).unwrap(),
+                        verifier.get_vrf_public_key(&addr).unwrap(),
                         verifier.get_voting_power(&addr).unwrap(),
                     )
                 })
@@ -393,6 +436,7 @@ pub fn random_validator_verifier(
             random_signer.author(),
             crate::validator_verifier::ValidatorConsensusInfo::new(
                 random_signer.public_key(),
+                random_signer.vrf_public_key(),
                 1,
             ),
         );
@@ -457,6 +501,7 @@ mod tests {
         let validator = ValidatorVerifier::new_single(
             validator_signer.author(),
             validator_signer.public_key(),
+            validator_signer.vrf_public_key(),
         );
         assert_eq!(
             validator.verify(
@@ -500,7 +545,11 @@ mod tests {
         for validator in validator_signers.iter() {
             author_to_public_key_map.insert(
                 validator.author(),
-                ValidatorConsensusInfo::new(validator.public_key(), 1),
+                ValidatorConsensusInfo::new(
+                    validator.public_key(),
+                    validator.vrf_public_key(),
+                    1,
+                ),
             );
         }
 
@@ -630,6 +679,7 @@ mod tests {
                 validator_signer.author(),
                 ValidatorConsensusInfo::new(
                     validator_signer.public_key(),
+                    validator_signer.vrf_public_key(),
                     voting_power,
                 ),
             );
@@ -662,6 +712,7 @@ mod tests {
                 validator_signer.author(),
                 ValidatorConsensusInfo::new(
                     validator_signer.public_key(),
+                    validator_signer.vrf_public_key(),
                     i as u64,
                 ),
             );

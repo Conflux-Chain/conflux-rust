@@ -42,6 +42,7 @@ bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", b
 vrf = "0.2.2"
 lazy_static = "1.4"
 parking_lot = "0.11"
+openssl = "0.10"
 
 
 [dev-dependencies]

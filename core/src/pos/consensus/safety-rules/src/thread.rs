@@ -46,6 +46,8 @@ impl ThreadService {
                 verify_vote_proposal_signature,
                 export_consensus_key,
                 timeout,
+                // TODO(lpl): Support this?
+                None,
             )
         });
 

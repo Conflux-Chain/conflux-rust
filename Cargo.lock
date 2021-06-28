@@ -1632,6 +1632,7 @@ name = "diem-config"
 version = "0.1.0"
 dependencies = [
  "bcs",
+ "cfx-types",
  "diem-crypto",
  "diem-crypto-derive",
  "diem-global-constants",
@@ -1673,6 +1674,7 @@ dependencies = [
  "lazy_static",
  "mirai-annotations",
  "once_cell",
+ "openssl",
  "parity-secp256k1",
  "parking_lot 0.11.1",
  "proptest",

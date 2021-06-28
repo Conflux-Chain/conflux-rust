@@ -46,6 +46,8 @@ impl Process {
             data.verify_vote_proposal_signature,
             data.export_consensus_key,
             data.network_timeout,
+            // TODO(lpl): Support this?
+            None,
         );
     }
 }

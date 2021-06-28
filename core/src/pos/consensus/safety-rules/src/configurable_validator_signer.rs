@@ -8,9 +8,11 @@ use diem_types::{
     account_address::AccountAddress,
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
+        ConsensusVRFPrivateKey, ConsensusVRFProof, ConsensusVRFPublicKey,
     },
     validator_signer::ValidatorSigner,
 };
+use rand::distributions::Open01;
 use serde::Serialize;
 
 /// A ConfigurableValidatorSigner is a ValidatorSigner wrapper that offers
@@ -26,8 +28,11 @@ impl ConfigurableValidatorSigner {
     /// Returns a new ValidatorSigner instance
     pub fn new_signer(
         author: AccountAddress, consensus_key: ConsensusPrivateKey,
-    ) -> Self {
-        let signer = ValidatorSigner::new(author, consensus_key);
+        vrf_private_key: Option<ConsensusVRFPrivateKey>,
+    ) -> Self
+    {
+        let signer =
+            ValidatorSigner::new(author, consensus_key, vrf_private_key);
         ConfigurableValidatorSigner::Signer(signer)
     }
 
@@ -55,6 +60,16 @@ impl ConfigurableValidatorSigner {
         }
     }
 
+    /// Returns the VRF public key associated with the signer configuration.
+    pub fn vrf_public_key(&self) -> Option<ConsensusVRFPublicKey> {
+        match self {
+            ConfigurableValidatorSigner::Signer(signer) => {
+                signer.vrf_public_key()
+            }
+            ConfigurableValidatorSigner::Handle(handle) => todo!(),
+        }
+    }
+
     /// Signs a given message using the signer configuration.
     pub fn sign<T: Serialize + CryptoHash>(
         &self, message: &T, storage: &PersistentSafetyStorage,
@@ -66,6 +81,17 @@ impl ConfigurableValidatorSigner {
             ConfigurableValidatorSigner::Handle(handle) => {
                 handle.sign(message, storage)
             }
+        }
+    }
+
+    pub fn gen_vrf_proof(
+        &self, seed: &[u8],
+    ) -> Result<Option<ConsensusVRFProof>, Error> {
+        match self {
+            ConfigurableValidatorSigner::Signer(signer) => {
+                Ok(signer.gen_vrf_proof(seed))
+            }
+            ConfigurableValidatorSigner::Handle(handle) => todo!(),
         }
     }
 }

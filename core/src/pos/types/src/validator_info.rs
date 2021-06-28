@@ -10,7 +10,9 @@ use crate::network_address::{
 };
 use crate::{
     account_address::AccountAddress,
-    validator_config::{ConsensusPublicKey, ValidatorConfig},
+    validator_config::{
+        ConsensusPublicKey, ConsensusVRFPublicKey, ValidatorConfig,
+    },
 };
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
@@ -66,7 +68,9 @@ impl ValidatorInfo {
     #[cfg(any(test, feature = "fuzzing"))]
     pub fn new_with_test_network_keys(
         account_address: AccountAddress,
-        consensus_public_key: ConsensusPublicKey, consensus_voting_power: u64,
+        consensus_public_key: ConsensusPublicKey,
+        vrf_public_key: Option<ConsensusVRFPublicKey>,
+        consensus_voting_power: u64,
     ) -> Self
     {
         let addr = NetworkAddress::mock();
@@ -79,6 +83,7 @@ impl ValidatorInfo {
         );
         let config = ValidatorConfig::new(
             consensus_public_key,
+            vrf_public_key,
             bcs::to_bytes(&vec![enc_addr.unwrap()]).unwrap(),
             bcs::to_bytes(&vec![addr]).unwrap(),
         );
@@ -98,6 +103,10 @@ impl ValidatorInfo {
     /// Returns the key for validating signed messages from this validator
     pub fn consensus_public_key(&self) -> &ConsensusPublicKey {
         &self.config.consensus_public_key
+    }
+
+    pub fn vrf_public_key(&self) -> &Option<ConsensusVRFPublicKey> {
+        &self.config.vrf_public_key
     }
 
     /// Returns the voting power for this validator

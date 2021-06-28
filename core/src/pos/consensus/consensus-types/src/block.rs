@@ -16,7 +16,7 @@ use diem_types::{
     epoch_state::EpochState,
     ledger_info::LedgerInfo,
     transaction::Version,
-    validator_config::ConsensusSignature,
+    validator_config::{ConsensusSignature, ConsensusVRFProof},
     validator_signer::ValidatorSigner,
     validator_verifier::ValidatorVerifier,
 };
@@ -32,6 +32,9 @@ pub mod block_test_utils;
 #[path = "block_test.rs"]
 pub mod block_test;
 
+/// FIXME(lpl): Update seed according to VDF.
+pub const VRF_SEED: &[u8] = "seed".as_bytes();
+
 #[derive(Serialize, Clone, PartialEq, Eq)]
 /// Block has the core data of a consensus block that should be persistent when
 /// necessary. Each block must know the id of its parent and keep the
@@ -45,6 +48,9 @@ pub struct Block {
     /// Signature that the hash of this block has been authored by the owner of
     /// the private key, this is only set within Proposal blocks
     signature: Option<ConsensusSignature>,
+    /// Optional VRF proof tp prove the author is a valid proposer in this
+    /// round.
+    vrf_proof: Option<ConsensusVRFProof>,
 }
 
 impl fmt::Debug for Block {
@@ -93,6 +99,10 @@ impl Block {
         self.signature.as_ref()
     }
 
+    pub fn vrf_proof(&self) -> Option<&ConsensusVRFProof> {
+        self.vrf_proof.as_ref()
+    }
+
     pub fn timestamp_usecs(&self) -> u64 { self.block_data.timestamp_usecs() }
 
     pub fn gen_block_info(
@@ -139,6 +149,7 @@ impl Block {
             id: block_data.hash(),
             block_data,
             signature: None,
+            vrf_proof: None,
         }
     }
 
@@ -148,12 +159,14 @@ impl Block {
     pub fn new_for_testing(
         id: HashValue, block_data: BlockData,
         signature: Option<ConsensusSignature>,
+        vrf_proof: Option<ConsensusVRFProof>,
     ) -> Self
     {
         Block {
             id,
             block_data,
             signature,
+            vrf_proof,
         }
     }
 
@@ -167,9 +180,11 @@ impl Block {
             id: block_data.hash(),
             block_data,
             signature: None,
+            vrf_proof: None,
         }
     }
 
+    // Test only?
     pub fn new_proposal(
         payload: Payload, round: Round, timestamp_usecs: u64,
         quorum_cert: QuorumCert, validator_signer: &ValidatorSigner,
@@ -186,20 +201,28 @@ impl Block {
         Self::new_proposal_from_block_data(block_data, validator_signer)
     }
 
+    // Test only?
     pub fn new_proposal_from_block_data(
         block_data: BlockData, validator_signer: &ValidatorSigner,
     ) -> Self {
         let signature = validator_signer.sign(&block_data);
-        Self::new_proposal_from_block_data_and_signature(block_data, signature)
+        let vrf_proof = validator_signer
+            .gen_vrf_proof(&block_data.vrf_round_seed(VRF_SEED));
+        Self::new_proposal_from_block_data_and_signature(
+            block_data, signature, vrf_proof,
+        )
     }
 
     pub fn new_proposal_from_block_data_and_signature(
         block_data: BlockData, signature: ConsensusSignature,
-    ) -> Self {
+        vrf_proof: Option<ConsensusVRFProof>,
+    ) -> Self
+    {
         Block {
             id: block_data.hash(),
             block_data,
             signature: Some(signature),
+            vrf_proof,
         }
     }
 
@@ -218,6 +241,13 @@ impl Block {
                     format_err!("Missing signature in Proposal")
                 })?;
                 validator.verify(*author, &self.block_data, signature)?;
+                if let Some(vrf_proof) = &self.vrf_proof {
+                    validator.verify_vrf(
+                        *author,
+                        &self.block_data.vrf_round_seed(VRF_SEED),
+                        vrf_proof,
+                    )?;
+                }
                 self.quorum_cert().verify(validator)
             }
         }
@@ -288,17 +318,20 @@ impl<'de> Deserialize<'de> for Block {
         struct BlockWithoutId {
             block_data: BlockData,
             signature: Option<ConsensusSignature>,
+            vrf_proof: Option<ConsensusVRFProof>,
         }
 
         let BlockWithoutId {
             block_data,
             signature,
+            vrf_proof,
         } = BlockWithoutId::deserialize(deserializer)?;
 
         Ok(Block {
             id: block_data.hash(),
             block_data,
             signature,
+            vrf_proof,
         })
     }
 }

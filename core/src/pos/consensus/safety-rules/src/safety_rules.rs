@@ -11,7 +11,7 @@ use crate::{
     t_safety_rules::TSafetyRules,
 };
 use consensus_types::{
-    block::Block,
+    block::{Block, VRF_SEED},
     block_data::BlockData,
     common::{Author, Round},
     quorum_cert::QuorumCert,
@@ -24,6 +24,7 @@ use consensus_types::{
 use diem_crypto::{
     hash::{CryptoHash, HashValue},
     traits::Signature,
+    Uniform,
 };
 use diem_logger::prelude::*;
 use diem_types::{
@@ -31,7 +32,10 @@ use diem_types::{
     epoch_change::EpochChangeProof,
     epoch_state::EpochState,
     ledger_info::LedgerInfo,
-    validator_config::{ConsensusPublicKey, ConsensusSignature},
+    validator_config::{
+        ConsensusPublicKey, ConsensusSignature, ConsensusVRFPrivateKey,
+        ConsensusVRFProof,
+    },
     waypoint::Waypoint,
 };
 use serde::Serialize;
@@ -44,6 +48,7 @@ pub struct SafetyRules {
     export_consensus_key: bool,
     validator_signer: Option<ConfigurableValidatorSigner>,
     epoch_state: Option<EpochState>,
+    vrf_private_key: Option<ConsensusVRFPrivateKey>,
 }
 
 impl SafetyRules {
@@ -52,6 +57,7 @@ impl SafetyRules {
     pub fn new(
         persistent_storage: PersistentSafetyStorage,
         verify_vote_proposal_signature: bool, export_consensus_key: bool,
+        vrf_private_key: Option<ConsensusVRFPrivateKey>,
     ) -> Self
     {
         let execution_public_key = if verify_vote_proposal_signature {
@@ -71,6 +77,7 @@ impl SafetyRules {
             export_consensus_key,
             validator_signer: None,
             epoch_state: None,
+            vrf_private_key,
         }
     }
 
@@ -79,6 +86,13 @@ impl SafetyRules {
     ) -> Result<ConsensusSignature, Error> {
         let signer = self.signer()?;
         signer.sign(message, &self.persistent_storage)
+    }
+
+    fn gen_vrf_proof(
+        &self, seed: &[u8],
+    ) -> Result<Option<ConsensusVRFProof>, Error> {
+        let signer = self.signer()?;
+        signer.gen_vrf_proof(seed)
     }
 
     fn signer(&self) -> Result<&ConfigurableValidatorSigner, Error> {
@@ -325,6 +339,7 @@ impl SafetyRules {
                                 Some(ConfigurableValidatorSigner::new_signer(
                                     author,
                                     consensus_key,
+                                    self.vrf_private_key.clone(),
                                 ));
                             Ok(())
                         }
@@ -444,8 +459,10 @@ impl SafetyRules {
         }
 
         let signature = self.sign(&block_data)?;
+        let vrf_proof =
+            self.gen_vrf_proof(&block_data.vrf_round_seed(VRF_SEED))?;
         Ok(Block::new_proposal_from_block_data_and_signature(
-            block_data, signature,
+            block_data, signature, vrf_proof,
         ))
     }
 

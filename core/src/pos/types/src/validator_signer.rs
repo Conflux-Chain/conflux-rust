@@ -5,10 +5,12 @@ use crate::{
     account_address::AccountAddress,
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
+        ConsensusVRFPrivateKey, ConsensusVRFProof, ConsensusVRFPublicKey,
     },
 };
 use diem_crypto::{
     hash::CryptoHash, test_utils::TEST_SEED, PrivateKey, SigningKey, Uniform,
+    VRFPrivateKey,
 };
 use rand::{rngs::StdRng, SeedableRng};
 use serde::ser::Serialize;
@@ -22,15 +24,20 @@ use std::convert::TryFrom;
 pub struct ValidatorSigner {
     author: AccountAddress,
     private_key: ConsensusPrivateKey,
+    // If it's `Some`, the generated block will also set `vrf_proof` to `Some`.
+    vrf_private_key: Option<ConsensusVRFPrivateKey>,
 }
 
 impl ValidatorSigner {
     pub fn new(
         author: AccountAddress, private_key: ConsensusPrivateKey,
-    ) -> Self {
+        vrf_private_key: Option<ConsensusVRFPrivateKey>,
+    ) -> Self
+    {
         ValidatorSigner {
             author,
             private_key,
+            vrf_private_key,
         }
     }
 
@@ -47,6 +54,16 @@ impl ValidatorSigner {
     /// Returns the public key associated with this signer.
     pub fn public_key(&self) -> ConsensusPublicKey {
         self.private_key.public_key()
+    }
+
+    pub fn vrf_public_key(&self) -> Option<ConsensusVRFPublicKey> {
+        self.vrf_private_key.as_ref().map(|sk| sk.public_key())
+    }
+
+    pub fn gen_vrf_proof(&self, seed: &[u8]) -> Option<ConsensusVRFProof> {
+        self.vrf_private_key
+            .as_ref()
+            .map(|sk| sk.compute(seed).unwrap())
     }
 
     /// Returns the private key associated with this signer. Only available for
@@ -66,6 +83,7 @@ impl ValidatorSigner {
         Self::new(
             AccountAddress::random(),
             ConsensusPrivateKey::generate(&mut rng),
+            Some(ConsensusVRFPrivateKey::generate(&mut rng)),
         )
     }
 
@@ -75,7 +93,12 @@ impl ValidatorSigner {
         let mut address = [0; AccountAddress::LENGTH];
         address[0] = num;
         let private_key = ConsensusPrivateKey::generate_for_testing();
-        Self::new(AccountAddress::try_from(&address[..]).unwrap(), private_key)
+        let vrf_private_key = ConsensusVRFPrivateKey::generate_for_testing();
+        Self::new(
+            AccountAddress::try_from(&address[..]).unwrap(),
+            private_key,
+            Some(vrf_private_key),
+        )
     }
 }
 
@@ -99,7 +122,7 @@ pub mod proptests {
         signing_key_strategy: impl Strategy<Value = ConsensusPrivateKey>,
     ) -> impl Strategy<Value = ValidatorSigner> {
         signing_key_strategy.prop_map(|signing_key| {
-            ValidatorSigner::new(AccountAddress::random(), signing_key)
+            ValidatorSigner::new(AccountAddress::random(), signing_key, None)
         })
     }
 

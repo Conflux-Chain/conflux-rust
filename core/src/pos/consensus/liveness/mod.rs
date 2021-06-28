@@ -7,6 +7,7 @@ pub(crate) mod proposer_election;
 pub(crate) mod rotating_proposer_election;
 pub(crate) mod round_proposer_election;
 pub(crate) mod round_state;
+pub(crate) mod vrf_proposer_election;
 
 #[cfg(test)]
 mod leader_reputation_test;

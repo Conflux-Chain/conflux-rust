@@ -76,6 +76,8 @@ pub fn start_consensus(
 
     let (timeout_sender, timeout_receiver) =
         channel::new(1_024, &counters::PENDING_ROUND_TIMEOUTS);
+    let (proposal_timeout_sender, proposal_timeout_receiver) =
+        channel::new(1_024, &counters::PENDING_PROPOSAL_TIMEOUTS);
     let pow_handler = Arc::new(PowHandler::new(runtime.handle().clone()));
 
     let epoch_mgr = EpochManager::new(
@@ -83,6 +85,7 @@ pub fn start_consensus(
         time_service,
         network_sender,
         timeout_sender,
+        proposal_timeout_sender,
         txn_manager,
         state_computer,
         storage,
@@ -93,6 +96,7 @@ pub fn start_consensus(
 
     runtime.spawn(epoch_mgr.start(
         timeout_receiver,
+        proposal_timeout_receiver,
         network_receiver,
         stopped.clone(),
     ));

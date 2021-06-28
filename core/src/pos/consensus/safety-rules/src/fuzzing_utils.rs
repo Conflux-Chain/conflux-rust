@@ -70,7 +70,7 @@ prop_compose! {
         } else {
             None
         };
-        Block::new_for_testing(id, block_data, signature)
+        Block::new_for_testing(id, block_data, signature, None)
     }
 }
 
