@@ -77,6 +77,8 @@ pub struct ConsensusInnerConfig {
     pub enable_optimistic_execution: bool,
     /// Control whether we enable the state exposer for the testing purpose.
     pub enable_state_expose: bool,
+    /// The deferred epoch count before a confirmed epoch.
+    pub pos_pivot_decision_defer_epoch_count: u64,
 
     /// If we hit invalid state root, we will dump the information into a
     /// directory specified here. This is useful for testing.
@@ -3804,7 +3806,7 @@ impl ConsensusGraphInner {
     }
 
     pub fn get_next_pivot_decision(
-        &self, parent_decision_hash: &H256,
+        &self, parent_decision_hash: &H256, confirmed_height: u64,
     ) -> Option<(u64, H256)> {
         let r = match self.hash_to_arena_indices.get(parent_decision_hash) {
             None => {
@@ -3820,16 +3822,18 @@ impl ConsensusGraphInner {
                 let parent_decision_height =
                     self.arena[*parent_decision].height;
                 assert_eq!(parent_decision_height % POS_TERM_EPOCHS, 0);
+                // `parent` should be on the pivot chain.
                 if self.get_pivot_block_arena_index(parent_decision_height)
                     == *parent_decision
                 {
                     // FIXME(lpl): Use confirmed epoch with a delay in
                     // pos-finality spec.
-                    let new_decision_height = (self
-                        .best_epoch_number()
-                        .saturating_sub(POW_CONFIRM_DELAY_EPOCH))
-                        / POS_TERM_EPOCHS
-                        * POS_TERM_EPOCHS;
+                    let new_decision_height =
+                        (confirmed_height.saturating_sub(
+                            self.inner_conf
+                                .pos_pivot_decision_defer_epoch_count,
+                        )) / POS_TERM_EPOCHS
+                            * POS_TERM_EPOCHS;
                     if new_decision_height <= parent_decision_height {
                         None
                     } else {
