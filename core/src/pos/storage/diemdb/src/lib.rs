@@ -950,6 +950,10 @@ impl DbReader for DiemDB {
             self.ledger_store.get_root_hash(version)
         })
     }
+
+    fn get_pos_state(&self, block_id: &HashValue) -> Result<PosState> {
+        self.ledger_store.get_pos_state(block_id)
+    }
 }
 
 impl DbWriter for DiemDB {

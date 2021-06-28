@@ -143,6 +143,25 @@ impl TermList {
             self.current_term = new_term;
         }
     }
+
+    fn can_be_elected(
+        &self, target_term_offset: usize, author: &AccountAddress,
+    ) -> bool {
+        // TODO(lpl): Optimize by adding hash set to each term or adding another
+        // field to node_map.
+        let start_term_offset = target_term_offset as usize - TERM_LIST_LEN;
+        // The checking of `target_view` ensures that this is in range of
+        // `term_list`.
+        for i in start_term_offset..=target_term_offset {
+            let term = &self.term_list[i as usize];
+            for (_, addr) in &term.node_list {
+                if addr.addr == *author {
+                    return false;
+                }
+            }
+        }
+        true
+    }
 }
 
 // FIXME(lpl): Check if we only need the latest version persisted.
@@ -258,19 +277,13 @@ impl PosState {
             bail!("Invalid VRF proof for election")
         }
 
-        // TODO(lpl): Optimize by adding hash set to each term or adding another
-        // field to node_map.
-        let start_term_offset = target_term_offset as usize - TERM_LIST_LEN;
-        // The checking of `target_view` ensures that this is in range of
-        // `term_list`.
-        for i in start_term_offset..=target_term_offset {
-            let term = &self.term_list.term_list[i as usize];
-            for (_, addr) in &term.node_list {
-                if *addr == node_id {
-                    bail!("Node in active term service cannot be elected");
-                }
-            }
+        if !self
+            .term_list
+            .can_be_elected(target_term_offset, &node_id.addr)
+        {
+            bail!("Node in active term service cannot be elected");
         }
+
         Ok(())
     }
 
@@ -332,6 +345,35 @@ impl PosState {
         }
         // TODO(lpl): Decide the ratio of voting power.
         Ok(ValidatorVerifier::new(address_to_validator_info))
+    }
+
+    /// TODO(lpl): Return VDF seed for the term.
+    /// Return `Some(target_term)` if `author` should send its election
+    /// transaction.
+    pub fn next_elect_term(&self, author: &AccountAddress) -> Option<u64> {
+        match self.node_map.get(author) {
+            // This node has not staked in PoW.
+            None => None,
+            Some(node) => {
+                match &node.status {
+                    NodeStatus::Accepted => {
+                        if self.term_list.can_be_elected(TERM_LIST_LEN, author)
+                        {
+                            Some(
+                                self.term_list.current_term
+                                    + TERM_LIST_LEN as u64,
+                            )
+                        } else {
+                            // This node is still active and thus cannot be
+                            // elected.
+                            None
+                        }
+                    }
+                    // This node has retired and will never be elected again.
+                    _ => None,
+                }
+            }
+        }
     }
 }
 

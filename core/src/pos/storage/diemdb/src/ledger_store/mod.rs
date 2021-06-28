@@ -178,7 +178,7 @@ impl LedgerStore {
         Ok(latest_epoch_state.clone())
     }
 
-    fn get_pos_state(&self, block_hash: &HashValue) -> Result<PosState> {
+    pub fn get_pos_state(&self, block_hash: &HashValue) -> Result<PosState> {
         self.db.get::<PosStateSchema>(block_hash)?.ok_or_else(|| {
             format_err!("PoS State is not found for block {}", block_hash)
         })

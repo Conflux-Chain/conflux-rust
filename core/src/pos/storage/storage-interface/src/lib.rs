@@ -326,6 +326,10 @@ pub trait DbReader: Send + Sync {
     ) -> Result<HashValue> {
         unimplemented!()
     }
+
+    fn get_pos_state(&self, block_id: &HashValue) -> Result<PosState> {
+        unimplemented!()
+    }
 }
 
 impl MoveStorage for &dyn DbReader {

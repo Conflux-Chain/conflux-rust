@@ -23,7 +23,10 @@ use diem_types::{
     chain_id::ChainId,
     contract_event::ContractEvent,
     transaction::{ChangeSet, RawTransaction},
-    validator_config::{ConsensusPrivateKey, ConsensusPublicKey},
+    validator_config::{
+        ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
+        ConsensusVRFPublicKey,
+    },
     write_set::WriteSet,
 };
 use move_core_types::language_storage::TypeTag;
@@ -63,6 +66,8 @@ pub struct ProposalGenerator {
     // FIXME(lpl): Where to put them?
     pub private_key: ConsensusPrivateKey,
     pub public_key: ConsensusPublicKey,
+    pub vrf_private_key: ConsensusVRFPrivateKey,
+    pub vrf_public_key: ConsensusVRFPublicKey,
 }
 
 impl ProposalGenerator {
@@ -71,6 +76,8 @@ impl ProposalGenerator {
         txn_manager: Arc<dyn TxnManager>, time_service: Arc<dyn TimeService>,
         max_block_size: u64, pow_handler: Arc<dyn PowInterface>,
         private_key: ConsensusPrivateKey, public_key: ConsensusPublicKey,
+        vrf_private_key: ConsensusVRFPrivateKey,
+        vrf_public_key: ConsensusVRFPublicKey,
     ) -> Self
     {
         Self {
@@ -83,6 +90,8 @@ impl ProposalGenerator {
             pow_handler,
             private_key,
             public_key,
+            vrf_private_key,
+            vrf_public_key,
         }
     }
 

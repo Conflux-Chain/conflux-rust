@@ -24,7 +24,7 @@ use super::{
 use crate::pos::protocol::message::block_retrieval_response::BlockRetrievalRpcResponse;
 use anyhow::{bail, ensure, Context, Result};
 use consensus_types::{
-    block::Block,
+    block::{Block, VRF_SEED},
     block_retrieval::{BlockRetrievalResponse, BlockRetrievalStatus},
     common::{Author, Round},
     proposal_msg::ProposalMsg,
@@ -34,11 +34,15 @@ use consensus_types::{
     vote::Vote,
     vote_msg::VoteMsg,
 };
+use diem_crypto::VRFPrivateKey;
 use diem_infallible::checked;
 use diem_logger::prelude::*;
 use diem_types::{
-    block_info::PivotBlockDecision, chain_id::ChainId, epoch_state::EpochState,
-    transaction::RawTransaction, validator_verifier::ValidatorVerifier,
+    block_info::PivotBlockDecision,
+    chain_id::ChainId,
+    epoch_state::EpochState,
+    transaction::{ElectionPayload, RawTransaction},
+    validator_verifier::ValidatorVerifier,
 };
 use fail::fail_point;
 #[cfg(test)]
@@ -284,7 +288,7 @@ impl RoundManager {
         Ok(())
     }
 
-    async fn broadcast_pivot_decision(&self) -> anyhow::Result<()> {
+    pub async fn broadcast_pivot_decision(&self) -> anyhow::Result<()> {
         if self.proposal_generator.is_none() {
             // Not an active validator, so do not need to sign pivot decision.
             return Ok(());
@@ -341,6 +345,47 @@ impl RoundManager {
             .into_inner();
         // FIXME(lpl): Broadcast this tx using transaction pool.
         // self.network.broadcast(ConsensusMsg::PivotDecisionMsg())
+        Ok(())
+    }
+
+    pub async fn broadcast_election(&self) -> anyhow::Result<()> {
+        if self.proposal_generator.is_none() {
+            // Not an active validator, so do not need to send election tx.
+            return Ok(());
+        }
+        let proposal_generator =
+            self.proposal_generator.as_ref().expect("checked");
+        let committed_block = self.block_store.root().id();
+        // TODO: Use cached pos state;
+        let pos_state =
+            self.storage.diem_db().get_pos_state(&committed_block)?;
+        if let Some(target_term) =
+            pos_state.next_elect_term(&proposal_generator.author())
+        {
+            let election_payload = ElectionPayload {
+                public_key: proposal_generator.public_key.clone(),
+                vrf_public_key: proposal_generator.vrf_public_key.clone(),
+                target_term,
+                vrf_proof: proposal_generator
+                    .vrf_private_key
+                    .compute(&VRF_SEED)
+                    .unwrap(),
+            };
+            let raw_tx = RawTransaction::new_election(
+                proposal_generator.author(),
+                0,
+                election_payload,
+                ChainId::default(), // FIXME(lpl): Set chain id.
+            );
+            let signed_tx = raw_tx
+                .sign(
+                    &proposal_generator.private_key,
+                    proposal_generator.public_key.clone(),
+                )?
+                .into_inner();
+            // FIXME(lpl): Broadcast this tx using transaction pool.
+            // self.network.broadcast(ConsensusMsg::PivotDecisionMsg())
+        }
         Ok(())
     }
 
