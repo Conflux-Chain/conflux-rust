@@ -285,8 +285,13 @@ impl RoundManager {
     }
 
     async fn broadcast_pivot_decision(&self) -> anyhow::Result<()> {
-        let parent_block =
-            self.block_store.highest_quorum_cert().certified_block();
+        if self.proposal_generator.is_none() {
+            // Not an active validator, so do not need to sign pivot decision.
+            return Ok(());
+        }
+
+        let hqc = self.block_store.highest_quorum_cert();
+        let parent_block = hqc.certified_block();
         // TODO(lpl): Check if this may happen.
         if self.block_store.path_from_root(parent_block.id()).is_none() {
             bail!("HQC {} already pruned", parent_block);
@@ -307,16 +312,20 @@ impl RoundManager {
             {
                 Some(res) => break res,
                 None => {
-                    // TODO(lpl): Handle the error from outside.
-                    // FIXME(lpl): Wait with a deadline.
-                    let sleep_duration = std::time::Duration::from_millis(100);
-                    self.time_service.sleep(sleep_duration);
+                    // No new pivot decision.
+                    diem_debug!("No new pivot decision");
+                    return Ok(());
                 }
             }
         };
 
+        let proposal_generator =
+            self.proposal_generator.as_ref().expect("checked");
+        diem_info!("Broadcast new pivot decision: {:?}", pivot_decision);
+        // It's allowed for a node to sign conflict pivot decision,
+        // so we do not need to persist this signing event.
         let raw_tx = RawTransaction::new_pivot_decision(
-            self.author,
+            proposal_generator.author(),
             0,
             PivotBlockDecision {
                 block_hash: pivot_decision.1,
@@ -325,10 +334,14 @@ impl RoundManager {
             ChainId::default(), // FIXME(lpl): Set chain id.
         );
         let signed_tx = raw_tx
-            .sign(&self.private_key, self.public_key.clone())?
+            .sign(
+                &proposal_generator.private_key,
+                proposal_generator.public_key.clone(),
+            )?
             .into_inner();
         // FIXME(lpl): Broadcast this tx using transaction pool.
         // self.network.broadcast(ConsensusMsg::PivotDecisionMsg())
+        Ok(())
     }
 
     async fn generate_proposal(

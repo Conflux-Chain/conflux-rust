@@ -61,8 +61,8 @@ pub struct ProposalGenerator {
     // Handle the interaction with PoW consensus.
     pow_handler: Arc<dyn PowInterface>,
     // FIXME(lpl): Where to put them?
-    private_key: ConsensusPrivateKey,
-    public_key: ConsensusPublicKey,
+    pub private_key: ConsensusPrivateKey,
+    pub public_key: ConsensusPublicKey,
 }
 
 impl ProposalGenerator {
