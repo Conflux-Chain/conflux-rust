@@ -16,7 +16,6 @@ use cfx_types::H256;
 use consensus_types::{
     block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse},
     epoch_retrieval::EpochRetrievalRequest,
-    pivot_decision_msg::PivotDecisionMsg,
     proposal_msg::ProposalMsg,
     sync_info::SyncInfo,
     vote_msg::VoteMsg,
@@ -54,10 +53,6 @@ pub enum ConsensusMsg {
     /// VoteMsg is the struct that is ultimately sent by the voter in response
     /// for receiving a proposal.
     VoteMsg(Box<VoteMsg>),
-    /// Include the latest pivot decision for a new round with the sender's
-    /// signature. A proposer generates a proposal after receiving enough
-    /// pivot decision signatures.
-    PivotDecisionMsg(Box<PivotDecisionMsg>),
 }
 
 /// The interface from Consensus to Networking layer.

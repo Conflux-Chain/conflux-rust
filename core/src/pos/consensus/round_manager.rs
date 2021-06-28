@@ -324,6 +324,7 @@ impl RoundManager {
         let signed_tx = raw_tx
             .sign(&self.private_key, self.public_key.clone())?
             .into_inner();
+        // FIXME(lpl): Broadcast this tx using transaction pool.
         // self.network.broadcast(ConsensusMsg::PivotDecisionMsg())
     }
 
