@@ -285,6 +285,8 @@ build_config! {
         (is_consortium, (bool), false)
         (pos_config_path, (Option<String>), Some("./pos_config/pos_config.toml".to_string()))
         (pos_genesis_pivot_decision, (Option<H256>), None)
+        // Deferred epoch count before a confirmed epoch.
+        (pos_pivot_decision_defer_epoch_count, (u64), 50)
 
         // Light node section
         (ln_epoch_request_batch_size, (Option<usize>), None)
@@ -527,7 +529,7 @@ impl Configuration {
                 era_epoch_count: self.raw_conf.era_epoch_count,
                 enable_optimistic_execution,
                 enable_state_expose: self.raw_conf.enable_state_expose,
-
+                pos_pivot_decision_defer_epoch_count: self.raw_conf.pos_pivot_decision_defer_epoch_count,
                 debug_dump_dir_invalid_state_root: if self
                     .raw_conf
                     .debug_invalid_state_root

@@ -41,10 +41,10 @@ impl PowHandler {
     fn next_pivot_decision_impl(
         pow_consensus: Arc<ConsensusGraph>, parent_decision: &H256,
     ) -> Option<(u64, H256)> {
-        pow_consensus
-            .inner
-            .read()
-            .get_next_pivot_decision(parent_decision)
+        let inner = pow_consensus.inner.read();
+        let confirmed_height =
+            pow_consensus.confirmation_meter.get_confirmed_epoch_num();
+        inner.get_next_pivot_decision(parent_decision, confirmed_height)
     }
 
     fn validate_proposal_pivot_decision_impl(
