@@ -219,3 +219,26 @@ impl fmt::Debug for BLSSignature {
         write!(f, "BLSSignature({})", self)
     }
 }
+
+mod test {
+    use crate as diem_crypto;
+    use crate::{
+        bls::{BLSPrivateKey, BLSSignature},
+        SigningKey, Uniform, ValidCryptoMaterial,
+    };
+    use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
+    use serde::{Deserialize, Serialize};
+    use std::{convert::TryFrom, time::Instant};
+
+    #[derive(Debug, CryptoHasher, BCSCryptoHash, Serialize, Deserialize)]
+    pub struct TestDiemCrypto(pub String);
+    #[test]
+    fn test_bls_sig_decode() {
+        let sk = BLSPrivateKey::generate(&mut rand::thread_rng());
+        let sig = sk.sign(&TestDiemCrypto("".to_string()));
+        let sig_bytes = sig.to_bytes();
+        let start = Instant::now();
+        let _decoded = BLSSignature::try_from(sig_bytes.as_slice()).unwrap();
+        println!("Time elapsed: {} us", start.elapsed().as_micros());
+    }
+}

@@ -382,6 +382,7 @@ impl BlockStore {
     pub fn insert_single_quorum_cert(
         &self, qc: QuorumCert,
     ) -> anyhow::Result<()> {
+        debug!("insert_single_quorum_cert: qc={:?}", qc);
         // If the parent block is not the root block (i.e not None), ensure the
         // executed state of a block is consistent with its QuorumCert,
         // otherwise persist the QuorumCert's state and on restart, a
