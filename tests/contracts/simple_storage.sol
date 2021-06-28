@@ -1,10 +1,11 @@
-pragma solidity >=0.4.22;
+pragma solidity ^0.4.22;
 
 // based on https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_getstorageat
 
 contract Storage {
     uint pos0;
     mapping(address => uint) pos1;
+    uint pos2;
 
     constructor() public {
         pos0 = 1234;
@@ -13,6 +14,10 @@ contract Storage {
 
     function increment() public {
         pos0 += 1;
+    }
+
+    function setFresh() public {
+        pos2 = 1;
     }
 
     function destroy() public {

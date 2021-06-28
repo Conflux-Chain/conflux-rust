@@ -17,6 +17,34 @@ COLLATERAL_UNIT_IN_DRIP = 10 ** 18 // 1024
 def charged_of_huge_gas(gas):
     return gas - gas // 4
 
+
+class EthLikeUnsignedTransaction(rlp.Serializable):
+    fields = [
+        ('nonce', big_endian_int),
+        ('gas_price', big_endian_int),
+        ('gas', big_endian_int),
+        ('action', address),
+        ('value', big_endian_int),
+        ('data', binary),
+        ('chain_id', big_endian_int),
+        ('reserved1', binary),
+        ('reserved2', binary)
+    ]
+
+    def __init__(self, unsigned_tx):
+        super(EthLikeUnsignedTransaction, self).__init__(
+            nonce=unsigned_tx.nonce,
+            gas_price=unsigned_tx.gas_price,
+            gas=unsigned_tx.gas,
+            value=unsigned_tx.value,
+            action=unsigned_tx.action,
+            data=unsigned_tx.data,
+            chain_id=unsigned_tx.chain_id,
+            reserved1=b"",
+            reserved2=b"",
+        )
+
+
 class UnsignedTransaction(rlp.Serializable):
     fields = [
         ('nonce', big_endian_int),
@@ -35,6 +63,8 @@ class UnsignedTransaction(rlp.Serializable):
                 value >= TT256 or nonce >= TT256:
             raise InvalidTransaction("Values way too high!")
 
+        self.eth_like = (epoch_height == 0xffff_ffff_ffff_ffff)
+
         super(UnsignedTransaction, self).__init__(
             nonce=nonce,
             gas_price=gas_price,
@@ -47,9 +77,17 @@ class UnsignedTransaction(rlp.Serializable):
             chain_id=chain_id
         )
 
+    def get_rawhash(self):
+        if not self.eth_like:
+            return utils.sha3(
+                rlp.encode(self, UnsignedTransaction))
+        else:
+            eth_like_tx = EthLikeUnsignedTransaction(self)
+            return utils.sha3(
+                rlp.encode(eth_like_tx, EthLikeUnsignedTransaction))
+
     def sign(self, key):
-        rawhash = utils.sha3(
-            rlp.encode(self, UnsignedTransaction))
+        rawhash = self.get_rawhash()
 
         key = normalize_key(key)
 

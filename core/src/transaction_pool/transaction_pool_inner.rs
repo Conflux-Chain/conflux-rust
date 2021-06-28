@@ -12,7 +12,8 @@ use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
 };
 use primitives::{
-    Account, Action, SignedTransaction, TransactionWithSignature,
+    transaction::TransactionType, Account, Action, SignedTransaction,
+    TransactionWithSignature,
 };
 use rlp::*;
 use serde::Serialize;
@@ -749,7 +750,9 @@ impl TransactionPoolInner {
             // the bound, we will skip the transaction.
             if tx.epoch_height < epoch_height_lower_bound {
                 continue 'out;
-            } else if tx.epoch_height > epoch_height_upper_bound {
+            } else if tx.epoch_height > epoch_height_upper_bound
+                && tx.transaction_type() == TransactionType::Normal
+            {
                 recycle_txs.push(tx.clone());
                 continue 'out;
             }

@@ -1,21 +1,35 @@
 [
 	{
+		"constant": false,
 		"inputs": [],
+		"name": "setFresh",
+		"outputs": [],
+		"payable": false,
 		"stateMutability": "nonpayable",
-		"type": "constructor"
+		"type": "function"
 	},
 	{
+		"constant": false,
 		"inputs": [],
 		"name": "destroy",
 		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [],
+		"name": "increment",
+		"outputs": [],
+		"payable": false,
 		"stateMutability": "nonpayable",
 		"type": "function"
 	},
 	{
 		"inputs": [],
-		"name": "increment",
-		"outputs": [],
+		"payable": false,
 		"stateMutability": "nonpayable",
-		"type": "function"
+		"type": "constructor"
 	}
 ]
