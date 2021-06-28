@@ -10,12 +10,12 @@ from test_framework.util import *
 
 class ExampleTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.num_nodes = 2
+        self.num_nodes = 4
         self.conf_parameters["vrf_proposal_threshold"] = '"{}"'.format(int_to_hex(int(2 ** 256 / 2)))
         # self.conf_parameters["log_level"] = '"trace"'
 
     def setup_network(self):
-        self.setup_nodes(is_consortium=True)
+        self.setup_nodes(is_consortium=True, genesis_nodes=3)
         connect_sample_nodes(self.nodes, self.log)
         sync_blocks(self.nodes)
 

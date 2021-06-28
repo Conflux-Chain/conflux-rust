@@ -62,12 +62,13 @@ use tempdir::TempDir;
 
 const USAGE: &str = r#"
 Usage:
-    tgconfig random [--num-validator=<nv>]
+    tgconfig random [--num-validator=<nv> --num-genesis-validator=<ng>]
     tgconfig frompub <pkfile>
 
 Options:
     -h, --help              Display this message and exit.
     --num-validator=<nv>    The number of validators.
+    --num-genesis-validator=<ng>    The number of validators included in the genesis.
 
 Commands:
     random                  Generate random key pairs for validators.
@@ -80,6 +81,7 @@ struct Args {
     cmd_frompub: bool,
     arg_pkfile: String,
     flag_num_validator: usize,
+    flag_num_genesis_validator: usize,
 }
 
 #[derive(Debug)]
@@ -217,6 +219,15 @@ where
             args.flag_num_validator
         };
 
+        let num_genesis_validator = if args.flag_num_genesis_validator == 0 {
+            num_validator
+        } else if args.flag_num_genesis_validator > num_validator {
+            panic!("The number of genesis validators cannot be more than the total number of \
+            validators: {} > {}", args.flag_num_genesis_validator, num_validator);
+        } else {
+            args.flag_num_genesis_validator
+        };
+
         let pivate_key_path = PathBuf::from("./private_key");
         let mut private_key_file = File::create(&pivate_key_path)?;
         let public_key_path = PathBuf::from("./public_key");
@@ -244,7 +255,12 @@ where
                 format!("{},{}\n", public_key_str, vrf_public_key_str);
             public_key_file.write_all(public_key_str.as_bytes())?;
         }
-        generate_genesis_from_public_keys(public_keys);
+        generate_genesis_from_public_keys(
+            public_keys
+                .into_iter()
+                .take(num_genesis_validator)
+                .collect(),
+        );
         Ok("Ok".into())
     } else if args.cmd_frompub {
         let public_key_path = PathBuf::from(args.arg_pkfile.as_str());
