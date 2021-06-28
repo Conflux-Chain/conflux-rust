@@ -6,7 +6,7 @@ from conflux.address import b32_address_to_hex
 from conflux.rpc import RpcClient
 from conflux.utils import sha3 as keccak
 from test_framework.blocktools import encode_hex_0x
-from test_framework.util import assert_equal, assert_ne
+from test_framework.util import assert_equal, assert_ne, assert_raises_rpc_error
 
 CONTRACT_PATH = "../contracts/simple_storage.dat"
 NUM_TXS = 10
@@ -97,6 +97,11 @@ class TestGetTxReceiptByHash(RpcClient):
         block_c = self.generate_custom_block(parent_hash = block_a, referee = [], txs = [])
         block_d = self.generate_custom_block(parent_hash = block_c, referee = [block_b], txs = txs2)
 
+        # not executed yet, no epoch receipts
+        epoch_d = self.block_by_hash(block_d)['height']
+        assert_equal(self.node.cfx_getEpochReceipts(epoch_d), None)
+        assert_equal(self.node.cfx_getEpochReceipts(f'hash:{block_d}'), None)
+
         # make sure transactions have been executed
         parent_hash = block_d
 
@@ -105,8 +110,7 @@ class TestGetTxReceiptByHash(RpcClient):
             parent_hash = block
 
         # retrieve epoch receipts
-        epoch = self.block_by_hash(block_d)['height']
-        receipts = self.node.cfx_getEpochReceipts(epoch)
+        receipts = self.node.cfx_getEpochReceipts(epoch_d)
 
         assert_ne(receipts, None)
         assert_equal(len(receipts), 2)
@@ -117,5 +121,8 @@ class TestGetTxReceiptByHash(RpcClient):
         receipts2 = self.node.cfx_getEpochReceipts(f'hash:{block_d}')
         assert_equal(receipts2, receipts)
 
-        receipts3 = self.node.cfx_getEpochReceipts(f'hash:{block_b}')
-        assert_equal(receipts3, None)
+        # request with non-pivot block hash should fail
+        assert_raises_rpc_error(None, None, self.node.cfx_getEpochReceipts, f'hash:{block_b}')
+
+        # request with nonexistent block hash should fail
+        assert_raises_rpc_error(None, None, self.node.cfx_getEpochReceipts, f'hash:0x66e365b5bbd53bc26fd306fd7c65290b2b13c165d7cae816b651e7fcf2646f37')

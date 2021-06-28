@@ -2,35 +2,26 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_parameters::internal_contract_addresses::ADMIN_CONTROL_CONTRACT_ADDRESS;
-
-use super::{
-    super::impls::admin::*, ExecutionTrait, InterfaceTrait,
-    InternalContractTrait, PreExecCheckConfTrait, SolFnTable,
-    SolidityFunctionTrait, UpfrontPaymentTrait,
-};
-#[cfg(test)]
-use crate::check_signature;
+use super::{super::impls::admin::*, macros::*, ExecutionTrait, SolFnTable};
 use crate::{
     evm::{ActionParams, Spec},
     executive::InternalRefContext,
-    impl_function_type, make_function_table, make_solidity_contract,
-    make_solidity_function,
     trace::{trace::ExecTrace, Tracer},
     vm,
 };
+use cfx_parameters::internal_contract_addresses::ADMIN_CONTROL_CONTRACT_ADDRESS;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{Address, U256};
 #[cfg(test)]
 use rustc_hex::FromHex;
 
+make_solidity_contract! {
+    pub struct AdminControl(ADMIN_CONTROL_CONTRACT_ADDRESS, generate_fn_table, activate_at: "genesis");
+}
 fn generate_fn_table() -> SolFnTable {
     make_function_table!(SetAdmin, Destroy, GetAdmin)
 }
-
-make_solidity_contract! {
-    pub struct AdminControl(ADMIN_CONTROL_CONTRACT_ADDRESS, generate_fn_table);
-}
+group_impl_activate_at!("genesis", SetAdmin, Destroy, GetAdmin);
 
 make_solidity_function! {
     struct SetAdmin((Address, Address), "setAdmin(address,address)");
