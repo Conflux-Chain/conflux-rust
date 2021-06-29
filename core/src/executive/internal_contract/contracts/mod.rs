@@ -14,7 +14,8 @@ mod macros {
 
     pub use crate::{
         group_impl_activate_at, impl_activate_at, impl_function_type,
-        make_function_table, make_solidity_contract, make_solidity_function,
+        make_function_table, make_solidity_contract, make_solidity_event,
+        make_solidity_function,
     };
 
     pub use super::super::{
@@ -23,10 +24,11 @@ mod macros {
             ExecutionTrait, InterfaceTrait, PreExecCheckConfTrait,
             UpfrontPaymentTrait,
         },
-        InternalContractTrait, SolidityFunctionTrait,
+        InternalContractTrait, SolidityEventTrait, SolidityFunctionTrait,
     };
 }
 
+pub(super) use self::pos::{IncreaseStakeEvent, RegisterEvent};
 pub use self::{
     admin::AdminControl, sponsor::SponsorWhitelistControl, staking::Staking,
 };

@@ -1,5 +1,6 @@
+use super::super::contracts::{IncreaseStakeEvent, RegisterEvent};
 use crate::{
-    executive::InternalRefContext,
+    executive::{internal_contract::SolidityEventTrait, InternalRefContext},
     vm::{self, ActionParams},
 };
 use bls_signatures::{
@@ -58,19 +59,25 @@ fn verify_bls_pubkey(
 }
 
 fn update_vote_power(
-    identifier: H256, vote_power: u64, allow_uninitialized: bool,
+    identifier: H256, vote_power: u64, initialize_mode: bool,
     param: &ActionParams, context: &mut InternalRefContext,
 ) -> vm::Result<()>
 {
     let mut status = IndexStatus::get(&identifier, context, param)?;
-    if !allow_uninitialized && status.registered == 0 {
+    if !initialize_mode && status.registered == 0 {
         return Err(vm::Error::InternalContract(
             "uninitialized identifier".into(),
+        ));
+    }
+    if initialize_mode && status.registered != 0 {
+        return Err(vm::Error::InternalContract(
+            "identifier has already been initialized".into(),
         ));
     }
     status.registered = status.registered.checked_add(vote_power).ok_or(
         vm::Error::InternalContract("registered index overflow".into()),
     )?;
+    IncreaseStakeEvent::log(&identifier, &status.registered, param, context)?;
     status.set(&identifier, context, param)?;
     Ok(())
 }
@@ -103,6 +110,12 @@ pub fn register(
             "Inconsistent identifier".into(),
         ));
     }
+    RegisterEvent::log(
+        &identifier,
+        &(verified_bls_pubkey, vrf_pubkey),
+        param,
+        context,
+    )?;
 
     update_vote_power(
         identifier, vote_power, /* allow_uninitialized */ true, param,

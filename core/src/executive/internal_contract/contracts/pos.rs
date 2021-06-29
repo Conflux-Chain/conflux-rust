@@ -26,6 +26,14 @@ fn generate_fn_table() -> SolFnTable {
 }
 group_impl_activate_at!("genesis", Register, IncreaseStake, GetStatus);
 
+make_solidity_event! {
+    pub struct RegisterEvent("register(bytes32,bytes,bytes)", indexed: H256, non_indexed: (Bytes, Bytes));
+}
+
+make_solidity_event! {
+    pub struct IncreaseStakeEvent("increaseStake(bytes32,uint64)", indexed: H256, non_indexed: u64);
+}
+
 make_solidity_function! {
     struct Register((H256, u64, BlsPubKey, VrfPubKey, BlsProof), "register(bytes32,uint64,bytes,bytes,bytes[2])");
 }
@@ -46,7 +54,6 @@ impl ExecutionTrait for Register {
     }
 }
 
-// TODO: Support sigma protocol verification later.
 make_solidity_function! {
     struct IncreaseStake((H256, u64), "increaseStake(bytes32,uint64)");
 }
