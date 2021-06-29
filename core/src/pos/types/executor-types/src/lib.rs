@@ -255,7 +255,7 @@ impl From<TreeState> for ExecutedTrees {
             tree_state.ledger_frozen_subtree_hashes,
             tree_state.num_transactions,
             // FIXME(lpl): Ensure this is not used.
-            Default::default(),
+            PosState::new_empty(),
         )
     }
 }
@@ -330,7 +330,7 @@ impl ExecutedTrees {
             *SPARSE_MERKLE_PLACEHOLDER_HASH,
             vec![],
             0,
-            Default::default(),
+            PosState::new_empty(),
         )
     }
 }

@@ -440,14 +440,23 @@ impl PosState {
         self.current_view += 1;
 
         let epoch_state = if self.current_view % ROUND_PER_TERM == 0 {
+            // generate new epoch for new term.
             let new_term = self.current_view / ROUND_PER_TERM;
             self.term_list.new_term(new_term);
             let verifier = self.get_new_committee()?;
             Some(EpochState {
                 // TODO(lpl): If we allow epoch changes within a term, this
                 // should be updated.
-                epoch: new_term,
+                epoch: new_term + 1,
                 verifier,
+            })
+        } else if self.current_view == 1 {
+            // genesis
+            Some(EpochState {
+                // TODO(lpl): If we allow epoch changes within a term, this
+                // should be updated.
+                epoch: 1,
+                verifier: self.get_new_committee()?,
             })
         } else {
             None
@@ -470,10 +479,8 @@ impl PosState {
             None => Err(anyhow!("Retiring node does not exist")),
         }
     }
-}
 
-impl Default for PosState {
-    fn default() -> Self {
+    pub fn new_empty() -> Self {
         Self {
             node_map: Default::default(),
             current_view: 0,
@@ -484,6 +491,19 @@ impl Default for PosState {
         }
     }
 }
+
+// impl Default for PosState {
+//     fn default() -> Self {
+//         Self {
+//             node_map: Default::default(),
+//             current_view: 0,
+//             term_list: TermList {
+//                 current_term: 0,
+//                 term_list: Default::default(),
+//             },
+//         }
+//     }
+// }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ElectionEvent {

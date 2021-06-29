@@ -19,6 +19,7 @@ use diem_types::{
     diem_timestamp::DiemTimestampResource,
     ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
     on_chain_config::{config_address, ConfigurationResource},
+    term_state::NodeID,
     transaction::Transaction,
     waypoint::Waypoint,
 };
@@ -34,8 +35,10 @@ pub fn generate_waypoint<V: VMExecutor>(
 ) -> Result<Waypoint> {
     let tree_state = db.reader.get_latest_tree_state()?;
 
+    // FIXME(lpl): initial nodes are not passed.
     // genesis ledger info (including pivot decision) is not used.
-    let committer = calculate_genesis::<V>(db, tree_state, genesis_txn, None)?;
+    let committer =
+        calculate_genesis::<V>(db, tree_state, genesis_txn, None, Vec::new())?;
     Ok(committer.waypoint)
 }
 
@@ -55,11 +58,13 @@ pub fn maybe_bootstrap<V: VMExecutor>(
         return Ok(false);
     }
 
+    // FIXME(lpl): Use correct initial nodes.
     let committer = calculate_genesis::<V>(
         db,
         tree_state,
         genesis_txn,
         genesis_pivot_decision,
+        vec![],
     )?;
     ensure!(
         waypoint == committer.waypoint(),
@@ -108,14 +113,18 @@ impl<V: VMExecutor> GenesisCommitter<V> {
 pub fn calculate_genesis<V: VMExecutor>(
     db: &DbReaderWriter, tree_state: TreeState, genesis_txn: &Transaction,
     genesis_pivot_decision: Option<PivotBlockDecision>,
+    initial_nodes: Vec<(NodeID, u64)>,
 ) -> Result<GenesisCommitter<V>>
 {
     // DB bootstrapper works on either an empty transaction accumulator or an
     // existing block chain. In the very extreme and sad situation of losing
     // quorum among validators, we refer to the second use case said above.
     let genesis_version = tree_state.num_transactions;
-    let mut executor =
-        Executor::<V>::new_on_unbootstrapped_db(db.clone(), tree_state);
+    let mut executor = Executor::<V>::new_on_unbootstrapped_db(
+        db.clone(),
+        tree_state,
+        initial_nodes,
+    );
 
     let block_id = HashValue::zero();
     let epoch = if genesis_version == 0 {

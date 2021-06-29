@@ -29,7 +29,7 @@ use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_types::{
     contract_event::ContractEvent, ledger_info::LedgerInfo,
-    transaction::Transaction,
+    term_state::PosState, transaction::Transaction,
 };
 use executor_types::{Error, ExecutedTrees};
 use std::{
@@ -157,10 +157,13 @@ impl SpeculationCache {
         cache
     }
 
-    pub fn new_for_db_bootstrapping(tree_state: TreeState) -> Self {
+    pub fn new_for_db_bootstrapping(
+        tree_state: TreeState, pos_state: PosState,
+    ) -> Self {
         // The DB-bootstrapper applies genesis txn on a local DB and create a
         // waypoint, assuming everything is synced and committed.
-        let executor_trees = ExecutedTrees::from(tree_state);
+        let mut executor_trees =
+            ExecutedTrees::new_with_pos_state(tree_state, pos_state);
         Self {
             synced_trees: executor_trees.clone(),
             committed_trees: executor_trees,

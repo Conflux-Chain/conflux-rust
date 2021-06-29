@@ -62,7 +62,8 @@ use crate::{
     types::{ProcessedVMOutput, TransactionData},
     vm::VMExecutor,
 };
-use diem_types::term_state::{PosState, RetireEvent};
+use consensus_types::block::VRF_SEED;
+use diem_types::term_state::{NodeID, PosState, RetireEvent};
 
 mod types;
 
@@ -116,10 +117,15 @@ where V: VMExecutor
 
     pub fn new_on_unbootstrapped_db(
         db: DbReaderWriter, tree_state: TreeState,
-    ) -> Self {
+        initial_nodes: Vec<(NodeID, u64)>,
+    ) -> Self
+    {
+        let pos_state = PosState::new(VRF_SEED.to_vec(), initial_nodes);
         Self {
             db,
-            cache: SpeculationCache::new_for_db_bootstrapping(tree_state),
+            cache: SpeculationCache::new_for_db_bootstrapping(
+                tree_state, pos_state,
+            ),
             phantom: PhantomData,
         }
     }
@@ -327,9 +333,6 @@ where V: VMExecutor
                     new_pos_state.retire_node(&retire_event)?;
                 }
             }
-        }
-        if pivot_decision.is_none() {
-            bail!("Missing pivot decision in normal blocks");
         }
         let next_epoch_state = new_pos_state.next_view()?;
 
@@ -574,7 +577,7 @@ where V: VMExecutor
             self.cache.synced_trees().state_root(),
             self.cache.synced_trees().state_tree(),
             // FIXME(lpl): State sync not used yet.
-            PosState::default(),
+            PosState::new_empty(),
         );
 
         fail_point!("executor::vm_execute_chunk", |_| {
