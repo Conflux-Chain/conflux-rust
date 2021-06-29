@@ -43,6 +43,22 @@ pub struct NodeData {
     vrf_public_key: Option<ConsensusVRFPublicKey>,
     status: NodeStatus,
     status_start_view: Round,
+    voting_power: u64,
+}
+
+/// A node becomes its voting power number of ElectionNodes for election.
+#[derive(
+    Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Ord, PartialOrd,
+)]
+struct ElectionNodeID {
+    node_id: NodeID,
+    nonce: u64,
+}
+
+impl ElectionNodeID {
+    pub fn new(node_id: NodeID, nonce: u64) -> Self {
+        ElectionNodeID { node_id, nonce }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -50,7 +66,7 @@ pub struct TermData {
     start_view: Round,
     seed: Vec<u8>,
     /// (VRF.val, NodeID)
-    node_list: BinaryHeap<(HashValue, NodeID)>,
+    node_list: BinaryHeap<(HashValue, ElectionNodeID)>,
 }
 
 impl PartialEq for TermData {
@@ -77,7 +93,9 @@ impl PartialEq for TermData {
 impl Eq for TermData {}
 
 impl TermData {
-    fn next_term(&self, node_list: BinaryHeap<(HashValue, NodeID)>) -> Self {
+    fn next_term(
+        &self, node_list: BinaryHeap<(HashValue, ElectionNodeID)>,
+    ) -> Self {
         TermData {
             start_view: self.start_view + ROUND_PER_TERM,
             seed: HashValue::sha3_256_of(&self.seed).to_vec(),
@@ -87,7 +105,7 @@ impl TermData {
 }
 
 impl TermData {
-    pub fn add_node(&mut self, vrf_output: HashValue, node_id: NodeID) {
+    fn add_node(&mut self, vrf_output: HashValue, node_id: ElectionNodeID) {
         self.node_list.push((vrf_output, node_id))
     }
 }
@@ -108,7 +126,7 @@ impl TermList {
     /// Add a new node to term list after a valid Election transaction has been
     /// executed.
     pub fn new_node_elected(
-        &mut self, event: &ElectionEvent,
+        &mut self, event: &ElectionEvent, voting_power: u64,
     ) -> anyhow::Result<()> {
         let term_offset = event
             .start_term
@@ -119,11 +137,22 @@ impl TermList {
             bail!("election start_term is too late");
         }
         let mut term = &mut self.term_list[term_offset];
-        term.add_node(event.vrf_output, event.node_id.clone());
-        if term.node_list.len() > TERM_MAX_SIZE {
-            // TODO: Decide if we want to keep the previously elected nodes to
-            // avoid duplicated election.
-            term.node_list.pop();
+
+        for nonce in 0..voting_power {
+            // Hash after appending the nonce to get multiple identifier for
+            // election.
+            let mut b = event.vrf_output.to_vec();
+            b.append(&mut nonce.to_le_bytes().to_vec());
+            let priority = HashValue::sha3_256_of(&b);
+            term.add_node(
+                priority,
+                ElectionNodeID::new(event.node_id.clone(), nonce),
+            );
+            if term.node_list.len() > TERM_MAX_SIZE {
+                // TODO: Decide if we want to keep the previously elected nodes
+                // to avoid duplicated election.
+                term.node_list.pop();
+            }
         }
         Ok(())
     }
@@ -155,7 +184,7 @@ impl TermList {
         for i in start_term_offset..=target_term_offset {
             let term = &self.term_list[i as usize];
             for (_, addr) in &term.node_list {
-                if addr.addr == *author {
+                if addr.node_id.addr == *author {
                     return false;
                 }
             }
@@ -189,10 +218,12 @@ impl Debug for PosState {
 }
 
 impl PosState {
-    pub fn new(initial_seed: Vec<u8>, initial_nodes: Vec<(NodeID)>) -> Self {
+    pub fn new(
+        initial_seed: Vec<u8>, initial_nodes: Vec<(NodeID, u64)>,
+    ) -> Self {
         let mut node_map = HashMap::new();
         let mut node_list = BinaryHeap::new();
-        for node_id in initial_nodes {
+        for (node_id, voting_power) in initial_nodes {
             node_map.insert(
                 node_id.addr.clone(),
                 NodeData {
@@ -200,11 +231,17 @@ impl PosState {
                     vrf_public_key: Some(node_id.vrf_public_key.clone()),
                     status: NodeStatus::Accepted,
                     status_start_view: 0,
+                    voting_power,
                 },
             );
             // VRF output of initial terms will not be used, because these terms
             // are not open for election.
-            node_list.push((Default::default(), node_id));
+            for nonce in 0..voting_power {
+                node_list.push((
+                    Default::default(),
+                    ElectionNodeID::new(node_id.clone(), nonce),
+                ));
+            }
         }
         let mut term_list = Vec::new();
         let initial_term = TermData {
@@ -305,7 +342,7 @@ impl PosState {
         // FIXME(lpl): Nodes in the current active term are not covered by this.
         for term in &self.term_list.term_list {
             for (_, addr) in &term.node_list {
-                if *addr == node_id {
+                if addr.node_id == node_id {
                     bail!("Node in active term service cannot retire");
                 }
             }
@@ -314,19 +351,27 @@ impl PosState {
     }
 
     pub fn get_new_committee(&self) -> Result<ValidatorVerifier> {
-        let mut address_to_validator_info = BTreeMap::new();
+        let mut voting_power_map = BTreeMap::new();
         for i in 0..TERM_LIST_LEN {
             let term = &self.term_list.term_list[i];
             for (_, node_id) in &term.node_list {
-                address_to_validator_info.insert(
-                    node_id.addr,
-                    ValidatorConsensusInfo::new(
-                        node_id.public_key.clone(),
-                        Some(node_id.vrf_public_key.clone()),
-                        1,
-                    ),
-                );
+                let voting_power = voting_power_map
+                    .entry(node_id.node_id.addr.clone())
+                    .or_insert(0 as u64);
+                *voting_power += 1;
             }
+        }
+        let mut address_to_validator_info = BTreeMap::new();
+        for (addr, voting_power) in voting_power_map {
+            let node_data = self.node_map.get(&addr).expect("node in node_map");
+            address_to_validator_info.insert(
+                addr,
+                ValidatorConsensusInfo::new(
+                    node_data.public_key.clone(),
+                    node_data.vrf_public_key.clone(),
+                    voting_power,
+                ),
+            );
         }
 
         // FIXME(lpl): Temporary solution before we have a running transaction
@@ -380,7 +425,12 @@ impl PosState {
 /// Write functions used apply changes (process events in PoS and PoW)
 impl PosState {
     pub fn new_node_elected(&mut self, event: &ElectionEvent) -> Result<()> {
-        self.term_list.new_node_elected(event)
+        let voting_power = self
+            .node_map
+            .get(&event.node_id.addr)
+            .expect("checked in execution")
+            .voting_power;
+        self.term_list.new_node_elected(event, voting_power)
     }
 
     /// `get_new_committee` has been called before this to produce an
