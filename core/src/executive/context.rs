@@ -263,8 +263,11 @@ impl<
         trace!(target: "context", "call");
 
         let (code, code_hash) = if let Some(contract) =
-            self.local_part.internal_contract_map.contract(code_address)
-        {
+            self.local_part.internal_contract_map.contract(
+                code_address,
+                self.local_part.env.number,
+                self.local_part.spec,
+            ) {
             (Some(contract.code()), Some(contract.code_hash()))
         } else {
             (
@@ -298,9 +301,11 @@ impl<
     }
 
     fn extcode(&self, address: &Address) -> vm::Result<Option<Arc<Bytes>>> {
-        if let Some(contract) =
-            self.local_part.internal_contract_map.contract(address)
-        {
+        if let Some(contract) = self.local_part.internal_contract_map.contract(
+            address,
+            self.local_part.env.number,
+            self.local_part.spec,
+        ) {
             Ok(Some(contract.code()))
         } else {
             Ok(self.state.code(address)?)
@@ -308,9 +313,11 @@ impl<
     }
 
     fn extcodehash(&self, address: &Address) -> vm::Result<Option<H256>> {
-        if let Some(contract) =
-            self.local_part.internal_contract_map.contract(address)
-        {
+        if let Some(contract) = self.local_part.internal_contract_map.contract(
+            address,
+            self.local_part.env.number,
+            self.local_part.spec,
+        ) {
             Ok(Some(contract.code_hash()))
         } else {
             Ok(self.state.code_hash(address)?)
@@ -318,9 +325,11 @@ impl<
     }
 
     fn extcodesize(&self, address: &Address) -> vm::Result<Option<usize>> {
-        if let Some(contract) =
-            self.local_part.internal_contract_map.contract(address)
-        {
+        if let Some(contract) = self.local_part.internal_contract_map.contract(
+            address,
+            self.local_part.env.number,
+            self.local_part.spec,
+        ) {
             Ok(Some(contract.code_size()))
         } else {
             Ok(self.state.code_size(address)?)

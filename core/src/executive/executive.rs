@@ -235,9 +235,11 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         {
             trace!("CallBuiltin");
             CallCreateExecutiveKind::CallBuiltin(builtin)
-        } else if let Some(internal) =
-            internal_contract_map.contract(&params.code_address)
-        {
+        } else if let Some(internal) = internal_contract_map.contract(
+            &params.code_address,
+            env.number,
+            spec,
+        ) {
             debug!(
                 "CallInternalContract: address={:?} data={:?}",
                 params.code_address, params.data
