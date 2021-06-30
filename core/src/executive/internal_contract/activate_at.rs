@@ -1,15 +1,15 @@
 use crate::evm::Spec;
 pub use primitives::BlockNumber;
 
-pub trait ActivateAtTrait {
-    fn activate_at(&self, block_number: BlockNumber, spec: &Spec) -> bool;
+pub trait IsActive {
+    fn is_active(&self, spec: &Spec) -> bool;
 }
 
 #[macro_export]
 macro_rules! impl_activate_at {
     ($name:ident,"genesis") => {
-        impl ActivateAtTrait for $name {
-            fn activate_at(&self, _: BlockNumber, _: &Spec) -> bool { true }
+        impl IsActive for $name {
+            fn is_active(&self, _: &Spec) -> bool { true }
         }
     };
 }

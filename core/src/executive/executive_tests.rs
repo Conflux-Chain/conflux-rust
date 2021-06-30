@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{executive::*, internal_contract::*, Executed, ExecutionError};
+use super::{executive::*, Executed, ExecutionError};
 use crate::{
     evm::FinalizationResult,
     executive::{CollateralCheckResultToVmResult, ExecutionOutcome},
@@ -105,7 +105,7 @@ fn test_sender_balance() {
             &sender,
             &COLLATERAL_DRIPS_PER_STORAGE_KEY,
             CleanupMode::NoEmpty,
-            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+            Spec::new_spec().account_start_nonce,
         )
         .unwrap();
     state
@@ -113,7 +113,7 @@ fn test_sender_balance() {
             &sender,
             &U256::from(0x100u64),
             CleanupMode::NoEmpty,
-            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+            Spec::new_spec().account_start_nonce,
         )
         .unwrap();
     assert_eq!(
@@ -122,19 +122,12 @@ fn test_sender_balance() {
     );
     let env = Env::default();
     let machine = make_byzantium_machine(0);
-    let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
     let mut substate = Substate::new();
 
     let FinalizationResult { gas_left, .. } = {
         state.checkpoint();
-        let mut ex = Executive::new(
-            &mut state,
-            &env,
-            &machine,
-            &spec,
-            &internal_contract_map,
-        );
+        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let mut tracer = trace::NoopTracer;
         let res = ex
             .create(params.clone(), &mut substate, &mut tracer)
@@ -144,7 +137,7 @@ fn test_sender_balance() {
                 &params.storage_owner,
                 &params.storage_limit_in_drip,
                 &mut substate,
-                spec.account_start_nonce(env.number),
+                spec.account_start_nonce,
             )
             .unwrap()
             .into_vm_result()
@@ -221,7 +214,6 @@ fn test_create_contract_out_of_depth() {
 
     let env = Env::default();
     let machine = make_byzantium_machine(0);
-    let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
 
     let storage_manager = new_state_manager_for_unit_test();
@@ -231,19 +223,13 @@ fn test_create_contract_out_of_depth() {
             &sender,
             &U256::from(100),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce(env.number),
+            spec.account_start_nonce,
         )
         .unwrap();
     let mut substate = Substate::new();
 
     let FinalizationResult { gas_left, .. } = {
-        let mut ex = Executive::new(
-            &mut state,
-            &env,
-            &machine,
-            &spec,
-            &internal_contract_map,
-        );
+        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let mut tracer = trace::NoopTracer;
         ex.create(params, &mut substate, &mut tracer).unwrap()
     };
@@ -285,7 +271,6 @@ fn test_suicide_when_creation() {
 
     let env = Env::default();
     let machine = make_byzantium_machine(0);
-    let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
 
     let storage_manager = new_state_manager_for_unit_test();
@@ -295,18 +280,12 @@ fn test_suicide_when_creation() {
             &sender_addr,
             &U256::from(100_000),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce(env.number),
+            spec.account_start_nonce,
         )
         .unwrap();
     let mut substate = Substate::new();
 
-    let mut ex = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    );
+    let mut ex = Executive::new(&mut state, &env, &machine, &spec);
     let mut tracer = trace::NoopTracer;
     let FinalizationResult {
         gas_left,
@@ -379,7 +358,6 @@ fn test_call_to_create() {
 
     let env = Env::default();
     let machine = make_byzantium_machine(5);
-    let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
 
     let storage_manager = new_state_manager_for_unit_test();
@@ -392,7 +370,7 @@ fn test_call_to_create() {
             &sender,
             &(U256::from(100) + params.storage_limit_in_drip),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce(env.number),
+            spec.account_start_nonce,
         )
         .unwrap();
     assert_eq!(
@@ -404,13 +382,7 @@ fn test_call_to_create() {
 
     let FinalizationResult { gas_left, .. } = {
         state.checkpoint();
-        let mut ex = Executive::new(
-            &mut state,
-            &env,
-            &machine,
-            &spec,
-            &internal_contract_map,
-        );
+        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let mut tracer = trace::NoopTracer;
         let res = ex.call(params.clone(), &mut substate, &mut tracer).unwrap();
         state
@@ -418,7 +390,7 @@ fn test_call_to_create() {
                 &params.storage_owner,
                 &params.storage_limit_in_drip,
                 &mut substate,
-                spec.account_start_nonce(env.number),
+                spec.account_start_nonce,
             )
             .unwrap()
             .into_vm_result()
@@ -448,7 +420,6 @@ fn test_revert() {
 
     let env = Env::default();
     let machine = make_byzantium_machine(0);
-    let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
     let mut substate = Substate::new();
 
@@ -459,7 +430,7 @@ fn test_revert() {
             &sender,
             &U256::from_str("152d02c7e14af68000000").unwrap(),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce(env.number),
+            spec.account_start_nonce,
         )
         .unwrap();
     state
@@ -483,13 +454,7 @@ fn test_revert() {
         return_data,
         ..
     } = {
-        let mut ex = Executive::new(
-            &mut state,
-            &env,
-            &machine,
-            &spec,
-            &internal_contract_map,
-        );
+        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let mut tracer = trace::NoopTracer;
         ex.call(params, &mut substate, &mut tracer).unwrap()
     };
@@ -532,7 +497,6 @@ fn test_keccak() {
 
     let env = Env::default();
     let machine = make_byzantium_machine(0);
-    let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
 
     let storage_manager = new_state_manager_for_unit_test();
@@ -542,20 +506,14 @@ fn test_keccak() {
             &sender,
             &U256::from_str("152d02c7e14af6800000").unwrap(),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce(env.number),
+            spec.account_start_nonce,
         )
         .unwrap();
     let mut substate = Substate::new();
 
     let mut tracer = trace::NoopTracer;
     let result = {
-        let mut ex = Executive::new(
-            &mut state,
-            &env,
-            &machine,
-            &spec,
-            &internal_contract_map,
-        );
+        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         ex.create(params, &mut substate, &mut tracer)
     };
 
@@ -585,7 +543,6 @@ fn test_not_enough_cash() {
     let mut env = Env::default();
     env.gas_limit = U256::from(100_000);
     let machine = make_byzantium_machine(0);
-    let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
 
     let storage_manager = new_state_manager_for_unit_test();
@@ -595,19 +552,13 @@ fn test_not_enough_cash() {
             &sender,
             &U256::from(100_017),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce(env.number),
+            spec.account_start_nonce,
         )
         .unwrap();
     let correct_cost = min(t.gas_price * t.gas, 100_017.into());
 
     let res = {
-        let mut ex = Executive::new(
-            &mut state,
-            &env,
-            &machine,
-            &spec,
-            &internal_contract_map,
-        );
+        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let options = TransactOptions::with_no_tracing();
         ex.transact(&t, options).unwrap()
     };
@@ -640,7 +591,6 @@ fn test_deposit_withdraw_lock() {
     let mut state = get_state_for_genesis_write(&storage_manager);
     let env = Env::default();
     let machine = make_byzantium_machine(0);
-    let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
     let mut substate = Substate::new();
     state
@@ -648,7 +598,7 @@ fn test_deposit_withdraw_lock() {
             &sender,
             &U256::from(2_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce(env.number),
+            spec.account_start_nonce,
         )
         .unwrap();
     state.add_total_issued(U256::from(2_000_000_000_000_000_000u64));
@@ -675,14 +625,11 @@ fn test_deposit_withdraw_lock() {
 
     // wrong call type
     let mut tracer = trace::NoopTracer;
-    let result = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .call(params.clone(), &mut substate, &mut tracer);
+    let result = Executive::new(&mut state, &env, &machine, &spec).call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+    );
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -703,14 +650,11 @@ fn test_deposit_withdraw_lock() {
     params.call_type = CallType::Call;
     params.data = Some("b6b55f250000000000000000000000000000000000000000000000000de0b6b3a763ffff".from_hex().unwrap());
     let mut tracer = trace::NoopTracer;
-    let result = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .call(params.clone(), &mut substate, &mut tracer);
+    let result = Executive::new(&mut state, &env, &machine, &spec).call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+    );
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -720,14 +664,11 @@ fn test_deposit_withdraw_lock() {
     // deposit 10^18, it should work fine
     params.data = Some("b6b55f250000000000000000000000000000000000000000000000000de0b6b3a7640000".from_hex().unwrap());
     let mut tracer = trace::NoopTracer;
-    let result = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .call(params.clone(), &mut substate, &mut tracer);
+    let result = Executive::new(&mut state, &env, &machine, &spec).call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+    );
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -749,14 +690,11 @@ fn test_deposit_withdraw_lock() {
     // empty data
     params.data = None;
     let mut tracer = trace::NoopTracer;
-    let result = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .call(params.clone(), &mut substate, &mut tracer);
+    let result = Executive::new(&mut state, &env, &machine, &spec).call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+    );
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -782,14 +720,11 @@ fn test_deposit_withdraw_lock() {
     // less data
     params.data = Some("b6b55f25000000000000000000000000000000000000000000000000000000174876e8".from_hex().unwrap());
     let mut tracer = trace::NoopTracer;
-    let result = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .call(params.clone(), &mut substate, &mut tracer);
+    let result = Executive::new(&mut state, &env, &machine, &spec).call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+    );
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -815,14 +750,11 @@ fn test_deposit_withdraw_lock() {
     // withdraw
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000000000ba43b7400".from_hex().unwrap());
     let mut tracer = trace::NoopTracer;
-    let result = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .call(params.clone(), &mut substate, &mut tracer);
+    let result = Executive::new(&mut state, &env, &machine, &spec).call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+    );
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -843,14 +775,11 @@ fn test_deposit_withdraw_lock() {
     // withdraw more than staking balance
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000de0b6a803288c01".from_hex().unwrap());
     let mut tracer = trace::NoopTracer;
-    let result = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .call(params.clone(), &mut substate, &mut tracer);
+    let result = Executive::new(&mut state, &env, &machine, &spec).call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+    );
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -878,14 +807,11 @@ fn test_deposit_withdraw_lock() {
     // lock until block_number = 0
     params.data = Some("44a51d6d00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap());
     let mut tracer = trace::NoopTracer;
-    let result = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .call(params.clone(), &mut substate, &mut tracer);
+    let result = Executive::new(&mut state, &env, &machine, &spec).call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+    );
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -916,14 +842,11 @@ fn test_deposit_withdraw_lock() {
     // lock 1 until 106751991167301 blocks, should succeed
     params.data = Some("44a51d6d00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000611722833944".from_hex().unwrap());
     let mut tracer = trace::NoopTracer;
-    let result = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .call(params.clone(), &mut substate, &mut tracer);
+    let result = Executive::new(&mut state, &env, &machine, &spec).call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+    );
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -950,14 +873,11 @@ fn test_deposit_withdraw_lock() {
     // lock 2 until block_number=2
     params.data = Some("44a51d6d00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002".from_hex().unwrap());
     let mut tracer = trace::NoopTracer;
-    let result = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .call(params.clone(), &mut substate, &mut tracer);
+    let result = Executive::new(&mut state, &env, &machine, &spec).call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+    );
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -984,14 +904,11 @@ fn test_deposit_withdraw_lock() {
     // withdraw more than withdrawable staking balance
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000de0b6a803288bff".from_hex().unwrap());
     let mut tracer = trace::NoopTracer;
-    let result = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .call(params.clone(), &mut substate, &mut tracer);
+    let result = Executive::new(&mut state, &env, &machine, &spec).call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+    );
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
@@ -1025,14 +942,11 @@ fn test_deposit_withdraw_lock() {
     // withdraw exact withdrawable staking balance
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000de0b6a803288bfe".from_hex().unwrap());
     let mut tracer = trace::NoopTracer;
-    let result = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .call(params.clone(), &mut substate, &mut tracer);
+    let result = Executive::new(&mut state, &env, &machine, &spec).call(
+        params.clone(),
+        &mut substate,
+        &mut tracer,
+    );
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -1091,7 +1005,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &sender.address(),
             &U256::from(1_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce(env.number),
+            spec.account_start_nonce,
         )
         .unwrap();
 
@@ -1104,7 +1018,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &Address::default(),
             &0.into(),
             &mut Substate::new(),
-            spec.account_start_nonce(env.number),
+            spec.account_start_nonce,
         )
         .unwrap();
     state.discard_checkpoint();
@@ -1153,7 +1067,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &sender.address(),
             &U256::from(1_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce(env.number),
+            spec.account_start_nonce,
         )
         .unwrap();
     let whitelisted_caller = Address::random();
@@ -1177,7 +1091,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &Address::default(),
             &0.into(),
             &mut Substate::new(),
-            spec.account_start_nonce(env.number),
+            spec.account_start_nonce,
         )
         .unwrap();
     state.discard_checkpoint();
@@ -1229,7 +1143,6 @@ fn test_commission_privilege() {
     let mut env = Env::default();
     env.gas_limit = U256::MAX;
     let machine = make_byzantium_machine(0);
-    let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
 
     let sender = Random.generate().unwrap();
@@ -1260,7 +1173,7 @@ fn test_commission_privilege() {
             &sender.address(),
             &U256::from(1_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce(env.number),
+            spec.account_start_nonce,
         )
         .unwrap();
 
@@ -1278,17 +1191,12 @@ fn test_commission_privilege() {
     .sign(sender.secret());
     assert_eq!(tx.sender(), sender.address());
     let options = TransactOptions::with_no_tracing();
-    let Executed { gas_used, .. } = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .transact(&tx, options)
-    .unwrap()
-    .successfully_executed()
-    .unwrap();
+    let Executed { gas_used, .. } =
+        Executive::new(&mut state, &env, &machine, &spec)
+            .transact(&tx, options)
+            .unwrap()
+            .successfully_executed()
+            .unwrap();
 
     assert_eq!(gas_used, U256::from(58_030));
     assert_eq!(state.nonce(&sender.address()).unwrap(), U256::from(1));
@@ -1303,7 +1211,7 @@ fn test_commission_privilege() {
             &caller1.address(),
             &U256::from(100_000),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce(env.number),
+            spec.account_start_nonce,
         )
         .unwrap();
     state
@@ -1311,7 +1219,7 @@ fn test_commission_privilege() {
             &caller2.address(),
             &U256::from(100_000),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce(env.number),
+            spec.account_start_nonce,
         )
         .unwrap();
     state
@@ -1319,7 +1227,7 @@ fn test_commission_privilege() {
             &caller3.address(),
             &U256::from(100_000),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce(env.number),
+            spec.account_start_nonce,
         )
         .unwrap();
     // add commission privilege to caller1 and caller2
@@ -1374,17 +1282,12 @@ fn test_commission_privilege() {
         U256::from(100_000)
     );
     let options = TransactOptions::with_no_tracing();
-    let Executed { gas_used, .. } = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .transact(&tx, options)
-    .unwrap()
-    .successfully_executed()
-    .unwrap();
+    let Executed { gas_used, .. } =
+        Executive::new(&mut state, &env, &machine, &spec)
+            .transact(&tx, options)
+            .unwrap()
+            .successfully_executed()
+            .unwrap();
 
     assert_eq!(gas_used, U256::from(58_030));
     assert_eq!(state.nonce(&caller3.address()).unwrap(), U256::from(1));
@@ -1416,17 +1319,12 @@ fn test_commission_privilege() {
         U256::from(100_000)
     );
     let options = TransactOptions::with_no_tracing();
-    let Executed { gas_used, .. } = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .transact(&tx, options)
-    .unwrap()
-    .successfully_executed()
-    .unwrap();
+    let Executed { gas_used, .. } =
+        Executive::new(&mut state, &env, &machine, &spec)
+            .transact(&tx, options)
+            .unwrap()
+            .successfully_executed()
+            .unwrap();
 
     assert_eq!(gas_used, U256::from(58_030));
     assert_eq!(state.nonce(&caller1.address()).unwrap(), U256::from(1));
@@ -1458,17 +1356,12 @@ fn test_commission_privilege() {
         U256::from(100_000)
     );
     let options = TransactOptions::with_no_tracing();
-    let Executed { gas_used, .. } = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .transact(&tx, options)
-    .unwrap()
-    .successfully_executed()
-    .unwrap();
+    let Executed { gas_used, .. } =
+        Executive::new(&mut state, &env, &machine, &spec)
+            .transact(&tx, options)
+            .unwrap()
+            .successfully_executed()
+            .unwrap();
 
     assert_eq!(gas_used, U256::from(58_030));
     assert_eq!(state.nonce(&caller2.address()).unwrap(), U256::from(1));
@@ -1514,17 +1407,12 @@ fn test_commission_privilege() {
         U256::from(25_000)
     );
     let options = TransactOptions::with_no_tracing();
-    let Executed { gas_used, .. } = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .transact(&tx, options)
-    .unwrap()
-    .successfully_executed()
-    .unwrap();
+    let Executed { gas_used, .. } =
+        Executive::new(&mut state, &env, &machine, &spec)
+            .transact(&tx, options)
+            .unwrap()
+            .successfully_executed()
+            .unwrap();
 
     assert_eq!(gas_used, U256::from(58_030));
     assert_eq!(state.nonce(&caller2.address()).unwrap(), U256::from(2));
@@ -1563,17 +1451,12 @@ fn test_commission_privilege() {
         U256::from(41_970)
     );
     let options = TransactOptions::with_no_tracing();
-    let Executed { gas_used, .. } = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .transact(&tx, options)
-    .unwrap()
-    .successfully_executed()
-    .unwrap();
+    let Executed { gas_used, .. } =
+        Executive::new(&mut state, &env, &machine, &spec)
+            .transact(&tx, options)
+            .unwrap()
+            .successfully_executed()
+            .unwrap();
 
     assert_eq!(gas_used, U256::from(58_030));
     assert_eq!(state.nonce(&caller3.address()).unwrap(), U256::from(2));
@@ -1606,7 +1489,6 @@ fn test_storage_commission_privilege() {
     let mut env = Env::default();
     env.gas_limit = U256::MAX;
     let machine = make_byzantium_machine(0);
-    let internal_contract_map = InternalContractMap::new();
     let spec = machine.spec(env.number);
 
     let sender = Random.generate().unwrap();
@@ -1638,7 +1520,7 @@ fn test_storage_commission_privilege() {
             &sender.address(),
             &U256::from(2_000_000_000_000_075_000u64),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce(env.number),
+            spec.account_start_nonce,
         )
         .unwrap();
 
@@ -1662,17 +1544,11 @@ fn test_storage_commission_privilege() {
         storage_collateralized,
         storage_released,
         ..
-    } = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .transact(&tx, options)
-    .unwrap()
-    .successfully_executed()
-    .unwrap();
+    } = Executive::new(&mut state, &env, &machine, &spec)
+        .transact(&tx, options)
+        .unwrap()
+        .successfully_executed()
+        .unwrap();
     assert_eq!(storage_collateralized.len(), 1);
     assert_eq!(storage_collateralized[0].address, sender.address());
     assert_eq!(
@@ -1715,7 +1591,7 @@ fn test_storage_commission_privilege() {
             &caller1.address(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce(env.number),
+            spec.account_start_nonce,
         )
         .unwrap();
     state
@@ -1723,7 +1599,7 @@ fn test_storage_commission_privilege() {
             &caller2.address(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce(env.number),
+            spec.account_start_nonce,
         )
         .unwrap();
     state
@@ -1731,7 +1607,7 @@ fn test_storage_commission_privilege() {
             &caller3.address(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce(env.number),
+            spec.account_start_nonce,
         )
         .unwrap();
 
@@ -1750,7 +1626,7 @@ fn test_storage_commission_privilege() {
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate,
-                spec.account_start_nonce(env.number),
+                spec.account_start_nonce,
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -1811,17 +1687,11 @@ fn test_storage_commission_privilege() {
         storage_collateralized,
         storage_released,
         ..
-    } = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .transact(&tx, options)
-    .unwrap()
-    .successfully_executed()
-    .unwrap();
+    } = Executive::new(&mut state, &env, &machine, &spec)
+        .transact(&tx, options)
+        .unwrap()
+        .successfully_executed()
+        .unwrap();
 
     assert_eq!(storage_collateralized.len(), 1);
     assert_eq!(storage_collateralized[0].address, caller3.address());
@@ -1893,17 +1763,11 @@ fn test_storage_commission_privilege() {
         storage_collateralized,
         storage_released,
         ..
-    } = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .transact(&tx, options)
-    .unwrap()
-    .successfully_executed()
-    .unwrap();
+    } = Executive::new(&mut state, &env, &machine, &spec)
+        .transact(&tx, options)
+        .unwrap()
+        .successfully_executed()
+        .unwrap();
 
     assert_eq!(storage_collateralized.len(), 1);
     assert_eq!(storage_collateralized[0].address, address);
@@ -1993,17 +1857,11 @@ fn test_storage_commission_privilege() {
         storage_collateralized,
         storage_released,
         ..
-    } = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .transact(&tx, options)
-    .unwrap()
-    .successfully_executed()
-    .unwrap();
+    } = Executive::new(&mut state, &env, &machine, &spec)
+        .transact(&tx, options)
+        .unwrap()
+        .successfully_executed()
+        .unwrap();
 
     assert_eq!(storage_collateralized.len(), 1);
     assert_eq!(storage_collateralized[0].address, caller2.address());
@@ -2072,7 +1930,7 @@ fn test_storage_commission_privilege() {
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate,
-                spec.account_start_nonce(env.number),
+                spec.account_start_nonce,
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -2127,17 +1985,11 @@ fn test_storage_commission_privilege() {
         storage_collateralized,
         storage_released,
         ..
-    } = Executive::new(
-        &mut state,
-        &env,
-        &machine,
-        &spec,
-        &internal_contract_map,
-    )
-    .transact(&tx, options)
-    .unwrap()
-    .successfully_executed()
-    .unwrap();
+    } = Executive::new(&mut state, &env, &machine, &spec)
+        .transact(&tx, options)
+        .unwrap()
+        .successfully_executed()
+        .unwrap();
 
     assert_eq!(storage_collateralized.len(), 1);
     assert_eq!(storage_collateralized[0].address, caller1.address());

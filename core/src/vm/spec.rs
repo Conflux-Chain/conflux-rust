@@ -122,6 +122,20 @@ pub struct Spec {
     pub keep_unsigned_nonce: bool,
     /// Wasm extra specs, if wasm activated
     pub wasm: Option<WasmCosts>,
+    /// Start nonce for a new contract
+    pub contract_start_nonce: U256,
+    /// Start nonce for a new account
+    pub account_start_nonce: U256,
+    /// CIP-62: Enable EC-related builtin contract
+    pub cip62: bool,
+    /// CIP-64: Get current epoch number through internal contract
+    pub cip64: bool,
+    /// CIP-71: Configurable anti-reentrancy: if configuration enabled
+    pub cip71a: bool,
+    /// CIP-71: Configurable anti-reentrancy: existing bug fixed
+    pub cip71b: bool,
+    /// CIP-72: Accept Ethereum transaction signature
+    pub cip72: bool,
 }
 
 /// Wasm cost table
@@ -236,9 +250,17 @@ impl Spec {
             no_empty: true,
             kill_empty: true,
             blockhash_gas: 20,
+            contract_start_nonce: U256::one(), /* If `no_empty` is false, it
+                                                * should be 0. */
+            account_start_nonce: U256::zero(),
             kill_dust: CleanDustMode::Off,
             keep_unsigned_nonce: false,
             wasm: None,
+            cip62: false,
+            cip64: false,
+            cip71a: false,
+            cip71b: false,
+            cip72: false,
         }
     }
 
@@ -248,24 +270,6 @@ impl Spec {
     pub fn wasm(&self) -> &WasmCosts {
         // *** Prefer PANIC here instead of silently breaking consensus! ***
         self.wasm.as_ref().expect("Wasm spec expected to exist while checking wasm contract. Misconfigured client?")
-    }
-
-    pub fn account_start_nonce(&self, _block_number: u64) -> U256 {
-        /*
-        let account_start_nonce = (_block_number * ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT as u64).int();
-        */
-        U256::zero()
-    }
-
-    pub fn contract_start_nonce(&self, _block_number: u64) -> U256 {
-        /*
-        let contract_start_nonce = (_block_number * ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT as u64).int();
-        */
-        if self.no_empty {
-            U256::one()
-        } else {
-            U256::zero()
-        }
     }
 }
 

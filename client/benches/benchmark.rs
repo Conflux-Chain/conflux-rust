@@ -8,7 +8,7 @@ use cfx_statedb::StateDb;
 use cfx_storage::{state_manager::StateIndex, StorageManagerTrait};
 use cfx_types::{H256, U256};
 use cfxcore::{
-    executive::{Executive, InternalContractMap, TransactOptions},
+    executive::{Executive, TransactOptions},
     machine::new_machine_with_builtin,
     state::State,
     vm::Env,
@@ -48,7 +48,6 @@ fn txexe_benchmark(c: &mut Criterion) {
     let tx = tx.sign(kp.secret());
     let machine =
         new_machine_with_builtin(Default::default(), VmFactory::new(1024 * 32));
-    let internal_contract_map = InternalContractMap::new();
     let env = Env {
         number: 0,
         author: Default::default(),
@@ -84,13 +83,7 @@ fn txexe_benchmark(c: &mut Criterion) {
             .expect("Failed to initialize state");
 
             let spec = machine.spec(env.number);
-            let mut ex = Executive::new(
-                &mut state,
-                &env,
-                &machine,
-                &spec,
-                &internal_contract_map,
-            );
+            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
 
             b.iter(|| {
                 let options = TransactOptions::with_no_tracing();

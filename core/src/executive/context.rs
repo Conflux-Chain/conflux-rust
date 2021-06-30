@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 // Transaction execution environment.
-use super::{executive::*, suicide as suicide_impl, InternalContractMap};
+use super::{executive::*, suicide as suicide_impl};
 use crate::{
     bytes::Bytes,
     machine::Machine,
@@ -94,14 +94,13 @@ pub struct LocalContext<'a, Substate: SubstateTrait> {
     pub machine: &'a Machine,
     pub spec: &'a Spec,
     pub static_flag: bool,
-    pub internal_contract_map: &'a InternalContractMap,
 }
 
 impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
     pub fn new(
         env: &'a Env, machine: &'a Machine, spec: &'a Spec, depth: usize,
         origin: OriginInfo, substate: Substate, is_create: bool,
-        static_flag: bool, internal_contract_map: &'a InternalContractMap,
+        static_flag: bool,
     ) -> Self
     {
         LocalContext {
@@ -113,7 +112,6 @@ impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
             spec,
             is_create,
             static_flag,
-            internal_contract_map,
         }
     }
 
@@ -243,10 +241,7 @@ impl<
                     // The sender of a CREATE call is guaranteed to exist,
                     // therefore the start_nonce below
                     // doesn't matter.
-                    &self
-                        .local_part
-                        .spec
-                        .contract_start_nonce(self.local_part.env.number),
+                    &self.local_part.spec.contract_start_nonce,
                 )?;
             }
         }
@@ -262,12 +257,12 @@ impl<
     {
         trace!(target: "context", "call");
 
-        let (code, code_hash) = if let Some(contract) =
-            self.local_part.internal_contract_map.contract(
-                code_address,
-                self.local_part.env.number,
-                self.local_part.spec,
-            ) {
+        let (code, code_hash) = if let Some(contract) = self
+            .local_part
+            .machine
+            .internal_contracts()
+            .contract(code_address, self.local_part.spec)
+        {
             (Some(contract.code()), Some(contract.code_hash()))
         } else {
             (
@@ -301,11 +296,12 @@ impl<
     }
 
     fn extcode(&self, address: &Address) -> vm::Result<Option<Arc<Bytes>>> {
-        if let Some(contract) = self.local_part.internal_contract_map.contract(
-            address,
-            self.local_part.env.number,
-            self.local_part.spec,
-        ) {
+        if let Some(contract) = self
+            .local_part
+            .machine
+            .internal_contracts()
+            .contract(address, self.local_part.spec)
+        {
             Ok(Some(contract.code()))
         } else {
             Ok(self.state.code(address)?)
@@ -313,11 +309,12 @@ impl<
     }
 
     fn extcodehash(&self, address: &Address) -> vm::Result<Option<H256>> {
-        if let Some(contract) = self.local_part.internal_contract_map.contract(
-            address,
-            self.local_part.env.number,
-            self.local_part.spec,
-        ) {
+        if let Some(contract) = self
+            .local_part
+            .machine
+            .internal_contracts()
+            .contract(address, self.local_part.spec)
+        {
             Ok(Some(contract.code_hash()))
         } else {
             Ok(self.state.code_hash(address)?)
@@ -325,11 +322,12 @@ impl<
     }
 
     fn extcodesize(&self, address: &Address) -> vm::Result<Option<usize>> {
-        if let Some(contract) = self.local_part.internal_contract_map.contract(
-            address,
-            self.local_part.env.number,
-            self.local_part.spec,
-        ) {
+        if let Some(contract) = self
+            .local_part
+            .machine
+            .internal_contracts()
+            .contract(address, self.local_part.spec)
+        {
             Ok(Some(contract.code_size()))
         } else {
             Ok(self.state.code_size(address)?)
@@ -478,7 +476,7 @@ impl<
 /// calls from test.
 #[cfg(test)]
 mod tests {
-    use super::{InternalContractMap, LocalContext, OriginInfo};
+    use super::{LocalContext, OriginInfo};
     use crate::{
         machine::{new_machine_with_builtin, Machine},
         state::{CallStackInfo, State, Substate},
@@ -530,7 +528,6 @@ mod tests {
         storage_manager: FakeStateManager,
         state: State,
         machine: Machine,
-        internal_contract_map: InternalContractMap,
         spec: Spec,
         substate: Substate,
         env: Env,
@@ -548,13 +545,11 @@ mod tests {
             let env = get_test_env();
             let spec = machine.spec(env.number);
             let callstack = CallStackInfo::default();
-            let internal_contract_map = InternalContractMap::new();
 
             let mut setup = Self {
                 storage_manager,
                 state,
                 machine,
-                internal_contract_map,
                 spec,
                 substate: Substate::new(),
                 env,
@@ -585,7 +580,6 @@ mod tests {
             setup.substate,
             true,  /* is_create */
             false, /* static_flag */
-            &setup.internal_contract_map,
         );
         let ctx = lctx.activate(state, &mut callstack);
 
@@ -608,7 +602,6 @@ mod tests {
             setup.substate,
             true,  /* is_create */
             false, /* static_flag */
-            &setup.internal_contract_map,
         );
         let mut ctx = lctx.activate(state, &mut callstack);
 
@@ -729,7 +722,6 @@ mod tests {
                 setup.substate,
                 true,  /* is_create */
                 false, /* static_flag */
-                &setup.internal_contract_map,
             );
             let mut ctx = lctx.activate(state, &mut callstack);
             ctx.log(log_topics, &log_data).unwrap();
@@ -773,17 +765,13 @@ mod tests {
                 setup.substate,
                 true,  /* is_create */
                 false, /* static_flag */
-                &setup.internal_contract_map,
             );
             let mut ctx = lctx.activate(state, &mut callstack);
             let mut tracer = trace::NoopTracer;
             ctx.suicide(
                 &refund_account,
                 &mut tracer,
-                setup
-                    .machine
-                    .spec(setup.env.number)
-                    .account_start_nonce(setup.env.number),
+                setup.machine.spec(setup.env.number).account_start_nonce,
             )
             .unwrap();
             assert_eq!(lctx.substate.suicides.len(), 1);

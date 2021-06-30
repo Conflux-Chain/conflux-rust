@@ -16,7 +16,7 @@ use cfx_types::{Address, U256};
 use rustc_hex::FromHex;
 
 make_solidity_contract! {
-    pub struct AdminControl(ADMIN_CONTROL_CONTRACT_ADDRESS, generate_fn_table, activate_at: "genesis");
+    pub struct AdminControl(ADMIN_CONTROL_CONTRACT_ADDRESS, generate_fn_table, "active_at_genesis");
 }
 fn generate_fn_table() -> SolFnTable {
     make_function_table!(SetAdmin, Destroy, GetAdmin)
@@ -64,7 +64,6 @@ impl ExecutionTrait for Destroy {
             context.spec,
             context.substate,
             tracer,
-            context.env,
         )
     }
 }

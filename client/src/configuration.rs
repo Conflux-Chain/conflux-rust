@@ -41,7 +41,7 @@ use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
 use parking_lot::RwLock;
 use rand::Rng;
-use std::{convert::TryInto, path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
 use txgen::TransactionGeneratorConfig;
 
 lazy_static! {
@@ -133,6 +133,8 @@ build_config! {
         (genesis_secrets, (Option<String>), None)
         (initial_difficulty, (Option<u64>), None)
         (tanzanite_transition_height, (u64), TANZANITE_HEIGHT)
+        (unnamed_21autumn_transition, (Option<u64>), None)
+        (unnamed_21autumn_cip71_deferred_transition, (Option<u64>), None)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
@@ -1023,14 +1025,49 @@ impl Configuration {
     }
 
     pub fn common_params(&self) -> CommonParams {
-        let mut params = CommonParams::common_params(
-            self.chain_id_params(),
-            self.raw_conf.anticone_penalty_ratio,
-            self.raw_conf.tanzanite_transition_height,
+        let mut params = CommonParams::default();
+
+        let transition_default = if self.is_test_or_dev_mode() {
+            1u64
+        } else {
+            u64::MAX
+        };
+
+        params.chain_id = self.chain_id_params();
+        params.anticone_penalty_ratio = self.raw_conf.anticone_penalty_ratio;
+
+        params.transition_heights.cip40 =
+            self.raw_conf.tanzanite_transition_height;
+        params.transition_numbers.cip62 = if self.is_test_or_dev_mode() {
+            0u64
+        } else {
+            BN128_ENABLE_NUMBER
+        };
+        params.transition_numbers.cip64 = self
+            .raw_conf
+            .unnamed_21autumn_transition
+            .unwrap_or(transition_default);
+        params.transition_numbers.cip71a = self
+            .raw_conf
+            .unnamed_21autumn_transition
+            .unwrap_or(transition_default);
+        params.transition_numbers.cip71b = self
+            .raw_conf
+            .unnamed_21autumn_cip71_deferred_transition
+            .unwrap_or(transition_default);
+        params.transition_numbers.cip72 = self
+            .raw_conf
+            .unnamed_21autumn_transition
+            .unwrap_or(transition_default);
+
+        let mut base_block_rewards = BTreeMap::new();
+        base_block_rewards.insert(0, INITIAL_BASE_MINING_REWARD_IN_UCFX.into());
+        base_block_rewards.insert(
+            params.transition_heights.cip40,
+            MINING_REWARD_TANZANITE_IN_UCFX.into(),
         );
-        if self.is_test_or_dev_mode() {
-            params.alt_bn128_transition = 0;
-        }
+        params.base_block_rewards = base_block_rewards;
+
         params
     }
 
@@ -1095,7 +1132,7 @@ pub fn parse_config_address_string(
     Err(format!("Address from configuration should be a valid base32 address or a 40-digit hex string!
             base32_err={:?}
             hex_err={:?}",
-           base32_err, hex_err))
+                base32_err, hex_err))
 }
 
 #[cfg(test)]
@@ -1115,7 +1152,7 @@ mod tests {
             addr,
             parse_config_address_string(
                 "1a2f80341409639ea6a35bbcab8299066109aa55",
-                &Network::Main
+                &Network::Main,
             )
             .unwrap()
         );
@@ -1124,7 +1161,7 @@ mod tests {
             addr,
             parse_config_address_string(
                 "cfx:aarc9abycue0hhzgyrr53m6cxedgccrmmyybjgh4xg",
-                &Network::Main
+                &Network::Main,
             )
             .unwrap()
         );
@@ -1133,7 +1170,7 @@ mod tests {
             addr,
             parse_config_address_string(
                 "cfx:type.user:aarc9abycue0hhzgyrr53m6cxedgccrmmyybjgh4xg",
-                &Network::Main
+                &Network::Main,
             )
             .unwrap()
         );

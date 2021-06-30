@@ -2,9 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{
-    context::OriginInfo, Executed, ExecutionError, InternalContractMap,
-};
+use super::{context::OriginInfo, Executed, ExecutionError};
 use crate::{
     builtin::Builtin,
     bytes::Bytes,
@@ -212,7 +210,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
         parent_static_flag: bool,
-        internal_contract_map: &'a InternalContractMap,
     ) -> Self
     {
         trace!(
@@ -235,11 +232,10 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         {
             trace!("CallBuiltin");
             CallCreateExecutiveKind::CallBuiltin(builtin)
-        } else if let Some(internal) = internal_contract_map.contract(
-            &params.code_address,
-            env.number,
-            spec,
-        ) {
+        } else if let Some(internal) = machine
+            .internal_contracts()
+            .contract(&params.code_address, spec)
+        {
             debug!(
                 "CallInternalContract: address={:?} data={:?}",
                 params.code_address, params.data
@@ -263,7 +259,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
             substate,
             /* is_create: */ false,
             static_flag,
-            internal_contract_map,
         );
         Self {
             context,
@@ -279,7 +274,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     pub fn new_create_raw(
         params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
-        static_flag: bool, internal_contract_map: &'a InternalContractMap,
+        static_flag: bool,
     ) -> Self
     {
         trace!(
@@ -304,7 +299,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
             substate,
             /* is_create */ true,
             static_flag,
-            internal_contract_map,
         );
 
         Self {
@@ -517,7 +511,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                 // It is a bug in the Parity version.
                 &mut self.context.substate,
                 Some(STORAGE_LAYOUT_REGULAR_V0),
-                spec.contract_start_nonce(self.context.env.number),
+                spec.contract_start_nonce,
             )
         } else {
             Self::transfer_exec_balance(
@@ -525,7 +519,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                 spec,
                 state,
                 &mut self.context.substate,
-                spec.account_start_nonce(self.context.env.number),
+                spec.account_start_nonce,
             )
         };
         if let Err(err) = db_result {
@@ -703,7 +697,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                     parent.factory,
                     parent.context.depth + 1,
                     parent.context.static_flag,
-                    parent.context.internal_contract_map,
                 ),
                 /* caller */ parent,
             ),
@@ -717,7 +710,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                     parent.factory,
                     parent.context.depth + 1,
                     parent.context.static_flag,
-                    parent.context.internal_contract_map,
                 ),
                 /* callee */ parent,
             ),
@@ -787,7 +779,6 @@ pub struct ExecutiveGeneric<
     spec: &'a Spec,
     depth: usize,
     static_flag: bool,
-    internal_contract_map: &'a InternalContractMap,
 }
 
 impl<
@@ -799,7 +790,7 @@ impl<
     /// Basic constructor.
     pub fn new(
         state: &'a mut State, env: &'a Env, machine: &'a Machine,
-        spec: &'a Spec, internal_contract_map: &'a InternalContractMap,
+        spec: &'a Spec,
     ) -> Self
     {
         ExecutiveGeneric {
@@ -809,7 +800,6 @@ impl<
             spec,
             depth: 0,
             static_flag: false,
-            internal_contract_map,
         }
     }
 
@@ -843,7 +833,6 @@ impl<
             &vm_factory,
             self.depth,
             self.static_flag,
-            self.internal_contract_map,
         )
         .consume(self.state, substate, tracer);
 
@@ -864,7 +853,6 @@ impl<
             &vm_factory,
             self.depth,
             self.static_flag,
-            self.internal_contract_map,
         )
         .consume(self.state, substate, tracer);
 
@@ -884,7 +872,7 @@ impl<
                 &sender,
                 &(needed_balance - balance),
                 CleanupMode::NoEmpty,
-                self.spec.account_start_nonce(self.env.number),
+                self.spec.account_start_nonce,
             )?;
         }
         let options = TransactOptions::with_tracing();
@@ -1063,10 +1051,8 @@ impl<
                     ToRepackError::SenderDoesNotExist,
                 ));
             }
-            self.state.inc_nonce(
-                &sender,
-                &self.spec.account_start_nonce(self.env.number),
-            )?;
+            self.state
+                .inc_nonce(&sender, &self.spec.account_start_nonce)?;
             self.state.sub_balance(
                 &sender,
                 &actual_gas_cost,
@@ -1087,10 +1073,8 @@ impl<
             // account does not exist (since she may be sponsored). Transaction
             // execution is guaranteed. Note that inc_nonce() will create a
             // new account if the account does not exist.
-            self.state.inc_nonce(
-                &sender,
-                &self.spec.account_start_nonce(self.env.number),
-            )?;
+            self.state
+                .inc_nonce(&sender, &self.spec.account_start_nonce)?;
         }
 
         // Subtract the transaction fee from sender or contract.
@@ -1184,7 +1168,7 @@ impl<
                         &sender,
                         &total_storage_limit,
                         &mut substate,
-                        self.spec.account_start_nonce(self.env.number),
+                        self.spec.account_start_nonce,
                     )?
                     .into_vm_result()
                     .and(Ok(finalize_res))
@@ -1251,7 +1235,7 @@ impl<
 
         let res = self.state.settle_collateral_for_all(
             &substate,
-            self.spec.account_start_nonce(self.env.number),
+            self.spec.account_start_nonce,
         )?;
         // The storage recycling process should never occupy new collateral.
         assert_eq!(res, CollateralCheckResult::Valid);
@@ -1272,7 +1256,7 @@ impl<
                     sponsor_for_gas.as_ref().unwrap(),
                     &sponsor_balance_for_gas,
                     cleanup_mode(&mut substate, self.spec),
-                    self.spec.account_start_nonce(self.env.number),
+                    self.spec.account_start_nonce,
                 )?;
                 self.state.sub_sponsor_balance_for_gas(
                     contract_address,
@@ -1284,7 +1268,7 @@ impl<
                     sponsor_for_collateral.as_ref().unwrap(),
                     &sponsor_balance_for_collateral,
                     cleanup_mode(&mut substate, self.spec),
-                    self.spec.account_start_nonce(self.env.number),
+                    self.spec.account_start_nonce,
                 )?;
                 self.state.sub_sponsor_balance_for_collateral(
                     contract_address,
@@ -1340,7 +1324,7 @@ impl<
                 &tx.sender(),
                 &refund_value,
                 cleanup_mode(&mut substate, self.spec),
-                self.spec.account_start_nonce(self.env.number),
+                self.spec.account_start_nonce,
             )?;
         };
 
