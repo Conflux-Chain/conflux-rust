@@ -27,14 +27,6 @@ use cfx_types::U256;
 pub struct Spec {
     /// Does it support exceptional failed code deposit
     pub exceptional_failed_code_deposit: bool,
-    /// Does it have a delegate cal
-    pub have_delegate_call: bool,
-    /// Does it have a CREATE2 instruction
-    pub have_create2: bool,
-    /// Does it have a REVERT instruction
-    pub have_revert: bool,
-    /// Does it have a EXTCODEHASH instruction
-    pub have_extcodehash: bool,
     /// VM stack limit
     pub stack_limit: usize,
     /// Max number of nested calls/creates
@@ -123,18 +115,6 @@ pub struct Spec {
     pub kill_empty: bool,
     /// Blockhash instruction gas cost.
     pub blockhash_gas: usize,
-    /// Static Call opcode enabled.
-    pub have_static_call: bool,
-    /// RETURNDATA and RETURNDATASIZE opcodes enabled.
-    pub have_return_data: bool,
-    /// BEGINSUB, JUMPSUB, and RETURNSUB opcodes enabled.
-    pub have_subs: bool,
-    /// CHAINID enabled.
-    pub have_chain_id: bool,
-    /// SELFBALANCE enabled.
-    pub have_self_balance: bool,
-    /// SHL, SHR, SAR opcodes enabled.
-    pub have_bitwise_shifting: bool,
     /// Kill basic accounts below this balance if touched.
     pub kill_dust: CleanDustMode,
     /// VM execution does not increase null signed address nonce if this field
@@ -213,25 +193,14 @@ pub enum CleanDustMode {
 }
 
 impl Spec {
-    pub fn new(
-        max_code_size: usize, fix_exp: bool, no_empty: bool, kill_empty: bool,
-    ) -> Spec {
+    pub fn new_spec() -> Spec {
         Spec {
             exceptional_failed_code_deposit: true,
-            have_delegate_call: true,
-            have_create2: false,
-            have_revert: false,
-            have_return_data: false,
-            have_bitwise_shifting: false,
-            have_extcodehash: false,
-            have_subs: false,
-            have_chain_id: false,
-            have_self_balance: false,
             stack_limit: 1024,
             max_depth: 1024,
             tier_step_gas: [0, 2, 3, 5, 8, 10, 20, 0],
             exp_gas: 10,
-            exp_byte_gas: if fix_exp { 50 } else { 10 },
+            exp_byte_gas: 50,
             sha3_gas: 30,
             sha3_word_gas: 6,
             sload_gas: 200,
@@ -251,7 +220,7 @@ impl Spec {
             memory_gas: 3,
             quad_coeff_div: 512,
             create_data_gas: 200,
-            create_data_limit: max_code_size,
+            create_data_limit: 49152,
             tx_gas: 21000,
             tx_create_gas: 53000,
             tx_data_zero_gas: 4,
@@ -264,28 +233,13 @@ impl Spec {
             suicide_gas: 5000,
             suicide_to_new_account_cost: 25000,
             sub_gas_cap_divisor: Some(64),
-            no_empty,
-            kill_empty,
+            no_empty: true,
+            kill_empty: true,
             blockhash_gas: 20,
-            have_static_call: false,
             kill_dust: CleanDustMode::Off,
             keep_unsigned_nonce: false,
             wasm: None,
         }
-    }
-
-    pub fn new_spec() -> Spec {
-        let mut spec = Self::new(49152, true, true, true);
-        spec.have_create2 = true;
-        spec.have_revert = true;
-        spec.have_static_call = true;
-        spec.have_return_data = true;
-        spec.have_bitwise_shifting = true;
-        spec.have_extcodehash = true;
-        spec.have_subs = true;
-        spec.have_chain_id = true;
-        spec.have_self_balance = true;
-        spec
     }
 
     /// Returns wasm spec
