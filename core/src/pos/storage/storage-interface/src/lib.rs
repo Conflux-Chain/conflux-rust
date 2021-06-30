@@ -501,4 +501,8 @@ pub trait DBReaderForPoW: Send + Sync {
     fn get_block_ledger_info(
         &self, consensus_block_id: &HashValue,
     ) -> Result<LedgerInfoWithSignatures>;
+
+    fn get_events_by_version(
+        &self, start_version: u64, end_version: u64,
+    ) -> Result<Vec<ContractEvent>>;
 }
