@@ -1,6 +1,9 @@
 use async_trait::async_trait;
 use cfx_types::H256;
-use diem_types::account_address::AccountAddress;
+use diem_types::{
+    account_address::AccountAddress,
+    validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
+};
 use std::collections::HashMap;
 
 #[async_trait]
@@ -14,6 +17,12 @@ pub trait PowInterface: Send + Sync {
         &self, parent_decision: H256, me_decision: H256,
     ) -> bool;
 
-    /// Return the map from committee addresses to their voting power.
-    async fn get_committee_candidates(&self) -> HashMap<AccountAddress, u64>;
+    async fn get_staking_events(
+        &self, parent_decision: H256, me_decision: H256,
+    ) -> Vec<StakingEvents>;
+}
+
+pub enum StakingEvents {
+    Register((AccountAddress, ConsensusPublicKey, ConsensusVRFPublicKey)),
+    IncreaseStake((AccountAddress, u64)),
 }

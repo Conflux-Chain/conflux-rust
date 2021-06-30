@@ -25,3 +25,8 @@ pub fn retire_address() -> AccountAddress {
     AccountAddress::from_hex_literal("0x1DB")
         .expect("Parsing valid hex literal should always succeed")
 }
+
+pub fn unlock_address() -> AccountAddress {
+    AccountAddress::from_hex_literal("0x1DC")
+        .expect("Parsing valid hex literal should always succeed")
+}

@@ -4,7 +4,7 @@ use cfx_types::H256;
 use diem_types::account_address::AccountAddress;
 use futures::{channel::oneshot, executor::block_on};
 use parking_lot::RwLock;
-use pow_types::PowInterface;
+use pow_types::{PowInterface, StakingEvents};
 use std::{collections::HashMap, sync::Arc};
 use tokio::runtime::Handle;
 
@@ -58,10 +58,12 @@ impl PowHandler {
             .validate_pivot_decision(parent_decision, me_decision)
     }
 
-    fn get_committee_candidates_impl(
-        _pow_consensus: Arc<ConsensusGraph>,
-    ) -> HashMap<AccountAddress, u64> {
-        todo!("Implement committee change later")
+    fn get_staking_events_impl(
+        _pow_consensus: Arc<ConsensusGraph>, _parent_decision: H256,
+        _me_decision: H256,
+    ) -> Vec<StakingEvents>
+    {
+        todo!("Implement getting events")
     }
 }
 
@@ -104,15 +106,21 @@ impl PowInterface for PowHandler {
         r
     }
 
-    async fn get_committee_candidates(&self) -> HashMap<AccountAddress, u64> {
+    async fn get_staking_events(
+        &self, parent_decision: H256, me_decision: H256,
+    ) -> Vec<StakingEvents> {
         let pow_consensus = self.pow_consensus.read().clone();
         if pow_consensus.is_none() {
-            return HashMap::new();
+            return Vec::new();
         }
         let (callback, cb_receiver) = oneshot::channel();
         let pow_consensus = pow_consensus.unwrap();
         self.executor.spawn(async move {
-            let r = Self::get_committee_candidates_impl(pow_consensus);
+            let r = Self::get_staking_events_impl(
+                pow_consensus,
+                parent_decision,
+                me_decision,
+            );
             callback.send(r);
         });
         cb_receiver.await.expect("callback error")
