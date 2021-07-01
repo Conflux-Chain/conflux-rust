@@ -20,7 +20,9 @@
 
 //! Cost spec and other parameterisations for the EVM.
 
+use crate::spec::CommonParams;
 use cfx_types::U256;
+use primitives::BlockNumber;
 
 /// Definition of the cost spec and other parameterisations for the VM.
 #[derive(Debug, Clone)]
@@ -207,7 +209,7 @@ pub enum CleanDustMode {
 }
 
 impl Spec {
-    pub fn new_spec() -> Spec {
+    fn new_spec() -> Spec {
         Spec {
             exceptional_failed_code_deposit: true,
             stack_limit: 1024,
@@ -264,6 +266,21 @@ impl Spec {
         }
     }
 
+    pub fn new_spec_from_common_params(
+        params: &CommonParams, number: BlockNumber,
+    ) -> Spec {
+        let mut spec = Self::new_spec();
+        spec.cip62 = number >= params.transition_numbers.cip62;
+        spec.cip64 = number >= params.transition_numbers.cip64;
+        spec.cip71a = number >= params.transition_numbers.cip71a;
+        spec.cip71b = number >= params.transition_numbers.cip71b;
+        spec.cip72 = number >= params.transition_numbers.cip72;
+        spec
+    }
+
+    #[cfg(test)]
+    pub fn new_spec_for_test() -> Spec { Self::new_spec() }
+
     /// Returns wasm spec
     ///
     /// May panic if there is no wasm spec
@@ -275,5 +292,5 @@ impl Spec {
 
 #[cfg(test)]
 impl Default for Spec {
-    fn default() -> Self { Spec::new_spec() }
+    fn default() -> Self { Spec::new_spec_for_test() }
 }

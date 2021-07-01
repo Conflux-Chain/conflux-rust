@@ -98,7 +98,7 @@ impl MockContext {
     /// New mock context with byzantium spec rules
     pub fn new_spec() -> Self {
         let mut context = MockContext::default();
-        context.spec = Spec::new_spec();
+        context.spec = Spec::new_spec_for_test();
         context
     }
 

@@ -1677,6 +1677,7 @@ impl ConsensusExecutionHandler {
             Some(v) => v.start_block_number + epoch_size as u64,
             None => bail!("cannot obtain the execution context. Database is potentially corrupted!"),
         };
+        let spec = self.machine.spec(start_block_number);
 
         invalid_params_check(
             "tx",
@@ -1684,6 +1685,7 @@ impl ConsensusExecutionHandler {
                 tx,
                 tx.chain_id,
                 block_height,
+                Some(&spec),
             ),
         )?;
 

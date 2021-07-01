@@ -105,7 +105,7 @@ fn test_sender_balance() {
             &sender,
             &COLLATERAL_DRIPS_PER_STORAGE_KEY,
             CleanupMode::NoEmpty,
-            Spec::new_spec().account_start_nonce,
+            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
     state
@@ -113,7 +113,7 @@ fn test_sender_balance() {
             &sender,
             &U256::from(0x100u64),
             CleanupMode::NoEmpty,
-            Spec::new_spec().account_start_nonce,
+            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
     assert_eq!(
