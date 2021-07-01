@@ -115,10 +115,13 @@ impl InternalContractMap {
     pub fn new(params: &CommonParams) -> Self {
         let mut builtin = BTreeMap::new();
         let mut activation_info = BTreeMap::new();
-        let contracts_name = ["admin", "sponsor", "staking"];
+        // We should initialize all the internal contracts here. Even if not all
+        // of them are activated at the genesis block. The activation of the
+        // internal contracts are controlled by the `CommonParams` and
+        // `vm::Spec`.
+        let mut internal_contracts = all_internal_contracts();
 
-        for name in contracts_name.iter() {
-            let contract = internal_contract_factory(name);
+        while let Some(contract) = internal_contracts.pop() {
             let address = *contract.address();
             let transition_block = contract.initialize_block(params);
 
@@ -137,10 +140,11 @@ impl InternalContractMap {
 
     #[cfg(test)]
     pub fn initialize_for_test() -> Vec<Address> {
-        ["admin", "sponsor", "staking"]
-            .iter()
-            .map(|name| *internal_contract_factory(name).address())
-            .collect()
+        vec![
+            *AdminControl::instance().address(),
+            *Staking::instance().address(),
+            *SponsorWhitelistControl::instance().address(),
+        ]
     }
 
     pub fn initialized_at_genesis(&self) -> &[Address] {
@@ -162,12 +166,11 @@ impl InternalContractMap {
     }
 }
 
-/// Built-in instruction factory.
-pub fn internal_contract_factory(name: &str) -> Box<dyn InternalContractTrait> {
-    match name {
-        "admin" => Box::new(AdminControl::instance()),
-        "staking" => Box::new(Staking::instance()),
-        "sponsor" => Box::new(SponsorWhitelistControl::instance()),
-        _ => panic!("invalid internal contract name: {}", name),
-    }
+/// All Built-in contracts.
+pub fn all_internal_contracts() -> Vec<Box<dyn InternalContractTrait>> {
+    vec![
+        Box::new(AdminControl::instance()),
+        Box::new(Staking::instance()),
+        Box::new(SponsorWhitelistControl::instance()),
+    ]
 }
