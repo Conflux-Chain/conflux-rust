@@ -140,11 +140,10 @@ impl InternalContractMap {
 
     #[cfg(test)]
     pub fn initialize_for_test() -> Vec<Address> {
-        vec![
-            *AdminControl::instance().address(),
-            *Staking::instance().address(),
-            *SponsorWhitelistControl::instance().address(),
-        ]
+        all_internal_contracts()
+            .iter()
+            .map(|contract| *contract.address())
+            .collect()
     }
 
     pub fn initialized_at_genesis(&self) -> &[Address] {

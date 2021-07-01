@@ -124,6 +124,7 @@ build_config! {
         (anticone_penalty_ratio, (u64), ANTICONE_PENALTY_RATIO)
         (chain_id, (Option<u32>), None)
         (execute_genesis, (bool), true)
+        (default_transition_time, (Option<u64>), None)
         // Snapshot Epoch Count is a consensus parameter. This flag overrides
         // the parameter, which only take effect in `dev` mode.
         (dev_snapshot_epoch_count, (u32), SNAPSHOT_EPOCHS_CAPACITY)
@@ -1027,11 +1028,14 @@ impl Configuration {
     pub fn common_params(&self) -> CommonParams {
         let mut params = CommonParams::default();
 
-        let transition_default = if self.is_test_or_dev_mode() {
-            1u64
-        } else {
-            u64::MAX
-        };
+        let default_transition_time =
+            if let Some(num) = self.raw_conf.default_transition_time {
+                num
+            } else if self.is_test_or_dev_mode() {
+                0u64
+            } else {
+                u64::MAX
+            };
 
         params.chain_id = self.chain_id_params();
         params.anticone_penalty_ratio = self.raw_conf.anticone_penalty_ratio;
@@ -1046,19 +1050,19 @@ impl Configuration {
         params.transition_numbers.cip64 = self
             .raw_conf
             .unnamed_21autumn_transition
-            .unwrap_or(transition_default);
+            .unwrap_or(default_transition_time);
         params.transition_numbers.cip71a = self
             .raw_conf
             .unnamed_21autumn_transition
-            .unwrap_or(transition_default);
+            .unwrap_or(default_transition_time);
         params.transition_numbers.cip71b = self
             .raw_conf
             .unnamed_21autumn_cip71_deferred_transition
-            .unwrap_or(transition_default);
+            .unwrap_or(default_transition_time);
         params.transition_numbers.cip72 = self
             .raw_conf
             .unnamed_21autumn_transition
-            .unwrap_or(transition_default);
+            .unwrap_or(default_transition_time);
 
         let mut base_block_rewards = BTreeMap::new();
         base_block_rewards.insert(0, INITIAL_BASE_MINING_REWARD_IN_UCFX.into());
