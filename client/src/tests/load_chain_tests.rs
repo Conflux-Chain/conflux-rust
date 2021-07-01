@@ -65,6 +65,7 @@ fn test_load_chain() {
     conf.raw_conf.jsonrpc_http_port = Some(18000);
     conf.raw_conf.chain_id = Some(10);
     conf.raw_conf.execute_genesis = false;
+    conf.raw_conf.default_transition_time = Some(0);
 
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
     let handle = ArchiveClient::start(conf, exit).unwrap();
