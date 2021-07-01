@@ -11,8 +11,8 @@ mod macros {
     pub use crate::check_signature;
 
     pub use crate::{
-        group_impl_activate_at, impl_activate_at, impl_function_type,
-        make_function_table, make_solidity_contract, make_solidity_function,
+        group_impl_activate_at, impl_function_type, make_function_table,
+        make_solidity_contract, make_solidity_function,
     };
 
     pub use super::super::{

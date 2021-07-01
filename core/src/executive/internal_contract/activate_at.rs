@@ -6,17 +6,13 @@ pub trait IsActive {
 }
 
 #[macro_export]
-macro_rules! impl_activate_at {
-    ($name:ident,"genesis") => {
-        impl IsActive for $name {
-            fn is_active(&self, _: &Spec) -> bool { true }
-        }
-    };
-}
-
-#[macro_export]
 macro_rules! group_impl_activate_at {
-    ($desc:tt $(, $name:ident)* $(,)?) => {
-        $(impl_activate_at!($name, $desc);)*
+    ("genesis" $(, $name:ident)* $(,)?) => {
+        group_impl_activate_at!(|_| true $(, $name)*);
+    };
+    ($is_active:expr $(, $name:ident)* $(,)?) => {
+        $(impl IsActive for $name {
+            fn is_active(&self, spec: &Spec) -> bool { $is_active(spec) }
+        })*
     };
 }
