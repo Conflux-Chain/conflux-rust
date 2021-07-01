@@ -20,6 +20,7 @@ use crate::{
     machine::Machine, state::State, verification::VerificationConfig,
 };
 
+use crate::vm::Spec;
 use account_cache::AccountCache;
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_statedb::{Result as StateDbResult, StateDb};
@@ -264,12 +265,18 @@ impl TransactionPool {
         // filter out invalid transactions.
         let mut index = 0;
 
-        let (chain_id, best_height) = {
+        let (chain_id, best_height, best_block_hash) = {
             (
                 current_best_info.best_chain_id(),
                 current_best_info.best_epoch_number,
+                current_best_info.best_block_hash,
             )
         };
+        // FIXME: Needs further discussion here
+        let maybe_spec = self
+            .data_man
+            .get_epoch_execution_context(&best_block_hash)
+            .map(|v| self.machine.spec(v.start_block_number));
 
         while let Some(tx) = transactions.get(index) {
             match self.verify_transaction_tx_pool(
@@ -277,6 +284,7 @@ impl TransactionPool {
                 /* basic_check = */ true,
                 chain_id,
                 best_height,
+                maybe_spec.as_ref(),
             ) {
                 Ok(_) => index += 1,
                 Err(e) => {
@@ -374,12 +382,19 @@ impl TransactionPool {
         // filter out invalid transactions.
         let mut index = 0;
 
-        let (chain_id, best_height) = {
+        let (chain_id, best_height, best_block_hash) = {
             (
                 current_best_info.best_chain_id(),
                 current_best_info.best_epoch_number,
+                current_best_info.best_block_hash,
             )
         };
+
+        // FIXME: Needs further discussion here
+        let maybe_spec = self
+            .data_man
+            .get_epoch_execution_context(&best_block_hash)
+            .map(|v| self.machine.spec(v.start_block_number));
 
         while let Some(tx) = signed_transactions.get(index) {
             match self.verify_transaction_tx_pool(
@@ -387,6 +402,7 @@ impl TransactionPool {
                 true, /* basic_check = */
                 chain_id,
                 best_height,
+                maybe_spec.as_ref(),
             ) {
                 Ok(_) => index += 1,
                 Err(e) => {
@@ -462,16 +478,17 @@ impl TransactionPool {
     /// readiness
     fn verify_transaction_tx_pool(
         &self, transaction: &TransactionWithSignature, basic_check: bool,
-        chain_id: u32, best_height: u64,
+        chain_id: u32, best_height: u64, vm_spec: Option<&Spec>,
     ) -> Result<(), String>
     {
         let _timer = MeterTimer::time_func(TX_POOL_VERIFY_TIMER.as_ref());
 
         if basic_check {
-            if let Err(e) = self
-                .verification_config
-                .verify_transaction_common(transaction, chain_id)
-            {
+            if let Err(e) = self.verification_config.verify_transaction_common(
+                transaction,
+                chain_id,
+                vm_spec,
+            ) {
                 warn!("Transaction {:?} discarded due to not passing basic verification.", transaction.hash());
                 return Err(format!("{:?}", e));
             }
@@ -695,8 +712,19 @@ impl TransactionPool {
             .ok();
         }
 
-        let (chain_id, best_height) =
-            { (best_info.best_chain_id(), best_info.best_epoch_number) };
+        let (chain_id, best_height, best_block_hash) = {
+            (
+                best_info.best_chain_id(),
+                best_info.best_epoch_number,
+                best_info.best_block_hash,
+            )
+        };
+
+        // FIXME: Needs further discussion here
+        let maybe_spec = self
+            .data_man
+            .get_epoch_execution_context(&best_block_hash)
+            .map(|v| self.machine.spec(v.start_block_number));
 
         while let Some(tx) = recycle_tx_buffer.pop() {
             debug!(
@@ -710,6 +738,7 @@ impl TransactionPool {
                 /* basic_check = */ false,
                 chain_id,
                 best_height,
+                maybe_spec.as_ref(),
             ) {
                 warn!(
                     "Recycled transaction {:?} discarded due to not passing verification {}.",
