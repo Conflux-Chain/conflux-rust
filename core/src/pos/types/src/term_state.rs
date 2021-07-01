@@ -1,7 +1,19 @@
+use std::{
+    cmp::Ordering,
+    collections::{BTreeMap, BinaryHeap, HashMap, VecDeque},
+    fmt::{Debug, Formatter},
+};
+
+use anyhow::{anyhow, bail, Result};
+use serde::{Deserialize, Serialize};
+
+use diem_crypto::{HashValue, VRFProof, ValidCryptoMaterial};
+
 use crate::{
     account_address::AccountAddress,
     account_config,
     block_info::Round,
+    contract_event::ContractEvent,
     epoch_state::EpochState,
     event::EventKey,
     transaction::{ElectionPayload, RetirePayload},
@@ -10,14 +22,7 @@ use crate::{
     },
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
 };
-use anyhow::{anyhow, bail, Result};
-use diem_crypto::{HashValue, VRFProof, ValidCryptoMaterial};
-use serde::{Deserialize, Serialize};
-use std::{
-    cmp::Ordering,
-    collections::{BTreeMap, BinaryHeap, HashMap},
-    fmt::{Debug, Formatter},
-};
+use move_core_types::language_storage::TypeTag;
 
 const TERM_LIST_LEN: usize = 6;
 const ELECTION_AFTER_ACCEPTED_ROUND: Round = 240;
@@ -29,8 +34,9 @@ const ELECTION_TERM_START_ROUND: Round = 120;
 const ELECTION_TERM_END_ROUND: Round = 30;
 
 const TERM_MAX_SIZE: usize = 16;
+const UNLOCK_WAIT_VIEW: u64 = 20160;
 
-#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
 pub enum NodeStatus {
     Accepted,
     Retired,
@@ -205,6 +211,10 @@ pub struct PosState {
     /// reconfiguration block.
     current_view: Round,
     term_list: TermList,
+
+    /// Track the nodes that have retired and are waiting to be unlocked.
+    /// Nodes that are enqueued early will also become unlocked early.
+    retiring_nodes: VecDeque<AccountAddress>,
 }
 
 impl Debug for PosState {
@@ -264,6 +274,7 @@ impl PosState {
                 current_term: 0,
                 term_list,
             },
+            retiring_nodes: Default::default(),
         }
     }
 }
@@ -420,6 +431,29 @@ impl PosState {
             }
         }
     }
+
+    pub fn get_unlock_events(&self) -> Vec<ContractEvent> {
+        let mut unlocked_nodes = Vec::new();
+        for retired_node in &self.retiring_nodes {
+            let node = self.node_map.get(&retired_node).expect("exists");
+            assert_eq!(node.status, NodeStatus::Retired);
+            if node.status_start_view + UNLOCK_WAIT_VIEW <= self.current_view {
+                let unlock_event = ContractEvent::new(
+                    ElectionEvent::election_event_key(),
+                    0, /* sequence_number */
+                    TypeTag::Vector(Box::new(TypeTag::U8)), /* TypeTag::ByteArray */
+                    bcs::to_bytes(&UnlockEvent {
+                        node_id: *retired_node,
+                    })
+                    .unwrap(),
+                );
+                unlocked_nodes.push(unlock_event);
+            } else {
+                break;
+            }
+        }
+        unlocked_nodes
+    }
 }
 
 /// Write functions used apply changes (process events in PoS and PoW)
@@ -437,8 +471,22 @@ impl PosState {
     /// EpochState. And `next_view` will not be called for blocks following
     /// a pending reconfiguration block.
     pub fn next_view(&mut self) -> Result<Option<EpochState>> {
-        self.current_view += 1;
+        while let Some(retired_node) = self.retiring_nodes.pop_front() {
+            let node = self.node_map.get_mut(&retired_node).expect("exists");
+            assert_eq!(node.status, NodeStatus::Retired);
+            if node.status_start_view + UNLOCK_WAIT_VIEW <= self.current_view {
+                node.status = NodeStatus::Unlocked;
+                node.status_start_view = self.current_view;
+            } else {
+                // This node and other nodes are not unlocked.
+                self.retiring_nodes.push_front(retired_node);
+                break;
+            }
+        }
 
+        // Increase view after updating node status above to get a correct
+        // `status_start_view`.
+        self.current_view += 1;
         let epoch_state = if self.current_view % ROUND_PER_TERM == 0 {
             // generate new epoch for new term.
             let new_term = self.current_view / ROUND_PER_TERM;
@@ -470,6 +518,7 @@ impl PosState {
                 NodeStatus::Accepted => {
                     node.status = NodeStatus::Retired;
                     node.status_start_view = self.current_view;
+                    self.retiring_nodes.push_back(retire_event.node_id.addr);
                     Ok(())
                 }
                 _ => Err(anyhow!(
@@ -488,6 +537,7 @@ impl PosState {
                 current_term: 0,
                 term_list: Default::default(),
             },
+            retiring_nodes: Default::default(),
         }
     }
 }
@@ -596,5 +646,23 @@ impl Ord for NodeID {
 impl PartialOrd for NodeID {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         self.addr.partial_cmp(&other.addr)
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct UnlockEvent {
+    /// The node id to unlock.
+    ///
+    /// The management contract should unlock the corresponding account.
+    pub node_id: AccountAddress,
+}
+
+impl UnlockEvent {
+    pub fn unlock_event_key() -> EventKey {
+        EventKey::new_from_address(&account_config::unlock_address(), 5)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
+        bcs::from_bytes(bytes).map_err(Into::into)
     }
 }

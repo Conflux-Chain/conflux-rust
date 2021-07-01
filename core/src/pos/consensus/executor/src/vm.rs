@@ -39,7 +39,12 @@ impl VMExecutor for FakeVM {
         for transaction in transactions {
             // Execute the transaction
             match transaction {
-                Transaction::BlockMetadata(_data) => {}
+                Transaction::BlockMetadata(_data) => {
+                    let unlock_events =
+                        state_view.pos_state().get_unlock_events();
+                    let output = Self::gen_output(unlock_events);
+                    vm_outputs.push(output);
+                }
                 Transaction::UserTransaction(trans) => {
                     // TODO(lpl): Parallel verification.
                     let trans = trans.check_signature().map_err(|_| {

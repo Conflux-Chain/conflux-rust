@@ -1036,7 +1036,7 @@ impl ConsensusExecutionHandler {
             // The pos_reference is continuous, so after seeing a new
             // pos_reference, we only need to process the new
             // unlock_txs in it.
-            for _unlock_tx in self.pos_verifier.get_unlock_events(
+            for _unlock_tx in self.pos_verifier.get_unlock_nodes(
                 pivot_block
                     .block_header
                     .pos_reference()
