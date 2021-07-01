@@ -984,7 +984,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                 context.suicide(
                     &refund_address,
                     tracer,
-                    context.spec().account_start_nonce(context.env().number),
+                    context.spec().account_start_nonce,
                 )?;
                 return Ok(InstructionResult::StopExecution);
             }
