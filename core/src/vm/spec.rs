@@ -277,7 +277,7 @@ impl Spec {
         spec.cip64 = number >= params.transition_numbers.cip64;
         spec.cip71a = number >= params.transition_numbers.cip71a;
         spec.cip71b = number >= params.transition_numbers.cip71b;
-        spec.cip72 = number >= params.transition_numbers.cip72;
+        spec.cip72 = number >= params.transition_numbers.cip72b;
         spec
     }
 

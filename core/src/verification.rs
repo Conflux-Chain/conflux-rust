@@ -18,9 +18,10 @@ use cfx_storage::{
 };
 use cfx_types::{BigEndianHash, H256, U256};
 use primitives::{
-    block::BlockHeight, transaction::TransactionError, Action, Block,
-    BlockHeader, BlockReceipts, MerkleHash, Receipt, SignedTransaction,
-    TransactionWithSignature,
+    block::BlockHeight,
+    transaction::{TransactionError, TransactionType},
+    Action, Block, BlockHeader, BlockReceipts, MerkleHash, Receipt,
+    SignedTransaction, TransactionWithSignature,
 };
 use rlp::Encodable;
 use std::{collections::HashSet, convert::TryInto, sync::Arc};
@@ -473,23 +474,38 @@ impl VerificationConfig {
         }
     }
 
+    // If the boolean variable returns true, it means this transaction do not
+    // need check epoch height.
+    fn can_skip_epoch_check(
+        tx: &TransactionWithSignature, cip72a: bool, mode: &VerifyTxMode,
+    ) -> bool {
+        if tx.transaction_type() != TransactionType::EthereumLike {
+            return false;
+        }
+
+        match mode {
+            VerifyTxMode::Local(_, _) if mode.is_maybe_later() => true,
+            VerifyTxMode::Local(_, spec) => cip72a && spec.cip72,
+            VerifyTxMode::Remote => cip72a,
+        }
+    }
+
     fn verify_transaction_epoch_height(
         tx: &TransactionWithSignature, block_height: u64,
-        transaction_epoch_bound: u64, mode: &VerifyTxMode,
+        transaction_epoch_bound: u64, cip72a: bool, mode: &VerifyTxMode,
     ) -> Result<(), TransactionError>
     {
+        if Self::can_skip_epoch_check(tx, cip72a, mode) {
+            return Ok(());
+        }
+
         let result = Self::check_transaction_epoch_bound(
             tx,
             block_height,
             transaction_epoch_bound,
         );
-        let allow_larger_epoch =
-            if let VerifyTxMode::Local(VerifyTxLocalMode::MaybeLater, _) = mode
-            {
-                true
-            } else {
-                false
-            };
+        let allow_larger_epoch = mode.is_maybe_later();
+
         if result == 0 || (result > 0 && allow_larger_epoch) {
             Ok(())
         } else {
@@ -535,29 +551,31 @@ impl VerificationConfig {
         // Each constraint depends on a mode or a CIP should be
         // implemented in a seperated function.
         // ******************************************
+        let cip76 = height >= transitions.cip76;
+        let cip72a = height >= transitions.cip72a;
 
         Self::verify_transaction_epoch_height(
             tx,
             height,
             self.transaction_epoch_bound,
+            cip72a,
             &mode,
         )?;
 
-        Self::check_gas_limit(tx, height, transitions, &mode)?;
+        Self::check_gas_limit(tx, cip76, &mode)?;
+        Self::check_eth_like(tx)?;
         Ok(())
     }
 
     /// Check transaction intrinsic gas. Influenced by CIP-76.
     fn check_gas_limit(
-        tx: &TransactionWithSignature, height: BlockHeight,
-        transitions: &TransitionsEpochHeight, mode: &VerifyTxMode,
-    ) -> Result<(), TransactionError>
-    {
+        tx: &TransactionWithSignature, cip76: bool, mode: &VerifyTxMode,
+    ) -> Result<(), TransactionError> {
         const GENESIS_SPEC: Spec = Spec::genesis_spec();
         let maybe_spec = if let VerifyTxMode::Local(_, spec) = mode {
             // In local mode, we check gas limit as usual.
             Some(*spec)
-        } else if height < transitions.cip76 {
+        } else if !cip76 {
             // In remote mode, we only check gas limit before cip-76 activated.
             Some(&GENESIS_SPEC)
         } else {
@@ -577,6 +595,24 @@ impl VerificationConfig {
                 });
             }
         }
+
+        Ok(())
+    }
+
+    fn check_eth_like(
+        tx: &TransactionWithSignature,
+    ) -> Result<(), TransactionError> {
+        if tx.transaction_type() != TransactionType::EthereumLike {
+            return Ok(());
+        }
+
+        // We do not check if cip72a is activated or not. Even if cip72a is
+        // not activated, a transaction with target epoch == u64::MAX and
+        // storage limit != u64::MAX can never be packed.
+        if tx.storage_limit != u64::MAX {
+            return Err(TransactionError::InvalidEthereumLike);
+        }
+
         Ok(())
     }
 }
@@ -597,4 +633,14 @@ pub enum VerifyTxLocalMode {
     MaybeLater, /* When inserting transactions to tx pool, if its epoch
            * height is too large, it can be accept even if it is not
            * regarded as a valid transaction. */
+}
+
+impl<'a> VerifyTxMode<'a> {
+    fn is_maybe_later(&self) -> bool {
+        if let VerifyTxMode::Local(VerifyTxLocalMode::MaybeLater, _) = self {
+            true
+        } else {
+            false
+        }
+    }
 }
