@@ -6,9 +6,9 @@ pub trait IsActive {
 }
 
 #[macro_export]
-macro_rules! group_impl_activate_at {
+macro_rules! group_impl_is_active {
     ("genesis" $(, $name:ident)* $(,)?) => {
-        group_impl_activate_at!(|_| true $(, $name)*);
+        group_impl_is_active!(|_| true $(, $name)*);
     };
     ($is_active:expr $(, $name:ident)* $(,)?) => {
         $(impl IsActive for $name {

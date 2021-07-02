@@ -11,7 +11,7 @@ mod macros {
     pub use crate::check_signature;
 
     pub use crate::{
-        group_impl_activate_at, impl_function_type, make_function_table,
+        group_impl_is_active, impl_function_type, make_function_table,
         make_solidity_contract, make_solidity_function,
     };
 
@@ -46,10 +46,10 @@ pub(super) type SolFnTable = HashMap<[u8; 4], Box<dyn SolidityFunctionTrait>>;
 macro_rules! make_solidity_contract {
     ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr, $gen_table:ident, "active_at_genesis"); ) => {
         $crate::make_solidity_contract! {
-            $(#[$attr])* $visibility struct $name ($addr, $gen_table, initialize: |_: &CommonParams| 0u64, activate:|_: &Spec| true);
+            $(#[$attr])* $visibility struct $name ($addr, $gen_table, initialize: |_: &CommonParams| 0u64, is_active: |_: &Spec| true);
         }
     };
-    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr, $gen_table:ident, initialize: $init:expr, activate: $is_active:expr); ) => {
+    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr, $gen_table:ident, initialize: $init:expr, is_active: $is_active:expr); ) => {
         $(#[$attr])*
         $visibility struct $name {
             function_table: SolFnTable
