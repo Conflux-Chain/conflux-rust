@@ -9,14 +9,10 @@ extern crate rustc_hex;
 extern crate serde;
 extern crate serde_derive;
 
-use cfxkey::{Error as EthkeyError, Generator};
-use diem_crypto::{
-    Uniform, ValidCryptoMaterialStringExt,
-};
+use cfxkey::Error as EthkeyError;
+use diem_crypto::{Uniform, ValidCryptoMaterialStringExt};
 use diem_types::{
-    account_address::{
-        from_consensus_public_key,
-    },
+    account_address::from_consensus_public_key,
     contract_event::ContractEvent,
     on_chain_config::{new_epoch_event_key, ValidatorSet},
     transaction::{ChangeSet, Transaction, WriteSetPayload},
@@ -30,30 +26,22 @@ use diem_types::{
 };
 use diemdb::DiemDB;
 use docopt::Docopt;
-use executor::{
-    db_bootstrapper::{calculate_genesis, generate_waypoint, maybe_bootstrap},
-    vm::FakeVM,
-    Executor,
-};
+use executor::{db_bootstrapper::generate_waypoint, vm::FakeVM};
 
 use log::*;
 use move_core_types::language_storage::TypeTag;
 
 use rand::{rngs::StdRng, SeedableRng};
-use rustc_hex::{FromHexError};
+use rustc_hex::FromHexError;
 use serde::Deserialize;
 use std::{
-    convert::TryFrom,
-    env,
-    fmt::{self, Write as FmtWrite},
+    env, fmt,
     fs::File,
     io::{self, Read, Write},
     num::ParseIntError,
     path::PathBuf,
     process,
     result::Result,
-    str::FromStr,
-    writeln,
 };
 use storage_interface::DbReaderWriter;
 use tempdir::TempDir;

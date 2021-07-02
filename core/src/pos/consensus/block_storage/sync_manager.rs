@@ -35,22 +35,6 @@ pub enum NeedFetchResult {
 }
 
 impl BlockStore {
-    /// Check if we're far away from this ledger info and need to sync.
-    /// Returns false if we have this block in the tree or the root's round is
-    /// higher than the block.
-    pub fn need_sync_for_quorum_cert(&self, qc: &QuorumCert) -> bool {
-        // This precondition ensures that the check in the following lines
-        // does not result in an addition overflow.
-        checked_precondition!(self.root().round() < std::u64::MAX - 1);
-
-        // If we have the block locally, we're not far from this QC thus don't
-        // need to sync. In case root().round() is greater than that the
-        // committed block carried by LI is older than my current
-        // commit.
-        !(self.block_exists(qc.commit_info().id())
-            || self.root().round() >= qc.commit_info().round())
-    }
-
     /// Checks if quorum certificate can be inserted in block store without RPC
     /// Returns the enum to indicate the detailed status.
     pub fn need_fetch_for_quorum_cert(
@@ -69,36 +53,6 @@ impl BlockStore {
             return NeedFetchResult::QCBlockExist;
         }
         NeedFetchResult::NeedFetch
-    }
-
-    /// Fetches dependencies for given sync_info.quorum_cert
-    /// If gap is large, performs state sync using process_highest_commit_cert
-    /// Inserts sync_info.quorum_cert into block store as the last step
-    pub async fn add_certs(
-        &self, sync_info: &SyncInfo, mut retriever: BlockRetriever,
-    ) -> anyhow::Result<()> {
-        self.sync_to_highest_commit_cert(
-            sync_info.highest_commit_cert().clone(),
-            &mut retriever,
-        )
-        .await?;
-
-        self.insert_quorum_cert(
-            sync_info.highest_commit_cert(),
-            &mut retriever,
-        )
-        .await?;
-
-        self.insert_quorum_cert(
-            sync_info.highest_quorum_cert(),
-            &mut retriever,
-        )
-        .await?;
-
-        if let Some(tc) = sync_info.highest_timeout_certificate() {
-            self.insert_timeout_certificate(Arc::new(tc.clone()))?;
-        }
-        Ok(())
     }
 
     pub async fn insert_quorum_cert(
@@ -170,50 +124,6 @@ impl BlockStore {
             }
         }
         self.insert_single_quorum_cert(qc)
-    }
-
-    /// Check the highest commit cert sent by peer to see if we're behind and
-    /// start a fast forward sync if the committed block doesn't exist in
-    /// our tree. It works as follows:
-    /// 1. request the committed 3-chain from the peer, if C2 is the
-    /// highest_commit_cert we request for B0 <- C0 <- B1 <- C1 <- B2 (<-
-    /// C2) 2. We persist the 3-chain to storage before start sync to ensure
-    /// we could restart if we crash in the middle of the sync.
-    /// 3. We prune the old tree and replace with a new tree built with the
-    /// 3-chain.
-    async fn sync_to_highest_commit_cert(
-        &self, highest_commit_cert: QuorumCert, retriever: &mut BlockRetriever,
-    ) -> anyhow::Result<()> {
-        if !self.need_sync_for_quorum_cert(&highest_commit_cert) {
-            return Ok(());
-        }
-        let (root, root_metadata, blocks, quorum_certs) =
-            Self::fast_forward_sync(
-                &highest_commit_cert,
-                retriever,
-                self.storage.clone(),
-                self.state_computer.clone(),
-            )
-            .await?
-            .take();
-        diem_debug!(
-            LogSchema::new(LogEvent::CommitViaSync).round(self.root().round()),
-            committed_round = root.0.round(),
-            block_id = root.0.id(),
-        );
-        self.rebuild(root, root_metadata, blocks, quorum_certs)
-            .await;
-
-        if highest_commit_cert.ends_epoch() {
-            retriever
-                .network
-                .notify_epoch_change(EpochChangeProof::new(
-                    vec![highest_commit_cert.ledger_info().clone()],
-                    /* more = */ false,
-                ))
-                .await;
-        }
-        Ok(())
     }
 
     pub async fn fast_forward_sync<'a>(

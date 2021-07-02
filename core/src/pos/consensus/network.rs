@@ -245,20 +245,6 @@ impl NetworkSender {
             );
         }
     }
-
-    pub async fn notify_epoch_change(&mut self, proof: EpochChangeProof) {
-        let msg = ConsensusMsg::EpochChangeProof(Box::new(proof));
-        let network_sender = self.network_sender.clone();
-        if let Err(e) =
-            network_sender.send_self_msg(self.author, msg.clone()).await
-        {
-            diem_warn!(
-                error = "Failed to notify to self an epoch change",
-                "{:?}",
-                e
-            );
-        }
-    }
 }
 
 pub struct NetworkTask {

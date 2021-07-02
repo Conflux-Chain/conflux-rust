@@ -261,56 +261,6 @@ impl BlockStore {
         Ok(())
     }
 
-    pub async fn rebuild(
-        &self, root: RootInfo, root_metadata: RootMetadata, blocks: Vec<Block>,
-        quorum_certs: Vec<QuorumCert>,
-    )
-    {
-        let max_pruned_blocks_in_mem =
-            self.inner.read().max_pruned_blocks_in_mem();
-        // Rollover the previous highest TC from the old tree to the new one.
-        let prev_htc =
-            self.highest_timeout_cert().map(|tc| tc.as_ref().clone());
-        let BlockStore { inner, .. } = Self::build(
-            root,
-            root_metadata,
-            blocks,
-            quorum_certs,
-            prev_htc,
-            Arc::clone(&self.state_computer),
-            Arc::clone(&self.storage),
-            max_pruned_blocks_in_mem,
-            Arc::clone(&self.time_service),
-            self.pow_handler.clone(),
-        );
-        let to_remove = self.inner.read().get_all_block_id();
-        if let Err(e) = self.storage.prune_tree(to_remove) {
-            // it's fine to fail here, the next restart will try to clean up
-            // dangling blocks again.
-            diem_error!(error = ?e, "Fail to delete block from consensus db");
-        }
-        // Unwrap the new tree and replace the existing tree.
-        *self.inner.write() = Arc::try_unwrap(inner)
-            .unwrap_or_else(|_| panic!("New block tree is not shared"))
-            .into_inner();
-        // If we fail to commit B_i via state computer and crash, after restart
-        // our highest commit cert will not match the latest commit
-        // B_j(j<i) of state computer. This introduces an inconsistent
-        // state if we send out SyncInfo and others try to sync to
-        // B_i and figure out we only have B_j.
-        // Here we commit up to the highest_commit_cert to maintain
-        // highest_commit_cert == state_computer.committed_trees.
-        if self.highest_commit_cert().commit_info().round()
-            > self.root().round()
-        {
-            let finality_proof =
-                self.highest_commit_cert().ledger_info().clone();
-            if let Err(e) = self.commit(finality_proof).await {
-                diem_error!(error = ?e, "Commit error during rebuild");
-            }
-        }
-    }
-
     /// Execute and insert a block if it passes all validation tests.
     /// Returns the Arc to the block kept in the block store after persisting it
     /// to storage

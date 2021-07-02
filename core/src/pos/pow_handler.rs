@@ -30,7 +30,7 @@ impl PowHandler {
     }
 
     pub fn stop(&self) {
-        let mut pow_consensus = &mut *self.pow_consensus.write();
+        let pow_consensus = &mut *self.pow_consensus.write();
         info!(
             "Stop PowHandler: current consensus strong_count={}",
             Arc::strong_count(pow_consensus.as_ref().unwrap())
@@ -83,7 +83,7 @@ impl PowInterface for PowHandler {
         self.executor.spawn(async move {
             let r =
                 Self::next_pivot_decision_impl(pow_consensus, &parent_decision);
-            callback.send(r);
+            assert!(callback.send(r).is_ok());
         });
         cb_receiver.await.expect("callback error")
     }
@@ -121,7 +121,7 @@ impl PowInterface for PowHandler {
                 parent_decision,
                 me_decision,
             );
-            callback.send(r);
+            assert!(callback.send(r).is_ok());
         });
         cb_receiver.await.expect("callback error")
     }

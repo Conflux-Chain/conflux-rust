@@ -824,7 +824,7 @@ use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use cfxcore::{
     block_data_manager::BlockDataManager,
-    consensus::pos_handler::{FakeDiemDB, PosConnection, PosVerifier},
+    consensus::pos_handler::{PosConnection, PosVerifier},
     machine::{new_machine_with_builtin, Machine},
     pos::pow_handler::PowHandler,
     pow::PowComputer,
@@ -839,10 +839,10 @@ use cfxcore::{
 use cfxcore_accounts::AccountProvider;
 use cfxkey::public_to_address;
 use diem_config::{
-    config::{NodeConfig, SafetyRulesTestConfig, TestConfig},
+    config::{NodeConfig, SafetyRulesTestConfig},
     keys::ConfigKey,
 };
-use diem_types::account_address::{from_consensus_public_key, from_public_key};
+use diem_types::account_address::from_consensus_public_key;
 use jsonrpc_http_server::Server as HttpServer;
 use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WSServer;
