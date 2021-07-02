@@ -9,15 +9,13 @@ extern crate rustc_hex;
 extern crate serde;
 extern crate serde_derive;
 
-use cfxkey::{Error as EthkeyError, Generator, Public, Random};
+use cfxkey::{Error as EthkeyError, Generator};
 use diem_crypto::{
-    bls::BLSPrivateKey,
-    ed25519::{Ed25519PrivateKey, Ed25519PublicKey, ED25519_PUBLIC_KEY_LENGTH},
     Uniform, ValidCryptoMaterialStringExt,
 };
 use diem_types::{
     account_address::{
-        from_consensus_public_key, from_public_key, AccountAddress,
+        from_consensus_public_key,
     },
     contract_event::ContractEvent,
     on_chain_config::{new_epoch_event_key, ValidatorSet},
@@ -37,12 +35,12 @@ use executor::{
     vm::FakeVM,
     Executor,
 };
-use keccak_hash::keccak;
+
 use log::*;
 use move_core_types::language_storage::TypeTag;
-use primitives::account::AddressSpace::Contract;
+
 use rand::{rngs::StdRng, SeedableRng};
-use rustc_hex::{FromHexError, ToHex};
+use rustc_hex::{FromHexError};
 use serde::Deserialize;
 use std::{
     convert::TryFrom,
@@ -235,7 +233,7 @@ where
         let mut rng = StdRng::from_seed([0u8; 32]);
         let mut public_keys = Vec::new();
 
-        for i in 0..num_validator {
+        for _i in 0..num_validator {
             let private_key = ConsensusPrivateKey::generate(&mut rng);
             let public_key = ConsensusPublicKey::from(&private_key);
             let vrf_private_key = ConsensusVRFPrivateKey::generate(&mut rng);
