@@ -1685,7 +1685,7 @@ impl ConsensusExecutionHandler {
                 tx,
                 tx.chain_id,
                 block_height,
-                Some(&spec),
+                &spec,
             ),
         )?;
 

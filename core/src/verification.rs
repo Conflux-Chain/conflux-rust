@@ -421,9 +421,15 @@ impl VerificationConfig {
         let mut block_total_gas = U256::zero();
 
         let block_height = block.block_header.height();
+        let check_gas_limit =
+            self.machine.params().transition_heights.cip76 < block_height;
         for t in &block.transactions {
-            // In sync graph, we skim checks requires spec.
-            self.verify_transaction_in_block(t, chain_id, block_height, None)?;
+            self.verify_transaction_in_sync_graph(
+                t,
+                chain_id,
+                block_height,
+                check_gas_limit,
+            )?;
             block_size += t.rlp_size();
             block_total_gas += *t.gas_limit();
         }
@@ -488,7 +494,7 @@ impl VerificationConfig {
 
     pub fn verify_transaction_in_block(
         &self, tx: &TransactionWithSignature, chain_id: u32, block_height: u64,
-        vm_spec: Option<&Spec>,
+        vm_spec: &Spec,
     ) -> Result<(), TransactionError>
     {
         self.verify_transaction_common(tx, chain_id, vm_spec)?;
@@ -499,11 +505,33 @@ impl VerificationConfig {
         )
     }
 
-    pub fn verify_transaction_common(
-        &self, tx: &TransactionWithSignature, chain_id: u32,
-        vm_spec: Option<&Spec>,
+    pub fn verify_transaction_in_sync_graph(
+        &self, tx: &TransactionWithSignature, chain_id: u32, block_height: u64,
+        check_gas_limit: bool,
     ) -> Result<(), TransactionError>
     {
+        self.verify_transaction_common_no_spec(tx, chain_id)?;
+        if check_gas_limit {
+            self.verify_gas_limit(tx, &Spec::genesis_spec())?;
+        }
+        Self::verify_transaction_epoch_height(
+            tx,
+            block_height,
+            self.transaction_epoch_bound,
+        )
+    }
+
+    pub fn verify_transaction_common(
+        &self, tx: &TransactionWithSignature, chain_id: u32, spec: &Spec,
+    ) -> Result<(), TransactionError> {
+        self.verify_transaction_common_no_spec(tx, chain_id)?;
+        self.verify_gas_limit(tx, spec)?;
+        Ok(())
+    }
+
+    pub fn verify_transaction_common_no_spec(
+        &self, tx: &TransactionWithSignature, chain_id: u32,
+    ) -> Result<(), TransactionError> {
         tx.check_low_s()?;
 
         // Disallow unsigned transactions
@@ -525,20 +553,25 @@ impl VerificationConfig {
             bail!(TransactionError::ZeroGasPrice);
         }
 
-        if let Some(spec) = vm_spec {
-            // check transaction intrinsic gas
-            let tx_intrinsic_gas = Executive::gas_required_for(
-                tx.action == Action::Create,
-                &tx.data,
-                &spec,
-            );
-            if tx.gas < (tx_intrinsic_gas as usize).into() {
-                bail!(TransactionError::NotEnoughBaseGas {
-                    required: tx_intrinsic_gas.into(),
-                    got: tx.gas
-                });
-            }
+        Ok(())
+    }
+
+    pub fn verify_gas_limit(
+        &self, tx: &TransactionWithSignature, spec: &Spec,
+    ) -> Result<(), TransactionError> {
+        // check transaction intrinsic gas
+        let tx_intrinsic_gas = Executive::gas_required_for(
+            tx.action == Action::Create,
+            &tx.data,
+            &spec,
+        );
+        if tx.gas < (tx_intrinsic_gas as usize).into() {
+            bail!(TransactionError::NotEnoughBaseGas {
+                required: tx_intrinsic_gas.into(),
+                got: tx.gas
+            });
         }
+
         Ok(())
     }
 }

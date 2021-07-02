@@ -94,6 +94,8 @@ pub struct TransitionsEpochHeight {
     /// The block `custom` field of this height is required to be
     /// `tanzanite_transition_header_custom`.
     pub cip40: BlockHeight,
+    /// CIP76: Remove VM-related constraints in syncing blocks
+    pub cip76: BlockHeight,
 }
 
 impl Default for CommonParams {

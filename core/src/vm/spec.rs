@@ -209,7 +209,9 @@ pub enum CleanDustMode {
 }
 
 impl Spec {
-    fn new_spec() -> Spec {
+    /// The spec when Conflux launches the mainnet. It should never changed
+    /// since the mainnet has launched.
+    pub const fn genesis_spec() -> Spec {
         Spec {
             exceptional_failed_code_deposit: true,
             stack_limit: 1024,
@@ -252,9 +254,10 @@ impl Spec {
             no_empty: true,
             kill_empty: true,
             blockhash_gas: 20,
-            contract_start_nonce: U256::one(), /* If `no_empty` is false, it
-                                                * should be 0. */
-            account_start_nonce: U256::zero(),
+            contract_start_nonce: U256([1, 0, 0, 0]), /* If `no_empty` is
+                                                       * false, it
+                                                       * should be 0. */
+            account_start_nonce: U256([0, 0, 0, 0]),
             kill_dust: CleanDustMode::Off,
             keep_unsigned_nonce: false,
             wasm: None,
@@ -269,7 +272,7 @@ impl Spec {
     pub fn new_spec_from_common_params(
         params: &CommonParams, number: BlockNumber,
     ) -> Spec {
-        let mut spec = Self::new_spec();
+        let mut spec = Self::genesis_spec();
         spec.cip62 = number >= params.transition_numbers.cip62;
         spec.cip64 = number >= params.transition_numbers.cip64;
         spec.cip71a = number >= params.transition_numbers.cip71a;
@@ -279,7 +282,7 @@ impl Spec {
     }
 
     #[cfg(test)]
-    pub fn new_spec_for_test() -> Spec { Self::new_spec() }
+    pub fn new_spec_for_test() -> Spec { Self::genesis_spec() }
 
     /// Returns wasm spec
     ///
