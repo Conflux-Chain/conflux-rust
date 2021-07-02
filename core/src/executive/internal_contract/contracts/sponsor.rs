@@ -35,7 +35,7 @@ fn generate_fn_table() -> SolFnTable {
         RemovePrivilegeByAdmin
     )
 }
-group_impl_activate_at!(
+group_impl_is_active!(
     "genesis",
     SetSponsorForGas,
     SetSponsorForCollateral,

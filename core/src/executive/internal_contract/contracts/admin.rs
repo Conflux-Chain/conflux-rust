@@ -21,7 +21,7 @@ make_solidity_contract! {
 fn generate_fn_table() -> SolFnTable {
     make_function_table!(SetAdmin, Destroy, GetAdmin)
 }
-group_impl_activate_at!("genesis", SetAdmin, Destroy, GetAdmin);
+group_impl_is_active!("genesis", SetAdmin, Destroy, GetAdmin);
 
 make_solidity_function! {
     struct SetAdmin((Address, Address), "setAdmin(address,address)");

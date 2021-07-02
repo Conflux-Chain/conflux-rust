@@ -29,7 +29,7 @@ fn generate_fn_table() -> SolFnTable {
         GetVotePower
     )
 }
-group_impl_activate_at!(
+group_impl_is_active!(
     "genesis",
     Deposit,
     Withdraw,
