@@ -1061,6 +1061,17 @@ impl DBReaderForPoW for DiemDB {
     ) -> Result<LedgerInfoWithSignatures> {
         self.ledger_store.get_block_ledger_info(consensus_block_id)
     }
+
+    fn get_events_by_version(
+        &self, start_version: u64, end_version: u64,
+    ) -> Result<Vec<ContractEvent>> {
+        let iter = self.event_store.get_events_by_version_iter(
+            start_version,
+            (end_version - start_version + 1) as usize,
+        )?;
+        let events_vec = iter.collect::<Result<Vec<Vec<ContractEvent>>>>()?;
+        Ok(events_vec.into_iter().flatten().collect())
+    }
 }
 
 // Convert requested range and order to a range in ascending order.

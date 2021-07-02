@@ -1,7 +1,11 @@
 use cfx_types::H256;
 use diem_crypto::HashValue;
-use diem_types::ledger_info::LedgerInfoWithSignatures;
+use diem_types::{
+    account_config, contract_event::ContractEvent, event::EventKey,
+    ledger_info::LedgerInfoWithSignatures,
+};
 use primitives::pos::{NodeId, PosBlockId};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use storage_interface::DBReaderForPoW;
 
@@ -25,6 +29,10 @@ pub trait PosInterface {
     /// Return the latest committed PoS block ID.
     /// This will become the PoS reference of the mined PoW block.
     fn latest_block(&self) -> PosBlockId;
+
+    fn get_events(
+        &self, from: &PosBlockId, to: &PosBlockId,
+    ) -> Vec<ContractEvent>;
 }
 
 #[allow(unused)]
@@ -32,15 +40,27 @@ pub struct PosBlock {
     hash: PosBlockId,
     round: u64,
     pivot_decision: H256,
-    unlock_txs: Vec<UnlockTransaction>,
 }
 
-#[derive(Clone)]
-pub struct UnlockTransaction {
+#[derive(Clone, Serialize, Deserialize)]
+pub struct UnlockEvent {
     /// The node id to unlock.
     ///
     /// The management contract should unlock the corresponding account.
     node_id: NodeId,
+}
+
+impl UnlockEvent {
+    pub fn unlock_event_key() -> EventKey {
+        EventKey::new_from_address(
+            &account_config::pivot_chain_select_address(),
+            5,
+        )
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
+        bcs::from_bytes(bytes).map_err(Into::into)
+    }
 }
 
 pub struct PosHandler<PoS: PosInterface> {
@@ -105,12 +125,20 @@ impl<PoS: PosInterface> PosHandler<PoS> {
         self.pos.latest_block()
     }
 
-    pub fn get_unlock_transactions(
-        &self, h: &PosBlockId,
-    ) -> Option<Vec<UnlockTransaction>> {
-        self.pos
-            .get_committed_block(h)
-            .map(|b| b.unlock_txs.clone())
+    pub fn get_unlock_events(
+        &self, h: &PosBlockId, parent_pos_ref: &PosBlockId,
+    ) -> Vec<UnlockEvent> {
+        let unlock_event_key = UnlockEvent::unlock_event_key();
+        let mut unlock_events = Vec::new();
+        for event in self.pos.get_events(parent_pos_ref, h) {
+            if *event.key() == unlock_event_key {
+                unlock_events.push(
+                    UnlockEvent::from_bytes(event.event_data())
+                        .expect("key checked"),
+                );
+            }
+        }
+        unlock_events
     }
 }
 
@@ -150,8 +178,6 @@ impl PosInterface for PosConnection {
                 .pivot_decision()
                 .unwrap()
                 .block_hash,
-            unlock_txs: Default::default(), /* TODO(lpl):
-                                             * ledger_info.unlock_txs, */
         })
     }
 
@@ -164,6 +190,26 @@ impl PosInterface for PosConnection {
                 .ledger_info()
                 .consensus_block_id(),
         )
+    }
+
+    fn get_events(
+        &self, from: &PosBlockId, to: &PosBlockId,
+    ) -> Vec<ContractEvent> {
+        let start_version = self
+            .pos_storage
+            .get_block_ledger_info(&h256_to_diem_hash(from))
+            .expect("err reading ledger info for from")
+            .ledger_info()
+            .version();
+        let end_version = self
+            .pos_storage
+            .get_block_ledger_info(&h256_to_diem_hash(to))
+            .expect("err reading ledger info for from")
+            .ledger_info()
+            .version();
+        self.pos_storage
+            .get_events_by_version(start_version, end_version)
+            .expect("err reading events")
     }
 }
 
@@ -185,6 +231,12 @@ impl DBReaderForPoW for FakeDiemDB {
     fn get_block_ledger_info(
         &self, _consensus_block_id: &HashValue,
     ) -> anyhow::Result<LedgerInfoWithSignatures> {
+        todo!()
+    }
+
+    fn get_events_by_version(
+        &self, _start_version: u64, _end_version: u64,
+    ) -> anyhow::Result<Vec<ContractEvent>> {
         todo!()
     }
 }
