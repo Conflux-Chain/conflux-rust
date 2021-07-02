@@ -1037,6 +1037,10 @@ impl Configuration {
                 u64::MAX
             };
 
+        if self.is_test_or_dev_mode() {
+            params.early_set_internal_contracts_states = true;
+        }
+
         params.chain_id = self.chain_id_params();
         params.anticone_penalty_ratio = self.raw_conf.anticone_penalty_ratio;
 

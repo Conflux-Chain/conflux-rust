@@ -69,6 +69,9 @@ pub struct CommonParams {
     /// Initial base rewards according to block height.
     pub base_block_rewards: BTreeMap<BlockHeight, U256>,
 
+    /// Set the internal contracts to state at the genesis blocks, even if it
+    /// is not activated.
+    pub early_set_internal_contracts_states: bool,
     /// The upgrades activated at given block number.
     pub transition_numbers: TransitionsBlockNumber,
     /// The upgrades activated at given block height (a.k.a. epoch number).
@@ -111,6 +114,7 @@ impl Default for CommonParams {
             max_transaction_size: 300 * 1024,
             anticone_penalty_ratio: ANTICONE_PENALTY_RATIO,
             base_block_rewards,
+            early_set_internal_contracts_states: false,
             transition_numbers: Default::default(),
             transition_heights: Default::default(),
         }
