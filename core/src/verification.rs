@@ -517,6 +517,42 @@ impl VerificationConfig {
         }
     }
 
+    pub fn fast_recheck(
+        &self, tx: &TransactionWithSignature, height: BlockHeight,
+        transitions: &TransitionsEpochHeight, spec: &Spec,
+    ) -> PackingCheckResult
+    {
+        let cip72a = height >= transitions.cip72a;
+
+        let tx_pool_mode =
+            VerifyTxMode::Local(VerifyTxLocalMode::MaybeLater, spec);
+        let packing_mode = VerifyTxMode::Local(VerifyTxLocalMode::Full, spec);
+
+        if Self::verify_transaction_epoch_height(
+            tx,
+            height,
+            self.transaction_epoch_bound,
+            cip72a,
+            &packing_mode,
+        )
+        .is_ok()
+        {
+            PackingCheckResult::Pack
+        } else if Self::verify_transaction_epoch_height(
+            tx,
+            height,
+            self.transaction_epoch_bound,
+            cip72a,
+            &tx_pool_mode,
+        )
+        .is_ok()
+        {
+            PackingCheckResult::Pending
+        } else {
+            PackingCheckResult::Drop
+        }
+    }
+
     // Packing transactions, verifying transaction in sync graph and inserting
     // transactions may have different logics. But they share a lot of similar
     // rules. We combine them together for convenient in the future upgrades..
@@ -615,6 +651,13 @@ impl VerificationConfig {
 
         Ok(())
     }
+}
+
+#[derive(Copy, Clone)]
+pub enum PackingCheckResult {
+    Pack,    // Transaction can be packed.
+    Pending, // Transaction may be ready to packed in the future.
+    Drop,    // Transaction can never be packed.
 }
 
 #[derive(Copy, Clone)]

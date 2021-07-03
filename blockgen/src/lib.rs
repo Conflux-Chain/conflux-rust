@@ -286,12 +286,14 @@ impl BlockGenerator {
         let block_gas_limit = block_gas_limit.into();
         let block_size_limit =
             self.graph.verification_config.max_block_size_in_bytes;
+        let best_info = consensus_graph.best_info();
 
         let transactions = self.txpool.pack_transactions(
             num_txs,
             block_gas_limit,
             block_size_limit,
-            consensus_graph.best_epoch_number(),
+            best_info.best_epoch_number,
+            best_info.best_block_number,
         );
 
         Ok(self.assemble_new_block_impl(
