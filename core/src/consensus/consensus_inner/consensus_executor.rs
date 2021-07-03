@@ -25,7 +25,10 @@ use crate::{
         State,
     },
     trace::trace::{ExecTrace, TransactionExecTraces},
-    verification::{compute_receipts_root, VerificationConfig, VerifyTxMode},
+    verification::{
+        compute_receipts_root, VerificationConfig, VerifyTxLocalMode,
+        VerifyTxMode,
+    },
     vm::{Env, Error as VmErr},
     SharedTransactionPool,
 };
@@ -1682,12 +1685,12 @@ impl ConsensusExecutionHandler {
 
         invalid_params_check(
             "tx",
-            self.verification_config.verify_transaction_in_block(
+            self.verification_config.verify_transaction_common(
                 tx,
                 tx.chain_id,
                 block_height,
                 transitions,
-                VerifyTxMode::Local(&spec),
+                VerifyTxMode::Local(VerifyTxLocalMode::Full, &spec),
             ),
         )?;
 

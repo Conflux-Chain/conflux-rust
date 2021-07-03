@@ -20,7 +20,11 @@ use crate::{
     machine::Machine, state::State, verification::VerificationConfig,
 };
 
-use crate::{spec::TransitionsEpochHeight, verification::VerifyTxMode};
+use crate::{
+    spec::TransitionsEpochHeight,
+    verification::{VerifyTxLocalMode, VerifyTxMode},
+    vm::Spec,
+};
 use account_cache::AccountCache;
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_statedb::{Result as StateDbResult, StateDb};
@@ -285,7 +289,7 @@ impl TransactionPool {
                 chain_id,
                 best_height,
                 transitions,
-                VerifyTxMode::Local(&vm_spec),
+                &vm_spec,
             ) {
                 Ok(_) => index += 1,
                 Err(e) => {
@@ -402,7 +406,7 @@ impl TransactionPool {
                 chain_id,
                 best_height,
                 transitions,
-                VerifyTxMode::Local(&vm_spec),
+                &vm_spec,
             ) {
                 Ok(_) => index += 1,
                 Err(e) => {
@@ -479,53 +483,29 @@ impl TransactionPool {
     fn verify_transaction_tx_pool(
         &self, transaction: &TransactionWithSignature, basic_check: bool,
         chain_id: u32, best_height: u64, transitions: &TransitionsEpochHeight,
-        mode: VerifyTxMode,
+        spec: &Spec,
     ) -> Result<(), String>
     {
         let _timer = MeterTimer::time_func(TX_POOL_VERIFY_TIMER.as_ref());
+        let mode = VerifyTxMode::Local(VerifyTxLocalMode::MaybeLater, spec);
 
         if basic_check {
-            if let Err(e) = self
-                .verification_config
-                .verify_transaction_common(
-                    transaction,
-                    chain_id,
-                    best_height,
-                    transitions,
-                    mode,
-                )
-            {
+            if let Err(e) = self.verification_config.verify_transaction_common(
+                transaction,
+                chain_id,
+                best_height,
+                transitions,
+                mode,
+            ) {
                 warn!("Transaction {:?} discarded due to not passing basic verification.", transaction.hash());
                 return Err(format!("{:?}", e));
             }
         }
 
-        // If it is zero, it might be possible that it is not initialized
-        // TODO: figure out when we should active txpool.
-        // TODO: Ideally txpool should only be initialized after Normal phase.
-        if best_height == 0 {
-            warn!("verify transaction while best info isn't initialized");
-        } else {
-            if VerificationConfig::check_transaction_epoch_bound(
-                transaction,
-                best_height,
-                self.verification_config.transaction_epoch_bound,
-            ) < 0
-            {
-                // Check the epoch height is in bound. Because this is such a
-                // loose bound, we can check it here as if it
-                // will not change at all during its life time.
-                warn!(
-                    "Transaction discarded due to epoch height out of the bound: \
-                    best height {} tx epoch height {}",
-                    best_height, transaction.epoch_height);
-                return Err(format!(
-                    "transaction epoch height {} is out side the range of the current \
-                    pivot height ({}) bound, only {} drift allowed!",
-                    transaction.epoch_height, best_height,
-                    self.verification_config.transaction_epoch_bound));
-            }
-        }
+        // Check the epoch height is moved to verify_transaction_common. In
+        // VerifyTxLocalMode::MaybeLater mode, a transaction with larger target
+        // epoch can be accepted. Since PR #1610, it is guaranteed that
+        // best info is initialized here.
 
         // check transaction gas limit
         let max_tx_gas = *self.config.max_tx_gas.read();
@@ -743,7 +723,7 @@ impl TransactionPool {
                 chain_id,
                 best_height,
                 transitions,
-                VerifyTxMode::Local(&vm_spec),
+                &vm_spec,
             ) {
                 warn!(
                     "Recycled transaction {:?} discarded due to not passing verification {}.",

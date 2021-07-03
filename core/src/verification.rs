@@ -425,7 +425,7 @@ impl VerificationConfig {
         let block_height = block.block_header.height();
         let transitions = &self.machine.params().transition_heights;
         for t in &block.transactions {
-            self.verify_transaction_in_block(
+            self.verify_transaction_common(
                 t,
                 chain_id,
                 block_height,
@@ -473,17 +473,24 @@ impl VerificationConfig {
         }
     }
 
-    pub fn verify_transaction_epoch_height(
+    fn verify_transaction_epoch_height(
         tx: &TransactionWithSignature, block_height: u64,
-        transaction_epoch_bound: u64,
+        transaction_epoch_bound: u64, mode: &VerifyTxMode,
     ) -> Result<(), TransactionError>
     {
-        if Self::check_transaction_epoch_bound(
+        let result = Self::check_transaction_epoch_bound(
             tx,
             block_height,
             transaction_epoch_bound,
-        ) == 0
-        {
+        );
+        let allow_larger_epoch =
+            if let VerifyTxMode::Local(VerifyTxLocalMode::MaybeLater, _) = mode
+            {
+                true
+            } else {
+                false
+            };
+        if result == 0 || (result > 0 && allow_larger_epoch) {
             Ok(())
         } else {
             bail!(TransactionError::EpochHeightOutOfBound {
@@ -494,25 +501,9 @@ impl VerificationConfig {
         }
     }
 
-    pub fn verify_transaction_in_block(
-        &self, tx: &TransactionWithSignature, chain_id: u32, block_height: u64,
-        transitions: &TransitionsEpochHeight, mode: VerifyTxMode,
-    ) -> Result<(), TransactionError>
-    {
-        self.verify_transaction_common(
-            tx,
-            chain_id,
-            block_height,
-            transitions,
-            mode,
-        )?;
-        Self::verify_transaction_epoch_height(
-            tx,
-            block_height,
-            self.transaction_epoch_bound,
-        )
-    }
-
+    // Packing transactions, verifying transaction in sync graph and inserting
+    // transactions may have different logics. But they share a lot of similar
+    // rules. We combine them together for convenient in the future upgrades..
     pub fn verify_transaction_common(
         &self, tx: &TransactionWithSignature, chain_id: u32,
         height: BlockHeight, transitions: &TransitionsEpochHeight,
@@ -541,25 +532,31 @@ impl VerificationConfig {
         }
 
         // ******************************************
-        // Each constraint depends on a CIP should be
+        // Each constraint depends on a mode or a CIP should be
         // implemented in a seperated function.
         // ******************************************
 
-        self.check_gas_limit(tx, height, transitions, mode)?;
+        Self::verify_transaction_epoch_height(
+            tx,
+            height,
+            self.transaction_epoch_bound,
+            &mode,
+        )?;
 
+        Self::check_gas_limit(tx, height, transitions, &mode)?;
         Ok(())
     }
 
     /// Check transaction intrinsic gas. Influenced by CIP-76.
     fn check_gas_limit(
-        &self, tx: &TransactionWithSignature, height: BlockHeight,
-        transitions: &TransitionsEpochHeight, mode: VerifyTxMode,
+        tx: &TransactionWithSignature, height: BlockHeight,
+        transitions: &TransitionsEpochHeight, mode: &VerifyTxMode,
     ) -> Result<(), TransactionError>
     {
         const GENESIS_SPEC: Spec = Spec::genesis_spec();
-        let maybe_spec = if let VerifyTxMode::Local(spec) = mode {
+        let maybe_spec = if let VerifyTxMode::Local(_, spec) = mode {
             // In local mode, we check gas limit as usual.
-            Some(spec)
+            Some(*spec)
         } else if height < transitions.cip76 {
             // In remote mode, we only check gas limit before cip-76 activated.
             Some(&GENESIS_SPEC)
@@ -586,7 +583,18 @@ impl VerificationConfig {
 
 #[derive(Copy, Clone)]
 pub enum VerifyTxMode<'a> {
-    Local(&'a Spec), /* 严于律己 (Be strict with yourself): We apply more checks in packing transactions and local execution. */
-    Remote,          /* 宽以待人 (Be lenient to others): We apply less
-                      * check for transaction in sync graph. */
+    Local(VerifyTxLocalMode, &'a Spec), /* Be strict with yourself: We
+                                         * apply more checks in packing
+                                         * transactions and local
+                                         * execution. */
+    Remote, /* Be lenient to others: We apply less
+             * check for transaction in sync graph. */
+}
+
+#[derive(Copy, Clone)]
+pub enum VerifyTxLocalMode {
+    Full, // Apply all checks.
+    MaybeLater, /* When inserting transactions to tx pool, if its epoch
+           * height is too large, it can be accept even if it is not
+           * regarded as a valid transaction. */
 }
