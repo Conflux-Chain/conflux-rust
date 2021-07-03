@@ -7,6 +7,7 @@ use crate::{
     executive::Executive,
     machine::Machine,
     pow::{self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem},
+    spec::TransitionsEpochHeight,
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
     vm::Spec,
 };
@@ -17,8 +18,9 @@ use cfx_storage::{
 };
 use cfx_types::{BigEndianHash, H256, U256};
 use primitives::{
-    transaction::TransactionError, Action, Block, BlockHeader, BlockReceipts,
-    MerkleHash, Receipt, SignedTransaction, TransactionWithSignature,
+    block::BlockHeight, transaction::TransactionError, Action, Block,
+    BlockHeader, BlockReceipts, MerkleHash, Receipt, SignedTransaction,
+    TransactionWithSignature,
 };
 use rlp::Encodable;
 use std::{collections::HashSet, convert::TryInto, sync::Arc};
@@ -412,7 +414,7 @@ impl VerificationConfig {
     /// the body is incorrect, this means the block is invalid, and we
     /// should discard this block and all its descendants.
     #[inline]
-    pub fn verify_block_basic(
+    pub fn verify_sync_graph_block_basic(
         &self, block: &Block, chain_id: u32,
     ) -> Result<(), Error> {
         self.verify_block_integrity(block)?;
@@ -421,14 +423,14 @@ impl VerificationConfig {
         let mut block_total_gas = U256::zero();
 
         let block_height = block.block_header.height();
-        let check_gas_limit =
-            self.machine.params().transition_heights.cip76 < block_height;
+        let transitions = &self.machine.params().transition_heights;
         for t in &block.transactions {
-            self.verify_transaction_in_sync_graph(
+            self.verify_transaction_in_block(
                 t,
                 chain_id,
                 block_height,
-                check_gas_limit,
+                transitions,
+                VerifyTxMode::Remote,
             )?;
             block_size += t.rlp_size();
             block_total_gas += *t.gas_limit();
@@ -494,26 +496,16 @@ impl VerificationConfig {
 
     pub fn verify_transaction_in_block(
         &self, tx: &TransactionWithSignature, chain_id: u32, block_height: u64,
-        vm_spec: &Spec,
+        transitions: &TransitionsEpochHeight, mode: VerifyTxMode,
     ) -> Result<(), TransactionError>
     {
-        self.verify_transaction_common(tx, chain_id, vm_spec)?;
-        Self::verify_transaction_epoch_height(
+        self.verify_transaction_common(
             tx,
+            chain_id,
             block_height,
-            self.transaction_epoch_bound,
-        )
-    }
-
-    pub fn verify_transaction_in_sync_graph(
-        &self, tx: &TransactionWithSignature, chain_id: u32, block_height: u64,
-        check_gas_limit: bool,
-    ) -> Result<(), TransactionError>
-    {
-        self.verify_transaction_common_no_spec(tx, chain_id)?;
-        if check_gas_limit {
-            self.verify_gas_limit(tx, &Spec::genesis_spec())?;
-        }
+            transitions,
+            mode,
+        )?;
         Self::verify_transaction_epoch_height(
             tx,
             block_height,
@@ -522,16 +514,11 @@ impl VerificationConfig {
     }
 
     pub fn verify_transaction_common(
-        &self, tx: &TransactionWithSignature, chain_id: u32, spec: &Spec,
-    ) -> Result<(), TransactionError> {
-        self.verify_transaction_common_no_spec(tx, chain_id)?;
-        self.verify_gas_limit(tx, spec)?;
-        Ok(())
-    }
-
-    pub fn verify_transaction_common_no_spec(
         &self, tx: &TransactionWithSignature, chain_id: u32,
-    ) -> Result<(), TransactionError> {
+        height: BlockHeight, transitions: &TransitionsEpochHeight,
+        mode: VerifyTxMode,
+    ) -> Result<(), TransactionError>
+    {
         tx.check_low_s()?;
 
         // Disallow unsigned transactions
@@ -553,25 +540,53 @@ impl VerificationConfig {
             bail!(TransactionError::ZeroGasPrice);
         }
 
+        // ******************************************
+        // Each constraint depends on a CIP should be
+        // implemented in a seperated function.
+        // ******************************************
+
+        self.check_gas_limit(tx, height, transitions, mode)?;
+
         Ok(())
     }
 
-    pub fn verify_gas_limit(
-        &self, tx: &TransactionWithSignature, spec: &Spec,
-    ) -> Result<(), TransactionError> {
-        // check transaction intrinsic gas
-        let tx_intrinsic_gas = Executive::gas_required_for(
-            tx.action == Action::Create,
-            &tx.data,
-            &spec,
-        );
-        if tx.gas < (tx_intrinsic_gas as usize).into() {
-            bail!(TransactionError::NotEnoughBaseGas {
-                required: tx_intrinsic_gas.into(),
-                got: tx.gas
-            });
+    /// Check transaction intrinsic gas. Influenced by CIP-76.
+    fn check_gas_limit(
+        &self, tx: &TransactionWithSignature, height: BlockHeight,
+        transitions: &TransitionsEpochHeight, mode: VerifyTxMode,
+    ) -> Result<(), TransactionError>
+    {
+        const GENESIS_SPEC: Spec = Spec::genesis_spec();
+        let maybe_spec = if let VerifyTxMode::Local(spec) = mode {
+            // In local mode, we check gas limit as usual.
+            Some(spec)
+        } else if height < transitions.cip76 {
+            // In remote mode, we only check gas limit before cip-76 activated.
+            Some(&GENESIS_SPEC)
+        } else {
+            None
+        };
+
+        if let Some(spec) = maybe_spec {
+            let tx_intrinsic_gas = Executive::gas_required_for(
+                tx.action == Action::Create,
+                &tx.data,
+                &spec,
+            );
+            if tx.gas < (tx_intrinsic_gas as usize).into() {
+                bail!(TransactionError::NotEnoughBaseGas {
+                    required: tx_intrinsic_gas.into(),
+                    got: tx.gas
+                });
+            }
         }
-
         Ok(())
     }
+}
+
+#[derive(Copy, Clone)]
+pub enum VerifyTxMode<'a> {
+    Local(&'a Spec), /* 严于律己 (Be strict with yourself): We apply more checks in packing transactions and local execution. */
+    Remote,          /* 宽以待人 (Be lenient to others): We apply less
+                      * check for transaction in sync graph. */
 }

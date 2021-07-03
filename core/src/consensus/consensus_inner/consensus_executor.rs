@@ -25,7 +25,7 @@ use crate::{
         State,
     },
     trace::trace::{ExecTrace, TransactionExecTraces},
-    verification::{compute_receipts_root, VerificationConfig},
+    verification::{compute_receipts_root, VerificationConfig, VerifyTxMode},
     vm::{Env, Error as VmErr},
     SharedTransactionPool,
 };
@@ -1678,6 +1678,7 @@ impl ConsensusExecutionHandler {
             None => bail!("cannot obtain the execution context. Database is potentially corrupted!"),
         };
         let spec = self.machine.spec(start_block_number);
+        let transitions = &self.machine.params().transition_heights;
 
         invalid_params_check(
             "tx",
@@ -1685,7 +1686,8 @@ impl ConsensusExecutionHandler {
                 tx,
                 tx.chain_id,
                 block_height,
-                &spec,
+                transitions,
+                VerifyTxMode::Local(&spec),
             ),
         )?;
 

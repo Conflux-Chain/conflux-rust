@@ -20,7 +20,7 @@ use crate::{
     machine::Machine, state::State, verification::VerificationConfig,
 };
 
-use crate::vm::Spec;
+use crate::{spec::TransitionsEpochHeight, verification::VerifyTxMode};
 use account_cache::AccountCache;
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_statedb::{Result as StateDbResult, StateDb};
@@ -276,6 +276,7 @@ impl TransactionPool {
         // and invalid back and forth does this matters? But for the epoch
         // height check, it may also become valid and invalid back and forth.
         let vm_spec = self.machine.spec(best_block_number);
+        let transitions = &self.machine.params().transition_heights;
 
         while let Some(tx) = transactions.get(index) {
             match self.verify_transaction_tx_pool(
@@ -283,7 +284,8 @@ impl TransactionPool {
                 /* basic_check = */ true,
                 chain_id,
                 best_height,
-                &vm_spec,
+                transitions,
+                VerifyTxMode::Local(&vm_spec),
             ) {
                 Ok(_) => index += 1,
                 Err(e) => {
@@ -391,6 +393,7 @@ impl TransactionPool {
         // FIXME: Needs further discussion here, some transactions may be valid
         // and invalid back and forth does this matters?
         let vm_spec = self.machine.spec(best_block_number);
+        let transitions = &self.machine.params().transition_heights;
 
         while let Some(tx) = signed_transactions.get(index) {
             match self.verify_transaction_tx_pool(
@@ -398,7 +401,8 @@ impl TransactionPool {
                 true, /* basic_check = */
                 chain_id,
                 best_height,
-                &vm_spec,
+                transitions,
+                VerifyTxMode::Local(&vm_spec),
             ) {
                 Ok(_) => index += 1,
                 Err(e) => {
@@ -474,17 +478,23 @@ impl TransactionPool {
     /// readiness
     fn verify_transaction_tx_pool(
         &self, transaction: &TransactionWithSignature, basic_check: bool,
-        chain_id: u32, best_height: u64, vm_spec: &Spec,
+        chain_id: u32, best_height: u64, transitions: &TransitionsEpochHeight,
+        mode: VerifyTxMode,
     ) -> Result<(), String>
     {
         let _timer = MeterTimer::time_func(TX_POOL_VERIFY_TIMER.as_ref());
 
         if basic_check {
-            if let Err(e) = self.verification_config.verify_transaction_common(
-                transaction,
-                chain_id,
-                vm_spec,
-            ) {
+            if let Err(e) = self
+                .verification_config
+                .verify_transaction_common(
+                    transaction,
+                    chain_id,
+                    best_height,
+                    transitions,
+                    mode,
+                )
+            {
                 warn!("Transaction {:?} discarded due to not passing basic verification.", transaction.hash());
                 return Err(format!("{:?}", e));
             }
@@ -718,6 +728,7 @@ impl TransactionPool {
         // FIXME: Needs further discussion here, some transactions may be valid
         // and invalid back and forth, does this matters?
         let vm_spec = self.machine.spec(best_block_number);
+        let transitions = &self.machine.params().transition_heights;
 
         while let Some(tx) = recycle_tx_buffer.pop() {
             debug!(
@@ -731,7 +742,8 @@ impl TransactionPool {
                 /* basic_check = */ false,
                 chain_id,
                 best_height,
-                &vm_spec,
+                transitions,
+                VerifyTxMode::Local(&vm_spec),
             ) {
                 warn!(
                     "Recycled transaction {:?} discarded due to not passing verification {}.",
