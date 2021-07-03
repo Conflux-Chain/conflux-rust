@@ -28,6 +28,7 @@ class ReentrancyTest(ConfluxTestFramework):
 
     def set_test_params(self):
         self.num_nodes = 1
+        self.conf_parameters["unnamed_21autumn_cip71_deferred_transition"] = 1_000_000_000
 
     def setup_network(self):
         self.setup_nodes()
