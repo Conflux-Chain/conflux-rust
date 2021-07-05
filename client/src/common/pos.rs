@@ -42,6 +42,7 @@ use std::{
 };
 use storage_interface::DbReaderWriter;
 use tokio::runtime::Runtime;
+use diem_types::term_state::NodeID;
 
 pub struct DiemHandle {
     // pow handler
@@ -55,7 +56,7 @@ pub struct DiemHandle {
 pub fn start_pos_consensus(
     config: &NodeConfig, network: Arc<NetworkService>, own_node_hash: H256,
     protocol_config: ProtocolConfiguration,
-    own_pos_public_key: Option<ConsensusPublicKey>,
+    own_pos_public_key: Option<ConsensusPublicKey>, initial_nodes: Vec<(NodeID, u64)>,
 ) -> DiemHandle
 {
     crash_handler::setup_panic_handler();
@@ -103,6 +104,7 @@ pub fn start_pos_consensus(
         own_node_hash,
         protocol_config,
         own_pos_public_key,
+        initial_nodes,
     )
 }
 
@@ -121,7 +123,7 @@ fn setup_chunk_executor(db: DbReaderWriter) -> Box<dyn ChunkExecutor> {
 pub fn setup_pos_environment(
     node_config: &NodeConfig, network: Arc<NetworkService>,
     own_node_hash: H256, protocol_config: ProtocolConfiguration,
-    own_pos_public_key: Option<ConsensusPublicKey>,
+    own_pos_public_key: Option<ConsensusPublicKey>, initial_nodes: Vec<(NodeID, u64)>
 ) -> DiemHandle
 {
     // TODO(lpl): Handle port conflict.
@@ -163,6 +165,7 @@ pub fn setup_pos_environment(
                 block_hash: protocol_config.pos_genesis_pivot_decision,
                 height: 0,
             }),
+            initial_nodes,
         )
         .expect("Db-bootstrapper should not fail.");
     } else {

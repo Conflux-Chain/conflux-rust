@@ -47,7 +47,7 @@ pub fn generate_waypoint<V: VMExecutor>(
 /// matches the waypoint. Returns Ok(true) if committed otherwise Err.
 pub fn maybe_bootstrap<V: VMExecutor>(
     db: &DbReaderWriter, genesis_txn: &Transaction, waypoint: Waypoint,
-    genesis_pivot_decision: Option<PivotBlockDecision>,
+    genesis_pivot_decision: Option<PivotBlockDecision>, initial_nodes: Vec<(NodeID, u64)>,
 ) -> Result<bool>
 {
     let tree_state = db.reader.get_latest_tree_state()?;
@@ -58,13 +58,12 @@ pub fn maybe_bootstrap<V: VMExecutor>(
         return Ok(false);
     }
 
-    // FIXME(lpl): Use correct initial nodes.
     let committer = calculate_genesis::<V>(
         db,
         tree_state,
         genesis_txn,
         genesis_pivot_decision,
-        vec![],
+        initial_nodes,
     )?;
     ensure!(
         waypoint == committer.waypoint(),
