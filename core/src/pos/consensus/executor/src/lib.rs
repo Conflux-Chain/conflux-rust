@@ -295,6 +295,7 @@ where V: VMExecutor
         account_to_proof: HashMap<HashValue, SparseMerkleProof>,
         transactions: &[Transaction], vm_outputs: Vec<TransactionOutput>,
         parent_trees: &ExecutedTrees, parent_block_id: &HashValue,
+        catch_up_mode: bool,
     ) -> Result<ProcessedVMOutput>
     {
         // The data of each individual transaction. For convenience purpose,
@@ -317,6 +318,7 @@ where V: VMExecutor
         // Find the next pivot block.
         let mut pivot_decision = None;
         let mut new_pos_state = parent_trees.pos_state().clone();
+        new_pos_state.set_catch_up_mode(catch_up_mode);
         for vm_output in vm_outputs.clone().into_iter() {
             for event in vm_output.events() {
                 // check for pivot block selection.
@@ -643,6 +645,7 @@ where V: VMExecutor
             self.cache.synced_trees(),
             // TODO(lpl): This function is not used.
             &HashValue::zero(),
+            true,
         )?;
 
         // Since we have verified the proofs, we just need to verify that each
@@ -984,6 +987,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     vm_outputs,
                     &parent_block_executed_trees,
                     &parent_block_id,
+                    catch_up_mode,
                 )
                 .map_err(|err| {
                     format_err!("Failed to execute block: {}", err)

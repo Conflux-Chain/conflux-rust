@@ -9,7 +9,7 @@ use crate::pos::consensus::{
     persistent_liveness_storage::{PersistentLivenessStorage, RecoveryData},
     state_replication::StateComputer,
 };
-use anyhow::{bail, format_err};
+use anyhow::{bail, ensure, format_err};
 use consensus_types::{
     block::Block,
     block_retrieval::{BlockRetrievalRequest, BlockRetrievalStatus},
@@ -20,6 +20,7 @@ use consensus_types::{
 use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress, epoch_change::EpochChangeProof,
+    term_state::ELECTION_AFTER_ACCEPTED_ROUND,
 };
 use mirai_annotations::checked_precondition;
 use rand::{prelude::*, Rng};
@@ -155,24 +156,79 @@ impl BlockStore {
             pending.push(block);
         }
 
-        // Execute the blocks in catch_up mode.
-        while let Some(block) = pending.pop() {
-            let block_qc = block.quorum_cert().clone();
-            self.insert_single_quorum_cert(block_qc.clone())?;
-            self.execute_and_insert_block(block, true)?;
-            match self.commit(block_qc.ledger_info().clone()).await {
-                Ok(()) => {}
-                Err(e) => {
-                    // TODO(lpl): Blocks not committed before crash should be
-                    // committed here? Make sure they are
-                    // recovered to BlockStore during start.
-                    diem_warn!("fetch_quorum_cert: commit error={:?}", e);
+        if !pending.is_empty() {
+            let root_block = pending.last().unwrap().parent_id();
+            let start_pos_state =
+                self.storage.diem_db().get_pos_state(&root_block).unwrap();
+            ensure!(
+                !start_pos_state.catch_up_mode(),
+                "PoS catch up from an unfinished catch_up"
+            );
+            let end_block = pending.first().unwrap().id();
+
+            // Execute the blocks in catch_up mode.
+            while let Some(block) = pending.clone().pop() {
+                let block_qc = block.quorum_cert().clone();
+                self.insert_single_quorum_cert(block_qc.clone())?;
+                self.execute_and_insert_block(
+                    block, true, /* catch_up_mode */
+                    true, /* force_recompute */
+                )?;
+                match self.commit(block_qc.ledger_info().clone()).await {
+                    Ok(()) => {}
+                    Err(e) => {
+                        // TODO(lpl): Blocks not committed before crash should
+                        // be committed here? Make sure
+                        // they are recovered to
+                        // BlockStore during start.
+                        diem_warn!("fetch_quorum_cert: commit error={:?}", e);
+                    }
+                }
+            }
+
+            let end_pos_state =
+                self.storage.diem_db().get_pos_state(&end_block).unwrap();
+            ensure!(
+                end_pos_state.catch_up_mode(),
+                "PoS catch up ends with incorrect pos_state"
+            );
+            let view_diff =
+                end_pos_state.current_view() - start_pos_state.current_view();
+
+            // Wait for PoW to enter NormalPhase
+            self.pow_handler.wait_for_initialization();
+
+            if view_diff > ELECTION_AFTER_ACCEPTED_ROUND {
+                // Rebuild start_pos_state from the latest PoW internal contract
+                // state. The latest PoW internal contract
+                // contains a super map of `start_pos_state.node_map`,
+                // the retiring and unlocked nodes in `start_pos_state.node_map`
+                // have correct status, and all other nodes
+                // registered/updated before `ELECTION_AFTER_ACCEPTED_ROUND`
+                // have been ready, so we only need to set
+                // `status_start_view` for nodes registered/updated recently.
+            }
+
+            // Execute the blocks in normal mode.
+            while let Some(block) = pending.clone().pop() {
+                let block_qc = block.quorum_cert().clone();
+                self.insert_single_quorum_cert(block_qc.clone())?;
+                self.execute_and_insert_block(
+                    block, false, /* catch_up_mode */
+                    true,  /* force_recompute */
+                )?;
+                match self.commit(block_qc.ledger_info().clone()).await {
+                    Ok(()) => {}
+                    Err(e) => {
+                        // TODO(lpl): Blocks not committed before crash should
+                        // be committed here? Make sure
+                        // they are recovered to
+                        // BlockStore during start.
+                        diem_warn!("fetch_quorum_cert: commit error={:?}", e);
+                    }
                 }
             }
         }
-
-        // Wait for PoW to enter NormalPhase
-        self.pow_handler.wait_for_initialization();
 
         // Re-execute pos_state after finishing PoW catching-up.
 

@@ -678,7 +678,7 @@ impl RoundManager {
             } else {
                 // Not a validator, just execute the block and wait for votes.
                 self.block_store
-                    .execute_and_insert_block(proposal, false)
+                    .execute_and_insert_block(proposal, false, false)
                     .context(
                         "[RoundManager] Failed to execute_and_insert the block",
                     )?;
@@ -740,8 +740,11 @@ impl RoundManager {
         observe_block(proposal.timestamp_usecs(), BlockStage::SYNCED);
 
         if self.proposer_election.is_random_election() {
-            self.block_store
-                .execute_and_insert_block(proposal.clone(), false)?;
+            self.block_store.execute_and_insert_block(
+                proposal.clone(),
+                false,
+                false,
+            )?;
             // Keep the proposal, and choose to vote after proposal timeout.
             ensure!(
                 self.proposer_election.receive_proposal_candidate(proposal),
@@ -781,7 +784,7 @@ impl RoundManager {
     ) -> anyhow::Result<Vote> {
         let executed_block = self
             .block_store
-            .execute_and_insert_block(proposed_block, false)
+            .execute_and_insert_block(proposed_block, false, false)
             .context("[RoundManager] Failed to execute_and_insert the block")?;
         // notify mempool about failed txn
         let compute_result = executed_block.compute_result();

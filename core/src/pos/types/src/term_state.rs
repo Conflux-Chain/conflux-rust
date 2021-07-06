@@ -29,7 +29,7 @@ use pow_types::StakingEvent;
 use std::convert::TryFrom;
 
 const TERM_LIST_LEN: usize = 6;
-const ELECTION_AFTER_ACCEPTED_ROUND: Round = 240;
+pub const ELECTION_AFTER_ACCEPTED_ROUND: Round = 240;
 const ROUND_PER_TERM: Round = 60;
 /// A term `n` is open for election in the view range
 /// `(n * ROUND_PER_TERM - ELECTION_TERM_START_ROUND, n * ROUND_PER_TERM -
@@ -300,7 +300,9 @@ impl PosState {
         }
     }
 
-    pub fn switch_to_normal_mode(&mut self) { self.catch_up_mode = false; }
+    pub fn set_catch_up_mode(&mut self, catch_up_mode: bool) {
+        self.catch_up_mode = catch_up_mode;
+    }
 }
 
 /// Read-only functions used in `execute_block`
@@ -478,6 +480,10 @@ impl PosState {
         }
         unlocked_nodes
     }
+
+    pub fn current_view(&self) -> u64 { self.current_view }
+
+    pub fn catch_up_mode(&self) -> bool { self.catch_up_mode }
 }
 
 /// Write functions used apply changes (process events in PoS and PoW)
@@ -540,6 +546,7 @@ impl PosState {
         match self.node_map.get_mut(addr) {
             Some(node_status) => {
                 node_status.voting_power += increased_voting_power;
+                node_status.status_start_view = self.current_view;
                 Ok(())
             }
             None => bail!("increase voting power of a non-existent node!"),

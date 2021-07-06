@@ -192,7 +192,7 @@ impl BlockStore {
         };
         for block in blocks {
             block_store
-                .execute_and_insert_block(block, true)
+                .execute_and_insert_block(block, true, true)
                 .unwrap_or_else(|e| {
                     panic!(
                         "[BlockStore] failed to insert block during build {:?}",
@@ -323,11 +323,13 @@ impl BlockStore {
     /// happen if a validator receives a certificate for a block that is
     /// currently being added).
     pub fn execute_and_insert_block(
-        &self, block: Block, catch_up_mode: bool,
+        &self, block: Block, catch_up_mode: bool, force_compute: bool,
     ) -> anyhow::Result<Arc<ExecutedBlock>> {
         diem_debug!("execute_and_insert_block: block={:?}", block.id());
-        if let Some(existing_block) = self.get_block(block.id()) {
-            return Ok(existing_block);
+        if !force_compute {
+            if let Some(existing_block) = self.get_block(block.id()) {
+                return Ok(existing_block);
+            }
         }
         ensure!(
             self.inner.read().root().round() < block.round(),
@@ -534,6 +536,6 @@ impl BlockStore {
         &self, block: Block,
     ) -> anyhow::Result<Arc<ExecutedBlock>> {
         self.insert_single_quorum_cert(block.quorum_cert().clone())?;
-        self.execute_and_insert_block(block, false)
+        self.execute_and_insert_block(block, false, false)
     }
 }
