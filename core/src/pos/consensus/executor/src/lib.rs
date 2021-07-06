@@ -64,6 +64,7 @@ use crate::{
 };
 use consensus_types::block::VRF_SEED;
 use diem_types::term_state::{NodeID, PosState, RetireEvent};
+use pow_types::PowInterface;
 
 mod types;
 
@@ -81,6 +82,7 @@ pub struct Executor<V> {
     db: DbReaderWriter,
     cache: SpeculationCache,
     phantom: PhantomData<V>,
+    pow_handler: Arc<dyn PowInterface>,
 }
 
 impl<V> Executor<V>
@@ -91,7 +93,7 @@ where V: VMExecutor
     }
 
     /// Constructs an `Executor`.
-    pub fn new(db: DbReaderWriter) -> Self {
+    pub fn new(db: DbReaderWriter, pow_handler: Arc<dyn PowInterface>) -> Self {
         let startup_info = db
             .reader
             .get_startup_info()
@@ -102,6 +104,7 @@ where V: VMExecutor
             db,
             cache: SpeculationCache::new_with_startup_info(startup_info),
             phantom: PhantomData,
+            pow_handler,
         }
     }
 
@@ -117,7 +120,7 @@ where V: VMExecutor
 
     pub fn new_on_unbootstrapped_db(
         db: DbReaderWriter, tree_state: TreeState,
-        initial_nodes: Vec<(NodeID, u64)>,
+        initial_nodes: Vec<(NodeID, u64)>, pow_handler: Arc<dyn PowInterface>,
     ) -> Self
     {
         let pos_state = PosState::new(VRF_SEED.to_vec(), initial_nodes);
@@ -127,6 +130,7 @@ where V: VMExecutor
                 tree_state, pos_state,
             ),
             phantom: PhantomData,
+            pow_handler,
         }
     }
 
@@ -287,10 +291,10 @@ where V: VMExecutor
     /// Post-processing of what the VM outputs. Returns the entire block's
     /// output.
     fn process_vm_outputs(
-        mut account_to_state: HashMap<AccountAddress, AccountState>,
+        &self, mut account_to_state: HashMap<AccountAddress, AccountState>,
         account_to_proof: HashMap<HashValue, SparseMerkleProof>,
         transactions: &[Transaction], vm_outputs: Vec<TransactionOutput>,
-        parent_trees: &ExecutedTrees,
+        parent_trees: &ExecutedTrees, parent_block_id: &HashValue,
     ) -> Result<ProcessedVMOutput>
     {
         // The data of each individual transaction. For convenience purpose,
@@ -333,6 +337,41 @@ where V: VMExecutor
                     new_pos_state.retire_node(&retire_event)?;
                 }
             }
+        }
+
+        let parent_pivot_decision = self
+            .cache
+            .get_block(&parent_block_id)?
+            .lock()
+            .output()
+            .pivot_block()
+            .clone()
+            .expect("All block have pivot decision");
+        if let Some(pivot_decision) = &pivot_decision {
+            diem_debug!(
+                "process_vm_outputs: parent={:?} parent_pivot={:?}",
+                parent_block_id,
+                parent_pivot_decision
+            );
+
+            // The check and event processing below will be skipped during PoS
+            // catching up, because pow_handler has not set its
+            // `pow_consensus`.
+            if !self.pow_handler.validate_proposal_pivot_decision(
+                parent_pivot_decision.block_hash,
+                pivot_decision.block_hash,
+            ) {
+                bail!("Invalid pivot decision for block");
+            }
+
+            for event in self.pow_handler.get_staking_events(
+                parent_pivot_decision.block_hash,
+                pivot_decision.block_hash,
+            ) {
+                new_pos_state.process_staking_event(event)?;
+            }
+        } else {
+            pivot_decision = Some(parent_pivot_decision);
         }
         let next_epoch_state = new_pos_state.next_view()?;
 
@@ -595,12 +634,14 @@ where V: VMExecutor
 
         let (account_to_state, account_to_proof) = state_view.into();
 
-        let output = Self::process_vm_outputs(
+        let output = self.process_vm_outputs(
             account_to_state,
             account_to_proof,
             &transactions,
             vm_outputs,
             self.cache.synced_trees(),
+            // TODO(lpl): This function is not used.
+            &HashValue::zero(),
         )?;
 
         // Since we have verified the proofs, we just need to verify that each
@@ -930,14 +971,18 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
 
             let (account_to_state, account_to_proof) = state_view.into();
 
-            let output = Self::process_vm_outputs(
-                account_to_state,
-                account_to_proof,
-                &transactions,
-                vm_outputs,
-                &parent_block_executed_trees,
-            )
-            .map_err(|err| format_err!("Failed to execute block: {}", err))?;
+            let output = self
+                .process_vm_outputs(
+                    account_to_state,
+                    account_to_proof,
+                    &transactions,
+                    vm_outputs,
+                    &parent_block_executed_trees,
+                    &parent_block_id,
+                )
+                .map_err(|err| {
+                    format_err!("Failed to execute block: {}", err)
+                })?;
 
             let parent_accu = parent_block_executed_trees.txn_accumulator();
 

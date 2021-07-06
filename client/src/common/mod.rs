@@ -293,8 +293,22 @@ pub fn initialize_common_modules(
 
     // TODO(lpl): Handle hard-fork.
     let pos_start_epoch = 0;
-    let start_epoch_id = data_man.executed_epoch_set_hashes_from_db(pos_start_epoch).expect("pos start epoch exists").last().cloned().expect("epoch not empty");
-    let initial_state_with_pos = data_man.storage_manager.get_state_no_commit(data_man.get_state_readonly_index(&start_epoch_id).expect("pos start epoch executed"), false /* try_open */).unwrap().unwrap();
+    let start_epoch_id = data_man
+        .executed_epoch_set_hashes_from_db(pos_start_epoch)
+        .expect("pos start epoch exists")
+        .last()
+        .cloned()
+        .expect("epoch not empty");
+    let initial_state_with_pos = data_man
+        .storage_manager
+        .get_state_no_commit(
+            data_man
+                .get_state_readonly_index(&start_epoch_id)
+                .expect("pos start epoch executed"),
+            false, /* try_open */
+        )
+        .unwrap()
+        .unwrap();
     // FIXME(lpl): Read from pow states.
     let initial_pos_nodes = vec![];
     let diem_handler = start_pos_consensus(
@@ -303,7 +317,7 @@ pub fn initialize_common_modules(
         own_node_hash,
         conf.protocol_config(),
         self_pos_public_key,
-        initial_pos_nodes
+        initial_pos_nodes,
     );
     debug!("PoS initialized");
     let pos_connection = PosConnection::new(
@@ -828,7 +842,7 @@ use crate::{
 };
 pub use crate::{common::pos::DiemHandle, configuration::Configuration};
 use blockgen::BlockGenerator;
-use cfx_storage::StorageManager;
+use cfx_storage::{state_manager::StateManagerTrait, StorageManager};
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use cfxcore::{
     block_data_manager::BlockDataManager,
@@ -872,4 +886,3 @@ use std::{
 use storage_interface::DBReaderForPoW;
 use threadpool::ThreadPool;
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
-use cfx_storage::state_manager::StateManagerTrait;

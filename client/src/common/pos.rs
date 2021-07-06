@@ -21,6 +21,7 @@ use diem_types::{
         from_consensus_public_key, from_public_key, AccountAddress,
     },
     block_info::PivotBlockDecision,
+    term_state::NodeID,
     validator_config::ConsensusPublicKey,
     PeerId,
 };
@@ -29,6 +30,7 @@ use executor::{db_bootstrapper::maybe_bootstrap, vm::FakeVM, Executor};
 use executor_types::ChunkExecutor;
 use futures::executor::block_on;
 use network::NetworkService;
+use pow_types::FakePowHandler;
 use state_sync::bootstrapper::StateSyncBootstrapper;
 use std::{
     boxed::Box,
@@ -42,7 +44,6 @@ use std::{
 };
 use storage_interface::DbReaderWriter;
 use tokio::runtime::Runtime;
-use diem_types::term_state::NodeID;
 
 pub struct DiemHandle {
     // pow handler
@@ -56,7 +57,8 @@ pub struct DiemHandle {
 pub fn start_pos_consensus(
     config: &NodeConfig, network: Arc<NetworkService>, own_node_hash: H256,
     protocol_config: ProtocolConfiguration,
-    own_pos_public_key: Option<ConsensusPublicKey>, initial_nodes: Vec<(NodeID, u64)>,
+    own_pos_public_key: Option<ConsensusPublicKey>,
+    initial_nodes: Vec<(NodeID, u64)>,
 ) -> DiemHandle
 {
     crash_handler::setup_panic_handler();
@@ -117,13 +119,14 @@ fn setup_metrics(peer_id: PeerId, config: &NodeConfig) {
 }
 
 fn setup_chunk_executor(db: DbReaderWriter) -> Box<dyn ChunkExecutor> {
-    Box::new(Executor::<FakeVM>::new(db))
+    Box::new(Executor::<FakeVM>::new(db, Arc::new(FakePowHandler {})))
 }
 
 pub fn setup_pos_environment(
     node_config: &NodeConfig, network: Arc<NetworkService>,
     own_node_hash: H256, protocol_config: ProtocolConfiguration,
-    own_pos_public_key: Option<ConsensusPublicKey>, initial_nodes: Vec<(NodeID, u64)>
+    own_pos_public_key: Option<ConsensusPublicKey>,
+    initial_nodes: Vec<(NodeID, u64)>,
 ) -> DiemHandle
 {
     // TODO(lpl): Handle port conflict.

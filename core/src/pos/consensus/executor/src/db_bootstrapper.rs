@@ -25,7 +25,8 @@ use diem_types::{
 };
 use executor_types::BlockExecutor;
 use move_core_types::move_resource::MoveResource;
-use std::collections::btree_map::BTreeMap;
+use pow_types::FakePowHandler;
+use std::{collections::btree_map::BTreeMap, sync::Arc};
 use storage_interface::{
     state_view::VerifiedStateView, DbReaderWriter, TreeState,
 };
@@ -47,7 +48,8 @@ pub fn generate_waypoint<V: VMExecutor>(
 /// matches the waypoint. Returns Ok(true) if committed otherwise Err.
 pub fn maybe_bootstrap<V: VMExecutor>(
     db: &DbReaderWriter, genesis_txn: &Transaction, waypoint: Waypoint,
-    genesis_pivot_decision: Option<PivotBlockDecision>, initial_nodes: Vec<(NodeID, u64)>,
+    genesis_pivot_decision: Option<PivotBlockDecision>,
+    initial_nodes: Vec<(NodeID, u64)>,
 ) -> Result<bool>
 {
     let tree_state = db.reader.get_latest_tree_state()?;
@@ -123,6 +125,8 @@ pub fn calculate_genesis<V: VMExecutor>(
         db.clone(),
         tree_state,
         initial_nodes,
+        // This will not be used in genesis execution.
+        Arc::new(FakePowHandler {}),
     );
 
     let block_id = HashValue::zero();

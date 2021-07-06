@@ -4,7 +4,7 @@ use std::{
     fmt::{Debug, Formatter},
 };
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 use serde::{Deserialize, Serialize};
 
 use diem_crypto::{HashValue, VRFProof, ValidCryptoMaterial};
@@ -22,7 +22,11 @@ use crate::{
     },
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
 };
-use move_core_types::language_storage::TypeTag;
+use move_core_types::{
+    language_storage::TypeTag, value::MoveTypeLayout::Address,
+};
+use pow_types::StakingEvent;
+use std::convert::TryFrom;
 
 const TERM_LIST_LEN: usize = 6;
 const ELECTION_AFTER_ACCEPTED_ROUND: Round = 240;
@@ -458,6 +462,70 @@ impl PosState {
 
 /// Write functions used apply changes (process events in PoS and PoW)
 impl PosState {
+    pub fn process_staking_event(&mut self, event: StakingEvent) -> Result<()> {
+        match event {
+            StakingEvent::Register((
+                addr_h256,
+                bls_pub_key_bytes,
+                vrf_pub_key_bytes,
+            )) => {
+                let addr = AccountAddress::from_bytes(addr_h256)?;
+                let bls_pub_key =
+                    ConsensusPublicKey::try_from(bls_pub_key_bytes.as_slice())?;
+                let vrf_pub_key = ConsensusVRFPublicKey::try_from(
+                    vrf_pub_key_bytes.as_slice(),
+                )?;
+                self.register_node(addr, bls_pub_key, vrf_pub_key)
+            }
+            StakingEvent::IncreaseStake((
+                addr_h256,
+                increased_voting_power,
+            )) => {
+                let addr = AccountAddress::from_bytes(addr_h256)?;
+                self.increase_voting_power(&addr, increased_voting_power)
+            }
+        }
+    }
+
+    fn register_node(
+        &mut self, addr: AccountAddress, bls_pub_key: ConsensusPublicKey,
+        vrf_pub_key: ConsensusVRFPublicKey,
+    ) -> Result<()>
+    {
+        let node_id = NodeID::new(bls_pub_key, vrf_pub_key);
+        ensure!(
+            node_id.addr == addr,
+            "provided address and generated address unmatch"
+        );
+        ensure!(
+            !self.node_map.contains_key(&addr),
+            "register an already registered address"
+        );
+        self.node_map.insert(
+            addr,
+            NodeData {
+                public_key: node_id.public_key,
+                vrf_public_key: Some(node_id.vrf_public_key),
+                status: NodeStatus::Accepted,
+                status_start_view: self.current_view,
+                voting_power: 0,
+            },
+        );
+        Ok(())
+    }
+
+    fn increase_voting_power(
+        &mut self, addr: &AccountAddress, increased_voting_power: u64,
+    ) -> Result<()> {
+        match self.node_map.get_mut(addr) {
+            Some(node_status) => {
+                node_status.voting_power += increased_voting_power;
+                Ok(())
+            }
+            None => bail!("increase voting power of a non-existent node!"),
+        }
+    }
+
     pub fn new_node_elected(&mut self, event: &ElectionEvent) -> Result<()> {
         let voting_power = self
             .node_map

@@ -366,12 +366,8 @@ impl BlockStore {
         // Although NIL blocks don't have a payload, we still send a
         // T::default() to compute because we may inject a block
         // prologue transaction.
-        let mut state_compute_result =
+        let state_compute_result =
             self.state_computer.compute(&block, block.parent_id())?;
-        self.post_process_state_compute_result(
-            &mut state_compute_result,
-            &block.parent_id(),
-        )?;
         observe_block(block.timestamp_usecs(), BlockStage::EXECUTED);
 
         Ok(ExecutedBlock::new(block, state_compute_result))
@@ -462,55 +458,6 @@ impl BlockStore {
             .write()
             .process_pruned_blocks(next_root_id, id_to_remove.clone());
         id_to_remove
-    }
-
-    fn post_process_state_compute_result(
-        &self, state_compute_result: &mut StateComputeResult,
-        parent_block_id: &HashValue,
-    ) -> anyhow::Result<(), Error>
-    {
-        // TODO(lpl): Decide if we store it in states.
-        // None for genesis for now.
-        let parent_pivot_decision = self
-            .get_block(*parent_block_id)
-            .ok_or(Error::InternalError {
-                error: format!(
-                    "Parent block not in BlockStore: parent={:?}",
-                    parent_block_id
-                ),
-            })?
-            .block_info()
-            .pivot_decision()
-            .cloned();
-        diem_debug!(
-            "post_process_state_compute_result: parent={:?} parent_pivot={:?}",
-            parent_block_id,
-            parent_pivot_decision
-        );
-
-        if state_compute_result.pivot_decision().is_none()
-            && parent_pivot_decision.is_some()
-        {
-            // No pivot decision tx is included.
-            state_compute_result
-                .update_pivot_decision(parent_pivot_decision.clone().unwrap());
-        }
-
-        if parent_pivot_decision.is_some()
-            && !self.pow_handler.validate_proposal_pivot_decision(
-                parent_pivot_decision.unwrap().block_hash,
-                state_compute_result
-                    .pivot_decision()
-                    .as_ref()
-                    .unwrap()
-                    .block_hash,
-            )
-        {
-            return Err(Error::InternalError {
-                error: format!("Invalid pivot decision for block"),
-            });
-        }
-        Ok(())
     }
 }
 

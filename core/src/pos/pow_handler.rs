@@ -4,7 +4,7 @@ use cfx_types::H256;
 use diem_types::account_address::AccountAddress;
 use futures::{channel::oneshot, executor::block_on};
 use parking_lot::RwLock;
-use pow_types::{PowInterface, StakingEvents};
+use pow_types::{PowInterface, StakingEvent};
 use std::{collections::HashMap, sync::Arc};
 use tokio::runtime::Handle;
 
@@ -61,7 +61,7 @@ impl PowHandler {
     fn get_staking_events_impl(
         _pow_consensus: Arc<ConsensusGraph>, _parent_decision: H256,
         _me_decision: H256,
-    ) -> Vec<StakingEvents>
+    ) -> Vec<StakingEvent>
     {
         todo!("Implement getting events")
     }
@@ -106,23 +106,19 @@ impl PowInterface for PowHandler {
         r
     }
 
-    async fn get_staking_events(
+    fn get_staking_events(
         &self, parent_decision: H256, me_decision: H256,
-    ) -> Vec<StakingEvents> {
+    ) -> Vec<StakingEvent> {
         let pow_consensus = self.pow_consensus.read().clone();
         if pow_consensus.is_none() {
+            // This case will be reached during pos recovery.
             return Vec::new();
         }
-        let (callback, cb_receiver) = oneshot::channel();
         let pow_consensus = pow_consensus.unwrap();
-        self.executor.spawn(async move {
-            let r = Self::get_staking_events_impl(
-                pow_consensus,
-                parent_decision,
-                me_decision,
-            );
-            callback.send(r);
-        });
-        cb_receiver.await.expect("callback error")
+        Self::get_staking_events_impl(
+            pow_consensus,
+            parent_decision,
+            me_decision,
+        )
     }
 }

@@ -55,7 +55,9 @@ pub fn start_consensus(
         node_config.consensus.mempool_txn_pull_timeout_ms,
         node_config.consensus.mempool_executed_txn_timeout_ms,
     ));
-    let executor = Box::new(Executor::<FakeVM>::new(db_rw));
+    let pow_handler = Arc::new(PowHandler::new(runtime.handle().clone()));
+    let executor =
+        Box::new(Executor::<FakeVM>::new(db_rw, pow_handler.clone()));
     let state_computer =
         Arc::new(ExecutionProxy::new(executor, state_sync_client));
     let time_service =
@@ -78,7 +80,6 @@ pub fn start_consensus(
         channel::new(1_024, &counters::PENDING_ROUND_TIMEOUTS);
     let (proposal_timeout_sender, proposal_timeout_receiver) =
         channel::new(1_024, &counters::PENDING_PROPOSAL_TIMEOUTS);
-    let pow_handler = Arc::new(PowHandler::new(runtime.handle().clone()));
 
     let epoch_mgr = EpochManager::new(
         node_config,
