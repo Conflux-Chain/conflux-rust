@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 mod admin;
+mod future;
 mod sponsor;
 mod staking;
 
@@ -14,6 +15,8 @@ mod macros {
         group_impl_is_active, impl_function_type, make_function_table,
         make_solidity_contract, make_solidity_function,
     };
+
+    pub(super) use super::SolFnTable;
 
     pub use super::super::{
         activate_at::{BlockNumber, IsActive},
@@ -44,12 +47,17 @@ pub(super) type SolFnTable = HashMap<[u8; 4], Box<dyn SolidityFunctionTrait>>;
 /// A marco to implement an internal contract.
 #[macro_export]
 macro_rules! make_solidity_contract {
-    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr, $gen_table:ident, "active_at_genesis"); ) => {
+    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr, "placeholder"); ) => {
+        $crate::make_solidity_contract! {
+            $(#[$attr])* $visibility struct $name ($addr, || Default::default(), initialize: |_: &CommonParams| u64::MAX, is_active: |_: &Spec| false);
+        }
+    };
+    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr, $gen_table:expr, "active_at_genesis"); ) => {
         $crate::make_solidity_contract! {
             $(#[$attr])* $visibility struct $name ($addr, $gen_table, initialize: |_: &CommonParams| 0u64, is_active: |_: &Spec| true);
         }
     };
-    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr, $gen_table:ident, initialize: $init:expr, is_active: $is_active:expr); ) => {
+    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr, $gen_table:expr, initialize: $init:expr, is_active: $is_active:expr); ) => {
         $(#[$attr])*
         $visibility struct $name {
             function_table: SolFnTable
@@ -123,7 +131,12 @@ impl InternalContractMap {
 
         while let Some(contract) = internal_contracts.pop() {
             let address = *contract.address();
-            let transition_block = contract.initialize_block(params);
+            let transition_block = if params.early_set_internal_contracts_states
+            {
+                0
+            } else {
+                contract.initialize_block(params)
+            };
 
             builtin.insert(*contract.address(), contract);
             activation_info
@@ -171,5 +184,8 @@ pub fn all_internal_contracts() -> Vec<Box<dyn InternalContractTrait>> {
         Box::new(AdminControl::instance()),
         Box::new(Staking::instance()),
         Box::new(SponsorWhitelistControl::instance()),
+        Box::new(future::AntiReentrancy::instance()),
+        Box::new(future::Context::instance()),
+        Box::new(future::PoS::instance()),
     ]
 }
