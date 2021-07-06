@@ -123,7 +123,7 @@ where V: VMExecutor
         initial_nodes: Vec<(NodeID, u64)>, pow_handler: Arc<dyn PowInterface>,
     ) -> Self
     {
-        let pos_state = PosState::new(VRF_SEED.to_vec(), initial_nodes);
+        let pos_state = PosState::new(VRF_SEED.to_vec(), initial_nodes, true);
         Self {
             db,
             cache: SpeculationCache::new_for_db_bootstrapping(
@@ -622,7 +622,8 @@ where V: VMExecutor
         fail_point!("executor::vm_execute_chunk", |_| {
             Err(anyhow::anyhow!("Injected error in execute_chunk"))
         });
-        let vm_outputs = V::execute_block(transactions.clone(), &state_view)?;
+        let vm_outputs =
+            V::execute_block(transactions.clone(), &state_view, true)?;
 
         // Since other validators have committed these transactions, their
         // status should all be TransactionStatus::Keep.
@@ -883,7 +884,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
 
     fn execute_block(
         &mut self, block: (HashValue, Vec<Transaction>),
-        parent_block_id: HashValue,
+        parent_block_id: HashValue, catch_up_mode: bool,
     ) -> Result<StateComputeResult, Error>
     {
         let (block_id, mut transactions) = block;
@@ -954,8 +955,12 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                         "Injected error in vm_execute_block"
                     )))
                 });
-                V::execute_block(transactions.clone(), &state_view)
-                    .map_err(anyhow::Error::from)?
+                V::execute_block(
+                    transactions.clone(),
+                    &state_view,
+                    catch_up_mode,
+                )
+                .map_err(anyhow::Error::from)?
             };
 
             // trace_code_block!("executor::process_vm_outputs", {"block",

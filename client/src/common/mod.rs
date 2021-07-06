@@ -352,7 +352,6 @@ pub fn initialize_common_modules(
         node_type,
         pos_verifier.clone(),
     ));
-    diem_handler.pow_handler.initialize(consensus.clone());
 
     let sync_config = conf.sync_graph_config();
 
@@ -365,6 +364,7 @@ pub fn initialize_common_modules(
         notifications.clone(),
         machine.clone(),
         pos_verifier.clone(),
+        diem_handler.pow_handler.clone(),
     ));
     let refresh_time =
         Duration::from_millis(conf.raw_conf.account_provider_refresh_time_ms);
@@ -473,6 +473,7 @@ pub fn initialize_not_light_node_modules(
         conf.state_sync_config(),
         SyncPhaseType::CatchUpRecoverBlockHeaderFromDB,
         light_provider,
+        consensus.clone(),
     ));
     sync.register().unwrap();
 

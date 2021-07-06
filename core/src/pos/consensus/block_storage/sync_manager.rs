@@ -154,11 +154,12 @@ impl BlockStore {
             retrieve_qc = block.quorum_cert().clone();
             pending.push(block);
         }
-        // insert the qc <- block pair
+
+        // Execute the blocks in catch_up mode.
         while let Some(block) = pending.pop() {
             let block_qc = block.quorum_cert().clone();
             self.insert_single_quorum_cert(block_qc.clone())?;
-            self.execute_and_insert_block(block)?;
+            self.execute_and_insert_block(block, true)?;
             match self.commit(block_qc.ledger_info().clone()).await {
                 Ok(()) => {}
                 Err(e) => {
@@ -169,6 +170,12 @@ impl BlockStore {
                 }
             }
         }
+
+        // Wait for PoW to enter NormalPhase
+        self.pow_handler.wait_for_initialization();
+
+        // Re-execute pos_state after finishing PoW catching-up.
+
         self.insert_single_quorum_cert(qc)
     }
 

@@ -41,6 +41,7 @@ pub trait StateComputer: Send + Sync {
         block: &Block,
         // The parent block root hash.
         parent_block_id: HashValue,
+        catch_up_mode: bool,
     ) -> Result<StateComputeResult, ExecutionError>;
 
     /// Send a successful commit. A future is fulfilled when the state is

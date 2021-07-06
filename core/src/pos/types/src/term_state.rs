@@ -219,6 +219,8 @@ pub struct PosState {
     /// Track the nodes that have retired and are waiting to be unlocked.
     /// Nodes that are enqueued early will also become unlocked early.
     retiring_nodes: VecDeque<AccountAddress>,
+
+    catch_up_mode: bool,
 }
 
 impl Debug for PosState {
@@ -234,7 +236,9 @@ impl Debug for PosState {
 impl PosState {
     pub fn new(
         initial_seed: Vec<u8>, initial_nodes: Vec<(NodeID, u64)>,
-    ) -> Self {
+        catch_up_mode: bool,
+    ) -> Self
+    {
         let mut node_map = HashMap::new();
         let mut node_list = BinaryHeap::new();
         for (node_id, voting_power) in initial_nodes {
@@ -279,8 +283,24 @@ impl PosState {
                 term_list,
             },
             retiring_nodes: Default::default(),
+            catch_up_mode,
         }
     }
+
+    pub fn new_empty() -> Self {
+        Self {
+            node_map: Default::default(),
+            current_view: 0,
+            term_list: TermList {
+                current_term: 0,
+                term_list: Default::default(),
+            },
+            retiring_nodes: Default::default(),
+            catch_up_mode: false,
+        }
+    }
+
+    pub fn switch_to_normal_mode(&mut self) { self.catch_up_mode = false; }
 }
 
 /// Read-only functions used in `execute_block`
@@ -594,18 +614,6 @@ impl PosState {
                 )),
             },
             None => Err(anyhow!("Retiring node does not exist")),
-        }
-    }
-
-    pub fn new_empty() -> Self {
-        Self {
-            node_map: Default::default(),
-            current_view: 0,
-            term_list: TermList {
-                current_term: 0,
-                term_list: Default::default(),
-            },
-            retiring_nodes: Default::default(),
         }
     }
 }

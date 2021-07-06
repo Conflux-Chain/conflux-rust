@@ -25,6 +25,7 @@ pub trait VMExecutor: Send {
     /// them.
     fn execute_block(
         transactions: Vec<Transaction>, state_view: &dyn StateView,
+        catch_up_mode: bool,
     ) -> Result<Vec<TransactionOutput>, VMStatus>;
 }
 
@@ -34,7 +35,9 @@ pub struct FakeVM;
 impl VMExecutor for FakeVM {
     fn execute_block(
         transactions: Vec<Transaction>, state_view: &dyn StateView,
-    ) -> Result<Vec<TransactionOutput>, VMStatus> {
+        catch_up_mode: bool,
+    ) -> Result<Vec<TransactionOutput>, VMStatus>
+    {
         let mut vm_outputs = Vec::new();
         for transaction in transactions {
             // Execute the transaction
@@ -81,23 +84,37 @@ impl VMExecutor for FakeVM {
                             WriteSetPayload::Direct(change_set),
                         ) => change_set.events().to_vec(),
                         TransactionPayload::Election(election_payload) => {
-                            state_view
-                                .pos_state()
-                                .validate_election(election_payload)
-                                .map_err(|e| {
-                                    diem_error!("election tx error: {:?}", e);
-                                    VMStatus::Error(StatusCode::CFX_INVALID_TX)
-                                })?;
+                            if !catch_up_mode {
+                                state_view
+                                    .pos_state()
+                                    .validate_election(election_payload)
+                                    .map_err(|e| {
+                                        diem_error!(
+                                            "election tx error: {:?}",
+                                            e
+                                        );
+                                        VMStatus::Error(
+                                            StatusCode::CFX_INVALID_TX,
+                                        )
+                                    })?;
+                            }
                             vec![election_payload.to_event()]
                         }
                         TransactionPayload::Retire(retire_payload) => {
-                            state_view
-                                .pos_state()
-                                .validate_retire(retire_payload)
-                                .map_err(|e| {
-                                    diem_error!("retirement tx error: {:?}", e);
-                                    VMStatus::Error(StatusCode::CFX_INVALID_TX)
-                                })?;
+                            if !catch_up_mode {
+                                state_view
+                                    .pos_state()
+                                    .validate_retire(retire_payload)
+                                    .map_err(|e| {
+                                        diem_error!(
+                                            "retirement tx error: {:?}",
+                                            e
+                                        );
+                                        VMStatus::Error(
+                                            StatusCode::CFX_INVALID_TX,
+                                        )
+                                    })?;
+                            }
                             vec![retire_payload.to_event()]
                         }
                         TransactionPayload::PivotDecision(pivot_decision) => {

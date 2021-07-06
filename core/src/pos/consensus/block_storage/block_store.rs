@@ -192,7 +192,7 @@ impl BlockStore {
         };
         for block in blocks {
             block_store
-                .execute_and_insert_block(block)
+                .execute_and_insert_block(block, true)
                 .unwrap_or_else(|e| {
                     panic!(
                         "[BlockStore] failed to insert block during build {:?}",
@@ -323,7 +323,7 @@ impl BlockStore {
     /// happen if a validator receives a certificate for a block that is
     /// currently being added).
     pub fn execute_and_insert_block(
-        &self, block: Block,
+        &self, block: Block, catch_up_mode: bool,
     ) -> anyhow::Result<Arc<ExecutedBlock>> {
         diem_debug!("execute_and_insert_block: block={:?}", block.id());
         if let Some(existing_block) = self.get_block(block.id()) {
@@ -334,7 +334,9 @@ impl BlockStore {
             "Block with old round"
         );
 
-        let executed_block = match self.execute_block(block.clone()) {
+        let executed_block = match self
+            .execute_block(block.clone(), catch_up_mode)
+        {
             Ok(res) => Ok(res),
             Err(Error::BlockNotFound(parent_block_id)) => {
                 // recover the block tree in executor
@@ -343,9 +345,9 @@ impl BlockStore {
                     .unwrap_or_else(Vec::new);
 
                 for block in blocks_to_reexecute {
-                    self.execute_block(block.block().clone())?;
+                    self.execute_block(block.block().clone(), catch_up_mode)?;
                 }
-                self.execute_block(block)
+                self.execute_block(block, catch_up_mode)
             }
             err => err,
         }?;
@@ -361,13 +363,16 @@ impl BlockStore {
     }
 
     fn execute_block(
-        &self, block: Block,
+        &self, block: Block, catch_up_mode: bool,
     ) -> anyhow::Result<ExecutedBlock, Error> {
         // Although NIL blocks don't have a payload, we still send a
         // T::default() to compute because we may inject a block
         // prologue transaction.
-        let state_compute_result =
-            self.state_computer.compute(&block, block.parent_id())?;
+        let state_compute_result = self.state_computer.compute(
+            &block,
+            block.parent_id(),
+            catch_up_mode,
+        )?;
         observe_block(block.timestamp_usecs(), BlockStage::EXECUTED);
 
         Ok(ExecutedBlock::new(block, state_compute_result))
@@ -529,6 +534,6 @@ impl BlockStore {
         &self, block: Block,
     ) -> anyhow::Result<Arc<ExecutedBlock>> {
         self.insert_single_quorum_cert(block.quorum_cert().clone())?;
-        self.execute_and_insert_block(block)
+        self.execute_and_insert_block(block, false)
     }
 }

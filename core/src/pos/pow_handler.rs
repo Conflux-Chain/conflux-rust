@@ -1,11 +1,12 @@
-use crate::ConsensusGraph;
+use crate::{ConsensusGraph, SharedConsensusGraph};
 use async_trait::async_trait;
+use cfx_storage::storage_db::KeyValueDbAsAnyTrait;
 use cfx_types::H256;
 use diem_types::account_address::AccountAddress;
 use futures::{channel::oneshot, executor::block_on};
 use parking_lot::RwLock;
 use pow_types::{PowInterface, StakingEvent};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::runtime::Handle;
 
 // FIXME(lpl): Decide the value.
@@ -120,5 +121,12 @@ impl PowInterface for PowHandler {
             parent_decision,
             me_decision,
         )
+    }
+
+    async fn wait_for_initialization(&self) {
+        while self.pow_consensus.read().is_none() {
+            self.executor
+                .block_on(tokio::time::sleep(Duration::from_millis(200)))
+        }
     }
 }

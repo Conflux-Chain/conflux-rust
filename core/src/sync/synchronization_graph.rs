@@ -8,6 +8,7 @@ use crate::{
     consensus::{pos_handler::PosVerifier, SharedConsensusGraph},
     error::{BlockError, Error, ErrorKind},
     machine::Machine,
+    pos::pow_handler::PowHandler,
     pow::{PowComputer, ProofOfWorkConfig},
     state_exposer::{SyncGraphBlockState, STATE_EXPOSER},
     statistics::SharedStatistics,
@@ -24,6 +25,7 @@ use metrics::{
     register_meter_with_group, register_queue, Meter, MeterTimer, Queue,
 };
 use parking_lot::RwLock;
+use pow_types::PowInterface;
 use primitives::{
     pos::PosBlockId, transaction::SignedTransaction, Block, BlockHeader,
     EpochNumber,
@@ -976,6 +978,7 @@ pub struct SynchronizationGraph {
     pub future_blocks: FutureBlockContainer,
 
     machine: Arc<Machine>,
+    pub pow_handler: Arc<PowHandler>,
 }
 
 impl MallocSizeOf for SynchronizationGraph {
@@ -1006,7 +1009,7 @@ impl SynchronizationGraph {
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
         pow: Arc<PowComputer>, sync_config: SyncGraphConfig,
         notifications: Arc<Notifications>, machine: Arc<Machine>,
-        pos_verifier: Arc<PosVerifier>,
+        pos_verifier: Arc<PosVerifier>, pow_handler: Arc<PowHandler>,
     ) -> Self
     {
         let data_man = consensus.get_data_manager().clone();
@@ -1044,6 +1047,7 @@ impl SynchronizationGraph {
             consensus_unprocessed_count: consensus_unprocessed_count.clone(),
             new_block_hashes: notifications.new_block_hashes.clone(),
             machine,
+            pow_handler,
         };
 
         // It receives `BLOCK_GRAPH_READY` blocks in order and handles them in

@@ -63,7 +63,7 @@ pub trait BlockExecutor: Send {
     /// Executes a block.
     fn execute_block(
         &mut self, block: (HashValue, Vec<Transaction>),
-        parent_block_id: HashValue,
+        parent_block_id: HashValue, catch_up_mode: bool,
     ) -> Result<StateComputeResult, Error>;
 
     /// Saves eligible blocks to persistent storage.

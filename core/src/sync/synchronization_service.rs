@@ -12,7 +12,7 @@ use crate::{
         synchronization_protocol_handler::ProtocolConfiguration,
         StateSyncConfiguration, SynchronizationPhaseTrait,
     },
-    NodeType,
+    ConsensusGraph, NodeType,
 };
 use cfx_types::H256;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -36,6 +36,7 @@ impl SynchronizationService {
         protocol_config: ProtocolConfiguration,
         state_sync_config: StateSyncConfiguration,
         initial_sync_phase: SyncPhaseType, light_provider: Arc<LightProvider>,
+        consensus: Arc<ConsensusGraph>,
     ) -> Self
     {
         let sync_handler = Arc::new(SynchronizationProtocolHandler::new(
@@ -45,6 +46,7 @@ impl SynchronizationService {
             initial_sync_phase,
             sync_graph.clone(),
             light_provider,
+            consensus,
         ));
 
         assert_eq!(sync_handler.is_consortium(), sync_graph.is_consortium());

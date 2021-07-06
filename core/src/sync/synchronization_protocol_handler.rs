@@ -24,7 +24,7 @@ use crate::{
         SYNCHRONIZATION_PROTOCOL_OLD_VERSIONS_TO_SUPPORT,
         SYNCHRONIZATION_PROTOCOL_VERSION, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
-    NodeType,
+    ConsensusGraph, NodeType,
 };
 use cfx_internal_common::ChainIdParamsDeprecated;
 use cfx_parameters::{block::MAX_BLOCK_SIZE_IN_BYTES, sync::*};
@@ -424,7 +424,7 @@ impl SynchronizationProtocolHandler {
         state_sync_config: StateSyncConfiguration,
         initial_sync_phase: SyncPhaseType,
         sync_graph: SharedSynchronizationGraph,
-        light_provider: Arc<LightProvider>,
+        light_provider: Arc<LightProvider>, consensus: Arc<ConsensusGraph>,
     ) -> Self
     {
         let sync_state = Arc::new(SynchronizationState::new(
@@ -456,6 +456,7 @@ impl SynchronizationProtocolHandler {
                 sync_state.clone(),
                 sync_graph.clone(),
                 state_sync.clone(),
+                consensus,
             ),
             phase_manager_lock: Mutex::new(0),
             recover_public_queue,
