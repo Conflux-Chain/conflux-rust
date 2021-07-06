@@ -1,0 +1,56 @@
+{
+  "abi": [
+    {
+      "constant": false,
+      "inputs": [
+        {
+          "name": "allowance",
+          "type": "bool"
+        }
+      ],
+      "name": "allowReentrancy",
+      "outputs": [],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "constant": false,
+      "inputs": [
+        {
+          "name": "contractAddr",
+          "type": "address"
+        },
+        {
+          "name": "allowance",
+          "type": "bool"
+        }
+      ],
+      "name": "allowReentrancyByAdmin",
+      "outputs": [],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "constant": true,
+      "inputs": [
+        {
+          "name": "contractAddr",
+          "type": "address"
+        }
+      ],
+      "name": "isReentrancyAllowed",
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": "608060405234801561001057600080fd5b5061016f806100206000396000f300608060405260043610610057576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063838d377c1461005c5780638fef6c391461008b578063e2adea25146100da575b600080fd5b34801561006857600080fd5b50610089600480360381019080803515159060200190929190505050610135565b005b34801561009757600080fd5b506100d8600480360381019080803573ffffffffffffffffffffffffffffffffffffffff169060200190929190803515159060200190929190505050610138565b005b3480156100e657600080fd5b5061011b600480360381019080803573ffffffffffffffffffffffffffffffffffffffff16906020019092919050505061013c565b604051808215151515815260200191505060405180910390f35b50565b5050565b60009190505600a165627a7a72305820cfd3cee6744aed5fe2fc7ca07c8a74dad9be9b7a45c68ea2b163fee73c9ade810029"
+}
