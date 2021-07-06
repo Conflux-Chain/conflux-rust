@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import time
+
 from eth_utils import decode_hex
 from conflux.rpc import RpcClient
 from conflux.transactions import CONTRACT_DEFAULT_GAS
@@ -35,8 +37,8 @@ class EthTransactionTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
 
-        self.conf_parameters["unnamed_21autumn_transition_number"] = 20
-        self.conf_parameters["unnamed_21autumn_transition_height"] = 15
+        self.conf_parameters["unnamed_21autumn_transition_number"] = 80
+        self.conf_parameters["unnamed_21autumn_transition_height"] = 40
 
     def get_nonce(self, sender, inc=True):
         if sender not in self.nonce_map:
@@ -99,7 +101,8 @@ class EthTransactionTest(ConfluxTestFramework):
         genesis_addr = self.genesis_addr
         self.log.info("genesis_addr={}".format(encode_hex_0x(genesis_addr)))
 
-        BlockGenThread(self.nodes, self.log, interval_fixed=1).start()
+        block_gen_thread = BlockGenThread(self.nodes, self.log, interval_fixed=1)
+        block_gen_thread.start()
 
         client = RpcClient(self.nodes[0])
 
@@ -118,12 +121,19 @@ class EthTransactionTest(ConfluxTestFramework):
             eth_tx=True,
         )
 
-        wait_until(lambda: self.nodes[1].tx_inspect(tx.hash_hex())['exist'], timeout=5)
-        wait_until(lambda: client.epoch_number() >= 20, timeout=30)
-        wait_until(lambda: self.nodes[1].tx_inspect(tx.hash_hex())['packed'], timeout=5)
+        wait_until(lambda: self.nodes[1].tx_inspect(tx.hash_hex())['exist'], timeout=10)
+        block_gen_thread.stop()
+
+        client.generate_blocks(40)
+        block_hash = client.generate_custom_block(client.best_block_hash(), [], [tx])
+        wait_until(lambda: client.best_block_hash()==block_hash, timeout=10)
+        client.generate_blocks(40)
+
+        BlockGenThread(self.nodes, self.log, interval_fixed=1).start()
 
         receipt = self.wait_for_tx([tx])[0]
-        assert_greater_than_or_equal(int(receipt['epochNumber'], 0), 20)
+
+        assert_greater_than_or_equal(int(receipt['epochNumber'], 0), 80)
 
         self.log.info("All test done")
 

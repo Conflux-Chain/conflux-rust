@@ -603,7 +603,7 @@ impl TransactionPool {
     {
         let mut inner = self.inner.write_with_metric(&PACK_TRANSACTION_LOCK);
         best_epoch_height += 1;
-        // The best block number is not necessary a exact number.
+        // The best block number is not necessary an exact number.
         best_block_number += 1;
         inner.pack_transactions(
             num_txs,
