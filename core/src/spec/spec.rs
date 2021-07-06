@@ -97,6 +97,8 @@ pub struct TransitionsEpochHeight {
     /// The block `custom` field of this height is required to be
     /// `tanzanite_transition_header_custom`.
     pub cip40: BlockHeight,
+    /// CIP76: Remove VM-related constraints in syncing blocks
+    pub cip76: BlockHeight,
 }
 
 impl Default for CommonParams {
@@ -144,12 +146,6 @@ impl CommonParams {
     }
 
     pub fn spec(&self, number: BlockNumber) -> vm::Spec {
-        let mut spec = vm::Spec::new_spec();
-        spec.cip62 = number >= self.transition_numbers.cip62;
-        spec.cip64 = number >= self.transition_numbers.cip64;
-        spec.cip71a = number >= self.transition_numbers.cip71a;
-        spec.cip71b = number >= self.transition_numbers.cip71b;
-        spec.cip72 = number >= self.transition_numbers.cip72;
-        spec
+        vm::Spec::new_spec_from_common_params(&self, number)
     }
 }

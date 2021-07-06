@@ -134,7 +134,8 @@ build_config! {
         (genesis_secrets, (Option<String>), None)
         (initial_difficulty, (Option<u64>), None)
         (tanzanite_transition_height, (u64), TANZANITE_HEIGHT)
-        (unnamed_21autumn_transition, (Option<u64>), None)
+        (unnamed_21autumn_transition_number, (Option<u64>), None)
+        (unnamed_21autumn_transition_height, (Option<u64>), None)
         (unnamed_21autumn_cip71_deferred_transition, (Option<u64>), None)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
@@ -1053,11 +1054,11 @@ impl Configuration {
         };
         params.transition_numbers.cip64 = self
             .raw_conf
-            .unnamed_21autumn_transition
+            .unnamed_21autumn_transition_number
             .unwrap_or(default_transition_time);
         params.transition_numbers.cip71a = self
             .raw_conf
-            .unnamed_21autumn_transition
+            .unnamed_21autumn_transition_number
             .unwrap_or(default_transition_time);
         params.transition_numbers.cip71b = self
             .raw_conf
@@ -1065,7 +1066,11 @@ impl Configuration {
             .unwrap_or(default_transition_time);
         params.transition_numbers.cip72 = self
             .raw_conf
-            .unnamed_21autumn_transition
+            .unnamed_21autumn_transition_number
+            .unwrap_or(default_transition_time);
+        params.transition_heights.cip76 = self
+            .raw_conf
+            .unnamed_21autumn_transition_height
             .unwrap_or(default_transition_time);
 
         let mut base_block_rewards = BTreeMap::new();

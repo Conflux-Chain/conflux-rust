@@ -902,23 +902,19 @@ impl<
         }
 
         // Validate transaction epoch height.
-        match VerificationConfig::verify_transaction_epoch_height(
+        if VerificationConfig::check_transaction_epoch_bound(
             tx,
             self.env.epoch_height,
             self.env.transaction_epoch_bound,
-        ) {
-            Err(_) => {
-                return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
-                    ToRepackError::EpochHeightOutOfBound {
-                        block_height: self.env.epoch_height,
-                        set: tx.epoch_height,
-                        transaction_epoch_bound: self
-                            .env
-                            .transaction_epoch_bound,
-                    },
-                ));
-            }
-            Ok(()) => {}
+        ) != 0
+        {
+            return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
+                ToRepackError::EpochHeightOutOfBound {
+                    block_height: self.env.epoch_height,
+                    set: tx.epoch_height,
+                    transaction_epoch_bound: self.env.transaction_epoch_bound,
+                },
+            ));
         }
 
         let base_gas_required =

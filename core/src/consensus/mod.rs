@@ -164,6 +164,7 @@ pub struct BestInformation {
     pub best_epoch_number: u64,
     pub current_difficulty: U256,
     pub bounded_terminal_block_hashes: Vec<H256>,
+    pub best_block_number: u64,
 }
 
 impl BestInformation {
@@ -1120,6 +1121,7 @@ impl ConsensusGraph {
                 .read()
                 .get_chain_id(best_epoch_number),
             best_block_hash: inner.best_block_hash(),
+            best_block_number: inner.best_block_number(),
             best_epoch_number,
             current_difficulty: inner.current_difficulty,
             bounded_terminal_block_hashes,

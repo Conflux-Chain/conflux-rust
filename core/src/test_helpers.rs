@@ -19,7 +19,7 @@ pub fn get_state_for_genesis_write(
     initialize_internal_contract_accounts(
         &mut state,
         InternalContractMap::initialize_for_test().as_slice(),
-        Spec::new_spec().contract_start_nonce,
+        Spec::new_spec_for_test().contract_start_nonce,
     );
     let genesis_epoch_id = EpochId::default();
     state
