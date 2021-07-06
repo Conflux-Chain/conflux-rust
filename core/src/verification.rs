@@ -465,7 +465,8 @@ impl VerificationConfig {
         transaction_epoch_bound: u64,
     ) -> i8
     {
-        if tx.epoch_height + transaction_epoch_bound < block_height {
+        if tx.epoch_height.wrapping_add(transaction_epoch_bound) < block_height
+        {
             -1
         } else if tx.epoch_height > block_height + transaction_epoch_bound {
             1
