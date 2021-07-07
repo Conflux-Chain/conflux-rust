@@ -34,8 +34,6 @@ pub struct OriginInfo {
     /// This is the address of account who will pay collateral for storage in
     /// the whole execution.
     storage_owner: Address,
-    /// The upper bound of `collateral_for_storage` for `original_sender`
-    storage_limit_in_drip: U256,
     gas_price: U256,
     value: U256,
 }
@@ -47,7 +45,6 @@ impl OriginInfo {
             address: params.address,
             original_sender: params.original_sender,
             storage_owner: params.storage_owner,
-            storage_limit_in_drip: params.storage_limit_in_drip,
             gas_price: params.gas_price,
             value: match params.value {
                 ActionValue::Transfer(val) | ActionValue::Apparent(val) => val,
@@ -221,7 +218,6 @@ impl<
             sender: self.local_part.origin.address.clone(),
             original_sender: self.local_part.origin.original_sender,
             storage_owner: self.local_part.origin.storage_owner,
-            storage_limit_in_drip: self.local_part.origin.storage_limit_in_drip,
             gas: *gas,
             gas_price: self.local_part.origin.gas_price,
             value: ActionValue::Transfer(*value),
@@ -278,7 +274,6 @@ impl<
             code_address: *code_address,
             original_sender: self.local_part.origin.original_sender,
             storage_owner: self.local_part.origin.storage_owner,
-            storage_limit_in_drip: self.local_part.origin.storage_limit_in_drip,
             gas: *gas,
             gas_price: self.local_part.origin.gas_price,
             code,
@@ -503,7 +498,6 @@ mod tests {
             storage_owner: Address::zero(),
             gas_price: U256::zero(),
             value: U256::zero(),
-            storage_limit_in_drip: U256::MAX,
         }
     }
 

@@ -598,26 +598,21 @@ impl TransactionPool {
 
     pub fn pack_transactions<'a>(
         &self, num_txs: usize, block_gas_limit: U256, block_size_limit: usize,
-        mut best_epoch_height: u64,
+        mut best_epoch_height: u64, mut best_block_number: u64,
     ) -> Vec<Arc<SignedTransaction>>
     {
         let mut inner = self.inner.write_with_metric(&PACK_TRANSACTION_LOCK);
         best_epoch_height += 1;
-        let transaction_epoch_bound =
-            self.verification_config.transaction_epoch_bound;
-        let height_lower_bound = if best_epoch_height > transaction_epoch_bound
-        {
-            best_epoch_height - transaction_epoch_bound
-        } else {
-            0
-        };
-        let height_upper_bound = best_epoch_height + transaction_epoch_bound;
+        // The best block number is not necessary an exact number.
+        best_block_number += 1;
         inner.pack_transactions(
             num_txs,
             block_gas_limit,
             block_size_limit,
-            height_lower_bound,
-            height_upper_bound,
+            best_epoch_height,
+            best_block_number,
+            &self.verification_config,
+            &self.machine,
         )
     }
 
@@ -789,6 +784,7 @@ impl TransactionPool {
             self_gas_limit.clone(),
             block_size_limit,
             consensus_best_info_clone.best_epoch_number,
+            consensus_best_info_clone.best_block_number,
         );
 
         let transactions = [

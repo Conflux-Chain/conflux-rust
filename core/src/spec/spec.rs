@@ -88,7 +88,7 @@ pub struct TransitionsBlockNumber {
     pub cip71a: BlockNumber,
     pub cip71b: BlockNumber,
     /// CIP72: Accept Ethereum transaction signature
-    pub cip72: BlockNumber,
+    pub cip72b: BlockNumber,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -99,6 +99,8 @@ pub struct TransitionsEpochHeight {
     pub cip40: BlockHeight,
     /// CIP76: Remove VM-related constraints in syncing blocks
     pub cip76: BlockHeight,
+    /// CIP72: Accept Ethereum transaction signature
+    pub cip72a: BlockHeight,
 }
 
 impl Default for CommonParams {
