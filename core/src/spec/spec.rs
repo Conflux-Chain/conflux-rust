@@ -89,6 +89,8 @@ pub struct TransitionsBlockNumber {
     pub cip71b: BlockNumber,
     /// CIP72: Accept Ethereum transaction signature
     pub cip72b: BlockNumber,
+    /// CIP78: Correct `is_sponsored` fields in receipt
+    pub cip78: BlockNumber,
 }
 
 #[derive(Default, Debug, Clone)]

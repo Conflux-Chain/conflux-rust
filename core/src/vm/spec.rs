@@ -138,6 +138,8 @@ pub struct Spec {
     pub cip71b: bool,
     /// CIP-72: Accept Ethereum transaction signature
     pub cip72: bool,
+    /// CIP-78: Correct `is_sponsored` fields in receipt
+    pub cip78: bool,
 }
 
 /// Wasm cost table
@@ -266,6 +268,7 @@ impl Spec {
             cip71a: false,
             cip71b: false,
             cip72: false,
+            cip78: false,
         }
     }
 
@@ -278,6 +281,7 @@ impl Spec {
         spec.cip71a = number >= params.transition_numbers.cip71a;
         spec.cip71b = number >= params.transition_numbers.cip71b;
         spec.cip72 = number >= params.transition_numbers.cip72b;
+        spec.cip78 = number >= params.transition_numbers.cip78;
         spec
     }
 
