@@ -36,8 +36,9 @@ fn block_number_by_hash(
     let position = match epoch_hashes.iter().position(|h| h == hash) {
         Some(p) => p as u64,
         None => {
-            // FIXME: this does happen sometimes, how is this possible?
-            warn!("Expected block {:?} to be one of {:?}", hash, epoch_hashes);
+            // this can happen if `hash` used to belong to epoch X,
+            // but there was a pivot chain reorg and `hash` has not
+            // been re-executed yet.
             return None;
         }
     };
