@@ -17,7 +17,7 @@ use crate::pos::pow_handler::PowHandler;
 use cfx_types::H256;
 use diem_crypto::PrivateKey;
 use diem_infallible::Mutex;
-use diem_logger::debug as diem_debug;
+use diem_logger::{debug as diem_debug, error as diem_error};
 use diem_types::{
     block_info::PivotBlockDecision,
     chain_id::ChainId,
@@ -198,12 +198,39 @@ impl ProposalGenerator {
                         self.author,
                         0,
                         pivot_decision,
-                        ChainId::default(), // FIXME(lpl): Set chain id.
+                        ChainId::default(),
                     );
                     let signed_tx = raw_tx
                         .sign(&self.private_key, self.public_key.clone())?
                         .into_inner();
                     payload.push(signed_tx);
+
+                    // Included new registered or updated nodes as transactions.
+                    let staking_events = self
+                        .pow_handler
+                        .get_staking_events(parent_decision, block_hash);
+                    for event in staking_events {
+                        match RawTransaction::from_staking_event(
+                            &event,
+                            self.author,
+                        ) {
+                            Ok(raw_tx) => {
+                                let signed_tx = raw_tx
+                                    .sign(
+                                        &self.private_key,
+                                        self.public_key.clone(),
+                                    )?
+                                    .into_inner();
+                                payload.push(signed_tx);
+                            }
+                            // TODO(lpl): This is not supposed to happen, so
+                            // should we return error here?
+                            Err(e) => diem_error!(
+                                "Get invalid staking event: err={:?}",
+                                e
+                            ),
+                        }
+                    }
                 }
                 None => {
                     warn!("pos progress without new pivot decision");

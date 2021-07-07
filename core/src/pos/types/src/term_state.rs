@@ -488,47 +488,13 @@ impl PosState {
 
 /// Write functions used apply changes (process events in PoS and PoW)
 impl PosState {
-    pub fn process_staking_event(&mut self, event: StakingEvent) -> Result<()> {
-        match event {
-            StakingEvent::Register((
-                addr_h256,
-                bls_pub_key_bytes,
-                vrf_pub_key_bytes,
-            )) => {
-                let addr = AccountAddress::from_bytes(addr_h256)?;
-                let bls_pub_key =
-                    ConsensusPublicKey::try_from(bls_pub_key_bytes.as_slice())?;
-                let vrf_pub_key = ConsensusVRFPublicKey::try_from(
-                    vrf_pub_key_bytes.as_slice(),
-                )?;
-                self.register_node(addr, bls_pub_key, vrf_pub_key)
-            }
-            StakingEvent::IncreaseStake((
-                addr_h256,
-                increased_voting_power,
-            )) => {
-                let addr = AccountAddress::from_bytes(addr_h256)?;
-                self.increase_voting_power(&addr, increased_voting_power)
-            }
-        }
-    }
-
-    fn register_node(
-        &mut self, addr: AccountAddress, bls_pub_key: ConsensusPublicKey,
-        vrf_pub_key: ConsensusVRFPublicKey,
-    ) -> Result<()>
-    {
-        let node_id = NodeID::new(bls_pub_key, vrf_pub_key);
+    pub fn register_node(&mut self, node_id: NodeID) -> Result<()> {
         ensure!(
-            node_id.addr == addr,
-            "provided address and generated address unmatch"
-        );
-        ensure!(
-            !self.node_map.contains_key(&addr),
+            !self.node_map.contains_key(&node_id.addr),
             "register an already registered address"
         );
         self.node_map.insert(
-            addr,
+            node_id.addr,
             NodeData {
                 public_key: node_id.public_key,
                 vrf_public_key: Some(node_id.vrf_public_key),
@@ -540,13 +506,17 @@ impl PosState {
         Ok(())
     }
 
-    fn increase_voting_power(
+    pub fn update_voting_power(
         &mut self, addr: &AccountAddress, increased_voting_power: u64,
     ) -> Result<()> {
         match self.node_map.get_mut(addr) {
             Some(node_status) => {
-                node_status.voting_power += increased_voting_power;
-                node_status.status_start_view = self.current_view;
+                // TODO(lpl): Should we return error if the node has been
+                // retired?
+                if matches!(node_status.status, NodeStatus::Accepted) {
+                    node_status.voting_power = increased_voting_power;
+                    node_status.status_start_view = self.current_view;
+                }
                 Ok(())
             }
             None => bail!("increase voting power of a non-existent node!"),
@@ -697,7 +667,7 @@ impl RetireEvent {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RegisterEvent {
-    node_id: NodeID,
+    pub node_id: NodeID,
 }
 
 impl RegisterEvent {
@@ -716,12 +686,39 @@ impl RegisterEvent {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         bcs::from_bytes(bytes).map_err(Into::into)
     }
+
+    pub fn matches_staking_event(
+        &self, staking_event: &StakingEvent,
+    ) -> Result<bool> {
+        match staking_event {
+            StakingEvent::Register((
+                addr_h256,
+                bls_pub_key_bytes,
+                vrf_pub_key_bytes,
+            )) => {
+                let addr = AccountAddress::from_bytes(addr_h256)?;
+                let public_key =
+                    ConsensusPublicKey::try_from(bls_pub_key_bytes.as_slice())?;
+                let vrf_public_key = ConsensusVRFPublicKey::try_from(
+                    vrf_pub_key_bytes.as_slice(),
+                )?;
+                let node_id =
+                    NodeID::new(public_key.clone(), vrf_public_key.clone());
+                ensure!(
+                    node_id.addr == addr,
+                    "register event has unmatching address and keys"
+                );
+                Ok(self.node_id == node_id)
+            }
+            _ => Ok(false),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct UpdateVotingPowerEvent {
-    node_address: AccountAddress,
-    voting_power: u64,
+    pub node_address: AccountAddress,
+    pub voting_power: u64,
 }
 
 impl UpdateVotingPowerEvent {
@@ -742,6 +739,19 @@ impl UpdateVotingPowerEvent {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         bcs::from_bytes(bytes).map_err(Into::into)
     }
+
+    pub fn matches_staking_event(
+        &self, staking_event: &StakingEvent,
+    ) -> Result<bool> {
+        match staking_event {
+            StakingEvent::IncreaseStake((addr_h256, updated_voting_power)) => {
+                let addr = AccountAddress::from_bytes(addr_h256)?;
+                Ok(self.node_address == addr
+                    && self.voting_power == *updated_voting_power)
+            }
+            _ => Ok(false),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -750,7 +760,7 @@ pub struct NodeID {
     vrf_public_key: ConsensusVRFPublicKey,
 
     /// Computed based on other fields.
-    addr: AccountAddress,
+    pub addr: AccountAddress,
 }
 
 impl NodeID {

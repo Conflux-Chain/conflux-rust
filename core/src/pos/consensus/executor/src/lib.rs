@@ -10,7 +10,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{bail, ensure, format_err, Result};
+use anyhow::{anyhow, bail, ensure, format_err, Result};
 use fail::fail_point;
 
 use diem_crypto::{
@@ -63,7 +63,12 @@ use crate::{
     vm::VMExecutor,
 };
 use consensus_types::block::VRF_SEED;
-use diem_types::term_state::{NodeID, PosState, RetireEvent};
+use diem_types::{
+    term_state::{
+        NodeID, PosState, RegisterEvent, RetireEvent, UpdateVotingPowerEvent,
+    },
+    transaction::TransactionPayload::UpdateVotingPower,
+};
 use pow_types::PowInterface;
 
 mod types;
@@ -314,6 +319,8 @@ where V: VMExecutor
             PivotBlockDecision::pivot_select_event_key();
         let election_event_key = ElectionEvent::event_key();
         let retire_event_key = RetireEvent::event_key();
+        let register_event_key = RegisterEvent::event_key();
+        let update_voting_power_event_key = UpdateVotingPowerEvent::event_key();
 
         // Find the next pivot block.
         let mut pivot_decision = None;
@@ -366,13 +373,83 @@ where V: VMExecutor
                 bail!("Invalid pivot decision for block");
             }
 
-            for event in self.pow_handler.get_staking_events(
-                parent_pivot_decision.block_hash,
-                pivot_decision.block_hash,
-            ) {
-                new_pos_state.process_staking_event(event)?;
+            if !catch_up_mode {
+                // Verify if the proposer has packed all staking events as
+                // expected.
+                let staking_events = self.pow_handler.get_staking_events(
+                    parent_pivot_decision.block_hash,
+                    pivot_decision.block_hash,
+                );
+                let mut staking_events_iter = staking_events.iter();
+                for vm_output in vm_outputs.clone().into_iter() {
+                    for event in vm_output.events() {
+                        // check for pivot block selection.
+                        if *event.key() == register_event_key {
+                            let register_event =
+                                RegisterEvent::from_bytes(event.event_data())?;
+                            match register_event.matches_staking_event(staking_events_iter.next().ok_or(anyhow!("More staking transactions packed than actual pow events"))?) {
+                                Ok(true) => {}
+                                Ok(false) => bail!("Packed staking transactions unmatch PoW events)"),
+                                Err(e) => diem_error!("error decoding pow events: err={:?}", e),
+                            }
+                            new_pos_state
+                                .register_node(register_event.node_id)?;
+                        } else if *event.key() == update_voting_power_event_key
+                        {
+                            let update_voting_power_event =
+                                UpdateVotingPowerEvent::from_bytes(
+                                    event.event_data(),
+                                )?;
+                            match update_voting_power_event.matches_staking_event(staking_events_iter.next().ok_or(anyhow!("More staking transactions packed than actual pow events"))?) {
+                                Ok(true) => {}
+                                Ok(false) => bail!("Packed staking transactions unmatch PoW events)"),
+                                Err(e) => diem_error!("error decoding pow events: err={:?}", e),
+                            }
+                            new_pos_state.update_voting_power(
+                                &update_voting_power_event.node_address,
+                                update_voting_power_event.voting_power,
+                            )?;
+                        }
+                    }
+                }
+                ensure!(
+                    staking_events_iter.next().is_none(),
+                    "Not all PoW staking events are packed"
+                );
+            } else {
+                for vm_output in vm_outputs.clone().into_iter() {
+                    for event in vm_output.events() {
+                        // check for pivot block selection.
+                        if *event.key() == register_event_key {
+                            let register_event =
+                                RegisterEvent::from_bytes(event.event_data())?;
+                            new_pos_state
+                                .register_node(register_event.node_id)?;
+                        } else if *event.key() == update_voting_power_event_key
+                        {
+                            let update_voting_power_event =
+                                UpdateVotingPowerEvent::from_bytes(
+                                    event.event_data(),
+                                )?;
+                            new_pos_state.update_voting_power(
+                                &update_voting_power_event.node_address,
+                                update_voting_power_event.voting_power,
+                            )?;
+                        }
+                    }
+                }
             }
         } else {
+            // No new pivot decision, so there should be no staking-related
+            // transactions.
+            if vm_outputs.iter().any(|output| {
+                output.events().iter().any(|event| {
+                    *event.key() == retire_event_key
+                        || *event.key() == update_voting_power_event_key
+                })
+            }) {
+                bail!("Should not pack staking related transactions");
+            }
             pivot_decision = Some(parent_pivot_decision);
         }
         let next_epoch_state = new_pos_state.next_view()?;

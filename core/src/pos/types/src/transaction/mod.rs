@@ -55,7 +55,8 @@ pub use script::{
 use crate::{
     block_info::{PivotBlockDecision, Round},
     term_state::{
-        ElectionEvent, RegisterEvent, RetireEvent, UpdateVotingPowerEvent,
+        ElectionEvent, NodeID, RegisterEvent, RetireEvent,
+        UpdateVotingPowerEvent,
     },
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
@@ -63,6 +64,7 @@ use crate::{
     },
 };
 use move_core_types::language_storage::TypeTag;
+use pow_types::StakingEvent;
 use std::ops::Deref;
 pub use transaction_argument::{
     parse_transaction_argument, TransactionArgument,
@@ -311,6 +313,58 @@ impl RawTransaction {
             expiration_timestamp_secs: u64::max_value(),
             chain_id,
         }
+    }
+
+    pub fn from_staking_event(
+        staking_event: &StakingEvent, sender: AccountAddress,
+    ) -> Result<Self> {
+        let payload = match staking_event {
+            StakingEvent::Register((
+                addr_h256,
+                bls_pub_key_bytes,
+                vrf_pub_key_bytes,
+            )) => {
+                let addr = AccountAddress::from_bytes(addr_h256)?;
+                let public_key =
+                    ConsensusPublicKey::try_from(bls_pub_key_bytes.as_slice())?;
+                let vrf_public_key = ConsensusVRFPublicKey::try_from(
+                    vrf_pub_key_bytes.as_slice(),
+                )?;
+                let node_id =
+                    NodeID::new(public_key.clone(), vrf_public_key.clone());
+                ensure!(
+                    node_id.addr == addr,
+                    "register event has unmatching address and keys"
+                );
+                TransactionPayload::Register(RegisterPayload {
+                    public_key,
+                    vrf_public_key,
+                })
+            }
+            StakingEvent::IncreaseStake((addr_h256, updated_voting_power)) => {
+                let addr = AccountAddress::from_bytes(addr_h256)?;
+                TransactionPayload::UpdateVotingPower(
+                    UpdateVotingPowerPayload {
+                        node_address: addr,
+                        voting_power: *updated_voting_power,
+                    },
+                )
+            }
+        };
+        Ok(RawTransaction {
+            sender,
+            sequence_number: 0,
+            payload,
+            // Since write-set transactions bypass the VM, these fields aren't
+            // relevant.
+            max_gas_amount: 0,
+            gas_unit_price: 0,
+            gas_currency_code: XUS_NAME.to_owned(),
+            // Write-set transactions are special and important and shouldn't
+            // expire.
+            expiration_timestamp_secs: u64::max_value(),
+            chain_id: Default::default(),
+        })
     }
 
     /// Signs the given `RawTransaction`. Note that this consumes the

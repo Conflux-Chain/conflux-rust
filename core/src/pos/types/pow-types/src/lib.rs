@@ -23,7 +23,7 @@ pub trait PowInterface: Send + Sync {
 pub enum StakingEvent {
     /// (address, bls_public_key, vrf_public_key)
     Register((H256, Vec<u8>, Vec<u8>)),
-    /// (address, increased_voting_power)
+    /// (address, updated_voting_power)
     IncreaseStake((H256, u64)),
 }
 

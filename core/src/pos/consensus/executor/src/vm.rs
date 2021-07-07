@@ -122,6 +122,12 @@ impl VMExecutor for FakeVM {
                             // `post_process_state_compute_result`.
                             vec![pivot_decision.to_event()]
                         }
+                        TransactionPayload::Register(register) => {
+                            vec![register.to_event()]
+                        }
+                        TransactionPayload::UpdateVotingPower(update) => {
+                            vec![update.to_event()]
+                        }
                         _ => {
                             return Err(VMStatus::Error(
                                 StatusCode::CFX_UNEXPECTED_TX,
