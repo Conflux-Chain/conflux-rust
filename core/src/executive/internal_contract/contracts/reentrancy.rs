@@ -14,7 +14,7 @@ use crate::{
 };
 use cfx_parameters::internal_contract_addresses::ANTI_REENTRANCY_CONTRACT_ADDRESS;
 use cfx_state::state_trait::StateOpsTrait;
-use cfx_types::{Address, U256};
+use cfx_types::{address_util::AddressUtil, Address, U256};
 
 make_solidity_contract! {
     pub struct AntiReentrancyConfig(ANTI_REENTRANCY_CONTRACT_ADDRESS,
@@ -48,16 +48,18 @@ impl ExecutionTrait for AllowReentrancy {
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        let storage_owner = params.storage_owner;
-        let contract_address = params.sender;
-        set_reentrancy_allowance(
-            &contract_address,
-            input,
-            context.state,
-            context.substate,
-            storage_owner,
-        )
-        .map_err(|err| err.into())
+        if params.sender.is_contract_address() {
+            let storage_owner = params.storage_owner;
+            let contract_address = params.sender;
+            set_reentrancy_allowance(
+                &contract_address,
+                input,
+                context.state,
+                context.substate,
+                storage_owner,
+            )?
+        }
+        Ok(())
     }
 }
 
@@ -73,15 +75,20 @@ impl ExecutionTrait for AllowReentrancyByAdmin {
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        let storage_owner = params.storage_owner;
-        set_reentrancy_allowance(
-            &input.0,
-            input.1,
-            context.state,
-            context.substate,
-            storage_owner,
-        )
-        .map_err(|err| err.into())
+        let (contract, allowance) = input;
+        if contract.is_contract_address()
+            && &params.sender == &context.state.admin(&contract)?
+        {
+            let storage_owner = params.storage_owner;
+            set_reentrancy_allowance(
+                &contract,
+                allowance,
+                context.state,
+                context.substate,
+                storage_owner,
+            )?
+        }
+        Ok(())
     }
 }
 
