@@ -7,8 +7,8 @@ use cfx_addr::Network;
 use cfx_types::{H160, H256, U256, U64};
 use cfxcore::{
     block_data_manager::{BlockDataManager, DataVersionTuple},
-    consensus::ConsensusGraphInner,
-    pow, SharedConsensusGraph,
+    consensus::{ConsensusConfig, ConsensusGraphInner},
+    pow, ConsensusGraphTrait, SharedConsensusGraph,
 };
 use jsonrpc_core::Error as RpcError;
 use primitives::{
@@ -18,7 +18,7 @@ use primitives::{
         TRANSACTION_OUTCOME_SUCCESS,
     },
     Block as PrimitiveBlock, BlockHeader as PrimitiveBlockHeader,
-    BlockHeaderBuilder, EpochNumber, TransactionIndex,
+    BlockHeaderBuilder, TransactionIndex,
 };
 use serde::{
     de::{Deserialize, Deserializer, Error, Unexpected},
@@ -29,28 +29,6 @@ use std::{convert::TryInto, sync::Arc};
 
 use crate::rpc::types::{transaction::PackedOrExecuted, Receipt, Transaction};
 use cfx_bytes::Bytes;
-
-fn block_number_by_hash(
-    data_man: &Arc<BlockDataManager>, epoch_hashes: Vec<H256>, hash: &H256,
-) -> Option<u64> {
-    let position = match epoch_hashes.iter().position(|h| h == hash) {
-        Some(p) => p as u64,
-        None => {
-            // this can happen if `hash` used to belong to epoch X,
-            // but there was a pivot chain reorg and `hash` has not
-            // been re-executed yet.
-            return None;
-        }
-    };
-
-    let pivot = epoch_hashes.last().expect("epoch should not be empty");
-
-    let base = data_man
-        .get_epoch_execution_context(&pivot)?
-        .start_block_number;
-
-    Some(base + position)
-}
 
 #[derive(PartialEq, Debug)]
 pub enum BlockTransactions {
@@ -162,6 +140,7 @@ pub struct Block {
 impl Block {
     pub fn new(
         b: &PrimitiveBlock, network: Network,
+        consensus: &dyn ConsensusGraphTrait<ConsensusConfig = ConsensusConfig>,
         consensus_inner: &ConsensusGraphInner,
         data_man: &Arc<BlockDataManager>, include_txs: bool,
     ) -> Result<Self, String>
@@ -248,15 +227,11 @@ impl Block {
 
         let epoch_number = consensus_inner
             .get_block_epoch_number(&block_hash)
-            .or_else(|| data_man.block_epoch_number(&block_hash));
+            .or_else(|| data_man.block_epoch_number(&block_hash))
+            .map(Into::into);
 
-        let block_number = match epoch_number {
-            None => None,
-            Some(e) => {
-                let epoch_hashes = consensus_inner.block_hashes_by_epoch(e)?;
-                block_number_by_hash(data_man, epoch_hashes, &block_hash)
-            }
-        };
+        let block_number =
+            consensus.get_block_number(&block_hash)?.map(Into::into);
 
         // get the block.gas_used
         let tx_len = b.transactions.len();
@@ -303,8 +278,8 @@ impl Block {
                 b.block_header.transactions_root().clone(),
             ),
             // PrimitiveBlock does not contain this information
-            epoch_number: epoch_number.map(Into::into),
-            block_number: block_number.map(Into::into),
+            epoch_number,
+            block_number,
             // fee system
             gas_used,
             gas_limit: b.block_header.gas_limit().into(),
@@ -437,21 +412,10 @@ impl Header {
 
         let epoch_number = consensus
             .get_block_epoch_number(&hash)
-            .or_else(|| consensus.get_data_manager().block_epoch_number(&hash));
+            .or_else(|| consensus.get_data_manager().block_epoch_number(&hash))
+            .map(Into::into);
 
-        let block_number = match epoch_number {
-            None => None,
-            Some(e) => {
-                let hashes = consensus
-                    .get_block_hashes_by_epoch(EpochNumber::Number(e))?;
-
-                block_number_by_hash(
-                    consensus.get_data_manager(),
-                    hashes,
-                    &hash,
-                )
-            }
-        };
+        let block_number = consensus.get_block_number(&hash)?.map(Into::into);
 
         let referee_hashes =
             h.referee_hashes().iter().map(|x| H256::from(*x)).collect();
@@ -466,8 +430,8 @@ impl Header {
             deferred_logs_bloom_hash: H256::from(*h.deferred_logs_bloom_hash()),
             blame: U64::from(h.blame()),
             transactions_root: H256::from(*h.transactions_root()),
-            epoch_number: epoch_number.map(Into::into),
-            block_number: block_number.map(Into::into),
+            epoch_number,
+            block_number,
             gas_limit: h.gas_limit().into(),
             timestamp: h.timestamp().into(),
             difficulty: h.difficulty().into(),
