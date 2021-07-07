@@ -43,61 +43,69 @@ class ContextInternalContractTest(ConfluxTestFramework):
         #                  .- | B | <..................
         #                      ---
 
+        #               0 --- A --- C --- B --- D ---
+        # block number: x  | x+1 | x+2 | x+3 | x+4 |
+        # epoch number: y  | y+1 | y+2 |   y + 3   |
+
+        start_nonce = self.rpc.get_nonce(self.rpc.GENESIS_ADDR)
+
         epoch_number_p = int(self.rpc.block_by_epoch("latest_mined")['epochNumber'], 0)
         block_number_p = int(self.rpc.block_by_epoch("latest_mined")['epochNumber'], 0)
         assert_equal(epoch_number_p, block_number_p)
 
         block_p = self.rpc.block_by_epoch("latest_mined")['hash']
-        block_a = self.rpc.generate_custom_block(parent_hash = block_p, referee = [], txs = [])
-        block_b = self.rpc.generate_custom_block(parent_hash = block_p, referee = [], txs = [])
-        block_c = self.rpc.generate_custom_block(parent_hash = block_a, referee = [], txs = [])
-        block_d = self.rpc.generate_custom_block(parent_hash = block_c, referee = [block_b], txs = [])
 
-        # as if executed in P
-        block_number = self.rpc.call(contractAddr, encode_hex_0x(keccak(b"getBlockNumber()")), epoch="latest_state")
-        assert_equal(int(block_number, 0), block_number_p)
-        epoch_number = self.rpc.call(contractAddr, encode_hex_0x(keccak(b"getEpochNumber()")), epoch="latest_state")
-        assert_equal(int(epoch_number, 0), epoch_number_p)
+        txs = [
+            self.rpc.new_contract_tx(receiver=contractAddr, data_hex=encode_hex_0x(keccak(b"getBlockNumber()")), nonce = start_nonce + 0, sender=sender, priv_key=priv_key),
+            self.rpc.new_contract_tx(receiver=contractAddr, data_hex=encode_hex_0x(keccak(b"getEpochNumber()")), nonce = start_nonce + 1, sender=sender, priv_key=priv_key),
+            self.rpc.new_contract_tx(receiver=contractAddr, data_hex=encode_hex_0x(keccak(b"getBlockNumber()")), nonce = start_nonce + 2, sender=sender, priv_key=priv_key),
+            self.rpc.new_contract_tx(receiver=contractAddr, data_hex=encode_hex_0x(keccak(b"getEpochNumber()")), nonce = start_nonce + 3, sender=sender, priv_key=priv_key),
+            self.rpc.new_contract_tx(receiver=contractAddr, data_hex=encode_hex_0x(keccak(b"getBlockNumber()")), nonce = start_nonce + 4, sender=sender, priv_key=priv_key),
+            self.rpc.new_contract_tx(receiver=contractAddr, data_hex=encode_hex_0x(keccak(b"getEpochNumber()")), nonce = start_nonce + 5, sender=sender, priv_key=priv_key),
+            self.rpc.new_contract_tx(receiver=contractAddr, data_hex=encode_hex_0x(keccak(b"getBlockNumber()")), nonce = start_nonce + 6, sender=sender, priv_key=priv_key),
+            self.rpc.new_contract_tx(receiver=contractAddr, data_hex=encode_hex_0x(keccak(b"getEpochNumber()")), nonce = start_nonce + 7, sender=sender, priv_key=priv_key),
+        ]
 
-        block_e = self.rpc.generate_custom_block(parent_hash = block_d, referee = [], txs = [])
+        block_a = self.rpc.generate_custom_block(parent_hash = block_p, referee = [], txs = txs[0:2])
+        block_c = self.rpc.generate_custom_block(parent_hash = block_a, referee = [], txs = txs[2:4])
+        block_b = self.rpc.generate_custom_block(parent_hash = block_p, referee = [], txs = txs[4:6])
+        block_d = self.rpc.generate_custom_block(parent_hash = block_c, referee = [block_b], txs = txs[6:8])
 
-        # as if executed in A (P + 1)
-        block_number = self.rpc.call(contractAddr, encode_hex_0x(keccak(b"getBlockNumber()")), epoch="latest_state")
-        assert_equal(int(block_number, 0), block_number_p + 1)
-        epoch_number = self.rpc.call(contractAddr, encode_hex_0x(keccak(b"getEpochNumber()")), epoch="latest_state")
-        assert_equal(int(epoch_number, 0), epoch_number_p + 1)
+        # make sure transactions have been executed
+        parent_hash = block_d
 
-        block_f = self.rpc.generate_custom_block(parent_hash = block_e, referee = [], txs = [])
+        for _ in range(5):
+            block = self.rpc.generate_custom_block(parent_hash = parent_hash, referee = [], txs = [])
+            parent_hash = block
 
-        # as if executed in C (A + 1)
-        block_number = self.rpc.call(contractAddr, encode_hex_0x(keccak(b"getBlockNumber()")), epoch="latest_state")
-        assert_equal(int(block_number, 0), block_number_p + 2)
-        epoch_number = self.rpc.call(contractAddr, encode_hex_0x(keccak(b"getEpochNumber()")), epoch="latest_state")
-        assert_equal(int(epoch_number, 0), epoch_number_p + 2)
+        # transactions in block A
+        # note: topic-1 of each log is the emitted block/epoch number
+        block_number_a = int(self.rpc.get_transaction_receipt(txs[0].hash_hex())['logs'][0]['topics'][1], 16)
+        epoch_number_a = int(self.rpc.get_transaction_receipt(txs[1].hash_hex())['logs'][0]['topics'][1], 16)
 
-        block_g = self.rpc.generate_custom_block(parent_hash = block_f, referee = [], txs = [])
+        assert_equal(block_number_a, block_number_p + 1)
+        assert_equal(epoch_number_a, epoch_number_p + 1)
 
-        # as if executed in B (C + 1)
-        block_number = self.rpc.call(contractAddr, encode_hex_0x(keccak(b"getBlockNumber()")), epoch="latest_state")
-        assert_equal(int(block_number, 0), block_number_p + 3)
-        epoch_number = self.rpc.call(contractAddr, encode_hex_0x(keccak(b"getEpochNumber()")), epoch="latest_state")
-        assert_equal(int(epoch_number, 0), epoch_number_p + 3)
+        # transactions in block B
+        block_number_b = int(self.rpc.get_transaction_receipt(txs[4].hash_hex())['logs'][0]['topics'][1], 16)
+        epoch_number_b = int(self.rpc.get_transaction_receipt(txs[5].hash_hex())['logs'][0]['topics'][1], 16)
 
-        block_h = self.rpc.generate_custom_block(parent_hash = block_g, referee = [], txs = [])
+        assert_equal(block_number_b, block_number_p + 3)
+        assert_equal(epoch_number_b, epoch_number_p + 3)
 
-        # as if executed in E (D + 2)
-        block_number = self.rpc.call(contractAddr, encode_hex_0x(keccak(b"getBlockNumber()")), epoch="latest_state")
-        assert_equal(int(block_number, 0), block_number_p + 5) # !!!
-        epoch_number = self.rpc.call(contractAddr, encode_hex_0x(keccak(b"getEpochNumber()")), epoch="latest_state")
-        assert_equal(int(epoch_number, 0), epoch_number_p + 4) # !!!
+        # transactions in block C
+        block_number_c = int(self.rpc.get_transaction_receipt(txs[2].hash_hex())['logs'][0]['topics'][1], 16)
+        epoch_number_c = int(self.rpc.get_transaction_receipt(txs[3].hash_hex())['logs'][0]['topics'][1], 16)
 
-        # as if executed in E (D + 2)
-        epoch_d = int(self.rpc.block_by_hash(block_d)['epochNumber'], 0)
+        assert_equal(block_number_c, block_number_p + 2)
+        assert_equal(epoch_number_c, epoch_number_p + 2)
 
-        block_number = self.rpc.call(contractAddr, encode_hex_0x(keccak(b"getBlockNumber()")), epoch=hex(epoch_d))
-        assert_equal(int(block_number, 0), block_number_p + 5) # !!!
-        epoch_number = self.rpc.call(contractAddr, encode_hex_0x(keccak(b"getEpochNumber()")), epoch=hex(epoch_d))
-        assert_equal(int(epoch_number, 0), epoch_number_p + 4) # !!!
+        # transactions in block d
+        block_number_d = int(self.rpc.get_transaction_receipt(txs[6].hash_hex())['logs'][0]['topics'][1], 16)
+        epoch_number_d = int(self.rpc.get_transaction_receipt(txs[7].hash_hex())['logs'][0]['topics'][1], 16)
+
+        assert_equal(block_number_d, block_number_p + 4)
+        assert_equal(epoch_number_d, epoch_number_p + 3)
 
         self.log.info("Pass")
 
