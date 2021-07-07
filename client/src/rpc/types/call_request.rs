@@ -123,9 +123,13 @@ impl SendTxRequest {
             data: self.data.unwrap_or(Bytes::new(vec![])).into(),
         };
 
+        if tx.epoch_height == u64::MAX {
+            return Err("Can not sign Ethereum like transaction by RPC.".into());
+        }
+
         let password = password.map(Password::from);
         let sig = accounts
-            .sign(self.from.into(), password, tx.hash())
+            .sign(self.from.into(), password, tx.signature_hash())
             // TODO: sign error into secret store error codes.
             .map_err(|e| format!("failed to sign transaction: {:?}", e))?;
 

@@ -20,21 +20,15 @@
 
 //! Cost spec and other parameterisations for the EVM.
 
+use crate::spec::CommonParams;
 use cfx_types::U256;
+use primitives::BlockNumber;
 
 /// Definition of the cost spec and other parameterisations for the VM.
 #[derive(Debug, Clone)]
 pub struct Spec {
     /// Does it support exceptional failed code deposit
     pub exceptional_failed_code_deposit: bool,
-    /// Does it have a delegate cal
-    pub have_delegate_call: bool,
-    /// Does it have a CREATE2 instruction
-    pub have_create2: bool,
-    /// Does it have a REVERT instruction
-    pub have_revert: bool,
-    /// Does it have a EXTCODEHASH instruction
-    pub have_extcodehash: bool,
     /// VM stack limit
     pub stack_limit: usize,
     /// Max number of nested calls/creates
@@ -123,18 +117,6 @@ pub struct Spec {
     pub kill_empty: bool,
     /// Blockhash instruction gas cost.
     pub blockhash_gas: usize,
-    /// Static Call opcode enabled.
-    pub have_static_call: bool,
-    /// RETURNDATA and RETURNDATASIZE opcodes enabled.
-    pub have_return_data: bool,
-    /// BEGINSUB, JUMPSUB, and RETURNSUB opcodes enabled.
-    pub have_subs: bool,
-    /// CHAINID enabled.
-    pub have_chain_id: bool,
-    /// SELFBALANCE enabled.
-    pub have_self_balance: bool,
-    /// SHL, SHR, SAR opcodes enabled.
-    pub have_bitwise_shifting: bool,
     /// Kill basic accounts below this balance if touched.
     pub kill_dust: CleanDustMode,
     /// VM execution does not increase null signed address nonce if this field
@@ -142,6 +124,20 @@ pub struct Spec {
     pub keep_unsigned_nonce: bool,
     /// Wasm extra specs, if wasm activated
     pub wasm: Option<WasmCosts>,
+    /// Start nonce for a new contract
+    pub contract_start_nonce: U256,
+    /// Start nonce for a new account
+    pub account_start_nonce: U256,
+    /// CIP-62: Enable EC-related builtin contract
+    pub cip62: bool,
+    /// CIP-64: Get current epoch number through internal contract
+    pub cip64: bool,
+    /// CIP-71: Configurable anti-reentrancy: if configuration enabled
+    pub cip71a: bool,
+    /// CIP-71: Configurable anti-reentrancy: existing bug fixed
+    pub cip71b: bool,
+    /// CIP-72: Accept Ethereum transaction signature
+    pub cip72: bool,
 }
 
 /// Wasm cost table
@@ -213,25 +209,16 @@ pub enum CleanDustMode {
 }
 
 impl Spec {
-    pub fn new(
-        max_code_size: usize, fix_exp: bool, no_empty: bool, kill_empty: bool,
-    ) -> Spec {
+    /// The spec when Conflux launches the mainnet. It should never changed
+    /// since the mainnet has launched.
+    pub const fn genesis_spec() -> Spec {
         Spec {
             exceptional_failed_code_deposit: true,
-            have_delegate_call: true,
-            have_create2: false,
-            have_revert: false,
-            have_return_data: false,
-            have_bitwise_shifting: false,
-            have_extcodehash: false,
-            have_subs: false,
-            have_chain_id: false,
-            have_self_balance: false,
             stack_limit: 1024,
             max_depth: 1024,
             tier_step_gas: [0, 2, 3, 5, 8, 10, 20, 0],
             exp_gas: 10,
-            exp_byte_gas: if fix_exp { 50 } else { 10 },
+            exp_byte_gas: 50,
             sha3_gas: 30,
             sha3_word_gas: 6,
             sload_gas: 200,
@@ -251,7 +238,7 @@ impl Spec {
             memory_gas: 3,
             quad_coeff_div: 512,
             create_data_gas: 200,
-            create_data_limit: max_code_size,
+            create_data_limit: 49152,
             tx_gas: 21000,
             tx_create_gas: 53000,
             tx_data_zero_gas: 4,
@@ -264,29 +251,38 @@ impl Spec {
             suicide_gas: 5000,
             suicide_to_new_account_cost: 25000,
             sub_gas_cap_divisor: Some(64),
-            no_empty,
-            kill_empty,
+            no_empty: true,
+            kill_empty: true,
             blockhash_gas: 20,
-            have_static_call: false,
+            contract_start_nonce: U256([1, 0, 0, 0]), /* If `no_empty` is
+                                                       * false, it
+                                                       * should be 0. */
+            account_start_nonce: U256([0, 0, 0, 0]),
             kill_dust: CleanDustMode::Off,
             keep_unsigned_nonce: false,
             wasm: None,
+            cip62: false,
+            cip64: false,
+            cip71a: false,
+            cip71b: false,
+            cip72: false,
         }
     }
 
-    pub fn new_spec() -> Spec {
-        let mut spec = Self::new(49152, true, true, true);
-        spec.have_create2 = true;
-        spec.have_revert = true;
-        spec.have_static_call = true;
-        spec.have_return_data = true;
-        spec.have_bitwise_shifting = true;
-        spec.have_extcodehash = true;
-        spec.have_subs = true;
-        spec.have_chain_id = true;
-        spec.have_self_balance = true;
+    pub fn new_spec_from_common_params(
+        params: &CommonParams, number: BlockNumber,
+    ) -> Spec {
+        let mut spec = Self::genesis_spec();
+        spec.cip62 = number >= params.transition_numbers.cip62;
+        spec.cip64 = number >= params.transition_numbers.cip64;
+        spec.cip71a = number >= params.transition_numbers.cip71a;
+        spec.cip71b = number >= params.transition_numbers.cip71b;
+        spec.cip72 = number >= params.transition_numbers.cip72b;
         spec
     }
+
+    #[cfg(test)]
+    pub fn new_spec_for_test() -> Spec { Self::genesis_spec() }
 
     /// Returns wasm spec
     ///
@@ -295,27 +291,9 @@ impl Spec {
         // *** Prefer PANIC here instead of silently breaking consensus! ***
         self.wasm.as_ref().expect("Wasm spec expected to exist while checking wasm contract. Misconfigured client?")
     }
-
-    pub fn account_start_nonce(&self, _block_number: u64) -> U256 {
-        /*
-        let account_start_nonce = (_block_number * ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT as u64).int();
-        */
-        U256::zero()
-    }
-
-    pub fn contract_start_nonce(&self, _block_number: u64) -> U256 {
-        /*
-        let contract_start_nonce = (_block_number * ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT as u64).int();
-        */
-        if self.no_empty {
-            U256::one()
-        } else {
-            U256::zero()
-        }
-    }
 }
 
 #[cfg(test)]
 impl Default for Spec {
-    fn default() -> Self { Spec::new_spec() }
+    fn default() -> Self { Spec::new_spec_for_test() }
 }

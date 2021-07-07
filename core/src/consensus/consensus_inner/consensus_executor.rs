@@ -13,10 +13,11 @@ use crate::{
     },
     executive::{
         revert_reason_decode, ExecutionError, ExecutionOutcome, Executive,
-        InternalContractMap, TransactOptions,
+        TransactOptions,
     },
     machine::Machine,
     rpc_errors::{invalid_params_check, Result as RpcResult},
+    spec::genesis::initialize_internal_contract_accounts,
     state::{
         prefetcher::{
             prefetch_accounts, ExecutionStatePrefetcher, PrefetchTaskHandle,
@@ -24,7 +25,10 @@ use crate::{
         State,
     },
     trace::trace::{ExecTrace, TransactionExecTraces},
-    verification::{compute_receipts_root, VerificationConfig},
+    verification::{
+        compute_receipts_root, VerificationConfig, VerifyTxLocalMode,
+        VerifyTxMode,
+    },
     vm::{Env, Error as VmErr},
     SharedTransactionPool,
 };
@@ -38,7 +42,10 @@ use cfx_storage::{
     defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
     StorageManagerTrait,
 };
-use cfx_types::{BigEndianHash, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512};
+use cfx_types::{
+    address_util::AddressUtil, BigEndianHash, H160, H256, KECCAK_EMPTY_BLOOM,
+    U256, U512,
+};
 use core::convert::TryFrom;
 use hash::KECCAK_EMPTY_LIST_RLP;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
@@ -1010,9 +1017,7 @@ impl ConsensusExecutionHandler {
                 &reward_execution_info,
                 on_local_pivot,
                 debug_record.as_deref_mut(),
-                self.machine
-                    .spec(start_block_number)
-                    .account_start_nonce(start_block_number),
+                self.machine.spec(start_block_number).account_start_nonce,
             );
         }
 
@@ -1100,7 +1105,6 @@ impl ConsensusExecutionHandler {
         drop(prefetch_join_handles);
 
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
-        let internal_contract_map = InternalContractMap::new();
         let mut epoch_receipts = Vec::with_capacity(epoch_blocks.len());
         let mut to_pending = Vec::new();
         let mut block_number = start_block_number;
@@ -1131,6 +1135,11 @@ impl ConsensusExecutionHandler {
             let spec = self.machine.spec(env.number);
             let secondary_reward =
                 state.bump_block_number_accumulate_interest();
+            initialize_internal_contract_accounts(
+                state,
+                self.machine.internal_contracts().initialized_at(env.number),
+                spec.contract_start_nonce,
+            );
             block_number += 1;
 
             last_block_hash = block.hash();
@@ -1144,24 +1153,12 @@ impl ConsensusExecutionHandler {
 
                 let r = if self.config.executive_trace {
                     let options = TransactOptions::with_tracing();
-                    Executive::new(
-                        state,
-                        &env,
-                        self.machine.as_ref(),
-                        &spec,
-                        &internal_contract_map,
-                    )
-                    .transact(transaction, options)?
+                    Executive::new(state, &env, self.machine.as_ref(), &spec)
+                        .transact(transaction, options)?
                 } else {
                     let options = TransactOptions::with_no_tracing();
-                    Executive::new(
-                        state,
-                        &env,
-                        self.machine.as_ref(),
-                        &spec,
-                        &internal_contract_map,
-                    )
-                    .transact(transaction, options)?
+                    Executive::new(state, &env, self.machine.as_ref(), &spec)
+                        .transact(transaction, options)?
                 };
 
                 let gas_fee;
@@ -1673,7 +1670,6 @@ impl ConsensusExecutionHandler {
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
     ) -> RpcResult<ExecutionOutcome> {
-        let internal_contract_map = InternalContractMap::new();
         let best_block_header = self.data_man.block_header_by_hash(epoch_id);
         if best_block_header.is_none() {
             bail!("invalid epoch id");
@@ -1684,13 +1680,17 @@ impl ConsensusExecutionHandler {
             Some(v) => v.start_block_number + epoch_size as u64,
             None => bail!("cannot obtain the execution context. Database is potentially corrupted!"),
         };
+        let spec = self.machine.spec(start_block_number);
+        let transitions = &self.machine.params().transition_heights;
 
         invalid_params_check(
             "tx",
-            self.verification_config.verify_transaction_in_block(
+            self.verification_config.verify_transaction_common(
                 tx,
                 tx.chain_id,
                 block_height,
+                transitions,
+                VerifyTxMode::Local(VerifyTxLocalMode::Full, &spec),
             ),
         )?;
 
@@ -1717,9 +1717,15 @@ impl ConsensusExecutionHandler {
         ))?;
         drop(state_availability_boundary);
 
+        let author = {
+            let mut address = H160::random();
+            address.set_user_account_type_bits();
+            address
+        };
+
         let env = Env {
             number: start_block_number,
-            author: H160::from(rand::random::<[u8; 20]>()),
+            author,
             timestamp: time_stamp,
             difficulty: Default::default(),
             accumulated_gas_used: U256::zero(),
@@ -1731,13 +1737,8 @@ impl ConsensusExecutionHandler {
                 .transaction_epoch_bound,
         };
         let spec = self.machine.spec(env.number);
-        let mut ex = Executive::new(
-            &mut state,
-            &env,
-            self.machine.as_ref(),
-            &spec,
-            &internal_contract_map,
-        );
+        let mut ex =
+            Executive::new(&mut state, &env, self.machine.as_ref(), &spec);
         let r = ex.transact_virtual(tx);
         trace!("Execution result {:?}", r);
         Ok(r?)

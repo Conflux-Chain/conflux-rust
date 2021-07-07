@@ -16,7 +16,7 @@ use cfx_types::{address_util::AddressUtil, Address, U256};
 use rustc_hex::FromHex;
 
 make_solidity_contract! {
-    pub struct SponsorWhitelistControl(SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, generate_fn_table, activate_at: "genesis");
+    pub struct SponsorWhitelistControl(SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, generate_fn_table, "active_at_genesis");
 }
 fn generate_fn_table() -> SolFnTable {
     make_function_table!(
@@ -35,7 +35,7 @@ fn generate_fn_table() -> SolFnTable {
         RemovePrivilegeByAdmin
     )
 }
-group_impl_activate_at!(
+group_impl_is_active!(
     "genesis",
     SetSponsorForGas,
     SetSponsorForCollateral,
@@ -72,7 +72,7 @@ impl ExecutionTrait for SetSponsorForGas {
             context.state,
             context.substate,
             tracer,
-            context.spec.account_start_nonce(context.env.number),
+            context.spec.account_start_nonce,
         )
     }
 }
@@ -96,7 +96,7 @@ impl ExecutionTrait for SetSponsorForCollateral {
             context.state,
             context.substate,
             tracer,
-            context.spec.account_start_nonce(context.env.number),
+            context.spec.account_start_nonce,
         )
     }
 }

@@ -4,4 +4,4 @@
 
 pub mod genesis;
 mod spec;
-pub use self::spec::CommonParams;
+pub use self::spec::{CommonParams, TransitionsEpochHeight};

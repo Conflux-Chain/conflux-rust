@@ -2,9 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{
-    context::OriginInfo, Executed, ExecutionError, InternalContractMap,
-};
+use super::{context::OriginInfo, Executed, ExecutionError};
 use crate::{
     builtin::Builtin,
     bytes::Bytes,
@@ -35,8 +33,10 @@ use cfx_state::{
 use cfx_statedb::Result as DbResult;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256, U512, U64};
 use primitives::{
-    receipt::StorageChange, storage::STORAGE_LAYOUT_REGULAR_V0,
-    transaction::Action, SignedTransaction, StorageLayout,
+    receipt::StorageChange,
+    storage::STORAGE_LAYOUT_REGULAR_V0,
+    transaction::{Action, TransactionType},
+    SignedTransaction, StorageLayout,
 };
 use std::{
     collections::HashSet,
@@ -212,7 +212,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
         parent_static_flag: bool,
-        internal_contract_map: &'a InternalContractMap,
     ) -> Self
     {
         trace!(
@@ -235,11 +234,10 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         {
             trace!("CallBuiltin");
             CallCreateExecutiveKind::CallBuiltin(builtin)
-        } else if let Some(internal) = internal_contract_map.contract(
-            &params.code_address,
-            env.number,
-            spec,
-        ) {
+        } else if let Some(internal) = machine
+            .internal_contracts()
+            .contract(&params.code_address, spec)
+        {
             debug!(
                 "CallInternalContract: address={:?} data={:?}",
                 params.code_address, params.data
@@ -263,7 +261,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
             substate,
             /* is_create: */ false,
             static_flag,
-            internal_contract_map,
         );
         Self {
             context,
@@ -279,7 +276,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     pub fn new_create_raw(
         params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
-        static_flag: bool, internal_contract_map: &'a InternalContractMap,
+        static_flag: bool,
     ) -> Self
     {
         trace!(
@@ -304,7 +301,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
             substate,
             /* is_create */ true,
             static_flag,
-            internal_contract_map,
         );
 
         Self {
@@ -517,7 +513,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                 // It is a bug in the Parity version.
                 &mut self.context.substate,
                 Some(STORAGE_LAYOUT_REGULAR_V0),
-                spec.contract_start_nonce(self.context.env.number),
+                spec.contract_start_nonce,
             )
         } else {
             Self::transfer_exec_balance(
@@ -525,7 +521,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                 spec,
                 state,
                 &mut self.context.substate,
-                spec.account_start_nonce(self.context.env.number),
+                spec.account_start_nonce,
             )
         };
         if let Err(err) = db_result {
@@ -703,7 +699,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                     parent.factory,
                     parent.context.depth + 1,
                     parent.context.static_flag,
-                    parent.context.internal_contract_map,
                 ),
                 /* caller */ parent,
             ),
@@ -717,7 +712,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                     parent.factory,
                     parent.context.depth + 1,
                     parent.context.static_flag,
-                    parent.context.internal_contract_map,
                 ),
                 /* callee */ parent,
             ),
@@ -787,7 +781,6 @@ pub struct ExecutiveGeneric<
     spec: &'a Spec,
     depth: usize,
     static_flag: bool,
-    internal_contract_map: &'a InternalContractMap,
 }
 
 impl<
@@ -799,7 +792,7 @@ impl<
     /// Basic constructor.
     pub fn new(
         state: &'a mut State, env: &'a Env, machine: &'a Machine,
-        spec: &'a Spec, internal_contract_map: &'a InternalContractMap,
+        spec: &'a Spec,
     ) -> Self
     {
         ExecutiveGeneric {
@@ -809,7 +802,6 @@ impl<
             spec,
             depth: 0,
             static_flag: false,
-            internal_contract_map,
         }
     }
 
@@ -843,7 +835,6 @@ impl<
             &vm_factory,
             self.depth,
             self.static_flag,
-            self.internal_contract_map,
         )
         .consume(self.state, substate, tracer);
 
@@ -864,7 +855,6 @@ impl<
             &vm_factory,
             self.depth,
             self.static_flag,
-            self.internal_contract_map,
         )
         .consume(self.state, substate, tracer);
 
@@ -884,7 +874,7 @@ impl<
                 &sender,
                 &(needed_balance - balance),
                 CleanupMode::NoEmpty,
-                self.spec.account_start_nonce(self.env.number),
+                self.spec.account_start_nonce,
             )?;
         }
         let options = TransactOptions::with_tracing();
@@ -914,23 +904,22 @@ impl<
         }
 
         // Validate transaction epoch height.
-        match VerificationConfig::verify_transaction_epoch_height(
-            tx,
-            self.env.epoch_height,
-            self.env.transaction_epoch_bound,
-        ) {
-            Err(_) => {
-                return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
-                    ToRepackError::EpochHeightOutOfBound {
-                        block_height: self.env.epoch_height,
-                        set: tx.epoch_height,
-                        transaction_epoch_bound: self
-                            .env
-                            .transaction_epoch_bound,
-                    },
-                ));
-            }
-            Ok(()) => {}
+        let eth_like_tx = spec.cip72
+            && tx.transaction_type() == TransactionType::EthereumLike;
+        if !eth_like_tx
+            && VerificationConfig::check_transaction_epoch_bound(
+                tx,
+                self.env.epoch_height,
+                self.env.transaction_epoch_bound,
+            ) != 0
+        {
+            return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
+                ToRepackError::EpochHeightOutOfBound {
+                    block_height: self.env.epoch_height,
+                    set: tx.epoch_height,
+                    transaction_epoch_bound: self.env.transaction_epoch_bound,
+                },
+            ));
         }
 
         let base_gas_required =
@@ -991,27 +980,40 @@ impl<
             total_cost += gas_cost
         }
 
-        let tx_storage_limit_in_drip =
-            U256::from(tx.storage_limit) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+        // Since the Ethereum transactions do not contain storage limit. All the
+        // storage limit will be regarded as u64::MAX. The EthereumLike
+        // transaction should bypass the balance for storage check in
+        // pre-execution.
+        let minimum_drip_required_for_storage = if eth_like_tx {
+            U256::zero()
+        } else {
+            U256::from(tx.storage_limit) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+        };
+        // No matter who pays the collateral, we only focuses on the storage
+        // limit of sender.
+        let total_storage_limit = if eth_like_tx {
+            U256::MAX
+        } else {
+            self.state.collateral_for_storage(&sender)?
+                + minimum_drip_required_for_storage
+        };
+
         let storage_sponsor_balance = if storage_sponsored {
             self.state.sponsor_balance_for_collateral(&code_address)?
         } else {
             0.into()
         };
-        // No matter who pays the collateral, we only focuses on the storage
-        // limit of sender.
-        let total_storage_limit = self.state.collateral_for_storage(&sender)?
-            + tx_storage_limit_in_drip;
+
         // Find the `storage_owner` in this execution.
         let storage_owner = {
             if storage_sponsored
-                && tx_storage_limit_in_drip <= storage_sponsor_balance
+                && minimum_drip_required_for_storage <= storage_sponsor_balance
             {
                 // sponsor will pay for collateral for storage
                 code_address
             } else {
                 // sender will pay for collateral for storage
-                total_cost += tx_storage_limit_in_drip.into();
+                total_cost += minimum_drip_required_for_storage.into();
                 sender
             }
         };
@@ -1022,7 +1024,7 @@ impl<
             sender_intended_cost += gas_cost
         }
         if !storage_sponsored {
-            sender_intended_cost += tx_storage_limit_in_drip.into()
+            sender_intended_cost += minimum_drip_required_for_storage.into()
         };
         // Sponsor is allowed however sender do not have enough balance to pay
         // for the extra gas because sponsor has run out of balance in
@@ -1035,7 +1037,7 @@ impl<
                 ToRepackError::NotEnoughCashFromSponsor {
                     required_gas_cost: gas_cost,
                     gas_sponsor_balance,
-                    required_storage_cost: tx_storage_limit_in_drip,
+                    required_storage_cost: minimum_drip_required_for_storage,
                     storage_sponsor_balance,
                 },
             ));
@@ -1063,10 +1065,8 @@ impl<
                     ToRepackError::SenderDoesNotExist,
                 ));
             }
-            self.state.inc_nonce(
-                &sender,
-                &self.spec.account_start_nonce(self.env.number),
-            )?;
+            self.state
+                .inc_nonce(&sender, &self.spec.account_start_nonce)?;
             self.state.sub_balance(
                 &sender,
                 &actual_gas_cost,
@@ -1078,7 +1078,7 @@ impl<
                     required: total_cost,
                     got: balance512,
                     actual_gas_cost: actual_gas_cost.clone(),
-                    max_storage_limit_cost: tx_storage_limit_in_drip,
+                    max_storage_limit_cost: minimum_drip_required_for_storage,
                 },
                 Executed::not_enough_balance_fee_charged(tx, &actual_gas_cost),
             ));
@@ -1087,10 +1087,8 @@ impl<
             // account does not exist (since she may be sponsored). Transaction
             // execution is guaranteed. Note that inc_nonce() will create a
             // new account if the account does not exist.
-            self.state.inc_nonce(
-                &sender,
-                &self.spec.account_start_nonce(self.env.number),
-            )?;
+            self.state
+                .inc_nonce(&sender, &self.spec.account_start_nonce)?;
         }
 
         // Subtract the transaction fee from sender or contract.
@@ -1149,7 +1147,6 @@ impl<
                     data: None,
                     call_type: CallType::None,
                     params_type: vm::ParamsType::Embedded,
-                    storage_limit_in_drip: total_storage_limit,
                 };
                 self.create(params, &mut substate, &mut options.tracer)
             }
@@ -1168,7 +1165,6 @@ impl<
                     data: Some(tx.data.clone()),
                     call_type: CallType::Call,
                     params_type: vm::ParamsType::Separate,
-                    storage_limit_in_drip: total_storage_limit,
                 };
                 self.call(params, &mut substate, &mut options.tracer)
             }
@@ -1184,7 +1180,7 @@ impl<
                         &sender,
                         &total_storage_limit,
                         &mut substate,
-                        self.spec.account_start_nonce(self.env.number),
+                        self.spec.account_start_nonce,
                     )?
                     .into_vm_result()
                     .and(Ok(finalize_res))
@@ -1251,7 +1247,7 @@ impl<
 
         let res = self.state.settle_collateral_for_all(
             &substate,
-            self.spec.account_start_nonce(self.env.number),
+            self.spec.account_start_nonce,
         )?;
         // The storage recycling process should never occupy new collateral.
         assert_eq!(res, CollateralCheckResult::Valid);
@@ -1272,7 +1268,7 @@ impl<
                     sponsor_for_gas.as_ref().unwrap(),
                     &sponsor_balance_for_gas,
                     cleanup_mode(&mut substate, self.spec),
-                    self.spec.account_start_nonce(self.env.number),
+                    self.spec.account_start_nonce,
                 )?;
                 self.state.sub_sponsor_balance_for_gas(
                     contract_address,
@@ -1284,7 +1280,7 @@ impl<
                     sponsor_for_collateral.as_ref().unwrap(),
                     &sponsor_balance_for_collateral,
                     cleanup_mode(&mut substate, self.spec),
-                    self.spec.account_start_nonce(self.env.number),
+                    self.spec.account_start_nonce,
                 )?;
                 self.state.sub_sponsor_balance_for_collateral(
                     contract_address,
@@ -1340,7 +1336,7 @@ impl<
                 &tx.sender(),
                 &refund_value,
                 cleanup_mode(&mut substate, self.spec),
-                self.spec.account_start_nonce(self.env.number),
+                self.spec.account_start_nonce,
             )?;
         };
 

@@ -2,20 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::message::Bytes;
+use crate::{message::Bytes, vm};
 use cfx_internal_common::ChainIdParams;
 use cfx_parameters::{
-    consensus::{
-        BN128_ENABLE_NUMBER, ONE_UCFX_IN_DRIP,
-        TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT,
-    },
+    consensus::{ONE_UCFX_IN_DRIP, TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT},
     consensus_internal::{
         ANTICONE_PENALTY_RATIO, INITIAL_BASE_MINING_REWARD_IN_UCFX,
-        MINING_REWARD_TANZANITE_IN_UCFX,
     },
 };
 use cfx_types::{Address, H256, U256, U512};
-use primitives::block::BlockHeight;
+use primitives::{block::BlockHeight, BlockNumber};
 use std::collections::BTreeMap;
 
 struct Spec {
@@ -73,12 +69,38 @@ pub struct CommonParams {
     /// Initial base rewards according to block height.
     pub base_block_rewards: BTreeMap<BlockHeight, U256>,
 
-    /// Number of first block where bn128 built-in contract enabled.
-    pub alt_bn128_transition: u64,
+    /// Set the internal contracts to state at the genesis blocks, even if it
+    /// is not activated.
+    pub early_set_internal_contracts_states: bool,
+    /// The upgrades activated at given block number.
+    pub transition_numbers: TransitionsBlockNumber,
+    /// The upgrades activated at given block height (a.k.a. epoch number).
+    pub transition_heights: TransitionsEpochHeight,
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct TransitionsBlockNumber {
+    /// CIP62: Enable EC-related builtin contract
+    pub cip62: BlockNumber,
+    /// CIP64: Get current epoch number through internal contract
+    pub cip64: BlockNumber,
+    /// CIP71: Configurable anti-reentrancy
+    pub cip71a: BlockNumber,
+    pub cip71b: BlockNumber,
+    /// CIP72: Accept Ethereum transaction signature
+    pub cip72b: BlockNumber,
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct TransitionsEpochHeight {
     /// The height to change block base reward.
     /// The block `custom` field of this height is required to be
     /// `tanzanite_transition_header_custom`.
-    pub tanzanite_transition: BlockHeight,
+    pub cip40: BlockHeight,
+    /// CIP76: Remove VM-related constraints in syncing blocks
+    pub cip76: BlockHeight,
+    /// CIP72: Accept Ethereum transaction signature
+    pub cip72a: BlockHeight,
 }
 
 impl Default for CommonParams {
@@ -96,32 +118,14 @@ impl Default for CommonParams {
             max_transaction_size: 300 * 1024,
             anticone_penalty_ratio: ANTICONE_PENALTY_RATIO,
             base_block_rewards,
-            alt_bn128_transition: BN128_ENABLE_NUMBER,
-            tanzanite_transition: 0,
+            early_set_internal_contracts_states: false,
+            transition_numbers: Default::default(),
+            transition_heights: Default::default(),
         }
     }
 }
 
 impl CommonParams {
-    pub fn common_params(
-        chain_id: ChainIdParams, anticone_penalty_ratio: u64,
-        tanzanite_transition: BlockHeight,
-    ) -> Self
-    {
-        let mut base_block_rewards = BTreeMap::new();
-        base_block_rewards.insert(0, INITIAL_BASE_MINING_REWARD_IN_UCFX.into());
-        base_block_rewards.insert(
-            tanzanite_transition,
-            MINING_REWARD_TANZANITE_IN_UCFX.into(),
-        );
-        let mut params = CommonParams::default();
-        params.chain_id = chain_id;
-        params.anticone_penalty_ratio = anticone_penalty_ratio;
-        params.tanzanite_transition = tanzanite_transition;
-        params.base_block_rewards = base_block_rewards;
-        params
-    }
-
     /// Return the base reward for a block.
     /// `past_block_count` may be used for reward decay again in the future.
     pub fn base_reward_in_ucfx(
@@ -136,10 +140,14 @@ impl CommonParams {
     }
 
     pub fn custom_prefix(&self, height: BlockHeight) -> Option<Vec<Bytes>> {
-        if height >= self.tanzanite_transition {
+        if height >= self.transition_heights.cip40 {
             Some(vec![TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
         } else {
             None
         }
+    }
+
+    pub fn spec(&self, number: BlockNumber) -> vm::Spec {
+        vm::Spec::new_spec_from_common_params(&self, number)
     }
 }

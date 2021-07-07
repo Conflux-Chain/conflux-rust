@@ -4,7 +4,7 @@
 
 // Transaction execution environment.
 use super::{
-    executive::*, suicide as suicide_impl, InternalContractMap,
+    executive::*, suicide as suicide_impl,
     InternalRefContext,
 };
 use crate::{
@@ -35,8 +35,6 @@ pub struct OriginInfo {
     /// This is the address of account who will pay collateral for storage in
     /// the whole execution.
     storage_owner: Address,
-    /// The upper bound of `collateral_for_storage` for `original_sender`
-    storage_limit_in_drip: U256,
     gas_price: U256,
     value: U256,
 }
@@ -48,7 +46,6 @@ impl OriginInfo {
             address: params.address,
             original_sender: params.original_sender,
             storage_owner: params.storage_owner,
-            storage_limit_in_drip: params.storage_limit_in_drip,
             gas_price: params.gas_price,
             value: match params.value {
                 ActionValue::Transfer(val) | ActionValue::Apparent(val) => val,
@@ -83,14 +80,13 @@ pub struct LocalContext<'a, Substate: SubstateTrait> {
     pub machine: &'a Machine,
     pub spec: &'a Spec,
     pub static_flag: bool,
-    pub internal_contract_map: &'a InternalContractMap,
 }
 
 impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
     pub fn new(
         env: &'a Env, machine: &'a Machine, spec: &'a Spec, depth: usize,
         origin: OriginInfo, substate: Substate, is_create: bool,
-        static_flag: bool, internal_contract_map: &'a InternalContractMap,
+        static_flag: bool,
     ) -> Self
     {
         LocalContext {
@@ -102,7 +98,6 @@ impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
             spec,
             is_create,
             static_flag,
-            internal_contract_map,
         }
     }
 
@@ -212,7 +207,6 @@ impl<
             sender: self.local_part.origin.address.clone(),
             original_sender: self.local_part.origin.original_sender,
             storage_owner: self.local_part.origin.storage_owner,
-            storage_limit_in_drip: self.local_part.origin.storage_limit_in_drip,
             gas: *gas,
             gas_price: self.local_part.origin.gas_price,
             value: ActionValue::Transfer(*value),
@@ -232,10 +226,7 @@ impl<
                     // The sender of a CREATE call is guaranteed to exist,
                     // therefore the start_nonce below
                     // doesn't matter.
-                    &self
-                        .local_part
-                        .spec
-                        .contract_start_nonce(self.local_part.env.number),
+                    &self.local_part.spec.contract_start_nonce,
                 )?;
             }
         }
@@ -251,12 +242,12 @@ impl<
     {
         trace!(target: "context", "call");
 
-        let (code, code_hash) = if let Some(contract) =
-            self.local_part.internal_contract_map.contract(
-                code_address,
-                self.local_part.env.number,
-                self.local_part.spec,
-            ) {
+        let (code, code_hash) = if let Some(contract) = self
+            .local_part
+            .machine
+            .internal_contracts()
+            .contract(code_address, self.local_part.spec)
+        {
             (Some(contract.code()), Some(contract.code_hash()))
         } else {
             (
@@ -272,7 +263,6 @@ impl<
             code_address: *code_address,
             original_sender: self.local_part.origin.original_sender,
             storage_owner: self.local_part.origin.storage_owner,
-            storage_limit_in_drip: self.local_part.origin.storage_limit_in_drip,
             gas: *gas,
             gas_price: self.local_part.origin.gas_price,
             code,
@@ -290,11 +280,12 @@ impl<
     }
 
     fn extcode(&self, address: &Address) -> vm::Result<Option<Arc<Bytes>>> {
-        if let Some(contract) = self.local_part.internal_contract_map.contract(
-            address,
-            self.local_part.env.number,
-            self.local_part.spec,
-        ) {
+        if let Some(contract) = self
+            .local_part
+            .machine
+            .internal_contracts()
+            .contract(address, self.local_part.spec)
+        {
             Ok(Some(contract.code()))
         } else {
             Ok(self.state.code(address)?)
@@ -302,11 +293,12 @@ impl<
     }
 
     fn extcodehash(&self, address: &Address) -> vm::Result<Option<H256>> {
-        if let Some(contract) = self.local_part.internal_contract_map.contract(
-            address,
-            self.local_part.env.number,
-            self.local_part.spec,
-        ) {
+        if let Some(contract) = self
+            .local_part
+            .machine
+            .internal_contracts()
+            .contract(address, self.local_part.spec)
+        {
             Ok(Some(contract.code_hash()))
         } else {
             Ok(self.state.code_hash(address)?)
@@ -314,11 +306,12 @@ impl<
     }
 
     fn extcodesize(&self, address: &Address) -> vm::Result<Option<usize>> {
-        if let Some(contract) = self.local_part.internal_contract_map.contract(
-            address,
-            self.local_part.env.number,
-            self.local_part.spec,
-        ) {
+        if let Some(contract) = self
+            .local_part
+            .machine
+            .internal_contracts()
+            .contract(address, self.local_part.spec)
+        {
             Ok(Some(contract.code_size()))
         } else {
             Ok(self.state.code_size(address)?)
@@ -468,7 +461,7 @@ impl<
 /// calls from test.
 #[cfg(test)]
 mod tests {
-    use super::{InternalContractMap, LocalContext, OriginInfo};
+    use super::{LocalContext, OriginInfo};
     use crate::{
         machine::{new_machine_with_builtin, Machine},
         state::{CallStackInfo, State, Substate},
@@ -495,7 +488,6 @@ mod tests {
             storage_owner: Address::zero(),
             gas_price: U256::zero(),
             value: U256::zero(),
-            storage_limit_in_drip: U256::MAX,
         }
     }
 
@@ -520,7 +512,6 @@ mod tests {
         storage_manager: FakeStateManager,
         state: State,
         machine: Machine,
-        internal_contract_map: InternalContractMap,
         spec: Spec,
         substate: Substate,
         env: Env,
@@ -538,13 +529,11 @@ mod tests {
             let env = get_test_env();
             let spec = machine.spec(env.number);
             let callstack = CallStackInfo::default();
-            let internal_contract_map = InternalContractMap::new();
 
             let mut setup = Self {
                 storage_manager,
                 state,
                 machine,
-                internal_contract_map,
                 spec,
                 substate: Substate::new(),
                 env,
@@ -575,7 +564,6 @@ mod tests {
             setup.substate,
             true,  /* is_create */
             false, /* static_flag */
-            &setup.internal_contract_map,
         );
         let ctx = lctx.activate(state, &mut callstack);
 
@@ -598,7 +586,6 @@ mod tests {
             setup.substate,
             true,  /* is_create */
             false, /* static_flag */
-            &setup.internal_contract_map,
         );
         let mut ctx = lctx.activate(state, &mut callstack);
 
@@ -719,7 +706,6 @@ mod tests {
                 setup.substate,
                 true,  /* is_create */
                 false, /* static_flag */
-                &setup.internal_contract_map,
             );
             let mut ctx = lctx.activate(state, &mut callstack);
             ctx.log(log_topics, &log_data).unwrap();
@@ -763,17 +749,13 @@ mod tests {
                 setup.substate,
                 true,  /* is_create */
                 false, /* static_flag */
-                &setup.internal_contract_map,
             );
             let mut ctx = lctx.activate(state, &mut callstack);
             let mut tracer = trace::NoopTracer;
             ctx.suicide(
                 &refund_account,
                 &mut tracer,
-                setup
-                    .machine
-                    .spec(setup.env.number)
-                    .account_start_nonce(setup.env.number),
+                setup.machine.spec(setup.env.number).account_start_nonce,
             )
             .unwrap();
             assert_eq!(lctx.substate.suicides.len(), 1);
