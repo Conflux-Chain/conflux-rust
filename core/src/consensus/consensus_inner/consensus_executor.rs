@@ -1225,6 +1225,11 @@ impl ConsensusExecutionHandler {
                         if self.config.executive_trace {
                             block_traces.push(executed.trace.into());
                         }
+                        if spec.cip78 {
+                            gas_sponsor_paid = executed.gas_sponsor_paid;
+                            storage_sponsor_paid =
+                                executed.storage_sponsor_paid;
+                        }
                         debug!(
                             "tx execution error: err={:?}, transaction={:?}",
                             error, transaction
