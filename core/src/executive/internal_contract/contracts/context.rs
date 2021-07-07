@@ -20,12 +20,12 @@ use cfx_types::{Address, U256};
 use rustc_hex::FromHex;
 
 make_solidity_contract! {
-    pub struct Context(CONTEXT_ADDRESS, generate_fn_table, activate_at: "21Q2-hardfork");
+    pub struct Context(CONTEXT_ADDRESS, generate_fn_table, initialize: |params: &CommonParams| params.transition_numbers.cip64, is_active: |spec: &Spec| spec.cip64);
 }
 
 fn generate_fn_table() -> SolFnTable { make_function_table!(EpochNumber) }
 
-group_impl_activate_at!("21Q2-hardfork", EpochNumber,);
+group_impl_is_active!(|spec: &Spec| spec.cip64, EpochNumber);
 
 make_solidity_function! {
     struct EpochNumber((), "epochNumber()", U256);
@@ -47,5 +47,5 @@ impl ExecutionTrait for EpochNumber {
 
 #[test]
 fn test_context_contract_sig() {
-    check_signature!(EpochNumber, "64efb22b");
+    check_signature!(EpochNumber, "f4145a83");
 }

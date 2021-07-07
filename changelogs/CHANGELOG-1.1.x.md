@@ -1,3 +1,11 @@
+# 1.1.5
+
+## Improvements
+
+### RPC Improvements
+- Raise error in `cfx_getBlockByHashWithPivotAssumption` if the provided block hash does not belong to the provided epoch.
+
+
 # 1.1.4
 
 ## Improvements

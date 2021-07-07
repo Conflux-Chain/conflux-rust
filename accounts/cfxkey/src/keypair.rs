@@ -31,6 +31,17 @@ pub fn public_to_address(public: &Public) -> Address {
     result
 }
 
+/// Check if the recovered address started with 0x1. If it does, this public key
+/// will have same the address in Conflux Network and Ethereum.
+pub fn is_compatible_public(public: &Public) -> bool {
+    let hash = public.keccak256();
+    let mut result = Address::zero();
+    result.as_bytes_mut().copy_from_slice(&hash[12..]);
+    // In Conflux, we reserve the first four bits to indicate the type of the
+    // address. For user address, the first four bits will be 0x1.
+    result.is_user_account_address()
+}
+
 #[derive(Debug, Clone, PartialEq, DeriveMallocSizeOf)]
 /// secp256k1 key pair
 pub struct KeyPair {

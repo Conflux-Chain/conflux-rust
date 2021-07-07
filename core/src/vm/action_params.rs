@@ -98,8 +98,6 @@ pub struct ActionParams {
     pub call_type: CallType,
     /// Param types encoding
     pub params_type: ParamsType,
-    /// The upper bound of `collateral_for_storage` for `original_sender`
-    pub storage_limit_in_drip: U256,
 }
 
 #[cfg(test)]
@@ -120,7 +118,6 @@ impl Default for ActionParams {
             data: None,
             call_type: CallType::Call,
             params_type: ParamsType::Separate,
-            storage_limit_in_drip: U256::MAX,
         }
     }
 }
