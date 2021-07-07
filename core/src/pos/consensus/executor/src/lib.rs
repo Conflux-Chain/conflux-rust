@@ -312,8 +312,8 @@ where V: VMExecutor
         let new_epoch_event_key = on_chain_config::new_epoch_event_key();
         let pivot_select_event_key =
             PivotBlockDecision::pivot_select_event_key();
-        let election_event_key = ElectionEvent::election_event_key();
-        let retire_event_key = RetireEvent::retire_event_key();
+        let election_event_key = ElectionEvent::event_key();
+        let retire_event_key = RetireEvent::event_key();
 
         // Find the next pivot block.
         let mut pivot_decision = None;
@@ -1209,16 +1209,10 @@ pub fn process_write_set(
                         bail!("BlockMetadata: Write set should be a subset of read set.")
                     }
                     Transaction::UserTransaction(txn) => match txn.payload() {
-                        TransactionPayload::Module(_)
-                        | TransactionPayload::Script(_)
-                        | TransactionPayload::ScriptFunction(_)
-                        | TransactionPayload::Election(_)
-                        | TransactionPayload::Retire(_)
-                        | TransactionPayload::PivotDecision(_) => {
+                        TransactionPayload::WriteSet(_) => (),
+                        _ => {
                             bail!("Write set should be a subset of read set: {:?}.", txn)
                         }
-                        TransactionPayload::PivotDecision(_) => continue,
-                        TransactionPayload::WriteSet(_) => (),
                     },
                 }
 

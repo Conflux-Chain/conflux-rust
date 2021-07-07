@@ -465,7 +465,7 @@ impl PosState {
             assert_eq!(node.status, NodeStatus::Retired);
             if node.status_start_view + UNLOCK_WAIT_VIEW <= self.current_view {
                 let unlock_event = ContractEvent::new(
-                    ElectionEvent::election_event_key(),
+                    ElectionEvent::event_key(),
                     0, /* sequence_number */
                     TypeTag::Vector(Box::new(TypeTag::U8)), /* TypeTag::ByteArray */
                     bcs::to_bytes(&UnlockEvent {
@@ -660,7 +660,7 @@ impl ElectionEvent {
 }
 
 impl ElectionEvent {
-    pub fn election_event_key() -> EventKey {
+    pub fn event_key() -> EventKey {
         EventKey::new_from_address(
             &account_config::election_select_address(),
             3,
@@ -686,8 +686,57 @@ impl RetireEvent {
         }
     }
 
-    pub fn retire_event_key() -> EventKey {
+    pub fn event_key() -> EventKey {
         EventKey::new_from_address(&account_config::retire_address(), 4)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        bcs::from_bytes(bytes).map_err(Into::into)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct RegisterEvent {
+    node_id: NodeID,
+}
+
+impl RegisterEvent {
+    pub fn new(
+        public_key: ConsensusPublicKey, vrf_public_key: ConsensusVRFPublicKey,
+    ) -> Self {
+        Self {
+            node_id: NodeID::new(public_key, vrf_public_key),
+        }
+    }
+
+    pub fn event_key() -> EventKey {
+        EventKey::new_from_address(&account_config::register_address(), 5)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        bcs::from_bytes(bytes).map_err(Into::into)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct UpdateVotingPowerEvent {
+    node_address: AccountAddress,
+    voting_power: u64,
+}
+
+impl UpdateVotingPowerEvent {
+    pub fn new(node_address: AccountAddress, voting_power: u64) -> Self {
+        Self {
+            node_address,
+            voting_power,
+        }
+    }
+
+    pub fn event_key() -> EventKey {
+        EventKey::new_from_address(
+            &account_config::update_voting_power_address(),
+            6,
+        )
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {

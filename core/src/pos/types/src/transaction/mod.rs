@@ -54,7 +54,9 @@ pub use script::{
 
 use crate::{
     block_info::{PivotBlockDecision, Round},
-    term_state::{ElectionEvent, RetireEvent},
+    term_state::{
+        ElectionEvent, RegisterEvent, RetireEvent, UpdateVotingPowerEvent,
+    },
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
         ConsensusVRFProof, ConsensusVRFPublicKey,
@@ -362,6 +364,10 @@ impl RawTransaction {
             TransactionPayload::PivotDecision(_) => {
                 ("pivot_decision".to_string(), vec![])
             }
+            TransactionPayload::Register(_) => ("register".to_string(), vec![]),
+            TransactionPayload::UpdateVotingPower(_) => {
+                ("update_voting_power".to_string(), vec![])
+            }
         };
         let mut f_args: String = "".to_string();
         for arg in args {
@@ -418,6 +424,9 @@ pub enum TransactionPayload {
     /// be elected.
     Retire(RetirePayload),
 
+    Register(RegisterPayload),
+    UpdateVotingPower(UpdateVotingPowerPayload),
+
     PivotDecision(PivotBlockDecision),
 }
 
@@ -427,12 +436,7 @@ impl TransactionPayload {
             Self::WriteSet(ws) => {
                 ws.should_trigger_reconfiguration_by_default()
             }
-            Self::Script(_)
-            | Self::ScriptFunction(_)
-            | Self::Module(_)
-            | Self::Election(_)
-            | Self::Retire(_)
-            | Self::PivotDecision(_) => false,
+            _ => false,
         }
     }
 
@@ -466,7 +470,7 @@ impl ElectionPayload {
             self.target_term,
         );
         ContractEvent::new(
-            ElectionEvent::election_event_key(),
+            ElectionEvent::event_key(),
             0,                                      /* sequence_number */
             TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
             bcs::to_bytes(&event).unwrap(),
@@ -487,7 +491,49 @@ impl RetirePayload {
             self.vrf_public_key.clone(),
         );
         ContractEvent::new(
-            RetireEvent::retire_event_key(),
+            RetireEvent::event_key(),
+            0,                                      /* sequence_number */
+            TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
+            bcs::to_bytes(&event).unwrap(),
+        )
+    }
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub struct RegisterPayload {
+    pub public_key: ConsensusPublicKey,
+    pub vrf_public_key: ConsensusVRFPublicKey,
+}
+
+impl RegisterPayload {
+    pub fn to_event(&self) -> ContractEvent {
+        let event = RegisterEvent::new(
+            self.public_key.clone(),
+            self.vrf_public_key.clone(),
+        );
+        ContractEvent::new(
+            RegisterEvent::event_key(),
+            0,                                      /* sequence_number */
+            TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
+            bcs::to_bytes(&event).unwrap(),
+        )
+    }
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub struct UpdateVotingPowerPayload {
+    node_address: AccountAddress,
+    voting_power: u64,
+}
+
+impl UpdateVotingPowerPayload {
+    pub fn to_event(&self) -> ContractEvent {
+        let event = UpdateVotingPowerEvent::new(
+            self.node_address.clone(),
+            self.voting_power,
+        );
+        ContractEvent::new(
+            UpdateVotingPowerEvent::event_key(),
             0,                                      /* sequence_number */
             TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
             bcs::to_bytes(&event).unwrap(),
