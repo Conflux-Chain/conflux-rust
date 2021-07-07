@@ -866,8 +866,6 @@ impl BlockDataManager {
         &self, block_number: u64, block_hash: &H256,
     ) {
         if self.config.persist_tx_index {
-            // transaction_indices will not be updated if it's not inserted
-            // before
             self.hash_by_block_number
                 .write()
                 .entry(block_number)
