@@ -33,10 +33,14 @@ use cfx_bytes::Bytes;
 fn block_number_by_hash(
     data_man: &Arc<BlockDataManager>, epoch_hashes: Vec<H256>, hash: &H256,
 ) -> Option<u64> {
-    let position = epoch_hashes
-        .iter()
-        .position(|h| h == hash)
-        .expect("block should be in epoch") as u64;
+    let position = match epoch_hashes.iter().position(|h| h == hash) {
+        Some(p) => p as u64,
+        None => {
+            // FIXME: this does happen sometimes, how is this possible?
+            warn!("Expected block {:?} to be one of {:?}", hash, epoch_hashes);
+            return None;
+        }
+    };
 
     let pivot = epoch_hashes.last().expect("epoch should not be empty");
 
@@ -485,7 +489,6 @@ mod tests {
     use cfx_types::{H256, U256};
     use keccak_hash::KECCAK_EMPTY_LIST_RLP;
     use serde_json;
-    use serial_test::serial;
 
     #[test]
     fn test_serialize_block_transactions() {
