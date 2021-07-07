@@ -1042,12 +1042,22 @@ impl ConsensusExecutionHandler {
                 .commit(*epoch_hash, debug_record)
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
         };
+
         self.data_man.insert_epoch_execution_commitment(
             pivot_block.hash(),
             state_root.clone(),
             compute_receipts_root(&epoch_receipts),
             BlockHeaderBuilder::compute_block_logs_bloom_hash(&epoch_receipts),
         );
+
+        // persist block number index
+        for (index, hash) in epoch_block_hashes.iter().enumerate() {
+            self.data_man.insert_hash_by_block_number(
+                start_block_number + index as u64,
+                hash,
+            );
+        }
+
         let epoch_execution_commitment = self
             .data_man
             .get_epoch_execution_commitment(&epoch_hash)

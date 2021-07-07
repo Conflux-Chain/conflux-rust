@@ -39,6 +39,7 @@ pub enum CacheId {
     TransactionAddress(H256),
     LocalBlockInfo(H256),
     BlamedHeaderVerifiedRoots(u64),
+    HashByBlockNumber(u64),
 }
 
 pub struct CacheManager<T> {
@@ -144,6 +145,8 @@ pub struct CacheSize {
     pub transaction_indices: usize,
     /// Local block info cache size.
     pub local_block_infos: usize,
+    /// Block number index cache size.
+    pub hash_by_block_number: usize,
 }
 
 impl CacheSize {

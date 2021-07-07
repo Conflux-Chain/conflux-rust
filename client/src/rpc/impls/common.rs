@@ -342,6 +342,44 @@ impl RpcImpl {
         )?)
     }
 
+    pub fn block_by_block_number(
+        &self, block_number: U64, include_txs: bool,
+    ) -> RpcResult<Option<RpcBlock>> {
+        let block_number = block_number.as_u64();
+        let consensus_graph = self.consensus_graph();
+
+        info!(
+            "RPC Request: cfx_getBlockByBlockNumber hash={:?} include_txs={:?}",
+            block_number, include_txs
+        );
+
+        let inner = &*consensus_graph.inner.read();
+
+        let block_hash = match self
+            .data_man
+            .hash_by_block_number(block_number, true /* update cache */)
+        {
+            None => return Ok(None),
+            Some(h) => h,
+        };
+
+        let maybe_block = self
+            .data_man
+            .block_by_hash(&block_hash, false /* update_cache */);
+
+        match maybe_block {
+            None => Ok(None),
+            Some(b) => Ok(Some(RpcBlock::new(
+                &*b,
+                *self.network.get_network_type(),
+                consensus_graph,
+                inner,
+                &self.data_man,
+                include_txs,
+            )?)),
+        }
+    }
+
     pub fn blocks_by_epoch(
         &self, num: EpochNumber,
     ) -> JsonRpcResult<Vec<H256>> {
