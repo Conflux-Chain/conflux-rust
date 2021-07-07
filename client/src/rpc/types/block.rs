@@ -18,7 +18,7 @@ use primitives::{
         TRANSACTION_OUTCOME_SUCCESS,
     },
     Block as PrimitiveBlock, BlockHeader as PrimitiveBlockHeader,
-    BlockHeaderBuilder, TransactionIndex,
+    BlockHeaderBuilder, EpochNumber, TransactionIndex,
 };
 use serde::{
     de::{Deserialize, Deserializer, Error, Unexpected},
@@ -29,6 +29,23 @@ use std::{convert::TryInto, sync::Arc};
 
 use crate::rpc::types::{transaction::PackedOrExecuted, Receipt, Transaction};
 use cfx_bytes::Bytes;
+
+fn block_number_by_hash(
+    data_man: &Arc<BlockDataManager>, epoch_hashes: Vec<H256>, hash: &H256,
+) -> Option<u64> {
+    let position = epoch_hashes
+        .iter()
+        .position(|h| h == hash)
+        .expect("block should be in epoch") as u64;
+
+    let pivot = epoch_hashes.last().expect("epoch should not be empty");
+
+    let base = data_man
+        .get_epoch_execution_context(&pivot)?
+        .start_block_number;
+
+    Some(base + position)
+}
 
 #[derive(PartialEq, Debug)]
 pub enum BlockTransactions {
@@ -110,6 +127,8 @@ pub struct Block {
     pub transactions_root: H256,
     /// Epoch number
     pub epoch_number: Option<U256>,
+    /// Block number
+    pub block_number: Option<U256>,
     /// Gas limit
     pub gas_limit: U256,
     /// Gas used
@@ -224,8 +243,15 @@ impl Block {
 
         let epoch_number = consensus_inner
             .get_block_epoch_number(&block_hash)
-            .or_else(|| data_man.block_epoch_number(&block_hash))
-            .map(Into::into);
+            .or_else(|| data_man.block_epoch_number(&block_hash));
+
+        let block_number = match epoch_number {
+            None => None,
+            Some(e) => {
+                let epoch_hashes = consensus_inner.block_hashes_by_epoch(e)?;
+                block_number_by_hash(data_man, epoch_hashes, &block_hash)
+            }
+        };
 
         // get the block.gas_used
         let tx_len = b.transactions.len();
@@ -272,7 +298,8 @@ impl Block {
                 b.block_header.transactions_root().clone(),
             ),
             // PrimitiveBlock does not contain this information
-            epoch_number,
+            epoch_number: epoch_number.map(Into::into),
+            block_number: block_number.map(Into::into),
             // fee system
             gas_used,
             gas_limit: b.block_header.gas_limit().into(),
@@ -376,6 +403,8 @@ pub struct Header {
     pub transactions_root: H256,
     /// Epoch number
     pub epoch_number: Option<U256>,
+    /// Block number
+    pub block_number: Option<U256>,
     /// Gas Limit
     pub gas_limit: U256,
     /// Timestamp
@@ -403,8 +432,21 @@ impl Header {
 
         let epoch_number = consensus
             .get_block_epoch_number(&hash)
-            .or_else(|| consensus.get_data_manager().block_epoch_number(&hash))
-            .map(Into::into);
+            .or_else(|| consensus.get_data_manager().block_epoch_number(&hash));
+
+        let block_number = match epoch_number {
+            None => None,
+            Some(e) => {
+                let hashes = consensus
+                    .get_block_hashes_by_epoch(EpochNumber::Number(e))?;
+
+                block_number_by_hash(
+                    consensus.get_data_manager(),
+                    hashes,
+                    &hash,
+                )
+            }
+        };
 
         let referee_hashes =
             h.referee_hashes().iter().map(|x| H256::from(*x)).collect();
@@ -419,7 +461,8 @@ impl Header {
             deferred_logs_bloom_hash: H256::from(*h.deferred_logs_bloom_hash()),
             blame: U64::from(h.blame()),
             transactions_root: H256::from(*h.transactions_root()),
-            epoch_number,
+            epoch_number: epoch_number.map(Into::into),
+            block_number: block_number.map(Into::into),
             gas_limit: h.gas_limit().into(),
             timestamp: h.timestamp().into(),
             difficulty: h.difficulty().into(),
@@ -465,7 +508,6 @@ mod tests {
     }
 
     #[test]
-    #[serial] // TODO: remove
     fn test_deserialize_block_transactions() {
         let result_block_transactions =
             BlockTransactions::Hashes(vec![H256::default(), H256::default()]);
@@ -496,6 +538,7 @@ mod tests {
             blame: 0.into(),
             transactions_root: KECCAK_EMPTY_LIST_RLP.into(),
             epoch_number: None,
+            block_number: None,
             gas_limit: U256::default(),
             gas_used: None,
             timestamp: 0.into(),
@@ -512,14 +555,13 @@ mod tests {
 
         assert_eq!(
             serialized_block,
-            r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","gasUsed":null,"timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45","custom":[]}"#
+            r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"blockNumber":null,"gasLimit":"0x0","gasUsed":null,"timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45","custom":[]}"#
         );
     }
 
     #[test]
-    #[serial] // TODO: remove
     fn test_deserialize_block() {
-        let serialized = r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":"0x0","gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"stable":null,"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45","custom":[]}"#;
+        let serialized = r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":"0x0","blockNumber":"0x0","gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"stable":null,"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45","custom":[]}"#;
         let result_block = Block {
             hash: H256::default(),
             parent_hash: H256::default(),
@@ -531,6 +573,7 @@ mod tests {
             blame: 0.into(),
             transactions_root: KECCAK_EMPTY_LIST_RLP.into(),
             epoch_number: Some(0.into()),
+            block_number: Some(0.into()),
             gas_limit: U256::default(),
             gas_used: None,
             timestamp: 0.into(),
@@ -561,6 +604,7 @@ mod tests {
             blame: 0.into(),
             transactions_root: KECCAK_EMPTY_LIST_RLP.into(),
             epoch_number: None,
+            block_number: None,
             gas_limit: U256::default(),
             timestamp: 0.into(),
             difficulty: U256::default(),
@@ -573,7 +617,7 @@ mod tests {
 
         assert_eq!(
             serialized_header,
-            r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0"}"#
+            r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":null,"blockNumber":null,"gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","powQuality":null,"refereeHashes":[],"adaptive":false,"nonce":"0x0"}"#
         );
     }
 }
