@@ -13,14 +13,14 @@ use crate::{
     trace::{trace::ExecTrace, Tracer},
     vm,
 };
-use cfx_parameters::internal_contract_addresses::CONTEXT_ADDRESS;
+use cfx_parameters::internal_contract_addresses::CONTEXT_CONTRACT_ADDRESS;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{Address, U256};
 #[cfg(test)]
 use rustc_hex::FromHex;
 
 make_solidity_contract! {
-    pub struct Context(CONTEXT_ADDRESS, generate_fn_table, initialize: |params: &CommonParams| params.transition_numbers.cip64, is_active: |spec: &Spec| spec.cip64);
+    pub struct Context(CONTEXT_CONTRACT_ADDRESS, generate_fn_table, initialize: |params: &CommonParams| params.transition_numbers.cip64, is_active: |spec: &Spec| spec.cip64);
 }
 
 fn generate_fn_table() -> SolFnTable { make_function_table!(EpochNumber) }

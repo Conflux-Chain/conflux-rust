@@ -14,7 +14,7 @@ lazy_static! {
         Address::from_str("0888000000000000000000000000000000000002").unwrap();
     pub static ref ANTI_REENTRANCY_CONTRACT_ADDRESS: Address =
         Address::from_str("0888000000000000000000000000000000000003").unwrap();
-    pub static ref CONTEXT_ADDRESS: Address =
+    pub static ref CONTEXT_CONTRACT_ADDRESS: Address =
         Address::from_str("0888000000000000000000000000000000000004").unwrap();
     pub static ref POS_REGISTER_CONTRACT_ADDRESS: Address =
         Address::from_str("0888000000000000000000000000000000000005").unwrap();
