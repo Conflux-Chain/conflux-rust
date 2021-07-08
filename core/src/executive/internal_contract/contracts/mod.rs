@@ -3,13 +3,17 @@
 // See http://www.gnu.org/licenses/
 
 mod admin;
+mod context;
 mod future;
+mod reentrancy;
 mod sponsor;
 mod staking;
 
 mod macros {
     #[cfg(test)]
     pub use crate::check_signature;
+    #[cfg(test)]
+    pub use rustc_hex::FromHex;
 
     pub use crate::{
         group_impl_is_active, impl_function_type, make_function_table,
@@ -31,7 +35,8 @@ mod macros {
 }
 
 pub use self::{
-    admin::AdminControl, sponsor::SponsorWhitelistControl, staking::Staking,
+    admin::AdminControl, context::Context, reentrancy::AntiReentrancyConfig,
+    sponsor::SponsorWhitelistControl, staking::Staking,
 };
 
 use super::{
@@ -184,8 +189,8 @@ pub fn all_internal_contracts() -> Vec<Box<dyn InternalContractTrait>> {
         Box::new(AdminControl::instance()),
         Box::new(Staking::instance()),
         Box::new(SponsorWhitelistControl::instance()),
-        Box::new(future::AntiReentrancy::instance()),
-        Box::new(future::Context::instance()),
+        Box::new(AntiReentrancyConfig::instance()),
+        Box::new(Context::instance()),
         Box::new(future::PoS::instance()),
     ]
 }

@@ -9,8 +9,9 @@ mod impls;
 mod internal_context;
 
 pub use self::{
-    contracts::InternalContractMap, impls::suicide,
     internal_context::InternalRefContext,
+    contracts::InternalContractMap,
+    impls::{get_reentrancy_allowance, suicide},
 };
 pub use solidity_abi::ABIDecodeError;
 
@@ -117,7 +118,7 @@ pub trait SolidityEventTrait: Send + Sync {
 
         let data = non_indexed.abi_encode();
 
-        context.log(param, topics, data)
+        context.log(param, context.spec, topics, data)
     }
 
     /// The string for function sig

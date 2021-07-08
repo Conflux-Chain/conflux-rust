@@ -13,7 +13,7 @@ use cfx_types::{Address, U256};
 use primitives::LogEntry;
 use std::collections::{HashMap, HashSet};
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct CallStackInfo {
     call_stack_recipient_addresses: Vec<(Address, bool)>,
     address_counter: HashMap<Address, u32>,
@@ -21,10 +21,23 @@ pub struct CallStackInfo {
 }
 
 impl CallStackInfo {
-    pub fn push(&mut self, address: Address, is_create: bool) {
+    pub fn new() -> Self {
+        CallStackInfo {
+            call_stack_recipient_addresses: Vec::default(),
+            address_counter: HashMap::default(),
+            first_reentrancy_depth: None,
+        }
+    }
+
+    pub fn push(
+        &mut self, address: Address, is_create: bool, allow_reentrancy: bool,
+    ) {
         // We should still use the correct behaviour to check if reentrancy
         // happens.
-        if self.last() != Some(&address) && self.contains_key(&address) {
+        if !allow_reentrancy
+            && self.last() != Some(&address)
+            && self.contains_key(&address)
+        {
             self.first_reentrancy_depth
                 .get_or_insert(self.call_stack_recipient_addresses.len());
         }
@@ -54,26 +67,6 @@ impl CallStackInfo {
         maybe_address
     }
 
-    pub fn reentrancy_happens_when_push(&self, address: &Address) -> bool {
-        // Consistent with old behaviour.
-        // The old (unexpected) behaviour is equivalent to the top element is
-        // lost.
-        let self_call = if let [.., second_last, _last] =
-            self.call_stack_recipient_addresses.as_slice()
-        {
-            second_last.0 == *address
-        } else {
-            false
-        };
-        // Check if the call stack except the last one contains key.
-        let contains_key = self.contains_key(address)
-            && (self.last() != Some(address)
-                || self.address_counter[address] > 1);
-        !self_call && contains_key
-        // Expected behaviour
-        // self.last() != Some(address) && self.contains_key(address)
-    }
-
     pub fn last(&self) -> Option<&Address> {
         self.call_stack_recipient_addresses
             .last()
@@ -84,16 +77,19 @@ impl CallStackInfo {
         self.address_counter.contains_key(key)
     }
 
-    pub fn in_reentrancy(&self) -> bool {
-        // Consistent with old behaviour
-        // The old (unexpected) behaviour is equivalent to the top element is
-        // lost.
-        self.first_reentrancy_depth.map_or(false, |depth| {
-            (depth as isize)
-                < self.call_stack_recipient_addresses.len() as isize - 1
-        })
-        // Expected behaviour
-        // self.first_reentrancy_depth.is_some()
+    pub fn in_reentrancy(&self, spec: &Spec) -> bool {
+        if spec.cip71b {
+            // Expected behaviour
+            self.first_reentrancy_depth.is_some()
+        } else {
+            // Consistent with old behaviour
+            // The old (unexpected) behaviour is equivalent to the top element
+            // is lost.
+            self.first_reentrancy_depth.map_or(false, |depth| {
+                (depth as isize)
+                    < self.call_stack_recipient_addresses.len() as isize - 1
+            })
+        }
     }
 
     pub fn contract_in_creation(&self) -> Option<&Address> {
@@ -282,15 +278,15 @@ mod tests {
 
     #[test]
     fn test_callstack_info() {
-        let mut call_stack = CallStackInfo::default();
-        call_stack.push(get_test_address(1), false);
-        call_stack.push(get_test_address(2), false);
+        let mut call_stack = CallStackInfo::new();
+        call_stack.push(get_test_address(1), false, false);
+        call_stack.push(get_test_address(2), false, false);
         assert_eq!(call_stack.pop(), Some((get_test_address(2), false)));
         assert_eq!(call_stack.contains_key(&get_test_address(2)), false);
 
-        call_stack.push(get_test_address(3), true);
-        call_stack.push(get_test_address(4), false);
-        call_stack.push(get_test_address(3), false);
+        call_stack.push(get_test_address(3), true, false);
+        call_stack.push(get_test_address(4), false, false);
+        call_stack.push(get_test_address(3), false, false);
         assert_eq!(call_stack.last().unwrap().clone(), get_test_address(3));
 
         assert_eq!(call_stack.pop(), Some((get_test_address(3), false)));
@@ -305,9 +301,9 @@ mod tests {
         assert_eq!(call_stack.contains_key(&get_test_address(3)), false);
         assert_eq!(call_stack.last().unwrap().clone(), get_test_address(1));
 
-        call_stack.push(get_test_address(3), true);
-        call_stack.push(get_test_address(4), false);
-        call_stack.push(get_test_address(3), false);
+        call_stack.push(get_test_address(3), true, false);
+        call_stack.push(get_test_address(4), false, false);
+        call_stack.push(get_test_address(3), false, false);
         assert_eq!(call_stack.last().unwrap().clone(), get_test_address(3));
 
         assert_eq!(call_stack.pop(), Some((get_test_address(3), false)));

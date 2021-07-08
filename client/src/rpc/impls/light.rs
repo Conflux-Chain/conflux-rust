@@ -765,6 +765,7 @@ impl RpcImpl {
             Ok(Some(RpcBlock::new(
                 &block,
                 *light.get_network_type(),
+                &*consensus_graph,
                 &*inner,
                 &data_man,
                 include_txs,
@@ -819,6 +820,7 @@ impl RpcImpl {
             Ok(RpcBlock::new(
                 &block,
                 *light.get_network_type(),
+                &*consensus_graph,
                 &*inner,
                 &data_man,
                 true,
@@ -873,6 +875,7 @@ impl RpcImpl {
             Ok(Some(RpcBlock::new(
                 &block,
                 *light.get_network_type(),
+                &*consensus_graph,
                 &*inner,
                 &data_man,
                 include_txs,
