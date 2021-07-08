@@ -226,11 +226,11 @@ macro_rules! make_solidity_event {
         $visibility struct $name {
         }
 
-        impl InterfaceTrait for $name {
+        impl SolidityEventTrait for $name {
             type Indexed = $indexed;
             type NonIndexed = $non_indexed;
 
-            fn name(&self) -> &'static str {
+            fn name() -> &'static str {
                 $interface
             }
         }

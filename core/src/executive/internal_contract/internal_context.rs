@@ -23,8 +23,10 @@ pub struct InternalRefContext<'a> {
 // here temporarily.
 impl<'a> InternalRefContext<'a> {
     pub fn log(
-        &mut self, param: &ActionParams, spec: &Spec, topics: Vec<H256>, data: Vec<u8>,
-    ) -> vm::Result<()> {
+        &mut self, param: &ActionParams, spec: &Spec, topics: Vec<H256>,
+        data: Vec<u8>,
+    ) -> vm::Result<()>
+    {
         use primitives::log_entry::LogEntry;
 
         if self.static_flag || self.callstack.in_reentrancy(spec) {
