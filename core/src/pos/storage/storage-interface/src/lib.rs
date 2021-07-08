@@ -327,7 +327,11 @@ pub trait DbReader: Send + Sync {
         unimplemented!()
     }
 
-    fn get_pos_state(&self, block_id: &HashValue) -> Result<PosState> {
+    fn get_pos_state(&self, _block_id: &HashValue) -> Result<PosState> {
+        unimplemented!()
+    }
+
+    fn get_term_vdf_output(&self, _term_num: u64) -> Result<Vec<u8>> {
         unimplemented!()
     }
 }
@@ -420,6 +424,12 @@ pub trait DbWriter: Send + Sync {
         ledger_info_with_sigs: Option<&LedgerInfoWithSignatures>,
         pos_state: Option<PosState>,
     ) -> Result<()>;
+
+    fn put_term_vdf_output(
+        &self, _term_num: u64, _vdf_output: Vec<u8>,
+    ) -> Result<()> {
+        unimplemented!()
+    }
 }
 
 #[derive(Clone)]

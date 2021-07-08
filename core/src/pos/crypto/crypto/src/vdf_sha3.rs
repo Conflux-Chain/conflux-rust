@@ -1,5 +1,6 @@
 use crate::{HashValue, VerifiableDelayFunction};
 
+/// VDF SHA256.
 pub struct VdfSha3 {}
 
 impl VerifiableDelayFunction for VdfSha3 {

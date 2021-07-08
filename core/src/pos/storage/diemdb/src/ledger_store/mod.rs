@@ -10,7 +10,7 @@ use crate::{
     schema::{
         epoch_by_version::EpochByVersionSchema, ledger_info::LedgerInfoSchema,
         ledger_info_by_block::LedgerInfoByBlockSchema,
-        pos_state::PosStateSchema,
+        pos_state::PosStateSchema, term_vdf_output::TermVdfOutputSchema,
         transaction_accumulator::TransactionAccumulatorSchema,
         transaction_info::TransactionInfoSchema,
     },
@@ -445,6 +445,27 @@ impl LedgerStore {
 
     pub fn get_root_hash(&self, version: Version) -> Result<HashValue> {
         Accumulator::get_root_hash(self, version + 1)
+    }
+
+    pub fn get_term_vdf_output(&self, term_num: u64) -> Result<Vec<u8>> {
+        self.db
+            .get::<TermVdfOutputSchema>(&term_num)?
+            .ok_or_else(|| {
+                DiemDbError::NotFound(format!(
+                    "VDF output of term {}",
+                    term_num
+                ))
+                .into()
+            })
+    }
+
+    pub fn put_term_vdf_output(
+        &self, term_num: u64, vdf_output: Vec<u8>,
+    ) -> Result<()> {
+        let mut cs = ChangeSet::new();
+        cs.batch
+            .put::<TermVdfOutputSchema>(&term_num, &vdf_output)?;
+        self.db.write_schemas(cs.batch)
     }
 }
 

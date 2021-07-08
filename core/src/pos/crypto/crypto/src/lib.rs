@@ -23,6 +23,8 @@ pub mod noise;
 pub mod secp256k1;
 pub mod test_utils;
 pub mod traits;
+/// VDF SHA256.
+pub mod vdf_sha3;
 pub mod x25519;
 
 #[cfg(test)]
@@ -30,7 +32,6 @@ mod unit_tests;
 
 #[cfg(mirai)]
 mod tags;
-mod vdf_sha3;
 
 pub use self::traits::*;
 pub use hash::HashValue;

@@ -61,11 +61,11 @@ pub enum UnverifiedEvent {
 
 impl UnverifiedEvent {
     pub fn verify(
-        self, validator: &ValidatorVerifier,
+        self, validator: &ValidatorVerifier, epoch_vrf_seed: &[u8],
     ) -> Result<VerifiedEvent, VerifyError> {
         Ok(match self {
             UnverifiedEvent::ProposalMsg(p) => {
-                p.verify(validator)?;
+                p.verify(validator, epoch_vrf_seed)?;
                 VerifiedEvent::ProposalMsg(p)
             }
             UnverifiedEvent::VoteMsg(v) => {

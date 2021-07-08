@@ -954,6 +954,10 @@ impl DbReader for DiemDB {
     fn get_pos_state(&self, block_id: &HashValue) -> Result<PosState> {
         self.ledger_store.get_pos_state(block_id)
     }
+
+    fn get_term_vdf_output(&self, term_num: u64) -> Result<Vec<u8>> {
+        self.ledger_store.get_term_vdf_output(term_num)
+    }
 }
 
 impl DbWriter for DiemDB {
@@ -1058,6 +1062,12 @@ impl DbWriter for DiemDB {
 
             Ok(())
         })
+    }
+
+    fn put_term_vdf_output(
+        &self, term_num: u64, vdf_output: Vec<u8>,
+    ) -> Result<()> {
+        self.ledger_store.put_term_vdf_output(term_num, vdf_output)
     }
 }
 

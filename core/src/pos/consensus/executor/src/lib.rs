@@ -63,6 +63,7 @@ use crate::{
     vm::VMExecutor,
 };
 use consensus_types::block::VRF_SEED;
+use diem_crypto::{vdf_sha3::VdfSha3, VerifiableDelayFunction};
 use diem_types::{
     term_state::{
         NodeID, PosState, RegisterEvent, RetireEvent, UpdateVotingPowerEvent,
@@ -70,6 +71,7 @@ use diem_types::{
     transaction::TransactionPayload::UpdateVotingPower,
 };
 use pow_types::PowInterface;
+use std::thread;
 
 mod types;
 
@@ -452,7 +454,24 @@ where V: VMExecutor
             }
             pivot_decision = Some(parent_pivot_decision);
         }
-        let next_epoch_state = new_pos_state.next_view()?;
+        let next_epoch_state =
+            new_pos_state.next_view()?.map(|(epoch_state, term_seed)| {
+                if !catch_up_mode {
+                    let epoch = epoch_state.epoch;
+                    if self.db.reader.get_term_vdf_output(epoch).is_err() {
+                        // Only err is NotFound, so compute it.
+                        let writer = self.db.writer.clone();
+                        thread::spawn(move || {
+                            // FIXME(lpl): Set difficulty correctly.
+                            let vdf_output = VdfSha3 {}
+                                .solve(term_seed.as_slice(), 2)
+                                .unwrap();
+                            writer.put_term_vdf_output(epoch, vdf_output)
+                        });
+                    }
+                }
+                epoch_state
+            });
 
         let new_epoch_marker = vm_outputs
             .iter()

@@ -18,6 +18,7 @@ use std::{collections::BTreeMap, fmt};
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct EpochState {
     pub epoch: u64,
+
     pub verifier: ValidatorVerifier,
 }
 

@@ -241,13 +241,6 @@ impl Block {
                     format_err!("Missing signature in Proposal")
                 })?;
                 validator.verify(*author, &self.block_data, signature)?;
-                if let Some(vrf_proof) = &self.vrf_proof {
-                    validator.verify_vrf(
-                        *author,
-                        &self.block_data.vrf_round_seed(VRF_SEED),
-                        vrf_proof,
-                    )?;
-                }
                 self.quorum_cert().verify(validator)
             }
         }

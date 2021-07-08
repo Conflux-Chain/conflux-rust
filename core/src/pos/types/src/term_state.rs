@@ -387,7 +387,8 @@ impl PosState {
         Ok(())
     }
 
-    pub fn get_new_committee(&self) -> Result<ValidatorVerifier> {
+    /// Return `(validator_set, term_seed)`.
+    pub fn get_new_committee(&self) -> Result<(ValidatorVerifier, Vec<u8>)> {
         let mut voting_power_map = BTreeMap::new();
         for i in 0..TERM_LIST_LEN {
             let term = &self.term_list.term_list[i];
@@ -425,8 +426,11 @@ impl PosState {
                 );
             }
         }
-        // TODO(lpl): Decide the ratio of voting power.
-        Ok(ValidatorVerifier::new(address_to_validator_info))
+
+        Ok((
+            ValidatorVerifier::new(address_to_validator_info),
+            self.term_list.term_list[0].seed.clone(),
+        ))
     }
 
     /// TODO(lpl): Return VDF seed for the term.
@@ -535,7 +539,7 @@ impl PosState {
     /// `get_new_committee` has been called before this to produce an
     /// EpochState. And `next_view` will not be called for blocks following
     /// a pending reconfiguration block.
-    pub fn next_view(&mut self) -> Result<Option<EpochState>> {
+    pub fn next_view(&mut self) -> Result<Option<(EpochState, Vec<u8>)>> {
         while let Some(retired_node) = self.retiring_nodes.pop_front() {
             let node = self.node_map.get_mut(&retired_node).expect("exists");
             assert_eq!(node.status, NodeStatus::Retired);
@@ -556,21 +560,28 @@ impl PosState {
             // generate new epoch for new term.
             let new_term = self.current_view / ROUND_PER_TERM;
             self.term_list.new_term(new_term);
-            let verifier = self.get_new_committee()?;
-            Some(EpochState {
-                // TODO(lpl): If we allow epoch changes within a term, this
-                // should be updated.
-                epoch: new_term + 1,
-                verifier,
-            })
+            let (verifier, term_seed) = self.get_new_committee()?;
+            Some((
+                EpochState {
+                    // TODO(lpl): If we allow epoch changes within a term, this
+                    // should be updated.
+                    epoch: new_term + 1,
+                    verifier,
+                },
+                term_seed,
+            ))
         } else if self.current_view == 1 {
+            let (verifier, term_seed) = self.get_new_committee()?;
             // genesis
-            Some(EpochState {
-                // TODO(lpl): If we allow epoch changes within a term, this
-                // should be updated.
-                epoch: 1,
-                verifier: self.get_new_committee()?,
-            })
+            Some((
+                EpochState {
+                    // TODO(lpl): If we allow epoch changes within a term, this
+                    // should be updated.
+                    epoch: 1,
+                    verifier,
+                },
+                term_seed,
+            ))
         } else {
             None
         };
