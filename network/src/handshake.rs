@@ -41,7 +41,7 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 pub static BYPASS_CRYPTOGRAPHY: AtomicBool = AtomicBool::new(false);
 
 #[derive(PartialEq, Eq, Debug)]
-enum HandshakeState {
+pub enum HandshakeState {
     /// Just created
     New,
     /// Waiting for auth packet
@@ -61,7 +61,7 @@ pub struct Handshake {
     /// Underlying connection
     pub connection: Connection,
     /// Handshake state
-    state: HandshakeState,
+    pub state: HandshakeState,
     /// nonce for verification
     nonce: H256,
 }

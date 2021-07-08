@@ -281,7 +281,7 @@ pub fn handle(
             | network::ErrorKind::OversizedPacket
             | network::ErrorKind::Throttling(_) => disconnect = false,
 
-            network::ErrorKind::BadProtocol | network::ErrorKind::Decoder => {
+            network::ErrorKind::BadProtocol | network::ErrorKind::Decoder(_) => {
                 op = Some(UpdateNodeOperation::Remove)
             }
 

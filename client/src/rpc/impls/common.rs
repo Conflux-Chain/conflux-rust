@@ -229,6 +229,7 @@ impl RpcImpl {
             Some(b) => Ok(Some(RpcBlock::new(
                 &*b,
                 *self.network.get_network_type(),
+                consensus_graph,
                 inner,
                 &self.data_man,
                 include_txs,
@@ -282,6 +283,7 @@ impl RpcImpl {
             Some(b) => Ok(Some(RpcBlock::new(
                 &*b,
                 *self.network.get_network_type(),
+                consensus_graph,
                 inner,
                 &self.data_man,
                 include_txs,
@@ -333,6 +335,7 @@ impl RpcImpl {
         Ok(RpcBlock::new(
             &*block,
             *self.network.get_network_type(),
+            consensus_graph,
             inner,
             &self.data_man,
             true,
@@ -428,6 +431,7 @@ impl RpcImpl {
             RpcBlock::new(
                 &*block,
                 *self.network.get_network_type(),
+                consensus_graph,
                 inner,
                 &self.data_man,
                 true,

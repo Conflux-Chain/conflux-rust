@@ -20,6 +20,16 @@ use crate::{
 };
 use cfx_addr::Network;
 use cfx_bytes::Bytes;
+use diem_crypto::{
+    ed25519::{Ed25519PrivateKey, Ed25519PublicKey},
+    ValidCryptoMaterialStringExt,
+};
+use diem_types::{
+    account_address::{from_consensus_public_key, from_public_key},
+    validator_config::{
+        ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
+    },
+};
 use keccak_hash::keccak;
 use keylib::{sign, Generator, KeyPair, Random, Secret};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
@@ -340,6 +350,14 @@ impl NetworkService {
         }
     }
 
+    pub fn pos_public_key(&self) -> Option<ConsensusPublicKey> {
+        if let Some(ref inner) = self.inner {
+            inner.sessions.self_pos_public_key.clone()
+        } else {
+            None
+        }
+    }
+
     pub fn add_latency(
         &self, id: NodeId, latency_ms: f64,
     ) -> Result<(), Error> {
@@ -540,6 +558,13 @@ impl NetworkServiceInner {
                     },
                 )
         };
+        let pos_public_key = config
+            .config_path
+            .clone()
+            .and_then(|ref p| load_pos_private_key(Path::new(&p)))
+            // FIXME(lpl): Use both public keys.
+            .map(|(private_key, _)| ConsensusPublicKey::from(&private_key));
+        info!("Self pos public key: {:?}", pos_public_key);
 
         info!("Self node id: {:?}", *keys.public());
 
@@ -625,6 +650,7 @@ impl NetworkServiceInner {
                 MAX_SESSIONS,
                 config.max_incoming_peers,
                 &config.session_ip_limit_config,
+                pos_public_key,
             ),
             handlers: RwLock::new(HashMap::new()),
             timers: RwLock::new(HashMap::new()),
@@ -1054,6 +1080,7 @@ impl NetworkServiceInner {
             // We check dropped_nodes first to make sure we stop processing
             // communications from any dropped peers
             let mut session_node_id = session.read().id().map(|id| *id);
+            let mut pos_public_key_opt = None;
             if let Some(node_id) = session_node_id {
                 let to_drop = self.dropped_nodes.read().contains(&node_id);
                 self.drop_peers(io);
@@ -1073,9 +1100,15 @@ impl NetworkServiceInner {
                                 session_data.token_to_disconnect;
                         }
                         match session_data.session_data {
-                            SessionData::Ready => {
+                            SessionData::Ready { pos_public_key } => {
+                                debug!(
+                                    "receive Ready with pos_public_key={:?} account={:?}",
+                                    pos_public_key,
+                                    pos_public_key.as_ref().map(|k| from_consensus_public_key(k)),
+                                );
                                 handshake_done = true;
                                 session_node_id = Some(*sess.id().unwrap());
+                                pos_public_key_opt = pos_public_key;
                             }
                             SessionData::Message { data, protocol } => {
                                 match self.handlers.read().get(&protocol) {
@@ -1092,8 +1125,8 @@ impl NetworkServiceInner {
                             SessionData::Continue => {}
                         }
                     }
-                    Err(Error(kind, _)) => {
-                        debug!("Failed to read session data, error kind = {:?}, session = {:?}", kind, *sess);
+                    Err(e) => {
+                        debug!("Failed to read session data, error = {:?}, session = {:?}", e, *sess);
                         kill = true;
                         break;
                     }
@@ -1147,6 +1180,7 @@ impl NetworkServiceInner {
                                     &network_context,
                                     session_node_id.as_ref().unwrap(),
                                     protocol.version,
+                                    pos_public_key_opt.clone(),
                                 );
                         }
                     }
@@ -1247,7 +1281,7 @@ impl NetworkServiceInner {
                 deregister = remote || sess.done();
                 failure_id = sess.id().cloned();
                 debug!(
-                    "kill connection, deregister = {}, reason = {:?}, session = {:?}, op = {:?}",
+                    "kill connection by token, deregister = {}, reason = {:?}, session = {:?}, op = {:?}",
                     deregister, reason, *sess, op
                 );
             }
@@ -1726,6 +1760,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 ref node_id,
                 ref data,
             } => {
+                debug!("Receive ProtocolMsg {:?}", protocol);
                 if let Some(handler) =
                     self.handlers.read().get(protocol).cloned()
                 {
@@ -2094,6 +2129,49 @@ fn load_key(path: &Path) -> Option<Secret> {
             None
         }
     }
+}
+
+pub fn load_pos_private_key(
+    path: &Path,
+) -> Option<(ConsensusPrivateKey, Option<ConsensusVRFPrivateKey>)> {
+    let mut path_buf = PathBuf::from(path);
+    path_buf.push("pos_key");
+    let mut file = match fs::File::open(path_buf.as_path()) {
+        Ok(file) => file,
+        Err(e) => {
+            debug!("failed to open key file: {:?}", e);
+            return None;
+        }
+    };
+    let mut buf = String::new();
+    match file.read_to_string(&mut buf) {
+        Ok(_) => {}
+        Err(e) => {
+            warn!("Error reading key file: {:?}", e);
+            return None;
+        }
+    }
+    let key_str: Vec<_> = buf.split(",").collect();
+    let private_key =
+        match ConsensusPrivateKey::from_encoded_string(&key_str[0]) {
+            Ok(key) => Some(key),
+            Err(e) => {
+                warn!("Error parsing key file: {:?}", e);
+                None
+            }
+        }?;
+    if key_str.len() <= 1 {
+        return Some((private_key, None));
+    }
+    let vrf_private_key =
+        match ConsensusVRFPrivateKey::from_encoded_string(&key_str[1]) {
+            Ok(key) => Some(key),
+            Err(e) => {
+                warn!("Error parsing key file: {:?}", e);
+                None
+            }
+        }?;
+    Some((private_key, Some(vrf_private_key)))
 }
 
 impl std::fmt::Display for ProtocolVersion {

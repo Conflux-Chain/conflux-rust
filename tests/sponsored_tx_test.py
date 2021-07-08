@@ -4,7 +4,7 @@ from eth_utils import decode_hex
 from conflux.address import hex_to_b32_address
 from conflux.rpc import RpcClient
 from conflux.transactions import CONTRACT_DEFAULT_GAS, COLLATERAL_UNIT_IN_DRIP, charged_of_huge_gas
-from conflux.utils import encode_hex, priv_to_addr, parse_as_int
+from conflux.utils import priv_to_addr
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, encode_hex_0x, wait_for_initial_nonce_for_address
 from test_framework.test_framework import ConfluxTestFramework
@@ -101,7 +101,7 @@ class SponsoredTxTest(ConfluxTestFramework):
 
         self.log.info("Initializing contract")
         genesis_key = self.genesis_priv_key
-        genesis_addr = encode_hex(self.genesis_addr)
+        genesis_addr = encode_hex_0x(self.genesis_addr)
         self.log.info("genesis_addr={}".format(genesis_addr))
         nonce = 0
         gas_price = 1
@@ -245,7 +245,8 @@ class SponsoredTxTest(ConfluxTestFramework):
         for _ in range(10):
             client.generate_block()
         tx_info = self.nodes[0].tx_inspect(transaction.hash_hex())
-        assert_equal(self.wait_for_tx([transaction], True)[0]['storageCoveredBySponsor'], True)
+        # Now addr1 pays for storage collateral by itself.
+        assert_equal(self.wait_for_tx([transaction], True)[0]['storageCoveredBySponsor'], False)
         assert_equal(int(tx_info['local_nonce'], 16), 3)
         assert_equal(tx_info['packed'], True)
 

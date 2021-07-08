@@ -1209,13 +1209,19 @@ impl<
             None
         };
 
+        let storage_sponsor_paid = if self.spec.cip78 {
+            storage_owner == code_address
+        } else {
+            storage_sponsored
+        };
+
         Ok(self.finalize(
             tx,
             tx_substate,
             result,
             output,
             refund_receiver,
-            storage_sponsored,
+            storage_sponsor_paid,
             options.tracer.drain(),
         )?)
     }

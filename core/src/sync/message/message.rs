@@ -15,7 +15,7 @@ use crate::{
 };
 use network::{service::ProtocolVersion, NetworkProtocolHandler};
 pub use priority_send_queue::SendQueuePriority;
-use rlp::{Decodable, Rlp};
+use rlp::{Decodable, Encodable, Rlp};
 
 // generate `pub mod msgid`
 build_msgid! {
@@ -62,6 +62,8 @@ build_msgid! {
     INVALID = 0xff
     // This above not the last one because msg_id is u16,
     // U16_NEXT = 0x100
+
+    // TODO (linxi): add pos final decision message
 }
 
 // generate `impl Message for _` for each message type
@@ -91,6 +93,12 @@ impl Message for GetBlockHashesResponse {
     fn msg_name(&self) -> &'static str { "GetBlockHashesResponse" }
 
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Low }
+
+    fn encode(&self) -> Vec<u8> {
+        let mut encoded = self.rlp_bytes();
+        self.push_msg_id_leb128_encoding(&mut encoded);
+        encoded
+    }
 }
 
 // normal priority and size-sensitive message types
@@ -102,6 +110,12 @@ impl Message for Transactions {
     fn msg_id(&self) -> MsgId { msgid::TRANSACTIONS }
 
     fn msg_name(&self) -> &'static str { "Transactions" }
+
+    fn encode(&self) -> Vec<u8> {
+        let mut encoded = self.rlp_bytes();
+        self.push_msg_id_leb128_encoding(&mut encoded);
+        encoded
+    }
 }
 
 impl GetMaybeRequestId for GetBlocksResponse {}
@@ -112,6 +126,12 @@ impl Message for GetBlocksResponse {
     fn msg_id(&self) -> MsgId { msgid::GET_BLOCKS_RESPONSE }
 
     fn msg_name(&self) -> &'static str { "GetBlocksResponse" }
+
+    fn encode(&self) -> Vec<u8> {
+        let mut encoded = self.rlp_bytes();
+        self.push_msg_id_leb128_encoding(&mut encoded);
+        encoded
+    }
 }
 
 impl GetMaybeRequestId for GetBlocksWithPublicResponse {}
@@ -126,6 +146,12 @@ impl Message for GetBlocksWithPublicResponse {
     fn msg_id(&self) -> MsgId { msgid::GET_BLOCKS_WITH_PUBLIC_RESPONSE }
 
     fn msg_name(&self) -> &'static str { "GetBlocksWithPublicResponse" }
+
+    fn encode(&self) -> Vec<u8> {
+        let mut encoded = self.rlp_bytes();
+        self.push_msg_id_leb128_encoding(&mut encoded);
+        encoded
+    }
 }
 
 impl GetMaybeRequestId for GetBlockTxnResponse {}
@@ -136,6 +162,12 @@ impl Message for GetBlockTxnResponse {
     fn msg_id(&self) -> MsgId { msgid::GET_BLOCK_TXN_RESPONSE }
 
     fn msg_name(&self) -> &'static str { "GetBlockTxnResponse" }
+
+    fn encode(&self) -> Vec<u8> {
+        let mut encoded = self.rlp_bytes();
+        self.push_msg_id_leb128_encoding(&mut encoded);
+        encoded
+    }
 }
 
 impl GetMaybeRequestId for TransactionDigests {}
@@ -148,6 +180,12 @@ impl Message for TransactionDigests {
     fn msg_name(&self) -> &'static str { "TransactionDigests" }
 
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
+
+    fn encode(&self) -> Vec<u8> {
+        let mut encoded = self.rlp_bytes();
+        self.push_msg_id_leb128_encoding(&mut encoded);
+        encoded
+    }
 }
 
 impl GetMaybeRequestId for GetTransactionsResponse {}
@@ -160,6 +198,12 @@ impl Message for GetTransactionsResponse {
     fn msg_name(&self) -> &'static str { "GetTransactionsResponse" }
 
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
+
+    fn encode(&self) -> Vec<u8> {
+        let mut encoded = self.rlp_bytes();
+        self.push_msg_id_leb128_encoding(&mut encoded);
+        encoded
+    }
 }
 impl GetMaybeRequestId for GetTransactionsFromTxHashesResponse {}
 mark_msg_version_bound!(
@@ -177,6 +221,12 @@ impl Message for GetTransactionsFromTxHashesResponse {
     fn msg_name(&self) -> &'static str { "GetTransactionsFromTxHashesResponse" }
 
     fn priority(&self) -> SendQueuePriority { SendQueuePriority::Normal }
+
+    fn encode(&self) -> Vec<u8> {
+        let mut encoded = self.rlp_bytes();
+        self.push_msg_id_leb128_encoding(&mut encoded);
+        encoded
+    }
 }
 /// handle the RLP encoded message with given context `ctx`.
 /// If the message not handled, return `Ok(false)`.

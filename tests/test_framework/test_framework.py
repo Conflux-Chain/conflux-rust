@@ -303,18 +303,20 @@ class ConfluxTestFramework:
             connect_nodes(self.nodes, i, i + 1)
         sync_blocks(self.nodes)
 
-    def setup_nodes(self, binary=None):
+    def setup_nodes(self, genesis_nodes=None, binary=None, is_consortium=True):
         """Override this method to customize test node setup"""
-        self.add_nodes(self.num_nodes, binary=binary)
+        self.add_nodes(self.num_nodes, genesis_nodes=genesis_nodes, binary=binary, is_consortium=is_consortium)
         self.start_nodes()
 
-    def add_nodes(self, num_nodes, rpchost=None, binary=None, auto_recovery=False, recovery_timeout=30, is_consortium=False):
+    def add_nodes(self, num_nodes, genesis_nodes=None, rpchost=None, binary=None, auto_recovery=False, recovery_timeout=30, is_consortium=True):
         """Instantiate TestNode objects"""
         if binary is None:
             binary = [self.options.conflux] * num_nodes
         assert_equal(len(binary), num_nodes)
+        if genesis_nodes is None:
+            genesis_nodes = num_nodes
         if is_consortium:
-            initialize_tg_config(self.options.tmpdir, num_nodes)
+            initialize_tg_config(self.options.tmpdir, num_nodes, genesis_nodes)
         for i in range(num_nodes):
             node_index = len(self.nodes)
             self.nodes.append(

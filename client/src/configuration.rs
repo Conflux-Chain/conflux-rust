@@ -24,12 +24,14 @@ use cfxcore::{
     },
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
+        pos_handler::{PosConfiguration, PosVerifier},
         ConsensusConfig, ConsensusInnerConfig,
     },
     consensus_internal_parameters::*,
     consensus_parameters::*,
     light_protocol::LightNodeConfiguration,
     machine::Machine,
+    pos::pow_handler::POS_TERM_EPOCHS,
     spec::CommonParams,
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
@@ -285,7 +287,11 @@ build_config! {
         // TreeGraph Section.
         (candidate_pivot_waiting_timeout_ms, (u64), 10_000)
         (is_consortium, (bool), false)
-        (tg_config_path, (Option<String>), Some("./tg_config/tg_config.toml".to_string()))
+        (pos_config_path, (Option<String>), Some("./pos_config/pos_config.toml".to_string()))
+        (pos_genesis_pivot_decision, (Option<H256>), None)
+        (vrf_proposal_threshold, (U256), U256::MAX)
+        // Deferred epoch count before a confirmed epoch.
+        (pos_pivot_decision_defer_epoch_count, (u64), 50)
 
         // Light node section
         (ln_epoch_request_batch_size, (Option<usize>), None)
@@ -511,6 +517,9 @@ impl Configuration {
         } else {
             self.raw_conf.enable_optimistic_execution
         };
+        // FIXME(lpl): This is needed to return a valid cross-checkpoint pivot
+        // decision for now.
+        assert_eq!(self.raw_conf.era_epoch_count % POS_TERM_EPOCHS, 0);
         let mut conf = ConsensusConfig {
             chain_id: self.chain_id_params(),
             inner_conf: ConsensusInnerConfig {
@@ -525,7 +534,7 @@ impl Configuration {
                 era_epoch_count: self.raw_conf.era_epoch_count,
                 enable_optimistic_execution,
                 enable_state_expose: self.raw_conf.enable_state_expose,
-
+                pos_pivot_decision_defer_epoch_count: self.raw_conf.pos_pivot_decision_defer_epoch_count,
                 debug_dump_dir_invalid_state_root: if self
                     .raw_conf
                     .debug_invalid_state_root
@@ -601,7 +610,7 @@ impl Configuration {
     }
 
     pub fn verification_config(
-        &self, machine: Arc<Machine>,
+        &self, machine: Arc<Machine>, pos_verifier: Arc<PosVerifier>,
     ) -> VerificationConfig {
         VerificationConfig::new(
             self.is_test_mode(),
@@ -609,6 +618,7 @@ impl Configuration {
             self.raw_conf.max_block_size_in_bytes,
             self.raw_conf.transaction_epoch_bound,
             machine,
+            pos_verifier,
         )
     }
 
@@ -759,6 +769,10 @@ impl Configuration {
             } else {
                 self.raw_conf.dev_allow_phase_change_without_peer
             },
+            pos_genesis_pivot_decision: self
+                .raw_conf
+                .pos_genesis_pivot_decision
+                .expect("set to genesis if none"),
         }
     }
 
@@ -1026,6 +1040,8 @@ impl Configuration {
         }
     }
 
+    pub fn pos_config(&self) -> PosConfiguration { PosConfiguration {} }
+
     pub fn common_params(&self) -> CommonParams {
         let mut params = CommonParams::default();
 
@@ -1068,6 +1084,11 @@ impl Configuration {
             .raw_conf
             .unnamed_21autumn_transition_number
             .unwrap_or(default_transition_time);
+        params.transition_numbers.cip78 = self
+            .raw_conf
+            .unnamed_21autumn_transition_number
+            .unwrap_or(default_transition_time);
+
         params.transition_heights.cip76 = self
             .raw_conf
             .unnamed_21autumn_transition_height

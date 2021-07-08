@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 mod admin;
+mod context;
 mod future;
 #[allow(unused)]
 mod pos;
@@ -34,7 +35,8 @@ mod macros {
 
 pub(super) use self::pos::{IncreaseStakeEvent, RegisterEvent};
 pub use self::{
-    admin::AdminControl, sponsor::SponsorWhitelistControl, staking::Staking,
+    admin::AdminControl, context::Context, sponsor::SponsorWhitelistControl,
+    staking::Staking,
 };
 
 use super::{
@@ -188,7 +190,7 @@ pub fn all_internal_contracts() -> Vec<Box<dyn InternalContractTrait>> {
         Box::new(Staking::instance()),
         Box::new(SponsorWhitelistControl::instance()),
         Box::new(future::AntiReentrancy::instance()),
-        Box::new(future::Context::instance()),
+        Box::new(Context::instance()),
         Box::new(future::PoS::instance()),
     ]
 }

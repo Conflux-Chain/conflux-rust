@@ -12,7 +12,7 @@ use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WsServer;
 
 use crate::{
-    common::{initialize_common_modules, ClientComponents},
+    common::{initialize_common_modules, ClientComponents, DiemHandle},
     configuration::Configuration,
     rpc::{
         extractor::RpcExtractor, impls::light::RpcImpl,
@@ -51,7 +51,7 @@ pub struct LightClient {}
 impl LightClient {
     // Start all key components of Conflux and pass out their handles
     pub fn start(
-        conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
+        mut conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     ) -> Result<
         Box<ClientComponents<BlockGenerator, LightClientExtraComponents>>,
         String,
@@ -62,6 +62,7 @@ impl LightClient {
             _genesis_accounts,
             data_man,
             pow,
+            _pos_verifier,
             txpool,
             consensus,
             sync_graph,
@@ -71,7 +72,12 @@ impl LightClient {
             notifications,
             pubsub,
             runtime,
-        ) = initialize_common_modules(&conf, exit.clone(), NodeType::Light)?;
+            diem_handler,
+        ) = initialize_common_modules(
+            &mut conf,
+            exit.clone(),
+            NodeType::Light,
+        )?;
 
         let light = Arc::new(LightQueryService::new(
             consensus.clone(),
@@ -157,6 +163,7 @@ impl LightClient {
 
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
+            diem_handler,
             blockgen: None,
             other_components: LightClientExtraComponents {
                 consensus,

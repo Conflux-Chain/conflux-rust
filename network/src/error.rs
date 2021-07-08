@@ -144,9 +144,9 @@ error_chain! {
             display("Bad socket address"),
         }
 
-        Decoder {
+        Decoder(reason: String) {
             description("Decoder error"),
-            display("Decoder error"),
+            display("Decoder error: reason={}", reason),
         }
 
         Expired {
@@ -213,7 +213,9 @@ impl From<io::Error> for Error {
 }
 
 impl From<rlp::DecoderError> for Error {
-    fn from(_err: rlp::DecoderError) -> Self { ErrorKind::Decoder.into() }
+    fn from(err: rlp::DecoderError) -> Self {
+        ErrorKind::Decoder(format!("{}", err)).into()
+    }
 }
 
 impl From<keylib::Error> for Error {

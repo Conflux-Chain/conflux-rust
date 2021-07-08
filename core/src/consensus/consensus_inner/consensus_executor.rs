@@ -9,6 +9,7 @@ use crate::{
             consensus_new_block_handler::ConsensusNewBlockHandler,
             StateBlameInfo,
         },
+        pos_handler::PosVerifier,
         ConsensusGraphInner,
     },
     executive::{
@@ -189,6 +190,7 @@ impl ConsensusExecutor {
         consensus_inner: Arc<RwLock<ConsensusGraphInner>>,
         config: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, bench_mode: bool,
+        pos_verifier: Arc<PosVerifier>,
     ) -> Arc<Self>
     {
         let machine = tx_pool.machine();
@@ -198,6 +200,7 @@ impl ConsensusExecutor {
             config,
             verification_config,
             machine,
+            pos_verifier,
         ));
         let (sender, receiver) = channel();
 
@@ -798,6 +801,7 @@ pub struct ConsensusExecutionHandler {
     config: ConsensusExecutionConfiguration,
     verification_config: VerificationConfig,
     machine: Arc<Machine>,
+    pos_verifier: Arc<PosVerifier>,
     execution_state_prefetcher: Option<Arc<ExecutionStatePrefetcher>>,
 }
 
@@ -806,6 +810,7 @@ impl ConsensusExecutionHandler {
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
         config: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, machine: Arc<Machine>,
+        pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         ConsensusExecutionHandler {
@@ -814,6 +819,7 @@ impl ConsensusExecutionHandler {
             config,
             verification_config,
             machine,
+            pos_verifier,
             execution_state_prefetcher: if DEFAULT_EXECUTION_PREFETCH_THREADS
                 > 0
             {
@@ -1021,6 +1027,32 @@ impl ConsensusExecutionHandler {
             );
         }
 
+        // TODO(peilun): Specify if we unlock before or after executing the
+        // transactions.
+        let parent_pos_ref = self
+            .data_man
+            .block_header_by_hash(&pivot_block.block_header.parent_hash()) // `None` only for genesis.
+            .and_then(|parent| parent.pos_reference().clone());
+        if self
+            .pos_verifier
+            .is_enabled_at_height(pivot_block.block_header.height())
+            && *pivot_block.block_header.pos_reference() != parent_pos_ref
+        {
+            // The pos_reference is continuous, so after seeing a new
+            // pos_reference, we only need to process the new
+            // unlock_txs in it.
+            for _unlock_tx in self.pos_verifier.get_unlock_events(
+                pivot_block
+                    .block_header
+                    .pos_reference()
+                    .as_ref()
+                    .expect("checked before sync graph insertion"),
+                &parent_pos_ref.expect("checked"),
+            ) {
+                // FIXME(peilun): Process unlock events.
+            }
+        }
+
         // FIXME: We may want to propagate the error up.
         let state_root;
         if on_local_pivot {
@@ -1224,6 +1256,11 @@ impl ConsensusExecutionHandler {
                         gas_fee = executed.fee;
                         if self.config.executive_trace {
                             block_traces.push(executed.trace.into());
+                        }
+                        if spec.cip78 {
+                            gas_sponsor_paid = executed.gas_sponsor_paid;
+                            storage_sponsor_paid =
+                                executed.storage_sponsor_paid;
                         }
                         debug!(
                             "tx execution error: err={:?}, transaction={:?}",
