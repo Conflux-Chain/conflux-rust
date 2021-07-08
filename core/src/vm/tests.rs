@@ -248,10 +248,5 @@ impl Context for MockContext {
         self.tracing
     }
 
-    fn is_reentrancy(&self, _: &Address, _: &Address) -> bool {
-        // The MockContext doesn't have message call
-        false
-    }
-
     fn internal_ref(&mut self) -> InternalRefContext { unimplemented!() }
 }

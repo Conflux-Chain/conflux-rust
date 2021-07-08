@@ -7,11 +7,5 @@ use cfx_types::Address;
 // update the hardcoded test mode genesis state  without waiting for the
 // implementation of each contract.
 make_solidity_contract! {
-    pub(super) struct AntiReentrancy(ANTI_REENTRANCY_CONTRACT_ADDRESS, "placeholder");
-}
-make_solidity_contract! {
-    pub(super) struct Context(CONTEXT_CONTRACT_ADDRESS, "placeholder");
-}
-make_solidity_contract! {
     pub(super) struct PoS(POS_REGISTER_CONTRACT_ADDRESS, "placeholder");
 }

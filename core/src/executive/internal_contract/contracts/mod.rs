@@ -3,20 +3,26 @@
 // See http://www.gnu.org/licenses/
 
 mod admin;
+mod context;
 mod future;
 #[allow(unused)]
 mod pos;
+mod reentrancy;
 mod sponsor;
 mod staking;
 
 mod macros {
     #[cfg(test)]
     pub use crate::check_signature;
+    #[cfg(test)]
+    pub use rustc_hex::FromHex;
 
     pub use crate::{
         group_impl_is_active, impl_function_type, make_function_table,
         make_solidity_contract, make_solidity_event, make_solidity_function,
     };
+    pub use cfx_types::H256;
+    pub use keccak_hash::keccak;
 
     pub(super) use super::SolFnTable;
 
@@ -34,7 +40,8 @@ mod macros {
 
 pub(super) use self::pos::{IncreaseStakeEvent, RegisterEvent};
 pub use self::{
-    admin::AdminControl, sponsor::SponsorWhitelistControl, staking::Staking,
+    admin::AdminControl, context::Context, reentrancy::AntiReentrancyConfig,
+    sponsor::SponsorWhitelistControl, staking::Staking,
 };
 
 use super::{
@@ -187,8 +194,8 @@ pub fn all_internal_contracts() -> Vec<Box<dyn InternalContractTrait>> {
         Box::new(AdminControl::instance()),
         Box::new(Staking::instance()),
         Box::new(SponsorWhitelistControl::instance()),
-        Box::new(future::AntiReentrancy::instance()),
-        Box::new(future::Context::instance()),
+        Box::new(AntiReentrancyConfig::instance()),
+        Box::new(Context::instance()),
         Box::new(future::PoS::instance()),
     ]
 }
