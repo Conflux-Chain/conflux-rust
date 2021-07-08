@@ -847,7 +847,6 @@ impl Configuration {
             .is_some()
         {
             conf.persist_tx_index = true;
-            conf.persist_block_number_index = true;
         }
         conf
     }

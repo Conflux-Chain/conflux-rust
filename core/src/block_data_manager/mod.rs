@@ -865,7 +865,7 @@ impl BlockDataManager {
     pub fn insert_hash_by_block_number(
         &self, block_number: u64, block_hash: &H256,
     ) {
-        if self.config.persist_tx_index {
+        if self.config.persist_block_number_index {
             self.hash_by_block_number
                 .write()
                 .entry(block_number)
