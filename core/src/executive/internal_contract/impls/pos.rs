@@ -40,10 +40,14 @@ impl IndexStatus {
 
 type Bytes = Vec<u8>;
 
+fn decode_bls_pubkey(bls_pubkey: Bytes) -> Result<PublicKey, CryptoError> {
+    PublicKey::from_bytes(bls_pubkey.as_slice())
+}
+
 fn verify_bls_pubkey(
     bls_pubkey: Bytes, bls_proof: [Bytes; 2],
 ) -> Result<Option<Bytes>, CryptoError> {
-    let pubkey = PublicKey::from_bytes(bls_pubkey.as_slice())?;
+    let pubkey = decode_bls_pubkey(bls_pubkey)?;
     let commit = decode_commit(bls_proof[0].as_slice())?;
     let answer = decode_answer(bls_proof[1].as_slice())?;
     let verified_pubkey = if verify(pubkey.clone(), commit, answer) {
@@ -146,5 +150,45 @@ pub fn get_status(
     Ok((status.registered, status.unlocked))
 }
 
+pub fn decode_register_info(event: &LogEntry) -> Option<StakingEvents> {
+    if event.address != *POS_REGISTER_CONTRACT_ADDRESS {
+        return None;
+    }
+
+    match event
+        .topics
+        .first()
+        .expect("First topic is event sig")
+        .clone()
+    {
+        sig if sig == RegisterEvent::event_sig() => {
+            let identifier =
+                event.topics.get(1).expect("Second topic is identifier");
+            let (verified_bls_pubkey, vrf_pubkey) =
+                <(Bytes, Bytes)>::abi_decode(&event.data).unwrap();
+            Some(Register((
+                AccountAddress::new(identifier.0),
+                decode_bls_pubkey(verified_bls_pubkey).unwrap().into(),
+                vrf_pubkey.into(),
+            )))
+        }
+        sig if sig == IncreaseStakeEvent::event_sig() => {
+            let identifier =
+                event.topics.get(1).expect("Second topic is identifier");
+            let power = u64::abi_decode(&event.data).unwrap();
+            Some(IncreaseStake((AccountAddress::new(identifier.0), power)))
+        }
+        _ => unreachable!(),
+    }
+}
+
 #[allow(unused)]
 pub fn sync_with_pos() { todo!() }
+
+use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
+use diem_crypto::{bls::BLSPublicKey, ec_vrf::EcVrfPublicKey};
+use diem_types::validator_config::ConsensusPublicKey;
+use move_core_types::account_address::AccountAddress;
+use pow_types::StakingEvents::{self, IncreaseStake, Register};
+use primitives::log_entry::LogEntry;
+use solidity_abi::ABIDecodable;

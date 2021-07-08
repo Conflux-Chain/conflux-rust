@@ -513,21 +513,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bls-signatures"
-version = "0.10.0"
-source = "git+https://github.com/Conflux-Chain/bls-signatures.git?branch=update_rand#eacce52ba0ed22e30eadd363db73953b9d77a86d"
-dependencies = [
- "fff",
- "groupy",
- "hkdf",
- "paired",
- "rand_core 0.6.2",
- "rayon",
- "sha2 0.9.5",
- "thiserror",
-]
-
-[[package]]
 name = "bn"
 version = "0.4.4"
 source = "git+https://github.com/paritytech/bn?rev=635c4cdd560bc0c8b262e6bf809dc709da8bcd7e#635c4cdd560bc0c8b262e6bf809dc709da8bcd7e"
@@ -819,7 +804,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "bit-set 0.4.0",
- "bls-signatures 0.10.0 (git+https://github.com/Conflux-Chain/bls-signatures.git?branch=update_rand)",
+ "bls-signatures",
  "bn",
  "byteorder",
  "cfx-addr",
@@ -1676,7 +1661,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "bitvec 0.19.5",
- "bls-signatures 0.10.0 (git+https://github.com/Conflux-Chain/bls-signatures.git?branch=temp_fast_decode)",
+ "bls-signatures",
  "byteorder",
  "bytes 1.0.1",
  "cfx-types",
