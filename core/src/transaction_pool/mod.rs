@@ -20,6 +20,11 @@ use crate::{
     machine::Machine, state::State, verification::VerificationConfig,
 };
 
+use crate::{
+    spec::TransitionsEpochHeight,
+    verification::{VerifyTxLocalMode, VerifyTxMode},
+    vm::Spec,
+};
 use account_cache::AccountCache;
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_statedb::{Result as StateDbResult, StateDb};
@@ -264,12 +269,18 @@ impl TransactionPool {
         // filter out invalid transactions.
         let mut index = 0;
 
-        let (chain_id, best_height) = {
+        let (chain_id, best_height, best_block_number) = {
             (
                 current_best_info.best_chain_id(),
                 current_best_info.best_epoch_number,
+                current_best_info.best_block_number,
             )
         };
+        // FIXME: Needs further discussion here, some transactions may be valid
+        // and invalid back and forth does this matters? But for the epoch
+        // height check, it may also become valid and invalid back and forth.
+        let vm_spec = self.machine.spec(best_block_number);
+        let transitions = &self.machine.params().transition_heights;
 
         while let Some(tx) = transactions.get(index) {
             match self.verify_transaction_tx_pool(
@@ -277,6 +288,8 @@ impl TransactionPool {
                 /* basic_check = */ true,
                 chain_id,
                 best_height,
+                transitions,
+                &vm_spec,
             ) {
                 Ok(_) => index += 1,
                 Err(e) => {
@@ -374,12 +387,17 @@ impl TransactionPool {
         // filter out invalid transactions.
         let mut index = 0;
 
-        let (chain_id, best_height) = {
+        let (chain_id, best_height, best_block_number) = {
             (
                 current_best_info.best_chain_id(),
                 current_best_info.best_epoch_number,
+                current_best_info.best_block_number,
             )
         };
+        // FIXME: Needs further discussion here, some transactions may be valid
+        // and invalid back and forth does this matters?
+        let vm_spec = self.machine.spec(best_block_number);
+        let transitions = &self.machine.params().transition_heights;
 
         while let Some(tx) = signed_transactions.get(index) {
             match self.verify_transaction_tx_pool(
@@ -387,6 +405,8 @@ impl TransactionPool {
                 true, /* basic_check = */
                 chain_id,
                 best_height,
+                transitions,
+                &vm_spec,
             ) {
                 Ok(_) => index += 1,
                 Err(e) => {
@@ -462,47 +482,30 @@ impl TransactionPool {
     /// readiness
     fn verify_transaction_tx_pool(
         &self, transaction: &TransactionWithSignature, basic_check: bool,
-        chain_id: u32, best_height: u64,
+        chain_id: u32, best_height: u64, transitions: &TransitionsEpochHeight,
+        spec: &Spec,
     ) -> Result<(), String>
     {
         let _timer = MeterTimer::time_func(TX_POOL_VERIFY_TIMER.as_ref());
+        let mode = VerifyTxMode::Local(VerifyTxLocalMode::MaybeLater, spec);
 
         if basic_check {
-            if let Err(e) = self
-                .verification_config
-                .verify_transaction_common(transaction, chain_id)
-            {
+            if let Err(e) = self.verification_config.verify_transaction_common(
+                transaction,
+                chain_id,
+                best_height,
+                transitions,
+                mode,
+            ) {
                 warn!("Transaction {:?} discarded due to not passing basic verification.", transaction.hash());
                 return Err(format!("{:?}", e));
             }
         }
 
-        // If it is zero, it might be possible that it is not initialized
-        // TODO: figure out when we should active txpool.
-        // TODO: Ideally txpool should only be initialized after Normal phase.
-        if best_height == 0 {
-            warn!("verify transaction while best info isn't initialized");
-        } else {
-            if VerificationConfig::check_transaction_epoch_bound(
-                transaction,
-                best_height,
-                self.verification_config.transaction_epoch_bound,
-            ) < 0
-            {
-                // Check the epoch height is in bound. Because this is such a
-                // loose bound, we can check it here as if it
-                // will not change at all during its life time.
-                warn!(
-                    "Transaction discarded due to epoch height out of the bound: \
-                    best height {} tx epoch height {}",
-                    best_height, transaction.epoch_height);
-                return Err(format!(
-                    "transaction epoch height {} is out side the range of the current \
-                    pivot height ({}) bound, only {} drift allowed!",
-                    transaction.epoch_height, best_height,
-                    self.verification_config.transaction_epoch_bound));
-            }
-        }
+        // Check the epoch height is moved to verify_transaction_common. In
+        // VerifyTxLocalMode::MaybeLater mode, a transaction with larger target
+        // epoch can be accepted. Since PR #1610, it is guaranteed that
+        // best info is initialized here.
 
         // check transaction gas limit
         let max_tx_gas = *self.config.max_tx_gas.read();
@@ -595,26 +598,21 @@ impl TransactionPool {
 
     pub fn pack_transactions<'a>(
         &self, num_txs: usize, block_gas_limit: U256, block_size_limit: usize,
-        mut best_epoch_height: u64,
+        mut best_epoch_height: u64, mut best_block_number: u64,
     ) -> Vec<Arc<SignedTransaction>>
     {
         let mut inner = self.inner.write_with_metric(&PACK_TRANSACTION_LOCK);
         best_epoch_height += 1;
-        let transaction_epoch_bound =
-            self.verification_config.transaction_epoch_bound;
-        let height_lower_bound = if best_epoch_height > transaction_epoch_bound
-        {
-            best_epoch_height - transaction_epoch_bound
-        } else {
-            0
-        };
-        let height_upper_bound = best_epoch_height + transaction_epoch_bound;
+        // The best block number is not necessary an exact number.
+        best_block_number += 1;
         inner.pack_transactions(
             num_txs,
             block_gas_limit,
             block_size_limit,
-            height_lower_bound,
-            height_upper_bound,
+            best_epoch_height,
+            best_block_number,
+            &self.verification_config,
+            &self.machine,
         )
     }
 
@@ -695,8 +693,17 @@ impl TransactionPool {
             .ok();
         }
 
-        let (chain_id, best_height) =
-            { (best_info.best_chain_id(), best_info.best_epoch_number) };
+        let (chain_id, best_height, best_block_number) = {
+            (
+                best_info.best_chain_id(),
+                best_info.best_epoch_number,
+                best_info.best_block_number,
+            )
+        };
+        // FIXME: Needs further discussion here, some transactions may be valid
+        // and invalid back and forth, does this matters?
+        let vm_spec = self.machine.spec(best_block_number);
+        let transitions = &self.machine.params().transition_heights;
 
         while let Some(tx) = recycle_tx_buffer.pop() {
             debug!(
@@ -710,6 +717,8 @@ impl TransactionPool {
                 /* basic_check = */ false,
                 chain_id,
                 best_height,
+                transitions,
+                &vm_spec,
             ) {
                 warn!(
                     "Recycled transaction {:?} discarded due to not passing verification {}.",
@@ -775,6 +784,7 @@ impl TransactionPool {
             self_gas_limit.clone(),
             block_size_limit,
             consensus_best_info_clone.best_epoch_number,
+            consensus_best_info_clone.best_block_number,
         );
 
         let transactions = [
