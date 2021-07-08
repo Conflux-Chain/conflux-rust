@@ -1,3 +1,12 @@
+# 1.1.5
+
+## Improvements
+
+### RPC Improvements
+- Raise error in `cfx_getBlockByHashWithPivotAssumption` if the provided block hash does not belong to the provided epoch.
+- Add `blockNumber` to the returned JSON object in `cfx_getBlockByHash`, `cfx_getBlockByEpochNumber`, and `cfx_getBlockByHashWithPivotAssumption`.
+
+
 # 1.1.4
 
 ## Improvements

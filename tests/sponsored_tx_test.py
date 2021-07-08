@@ -245,7 +245,8 @@ class SponsoredTxTest(ConfluxTestFramework):
         for _ in range(10):
             client.generate_block()
         tx_info = self.nodes[0].tx_inspect(transaction.hash_hex())
-        assert_equal(self.wait_for_tx([transaction], True)[0]['storageCoveredBySponsor'], True)
+        # Now addr1 pays for storage collateral by itself.
+        assert_equal(self.wait_for_tx([transaction], True)[0]['storageCoveredBySponsor'], False)
         assert_equal(int(tx_info['local_nonce'], 16), 3)
         assert_equal(tx_info['packed'], True)
 

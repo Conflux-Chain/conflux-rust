@@ -2033,6 +2033,10 @@ impl ConsensusGraphInner {
         self.arena[*self.pivot_chain.last().unwrap()].hash
     }
 
+    pub fn best_block_number(&self) -> u64 {
+        self.arena[*self.pivot_chain.last().unwrap()].past_num_blocks
+    }
+
     /// Return the latest epoch number whose state has been enqueued.
     ///
     /// The state may not exist, so the caller should wait for the result if its
