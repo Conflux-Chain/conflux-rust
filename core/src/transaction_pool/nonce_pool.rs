@@ -3,7 +3,9 @@ use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_types::{U128, U256, U512};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
-use primitives::SignedTransaction;
+use primitives::{
+    transaction::TransactionType::EthereumLike, SignedTransaction,
+};
 use rand::{RngCore, SeedableRng};
 use rand_xorshift::XorShiftRng;
 use std::{cmp::Ordering, mem, ops::Deref, sync::Arc};
@@ -80,17 +82,20 @@ impl NoncePoolNode {
         } else {
             (tx.gas - tx.sponsored_gas) * tx.gas_price
         };
+        let storage_collateral_requirement =
+            if tx.transaction.transaction_type() == EthereumLike {
+                U256::zero()
+            } else {
+                U256::from(tx.storage_limit - tx.sponsored_storage)
+                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+            };
         // normally, the value <= 2^192
         if tx.value > U256::from(u64::MAX) * U256::from(U128::max_value()) {
             U256::from(u64::MAX) * U256::from(U128::max_value())
                 + estimate_gas
-                + U256::from(tx.storage_limit - tx.sponsored_storage)
-                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+                + storage_collateral_requirement
         } else {
-            tx.value
-                + estimate_gas
-                + U256::from(tx.storage_limit - tx.sponsored_storage)
-                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+            tx.value + estimate_gas + storage_collateral_requirement
         }
     }
 

@@ -5,7 +5,7 @@
 use crate::{
     state::cleanup_mode,
     trace::{trace::ExecTrace, Tracer},
-    vm::{self, ActionParams, Env, Spec},
+    vm::{self, ActionParams, Spec},
 };
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{address_util::AddressUtil, Address, U256};
@@ -98,7 +98,7 @@ pub fn destroy(
     contract_address: Address, params: &ActionParams,
     state: &mut dyn StateOpsTrait, spec: &Spec,
     substate: &mut dyn SubstateTrait,
-    tracer: &mut dyn Tracer<Output = ExecTrace>, env: &Env,
+    tracer: &mut dyn Tracer<Output = ExecTrace>,
 ) -> vm::Result<()>
 {
     debug!("contract_address={:?}", contract_address);
@@ -113,7 +113,7 @@ pub fn destroy(
             spec,
             substate,
             tracer,
-            spec.account_start_nonce(env.number),
+            spec.account_start_nonce,
         )
     } else {
         Ok(())

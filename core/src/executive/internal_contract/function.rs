@@ -4,9 +4,7 @@
 
 use super::SolidityFunctionTrait;
 use crate::{
-    executive::{
-        internal_contract::activate_at::ActivateAtTrait, InternalRefContext,
-    },
+    executive::{internal_contract::activate_at::IsActive, InternalRefContext},
     state::CallStackInfo,
     trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, CallType, GasLeft, ReturnData, Spec},
@@ -33,7 +31,7 @@ impl<
             + PreExecCheckTrait
             + UpfrontPaymentTrait
             + ExecutionTrait
-            + ActivateAtTrait,
+            + IsActive,
     > SolidityFunctionTrait for T
 {
     fn execute(

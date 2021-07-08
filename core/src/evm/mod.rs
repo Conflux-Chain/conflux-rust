@@ -15,6 +15,7 @@ mod tests;
 pub use self::{
     evm::{CostType, FinalizationResult, Finalize},
     factory::Factory,
+    instructions::GasPriceTier,
     vmtype::VMType,
 };
 pub use crate::vm::{

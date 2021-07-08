@@ -62,7 +62,7 @@ pub use self::{
         Derivation, DerivationError, ExtendedKeyPair, ExtendedPublic,
         ExtendedSecret,
     },
-    keypair::{public_to_address, KeyPair},
+    keypair::{is_compatible_public, public_to_address, KeyPair},
     math::public_is_valid,
     parity_wordlist::Error as WordlistError,
     password::Password,

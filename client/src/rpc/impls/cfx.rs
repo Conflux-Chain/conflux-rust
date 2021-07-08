@@ -20,6 +20,7 @@ use cfxcore::{
     SharedSynchronizationService, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
+use cfxkey::is_compatible_public;
 use delegate::delegate;
 use jsonrpc_core::{BoxFuture, Error as JsonRpcError, Result as JsonRpcResult};
 use network::{
@@ -76,6 +77,7 @@ use cfxcore::{
 };
 use lazy_static::lazy_static;
 use metrics::{register_timer_with_group, ScopeTimer, Timer};
+use primitives::transaction::TransactionType;
 use serde::Serialize;
 
 lazy_static! {
@@ -385,8 +387,21 @@ impl RpcImpl {
         info!("RPC Request: cfx_sendRawTransaction len={:?}", raw.0.len());
         debug!("RawTransaction bytes={:?}", raw);
 
-        let tx =
+        let tx: TransactionWithSignature =
             invalid_params_check("raw", Rlp::new(&raw.into_vec()).as_val())?;
+
+        if tx.transaction_type() == TransactionType::EthereumLike {
+            if let Ok(pubkey) = tx.recover_public() {
+                if !is_compatible_public(&pubkey) {
+                    bail!(invalid_params("tx", "Sending Ethereum like transaction from invalid address: the sender address should start by 0x1 (by Ethereum address rule)."))
+                }
+            } else {
+                bail!(invalid_params(
+                    "tx",
+                    "Can not recover pubkey for Ethereum like tx"
+                ))
+            }
+        }
 
         let r = self.send_transaction_with_signature(tx);
         if r.is_ok() && self.config.dev_pack_tx_immediately {
