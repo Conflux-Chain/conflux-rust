@@ -9,9 +9,9 @@ mod impls;
 mod internal_context;
 
 pub use self::{
-    internal_context::InternalRefContext,
     contracts::InternalContractMap,
     impls::{get_reentrancy_allowance, suicide},
+    internal_context::InternalRefContext,
 };
 pub use solidity_abi::ABIDecodeError;
 
@@ -104,16 +104,16 @@ pub trait SolidityFunctionTrait: Send + Sync + IsActive {
 
 /// Native implementation of a solidity-interface function.
 pub trait SolidityEventTrait: Send + Sync {
-    type IndexedType: EventIndexEncodable;
-    type NonIndexedType: ABIEncodable;
+    type Indexed: EventIndexEncodable;
+    type NonIndexed: ABIEncodable;
 
     fn log(
-        &self, indexed: Self::IndexedType, non_indexed: Self::NonIndexedType,
+        indexed: &Self::Indexed, non_indexed: &Self::NonIndexed,
         param: &ActionParams, context: &mut InternalRefContext,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        let mut topics = vec![self.event_sig()];
+        let mut topics = vec![Self::event_sig()];
         topics.extend_from_slice(&indexed.indexed_event_encode());
 
         let data = non_indexed.abi_encode();
@@ -122,8 +122,8 @@ pub trait SolidityEventTrait: Send + Sync {
     }
 
     /// The string for function sig
-    fn name(&self) -> &'static str;
+    fn name() -> &'static str;
 
     /// The event signature
-    fn event_sig(&self) -> H256 { keccak(self.name()) }
+    fn event_sig() -> H256 { keccak(Self::name()) }
 }

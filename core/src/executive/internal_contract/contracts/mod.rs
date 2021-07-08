@@ -17,8 +17,10 @@ mod macros {
 
     pub use crate::{
         group_impl_is_active, impl_function_type, make_function_table,
-        make_solidity_contract, make_solidity_function,
+        make_solidity_contract, make_solidity_event, make_solidity_function,
     };
+    pub use cfx_types::H256;
+    pub use keccak_hash::keccak;
 
     pub(super) use super::SolFnTable;
 
@@ -28,7 +30,7 @@ mod macros {
             ExecutionTrait, InterfaceTrait, PreExecCheckConfTrait,
             UpfrontPaymentTrait,
         },
-        InternalContractTrait, SolidityFunctionTrait,
+        InternalContractTrait, SolidityEventTrait, SolidityFunctionTrait,
     };
 
     pub use crate::spec::CommonParams;

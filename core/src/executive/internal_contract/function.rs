@@ -220,17 +220,16 @@ macro_rules! impl_function_type {
 
 #[macro_export]
 macro_rules! make_solidity_event {
-    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($interface:expr, $indexed:ty, $non_indexed:ty); ) => {
+    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($interface:expr $(, indexed: $indexed:ty)? $(, non_indexed: $non_indexed:ty)?); ) => {
         $(#[$attr])*
         #[derive(Copy, Clone)]
-        $visibility struct $name {
-        }
+        $visibility struct $name;
 
-        impl InterfaceTrait for $name {
-            type Indexed = $indexed;
-            type NonIndexed = $non_indexed;
+        impl SolidityEventTrait for $name {
+            $(type Indexed = $indexed;)?
+            $(type NonIndexed = $non_indexed;)?
 
-            fn name(&self) -> &'static str {
+            fn name() -> &'static str {
                 $interface
             }
         }
