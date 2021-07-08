@@ -449,11 +449,8 @@ impl<
     fn is_static(&self) -> bool { self.local_part.static_flag }
 
     fn is_static_or_reentrancy(&self) -> bool {
-        self.local_part.static_flag || self.callstack.in_reentrancy()
-    }
-
-    fn is_reentrancy(&self, _caller: &Address, callee: &Address) -> bool {
-        self.callstack.reentrancy_happens_when_push(callee)
+        self.local_part.static_flag
+            || self.callstack.in_reentrancy(self.local_part.spec)
     }
 
     fn internal_ref(&mut self) -> InternalRefContext {
@@ -538,7 +535,7 @@ mod tests {
             );
             let env = get_test_env();
             let spec = machine.spec(env.number);
-            let callstack = CallStackInfo::default();
+            let callstack = CallStackInfo::new();
 
             let mut setup = Self {
                 storage_manager,
@@ -563,7 +560,7 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
-        let mut callstack = CallStackInfo::default();
+        let mut callstack = CallStackInfo::new();
 
         let mut lctx = LocalContext::new(
             &setup.env,
@@ -585,7 +582,7 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
-        let mut callstack = CallStackInfo::default();
+        let mut callstack = CallStackInfo::new();
 
         let mut lctx = LocalContext::new(
             &setup.env,
@@ -704,7 +701,7 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
-        let mut callstack = CallStackInfo::default();
+        let mut callstack = CallStackInfo::new();
 
         {
             let mut lctx = LocalContext::new(
@@ -731,7 +728,7 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let mut origin = get_test_origin();
-        let mut callstack = CallStackInfo::default();
+        let mut callstack = CallStackInfo::new();
 
         let mut contract_address = Address::zero();
         contract_address.set_contract_type_bits();

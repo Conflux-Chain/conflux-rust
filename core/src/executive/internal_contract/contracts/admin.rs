@@ -12,8 +12,6 @@ use crate::{
 use cfx_parameters::internal_contract_addresses::ADMIN_CONTROL_CONTRACT_ADDRESS;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{Address, U256};
-#[cfg(test)]
-use rustc_hex::FromHex;
 
 make_solidity_contract! {
     pub struct AdminControl(ADMIN_CONTROL_CONTRACT_ADDRESS, generate_fn_table, "active_at_genesis");
