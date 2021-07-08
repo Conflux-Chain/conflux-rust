@@ -123,7 +123,8 @@ impl ExecutionTrait for AddPrivilege {
     {
         if !params.sender.is_contract_address() {
             return Err(vm::Error::InternalContract(
-                "normal account is not allowed to set commission_privilege",
+                "normal account is not allowed to set commission_privilege"
+                    .into(),
             ));
         }
         add_privilege(params.sender, addresses, params, context.state)
@@ -154,7 +155,8 @@ impl ExecutionTrait for RemovePrivilege {
     {
         if !params.sender.is_contract_address() {
             return Err(vm::Error::InternalContract(
-                "normal account is not allowed to set commission_privilege",
+                "normal account is not allowed to set commission_privilege"
+                    .into(),
             ));
         }
 
