@@ -30,6 +30,7 @@ mod unit_tests;
 
 #[cfg(mirai)]
 mod tags;
+mod vdf_sha3;
 
 pub use self::traits::*;
 pub use hash::HashValue;
