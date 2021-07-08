@@ -33,7 +33,9 @@ use network::{
 };
 use num_bigint::{BigInt, ToBigInt};
 use parking_lot::{Condvar, Mutex};
-use primitives::{Account, Action, SignedTransaction};
+use primitives::{
+    transaction::TransactionType, Account, Action, SignedTransaction,
+};
 use std::{
     collections::{BTreeMap, HashSet},
     net::SocketAddr,
@@ -227,6 +229,7 @@ impl RpcImpl {
             Some(b) => Ok(Some(RpcBlock::new(
                 &*b,
                 *self.network.get_network_type(),
+                consensus_graph,
                 inner,
                 &self.data_man,
                 include_txs,
@@ -280,6 +283,7 @@ impl RpcImpl {
             Some(b) => Ok(Some(RpcBlock::new(
                 &*b,
                 *self.network.get_network_type(),
+                consensus_graph,
                 inner,
                 &self.data_man,
                 include_txs,
@@ -331,6 +335,7 @@ impl RpcImpl {
         Ok(RpcBlock::new(
             &*block,
             *self.network.get_network_type(),
+            consensus_graph,
             inner,
             &self.data_man,
             true,
@@ -426,6 +431,7 @@ impl RpcImpl {
             RpcBlock::new(
                 &*block,
                 *self.network.get_network_type(),
+                consensus_graph,
                 inner,
                 &self.data_man,
                 true,
@@ -662,10 +668,16 @@ impl RpcImpl {
                     rpc_error.data = Some(RpcValue::String(format!("{}", e)));
                     rpc_error
                 })?;
-            let required_balance = tx.value
-                + tx.gas * tx.gas_price
-                + U256::from(tx.storage_limit)
-                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+            let required_storage_collateral =
+                if tx.transaction.transaction_type() == TransactionType::Normal
+                {
+                    U256::from(tx.storage_limit)
+                        * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+                } else {
+                    U256::zero()
+                };
+            let required_balance =
+                tx.value + tx.gas * tx.gas_price + required_storage_collateral;
             ret.local_balance_enough = local_balance > required_balance;
             ret.state_balance_enough = state_balance > required_balance;
             ret.local_balance = local_balance;
