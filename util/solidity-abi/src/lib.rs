@@ -147,7 +147,7 @@ macro_rules! impl_abi_serde {
     };
 }
 
-// Now we supply a function with at most four parameters
+// Now we supply a function/events with at most five parameters
 impl_abi_serde!((0=>A),(1=>B));
 impl_abi_serde!((0=>A),(1=>B),(2=>C));
 impl_abi_serde!((0=>A),(1=>B),(2=>C),(3=>D));
