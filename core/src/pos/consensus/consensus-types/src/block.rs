@@ -103,6 +103,11 @@ impl Block {
         self.vrf_proof.as_ref()
     }
 
+    pub fn set_vrf_proof(&mut self, vrf_proof: ConsensusVRFProof) {
+        debug_assert!(self.vrf_proof.is_none());
+        self.vrf_proof = Some(vrf_proof);
+    }
+
     pub fn timestamp_usecs(&self) -> u64 { self.block_data.timestamp_usecs() }
 
     pub fn gen_block_info(
@@ -206,10 +211,8 @@ impl Block {
         block_data: BlockData, validator_signer: &ValidatorSigner,
     ) -> Self {
         let signature = validator_signer.sign(&block_data);
-        let vrf_proof = validator_signer
-            .gen_vrf_proof(&block_data.vrf_round_seed(VRF_SEED));
         Self::new_proposal_from_block_data_and_signature(
-            block_data, signature, vrf_proof,
+            block_data, signature, None,
         )
     }
 

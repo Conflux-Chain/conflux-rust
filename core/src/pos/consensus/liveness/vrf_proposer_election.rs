@@ -5,11 +5,15 @@ use crate::pos::consensus::liveness::proposer_election::ProposerElection;
 use consensus_types::common::{Author, Round};
 
 use cfx_types::U256;
-use consensus_types::block::{Block, VRF_SEED};
+use consensus_types::{
+    block::{Block, VRF_SEED},
+    block_data::BlockData,
+};
 use diem_crypto::{VRFPrivateKey, VRFProof};
 use diem_logger::debug as diem_debug;
 use diem_types::{
-    account_address::AccountAddress, validator_config::ConsensusVRFPrivateKey,
+    account_address::AccountAddress,
+    validator_config::{ConsensusVRFPrivateKey, ConsensusVRFProof},
 };
 use parking_lot::Mutex;
 use std::collections::HashMap;
@@ -36,8 +40,10 @@ impl VrfProposer {
             author,
             vrf_private_key,
             proposal_threshold,
+            // current_round and current_seed will not be used before
+            // `next_round` is called.
             current_round: Mutex::new(0),
-            current_seed: Mutex::new(VRF_SEED.to_vec()),
+            current_seed: Mutex::new(vec![]),
             proposal_candidates: Default::default(),
         }
     }
@@ -107,8 +113,21 @@ impl ProposerElection for VrfProposer {
         chosen_proposal
     }
 
-    fn next_round(&self, round: Round) {
+    fn next_round(&self, round: Round, new_seed: Vec<u8>) {
         *self.current_round.lock() = round;
         self.proposal_candidates.lock().clear();
+        *self.current_seed.lock() = new_seed;
+    }
+
+    fn gen_vrf_proof(
+        &self, block_data: &BlockData,
+    ) -> Option<ConsensusVRFProof> {
+        self.vrf_private_key
+            .compute(
+                block_data
+                    .vrf_round_seed(self.current_seed.lock().as_slice())
+                    .as_slice(),
+            )
+            .ok()
     }
 }

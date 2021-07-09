@@ -269,7 +269,22 @@ impl RoundManager {
             reason = new_round_event.reason
         );
         if self.proposer_election.is_random_election() {
-            self.proposer_election.next_round(new_round_event.round);
+            // TODO(lpl): Only read during epoch change.
+            let epoch_seed = loop {
+                match self
+                    .storage
+                    .diem_db()
+                    .get_term_vdf_output(self.epoch_state.epoch)
+                {
+                    Ok(seed) => break seed,
+                    // TODO(lpl): Use signal.
+                    Err(_) => {
+                        tokio::time::sleep(Duration::from_millis(100)).await
+                    }
+                }
+            };
+            self.proposer_election
+                .next_round(new_round_event.round, epoch_seed);
             self.round_state.setup_proposal_timeout();
         }
         if let Some(ref proposal_generator) = self.proposal_generator {
@@ -362,13 +377,26 @@ impl RoundManager {
         if let Some(target_term) =
             pos_state.next_elect_term(&proposal_generator.author())
         {
+            let epoch_vrf_seed = loop {
+                match self
+                    .storage
+                    .diem_db()
+                    .get_term_vdf_output(target_term + 1)
+                {
+                    Ok(seed) => break seed,
+                    // TODO(lpl): Use signal.
+                    Err(_) => {
+                        tokio::time::sleep(Duration::from_millis(100)).await
+                    }
+                }
+            };
             let election_payload = ElectionPayload {
                 public_key: proposal_generator.public_key.clone(),
                 vrf_public_key: proposal_generator.vrf_public_key.clone(),
                 target_term,
                 vrf_proof: proposal_generator
                     .vrf_private_key
-                    .compute(&VRF_SEED)
+                    .compute(epoch_vrf_seed.as_slice())
                     .unwrap(),
             };
             let raw_tx = RawTransaction::new_election(
@@ -400,7 +428,14 @@ impl RoundManager {
             .expect("checked by process_new_round_event")
             .generate_proposal(new_round_event.round)
             .await?;
-        let signed_proposal = self.safety_rules.sign_proposal(proposal)?;
+        let mut signed_proposal = self.safety_rules.sign_proposal(proposal)?;
+        if self.proposer_election.is_random_election() {
+            signed_proposal.set_vrf_proof(
+                self.proposer_election
+                    .gen_vrf_proof(signed_proposal.block_data())
+                    .unwrap(),
+            )
+        }
         observe_block(signed_proposal.timestamp_usecs(), BlockStage::SIGNED);
         diem_debug!(self.new_log(LogEvent::Propose), "{}", signed_proposal);
         // return proposal

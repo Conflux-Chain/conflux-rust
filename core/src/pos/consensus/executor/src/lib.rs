@@ -456,6 +456,7 @@ where V: VMExecutor
         }
         let next_epoch_state =
             new_pos_state.next_view()?.map(|(epoch_state, term_seed)| {
+                // FIXME(lpl): Start this at a proper time.
                 if !catch_up_mode {
                     let epoch = epoch_state.epoch;
                     if self.db.reader.get_term_vdf_output(epoch).is_err() {
