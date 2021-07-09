@@ -26,4 +26,15 @@
 # later on.
 # 
 
-changelogs/*.md	@Conflux-Chain/spec-change-review
+# The following gives a list of files which will trigger spec-breaking with high probability.
+core/parameters/* @Conflux-Chain/spec-change-review
+core/src/evm/*	@Conflux-Chain/spec-change-review
+core/src/consensus/*	@Conflux-Chain/spec-change-review
+core/src/executive/*	@Conflux-Chain/spec-change-review
+core/src/pow/*	@Conflux-Chain/spec-change-review
+core/src/spec/*	@Conflux-Chain/spec-change-review
+core/src/sync/*	@Conflux-Chain/spec-change-review
+core/src/vm/*	@Conflux-Chain/spec-change-review
+core/src/builtin.rs	@Conflux-Chain/spec-change-review
+core/src/machine.rs	@Conflux-Chain/spec-change-review
+core/src/verification.rs @Conflux-Chain/spec-change-review

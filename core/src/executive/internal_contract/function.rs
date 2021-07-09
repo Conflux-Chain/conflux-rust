@@ -40,7 +40,7 @@ impl<
         tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<GasLeft>
     {
-        self.pre_execution_check(params, context.callstack)?;
+        self.pre_execution_check(params, context.callstack, context.spec)?;
         let solidity_params = <T::Input as ABIDecodable>::abi_decode(&input)?;
 
         let cost = self.upfront_gas_payment(
@@ -82,6 +82,7 @@ pub trait InterfaceTrait {
 pub trait PreExecCheckTrait: Send + Sync {
     fn pre_execution_check(
         &self, params: &ActionParams, call_stack: &mut CallStackInfo,
+        context: &Spec,
     ) -> vm::Result<()>;
 }
 
@@ -110,15 +111,17 @@ pub trait PreExecCheckConfTrait: Send + Sync {
 impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
     fn pre_execution_check(
         &self, params: &ActionParams, call_stack: &mut CallStackInfo,
-    ) -> vm::Result<()> {
+        spec: &Spec,
+    ) -> vm::Result<()>
+    {
         if !Self::PAYABLE && !params.value.value().is_zero() {
             return Err(vm::Error::InternalContract(
-                "should not transfer balance to Staking contract",
+                "should not transfer balance to Staking contract".into(),
             ));
         }
 
         if Self::HAS_WRITE_OP
-            && (call_stack.in_reentrancy()
+            && (call_stack.in_reentrancy(spec)
                 || params.call_type == CallType::StaticCall)
         {
             return Err(vm::Error::MutableCallInStaticContext);
@@ -210,6 +213,24 @@ macro_rules! impl_function_type {
                 &self, _input: &Self::Input, _params: &ActionParams, spec: &Spec, _state: &dyn StateOpsTrait,
             ) -> U256 {
                 U256::from(spec.balance_gas)
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! make_solidity_event {
+    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($interface:expr $(, indexed: $indexed:ty)? $(, non_indexed: $non_indexed:ty)?); ) => {
+        $(#[$attr])*
+        #[derive(Copy, Clone)]
+        $visibility struct $name;
+
+        impl SolidityEventTrait for $name {
+            $(type Indexed = $indexed;)?
+            $(type NonIndexed = $non_indexed;)?
+
+            fn name() -> &'static str {
+                $interface
             }
         }
     };
