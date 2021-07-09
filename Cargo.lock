@@ -5625,6 +5625,7 @@ name = "solidity-abi"
 version = "0.1.0"
 dependencies = [
  "cfx-types",
+ "keccak-hash",
  "lazy_static",
  "rustc-hex",
 ]
