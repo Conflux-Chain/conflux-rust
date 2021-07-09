@@ -804,6 +804,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "bit-set 0.4.0",
+ "bls-signatures",
  "bn",
  "byteorder",
  "cfx-addr",
@@ -907,6 +908,7 @@ dependencies = [
  "thiserror",
  "threadpool",
  "throttling",
+ "tiny-keccak 2.0.2",
  "tokio 0.2.25",
  "tokio 1.6.1",
  "tokio-timer",
@@ -5626,6 +5628,7 @@ name = "solidity-abi"
 version = "0.1.0"
 dependencies = [
  "cfx-types",
+ "keccak-hash",
  "lazy_static",
  "rustc-hex",
 ]

@@ -66,6 +66,10 @@ impl SigningKey for BLSPrivateKey {
     }
 }
 
+impl From<RawPublicKey> for BLSPublicKey {
+    fn from(raw: RawPublicKey) -> Self { BLSPublicKey(raw) }
+}
+
 impl VerifyingKey for BLSPublicKey {
     type SignatureMaterial = BLSSignature;
     type SigningKeyMaterial = BLSPrivateKey;
