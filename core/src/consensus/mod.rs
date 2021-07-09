@@ -61,6 +61,7 @@ use metrics::{
 };
 use parking_lot::{Mutex, RwLock};
 use primitives::{
+    compute_block_number,
     epoch::BlockHashOrEpochNumber,
     filter::{FilterError, LogFilter},
     log_entry::LocalizedLogEntry,
@@ -1454,7 +1455,11 @@ impl ConsensusGraphTrait for ConsensusGraph {
             None => return Ok(None),
             Some(index) => index as u64,
         };
-        return Ok(Some(start_block_number + index_of_block));
+
+        return Ok(Some(compute_block_number(
+            start_block_number,
+            index_of_block,
+        )));
     }
 
     /// Find a trusted blame block for snapshot full sync

@@ -51,6 +51,7 @@ use hash::KECCAK_EMPTY_LIST_RLP;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
+    compute_block_number,
     receipt::{
         BlockReceipts, Receipt,
         TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
@@ -1053,7 +1054,7 @@ impl ConsensusExecutionHandler {
         // persist block number index
         for (index, hash) in epoch_block_hashes.iter().enumerate() {
             self.data_man.insert_hash_by_block_number(
-                start_block_number + index as u64,
+                compute_block_number(start_block_number, index as u64),
                 hash,
             );
         }
