@@ -1,11 +1,16 @@
-use crate::{ConsensusGraph, SharedConsensusGraph};
+use crate::{
+    executive::internal_contract::impls::pos::decode_register_info,
+    ConsensusGraph, SharedConsensusGraph,
+};
 use async_trait::async_trait;
+use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
 use cfx_storage::storage_db::KeyValueDbAsAnyTrait;
 use cfx_types::H256;
 use diem_types::account_address::AccountAddress;
 use futures::{channel::oneshot, executor::block_on};
 use parking_lot::RwLock;
 use pow_types::{PowInterface, StakingEvent};
+use primitives::filter::LogFilter;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::runtime::Handle;
 
@@ -60,11 +65,37 @@ impl PowHandler {
     }
 
     fn get_staking_events_impl(
-        _pow_consensus: Arc<ConsensusGraph>, _parent_decision: H256,
-        _me_decision: H256,
+        pow_consensus: Arc<ConsensusGraph>, parent_decision: H256,
+        me_decision: H256,
     ) -> Vec<StakingEvent>
     {
-        todo!("Implement getting events")
+        // We only call this for committed blocks, so it is guaranteed that
+        // `parent_decision` is an ancestor of `me_decision`.
+        if parent_decision == me_decision {
+            return vec![];
+        }
+        let start_epoch = pow_consensus
+            .data_man
+            .block_height_by_hash(&parent_decision)
+            .unwrap();
+        let end_epoch = pow_consensus
+            .data_man
+            .block_height_by_hash(&me_decision)
+            .unwrap();
+        let mut log_filter = LogFilter::default();
+        // start_epoch has been processed by parent.
+        log_filter.from_epoch = (start_epoch + 1).into();
+        log_filter.to_epoch = end_epoch.into();
+        log_filter.address = Some(vec![*POS_REGISTER_CONTRACT_ADDRESS]);
+        pow_consensus
+            .logs(log_filter)
+            .expect("Logs not deleted")
+            .into_iter()
+            .map(|localized_entry| {
+                decode_register_info(&localized_entry.entry)
+                    .expect("address checked")
+            })
+            .collect()
     }
 }
 
