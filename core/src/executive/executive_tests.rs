@@ -132,7 +132,8 @@ fn test_sender_balance() {
         let mut tracer = trace::NoopTracer;
         let res = ex
             .create(params.clone(), &mut substate, &mut tracer)
-            .unwrap();
+            .expect("no db error")
+            .expect("no vm error");
         state
             .collect_and_settle_collateral(
                 &params.storage_owner,
@@ -232,7 +233,9 @@ fn test_create_contract_out_of_depth() {
     let FinalizationResult { gas_left, .. } = {
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let mut tracer = trace::NoopTracer;
-        ex.create(params, &mut substate, &mut tracer).unwrap()
+        ex.create(params, &mut substate, &mut tracer)
+            .expect("no db error")
+            .expect("no vm error")
     };
 
     assert_eq!(gas_left, U256::from(62_970));
@@ -292,7 +295,10 @@ fn test_suicide_when_creation() {
         gas_left,
         apply_state,
         return_data: _,
-    } = ex.create(params, &mut substate, &mut tracer).unwrap();
+    } = ex
+        .create(params, &mut substate, &mut tracer)
+        .expect("no db error")
+        .expect("no vm error");
 
     assert_eq!(gas_left, U256::from(94_998));
     assert_eq!(apply_state, true);
@@ -385,7 +391,10 @@ fn test_call_to_create() {
         state.checkpoint();
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let mut tracer = trace::NoopTracer;
-        let res = ex.call(params.clone(), &mut substate, &mut tracer).unwrap();
+        let res = ex
+            .call(params.clone(), &mut substate, &mut tracer)
+            .expect("no db error")
+            .expect("no vm error");
         state
             .collect_and_settle_collateral(
                 &params.storage_owner,
@@ -457,7 +466,9 @@ fn test_revert() {
     } = {
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let mut tracer = trace::NoopTracer;
-        ex.call(params, &mut substate, &mut tracer).unwrap()
+        ex.call(params, &mut substate, &mut tracer)
+            .expect("no db error")
+            .expect("no vm error")
     };
     (&mut output)
         .copy_from_slice(&return_data[..(cmp::min(14, return_data.len()))]);
@@ -516,6 +527,7 @@ fn test_keccak() {
     let result = {
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         ex.create(params, &mut substate, &mut tracer)
+            .expect("no db error")
     };
 
     match result {
@@ -626,15 +638,13 @@ fn test_deposit_withdraw_lock() {
 
     // wrong call type
     let mut tracer = trace::NoopTracer;
-    let result = Executive::new(&mut state, &env, &machine, &spec).call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    let result = Executive::new(&mut state, &env, &machine, &spec)
+        .call(params.clone(), &mut substate, &mut tracer)
+        .expect("no db error");
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("Incorrect call type.")
+        vm::Error::InternalContract("Incorrect call type.".into())
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -651,15 +661,13 @@ fn test_deposit_withdraw_lock() {
     params.call_type = CallType::Call;
     params.data = Some("b6b55f250000000000000000000000000000000000000000000000000de0b6b3a763ffff".from_hex().unwrap());
     let mut tracer = trace::NoopTracer;
-    let result = Executive::new(&mut state, &env, &machine, &spec).call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    let result = Executive::new(&mut state, &env, &machine, &spec)
+        .call(params.clone(), &mut substate, &mut tracer)
+        .expect("no db error");
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("invalid deposit amount")
+        vm::Error::InternalContract("invalid deposit amount".into())
     );
 
     // deposit 10^18, it should work fine
@@ -691,15 +699,13 @@ fn test_deposit_withdraw_lock() {
     // empty data
     params.data = None;
     let mut tracer = trace::NoopTracer;
-    let result = Executive::new(&mut state, &env, &machine, &spec).call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    let result = Executive::new(&mut state, &env, &machine, &spec)
+        .call(params.clone(), &mut substate, &mut tracer)
+        .expect("no db error");
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("None call data")
+        vm::Error::InternalContract("ABI decode error: None call data".into())
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -721,15 +727,15 @@ fn test_deposit_withdraw_lock() {
     // less data
     params.data = Some("b6b55f25000000000000000000000000000000000000000000000000000000174876e8".from_hex().unwrap());
     let mut tracer = trace::NoopTracer;
-    let result = Executive::new(&mut state, &env, &machine, &spec).call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    let result = Executive::new(&mut state, &env, &machine, &spec)
+        .call(params.clone(), &mut substate, &mut tracer)
+        .expect("no db error");
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("Incomplete static input parameter")
+        vm::Error::InternalContract(
+            "ABI decode error: Incomplete static input parameter".into()
+        )
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -776,16 +782,14 @@ fn test_deposit_withdraw_lock() {
     // withdraw more than staking balance
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000de0b6a803288c01".from_hex().unwrap());
     let mut tracer = trace::NoopTracer;
-    let result = Executive::new(&mut state, &env, &machine, &spec).call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    let result = Executive::new(&mut state, &env, &machine, &spec)
+        .call(params.clone(), &mut substate, &mut tracer)
+        .expect("no db error");
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
         vm::Error::InternalContract(
-            "not enough withdrawable staking balance to withdraw"
+            "not enough withdrawable staking balance to withdraw".into()
         )
     );
     assert_eq!(
@@ -808,15 +812,13 @@ fn test_deposit_withdraw_lock() {
     // lock until block_number = 0
     params.data = Some("44a51d6d00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap());
     let mut tracer = trace::NoopTracer;
-    let result = Executive::new(&mut state, &env, &machine, &spec).call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    let result = Executive::new(&mut state, &env, &machine, &spec)
+        .call(params.clone(), &mut substate, &mut tracer)
+        .expect("no db error");
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
-        vm::Error::InternalContract("invalid unlock_block_number")
+        vm::Error::InternalContract("invalid unlock_block_number".into())
     );
     assert_eq!(
         state.balance(&sender).unwrap(),
@@ -905,16 +907,14 @@ fn test_deposit_withdraw_lock() {
     // withdraw more than withdrawable staking balance
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000de0b6a803288bff".from_hex().unwrap());
     let mut tracer = trace::NoopTracer;
-    let result = Executive::new(&mut state, &env, &machine, &spec).call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    let result = Executive::new(&mut state, &env, &machine, &spec)
+        .call(params.clone(), &mut substate, &mut tracer)
+        .expect("no db error");
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err(),
         vm::Error::InternalContract(
-            "not enough withdrawable staking balance to withdraw"
+            "not enough withdrawable staking balance to withdraw".into()
         )
     );
     assert_eq!(

@@ -21,9 +21,11 @@ pub fn deposit(
 ) -> vm::Result<()>
 {
     if amount < U256::from(ONE_CFX_IN_DRIP) {
-        Err(vm::Error::InternalContract("invalid deposit amount"))
+        Err(vm::Error::InternalContract("invalid deposit amount".into()))
     } else if state.balance(&params.sender)? < amount {
-        Err(vm::Error::InternalContract("not enough balance to deposit"))
+        Err(vm::Error::InternalContract(
+            "not enough balance to deposit".into(),
+        ))
     } else {
         tracer.prepare_internal_transfer_action(
             params.sender,
@@ -45,7 +47,7 @@ pub fn withdraw(
     if state.withdrawable_staking_balance(&params.sender, env.number)? < amount
     {
         Err(vm::Error::InternalContract(
-            "not enough withdrawable staking balance to withdraw",
+            "not enough withdrawable staking balance to withdraw".into(),
         ))
     } else {
         tracer.prepare_internal_transfer_action(
@@ -71,10 +73,12 @@ pub fn vote_lock(
 {
     let unlock_block_number = unlock_block_number.low_u64();
     if unlock_block_number <= env.number {
-        Err(vm::Error::InternalContract("invalid unlock_block_number"))
+        Err(vm::Error::InternalContract(
+            "invalid unlock_block_number".into(),
+        ))
     } else if state.staking_balance(&params.sender)? < amount {
         Err(vm::Error::InternalContract(
-            "not enough staking balance to lock",
+            "not enough staking balance to lock".into(),
         ))
     } else {
         state.remove_expired_vote_stake_info(&params.sender, env.number)?;
