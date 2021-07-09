@@ -110,7 +110,6 @@ pub trait SolidityEventTrait: Send + Sync {
     fn log(
         indexed: &Self::Indexed, non_indexed: &Self::NonIndexed,
         param: &ActionParams, context: &mut InternalRefContext,
-        _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
         let mut topics = vec![Self::event_sig()];

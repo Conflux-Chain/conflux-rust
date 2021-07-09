@@ -5,6 +5,8 @@
 mod admin;
 mod context;
 mod future;
+#[allow(unused)]
+mod pos;
 mod reentrancy;
 mod sponsor;
 mod staking;
@@ -36,6 +38,7 @@ mod macros {
     pub use crate::spec::CommonParams;
 }
 
+pub(super) use self::pos::{IncreaseStakeEvent, RegisterEvent};
 pub use self::{
     admin::AdminControl, context::Context, reentrancy::AntiReentrancyConfig,
     sponsor::SponsorWhitelistControl, staking::Staking,
