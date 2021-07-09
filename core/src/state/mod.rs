@@ -8,13 +8,19 @@ pub use self::{
 };
 
 use self::account_entry::{AccountEntry, AccountState};
-use crate::{hash::KECCAK_EMPTY, transaction_pool::SharedTransactionPool};
+use crate::{
+    executive::IndexStatus, hash::KECCAK_EMPTY,
+    transaction_pool::SharedTransactionPool,
+};
 use cfx_bytes::Bytes;
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };
 use cfx_parameters::{
-    internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+    internal_contract_addresses::{
+        POS_REGISTER_CONTRACT_ADDRESS,
+        SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+    },
     staking::*,
 };
 use cfx_state::{
@@ -851,6 +857,29 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
             self.require_exists(address, false)?
                 .set_storage(key, value, owner)
         }
+        Ok(())
+    }
+
+    fn update_pos_status(
+        &mut self, identifier: H256, number: u64,
+    ) -> DbResult<()> {
+        let old_value = self.storage_at(
+            &POS_REGISTER_CONTRACT_ADDRESS,
+            &identifier.as_bytes(),
+        )?;
+        if old_value.is_zero() {
+            return Ok(());
+        }
+        let mut status: IndexStatus = old_value.into();
+        status
+            .inc_unlocked(number)
+            .expect("Incorrect unlock information");
+        self.require_exists(&POS_REGISTER_CONTRACT_ADDRESS, false)?
+            .change_storage_value(
+                &self.db,
+                identifier.as_bytes(),
+                status.into(),
+            )?;
         Ok(())
     }
 }

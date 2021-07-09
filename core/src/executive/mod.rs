@@ -35,7 +35,7 @@ pub use self::{
         TransactOptions,
     },
     internal_contract::{
-        function, suicide, ABIDecodeError, InternalContractMap,
+        function, suicide, ABIDecodeError, IndexStatus, InternalContractMap,
         InternalContractTrait, InternalRefContext, SolidityFunctionTrait,
     },
 };

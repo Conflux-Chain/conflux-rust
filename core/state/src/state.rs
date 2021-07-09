@@ -613,6 +613,12 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
                 },
             )
     }
+
+    fn update_pos_status(
+        &mut self, identifier: H256, number: u64,
+    ) -> Result<()> {
+        unimplemented!()
+    }
 }
 
 impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>

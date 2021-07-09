@@ -205,6 +205,10 @@ pub trait StateOpsTrait {
     fn set_storage(
         &mut self, address: &Address, key: Vec<u8>, value: U256, owner: Address,
     ) -> DbResult<()>;
+
+    fn update_pos_status(
+        &mut self, identifier: H256, number: u64,
+    ) -> DbResult<()>;
 }
 
 pub trait CheckpointTrait: StateOpsTrait {

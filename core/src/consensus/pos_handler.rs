@@ -47,7 +47,7 @@ pub struct UnlockEvent {
     /// The node id to unlock.
     ///
     /// The management contract should unlock the corresponding account.
-    node_id: NodeId,
+    pub node_id: NodeId,
 }
 
 impl UnlockEvent {

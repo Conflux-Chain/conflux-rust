@@ -1041,7 +1041,7 @@ impl ConsensusExecutionHandler {
             // The pos_reference is continuous, so after seeing a new
             // pos_reference, we only need to process the new
             // unlock_txs in it.
-            for _unlock_tx in self.pos_verifier.get_unlock_events(
+            for unlock_tx in self.pos_verifier.get_unlock_events(
                 pivot_block
                     .block_header
                     .pos_reference()
@@ -1049,7 +1049,7 @@ impl ConsensusExecutionHandler {
                     .expect("checked before sync graph insertion"),
                 &parent_pos_ref.expect("checked"),
             ) {
-                // FIXME(peilun): Process unlock events.
+                state.update_pos_status(unlock_tx.node_id, 1);
             }
         }
 
