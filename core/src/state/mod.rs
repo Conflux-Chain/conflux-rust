@@ -867,9 +867,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
             &POS_REGISTER_CONTRACT_ADDRESS,
             &identifier.as_bytes(),
         )?;
-        if old_value.is_zero() {
-            return Ok(());
-        }
+        assert!(!old_value.is_zero(), "If an identifier is unlocked, its index information must be non-zero");
         let mut status: IndexStatus = old_value.into();
         status
             .inc_unlocked(number)
