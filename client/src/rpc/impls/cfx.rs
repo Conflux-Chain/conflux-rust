@@ -66,6 +66,7 @@ use crate::{
     },
 };
 use cfx_addr::Network;
+use cfx_parameters::consensus_internal::REWARD_EPOCH_COUNT;
 use cfxcore::{
     consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
@@ -1070,11 +1071,11 @@ impl RpcImpl {
                 }
             }
         };
-        let epoch_later_number = epoch_number.overflowing_add(12.into());
-        if epoch_later_number.1 {
+        let (epoch_later_number, overflow) =
+            epoch_number.overflowing_add(REWARD_EPOCH_COUNT.into());
+        if overflow {
             bail!(invalid_params("epoch", "Epoch number overflows!"));
         }
-        let epoch_later_number = epoch_later_number.0;
         let epoch_later = self.consensus.get_hash_from_epoch_number(
             EpochNumber::Num(epoch_later_number).into_primitive(),
         )?;
@@ -1089,8 +1090,8 @@ impl RpcImpl {
                 .block_reward_result_by_hash_with_epoch(
                     &b,
                     &epoch_later,
-                    false,
-                    true,
+                    false, // update_pivot_assumption
+                    true,  // update_cache
                 )
             {
                 if let Some(block_header) =

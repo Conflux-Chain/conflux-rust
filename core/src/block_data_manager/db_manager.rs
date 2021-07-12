@@ -523,10 +523,7 @@ impl DBManager {
     ) -> Option<V>
     where V: DatabaseDecodable {
         let encoded = self.load_from_db(table, db_key)?;
-        match V::db_decode(&encoded) {
-            Ok(res) => Some(res),
-            Err(_) => None,
-        }
+        V::db_decode(&encoded).ok()
     }
 
     fn load_decodable_list<V>(
