@@ -63,7 +63,9 @@ use crate::{
     vm::VMExecutor,
 };
 use consensus_types::block::VRF_SEED;
-use diem_crypto::{vdf_sha3::VdfSha3, VerifiableDelayFunction};
+use diem_crypto::{
+    hash::PRE_GENESIS_BLOCK_ID, vdf_sha3::VdfSha3, VerifiableDelayFunction,
+};
 use diem_types::{
     on_chain_config::ValidatorSet,
     term_state::{
@@ -134,37 +136,37 @@ where V: VMExecutor
         pow_handler: Arc<dyn PowInterface>,
     ) -> Self
     {
-        if initial_nodes.is_empty() {
-            // FIXME(lpl): Finalize if we want to hard code initial nodes.
-            let access_paths = ON_CHAIN_CONFIG_REGISTRY
-                .iter()
-                .map(|config_id| config_id.access_path())
-                .collect();
-            let configs = db
-                .reader
-                .as_ref()
-                .batch_fetch_resources_by_version(access_paths, 0)
-                .unwrap();
-            let validators: ValidatorSet = OnChainConfigPayload::new(
-                0,
-                Arc::new(
-                    ON_CHAIN_CONFIG_REGISTRY
-                        .iter()
-                        .cloned()
-                        .zip_eq(configs)
-                        .collect(),
-                ),
-            )
-            .get()
-            .unwrap();
-            for node in validators {
-                let node_id = NodeID::new(
-                    node.consensus_public_key().clone(),
-                    node.vrf_public_key().clone().unwrap(),
-                );
-                initial_nodes.push((node_id, node.consensus_voting_power()));
-            }
-        }
+        // if initial_nodes.is_empty() {
+        //     // FIXME(lpl): Finalize if we want to hard code initial nodes.
+        //     let access_paths = ON_CHAIN_CONFIG_REGISTRY
+        //         .iter()
+        //         .map(|config_id| config_id.access_path())
+        //         .collect();
+        //     let configs = db
+        //         .reader
+        //         .as_ref()
+        //         .batch_fetch_resources_by_version(access_paths, 0)
+        //         .unwrap();
+        //     let validators: ValidatorSet = OnChainConfigPayload::new(
+        //         0,
+        //         Arc::new(
+        //             ON_CHAIN_CONFIG_REGISTRY
+        //                 .iter()
+        //                 .cloned()
+        //                 .zip_eq(configs)
+        //                 .collect(),
+        //         ),
+        //     )
+        //     .get()
+        //     .unwrap();
+        //     for node in validators {
+        //         let node_id = NodeID::new(
+        //             node.consensus_public_key().clone(),
+        //             node.vrf_public_key().clone().unwrap(),
+        //         );
+        //         initial_nodes.push((node_id, node.consensus_voting_power()));
+        //     }
+        // }
         let pos_state = PosState::new(VRF_SEED.to_vec(), initial_nodes, true);
         Self {
             db,
@@ -385,111 +387,117 @@ where V: VMExecutor
             }
         }
 
-        let parent_pivot_decision = self
-            .cache
-            .get_block(&parent_block_id)?
-            .lock()
-            .output()
-            .pivot_block()
-            .clone()
-            .expect("All block have pivot decision");
-        if let Some(pivot_decision) = &pivot_decision {
-            diem_debug!(
-                "process_vm_outputs: parent={:?} parent_pivot={:?}",
-                parent_block_id,
-                parent_pivot_decision
-            );
+        if *parent_block_id != *PRE_GENESIS_BLOCK_ID {
+            let parent_pivot_decision = self
+                .cache
+                .get_block(&parent_block_id)?
+                .lock()
+                .output()
+                .pivot_block()
+                .clone()
+                .expect("All block have pivot decision");
+            if let Some(pivot_decision) = &pivot_decision {
+                diem_debug!(
+                    "process_vm_outputs: parent={:?} parent_pivot={:?}",
+                    parent_block_id,
+                    parent_pivot_decision
+                );
 
-            // The check and event processing below will be skipped during PoS
-            // catching up, because pow_handler has not set its
-            // `pow_consensus`.
-            if !self.pow_handler.validate_proposal_pivot_decision(
-                parent_pivot_decision.block_hash,
-                pivot_decision.block_hash,
-            ) {
-                bail!("Invalid pivot decision for block");
-            }
-
-            if !catch_up_mode {
-                // Verify if the proposer has packed all staking events as
-                // expected.
-                let staking_events = self.pow_handler.get_staking_events(
+                // The check and event processing below will be skipped during
+                // PoS catching up, because pow_handler has not
+                // set its `pow_consensus`.
+                if !self.pow_handler.validate_proposal_pivot_decision(
                     parent_pivot_decision.block_hash,
                     pivot_decision.block_hash,
-                );
-                let mut staking_events_iter = staking_events.iter();
-                for vm_output in vm_outputs.clone().into_iter() {
-                    for event in vm_output.events() {
-                        // check for pivot block selection.
-                        if *event.key() == register_event_key {
-                            let register_event =
-                                RegisterEvent::from_bytes(event.event_data())?;
-                            match register_event.matches_staking_event(staking_events_iter.next().ok_or(anyhow!("More staking transactions packed than actual pow events"))?) {
-                                Ok(true) => {}
-                                Ok(false) => bail!("Packed staking transactions unmatch PoW events)"),
-                                Err(e) => diem_error!("error decoding pow events: err={:?}", e),
-                            }
-                            new_pos_state
-                                .register_node(register_event.node_id)?;
-                        } else if *event.key() == update_voting_power_event_key
-                        {
-                            let update_voting_power_event =
-                                UpdateVotingPowerEvent::from_bytes(
+                ) {
+                    bail!("Invalid pivot decision for block");
+                }
+
+                if !catch_up_mode {
+                    // Verify if the proposer has packed all staking events as
+                    // expected.
+                    let staking_events = self.pow_handler.get_staking_events(
+                        parent_pivot_decision.block_hash,
+                        pivot_decision.block_hash,
+                    );
+                    let mut staking_events_iter = staking_events.iter();
+                    for vm_output in vm_outputs.clone().into_iter() {
+                        for event in vm_output.events() {
+                            // check for pivot block selection.
+                            if *event.key() == register_event_key {
+                                let register_event = RegisterEvent::from_bytes(
                                     event.event_data(),
                                 )?;
-                            match update_voting_power_event.matches_staking_event(staking_events_iter.next().ok_or(anyhow!("More staking transactions packed than actual pow events"))?) {
-                                Ok(true) => {}
-                                Ok(false) => bail!("Packed staking transactions unmatch PoW events)"),
-                                Err(e) => diem_error!("error decoding pow events: err={:?}", e),
+                                match register_event.matches_staking_event(staking_events_iter.next().ok_or(anyhow!("More staking transactions packed than actual pow events"))?) {
+                                    Ok(true) => {}
+                                    Ok(false) => bail!("Packed staking transactions unmatch PoW events)"),
+                                    Err(e) => diem_error!("error decoding pow events: err={:?}", e),
+                                }
+                                new_pos_state
+                                    .register_node(register_event.node_id)?;
+                            } else if *event.key()
+                                == update_voting_power_event_key
+                            {
+                                let update_voting_power_event =
+                                    UpdateVotingPowerEvent::from_bytes(
+                                        event.event_data(),
+                                    )?;
+                                match update_voting_power_event.matches_staking_event(staking_events_iter.next().ok_or(anyhow!("More staking transactions packed than actual pow events"))?) {
+                                    Ok(true) => {}
+                                    Ok(false) => bail!("Packed staking transactions unmatch PoW events)"),
+                                    Err(e) => diem_error!("error decoding pow events: err={:?}", e),
+                                }
+                                new_pos_state.update_voting_power(
+                                    &update_voting_power_event.node_address,
+                                    update_voting_power_event.voting_power,
+                                )?;
                             }
-                            new_pos_state.update_voting_power(
-                                &update_voting_power_event.node_address,
-                                update_voting_power_event.voting_power,
-                            )?;
+                        }
+                    }
+                    ensure!(
+                        staking_events_iter.next().is_none(),
+                        "Not all PoW staking events are packed"
+                    );
+                } else {
+                    for vm_output in vm_outputs.clone().into_iter() {
+                        for event in vm_output.events() {
+                            // check for pivot block selection.
+                            if *event.key() == register_event_key {
+                                let register_event = RegisterEvent::from_bytes(
+                                    event.event_data(),
+                                )?;
+                                new_pos_state
+                                    .register_node(register_event.node_id)?;
+                            } else if *event.key()
+                                == update_voting_power_event_key
+                            {
+                                let update_voting_power_event =
+                                    UpdateVotingPowerEvent::from_bytes(
+                                        event.event_data(),
+                                    )?;
+                                new_pos_state.update_voting_power(
+                                    &update_voting_power_event.node_address,
+                                    update_voting_power_event.voting_power,
+                                )?;
+                            }
                         }
                     }
                 }
-                ensure!(
-                    staking_events_iter.next().is_none(),
-                    "Not all PoW staking events are packed"
-                );
             } else {
-                for vm_output in vm_outputs.clone().into_iter() {
-                    for event in vm_output.events() {
-                        // check for pivot block selection.
-                        if *event.key() == register_event_key {
-                            let register_event =
-                                RegisterEvent::from_bytes(event.event_data())?;
-                            new_pos_state
-                                .register_node(register_event.node_id)?;
-                        } else if *event.key() == update_voting_power_event_key
-                        {
-                            let update_voting_power_event =
-                                UpdateVotingPowerEvent::from_bytes(
-                                    event.event_data(),
-                                )?;
-                            new_pos_state.update_voting_power(
-                                &update_voting_power_event.node_address,
-                                update_voting_power_event.voting_power,
-                            )?;
-                        }
-                    }
+                // No new pivot decision, so there should be no staking-related
+                // transactions.
+                if vm_outputs.iter().any(|output| {
+                    output.events().iter().any(|event| {
+                        *event.key() == retire_event_key
+                            || *event.key() == update_voting_power_event_key
+                    })
+                }) {
+                    bail!("Should not pack staking related transactions");
                 }
+                pivot_decision = Some(parent_pivot_decision);
             }
-        } else {
-            // No new pivot decision, so there should be no staking-related
-            // transactions.
-            if vm_outputs.iter().any(|output| {
-                output.events().iter().any(|event| {
-                    *event.key() == retire_event_key
-                        || *event.key() == update_voting_power_event_key
-                })
-            }) {
-                bail!("Should not pack staking related transactions");
-            }
-            pivot_decision = Some(parent_pivot_decision);
         }
-        let next_epoch_state =
+        let mut next_epoch_state =
             new_pos_state.next_view()?.map(|(epoch_state, term_seed)| {
                 // FIXME(lpl): Start this at a proper time.
                 if !catch_up_mode {
@@ -622,10 +630,10 @@ where V: VMExecutor
             ));
         }
 
-        /* TODO(lpl): Check if we still need this.
-           TODO(lpl): The validator set is not stored in state noq. Might be needed in state sync?
-        // check for change in validator set
-        let next_epoch_state = if new_epoch_marker.is_some() {
+        // FIXME(lpl): For genesis.
+        if next_epoch_state.is_some()
+            && next_epoch_state.as_ref().unwrap().epoch == 1
+        {
             // Pad the rest of transactions
             txn_data.resize(
                 transactions.len(),
@@ -663,17 +671,14 @@ where V: VMExecutor
             .ok_or_else(|| {
                 format_err!("Association account does not exist")
             })??;*/
-            Some(EpochState {
+            next_epoch_state = Some(EpochState {
                 // TODO(lpl): This is only used for genesis, and after executing
                 // the genesis block, the epoch number should be
                 // increased from 0 to 1.
                 epoch: 1, //configuration.epoch(),
                 verifier: (&validator_set).into(),
             })
-        } else {
-            None
         };
-         */
 
         let current_transaction_accumulator =
             parent_trees.txn_accumulator().append(&txn_info_hashes);
@@ -1150,6 +1155,12 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
         let _timer = DIEM_EXECUTOR_COMMIT_BLOCKS_SECONDS.start_timer();
         let block_id_to_commit =
             ledger_info_with_sigs.ledger_info().consensus_block_id();
+        let pos_state_to_commit = self
+            .get_executed_trees(
+                ledger_info_with_sigs.ledger_info().consensus_block_id(),
+            )?
+            .pos_state()
+            .clone();
 
         diem_info!(
             LogSchema::new(LogEntry::BlockExecutor)
@@ -1268,12 +1279,6 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     "Injected error in commit_blocks"
                 )))
             });
-            let pos_state_to_commit = self
-                .get_executed_trees(
-                    ledger_info_with_sigs.ledger_info().consensus_block_id(),
-                )?
-                .pos_state()
-                .clone();
             self.db.writer.save_transactions(
                 txns_to_commit,
                 first_version_to_commit,

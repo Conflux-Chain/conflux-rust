@@ -147,6 +147,7 @@ pub fn calculate_genesis<V: VMExecutor>(
     let result = executor.execute_block(
         (block_id, vec![genesis_txn.clone()]),
         *PRE_GENESIS_BLOCK_ID,
+        // Use `catch_up_mode=false` for genesis to calculate VDF output.
         false,
     )?;
 

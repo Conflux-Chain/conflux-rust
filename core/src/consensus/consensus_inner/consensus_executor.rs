@@ -1037,6 +1037,8 @@ impl ConsensusExecutionHandler {
             .pos_verifier
             .is_enabled_at_height(pivot_block.block_header.height())
             && *pivot_block.block_header.pos_reference() != parent_pos_ref
+            // TODO(lpl): This condition is for genesis.
+            && parent_pos_ref.is_some()
         {
             // The pos_reference is continuous, so after seeing a new
             // pos_reference, we only need to process the new

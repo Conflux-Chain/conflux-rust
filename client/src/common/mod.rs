@@ -294,7 +294,7 @@ pub fn initialize_common_modules(
     pos_config.consensus.safety_rules.vrf_proposal_threshold =
         conf.raw_conf.vrf_proposal_threshold;
 
-    // TODO(lpl): Handle hard-fork.
+    /*
     let pos_start_epoch = 0;
     let start_epoch_id = data_man
         .executed_epoch_set_hashes_from_db(pos_start_epoch)
@@ -312,15 +312,15 @@ pub fn initialize_common_modules(
         )
         .unwrap()
         .unwrap();
-    // FIXME(lpl): Read from pow states.
     let initial_pos_nodes = vec![];
+     */
     let diem_handler = start_pos_consensus(
         &pos_config,
         network.clone(),
         own_node_hash,
         conf.protocol_config(),
         Some((self_pos_public_key.unwrap(), self_vrf_public_key)),
-        initial_pos_nodes,
+        vec![],
     );
     debug!("PoS initialized");
     let pos_connection = PosConnection::new(
