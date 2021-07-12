@@ -1054,33 +1054,30 @@ impl RpcImpl {
             epoch
         );
         let epoch_number = match epoch {
-            EpochNumber::Num(number) => {
-                number
-            }
+            EpochNumber::Num(number) => number,
             _ => {
-                let epoch_hash = self.consensus.get_hash_from_epoch_number(
-                    epoch.clone().into())?;
-                match self.consensus
-                    .get_block_epoch_number(&epoch_hash)
-                {
+                let epoch_hash = self
+                    .consensus
+                    .get_hash_from_epoch_number(epoch.clone().into())?;
+                match self.consensus.get_block_epoch_number(&epoch_hash) {
                     None => {
-                        bail!(invalid_params("epoch", "get_block_epoch_number returns none!"));
+                        bail!(invalid_params(
+                            "epoch",
+                            "get_block_epoch_number returns none!"
+                        ));
                     }
-                    Some(epoch_number) => {
-                        epoch_number.into()
-                    }
+                    Some(epoch_number) => epoch_number.into(),
                 }
             }
         };
-        let epoch_later_number = epoch_number
-            .overflowing_add(12.into());
+        let epoch_later_number = epoch_number.overflowing_add(12.into());
         if epoch_later_number.1 {
             bail!(invalid_params("epoch", "Epoch number overflows!"));
         }
         let epoch_later_number = epoch_later_number.0;
-        let epoch_later = self.consensus
-            .get_hash_from_epoch_number(
-                EpochNumber::Num(epoch_later_number).into_primitive())?;
+        let epoch_later = self.consensus.get_hash_from_epoch_number(
+            EpochNumber::Num(epoch_later_number).into_primitive(),
+        )?;
 
         let blocks = self.consensus.get_block_hashes_by_epoch(epoch.into())?;
 
@@ -1090,7 +1087,11 @@ impl RpcImpl {
                 .consensus
                 .get_data_manager()
                 .block_reward_result_by_hash_with_epoch(
-                    &b, &epoch_later, false, true)
+                    &b,
+                    &epoch_later,
+                    false,
+                    true,
+                )
             {
                 if let Some(block_header) =
                     self.consensus.get_data_manager().block_header_by_hash(&b)

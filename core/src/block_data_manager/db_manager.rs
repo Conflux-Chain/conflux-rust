@@ -1,10 +1,9 @@
 use crate::{
     block_data_manager::{
         db_decode_list, db_encode_list, BlamedHeaderVerifiedRoots,
-        BlockExecutionResultWithEpoch,
-        BlockRewardResultWithEpoch,
-        BlockTracesWithEpoch,
-        CheckpointHashes, EpochExecutionContext, LocalBlockInfo,
+        BlockExecutionResultWithEpoch, BlockRewardResultWithEpoch,
+        BlockTracesWithEpoch, CheckpointHashes, EpochExecutionContext,
+        LocalBlockInfo,
     },
     db::{
         COL_BLAMED_HEADER_VERIFIED_ROOTS, COL_BLOCKS, COL_BLOCK_TRACES,
@@ -316,7 +315,10 @@ impl DBManager {
     pub fn block_reward_result_from_db(
         &self, hash: &H256,
     ) -> Option<BlockRewardResultWithEpoch> {
-        self.load_might_decodable_val(DBTable::Blocks, &block_reward_result_key(hash))
+        self.load_might_decodable_val(
+            DBTable::Blocks,
+            &block_reward_result_key(hash),
+        )
     }
 
     pub fn remove_block_execution_result_from_db(&self, hash: &H256) {
@@ -522,8 +524,8 @@ impl DBManager {
     where V: DatabaseDecodable {
         let encoded = self.load_from_db(table, db_key)?;
         match V::db_decode(&encoded) {
-            Ok(res) => { Some(res) }
-            Err(_) => { None }
+            Ok(res) => Some(res),
+            Err(_) => None,
         }
     }
 
