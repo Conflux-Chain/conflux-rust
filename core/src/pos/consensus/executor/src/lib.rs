@@ -65,11 +65,14 @@ use crate::{
 use consensus_types::block::VRF_SEED;
 use diem_crypto::{vdf_sha3::VdfSha3, VerifiableDelayFunction};
 use diem_types::{
+    on_chain_config::ValidatorSet,
     term_state::{
         NodeID, PosState, RegisterEvent, RetireEvent, UpdateVotingPowerEvent,
     },
     transaction::TransactionPayload::UpdateVotingPower,
+    validator_verifier::ValidatorVerifier,
 };
+use itertools::Itertools;
 use pow_types::PowInterface;
 use std::thread;
 
@@ -127,9 +130,41 @@ where V: VMExecutor
 
     pub fn new_on_unbootstrapped_db(
         db: DbReaderWriter, tree_state: TreeState,
-        initial_nodes: Vec<(NodeID, u64)>, pow_handler: Arc<dyn PowInterface>,
+        mut initial_nodes: Vec<(NodeID, u64)>,
+        pow_handler: Arc<dyn PowInterface>,
     ) -> Self
     {
+        if initial_nodes.is_empty() {
+            // FIXME(lpl): Finalize if we want to hard code initial nodes.
+            let access_paths = ON_CHAIN_CONFIG_REGISTRY
+                .iter()
+                .map(|config_id| config_id.access_path())
+                .collect();
+            let configs = db
+                .reader
+                .as_ref()
+                .batch_fetch_resources_by_version(access_paths, 0)
+                .unwrap();
+            let validators: ValidatorSet = OnChainConfigPayload::new(
+                0,
+                Arc::new(
+                    ON_CHAIN_CONFIG_REGISTRY
+                        .iter()
+                        .cloned()
+                        .zip_eq(configs)
+                        .collect(),
+                ),
+            )
+            .get()
+            .unwrap();
+            for node in validators {
+                let node_id = NodeID::new(
+                    node.consensus_public_key().clone(),
+                    node.vrf_public_key().clone().unwrap(),
+                );
+                initial_nodes.push((node_id, node.consensus_voting_power()));
+            }
+        }
         let pos_state = PosState::new(VRF_SEED.to_vec(), initial_nodes, true);
         Self {
             db,
