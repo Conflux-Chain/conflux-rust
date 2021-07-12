@@ -3,6 +3,7 @@ import time
 sys.path.append("..")
 
 from conflux.rpc import RpcClient
+from test_framework.util import *
 
 class TestGetBlockRewardInfo(RpcClient):
     def test_two_chains(self):
@@ -18,10 +19,12 @@ class TestGetBlockRewardInfo(RpcClient):
         time.sleep(1)
 
         epoch = self.epoch_number(self.EPOCH_LATEST_MINED)
-        res = self.get_block_reward_info(self.EPOCH_LATEST_MINED)
-        assert(len(res) == 0)
-        res = self.get_block_reward_info(self.EPOCH_NUM(epoch - 10))
-        assert(len(res) == 0)
+        assert_raises_rpc_error(-32602,
+            "Invalid parameters: epoch",
+            self.get_block_reward_info, self.EPOCH_LATEST_MINED)
+        assert_raises_rpc_error(-32602,
+            "Invalid parameters: epoch",
+            self.get_block_reward_info, self.EPOCH_NUM(epoch - 10))
 
         for i in range(0, 7):
             self.generate_block()

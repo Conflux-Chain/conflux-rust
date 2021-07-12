@@ -1054,31 +1054,23 @@ impl RpcImpl {
             "RPC Request: cfx_getBlockRewardInfo epoch_number={:?}",
             epoch
         );
-        let epoch_number = match epoch {
-            EpochNumber::Num(number) => number,
-            _ => {
-                let epoch_hash = self
-                    .consensus
-                    .get_hash_from_epoch_number(epoch.clone().into())?;
-                match self.consensus.get_block_epoch_number(&epoch_hash) {
-                    None => {
-                        bail!(invalid_params(
-                            "epoch",
-                            "get_block_epoch_number returns none!"
-                        ));
-                    }
-                    Some(epoch_number) => epoch_number.into(),
-                }
-            }
-        };
+        let epoch_height: U64 = self
+            .consensus_graph()
+            .get_height_from_epoch_number(epoch.clone().into_primitive())?
+            .into();
         let (epoch_later_number, overflow) =
-            epoch_number.overflowing_add(REWARD_EPOCH_COUNT.into());
+            epoch_height.overflowing_add(REWARD_EPOCH_COUNT.into());
         if overflow {
             bail!(invalid_params("epoch", "Epoch number overflows!"));
         }
-        let epoch_later = self.consensus.get_hash_from_epoch_number(
+        let epoch_later = match self.consensus.get_hash_from_epoch_number(
             EpochNumber::Num(epoch_later_number).into_primitive(),
-        )?;
+        ) {
+            Ok(hash) => hash,
+            Err(_) => {
+                bail!(invalid_params("epoch", "Reward not calculated yet!"))
+            }
+        };
 
         let blocks = self.consensus.get_block_hashes_by_epoch(epoch.into())?;
 
