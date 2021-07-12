@@ -1455,7 +1455,7 @@ impl ConsensusExecutionHandler {
                 .block_execution_result_by_hash_with_epoch(
                     &block_hash,
                     &reward_epoch_hash,
-                    true, /* update_pivot_assumption */
+                    false, /* update_pivot_assumption */
                     true, /* update_cache */
                 ) {
                 Some(block_exec_result) => block_exec_result.block_receipts,
