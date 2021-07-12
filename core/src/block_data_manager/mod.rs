@@ -7,6 +7,7 @@ use crate::{
     cache_manager::{CacheId, CacheManager, CacheSize},
     ext_db::SystemDB,
     pow::{PowComputer, TargetDifficultyManager},
+    consensus::consensus_inner::consensus_executor::RewardExecutionInfo,
 };
 use cfx_storage::{
     state_manager::StateIndex, utils::guarded_value::*, StorageManager,
@@ -97,7 +98,7 @@ pub struct BlockDataManager {
     blocks: RwLock<HashMap<H256, Arc<Block>>>,
     compact_blocks: RwLock<HashMap<H256, CompactBlock>>,
     block_receipts: RwLock<HashMap<H256, BlockReceiptsInfo>>,
-    block_rewards: RwLock<HashMap<H256, BlockRewardResult>>,
+    block_rewards: RwLock<HashMap<H256, BlockRewardsInfo>>,
     block_traces: RwLock<HashMap<H256, BlockTracesInfo>>,
     transaction_indices: RwLock<HashMap<H256, TransactionIndex>>,
     local_block_info: RwLock<HashMap<H256, LocalBlockInfo>>,
@@ -755,31 +756,75 @@ impl BlockDataManager {
             .note_used(CacheId::BlockReceipts(hash));
     }
 
+    // Similar to `insert_block_execution_result`
     pub fn insert_block_reward_result(
-        &self, hash: H256, block_reward: BlockRewardResult, persistent: bool,
+        &self, hash: H256, epoch: &H256, block_reward: BlockRewardResult, persistent: bool,
     ) {
-        self.insert(
-            hash,
-            block_reward,
-            &self.block_rewards,
-            |hash, value| {
-                self.db_manager
-                    .insert_block_reward_result_to_db(hash, value)
-            },
-            Some(CacheId::BlockRewards(hash)),
-            persistent,
-        )
+        let result = BlockRewardResultWithEpoch::new(epoch.clone(), block_reward);
+        if persistent {
+            self.db_manager
+                .insert_block_reward_result_to_db(
+                    &hash, &result);
+        }
+        let mut block_rewards = self.block_rewards.write();
+        let reward_info = block_rewards
+            .entry(hash)
+            .or_insert(BlockRewardsInfo::default());
+        reward_info.insert_current_data(epoch, result.1);
+        self.cache_man.lock().note_used(CacheId::BlockRewards(hash));
     }
 
-    pub fn block_reward_result_by_hash(
-        &self, hash: &H256,
+    // Similar to `block_execution_result_by_hash_with_epoch`
+    pub fn block_reward_result_by_hash_with_epoch(
+        &self, hash: &H256, assumed_epoch_later: &H256,
+        update_pivot_assumption: bool, update_cache: bool,
     ) -> Option<BlockRewardResult> {
-        self.get(
-            hash,
-            &self.block_rewards,
-            |key| self.db_manager.block_reward_result_from_db(key),
-            Some(CacheId::BlockRewards(*hash)),
-        )
+        if let Some((rewards, is_on_pivot)) = self
+            .block_rewards
+            .write()
+            .get_mut(hash)
+            .and_then(|reward_info| {
+                let r = reward_info.get_data_at_version(assumed_epoch_later);
+                if update_pivot_assumption && r.is_some() {
+                    reward_info.set_current_version(*assumed_epoch_later);
+                }
+                r
+            })
+        {
+            if update_cache {
+                self.cache_man.lock()
+                    .note_used(CacheId::BlockRewards(*hash));
+            }
+            if update_pivot_assumption && !is_on_pivot {
+                self.db_manager.insert_block_reward_result_to_db(
+                    hash,
+                    &BlockRewardResultWithEpoch::new(
+                        *assumed_epoch_later,
+                        rewards.clone()
+                    )
+                );
+            }
+            return Some(rewards);
+        }
+        let DataVersionTuple(epoch, rewards) =
+            self.db_manager.block_reward_result_from_db(hash)?;
+        if epoch != *assumed_epoch_later {
+            debug!(
+                "epoch from db {} does not match assumed {}",
+                epoch, assumed_epoch_later
+            );
+            return None;
+        }
+        if update_cache {
+            self.block_rewards
+                .write()
+                .entry(*hash)
+                .or_insert(BlockRewardsInfo::default())
+                .insert_data(assumed_epoch_later, rewards.clone());
+            self.cache_man.lock()
+                .note_used(CacheId::BlockRewards(*hash));
+        }
+        Some(rewards)
     }
 
     pub fn remove_block_result(&self, hash: &H256, remove_db: bool) {
@@ -1132,6 +1177,7 @@ impl BlockDataManager {
     pub fn epoch_executed_and_recovered(
         &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
         on_local_pivot: bool, update_trace: bool,
+        reward_execution_info: &Option<RewardExecutionInfo>,
     ) -> bool
     {
         if !self.epoch_executed(epoch_hash) {
@@ -1188,6 +1234,16 @@ impl BlockDataManager {
                             )
                         }
                         _ => {}
+                    }
+                }
+            }
+            if let Some(reward_execution_info) = reward_execution_info {
+                for block in &reward_execution_info.epoch_blocks {
+                    let h = block.as_ref().hash();
+                    if self.block_reward_result_by_hash_with_epoch(
+                        &h, epoch_hash, true, true).is_none()
+                    {
+                        return false;
                     }
                 }
             }

@@ -912,6 +912,7 @@ impl ConsensusExecutionHandler {
                 &epoch_block_hashes,
                 on_local_pivot,
                 self.config.executive_trace,
+                reward_execution_info,
             )
         {
             let pivot_block_header = self
@@ -1015,6 +1016,7 @@ impl ConsensusExecutionHandler {
             self.process_rewards_and_fees(
                 &mut state,
                 &reward_execution_info,
+                epoch_hash,
                 on_local_pivot,
                 debug_record.as_deref_mut(),
                 self.machine.spec(start_block_number).account_start_nonce,
@@ -1331,7 +1333,7 @@ impl ConsensusExecutionHandler {
     /// anticone difficulty
     fn process_rewards_and_fees(
         &self, state: &mut State, reward_info: &RewardExecutionInfo,
-        on_local_pivot: bool,
+        epoch_later: &H256, on_local_pivot: bool,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
         account_start_nonce: U256,
     )
@@ -1453,7 +1455,7 @@ impl ConsensusExecutionHandler {
                 .block_execution_result_by_hash_with_epoch(
                     &block_hash,
                     &reward_epoch_hash,
-                    false, /* update_pivot_assumption */
+                    true, /* update_pivot_assumption */
                     true,  /* update_cache */
                 ) {
                 Some(block_exec_result) => block_exec_result.block_receipts,
@@ -1584,6 +1586,7 @@ impl ConsensusExecutionHandler {
             if on_local_pivot {
                 self.data_man.insert_block_reward_result(
                     block_hash,
+                    epoch_later,
                     BlockRewardResult {
                         total_reward,
                         tx_fee,
