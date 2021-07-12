@@ -278,9 +278,12 @@ pub fn initialize_common_modules(
             (ConfigKey::new(sk), vrf_sk.map(|key| ConfigKey::new(key)))
         })
         .unwrap();
+    let self_vrf_public_key =
+        self_vrf_private_key.as_ref().unwrap().public_key();
     pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
         author: from_consensus_public_key(
             self_pos_public_key.as_ref().unwrap(),
+            &self_vrf_public_key,
         ),
         consensus_key: Some(self_pos_private_key.clone()),
         execution_key: Some(self_pos_private_key),
@@ -316,7 +319,7 @@ pub fn initialize_common_modules(
         network.clone(),
         own_node_hash,
         conf.protocol_config(),
-        self_pos_public_key,
+        Some((self_pos_public_key.unwrap(), self_vrf_public_key)),
         initial_pos_nodes,
     );
     debug!("PoS initialized");

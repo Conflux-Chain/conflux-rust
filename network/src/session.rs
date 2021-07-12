@@ -12,15 +12,17 @@ use crate::{
     SessionMetadata, UpdateNodeOperation, PROTOCOL_ID_SIZE,
 };
 use bytes::Bytes;
-use diem_crypto::{ed25519::Ed25519PublicKey, ValidCryptoMaterial};
-use diem_types::validator_config::ConsensusPublicKey;
+use diem_crypto::{
+    bls::BLS_PUBLIC_KEY_LENGTH, ed25519::Ed25519PublicKey, ValidCryptoMaterial,
+};
+use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 use io::*;
 use mio::{tcp::*, *};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Rlp, RlpStream};
 use serde_derive::Serialize;
 use std::{
-    convert::TryInto,
+    convert::{TryFrom, TryInto},
     fmt,
     net::SocketAddr,
     str,
@@ -54,7 +56,7 @@ pub struct Session {
     // statistics for read/write
     last_read: Instant,
     last_write: (Instant, WriteStatus),
-    pos_public_key: Option<ConsensusPublicKey>,
+    pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
 }
 
 /// Session state.
@@ -73,7 +75,7 @@ pub enum SessionData {
     None,
     /// Session is ready to send or receive protocol packets.
     Ready {
-        pos_public_key: Option<ConsensusPublicKey>,
+        pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     },
     /// A protocol packet has been received, and delegate to the corresponding
     /// protocol handler to handle the packet.
@@ -105,7 +107,8 @@ impl Session {
     pub fn new<Message: Send + Sync + Clone + 'static>(
         io: &IoContext<Message>, socket: TcpStream, address: SocketAddr,
         id: Option<&NodeId>, peer_header_version: u8, token: StreamToken,
-        host: &NetworkServiceInner, pos_public_key: Option<ConsensusPublicKey>,
+        host: &NetworkServiceInner,
+        pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     ) -> Result<Session, Error>
     {
         let originated = id.is_some();
@@ -377,7 +380,8 @@ impl Session {
     /// node database, which is used to establish outgoing connections.
     fn read_hello(
         &mut self, rlp: &Rlp, host: &NetworkServiceInner,
-    ) -> Result<Option<ConsensusPublicKey>, Error> {
+    ) -> Result<Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>, Error>
+    {
         let remote_network_id: u64 = rlp.val_at(0)?;
         if remote_network_id != host.metadata.network_id {
             debug!(
@@ -456,8 +460,23 @@ impl Session {
 
         self.had_hello = Some(Instant::now());
         let pos_public_key_bytes: Vec<u8> = rlp.val_at(3)?;
+        if pos_public_key_bytes.len() < BLS_PUBLIC_KEY_LENGTH {
+            bail!("pos public key bytes is too short!");
+        }
+        let bls_pub_key = ConsensusPublicKey::try_from(
+            &pos_public_key_bytes[..BLS_PUBLIC_KEY_LENGTH],
+        )
+        .map_err(|e| {
+            Error::from_kind(ErrorKind::Decoder(format!("{:?}", e)).into())
+        })?;
+        let vrf_pub_key = ConsensusVRFPublicKey::try_from(
+            &pos_public_key_bytes[BLS_PUBLIC_KEY_LENGTH..],
+        )
+        .map_err(|e| {
+            Error::from_kind(ErrorKind::Decoder(format!("{:?}", e)).into())
+        })?;
 
-        Ok(pos_public_key_bytes.as_slice().try_into().ok())
+        Ok(Some((bls_pub_key, vrf_pub_key)))
     }
 
     /// Assemble a packet with specified protocol id, packet id and data.
@@ -572,7 +591,12 @@ impl Session {
         rlp.append(&host.metadata.network_id);
         rlp.append_list(&*host.metadata.protocols.read());
         host.metadata.public_endpoint.to_rlp_list(&mut rlp);
-        rlp.append(&self.pos_public_key.as_ref().unwrap().to_bytes().to_vec());
+        let mut key_bytes =
+            self.pos_public_key.as_ref().unwrap().0.to_bytes().to_vec();
+        key_bytes.append(
+            &mut self.pos_public_key.as_ref().unwrap().1.to_bytes().to_vec(),
+        );
+        rlp.append(&key_bytes);
         self.send_packet(
             io,
             None,

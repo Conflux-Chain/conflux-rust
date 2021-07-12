@@ -35,7 +35,7 @@ use diem_types::{
         from_consensus_public_key, from_public_key, AccountAddress,
     },
     epoch_change::EpochChangeProof,
-    validator_config::ConsensusPublicKey,
+    validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
 };
 use io::TimerToken;
 use keccak_hash::keccak;
@@ -51,13 +51,15 @@ use std::{cmp::Eq, collections::HashMap, fmt::Debug, hash::Hash, sync::Arc};
 pub struct PeerState {
     id: NodeId,
     peer_hash: H256,
-    pos_public_key: Option<ConsensusPublicKey>,
+    pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
 }
 
 impl PeerState {
     pub fn new(
-        id: NodeId, peer_hash: H256, pos_public_key: Option<ConsensusPublicKey>,
-    ) -> Self {
+        id: NodeId, peer_hash: H256,
+        pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
+    ) -> Self
+    {
         Self {
             id,
             peer_hash,
@@ -66,8 +68,10 @@ impl PeerState {
     }
 
     pub fn set_pos_public_key(
-        &mut self, pos_public_key: Option<ConsensusPublicKey>,
-    ) {
+        &mut self,
+        pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
+    )
+    {
         self.pos_public_key = pos_public_key
     }
 
@@ -86,7 +90,7 @@ impl Peers {
 
     pub fn insert(
         &self, peer: H256, id: NodeId,
-        pos_public_key: Option<ConsensusPublicKey>,
+        pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     )
     {
         self.0.write().entry(peer).or_insert(Arc::new(RwLock::new(
@@ -149,18 +153,17 @@ impl<'a> Context<'a> {
     }
 
     pub fn get_peer_account_address(&self) -> AccountAddress {
-        from_consensus_public_key(
-            &self
-                .manager
-                .peers
-                .get(&self.peer_hash)
-                .as_ref()
-                .unwrap()
-                .read()
-                .pos_public_key
-                .as_ref()
-                .expect("has public key"),
-        )
+        let k = self
+            .manager
+            .peers
+            .get(&self.peer_hash)
+            .as_ref()
+            .unwrap()
+            .read()
+            .pos_public_key
+            .clone()
+            .expect("has public key");
+        from_consensus_public_key(&k.0, &k.1)
     }
 }
 
@@ -502,19 +505,19 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
     }
 
     fn on_peer_connected(
-        &self, io: &dyn NetworkContext, peer: &NodeId,
-        _peer_protocol_version: ProtocolVersion,
-        pos_public_key: Option<ConsensusPublicKey>,
+        &self, io: &dyn NetworkContext, node_id: &NodeId,
+        peer_protocol_version: ProtocolVersion,
+        pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     )
     {
         // TODO(linxi): maintain peer protocol version
-        let new_originated = io.get_peer_connection_origin(peer);
+        let new_originated = io.get_peer_connection_origin(node_id);
         if new_originated.is_none() {
             debug!("Peer does not exist when just connected");
             return;
         }
         let new_originated = new_originated.unwrap();
-        let peer_hash = keccak(peer);
+        let peer_hash = keccak(node_id);
 
         let add_new_peer = if let Some(old_peer) = self.peers.remove(&peer_hash)
         {
@@ -549,16 +552,16 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
         };
 
         if add_new_peer {
-            self.peers.insert(peer_hash.clone(), *peer, None);
+            self.peers.insert(peer_hash.clone(), *node_id, None);
             let peer_state =
                 self.peers.get(&peer_hash).expect("peer not found");
             let mut peer_state = peer_state.write();
-            peer_state.id = *peer;
+            peer_state.id = *node_id;
             peer_state.peer_hash = peer_hash;
-            self.request_manager.on_peer_connected(peer);
+            self.request_manager.on_peer_connected(node_id);
         } else {
             io.disconnect_peer(
-                peer,
+                node_id,
                 Some(UpdateNodeOperation::Failure),
                 "remove new peer connection",
             );
@@ -567,7 +570,7 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
         if let Some(public_key) = pos_public_key {
             self.pos_peer_mapping
                 .write()
-                .insert(public_key.clone(), peer_hash);
+                .insert(public_key.0.clone(), peer_hash);
             if let Some(state) = self.peers.get(&peer_hash) {
                 state.write().set_pos_public_key(Some(public_key));
             } else {
@@ -585,7 +588,7 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
 
         info!(
             "hsb on_peer_connected: peer {:?}, peer_hash {:?}, peer count {}",
-            peer,
+            node_id,
             peer_hash,
             self.peers.len()
         );
@@ -595,7 +598,7 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
         let peer_hash = keccak(*peer);
         if let Some(peer_state) = self.peers.remove(&peer_hash) {
             if let Some(pos_public_key) = &peer_state.read().pos_public_key {
-                self.pos_peer_mapping.write().remove(pos_public_key);
+                self.pos_peer_mapping.write().remove(&pos_public_key.0);
             }
         }
         self.request_manager.on_peer_disconnected(io, peer);

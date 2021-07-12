@@ -30,7 +30,7 @@ use cfx_internal_common::ChainIdParamsDeprecated;
 use cfx_parameters::{block::MAX_BLOCK_SIZE_IN_BYTES, sync::*};
 use cfx_types::H256;
 use diem_crypto::ed25519::Ed25519PublicKey;
-use diem_types::validator_config::ConsensusPublicKey;
+use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 use io::TimerToken;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -1834,19 +1834,19 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
     }
 
     fn on_peer_connected(
-        &self, io: &dyn NetworkContext, peer: &NodeId,
+        &self, io: &dyn NetworkContext, node_id: &NodeId,
         peer_protocol_version: ProtocolVersion,
-        _pos_public_key: Option<ConsensusPublicKey>,
+        _pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     )
     {
         debug!(
             "Peer connected: peer={:?}, version={}",
-            peer, peer_protocol_version
+            node_id, peer_protocol_version
         );
-        if let Err(e) = self.send_status(io, peer, peer_protocol_version) {
+        if let Err(e) = self.send_status(io, node_id, peer_protocol_version) {
             debug!("Error sending status message: {:?}", e);
             io.disconnect_peer(
-                peer,
+                node_id,
                 Some(UpdateNodeOperation::Failure),
                 "send status failed", /* reason */
             );
@@ -1854,7 +1854,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             self.syn
                 .handshaking_peers
                 .write()
-                .insert(*peer, (peer_protocol_version, Instant::now()));
+                .insert(*node_id, (peer_protocol_version, Instant::now()));
         }
     }
 

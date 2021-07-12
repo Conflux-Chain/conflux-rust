@@ -25,6 +25,8 @@ use std::fmt::{self, Formatter};
 
 /// Private key length in bytes. The actual key length should be 255 bits.
 pub const BLS_PRIVATE_KEY_LENGTH: usize = 32;
+/// Public key length in bytes.
+pub const BLS_PUBLIC_KEY_LENGTH: usize = 48;
 
 #[cfg(not(mirai))]
 struct ValidatedPublicKeyTag {}

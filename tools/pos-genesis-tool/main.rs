@@ -169,7 +169,8 @@ fn generate_genesis_from_public_keys(
 
     let mut validators = Vec::new();
     for (public_key, vrf_public_key) in public_keys {
-        let account_address = from_consensus_public_key(&public_key);
+        let account_address =
+            from_consensus_public_key(&public_key, &vrf_public_key);
         let validator_config = ValidatorConfig::new(
             public_key,
             Some(vrf_public_key),

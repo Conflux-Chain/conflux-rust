@@ -22,7 +22,7 @@ use diem_types::{
     },
     block_info::PivotBlockDecision,
     term_state::NodeID,
-    validator_config::ConsensusPublicKey,
+    validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
     PeerId,
 };
 use diemdb::DiemDB;
@@ -57,7 +57,7 @@ pub struct DiemHandle {
 pub fn start_pos_consensus(
     config: &NodeConfig, network: Arc<NetworkService>, own_node_hash: H256,
     protocol_config: ProtocolConfiguration,
-    own_pos_public_key: Option<ConsensusPublicKey>,
+    own_pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     initial_nodes: Vec<(NodeID, u64)>,
 ) -> DiemHandle
 {
@@ -125,7 +125,7 @@ fn setup_chunk_executor(db: DbReaderWriter) -> Box<dyn ChunkExecutor> {
 pub fn setup_pos_environment(
     node_config: &NodeConfig, network: Arc<NetworkService>,
     own_node_hash: H256, protocol_config: ProtocolConfiguration,
-    own_pos_public_key: Option<ConsensusPublicKey>,
+    own_pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     initial_nodes: Vec<(NodeID, u64)>,
 ) -> DiemHandle
 {
@@ -231,7 +231,9 @@ pub fn setup_pos_environment(
         consensus_reconfig_events,
         own_pos_public_key.map_or_else(
             || AccountAddress::random(),
-            |public_key| from_consensus_public_key(&public_key),
+            |public_key| {
+                from_consensus_public_key(&public_key.0, &public_key.1)
+            },
         ),
     );
     debug!("Consensus started in {} ms", instant.elapsed().as_millis());
