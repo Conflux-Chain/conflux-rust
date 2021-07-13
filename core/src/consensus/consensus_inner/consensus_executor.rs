@@ -1456,7 +1456,7 @@ impl ConsensusExecutionHandler {
                     &block_hash,
                     &reward_epoch_hash,
                     false, /* update_pivot_assumption */
-                    true, /* update_cache */
+                    true,  /* update_cache */
                 ) {
                 Some(block_exec_result) => block_exec_result.block_receipts,
                 None => {
