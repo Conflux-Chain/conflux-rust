@@ -278,7 +278,8 @@ impl RoundManager {
                 {
                     Ok(seed) => break seed,
                     // TODO(lpl): Use signal.
-                    Err(_) => {
+                    Err(e) => {
+                        diem_debug!("wait for term_vdf_output: {:?}", e);
                         tokio::time::sleep(Duration::from_millis(100)).await
                     }
                 }
