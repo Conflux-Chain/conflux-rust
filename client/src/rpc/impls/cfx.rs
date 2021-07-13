@@ -1067,7 +1067,8 @@ impl RpcImpl {
             EpochNumber::Num(epoch_later_number).into_primitive(),
         ) {
             Ok(hash) => hash,
-            Err(_) => {
+            Err(e) => {
+                debug!("get_block_reward_info: get_hash_from_epoch_number returns error: {}", e);
                 bail!(invalid_params("epoch", "Reward not calculated yet!"))
             }
         };
