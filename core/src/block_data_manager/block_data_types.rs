@@ -67,13 +67,6 @@ impl Default for BlockRewardResult {
     }
 }
 
-pub type BlockRewardResultWithEpoch = DataVersionTuple<H256, BlockRewardResult>;
-impl BlockRewardResultWithEpoch {
-    pub fn new(pivot_hash: H256, reward_result: BlockRewardResult) -> Self {
-        DataVersionTuple(pivot_hash, reward_result)
-    }
-}
-
 pub type BlockRewardsInfo = BlockDataWithMultiVersion<H256, BlockRewardResult>;
 
 #[derive(Clone, Debug, DeriveMallocSizeOf)]

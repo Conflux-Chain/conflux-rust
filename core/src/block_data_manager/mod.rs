@@ -503,53 +503,25 @@ impl BlockDataManager {
         )
     }
 
-    /// Similar to `block_execution_result_by_hash_with_epoch`.
     pub fn block_traces_by_hash_with_epoch(
         &self, hash: &H256, assumed_epoch: &H256,
         update_pivot_assumption: bool, update_cache: bool,
     ) -> Option<BlockExecTraces>
     {
-        if let Some((trace, is_on_pivot)) = self
-            .block_traces
-            .write()
-            .get_mut(hash)
-            .and_then(|traces_info| {
-                let r = traces_info.get_data_at_version(assumed_epoch);
-                if update_pivot_assumption && r.is_some() {
-                    traces_info.set_current_version(*assumed_epoch);
-                }
-                r
-            })
-        {
-            if update_cache {
-                self.cache_man.lock().note_used(CacheId::BlockTraces(*hash));
-            }
-            if update_pivot_assumption && !is_on_pivot {
-                self.db_manager.insert_block_traces_to_db(
-                    hash,
-                    &BlockTracesWithEpoch::new(*assumed_epoch, trace.clone()),
-                )
-            }
-            return Some(trace);
-        }
-        let DataVersionTuple(epoch, trace) =
-            self.db_manager.block_traces_from_db(hash)?;
-        if epoch != *assumed_epoch {
-            debug!(
-                "epoch from db {} does not match assumed {}",
-                epoch, assumed_epoch
-            );
-            return None;
-        }
-        if update_cache {
-            self.block_traces
-                .write()
-                .entry(*hash)
-                .or_insert(BlockTracesInfo::default())
-                .insert_data(assumed_epoch, trace.clone());
-            self.cache_man.lock().note_used(CacheId::BlockTraces(*hash));
-        }
-        Some(trace)
+        self.get_version(
+            hash,
+            assumed_epoch,
+            &self.block_traces,
+            update_pivot_assumption,
+            match update_cache {
+                true => Some(CacheId::BlockTraces(*hash)),
+                false => None,
+            },
+            |key| self.db_manager.block_traces_from_db(key),
+            |key, result| {
+                self.db_manager.insert_block_traces_to_db(key, result);
+            },
+        )
     }
 
     pub fn insert_block_traces(
@@ -557,20 +529,17 @@ impl BlockDataManager {
         persistent: bool,
     )
     {
-        if persistent {
-            self.db_manager.insert_block_traces_to_db(
-                &hash,
-                &BlockTracesWithEpoch::new(pivot_hash, trace.clone()),
-            );
-        }
-
-        let mut block_traces = self.block_traces.write();
-        let traces_info = block_traces
-            .entry(hash)
-            .or_insert(BlockTracesInfo::default());
-        traces_info.insert_current_data(&pivot_hash, trace);
-
-        self.cache_man.lock().note_used(CacheId::BlockTraces(hash));
+        self.insert_version(
+            hash,
+            &pivot_hash,
+            trace,
+            |key, result| {
+                self.db_manager.insert_block_traces_to_db(key, result);
+            },
+            &self.block_traces,
+            CacheId::BlockTraces(hash),
+            persistent,
+        );
     }
 
     /// remove block traces in memory cache and db
@@ -651,54 +620,21 @@ impl BlockDataManager {
         update_pivot_assumption: bool, update_cache: bool,
     ) -> Option<BlockExecutionResult>
     {
-        if let Some((receipts, is_on_pivot)) = self
-            .block_receipts
-            .write()
-            .get_mut(hash)
-            .and_then(|receipt_info| {
-                let r = receipt_info.get_data_at_version(assumed_epoch);
-                if update_pivot_assumption && r.is_some() {
-                    receipt_info.set_current_version(*assumed_epoch);
-                }
-                r
-            })
-        {
-            if update_cache {
-                self.cache_man
-                    .lock()
-                    .note_used(CacheId::BlockReceipts(*hash));
-            }
-            if update_pivot_assumption && !is_on_pivot {
-                self.db_manager.insert_block_execution_result_to_db(
-                    hash,
-                    &BlockExecutionResultWithEpoch::new(
-                        *assumed_epoch,
-                        receipts.clone(),
-                    ),
-                )
-            }
-            return Some(receipts);
-        }
-        let DataVersionTuple(epoch, receipts) =
-            self.db_manager.block_execution_result_from_db(hash)?;
-        if epoch != *assumed_epoch {
-            debug!(
-                "epoch from db {} does not match assumed {}",
-                epoch, assumed_epoch
-            );
-            return None;
-        }
-        if update_cache {
-            self.block_receipts
-                .write()
-                .entry(*hash)
-                .or_insert(BlockReceiptsInfo::default())
-                .insert_data(assumed_epoch, receipts.clone());
-            self.cache_man
-                .lock()
-                .note_used(CacheId::BlockReceipts(*hash));
-        }
-        Some(receipts)
+        self.get_version(
+            hash,
+            assumed_epoch,
+            &self.block_receipts,
+            update_pivot_assumption,
+            match update_cache {
+                true => Some(CacheId::BlockReceipts(*hash)),
+                false => None,
+            },
+            |key| self.db_manager.block_execution_result_from_db(key),
+            |key, result| {
+                self.db_manager
+                    .insert_block_execution_result_to_db(key, result);
+            },
+        )
     }
 
     pub fn block_execution_result_by_hash_from_db(
@@ -732,104 +668,62 @@ impl BlockDataManager {
                     b.accrue_bloom(&r.log_bloom);
                     b
                 });
-        let result = DataVersionTuple(
-            epoch,
+        self.insert_version(
+            hash,
+            &epoch,
             BlockExecutionResult {
                 block_receipts,
                 bloom,
             },
+            |key, result| {
+                self.db_manager
+                    .insert_block_execution_result_to_db(key, result);
+            },
+            &self.block_receipts,
+            CacheId::BlockReceipts(hash),
+            persistent,
         );
-
-        if persistent {
-            self.db_manager
-                .insert_block_execution_result_to_db(&hash, &result);
-        }
-
-        let mut block_receipts = self.block_receipts.write();
-        let receipt_info = block_receipts
-            .entry(hash)
-            .or_insert(BlockReceiptsInfo::default());
-        receipt_info.insert_current_data(&epoch, result.1);
-
-        self.cache_man
-            .lock()
-            .note_used(CacheId::BlockReceipts(hash));
     }
 
-    // Similar to `insert_block_execution_result`
     pub fn insert_block_reward_result(
         &self, hash: H256, epoch: &H256, block_reward: BlockRewardResult,
         persistent: bool,
     )
     {
-        let result =
-            BlockRewardResultWithEpoch::new(epoch.clone(), block_reward);
-        if persistent {
-            self.db_manager
-                .insert_block_reward_result_to_db(&hash, &result);
-        }
-        let mut block_rewards = self.block_rewards.write();
-        let reward_info = block_rewards
-            .entry(hash)
-            .or_insert(BlockRewardsInfo::default());
-        reward_info.insert_current_data(epoch, result.1);
-        self.cache_man.lock().note_used(CacheId::BlockRewards(hash));
+        self.insert_version(
+            hash,
+            epoch,
+            block_reward,
+            |key, result| {
+                self.db_manager
+                    .insert_block_reward_result_to_db(key, &result);
+            },
+            &self.block_rewards,
+            CacheId::BlockRewards(hash),
+            persistent,
+        );
     }
 
-    // Similar to `block_execution_result_by_hash_with_epoch`
     pub fn block_reward_result_by_hash_with_epoch(
         &self, hash: &H256, assumed_epoch_later: &H256,
         update_pivot_assumption: bool, update_cache: bool,
     ) -> Option<BlockRewardResult>
     {
-        if let Some((rewards, is_on_pivot)) = self
-            .block_rewards
-            .write()
-            .get_mut(hash)
-            .and_then(|reward_info| {
-                let r = reward_info.get_data_at_version(assumed_epoch_later);
-                if update_pivot_assumption && r.is_some() {
-                    reward_info.set_current_version(*assumed_epoch_later);
-                }
-                r
-            })
-        {
-            if update_cache {
-                self.cache_man
-                    .lock()
-                    .note_used(CacheId::BlockRewards(*hash));
-            }
-            if update_pivot_assumption && !is_on_pivot {
-                self.db_manager.insert_block_reward_result_to_db(
-                    hash,
-                    &BlockRewardResultWithEpoch::new(
-                        *assumed_epoch_later,
-                        rewards.clone(),
-                    ),
-                );
-            }
-            return Some(rewards);
-        }
-        let DataVersionTuple(epoch, rewards) =
-            self.db_manager.block_reward_result_from_db(hash)?;
-        if epoch != *assumed_epoch_later {
-            debug!(
-                "epoch from db {} does not match assumed {}",
-                epoch, assumed_epoch_later
-            );
-            return None;
-        }
-        if update_cache {
-            self.block_rewards
-                .write()
-                .entry(*hash)
-                .or_insert(BlockRewardsInfo::default())
-                .insert_data(assumed_epoch_later, rewards.clone());
-            self.cache_man
-                .lock()
-                .note_used(CacheId::BlockRewards(*hash));
-        }
-        Some(rewards)
+        self.get_version(
+            hash,
+            assumed_epoch_later,
+            &self.block_rewards,
+            update_pivot_assumption,
+            match update_cache {
+                true => Some(CacheId::BlockRewards(*hash)),
+                false => None,
+            },
+            |key| self.db_manager.block_reward_result_from_db(key),
+            |key, result| {
+                self.db_manager
+                    .insert_block_reward_result_to_db(key, result)
+            },
+        )
     }
 
     pub fn remove_block_result(&self, hash: &H256, remove_db: bool) {
@@ -983,6 +877,74 @@ impl BlockDataManager {
             }
             value
         })
+    }
+
+    fn insert_version<K, Ver, V, InsertF>(
+        &self, key: K, version: &Ver, value: V, insert_f: InsertF,
+        in_mem: &RwLock<HashMap<K, BlockDataWithMultiVersion<Ver, V>>>,
+        cache_id: CacheId, persistent: bool,
+    ) where
+        K: Eq + Hash,
+        Ver: Clone + Eq + PartialEq + Copy,
+        V: Clone,
+        InsertF: Fn(&K, &DataVersionTuple<Ver, V>),
+    {
+        let result = DataVersionTuple(version.clone(), value);
+        if persistent {
+            insert_f(&key, &result);
+        }
+        in_mem
+            .write()
+            .entry(key)
+            .or_insert(BlockDataWithMultiVersion::default())
+            .insert_current_data(version, result.1);
+        self.cache_man.lock().note_used(cache_id);
+    }
+
+    fn get_version<K, Ver, V, LoadF, InsertF>(
+        &self, key: &K, version: &Ver,
+        in_mem: &RwLock<HashMap<K, BlockDataWithMultiVersion<Ver, V>>>,
+        update_current_version: bool, maybe_cache_id: Option<CacheId>,
+        load_f: LoadF, insert_f: InsertF,
+    ) -> Option<V>
+    where
+        K: Eq + Hash + Clone,
+        Ver: Eq + Copy + PartialEq + std::fmt::Display,
+        V: Clone,
+        LoadF: Fn(&K) -> Option<DataVersionTuple<Ver, V>>,
+        InsertF: Fn(&K, &DataVersionTuple<Ver, V>),
+    {
+        if let Some(versions) = in_mem.write().get_mut(key) {
+            if let Some((value, is_current_version)) =
+                versions.get_data_at_version(version)
+            {
+                if update_current_version && !is_current_version {
+                    versions.set_current_version(*version);
+                    insert_f(key, &DataVersionTuple(*version, value.clone()));
+                }
+                if let Some(cache_id) = maybe_cache_id {
+                    self.cache_man.lock().note_used(cache_id);
+                }
+                return Some(value);
+            }
+        }
+        let DataVersionTuple(version_in_db, res) = load_f(key)?;
+        if version_in_db != *version {
+            debug!(
+                "Version from db {} does not match required {}",
+                version_in_db, version
+            );
+            return None;
+        }
+        if let Some(cache_id) = maybe_cache_id {
+            in_mem
+                .write()
+                .entry(key.clone())
+                .or_insert(BlockDataWithMultiVersion::default())
+                .insert_data(version, res.clone());
+            self.cache_man.lock().note_used(cache_id);
+        }
+        Some(res)
     }
 
     pub fn insert_terminals_to_db(&self, terminals: Vec<H256>) {

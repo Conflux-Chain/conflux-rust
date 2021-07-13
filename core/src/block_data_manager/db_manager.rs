@@ -1,8 +1,8 @@
 use crate::{
     block_data_manager::{
         db_decode_list, db_encode_list, BlamedHeaderVerifiedRoots,
-        BlockExecutionResultWithEpoch, BlockRewardResultWithEpoch,
-        BlockTracesWithEpoch, CheckpointHashes, EpochExecutionContext,
+        BlockExecutionResultWithEpoch, BlockRewardResult, BlockTracesWithEpoch,
+        CheckpointHashes, DataVersionTuple, EpochExecutionContext,
         LocalBlockInfo,
     },
     db::{
@@ -294,7 +294,7 @@ impl DBManager {
     }
 
     pub fn insert_block_reward_result_to_db(
-        &self, hash: &H256, value: &BlockRewardResultWithEpoch,
+        &self, hash: &H256, value: &DataVersionTuple<H256, BlockRewardResult>,
     ) {
         self.insert_encodable_val(
             DBTable::Blocks,
@@ -314,7 +314,7 @@ impl DBManager {
 
     pub fn block_reward_result_from_db(
         &self, hash: &H256,
-    ) -> Option<BlockRewardResultWithEpoch> {
+    ) -> Option<DataVersionTuple<H256, BlockRewardResult>> {
         self.load_might_decodable_val(
             DBTable::Blocks,
             &block_reward_result_key(hash),
