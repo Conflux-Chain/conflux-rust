@@ -372,8 +372,7 @@ impl RoundManager {
             self.proposal_generator.as_ref().expect("checked");
         let committed_block = self.block_store.root().id();
         // TODO: Use cached pos state;
-        let pos_state =
-            self.storage.diem_db().get_pos_state(&committed_block)?;
+        let pos_state = self.storage.diem_db().get_latest_pos_state();
         if let Some(target_term) =
             pos_state.next_elect_term(&proposal_generator.author())
         {

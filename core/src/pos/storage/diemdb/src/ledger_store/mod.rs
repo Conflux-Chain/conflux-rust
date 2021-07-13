@@ -22,6 +22,7 @@ use diem_crypto::{
     hash::{CryptoHash, TransactionAccumulatorHasher},
     HashValue,
 };
+use diem_logger::prelude::*;
 use diem_types::{
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
@@ -47,6 +48,10 @@ pub(crate) struct LedgerStore {
     /// DB and deserializing the object frequently. It should be updated
     /// every time new ledger info and signatures are persisted.
     latest_ledger_info: ArcSwap<Option<LedgerInfoWithSignatures>>,
+
+    /// latest pos state based on `current_view`. It's not always in sync with
+    /// `latest_ledger_info`.
+    latest_pos_state: ArcSwap<PosState>,
 }
 
 impl LedgerStore {
@@ -64,10 +69,22 @@ impl LedgerStore {
                 .map(|kv| kv.1)
         };
 
-        Self {
+        let latest_pos_state = ledger_info
+            .as_ref()
+            .map(|ledger_info| {
+                db.get::<PosStateSchema>(
+                    &ledger_info.ledger_info().consensus_block_id(),
+                )
+                .unwrap()
+                .expect("pos state and ledger info both committed")
+            })
+            .unwrap_or(PosState::new_empty());
+        let ledger_store = Self {
             db,
-            latest_ledger_info: ArcSwap::from(Arc::new(ledger_info)),
-        }
+            latest_ledger_info: ArcSwap::from(Arc::new(ledger_info.clone())),
+            latest_pos_state: ArcSwap::from(Arc::new(latest_pos_state)),
+        };
+        ledger_store
     }
 
     pub fn get_epoch(&self, version: Version) -> Result<u64> {
@@ -423,8 +440,16 @@ impl LedgerStore {
     pub fn put_pos_state(
         &self, block_hash: &HashValue, pos_state: PosState,
     ) -> Result<()> {
+        diem_debug!("put_pos_state: {}", block_hash);
         let mut cs = ChangeSet::new();
         cs.batch.put::<PosStateSchema>(block_hash, &pos_state)?;
+
+        // replace pos state later to avoid clone.
+        if self.latest_pos_state.load().current_view()
+            < pos_state.current_view()
+        {
+            self.latest_pos_state.store(Arc::new(pos_state));
+        }
         self.db.write_schemas(cs.batch)
     }
 
@@ -466,6 +491,10 @@ impl LedgerStore {
         cs.batch
             .put::<TermVdfOutputSchema>(&term_num, &vdf_output)?;
         self.db.write_schemas(cs.batch)
+    }
+
+    pub fn get_latest_pos_state(&self) -> Arc<PosState> {
+        self.latest_pos_state.load().clone()
     }
 }
 

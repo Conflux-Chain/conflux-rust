@@ -334,6 +334,8 @@ pub trait DbReader: Send + Sync {
     fn get_term_vdf_output(&self, _term_num: u64) -> Result<Vec<u8>> {
         unimplemented!()
     }
+
+    fn get_latest_pos_state(&self) -> Arc<PosState> { unimplemented!() }
 }
 
 impl MoveStorage for &dyn DbReader {
