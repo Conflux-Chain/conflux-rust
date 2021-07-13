@@ -157,8 +157,8 @@ pub mod prelude {
     pub use crate::{
         debug as diem_debug,
         diem_logger::FileWriter,
-        error as diem_error, event, info as diem_info,
-        sample::{self, SampleRate, Sampling},
+        error as diem_error, event, info as diem_info, sample as diem_sample,
+        sample::{SampleRate, Sampling},
         security::SecurityEvent,
         trace as diem_trace, warn as diem_warn,
     };

@@ -4,7 +4,7 @@
 
 use crate::{
     pos::{
-        consensus::network_interface::ConsensusMsg,
+        consensus::network::ConsensusMsg,
         protocol::sync_protocol::{Context, Handleable},
     },
     sync::Error,
@@ -27,7 +27,7 @@ impl Handleable for VoteMsg {
         //self.verify(&ctx.manager.network_task.epoch_info.read().verifier)?;
         let msg = ConsensusMsg::VoteMsg(Box::new(self));
         ctx.manager
-            .network_task
+            .consensus_network_task
             .consensus_messages_tx
             .push((peer_address, discriminant(&msg)), (peer_address, msg))?;
         Ok(())

@@ -4,8 +4,7 @@
 use crate::pos::consensus::{
     block_storage::{BlockReader, BlockStore},
     logging::{LogEvent, LogSchema},
-    network::NetworkSender,
-    network_interface::ConsensusMsg,
+    network::{ConsensusMsg, ConsensusNetworkSender},
     persistent_liveness_storage::{PersistentLivenessStorage, RecoveryData},
     state_replication::StateComputer,
 };
@@ -265,12 +264,14 @@ impl BlockStore {
 
 /// BlockRetriever is used internally to retrieve blocks
 pub struct BlockRetriever {
-    network: NetworkSender,
+    network: ConsensusNetworkSender,
     preferred_peer: Author,
 }
 
 impl BlockRetriever {
-    pub fn new(network: NetworkSender, preferred_peer: Author) -> Self {
+    pub fn new(
+        network: ConsensusNetworkSender, preferred_peer: Author,
+    ) -> Self {
         Self {
             network,
             preferred_peer,

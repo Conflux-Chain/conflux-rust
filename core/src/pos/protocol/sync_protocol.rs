@@ -6,7 +6,8 @@ use super::{HSB_PROTOCOL_ID, HSB_PROTOCOL_VERSION};
 use crate::{
     message::{GetMaybeRequestId, Message, MsgId},
     pos::{
-        consensus::network::NetworkTask,
+        consensus::network::NetworkTask as ConsensusNetworkTask,
+        mempool::network::{MempoolSyncMsg, NetworkTask as MempoolNetworkTask},
         protocol::{
             message::{block_retrieval::BlockRetrievalRpcRequest, msgid},
             request_manager::{
@@ -19,7 +20,7 @@ use crate::{
 
 use crate::{
     pos::{
-        consensus::network_interface::ConsensusMsg,
+        consensus::network::ConsensusMsg,
         protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
     },
     sync::ProtocolConfiguration,
@@ -169,13 +170,15 @@ pub struct HotStuffSynchronizationProtocol {
     pub own_node_hash: H256,
     pub peers: Arc<Peers>,
     pub request_manager: Arc<RequestManager>,
-    pub network_task: NetworkTask,
+    pub consensus_network_task: ConsensusNetworkTask,
+    pub mempool_network_task: MempoolNetworkTask,
     pub pos_peer_mapping: RwLock<HashMap<ConsensusPublicKey, H256>>,
 }
 
 impl HotStuffSynchronizationProtocol {
     pub fn new(
-        own_node_hash: H256, network_task: NetworkTask,
+        own_node_hash: H256, consensus_network_task: ConsensusNetworkTask,
+        mempool_network_task: MempoolNetworkTask,
         protocol_config: ProtocolConfiguration,
     ) -> Self
     {
@@ -185,14 +188,16 @@ impl HotStuffSynchronizationProtocol {
             own_node_hash,
             peers: Arc::new(Peers::new()),
             request_manager,
-            network_task,
+            consensus_network_task,
+            mempool_network_task,
             pos_peer_mapping: RwLock::new(Default::default()),
         }
     }
 
     pub fn with_peers(
         protocol_config: ProtocolConfiguration, own_node_hash: H256,
-        network_task: NetworkTask, peers: Arc<Peers>,
+        consensus_network_task: ConsensusNetworkTask,
+        mempool_network_task: MempoolNetworkTask, peers: Arc<Peers>,
     ) -> Self
     {
         let request_manager = Arc::new(RequestManager::new(&protocol_config));
@@ -201,7 +206,8 @@ impl HotStuffSynchronizationProtocol {
             own_node_hash,
             peers,
             request_manager,
-            network_task,
+            consensus_network_task,
+            mempool_network_task,
             pos_peer_mapping: RwLock::new(Default::default()),
         }
     }
@@ -437,6 +443,7 @@ pub fn handle_serialized_message(
         }
         msgid::EPOCH_CHANGE => handle_message::<EpochChangeProof>(ctx, msg)?,
         msgid::CONSENSUS_MSG => handle_message::<ConsensusMsg>(ctx, msg)?,
+        msgid::MEMPOOL_SYNC_MSG => handle_message::<MempoolSyncMsg>(ctx, msg)?,
         _ => return Ok(false),
     }
     Ok(true)
