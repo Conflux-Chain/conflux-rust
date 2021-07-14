@@ -22,7 +22,7 @@ use diem_types::{
     block_info::PivotBlockDecision,
     chain_id::ChainId,
     contract_event::ContractEvent,
-    transaction::{ChangeSet, RawTransaction},
+    transaction::{ChangeSet, RawTransaction, TransactionPayload},
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
         ConsensusVRFPublicKey,
@@ -190,7 +190,16 @@ impl ProposalGenerator {
                 .pivot_decision()
                 .map(|d| d.block_hash)
                 .unwrap_or_default();
+            let new_pivot_decision =
+                payload.iter().find_map(|tx| match tx.payload() {
+                    TransactionPayload::PivotDecision(decision) => {
+                        Some(decision.block_hash)
+                    }
+                    _ => None,
+                });
+            /*
             match self.pow_handler.next_pivot_decision(parent_decision).await {
+
                 Some((height, block_hash)) => {
                     let pivot_decision =
                         PivotBlockDecision { height, block_hash };
@@ -204,7 +213,9 @@ impl ProposalGenerator {
                         .sign(&self.private_key, self.public_key.clone())?
                         .into_inner();
                     payload.push(signed_tx);
-
+             */
+            match new_pivot_decision {
+                Some(block_hash) => {
                     // Included new registered or updated nodes as transactions.
                     let staking_events = self
                         .pow_handler
