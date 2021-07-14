@@ -1,7 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::error::Error;
+use super::error::Error;
 use diem_types::{
     epoch_change::Verifier, epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,

@@ -525,6 +525,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "bounded-executor"
+version = "0.1.0"
+dependencies = [
+ "futures 0.3.15",
+ "tokio 1.6.1",
+]
+
+[[package]]
 name = "bstr"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -806,6 +814,7 @@ dependencies = [
  "bit-set 0.4.0",
  "bls-signatures",
  "bn",
+ "bounded-executor",
  "byteorder",
  "cfx-addr",
  "cfx-bytes",
@@ -896,7 +905,6 @@ dependencies = [
  "solidity-abi",
  "sqlite",
  "sqlite3-sys",
- "state-sync",
  "static_assertions",
  "storage-interface",
  "strfmt",
@@ -911,6 +919,7 @@ dependencies = [
  "tiny-keccak 2.0.2",
  "tokio 0.2.25",
  "tokio 1.6.1",
+ "tokio-stream",
  "tokio-timer",
  "toml 0.4.10",
  "unexpected",
@@ -1120,7 +1129,6 @@ dependencies = [
  "serde_json",
  "serial_test",
  "slab",
- "state-sync",
  "storage-interface",
  "strum 0.20.0",
  "strum_macros 0.20.1",
@@ -5668,59 +5676,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "state-sync"
-version = "0.1.0"
-dependencies = [
- "bcs",
- "bytes 1.0.1",
- "channel",
- "diem-config",
- "diem-crypto",
- "diem-infallible",
- "diem-logger",
- "diem-metrics",
- "diem-proptest-helpers",
- "diem-temppath",
- "diem-time-service",
- "diem-types",
- "diemdb",
- "executor",
- "executor-types",
- "fail",
- "futures 0.3.15",
- "itertools 0.10.0",
- "once_cell",
- "proptest",
- "rand 0.8.3",
- "serde",
- "storage-interface",
- "storage-service",
- "subscription-service",
- "thiserror",
- "tokio 1.6.1",
- "tokio-stream",
-]
-
-[[package]]
 name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "storage-client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bcs",
- "diem-crypto",
- "diem-infallible",
- "diem-logger",
- "diem-secure-net",
- "diem-types",
- "serde",
- "storage-interface",
-]
 
 [[package]]
 name = "storage-interface"
@@ -5738,29 +5697,6 @@ dependencies = [
  "scratchpad",
  "serde",
  "thiserror",
-]
-
-[[package]]
-name = "storage-service"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bcs",
- "diem-config",
- "diem-crypto",
- "diem-logger",
- "diem-metrics",
- "diem-secure-net",
- "diem-temppath",
- "diem-types",
- "diemdb",
- "futures 0.3.15",
- "itertools 0.10.0",
- "proptest",
- "rand 0.8.3",
- "storage-client",
- "storage-interface",
- "tokio 1.6.1",
 ]
 
 [[package]]

@@ -3,7 +3,7 @@
 
 //! Interface between State Sync and Network layers.
 
-use crate::{
+use crate::pos::state_sync::{
     chunk_request::GetChunkRequest, chunk_response::GetChunkResponse, counters,
     error::Error,
 };

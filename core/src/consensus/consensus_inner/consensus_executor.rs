@@ -1036,6 +1036,7 @@ impl ConsensusExecutionHandler {
         if self
             .pos_verifier
             .is_enabled_at_height(pivot_block.block_header.height())
+            && parent_pos_ref.is_some()
             && *pivot_block.block_header.pos_reference() != parent_pos_ref
         {
             // The pos_reference is continuous, so after seeing a new

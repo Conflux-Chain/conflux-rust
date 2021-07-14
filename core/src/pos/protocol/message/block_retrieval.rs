@@ -74,7 +74,7 @@ impl Handleable for BlockRetrievalRpcRequest {
             request_id: self.request_id,
         };
         ctx.manager
-            .network_task
+            .consensus_network_task
             .block_retrieval_tx
             .push(peer_address, req_with_callback)?;
         Ok(())
