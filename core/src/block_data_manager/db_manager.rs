@@ -2,7 +2,8 @@ use crate::{
     block_data_manager::{
         db_decode_list, db_encode_list, BlamedHeaderVerifiedRoots,
         BlockExecutionResultWithEpoch, BlockRewardResult, BlockTracesWithEpoch,
-        CheckpointHashes, EpochExecutionContext, LocalBlockInfo,
+        CheckpointHashes, DataVersionTuple, EpochExecutionContext,
+        LocalBlockInfo,
     },
     db::{
         COL_BLAMED_HEADER_VERIFIED_ROOTS, COL_BLOCKS, COL_BLOCK_TRACES,
@@ -293,7 +294,7 @@ impl DBManager {
     }
 
     pub fn insert_block_reward_result_to_db(
-        &self, hash: &H256, value: &BlockRewardResult,
+        &self, hash: &H256, value: &DataVersionTuple<H256, BlockRewardResult>,
     ) {
         self.insert_encodable_val(
             DBTable::Blocks,
@@ -313,8 +314,11 @@ impl DBManager {
 
     pub fn block_reward_result_from_db(
         &self, hash: &H256,
-    ) -> Option<BlockRewardResult> {
-        self.load_decodable_val(DBTable::Blocks, &block_reward_result_key(hash))
+    ) -> Option<DataVersionTuple<H256, BlockRewardResult>> {
+        self.load_might_decodable_val(
+            DBTable::Blocks,
+            &block_reward_result_key(hash),
+        )
     }
 
     pub fn remove_block_execution_result_from_db(&self, hash: &H256) {
@@ -512,6 +516,14 @@ impl DBManager {
     where V: DatabaseDecodable {
         let encoded = self.load_from_db(table, db_key)?;
         Some(V::db_decode(&encoded).expect("decode succeeds"))
+    }
+
+    fn load_might_decodable_val<V>(
+        &self, table: DBTable, db_key: &[u8],
+    ) -> Option<V>
+    where V: DatabaseDecodable {
+        let encoded = self.load_from_db(table, db_key)?;
+        V::db_decode(&encoded).ok()
     }
 
     fn load_decodable_list<V>(
