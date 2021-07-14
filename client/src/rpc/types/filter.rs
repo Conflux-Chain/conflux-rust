@@ -186,7 +186,7 @@ mod tests {
     use cfx_types::{H160, H256, U64};
     use primitives::{
         epoch::EpochNumber as PrimitiveEpochNumber,
-        filter::LogFilter as PrimitiveFilter,
+        filter::{LogFilter as PrimitiveFilter, LogFilterParams},
     };
     use serde_json;
     use std::str::FromStr;
@@ -333,7 +333,104 @@ mod tests {
 
     #[test]
     fn test_convert_filter() {
-        let filter = LogFilter {
+        let epoch_filter = LogFilter {
+            from_epoch: Some(EpochNumber::Earliest),
+            to_epoch: None,
+            from_block: None,
+            to_block: None,
+            block_hashes: None,
+            address: Some(VariadicValue::Multiple(vec![
+                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main).unwrap(),
+                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main).unwrap(),
+            ])),
+            topics: Some(vec![
+                VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
+                VariadicValue::Multiple(vec![
+                    H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+                    H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+                ]),
+            ]),
+            offset: Some(U64::from(1)),
+            limit: Some(U64::from(2)),
+        };
+
+        let primitive_epoch_filter = PrimitiveFilter::EpochLogFilter {
+            from_epoch: PrimitiveEpochNumber::Earliest,
+            to_epoch: PrimitiveEpochNumber::LatestState,
+            params: LogFilterParams {
+                address: Some(vec![
+                    H160::from_str("0000000000000000000000000000000000000000").unwrap(),
+                    H160::from_str("0000000000000000000000000000000000000001").unwrap(),
+                ]),
+                topics: vec![
+                    Some(vec![H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()]),
+                    Some(vec![
+                        H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+                        H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+                    ]),
+                    None,
+                    None,
+                ],
+                offset: Some(1),
+                limit: Some(2),
+            },
+        };
+
+        assert_eq!(epoch_filter.into_primitive(), Ok(primitive_epoch_filter));
+
+        // -------------------------------------
+
+        let block_number_filter = LogFilter {
+            from_epoch: None,
+            to_epoch: None,
+            from_block: Some(U64::from(1)),
+            to_block: Some(U64::from(2)),
+            block_hashes: None,
+            address: Some(VariadicValue::Multiple(vec![
+                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000000").unwrap(), Network::Main).unwrap(),
+                RpcAddress::try_from_h160(H160::from_str("0000000000000000000000000000000000000001").unwrap(), Network::Main).unwrap(),
+            ])),
+            topics: Some(vec![
+                VariadicValue::Single(H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()),
+                VariadicValue::Multiple(vec![
+                    H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+                    H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+                ]),
+            ]),
+            offset: Some(U64::from(1)),
+            limit: Some(U64::from(2)),
+        };
+
+        let primitive_block_number_filter = PrimitiveFilter::BlockNumberLogFilter {
+            from_block: 1,
+            to_block: 2,
+            params: LogFilterParams {
+                address: Some(vec![
+                    H160::from_str("0000000000000000000000000000000000000000").unwrap(),
+                    H160::from_str("0000000000000000000000000000000000000001").unwrap(),
+                ]),
+                topics: vec![
+                    Some(vec![H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()]),
+                    Some(vec![
+                        H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+                        H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+                    ]),
+                    None,
+                    None,
+                ],
+                offset: Some(1),
+                limit: Some(2),
+            },
+        };
+
+        assert_eq!(
+            block_number_filter.into_primitive(),
+            Ok(primitive_block_number_filter)
+        );
+
+        // -------------------------------------
+
+        let block_hash_filter = LogFilter {
             from_epoch: None,
             to_epoch: None,
             from_block: None,
@@ -357,32 +454,33 @@ mod tests {
             limit: Some(U64::from(2)),
         };
 
-        let primitive_filter = PrimitiveFilter {
-            from_epoch: PrimitiveEpochNumber::LatestCheckpoint,
-            to_epoch: PrimitiveEpochNumber::LatestState,
-            from_block: None,
-            to_block: None,
-            block_hashes: Some(vec![
+        let primitive_block_hash_filter = PrimitiveFilter::BlockHashLogFilter {
+            block_hashes: vec![
                 H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
-            ]),
-            address: Some(vec![
-                H160::from_str("0000000000000000000000000000000000000000").unwrap(),
-                H160::from_str("0000000000000000000000000000000000000001").unwrap(),
-            ]),
-            topics: vec![
-                Some(vec![H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()]),
-                Some(vec![
-                    H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
-                    H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
-                ]),
-                None,
-                None,
             ],
-            offset: Some(1),
-            limit: Some(2),
+            params: LogFilterParams {
+                address: Some(vec![
+                    H160::from_str("0000000000000000000000000000000000000000").unwrap(),
+                    H160::from_str("0000000000000000000000000000000000000001").unwrap(),
+                ]),
+                topics: vec![
+                    Some(vec![H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap()]),
+                    Some(vec![
+                        H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+                        H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
+                    ]),
+                    None,
+                    None,
+                ],
+                offset: Some(1),
+                limit: Some(2),
+            },
         };
 
-        assert_eq!(filter.into_primitive(), Ok(primitive_filter));
+        assert_eq!(
+            block_hash_filter.into_primitive(),
+            Ok(primitive_block_hash_filter)
+        );
     }
 }
