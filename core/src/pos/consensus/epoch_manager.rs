@@ -463,10 +463,6 @@ impl EpochManager {
             self.config.sync_only,
             self.tx_sender.clone(),
         );
-        // FIXME(lpl): Send with fixed timeout or PoW signal.
-        if let Err(e) = processor.broadcast_pivot_decision().await {
-            diem_error!("error in broadcasting pivot decision tx: {:?}", e);
-        }
         // Only check if we should send election after entering an new epoch.
         if let Err(e) = processor.broadcast_election().await {
             diem_error!("error in broadcasting election tx: {:?}", e);

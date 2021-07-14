@@ -66,9 +66,12 @@ impl ProposerElection for VrfProposer {
             *self.current_round.lock(),
             "VRF election can not generate vrf_proof for other rounds"
         );
+        // TODO(lpl): Unify seed computation.
+        let mut round_seed = self.current_seed.lock().clone();
+        round_seed.extend_from_slice(&round.to_be_bytes());
         let vrf_output = self
             .vrf_private_key
-            .compute(&*self.current_seed.lock())
+            .compute(round_seed.as_slice())
             .unwrap()
             .to_hash()
             .unwrap();
@@ -77,6 +80,7 @@ impl ProposerElection for VrfProposer {
     }
 
     fn is_valid_proposal(&self, block: &Block) -> bool {
+        // FIXME(lpl): Verify VRF.
         let vrf_number =
             block.vrf_proof().unwrap().to_hash().unwrap().to_u256();
         vrf_number <= self.proposal_threshold

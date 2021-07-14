@@ -184,16 +184,19 @@ impl FakeVM {
                     ValidatorSet::CONFIG_ID.access_path(),
                     WriteOp::Value(event.event_data().to_vec()),
                 ));
-            } else if *event.key() == pivot_select_event_key {
-                write_set.push((
-                    AccessPath {
-                        address: pivot_chain_select_address(),
-                        path: pivot_select_event_key.to_vec(),
-                    },
-                    WriteOp::Value(event.event_data().to_vec()),
-                ));
-            } else {
-                todo!()
+                /*
+                } else if *event.key() == pivot_select_event_key {
+                    write_set.push((
+                        AccessPath {
+                            address: pivot_chain_select_address(),
+                            path: pivot_select_event_key.to_vec(),
+                        },
+                        WriteOp::Value(event.event_data().to_vec()),
+                    ));
+
+                } else {
+                    todo!()
+                     */
             }
         }
 

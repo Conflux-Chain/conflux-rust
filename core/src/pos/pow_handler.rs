@@ -146,6 +146,10 @@ impl PowInterface for PowHandler {
             // This case will be reached during pos recovery.
             return Vec::new();
         }
+        debug!(
+            "get_staking_events: parent={:?}, me={:?}",
+            parent_decision, me_decision
+        );
         let pow_consensus = pow_consensus.unwrap();
         Self::get_staking_events_impl(
             pow_consensus,

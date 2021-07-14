@@ -305,6 +305,11 @@ impl RoundManager {
                 .next_round(new_round_event.round, epoch_seed);
             self.round_state.setup_proposal_timeout();
         }
+
+        // FIXME(lpl): Send with fixed timeout or PoW signal.
+        if let Err(e) = self.broadcast_pivot_decision().await {
+            diem_error!("error in broadcasting pivot decision tx: {:?}", e);
+        }
         if let Some(ref proposal_generator) = self.proposal_generator {
             if self.proposer_election.is_valid_proposer(
                 proposal_generator.author(),
@@ -326,6 +331,7 @@ impl RoundManager {
             // Not an active validator, so do not need to sign pivot decision.
             return Ok(());
         }
+        diem_debug!("broadcast_pivot_decision starts");
 
         let hqc = self.block_store.highest_quorum_cert();
         let parent_block = hqc.certified_block();
@@ -379,6 +385,7 @@ impl RoundManager {
         let (tx, rx) = oneshot::channel();
         self.tx_sender.send((signed_tx, tx)).await;
         rx.await?;
+        diem_debug!("broadcast_pivot_decision sends");
         Ok(())
     }
 
@@ -387,6 +394,7 @@ impl RoundManager {
             // Not an active validator, so do not need to send election tx.
             return Ok(());
         }
+        diem_debug!("broadcast_election starts");
         let proposal_generator =
             self.proposal_generator.as_ref().expect("checked");
         let pos_state = self.storage.diem_db().get_latest_pos_state();
@@ -430,6 +438,7 @@ impl RoundManager {
             let (tx, rx) = oneshot::channel();
             self.tx_sender.send((signed_tx, tx)).await;
             rx.await?;
+            diem_debug!("broadcast_election sends");
         }
         Ok(())
     }
