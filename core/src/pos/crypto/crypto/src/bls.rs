@@ -15,6 +15,7 @@ use bls_signatures::{
 use diem_crypto_derive::{
     DeserializeKey, SerializeKey, SilentDebug, SilentDisplay,
 };
+use diem_logger::prelude::*;
 use mirai_annotations::*;
 use serde::Serialize;
 use std::convert::TryFrom;
@@ -144,7 +145,14 @@ impl TryFrom<&[u8]> for BLSPublicKey {
     ) -> std::result::Result<BLSPublicKey, CryptoMaterialError> {
         match RawPublicKey::from_bytes(bytes) {
             Ok(sig) => Ok(Self(sig)),
-            Err(_) => Err(CryptoMaterialError::DeserializationError),
+            Err(e) => {
+                diem_debug!(
+                    "BLSPublicKey debug error: bytes={:?}, err={:?}",
+                    bytes,
+                    e
+                );
+                Err(CryptoMaterialError::DeserializationError)
+            }
         }
     }
 }

@@ -1678,6 +1678,7 @@ dependencies = [
  "criterion 0.3.4",
  "curve25519-dalek-fiat",
  "diem-crypto-derive",
+ "diem-logger",
  "digest 0.9.0",
  "ed25519-dalek-fiat",
  "hex 0.4.3",
