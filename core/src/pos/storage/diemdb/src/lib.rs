@@ -243,6 +243,7 @@ impl DiemDB {
             TRANSACTION_INFO_CF_NAME,
             LEDGER_INFO_BY_BLOCK_CF_NAME,
             TERM_VDF_OUTPUT_CF_NAME,
+            POS_STATE_CF_NAME,
         ]
     }
 

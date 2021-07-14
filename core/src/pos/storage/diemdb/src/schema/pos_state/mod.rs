@@ -13,20 +13,20 @@
 //! `epoch` is serialized in big endian so that records in RocksDB will be in
 //! order of their numeric value.
 
+use crate::schema::POS_STATE_CF_NAME;
 use anyhow::Result;
 use diem_crypto::hash::HashValue;
 use diem_types::{ledger_info::LedgerInfoWithSignatures, term_state::PosState};
 use schemadb::{
     define_schema,
     schema::{KeyCodec, ValueCodec},
-    DEFAULT_CF_NAME,
 };
 
 define_schema!(
     PosStateSchema,
     HashValue, /* block id */
     PosState,
-    DEFAULT_CF_NAME
+    POS_STATE_CF_NAME
 );
 
 impl KeyCodec<PosStateSchema> for HashValue {
