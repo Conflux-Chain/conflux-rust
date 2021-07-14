@@ -45,3 +45,59 @@ class TestBlockNumber(RpcClient):
         # note that this epoch will reference the pivot block (D)
         epoch_d = hex(epoch_0 + 3)
         assert_equal(int(self.block_by_epoch(epoch_d)['blockNumber'], 16), block_number_0 + 4)
+
+    def test_get_block_by_block_number(self):
+
+        #                      ---        ---        ---
+        #                  .- | A | <--- | C | <--- | D | <--- ...
+        #           ---    |   ---        ---        ---
+        # ... <--- | 0 | <-*                          .
+        #           ---    |   ---                    .
+        #                  .- | B | <..................
+        #                      ---
+
+        #               0 --- A --- C --- B --- D ---
+        # block number: x  | x+1 | x+2 | x+3 | x+4 |
+        # epoch number: y  | y+1 | y+2 |   y + 3   |
+
+        block_0 = self.block_by_epoch("latest_mined")['hash']
+        block_a = self.generate_custom_block(parent_hash = block_0, referee = [], txs = [])
+        block_b = self.generate_custom_block(parent_hash = block_0, referee = [], txs = [])
+        block_c = self.generate_custom_block(parent_hash = block_a, referee = [], txs = [])
+        block_d = self.generate_custom_block(parent_hash = block_c, referee = [block_b], txs = [])
+
+        epoch_0 = int(self.block_by_hash(block_0)['height'], 16)
+        block_number_0 = int(self.block_by_hash(block_0)['blockNumber'], 16)
+
+        # make sure transactions have been executed
+        parent_hash = block_d
+
+        for _ in range(5):
+            block = self.generate_custom_block(parent_hash = parent_hash, referee = [], txs = [])
+            parent_hash = block
+
+        # check blocks by block number
+        assert_equal(
+            self.block_by_block_number(hex(block_number_0)),
+            self.block_by_hash(block_0)
+        )
+
+        assert_equal(
+            self.block_by_block_number(hex(block_number_0 + 1)),
+            self.block_by_hash(block_a)
+        )
+
+        assert_equal(
+            self.block_by_block_number(hex(block_number_0 + 2)),
+            self.block_by_hash(block_c)
+        )
+
+        assert_equal(
+            self.block_by_block_number(hex(block_number_0 + 3)),
+            self.block_by_hash(block_b)
+        )
+
+        assert_equal(
+            self.block_by_block_number(hex(block_number_0 + 4)),
+            self.block_by_hash(block_d)
+        )

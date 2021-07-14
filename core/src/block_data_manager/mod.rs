@@ -101,6 +101,7 @@ pub struct BlockDataManager {
     block_rewards: RwLock<HashMap<H256, BlockRewardsInfo>>,
     block_traces: RwLock<HashMap<H256, BlockTracesInfo>>,
     transaction_indices: RwLock<HashMap<H256, TransactionIndex>>,
+    hash_by_block_number: RwLock<HashMap<u64, H256>>,
     local_block_info: RwLock<HashMap<H256, LocalBlockInfo>>,
     blamed_header_verified_roots:
         RwLock<HashMap<u64, BlamedHeaderVerifiedRoots>>,
@@ -202,6 +203,7 @@ impl BlockDataManager {
             block_rewards: Default::default(),
             block_traces: Default::default(),
             transaction_indices: Default::default(),
+            hash_by_block_number: Default::default(),
             local_block_info: Default::default(),
             blamed_header_verified_roots: Default::default(),
             epoch_execution_commitments: Default::default(),
@@ -782,6 +784,54 @@ impl BlockDataManager {
         }
     }
 
+    pub fn hash_by_block_number(
+        &self, block_number: u64, update_cache: bool,
+    ) -> Option<H256> {
+        if self.config.persist_block_number_index {
+            self.get(
+                &block_number,
+                &self.hash_by_block_number,
+                |key| self.db_manager.hash_by_block_number_from_db(key),
+                if update_cache {
+                    Some(CacheId::HashByBlockNumber(block_number))
+                } else {
+                    None
+                },
+            )
+        } else {
+            self.hash_by_block_number
+                .read()
+                .get(&block_number)
+                .map(|v| v.clone())
+        }
+    }
+
+    pub fn insert_hash_by_block_number(
+        &self, block_number: u64, block_hash: &H256,
+    ) {
+        if self.config.persist_block_number_index {
+            self.hash_by_block_number
+                .write()
+                .entry(block_number)
+                .and_modify(|v| {
+                    *v = block_hash.clone();
+                    self.cache_man
+                        .lock()
+                        .note_used(CacheId::HashByBlockNumber(block_number));
+                });
+            self.db_manager
+                .insert_hash_by_block_number_to_db(block_number, block_hash);
+        } else {
+            // If not persisted, we will just hold it temporarily in memory
+            self.hash_by_block_number
+                .write()
+                .insert(block_number, *block_hash);
+            self.cache_man
+                .lock()
+                .note_used(CacheId::HashByBlockNumber(block_number));
+        }
+    }
+
     pub fn insert_local_block_info(&self, hash: &H256, info: LocalBlockInfo) {
         self.insert(
             *hash,
@@ -1270,6 +1320,8 @@ impl BlockDataManager {
         let block_traces = self.block_traces.read().size_of(malloc_ops);
         let transaction_indices =
             self.transaction_indices.read().size_of(malloc_ops);
+        let hash_by_block_number =
+            self.hash_by_block_number.read().size_of(malloc_ops);
         let local_block_infos =
             self.local_block_info.read().size_of(malloc_ops);
 
@@ -1282,6 +1334,7 @@ impl BlockDataManager {
             transaction_indices,
             compact_blocks,
             local_block_infos,
+            hash_by_block_number,
         }
     }
 
@@ -1297,10 +1350,11 @@ impl BlockDataManager {
         let mut local_block_info = self.local_block_info.write();
         let mut blamed_header_verified_roots =
             self.blamed_header_verified_roots.write();
+        let mut hash_by_block_number = self.hash_by_block_number.write();
         let mut cache_man = self.cache_man.lock();
 
         debug!(
-            "Before gc cache_size={} {} {} {} {} {} {} {} {} {}",
+            "Before gc cache_size={} {} {} {} {} {} {} {} {} {} {}",
             current_size,
             block_headers.len(),
             blocks.len(),
@@ -1311,6 +1365,7 @@ impl BlockDataManager {
             tx_indices.len(),
             local_block_info.len(),
             blamed_header_verified_roots.len(),
+            hash_by_block_number.len(),
         );
 
         cache_man.collect_garbage(current_size, |ids| {
@@ -1342,6 +1397,9 @@ impl BlockDataManager {
                     }
                     CacheId::BlamedHeaderVerifiedRoots(h) => {
                         blamed_header_verified_roots.remove(h);
+                    }
+                    &CacheId::HashByBlockNumber(block_number) => {
+                        hash_by_block_number.remove(&block_number);
                     }
                 }
             }
@@ -1637,6 +1695,7 @@ pub enum DbType {
 
 pub struct DataManagerConfiguration {
     pub persist_tx_index: bool,
+    pub persist_block_number_index: bool,
     pub tx_cache_index_maintain_timeout: Duration,
     pub db_type: DbType,
     pub additional_maintained_block_body_epoch_count: Option<usize>,
@@ -1654,12 +1713,13 @@ impl MallocSizeOf for DataManagerConfiguration {
 
 impl DataManagerConfiguration {
     pub fn new(
-        persist_tx_index: bool, tx_cache_index_maintain_timeout: Duration,
-        db_type: DbType,
+        persist_tx_index: bool, persist_block_number_index: bool,
+        tx_cache_index_maintain_timeout: Duration, db_type: DbType,
     ) -> Self
     {
         Self {
             persist_tx_index,
+            persist_block_number_index,
             tx_cache_index_maintain_timeout,
             db_type,
             additional_maintained_block_body_epoch_count: None,

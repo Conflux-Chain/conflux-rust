@@ -51,6 +51,7 @@ use hash::KECCAK_EMPTY_LIST_RLP;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
+    compute_block_number,
     receipt::{
         BlockReceipts, Receipt,
         TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
@@ -1044,12 +1045,22 @@ impl ConsensusExecutionHandler {
                 .commit(*epoch_hash, debug_record)
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
         };
+
         self.data_man.insert_epoch_execution_commitment(
             pivot_block.hash(),
             state_root.clone(),
             compute_receipts_root(&epoch_receipts),
             BlockHeaderBuilder::compute_block_logs_bloom_hash(&epoch_receipts),
         );
+
+        // persist block number index
+        for (index, hash) in epoch_block_hashes.iter().enumerate() {
+            self.data_man.insert_hash_by_block_number(
+                compute_block_number(start_block_number, index as u64),
+                hash,
+            );
+        }
+
         let epoch_execution_commitment = self
             .data_man
             .get_epoch_execution_commitment(&epoch_hash)

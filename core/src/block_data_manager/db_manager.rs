@@ -7,7 +7,7 @@ use crate::{
     },
     db::{
         COL_BLAMED_HEADER_VERIFIED_ROOTS, COL_BLOCKS, COL_BLOCK_TRACES,
-        COL_EPOCH_NUMBER, COL_MISC, COL_TX_INDEX,
+        COL_EPOCH_NUMBER, COL_HASH_BY_BLOCK_NUMBER, COL_MISC, COL_TX_INDEX,
     },
     pow::PowComputer,
     verification::VerificationConfig,
@@ -25,6 +25,8 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use primitives::{Block, BlockHeader, SignedTransaction, TransactionIndex};
 use rlp::Rlp;
 use std::{collections::HashMap, fs, path::Path, sync::Arc};
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 
 const LOCAL_BLOCK_INFO_SUFFIX_BYTE: u8 = 1;
 const BLOCK_BODY_SUFFIX_BYTE: u8 = 2;
@@ -37,7 +39,7 @@ const BLOCK_REWARD_RESULT_SUFFIX_BYTE: u8 = 8;
 const BLOCK_TERMINAL_KEY: &[u8] = b"block_terminals";
 const GC_PROGRESS_KEY: &[u8] = b"gc_progress";
 
-#[derive(Clone, Copy, Hash, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Copy, Hash, Ord, PartialOrd, Eq, PartialEq, EnumIter)]
 enum DBTable {
     Misc,
     Blocks,
@@ -45,6 +47,7 @@ enum DBTable {
     EpochNumbers,
     BlamedHeaderVerifiedRoots,
     BlockTraces,
+    HashByBlockNumber,
 }
 
 fn rocks_db_col(table: DBTable) -> u32 {
@@ -55,6 +58,7 @@ fn rocks_db_col(table: DBTable) -> u32 {
         DBTable::EpochNumbers => COL_EPOCH_NUMBER,
         DBTable::BlamedHeaderVerifiedRoots => COL_BLAMED_HEADER_VERIFIED_ROOTS,
         DBTable::BlockTraces => COL_BLOCK_TRACES,
+        DBTable::HashByBlockNumber => COL_HASH_BY_BLOCK_NUMBER,
     }
 }
 
@@ -66,6 +70,7 @@ fn sqlite_db_table(table: DBTable) -> String {
         DBTable::EpochNumbers => "epoch_numbers",
         DBTable::BlamedHeaderVerifiedRoots => "blamed_header_verified_roots",
         DBTable::BlockTraces => "block_traces",
+        DBTable::HashByBlockNumber => "hash_by_block_number",
     }
     .into()
 }
@@ -78,14 +83,8 @@ pub struct DBManager {
 impl DBManager {
     pub fn new_from_rocksdb(db: Arc<SystemDB>, pow: Arc<PowComputer>) -> Self {
         let mut table_db = HashMap::new();
-        for table in vec![
-            DBTable::Misc,
-            DBTable::Blocks,
-            DBTable::Transactions,
-            DBTable::EpochNumbers,
-            DBTable::BlamedHeaderVerifiedRoots,
-            DBTable::BlockTraces,
-        ] {
+
+        for table in DBTable::iter() {
             table_db.insert(
                 table,
                 Box::new(KvdbRocksdb {
@@ -105,14 +104,7 @@ impl DBManager {
             panic!("Error creating database directory: {:?}", e);
         }
         let mut table_db = HashMap::new();
-        for table in vec![
-            DBTable::Misc,
-            DBTable::Blocks,
-            DBTable::Transactions,
-            DBTable::EpochNumbers,
-            DBTable::BlamedHeaderVerifiedRoots,
-            DBTable::BlockTraces,
-        ] {
+        for table in DBTable::iter() {
             let table_str = sqlite_db_table(table);
             let (_, sqlite_db) = KvdbSqlite::open_or_create(
                 &db_path.join(table_str.as_str()), /* Use separate database
@@ -199,6 +191,25 @@ impl DBManager {
         &self, hash: &H256,
     ) -> Option<TransactionIndex> {
         self.load_decodable_val(DBTable::Transactions, hash.as_bytes())
+    }
+
+    pub fn insert_hash_by_block_number_to_db(
+        &self, block_number: u64, hash: &H256,
+    ) {
+        self.insert_encodable_val(
+            DBTable::HashByBlockNumber,
+            &block_number.to_be_bytes(),
+            hash,
+        )
+    }
+
+    pub fn hash_by_block_number_from_db(
+        &self, block_number: &u64,
+    ) -> Option<H256> {
+        self.load_decodable_val(
+            DBTable::HashByBlockNumber,
+            &block_number.to_be_bytes(),
+        )
     }
 
     /// Store block info to db. Block info includes block status and

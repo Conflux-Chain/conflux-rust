@@ -1550,6 +1550,7 @@ impl Cfx for CfxHandler {
                 -> BoxFuture<RpcBlock>;
             fn block_by_hash(&self, hash: H256, include_txs: bool)
                 -> BoxFuture<Option<RpcBlock>>;
+            fn block_by_block_number(&self, block_number: U64, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;
             fn confirmation_risk_by_hash(&self, block_hash: H256) -> JsonRpcResult<Option<U256>>;
             fn blocks_by_epoch(&self, num: EpochNumber) -> JsonRpcResult<Vec<H256>>;
             fn skipped_blocks_by_epoch(&self, num: EpochNumber) -> JsonRpcResult<Vec<H256>>;
