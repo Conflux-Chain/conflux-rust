@@ -158,7 +158,8 @@ impl BlockStore {
 
         if !pending.is_empty() {
             // Execute the blocks in catch_up mode.
-            while let Some(block) = pending.clone().pop() {
+            let mut dup_pending = pending.clone();
+            while let Some(block) = dup_pending.pop() {
                 let block_qc = block.quorum_cert().clone();
                 self.insert_single_quorum_cert(block_qc.clone())?;
                 self.execute_and_insert_block(
@@ -181,7 +182,7 @@ impl BlockStore {
             self.pow_handler.wait_for_initialization();
 
             // Execute the blocks in normal mode.
-            while let Some(block) = pending.clone().pop() {
+            while let Some(block) = pending.pop() {
                 let block_qc = block.quorum_cert().clone();
                 self.insert_single_quorum_cert(block_qc.clone())?;
                 self.execute_and_insert_block(

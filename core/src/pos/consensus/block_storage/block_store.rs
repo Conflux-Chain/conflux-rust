@@ -226,6 +226,10 @@ impl BlockStore {
             .get_block(block_id_to_commit)
             .ok_or_else(|| format_err!("Committed block id not found"))?;
 
+        if block_to_commit == self.root() {
+            diem_debug!("commit an committed block in sync");
+            return Ok(())
+        }
         // First make sure that this commit is new.
         ensure!(
             block_to_commit.round() > self.root().round(),

@@ -137,6 +137,7 @@ impl TxnManager for MempoolProxy {
             Some(txns) => txns,
             None => return Ok(()),
         };
+        /*
         // skip the block metadata txn result
         for (txn, status) in txns
             .iter()
@@ -145,13 +146,14 @@ impl TxnManager for MempoolProxy {
             )
         {
             if let TransactionStatus::Discard(_) = status {
-                /*
+
                 rejected_txns.push(CommittedTransaction {
                     sender: txn.sender(),
                     sequence_number: txn.sequence_number(),
-                });*/
+                });
             }
         }
+         */
 
         /*if rejected_txns.is_empty() {
             return Ok(());

@@ -12,7 +12,7 @@ use diem_crypto::{HashValue, VRFProof, ValidCryptoMaterial};
 use crate::{
     account_address::AccountAddress,
     account_config,
-    block_info::Round,
+    block_info::{PivotBlockDecision, Round},
     contract_event::ContractEvent,
     epoch_state::EpochState,
     event::EventKey,
@@ -219,6 +219,8 @@ pub struct PosState {
     /// Track the nodes that have retired and are waiting to be unlocked.
     /// Nodes that are enqueued early will also become unlocked early.
     retiring_nodes: VecDeque<AccountAddress>,
+    /// Current pivot decision.
+    pivot_decision: PivotBlockDecision,
 
     catch_up_mode: bool,
 }
@@ -236,7 +238,7 @@ impl Debug for PosState {
 impl PosState {
     pub fn new(
         initial_seed: Vec<u8>, initial_nodes: Vec<(NodeID, u64)>,
-        catch_up_mode: bool,
+        genesis_pivot_decision: PivotBlockDecision, catch_up_mode: bool,
     ) -> Self
     {
         let mut node_map = HashMap::new();
@@ -283,6 +285,7 @@ impl PosState {
                 term_list,
             },
             retiring_nodes: Default::default(),
+            pivot_decision: genesis_pivot_decision,
             catch_up_mode,
         }
     }
@@ -296,6 +299,10 @@ impl PosState {
                 term_list: Default::default(),
             },
             retiring_nodes: Default::default(),
+            pivot_decision: PivotBlockDecision {
+                block_hash: Default::default(),
+                height: 0,
+            },
             catch_up_mode: false,
         }
     }
@@ -303,6 +310,12 @@ impl PosState {
     pub fn set_catch_up_mode(&mut self, catch_up_mode: bool) {
         self.catch_up_mode = catch_up_mode;
     }
+
+    pub fn set_pivot_decision(&mut self, pivot_decision: PivotBlockDecision) {
+        self.pivot_decision = pivot_decision;
+    }
+
+    pub fn pivot_decision(&self) -> &PivotBlockDecision { &self.pivot_decision }
 }
 
 /// Read-only functions used in `execute_block`

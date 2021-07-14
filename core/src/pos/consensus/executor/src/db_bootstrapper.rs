@@ -125,6 +125,7 @@ pub fn calculate_genesis<V: VMExecutor>(
         db.clone(),
         tree_state,
         initial_nodes,
+        genesis_pivot_decision.clone(),
         // This will not be used in genesis execution.
         Arc::new(FakePowHandler {}),
     );

@@ -133,6 +133,7 @@ where V: VMExecutor
     pub fn new_on_unbootstrapped_db(
         db: DbReaderWriter, tree_state: TreeState,
         mut initial_nodes: Vec<(NodeID, u64)>,
+        genesis_pivot_decision: Option<PivotBlockDecision>,
         pow_handler: Arc<dyn PowInterface>,
     ) -> Self
     {
@@ -167,7 +168,18 @@ where V: VMExecutor
         //         initial_nodes.push((node_id, node.consensus_voting_power()));
         //     }
         // }
-        let pos_state = PosState::new(VRF_SEED.to_vec(), initial_nodes, true);
+        // TODO(lpl): The default value is only for pos-tool.
+        let genesis_pivot_decision =
+            genesis_pivot_decision.unwrap_or(PivotBlockDecision {
+                block_hash: Default::default(),
+                height: 0,
+            });
+        let pos_state = PosState::new(
+            VRF_SEED.to_vec(),
+            initial_nodes,
+            genesis_pivot_decision,
+            true,
+        );
         Self {
             db,
             cache: SpeculationCache::new_for_db_bootstrapping(
@@ -364,6 +376,7 @@ where V: VMExecutor
         // Find the next pivot block.
         let mut pivot_decision = None;
         let mut new_pos_state = parent_trees.pos_state().clone();
+        let parent_pivot_decision = new_pos_state.pivot_decision().clone();
         new_pos_state.set_catch_up_mode(catch_up_mode);
         for vm_output in vm_outputs.clone().into_iter() {
             for event in vm_output.events() {
@@ -388,14 +401,6 @@ where V: VMExecutor
         }
 
         if *parent_block_id != *PRE_GENESIS_BLOCK_ID {
-            let parent_pivot_decision = self
-                .cache
-                .get_block(&parent_block_id)?
-                .lock()
-                .output()
-                .pivot_block()
-                .clone()
-                .expect("All block have pivot decision");
             if let Some(pivot_decision) = &pivot_decision {
                 diem_debug!(
                     "process_vm_outputs: parent={:?} parent_pivot={:?}",
@@ -497,6 +502,10 @@ where V: VMExecutor
                 pivot_decision = Some(parent_pivot_decision);
             }
         }
+        // TODO(lpl): This is only for pos-tool
+        if let Some(pivot_decision) = &pivot_decision {
+            new_pos_state.set_pivot_decision(pivot_decision.clone());
+        }
         let mut next_epoch_state =
             new_pos_state.next_view()?.map(|(epoch_state, term_seed)| {
                 // FIXME(lpl): Start this at a proper time.
@@ -585,10 +594,10 @@ where V: VMExecutor
             let mut txn_info_hash = None;
             match vm_output.status() {
                 TransactionStatus::Keep(status) => {
-                    ensure!(
-                        !vm_output.write_set().is_empty(),
-                        "Transaction with empty write set should be discarded.",
-                    );
+                    // ensure!(
+                    //     !vm_output.write_set().is_empty(),
+                    //     "Transaction with empty write set should be
+                    // discarded.", );
                     // Compute hash for the TransactionInfo object. We need the
                     // hash of the transaction itself, the
                     // state root hash as well as the event root hash.
