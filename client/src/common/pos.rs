@@ -247,7 +247,7 @@ pub fn setup_pos_environment(
         protocol_handler,
     };
 
-    let (_mp_client_sender, mp_client_events) =
+    let (mp_client_sender, mp_client_events) =
         channel(AC_SMP_CHANNEL_BUFFER_SIZE);
 
     // TODO (linxi): pos rpc
@@ -295,6 +295,7 @@ pub fn setup_pos_environment(
                 from_consensus_public_key(&public_key.0, &public_key.1)
             },
         ),
+        mp_client_sender,
     );
     debug!("Consensus started in {} ms", instant.elapsed().as_millis());
 

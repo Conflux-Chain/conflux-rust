@@ -34,7 +34,7 @@ use super::{
 };
 use crate::pos::{
     consensus::liveness::vrf_proposer_election::VrfProposer,
-    protocol::network_sender::NetworkSender,
+    mempool::SubmissionStatus, protocol::network_sender::NetworkSender,
 };
 use anyhow::{bail, ensure, Context};
 use channel::diem_channel;
@@ -51,8 +51,12 @@ use diem_types::{
     epoch_change::EpochChangeProof,
     epoch_state::EpochState,
     on_chain_config::{OnChainConfigPayload, ValidatorSet},
+    transaction::SignedTransaction,
 };
-use futures::{select, StreamExt};
+use futures::{
+    channel::{mpsc, oneshot},
+    select, StreamExt,
+};
 use pow_types::PowInterface;
 use safety_rules::SafetyRulesManager;
 use std::{
@@ -107,6 +111,10 @@ pub struct EpochManager {
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
     // Conflux PoW handler
     pow_handler: Arc<dyn PowInterface>,
+    tx_sender: mpsc::Sender<(
+        SignedTransaction,
+        oneshot::Sender<anyhow::Result<SubmissionStatus>>,
+    )>,
 }
 
 impl EpochManager {
@@ -123,6 +131,10 @@ impl EpochManager {
         reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
         pow_handler: Arc<dyn PowInterface>,
         author: AccountAddress,
+        tx_sender: mpsc::Sender<(
+            SignedTransaction,
+            oneshot::Sender<anyhow::Result<SubmissionStatus>>,
+        )>,
     ) -> Self
     {
         let config = node_config.consensus.clone();
@@ -144,6 +156,7 @@ impl EpochManager {
             processor: None,
             reconfig_events,
             pow_handler,
+            tx_sender,
         }
     }
 
@@ -448,7 +461,12 @@ impl EpochManager {
             self.txn_manager.clone(),
             self.storage.clone(),
             self.config.sync_only,
+            self.tx_sender.clone(),
         );
+        // FIXME(lpl): Send with fixed timeout or PoW signal.
+        if let Err(e) = processor.broadcast_pivot_decision().await {
+            diem_error!("error in broadcasting pivot decision tx: {:?}", e);
+        }
         // Only check if we should send election after entering an new epoch.
         if let Err(e) = processor.broadcast_election().await {
             diem_error!("error in broadcasting election tx: {:?}", e);

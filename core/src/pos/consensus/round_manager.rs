@@ -22,7 +22,10 @@ use super::{
     persistent_liveness_storage::{PersistentLivenessStorage, RecoveryData},
     state_replication::{StateComputer, TxnManager},
 };
-use crate::pos::protocol::message::block_retrieval_response::BlockRetrievalRpcResponse;
+use crate::pos::{
+    mempool::SubmissionStatus,
+    protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
+};
 use anyhow::{bail, ensure, Context, Result};
 use consensus_types::{
     block::{Block, VRF_SEED},
@@ -42,10 +45,14 @@ use diem_types::{
     block_info::PivotBlockDecision,
     chain_id::ChainId,
     epoch_state::EpochState,
-    transaction::{ElectionPayload, RawTransaction},
+    transaction::{ElectionPayload, RawTransaction, SignedTransaction},
     validator_verifier::ValidatorVerifier,
 };
 use fail::fail_point;
+use futures::{
+    channel::{mpsc, oneshot},
+    SinkExt,
+};
 #[cfg(test)]
 use safety_rules::ConsensusState;
 use safety_rules::TSafetyRules;
@@ -203,6 +210,10 @@ pub struct RoundManager {
     txn_manager: Arc<dyn TxnManager>,
     storage: Arc<dyn PersistentLivenessStorage>,
     sync_only: bool,
+    tx_sender: mpsc::Sender<(
+        SignedTransaction,
+        oneshot::Sender<anyhow::Result<SubmissionStatus>>,
+    )>,
 }
 
 impl RoundManager {
@@ -214,6 +225,10 @@ impl RoundManager {
         safety_rules: MetricsSafetyRules, network: ConsensusNetworkSender,
         txn_manager: Arc<dyn TxnManager>,
         storage: Arc<dyn PersistentLivenessStorage>, sync_only: bool,
+        tx_sender: mpsc::Sender<(
+            SignedTransaction,
+            oneshot::Sender<anyhow::Result<SubmissionStatus>>,
+        )>,
     ) -> Self
     {
         counters::OP_COUNTERS
@@ -230,6 +245,7 @@ impl RoundManager {
             network,
             storage,
             sync_only,
+            tx_sender,
         }
     }
 
@@ -305,7 +321,7 @@ impl RoundManager {
         Ok(())
     }
 
-    pub async fn broadcast_pivot_decision(&self) -> anyhow::Result<()> {
+    pub async fn broadcast_pivot_decision(&mut self) -> anyhow::Result<()> {
         if self.proposal_generator.is_none() {
             // Not an active validator, so do not need to sign pivot decision.
             return Ok(());
@@ -360,20 +376,19 @@ impl RoundManager {
                 proposal_generator.public_key.clone(),
             )?
             .into_inner();
-        // FIXME(lpl): Broadcast this tx using transaction pool.
-        // self.network.broadcast(ConsensusMsg::PivotDecisionMsg())
+        let (tx, rx) = oneshot::channel();
+        self.tx_sender.send((signed_tx, tx)).await;
+        rx.await?;
         Ok(())
     }
 
-    pub async fn broadcast_election(&self) -> anyhow::Result<()> {
+    pub async fn broadcast_election(&mut self) -> anyhow::Result<()> {
         if self.proposal_generator.is_none() {
             // Not an active validator, so do not need to send election tx.
             return Ok(());
         }
         let proposal_generator =
             self.proposal_generator.as_ref().expect("checked");
-        let committed_block = self.block_store.root().id();
-        // TODO: Use cached pos state;
         let pos_state = self.storage.diem_db().get_latest_pos_state();
         if let Some(target_term) =
             pos_state.next_elect_term(&proposal_generator.author())
@@ -412,8 +427,9 @@ impl RoundManager {
                     proposal_generator.public_key.clone(),
                 )?
                 .into_inner();
-            // FIXME(lpl): Broadcast this tx using transaction pool.
-            // self.network.broadcast(ConsensusMsg::PivotDecisionMsg())
+            let (tx, rx) = oneshot::channel();
+            self.tx_sender.send((signed_tx, tx)).await;
+            rx.await?;
         }
         Ok(())
     }

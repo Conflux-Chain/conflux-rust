@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{
     pos::{
-        mempool::ConsensusRequest,
+        mempool::{ConsensusRequest, SubmissionStatus},
         pow_handler::PowHandler,
         protocol::{
             network_sender::NetworkSender,
@@ -25,10 +25,11 @@ use diem_config::config::NodeConfig;
 use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress, on_chain_config::OnChainConfigPayload,
+    transaction::SignedTransaction,
 };
 use executor::{vm::FakeVM, Executor};
 use executor_types::BlockExecutor;
-use futures::channel::mpsc;
+use futures::channel::{mpsc, oneshot};
 use network::NetworkService;
 use std::sync::{atomic::AtomicBool, Arc};
 use storage_interface::{DbReader, DbReaderWriter};
@@ -44,6 +45,10 @@ pub fn start_consensus(
     db_rw: DbReaderWriter,
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
     author: AccountAddress,
+    tx_sender: mpsc::Sender<(
+        SignedTransaction,
+        oneshot::Sender<anyhow::Result<SubmissionStatus>>,
+    )>,
 ) -> (Runtime, Arc<PowHandler>, Arc<AtomicBool>)
 {
     let stopped = Arc::new(AtomicBool::new(false));
@@ -86,6 +91,7 @@ pub fn start_consensus(
         reconfig_events,
         pow_handler.clone(),
         author,
+        tx_sender,
     );
 
     runtime.spawn(epoch_mgr.start(
