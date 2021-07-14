@@ -2,16 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    counters, epoch_manager::EpochManager, network::NetworkTask,
-    network_interface::ConsensusNetworkSender,
+    counters, epoch_manager::EpochManager, network::NetworkReceivers,
     persistent_liveness_storage::StorageWriteProxy,
     state_computer::ExecutionProxy, txn_manager::MempoolProxy,
     util::time_service::ClockTimeService,
 };
 use crate::{
     pos::{
+        mempool::ConsensusRequest,
         pow_handler::PowHandler,
-        protocol::sync_protocol::HotStuffSynchronizationProtocol,
+        protocol::{
+            network_sender::NetworkSender,
+            sync_protocol::HotStuffSynchronizationProtocol,
+        },
+        state_sync::client::StateSyncClient,
     },
     sync::ProtocolConfiguration,
 };
@@ -24,8 +28,8 @@ use diem_types::{
 };
 use executor::{vm::FakeVM, Executor};
 use executor_types::BlockExecutor;
+use futures::channel::mpsc;
 use network::NetworkService;
-use state_sync::client::StateSyncClient;
 use std::sync::{atomic::AtomicBool, Arc};
 use storage_interface::{DbReader, DbReaderWriter};
 use tokio::runtime::{self, Runtime};
@@ -33,8 +37,9 @@ use tokio::runtime::{self, Runtime};
 /// Helper function to start consensus based on configuration and return the
 /// runtime
 pub fn start_consensus(
-    node_config: &NodeConfig, network: Arc<NetworkService>,
-    own_node_hash: H256, protocol_config: ProtocolConfiguration,
+    node_config: &NodeConfig, network_sender: NetworkSender,
+    network_receiver: NetworkReceivers,
+    consensus_to_mempool_sender: mpsc::Sender<ConsensusRequest>,
     state_sync_client: StateSyncClient, diem_db: Arc<dyn DbReader>,
     db_rw: DbReaderWriter,
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
@@ -51,6 +56,7 @@ pub fn start_consensus(
         .expect("Failed to create Tokio runtime!");
     let storage = Arc::new(StorageWriteProxy::new(node_config, diem_db));
     let txn_manager = Arc::new(MempoolProxy::new(
+        consensus_to_mempool_sender,
         node_config.consensus.mempool_poll_count,
         node_config.consensus.mempool_txn_pull_timeout_ms,
         node_config.consensus.mempool_executed_txn_timeout_ms,
@@ -62,19 +68,6 @@ pub fn start_consensus(
         Arc::new(ExecutionProxy::new(executor, state_sync_client));
     let time_service =
         Arc::new(ClockTimeService::new(runtime.handle().clone()));
-
-    let (network_task, network_receiver) = NetworkTask::new();
-    let protocol_handler = Arc::new(HotStuffSynchronizationProtocol::new(
-        own_node_hash,
-        network_task,
-        protocol_config,
-    ));
-    protocol_handler.clone().register(network.clone()).unwrap();
-    // network.start_network_poll().unwrap();
-    let network_sender = ConsensusNetworkSender {
-        network,
-        protocol_handler,
-    };
 
     let (timeout_sender, timeout_receiver) =
         channel::new(1_024, &counters::PENDING_ROUND_TIMEOUTS);

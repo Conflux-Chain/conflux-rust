@@ -4,23 +4,21 @@
 
 use crate::{
     pos::{
-        consensus::network::ConsensusMsg,
+        mempool::network::MempoolSyncMsg,
         protocol::sync_protocol::{Context, Handleable},
     },
     sync::Error,
 };
-use consensus_types::epoch_retrieval::EpochRetrievalRequest;
 use diem_types::account_address::AccountAddress;
 use std::{cmp::Ordering, mem::discriminant};
 
-impl Handleable for ConsensusMsg {
+impl Handleable for MempoolSyncMsg {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        debug!("on_consensus_msg, msg={:?}", &self);
-        let peer_address = ctx.get_peer_account_address();
+        debug!("on_mempool_sync_msg, msg={:?}", &self);
         ctx.manager
-            .consensus_network_task
-            .consensus_messages_tx
-            .push((peer_address, discriminant(&self)), (peer_address, self))?;
+            .mempool_network_task
+            .mempool_sync_message_tx
+            .push((ctx.peer, discriminant(&self)), (ctx.peer, self))?;
         Ok(())
     }
 }

@@ -1,6 +1,8 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::pos::state_sync::client::StateSyncClient;
+
 use super::{error::StateSyncError, state_replication::StateComputer};
 use anyhow::Result;
 use consensus_types::block::Block;
@@ -8,14 +10,13 @@ use diem_crypto::HashValue;
 use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_metrics::monitor;
-use diem_types::ledger_info::LedgerInfoWithSignatures;
+use diem_types::{
+    ledger_info::LedgerInfoWithSignatures, transaction::Transaction,
+};
 use executor_types::{
     BlockExecutor, Error as ExecutionError, StateComputeResult,
 };
 use fail::fail_point;
-//use state_sync::client::StateSyncClient;
-use diem_types::transaction::Transaction;
-use state_sync::client::StateSyncClient;
 use std::boxed::Box;
 
 /// Basic communication with the Execution module;

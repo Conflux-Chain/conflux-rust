@@ -15,8 +15,9 @@ use super::{
     },
     logging::{LogEvent, LogSchema},
     metrics_safety_rules::MetricsSafetyRules,
-    network::{IncomingBlockRetrievalRequest, NetworkSender},
-    network_interface::ConsensusMsg,
+    network::{
+        ConsensusMsg, ConsensusNetworkSender, IncomingBlockRetrievalRequest,
+    },
     pending_votes::VoteReceptionResult,
     persistent_liveness_storage::{PersistentLivenessStorage, RecoveryData},
     state_replication::{StateComputer, TxnManager},
@@ -118,7 +119,7 @@ pub mod round_manager_fuzzing;
 /// and use the info to retrieve blocks from peers
 pub struct RecoveryManager {
     epoch_state: EpochState,
-    network: NetworkSender,
+    network: ConsensusNetworkSender,
     storage: Arc<dyn PersistentLivenessStorage>,
     state_computer: Arc<dyn StateComputer>,
     last_committed_round: Round,
@@ -126,7 +127,7 @@ pub struct RecoveryManager {
 
 impl RecoveryManager {
     pub fn new(
-        epoch_state: EpochState, network: NetworkSender,
+        epoch_state: EpochState, network: ConsensusNetworkSender,
         storage: Arc<dyn PersistentLivenessStorage>,
         state_computer: Arc<dyn StateComputer>, last_committed_round: Round,
     ) -> Self
@@ -198,7 +199,7 @@ pub struct RoundManager {
     // None if this is not a validator.
     proposal_generator: Option<ProposalGenerator>,
     safety_rules: MetricsSafetyRules,
-    network: NetworkSender,
+    network: ConsensusNetworkSender,
     txn_manager: Arc<dyn TxnManager>,
     storage: Arc<dyn PersistentLivenessStorage>,
     sync_only: bool,
@@ -210,7 +211,7 @@ impl RoundManager {
         round_state: RoundState,
         proposer_election: Box<dyn ProposerElection + Send + Sync>,
         proposal_generator: Option<ProposalGenerator>,
-        safety_rules: MetricsSafetyRules, network: NetworkSender,
+        safety_rules: MetricsSafetyRules, network: ConsensusNetworkSender,
         txn_manager: Arc<dyn TxnManager>,
         storage: Arc<dyn PersistentLivenessStorage>, sync_only: bool,
     ) -> Self

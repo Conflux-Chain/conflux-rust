@@ -1,9 +1,12 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    client::{CoordinatorMessage, StateSyncClient},
-    coordinator::StateSyncCoordinator,
-    executor_proxy::{ExecutorProxy, ExecutorProxyTrait},
+use crate::pos::{
+    mempool as diem_mempool,
+    state_sync::{
+        client::{CoordinatorMessage, StateSyncClient},
+        coordinator::StateSyncCoordinator,
+        executor_proxy::{ExecutorProxy, ExecutorProxyTrait},
+    },
 };
 use diem_config::{config::NodeConfig, network_id::NodeNetworkId};
 use diem_logger::debug as diem_debug;
@@ -24,10 +27,10 @@ pub struct StateSyncBootstrapper {
 
 impl StateSyncBootstrapper {
     pub fn bootstrap(
-        /*network: Vec<(NodeNetworkId, StateSyncSender, StateSyncEvents)>,
+        /* network: Vec<(NodeNetworkId, StateSyncSender, StateSyncEvents)>, */
         state_sync_to_mempool_sender: mpsc::Sender<
             diem_mempool::CommitNotification,
-        >,*/
+        >,
         storage: Arc<dyn DbReader>, executor: Box<dyn ChunkExecutor>,
         node_config: &NodeConfig, waypoint: Waypoint,
         reconfig_event_subscriptions: Vec<ReconfigSubscription>,
@@ -44,7 +47,7 @@ impl StateSyncBootstrapper {
         Self::bootstrap_with_executor_proxy(
             runtime,
             //network,
-            //state_sync_to_mempool_sender,
+            state_sync_to_mempool_sender,
             node_config,
             waypoint,
             executor_proxy,
@@ -53,10 +56,10 @@ impl StateSyncBootstrapper {
 
     pub fn bootstrap_with_executor_proxy<E: ExecutorProxyTrait + 'static>(
         runtime: Runtime,
-        /*network: Vec<(NodeNetworkId, StateSyncSender, StateSyncEvents)>,
+        /* network: Vec<(NodeNetworkId, StateSyncSender, StateSyncEvents)>, */
         state_sync_to_mempool_sender: mpsc::Sender<
             diem_mempool::CommitNotification,
-        >,*/
+        >,
         node_config: &NodeConfig, waypoint: Waypoint, executor_proxy: E,
     ) -> Self
     {
@@ -73,7 +76,7 @@ impl StateSyncBootstrapper {
 
         let coordinator = StateSyncCoordinator::new(
             coordinator_receiver,
-            //state_sync_to_mempool_sender,
+            state_sync_to_mempool_sender,
             //network_senders,
             node_config,
             waypoint,

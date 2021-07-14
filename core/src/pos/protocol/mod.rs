@@ -3,6 +3,7 @@
 // See https://www.apache.org/licenses/LICENSE-2.0
 
 pub mod message;
+pub mod network_sender;
 pub mod request_manager;
 pub mod sync_protocol;
 

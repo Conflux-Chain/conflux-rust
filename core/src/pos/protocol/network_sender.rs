@@ -1,14 +1,16 @@
-// Copyright (c) The Diem Core Contributors
-// SPDX-License-Identifier: Apache-2.0
-
-//! Interface between Consensus and Network layers.
+// Copyright 2019-2020 Conflux Foundation. All rights reserved.
+// TreeGraph is free software and distributed under Apache License 2.0.
+// See https://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
     message::Message,
-    pos::protocol::{
-        request_manager::Request,
-        sync_protocol::{HotStuffSynchronizationProtocol, RpcResponse},
-        HSB_PROTOCOL_ID,
+    pos::{
+        consensus::network::ConsensusMsg,
+        protocol::{
+            request_manager::Request,
+            sync_protocol::{HotStuffSynchronizationProtocol, RpcResponse},
+            HSB_PROTOCOL_ID,
+        },
     },
 };
 use anyhow::{format_err, Context};
@@ -30,31 +32,6 @@ use network::{node_table::NodeId, NetworkService};
 use serde::{Deserialize, Serialize};
 use std::{mem::discriminant, sync::Arc};
 
-/// Network type for consensus
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum ConsensusMsg {
-    /// RPC to get a chain of block of the given length starting from the given
-    /// block id.
-    BlockRetrievalRequest(Box<BlockRetrievalRequest>),
-    /// Carries the returned blocks and the retrieval status.
-    BlockRetrievalResponse(Box<BlockRetrievalResponse>),
-    /// Request to get a EpochChangeProof from current_epoch to target_epoch
-    EpochRetrievalRequest(Box<EpochRetrievalRequest>),
-    /// ProposalMsg contains the required information for the proposer election
-    /// protocol to make its choice (typically depends on round and
-    /// proposer info).
-    ProposalMsg(Box<ProposalMsg>),
-    /// This struct describes basic synchronization metadata.
-    SyncInfo(Box<SyncInfo>),
-    /// A vector of LedgerInfo with contiguous increasing epoch numbers to
-    /// prove a sequence of epoch changes from the first LedgerInfo's
-    /// epoch.
-    EpochChangeProof(Box<EpochChangeProof>),
-    /// VoteMsg is the struct that is ultimately sent by the voter in response
-    /// for receiving a proposal.
-    VoteMsg(Box<VoteMsg>),
-}
-
 /// The interface from Consensus to Networking layer.
 ///
 /// This is a thin wrapper around a `NetworkSender<ConsensusMsg>`, so it is easy
@@ -62,16 +39,16 @@ pub enum ConsensusMsg {
 /// return Futures that encapsulate the whole flow, from sending the request to
 /// remote, to finally receiving the response and deserializing. It therefore
 /// makes the most sense to make the rpc call on a separate async task, which
-/// requires the `ConsensusNetworkSender` to be `Clone` and `Send`.
+/// requires the `NetworkSender` to be `Clone` and `Send`.
 #[derive(Clone)]
-pub struct ConsensusNetworkSender {
+pub struct NetworkSender {
     /// network service
     pub network: Arc<NetworkService>,
-    /// hotstuff protoal handler
+    /// hotstuff protocol handler
     pub protocol_handler: Arc<HotStuffSynchronizationProtocol>,
 }
 
-impl ConsensusNetworkSender {
+impl NetworkSender {
     /// Send a single message to the destination peer using the
     /// `CONSENSUS_DIRECT_SEND_PROTOCOL` ProtocolId.
     pub fn send_to(
@@ -85,7 +62,7 @@ impl ConsensusNetworkSender {
         {
             if let Some(peer) = self.protocol_handler.peers.get(peer_hash) {
                 let peer_id = peer.read().get_id();
-                self.send_message_with_peer_id(&peer_id, msg);
+                self.send_message_with_peer_id(&peer_id, msg)?;
             } else {
                 warn!("peer_hash {:?} does not exist", peer_hash);
             }
@@ -118,7 +95,7 @@ impl ConsensusNetworkSender {
         {
             if let Some(peer) = self.protocol_handler.peers.get(peer_hash) {
                 let peer_id = peer.read().get_id();
-                self.send_message_with_peer_id(&peer_id, msg);
+                self.send_message_with_peer_id(&peer_id, msg)?;
             } else {
                 warn!("peer_hash {:?} does not exist", peer_hash);
             }
@@ -152,7 +129,7 @@ impl ConsensusNetworkSender {
         &self, self_author: AccountAddress, msg: ConsensusMsg,
     ) -> anyhow::Result<(), anyhow::Error> {
         self.protocol_handler
-            .network_task
+            .consensus_network_task
             .consensus_messages_tx
             .push((self_author, discriminant(&msg)), (self_author, msg))
     }
@@ -160,13 +137,14 @@ impl ConsensusNetworkSender {
     /// Send msg to peer
     pub fn send_message_with_peer_id(
         &self, peer_id: &NodeId, msg: &dyn Message,
-    ) {
-        if let Err(e) = self.network.with_context(
-            self.protocol_handler.clone(),
-            HSB_PROTOCOL_ID,
-            |io| msg.send(io, peer_id),
-        ) {
-            warn!("Error sending message: err={:?}", e);
-        }
+    ) -> anyhow::Result<(), anyhow::Error> {
+        self.network
+            .with_context(
+                self.protocol_handler.clone(),
+                HSB_PROTOCOL_ID,
+                |io| msg.send(io, peer_id),
+            )
+            .map_err(|_| format_err!("send message failed"))?;
+        Ok(())
     }
 }

@@ -19,8 +19,10 @@ use super::{
     },
     logging::{LogEvent, LogSchema},
     metrics_safety_rules::MetricsSafetyRules,
-    network::{IncomingBlockRetrievalRequest, NetworkReceivers, NetworkSender},
-    network_interface::{ConsensusMsg, ConsensusNetworkSender},
+    network::{
+        ConsensusMsg, ConsensusNetworkSender, IncomingBlockRetrievalRequest,
+        NetworkReceivers,
+    },
     persistent_liveness_storage::{
         LedgerRecoveryData, PersistentLivenessStorage, RecoveryData,
     },
@@ -30,7 +32,10 @@ use super::{
     state_replication::{StateComputer, TxnManager},
     util::time_service::TimeService,
 };
-use crate::pos::consensus::liveness::vrf_proposer_election::VrfProposer;
+use crate::pos::{
+    consensus::liveness::vrf_proposer_election::VrfProposer,
+    protocol::network_sender::NetworkSender,
+};
 use anyhow::{bail, ensure, Context};
 use channel::diem_channel;
 use consensus_types::{
@@ -91,7 +96,7 @@ pub struct EpochManager {
     config: ConsensusConfig,
     time_service: Arc<dyn TimeService>,
     //self_sender: channel::Sender<Event<ConsensusMsg>>,
-    network_sender: ConsensusNetworkSender,
+    network_sender: NetworkSender,
     timeout_sender: channel::Sender<Round>,
     proposal_timeout_sender: channel::Sender<Round>,
     txn_manager: Arc<dyn TxnManager>,
@@ -109,7 +114,7 @@ impl EpochManager {
         node_config: &NodeConfig,
         time_service: Arc<dyn TimeService>,
         //self_sender: channel::Sender<Event<ConsensusMsg>>,
-        network_sender: ConsensusNetworkSender,
+        network_sender: NetworkSender,
         timeout_sender: channel::Sender<Round>,
         proposal_timeout_sender: channel::Sender<Round>,
         txn_manager: Arc<dyn TxnManager>,
@@ -425,7 +430,7 @@ impl EpochManager {
 
         diem_info!(epoch = epoch, "Create ProposerElection");
         let proposer_election = self.create_proposer_election(&epoch_state);
-        let network_sender = NetworkSender::new(
+        let network_sender = ConsensusNetworkSender::new(
             self.author,
             self.network_sender.clone(),
             //self.self_sender.clone(),
@@ -463,7 +468,7 @@ impl EpochManager {
     )
     {
         let epoch = epoch_state.epoch;
-        let network_sender = NetworkSender::new(
+        let network_sender = ConsensusNetworkSender::new(
             self.author,
             self.network_sender.clone(),
             //self.self_sender.clone(),

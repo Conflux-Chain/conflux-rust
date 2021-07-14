@@ -228,7 +228,7 @@ impl BlockStore {
 
         if block_to_commit == self.root() {
             diem_debug!("commit an committed block in sync");
-            return Ok(())
+            return Ok(());
         }
         // First make sure that this commit is new.
         ensure!(

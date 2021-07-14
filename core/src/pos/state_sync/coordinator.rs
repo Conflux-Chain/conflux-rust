@@ -1,23 +1,25 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    chunk_request::{GetChunkRequest, TargetType},
-    chunk_response::{GetChunkResponse, ResponseLedgerInfo},
-    client::{CoordinatorMessage, SyncRequest},
-    counters,
-    error::Error,
-    executor_proxy::ExecutorProxyTrait,
-    logging::{LogEntry, LogEvent, LogSchema},
-    network::StateSyncMessage,
-    shared_components::SyncState,
+use crate::pos::{
+    mempool::{CommitNotification, CommitResponse, CommittedTransaction},
+    state_sync::{
+        chunk_request::{GetChunkRequest, TargetType},
+        chunk_response::{GetChunkResponse, ResponseLedgerInfo},
+        client::{CoordinatorMessage, SyncRequest},
+        counters,
+        error::Error,
+        executor_proxy::ExecutorProxyTrait,
+        logging::{LogEntry, LogEvent, LogSchema},
+        network::StateSyncMessage,
+        shared_components::SyncState,
+    },
 };
 use diem_config::{
     config::{NodeConfig, PeerNetworkId, RoleType, StateSyncConfig},
     network_id::NodeNetworkId,
 };
 use diem_logger::prelude::*;
-//use diem_mempool::{CommitResponse, CommittedTransaction};
 use diem_types::{
     contract_event::ContractEvent,
     ledger_info::LedgerInfoWithSignatures,
@@ -31,8 +33,6 @@ use futures::{
     stream::select_all,
     StreamExt,
 };
-//use network::{protocols::network::Event, transport::ConnectionMetadata};
-use crate::client::CommitResponse;
 use std::{
     cmp,
     collections::HashMap,
@@ -66,8 +66,7 @@ pub(crate) struct StateSyncCoordinator<T> {
     client_events: mpsc::UnboundedReceiver<CoordinatorMessage>,
     // used to send messages (e.g. notifications about newly committed txns) to
     // mempool
-    //state_sync_to_mempool_sender:
-    //    mpsc::Sender<diem_mempool::CommitNotification>,
+    state_sync_to_mempool_sender: mpsc::Sender<CommitNotification>,
     // Current state of the storage, which includes both the latest committed
     // transaction and the latest transaction covered by the LedgerInfo
     // (see `SynchronizerState` documentation). The state is updated via
@@ -103,10 +102,8 @@ pub(crate) struct StateSyncCoordinator<T> {
 impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
     pub fn new(
         client_events: mpsc::UnboundedReceiver<CoordinatorMessage>,
-        /*state_sync_to_mempool_sender: mpsc::Sender<
-            diem_mempool::CommitNotification,
-        >,
-        network_senders: HashMap<NodeNetworkId, StateSyncSender>,*/
+        state_sync_to_mempool_sender: mpsc::Sender<CommitNotification>,
+        /* network_senders: HashMap<NodeNetworkId, StateSyncSender>, */
         node_config: &NodeConfig, waypoint: Waypoint, executor_proxy: T,
         initial_state: SyncState,
     ) -> Result<Self, Error>
@@ -145,7 +142,7 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
 
         Ok(Self {
             client_events,
-            //state_sync_to_mempool_sender,
+            state_sync_to_mempool_sender,
             local_state: initial_state,
             config: node_config.state_sync.clone(),
             role,
@@ -466,7 +463,7 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
         self.update_sync_state_metrics_and_logs()?;
 
         // Notify mempool of commit
-        /*let commit_response = match self
+        let commit_response = match self
             .notify_mempool_of_committed_transactions(committed_transactions)
             .await
         {
@@ -475,8 +472,7 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
                 diem_error!(LogSchema::new(LogEntry::CommitFlow).error(&error));
                 CommitResponse::error(error.to_string())
             }
-        };*/
-        let commit_response = CommitResponse::success();
+        };
 
         // Notify consensus of the commit response
         if let Err(error) = self.notify_consensus_of_commit_response(
@@ -573,26 +569,27 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
         Ok(())
     }
 
-    /*/// Notifies mempool that transactions have been committed.
+    /// Notifies mempool that transactions have been committed.
     async fn notify_mempool_of_committed_transactions(
-        &mut self,
-        committed_transactions: Vec<Transaction>,
+        &mut self, committed_transactions: Vec<Transaction>,
     ) -> Result<(), Error> {
         // Get all user transactions from committed transactions
         let user_transactions = committed_transactions
             .iter()
             .filter_map(|transaction| match transaction {
-                Transaction::UserTransaction(signed_txn) => Some(CommittedTransaction {
-                    sender: signed_txn.sender(),
-                    sequence_number: signed_txn.sequence_number(),
-                }),
+                Transaction::UserTransaction(signed_txn) => {
+                    Some(CommittedTransaction {
+                        sender: signed_txn.sender(),
+                        sequence_number: signed_txn.sequence_number(),
+                    })
+                }
                 _ => None,
             })
             .collect();
 
         // Create commit notification of user transactions for mempool
         let (callback_sender, callback_receiver) = oneshot::channel();
-        let req = diem_mempool::CommitNotification {
+        let req = CommitNotification {
             transactions: user_transactions,
             block_timestamp_usecs: self
                 .local_state
@@ -627,7 +624,7 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
         } else {
             Ok(())
         }
-    }*/
+    }
 
     /// Updates the metrics and logs based on the current (local) sync state.
     fn update_sync_state_metrics_and_logs(&mut self) -> Result<(), Error> {
@@ -1840,16 +1837,19 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        chunk_request::{GetChunkRequest, TargetType},
-        chunk_response::{GetChunkResponse, ResponseLedgerInfo},
-        client::SyncRequest,
-        coordinator::StateSyncCoordinator,
-        error::Error,
-        executor_proxy::ExecutorProxy,
-        network::StateSyncMessage,
-        shared_components::test_utils::{
-            self, create_coordinator_with_config_and_waypoint,
+    use crate::pos::{
+        mempool::CommitResponse,
+        state_sync::{
+            chunk_request::{GetChunkRequest, TargetType},
+            chunk_response::{GetChunkResponse, ResponseLedgerInfo},
+            client::SyncRequest,
+            coordinator::StateSyncCoordinator,
+            error::Error,
+            executor_proxy::ExecutorProxy,
+            network::StateSyncMessage,
+            shared_components::test_utils::{
+                self, create_coordinator_with_config_and_waypoint,
+            },
         },
     };
     use diem_config::{
@@ -1860,7 +1860,6 @@ mod tests {
         ed25519::{Ed25519PrivateKey, Ed25519Signature},
         HashValue, PrivateKey, Uniform,
     };
-    use diem_mempool::CommitResponse;
     use diem_types::{
         account_address::AccountAddress,
         block_info::BlockInfo,
