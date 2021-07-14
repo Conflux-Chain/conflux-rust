@@ -6,7 +6,7 @@ use super::{EpochNumber, RpcAddress};
 use crate::rpc::helpers::{maybe_vec_into, VariadicValue};
 use cfx_types::{H256, U64};
 use jsonrpc_core::Error as RpcError;
-use primitives::filter::LogFilter as PrimitiveFilter;
+use primitives::filter::{LogFilter as PrimitiveFilter, LogFilterParams};
 use serde::{Deserialize, Serialize};
 
 const FILTER_BLOCK_HASH_LIMIT: usize = 128;
@@ -19,6 +19,12 @@ pub struct LogFilter {
 
     /// Till this epoch number.
     pub to_epoch: Option<EpochNumber>,
+
+    /// Search will be applied from this block number.
+    pub from_block: Option<U64>,
+
+    /// Till this block number.
+    pub to_block: Option<U64>,
 
     /// Search will be applied in these blocks if given.
     /// This will override from/to_epoch fields.
@@ -58,10 +64,19 @@ impl LogFilter {
         // from_epoch, to_epoch
         let from_epoch = self
             .from_epoch
+            .clone()
             .unwrap_or(EpochNumber::LatestCheckpoint)
             .into();
 
-        let to_epoch = self.to_epoch.unwrap_or(EpochNumber::LatestState).into();
+        let to_epoch = self
+            .to_epoch
+            .clone()
+            .unwrap_or(EpochNumber::LatestState)
+            .into();
+
+        // from_block, to_block
+        let from_block = self.from_block.map(|x| x.as_u64());
+        let to_block = self.to_block.map(|x| x.as_u64());
 
         // block_hashes
         match self.block_hashes {
@@ -113,15 +128,54 @@ impl LogFilter {
         let offset = self.offset.map(|x| x.as_u64() as usize);
         let limit = self.limit.map(|x| x.as_u64() as usize);
 
-        Ok(PrimitiveFilter {
-            from_epoch,
-            to_epoch,
-            block_hashes,
+        let params = LogFilterParams {
             address,
             topics,
             offset,
             limit,
-        })
+        };
+
+        // choose filter type based on fields
+        match (
+            &self.from_epoch,
+            &self.to_epoch,
+            &self.from_block,
+            &self.to_block,
+            &self.block_hashes,
+        ) {
+            // block has filter
+            (None, None, None, None, Some(_)) => {
+                Ok(PrimitiveFilter::BlockHashLogFilter {
+                    block_hashes: block_hashes.unwrap(),
+                    params,
+                })
+            }
+
+            // block number range filter
+            // (both from and to need to be provided)
+            (None, None, Some(_), Some(_), None) => {
+                Ok(PrimitiveFilter::BlockNumberLogFilter {
+                    from_block: from_block.unwrap(),
+                    to_block: to_block.unwrap(),
+                    params,
+                })
+            }
+
+            // epoch number range filter
+            // (can be ommitted)
+            (_, _, None, None, None) => Ok(PrimitiveFilter::EpochLogFilter {
+                from_epoch,
+                to_epoch,
+                params,
+            }),
+
+            // any other case is considered an error
+            _ => {
+                bail!(RpcError::invalid_params(
+                    format!("Filter must provide one of the following: (1) an epoch range through `fromEpoch` and `toEpoch`, (2) a block number range through `fromBlock` and `toBlock`, (3) a set of block hashes through `blockHashes`")
+                ));
+            }
+        }
     }
 }
 
@@ -142,6 +196,8 @@ mod tests {
         let filter = LogFilter {
             from_epoch: None,
             to_epoch: None,
+            from_block: None,
+            to_block: None,
             block_hashes: None,
             address: None,
             topics: None,
@@ -156,6 +212,8 @@ mod tests {
             "{\
              \"fromEpoch\":null,\
              \"toEpoch\":null,\
+             \"fromBlock\":null,\
+             \"toBlock\":null,\
              \"blockHashes\":null,\
              \"address\":null,\
              \"topics\":null,\
@@ -167,6 +225,8 @@ mod tests {
         let filter = LogFilter {
             from_epoch: Some(1000.into()),
             to_epoch: Some(EpochNumber::LatestState),
+            from_block: Some(1000.into()),
+            to_block: Some(1000.into()),
             block_hashes: Some(vec![
                 H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
@@ -193,6 +253,8 @@ mod tests {
             "{\
              \"fromEpoch\":\"0x3e8\",\
              \"toEpoch\":\"latest_state\",\
+             \"fromBlock\":\"0x3e8\",\
+             \"toBlock\":\"0x3e8\",\
              \"blockHashes\":[\"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
              \"address\":[\"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2\",\"CFX:TYPE.BUILTIN:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEJC4EYEY6\"],\
              \"topics\":[\
@@ -212,6 +274,8 @@ mod tests {
         let result_filter = LogFilter {
             from_epoch: None,
             to_epoch: None,
+            from_block: None,
+            to_block: None,
             block_hashes: None,
             address: None,
             topics: None,
@@ -226,6 +290,8 @@ mod tests {
         let serialized = "{\
              \"fromEpoch\":\"0x3e8\",\
              \"toEpoch\":\"latest_state\",\
+             \"fromBlock\":\"0x3e8\",\
+             \"toBlock\":\"0x3e8\",\
              \"blockHashes\":[\"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
              \"address\":[\"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2\",\"CFX:TYPE.BUILTIN:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEJC4EYEY6\"],\
              \"topics\":[\
@@ -239,6 +305,8 @@ mod tests {
         let result_filter = LogFilter {
             from_epoch: Some(1000.into()),
             to_epoch: Some(EpochNumber::LatestState),
+            from_block: Some(1000.into()),
+            to_block: Some(1000.into()),
             block_hashes: Some(vec![
                 H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
@@ -268,6 +336,8 @@ mod tests {
         let filter = LogFilter {
             from_epoch: None,
             to_epoch: None,
+            from_block: None,
+            to_block: None,
             block_hashes: Some(vec![
                 H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
@@ -290,6 +360,8 @@ mod tests {
         let primitive_filter = PrimitiveFilter {
             from_epoch: PrimitiveEpochNumber::LatestCheckpoint,
             to_epoch: PrimitiveEpochNumber::LatestState,
+            from_block: None,
+            to_block: None,
             block_hashes: Some(vec![
                 H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
