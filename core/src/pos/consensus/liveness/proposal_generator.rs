@@ -219,7 +219,7 @@ impl ProposalGenerator {
                     // Included new registered or updated nodes as transactions.
                     let staking_events = self
                         .pow_handler
-                        .get_staking_events(parent_decision, block_hash);
+                        .get_staking_events(parent_decision, block_hash)?;
                     for event in staking_events {
                         match RawTransaction::from_staking_event(
                             &event,

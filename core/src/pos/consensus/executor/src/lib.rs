@@ -424,7 +424,7 @@ where V: VMExecutor
                     let staking_events = self.pow_handler.get_staking_events(
                         parent_pivot_decision.block_hash,
                         pivot_decision.block_hash,
-                    );
+                    )?;
                     let mut staking_events_iter = staking_events.iter();
                     for vm_output in vm_outputs.clone().into_iter() {
                         for event in vm_output.events() {

@@ -1,3 +1,4 @@
+use anyhow::Result;
 use async_trait::async_trait;
 use cfx_types::H256;
 use std::collections::HashMap;
@@ -15,7 +16,7 @@ pub trait PowInterface: Send + Sync {
 
     fn get_staking_events(
         &self, parent_decision: H256, me_decision: H256,
-    ) -> Vec<StakingEvent>;
+    ) -> Result<Vec<StakingEvent>>;
 
     async fn wait_for_initialization(&self);
 }
@@ -47,7 +48,7 @@ impl PowInterface for FakePowHandler {
 
     fn get_staking_events(
         &self, _parent_decision: H256, _me_decision: H256,
-    ) -> Vec<StakingEvent> {
+    ) -> Result<Vec<StakingEvent>> {
         todo!()
     }
 

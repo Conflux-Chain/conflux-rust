@@ -4525,6 +4525,7 @@ dependencies = [
 name = "pow-types"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "cfx-types",
 ]

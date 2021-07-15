@@ -2,6 +2,7 @@ use crate::{
     executive::internal_contract::impls::pos::decode_register_info,
     ConsensusGraph, SharedConsensusGraph,
 };
+use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
 use cfx_storage::storage_db::KeyValueDbAsAnyTrait;
@@ -69,35 +70,35 @@ impl PowHandler {
     fn get_staking_events_impl(
         pow_consensus: Arc<ConsensusGraph>, parent_decision: H256,
         me_decision: H256,
-    ) -> Vec<StakingEvent>
+    ) -> Result<Vec<StakingEvent>>
     {
         // We only call this for committed blocks, so it is guaranteed that
         // `parent_decision` is an ancestor of `me_decision`.
         if parent_decision == me_decision {
-            return vec![];
+            return Ok(vec![]);
         }
         let start_epoch = pow_consensus
             .data_man
             .block_height_by_hash(&parent_decision)
-            .unwrap();
+            .ok_or(anyhow!("parent decision block missing"))?;
         let end_epoch = pow_consensus
             .data_man
             .block_height_by_hash(&me_decision)
-            .unwrap();
+            .ok_or(anyhow!("new decision block missing"))?;
         let mut log_filter = LogFilter::default();
         // start_epoch has been processed by parent.
         log_filter.from_epoch = (start_epoch + 1).into();
         log_filter.to_epoch = end_epoch.into();
         log_filter.address = Some(vec![*POS_REGISTER_CONTRACT_ADDRESS]);
-        pow_consensus
+        Ok(pow_consensus
             .logs(log_filter)
-            .expect("Logs not deleted")
+            .map_err(|e| anyhow!("Logs not available: e={}", e))?
             .into_iter()
             .map(|localized_entry| {
                 decode_register_info(&localized_entry.entry)
                     .expect("address checked")
             })
-            .collect()
+            .collect())
     }
 }
 
@@ -140,13 +141,17 @@ impl PowInterface for PowHandler {
         r
     }
 
+    /// Return error if pow_consensus has not been initialized or the pivot
+    /// decision blocks have not been processed in PoW. Thus, a PoS node
+    /// will not vote for new pivot decisions if the PoW block has not been
+    /// processed.
     fn get_staking_events(
         &self, parent_decision: H256, me_decision: H256,
-    ) -> Vec<StakingEvent> {
+    ) -> Result<Vec<StakingEvent>> {
         let pow_consensus = self.pow_consensus.read().clone();
         if pow_consensus.is_none() {
             // This case will be reached during pos recovery.
-            return Vec::new();
+            bail!("PoW consensus not initialized");
         }
         debug!(
             "get_staking_events: parent={:?}, me={:?}",
