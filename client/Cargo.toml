@@ -89,7 +89,6 @@ executor = { path = "../core/src/pos/consensus/executor" }
 fail = "0.4.0"
 storage-interface = { path = "../core/src/pos/storage/storage-interface" }
 
-
 [dev-dependencies]
 criterion = "0.2"
 cfx-parameters = { path = "../core/parameters" }

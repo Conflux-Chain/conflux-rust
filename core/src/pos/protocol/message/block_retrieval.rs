@@ -61,7 +61,7 @@ impl Request for BlockRetrievalRpcRequest {
 
 impl Handleable for BlockRetrievalRpcRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        let peer_address = ctx.get_peer_account_address();
+        let peer_address = ctx.get_peer_account_address()?;
         let req = self.request;
         debug!(
             "Received block retrieval request [block id: {}, request_id: {}]",

@@ -315,7 +315,7 @@ impl EpochManager {
                     .epoch_state()
                     .verifier
                     .get_public_key(&peer_id)
-                    .unwrap();
+                    .ok_or(anyhow::anyhow!("peer is not an validator"))?;
                 self.network_sender.send_to(pos_public_key, &msg).context(
                     format!(
                         "[EpochManager] Failed to send epoch retrieval to {}",

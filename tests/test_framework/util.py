@@ -270,6 +270,7 @@ def initialize_tg_config(dirname, nodes, genesis_nodes):
                 "--num-genesis-validator={}".format(genesis_nodes)], cwd=dirname)
     waypoint_path = os.path.join(dirname, 'waypoint_config')
     genesis_path = os.path.join(dirname, 'genesis_file')
+    initial_nodes_path = os.path.join(dirname, 'initial_nodes.toml')
     waypoint = open(waypoint_path, 'r').readlines()[0].strip()
     private_keys = open(os.path.join(dirname, "private_key")).readlines()
     print('private_keys: {}'.format(private_keys))
@@ -324,6 +325,7 @@ def initialize_datadir(dirname, n, port_min, conf_parameters, extra_files: dict 
             "jsonrpc_ws_port": str(pubsub_port(n)),
             "jsonrpc_http_port": str(remote_rpc_port(n)),
             "pos_config_path": "\'{}\'".format(os.path.join(datadir, "validator_full_node.yaml")),
+            "pos_initial_nodes_path": "\'{}\'".format(os.path.join(dirname, "initial_nodes.toml")),
         }
         local_conf.update(conflux.config.small_local_test_conf)
         local_conf.update(conf_parameters)

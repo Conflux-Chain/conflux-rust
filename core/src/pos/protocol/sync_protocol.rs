@@ -153,18 +153,23 @@ impl<'a> Context<'a> {
         Ok(())
     }
 
-    pub fn get_peer_account_address(&self) -> AccountAddress {
+    pub fn get_peer_account_address(&self) -> Result<AccountAddress, Error> {
         let k = self
-            .manager
+            .get_pos_public_key()
+            .ok_or(Error::from_kind(ErrorKind::UnknownPeer))?;
+        Ok(from_consensus_public_key(&k.0, &k.1))
+    }
+
+    fn get_pos_public_key(
+        &self,
+    ) -> Option<(ConsensusPublicKey, ConsensusVRFPublicKey)> {
+        self.manager
             .peers
             .get(&self.peer_hash)
-            .as_ref()
-            .unwrap()
+            .as_ref()?
             .read()
             .pos_public_key
             .clone()
-            .expect("has public key");
-        from_consensus_public_key(&k.0, &k.1)
     }
 }
 

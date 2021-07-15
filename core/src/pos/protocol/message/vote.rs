@@ -17,7 +17,7 @@ impl Handleable for VoteMsg {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_vote, msg={:?}", &self);
 
-        let peer_address = ctx.get_peer_account_address();
+        let peer_address = ctx.get_peer_account_address()?;
 
         /*ensure!(
             self.vote().author() == peer_address,

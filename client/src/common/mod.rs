@@ -314,13 +314,22 @@ pub fn initialize_common_modules(
         .unwrap();
     let initial_pos_nodes = vec![];
      */
+    let initial_nodes = read_initial_nodes_from_file(
+        conf.raw_conf.pos_initial_nodes_path.as_str(),
+    )?
+    .into_iter()
+    .map(|(bls_key, vrf_key, voting_power)| {
+        (NodeID::new(bls_key, vrf_key), voting_power)
+    })
+    .collect();
+
     let diem_handler = start_pos_consensus(
         &pos_config,
         network.clone(),
         own_node_hash,
         conf.protocol_config(),
         Some((self_pos_public_key.unwrap(), self_vrf_public_key)),
-        vec![],
+        initial_nodes,
     );
     debug!("PoS initialized");
     let pos_connection = PosConnection::new(
@@ -836,7 +845,9 @@ pub mod delegate_convert {
 use crate::{
     accounts::{account_provider, keys_path},
     common::pos::start_pos_consensus,
-    configuration::parse_config_address_string,
+    configuration::{
+        parse_config_address_string, read_initial_nodes_from_file,
+    },
     rpc::{
         extractor::RpcExtractor,
         impls::{
@@ -871,7 +882,10 @@ use diem_config::{
     config::{NodeConfig, SafetyRulesTestConfig, TestConfig},
     keys::ConfigKey,
 };
-use diem_types::account_address::{from_consensus_public_key, from_public_key};
+use diem_types::{
+    account_address::{from_consensus_public_key, from_public_key},
+    term_state::NodeID,
+};
 use jsonrpc_http_server::Server as HttpServer;
 use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WSServer;
