@@ -328,7 +328,10 @@ pub fn initialize_common_modules(
         conf.pos_config(),
     );
     // FIXME(lpl): Set CIP height.
-    let pos_verifier = Arc::new(PosVerifier::new(pos_connection, 0));
+    let pos_verifier = Arc::new(PosVerifier::new(
+        pos_connection,
+        conf.raw_conf.pos_reference_enable_height,
+    ));
 
     let verification_config =
         conf.verification_config(machine.clone(), pos_verifier.clone());

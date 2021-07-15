@@ -292,6 +292,7 @@ build_config! {
         (vrf_proposal_threshold, (U256), U256::MAX)
         // Deferred epoch count before a confirmed epoch.
         (pos_pivot_decision_defer_epoch_count, (u64), 50)
+        (pos_reference_enable_height, (u64), 0)
 
         // Light node section
         (ln_epoch_request_batch_size, (Option<usize>), None)

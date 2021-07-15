@@ -15,7 +15,8 @@ An attacker keeps mining with the same parent block and release them at once.
 class SameHeightTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
-        self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = '1000'
+        # Disable pos reference because pow blocks are generated too fast.
+        self.conf_parameters["pos_reference_enable_height"] = '100000'
 
     def setup_network(self):
         self.setup_nodes()
