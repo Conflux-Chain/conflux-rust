@@ -4,6 +4,7 @@
 use crate::{
     epoch_change::Verifier,
     ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
+    on_chain_config::OnChainConfig,
     validator_verifier::ValidatorVerifier,
 };
 use anyhow::ensure;
@@ -29,6 +30,10 @@ impl EpochState {
             verifier: ValidatorVerifier::new(BTreeMap::new()),
         }
     }
+}
+
+impl OnChainConfig for EpochState {
+    const IDENTIFIER: &'static str = "DiemSystem";
 }
 
 impl Verifier for EpochState {

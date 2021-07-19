@@ -16,9 +16,11 @@ use consensus_types::{
     quorum_cert::QuorumCert,
     sync_info::SyncInfo,
 };
+use diem_crypto::HashValue;
 use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress, epoch_change::EpochChangeProof,
+    ledger_info::LedgerInfoWithSignatures,
     term_state::ELECTION_AFTER_ACCEPTED_ROUND,
 };
 use mirai_annotations::checked_precondition;
@@ -326,12 +328,34 @@ impl BlockRetriever {
     /// creation The other peers from the quorum certificate
     /// will be randomly tried next.  If all members of the quorum certificate
     /// are exhausted, an error is returned
-    async fn retrieve_block_for_qc<'a>(
+    pub async fn retrieve_block_for_qc<'a>(
         &'a mut self, qc: &'a QuorumCert, num_blocks: u64,
     ) -> anyhow::Result<Vec<Block>> {
         let block_id = qc.certified_block().id();
         let mut peers: Vec<&AccountAddress> =
             qc.ledger_info().signatures().keys().collect();
+        self.request_block(num_blocks, block_id, peers).await
+    }
+
+    pub async fn retrieve_block_for_ledger_info(
+        &mut self, ledger_info: &LedgerInfoWithSignatures,
+    ) -> anyhow::Result<Block> {
+        let block_id = ledger_info.ledger_info().consensus_block_id();
+        let mut peers: Vec<&AccountAddress> =
+            ledger_info.signatures().keys().collect();
+        let mut blocks = self.request_block(1, block_id, peers).await?;
+        if blocks.len() == 1 {
+            Ok(blocks.remove(0))
+        } else {
+            bail!("retrieve_block_for_ledger_info returns incorrect block number: {}", blocks.len())
+        }
+    }
+
+    async fn request_block<'a>(
+        &'a mut self, num_blocks: u64, block_id: HashValue,
+        mut peers: Vec<&'a AccountAddress>,
+    ) -> anyhow::Result<Vec<Block>>
+    {
         let mut attempt = 0_u32;
         loop {
             if peers.is_empty() {

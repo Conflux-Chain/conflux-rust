@@ -41,6 +41,7 @@ use channel::diem_channel;
 use consensus_types::{
     common::{Author, Round},
     epoch_retrieval::EpochRetrievalRequest,
+    sync_info::SyncInfo,
 };
 use diem_config::config::{ConsensusConfig, ConsensusProposerType, NodeConfig};
 use diem_infallible::duration_since_epoch;
@@ -52,6 +53,7 @@ use diem_types::{
     epoch_state::EpochState,
     on_chain_config::{OnChainConfigPayload, ValidatorSet},
     transaction::SignedTransaction,
+    validator_verifier::ValidatorVerifier,
 };
 use futures::{
     channel::{mpsc, oneshot},
@@ -330,7 +332,7 @@ impl EpochManager {
     }
 
     async fn start_new_epoch(
-        &mut self, proof: EpochChangeProof,
+        &mut self, proof: EpochChangeProof, peer_id: AccountAddress,
     ) -> anyhow::Result<()> {
         let ledger_info = proof
             .verify(self.epoch_state())
@@ -343,13 +345,22 @@ impl EpochManager {
 
         // make sure storage is on this ledger_info too, it should be no-op if
         // it's already committed
-        self.state_computer
-            .sync_to(ledger_info.clone())
-            .await
-            .context(format!(
-                "[EpochManager] State sync to new epoch {}",
-                ledger_info
-            ))?;
+        // self.state_computer
+        //     .sync_to(ledger_info.clone())
+        //     .await
+        //     .context(format!(
+        //         "[EpochManager] State sync to new epoch {}",
+        //         ledger_info
+        //     ))?;
+        // FIXME(lpl): Use ledger_info to sync needed blocks.
+        match self.processor_mut() {
+            RoundProcessor::Recovery(_) => {
+                bail!("start_new_epoch for Recovery processor");
+            }
+            RoundProcessor::Normal(p) => {
+                p.sync_to_ledger_info(ledger_info, peer_id).await?;
+            }
+        }
 
         monitor!("reconfig", self.expect_new_epoch().await);
         Ok(())
@@ -499,13 +510,13 @@ impl EpochManager {
     }
 
     async fn start_processor(&mut self, payload: OnChainConfigPayload) {
-        let validator_set: ValidatorSet = payload
-            .get()
-            .expect("failed to get ValidatorSet from payload");
-        let epoch_state = EpochState {
-            epoch: payload.epoch(),
-            verifier: (&validator_set).into(),
-        };
+        let epoch_state: EpochState = payload.get().unwrap_or_else(|_| {
+            let validator_set: ValidatorSet = payload.get().unwrap();
+            EpochState {
+                epoch: payload.epoch(),
+                verifier: (&validator_set).into(),
+            }
+        });
 
         match self.storage.start() {
             LivenessStorageData::RecoveryData(initial_data) => {
@@ -586,7 +597,7 @@ impl EpochManager {
                 if msg_epoch == self.epoch() {
                     monitor!(
                         "process_epoch_proof",
-                        self.start_new_epoch(*proof).await?
+                        self.start_new_epoch(*proof, peer_id).await?
                     );
                 } else {
                     bail!(

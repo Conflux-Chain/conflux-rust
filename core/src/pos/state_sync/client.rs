@@ -5,6 +5,7 @@ use crate::pos::{
     mempool::CommitResponse,
     state_sync::{counters, error::Error, shared_components::SyncState},
 };
+use diem_logger::prelude::*;
 use diem_types::{
     contract_event::ContractEvent, ledger_info::LedgerInfoWithSignatures,
     transaction::Transaction,
@@ -100,6 +101,10 @@ impl StateSyncClient {
             committed_transactions: committed_txns,
             reconfiguration_events: reconfig_events,
         };
+        diem_debug!(
+            "state_sync::commit: {} reconfig events",
+            notification.reconfiguration_events.len()
+        );
 
         async move {
             sender

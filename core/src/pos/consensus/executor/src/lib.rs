@@ -526,22 +526,8 @@ where V: VMExecutor
                 epoch_state
             });
 
-        let new_epoch_marker = vm_outputs
-            .iter()
-            .enumerate()
-            .find(|(_, output)| {
-                output
-                    .events()
-                    .iter()
-                    .any(|event| *event.key() == new_epoch_event_key)
-            })
-            // Off by one for exclusive index.
-            .map(|(idx, _)| idx + 1);
-        let transaction_count = new_epoch_marker.unwrap_or(vm_outputs.len());
-
         let txn_blobs =
             itertools::zip_eq(vm_outputs.iter(), transactions.iter())
-                .take(transaction_count)
                 .map(|(vm_output, txn)| {
                     process_write_set(
                         txn,
@@ -568,8 +554,7 @@ where V: VMExecutor
 
         for ((vm_output, txn), (mut state_tree_hash, blobs)) in
             itertools::zip_eq(
-                itertools::zip_eq(vm_outputs.into_iter(), transactions.iter())
-                    .take(transaction_count),
+                itertools::zip_eq(vm_outputs.into_iter(), transactions.iter()),
                 itertools::zip_eq(txn_state_roots, txn_blobs),
             )
         {
@@ -1352,13 +1337,15 @@ pub fn process_write_set(
                 match transaction {
                     Transaction::GenesisTransaction(_) => (),
                     Transaction::BlockMetadata(_) => {
-                        bail!("BlockMetadata: Write set should be a subset of read set.")
+                        // bail!("BlockMetadata: Write set should be a subset of
+                        // read set.")
                     }
                     Transaction::UserTransaction(txn) => match txn.payload() {
                         TransactionPayload::WriteSet(_) => (),
-                        _ => {
-                            bail!("Write set should be a subset of read set: {:?}.", txn)
-                        }
+                        _ => bail!(
+                            "Write set should be a subset of read set: {:?}.",
+                            txn
+                        ),
                     },
                 }
 

@@ -42,9 +42,11 @@ use diem_crypto::VRFPrivateKey;
 use diem_infallible::checked;
 use diem_logger::prelude::*;
 use diem_types::{
+    account_address::AccountAddress,
     block_info::PivotBlockDecision,
     chain_id::ChainId,
     epoch_state::EpochState,
+    ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
     transaction::{ElectionPayload, RawTransaction, SignedTransaction},
     validator_verifier::ValidatorVerifier,
 };
@@ -525,7 +527,7 @@ impl RoundManager {
     /// Sync to the sync info sending from peer if it has newer certificates, if
     /// we have newer certificates and help_remote is set, send it back the
     /// local sync info.
-    async fn sync_up(
+    pub async fn sync_up(
         &mut self, sync_info: &SyncInfo, author: Author, help_remote: bool,
     ) -> anyhow::Result<()> {
         let local_sync_info = self.block_store.sync_info();
@@ -587,6 +589,39 @@ impl RoundManager {
         } else {
             Ok(())
         }
+    }
+
+    /// This can only be used in `EpochManager.start_new_epoch`.
+    pub async fn sync_to_ledger_info(
+        &mut self, ledger_info: &LedgerInfoWithSignatures,
+        peer_id: AccountAddress,
+    ) -> Result<()>
+    {
+        let mut retriever = self.create_block_retriever(peer_id);
+        if self
+            .block_store
+            .block_exists(ledger_info.ledger_info().consensus_block_id())
+        {
+            return Ok(());
+        }
+        let block_for_ledger_info = retriever
+            .retrieve_block_for_ledger_info(ledger_info)
+            .await?;
+        self.block_store
+            .insert_quorum_cert(
+                block_for_ledger_info.quorum_cert(),
+                &mut retriever,
+            )
+            .await?;
+        // `insert_quorum_cert` will wait for PoW to initialize if needed, so
+        // here we do not need to execute as catch_up_mode again.
+        self.block_store.execute_and_insert_block(
+            block_for_ledger_info,
+            false,
+            false,
+        );
+        self.block_store.commit(ledger_info.clone()).await?;
+        Ok(())
     }
 
     /// The function makes sure that it ensures the message_round equal to what

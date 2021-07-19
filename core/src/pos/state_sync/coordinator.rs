@@ -455,6 +455,10 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
         chunk_sender: Option<&PeerNetworkId>,
     ) -> Result<(), Error>
     {
+        diem_debug!(
+            "process_commit_notification: {} events",
+            reconfiguration_events.len()
+        );
         // We choose to re-sync the state with the storage as it's the simplest
         // approach: in case the performance implications of re-syncing
         // upon every commit are high, it's possible to manage some of

@@ -5,7 +5,11 @@ use diem_types::{
     account_config::pivot_chain_select_address,
     block_info::PivotBlockDecision,
     contract_event::ContractEvent,
-    on_chain_config::{self, config_address, OnChainConfig, ValidatorSet},
+    epoch_state::EpochState,
+    mempool_status::MempoolStatusCode::VmError,
+    on_chain_config::{
+        self, config_address, new_epoch_event_key, OnChainConfig, ValidatorSet,
+    },
     transaction::{
         Transaction, TransactionOutput, TransactionPayload, TransactionStatus,
         WriteSetPayload,
@@ -13,6 +17,7 @@ use diem_types::{
     vm_status::{KeptVMStatus, StatusCode, VMStatus},
     write_set::{WriteOp, WriteSet, WriteSetMut},
 };
+use move_core_types::language_storage::TypeTag;
 
 /// This trait describes the VM's execution interface.
 pub trait VMExecutor: Send {
@@ -43,9 +48,31 @@ impl VMExecutor for FakeVM {
             // Execute the transaction
             match transaction {
                 Transaction::BlockMetadata(_data) => {
-                    let unlock_events =
-                        state_view.pos_state().get_unlock_events();
-                    let output = Self::gen_output(unlock_events);
+                    let mut events = state_view.pos_state().get_unlock_events();
+                    // FIXME(lpl)
+                    if (state_view.pos_state().current_view() + 1) % 60 == 0 {
+                        let (validator_verifier, _seed) = state_view
+                            .pos_state()
+                            .get_new_committee()
+                            .map_err(|e| {
+                                VMStatus::Error(StatusCode::CFX_INVALID_TX)
+                            })?;
+                        let validator_bytes = bcs::to_bytes(&EpochState {
+                            epoch: state_view.pos_state().current_view()
+                                + 1 / 60
+                                + 1,
+                            verifier: validator_verifier,
+                        })
+                        .unwrap();
+                        let contract_event = ContractEvent::new(
+                            new_epoch_event_key(),
+                            0,
+                            TypeTag::Address,
+                            validator_bytes,
+                        );
+                        events.push(contract_event);
+                    }
+                    let output = Self::gen_output(events, false);
                     vm_outputs.push(output);
                 }
                 Transaction::UserTransaction(trans) => {
@@ -140,7 +167,7 @@ impl VMExecutor for FakeVM {
                     //     "One transaction can contain exactly 1 event."
                     // );
 
-                    let output = Self::gen_output(events);
+                    let output = Self::gen_output(events, false);
                     vm_outputs.push(output);
                 }
                 Transaction::GenesisTransaction(change_set) => {
@@ -159,7 +186,7 @@ impl VMExecutor for FakeVM {
                     //     "One transaction can contain exactly 1 event."
                     // );
 
-                    let output = Self::gen_output(events);
+                    let output = Self::gen_output(events, true);
                     vm_outputs.push(output);
                 }
             }
@@ -170,33 +197,22 @@ impl VMExecutor for FakeVM {
 }
 
 impl FakeVM {
-    fn gen_output(events: Vec<ContractEvent>) -> TransactionOutput {
+    fn gen_output(
+        events: Vec<ContractEvent>, write: bool,
+    ) -> TransactionOutput {
         let new_epoch_event_key = on_chain_config::new_epoch_event_key();
-        let pivot_select_event_key =
-            PivotBlockDecision::pivot_select_event_key();
         let status = TransactionStatus::Keep(KeptVMStatus::Executed);
         let mut write_set = WriteSetMut::default();
 
         // TODO(linxi): support other event key
-        for event in &events {
-            if *event.key() == new_epoch_event_key {
-                write_set.push((
-                    ValidatorSet::CONFIG_ID.access_path(),
-                    WriteOp::Value(event.event_data().to_vec()),
-                ));
-                /*
-                } else if *event.key() == pivot_select_event_key {
+        if write {
+            for event in &events {
+                if *event.key() == new_epoch_event_key {
                     write_set.push((
-                        AccessPath {
-                            address: pivot_chain_select_address(),
-                            path: pivot_select_event_key.to_vec(),
-                        },
+                        ValidatorSet::CONFIG_ID.access_path(),
                         WriteOp::Value(event.event_data().to_vec()),
                     ));
-
-                } else {
-                    todo!()
-                     */
+                }
             }
         }
 
