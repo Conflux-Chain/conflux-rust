@@ -143,7 +143,7 @@ impl LogFilter {
             &self.to_block,
             &self.block_hashes,
         ) {
-            // block has filter
+            // block hash filter
             (None, None, None, None, Some(_)) => {
                 Ok(PrimitiveFilter::BlockHashLogFilter {
                     block_hashes: block_hashes.unwrap(),

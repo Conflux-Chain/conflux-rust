@@ -1038,7 +1038,7 @@ impl ConsensusGraph {
         let from_epoch = match self.get_block_epoch_number(&from_hash) {
             Some(e) => e,
             None => bail!(FilterError::Custom(format!(
-                "Unable to find epoch hashes for block {:?}",
+                "Unable to find epoch number for block {:?}",
                 from_hash
             ))),
         };
@@ -1046,7 +1046,7 @@ impl ConsensusGraph {
         let to_epoch = match self.get_block_epoch_number(&to_hash) {
             Some(e) => e,
             None => bail!(FilterError::Custom(format!(
-                "Unable to find epoch hashes for block {:?}",
+                "Unable to find epoch number for block {:?}",
                 to_hash
             ))),
         };
