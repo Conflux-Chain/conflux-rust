@@ -41,7 +41,7 @@ use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
 use parking_lot::RwLock;
 use rand::Rng;
-use std::{convert::TryInto, path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
 use txgen::TransactionGeneratorConfig;
 
 lazy_static! {
@@ -124,6 +124,7 @@ build_config! {
         (anticone_penalty_ratio, (u64), ANTICONE_PENALTY_RATIO)
         (chain_id, (Option<u32>), None)
         (execute_genesis, (bool), true)
+        (default_transition_time, (Option<u64>), None)
         // Snapshot Epoch Count is a consensus parameter. This flag overrides
         // the parameter, which only take effect in `dev` mode.
         (dev_snapshot_epoch_count, (u32), SNAPSHOT_EPOCHS_CAPACITY)
@@ -133,6 +134,9 @@ build_config! {
         (genesis_secrets, (Option<String>), None)
         (initial_difficulty, (Option<u64>), None)
         (tanzanite_transition_height, (u64), TANZANITE_HEIGHT)
+        (unnamed_21autumn_transition_number, (Option<u64>), None)
+        (unnamed_21autumn_transition_height, (Option<u64>), None)
+        (unnamed_21autumn_cip71_deferred_transition, (Option<u64>), None)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
@@ -151,9 +155,11 @@ build_config! {
         // Network section.
         (jsonrpc_local_tcp_port, (Option<u16>), None)
         (jsonrpc_local_http_port, (Option<u16>), None)
+        (jsonrpc_local_ws_port, (Option<u16>), None)
         (jsonrpc_ws_port, (Option<u16>), None)
         (jsonrpc_tcp_port, (Option<u16>), None)
         (jsonrpc_http_port, (Option<u16>), None)
+        (jsonrpc_http_threads, (Option<usize>), None)
         (jsonrpc_cors, (Option<String>), None)
         (jsonrpc_http_keep_alive, (bool), false)
         (jsonrpc_ws_max_payload_bytes, (usize), 30 * 1024 * 1024)
@@ -256,6 +262,7 @@ build_config! {
         (storage_delta_mpts_node_map_vec_size, (u32), cfx_storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
         (storage_delta_mpts_slab_idle_size, (u32), cfx_storage::defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE)
         (storage_max_open_snapshots, (u16), cfx_storage::defaults::DEFAULT_MAX_OPEN_SNAPSHOTS)
+        (storage_max_open_mpt_count, (u32), cfx_storage::defaults::DEFAULT_MAX_OPEN_MPT)
         (strict_tx_index_gc, (bool), true)
         (sync_state_starting_epoch, (Option<u64>), None)
         (sync_state_epoch_gap, (Option<u64>), None)
@@ -271,6 +278,7 @@ build_config! {
         (get_logs_epoch_batch_size, (usize), 32)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (persist_tx_index, (bool), false)
+        (persist_block_number_index, (bool), false)
         (print_memory_usage_period_s, (Option<u64>), None)
         (target_block_gas_limit, (u64), DEFAULT_TARGET_BLOCK_GAS_LIMIT)
         (executive_trace, (bool), false)
@@ -661,6 +669,7 @@ impl Configuration {
                 .raw_conf
                 .provide_more_snapshot_for_sync
                 .clone(),
+            max_open_mpt_count: self.raw_conf.storage_max_open_mpt_count,
         }
     }
 
@@ -772,6 +781,9 @@ impl Configuration {
     pub fn data_mananger_config(&self) -> DataManagerConfiguration {
         let mut conf = DataManagerConfiguration {
             persist_tx_index: self.raw_conf.persist_tx_index,
+            persist_block_number_index: self
+                .raw_conf
+                .persist_block_number_index,
             tx_cache_index_maintain_timeout: Duration::from_millis(
                 self.raw_conf.tx_cache_index_maintain_timeout_ms,
             ),
@@ -898,6 +910,7 @@ impl Configuration {
             self.raw_conf.jsonrpc_local_http_port,
             self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
+            self.raw_conf.jsonrpc_http_threads,
         )
     }
 
@@ -907,11 +920,27 @@ impl Configuration {
             self.raw_conf.jsonrpc_http_port,
             self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
+            self.raw_conf.jsonrpc_http_threads,
+        )
+    }
+
+    pub fn local_tcp_config(&self) -> TcpConfiguration {
+        TcpConfiguration::new(
+            Some((127, 0, 0, 1)),
+            self.raw_conf.jsonrpc_local_tcp_port,
         )
     }
 
     pub fn tcp_config(&self) -> TcpConfiguration {
         TcpConfiguration::new(None, self.raw_conf.jsonrpc_tcp_port)
+    }
+
+    pub fn local_ws_config(&self) -> WsConfiguration {
+        WsConfiguration::new(
+            Some((127, 0, 0, 1)),
+            self.raw_conf.jsonrpc_local_ws_port,
+            self.raw_conf.jsonrpc_ws_max_payload_bytes,
+        )
     }
 
     pub fn ws_config(&self) -> WsConfiguration {
@@ -1002,14 +1031,69 @@ impl Configuration {
     }
 
     pub fn common_params(&self) -> CommonParams {
-        let mut params = CommonParams::common_params(
-            self.chain_id_params(),
-            self.raw_conf.anticone_penalty_ratio,
-            self.raw_conf.tanzanite_transition_height,
-        );
+        let mut params = CommonParams::default();
+
+        let default_transition_time =
+            if let Some(num) = self.raw_conf.default_transition_time {
+                num
+            } else if self.is_test_or_dev_mode() {
+                0u64
+            } else {
+                u64::MAX
+            };
+
         if self.is_test_or_dev_mode() {
-            params.alt_bn128_transition = 0;
+            params.early_set_internal_contracts_states = true;
         }
+
+        params.chain_id = self.chain_id_params();
+        params.anticone_penalty_ratio = self.raw_conf.anticone_penalty_ratio;
+
+        params.transition_heights.cip40 =
+            self.raw_conf.tanzanite_transition_height;
+        params.transition_numbers.cip62 = if self.is_test_or_dev_mode() {
+            0u64
+        } else {
+            BN128_ENABLE_NUMBER
+        };
+        params.transition_numbers.cip64 = self
+            .raw_conf
+            .unnamed_21autumn_transition_number
+            .unwrap_or(default_transition_time);
+        params.transition_numbers.cip71a = self
+            .raw_conf
+            .unnamed_21autumn_transition_number
+            .unwrap_or(default_transition_time);
+        params.transition_numbers.cip71b = self
+            .raw_conf
+            .unnamed_21autumn_cip71_deferred_transition
+            .unwrap_or(default_transition_time);
+        params.transition_numbers.cip72b = self
+            .raw_conf
+            .unnamed_21autumn_transition_number
+            .unwrap_or(default_transition_time);
+        params.transition_numbers.cip78 = self
+            .raw_conf
+            .unnamed_21autumn_transition_number
+            .unwrap_or(default_transition_time);
+
+        params.transition_heights.cip76 = self
+            .raw_conf
+            .unnamed_21autumn_transition_height
+            .unwrap_or(default_transition_time);
+        params.transition_heights.cip72a = self
+            .raw_conf
+            .unnamed_21autumn_transition_height
+            .unwrap_or(default_transition_time);
+
+        let mut base_block_rewards = BTreeMap::new();
+        base_block_rewards.insert(0, INITIAL_BASE_MINING_REWARD_IN_UCFX.into());
+        base_block_rewards.insert(
+            params.transition_heights.cip40,
+            MINING_REWARD_TANZANITE_IN_UCFX.into(),
+        );
+        params.base_block_rewards = base_block_rewards;
+
         params
     }
 
@@ -1074,7 +1158,7 @@ pub fn parse_config_address_string(
     Err(format!("Address from configuration should be a valid base32 address or a 40-digit hex string!
             base32_err={:?}
             hex_err={:?}",
-           base32_err, hex_err))
+                base32_err, hex_err))
 }
 
 #[cfg(test)]
@@ -1094,7 +1178,7 @@ mod tests {
             addr,
             parse_config_address_string(
                 "1a2f80341409639ea6a35bbcab8299066109aa55",
-                &Network::Main
+                &Network::Main,
             )
             .unwrap()
         );
@@ -1103,7 +1187,7 @@ mod tests {
             addr,
             parse_config_address_string(
                 "cfx:aarc9abycue0hhzgyrr53m6cxedgccrmmyybjgh4xg",
-                &Network::Main
+                &Network::Main,
             )
             .unwrap()
         );
@@ -1112,7 +1196,7 @@ mod tests {
             addr,
             parse_config_address_string(
                 "cfx:type.user:aarc9abycue0hhzgyrr53m6cxedgccrmmyybjgh4xg",
-                &Network::Main
+                &Network::Main,
             )
             .unwrap()
         );

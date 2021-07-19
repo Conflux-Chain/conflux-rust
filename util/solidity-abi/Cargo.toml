@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 cfx-types = {path = "../../cfx_types"}
+keccak-hash = "0.5"
 
 [dev-dependencies]
 lazy_static = "1.4"

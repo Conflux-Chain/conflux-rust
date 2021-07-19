@@ -123,6 +123,10 @@ log_conf="log.yaml"
 #
 # udp_port=32323
 
+# `jsonrpc_http_threads` is used to control how many threads to process HTTP rpc requests.
+#
+# jsonrpc_http_threads=1
+
 # `jsonrpc_http_keep_alive` is used to control whether to set KeepAlive for rpc HTTP connections.
 #
 # jsonrpc_http_keep_alive=false
@@ -146,6 +150,7 @@ log_conf="log.yaml"
 # jsonrpc_http_port=12537
 # jsonrpc_local_tcp_port=12538
 jsonrpc_local_http_port=12539
+# jsonrpc_local_ws_port=12540
 
 # Specify the APIs available through the public JSON-RPC interfaces (HTTP, TCP, WebSocket)
 # using a comma-delimited list of API names.
@@ -352,6 +357,13 @@ jsonrpc_local_http_port=12539
 #
 # subnet_quota=32
 
+# ---------------- Block number index parameters -----------------
+
+# Whether to persist block number indices.
+# This only needs to be enabled if you want to use RPCs that take block numbers as an input.
+#
+# persist_block_number_index = false
+
 # ---------------- Transaction Cache Parameters -----------------
 
 # Whether to persist transaction indices.
@@ -433,6 +445,20 @@ jsonrpc_local_http_port=12539
 # storage_delta_mpts_cache_start_size=1000000
 # storage_delta_mpts_node_map_vec_size=80000000
 # storage_delta_mpts_slab_idle_size=200000
+
+# Configure the maximal open MPT count. Open MPTs are maintained as an LRU cache, and we will close the database handle
+# for the evicted MPT once its usage finishes. Every MPT contains the data written in 2000 epochs.
+# Accessing a state involves opening both its delta MPT and intermediate MPT,
+# so setting this to 4 allows to access two states at the same time. A full node always needs one latest state to
+# process new epochs, so with the default value we can frequently access one old state (by calling state-related RPCs)
+# efficiently without the overhead of opening/closing databases.
+#
+# Idealy, if the RPC working set involves accessing X state ranges frequently (each range has 2000 epochs),
+# this value should be set to 2+2X to avoid thrashing.
+# However, increasing the value may increase the system memory usage by opening more database instances at the same
+# time, and the memory usage of an MPT is affected by `rocksdb_cache_size`.
+#
+# storage_max_open_mpt_count = 4
 
 # Configure if we strictly check the tx index before garbage collection.
 # Setting it to `false` will improve the performance. But if the value is `false`, it's possible that although the

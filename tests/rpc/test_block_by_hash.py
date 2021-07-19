@@ -9,7 +9,7 @@ class TestGetBlockByHash(RpcClient):
         # empty hash
         assert_raises_rpc_error(None, None, self.block_by_hash, "", False)
         assert_raises_rpc_error(None, None, self.block_by_hash, "0x", True)
-        
+
         # invalid hash
         assert_raises_rpc_error(None, None, self.block_by_hash, "0x123", False) # too short
         assert_raises_rpc_error(None, None, self.block_by_hash, self.rand_hash() + "123", True) # too long
@@ -23,7 +23,7 @@ class TestGetBlockByHash(RpcClient):
 
     def test_valid_block(self):
         block_hash = self.generate_block()
-        
+
         block1 = self.block_by_hash(block_hash)
         assert_equal(block1["hash"], block_hash)
 

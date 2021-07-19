@@ -10,7 +10,7 @@ default_config = dict(
     GENESIS_PRI_KEY=decode_hex("46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f"),
     GENESIS_PRI_KEY_2=decode_hex("9a6d3ba2b0c7514b16a006ee605055d71b9edfad183aeb2d9790e9d4ccced471"),
     TOTAL_COIN= 5 * 10**9 * 10**18 * 10**6,
-    GENESIS_STATE_ROOT=decode_hex("0xcb318d3af4f483f9caaace1317c686a34962c8ccc559dda92d19d21da267f42e"),
+    GENESIS_STATE_ROOT=decode_hex("0x2a06395749fc38a73ad15a1f2b3b58f54a7f889fff1ad89fa02c5b00d674186b"),
     GENESIS_RECEIPTS_ROOT=trie.EMPTY_EPOCH_RECEIPT_ROOT_BY_NUMBER_OF_BLOCKS[0],
     GENESIS_LOGS_BLOOM_HASH=decode_hex("0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5"), # KECCAK_EMPTY_BLOOM    ~ keccak(b'\0' * 256)
     GENESIS_TRANSACTION_ROOT=decode_hex("0xb57af0cd32b5ea81f74726ccc3a367c06023350d2a6751694ebad8e79175719f"),
@@ -28,6 +28,7 @@ default_conflux_conf = dict(
     storage_delta_mpts_slab_idle_size = 2_000_000,
     tx_pool_size = 500_000,
     persist_tx_index = "true",
+    persist_block_number_index = "true",
 )
 
 production_conf = default_conflux_conf
@@ -48,6 +49,7 @@ small_local_test_conf = dict(
     storage_delta_mpts_slab_idle_size = 2_000_000,
     subnet_quota = 0,
     persist_tx_index = "true",
+    persist_block_number_index = "true",
     execute_genesis = "false",
     dev_allow_phase_change_without_peer = "true",
 )

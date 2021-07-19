@@ -21,7 +21,7 @@
 //! VM errors module
 
 use super::{action_params::ActionParams, ResumeCall, ResumeCreate};
-use cfx_statedb::Error as DbError;
+use cfx_statedb::{Error as DbError, Result as DbResult};
 use cfx_types::{Address, U256};
 use solidity_abi::ABIDecodeError;
 use std::fmt;
@@ -34,7 +34,7 @@ pub enum TrapKind {
 
 pub enum TrapError<Call, Create> {
     Call(ActionParams, Call),
-    Create(ActionParams, Address, Create),
+    Create(ActionParams, Create),
 }
 
 /// VM errors.
@@ -105,7 +105,7 @@ pub enum Error {
     /// Built-in contract failed on given input
     BuiltIn(&'static str),
     /// Internal contract failed
-    InternalContract(&'static str),
+    InternalContract(String),
     /// When execution tries to modify the state in static context
     MutableCallInStaticContext,
     /// Error from storage.
@@ -136,7 +136,9 @@ impl From<DbError> for Error {
 }
 
 impl From<ABIDecodeError> for Error {
-    fn from(err: ABIDecodeError) -> Self { Error::InternalContract(err.0) }
+    fn from(err: ABIDecodeError) -> Self {
+        Error::InternalContract(format!("ABI decode error: {}", err.0))
+    }
 }
 
 impl fmt::Display for Error {
@@ -178,7 +180,7 @@ impl fmt::Display for Error {
             }
             ExceedStorageLimit => write!(f, "Exceed storage limit"),
             BuiltIn(name) => write!(f, "Built-in failed: {}", name),
-            InternalContract(name) => {
+            InternalContract(ref name) => {
                 write!(f, "InternalContract failed: {}", name)
             }
             StateDbError(ref msg) => {
@@ -199,9 +201,31 @@ impl fmt::Display for Error {
 }
 
 pub type Result<T> = ::std::result::Result<T, Error>;
-pub type TrapResult<T, Call, Create> =
-    ::std::result::Result<Result<T>, TrapError<Call, Create>>;
+
+pub fn separate_out_db_error<T>(result: Result<T>) -> DbResult<Result<T>> {
+    match result {
+        Err(Error::StateDbError(err)) => Err(err.0),
+        x => Ok(x),
+    }
+}
+
+pub enum TrapResult<T, Call, Create> {
+    Return(Result<T>),
+    SubCallCreate(TrapError<Call, Create>),
+}
+
+impl<T, Call, Create> TrapResult<T, Call, Create> {
+    #[cfg(test)]
+    pub fn ok(self) -> Option<Result<T>> {
+        if let TrapResult::Return(result) = self {
+            Some(result)
+        } else {
+            None
+        }
+    }
+}
 
 pub type ExecTrapResult<T> =
     TrapResult<T, Box<dyn ResumeCall>, Box<dyn ResumeCreate>>;
-//pub type ExecTrapError = TrapError<Box<ResumeCall>, Box<ResumeCreate>>;
+
+pub type ExecTrapError = TrapError<Box<dyn ResumeCall>, Box<dyn ResumeCreate>>;

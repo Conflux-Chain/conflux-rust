@@ -7,8 +7,9 @@ use crate::{
     executive::Executive,
     machine::Machine,
     pow::{self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem},
+    spec::TransitionsEpochHeight,
     sync::{Error as SyncError, ErrorKind as SyncErrorKind},
-    vm,
+    vm::Spec,
 };
 use cfx_parameters::block::*;
 use cfx_storage::{
@@ -17,8 +18,10 @@ use cfx_storage::{
 };
 use cfx_types::{BigEndianHash, H256, U256};
 use primitives::{
-    transaction::TransactionError, Action, Block, BlockHeader, BlockReceipts,
-    MerkleHash, Receipt, SignedTransaction, TransactionWithSignature,
+    block::BlockHeight,
+    transaction::{TransactionError, TransactionType},
+    Action, Block, BlockHeader, BlockReceipts, MerkleHash, Receipt,
+    SignedTransaction, TransactionWithSignature,
 };
 use rlp::Encodable;
 use std::{collections::HashSet, convert::TryInto, sync::Arc};
@@ -30,7 +33,6 @@ pub struct VerificationConfig {
     pub referee_bound: usize,
     pub max_block_size_in_bytes: usize,
     pub transaction_epoch_bound: u64,
-    vm_spec: vm::Spec,
     machine: Arc<Machine>,
 }
 
@@ -210,7 +212,6 @@ impl VerificationConfig {
                 referee_bound,
                 max_block_size_in_bytes,
                 transaction_epoch_bound,
-                vm_spec: vm::Spec::new_spec(),
                 machine,
             }
         } else {
@@ -219,7 +220,6 @@ impl VerificationConfig {
                 referee_bound,
                 max_block_size_in_bytes,
                 transaction_epoch_bound,
-                vm_spec: vm::Spec::new_spec(),
                 machine,
             }
         }
@@ -415,7 +415,7 @@ impl VerificationConfig {
     /// the body is incorrect, this means the block is invalid, and we
     /// should discard this block and all its descendants.
     #[inline]
-    pub fn verify_block_basic(
+    pub fn verify_sync_graph_block_basic(
         &self, block: &Block, chain_id: u32,
     ) -> Result<(), Error> {
         self.verify_block_integrity(block)?;
@@ -424,8 +424,15 @@ impl VerificationConfig {
         let mut block_total_gas = U256::zero();
 
         let block_height = block.block_header.height();
+        let transitions = &self.machine.params().transition_heights;
         for t in &block.transactions {
-            self.verify_transaction_in_block(t, chain_id, block_height)?;
+            self.verify_transaction_common(
+                t,
+                chain_id,
+                block_height,
+                transitions,
+                VerifyTxMode::Remote,
+            )?;
             block_size += t.rlp_size();
             block_total_gas += *t.gas_limit();
         }
@@ -458,7 +465,8 @@ impl VerificationConfig {
         transaction_epoch_bound: u64,
     ) -> i8
     {
-        if tx.epoch_height + transaction_epoch_bound < block_height {
+        if tx.epoch_height.wrapping_add(transaction_epoch_bound) < block_height
+        {
             -1
         } else if tx.epoch_height > block_height + transaction_epoch_bound {
             1
@@ -467,17 +475,39 @@ impl VerificationConfig {
         }
     }
 
-    pub fn verify_transaction_epoch_height(
+    // If the boolean variable returns true, it means this transaction do not
+    // need check epoch height.
+    fn can_skip_epoch_check(
+        tx: &TransactionWithSignature, cip72a: bool, mode: &VerifyTxMode,
+    ) -> bool {
+        if tx.transaction_type() != TransactionType::EthereumLike {
+            return false;
+        }
+
+        match mode {
+            VerifyTxMode::Local(_, _) if mode.is_maybe_later() => true,
+            VerifyTxMode::Local(_, spec) => cip72a && spec.cip72,
+            VerifyTxMode::Remote => cip72a,
+        }
+    }
+
+    fn verify_transaction_epoch_height(
         tx: &TransactionWithSignature, block_height: u64,
-        transaction_epoch_bound: u64,
+        transaction_epoch_bound: u64, cip72a: bool, mode: &VerifyTxMode,
     ) -> Result<(), TransactionError>
     {
-        if Self::check_transaction_epoch_bound(
+        if Self::can_skip_epoch_check(tx, cip72a, mode) {
+            return Ok(());
+        }
+
+        let result = Self::check_transaction_epoch_bound(
             tx,
             block_height,
             transaction_epoch_bound,
-        ) == 0
-        {
+        );
+        let allow_larger_epoch = mode.is_maybe_later();
+
+        if result == 0 || (result > 0 && allow_larger_epoch) {
             Ok(())
         } else {
             bail!(TransactionError::EpochHeightOutOfBound {
@@ -488,20 +518,51 @@ impl VerificationConfig {
         }
     }
 
-    pub fn verify_transaction_in_block(
-        &self, tx: &TransactionWithSignature, chain_id: u32, block_height: u64,
-    ) -> Result<(), TransactionError> {
-        self.verify_transaction_common(tx, chain_id)?;
-        Self::verify_transaction_epoch_height(
+    pub fn fast_recheck(
+        &self, tx: &TransactionWithSignature, height: BlockHeight,
+        transitions: &TransitionsEpochHeight, spec: &Spec,
+    ) -> PackingCheckResult
+    {
+        let cip72a = height >= transitions.cip72a;
+
+        let tx_pool_mode =
+            VerifyTxMode::Local(VerifyTxLocalMode::MaybeLater, spec);
+        let packing_mode = VerifyTxMode::Local(VerifyTxLocalMode::Full, spec);
+
+        if Self::verify_transaction_epoch_height(
             tx,
-            block_height,
+            height,
             self.transaction_epoch_bound,
+            cip72a,
+            &packing_mode,
         )
+        .is_ok()
+        {
+            PackingCheckResult::Pack
+        } else if Self::verify_transaction_epoch_height(
+            tx,
+            height,
+            self.transaction_epoch_bound,
+            cip72a,
+            &tx_pool_mode,
+        )
+        .is_ok()
+        {
+            PackingCheckResult::Pending
+        } else {
+            PackingCheckResult::Drop
+        }
     }
 
+    // Packing transactions, verifying transaction in sync graph and inserting
+    // transactions may have different logics. But they share a lot of similar
+    // rules. We combine them together for convenient in the future upgrades..
     pub fn verify_transaction_common(
         &self, tx: &TransactionWithSignature, chain_id: u32,
-    ) -> Result<(), TransactionError> {
+        height: BlockHeight, transitions: &TransitionsEpochHeight,
+        mode: VerifyTxMode,
+    ) -> Result<(), TransactionError>
+    {
         tx.check_low_s()?;
 
         // Disallow unsigned transactions
@@ -523,19 +584,107 @@ impl VerificationConfig {
             bail!(TransactionError::ZeroGasPrice);
         }
 
-        // check transaction intrinsic gas
-        let tx_intrinsic_gas = Executive::gas_required_for(
-            tx.action == Action::Create,
-            &tx.data,
-            &self.vm_spec,
-        );
-        if tx.gas < (tx_intrinsic_gas as usize).into() {
-            bail!(TransactionError::NotEnoughBaseGas {
-                required: tx_intrinsic_gas.into(),
-                got: tx.gas
-            });
+        // ******************************************
+        // Each constraint depends on a mode or a CIP should be
+        // implemented in a seperated function.
+        // ******************************************
+        let cip76 = height >= transitions.cip76;
+        let cip72a = height >= transitions.cip72a;
+
+        Self::verify_transaction_epoch_height(
+            tx,
+            height,
+            self.transaction_epoch_bound,
+            cip72a,
+            &mode,
+        )?;
+
+        Self::check_gas_limit(tx, cip76, &mode)?;
+        Self::check_eth_like(tx)?;
+        Ok(())
+    }
+
+    /// Check transaction intrinsic gas. Influenced by CIP-76.
+    fn check_gas_limit(
+        tx: &TransactionWithSignature, cip76: bool, mode: &VerifyTxMode,
+    ) -> Result<(), TransactionError> {
+        const GENESIS_SPEC: Spec = Spec::genesis_spec();
+        let maybe_spec = if let VerifyTxMode::Local(_, spec) = mode {
+            // In local mode, we check gas limit as usual.
+            Some(*spec)
+        } else if !cip76 {
+            // In remote mode, we only check gas limit before cip-76 activated.
+            Some(&GENESIS_SPEC)
+        } else {
+            None
+        };
+
+        if let Some(spec) = maybe_spec {
+            let tx_intrinsic_gas = Executive::gas_required_for(
+                tx.action == Action::Create,
+                &tx.data,
+                &spec,
+            );
+            if tx.gas < (tx_intrinsic_gas as usize).into() {
+                bail!(TransactionError::NotEnoughBaseGas {
+                    required: tx_intrinsic_gas.into(),
+                    got: tx.gas
+                });
+            }
         }
 
         Ok(())
+    }
+
+    fn check_eth_like(
+        tx: &TransactionWithSignature,
+    ) -> Result<(), TransactionError> {
+        if tx.transaction_type() != TransactionType::EthereumLike {
+            return Ok(());
+        }
+
+        // We do not check if cip72a is activated or not. Even if cip72a is
+        // not activated, a transaction with target epoch == u64::MAX and
+        // storage limit != u64::MAX can never be packed.
+        if tx.storage_limit != u64::MAX {
+            return Err(TransactionError::InvalidEthereumLike);
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Copy, Clone)]
+pub enum PackingCheckResult {
+    Pack,    // Transaction can be packed.
+    Pending, // Transaction may be ready to packed in the future.
+    Drop,    // Transaction can never be packed.
+}
+
+#[derive(Copy, Clone)]
+pub enum VerifyTxMode<'a> {
+    Local(VerifyTxLocalMode, &'a Spec), /* Be strict with yourself: We
+                                         * apply more checks in packing
+                                         * transactions and local
+                                         * execution. */
+    Remote, /* Be lenient to others: We apply less
+             * check for transaction in sync graph. */
+}
+
+#[derive(Copy, Clone)]
+pub enum VerifyTxLocalMode {
+    Full, // Apply all checks.
+    MaybeLater, /* When inserting transactions to tx pool, if its epoch
+           * height is too large, it can be accept even if it is not
+           * regarded as a valid transaction. */
+}
+
+impl<'a> VerifyTxMode<'a> {
+    fn is_maybe_later(&self) -> bool {
+        if let VerifyTxMode::Local(VerifyTxLocalMode::MaybeLater, _) = self {
+            true
+        } else {
+            false
+        }
     }
 }

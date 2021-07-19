@@ -36,5 +36,11 @@ pub mod defaults {
     pub const MAX_CACHED_TRIE_NODES_R_LFU_COUNTER: u32 =
         DeltaMptsNodeMemoryManager::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER;
 
+    /// The max number of opened MPT databases at the same time.
+    /// Accessing a state currently involves both the intermediate MPT and delta
+    /// MPT, so setting this to 4 allows to access two states at the same
+    /// time.
+    pub const DEFAULT_MAX_OPEN_MPT: u32 = 4;
+
     use super::delta_mpt::node_memory_manager::DeltaMptsNodeMemoryManager;
 }

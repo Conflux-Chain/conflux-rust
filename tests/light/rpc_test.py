@@ -557,6 +557,7 @@ class LightRPCTest(ConfluxTestFramework):
 
         assert_raises_rpc_error(-32000, None, self.nodes[LIGHTNODE].cfx_call, {}, "latest_checkpoint")
         assert_raises_rpc_error(-32000, None, self.nodes[LIGHTNODE].cfx_estimateGasAndCollateral, {}, "latest_checkpoint")
+        assert_raises_rpc_error(-32000, None, self.nodes[LIGHTNODE].cfx_getBlockByBlockNumber, "0x1", False)
         assert_raises_rpc_error(-32000, None, self.nodes[LIGHTNODE].cfx_getBlockRewardInfo, "latest_checkpoint")
         assert_raises_rpc_error(-32000, None, self.nodes[LIGHTNODE].cfx_getEpochReceipts, "latest_checkpoint")
         assert_raises_rpc_error(-32000, None, self.nodes[LIGHTNODE].cfx_getSupplyInfo, "latest_checkpoint")

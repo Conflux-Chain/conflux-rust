@@ -2,7 +2,7 @@ from conflux.address import hex_to_b32_address
 
 
 class Filter():
-    def __init__(self, from_epoch="earliest", to_epoch="latest_state", block_hashes = None, address = None, topics = [],
+    def __init__(self, from_epoch=None, to_epoch=None, from_block = None, to_block = None, block_hashes = None, address = None, topics = [],
                  offset = None, limit = None, encode_address=True):
         if encode_address and address is not None:
             if isinstance(address, list):
@@ -14,6 +14,8 @@ class Filter():
             address = base32_address
         self.fromEpoch = from_epoch
         self.toEpoch = to_epoch
+        self.fromBlock = from_block
+        self.toBlock = to_block
         self.blockHashes = block_hashes
         self.address = address
         self.topics = topics

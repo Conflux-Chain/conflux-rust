@@ -305,6 +305,8 @@ class TestSendTx(RpcClient):
         tx4 = self.new_tx(nonce=cur_nonce + 4, value=default_config["TOTAL_COIN"])
         assert_equal(self.send_tx(tx4), tx4.hash_hex())
         r = self.node.cfx_getAccountPendingTransactions(addr)
+        r2 = self.node.cfx_getAccountPendingTransactions(addr, "0x0")
+        assert_equal(r, r2)
         pending_txs = r["pendingTransactions"]
         tx_status = r["firstTxStatus"]
         assert_equal(len(pending_txs), 1)

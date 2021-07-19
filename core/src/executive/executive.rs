@@ -2,26 +2,27 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{
-    context::{Context, OriginInfo, OutputPolicy},
-    Executed, ExecutionError, InternalContractMap,
-};
+use super::{context::OriginInfo, Executed, ExecutionError};
 use crate::{
-    bytes::{Bytes, BytesRef},
+    builtin::Builtin,
+    bytes::Bytes,
     evm::{FinalizationResult, Finalize},
     executive::{
+        context::LocalContext,
         executed::{ExecutionOutcome, ToRepackError},
-        CollateralCheckResultToVmResult, TxDropError,
+        internal_contract::get_reentrancy_allowance,
+        vm_exec::{BuiltinExec, InternalContractExec, NoopExec},
+        CollateralCheckResultToVmResult, InternalContractTrait, TxDropError,
     },
     hash::keccak,
     machine::Machine,
-    state::{CallStackInfo, State, Substate},
+    state::{cleanup_mode, CallStackInfo, State, Substate},
     trace::{self, trace::ExecTrace, Tracer},
     verification::VerificationConfig,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
-        ExecTrapResult, GasLeft, ResumeCall, ResumeCreate, ReturnData, Spec,
-        TrapError,
+        Exec, ExecTrapError, ExecTrapResult, GasLeft, ResumeCall, ResumeCreate,
+        ReturnData, Spec, TrapError, TrapResult,
     },
     vm_factory::VmFactory,
 };
@@ -33,14 +34,14 @@ use cfx_state::{
 use cfx_statedb::Result as DbResult;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256, U512, U64};
 use primitives::{
-    receipt::StorageChange, storage::STORAGE_LAYOUT_REGULAR_V0,
-    transaction::Action, SignedTransaction, StorageLayout,
+    receipt::StorageChange,
+    storage::STORAGE_LAYOUT_REGULAR_V0,
+    transaction::{Action, TransactionType},
+    SignedTransaction, StorageLayout,
 };
 use std::{
-    cell::RefCell,
     collections::HashSet,
     convert::{TryFrom, TryInto},
-    rc::Rc,
     sync::Arc,
 };
 
@@ -107,48 +108,49 @@ pub fn contract_address(
 
 /// Convert a finalization result into a VM message call result.
 pub fn into_message_call_result(
-    result: vm::Result<FinalizationResult>,
-) -> DbResult<vm::MessageCallResult> {
+    result: vm::Result<ExecutiveResult>,
+) -> vm::MessageCallResult {
     match result {
-        Ok(FinalizationResult {
+        Ok(ExecutiveResult {
             gas_left,
             return_data,
             apply_state: true,
-        }) => Ok(vm::MessageCallResult::Success(gas_left, return_data)),
-        Ok(FinalizationResult {
+            ..
+        }) => vm::MessageCallResult::Success(gas_left, return_data),
+        Ok(ExecutiveResult {
             gas_left,
             return_data,
             apply_state: false,
-        }) => Ok(vm::MessageCallResult::Reverted(gas_left, return_data)),
-        Err(vm::Error::StateDbError(err)) => Err(err.0),
-        Err(err) => Ok(vm::MessageCallResult::Failed(err)),
+            ..
+        }) => vm::MessageCallResult::Reverted(gas_left, return_data),
+        Err(err) => vm::MessageCallResult::Failed(err),
     }
 }
 
 /// Convert a finalization result into a VM contract create result.
-pub fn into_contract_create_result<
-    Substate: SubstateMngTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
->(
-    result: vm::Result<FinalizationResult>, address: &Address,
-    substate: &mut Substate,
-) -> DbResult<vm::ContractCreateResult>
-{
+pub fn into_contract_create_result(
+    result: vm::Result<ExecutiveResult>,
+) -> vm::ContractCreateResult {
     match result {
-        Ok(FinalizationResult {
+        Ok(ExecutiveResult {
             gas_left,
             apply_state: true,
+            create_address,
             ..
         }) => {
-            substate.contracts_created_mut().push(address.clone());
-            Ok(vm::ContractCreateResult::Created(address.clone(), gas_left))
+            // Move the change of contracts_created in substate to
+            // process_return.
+            let address = create_address
+                .expect("ExecutiveResult for Create executive should be some.");
+            vm::ContractCreateResult::Created(address.clone(), gas_left)
         }
-        Ok(FinalizationResult {
+        Ok(ExecutiveResult {
             gas_left,
             apply_state: false,
             return_data,
-        }) => Ok(vm::ContractCreateResult::Reverted(gas_left, return_data)),
-        Err(vm::Error::StateDbError(err)) => Err(err.0),
-        Err(err) => Ok(vm::ContractCreateResult::Failed(err)),
+            ..
+        }) => vm::ContractCreateResult::Reverted(gas_left, return_data),
+        Err(err) => vm::ContractCreateResult::Failed(err),
     }
 }
 
@@ -182,51 +184,35 @@ impl TransactOptions<trace::NoopTracer> {
     }
 }
 
-enum CallCreateExecutiveKind<
-    Substate: SubstateMngTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
-> {
-    Transfer(ActionParams),
-    CallBuiltin(ActionParams),
-    CallInternalContract(ActionParams, Substate),
-    ExecCall(ActionParams, Substate),
-    ExecCreate(ActionParams, Substate),
-    ResumeCall(OriginInfo, Box<dyn ResumeCall>, Substate),
-    ResumeCreate(OriginInfo, Box<dyn ResumeCreate>, Substate),
-    // A temporally status to handle the ownership check in rust.
-    // It should only appear in function `enact_output`.
-    Moved,
+enum CallCreateExecutiveKind<'a> {
+    Transfer,
+    CallBuiltin(&'a Builtin),
+    CallInternalContract(&'a Box<dyn InternalContractTrait>),
+    ExecCall,
+    ExecCreate,
 }
-
-pub struct CallCreateExecutive<
-    'a,
-    Substate: SubstateMngTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
-> {
-    env: &'a Env,
-    machine: &'a Machine,
-    spec: &'a Substate::Spec,
+pub struct CallCreateExecutive<'a, Substate: SubstateMngTrait> {
+    context: LocalContext<'a, Substate>,
     factory: &'a VmFactory,
-    depth: usize,
-    stack_depth: usize,
-    static_flag: bool,
-    is_create: bool,
-    gas: U256,
-    kind: CallCreateExecutiveKind<Substate>,
-    internal_contract_map: &'a InternalContractMap,
+    status: ExecutiveStatus,
+    create_address: Option<Address>,
+    kind: CallCreateExecutiveKind<'a>,
 }
 
-impl<
-        'a,
-        Substate: SubstateMngTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
-    > CallCreateExecutive<'a, Substate>
-{
+pub enum ExecutiveStatus {
+    Input(ActionParams),
+    Running,
+    ResumeCall(Box<dyn ResumeCall>),
+    ResumeCreate(Box<dyn ResumeCreate>),
+    Done,
+}
+
+impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// Create a new call executive using raw data.
     pub fn new_call_raw(
         params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
-        stack_depth: usize, parent_static_flag: bool,
-        parent_contract_in_creation: Option<Address>,
-        internal_contract_map: &'a InternalContractMap,
-        contracts_in_callstack: Rc<RefCell<Substate::CallStackInfo>>,
+        parent_static_flag: bool,
     ) -> Self
     {
         trace!(
@@ -236,64 +222,54 @@ impl<
             parent_static_flag,
         );
 
-        let gas = params.gas;
         let static_flag =
             parent_static_flag || params.call_type == CallType::StaticCall;
+
+        let substate = Substate::new();
+        // This logic is moved from function exec.
+        let origin = OriginInfo::from(&params);
 
         // if destination is builtin, try to execute it
         let kind = if let Some(builtin) =
             machine.builtin(&params.code_address, env.number)
         {
-            // Engines aren't supposed to return builtins until activation, but
-            // prefer to fail rather than silently break consensus.
-            if !builtin.is_active(env.number) {
-                panic!("Consensus failure: engine implementation prematurely enabled built-in at {}", params.code_address);
-            }
             trace!("CallBuiltin");
-            CallCreateExecutiveKind::CallBuiltin(params)
-        } else if let Some(_) =
-            internal_contract_map.contract(&params.code_address)
+            CallCreateExecutiveKind::CallBuiltin(builtin)
+        } else if let Some(internal) = machine
+            .internal_contracts()
+            .contract(&params.code_address, spec)
         {
             debug!(
                 "CallInternalContract: address={:?} data={:?}",
                 params.code_address, params.data
             );
-            CallCreateExecutiveKind::CallInternalContract(
-                params,
-                Substate::with_call_stack(contracts_in_callstack)
-                    .update_contract_in_creation_call(
-                        parent_contract_in_creation,
-                        /* is_internal_contract = */ true,
-                    ),
-            )
+            CallCreateExecutiveKind::CallInternalContract(internal)
         } else {
             if params.code.is_some() {
                 trace!("ExecCall");
-                CallCreateExecutiveKind::ExecCall(
-                    params,
-                    Substate::with_call_stack(contracts_in_callstack)
-                        .update_contract_in_creation_call(
-                            parent_contract_in_creation,
-                            /* is_internal_contract = */ false,
-                        ),
-                )
+                CallCreateExecutiveKind::ExecCall
             } else {
                 trace!("Transfer");
-                CallCreateExecutiveKind::Transfer(params)
+                CallCreateExecutiveKind::Transfer
             }
         };
-        Self {
+        let context = LocalContext::new(
             env,
             machine,
             spec,
-            factory,
             depth,
-            stack_depth,
+            origin,
+            substate,
+            /* is_create: */ false,
             static_flag,
+        );
+        Self {
+            context,
+            factory,
+            // Instead of put params to Exective kind, we put it into status.
+            status: ExecutiveStatus::Input(params),
+            create_address: None,
             kind,
-            gas,
-            is_create: false,
-            internal_contract_map,
         }
     }
 
@@ -301,9 +277,7 @@ impl<
     pub fn new_create_raw(
         params: ActionParams, env: &'a Env, machine: &'a Machine,
         spec: &'a Spec, factory: &'a VmFactory, depth: usize,
-        stack_depth: usize, static_flag: bool,
-        internal_contract_map: &'a InternalContractMap,
-        contracts_in_callstack: Rc<RefCell<Substate::CallStackInfo>>,
+        static_flag: bool,
     ) -> Self
     {
         trace!(
@@ -313,71 +287,41 @@ impl<
             static_flag
         );
 
-        let gas = params.gas;
-        let contract_in_creation = params.code_address;
+        let origin = OriginInfo::from(&params);
 
-        let kind = CallCreateExecutiveKind::ExecCreate(
-            params,
-            Substate::with_call_stack(contracts_in_callstack)
-                .set_contract_in_creation_create(contract_in_creation),
-        );
+        let kind = CallCreateExecutiveKind::ExecCreate;
 
-        Self {
+        let substate = Substate::new();
+
+        let context = LocalContext::new(
             env,
             machine,
             spec,
-            factory,
             depth,
-            stack_depth,
+            origin,
+            substate,
+            /* is_create */ true,
             static_flag,
+        );
+
+        Self {
+            context,
+            create_address: Some(params.code_address),
+            status: ExecutiveStatus::Input(params),
+            factory,
             kind,
-            gas,
-            is_create: true,
-            internal_contract_map,
         }
     }
 
-    /// If this executive contains an unconfirmed substate, returns a mutable
+    /// This executive always contain an unconfirmed substate, returns a mutable
     /// reference to it.
-    pub fn unconfirmed_substate(&mut self) -> Option<&mut Substate> {
-        match self.kind {
-            CallCreateExecutiveKind::ExecCall(_, ref mut unsub) => Some(unsub),
-            CallCreateExecutiveKind::ExecCreate(_, ref mut unsub) => {
-                Some(unsub)
-            }
-            CallCreateExecutiveKind::ResumeCreate(_, _, ref mut unsub) => {
-                Some(unsub)
-            }
-            CallCreateExecutiveKind::ResumeCall(_, _, ref mut unsub) => {
-                Some(unsub)
-            }
-            CallCreateExecutiveKind::CallInternalContract(_, ref mut unsub) => {
-                Some(unsub)
-            }
-            CallCreateExecutiveKind::Transfer(..)
-            | CallCreateExecutiveKind::CallBuiltin(..) => None,
-            CallCreateExecutiveKind::Moved => {
-                panic!("A temporally status in function `enact_output`, should not appear during execution.");
-            }
-        }
+    pub fn unconfirmed_substate(&mut self) -> &mut Substate {
+        &mut self.context.substate
     }
 
-    pub fn get_recipient(&self) -> &Address {
-        match &self.kind {
-            CallCreateExecutiveKind::ExecCall(params, _)
-            | CallCreateExecutiveKind::ExecCreate(params, _)
-            | CallCreateExecutiveKind::CallInternalContract(params, _)
-            | CallCreateExecutiveKind::Transfer(params)
-            | CallCreateExecutiveKind::CallBuiltin(params) => &params.address,
-            CallCreateExecutiveKind::ResumeCreate(origin, ..)
-            | CallCreateExecutiveKind::ResumeCall(origin, ..) => {
-                origin.recipient()
-            }
-            CallCreateExecutiveKind::Moved => {
-                panic!("A temporally status in function `enact_output`, should not appear during execution.");
-            }
-        }
-    }
+    /// Get the recipient of this executive. The recipient is the address whose
+    /// state will change.
+    pub fn get_recipient(&self) -> &Address { &self.context.origin.recipient() }
 
     fn check_static_flag(
         params: &ActionParams, static_flag: bool, is_create: bool,
@@ -408,11 +352,7 @@ impl<
 
     fn transfer_exec_balance(
         params: &ActionParams, spec: &Spec, state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait<
-            CallStackInfo = CallStackInfo,
-            Spec = Spec,
-        >,
-        account_start_nonce: U256,
+        substate: &mut dyn SubstateTrait, account_start_nonce: U256,
     ) -> DbResult<()>
     {
         if let ActionValue::Transfer(val) = params.value {
@@ -420,7 +360,7 @@ impl<
                 &params.sender,
                 &params.address,
                 &val,
-                substate.to_cleanup_mode(&spec),
+                cleanup_mode(substate, &spec),
                 account_start_nonce,
             )?;
         }
@@ -430,12 +370,9 @@ impl<
 
     fn transfer_exec_balance_and_init_contract(
         params: &ActionParams, spec: &Spec, state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait<
-            CallStackInfo = CallStackInfo,
-            Spec = Spec,
-        >,
+        substate: &mut dyn SubstateTrait,
         storage_layout: Option<StorageLayout>, contract_start_nonce: U256,
-    ) -> vm::Result<()>
+    ) -> DbResult<()>
     {
         if let ActionValue::Transfer(val) = params.value {
             // It is possible to first send money to a pre-calculated
@@ -444,7 +381,7 @@ impl<
             state.sub_balance(
                 &params.sender,
                 &val,
-                &mut substate.to_cleanup_mode(&spec),
+                &mut cleanup_mode(substate, &spec),
             )?;
             state.new_contract_with_admin(
                 &params.address,
@@ -462,699 +399,362 @@ impl<
         Ok(())
     }
 
-    fn enact_output<State: StateTrait<Substate = Substate>>(
-        mut self, output: ExecTrapResult<FinalizationResult>,
-        origin: OriginInfo, state: &mut State, substate: &mut Substate,
-        mut unconfirmed_substate: Substate,
-    ) -> ExecutiveTrapResult<'a, FinalizationResult, Substate>
+    /// When the executive (the inner EVM) returns, this function will process
+    /// the rest tasks: If the execution successes, this function collects
+    /// storage collateral change from the cache to substate, merge substate to
+    /// its parent and settles down bytecode for newly created contract. If the
+    /// execution fails, this function reverts state and drops substate.
+    fn process_return<State: StateTrait<Substate = Substate>>(
+        mut self, result: vm::Result<GasLeft>, state: &mut State,
+        parent_substate: &mut Substate, callstack: &mut CallStackInfo,
+        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
+    ) -> DbResult<vm::Result<ExecutiveResult>>
     {
-        // You should avoid calling functions for self here, since `self.kind`
-        // is moved temporally.
+        let context = self.context.activate(state, callstack);
+        // The post execution task in spec is completed here.
+        let finalized_result = result.finalize(context);
+        let executive_result = finalized_result
+            .map(|result| ExecutiveResult::new(result, self.create_address));
 
-        // TODO: `ExecTrapResult` is a nested `Result`. It is ambiguous to deal
-        // with result like `Ok(Err(e))`. I plan to rename it in a separated PR.
+        self.status = ExecutiveStatus::Done;
 
-        // In case the execution is done and the state will be reverted, there
-        // will be no need be collect ownership.
+        let executive_result = vm::separate_out_db_error(executive_result)?;
 
-        // We check it here only for performance. Even if we regard all the case
-        // as ``need_collect_ownership'', the result should be same. But we
-        // don't want to execute heavy function collect_ownership_changed if it
-        // is unnecessary.
-        let need_collect_ownership = match &output {
-            Ok(Err(_))
-            | Ok(Ok(FinalizationResult {
-                apply_state: false, ..
-            })) => false,
-            _ => true,
-        };
-        let output = if need_collect_ownership {
-            match state.collect_ownership_changed(&mut unconfirmed_substate) {
-                Ok(_) => output,
-                Err(db_err) => Ok(Err(db_err.into())),
-            }
+        if self.context.is_create {
+            tracer.prepare_trace_create_result(&executive_result);
         } else {
-            output
-        };
-
-        match output {
-            Ok(result) => match result {
-                // The whole epoch execution fails. No need to revert state.
-                Err(vm::Error::StateDbError(_)) => Ok(result),
-                Err(_)
-                | Ok(FinalizationResult {
-                    apply_state: false, ..
-                }) => {
-                    state.revert_to_checkpoint();
-                    Ok(result)
-                }
-                Ok(_) => {
-                    state.discard_checkpoint();
-                    substate.accrue(unconfirmed_substate);
-
-                    Ok(result)
-                }
-            },
-            Err(trap_err) => match trap_err {
-                TrapError::Call(subparams, resume) => {
-                    self.kind = CallCreateExecutiveKind::ResumeCall(
-                        origin,
-                        resume,
-                        unconfirmed_substate,
-                    );
-                    Err(TrapError::Call(subparams, self))
-                }
-                TrapError::Create(subparams, address, resume) => {
-                    self.kind = CallCreateExecutiveKind::ResumeCreate(
-                        origin,
-                        resume,
-                        unconfirmed_substate,
-                    );
-                    Err(TrapError::Create(subparams, address, self))
-                }
-            },
+            tracer.prepare_trace_call_result(&executive_result);
         }
+
+        let apply_state =
+            executive_result.as_ref().map_or(false, |r| r.apply_state);
+        if apply_state {
+            let mut substate = self.context.substate;
+            state.collect_ownership_changed(&mut substate)?; /* only fail for db error. */
+            if let Some(create_address) = self.create_address {
+                substate.contracts_created_mut().push(create_address);
+            }
+
+            state.discard_checkpoint();
+            // See my comments in resume function.
+            parent_substate.accrue(substate);
+        } else {
+            state.revert_to_checkpoint();
+        }
+        callstack.pop();
+
+        Ok(executive_result)
     }
 
-    /// Creates `Context` from `Executive`.
-    fn as_context<'any, State: StateTrait<Substate = Substate>>(
-        state: &'any mut State, env: &'any Env, machine: &'any Machine,
-        spec: &'any Spec, depth: usize, stack_depth: usize, static_flag: bool,
-        origin: &'any OriginInfo, substate: &'any mut Substate,
-        output: OutputPolicy, internal_contract_map: &'any InternalContractMap,
-    ) -> Context<'any, Substate, State>
-    {
-        Context::new(
-            state,
-            env,
-            machine,
-            spec,
-            depth,
-            stack_depth,
-            origin,
-            substate,
-            output,
-            static_flag,
-            internal_contract_map,
-        )
+    /// If the executive triggers a sub-call during execution, this function
+    /// outputs a trap error with sub-call parameters and return point.
+    fn process_trap(
+        mut self, trap_err: ExecTrapError,
+    ) -> ExecutiveTrapError<'a, Substate> {
+        match trap_err {
+            TrapError::Call(subparams, resume) => {
+                self.status = ExecutiveStatus::ResumeCall(resume);
+                TrapError::Call(subparams, self)
+            }
+            TrapError::Create(subparams, resume) => {
+                self.status = ExecutiveStatus::ResumeCreate(resume);
+                TrapError::Create(subparams, self)
+            }
+        }
     }
 
     /// Execute the executive. If a sub-call/create action is required, a
     /// resume trap error is returned. The caller is then expected to call
-    /// `resume_call` or `resume_create` to continue the execution.
+    /// `resume` to continue the execution.
     pub fn exec<State: StateTrait<Substate = Substate>>(
-        mut self, state: &mut State, substate: &mut Substate,
+        mut self, state: &mut State, parent_substate: &mut Substate,
+        callstack: &mut CallStackInfo,
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
-    ) -> ExecutiveTrapResult<'a, FinalizationResult, Substate>
+    ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
     {
-        let kind =
-            std::mem::replace(&mut self.kind, CallCreateExecutiveKind::Moved);
-        match kind {
-            CallCreateExecutiveKind::Transfer(ref params) => {
-                assert!(!self.is_create);
+        let status =
+            std::mem::replace(&mut self.status, ExecutiveStatus::Running);
+        let params = if let ExecutiveStatus::Input(params) = status {
+            params
+        } else {
+            panic!("Status should be input parameter")
+        };
 
-                let mut inner = || {
-                    Self::check_static_flag(
-                        params,
-                        self.static_flag,
-                        self.is_create,
-                    )?;
-                    Self::transfer_exec_balance(
-                        params,
-                        self.spec,
-                        state,
-                        substate,
-                        self.spec.account_start_nonce(self.env.number),
-                    )?;
+        let is_create = self.create_address.is_some();
+        assert_eq!(is_create, self.context.is_create);
 
-                    Ok(FinalizationResult {
-                        gas_left: params.gas,
-                        return_data: ReturnData::empty(),
-                        apply_state: true,
-                    })
-                };
+        // By technical specification and current implementation, the EVM should
+        // guarantee the current executive satisfies static_flag.
+        Self::check_static_flag(&params, self.context.static_flag, is_create)
+            .expect("check_static_flag should always success because EVM has checked it.");
 
-                Ok(inner())
-            }
-
-            CallCreateExecutiveKind::CallBuiltin(ref params) => {
-                assert!(!self.is_create);
-
-                let mut inner = || {
-                    let builtin = self.machine.builtin(&params.code_address, self.env.number).expect("Builtin is_some is checked when creating this kind in new_call_raw; qed");
-
-                    Self::check_static_flag(
-                        &params,
-                        self.static_flag,
-                        self.is_create,
-                    )?;
-                    state.checkpoint();
-                    Self::transfer_exec_balance(
-                        &params,
-                        self.spec,
-                        state,
-                        substate,
-                        self.spec.account_start_nonce(self.env.number),
-                    )?;
-
-                    let default = [];
-                    let data = if let Some(ref d) = params.data {
-                        d as &[u8]
-                    } else {
-                        &default as &[u8]
-                    };
-
-                    let cost = builtin.cost(data);
-                    if cost <= params.gas {
-                        let mut builtin_out_buffer = Vec::new();
-                        let result = {
-                            let mut builtin_output =
-                                BytesRef::Flexible(&mut builtin_out_buffer);
-                            builtin.execute(data, &mut builtin_output)
-                        };
-                        if let Err(e) = result {
-                            state.revert_to_checkpoint();
-
-                            Err(e.into())
-                        } else {
-                            state.discard_checkpoint();
-
-                            let out_len = builtin_out_buffer.len();
-                            Ok(FinalizationResult {
-                                gas_left: params.gas - cost,
-                                return_data: ReturnData::new(
-                                    builtin_out_buffer,
-                                    0,
-                                    out_len,
-                                ),
-                                apply_state: true,
-                            })
-                        }
-                    } else {
-                        state.revert_to_checkpoint();
-                        Err(vm::Error::OutOfGas)
-                    }
-                };
-
-                Ok(inner())
-            }
-
-            CallCreateExecutiveKind::CallInternalContract(
-                params,
-                mut unconfirmed_substate,
-            ) => {
-                assert!(!self.is_create);
-
-                let static_flag = self.static_flag;
-                let is_create = self.is_create;
-                let spec = self.spec;
-                let internal_contract_map = self.internal_contract_map;
-
-                let mut pre_inner = || {
-                    Self::check_static_flag(&params, static_flag, is_create)?;
-                    state.checkpoint();
-                    Self::transfer_exec_balance(
-                        &params,
-                        spec,
-                        state,
-                        substate,
-                        self.spec.account_start_nonce(self.env.number),
-                    )?;
-                    Ok(())
-                };
-
-                match pre_inner() {
-                    Ok(()) => (),
-                    Err(err) => return Ok(Err(err)),
-                }
-
-                let origin = OriginInfo::from(&params);
-
-                let result = if params.call_type != CallType::Call
-                    && params.call_type != CallType::StaticCall
-                {
-                    Err(vm::Error::InternalContract("Incorrect call type."))
-                } else if let Some(contract) =
-                    internal_contract_map.contract(&params.code_address)
-                {
-                    contract.execute(
-                        &params,
-                        self.env,
-                        &spec,
-                        state,
-                        &mut unconfirmed_substate,
-                        tracer,
-                    )
-                } else {
-                    Ok(GasLeft::Known(params.gas))
-                };
-                debug!("Internal Call Result: {:?}", result);
-
-                let context = Self::as_context(
-                    state,
-                    self.env,
-                    self.machine,
-                    self.spec,
-                    self.depth,
-                    self.stack_depth,
-                    self.static_flag,
-                    &origin,
-                    &mut unconfirmed_substate,
-                    OutputPolicy::Return,
-                    self.internal_contract_map,
-                );
-                let out = Ok(result.finalize(context));
-                self.enact_output(
-                    out,
-                    origin,
-                    state,
-                    substate,
-                    unconfirmed_substate,
-                )
-            }
-
-            CallCreateExecutiveKind::ExecCall(
-                params,
-                mut unconfirmed_substate,
-            ) => {
-                assert!(!self.is_create);
-
-                {
-                    let static_flag = self.static_flag;
-                    let is_create = self.is_create;
-                    let spec = self.spec;
-
-                    let mut pre_inner = || {
-                        Self::check_static_flag(
-                            &params,
-                            static_flag,
-                            is_create,
-                        )?;
-                        state.checkpoint();
-                        Self::transfer_exec_balance(
-                            &params,
-                            spec,
-                            state,
-                            substate,
-                            self.spec.account_start_nonce(self.env.number),
-                        )?;
-                        Ok(())
-                    };
-
-                    match pre_inner() {
-                        Ok(()) => (),
-                        Err(err) => return Ok(Err(err)),
-                    }
-                }
-
-                let origin = OriginInfo::from(&params);
-                let exec = self.factory.create(params, self.spec, self.depth);
-
-                let out = {
-                    let mut context = Self::as_context(
-                        state,
-                        self.env,
-                        self.machine,
-                        self.spec,
-                        self.depth,
-                        self.stack_depth,
-                        self.static_flag,
-                        &origin,
-                        &mut unconfirmed_substate,
-                        OutputPolicy::Return,
-                        self.internal_contract_map,
-                    );
-                    match exec.exec(&mut context, tracer) {
-                        Ok(val) => Ok(val.finalize(context)),
-                        Err(err) => Err(err),
-                    }
-                };
-
-                self.enact_output(
-                    out,
-                    origin,
-                    state,
-                    substate,
-                    unconfirmed_substate,
-                )
-            }
-
-            CallCreateExecutiveKind::ExecCreate(
-                params,
-                mut unconfirmed_substate,
-            ) => {
-                debug!(
-                    "CallCreateExecutiveKind::ExecCreate: contract_addr = {:?}",
-                    params.address
-                );
-                assert!(self.is_create);
-
-                {
-                    let static_flag = self.static_flag;
-                    let is_create = self.is_create;
-                    let spec = self.spec;
-
-                    let mut pre_inner = || {
-                        Self::check_static_flag(
-                            &params,
-                            static_flag,
-                            is_create,
-                        )?;
-                        state.checkpoint();
-                        Self::transfer_exec_balance_and_init_contract(
-                            &params,
-                            spec,
-                            state,
-                            substate,
-                            Some(STORAGE_LAYOUT_REGULAR_V0),
-                            spec.contract_start_nonce(self.env.number),
-                        )?;
-                        Ok(())
-                    };
-
-                    match pre_inner() {
-                        Ok(()) => (),
-                        Err(err) => return Ok(Err(err)),
-                    }
-                }
-
-                let origin = OriginInfo::from(&params);
-                let exec = self.factory.create(params, self.spec, self.depth);
-
-                let out = {
-                    let mut context = Self::as_context(
-                        state,
-                        self.env,
-                        self.machine,
-                        self.spec,
-                        self.depth,
-                        self.stack_depth,
-                        self.static_flag,
-                        &origin,
-                        &mut unconfirmed_substate,
-                        OutputPolicy::InitContract,
-                        self.internal_contract_map,
-                    );
-                    match exec.exec(&mut context, tracer) {
-                        Ok(val) => Ok(val.finalize(context)),
-                        Err(err) => Err(err),
-                    }
-                };
-
-                self.enact_output(
-                    out,
-                    origin,
-                    state,
-                    substate,
-                    unconfirmed_substate,
-                )
-            }
-
-            CallCreateExecutiveKind::ResumeCall(..)
-            | CallCreateExecutiveKind::ResumeCreate(..) => {
-                panic!("This executive has already been executed once.")
-            }
-
-            CallCreateExecutiveKind::Moved => {
-                panic!("A temporally status in function `enact_output`, should not appear during execution.")
-            }
+        // Trace task
+        if is_create {
+            debug!(
+                "CallCreateExecutiveKind::ExecCreate: contract_addr = {:?}",
+                params.address
+            );
+            tracer.prepare_trace_create(&params);
+        } else {
+            tracer.prepare_trace_call(&params);
         }
+
+        // Make checkpoint for this executive, callstack is always maintained
+        // with checkpoint.
+        state.checkpoint();
+
+        let contract_address = self.get_recipient().clone();
+        let allow_reentrancy = get_reentrancy_allowance(
+            &contract_address,
+            state,
+            &mut self.context.substate,
+        )?;
+        callstack.push(contract_address, is_create, allow_reentrancy);
+
+        // Pre execution: transfer value and init contract.
+        let spec = self.context.spec;
+        if is_create {
+            Self::transfer_exec_balance_and_init_contract(
+                &params,
+                spec,
+                state,
+                // It is a bug in the Parity version.
+                &mut self.context.substate,
+                Some(STORAGE_LAYOUT_REGULAR_V0),
+                spec.contract_start_nonce,
+            )?
+        } else {
+            Self::transfer_exec_balance(
+                &params,
+                spec,
+                state,
+                &mut self.context.substate,
+                spec.account_start_nonce,
+            )?
+        };
+
+        // Fetch execution model and execute
+        let exec: Box<dyn Exec> = match self.kind {
+            CallCreateExecutiveKind::Transfer => {
+                Box::new(NoopExec { gas: params.gas })
+            }
+            CallCreateExecutiveKind::CallBuiltin(builtin) => {
+                Box::new(BuiltinExec { builtin, params })
+            }
+            CallCreateExecutiveKind::CallInternalContract(internal) => {
+                Box::new(InternalContractExec { internal, params })
+            }
+            CallCreateExecutiveKind::ExecCall
+            | CallCreateExecutiveKind::ExecCreate => {
+                let factory = self.context.machine.vm_factory();
+                factory.create(params, self.context.spec, self.context.depth)
+            }
+        };
+        let mut context = self.context.activate(state, callstack);
+        let output = exec.exec(&mut context, tracer);
+
+        // Post execution.
+        self.process_output(output, state, parent_substate, callstack, tracer)
     }
 
-    /// Resume execution from a call trap previously trapped by `exec'.
-    pub fn resume_call<State: StateTrait<Substate = Substate>>(
-        mut self, result: vm::MessageCallResult, state: &mut State,
-        substate: &mut Substate, tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> ExecutiveTrapResult<'a, FinalizationResult, Substate>
+    pub fn resume<State: StateTrait<Substate = Substate>>(
+        mut self, result: vm::Result<ExecutiveResult>, state: &mut State,
+        parent_substate: &mut Substate, callstack: &mut CallStackInfo,
+        tracer: &mut dyn Tracer<Output = ExecTrace>,
+    ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
     {
-        match self.kind {
-            CallCreateExecutiveKind::ResumeCall(
-                origin,
-                resume,
-                mut unconfirmed_substate,
-            ) => {
-                let out = {
-                    let exec = resume.resume_call(result);
+        let status =
+            std::mem::replace(&mut self.status, ExecutiveStatus::Running);
 
-                    let mut context = Self::as_context(
-                        state,
-                        self.env,
-                        self.machine,
-                        self.spec,
-                        self.depth,
-                        self.stack_depth,
-                        self.static_flag,
-                        &origin,
-                        &mut unconfirmed_substate,
-                        if self.is_create {
-                            OutputPolicy::InitContract
-                        } else {
-                            OutputPolicy::Return
-                        },
-                        self.internal_contract_map,
-                    );
-                    match exec.exec(&mut context, tracer) {
-                        Ok(val) => Ok(val.finalize(context)),
-                        Err(err) => Err(err),
-                    }
-                };
+        // TODO: Substate from sub-call should have been merged here by
+        // specification. But we have merged it in function `process_return`.
+        // If we put `substate.accrue` back to here, we can save the maintenance
+        // for `parent_substate` in `exec`, `resume`, `process_return` and
+        // `consume`. It will also make the implementation with
+        // specification: substate is in return value and its caller's duty to
+        // merge callee's substate. However, Substate is a trait
+        // currently, such change will make too many functions has generic
+        // parameters or trait parameter. So I put off this plan until
+        // substate is no longer a trait.
 
-                self.kind = CallCreateExecutiveKind::Moved;
-                self.enact_output(
-                    out,
-                    origin,
-                    state,
-                    substate,
-                    unconfirmed_substate,
-                )
+        // Process resume tasks, which is defined in Instruction Set
+        // Specification of tech-specification.
+        let exec = match status {
+            ExecutiveStatus::ResumeCreate(resume) => {
+                let result = into_contract_create_result(result);
+                resume.resume_create(result)
             }
-            CallCreateExecutiveKind::ResumeCreate(..) => {
-                panic!("Resumable as create, but called resume_call")
+            ExecutiveStatus::ResumeCall(resume) => {
+                let result = into_message_call_result(result);
+                resume.resume_call(result)
             }
-            CallCreateExecutiveKind::Transfer(..)
-            | CallCreateExecutiveKind::CallBuiltin(..)
-            | CallCreateExecutiveKind::CallInternalContract(..)
-            | CallCreateExecutiveKind::ExecCall(..)
-            | CallCreateExecutiveKind::ExecCreate(..) => {
-                panic!("Not resumable")
+            ExecutiveStatus::Input(_)
+            | ExecutiveStatus::Done
+            | ExecutiveStatus::Running => {
+                panic!("Incorrect executive status in resume");
             }
-            CallCreateExecutiveKind::Moved => {
-                panic!("A temporally status in function `enact_output`, should not appear during execution.")
-            }
-        }
+        };
+
+        let mut context = self.context.activate(state, callstack);
+        let output = exec.exec(&mut context, tracer);
+
+        // Post execution.
+        self.process_output(output, state, parent_substate, callstack, tracer)
     }
 
-    /// Resume execution from a create trap previously trapped by `exec`.
-    pub fn resume_create<State: StateTrait<Substate = Substate>>(
-        mut self, result: vm::ContractCreateResult, state: &mut State,
-        substate: &mut Substate, tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> ExecutiveTrapResult<'a, FinalizationResult, Substate>
+    #[inline]
+    fn process_output<State: StateTrait<Substate = Substate>>(
+        self, output: ExecTrapResult<GasLeft>, state: &mut State,
+        parent_substate: &mut Substate, callstack: &mut CallStackInfo,
+        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
+    ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
     {
-        match self.kind {
-            CallCreateExecutiveKind::ResumeCreate(
-                origin,
-                resume,
-                mut unconfirmed_substate,
-            ) => {
-                let out = {
-                    let exec = resume.resume_create(result);
-
-                    let mut context = Self::as_context(
-                        state,
-                        self.env,
-                        self.machine,
-                        self.spec,
-                        self.depth,
-                        self.stack_depth,
-                        self.static_flag,
-                        &origin,
-                        &mut unconfirmed_substate,
-                        if self.is_create {
-                            OutputPolicy::InitContract
-                        } else {
-                            OutputPolicy::Return
-                        },
-                        self.internal_contract_map,
-                    );
-                    match exec.exec(&mut context, tracer) {
-                        Ok(val) => Ok(val.finalize(context)),
-                        Err(err) => Err(err),
-                    }
-                };
-
-                self.kind = CallCreateExecutiveKind::Moved;
-                self.enact_output(
-                    out,
-                    origin,
+        // Convert the `ExecTrapResult` (result of evm) to `ExecutiveTrapResult`
+        // (result of self).
+        let trap_result = match output {
+            TrapResult::Return(result) => {
+                TrapResult::Return(self.process_return(
+                    result,
                     state,
-                    substate,
-                    unconfirmed_substate,
-                )
+                    parent_substate,
+                    callstack,
+                    tracer,
+                )?)
             }
-            CallCreateExecutiveKind::ResumeCall(..) => {
-                panic!("Resumable as call, but called resume_create")
+            TrapResult::SubCallCreate(trap_err) => {
+                TrapResult::SubCallCreate(self.process_trap(trap_err))
             }
-            CallCreateExecutiveKind::Transfer(..)
-            | CallCreateExecutiveKind::CallBuiltin(..)
-            | CallCreateExecutiveKind::CallInternalContract(..)
-            | CallCreateExecutiveKind::ExecCall(..)
-            | CallCreateExecutiveKind::ExecCreate(..) => {
-                panic!("Not resumable")
-            }
-            CallCreateExecutiveKind::Moved => {
-                panic!("A temporally status in function `enact_output`, should not appear during execution.")
-            }
-        }
+        };
+        Ok(trap_result)
     }
 
-    /// Execute and consume the current executive. This function handles resume
+    /// Execute the top call-create executive. This function handles resume
     /// traps and sub-level tracing. The caller is expected to handle
     /// current-level tracing.
     pub fn consume<State: StateTrait<Substate = Substate>>(
-        self, state: &mut State, top_substate: &mut Substate,
+        self, state: &'a mut State, top_substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
-    ) -> vm::Result<FinalizationResult>
+    ) -> DbResult<vm::Result<FinalizationResult>>
     {
-        let mut last_res =
-            Some((false, self.gas, self.exec(state, top_substate, tracer)));
+        let mut callstack = CallStackInfo::new();
+        let mut executive_stack: Vec<Self> = Vec::new();
 
-        let mut callstack: Vec<(
-            Option<Address>,
-            CallCreateExecutive<'a, Substate>,
-        )> = Vec::new();
+        let mut last_res =
+            self.exec(state, top_substate, &mut callstack, tracer)?;
 
         loop {
             match last_res {
-                None => {
-                    let current = callstack.pop();
-                    top_substate.pop_callstack();
-                    match current {
-                        Some((_, exec)) => {
-                            let second_last = callstack.last_mut();
-                            let parent_substate = match second_last {
-                                Some((_, ref mut second_last)) => second_last.unconfirmed_substate().expect("Current stack value is created from second last item; second last item must be call or create; qed"),
-                                None => top_substate,
-                            };
-
-                            last_res = Some((exec.is_create, exec.gas, exec.exec(state, parent_substate, tracer)));
+                TrapResult::Return(result) => {
+                    let parent = match executive_stack.pop() {
+                        Some(x) => x,
+                        None => {
+                            return Ok(result.map(|result| result.into()));
                         }
-                        None => panic!("When callstack only had one item and it was executed, this function would return; callstack never reaches zero item; qed"),
-                    }
-                }
-                Some((is_create, _gas, Ok(val))) => {
-                    let current = callstack.pop();
-                    top_substate.pop_callstack();
+                    };
 
-                    match current {
-                        Some((address, mut exec)) => {
-                            if is_create {
-                                let address = address.expect("If the last executed status was from a create executive, then the destination address was pushed to the callstack; address is_some if it is_create; qed");
-
-                                let second_last = callstack.last_mut();
-                                let parent_substate = match second_last {
-                                    Some((_, ref mut second_last)) => second_last.unconfirmed_substate().expect("Current stack value is created from second last item; second last item must be call or create; qed"),
-                                    None => top_substate,
-                                };
-
-                                let contract_create_result = into_contract_create_result(val, &address, exec.unconfirmed_substate().expect("Executive is resumed from a create; it has an unconfirmed substate; qed"));
-
-                                if let Ok(result) = &contract_create_result {
-                                    tracer.prepare_trace_create_result(result);
-                                }
-
-                                last_res = Some((
-                                    exec.is_create,
-                                    exec.gas,
-                                    exec.resume_create(
-                                        contract_create_result?,
-                                        state,
-                                        parent_substate,
-                                        tracer,
-                                    ),
-                                ));
-                            } else {
-                                let second_last = callstack.last_mut();
-                                let parent_substate = match second_last {
-                                    Some((_, ref mut second_last)) => second_last.unconfirmed_substate().expect("Current stack value is created from second last item; second last item must be call or create; qed"),
-                                    None => top_substate,
-                                };
-                                let contract_call_result =
-                                    into_message_call_result(val);
-
-                                if let Ok(result) = &contract_call_result {
-                                    tracer.prepare_trace_call_result(result);
-                                }
-
-                                last_res = Some((
-                                    exec.is_create,
-                                    exec.gas,
-                                    exec.resume_call(
-                                        contract_call_result?,
-                                        state,
-                                        parent_substate,
-                                        tracer,
-                                    ),
-                                ));
-                            }
-                        }
-                        None => return val,
-                    }
-                }
-                Some((_, _, Err(TrapError::Call(subparams, mut resume)))) => {
-                    tracer.prepare_trace_call(&subparams);
-                    let maybe_parent_contract_in_creation = resume
-                        .unconfirmed_substate()
-                        .map_or(None, |substate| {
-                            substate.contract_in_creation().cloned()
+                    let parent_substate = executive_stack
+                        .last_mut()
+                        .map_or(&mut *top_substate, |parent| {
+                            parent.unconfirmed_substate()
                         });
-                    let sub_exec = CallCreateExecutive::new_call_raw(
-                        subparams,
-                        resume.env,
-                        resume.machine,
-                        resume.spec,
-                        resume.factory,
-                        resume.depth + 1,
-                        resume.stack_depth,
-                        resume.static_flag,
-                        maybe_parent_contract_in_creation,
-                        resume.internal_contract_map,
-                        top_substate.contracts_in_callstack().clone(),
-                    );
 
-                    top_substate.push_callstack(resume.get_recipient().clone());
-                    callstack.push((None, resume));
-                    top_substate
-                        .push_callstack(sub_exec.get_recipient().clone());
-                    callstack.push((None, sub_exec));
-                    last_res = None;
+                    last_res = parent.resume(
+                        result,
+                        state,
+                        parent_substate,
+                        &mut callstack,
+                        tracer,
+                    )?;
                 }
-                Some((
-                    _,
-                    _,
-                    Err(TrapError::Create(subparams, address, resume)),
-                )) => {
-                    tracer.prepare_trace_create(&subparams);
-                    let sub_exec = CallCreateExecutive::new_create_raw(
-                        subparams,
-                        resume.env,
-                        resume.machine,
-                        resume.spec,
-                        resume.factory,
-                        resume.depth + 1,
-                        resume.stack_depth,
-                        resume.static_flag,
-                        resume.internal_contract_map,
-                        top_substate.contracts_in_callstack().clone(),
-                    );
+                TrapResult::SubCallCreate(trap_err) => {
+                    let (callee, caller) = Self::from_trap_error(trap_err);
+                    executive_stack.push(caller);
 
-                    top_substate.push_callstack(resume.get_recipient().clone());
-                    callstack.push((Some(address), resume));
-                    top_substate
-                        .push_callstack(sub_exec.get_recipient().clone());
-                    callstack.push((None, sub_exec));
-                    last_res = None;
+                    let parent_substate = executive_stack
+                        .last_mut()
+                        .expect(
+                            "Last executive is `caller`, it will never be None",
+                        )
+                        .unconfirmed_substate();
+
+                    last_res = callee.exec(
+                        state,
+                        parent_substate,
+                        &mut callstack,
+                        tracer,
+                    )?;
                 }
             }
+        }
+    }
+
+    /// Output callee executive and caller executive from trap kind error.
+    pub fn from_trap_error(
+        trap_err: ExecutiveTrapError<'a, Substate>,
+    ) -> (Self, Self) {
+        match trap_err {
+            TrapError::Call(params, parent) => (
+                /* callee */
+                CallCreateExecutive::new_call_raw(
+                    params,
+                    parent.context.env,
+                    parent.context.machine,
+                    parent.context.spec,
+                    parent.factory,
+                    parent.context.depth + 1,
+                    parent.context.static_flag,
+                ),
+                /* caller */ parent,
+            ),
+            TrapError::Create(params, parent) => (
+                /* callee */
+                CallCreateExecutive::new_create_raw(
+                    params,
+                    parent.context.env,
+                    parent.context.machine,
+                    parent.context.spec,
+                    parent.factory,
+                    parent.context.depth + 1,
+                    parent.context.static_flag,
+                ),
+                /* callee */ parent,
+            ),
+        }
+    }
+}
+
+/// The result contains more data than finalization result.
+#[derive(Debug)]
+pub struct ExecutiveResult {
+    /// Final amount of gas left.
+    pub gas_left: U256,
+    /// Apply execution state changes or revert them.
+    pub apply_state: bool,
+    /// Return data buffer.
+    pub return_data: ReturnData,
+    /// Create address.
+    pub create_address: Option<Address>,
+}
+
+impl Into<FinalizationResult> for ExecutiveResult {
+    fn into(self) -> FinalizationResult {
+        FinalizationResult {
+            gas_left: self.gas_left,
+            apply_state: self.apply_state,
+            return_data: self.return_data,
+        }
+    }
+}
+
+impl ExecutiveResult {
+    fn new(
+        result: FinalizationResult, create_address: Option<Address>,
+    ) -> Self {
+        ExecutiveResult {
+            gas_left: result.gas_left,
+            apply_state: result.apply_state,
+            return_data: result.return_data,
+            create_address,
         }
     }
 }
@@ -1162,6 +762,11 @@ impl<
 /// Trap result returned by executive.
 pub type ExecutiveTrapResult<'a, T, Substate> = vm::TrapResult<
     T,
+    CallCreateExecutive<'a, Substate>,
+    CallCreateExecutive<'a, Substate>,
+>;
+
+pub type ExecutiveTrapError<'a, Substate> = vm::TrapError<
     CallCreateExecutive<'a, Substate>,
     CallCreateExecutive<'a, Substate>,
 >;
@@ -1177,22 +782,21 @@ pub struct ExecutiveGeneric<
     pub state: &'a mut State,
     env: &'a Env,
     machine: &'a Machine,
-    spec: &'a Substate::Spec,
+    spec: &'a Spec,
     depth: usize,
     static_flag: bool,
-    internal_contract_map: &'a InternalContractMap,
 }
 
 impl<
         'a,
-        Substate: SubstateMngTrait<CallStackInfo = CallStackInfo, Spec = Spec>,
+        Substate: SubstateMngTrait,
         State: StateTrait<Substate = Substate>,
     > ExecutiveGeneric<'a, Substate, State>
 {
     /// Basic constructor.
     pub fn new(
         state: &'a mut State, env: &'a Env, machine: &'a Machine,
-        spec: &'a Spec, internal_contract_map: &'a InternalContractMap,
+        spec: &'a Spec,
     ) -> Self
     {
         ExecutiveGeneric {
@@ -1202,25 +806,6 @@ impl<
             spec,
             depth: 0,
             static_flag: false,
-            internal_contract_map,
-        }
-    }
-
-    /// Populates executive from parent properties. Increments executive depth.
-    pub fn from_parent(
-        state: &'a mut State, env: &'a Env, machine: &'a Machine,
-        spec: &'a Spec, parent_depth: usize, static_flag: bool,
-        internal_contract_map: &'a InternalContractMap,
-    ) -> Self
-    {
-        ExecutiveGeneric {
-            state,
-            env,
-            machine,
-            spec,
-            depth: parent_depth + 1,
-            static_flag,
-            internal_contract_map,
         }
     }
 
@@ -1240,16 +825,11 @@ impl<
         )
     }
 
-    pub fn create_with_stack_depth(
+    pub fn create(
         &mut self, params: ActionParams, substate: &mut Substate,
-        stack_depth: usize,
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
-    ) -> vm::Result<FinalizationResult>
+    ) -> DbResult<vm::Result<FinalizationResult>>
     {
-        tracer.prepare_trace_create(&params);
-        let _address = params.address;
-        let _gas = params.gas;
-
         let vm_factory = self.machine.vm_factory();
         let result = CallCreateExecutive::new_create_raw(
             params,
@@ -1258,31 +838,18 @@ impl<
             self.spec,
             &vm_factory,
             self.depth,
-            stack_depth,
             self.static_flag,
-            self.internal_contract_map,
-            substate.contracts_in_callstack().clone(),
         )
-        .consume(self.state, substate, tracer);
+        .consume(self.state, substate, tracer)?;
 
-        result
+        Ok(result)
     }
 
-    pub fn create(
+    pub fn call(
         &mut self, params: ActionParams, substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
-    ) -> vm::Result<FinalizationResult>
+    ) -> DbResult<vm::Result<FinalizationResult>>
     {
-        self.create_with_stack_depth(params, substate, 0, tracer)
-    }
-
-    pub fn call_with_stack_depth(
-        &mut self, params: ActionParams, substate: &mut Substate,
-        stack_depth: usize,
-        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
-    ) -> vm::Result<FinalizationResult>
-    {
-        tracer.prepare_trace_call(&params);
         let vm_factory = self.machine.vm_factory();
         let result = CallCreateExecutive::new_call_raw(
             params,
@@ -1291,23 +858,11 @@ impl<
             self.spec,
             &vm_factory,
             self.depth,
-            stack_depth,
             self.static_flag,
-            None,
-            self.internal_contract_map,
-            substate.contracts_in_callstack().clone(),
         )
-        .consume(self.state, substate, tracer);
+        .consume(self.state, substate, tracer)?;
 
-        result
-    }
-
-    pub fn call(
-        &mut self, params: ActionParams, substate: &mut Substate,
-        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
-    ) -> vm::Result<FinalizationResult>
-    {
-        self.call_with_stack_depth(params, substate, 0, tracer)
+        Ok(result)
     }
 
     pub fn transact_virtual(
@@ -1323,7 +878,7 @@ impl<
                 &sender,
                 &(needed_balance - balance),
                 CleanupMode::NoEmpty,
-                self.spec.account_start_nonce(self.env.number),
+                self.spec.account_start_nonce,
             )?;
         }
         let options = TransactOptions::with_tracing();
@@ -1353,23 +908,22 @@ impl<
         }
 
         // Validate transaction epoch height.
-        match VerificationConfig::verify_transaction_epoch_height(
-            tx,
-            self.env.epoch_height,
-            self.env.transaction_epoch_bound,
-        ) {
-            Err(_) => {
-                return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
-                    ToRepackError::EpochHeightOutOfBound {
-                        block_height: self.env.epoch_height,
-                        set: tx.epoch_height,
-                        transaction_epoch_bound: self
-                            .env
-                            .transaction_epoch_bound,
-                    },
-                ));
-            }
-            Ok(()) => {}
+        let eth_like_tx = spec.cip72
+            && tx.transaction_type() == TransactionType::EthereumLike;
+        if !eth_like_tx
+            && VerificationConfig::check_transaction_epoch_bound(
+                tx,
+                self.env.epoch_height,
+                self.env.transaction_epoch_bound,
+            ) != 0
+        {
+            return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
+                ToRepackError::EpochHeightOutOfBound {
+                    block_height: self.env.epoch_height,
+                    set: tx.epoch_height,
+                    transaction_epoch_bound: self.env.transaction_epoch_bound,
+                },
+            ));
         }
 
         let base_gas_required =
@@ -1430,27 +984,40 @@ impl<
             total_cost += gas_cost
         }
 
-        let tx_storage_limit_in_drip =
-            U256::from(tx.storage_limit) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+        // Since the Ethereum transactions do not contain storage limit. All the
+        // storage limit will be regarded as u64::MAX. The EthereumLike
+        // transaction should bypass the balance for storage check in
+        // pre-execution.
+        let minimum_drip_required_for_storage = if eth_like_tx {
+            U256::zero()
+        } else {
+            U256::from(tx.storage_limit) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+        };
+        // No matter who pays the collateral, we only focuses on the storage
+        // limit of sender.
+        let total_storage_limit = if eth_like_tx {
+            U256::MAX
+        } else {
+            self.state.collateral_for_storage(&sender)?
+                + minimum_drip_required_for_storage
+        };
+
         let storage_sponsor_balance = if storage_sponsored {
             self.state.sponsor_balance_for_collateral(&code_address)?
         } else {
             0.into()
         };
-        // No matter who pays the collateral, we only focuses on the storage
-        // limit of sender.
-        let total_storage_limit = self.state.collateral_for_storage(&sender)?
-            + tx_storage_limit_in_drip;
+
         // Find the `storage_owner` in this execution.
         let storage_owner = {
             if storage_sponsored
-                && tx_storage_limit_in_drip <= storage_sponsor_balance
+                && minimum_drip_required_for_storage <= storage_sponsor_balance
             {
                 // sponsor will pay for collateral for storage
                 code_address
             } else {
                 // sender will pay for collateral for storage
-                total_cost += tx_storage_limit_in_drip.into();
+                total_cost += minimum_drip_required_for_storage.into();
                 sender
             }
         };
@@ -1461,7 +1028,7 @@ impl<
             sender_intended_cost += gas_cost
         }
         if !storage_sponsored {
-            sender_intended_cost += tx_storage_limit_in_drip.into()
+            sender_intended_cost += minimum_drip_required_for_storage.into()
         };
         // Sponsor is allowed however sender do not have enough balance to pay
         // for the extra gas because sponsor has run out of balance in
@@ -1474,7 +1041,7 @@ impl<
                 ToRepackError::NotEnoughCashFromSponsor {
                     required_gas_cost: gas_cost,
                     gas_sponsor_balance,
-                    required_storage_cost: tx_storage_limit_in_drip,
+                    required_storage_cost: minimum_drip_required_for_storage,
                     storage_sponsor_balance,
                 },
             ));
@@ -1502,14 +1069,12 @@ impl<
                     ToRepackError::SenderDoesNotExist,
                 ));
             }
-            self.state.inc_nonce(
-                &sender,
-                &self.spec.account_start_nonce(self.env.number),
-            )?;
+            self.state
+                .inc_nonce(&sender, &self.spec.account_start_nonce)?;
             self.state.sub_balance(
                 &sender,
                 &actual_gas_cost,
-                &mut tx_substate.to_cleanup_mode(&spec),
+                &mut cleanup_mode(&mut tx_substate, &spec),
             )?;
 
             return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
@@ -1517,7 +1082,7 @@ impl<
                     required: total_cost,
                     got: balance512,
                     actual_gas_cost: actual_gas_cost.clone(),
-                    max_storage_limit_cost: tx_storage_limit_in_drip,
+                    max_storage_limit_cost: minimum_drip_required_for_storage,
                 },
                 Executed::not_enough_balance_fee_charged(tx, &actual_gas_cost),
             ));
@@ -1526,10 +1091,8 @@ impl<
             // account does not exist (since she may be sponsored). Transaction
             // execution is guaranteed. Note that inc_nonce() will create a
             // new account if the account does not exist.
-            self.state.inc_nonce(
-                &sender,
-                &self.spec.account_start_nonce(self.env.number),
-            )?;
+            self.state
+                .inc_nonce(&sender, &self.spec.account_start_nonce)?;
         }
 
         // Subtract the transaction fee from sender or contract.
@@ -1537,7 +1100,7 @@ impl<
             self.state.sub_balance(
                 &sender,
                 &U256::try_from(gas_cost).unwrap(),
-                &mut tx_substate.to_cleanup_mode(&spec),
+                &mut cleanup_mode(&mut tx_substate, &spec),
             )?;
         } else {
             self.state.sub_sponsor_balance_for_gas(
@@ -1588,9 +1151,8 @@ impl<
                     data: None,
                     call_type: CallType::None,
                     params_type: vm::ParamsType::Embedded,
-                    storage_limit_in_drip: total_storage_limit,
                 };
-                self.create(params, &mut substate, &mut options.tracer)
+                self.create(params, &mut substate, &mut options.tracer)?
             }
             Action::Call(ref address) => {
                 let params = ActionParams {
@@ -1607,9 +1169,8 @@ impl<
                     data: Some(tx.data.clone()),
                     call_type: CallType::Call,
                     params_type: vm::ParamsType::Separate,
-                    storage_limit_in_drip: total_storage_limit,
                 };
-                self.call(params, &mut substate, &mut options.tracer)
+                self.call(params, &mut substate, &mut options.tracer)?
             }
         };
 
@@ -1623,7 +1184,7 @@ impl<
                         &sender,
                         &total_storage_limit,
                         &mut substate,
-                        self.spec.account_start_nonce(self.env.number),
+                        self.spec.account_start_nonce,
                     )?
                     .into_vm_result()
                     .and(Ok(finalize_res))
@@ -1652,13 +1213,19 @@ impl<
             None
         };
 
+        let storage_sponsor_paid = if self.spec.cip78 {
+            storage_owner == code_address
+        } else {
+            storage_sponsored
+        };
+
         Ok(self.finalize(
             tx,
             tx_substate,
             result,
             output,
             refund_receiver,
-            storage_sponsored,
+            storage_sponsor_paid,
             options.tracer.drain(),
         )?)
     }
@@ -1690,7 +1257,7 @@ impl<
 
         let res = self.state.settle_collateral_for_all(
             &substate,
-            self.spec.account_start_nonce(self.env.number),
+            self.spec.account_start_nonce,
         )?;
         // The storage recycling process should never occupy new collateral.
         assert_eq!(res, CollateralCheckResult::Valid);
@@ -1710,8 +1277,8 @@ impl<
                 self.state.add_balance(
                     sponsor_for_gas.as_ref().unwrap(),
                     &sponsor_balance_for_gas,
-                    substate.to_cleanup_mode(self.spec),
-                    self.spec.account_start_nonce(self.env.number),
+                    cleanup_mode(&mut substate, self.spec),
+                    self.spec.account_start_nonce,
                 )?;
                 self.state.sub_sponsor_balance_for_gas(
                     contract_address,
@@ -1722,8 +1289,8 @@ impl<
                 self.state.add_balance(
                     sponsor_for_collateral.as_ref().unwrap(),
                     &sponsor_balance_for_collateral,
-                    substate.to_cleanup_mode(self.spec),
-                    self.spec.account_start_nonce(self.env.number),
+                    cleanup_mode(&mut substate, self.spec),
+                    self.spec.account_start_nonce,
                 )?;
                 self.state.sub_sponsor_balance_for_collateral(
                     contract_address,
@@ -1778,8 +1345,8 @@ impl<
             self.state.add_balance(
                 &tx.sender(),
                 &refund_value,
-                substate.to_cleanup_mode(self.spec),
-                self.spec.account_start_nonce(self.env.number),
+                cleanup_mode(&mut substate, self.spec),
+                self.spec.account_start_nonce,
             )?;
         };
 

@@ -21,6 +21,7 @@ pub use self::{
     },
     statedb_ext::{
         StateDbExt, ACCUMULATE_INTEREST_RATE_KEY, INTEREST_RATE_KEY,
+        TOTAL_BANK_TOKENS_KEY, TOTAL_STORAGE_TOKENS_KEY, TOTAL_TOKENS_KEY,
     },
 };
 pub type StateDb = StateDbGeneric<StorageState>;

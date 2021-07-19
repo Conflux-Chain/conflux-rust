@@ -18,6 +18,7 @@ extern crate serde_json;
 pub mod account;
 pub mod block;
 pub mod block_header;
+pub mod block_number;
 pub mod epoch;
 pub mod filter;
 pub mod is_default;
@@ -37,6 +38,7 @@ pub use crate::{
     },
     block::{Block, BlockNumber},
     block_header::{BlockHeader, BlockHeaderBuilder},
+    block_number::compute_block_number,
     epoch::{BlockHashOrEpochNumber, EpochId, EpochNumber, NULL_EPOCH},
     log_entry::LogEntry,
     receipt::{BlockReceipts, Receipt},

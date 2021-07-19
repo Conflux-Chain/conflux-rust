@@ -330,6 +330,8 @@ pub fn initialize_not_light_node_modules(
         Option<HttpServer>,
         Option<HttpServer>,
         Option<TcpServer>,
+        Option<TcpServer>,
+        Option<WSServer>,
         Option<WSServer>,
         Runtime,
     ),
@@ -490,8 +492,30 @@ pub fn initialize_not_light_node_modules(
         ),
     )?;
 
+    let debug_rpc_tcp_server = super::rpc::start_tcp(
+        conf.local_tcp_config(),
+        setup_debug_rpc_apis(
+            common_impl.clone(),
+            rpc_impl.clone(),
+            pubsub.clone(),
+            &conf,
+        ),
+        RpcExtractor,
+    )?;
+
     let rpc_tcp_server = super::rpc::start_tcp(
         conf.tcp_config(),
+        setup_public_rpc_apis(
+            common_impl.clone(),
+            rpc_impl.clone(),
+            pubsub.clone(),
+            &conf,
+        ),
+        RpcExtractor,
+    )?;
+
+    let debug_rpc_ws_server = super::rpc::start_ws(
+        conf.local_ws_config(),
         setup_public_rpc_apis(
             common_impl.clone(),
             rpc_impl.clone(),
@@ -526,7 +550,9 @@ pub fn initialize_not_light_node_modules(
         blockgen,
         debug_rpc_http_server,
         rpc_http_server,
+        debug_rpc_tcp_server,
         rpc_tcp_server,
+        debug_rpc_ws_server,
         rpc_ws_server,
         runtime,
     ))

@@ -485,7 +485,7 @@ class WaitHandler:
 ############################################
 
 # The maximum number of nodes a single test can spawn
-MAX_NODES = 20
+MAX_NODES = 25
 # The number of ports to "reserve" for p2p and rpc, each
 PORT_RANGE = 100
 
