@@ -81,13 +81,15 @@ impl LightClient {
 
         let light = Arc::new(LightQueryService::new(
             consensus.clone(),
-            sync_graph,
+            sync_graph.clone(),
             network.clone(),
             conf.raw_conf.throttling_conf.clone(),
             notifications,
             conf.light_node_config(),
         ));
         light.register().unwrap();
+
+        sync_graph.recover_graph_from_db();
 
         let rpc_impl = Arc::new(RpcImpl::new(
             conf.rpc_impl_config(),
