@@ -148,6 +148,7 @@ pub fn initialize_data_manager(
         DataManagerConfiguration::new(
             false,                          /* do not persist transaction
                                              * address */
+            false, /* do not persist block number index */
             Duration::from_millis(300_000), /* max cached tx count */
             dbtype,
         ),

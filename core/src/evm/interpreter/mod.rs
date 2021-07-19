@@ -216,13 +216,19 @@ impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
             let result = self.step(context, tracer);
             match result {
                 InterpreterResult::Continue => {}
-                InterpreterResult::Done(value) => return Ok(value),
+                InterpreterResult::Done(value) => {
+                    return vm::TrapResult::Return(value)
+                }
                 InterpreterResult::Trap(trap) => match trap {
                     TrapKind::Call(params) => {
-                        return Err(TrapError::Call(params, self));
+                        return vm::TrapResult::SubCallCreate(TrapError::Call(
+                            params, self,
+                        ));
                     }
-                    TrapKind::Create(params, address) => {
-                        return Err(TrapError::Create(params, address, self));
+                    TrapKind::Create(params, _) => {
+                        return vm::TrapResult::SubCallCreate(
+                            TrapError::Create(params, self),
+                        );
                     }
                 },
                 InterpreterResult::Stopped => {
@@ -612,39 +618,14 @@ impl<Cost: CostType> Interpreter<Cost> {
     }
 
     fn verify_instruction(
-        &self, context: &dyn vm::Context, instruction: Instruction,
+        &self, context: &dyn vm::Context, _instruction: Instruction,
         info: &InstructionInfo,
     ) -> vm::Result<()>
     {
         let spec = context.spec();
 
-        if (instruction == instructions::DELEGATECALL
-            && !spec.have_delegate_call)
-            || (instruction == instructions::CREATE2 && !spec.have_create2)
-            || (instruction == instructions::STATICCALL
-                && !spec.have_static_call)
-            || ((instruction == instructions::RETURNDATACOPY
-                || instruction == instructions::RETURNDATASIZE)
-                && !spec.have_return_data)
-            || (instruction == instructions::REVERT && !spec.have_revert)
-            || ((instruction == instructions::SHL
-                || instruction == instructions::SHR
-                || instruction == instructions::SAR)
-                && !spec.have_bitwise_shifting)
-            || (instruction == instructions::EXTCODEHASH
-                && !spec.have_extcodehash)
-            || ((instruction == instructions::BEGINSUB
-                || instruction == instructions::JUMPSUB
-                || instruction == instructions::RETURNSUB)
-                && !spec.have_subs)
-            || (instruction == instructions::CHAINID && !spec.have_chain_id)
-            || (instruction == instructions::SELFBALANCE
-                && !spec.have_self_balance)
-        {
-            return Err(vm::Error::BadInstruction {
-                instruction: instruction as u8,
-            });
-        }
+        // Mark: this is the place to check if opcode activated. If not, here
+        // should return a bad instruction error.
 
         if !self.stack.has(info.args) {
             Err(vm::Error::StackUnderflow {
@@ -788,7 +769,6 @@ impl<Cost: CostType> Interpreter<Cost> {
                     &endowment,
                     contract_code,
                     address_scheme,
-                    true,
                 )?;
                 return match create_result {
                     Ok(ContractCreateResult::Created(address, gas_left)) => {
@@ -932,7 +912,6 @@ impl<Cost: CostType> Interpreter<Cost> {
                         input,
                         &code_address,
                         call_type,
-                        true,
                     )?
                 };
 
@@ -1005,7 +984,7 @@ impl<Cost: CostType> Interpreter<Cost> {
                 context.suicide(
                     &refund_address,
                     tracer,
-                    context.spec().account_start_nonce(context.env().number),
+                    context.spec().account_start_nonce,
                 )?;
                 return Ok(InstructionResult::StopExecution);
             }

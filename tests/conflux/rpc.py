@@ -296,8 +296,18 @@ class RpcClient:
         convert_b32_address_field_to_hex(block, "miner")
         return block
 
+    def block_by_hash_with_pivot_assumption(self, block_hash: str, pivot_hash: str, epoch: str) -> dict:
+        block = self.node.cfx_getBlockByHashWithPivotAssumption(block_hash, pivot_hash, epoch)
+        convert_b32_address_field_to_hex(block, "miner")
+        return block
+
     def block_by_epoch(self, epoch: str, include_txs: bool = False) -> dict:
         block = self.node.cfx_getBlockByEpochNumber(epoch, include_txs)
+        convert_b32_address_field_to_hex(block, "miner")
+        return block
+
+    def block_by_block_number(self, block_number: str, include_txs: bool = False) -> dict:
+        block = self.node.cfx_getBlockByBlockNumber(block_number, include_txs)
         convert_b32_address_field_to_hex(block, "miner")
         return block
 

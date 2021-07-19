@@ -39,8 +39,10 @@ pub const COL_EPOCH_NUMBER: u32 = 3;
 pub const COL_BLAMED_HEADER_VERIFIED_ROOTS: u32 = 4;
 /// Column for block traces
 pub const COL_BLOCK_TRACES: u32 = 5;
+/// Column for block number index
+pub const COL_HASH_BY_BLOCK_NUMBER: u32 = 6;
 /// Number of columns in DB
-pub const NUM_COLUMNS: u32 = 6;
+pub const NUM_COLUMNS: u32 = 7;
 
 /// Modes for updating caches.
 #[derive(Clone, Copy)]

@@ -33,7 +33,9 @@ use network::{
 };
 use num_bigint::{BigInt, ToBigInt};
 use parking_lot::{Condvar, Mutex};
-use primitives::{Account, Action, SignedTransaction};
+use primitives::{
+    transaction::TransactionType, Account, Action, SignedTransaction,
+};
 use std::{
     collections::{BTreeMap, HashSet},
     net::SocketAddr,
@@ -227,6 +229,7 @@ impl RpcImpl {
             Some(b) => Ok(Some(RpcBlock::new(
                 &*b,
                 *self.network.get_network_type(),
+                consensus_graph,
                 inner,
                 &self.data_man,
                 include_txs,
@@ -280,6 +283,7 @@ impl RpcImpl {
             Some(b) => Ok(Some(RpcBlock::new(
                 &*b,
                 *self.network.get_network_type(),
+                consensus_graph,
                 inner,
                 &self.data_man,
                 include_txs,
@@ -301,6 +305,23 @@ impl RpcImpl {
             block_hash, pivot_hash, epoch_number
         );
 
+        let genesis = self.consensus.get_data_manager().true_genesis.hash();
+
+        // for genesis, check criteria directly
+        if block_hash == genesis && (pivot_hash != genesis || epoch_number != 0)
+        {
+            bail!(RpcError::invalid_params("pivot chain assumption failed"));
+        }
+
+        // `block_hash` must match `epoch_number`
+        if block_hash != genesis
+            && (consensus_graph.get_block_epoch_number(&block_hash)
+                != epoch_number.into())
+        {
+            bail!(RpcError::invalid_params("pivot chain assumption failed"));
+        }
+
+        // `pivot_hash` must match `epoch_number`
         inner
             .check_block_pivot_assumption(&pivot_hash, epoch_number)
             .map_err(RpcError::invalid_params)?;
@@ -314,10 +335,49 @@ impl RpcImpl {
         Ok(RpcBlock::new(
             &*block,
             *self.network.get_network_type(),
+            consensus_graph,
             inner,
             &self.data_man,
             true,
         )?)
+    }
+
+    pub fn block_by_block_number(
+        &self, block_number: U64, include_txs: bool,
+    ) -> RpcResult<Option<RpcBlock>> {
+        let block_number = block_number.as_u64();
+        let consensus_graph = self.consensus_graph();
+
+        info!(
+            "RPC Request: cfx_getBlockByBlockNumber hash={:?} include_txs={:?}",
+            block_number, include_txs
+        );
+
+        let inner = &*consensus_graph.inner.read();
+
+        let block_hash = match self
+            .data_man
+            .hash_by_block_number(block_number, true /* update cache */)
+        {
+            None => return Ok(None),
+            Some(h) => h,
+        };
+
+        let maybe_block = self
+            .data_man
+            .block_by_hash(&block_hash, false /* update_cache */);
+
+        match maybe_block {
+            None => Ok(None),
+            Some(b) => Ok(Some(RpcBlock::new(
+                &*b,
+                *self.network.get_network_type(),
+                consensus_graph,
+                inner,
+                &self.data_man,
+                include_txs,
+            )?)),
+        }
     }
 
     pub fn blocks_by_epoch(
@@ -409,6 +469,7 @@ impl RpcImpl {
             RpcBlock::new(
                 &*block,
                 *self.network.get_network_type(),
+                consensus_graph,
                 inner,
                 &self.data_man,
                 true,
@@ -645,10 +706,16 @@ impl RpcImpl {
                     rpc_error.data = Some(RpcValue::String(format!("{}", e)));
                     rpc_error
                 })?;
-            let required_balance = tx.value
-                + tx.gas * tx.gas_price
-                + U256::from(tx.storage_limit)
-                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+            let required_storage_collateral =
+                if tx.transaction.transaction_type() == TransactionType::Normal
+                {
+                    U256::from(tx.storage_limit)
+                        * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+                } else {
+                    U256::zero()
+                };
+            let required_balance =
+                tx.value + tx.gas * tx.gas_price + required_storage_collateral;
             ret.local_balance_enough = local_balance > required_balance;
             ret.state_balance_enough = state_balance > required_balance;
             ret.local_balance = local_balance;

@@ -56,7 +56,7 @@ fn checkpoint_basic() {
             &address,
             &U256::from(1069u64),
             CleanupMode::NoEmpty,
-            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
     state
@@ -67,7 +67,7 @@ fn checkpoint_basic() {
         state.collateral_for_storage(&address).unwrap(),
         U256::from(1000)
     );
-    assert_eq!(*state.total_storage_tokens(), U256::from(1000));
+    assert_eq!(state.total_storage_tokens(), U256::from(1000));
     state.discard_checkpoint();
     assert_eq!(state.balance(&address).unwrap(), U256::from(69u64));
     state.checkpoint();
@@ -76,21 +76,21 @@ fn checkpoint_basic() {
             &address,
             &U256::from(1u64),
             CleanupMode::NoEmpty,
-            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
     state
         .sub_collateral_for_storage(
             &address,
             &U256::from(1000),
-            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
     assert_eq!(
         state.collateral_for_storage(&address).unwrap(),
         U256::from(0)
     );
-    assert_eq!(*state.total_storage_tokens(), U256::from(0));
+    assert_eq!(state.total_storage_tokens(), U256::from(0));
     assert_eq!(state.balance(&address).unwrap(), U256::from(1070u64));
     state.revert_to_checkpoint();
     assert_eq!(state.balance(&address).unwrap(), U256::from(69u64));
@@ -98,7 +98,7 @@ fn checkpoint_basic() {
         state.collateral_for_storage(&address).unwrap(),
         U256::from(1000)
     );
-    assert_eq!(*state.total_storage_tokens(), U256::from(1000));
+    assert_eq!(state.total_storage_tokens(), U256::from(1000));
 }
 
 #[test]
@@ -107,7 +107,7 @@ fn checkpoint_nested() {
     let mut state = get_state_for_genesis_write(&storage_manager);
     let mut address = Address::zero();
     address.set_user_account_type_bits();
-    assert_eq!(*state.total_storage_tokens(), U256::from(0));
+    assert_eq!(state.total_storage_tokens(), U256::from(0));
     assert_eq!(state.balance(&address).unwrap(), U256::from(0));
     assert_eq!(
         state.collateral_for_storage(&address).unwrap(),
@@ -120,20 +120,20 @@ fn checkpoint_nested() {
             &address,
             &U256::from(1069u64),
             CleanupMode::NoEmpty,
-            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
     state
         .add_collateral_for_storage(&address, &U256::from(1000))
         .unwrap();
-    assert_eq!(*state.total_storage_tokens(), U256::from(1000));
+    assert_eq!(state.total_storage_tokens(), U256::from(1000));
     assert_eq!(
         state.collateral_for_storage(&address).unwrap(),
         U256::from(1000)
     );
     assert_eq!(state.balance(&address).unwrap(), U256::from(69u64));
     state.discard_checkpoint();
-    assert_eq!(*state.total_storage_tokens(), U256::from(1000));
+    assert_eq!(state.total_storage_tokens(), U256::from(1000));
     assert_eq!(
         state.collateral_for_storage(&address).unwrap(),
         U256::from(1000)
@@ -141,7 +141,7 @@ fn checkpoint_nested() {
     assert_eq!(state.balance(&address).unwrap(), U256::from(69u64));
     state.revert_to_checkpoint();
     assert_eq!(state.balance(&address).unwrap(), U256::from(0));
-    assert_eq!(*state.total_storage_tokens(), U256::from(0));
+    assert_eq!(state.total_storage_tokens(), U256::from(0));
     assert_eq!(
         state.collateral_for_storage(&address).unwrap(),
         U256::from(0)
@@ -266,7 +266,7 @@ fn checkpoint_from_empty_get_storage_at() {
                 &a,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -277,7 +277,7 @@ fn checkpoint_from_empty_get_storage_at() {
     state.discard_checkpoint(); // Commit/discard c5.
     let substate = substates.pop().unwrap();
     substates.last_mut().unwrap().accrue(substate);
-    assert_eq!(*state.total_storage_tokens(), U256::from(0));
+    assert_eq!(state.total_storage_tokens(), U256::from(0));
     assert_eq!(state.collateral_for_storage(&a).unwrap(), U256::from(0));
     assert_eq!(state.balance(&a).unwrap(), U256::zero());
     assert_eq!(
@@ -307,7 +307,7 @@ fn checkpoint_from_empty_get_storage_at() {
 
     state.revert_to_checkpoint(); // Revert to c4.
     substates.pop();
-    assert_eq!(*state.total_storage_tokens(), U256::from(0));
+    assert_eq!(state.total_storage_tokens(), U256::from(0));
     assert_eq!(state.collateral_for_storage(&a).unwrap(), U256::from(0));
     assert_eq!(
         state.checkpoint_storage_at(c0, &a, &k).unwrap(),
@@ -332,7 +332,7 @@ fn checkpoint_from_empty_get_storage_at() {
                 &a,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -345,7 +345,7 @@ fn checkpoint_from_empty_get_storage_at() {
     let substate = substates.pop().unwrap();
     substates.last_mut().unwrap().accrue(substate);
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
     assert_eq!(
@@ -367,7 +367,7 @@ fn checkpoint_from_empty_get_storage_at() {
 
     state.revert_to_checkpoint(); // Revert to c2.
     substates.pop();
-    assert_eq!(*state.total_storage_tokens(), U256::from(0));
+    assert_eq!(state.total_storage_tokens(), U256::from(0));
     assert_eq!(state.collateral_for_storage(&a).unwrap(), U256::from(0));
     assert_eq!(
         state.checkpoint_storage_at(c0, &a, &k).unwrap(),
@@ -384,7 +384,7 @@ fn checkpoint_from_empty_get_storage_at() {
                 &a,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -396,7 +396,7 @@ fn checkpoint_from_empty_get_storage_at() {
     let substate = substates.pop().unwrap();
     substates.last_mut().unwrap().accrue(substate);
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
@@ -436,7 +436,7 @@ fn checkpoint_get_storage_at() {
             &a,
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)),
             CleanupMode::NoEmpty,
-            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
     assert_eq!(
@@ -452,10 +452,7 @@ fn checkpoint_get_storage_at() {
         .set_storage(&contract_a, k.clone(), U256::from(0xffff), a)
         .unwrap();
     state
-        .inc_nonce(
-            &contract_a,
-            &Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
-        )
+        .inc_nonce(&contract_a, &Spec::new_spec_for_test().account_start_nonce)
         .unwrap();
     assert_eq!(
         state
@@ -463,7 +460,7 @@ fn checkpoint_get_storage_at() {
                 &a,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -479,7 +476,7 @@ fn checkpoint_get_storage_at() {
         *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
@@ -506,7 +503,7 @@ fn checkpoint_get_storage_at() {
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(1),
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
@@ -543,7 +540,7 @@ fn checkpoint_get_storage_at() {
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2),
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
@@ -608,7 +605,7 @@ fn checkpoint_get_storage_at() {
                 &contract_a,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -625,7 +622,7 @@ fn checkpoint_get_storage_at() {
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2),
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
@@ -665,7 +662,7 @@ fn checkpoint_get_storage_at() {
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2),
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
@@ -699,7 +696,7 @@ fn checkpoint_get_storage_at() {
                 &contract_a,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -717,7 +714,7 @@ fn checkpoint_get_storage_at() {
         U256::from(0)
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(3)
     );
     assert_eq!(
@@ -749,7 +746,7 @@ fn checkpoint_get_storage_at() {
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
@@ -775,7 +772,7 @@ fn checkpoint_get_storage_at() {
                 &contract_a,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -792,7 +789,7 @@ fn checkpoint_get_storage_at() {
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
     assert_eq!(
@@ -887,7 +884,7 @@ fn check_result_of_simple_payment_to_killed_account() {
     state_0
         .require_or_new_basic_account(
             &sender_addr,
-            &Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+            &Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap()
         .add_balance(&ONE_CFX_IN_DRIP.into());
@@ -936,7 +933,7 @@ fn check_result_of_simple_payment_to_killed_account() {
             &a,
             &U256::one(),
             CleanupMode::NoEmpty,
-            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
     let epoch_id = EpochId::from_uint(&U256::from(2));
@@ -968,7 +965,7 @@ fn create_contract_fail() {
             &a,
             &U256::from(1),
             CleanupMode::ForceCreate,
-            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
     state.checkpoint(); // c2
@@ -977,7 +974,7 @@ fn create_contract_fail() {
             &a,
             &U256::from(1),
             CleanupMode::ForceCreate,
-            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
     assert_eq!(
@@ -986,7 +983,7 @@ fn create_contract_fail() {
                 &a,
                 &U256::MAX,
                 &mut substate,
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -1021,10 +1018,10 @@ fn create_contract_fail_previous_storage() {
             &a,
             &COLLATERAL_DRIPS_PER_STORAGE_KEY,
             CleanupMode::NoEmpty,
-            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
-    assert_eq!(*state.total_storage_tokens(), U256::from(0));
+    assert_eq!(state.total_storage_tokens(), U256::from(0));
     assert_eq!(state.collateral_for_storage(&a).unwrap(), U256::from(0));
     assert_eq!(
         state.balance(&a).unwrap(),
@@ -1043,7 +1040,7 @@ fn create_contract_fail_previous_storage() {
                 &a,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -1056,7 +1053,7 @@ fn create_contract_fail_previous_storage() {
     let substate = substates.pop().unwrap();
     substates.last_mut().unwrap().accrue(substate);
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
@@ -1081,7 +1078,7 @@ fn create_contract_fail_previous_storage() {
     state =
         get_state(&storage_manager, &BigEndianHash::from_uint(&U256::from(1)));
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
@@ -1099,8 +1096,7 @@ fn create_contract_fail_previous_storage() {
         state
             .require_or_new_basic_account(
                 &a,
-                &Spec::new_spec()
-                    .account_start_nonce(/* _block_number = */ 0),
+                &Spec::new_spec_for_test().account_start_nonce,
             )
             .unwrap(),
     );
@@ -1115,7 +1111,7 @@ fn create_contract_fail_previous_storage() {
     state.revert_to_checkpoint();
     substates.pop(); // revert to c2
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(state.collateral_for_storage(&a).unwrap(), U256::from(0));
@@ -1128,7 +1124,7 @@ fn create_contract_fail_previous_storage() {
         U256::from(0xffff)
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
@@ -1162,7 +1158,7 @@ fn test_automatic_collateral_normal_account() {
             &normal_account,
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)),
             CleanupMode::NoEmpty,
-            Spec::new_spec().account_start_nonce(/* _block_number = */ 0),
+            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
     state
@@ -1173,7 +1169,7 @@ fn test_automatic_collateral_normal_account() {
         )
         .unwrap();
 
-    assert_eq!(*state.total_storage_tokens(), U256::from(0));
+    assert_eq!(state.total_storage_tokens(), U256::from(0));
     assert_eq!(
         state.collateral_for_storage(&normal_account).unwrap(),
         U256::from(0)
@@ -1208,7 +1204,7 @@ fn test_automatic_collateral_normal_account() {
                 &normal_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -1220,7 +1216,7 @@ fn test_automatic_collateral_normal_account() {
     let substate = substates.pop().unwrap();
     substates.last_mut().unwrap().accrue(substate);
 
-    assert_eq!(*state.total_storage_tokens(), U256::from(0));
+    assert_eq!(state.total_storage_tokens(), U256::from(0));
     assert_eq!(
         state.collateral_for_storage(&normal_account).unwrap(),
         U256::from(0)
@@ -1250,7 +1246,7 @@ fn test_automatic_collateral_normal_account() {
                 &normal_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -1262,7 +1258,7 @@ fn test_automatic_collateral_normal_account() {
     let substate = substates.pop().unwrap();
     substates.last_mut().unwrap().accrue(substate);
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
@@ -1294,14 +1290,14 @@ fn test_automatic_collateral_normal_account() {
                 &normal_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::Valid
     );
     state.revert_to_checkpoint();
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
@@ -1330,7 +1326,7 @@ fn test_automatic_collateral_normal_account() {
                 &normal_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -1342,7 +1338,7 @@ fn test_automatic_collateral_normal_account() {
     let substate = substates.pop().unwrap();
     substates.last_mut().unwrap().accrue(substate);
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
     assert_eq!(
@@ -1372,7 +1368,7 @@ fn test_automatic_collateral_normal_account() {
                 &normal_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -1384,7 +1380,7 @@ fn test_automatic_collateral_normal_account() {
     let substate = substates.pop().unwrap();
     substates.last_mut().unwrap().accrue(substate);
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
@@ -1416,7 +1412,7 @@ fn test_automatic_collateral_normal_account() {
                 &normal_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -1427,7 +1423,7 @@ fn test_automatic_collateral_normal_account() {
     state.discard_checkpoint();
     let substate = substates.pop().unwrap();
     substates.last_mut().unwrap().accrue(substate);
-    assert_eq!(*state.total_storage_tokens(), U256::from(0));
+    assert_eq!(state.total_storage_tokens(), U256::from(0));
     assert_eq!(
         state.collateral_for_storage(&normal_account).unwrap(),
         U256::from(0)
@@ -1473,7 +1469,7 @@ fn test_automatic_collateral_contract_account() {
             .unwrap_or_default(),
         sponsor
     );
-    assert_eq!(*state.total_storage_tokens(), U256::from(0));
+    assert_eq!(state.total_storage_tokens(), U256::from(0));
     assert_eq!(
         state.collateral_for_storage(&contract_account).unwrap(),
         U256::from(0)
@@ -1503,14 +1499,14 @@ fn test_automatic_collateral_contract_account() {
                 &contract_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::Valid
     );
     state.discard_checkpoint();
     substates.pop();
-    assert_eq!(*state.total_storage_tokens(), U256::from(0));
+    assert_eq!(state.total_storage_tokens(), U256::from(0));
     assert_eq!(
         state.collateral_for_storage(&contract_account).unwrap(),
         U256::from(0),
@@ -1540,7 +1536,7 @@ fn test_automatic_collateral_contract_account() {
                 &contract_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -1564,7 +1560,7 @@ fn test_automatic_collateral_contract_account() {
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
 
@@ -1593,7 +1589,7 @@ fn test_automatic_collateral_contract_account() {
                 &contract_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::NotEnoughBalance {
@@ -1617,7 +1613,7 @@ fn test_automatic_collateral_contract_account() {
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
 
@@ -1639,7 +1635,7 @@ fn test_automatic_collateral_contract_account() {
                 &contract_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::Valid,
@@ -1662,7 +1658,7 @@ fn test_automatic_collateral_contract_account() {
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
 
@@ -1683,7 +1679,7 @@ fn test_automatic_collateral_contract_account() {
                 &contract_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -1706,7 +1702,7 @@ fn test_automatic_collateral_contract_account() {
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
-        *state.total_storage_tokens(),
+        state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
@@ -1731,7 +1727,7 @@ fn test_automatic_collateral_contract_account() {
                 &contract_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                Spec::new_spec().account_start_nonce(/* _block_number = */ 0)
+                Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -1753,6 +1749,6 @@ fn test_automatic_collateral_contract_account() {
         state.collateral_for_storage(&contract_account).unwrap(),
         U256::from(0)
     );
-    assert_eq!(*state.total_storage_tokens(), U256::from(0));
+    assert_eq!(state.total_storage_tokens(), U256::from(0));
     assert_eq!(state.bump_block_number_accumulate_interest(), U256::from(0));
 }

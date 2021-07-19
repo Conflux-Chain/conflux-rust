@@ -23,7 +23,10 @@ use super::{
     CreateContractAddress, Env, Error, GasLeft, MessageCallResult, Result,
     ReturnData, Spec,
 };
-use crate::trace::{trace::ExecTrace, Tracer};
+use crate::{
+    executive::InternalRefContext,
+    trace::{trace::ExecTrace, Tracer},
+};
 use cfx_bytes::Bytes;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use hash::keccak;
@@ -95,7 +98,7 @@ impl MockContext {
     /// New mock context with byzantium spec rules
     pub fn new_spec() -> Self {
         let mut context = MockContext::default();
-        context.spec = Spec::new_spec();
+        context.spec = Spec::new_spec_for_test();
         context
     }
 
@@ -144,7 +147,7 @@ impl Context for MockContext {
 
     fn create(
         &mut self, gas: &U256, value: &U256, code: &[u8],
-        address: CreateContractAddress, _trap: bool,
+        address: CreateContractAddress,
     ) -> cfx_statedb::Result<
         ::std::result::Result<ContractCreateResult, TrapKind>,
     >
@@ -168,7 +171,7 @@ impl Context for MockContext {
     fn call(
         &mut self, gas: &U256, sender_address: &Address,
         receive_address: &Address, value: Option<U256>, data: &[u8],
-        code_address: &Address, _call_type: CallType, _trap: bool,
+        code_address: &Address, _call_type: CallType,
     ) -> cfx_statedb::Result<::std::result::Result<MessageCallResult, TrapKind>>
     {
         self.calls.insert(MockCall {
@@ -239,22 +242,11 @@ impl Context for MockContext {
     // reentrancy check.
     fn is_static_or_reentrancy(&self) -> bool { self.is_static }
 
-    fn add_sstore_refund(&mut self, value: usize) {
-        self.sstore_clears += value as i128;
-    }
-
-    fn sub_sstore_refund(&mut self, value: usize) {
-        self.sstore_clears -= value as i128;
-    }
-
     fn trace_next_instruction(
         &mut self, _pc: usize, _instruction: u8, _gas: U256,
     ) -> bool {
         self.tracing
     }
 
-    fn is_reentrancy(&self, _: &Address, _: &Address) -> bool {
-        // The MockContext doesn't have message call
-        false
-    }
+    fn internal_ref(&mut self) -> InternalRefContext { unimplemented!() }
 }

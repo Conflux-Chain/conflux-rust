@@ -123,6 +123,12 @@ pub trait Cfx {
         &self, epoch_number: EpochNumber, include_txs: bool,
     ) -> BoxFuture<Option<Block>>;
 
+    /// Returns block with given block number.
+    #[rpc(name = "cfx_getBlockByBlockNumber")]
+    fn block_by_block_number(
+        &self, block_number: U64, include_txs: bool,
+    ) -> BoxFuture<Option<Block>>;
+
     /// Returns best block hash.
     #[rpc(name = "cfx_getBestBlockHash")]
     fn best_block_hash(&self) -> JsonRpcResult<H256>;

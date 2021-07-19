@@ -4,6 +4,10 @@ use super::{
     impls::TreapMap,
     nonce_pool::{InsertResult, NoncePool, TxWithReadyInfo},
 };
+use crate::{
+    machine::Machine,
+    verification::{PackingCheckResult, VerificationConfig},
+};
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_statedb::Result as StateDbResult;
 use cfx_types::{address_util::AddressUtil, Address, H256, U128, U256, U512};
@@ -139,15 +143,17 @@ impl DeferredPool {
     }
 
     fn get_pending_transactions(
-        &self, addr: &Address, nonce: &U256, balance: &U256,
-    ) -> (Vec<Arc<SignedTransaction>>, Option<PendingReason>) {
+        &self, addr: &Address, start_nonce: &U256, local_nonce: &U256,
+        local_balance: &U256,
+    ) -> (Vec<Arc<SignedTransaction>>, Option<PendingReason>)
+    {
         match self.buckets.get(addr) {
             Some(bucket) => {
-                let pending_txs = bucket.get_pending_transactions(nonce);
+                let pending_txs = bucket.get_pending_transactions(start_nonce);
                 let pending_reason = pending_txs.first().and_then(|tx| {
                     bucket.check_pending_reason_with_local_info(
-                        *nonce,
-                        *balance,
+                        *local_nonce,
+                        *local_balance,
                         tx.as_ref(),
                     )
                 });
@@ -570,9 +576,13 @@ impl TransactionPoolInner {
             .get_local_nonce_and_balance(address)
             .unwrap_or((U256::from(0), U256::from(0)));
         let start_nonce = maybe_start_nonce.unwrap_or(local_nonce);
-        let (pending_txs, pending_reason) = self
-            .deferred_pool
-            .get_pending_transactions(address, &start_nonce, &local_balance);
+        let (pending_txs, pending_reason) =
+            self.deferred_pool.get_pending_transactions(
+                address,
+                &start_nonce,
+                &local_nonce,
+                &local_balance,
+            );
         if pending_txs.is_empty() {
             return (Vec::new(), None, 0);
         }
@@ -710,8 +720,9 @@ impl TransactionPoolInner {
     /// pack at most num_txs transactions randomly
     pub fn pack_transactions<'a>(
         &mut self, num_txs: usize, block_gas_limit: U256,
-        block_size_limit: usize, epoch_height_lower_bound: u64,
-        epoch_height_upper_bound: u64,
+        block_size_limit: usize, best_epoch_height: u64,
+        best_block_number: u64, verification_config: &VerificationConfig,
+        machine: &Machine,
     ) -> Vec<Arc<SignedTransaction>>
     {
         let mut packed_transactions: Vec<Arc<SignedTransaction>> = Vec::new();
@@ -724,6 +735,9 @@ impl TransactionPoolInner {
 
         let mut big_tx_resample_times_limit = 10;
         let mut recycle_txs = Vec::new();
+
+        let spec = machine.spec(best_block_number);
+        let transitions = &machine.params().transition_heights;
 
         'out: while let Some(tx) = self.ready_account_pool.pop() {
             let tx_size = tx.rlp_size();
@@ -739,13 +753,21 @@ impl TransactionPoolInner {
                 }
             }
 
-            // If in rare case we popped up something that is currently outside
-            // the bound, we will skip the transaction.
-            if tx.epoch_height < epoch_height_lower_bound {
-                continue 'out;
-            } else if tx.epoch_height > epoch_height_upper_bound {
-                recycle_txs.push(tx.clone());
-                continue 'out;
+            // The validity of a transaction may change during the time.
+            match verification_config.fast_recheck(
+                &tx,
+                best_epoch_height,
+                transitions,
+                &spec,
+            ) {
+                PackingCheckResult::Pack => {}
+                PackingCheckResult::Pending => {
+                    recycle_txs.push(tx.clone());
+                    continue 'out;
+                }
+                PackingCheckResult::Drop => {
+                    continue 'out;
+                }
             }
 
             total_tx_gas_limit += *tx.gas_limit();

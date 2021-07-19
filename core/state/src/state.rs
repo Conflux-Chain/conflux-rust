@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_types::U256;
+
 pub struct State<StateDbStorage, Substate: SubstateMngTrait> {
     db: StateDbGeneric<StateDbStorage>,
 
@@ -79,9 +81,27 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         unimplemented!()
     }
 
-    fn add_total_issued(&mut self, _v: U256) { unimplemented!() }
+    fn add_total_issued(&mut self, v: U256) {
+        let new_total_issued = self.total_issued_tokens() + v;
+        self.set_storage(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            TOTAL_TOKENS_KEY.to_vec(),
+            new_total_issued,
+            *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+        )
+        .unwrap();
+    }
 
-    fn subtract_total_issued(&mut self, _v: U256) { unimplemented!() }
+    fn subtract_total_issued(&mut self, v: U256) {
+        let new_total_issued = self.total_issued_tokens() - v;
+        self.set_storage(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            TOTAL_TOKENS_KEY.to_vec(),
+            new_total_issued,
+            *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+        )
+        .unwrap();
+    }
 
     fn new_contract_with_admin(
         &mut self, _contract: &Address, _admin: &Address, _balance: U256,
@@ -524,11 +544,32 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
             )
     }
 
-    fn total_issued_tokens(&self) -> &U256 { unimplemented!() }
+    fn total_issued_tokens(&self) -> U256 {
+        return self
+            .storage_at(
+                &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+                TOTAL_TOKENS_KEY,
+            )
+            .unwrap_or(U256::zero());
+    }
 
-    fn total_staking_tokens(&self) -> &U256 { unimplemented!() }
+    fn total_staking_tokens(&self) -> U256 {
+        return self
+            .storage_at(
+                &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+                TOTAL_BANK_TOKENS_KEY,
+            )
+            .unwrap_or(U256::zero());
+    }
 
-    fn total_storage_tokens(&self) -> &U256 { unimplemented!() }
+    fn total_storage_tokens(&self) -> U256 {
+        return self
+            .storage_at(
+                &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+                TOTAL_STORAGE_TOKENS_KEY,
+            )
+            .unwrap_or(U256::zero());
+    }
 
     fn remove_contract(&mut self, _address: &Address) -> Result<()> {
         unimplemented!()
@@ -547,16 +588,30 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         }))
     }
 
-    fn storage_at(&self, _address: &Address, _key: &[u8]) -> Result<U256> {
-        unimplemented!()
+    fn storage_at(&self, address: &Address, key: &[u8]) -> Result<U256> {
+        Ok(self
+            .get_storage(address, key)?
+            .as_ref()
+            .map_or(U256::zero(), |a| a.value))
     }
 
     fn set_storage(
-        &mut self, _address: &Address, _key: Vec<u8>, _value: U256,
-        _owner: Address,
-    ) -> Result<()>
-    {
-        unimplemented!()
+        &mut self, address: &Address, key: Vec<u8>, value: U256, owner: Address,
+    ) -> Result<()> {
+        self.modify_and_update_storage(address, &*key, None)?
+            .as_mut()
+            .map_or_else(
+                || unreachable!(),
+                |entry| {
+                    entry.value = value;
+                    if owner == *address {
+                        entry.owner = None
+                    } else {
+                        entry.owner = Some(owner)
+                    }
+                    Ok(())
+                },
+            )
     }
 }
 
@@ -617,16 +672,17 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         )
     }
 
+    fn get_storage(
+        &self, address: &Address, key: &[u8],
+    ) -> Result<impl AsRef<NonCopy<Option<&StorageValue>>>> {
+        self.cache.get_storage(address, key, &self.db)
+    }
+
     fn modify_and_update_account<'a>(
         &'a mut self, address: &Address,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
     ) -> Result<
-        impl AsMut<
-            ModifyAndUpdate<
-                StateDbGeneric<StateDbStorage>,
-                /* TODO: Key, */ CachedAccount,
-            >,
-        >,
+        impl AsMut<ModifyAndUpdate<StateDbGeneric<StateDbStorage>, CachedAccount>>,
     >
     {
         self.cache.modify_and_update_account(
@@ -640,17 +696,43 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         &'a mut self, address: &Address,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
     ) -> Result<
-        impl AsMut<
-            ModifyAndUpdate<
-                StateDbGeneric<StateDbStorage>,
-                /* TODO: Key, */ VoteStakeList,
-            >,
-        >,
+        impl AsMut<ModifyAndUpdate<StateDbGeneric<StateDbStorage>, VoteStakeList>>,
     >
     {
         self.cache.modify_and_update_vote_stake_list(
             address,
             &mut self.db,
+            debug_record,
+        )
+    }
+
+    fn modify_and_update_storage<'a>(
+        &'a mut self, address: &Address, key: &[u8],
+        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
+    ) -> Result<
+        impl AsMut<ModifyAndUpdate<StateDbGeneric<StateDbStorage>, StorageValue>>,
+    >
+    {
+        self.cache.modify_and_update_storage(
+            address,
+            key,
+            &mut self.db,
+            debug_record,
+        )
+    }
+
+    #[allow(dead_code)]
+    fn require_or_new_basic_account<'a>(
+        &'a mut self, address: &Address, account_start_nonce: &U256,
+        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
+    ) -> Result<
+        impl AsMut<ModifyAndUpdate<StateDbGeneric<StateDbStorage>, CachedAccount>>,
+    >
+    {
+        self.cache.require_or_new_basic_account(
+            address,
+            &mut self.db,
+            account_start_nonce,
             debug_record,
         )
     }
@@ -681,13 +763,16 @@ use crate::{
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };
+use cfx_parameters::internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS;
 use cfx_statedb::{
     ErrorKind, Result, StateDbCheckpointMethods, StateDbGeneric,
+    TOTAL_BANK_TOKENS_KEY, TOTAL_STORAGE_TOKENS_KEY, TOTAL_TOKENS_KEY,
 };
 use cfx_storage::{utils::guarded_value::NonCopy, StorageStateTrait};
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, H256};
 use keccak_hash::{keccak, KECCAK_EMPTY};
 use primitives::{
-    CodeInfo, DepositList, EpochId, SponsorInfo, StorageLayout, VoteStakeList,
+    CodeInfo, DepositList, EpochId, SponsorInfo, StorageLayout, StorageValue,
+    VoteStakeList,
 };
 use std::{marker::PhantomData, ops::Deref, sync::Arc};

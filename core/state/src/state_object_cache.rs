@@ -17,6 +17,7 @@ pub struct StateObjectCache {
     commission_privilege_cache: RwLock<
         HashMap<CommissionPrivilegeAddress, Option<CachedCommissionPrivilege>>,
     >,
+    storage_cache: RwLock<HashMap<StorageAddress, Option<StorageValue>>>,
     // TODO: etc.
 }
 
@@ -168,7 +169,7 @@ impl StateObjectCache {
                 'c,
                 HashMap<<Value as CachedObject>::HashKeyType, Option<Value>>,
             >,
-            ModifyAndUpdate<'c, StateDb, /* TODO: Key, */ Value>,
+            ModifyAndUpdate<'c, StateDb, Value>,
         >,
     >
     where
@@ -254,7 +255,7 @@ impl StateObjectCache {
     ) -> Result<
         GuardedValue<
             RwLockWriteGuard<HashMap<Address, Option<CachedAccount>>>,
-            ModifyAndUpdate<StateDb, /* TODO: Key, */ CachedAccount>,
+            ModifyAndUpdate<StateDb, CachedAccount>,
         >,
     >
     {
@@ -263,6 +264,47 @@ impl StateObjectCache {
             address,
             db,
             |_addr| Ok(None),
+            debug_record,
+        )
+    }
+
+    pub fn require_or_new_basic_account<'a, StateDb: StateDbOps>(
+        &'a self, address: &Address, db: &'a mut StateDb,
+        account_start_nonce: &U256,
+        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
+    ) -> Result<
+        GuardedValue<
+            RwLockWriteGuard<HashMap<Address, Option<CachedAccount>>>,
+            ModifyAndUpdate<StateDb, CachedAccount>,
+        >,
+    >
+    {
+        Self::require_or_set(
+            &self.account_cache,
+            address,
+            db,
+            |address| {
+                if address.is_valid_address() {
+                    // Note that it is possible to first send money to a
+                    // pre-calculated contract address and
+                    // then deploy contracts. So we are going to *allow* sending
+                    // to a contract address and use
+                    // new_basic() to create a *stub* there. Because the
+                    // contract serialization is a super-set
+                    // of the normal address serialization, this should just
+                    // work.
+                    Ok(Some(CachedAccount::new_basic(
+                        address,
+                        &U256::zero(),
+                        account_start_nonce,
+                    )?))
+                } else {
+                    unreachable!(
+                        "address does not already exist and is not a valid address. {:?}",
+                        address
+                    )
+                }
+            },
             debug_record,
         )
     }
@@ -367,7 +409,7 @@ impl StateObjectCache {
             RwLockWriteGuard<
                 HashMap<VoteStakeListAddress, Option<VoteStakeList>>,
             >,
-            ModifyAndUpdate<StateDb, /* TODO: Key, */ VoteStakeList>,
+            ModifyAndUpdate<StateDb, VoteStakeList>,
         >,
     >
     {
@@ -399,23 +441,57 @@ impl StateObjectCache {
             db,
         )
     }
+
+    pub fn get_storage<StateDb: StateDbOps>(
+        &self, address: &Address, key: &[u8], db: &StateDb,
+    ) -> Result<
+        GuardedValue<
+            RwLockReadGuard<HashMap<StorageAddress, Option<StorageValue>>>,
+            NonCopy<Option<&StorageValue>>,
+        >,
+    > {
+        Self::ensure_loaded(
+            &self.storage_cache,
+            &StorageAddress(*address, key.to_vec()),
+            db,
+        )
+    }
+
+    pub fn modify_and_update_storage<'a, StateDb: StateDbOps>(
+        &'a self, address: &Address, key: &[u8], db: &'a mut StateDb,
+        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
+    ) -> Result<
+        GuardedValue<
+            RwLockWriteGuard<HashMap<StorageAddress, Option<StorageValue>>>,
+            ModifyAndUpdate<StateDb, StorageValue>,
+        >,
+    >
+    {
+        Self::require_or_set(
+            &self.storage_cache,
+            &StorageAddress(*address, key.to_vec()),
+            db,
+            |_addr| Ok(Some(Default::default())),
+            debug_record,
+        )
+    }
 }
 
 use crate::{
     cache_object::{
         CachedAccount, CachedCommissionPrivilege, CachedObject, CodeAddress,
-        CommissionPrivilegeAddress, DepositListAddress, ToHashKey,
-        VoteStakeListAddress,
+        CommissionPrivilegeAddress, DepositListAddress, StorageAddress,
+        ToHashKey, VoteStakeListAddress,
     },
     StateDbOps,
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_statedb::{ErrorKind, Result};
 use cfx_storage::utils::guarded_value::{GuardedValue, NonCopy};
-use cfx_types::Address;
+use cfx_types::{address_util::AddressUtil, Address, U256};
 use keccak_hash::{keccak, KECCAK_EMPTY};
 use parking_lot::{
     RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
-use primitives::{CodeInfo, DepositList, VoteStakeList};
+use primitives::{CodeInfo, DepositList, StorageValue, VoteStakeList};
 use std::{borrow::Borrow, collections::HashMap, hash::Hash, sync::Arc};

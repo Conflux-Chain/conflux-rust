@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    state::CallStackInfo,
+    state::cleanup_mode,
     trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, Spec},
 };
@@ -15,22 +15,21 @@ use cfx_types::{address_util::AddressUtil, Address, U256};
 pub fn set_sponsor_for_gas(
     contract_address: Address, upper_bound: U256, params: &ActionParams,
     spec: &Spec, state: &mut dyn StateOpsTrait,
-    substate: &mut dyn SubstateTrait<
-        Spec = Spec,
-        CallStackInfo = CallStackInfo,
-    >,
+    substate: &mut dyn SubstateTrait,
     tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
 
     if !state.exists(&contract_address)? {
-        return Err(vm::Error::InternalContract("contract address not exist"));
+        return Err(vm::Error::InternalContract(
+            "contract address not exist".into(),
+        ));
     }
 
     if !contract_address.is_contract_address() {
         return Err(vm::Error::InternalContract(
-            "not allowed to sponsor non-contract account",
+            "not allowed to sponsor non-contract account".into(),
         ));
     }
 
@@ -38,7 +37,7 @@ pub fn set_sponsor_for_gas(
 
     if sponsor_balance / U256::from(1000) < upper_bound {
         return Err(vm::Error::InternalContract(
-            "sponsor should at least sponsor upper_bound * 1000",
+            "sponsor should at least sponsor upper_bound * 1000".into(),
         ));
     }
 
@@ -57,7 +56,7 @@ pub fn set_sponsor_for_gas(
         // `sponsor_balance`.
         if sponsor_balance <= prev_sponsor_balance {
             return Err(vm::Error::InternalContract(
-                "sponsor_balance is not exceed previous sponsor",
+                "sponsor_balance is not exceed previous sponsor".into(),
             ));
         }
         // `upper_bound` should exceed previous sponsor's `upper_bound`,
@@ -67,7 +66,7 @@ pub fn set_sponsor_for_gas(
             && upper_bound < prev_upper_bound
         {
             return Err(vm::Error::InternalContract(
-                "upper_bound is not exceed previous sponsor",
+                "upper_bound is not exceed previous sponsor".into(),
             ));
         }
         // refund to previous sponsor
@@ -80,14 +79,14 @@ pub fn set_sponsor_for_gas(
             state.add_balance(
                 prev_sponsor.as_ref().unwrap(),
                 &prev_sponsor_balance,
-                substate.to_cleanup_mode(&spec),
+                cleanup_mode(substate, &spec),
                 account_start_nonce,
             )?;
         }
         state.sub_balance(
             &params.address,
             &sponsor_balance,
-            &mut substate.to_cleanup_mode(&spec),
+            &mut cleanup_mode(substate, &spec),
         )?;
         state.set_sponsor_for_gas(
             &contract_address,
@@ -103,13 +102,13 @@ pub fn set_sponsor_for_gas(
             && upper_bound < prev_upper_bound
         {
             return Err(vm::Error::InternalContract(
-                "cannot change upper_bound to a smaller one",
+                "cannot change upper_bound to a smaller one".into(),
             ));
         }
         state.sub_balance(
             &params.address,
             &sponsor_balance,
-            &mut substate.to_cleanup_mode(&spec),
+            &mut cleanup_mode(substate, &spec),
         )?;
         state.set_sponsor_for_gas(
             &contract_address,
@@ -125,23 +124,21 @@ pub fn set_sponsor_for_gas(
 /// Implementation of `set_sponsor_for_collateral(address)`.
 pub fn set_sponsor_for_collateral(
     contract_address: Address, params: &ActionParams, spec: &Spec,
-    state: &mut dyn StateOpsTrait,
-    substate: &mut dyn SubstateTrait<
-        Spec = Spec,
-        CallStackInfo = CallStackInfo,
-    >,
+    state: &mut dyn StateOpsTrait, substate: &mut dyn SubstateTrait,
     tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
 
     if !state.exists(&contract_address)? {
-        return Err(vm::Error::InternalContract("contract address not exist"));
+        return Err(vm::Error::InternalContract(
+            "contract address not exist".into(),
+        ));
     }
 
     if !contract_address.is_contract_address() {
         return Err(vm::Error::InternalContract(
-            "not allowed to sponsor non-contract account",
+            "not allowed to sponsor non-contract account".into(),
         ));
     }
 
@@ -149,7 +146,7 @@ pub fn set_sponsor_for_collateral(
 
     if sponsor_balance.is_zero() {
         return Err(vm::Error::InternalContract(
-            "zero sponsor balance is not allowed",
+            "zero sponsor balance is not allowed".into(),
         ));
     }
 
@@ -169,7 +166,7 @@ pub fn set_sponsor_for_collateral(
         // `sponsor_balance` + `collateral_for_storage`.
         if sponsor_balance <= prev_sponsor_balance + collateral_for_storage {
             return Err(vm::Error::InternalContract(
-                    "sponsor_balance is not enough to cover previous sponsor's sponsor_balance and collateral_for_storage",
+                    "sponsor_balance is not enough to cover previous sponsor's sponsor_balance and collateral_for_storage".into()
                 ));
         }
         // refund to previous sponsor
@@ -182,14 +179,14 @@ pub fn set_sponsor_for_collateral(
             state.add_balance(
                 prev_sponsor.as_ref().unwrap(),
                 &(prev_sponsor_balance + collateral_for_storage),
-                substate.to_cleanup_mode(&spec),
+                cleanup_mode(substate, &spec),
                 account_start_nonce,
             )?;
         }
         state.sub_balance(
             &params.address,
             &sponsor_balance,
-            &mut substate.to_cleanup_mode(&spec),
+            &mut cleanup_mode(substate, &spec),
         )?;
         state.set_sponsor_for_collateral(
             &contract_address,
@@ -200,7 +197,7 @@ pub fn set_sponsor_for_collateral(
         state.sub_balance(
             &params.address,
             &sponsor_balance,
-            &mut substate.to_cleanup_mode(&spec),
+            &mut cleanup_mode(substate, &spec),
         )?;
         state.set_sponsor_for_collateral(
             &contract_address,

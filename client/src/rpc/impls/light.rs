@@ -765,6 +765,7 @@ impl RpcImpl {
             Ok(Some(RpcBlock::new(
                 &block,
                 *light.get_network_type(),
+                &*consensus_graph,
                 &*inner,
                 &data_man,
                 include_txs,
@@ -819,6 +820,7 @@ impl RpcImpl {
             Ok(RpcBlock::new(
                 &block,
                 *light.get_network_type(),
+                &*consensus_graph,
                 &*inner,
                 &data_man,
                 true,
@@ -873,6 +875,7 @@ impl RpcImpl {
             Ok(Some(RpcBlock::new(
                 &block,
                 *light.get_network_type(),
+                &*consensus_graph,
                 &*inner,
                 &data_man,
                 include_txs,
@@ -1070,11 +1073,12 @@ impl Cfx for CfxHandler {
 
     // TODO(thegaram): add support for these
     not_supported! {
+        fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
+        fn block_by_block_number(&self, block_number: U64, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;
         fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> JsonRpcResult<Bytes>;
         fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> JsonRpcResult<EstimateGasAndCollateralResponse>;
         fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
         fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
-        fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
     }
 }
 
@@ -1166,7 +1170,7 @@ impl LocalRpc for DebugRpcImpl {
     not_supported! {
         fn consensus_graph_state(&self) -> JsonRpcResult<ConsensusGraphStates>;
         fn current_sync_phase(&self) -> JsonRpcResult<String>;
-        fn epoch_receipts(&self, epoch: EpochNumber) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
+        fn epoch_receipts(&self, epoch: BlockHashOrEpochNumber) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
         fn sign_transaction(&self, tx: SendTxRequest, password: Option<String>) -> JsonRpcResult<String>;
         fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
     }
