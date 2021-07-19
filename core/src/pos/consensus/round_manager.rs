@@ -598,28 +598,28 @@ impl RoundManager {
     ) -> Result<()>
     {
         let mut retriever = self.create_block_retriever(peer_id);
-        if self
+        if !self
             .block_store
             .block_exists(ledger_info.ledger_info().consensus_block_id())
         {
-            return Ok(());
-        }
-        let block_for_ledger_info = retriever
-            .retrieve_block_for_ledger_info(ledger_info)
-            .await?;
-        self.block_store
-            .insert_quorum_cert(
-                block_for_ledger_info.quorum_cert(),
-                &mut retriever,
-            )
-            .await?;
-        // `insert_quorum_cert` will wait for PoW to initialize if needed, so
-        // here we do not need to execute as catch_up_mode again.
-        self.block_store.execute_and_insert_block(
-            block_for_ledger_info,
-            false,
-            false,
-        );
+            let block_for_ledger_info = retriever
+                .retrieve_block_for_ledger_info(ledger_info)
+                .await?;
+            self.block_store
+                .insert_quorum_cert(
+                    block_for_ledger_info.quorum_cert(),
+                    &mut retriever,
+                )
+                .await?;
+            // `insert_quorum_cert` will wait for PoW to initialize if needed,
+            // so here we do not need to execute as catch_up_mode
+            // again.
+            self.block_store.execute_and_insert_block(
+                block_for_ledger_info,
+                false,
+                false,
+            );
+        };
         self.block_store.commit(ledger_info.clone()).await?;
         Ok(())
     }
