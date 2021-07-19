@@ -22,7 +22,10 @@
 
 use crate::{epoch::EpochNumber, log_entry::LogEntry};
 use cfx_types::{Address, Bloom, BloomInput, H256};
-use std::{error, fmt};
+use std::{
+    error, fmt,
+    ops::{Deref, DerefMut},
+};
 
 #[derive(Debug, PartialEq, Clone)]
 /// Errors concerning log filtering.
@@ -31,6 +34,12 @@ pub enum FilterError {
     InvalidEpochNumber {
         from_epoch: u64,
         to_epoch: u64,
+    },
+
+    /// Filter has wrong block numbers set.
+    InvalidBlockNumber {
+        from_block: u64,
+        to_block: u64,
     },
 
     OutOfBoundEpochNumber {
@@ -94,6 +103,13 @@ impl fmt::Display for FilterError {
                 "Filter has wrong epoch numbers set (from: {}, to: {})",
                 from_epoch, to_epoch
             },
+            InvalidBlockNumber {
+                from_block,
+                to_block,
+            } => format! {
+                "Filter has wrong block numbers set (from: {}, to: {})",
+                from_block, to_block
+            },
             OutOfBoundEpochNumber {
                 to_epoch,
                 max_epoch,
@@ -147,19 +163,27 @@ impl error::Error for FilterError {
     fn description(&self) -> &str { "Filter error" }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum LogFilter {
+    EpochLogFilter {
+        from_epoch: EpochNumber,
+        to_epoch: EpochNumber,
+        params: LogFilterParams,
+    },
+    BlockHashLogFilter {
+        block_hashes: Vec<H256>,
+        params: LogFilterParams,
+    },
+    BlockNumberLogFilter {
+        from_block: u64,
+        to_block: u64,
+        params: LogFilterParams,
+    },
+}
+
 /// Log event Filter.
-#[derive(Debug, PartialEq)]
-pub struct LogFilter {
-    /// Search will be applied from this epoch number.
-    pub from_epoch: EpochNumber,
-
-    /// Till this epoch number.
-    pub to_epoch: EpochNumber,
-
-    /// Search will be applied in these blocks if given.
-    /// This will override from/to_epoch fields.
-    pub block_hashes: Option<Vec<H256>>,
-
+#[derive(Clone, Debug, PartialEq)]
+pub struct LogFilterParams {
     /// Search addresses.
     ///
     /// If None, match all.
@@ -186,31 +210,9 @@ pub struct LogFilter {
     pub limit: Option<usize>,
 }
 
-impl Clone for LogFilter {
-    fn clone(&self) -> Self {
-        let mut topics = [None, None, None, None];
-        for i in 0..4 {
-            topics[i] = self.topics[i].clone();
-        }
-
-        LogFilter {
-            from_epoch: self.from_epoch.clone(),
-            to_epoch: self.to_epoch.clone(),
-            block_hashes: self.block_hashes.clone(),
-            address: self.address.clone(),
-            topics: topics[..].to_vec(),
-            offset: self.offset,
-            limit: self.limit,
-        }
-    }
-}
-
-impl Default for LogFilter {
+impl Default for LogFilterParams {
     fn default() -> Self {
-        LogFilter {
-            from_epoch: EpochNumber::Earliest,
-            to_epoch: EpochNumber::LatestMined,
-            block_hashes: None,
+        LogFilterParams {
             address: None,
             topics: vec![None, None, None, None],
             offset: None,
@@ -219,7 +221,39 @@ impl Default for LogFilter {
     }
 }
 
-impl LogFilter {
+impl Default for LogFilter {
+    fn default() -> Self {
+        LogFilter::EpochLogFilter {
+            from_epoch: EpochNumber::LatestCheckpoint,
+            to_epoch: EpochNumber::LatestState,
+            params: Default::default(),
+        }
+    }
+}
+
+impl Deref for LogFilter {
+    type Target = LogFilterParams;
+
+    fn deref(&self) -> &Self::Target {
+        match &self {
+            &LogFilter::EpochLogFilter { params, .. } => params,
+            &LogFilter::BlockHashLogFilter { params, .. } => params,
+            &LogFilter::BlockNumberLogFilter { params, .. } => params,
+        }
+    }
+}
+
+impl DerefMut for LogFilter {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            LogFilter::EpochLogFilter { params, .. } => params,
+            LogFilter::BlockHashLogFilter { params, .. } => params,
+            LogFilter::BlockNumberLogFilter { params, .. } => params,
+        }
+    }
+}
+
+impl LogFilterParams {
     /// Returns combinations of each address and topic.
     pub fn bloom_possibilities(&self) -> Vec<Bloom> {
         let blooms = match self.address {

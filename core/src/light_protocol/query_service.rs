@@ -826,12 +826,16 @@ impl QueryService {
         &self, filter: &LogFilter,
     ) -> Result<(Vec<u64>, Box<dyn Fn(H256) -> bool + Send + Sync>), FilterError>
     {
-        match &filter.block_hashes {
-            None => {
-                let from_epoch = self
-                    .get_height_from_epoch_number(filter.from_epoch.clone())?;
+        match &filter {
+            LogFilter::EpochLogFilter {
+                from_epoch,
+                to_epoch,
+                ..
+            } => {
+                let from_epoch =
+                    self.get_height_from_epoch_number(from_epoch.clone())?;
                 let to_epoch =
-                    self.get_height_from_epoch_number(filter.to_epoch.clone())?;
+                    self.get_height_from_epoch_number(to_epoch.clone())?;
 
                 if from_epoch > to_epoch {
                     return Err(FilterError::InvalidEpochNumber {
@@ -845,9 +849,10 @@ impl QueryService {
 
                 Ok((epochs, block_filter))
             }
-            Some(hashes) => {
+            LogFilter::BlockHashLogFilter { block_hashes, .. } => {
                 // we use BTreeSet to make lookup efficient
-                let hashes: BTreeSet<_> = hashes.iter().cloned().collect();
+                let hashes: BTreeSet<_> =
+                    block_hashes.iter().cloned().collect();
 
                 // we use BTreeSet to ensure order and uniqueness
                 let mut epochs = BTreeSet::new();
@@ -868,6 +873,10 @@ impl QueryService {
 
                 Ok((epochs, block_filter))
             }
+            _ => bail!(FilterError::Custom(
+                "Light nodes do not support log filtering using block numbers"
+                    .into(),
+            )),
         }
     }
 

@@ -118,5 +118,5 @@ class TestGetLogs(RpcClient):
             offset="0x0",
             limit="0x1"
         )
-        logs = self.get_logs(filter)
-        assert_equal(logs, [])
+
+        assert_raises_rpc_error(None, None, self.get_logs, filter)
