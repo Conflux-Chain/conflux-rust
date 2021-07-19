@@ -1001,17 +1001,6 @@ impl ConsensusGraph {
         Ok(logs)
     }
 
-    // TODO
-    fn get_block_epoch_number_2(&self, h: &H256) -> Option<u64> {
-        // try to get from memory
-        if let Some(e) = self.get_block_epoch_number(h) {
-            return Some(e);
-        }
-
-        // try to get from db
-        self.data_man.block_epoch_number(h)
-    }
-
     fn filter_logs_by_block_numbers(
         &self, from_block: u64, to_block: u64, filter: LogFilter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
@@ -1046,7 +1035,7 @@ impl ConsensusGraph {
             ))),
         };
 
-        let from_epoch = match self.get_block_epoch_number_2(&from_hash) {
+        let from_epoch = match self.get_block_epoch_number(&from_hash) {
             Some(e) => e,
             None => bail!(FilterError::Custom(format!(
                 "Unable to find epoch hashes for block {:?}",
@@ -1054,7 +1043,7 @@ impl ConsensusGraph {
             ))),
         };
 
-        let to_epoch = match self.get_block_epoch_number_2(&to_hash) {
+        let to_epoch = match self.get_block_epoch_number(&to_hash) {
             Some(e) => e,
             None => bail!(FilterError::Custom(format!(
                 "Unable to find epoch hashes for block {:?}",
@@ -1572,7 +1561,15 @@ impl ConsensusGraphTrait for ConsensusGraph {
     }
 
     fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
-        self.inner.read_recursive().get_block_epoch_number(hash)
+        // try to get from memory
+        if let Some(e) =
+            self.inner.read_recursive().get_block_epoch_number(hash)
+        {
+            return Some(e);
+        }
+
+        // try to get from db
+        self.data_man.block_epoch_number(hash)
     }
 
     fn get_block_number(
