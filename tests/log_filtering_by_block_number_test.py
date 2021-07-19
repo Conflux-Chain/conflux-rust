@@ -12,10 +12,19 @@ from test_framework.util import *
 from test_framework.mininode import *
 
 CONTRACT_PATH = "contracts/EventsTestContract_bytecode.dat"
+FOO_TOPIC = encode_hex_0x(keccak(b"Foo(address,uint32)"))
+SNAPSHOT_EPOCH_COUNT = 50
+
+def address_to_topic(address):
+    return "0x" + address[2:].zfill(64)
+
+def number_to_topic(number):
+    return "0x" + ("%x" % number).zfill(64)
 
 class LogFilteringTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
+        self.conf_parameters["dev_snapshot_epoch_count"] = str(SNAPSHOT_EPOCH_COUNT)
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)
@@ -82,17 +91,36 @@ class LogFilteringTest(ConfluxTestFramework):
             block = self.rpc.generate_custom_block(parent_hash = parent_hash, referee = [], txs = [])
             parent_hash = block
 
-        # check events
+        # check logs
         block_number_a = int(self.rpc.block_by_hash(block_a)['blockNumber'], 0)
         block_number_i = int(self.rpc.block_by_hash(block_i)['blockNumber'], 0)
 
-        for from_block in range(block_number_a, block_number_i + 1):
-            for to_block in range(from_block, block_number_i + 1):
-                filter = Filter(from_block=hex(from_block), to_block=hex(to_block), from_epoch = None, to_epoch = None)
+        self.check_logs(block_number_a, block_number_i, sender)
+
+        # check logs in old era
+        for _ in range(10 * SNAPSHOT_EPOCH_COUNT):
+            block = self.rpc.generate_custom_block(parent_hash = parent_hash, referee = [], txs = [])
+            parent_hash = block
+
+        self.check_logs(block_number_a, block_number_i, sender)
+
+        self.log.info("Pass")
+
+    def check_logs(self, first_block_number, last_block_number, sender):
+        # check the number of logs returned for different ranges
+        for from_block in range(first_block_number, last_block_number + 1):
+            for to_block in range(from_block, last_block_number + 1):
+                filter = Filter(from_block=hex(from_block), to_block=hex(to_block))
                 logs = self.rpc.get_logs(filter)
                 assert_equal(len(logs), to_block - from_block + 1)
 
-        self.log.info("Pass")
+        # check the event parameters in each block
+        for block_number in range(first_block_number, last_block_number + 1):
+            logs = self.rpc.get_logs(Filter(from_block=hex(block_number), to_block=hex(block_number)))
+            assert_equal(len(logs), 1)
+            assert_equal(logs[0]["topics"][0], FOO_TOPIC)
+            assert_equal(logs[0]["topics"][1], address_to_topic(sender))
+            assert_equal(logs[0]["topics"][2], number_to_topic(block_number - first_block_number + 1))
 
 if __name__ == "__main__":
     LogFilteringTest().main()
