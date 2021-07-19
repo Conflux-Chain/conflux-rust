@@ -16,7 +16,9 @@ pub(crate) mod jellyfish_merkle_node;
 pub(crate) mod ledger_counters;
 pub(crate) mod ledger_info;
 pub(crate) mod ledger_info_by_block;
+pub(crate) mod pos_state;
 pub(crate) mod stale_node_index;
+pub(crate) mod term_vdf_output;
 pub(crate) mod transaction;
 pub(crate) mod transaction_accumulator;
 pub(crate) mod transaction_by_account;
@@ -42,6 +44,8 @@ pub const TRANSACTION_BY_ACCOUNT_CF_NAME: ColumnFamilyName =
 pub const TRANSACTION_INFO_CF_NAME: ColumnFamilyName = "transaction_info";
 pub const LEDGER_INFO_BY_BLOCK_CF_NAME: ColumnFamilyName =
     "ledger_info_by_block";
+pub const TERM_VDF_OUTPUT_CF_NAME: ColumnFamilyName = "term_vdf_output";
+pub const POS_STATE_CF_NAME: ColumnFamilyName = "pos_state";
 
 fn ensure_slice_len_eq(data: &[u8], len: usize) -> Result<()> {
     ensure!(

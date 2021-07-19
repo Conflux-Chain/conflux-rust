@@ -8,5 +8,5 @@ edition = "2018"
 
 [dependencies]
 cfx-types = {path = "../../../../../cfx_types"}
-diem-types = {path = ".."}
 async-trait = "0.1"
+anyhow = "1.0.38"

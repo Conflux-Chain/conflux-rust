@@ -51,6 +51,7 @@ impl StateComputer for ExecutionProxy {
         block: &Block,
         // The parent block id.
         parent_block_id: HashValue,
+        catch_up_mode: bool,
     ) -> Result<StateComputeResult, ExecutionError>
     {
         fail_point!("consensus::compute", |_| {
@@ -69,7 +70,8 @@ impl StateComputer for ExecutionProxy {
             "execute_block",
             self.executor.lock().execute_block(
                 id_and_transactions_from_block(block),
-                parent_block_id
+                parent_block_id,
+                catch_up_mode
             )
         )
     }
@@ -131,8 +133,7 @@ fn id_and_transactions_from_block(
 ) -> (HashValue, Vec<Transaction>) {
     let id = block.id();
     // TODO(lpl): Do we need BlockMetadata?
-    // let mut transactions = vec![Transaction::BlockMetadata(block.into())];
-    let mut transactions = vec![];
+    let mut transactions = vec![Transaction::BlockMetadata(block.into())];
     transactions.extend(
         block
             .payload()

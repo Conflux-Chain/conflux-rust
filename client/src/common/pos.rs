@@ -31,7 +31,8 @@ use diem_types::{
         from_consensus_public_key, from_public_key, AccountAddress,
     },
     block_info::PivotBlockDecision,
-    validator_config::ConsensusPublicKey,
+    term_state::NodeID,
+    validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
     PeerId,
 };
 use diemdb::DiemDB;
@@ -39,6 +40,7 @@ use executor::{db_bootstrapper::maybe_bootstrap, vm::FakeVM, Executor};
 use executor_types::ChunkExecutor;
 use futures::{channel::mpsc::channel, executor::block_on};
 use network::NetworkService;
+use pow_types::FakePowHandler;
 use std::{
     boxed::Box,
     path::PathBuf,
@@ -68,7 +70,8 @@ pub struct DiemHandle {
 pub fn start_pos_consensus(
     config: &NodeConfig, network: Arc<NetworkService>, own_node_hash: H256,
     protocol_config: ProtocolConfiguration,
-    own_pos_public_key: Option<ConsensusPublicKey>,
+    own_pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
+    initial_nodes: Vec<(NodeID, u64)>,
 ) -> DiemHandle
 {
     crash_handler::setup_panic_handler();
@@ -116,6 +119,7 @@ pub fn start_pos_consensus(
         own_node_hash,
         protocol_config,
         own_pos_public_key,
+        initial_nodes,
     )
 }
 
@@ -128,13 +132,14 @@ fn setup_metrics(peer_id: PeerId, config: &NodeConfig) {
 }
 
 fn setup_chunk_executor(db: DbReaderWriter) -> Box<dyn ChunkExecutor> {
-    Box::new(Executor::<FakeVM>::new(db))
+    Box::new(Executor::<FakeVM>::new(db, Arc::new(FakePowHandler {})))
 }
 
 pub fn setup_pos_environment(
     node_config: &NodeConfig, network: Arc<NetworkService>,
     own_node_hash: H256, protocol_config: ProtocolConfiguration,
-    own_pos_public_key: Option<ConsensusPublicKey>,
+    own_pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
+    initial_nodes: Vec<(NodeID, u64)>,
 ) -> DiemHandle
 {
     // TODO(lpl): Handle port conflict.
@@ -176,6 +181,7 @@ pub fn setup_pos_environment(
                 block_hash: protocol_config.pos_genesis_pivot_decision,
                 height: 0,
             }),
+            initial_nodes,
         )
         .expect("Db-bootstrapper should not fail.");
     } else {
@@ -241,7 +247,7 @@ pub fn setup_pos_environment(
         protocol_handler,
     };
 
-    let (_mp_client_sender, mp_client_events) =
+    let (mp_client_sender, mp_client_events) =
         channel(AC_SMP_CHANNEL_BUFFER_SIZE);
 
     // TODO (linxi): pos rpc
@@ -285,8 +291,11 @@ pub fn setup_pos_environment(
         consensus_reconfig_events,
         own_pos_public_key.map_or_else(
             || AccountAddress::random(),
-            |public_key| from_consensus_public_key(&public_key),
+            |public_key| {
+                from_consensus_public_key(&public_key.0, &public_key.1)
+            },
         ),
+        mp_client_sender,
     );
     debug!("Consensus started in {} ms", instant.elapsed().as_millis());
 

@@ -106,6 +106,7 @@ async fn handle_client_event(
     >,
 )
 {
+    diem_debug!("handle_client_event");
     // This timer measures how long it took for the bounded executor to
     // *schedule* the task.
     let _timer = counters::task_spawn_latency_timer(

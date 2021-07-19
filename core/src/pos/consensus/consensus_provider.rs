@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{
     pos::{
-        mempool::ConsensusRequest,
+        mempool::{ConsensusRequest, SubmissionStatus},
         pow_handler::PowHandler,
         protocol::{
             network_sender::NetworkSender,
@@ -25,10 +25,11 @@ use diem_config::config::NodeConfig;
 use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress, on_chain_config::OnChainConfigPayload,
+    transaction::SignedTransaction,
 };
 use executor::{vm::FakeVM, Executor};
 use executor_types::BlockExecutor;
-use futures::channel::mpsc;
+use futures::channel::{mpsc, oneshot};
 use network::NetworkService;
 use std::sync::{atomic::AtomicBool, Arc};
 use storage_interface::{DbReader, DbReaderWriter};
@@ -44,6 +45,10 @@ pub fn start_consensus(
     db_rw: DbReaderWriter,
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
     author: AccountAddress,
+    tx_sender: mpsc::Sender<(
+        SignedTransaction,
+        oneshot::Sender<anyhow::Result<SubmissionStatus>>,
+    )>,
 ) -> (Runtime, Arc<PowHandler>, Arc<AtomicBool>)
 {
     let stopped = Arc::new(AtomicBool::new(false));
@@ -61,7 +66,9 @@ pub fn start_consensus(
         node_config.consensus.mempool_txn_pull_timeout_ms,
         node_config.consensus.mempool_executed_txn_timeout_ms,
     ));
-    let executor = Box::new(Executor::<FakeVM>::new(db_rw));
+    let pow_handler = Arc::new(PowHandler::new(runtime.handle().clone()));
+    let executor =
+        Box::new(Executor::<FakeVM>::new(db_rw, pow_handler.clone()));
     let state_computer =
         Arc::new(ExecutionProxy::new(executor, state_sync_client));
     let time_service =
@@ -71,7 +78,6 @@ pub fn start_consensus(
         channel::new(1_024, &counters::PENDING_ROUND_TIMEOUTS);
     let (proposal_timeout_sender, proposal_timeout_receiver) =
         channel::new(1_024, &counters::PENDING_PROPOSAL_TIMEOUTS);
-    let pow_handler = Arc::new(PowHandler::new(runtime.handle().clone()));
 
     let epoch_mgr = EpochManager::new(
         node_config,
@@ -85,6 +91,7 @@ pub fn start_consensus(
         reconfig_events,
         pow_handler.clone(),
         author,
+        tx_sender,
     );
 
     runtime.spawn(epoch_mgr.start(

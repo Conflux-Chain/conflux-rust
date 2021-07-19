@@ -38,12 +38,18 @@ use cfxcore::{
     transaction_pool::TxPoolConfig,
     NodeType,
 };
+use diem_crypto::{ValidCryptoMaterial, ValidCryptoMaterialStringExt};
+use diem_types::{
+    account_address::from_consensus_public_key,
+    validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
+};
 use lazy_static::*;
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
 use parking_lot::RwLock;
 use rand::Rng;
 use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
+use toml::Value;
 use txgen::TransactionGeneratorConfig;
 
 lazy_static! {
@@ -292,6 +298,8 @@ build_config! {
         (vrf_proposal_threshold, (U256), U256::MAX)
         // Deferred epoch count before a confirmed epoch.
         (pos_pivot_decision_defer_epoch_count, (u64), 50)
+        (pos_reference_enable_height, (u64), 0)
+        (pos_initial_nodes_path, (String), "./pos_config/initial_nodes.toml".to_string())
 
         // Light node section
         (ln_epoch_request_batch_size, (Option<usize>), None)
@@ -1171,6 +1179,69 @@ pub fn parse_config_address_string(
             base32_err={:?}
             hex_err={:?}",
                 base32_err, hex_err))
+}
+
+pub fn save_initial_nodes_to_file(
+    path: &str,
+    public_keys: Vec<(ConsensusPublicKey, ConsensusVRFPublicKey, u64)>,
+)
+{
+    let nodes = Value::Array(
+        public_keys
+            .into_iter()
+            .map(|(bls_key, vrf_key, voting_power)| {
+                let mut map = BTreeMap::new();
+                map.insert(
+                    "bls_key".to_string(),
+                    Value::String(bls_key.to_encoded_string().unwrap()),
+                );
+                map.insert(
+                    "vrf_key".to_string(),
+                    Value::String(vrf_key.to_encoded_string().unwrap()),
+                );
+                map.insert(
+                    "voting_power".to_string(),
+                    Value::Integer(voting_power as i64),
+                );
+                Value::Table(map)
+            })
+            .collect(),
+    );
+    let mut conf = BTreeMap::new();
+    conf.insert("initial_nodes".to_string(), nodes);
+    fs::write(path, toml::to_string(&Value::Table(conf)).unwrap());
+}
+
+pub fn read_initial_nodes_from_file(
+    path: &str,
+) -> Result<Vec<(ConsensusPublicKey, ConsensusVRFPublicKey, u64)>, String> {
+    let mut file = File::open(path)
+        .map_err(|e| format!("failed to open initial nodes file: {:?}", e))?;
+
+    let mut nodes_str = String::new();
+    file.read_to_string(&mut nodes_str)
+        .map_err(|e| format!("failed to read initial nodes file: {:?}", e))?;
+
+    let config = nodes_str
+        .parse::<Value>()
+        .map_err(|e| format!("failed to parse initial nodes file: {:?}", e))?;
+    let mut nodes = Vec::new();
+    for map in config["initial_nodes"]
+        .as_array()
+        .ok_or(format!("failed to parse initial nodes file: Not an array"))?
+    {
+        let bls_key = ConsensusPublicKey::from_encoded_string(
+            map["bls_key"].as_str().unwrap(),
+        )
+        .map_err(|e| format!("wrong BLS key, err={:?}", e))?;
+        let vrf_key = ConsensusVRFPublicKey::from_encoded_string(
+            map["vrf_key"].as_str().unwrap(),
+        )
+        .map_err(|e| format!("wrong VRF key, err={:?}", e))?;
+        let voting_power = map["voting_power"].as_integer().unwrap() as u64;
+        nodes.push((bls_key, vrf_key, voting_power));
+    }
+    Ok(nodes)
 }
 
 #[cfg(test)]

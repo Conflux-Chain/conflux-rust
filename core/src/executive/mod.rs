@@ -7,7 +7,7 @@ mod executed;
 mod executive;
 #[cfg(test)]
 mod executive_tests;
-mod internal_contract;
+pub mod internal_contract;
 mod vm_exec;
 
 trait CollateralCheckResultToVmResult {

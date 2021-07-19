@@ -178,9 +178,13 @@ impl ExecutorProxyTrait for ExecutorProxy {
 
         let synced_trees =
             if let Some(synced_tree_state) = storage_info.synced_tree_state {
+                // FIXME(lpl): synced_tree_state.pos_state is left unhandled.
                 ExecutedTrees::from(synced_tree_state)
             } else {
-                ExecutedTrees::from(storage_info.committed_tree_state)
+                ExecutedTrees::new_with_pos_state(
+                    storage_info.committed_tree_state,
+                    storage_info.committed_pos_state,
+                )
             };
 
         Ok(SyncState::new(
@@ -294,7 +298,18 @@ impl ExecutorProxyTrait for ExecutorProxy {
             .collect::<HashSet<_>>();
 
         // calculate deltas
-        let new_configs = Self::fetch_all_configs(&*self.storage)?;
+        let new_configs = OnChainConfigPayload::new(
+            1, /* not used */
+            Arc::new(
+                ON_CHAIN_CONFIG_REGISTRY
+                    .iter()
+                    .cloned()
+                    .zip_eq(vec![events[0].event_data().to_vec()])
+                    .collect(),
+            ),
+        );
+        diem_debug!("get {} configs", new_configs.configs().len());
+
         let changed_configs = new_configs
             .configs()
             .iter()
@@ -318,6 +333,7 @@ impl ExecutorProxyTrait for ExecutorProxy {
             if !changed_configs.is_disjoint(&subscribed_items.configs)
                 || !event_keys.is_disjoint(&subscribed_items.events)
             {
+                diem_debug!("publish {} configs", new_configs.configs().len());
                 if let Err(e) = subscription.publish(new_configs.clone()) {
                     publish_success = false;
                     diem_error!(

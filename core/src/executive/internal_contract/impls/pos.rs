@@ -150,7 +150,7 @@ pub fn get_status(
     Ok((status.registered, status.unlocked))
 }
 
-pub fn decode_register_info(event: &LogEntry) -> Option<StakingEvents> {
+pub fn decode_register_info(event: &LogEntry) -> Option<StakingEvent> {
     if event.address != *POS_REGISTER_CONTRACT_ADDRESS {
         return None;
     }
@@ -166,17 +166,13 @@ pub fn decode_register_info(event: &LogEntry) -> Option<StakingEvents> {
                 event.topics.get(1).expect("Second topic is identifier");
             let (verified_bls_pubkey, vrf_pubkey) =
                 <(Bytes, Bytes)>::abi_decode(&event.data).unwrap();
-            Some(Register((
-                AccountAddress::new(identifier.0),
-                decode_bls_pubkey(verified_bls_pubkey).unwrap().into(),
-                vrf_pubkey.into(),
-            )))
+            Some(Register((*identifier, verified_bls_pubkey, vrf_pubkey)))
         }
         sig if sig == IncreaseStakeEvent::event_sig() => {
             let identifier =
                 event.topics.get(1).expect("Second topic is identifier");
             let power = u64::abi_decode(&event.data).unwrap();
-            Some(IncreaseStake((AccountAddress::new(identifier.0), power)))
+            Some(IncreaseStake((*identifier, power)))
         }
         _ => unreachable!(),
     }
@@ -189,6 +185,6 @@ use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
 use diem_crypto::{bls::BLSPublicKey, ec_vrf::EcVrfPublicKey};
 use diem_types::validator_config::ConsensusPublicKey;
 use move_core_types::account_address::AccountAddress;
-use pow_types::StakingEvents::{self, IncreaseStake, Register};
+use pow_types::StakingEvent::{self, IncreaseStake, Register};
 use primitives::log_entry::LogEntry;
 use solidity_abi::ABIDecodable;

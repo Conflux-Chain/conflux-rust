@@ -102,7 +102,7 @@ pub struct BlockStore {
     /// time
     time_service: Arc<dyn TimeService>,
     /// The interface used to verify block execution result.
-    pow_handler: Arc<dyn PowInterface>,
+    pub pow_handler: Arc<dyn PowInterface>,
 }
 
 impl BlockStore {
@@ -192,7 +192,7 @@ impl BlockStore {
         };
         for block in blocks {
             block_store
-                .execute_and_insert_block(block)
+                .execute_and_insert_block(block, true, true)
                 .unwrap_or_else(|e| {
                     panic!(
                         "[BlockStore] failed to insert block during build {:?}",
@@ -226,6 +226,10 @@ impl BlockStore {
             .get_block(block_id_to_commit)
             .ok_or_else(|| format_err!("Committed block id not found"))?;
 
+        if block_to_commit == self.root() {
+            diem_debug!("commit an committed block in sync");
+            return Ok(());
+        }
         // First make sure that this commit is new.
         ensure!(
             block_to_commit.round() > self.root().round(),
@@ -323,18 +327,22 @@ impl BlockStore {
     /// happen if a validator receives a certificate for a block that is
     /// currently being added).
     pub fn execute_and_insert_block(
-        &self, block: Block,
+        &self, block: Block, catch_up_mode: bool, force_compute: bool,
     ) -> anyhow::Result<Arc<ExecutedBlock>> {
         diem_debug!("execute_and_insert_block: block={:?}", block.id());
-        if let Some(existing_block) = self.get_block(block.id()) {
-            return Ok(existing_block);
+        if !force_compute {
+            if let Some(existing_block) = self.get_block(block.id()) {
+                return Ok(existing_block);
+            }
         }
         ensure!(
             self.inner.read().root().round() < block.round(),
             "Block with old round"
         );
 
-        let executed_block = match self.execute_block(block.clone()) {
+        let executed_block = match self
+            .execute_block(block.clone(), catch_up_mode)
+        {
             Ok(res) => Ok(res),
             Err(Error::BlockNotFound(parent_block_id)) => {
                 // recover the block tree in executor
@@ -343,9 +351,9 @@ impl BlockStore {
                     .unwrap_or_else(Vec::new);
 
                 for block in blocks_to_reexecute {
-                    self.execute_block(block.block().clone())?;
+                    self.execute_block(block.block().clone(), catch_up_mode)?;
                 }
-                self.execute_block(block)
+                self.execute_block(block, catch_up_mode)
             }
             err => err,
         }?;
@@ -361,16 +369,15 @@ impl BlockStore {
     }
 
     fn execute_block(
-        &self, block: Block,
+        &self, block: Block, catch_up_mode: bool,
     ) -> anyhow::Result<ExecutedBlock, Error> {
         // Although NIL blocks don't have a payload, we still send a
         // T::default() to compute because we may inject a block
         // prologue transaction.
-        let mut state_compute_result =
-            self.state_computer.compute(&block, block.parent_id())?;
-        self.post_process_state_compute_result(
-            &mut state_compute_result,
-            &block.parent_id(),
+        let state_compute_result = self.state_computer.compute(
+            &block,
+            block.parent_id(),
+            catch_up_mode,
         )?;
         observe_block(block.timestamp_usecs(), BlockStage::EXECUTED);
 
@@ -382,7 +389,7 @@ impl BlockStore {
     pub fn insert_single_quorum_cert(
         &self, qc: QuorumCert,
     ) -> anyhow::Result<()> {
-        debug!("insert_single_quorum_cert: qc={:?}", qc);
+        diem_debug!("insert_single_quorum_cert: qc={:?}", qc);
         // If the parent block is not the root block (i.e not None), ensure the
         // executed state of a block is consistent with its QuorumCert,
         // otherwise persist the QuorumCert's state and on restart, a
@@ -463,55 +470,6 @@ impl BlockStore {
             .process_pruned_blocks(next_root_id, id_to_remove.clone());
         id_to_remove
     }
-
-    fn post_process_state_compute_result(
-        &self, state_compute_result: &mut StateComputeResult,
-        parent_block_id: &HashValue,
-    ) -> anyhow::Result<(), Error>
-    {
-        // TODO(lpl): Decide if we store it in states.
-        // None for genesis for now.
-        let parent_pivot_decision = self
-            .get_block(*parent_block_id)
-            .ok_or(Error::InternalError {
-                error: format!(
-                    "Parent block not in BlockStore: parent={:?}",
-                    parent_block_id
-                ),
-            })?
-            .block_info()
-            .pivot_decision()
-            .cloned();
-        diem_debug!(
-            "post_process_state_compute_result: parent={:?} parent_pivot={:?}",
-            parent_block_id,
-            parent_pivot_decision
-        );
-
-        if state_compute_result.pivot_decision().is_none()
-            && parent_pivot_decision.is_some()
-        {
-            // No pivot decision tx is included.
-            state_compute_result
-                .update_pivot_decision(parent_pivot_decision.clone().unwrap());
-        }
-
-        if parent_pivot_decision.is_some()
-            && !self.pow_handler.validate_proposal_pivot_decision(
-                parent_pivot_decision.unwrap().block_hash,
-                state_compute_result
-                    .pivot_decision()
-                    .as_ref()
-                    .unwrap()
-                    .block_hash,
-            )
-        {
-            return Err(Error::InternalError {
-                error: format!("Invalid pivot decision for block"),
-            });
-        }
-        Ok(())
-    }
 }
 
 impl BlockReader for BlockStore {
@@ -582,6 +540,6 @@ impl BlockStore {
         &self, block: Block,
     ) -> anyhow::Result<Arc<ExecutedBlock>> {
         self.insert_single_quorum_cert(block.quorum_cert().clone())?;
-        self.execute_and_insert_block(block)
+        self.execute_and_insert_block(block, false, false)
     }
 }

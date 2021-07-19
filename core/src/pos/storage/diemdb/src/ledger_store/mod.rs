@@ -10,6 +10,7 @@ use crate::{
     schema::{
         epoch_by_version::EpochByVersionSchema, ledger_info::LedgerInfoSchema,
         ledger_info_by_block::LedgerInfoByBlockSchema,
+        pos_state::PosStateSchema, term_vdf_output::TermVdfOutputSchema,
         transaction_accumulator::TransactionAccumulatorSchema,
         transaction_info::TransactionInfoSchema,
     },
@@ -21,6 +22,7 @@ use diem_crypto::{
     hash::{CryptoHash, TransactionAccumulatorHasher},
     HashValue,
 };
+use diem_logger::prelude::*;
 use diem_types::{
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
@@ -29,6 +31,7 @@ use diem_types::{
         TransactionAccumulatorProof, TransactionAccumulatorRangeProof,
         TransactionInfoWithProof,
     },
+    term_state::PosState,
     transaction::{TransactionInfo, Version},
 };
 use itertools::Itertools;
@@ -45,6 +48,10 @@ pub(crate) struct LedgerStore {
     /// DB and deserializing the object frequently. It should be updated
     /// every time new ledger info and signatures are persisted.
     latest_ledger_info: ArcSwap<Option<LedgerInfoWithSignatures>>,
+
+    /// latest pos state based on `current_view`. It's not always in sync with
+    /// `latest_ledger_info`.
+    latest_pos_state: ArcSwap<PosState>,
 }
 
 impl LedgerStore {
@@ -62,10 +69,22 @@ impl LedgerStore {
                 .map(|kv| kv.1)
         };
 
-        Self {
+        let latest_pos_state = ledger_info
+            .as_ref()
+            .map(|ledger_info| {
+                db.get::<PosStateSchema>(
+                    &ledger_info.ledger_info().consensus_block_id(),
+                )
+                .unwrap()
+                .expect("pos state and ledger info both committed")
+            })
+            .unwrap_or(PosState::new_empty());
+        let ledger_store = Self {
             db,
-            latest_ledger_info: ArcSwap::from(Arc::new(ledger_info)),
-        }
+            latest_ledger_info: ArcSwap::from(Arc::new(ledger_info.clone())),
+            latest_pos_state: ArcSwap::from(Arc::new(latest_pos_state)),
+        };
+        ledger_store
     }
 
     pub fn get_epoch(&self, version: Version) -> Result<u64> {
@@ -176,6 +195,12 @@ impl LedgerStore {
         Ok(latest_epoch_state.clone())
     }
 
+    pub fn get_pos_state(&self, block_hash: &HashValue) -> Result<PosState> {
+        self.db.get::<PosStateSchema>(block_hash)?.ok_or_else(|| {
+            format_err!("PoS State is not found for block {}", block_hash)
+        })
+    }
+
     pub fn get_tree_state(
         &self, num_transactions: LeafCount, transaction_info: TransactionInfo,
     ) -> Result<TreeState> {
@@ -227,12 +252,16 @@ impl LedgerStore {
                 Some(self.get_tree_state(latest_version + 1, latest_txn_info)?),
             )
         };
+        let pos_state = self.get_pos_state(
+            &latest_ledger_info.ledger_info().consensus_block_id(),
+        )?;
 
         Ok(Some(StartupInfo::new(
             latest_ledger_info,
             latest_epoch_state_if_not_in_li,
             commited_tree_state,
             synced_tree_state,
+            pos_state,
         )))
     }
 
@@ -408,6 +437,22 @@ impl LedgerStore {
         )
     }
 
+    pub fn put_pos_state(
+        &self, block_hash: &HashValue, pos_state: PosState,
+    ) -> Result<()> {
+        diem_debug!("put_pos_state: {}", block_hash);
+        let mut cs = ChangeSet::new();
+        cs.batch.put::<PosStateSchema>(block_hash, &pos_state)?;
+
+        // replace pos state later to avoid clone.
+        if self.latest_pos_state.load().current_view()
+            < pos_state.current_view()
+        {
+            self.latest_pos_state.store(Arc::new(pos_state));
+        }
+        self.db.write_schemas(cs.batch)
+    }
+
     /// Read LedgerInfo by block id from the database.
     pub fn get_block_ledger_info(
         &self, consensus_block_id: &HashValue,
@@ -425,6 +470,31 @@ impl LedgerStore {
 
     pub fn get_root_hash(&self, version: Version) -> Result<HashValue> {
         Accumulator::get_root_hash(self, version + 1)
+    }
+
+    pub fn get_term_vdf_output(&self, term_num: u64) -> Result<Vec<u8>> {
+        self.db
+            .get::<TermVdfOutputSchema>(&term_num)?
+            .ok_or_else(|| {
+                DiemDbError::NotFound(format!(
+                    "VDF output of term {}",
+                    term_num
+                ))
+                .into()
+            })
+    }
+
+    pub fn put_term_vdf_output(
+        &self, term_num: u64, vdf_output: Vec<u8>,
+    ) -> Result<()> {
+        let mut cs = ChangeSet::new();
+        cs.batch
+            .put::<TermVdfOutputSchema>(&term_num, &vdf_output)?;
+        self.db.write_schemas(cs.batch)
+    }
+
+    pub fn get_latest_pos_state(&self) -> Arc<PosState> {
+        self.latest_pos_state.load().clone()
     }
 }
 

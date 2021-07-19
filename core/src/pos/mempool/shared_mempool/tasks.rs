@@ -279,6 +279,7 @@ pub(crate) async fn process_incoming_transactions(
                         let ranking_score = validation_result.score();
                         let governance_role =
                             validation_result.governance_role();
+                        diem_debug!("process_incoming_transaction: add_txn");
                         let mempool_status = mempool.add_txn(
                             transaction.clone(),
                             gas_amount,

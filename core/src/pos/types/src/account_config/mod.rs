@@ -16,7 +16,27 @@ pub fn pivot_chain_select_address() -> AccountAddress {
         .expect("Parsing valid hex literal should always succeed")
 }
 
+pub fn election_select_address() -> AccountAddress {
+    AccountAddress::from_hex_literal("0x1DA")
+        .expect("Parsing valid hex literal should always succeed")
+}
+
+pub fn retire_address() -> AccountAddress {
+    AccountAddress::from_hex_literal("0x1DB")
+        .expect("Parsing valid hex literal should always succeed")
+}
+
 pub fn unlock_address() -> AccountAddress {
     AccountAddress::from_hex_literal("0x1DC")
+        .expect("Parsing valid hex literal should always succeed")
+}
+
+pub fn register_address() -> AccountAddress {
+    AccountAddress::from_hex_literal("0x1DD")
+        .expect("Parsing valid hex literal should always succeed")
+}
+
+pub fn update_voting_power_address() -> AccountAddress {
+    AccountAddress::from_hex_literal("0x1DE")
         .expect("Parsing valid hex literal should always succeed")
 }

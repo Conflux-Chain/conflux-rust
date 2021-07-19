@@ -10,6 +10,7 @@ use crate::{
     },
     db::NUM_COLUMNS,
     machine::new_machine_with_builtin,
+    pos::pow_handler::PowHandler,
     pow::{self, PowComputer, ProofOfWorkConfig},
     spec::genesis::genesis_block,
     statistics::Statistics,
@@ -29,10 +30,12 @@ use cfx_storage::{StorageConfiguration, StorageManager};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use core::str::FromStr;
 use parking_lot::Mutex;
+use pow_types::FakePowHandler;
 use primitives::{Block, BlockHeaderBuilder};
 use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
 use storage_interface::DBReaderForPoW;
 use threadpool::ThreadPool;
+use tokio::runtime;
 
 pub fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: U256,
@@ -252,6 +255,13 @@ pub fn initialize_synchronization_graph_with_data_manager(
         notifications,
         machine,
         pos_verifier.clone(),
+        Arc::new(PowHandler::new(
+            runtime::Builder::new_multi_thread()
+                .build()
+                .expect("Failed to create Tokio runtime!")
+                .handle()
+                .clone(),
+        )),
     ));
 
     (sync, consensus)

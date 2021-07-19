@@ -83,11 +83,11 @@ diem-secure-storage = { path = "../core/src/pos/secure/storage" }
 diem-temppath = { path = "../core/src/pos/common/temppath" }
 diem-time-service = { path = "../core/src/pos/common/time-service" }
 diem-types = { path = "../core/src/pos/types" }
+pow-types = {path = "../core/src/pos/types/pow-types" }
 executor-types = { path = "../core/src/pos/types/executor-types" }
 executor = { path = "../core/src/pos/consensus/executor" }
 fail = "0.4.0"
 storage-interface = { path = "../core/src/pos/storage/storage-interface" }
-
 
 [dev-dependencies]
 criterion = "0.2"

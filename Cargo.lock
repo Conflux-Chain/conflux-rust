@@ -1115,6 +1115,7 @@ dependencies = [
  "num-bigint",
  "order-stat",
  "parking_lot 0.11.1",
+ "pow-types",
  "primitives",
  "rand 0.7.3",
  "rand_xorshift 0.2.0",
@@ -1677,6 +1678,7 @@ dependencies = [
  "criterion 0.3.4",
  "curve25519-dalek-fiat",
  "diem-crypto-derive",
+ "diem-logger",
  "digest 0.9.0",
  "ed25519-dalek-fiat",
  "hex 0.4.3",
@@ -1933,6 +1935,7 @@ dependencies = [
  "mirai-annotations",
  "move-core-types",
  "once_cell",
+ "pow-types",
  "proptest",
  "proptest-derive",
  "rand 0.8.3",
@@ -4522,9 +4525,9 @@ dependencies = [
 name = "pow-types"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "cfx-types",
- "diem-types",
 ]
 
 [[package]]
