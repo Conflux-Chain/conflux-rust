@@ -67,6 +67,8 @@ impl Default for BlockRewardResult {
     }
 }
 
+pub type BlockRewardsInfo = BlockDataWithMultiVersion<H256, BlockRewardResult>;
+
 #[derive(Clone, Debug, DeriveMallocSizeOf)]
 pub struct DataVersionTuple<Version, T>(pub Version, pub T);
 

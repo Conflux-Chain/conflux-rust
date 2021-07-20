@@ -51,6 +51,7 @@ use hash::KECCAK_EMPTY_LIST_RLP;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
+    compute_block_number,
     receipt::{
         BlockReceipts, Receipt,
         TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
@@ -912,6 +913,7 @@ impl ConsensusExecutionHandler {
                 &epoch_block_hashes,
                 on_local_pivot,
                 self.config.executive_trace,
+                reward_execution_info,
             )
         {
             let pivot_block_header = self
@@ -1015,6 +1017,7 @@ impl ConsensusExecutionHandler {
             self.process_rewards_and_fees(
                 &mut state,
                 &reward_execution_info,
+                epoch_hash,
                 on_local_pivot,
                 debug_record.as_deref_mut(),
                 self.machine.spec(start_block_number).account_start_nonce,
@@ -1042,12 +1045,22 @@ impl ConsensusExecutionHandler {
                 .commit(*epoch_hash, debug_record)
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
         };
+
         self.data_man.insert_epoch_execution_commitment(
             pivot_block.hash(),
             state_root.clone(),
             compute_receipts_root(&epoch_receipts),
             BlockHeaderBuilder::compute_block_logs_bloom_hash(&epoch_receipts),
         );
+
+        // persist block number index
+        for (index, hash) in epoch_block_hashes.iter().enumerate() {
+            self.data_man.insert_hash_by_block_number(
+                compute_block_number(start_block_number, index as u64),
+                hash,
+            );
+        }
+
         let epoch_execution_commitment = self
             .data_man
             .get_epoch_execution_commitment(&epoch_hash)
@@ -1331,7 +1344,7 @@ impl ConsensusExecutionHandler {
     /// anticone difficulty
     fn process_rewards_and_fees(
         &self, state: &mut State, reward_info: &RewardExecutionInfo,
-        on_local_pivot: bool,
+        epoch_later: &H256, on_local_pivot: bool,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
         account_start_nonce: U256,
     )
@@ -1584,6 +1597,7 @@ impl ConsensusExecutionHandler {
             if on_local_pivot {
                 self.data_man.insert_block_reward_result(
                     block_hash,
+                    epoch_later,
                     BlockRewardResult {
                         total_reward,
                         tx_fee,

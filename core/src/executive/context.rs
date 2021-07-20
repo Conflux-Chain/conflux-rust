@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 // Transaction execution environment.
-use super::{executive::*, suicide as suicide_impl};
+use super::{executive::*, suicide as suicide_impl, InternalRefContext};
 use crate::{
     bytes::Bytes,
     machine::Machine,
@@ -18,9 +18,7 @@ use crate::{
 use cfx_parameters::staking::{
     code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
-use cfx_state::{
-    state_trait::StateOpsTrait, StateTrait, SubstateMngTrait, SubstateTrait,
-};
+use cfx_state::{StateTrait, SubstateMngTrait, SubstateTrait};
 use cfx_types::{Address, H256, U256};
 use primitives::transaction::UNSIGNED_SENDER;
 use std::sync::Arc;
@@ -65,18 +63,6 @@ pub struct Context<
     state: &'b mut State,
     callstack: &'b mut CallStackInfo,
     local_part: &'b mut LocalContext<'a, Substate>,
-}
-
-/// The internal contracts need to access the context parameter directly, e.g.,
-/// `foo(env, spec)`. But `foo(context.env(), context.spec())` will incur
-/// lifetime issue. The `InternalRefContext` contains the parameters required by
-/// the internal contracts.
-pub struct InternalRefContext<'a> {
-    pub env: &'a Env,
-    pub spec: &'a Spec,
-    pub callstack: &'a mut CallStackInfo,
-    pub state: &'a mut dyn StateOpsTrait,
-    pub substate: &'a mut dyn SubstateTrait,
 }
 
 /// The `LocalContext` only contains the parameters can be owned by an
@@ -449,11 +435,8 @@ impl<
     fn is_static(&self) -> bool { self.local_part.static_flag }
 
     fn is_static_or_reentrancy(&self) -> bool {
-        self.local_part.static_flag || self.callstack.in_reentrancy()
-    }
-
-    fn is_reentrancy(&self, _caller: &Address, callee: &Address) -> bool {
-        self.callstack.reentrancy_happens_when_push(callee)
+        self.local_part.static_flag
+            || self.callstack.in_reentrancy(self.local_part.spec)
     }
 
     fn internal_ref(&mut self) -> InternalRefContext {
@@ -463,6 +446,7 @@ impl<
             callstack: self.callstack,
             state: self.state,
             substate: &mut self.local_part.substate,
+            static_flag: self.local_part.static_flag,
         }
     }
 }
@@ -538,7 +522,7 @@ mod tests {
             );
             let env = get_test_env();
             let spec = machine.spec(env.number);
-            let callstack = CallStackInfo::default();
+            let callstack = CallStackInfo::new();
 
             let mut setup = Self {
                 storage_manager,
@@ -563,7 +547,7 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
-        let mut callstack = CallStackInfo::default();
+        let mut callstack = CallStackInfo::new();
 
         let mut lctx = LocalContext::new(
             &setup.env,
@@ -585,7 +569,7 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
-        let mut callstack = CallStackInfo::default();
+        let mut callstack = CallStackInfo::new();
 
         let mut lctx = LocalContext::new(
             &setup.env,
@@ -704,7 +688,7 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let origin = get_test_origin();
-        let mut callstack = CallStackInfo::default();
+        let mut callstack = CallStackInfo::new();
 
         {
             let mut lctx = LocalContext::new(
@@ -731,7 +715,7 @@ mod tests {
         let mut setup = TestSetup::new();
         let state = &mut setup.state;
         let mut origin = get_test_origin();
-        let mut callstack = CallStackInfo::default();
+        let mut callstack = CallStackInfo::new();
 
         let mut contract_address = Address::zero();
         contract_address.set_contract_type_bits();

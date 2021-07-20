@@ -278,6 +278,7 @@ build_config! {
         (get_logs_epoch_batch_size, (usize), 32)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (persist_tx_index, (bool), false)
+        (persist_block_number_index, (bool), false)
         (print_memory_usage_period_s, (Option<u64>), None)
         (target_block_gas_limit, (u64), DEFAULT_TARGET_BLOCK_GAS_LIMIT)
         (executive_trace, (bool), false)
@@ -780,6 +781,9 @@ impl Configuration {
     pub fn data_mananger_config(&self) -> DataManagerConfiguration {
         let mut conf = DataManagerConfiguration {
             persist_tx_index: self.raw_conf.persist_tx_index,
+            persist_block_number_index: self
+                .raw_conf
+                .persist_block_number_index,
             tx_cache_index_maintain_timeout: Duration::from_millis(
                 self.raw_conf.tx_cache_index_maintain_timeout_ms,
             ),

@@ -66,6 +66,7 @@ use crate::{
     },
 };
 use cfx_addr::Network;
+use cfx_parameters::consensus_internal::REWARD_EPOCH_COUNT;
 use cfxcore::{
     consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
@@ -1053,6 +1054,24 @@ impl RpcImpl {
             "RPC Request: cfx_getBlockRewardInfo epoch_number={:?}",
             epoch
         );
+        let epoch_height: U64 = self
+            .consensus_graph()
+            .get_height_from_epoch_number(epoch.clone().into_primitive())?
+            .into();
+        let (epoch_later_number, overflow) =
+            epoch_height.overflowing_add(REWARD_EPOCH_COUNT.into());
+        if overflow {
+            bail!(invalid_params("epoch", "Epoch number overflows!"));
+        }
+        let epoch_later = match self.consensus.get_hash_from_epoch_number(
+            EpochNumber::Num(epoch_later_number).into_primitive(),
+        ) {
+            Ok(hash) => hash,
+            Err(e) => {
+                debug!("get_block_reward_info: get_hash_from_epoch_number returns error: {}", e);
+                bail!(invalid_params("epoch", "Reward not calculated yet!"))
+            }
+        };
 
         let blocks = self.consensus.get_block_hashes_by_epoch(epoch.into())?;
 
@@ -1061,7 +1080,12 @@ impl RpcImpl {
             if let Some(reward_result) = self
                 .consensus
                 .get_data_manager()
-                .block_reward_result_by_hash(&b)
+                .block_reward_result_by_hash_with_epoch(
+                    &b,
+                    &epoch_later,
+                    false, // update_pivot_assumption
+                    true,  // update_cache
+                )
             {
                 if let Some(block_header) =
                     self.consensus.get_data_manager().block_header_by_hash(&b)
@@ -1526,6 +1550,7 @@ impl Cfx for CfxHandler {
                 -> BoxFuture<RpcBlock>;
             fn block_by_hash(&self, hash: H256, include_txs: bool)
                 -> BoxFuture<Option<RpcBlock>>;
+            fn block_by_block_number(&self, block_number: U64, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;
             fn confirmation_risk_by_hash(&self, block_hash: H256) -> JsonRpcResult<Option<U256>>;
             fn blocks_by_epoch(&self, num: EpochNumber) -> JsonRpcResult<Vec<H256>>;
             fn skipped_blocks_by_epoch(&self, num: EpochNumber) -> JsonRpcResult<Vec<H256>>;

@@ -6,14 +6,18 @@ mod activate_at;
 mod contracts;
 pub mod function;
 mod impls;
+mod internal_context;
 
-pub use self::{contracts::InternalContractMap, impls::suicide};
+pub use self::{
+    contracts::InternalContractMap,
+    impls::{get_reentrancy_allowance, suicide},
+    internal_context::InternalRefContext,
+};
 pub use solidity_abi::ABIDecodeError;
 
 use self::{activate_at::IsActive, contracts::SolFnTable};
 use crate::{
     bytes::Bytes,
-    executive::InternalRefContext,
     hash::keccak,
     spec::CommonParams,
     trace::{trace::ExecTrace, Tracer},
@@ -21,6 +25,7 @@ use crate::{
 };
 use cfx_types::{Address, H256};
 use primitives::BlockNumber;
+use solidity_abi::{ABIEncodable, EventIndexEncodable};
 use std::sync::Arc;
 
 lazy_static! {
@@ -64,7 +69,9 @@ pub trait InternalContractTrait: Send + Sync + IsActive {
         let solidity_fn = func_table
             .get(&fn_sig)
             .filter(|&func| func.is_active(context.spec))
-            .ok_or(vm::Error::InternalContract("unsupported function"))?;
+            .ok_or(vm::Error::InternalContract(
+                "unsupported function".into(),
+            ))?;
 
         solidity_fn.execute(call_params, params, context, tracer)
     }
@@ -93,4 +100,30 @@ pub trait SolidityFunctionTrait: Send + Sync + IsActive {
         answer.clone_from_slice(&keccak(self.name()).as_ref()[0..4]);
         answer
     }
+}
+
+/// Native implementation of a solidity-interface function.
+pub trait SolidityEventTrait: Send + Sync {
+    type Indexed: EventIndexEncodable;
+    type NonIndexed: ABIEncodable;
+
+    fn log(
+        indexed: &Self::Indexed, non_indexed: &Self::NonIndexed,
+        param: &ActionParams, context: &mut InternalRefContext,
+        _tracer: &mut dyn Tracer<Output = ExecTrace>,
+    ) -> vm::Result<()>
+    {
+        let mut topics = vec![Self::event_sig()];
+        topics.extend_from_slice(&indexed.indexed_event_encode());
+
+        let data = non_indexed.abi_encode();
+
+        context.log(param, context.spec, topics, data)
+    }
+
+    /// The string for function sig
+    fn name() -> &'static str;
+
+    /// The event signature
+    fn event_sig() -> H256 { keccak(Self::name()) }
 }
