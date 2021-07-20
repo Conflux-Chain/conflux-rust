@@ -242,7 +242,6 @@ impl DiemDB {
             TRANSACTION_BY_ACCOUNT_CF_NAME,
             TRANSACTION_INFO_CF_NAME,
             LEDGER_INFO_BY_BLOCK_CF_NAME,
-            TERM_VDF_OUTPUT_CF_NAME,
             POS_STATE_CF_NAME,
         ]
     }
@@ -961,11 +960,6 @@ impl DbReader for DiemDB {
     fn get_latest_pos_state(&self) -> Arc<PosState> {
         self.ledger_store.get_latest_pos_state()
     }
-
-    fn get_term_vdf_output(&self, term_num: u64) -> Result<Vec<u8>> {
-        diem_debug!("get_term_vdf_output:{}", term_num);
-        self.ledger_store.get_term_vdf_output(term_num)
-    }
 }
 
 impl DbWriter for DiemDB {
@@ -1070,13 +1064,6 @@ impl DbWriter for DiemDB {
 
             Ok(())
         })
-    }
-
-    fn put_term_vdf_output(
-        &self, term_num: u64, vdf_output: Vec<u8>,
-    ) -> Result<()> {
-        diem_debug!("put_term_vdf_output:{}", term_num);
-        self.ledger_store.put_term_vdf_output(term_num, vdf_output)
     }
 }
 

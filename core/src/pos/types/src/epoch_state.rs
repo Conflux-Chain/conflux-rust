@@ -21,6 +21,8 @@ pub struct EpochState {
     pub epoch: u64,
 
     pub verifier: ValidatorVerifier,
+
+    pub vrf_seed: Vec<u8>,
 }
 
 impl EpochState {
@@ -28,6 +30,7 @@ impl EpochState {
         Self {
             epoch: 0,
             verifier: ValidatorVerifier::new(BTreeMap::new()),
+            vrf_seed: vec![],
         }
     }
 }

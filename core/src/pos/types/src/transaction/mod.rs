@@ -510,8 +510,6 @@ pub struct ElectionPayload {
     pub public_key: ConsensusPublicKey,
     pub vrf_public_key: ConsensusVRFPublicKey,
     pub target_term: u64,
-    // FIXME(lpl): Add delay function.
-    // vdf_output: VDFOutput
     pub vrf_proof: ConsensusVRFProof,
 }
 

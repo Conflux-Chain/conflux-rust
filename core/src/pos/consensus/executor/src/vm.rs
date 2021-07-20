@@ -51,7 +51,7 @@ impl VMExecutor for FakeVM {
                     let mut events = state_view.pos_state().get_unlock_events();
                     // FIXME(lpl)
                     if (state_view.pos_state().current_view() + 1) % 60 == 0 {
-                        let (validator_verifier, _seed) = state_view
+                        let (validator_verifier, vrf_seed) = state_view
                             .pos_state()
                             .get_new_committee()
                             .map_err(|e| {
@@ -62,6 +62,7 @@ impl VMExecutor for FakeVM {
                                 + 1 / 60
                                 + 1,
                             verifier: validator_verifier,
+                            vrf_seed,
                         })
                         .unwrap();
                         let contract_event = ContractEvent::new(
