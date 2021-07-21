@@ -1576,21 +1576,34 @@ impl ConsensusGraphTrait for ConsensusGraph {
         &self, block_hash: &H256,
     ) -> Result<Option<u64>, String> {
         let inner = self.inner.read_recursive();
-        let epoch_number = match inner.get_block_epoch_number(block_hash) {
+
+        let epoch_number = match inner
+            .get_block_epoch_number(block_hash)
+            .or_else(|| self.data_man.block_epoch_number(&block_hash))
+        {
             None => return Ok(None),
             Some(epoch_number) => epoch_number,
         };
-        let epoch_hash = match inner.epoch_hash(epoch_number) {
+
+        let blocks = match self
+            .get_block_hashes_by_epoch(EpochNumber::Number(epoch_number))
+            .ok()
+            .or_else(|| {
+                self.data_man
+                    .executed_epoch_set_hashes_from_db(epoch_number)
+            }) {
             None => return Ok(None),
-            Some(hash) => hash,
+            Some(hashes) => hashes,
         };
-        let blocks =
-            self.get_block_hashes_by_epoch(EpochNumber::Number(epoch_number))?;
+
+        let epoch_hash = blocks.last().expect("Epoch not empty");
+
         let start_block_number =
             match self.data_man.get_epoch_execution_context(&epoch_hash) {
                 None => return Ok(None),
                 Some(ctx) => ctx.start_block_number,
             };
+
         let index_of_block = match blocks.iter().position(|x| x == block_hash) {
             None => return Ok(None),
             Some(index) => index as u64,
