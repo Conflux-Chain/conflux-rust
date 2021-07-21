@@ -883,8 +883,7 @@ use diem_config::{
     keys::ConfigKey,
 };
 use diem_types::{
-    account_address::{from_consensus_public_key},
-    term_state::NodeID,
+    account_address::from_consensus_public_key, term_state::NodeID,
 };
 use jsonrpc_http_server::Server as HttpServer;
 use jsonrpc_tcp_server::Server as TcpServer;

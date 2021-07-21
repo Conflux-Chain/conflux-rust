@@ -97,7 +97,6 @@
 //! [`Slab::with_capacity`]: struct.Slab.html#with_capacity
 
 #![deny(warnings, missing_debug_implementations)]
-#![doc(html_root_url = "https://docs.rs/slab/0.4.1")]
 
 use super::super::{
     super::utils::{UnsafeCellExtension, WrappedCreateFrom},
