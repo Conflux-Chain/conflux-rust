@@ -53,9 +53,10 @@ pub use script::{
 };
 
 use crate::{
+    account_address::from_consensus_public_key,
     block_info::{PivotBlockDecision, Round},
     term_state::{
-        ElectionEvent, NodeID, RegisterEvent, RetireEvent,
+        DisputeEvent, ElectionEvent, NodeID, RegisterEvent, RetireEvent,
         UpdateVotingPowerEvent,
     },
     validator_config::{
@@ -422,6 +423,7 @@ impl RawTransaction {
             TransactionPayload::UpdateVotingPower(_) => {
                 ("update_voting_power".to_string(), vec![])
             }
+            TransactionPayload::Dispute(_) => ("dispute".to_string(), vec![]),
         };
         let mut f_args: String = "".to_string();
         for arg in args {
@@ -479,9 +481,12 @@ pub enum TransactionPayload {
     Retire(RetirePayload),
 
     Register(RegisterPayload),
+
     UpdateVotingPower(UpdateVotingPowerPayload),
 
     PivotDecision(PivotBlockDecision),
+
+    Dispute(DisputePayload),
 }
 
 impl TransactionPayload {
@@ -586,6 +591,35 @@ impl UpdateVotingPowerPayload {
         );
         ContractEvent::new(
             UpdateVotingPowerEvent::event_key(),
+            0,                                      /* sequence_number */
+            TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
+            bcs::to_bytes(&event).unwrap(),
+        )
+    }
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub struct DisputePayload {
+    pub address: AccountAddress,
+    pub bls_pub_key: ConsensusPublicKey,
+    pub vrf_pub_key: ConsensusVRFPublicKey,
+    pub conflicting_votes: ConflictSignature,
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub enum ConflictSignature {
+    // Use raw bytes instead of `Proposal` or `Vote` to avoid dependency loop.
+    Proposal((Vec<u8>, Vec<u8>)),
+    Vote((Vec<u8>, Vec<u8>)),
+}
+
+impl DisputePayload {
+    pub fn to_event(&self) -> ContractEvent {
+        let event = DisputeEvent {
+            node_id: self.address,
+        };
+        ContractEvent::new(
+            DisputeEvent::event_key(),
             0,                                      /* sequence_number */
             TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
             bcs::to_bytes(&event).unwrap(),

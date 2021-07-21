@@ -839,3 +839,19 @@ impl UnlockEvent {
         bcs::from_bytes(bytes).map_err(Into::into)
     }
 }
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct DisputeEvent {
+    /// The node id to dispute.
+    pub node_id: AccountAddress,
+}
+
+impl DisputeEvent {
+    pub fn event_key() -> EventKey {
+        EventKey::new_from_address(&account_config::dispute_address(), 6)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
+        bcs::from_bytes(bytes).map_err(Into::into)
+    }
+}

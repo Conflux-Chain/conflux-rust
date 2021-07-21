@@ -989,6 +989,11 @@ impl RoundManager {
                 self.new_tc_aggregated(tc).await
             }
             VoteReceptionResult::VoteAdded(_) => Ok(()),
+            VoteReceptionResult::EquivocateVote => {
+                // Attack detected!
+                // Construct a transaction to dispute this signer.
+                bail!("EquivocateVote!")
+            }
             // Return error so that duplicate or invalid votes will not be
             // broadcast to others.
             r => bail!("vote not added with result {:?}", r),

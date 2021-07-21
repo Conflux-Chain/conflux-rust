@@ -1,7 +1,12 @@
-use diem_logger::error as diem_error;
+use consensus_types::{
+    block::Block, block_data::BlockType::Proposal, proposal_msg::ProposalMsg,
+    vote::Vote,
+};
+use diem_logger::{error as diem_error, prelude::*};
 use diem_state_view::StateView;
 use diem_types::{
     access_path::AccessPath,
+    account_address::from_consensus_public_key,
     account_config::pivot_chain_select_address,
     block_info::PivotBlockDecision,
     contract_event::ContractEvent,
@@ -11,13 +16,16 @@ use diem_types::{
         self, config_address, new_epoch_event_key, OnChainConfig, ValidatorSet,
     },
     transaction::{
-        Transaction, TransactionOutput, TransactionPayload, TransactionStatus,
-        WriteSetPayload,
+        ConflictSignature, DisputePayload, Transaction, TransactionOutput,
+        TransactionPayload, TransactionStatus, WriteSetPayload,
     },
+    validator_info::ValidatorInfo,
+    validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
     vm_status::{KeptVMStatus, StatusCode, VMStatus},
     write_set::{WriteOp, WriteSet, WriteSetMut},
 };
 use move_core_types::language_storage::TypeTag;
+use std::collections::BTreeMap;
 
 /// This trait describes the VM's execution interface.
 pub trait VMExecutor: Send {
@@ -146,8 +154,6 @@ impl VMExecutor for FakeVM {
                             vec![retire_payload.to_event()]
                         }
                         TransactionPayload::PivotDecision(pivot_decision) => {
-                            // The validation is handled in
-                            // `post_process_state_compute_result`.
                             vec![pivot_decision.to_event()]
                         }
                         TransactionPayload::Register(register) => {
@@ -155,6 +161,14 @@ impl VMExecutor for FakeVM {
                         }
                         TransactionPayload::UpdateVotingPower(update) => {
                             vec![update.to_event()]
+                        }
+                        TransactionPayload::Dispute(dispute) => {
+                            if Self::verify_dispute(dispute) {
+                                return Err(VMStatus::Error(
+                                    StatusCode::CFX_INVALID_TX,
+                                ));
+                            }
+                            vec![dispute.to_event()]
                         }
                         _ => {
                             return Err(VMStatus::Error(
@@ -218,5 +232,98 @@ impl FakeVM {
         }
 
         TransactionOutput::new(write_set.freeze().unwrap(), events, 0, status)
+    }
+
+    /// Return true if the dispute is valid.
+    /// Return false if the encoding is invalid or the provided signatures are
+    /// not from the same round.
+    fn verify_dispute(dispute: &DisputePayload) -> bool {
+        let computed_address = from_consensus_public_key(
+            &dispute.bls_pub_key,
+            &dispute.vrf_pub_key,
+        );
+        if dispute.address != computed_address {
+            diem_trace!("Incorrect address and public keys");
+            return false;
+        }
+        match &dispute.conflicting_votes {
+            ConflictSignature::Proposal((proposal_byte1, proposal_byte2)) => {
+                let proposal1: Block =
+                    match bcs::from_bytes(proposal_byte1.as_slice()) {
+                        Ok(proposal) => proposal,
+                        Err(e) => {
+                            diem_trace!("1st proposal encoding error: {:?}", e);
+                            return false;
+                        }
+                    };
+                let proposal2: Block =
+                    match bcs::from_bytes(proposal_byte2.as_slice()) {
+                        Ok(proposal) => proposal,
+                        Err(e) => {
+                            diem_trace!("2nd proposal encoding error: {:?}", e);
+                            return false;
+                        }
+                    };
+                if proposal1.block_data().round()
+                    != proposal2.block_data().round()
+                {
+                    diem_trace!("Two proposals are from different rounds");
+                    return false;
+                }
+                let mut temp_map = BTreeMap::new();
+                temp_map.insert(
+                    dispute.address,
+                    ValidatorConsensusInfo::new(
+                        dispute.bls_pub_key.clone(),
+                        Some(dispute.vrf_pub_key.clone()),
+                        1,
+                    ),
+                );
+                let temp_verifier = ValidatorVerifier::new(temp_map);
+                if proposal1.validate_signature(&temp_verifier).is_err()
+                    || proposal2.validate_signature(&temp_verifier).is_err()
+                {
+                    return false;
+                }
+            }
+            ConflictSignature::Vote((vote_byte1, vote_byte2)) => {
+                let vote1: Vote = match bcs::from_bytes(vote_byte1.as_slice()) {
+                    Ok(vote) => vote,
+                    Err(e) => {
+                        diem_trace!("1st vote encoding error: {:?}", e);
+                        return false;
+                    }
+                };
+                let vote2: Vote = match bcs::from_bytes(vote_byte2.as_slice()) {
+                    Ok(vote) => vote,
+                    Err(e) => {
+                        diem_trace!("2nd vote encoding error: {:?}", e);
+                        return false;
+                    }
+                };
+                if vote1.vote_data().proposed().round()
+                    != vote2.vote_data().proposed().round()
+                {
+                    diem_trace!("Two votes are from different rounds");
+                    return false;
+                }
+                let mut temp_map = BTreeMap::new();
+                temp_map.insert(
+                    dispute.address,
+                    ValidatorConsensusInfo::new(
+                        dispute.bls_pub_key.clone(),
+                        Some(dispute.vrf_pub_key.clone()),
+                        1,
+                    ),
+                );
+                let temp_verifier = ValidatorVerifier::new(temp_map);
+                if vote1.verify(&temp_verifier).is_err()
+                    || vote2.verify(&temp_verifier).is_err()
+                {
+                    return false;
+                }
+            }
+        }
+        true
     }
 }
