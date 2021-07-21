@@ -117,33 +117,35 @@ impl PeerManager {
     }
 
     // Returns true if `peer` is discovered for the first time, else false.
-    /*pub fn add_peer(
-        &self, peer: PeerNetworkId, metadata: ConnectionMetadata,
-    ) -> bool {
+    pub fn add_peer(
+        &self,
+        peer: NodeId, //metadata: ConnectionMetadata,
+    ) -> bool
+    {
         let mut peer_states = self.peer_states.lock();
         let is_new_peer = !peer_states.contains_key(&peer);
-        if self.is_upstream_peer(&peer, Some(&metadata)) {
-            // If we have a new peer, let's insert new data, otherwise, let's
-            // just update the current state
-            if is_new_peer {
-                counters::active_upstream_peers(&peer.raw_network_id()).inc();
-                peer_states.insert(peer, PeerSyncState::new(metadata));
-            } else if let Some(peer_state) = peer_states.get_mut(&peer) {
-                if !peer_state.is_alive {
-                    counters::active_upstream_peers(&peer.raw_network_id())
-                        .inc();
-                }
-                peer_state.is_alive = true;
-                peer_state.metadata = metadata;
+        //if self.is_upstream_peer(&peer, Some(&metadata)) {
+        // If we have a new peer, let's insert new data, otherwise, let's
+        // just update the current state
+        if is_new_peer {
+            //counters::active_upstream_peers(&peer.raw_network_id()).inc();
+            peer_states.insert(peer, PeerSyncState::new(/*metadata*/));
+        } else if let Some(peer_state) = peer_states.get_mut(&peer) {
+            if !peer_state.is_alive {
+                //counters::active_upstream_peers(&peer.raw_network_id())
+                //    .inc();
             }
+            peer_state.is_alive = true;
+            //peer_state.metadata = metadata;
         }
+        //}
         drop(peer_states);
 
         // Always need to update the prioritized peers, because of `is_alive`
         // state changes
         self.update_prioritized_peers();
         is_new_peer
-    }*/
+    }
 
     /*/// Disables a peer if it can be restarted, otherwise removes it
     pub fn disable_peer(&self, peer: PeerNetworkId) {

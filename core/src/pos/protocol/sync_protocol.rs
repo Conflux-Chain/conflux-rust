@@ -10,6 +10,7 @@ use crate::{
         mempool::network::{MempoolSyncMsg, NetworkTask as MempoolNetworkTask},
         protocol::{
             message::{block_retrieval::BlockRetrievalRpcRequest, msgid},
+            network_event::NetworkEvent,
             request_manager::{
                 request_handler::AsAny, RequestManager, RequestMessage,
             },
@@ -43,7 +44,7 @@ use network::{
 };
 use parking_lot::RwLock;
 use serde::Deserialize;
-use std::{collections::HashMap, fmt::Debug, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, mem::discriminant, sync::Arc};
 
 #[derive(Default)]
 pub struct PeerState {
@@ -577,6 +578,12 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
         }
 
         if let Some(public_key) = pos_public_key {
+            if (add_new_peer) {
+                let event = NetworkEvent::PeerConnected;
+                self.mempool_network_task
+                    .network_events_tx
+                    .push((*node_id, discriminant(&event)), (*node_id, event));
+            }
             self.pos_peer_mapping
                 .write()
                 .insert(public_key.0.clone(), peer_hash);
