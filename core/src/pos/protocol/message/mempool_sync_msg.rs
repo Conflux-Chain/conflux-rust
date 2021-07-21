@@ -9,8 +9,7 @@ use crate::{
     },
     sync::Error,
 };
-use diem_types::account_address::AccountAddress;
-use std::{cmp::Ordering, mem::discriminant};
+use std::mem::discriminant;
 
 impl Handleable for MempoolSyncMsg {
     fn handle(self, ctx: &Context) -> Result<(), Error> {

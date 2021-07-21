@@ -29,7 +29,6 @@ use crate::{
 use cfx_internal_common::ChainIdParamsDeprecated;
 use cfx_parameters::{block::MAX_BLOCK_SIZE_IN_BYTES, sync::*};
 use cfx_types::H256;
-use diem_crypto::ed25519::Ed25519PublicKey;
 use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 use io::TimerToken;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};

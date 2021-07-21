@@ -3,18 +3,8 @@
 
 //! Interface between Mempool and Network layers.
 
-use crate::pos::{
-    mempool::counters,
-    protocol::{
-        network_sender::NetworkSender,
-        sync_protocol::HotStuffSynchronizationProtocol,
-    },
-};
 use channel::{diem_channel, message_queues::QueueStyle};
-use consensus_types::common::Author;
-use diem_metrics::IntCounterVec;
 use diem_types::transaction::SignedTransaction;
-use fail::fail_point;
 use network::node_table::NodeId;
 use serde::{Deserialize, Serialize};
 use std::mem::Discriminant;

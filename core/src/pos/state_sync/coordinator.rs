@@ -5,19 +5,17 @@ use crate::pos::{
     mempool::{CommitNotification, CommitResponse, CommittedTransaction},
     state_sync::{
         chunk_request::{GetChunkRequest, TargetType},
-        chunk_response::{GetChunkResponse, ResponseLedgerInfo},
+        chunk_response::ResponseLedgerInfo,
         client::{CoordinatorMessage, SyncRequest},
         counters,
         error::Error,
         executor_proxy::ExecutorProxyTrait,
         logging::{LogEntry, LogEvent, LogSchema},
-        network::StateSyncMessage,
         shared_components::SyncState,
     },
 };
-use diem_config::{
-    config::{NodeConfig, PeerNetworkId, RoleType, StateSyncConfig},
-    network_id::NodeNetworkId,
+use diem_config::config::{
+    NodeConfig, PeerNetworkId, RoleType, StateSyncConfig,
 };
 use diem_logger::prelude::*;
 use diem_types::{
@@ -25,12 +23,9 @@ use diem_types::{
     ledger_info::LedgerInfoWithSignatures,
     transaction::{Transaction, TransactionListWithProof, Version},
     waypoint::Waypoint,
-    PeerId,
 };
-use fail::fail_point;
 use futures::{
     channel::{mpsc, oneshot},
-    stream::select_all,
     StreamExt,
 };
 use std::{

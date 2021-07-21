@@ -23,13 +23,9 @@ use cfxcore::{
     sync::ProtocolConfiguration,
 };
 use diem_config::{config::NodeConfig, utils::get_genesis_txn};
-use diem_crypto::ed25519::Ed25519PublicKey;
 use diem_logger::prelude::*;
-use diem_metrics::metric_server;
 use diem_types::{
-    account_address::{
-        from_consensus_public_key, from_public_key, AccountAddress,
-    },
+    account_address::{from_consensus_public_key, AccountAddress},
     block_info::PivotBlockDecision,
     term_state::NodeID,
     validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
@@ -43,12 +39,10 @@ use network::NetworkService;
 use pow_types::FakePowHandler;
 use std::{
     boxed::Box,
-    path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    thread,
     time::Instant,
 };
 use storage_interface::DbReaderWriter;
@@ -64,7 +58,7 @@ pub struct DiemHandle {
     pub stopped: Arc<AtomicBool>,
     _mempool: Runtime,
     _state_sync_bootstrapper: StateSyncBootstrapper,
-    consensus_runtime: Runtime,
+    _consensus_runtime: Runtime,
 }
 
 pub fn start_pos_consensus(
@@ -123,6 +117,7 @@ pub fn start_pos_consensus(
     )
 }
 
+#[allow(unused)]
 fn setup_metrics(peer_id: PeerId, config: &NodeConfig) {
     diem_metrics::dump_all_metrics_to_file_periodically(
         &config.metrics.dir(),
@@ -301,7 +296,7 @@ pub fn setup_pos_environment(
 
     DiemHandle {
         pow_handler,
-        consensus_runtime,
+        _consensus_runtime: consensus_runtime,
         stopped,
         _state_sync_bootstrapper: state_sync_bootstrapper,
         _mempool: mempool,

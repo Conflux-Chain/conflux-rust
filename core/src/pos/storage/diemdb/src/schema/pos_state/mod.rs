@@ -16,7 +16,7 @@
 use crate::schema::POS_STATE_CF_NAME;
 use anyhow::Result;
 use diem_crypto::hash::HashValue;
-use diem_types::{ledger_info::LedgerInfoWithSignatures, term_state::PosState};
+use diem_types::term_state::PosState;
 use schemadb::{
     define_schema,
     schema::{KeyCodec, ValueCodec},

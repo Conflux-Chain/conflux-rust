@@ -32,9 +32,6 @@ pub mod block_test_utils;
 #[path = "block_test.rs"]
 pub mod block_test;
 
-/// FIXME(lpl): Update seed according to VDF.
-pub const VRF_SEED: &[u8] = "seed".as_bytes();
-
 #[derive(Serialize, Clone, PartialEq, Eq)]
 /// Block has the core data of a consensus block that should be persistent when
 /// necessary. Each block must know the id of its parent and keep the

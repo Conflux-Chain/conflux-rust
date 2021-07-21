@@ -53,7 +53,7 @@ pub use script::{
 };
 
 use crate::{
-    block_info::{PivotBlockDecision, Round},
+    block_info::PivotBlockDecision,
     term_state::{
         ElectionEvent, NodeID, RegisterEvent, RetireEvent,
         UpdateVotingPowerEvent,

@@ -12,9 +12,7 @@ use crate::{
     SessionMetadata, UpdateNodeOperation, PROTOCOL_ID_SIZE,
 };
 use bytes::Bytes;
-use diem_crypto::{
-    bls::BLS_PUBLIC_KEY_LENGTH, ed25519::Ed25519PublicKey, ValidCryptoMaterial,
-};
+use diem_crypto::{bls::BLS_PUBLIC_KEY_LENGTH, ValidCryptoMaterial};
 use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 use io::*;
 use mio::{tcp::*, *};
@@ -22,7 +20,7 @@ use priority_send_queue::SendQueuePriority;
 use rlp::{Rlp, RlpStream};
 use serde_derive::Serialize;
 use std::{
-    convert::{TryFrom, TryInto},
+    convert::TryFrom,
     fmt,
     net::SocketAddr,
     str,

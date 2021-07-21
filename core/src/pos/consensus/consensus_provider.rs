@@ -7,19 +7,12 @@ use super::{
     state_computer::ExecutionProxy, txn_manager::MempoolProxy,
     util::time_service::ClockTimeService,
 };
-use crate::{
-    pos::{
-        mempool::{ConsensusRequest, SubmissionStatus},
-        pow_handler::PowHandler,
-        protocol::{
-            network_sender::NetworkSender,
-            sync_protocol::HotStuffSynchronizationProtocol,
-        },
-        state_sync::client::StateSyncClient,
-    },
-    sync::ProtocolConfiguration,
+use crate::pos::{
+    mempool::{ConsensusRequest, SubmissionStatus},
+    pow_handler::PowHandler,
+    protocol::network_sender::NetworkSender,
+    state_sync::client::StateSyncClient,
 };
-use cfx_types::H256;
 use channel::diem_channel;
 use diem_config::config::NodeConfig;
 use diem_logger::prelude::*;
@@ -28,9 +21,7 @@ use diem_types::{
     transaction::SignedTransaction,
 };
 use executor::{vm::FakeVM, Executor};
-use executor_types::BlockExecutor;
 use futures::channel::{mpsc, oneshot};
-use network::NetworkService;
 use std::sync::{atomic::AtomicBool, Arc};
 use storage_interface::{DbReader, DbReaderWriter};
 use tokio::runtime::{self, Runtime};

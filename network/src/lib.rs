@@ -69,7 +69,6 @@ use crate::{
     },
 };
 use cfx_addr::Network;
-use diem_crypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};
 use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 use ipnetwork::{IpNetwork, IpNetworkError};
 use keylib::Secret;

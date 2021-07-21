@@ -9,18 +9,15 @@ use crate::pos::state_sync::{
 };
 use diem_logger::prelude::*;
 use diem_types::{
-    account_state::AccountState,
     contract_event::ContractEvent,
     ledger_info::LedgerInfoWithSignatures,
     move_resource::MoveStorage,
-    on_chain_config::{
-        config_address, OnChainConfigPayload, ON_CHAIN_CONFIG_REGISTRY,
-    },
+    on_chain_config::{OnChainConfigPayload, ON_CHAIN_CONFIG_REGISTRY},
     transaction::TransactionListWithProof,
 };
 use executor_types::{ChunkExecutor, ExecutedTrees};
 use itertools::Itertools;
-use std::{collections::HashSet, convert::TryFrom, sync::Arc};
+use std::{collections::HashSet, sync::Arc};
 use storage_interface::DbReader;
 use subscription_service::ReconfigSubscription;
 

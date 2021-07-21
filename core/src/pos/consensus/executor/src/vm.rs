@@ -1,21 +1,15 @@
 use diem_logger::error as diem_error;
 use diem_state_view::StateView;
 use diem_types::{
-    access_path::AccessPath,
-    account_config::pivot_chain_select_address,
-    block_info::PivotBlockDecision,
     contract_event::ContractEvent,
     epoch_state::EpochState,
-    mempool_status::MempoolStatusCode::VmError,
-    on_chain_config::{
-        self, config_address, new_epoch_event_key, OnChainConfig, ValidatorSet,
-    },
+    on_chain_config::{self, new_epoch_event_key, OnChainConfig, ValidatorSet},
     transaction::{
         Transaction, TransactionOutput, TransactionPayload, TransactionStatus,
         WriteSetPayload,
     },
     vm_status::{KeptVMStatus, StatusCode, VMStatus},
-    write_set::{WriteOp, WriteSet, WriteSetMut},
+    write_set::{WriteOp, WriteSetMut},
 };
 use move_core_types::language_storage::TypeTag;
 

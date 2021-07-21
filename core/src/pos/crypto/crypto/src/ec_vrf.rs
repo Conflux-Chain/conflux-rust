@@ -25,9 +25,6 @@ lazy_static! {
     );
 }
 
-#[cfg(not(mirai))]
-struct ValidatedPublicKeyTag {}
-
 /// Elliptic Curve VRF private key
 #[derive(
     DeserializeKey,
@@ -181,7 +178,7 @@ impl ValidCryptoMaterial for EcVrfProof {
 // TODO(lpl): Double check the correctness of key generation.
 // Reuse ec group in VRF_CONTEXT?
 impl Uniform for EcVrfPrivateKey {
-    fn generate<R>(rng: &mut R) -> Self
+    fn generate<R>(_rng: &mut R) -> Self
     where R: ::rand::RngCore + ::rand::CryptoRng {
         let ec_group = ec::EcGroup::from_curve_name(Nid::SECP256K1).unwrap();
         Self(

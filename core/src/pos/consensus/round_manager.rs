@@ -28,7 +28,7 @@ use crate::pos::{
 };
 use anyhow::{bail, ensure, Context, Result};
 use consensus_types::{
-    block::{Block, VRF_SEED},
+    block::Block,
     block_retrieval::{BlockRetrievalResponse, BlockRetrievalStatus},
     common::{Author, Round},
     proposal_msg::ProposalMsg,
@@ -46,7 +46,7 @@ use diem_types::{
     block_info::PivotBlockDecision,
     chain_id::ChainId,
     epoch_state::EpochState,
-    ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
+    ledger_info::LedgerInfoWithSignatures,
     transaction::{ElectionPayload, RawTransaction, SignedTransaction},
     validator_verifier::ValidatorVerifier,
 };
@@ -488,7 +488,8 @@ impl RoundManager {
             // first time.
             // TODO(lpl): Do not send to the sender and the original author.
             self.network
-                .broadcast(ConsensusMsg::ProposalMsg(Box::new(proposal_msg)));
+                .broadcast(ConsensusMsg::ProposalMsg(Box::new(proposal_msg)))
+                .await;
             Ok(())
         } else {
             bail!(
@@ -930,7 +931,8 @@ impl RoundManager {
                 .await
                 .context("[RoundManager] Add a new vote")?;
             self.network
-                .broadcast(ConsensusMsg::VoteMsg(Box::new(vote_msg)));
+                .broadcast(ConsensusMsg::VoteMsg(Box::new(vote_msg)))
+                .await;
         }
         Ok(())
     }

@@ -6,7 +6,7 @@ use crate::{
     PublicKeyResponse,
 };
 use chrono::DateTime;
-use diem_crypto::{hash::CryptoHash, PrivateKey};
+use diem_crypto::hash::CryptoHash;
 use diem_infallible::RwLock;
 use diem_time_service::{TimeService, TimeServiceTrait};
 use diem_vault_client::{self as vault, Client};
