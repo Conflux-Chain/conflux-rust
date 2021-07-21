@@ -269,17 +269,10 @@ impl EpochManager {
             .map_err(DbError::from)
             .context("[EpochManager] Failed to get epoch proof")?;
         let msg = ConsensusMsg::EpochChangeProof(Box::new(proof));
-        let pos_public_key = self
-            .epoch_state()
-            .verifier
-            .get_public_key(&peer_id)
-            .unwrap();
-        self.network_sender
-            .send_to(pos_public_key, &msg)
-            .context(format!(
-                "[EpochManager] Failed to send epoch proof to {}",
-                peer_id
-            ))
+        self.network_sender.send_to(peer_id, &msg).context(format!(
+            "[EpochManager] Failed to send epoch proof to {}",
+            peer_id
+        ))
     }
 
     async fn process_different_epoch(
@@ -311,17 +304,10 @@ impl EpochManager {
                 };
                 let msg =
                     ConsensusMsg::EpochRetrievalRequest(Box::new(request));
-                let pos_public_key = self
-                    .epoch_state()
-                    .verifier
-                    .get_public_key(&peer_id)
-                    .ok_or(anyhow::anyhow!("peer is not an validator"))?;
-                self.network_sender.send_to(pos_public_key, &msg).context(
-                    format!(
-                        "[EpochManager] Failed to send epoch retrieval to {}",
-                        peer_id
-                    ),
-                )
+                self.network_sender.send_to(peer_id, &msg).context(format!(
+                    "[EpochManager] Failed to send epoch retrieval to {}",
+                    peer_id
+                ))
             }
             Ordering::Equal => {
                 bail!("[EpochManager] Same epoch should not come to process_different_epoch");

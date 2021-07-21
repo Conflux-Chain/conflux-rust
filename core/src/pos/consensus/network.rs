@@ -112,19 +112,16 @@ impl ConsensusNetworkSender {
     {
         ensure!(from != self.author, "Retrieve block from self");
 
-        let public_key = self.validators.get_public_key(&from).ok_or(
-            anyhow!("request_block: from {:?} is not a validator", from),
-        )?;
         let peer_hash = self
             .network_sender
             .protocol_handler
             .pos_peer_mapping
             .read()
-            .get(&public_key)
+            .get(&from)
             .cloned()
             .ok_or(anyhow!(
                 "request_block: recipient {:?} has been removed",
-                public_key
+                from
             ))?;
         let peer_state =
             self.network_sender.protocol_handler.peers.get(&peer_hash);
@@ -243,8 +240,7 @@ impl ConsensusNetworkSender {
                 }
                 continue;
             }
-            let public_key = self.validators.get_public_key(&peer).unwrap();
-            if let Err(e) = network_sender.send_to(public_key, &msg) {
+            if let Err(e) = network_sender.send_to(peer, &msg) {
                 diem_error!(
                     remote_peer = peer,
                     error = ?e, "Failed to send a vote to peer",
@@ -260,8 +256,7 @@ impl ConsensusNetworkSender {
     pub fn send_sync_info(&self, sync_info: SyncInfo, recipient: Author) {
         let msg = ConsensusMsg::SyncInfo(Box::new(sync_info));
         let mut network_sender = self.network_sender.clone();
-        let public_key = self.validators.get_public_key(&recipient).unwrap();
-        if let Err(e) = network_sender.send_to(public_key, &msg) {
+        if let Err(e) = network_sender.send_to(recipient, &msg) {
             diem_warn!(
                 remote_peer = recipient,
                 error = "Failed to send a sync info msg to peer {:?}",
