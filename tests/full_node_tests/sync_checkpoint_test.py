@@ -25,6 +25,8 @@ class SyncCheckpointTests(ConfluxTestFramework):
             "anticone_penalty_ratio": "5",
             # Make sure checkpoint synchronization is triggered during phase change.
             "dev_allow_phase_change_without_peer": "false",
+            # Disable pos reference because pow blocks are generated too fast.
+            "pos_reference_enable_height": "10000"
         }
 
     def setup_network(self):

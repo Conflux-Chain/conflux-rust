@@ -98,7 +98,7 @@ impl MockContext {
     /// New mock context with byzantium spec rules
     pub fn new_spec() -> Self {
         let mut context = MockContext::default();
-        context.spec = Spec::new_spec();
+        context.spec = Spec::new_spec_for_test();
         context
     }
 
@@ -246,11 +246,6 @@ impl Context for MockContext {
         &mut self, _pc: usize, _instruction: u8, _gas: U256,
     ) -> bool {
         self.tracing
-    }
-
-    fn is_reentrancy(&self, _: &Address, _: &Address) -> bool {
-        // The MockContext doesn't have message call
-        false
     }
 
     fn internal_ref(&mut self) -> InternalRefContext { unimplemented!() }

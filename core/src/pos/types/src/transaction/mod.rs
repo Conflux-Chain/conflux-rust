@@ -24,7 +24,7 @@ use diem_crypto::{
     hash::{CryptoHash, EventAccumulatorHasher},
     multi_ed25519::{MultiEd25519PublicKey, MultiEd25519Signature},
     traits::SigningKey,
-    HashValue,
+    HashValue, VRFProof,
 };
 use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
 use move_core_types::transaction_argument::convert_txn_args;
@@ -53,11 +53,18 @@ pub use script::{
 };
 
 use crate::{
-    block_info::PivotBlockDecision,
+    block_info::{PivotBlockDecision, Round},
+    term_state::{
+        ElectionEvent, NodeID, RegisterEvent, RetireEvent,
+        UpdateVotingPowerEvent,
+    },
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
+        ConsensusVRFProof, ConsensusVRFPublicKey,
     },
 };
+use move_core_types::language_storage::TypeTag;
+use pow_types::StakingEvent;
 use std::ops::Deref;
 pub use transaction_argument::{
     parse_transaction_argument, TransactionArgument,
@@ -287,6 +294,79 @@ impl RawTransaction {
         }
     }
 
+    pub fn new_election(
+        sender: AccountAddress, sequence_number: u64,
+        election_payload: ElectionPayload, chain_id: ChainId,
+    ) -> Self
+    {
+        RawTransaction {
+            sender,
+            sequence_number,
+            payload: TransactionPayload::Election(election_payload),
+            // Since write-set transactions bypass the VM, these fields aren't
+            // relevant.
+            max_gas_amount: 0,
+            gas_unit_price: 0,
+            gas_currency_code: XUS_NAME.to_owned(),
+            // Write-set transactions are special and important and shouldn't
+            // expire.
+            expiration_timestamp_secs: u64::max_value(),
+            chain_id,
+        }
+    }
+
+    pub fn from_staking_event(
+        staking_event: &StakingEvent, sender: AccountAddress,
+    ) -> Result<Self> {
+        let payload = match staking_event {
+            StakingEvent::Register((
+                addr_h256,
+                bls_pub_key_bytes,
+                vrf_pub_key_bytes,
+            )) => {
+                let addr = AccountAddress::from_bytes(addr_h256)?;
+                let public_key =
+                    ConsensusPublicKey::try_from(bls_pub_key_bytes.as_slice())?;
+                let vrf_public_key = ConsensusVRFPublicKey::try_from(
+                    vrf_pub_key_bytes.as_slice(),
+                )?;
+                let node_id =
+                    NodeID::new(public_key.clone(), vrf_public_key.clone());
+                ensure!(
+                    node_id.addr == addr,
+                    "register event has unmatching address and keys"
+                );
+                TransactionPayload::Register(RegisterPayload {
+                    public_key,
+                    vrf_public_key,
+                })
+            }
+            StakingEvent::IncreaseStake((addr_h256, updated_voting_power)) => {
+                let addr = AccountAddress::from_bytes(addr_h256)?;
+                TransactionPayload::UpdateVotingPower(
+                    UpdateVotingPowerPayload {
+                        node_address: addr,
+                        voting_power: *updated_voting_power,
+                    },
+                )
+            }
+        };
+        Ok(RawTransaction {
+            sender,
+            sequence_number: 0,
+            payload,
+            // Since write-set transactions bypass the VM, these fields aren't
+            // relevant.
+            max_gas_amount: 0,
+            gas_unit_price: 0,
+            gas_currency_code: XUS_NAME.to_owned(),
+            // Write-set transactions are special and important and shouldn't
+            // expire.
+            expiration_timestamp_secs: u64::max_value(),
+            chain_id: Default::default(),
+        })
+    }
+
     /// Signs the given `RawTransaction`. Note that this consumes the
     /// `RawTransaction` and turns it into a `SignatureCheckedTransaction`.
     ///
@@ -333,8 +413,14 @@ impl RawTransaction {
             TransactionPayload::Module(_) => {
                 ("module publishing".to_string(), vec![])
             }
+            TransactionPayload::Election(_) => ("election".to_string(), vec![]),
+            TransactionPayload::Retire(_) => ("retire".to_string(), vec![]),
             TransactionPayload::PivotDecision(_) => {
                 ("pivot_decision".to_string(), vec![])
+            }
+            TransactionPayload::Register(_) => ("register".to_string(), vec![]),
+            TransactionPayload::UpdateVotingPower(_) => {
+                ("update_voting_power".to_string(), vec![])
             }
         };
         let mut f_args: String = "".to_string();
@@ -384,8 +470,17 @@ pub enum TransactionPayload {
     /// A transaction that executes an existing script function published
     /// on-chain.
     ScriptFunction(ScriptFunction),
+
+    /// A transaction that add a node to committee candidates.
+    Election(ElectionPayload),
+
     /// A transaction that sets a node to `Retire` status so the node will not
     /// be elected.
+    Retire(RetirePayload),
+
+    Register(RegisterPayload),
+    UpdateVotingPower(UpdateVotingPowerPayload),
+
     PivotDecision(PivotBlockDecision),
 }
 
@@ -395,10 +490,7 @@ impl TransactionPayload {
             Self::WriteSet(ws) => {
                 ws.should_trigger_reconfiguration_by_default()
             }
-            Self::Script(_)
-            | Self::ScriptFunction(_)
-            | Self::Module(_)
-            | Self::PivotDecision(_) => false,
+            _ => false,
         }
     }
 
@@ -410,6 +502,94 @@ impl TransactionPayload {
                 payload
             ),
         }
+    }
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ElectionPayload {
+    pub public_key: ConsensusPublicKey,
+    pub vrf_public_key: ConsensusVRFPublicKey,
+    pub target_term: u64,
+    pub vrf_proof: ConsensusVRFProof,
+}
+
+impl ElectionPayload {
+    pub fn to_event(&self) -> ContractEvent {
+        let event = ElectionEvent::new(
+            self.public_key.clone(),
+            self.vrf_public_key.clone(),
+            self.vrf_proof.to_hash().unwrap(),
+            self.target_term,
+        );
+        ContractEvent::new(
+            ElectionEvent::event_key(),
+            0,                                      /* sequence_number */
+            TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
+            bcs::to_bytes(&event).unwrap(),
+        )
+    }
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub struct RetirePayload {
+    pub public_key: ConsensusPublicKey,
+    pub vrf_public_key: ConsensusVRFPublicKey,
+}
+
+impl RetirePayload {
+    pub fn to_event(&self) -> ContractEvent {
+        let event = RetireEvent::new(
+            self.public_key.clone(),
+            self.vrf_public_key.clone(),
+        );
+        ContractEvent::new(
+            RetireEvent::event_key(),
+            0,                                      /* sequence_number */
+            TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
+            bcs::to_bytes(&event).unwrap(),
+        )
+    }
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub struct RegisterPayload {
+    pub public_key: ConsensusPublicKey,
+    pub vrf_public_key: ConsensusVRFPublicKey,
+}
+
+impl RegisterPayload {
+    pub fn to_event(&self) -> ContractEvent {
+        let event = RegisterEvent::new(
+            self.public_key.clone(),
+            self.vrf_public_key.clone(),
+        );
+        ContractEvent::new(
+            RegisterEvent::event_key(),
+            0,                                      /* sequence_number */
+            TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
+            bcs::to_bytes(&event).unwrap(),
+        )
+    }
+}
+
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+pub struct UpdateVotingPowerPayload {
+    node_address: AccountAddress,
+    voting_power: u64,
+}
+
+impl UpdateVotingPowerPayload {
+    pub fn to_event(&self) -> ContractEvent {
+        let event = UpdateVotingPowerEvent::new(
+            self.node_address.clone(),
+            self.voting_power,
+        );
+        ContractEvent::new(
+            UpdateVotingPowerEvent::event_key(),
+            0,                                      /* sequence_number */
+            TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
+            bcs::to_bytes(&event).unwrap(),
+        )
     }
 }
 

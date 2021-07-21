@@ -10,7 +10,7 @@ PORT_MAX = 65535
 PORT_RANGE = 100
 
 
-def run_single_test(py, script, test_dir, index):
+def run_single_test(py, script, test_dir, index, port_min, port_max):
     try:
         # Make sure python thinks it can write unicode to its stdout
         "\u2713".encode("utf_8").decode(sys.stdout.encoding)
@@ -31,7 +31,7 @@ def run_single_test(py, script, test_dir, index):
         RED = ('\033[0m', '\033[0;31m')
         GREY = ('\033[0m', '\033[1;30m')
     print("Running " + script)
-    port_min = PORT_MIN + (index * PORT_RANGE) % (PORT_MAX - PORT_MIN)
+    port_min = port_min + (index * PORT_RANGE) % (port_max - port_min)
     color = BLUE
     glyph = TICK
     try:
@@ -51,6 +51,18 @@ def run():
         "--max-workers",
         dest="max_workers",
         default=8,
+        type=int,
+    )
+    parser.add_argument(
+        "--port-max",
+        dest="port_max",
+        default=PORT_MAX,
+        type=int,
+    )
+    parser.add_argument(
+        "--port-min",
+        dest="port_min",
+        default=PORT_MIN,
         type=int,
     )
     options = parser.parse_args()
@@ -87,11 +99,11 @@ def run():
     i = 0
     # Start slow tests first to avoid waiting for long-tail jobs
     for script in slow_tests:
-        f = executor.submit(run_single_test, py, script, test_dir, i)
+        f = executor.submit(run_single_test, py, script, test_dir, i, options.port_min, options.port_max)
         test_results.append((script, f))
         i += 1
     for script in TEST_SCRIPTS:
-        f = executor.submit(run_single_test, py, script, test_dir, i)
+        f = executor.submit(run_single_test, py, script, test_dir, i, options.port_min, options.port_max)
         test_results.append((script, f))
         i += 1
 

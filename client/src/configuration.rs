@@ -38,12 +38,18 @@ use cfxcore::{
     transaction_pool::TxPoolConfig,
     NodeType,
 };
+use diem_crypto::{ValidCryptoMaterial, ValidCryptoMaterialStringExt};
+use diem_types::{
+    account_address::from_consensus_public_key,
+    validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
+};
 use lazy_static::*;
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
 use parking_lot::RwLock;
 use rand::Rng;
-use std::{convert::TryInto, path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
+use toml::Value;
 use txgen::TransactionGeneratorConfig;
 
 lazy_static! {
@@ -126,6 +132,7 @@ build_config! {
         (anticone_penalty_ratio, (u64), ANTICONE_PENALTY_RATIO)
         (chain_id, (Option<u32>), None)
         (execute_genesis, (bool), true)
+        (default_transition_time, (Option<u64>), None)
         // Snapshot Epoch Count is a consensus parameter. This flag overrides
         // the parameter, which only take effect in `dev` mode.
         (dev_snapshot_epoch_count, (u32), SNAPSHOT_EPOCHS_CAPACITY)
@@ -135,6 +142,9 @@ build_config! {
         (genesis_secrets, (Option<String>), None)
         (initial_difficulty, (Option<u64>), None)
         (tanzanite_transition_height, (u64), TANZANITE_HEIGHT)
+        (unnamed_21autumn_transition_number, (Option<u64>), None)
+        (unnamed_21autumn_transition_height, (Option<u64>), None)
+        (unnamed_21autumn_cip71_deferred_transition, (Option<u64>), None)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
@@ -288,6 +298,8 @@ build_config! {
         (vrf_proposal_threshold, (U256), U256::MAX)
         // Deferred epoch count before a confirmed epoch.
         (pos_pivot_decision_defer_epoch_count, (u64), 50)
+        (pos_reference_enable_height, (u64), 0)
+        (pos_initial_nodes_path, (String), "./pos_config/initial_nodes.toml".to_string())
 
         // Light node section
         (ln_epoch_request_batch_size, (Option<usize>), None)
@@ -1039,14 +1051,69 @@ impl Configuration {
     pub fn pos_config(&self) -> PosConfiguration { PosConfiguration {} }
 
     pub fn common_params(&self) -> CommonParams {
-        let mut params = CommonParams::common_params(
-            self.chain_id_params(),
-            self.raw_conf.anticone_penalty_ratio,
-            self.raw_conf.tanzanite_transition_height,
-        );
+        let mut params = CommonParams::default();
+
+        let default_transition_time =
+            if let Some(num) = self.raw_conf.default_transition_time {
+                num
+            } else if self.is_test_or_dev_mode() {
+                0u64
+            } else {
+                u64::MAX
+            };
+
         if self.is_test_or_dev_mode() {
-            params.alt_bn128_transition = 0;
+            params.early_set_internal_contracts_states = true;
         }
+
+        params.chain_id = self.chain_id_params();
+        params.anticone_penalty_ratio = self.raw_conf.anticone_penalty_ratio;
+
+        params.transition_heights.cip40 =
+            self.raw_conf.tanzanite_transition_height;
+        params.transition_numbers.cip62 = if self.is_test_or_dev_mode() {
+            0u64
+        } else {
+            BN128_ENABLE_NUMBER
+        };
+        params.transition_numbers.cip64 = self
+            .raw_conf
+            .unnamed_21autumn_transition_number
+            .unwrap_or(default_transition_time);
+        params.transition_numbers.cip71a = self
+            .raw_conf
+            .unnamed_21autumn_transition_number
+            .unwrap_or(default_transition_time);
+        params.transition_numbers.cip71b = self
+            .raw_conf
+            .unnamed_21autumn_cip71_deferred_transition
+            .unwrap_or(default_transition_time);
+        params.transition_numbers.cip72b = self
+            .raw_conf
+            .unnamed_21autumn_transition_number
+            .unwrap_or(default_transition_time);
+        params.transition_numbers.cip78 = self
+            .raw_conf
+            .unnamed_21autumn_transition_number
+            .unwrap_or(default_transition_time);
+
+        params.transition_heights.cip76 = self
+            .raw_conf
+            .unnamed_21autumn_transition_height
+            .unwrap_or(default_transition_time);
+        params.transition_heights.cip72a = self
+            .raw_conf
+            .unnamed_21autumn_transition_height
+            .unwrap_or(default_transition_time);
+
+        let mut base_block_rewards = BTreeMap::new();
+        base_block_rewards.insert(0, INITIAL_BASE_MINING_REWARD_IN_UCFX.into());
+        base_block_rewards.insert(
+            params.transition_heights.cip40,
+            MINING_REWARD_TANZANITE_IN_UCFX.into(),
+        );
+        params.base_block_rewards = base_block_rewards;
+
         params
     }
 
@@ -1111,7 +1178,70 @@ pub fn parse_config_address_string(
     Err(format!("Address from configuration should be a valid base32 address or a 40-digit hex string!
             base32_err={:?}
             hex_err={:?}",
-           base32_err, hex_err))
+                base32_err, hex_err))
+}
+
+pub fn save_initial_nodes_to_file(
+    path: &str,
+    public_keys: Vec<(ConsensusPublicKey, ConsensusVRFPublicKey, u64)>,
+)
+{
+    let nodes = Value::Array(
+        public_keys
+            .into_iter()
+            .map(|(bls_key, vrf_key, voting_power)| {
+                let mut map = BTreeMap::new();
+                map.insert(
+                    "bls_key".to_string(),
+                    Value::String(bls_key.to_encoded_string().unwrap()),
+                );
+                map.insert(
+                    "vrf_key".to_string(),
+                    Value::String(vrf_key.to_encoded_string().unwrap()),
+                );
+                map.insert(
+                    "voting_power".to_string(),
+                    Value::Integer(voting_power as i64),
+                );
+                Value::Table(map)
+            })
+            .collect(),
+    );
+    let mut conf = BTreeMap::new();
+    conf.insert("initial_nodes".to_string(), nodes);
+    fs::write(path, toml::to_string(&Value::Table(conf)).unwrap());
+}
+
+pub fn read_initial_nodes_from_file(
+    path: &str,
+) -> Result<Vec<(ConsensusPublicKey, ConsensusVRFPublicKey, u64)>, String> {
+    let mut file = File::open(path)
+        .map_err(|e| format!("failed to open initial nodes file: {:?}", e))?;
+
+    let mut nodes_str = String::new();
+    file.read_to_string(&mut nodes_str)
+        .map_err(|e| format!("failed to read initial nodes file: {:?}", e))?;
+
+    let config = nodes_str
+        .parse::<Value>()
+        .map_err(|e| format!("failed to parse initial nodes file: {:?}", e))?;
+    let mut nodes = Vec::new();
+    for map in config["initial_nodes"]
+        .as_array()
+        .ok_or(format!("failed to parse initial nodes file: Not an array"))?
+    {
+        let bls_key = ConsensusPublicKey::from_encoded_string(
+            map["bls_key"].as_str().unwrap(),
+        )
+        .map_err(|e| format!("wrong BLS key, err={:?}", e))?;
+        let vrf_key = ConsensusVRFPublicKey::from_encoded_string(
+            map["vrf_key"].as_str().unwrap(),
+        )
+        .map_err(|e| format!("wrong VRF key, err={:?}", e))?;
+        let voting_power = map["voting_power"].as_integer().unwrap() as u64;
+        nodes.push((bls_key, vrf_key, voting_power));
+    }
+    Ok(nodes)
 }
 
 #[cfg(test)]
@@ -1131,7 +1261,7 @@ mod tests {
             addr,
             parse_config_address_string(
                 "1a2f80341409639ea6a35bbcab8299066109aa55",
-                &Network::Main
+                &Network::Main,
             )
             .unwrap()
         );
@@ -1140,7 +1270,7 @@ mod tests {
             addr,
             parse_config_address_string(
                 "cfx:aarc9abycue0hhzgyrr53m6cxedgccrmmyybjgh4xg",
-                &Network::Main
+                &Network::Main,
             )
             .unwrap()
         );
@@ -1149,7 +1279,7 @@ mod tests {
             addr,
             parse_config_address_string(
                 "cfx:type.user:aarc9abycue0hhzgyrr53m6cxedgccrmmyybjgh4xg",
-                &Network::Main
+                &Network::Main,
             )
             .unwrap()
         );

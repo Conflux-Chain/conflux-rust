@@ -88,13 +88,6 @@ impl SafetyRules {
         signer.sign(message, &self.persistent_storage)
     }
 
-    fn gen_vrf_proof(
-        &self, seed: &[u8],
-    ) -> Result<Option<ConsensusVRFProof>, Error> {
-        let signer = self.signer()?;
-        signer.gen_vrf_proof(seed)
-    }
-
     fn signer(&self) -> Result<&ConfigurableValidatorSigner, Error> {
         self.validator_signer
             .as_ref()
@@ -459,10 +452,8 @@ impl SafetyRules {
         }
 
         let signature = self.sign(&block_data)?;
-        let vrf_proof =
-            self.gen_vrf_proof(&block_data.vrf_round_seed(VRF_SEED))?;
         Ok(Block::new_proposal_from_block_data_and_signature(
-            block_data, signature, vrf_proof,
+            block_data, signature, None,
         ))
     }
 

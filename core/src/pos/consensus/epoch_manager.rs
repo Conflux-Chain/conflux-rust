@@ -19,8 +19,10 @@ use super::{
     },
     logging::{LogEvent, LogSchema},
     metrics_safety_rules::MetricsSafetyRules,
-    network::{IncomingBlockRetrievalRequest, NetworkReceivers, NetworkSender},
-    network_interface::{ConsensusMsg, ConsensusNetworkSender},
+    network::{
+        ConsensusMsg, ConsensusNetworkSender, IncomingBlockRetrievalRequest,
+        NetworkReceivers,
+    },
     persistent_liveness_storage::{
         LedgerRecoveryData, PersistentLivenessStorage, RecoveryData,
     },
@@ -30,12 +32,16 @@ use super::{
     state_replication::{StateComputer, TxnManager},
     util::time_service::TimeService,
 };
-use crate::pos::consensus::liveness::vrf_proposer_election::VrfProposer;
+use crate::pos::{
+    consensus::liveness::vrf_proposer_election::VrfProposer,
+    mempool::SubmissionStatus, protocol::network_sender::NetworkSender,
+};
 use anyhow::{bail, ensure, Context};
 use channel::diem_channel;
 use consensus_types::{
     common::{Author, Round},
     epoch_retrieval::EpochRetrievalRequest,
+    sync_info::SyncInfo,
 };
 use diem_config::config::{ConsensusConfig, ConsensusProposerType, NodeConfig};
 use diem_infallible::duration_since_epoch;
@@ -46,8 +52,13 @@ use diem_types::{
     epoch_change::EpochChangeProof,
     epoch_state::EpochState,
     on_chain_config::{OnChainConfigPayload, ValidatorSet},
+    transaction::SignedTransaction,
+    validator_verifier::ValidatorVerifier,
 };
-use futures::{select, StreamExt};
+use futures::{
+    channel::{mpsc, oneshot},
+    select, StreamExt,
+};
 use pow_types::PowInterface;
 use safety_rules::SafetyRulesManager;
 use std::{
@@ -91,7 +102,7 @@ pub struct EpochManager {
     config: ConsensusConfig,
     time_service: Arc<dyn TimeService>,
     //self_sender: channel::Sender<Event<ConsensusMsg>>,
-    network_sender: ConsensusNetworkSender,
+    network_sender: NetworkSender,
     timeout_sender: channel::Sender<Round>,
     proposal_timeout_sender: channel::Sender<Round>,
     txn_manager: Arc<dyn TxnManager>,
@@ -102,6 +113,10 @@ pub struct EpochManager {
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
     // Conflux PoW handler
     pow_handler: Arc<dyn PowInterface>,
+    tx_sender: mpsc::Sender<(
+        SignedTransaction,
+        oneshot::Sender<anyhow::Result<SubmissionStatus>>,
+    )>,
 }
 
 impl EpochManager {
@@ -109,7 +124,7 @@ impl EpochManager {
         node_config: &NodeConfig,
         time_service: Arc<dyn TimeService>,
         //self_sender: channel::Sender<Event<ConsensusMsg>>,
-        network_sender: ConsensusNetworkSender,
+        network_sender: NetworkSender,
         timeout_sender: channel::Sender<Round>,
         proposal_timeout_sender: channel::Sender<Round>,
         txn_manager: Arc<dyn TxnManager>,
@@ -118,6 +133,10 @@ impl EpochManager {
         reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
         pow_handler: Arc<dyn PowInterface>,
         author: AccountAddress,
+        tx_sender: mpsc::Sender<(
+            SignedTransaction,
+            oneshot::Sender<anyhow::Result<SubmissionStatus>>,
+        )>,
     ) -> Self
     {
         let config = node_config.consensus.clone();
@@ -139,6 +158,7 @@ impl EpochManager {
             processor: None,
             reconfig_events,
             pow_handler,
+            tx_sender,
         }
     }
 
@@ -297,7 +317,7 @@ impl EpochManager {
                     .epoch_state()
                     .verifier
                     .get_public_key(&peer_id)
-                    .unwrap();
+                    .ok_or(anyhow::anyhow!("peer is not an validator"))?;
                 self.network_sender.send_to(pos_public_key, &msg).context(
                     format!(
                         "[EpochManager] Failed to send epoch retrieval to {}",
@@ -312,7 +332,7 @@ impl EpochManager {
     }
 
     async fn start_new_epoch(
-        &mut self, proof: EpochChangeProof,
+        &mut self, proof: EpochChangeProof, peer_id: AccountAddress,
     ) -> anyhow::Result<()> {
         let ledger_info = proof
             .verify(self.epoch_state())
@@ -325,13 +345,22 @@ impl EpochManager {
 
         // make sure storage is on this ledger_info too, it should be no-op if
         // it's already committed
-        self.state_computer
-            .sync_to(ledger_info.clone())
-            .await
-            .context(format!(
-                "[EpochManager] State sync to new epoch {}",
-                ledger_info
-            ))?;
+        // self.state_computer
+        //     .sync_to(ledger_info.clone())
+        //     .await
+        //     .context(format!(
+        //         "[EpochManager] State sync to new epoch {}",
+        //         ledger_info
+        //     ))?;
+        // FIXME(lpl): Use ledger_info to sync needed blocks.
+        match self.processor_mut() {
+            RoundProcessor::Recovery(_) => {
+                bail!("start_new_epoch for Recovery processor");
+            }
+            RoundProcessor::Normal(p) => {
+                p.sync_to_ledger_info(ledger_info, peer_id).await?;
+            }
+        }
 
         monitor!("reconfig", self.expect_new_epoch().await);
         Ok(())
@@ -382,32 +411,39 @@ impl EpochManager {
         // TODO(lpl): Decide key management.
         // txn manager is required both by proposal generator (to pull the
         // proposers) and by event processor (to update their status).
-        let proposal_generator =
-            match epoch_state.verifier.get_public_key(&self.author) {
-                Some(public_key) => {
-                    let private_key = self
-                        .config
-                        .safety_rules
-                        .test
-                        .as_ref()
-                        .expect("test config set")
-                        .consensus_key
-                        .as_ref()
-                        .expect("private key set in pos")
-                        .private_key();
-                    Some(ProposalGenerator::new(
-                        self.author,
-                        block_store.clone(),
-                        self.txn_manager.clone(),
-                        self.time_service.clone(),
-                        self.config.max_block_size,
-                        self.pow_handler.clone(),
-                        private_key,
-                        public_key,
-                    ))
-                }
-                None => None,
-            };
+        let proposal_generator = match epoch_state
+            .verifier
+            .get_public_key(&self.author)
+        {
+            Some(public_key) => {
+                // TODO(lpl): Handle no vrf.
+                let vrf_key =
+                    self.config.safety_rules.vrf_private_key.as_ref().unwrap();
+                let private_key = self
+                    .config
+                    .safety_rules
+                    .test
+                    .as_ref()
+                    .expect("test config set")
+                    .consensus_key
+                    .as_ref()
+                    .expect("private key set in pos")
+                    .private_key();
+                Some(ProposalGenerator::new(
+                    self.author,
+                    block_store.clone(),
+                    self.txn_manager.clone(),
+                    self.time_service.clone(),
+                    self.config.max_block_size,
+                    self.pow_handler.clone(),
+                    private_key,
+                    public_key,
+                    vrf_key.private_key(),
+                    vrf_key.public_key(),
+                ))
+            }
+            None => None,
+        };
 
         diem_info!(epoch = epoch, "Create RoundState");
         let round_state = self.create_round_state(
@@ -418,7 +454,7 @@ impl EpochManager {
 
         diem_info!(epoch = epoch, "Create ProposerElection");
         let proposer_election = self.create_proposer_election(&epoch_state);
-        let network_sender = NetworkSender::new(
+        let network_sender = ConsensusNetworkSender::new(
             self.author,
             self.network_sender.clone(),
             //self.self_sender.clone(),
@@ -436,7 +472,12 @@ impl EpochManager {
             self.txn_manager.clone(),
             self.storage.clone(),
             self.config.sync_only,
+            self.tx_sender.clone(),
         );
+        // Only check if we should send election after entering an new epoch.
+        if let Err(e) = processor.broadcast_election().await {
+            diem_error!("error in broadcasting election tx: {:?}", e);
+        }
         processor.start(last_vote).await;
         self.processor = Some(RoundProcessor::Normal(processor));
         diem_info!(epoch = epoch, "RoundManager started");
@@ -452,7 +493,7 @@ impl EpochManager {
     )
     {
         let epoch = epoch_state.epoch;
-        let network_sender = NetworkSender::new(
+        let network_sender = ConsensusNetworkSender::new(
             self.author,
             self.network_sender.clone(),
             //self.self_sender.clone(),
@@ -469,13 +510,25 @@ impl EpochManager {
     }
 
     async fn start_processor(&mut self, payload: OnChainConfigPayload) {
-        let validator_set: ValidatorSet = payload
-            .get()
-            .expect("failed to get ValidatorSet from payload");
-        let epoch_state = EpochState {
-            epoch: payload.epoch(),
-            verifier: (&validator_set).into(),
-        };
+        let epoch_state: EpochState = payload.get().unwrap_or_else(|_| {
+            let validator_set: ValidatorSet = payload.get().unwrap();
+            EpochState {
+                epoch: payload.epoch(),
+                verifier: (&validator_set).into(),
+                // genesis pivot decision
+                vrf_seed: self
+                    .storage
+                    .diem_db()
+                    .get_latest_ledger_info()
+                    .expect("non-empty ledger info")
+                    .ledger_info()
+                    .pivot_decision()
+                    .unwrap()
+                    .block_hash
+                    .as_bytes()
+                    .to_vec(),
+            }
+        });
 
         match self.storage.start() {
             LivenessStorageData::RecoveryData(initial_data) => {
@@ -499,7 +552,10 @@ impl EpochManager {
             // same epoch -> run well-formedness + signature check
             let verified_event = unverified_event
                 .clone()
-                .verify(&self.epoch_state().verifier)
+                .verify(
+                    &self.epoch_state().verifier,
+                    self.epoch_state().vrf_seed.as_slice(),
+                )
                 .context("[EpochManager] Verify event")
                 .map_err(|err| {
                     diem_error!(
@@ -547,7 +603,7 @@ impl EpochManager {
                 if msg_epoch == self.epoch() {
                     monitor!(
                         "process_epoch_proof",
-                        self.start_new_epoch(*proof).await?
+                        self.start_new_epoch(*proof, peer_id).await?
                     );
                 } else {
                     bail!(

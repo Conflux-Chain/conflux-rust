@@ -10,6 +10,7 @@ extern crate serde;
 extern crate serde_derive;
 
 use cfxkey::Error as EthkeyError;
+use client::configuration::save_initial_nodes_to_file;
 use diem_crypto::{Uniform, ValidCryptoMaterialStringExt};
 use diem_types::{
     account_address::from_consensus_public_key,
@@ -141,12 +142,11 @@ fn execute_genesis_transaction(genesis_txn: Transaction) -> Waypoint {
         )
         .expect("DB should open."),
     );
-
     generate_waypoint::<FakeVM>(&db, &genesis_txn).unwrap()
 }
 
 fn generate_genesis_from_public_keys(
-    public_keys: Vec<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
+    public_keys: Vec<(ConsensusPublicKey, ConsensusVRFPublicKey, u64)>,
 ) {
     let genesis_path = PathBuf::from("./genesis_file");
     let waypoint_path = PathBuf::from("./waypoint_config");
@@ -154,8 +154,9 @@ fn generate_genesis_from_public_keys(
     let mut waypoint_file = File::create(&waypoint_path).unwrap();
 
     let mut validators = Vec::new();
-    for (public_key, vrf_public_key) in public_keys {
-        let account_address = from_consensus_public_key(&public_key);
+    for (public_key, vrf_public_key, voting_power) in public_keys {
+        let account_address =
+            from_consensus_public_key(&public_key, &vrf_public_key);
         let validator_config = ValidatorConfig::new(
             public_key,
             Some(vrf_public_key),
@@ -164,7 +165,7 @@ fn generate_genesis_from_public_keys(
         );
         validators.push(ValidatorInfo::new(
             account_address,
-            1,
+            voting_power,
             validator_config,
         ));
     }
@@ -226,7 +227,7 @@ where
             let public_key = ConsensusPublicKey::from(&private_key);
             let vrf_private_key = ConsensusVRFPrivateKey::generate(&mut rng);
             let vrf_public_key = ConsensusVRFPublicKey::from(&vrf_private_key);
-            public_keys.push((public_key.clone(), vrf_public_key.clone()));
+            public_keys.push((public_key.clone(), vrf_public_key.clone(), 1));
 
             let private_key_str = private_key.to_encoded_string().unwrap();
             let vrf_private_key_str =
@@ -241,6 +242,7 @@ where
                 format!("{},{}\n", public_key_str, vrf_public_key_str);
             public_key_file.write_all(public_key_str.as_bytes())?;
         }
+        save_initial_nodes_to_file("./initial_nodes.toml", public_keys.clone());
         generate_genesis_from_public_keys(
             public_keys
                 .into_iter()
@@ -263,7 +265,7 @@ where
             let vrf_public_key =
                 ConsensusVRFPublicKey::from_encoded_string(key_array[1])
                     .unwrap();
-            public_keys.push((public_key, vrf_public_key));
+            public_keys.push((public_key, vrf_public_key, 1));
         }
         generate_genesis_from_public_keys(public_keys);
         Ok("Ok".into())

@@ -21,6 +21,7 @@
 //! VM errors module
 
 use super::{action_params::ActionParams, ResumeCall, ResumeCreate};
+use bls_signatures::Error as CryptoError;
 use cfx_statedb::{Error as DbError, Result as DbResult};
 use cfx_types::{Address, U256};
 use solidity_abi::ABIDecodeError;
@@ -105,7 +106,7 @@ pub enum Error {
     /// Built-in contract failed on given input
     BuiltIn(&'static str),
     /// Internal contract failed
-    InternalContract(&'static str),
+    InternalContract(String),
     /// When execution tries to modify the state in static context
     MutableCallInStaticContext,
     /// Error from storage.
@@ -135,8 +136,18 @@ impl From<DbError> for Error {
     fn from(err: DbError) -> Self { Error::StateDbError(PartialEqWrapper(err)) }
 }
 
+impl From<CryptoError> for Error {
+    fn from(err: CryptoError) -> Self {
+        Error::InternalContract(
+            format!("Crypto decoding error {:?}", err).into(),
+        )
+    }
+}
+
 impl From<ABIDecodeError> for Error {
-    fn from(err: ABIDecodeError) -> Self { Error::InternalContract(err.0) }
+    fn from(err: ABIDecodeError) -> Self {
+        Error::InternalContract(format!("ABI decode error: {}", err.0))
+    }
 }
 
 impl fmt::Display for Error {
@@ -178,7 +189,7 @@ impl fmt::Display for Error {
             }
             ExceedStorageLimit => write!(f, "Exceed storage limit"),
             BuiltIn(name) => write!(f, "Built-in failed: {}", name),
-            InternalContract(name) => {
+            InternalContract(ref name) => {
                 write!(f, "InternalContract failed: {}", name)
             }
             StateDbError(ref msg) => {

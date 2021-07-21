@@ -12,16 +12,14 @@ use crate::{
 use cfx_parameters::internal_contract_addresses::ADMIN_CONTROL_CONTRACT_ADDRESS;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{Address, U256};
-#[cfg(test)]
-use rustc_hex::FromHex;
 
 make_solidity_contract! {
-    pub struct AdminControl(ADMIN_CONTROL_CONTRACT_ADDRESS, generate_fn_table, activate_at: "genesis");
+    pub struct AdminControl(ADMIN_CONTROL_CONTRACT_ADDRESS, generate_fn_table, "active_at_genesis");
 }
 fn generate_fn_table() -> SolFnTable {
     make_function_table!(SetAdmin, Destroy, GetAdmin)
 }
-group_impl_activate_at!("genesis", SetAdmin, Destroy, GetAdmin);
+group_impl_is_active!("genesis", SetAdmin, Destroy, GetAdmin);
 
 make_solidity_function! {
     struct SetAdmin((Address, Address), "setAdmin(address,address)");
@@ -64,7 +62,6 @@ impl ExecutionTrait for Destroy {
             context.spec,
             context.substate,
             tracer,
-            context.env,
         )
     }
 }

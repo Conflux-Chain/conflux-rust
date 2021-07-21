@@ -344,6 +344,18 @@ pub trait Genesis: PrivateKey {
     fn genesis() -> Self;
 }
 
+/// The trait for VDF.
+pub trait VerifiableDelayFunction {
+    /// solve inputted `challenge` with a given `difficulty`, and output a
+    /// solution.
+    fn solve(&self, challenge: &[u8], difficulty: u64) -> Result<Vec<u8>>;
+
+    /// Verify that the given `alleged_solution` is indeed a valid solution.
+    fn verify(
+        &self, challenge: &[u8], difficulty: u64, alleged_solution: &[u8],
+    ) -> Result<()>;
+}
+
 /// A pub(crate) mod hiding a Sealed trait and its implementations, allowing
 /// us to make sure implementations are constrained to the crypto crate.
 // See https://rust-lang.github.io/api-guidelines/future-proofing.html#sealed-traits-protect-against-downstream-implementations-c-sealed

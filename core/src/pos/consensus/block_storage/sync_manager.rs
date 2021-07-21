@@ -4,12 +4,11 @@
 use crate::pos::consensus::{
     block_storage::{BlockReader, BlockStore},
     logging::{LogEvent, LogSchema},
-    network::NetworkSender,
-    network_interface::ConsensusMsg,
+    network::{ConsensusMsg, ConsensusNetworkSender},
     persistent_liveness_storage::{PersistentLivenessStorage, RecoveryData},
     state_replication::StateComputer,
 };
-use anyhow::{bail, format_err};
+use anyhow::{bail, ensure, format_err};
 use consensus_types::{
     block::Block,
     block_retrieval::{BlockRetrievalRequest, BlockRetrievalStatus},
@@ -17,9 +16,12 @@ use consensus_types::{
     quorum_cert::QuorumCert,
     sync_info::SyncInfo,
 };
+use diem_crypto::HashValue;
 use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress, epoch_change::EpochChangeProof,
+    ledger_info::LedgerInfoWithSignatures,
+    term_state::ELECTION_AFTER_ACCEPTED_ROUND,
 };
 use mirai_annotations::checked_precondition;
 use rand::{prelude::*, Rng};
@@ -108,21 +110,55 @@ impl BlockStore {
             retrieve_qc = block.quorum_cert().clone();
             pending.push(block);
         }
-        // insert the qc <- block pair
-        while let Some(block) = pending.pop() {
-            let block_qc = block.quorum_cert().clone();
-            self.insert_single_quorum_cert(block_qc.clone())?;
-            self.execute_and_insert_block(block)?;
-            match self.commit(block_qc.ledger_info().clone()).await {
-                Ok(()) => {}
-                Err(e) => {
-                    // TODO(lpl): Blocks not committed before crash should be
-                    // committed here? Make sure they are
-                    // recovered to BlockStore during start.
-                    diem_warn!("fetch_quorum_cert: commit error={:?}", e);
+
+        if !pending.is_empty() {
+            // Execute the blocks in catch_up mode.
+            let mut dup_pending = pending.clone();
+            while let Some(block) = dup_pending.pop() {
+                let block_qc = block.quorum_cert().clone();
+                self.insert_single_quorum_cert(block_qc.clone())?;
+                self.execute_and_insert_block(
+                    block, true, /* catch_up_mode */
+                    true, /* force_recompute */
+                )?;
+                match self.commit(block_qc.ledger_info().clone()).await {
+                    Ok(()) => {}
+                    Err(e) => {
+                        // TODO(lpl): Blocks not committed before crash should
+                        // be committed here? Make sure
+                        // they are recovered to
+                        // BlockStore during start.
+                        diem_warn!("fetch_quorum_cert: commit error={:?}", e);
+                    }
+                }
+            }
+
+            // Wait for PoW to enter NormalPhase
+            self.pow_handler.wait_for_initialization();
+
+            // Execute the blocks in normal mode.
+            while let Some(block) = pending.pop() {
+                let block_qc = block.quorum_cert().clone();
+                self.insert_single_quorum_cert(block_qc.clone())?;
+                self.execute_and_insert_block(
+                    block, false, /* catch_up_mode */
+                    true,  /* force_recompute */
+                )?;
+                match self.commit(block_qc.ledger_info().clone()).await {
+                    Ok(()) => {}
+                    Err(e) => {
+                        // TODO(lpl): Blocks not committed before crash should
+                        // be committed here? Make sure
+                        // they are recovered to
+                        // BlockStore during start.
+                        diem_warn!("fetch_quorum_cert: commit error={:?}", e);
+                    }
                 }
             }
         }
+
+        // Re-execute pos_state after finishing PoW catching-up.
+
         self.insert_single_quorum_cert(qc)
     }
 
@@ -175,12 +211,14 @@ impl BlockStore {
 
 /// BlockRetriever is used internally to retrieve blocks
 pub struct BlockRetriever {
-    network: NetworkSender,
+    network: ConsensusNetworkSender,
     preferred_peer: Author,
 }
 
 impl BlockRetriever {
-    pub fn new(network: NetworkSender, preferred_peer: Author) -> Self {
+    pub fn new(
+        network: ConsensusNetworkSender, preferred_peer: Author,
+    ) -> Self {
         Self {
             network,
             preferred_peer,
@@ -200,12 +238,34 @@ impl BlockRetriever {
     /// creation The other peers from the quorum certificate
     /// will be randomly tried next.  If all members of the quorum certificate
     /// are exhausted, an error is returned
-    async fn retrieve_block_for_qc<'a>(
+    pub async fn retrieve_block_for_qc<'a>(
         &'a mut self, qc: &'a QuorumCert, num_blocks: u64,
     ) -> anyhow::Result<Vec<Block>> {
         let block_id = qc.certified_block().id();
         let mut peers: Vec<&AccountAddress> =
             qc.ledger_info().signatures().keys().collect();
+        self.request_block(num_blocks, block_id, peers).await
+    }
+
+    pub async fn retrieve_block_for_ledger_info(
+        &mut self, ledger_info: &LedgerInfoWithSignatures,
+    ) -> anyhow::Result<Block> {
+        let block_id = ledger_info.ledger_info().consensus_block_id();
+        let mut peers: Vec<&AccountAddress> =
+            ledger_info.signatures().keys().collect();
+        let mut blocks = self.request_block(1, block_id, peers).await?;
+        if blocks.len() == 1 {
+            Ok(blocks.remove(0))
+        } else {
+            bail!("retrieve_block_for_ledger_info returns incorrect block number: {}", blocks.len())
+        }
+    }
+
+    async fn request_block<'a>(
+        &'a mut self, num_blocks: u64, block_id: HashValue,
+        mut peers: Vec<&'a AccountAddress>,
+    ) -> anyhow::Result<Vec<Block>>
+    {
         let mut attempt = 0_u32;
         loop {
             if peers.is_empty() {

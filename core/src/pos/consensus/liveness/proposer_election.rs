@@ -3,8 +3,10 @@
 
 use consensus_types::{
     block::Block,
+    block_data::BlockData,
     common::{Author, Round},
 };
+use diem_types::validator_config::ConsensusVRFProof;
 use fallible::copy_from_slice::copy_slice_to_vec;
 
 /// ProposerElection incorporates the logic of choosing a leader among multiple
@@ -45,7 +47,13 @@ pub trait ProposerElection {
     /// Choose a proposal from all received proposal candidates to vote for.
     fn choose_proposal_to_vote(&self) -> Option<Block> { unreachable!() }
 
-    fn next_round(&self, _round: Round) { unreachable!() }
+    fn next_round(&self, _round: Round, _new_seed: Vec<u8>) { unreachable!() }
+
+    fn gen_vrf_proof(
+        &self, _block_data: &BlockData,
+    ) -> Option<ConsensusVRFProof> {
+        unreachable!()
+    }
 }
 
 // next continuously mutates a state and returns a u64-index

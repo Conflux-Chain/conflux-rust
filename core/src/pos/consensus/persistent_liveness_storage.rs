@@ -384,8 +384,10 @@ impl PersistentLivenessStorage for StorageWriteProxy {
             .committed_tree_state
             .ledger_frozen_subtree_hashes
             .clone();
-        let root_executed_trees =
-            ExecutedTrees::from(startup_info.committed_tree_state);
+        let root_executed_trees = ExecutedTrees::new_with_pos_state(
+            startup_info.committed_tree_state,
+            startup_info.committed_pos_state,
+        );
         match RecoveryData::new(
             last_vote,
             ledger_recovery_data.clone(),

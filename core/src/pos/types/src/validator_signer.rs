@@ -60,12 +60,6 @@ impl ValidatorSigner {
         self.vrf_private_key.as_ref().map(|sk| sk.public_key())
     }
 
-    pub fn gen_vrf_proof(&self, seed: &[u8]) -> Option<ConsensusVRFProof> {
-        self.vrf_private_key
-            .as_ref()
-            .map(|sk| sk.compute(seed).unwrap())
-    }
-
     /// Returns the private key associated with this signer. Only available for
     /// testing purposes.
     #[cfg(any(test, feature = "fuzzing"))]

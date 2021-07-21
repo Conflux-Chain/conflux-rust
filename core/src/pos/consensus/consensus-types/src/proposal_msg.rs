@@ -79,10 +79,20 @@ impl ProposalMsg {
         Ok(())
     }
 
-    pub fn verify(&self, validator: &ValidatorVerifier) -> Result<()> {
+    pub fn verify(
+        &self, validator: &ValidatorVerifier, epoch_vrf_seed: &[u8],
+    ) -> Result<()> {
         self.proposal
             .validate_signature(validator)
             .map_err(|e| format_err!("{:?}", e))?;
+
+        if let Some(vrf_proof) = self.proposal.vrf_proof() {
+            validator.verify_vrf(
+                self.proposal.author().unwrap(),
+                &self.proposal.block_data().vrf_round_seed(epoch_vrf_seed),
+                vrf_proof,
+            )?;
+        }
         // if there is a timeout certificate, verify its signatures
         if let Some(tc) = self.sync_info.highest_timeout_certificate() {
             tc.verify(validator).map_err(|e| format_err!("{:?}", e))?;

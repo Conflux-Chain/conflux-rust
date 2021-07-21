@@ -7,7 +7,7 @@ mod executed;
 mod executive;
 #[cfg(test)]
 mod executive_tests;
-mod internal_contract;
+pub mod internal_contract;
 mod vm_exec;
 
 trait CollateralCheckResultToVmResult {
@@ -29,7 +29,6 @@ impl CollateralCheckResultToVmResult for CollateralCheckResult {
 }
 
 pub use self::{
-    context::InternalRefContext,
     executed::*,
     executive::{
         contract_address, Executive, ExecutiveGeneric, ExecutiveResult,
@@ -37,7 +36,7 @@ pub use self::{
     },
     internal_contract::{
         function, suicide, ABIDecodeError, InternalContractMap,
-        InternalContractTrait, SolidityFunctionTrait,
+        InternalContractTrait, InternalRefContext, SolidityFunctionTrait,
     },
 };
 use crate::vm::Error as vmError;

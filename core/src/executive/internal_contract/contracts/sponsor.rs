@@ -12,11 +12,9 @@ use crate::{
 use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{address_util::AddressUtil, Address, U256};
-#[cfg(test)]
-use rustc_hex::FromHex;
 
 make_solidity_contract! {
-    pub struct SponsorWhitelistControl(SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, generate_fn_table, activate_at: "genesis");
+    pub struct SponsorWhitelistControl(SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, generate_fn_table, "active_at_genesis");
 }
 fn generate_fn_table() -> SolFnTable {
     make_function_table!(
@@ -35,7 +33,7 @@ fn generate_fn_table() -> SolFnTable {
         RemovePrivilegeByAdmin
     )
 }
-group_impl_activate_at!(
+group_impl_is_active!(
     "genesis",
     SetSponsorForGas,
     SetSponsorForCollateral,
@@ -72,7 +70,7 @@ impl ExecutionTrait for SetSponsorForGas {
             context.state,
             context.substate,
             tracer,
-            context.spec.account_start_nonce(context.env.number),
+            context.spec.account_start_nonce,
         )
     }
 }
@@ -96,7 +94,7 @@ impl ExecutionTrait for SetSponsorForCollateral {
             context.state,
             context.substate,
             tracer,
-            context.spec.account_start_nonce(context.env.number),
+            context.spec.account_start_nonce,
         )
     }
 }
@@ -125,7 +123,8 @@ impl ExecutionTrait for AddPrivilege {
     {
         if !params.sender.is_contract_address() {
             return Err(vm::Error::InternalContract(
-                "normal account is not allowed to set commission_privilege",
+                "normal account is not allowed to set commission_privilege"
+                    .into(),
             ));
         }
         add_privilege(params.sender, addresses, params, context.state)
@@ -156,7 +155,8 @@ impl ExecutionTrait for RemovePrivilege {
     {
         if !params.sender.is_contract_address() {
             return Err(vm::Error::InternalContract(
-                "normal account is not allowed to set commission_privilege",
+                "normal account is not allowed to set commission_privilege"
+                    .into(),
             ));
         }
 

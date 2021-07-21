@@ -4,7 +4,7 @@
 
 use crate::{
     pos::{
-        consensus::network_interface::ConsensusMsg,
+        consensus::network::ConsensusMsg,
         protocol::sync_protocol::{Context, Handleable},
     },
     sync::Error,
@@ -18,7 +18,7 @@ impl Handleable for ProposalMsg {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_proposal, msg={:?}", &self);
 
-        let peer_address = ctx.get_peer_account_address();
+        let peer_address = ctx.get_peer_account_address()?;
 
         /*ensure!(
             self.author() == Some(peer_address),
@@ -27,7 +27,7 @@ impl Handleable for ProposalMsg {
 
         let msg = ConsensusMsg::ProposalMsg(Box::new(self));
         ctx.manager
-            .network_task
+            .consensus_network_task
             .consensus_messages_tx
             .push((peer_address, discriminant(&msg)), (peer_address, msg))?;
         Ok(())

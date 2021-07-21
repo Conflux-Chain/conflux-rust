@@ -22,7 +22,7 @@ use cfx_addr::Network;
 use cfx_bytes::Bytes;
 use diem_crypto::{
     ed25519::{Ed25519PrivateKey, Ed25519PublicKey},
-    ValidCryptoMaterialStringExt,
+    PrivateKey, ValidCryptoMaterialStringExt,
 };
 use diem_types::{
     account_address::{from_consensus_public_key, from_public_key},
@@ -352,7 +352,7 @@ impl NetworkService {
 
     pub fn pos_public_key(&self) -> Option<ConsensusPublicKey> {
         if let Some(ref inner) = self.inner {
-            inner.sessions.self_pos_public_key.clone()
+            inner.sessions.self_pos_public_key.clone().map(|k| k.0)
         } else {
             None
         }
@@ -558,12 +558,14 @@ impl NetworkServiceInner {
                     },
                 )
         };
-        let pos_public_key = config
+        let (pos_public_key, vrf_public_key) = config
             .config_path
             .clone()
-            .and_then(|ref p| load_pos_private_key(Path::new(&p)))
-            // FIXME(lpl): Use both public keys.
-            .map(|(private_key, _)| ConsensusPublicKey::from(&private_key));
+            .map(|ref p| {
+                let (sk, vrf_sk) = load_pos_private_key(Path::new(&p)).unwrap();
+                (sk.public_key(), vrf_sk.unwrap().public_key())
+            })
+            .unwrap();
         info!("Self pos public key: {:?}", pos_public_key);
 
         info!("Self node id: {:?}", *keys.public());
@@ -650,7 +652,7 @@ impl NetworkServiceInner {
                 MAX_SESSIONS,
                 config.max_incoming_peers,
                 &config.session_ip_limit_config,
-                pos_public_key,
+                Some((pos_public_key, vrf_public_key)),
             ),
             handlers: RwLock::new(HashMap::new()),
             timers: RwLock::new(HashMap::new()),
@@ -1104,7 +1106,7 @@ impl NetworkServiceInner {
                                 debug!(
                                     "receive Ready with pos_public_key={:?} account={:?}",
                                     pos_public_key,
-                                    pos_public_key.as_ref().map(|k| from_consensus_public_key(k)),
+                                    pos_public_key.as_ref().map(|k| from_consensus_public_key(&k.0, &k.1)),
                                 );
                                 handshake_done = true;
                                 session_node_id = Some(*sess.id().unwrap());

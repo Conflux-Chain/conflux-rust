@@ -94,6 +94,10 @@ impl PublicKey for EcVrfPublicKey {
     type PrivateKeyMaterial = EcVrfPrivateKey;
 }
 
+impl From<Vec<u8>> for EcVrfPublicKey {
+    fn from(raw: Vec<u8>) -> Self { EcVrfPublicKey(raw) }
+}
+
 impl From<&EcVrfPrivateKey> for EcVrfPublicKey {
     fn from(private_key: &EcVrfPrivateKey) -> Self {
         EcVrfPublicKey(

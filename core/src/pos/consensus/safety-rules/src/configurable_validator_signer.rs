@@ -83,17 +83,6 @@ impl ConfigurableValidatorSigner {
             }
         }
     }
-
-    pub fn gen_vrf_proof(
-        &self, seed: &[u8],
-    ) -> Result<Option<ConsensusVRFProof>, Error> {
-        match self {
-            ConfigurableValidatorSigner::Signer(signer) => {
-                Ok(signer.gen_vrf_proof(seed))
-            }
-            ConfigurableValidatorSigner::Handle(handle) => todo!(),
-        }
-    }
 }
 
 /// A ValidatorHandle associates a validator with a consensus key version held

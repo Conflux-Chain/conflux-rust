@@ -12,12 +12,10 @@ use crate::{
 use cfx_parameters::internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{Address, U256};
-#[cfg(test)]
-use rustc_hex::FromHex;
 
 // Definitions for the whole contract.
 make_solidity_contract! {
-    pub struct Staking(STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS, generate_fn_table, activate_at: "genesis");
+    pub struct Staking(STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS, generate_fn_table, "active_at_genesis");
 }
 fn generate_fn_table() -> SolFnTable {
     make_function_table!(
@@ -29,7 +27,7 @@ fn generate_fn_table() -> SolFnTable {
         GetVotePower
     )
 }
-group_impl_activate_at!(
+group_impl_is_active!(
     "genesis",
     Deposit,
     Withdraw,

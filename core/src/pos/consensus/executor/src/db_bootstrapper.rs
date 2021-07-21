@@ -19,12 +19,14 @@ use diem_types::{
     diem_timestamp::DiemTimestampResource,
     ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
     on_chain_config::{config_address, ConfigurationResource},
+    term_state::NodeID,
     transaction::Transaction,
     waypoint::Waypoint,
 };
 use executor_types::BlockExecutor;
 use move_core_types::move_resource::MoveResource;
-use std::collections::btree_map::BTreeMap;
+use pow_types::FakePowHandler;
+use std::{collections::btree_map::BTreeMap, sync::Arc};
 use storage_interface::{
     state_view::VerifiedStateView, DbReaderWriter, TreeState,
 };
@@ -34,8 +36,10 @@ pub fn generate_waypoint<V: VMExecutor>(
 ) -> Result<Waypoint> {
     let tree_state = db.reader.get_latest_tree_state()?;
 
+    // FIXME(lpl): initial nodes are not passed.
     // genesis ledger info (including pivot decision) is not used.
-    let committer = calculate_genesis::<V>(db, tree_state, genesis_txn, None)?;
+    let committer =
+        calculate_genesis::<V>(db, tree_state, genesis_txn, None, Vec::new())?;
     Ok(committer.waypoint)
 }
 
@@ -45,6 +49,7 @@ pub fn generate_waypoint<V: VMExecutor>(
 pub fn maybe_bootstrap<V: VMExecutor>(
     db: &DbReaderWriter, genesis_txn: &Transaction, waypoint: Waypoint,
     genesis_pivot_decision: Option<PivotBlockDecision>,
+    initial_nodes: Vec<(NodeID, u64)>,
 ) -> Result<bool>
 {
     let tree_state = db.reader.get_latest_tree_state()?;
@@ -60,6 +65,7 @@ pub fn maybe_bootstrap<V: VMExecutor>(
         tree_state,
         genesis_txn,
         genesis_pivot_decision,
+        initial_nodes,
     )?;
     ensure!(
         waypoint == committer.waypoint(),
@@ -108,14 +114,21 @@ impl<V: VMExecutor> GenesisCommitter<V> {
 pub fn calculate_genesis<V: VMExecutor>(
     db: &DbReaderWriter, tree_state: TreeState, genesis_txn: &Transaction,
     genesis_pivot_decision: Option<PivotBlockDecision>,
+    initial_nodes: Vec<(NodeID, u64)>,
 ) -> Result<GenesisCommitter<V>>
 {
     // DB bootstrapper works on either an empty transaction accumulator or an
     // existing block chain. In the very extreme and sad situation of losing
     // quorum among validators, we refer to the second use case said above.
     let genesis_version = tree_state.num_transactions;
-    let mut executor =
-        Executor::<V>::new_on_unbootstrapped_db(db.clone(), tree_state);
+    let mut executor = Executor::<V>::new_on_unbootstrapped_db(
+        db.clone(),
+        tree_state,
+        initial_nodes,
+        genesis_pivot_decision.clone(),
+        // This will not be used in genesis execution.
+        Arc::new(FakePowHandler {}),
+    );
 
     let block_id = HashValue::zero();
     let epoch = if genesis_version == 0 {
@@ -135,6 +148,8 @@ pub fn calculate_genesis<V: VMExecutor>(
     let result = executor.execute_block(
         (block_id, vec![genesis_txn.clone()]),
         *PRE_GENESIS_BLOCK_ID,
+        // Use `catch_up_mode=false` for genesis to calculate VDF output.
+        false,
     )?;
 
     let root_hash = result.root_hash();

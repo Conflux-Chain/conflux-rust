@@ -3,29 +3,16 @@
 
 #![forbid(unsafe_code)]
 
-mod types;
-
-pub mod db_bootstrapper;
-mod logging;
-mod metrics;
-mod speculation_cache;
-pub mod vm;
-
-use crate::{
-    logging::{LogEntry, LogSchema},
-    metrics::{
-        DIEM_EXECUTOR_COMMIT_BLOCKS_SECONDS, DIEM_EXECUTOR_ERRORS,
-        DIEM_EXECUTOR_EXECUTE_AND_COMMIT_CHUNK_SECONDS,
-        DIEM_EXECUTOR_EXECUTE_BLOCK_SECONDS,
-        DIEM_EXECUTOR_SAVE_TRANSACTIONS_SECONDS,
-        DIEM_EXECUTOR_TRANSACTIONS_SAVED,
-        DIEM_EXECUTOR_VM_EXECUTE_BLOCK_SECONDS,
-    },
-    speculation_cache::SpeculationCache,
-    types::{ProcessedVMOutput, TransactionData},
-    vm::VMExecutor,
+use std::{
+    collections::{hash_map, HashMap, HashSet},
+    convert::TryFrom,
+    marker::PhantomData,
+    sync::Arc,
 };
-use anyhow::{bail, ensure, format_err, Result};
+
+use anyhow::{anyhow, bail, ensure, format_err, Result};
+use fail::fail_point;
+
 use diem_crypto::{
     hash::{CryptoHash, EventAccumulatorHasher, TransactionAccumulatorHasher},
     HashValue,
@@ -45,6 +32,7 @@ use diem_types::{
         self, config_address, OnChainConfigPayload, ON_CHAIN_CONFIG_REGISTRY,
     },
     proof::accumulator::InMemoryAccumulator,
+    term_state::ElectionEvent,
     transaction::{
         Transaction, TransactionInfo, TransactionListWithProof,
         TransactionOutput, TransactionPayload, TransactionStatus,
@@ -56,16 +44,45 @@ use executor_types::{
     BlockExecutor, ChunkExecutor, Error, ExecutedTrees, ProofReader,
     StateComputeResult, TransactionReplayer,
 };
-use fail::fail_point;
-use std::{
-    collections::{hash_map, HashMap, HashSet},
-    convert::TryFrom,
-    marker::PhantomData,
-    sync::Arc,
-};
 use storage_interface::{
     state_view::VerifiedStateView, DbReaderWriter, TreeState,
 };
+
+use crate::{
+    logging::{LogEntry, LogSchema},
+    metrics::{
+        DIEM_EXECUTOR_COMMIT_BLOCKS_SECONDS, DIEM_EXECUTOR_ERRORS,
+        DIEM_EXECUTOR_EXECUTE_AND_COMMIT_CHUNK_SECONDS,
+        DIEM_EXECUTOR_EXECUTE_BLOCK_SECONDS,
+        DIEM_EXECUTOR_SAVE_TRANSACTIONS_SECONDS,
+        DIEM_EXECUTOR_TRANSACTIONS_SAVED,
+        DIEM_EXECUTOR_VM_EXECUTE_BLOCK_SECONDS,
+    },
+    speculation_cache::SpeculationCache,
+    types::{ProcessedVMOutput, TransactionData},
+    vm::VMExecutor,
+};
+use consensus_types::block::VRF_SEED;
+use diem_crypto::hash::PRE_GENESIS_BLOCK_ID;
+use diem_types::{
+    on_chain_config::ValidatorSet,
+    term_state::{
+        NodeID, PosState, RegisterEvent, RetireEvent, UpdateVotingPowerEvent,
+    },
+    transaction::TransactionPayload::UpdateVotingPower,
+    validator_verifier::ValidatorVerifier,
+};
+use itertools::Itertools;
+use pow_types::PowInterface;
+use std::thread;
+
+mod types;
+
+pub mod db_bootstrapper;
+mod logging;
+mod metrics;
+mod speculation_cache;
+pub mod vm;
 
 type SparseMerkleProof = diem_types::proof::SparseMerkleProof<AccountStateBlob>;
 
@@ -75,6 +92,7 @@ pub struct Executor<V> {
     db: DbReaderWriter,
     cache: SpeculationCache,
     phantom: PhantomData<V>,
+    pow_handler: Arc<dyn PowInterface>,
 }
 
 impl<V> Executor<V>
@@ -85,7 +103,7 @@ where V: VMExecutor
     }
 
     /// Constructs an `Executor`.
-    pub fn new(db: DbReaderWriter) -> Self {
+    pub fn new(db: DbReaderWriter, pow_handler: Arc<dyn PowInterface>) -> Self {
         let startup_info = db
             .reader
             .get_startup_info()
@@ -96,6 +114,7 @@ where V: VMExecutor
             db,
             cache: SpeculationCache::new_with_startup_info(startup_info),
             phantom: PhantomData,
+            pow_handler,
         }
     }
 
@@ -111,11 +130,61 @@ where V: VMExecutor
 
     pub fn new_on_unbootstrapped_db(
         db: DbReaderWriter, tree_state: TreeState,
-    ) -> Self {
+        mut initial_nodes: Vec<(NodeID, u64)>,
+        genesis_pivot_decision: Option<PivotBlockDecision>,
+        pow_handler: Arc<dyn PowInterface>,
+    ) -> Self
+    {
+        // if initial_nodes.is_empty() {
+        //     // FIXME(lpl): Finalize if we want to hard code initial nodes.
+        //     let access_paths = ON_CHAIN_CONFIG_REGISTRY
+        //         .iter()
+        //         .map(|config_id| config_id.access_path())
+        //         .collect();
+        //     let configs = db
+        //         .reader
+        //         .as_ref()
+        //         .batch_fetch_resources_by_version(access_paths, 0)
+        //         .unwrap();
+        //     let validators: ValidatorSet = OnChainConfigPayload::new(
+        //         0,
+        //         Arc::new(
+        //             ON_CHAIN_CONFIG_REGISTRY
+        //                 .iter()
+        //                 .cloned()
+        //                 .zip_eq(configs)
+        //                 .collect(),
+        //         ),
+        //     )
+        //     .get()
+        //     .unwrap();
+        //     for node in validators {
+        //         let node_id = NodeID::new(
+        //             node.consensus_public_key().clone(),
+        //             node.vrf_public_key().clone().unwrap(),
+        //         );
+        //         initial_nodes.push((node_id, node.consensus_voting_power()));
+        //     }
+        // }
+        // TODO(lpl): The default value is only for pos-tool.
+        let genesis_pivot_decision =
+            genesis_pivot_decision.unwrap_or(PivotBlockDecision {
+                block_hash: Default::default(),
+                height: 0,
+            });
+        let pos_state = PosState::new(
+            VRF_SEED.to_vec(),
+            initial_nodes,
+            genesis_pivot_decision,
+            true,
+        );
         Self {
             db,
-            cache: SpeculationCache::new_for_db_bootstrapping(tree_state),
+            cache: SpeculationCache::new_for_db_bootstrapping(
+                tree_state, pos_state,
+            ),
             phantom: PhantomData,
+            pow_handler,
         }
     }
 
@@ -276,10 +345,11 @@ where V: VMExecutor
     /// Post-processing of what the VM outputs. Returns the entire block's
     /// output.
     fn process_vm_outputs(
-        mut account_to_state: HashMap<AccountAddress, AccountState>,
+        &self, mut account_to_state: HashMap<AccountAddress, AccountState>,
         account_to_proof: HashMap<HashValue, SparseMerkleProof>,
         transactions: &[Transaction], vm_outputs: Vec<TransactionOutput>,
-        parent_trees: &ExecutedTrees,
+        parent_trees: &ExecutedTrees, parent_block_id: &HashValue,
+        catch_up_mode: bool,
     ) -> Result<ProcessedVMOutput>
     {
         // The data of each individual transaction. For convenience purpose,
@@ -296,36 +366,150 @@ where V: VMExecutor
         let new_epoch_event_key = on_chain_config::new_epoch_event_key();
         let pivot_select_event_key =
             PivotBlockDecision::pivot_select_event_key();
+        let election_event_key = ElectionEvent::event_key();
+        let retire_event_key = RetireEvent::event_key();
+        let register_event_key = RegisterEvent::event_key();
+        let update_voting_power_event_key = UpdateVotingPowerEvent::event_key();
 
         // Find the next pivot block.
         let mut pivot_decision = None;
+        let mut new_pos_state = parent_trees.pos_state().clone();
+        let parent_pivot_decision = new_pos_state.pivot_decision().clone();
+        new_pos_state.set_catch_up_mode(catch_up_mode);
         for vm_output in vm_outputs.clone().into_iter() {
             for event in vm_output.events() {
                 // check for pivot block selection.
                 if *event.key() == pivot_select_event_key {
+                    if pivot_decision.is_some() {
+                        bail!("Multiple pivot decisions in one block!");
+                    }
                     pivot_decision = Some(PivotBlockDecision::from_bytes(
                         event.event_data(),
                     )?);
-                    break;
+                } else if *event.key() == election_event_key {
+                    let election_event =
+                        ElectionEvent::from_bytes(event.event_data())?;
+                    new_pos_state.new_node_elected(&election_event)?;
+                } else if *event.key() == retire_event_key {
+                    let retire_event =
+                        RetireEvent::from_bytes(event.event_data())?;
+                    new_pos_state.retire_node(&retire_event)?;
                 }
             }
         }
-        let new_epoch_marker = vm_outputs
-            .iter()
-            .enumerate()
-            .find(|(_, output)| {
-                output
-                    .events()
-                    .iter()
-                    .any(|event| *event.key() == new_epoch_event_key)
-            })
-            // Off by one for exclusive index.
-            .map(|(idx, _)| idx + 1);
-        let transaction_count = new_epoch_marker.unwrap_or(vm_outputs.len());
+
+        if *parent_block_id != *PRE_GENESIS_BLOCK_ID {
+            if let Some(pivot_decision) = &pivot_decision {
+                diem_debug!(
+                    "process_vm_outputs: parent={:?} parent_pivot={:?}",
+                    parent_block_id,
+                    parent_pivot_decision
+                );
+
+                // The check and event processing below will be skipped during
+                // PoS catching up, because pow_handler has not
+                // set its `pow_consensus`.
+                if !self.pow_handler.validate_proposal_pivot_decision(
+                    parent_pivot_decision.block_hash,
+                    pivot_decision.block_hash,
+                ) {
+                    bail!("Invalid pivot decision for block");
+                }
+
+                if !catch_up_mode {
+                    // Verify if the proposer has packed all staking events as
+                    // expected.
+                    let staking_events = self.pow_handler.get_staking_events(
+                        parent_pivot_decision.block_hash,
+                        pivot_decision.block_hash,
+                    )?;
+                    let mut staking_events_iter = staking_events.iter();
+                    for vm_output in vm_outputs.clone().into_iter() {
+                        for event in vm_output.events() {
+                            // check for pivot block selection.
+                            if *event.key() == register_event_key {
+                                let register_event = RegisterEvent::from_bytes(
+                                    event.event_data(),
+                                )?;
+                                match register_event.matches_staking_event(staking_events_iter.next().ok_or(anyhow!("More staking transactions packed than actual pow events"))?) {
+                                    Ok(true) => {}
+                                    Ok(false) => bail!("Packed staking transactions unmatch PoW events)"),
+                                    Err(e) => diem_error!("error decoding pow events: err={:?}", e),
+                                }
+                                new_pos_state
+                                    .register_node(register_event.node_id)?;
+                            } else if *event.key()
+                                == update_voting_power_event_key
+                            {
+                                let update_voting_power_event =
+                                    UpdateVotingPowerEvent::from_bytes(
+                                        event.event_data(),
+                                    )?;
+                                match update_voting_power_event.matches_staking_event(staking_events_iter.next().ok_or(anyhow!("More staking transactions packed than actual pow events"))?) {
+                                    Ok(true) => {}
+                                    Ok(false) => bail!("Packed staking transactions unmatch PoW events)"),
+                                    Err(e) => diem_error!("error decoding pow events: err={:?}", e),
+                                }
+                                new_pos_state.update_voting_power(
+                                    &update_voting_power_event.node_address,
+                                    update_voting_power_event.voting_power,
+                                )?;
+                            }
+                        }
+                    }
+                    ensure!(
+                        staking_events_iter.next().is_none(),
+                        "Not all PoW staking events are packed"
+                    );
+                } else {
+                    for vm_output in vm_outputs.clone().into_iter() {
+                        for event in vm_output.events() {
+                            // check for pivot block selection.
+                            if *event.key() == register_event_key {
+                                let register_event = RegisterEvent::from_bytes(
+                                    event.event_data(),
+                                )?;
+                                new_pos_state
+                                    .register_node(register_event.node_id)?;
+                            } else if *event.key()
+                                == update_voting_power_event_key
+                            {
+                                let update_voting_power_event =
+                                    UpdateVotingPowerEvent::from_bytes(
+                                        event.event_data(),
+                                    )?;
+                                new_pos_state.update_voting_power(
+                                    &update_voting_power_event.node_address,
+                                    update_voting_power_event.voting_power,
+                                )?;
+                            }
+                        }
+                    }
+                }
+            } else {
+                // No new pivot decision, so there should be no staking-related
+                // transactions.
+                if vm_outputs.iter().any(|output| {
+                    output.events().iter().any(|event| {
+                        *event.key() == retire_event_key
+                            || *event.key() == update_voting_power_event_key
+                    })
+                }) {
+                    bail!("Should not pack staking related transactions");
+                }
+                pivot_decision = Some(parent_pivot_decision);
+            }
+        }
+        // TODO(lpl): This is only for pos-tool
+        if let Some(pivot_decision) = &pivot_decision {
+            new_pos_state.set_pivot_decision(pivot_decision.clone());
+        }
+        let mut next_epoch_state = new_pos_state
+            .next_view()?
+            .map(|(epoch_state, _term_seed)| epoch_state);
 
         let txn_blobs =
             itertools::zip_eq(vm_outputs.iter(), transactions.iter())
-                .take(transaction_count)
                 .map(|(vm_output, txn)| {
                     process_write_set(
                         txn,
@@ -352,8 +536,7 @@ where V: VMExecutor
 
         for ((vm_output, txn), (mut state_tree_hash, blobs)) in
             itertools::zip_eq(
-                itertools::zip_eq(vm_outputs.into_iter(), transactions.iter())
-                    .take(transaction_count),
+                itertools::zip_eq(vm_outputs.into_iter(), transactions.iter()),
                 itertools::zip_eq(txn_state_roots, txn_blobs),
             )
         {
@@ -378,10 +561,10 @@ where V: VMExecutor
             let mut txn_info_hash = None;
             match vm_output.status() {
                 TransactionStatus::Keep(status) => {
-                    ensure!(
-                        !vm_output.write_set().is_empty(),
-                        "Transaction with empty write set should be discarded.",
-                    );
+                    // ensure!(
+                    //     !vm_output.write_set().is_empty(),
+                    //     "Transaction with empty write set should be
+                    // discarded.", );
                     // Compute hash for the TransactionInfo object. We need the
                     // hash of the transaction itself, the
                     // state root hash as well as the event root hash.
@@ -423,8 +606,10 @@ where V: VMExecutor
             ));
         }
 
-        // check for change in validator set
-        let next_epoch_state = if new_epoch_marker.is_some() {
+        // FIXME(lpl): For genesis.
+        if next_epoch_state.is_some()
+            && next_epoch_state.as_ref().unwrap().epoch == 1
+        {
             // Pad the rest of transactions
             txn_data.resize(
                 transactions.len(),
@@ -462,15 +647,17 @@ where V: VMExecutor
             .ok_or_else(|| {
                 format_err!("Association account does not exist")
             })??;*/
-            Some(EpochState {
+            next_epoch_state = Some(EpochState {
                 // TODO(lpl): This is only used for genesis, and after executing
                 // the genesis block, the epoch number should be
                 // increased from 0 to 1.
                 epoch: 1, //configuration.epoch(),
                 verifier: (&validator_set).into(),
+                vrf_seed: pivot_decision
+                    .as_ref()
+                    .map(|p| p.block_hash.as_bytes().to_vec())
+                    .unwrap_or(vec![]),
             })
-        } else {
-            None
         };
 
         let current_transaction_accumulator =
@@ -481,6 +668,7 @@ where V: VMExecutor
             ExecutedTrees::new_copy(
                 Arc::new(current_state_tree),
                 Arc::new(current_transaction_accumulator),
+                new_pos_state,
             ),
             next_epoch_state,
             // TODO(lpl): Check if we need to assert it's Some.
@@ -524,6 +712,7 @@ where V: VMExecutor
             self.cache.committed_trees().version(),
             self.cache.committed_trees().state_root(),
             executed_trees.state_tree(),
+            executed_trees.pos_state().clone(),
         )
     }
 
@@ -545,12 +734,15 @@ where V: VMExecutor
             self.cache.synced_trees().version(),
             self.cache.synced_trees().state_root(),
             self.cache.synced_trees().state_tree(),
+            // FIXME(lpl): State sync not used yet.
+            PosState::new_empty(),
         );
 
         fail_point!("executor::vm_execute_chunk", |_| {
             Err(anyhow::anyhow!("Injected error in execute_chunk"))
         });
-        let vm_outputs = V::execute_block(transactions.clone(), &state_view)?;
+        let vm_outputs =
+            V::execute_block(transactions.clone(), &state_view, true)?;
 
         // Since other validators have committed these transactions, their
         // status should all be TransactionStatus::Keep.
@@ -562,12 +754,15 @@ where V: VMExecutor
 
         let (account_to_state, account_to_proof) = state_view.into();
 
-        let output = Self::process_vm_outputs(
+        let output = self.process_vm_outputs(
             account_to_state,
             account_to_proof,
             &transactions,
             vm_outputs,
             self.cache.synced_trees(),
+            // TODO(lpl): This function is not used.
+            &HashValue::zero(),
+            true,
         )?;
 
         // Since we have verified the proofs, we just need to verify that each
@@ -722,6 +917,7 @@ impl<V: VMExecutor> ChunkExecutor for Executor<V> {
             &txns_to_commit,
             first_version,
             ledger_info_to_commit.as_ref(),
+            None,
         )?;
 
         // 5. Cache maintenance.
@@ -778,6 +974,7 @@ impl<V: VMExecutor> TransactionReplayer for Executor<V> {
                 &txns_to_commit,
                 first_version,
                 None,
+                None,
             )?;
 
             self.cache
@@ -807,7 +1004,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
 
     fn execute_block(
         &mut self, block: (HashValue, Vec<Transaction>),
-        parent_block_id: HashValue,
+        parent_block_id: HashValue, catch_up_mode: bool,
     ) -> Result<StateComputeResult, Error>
     {
         let (block_id, mut transactions) = block;
@@ -878,8 +1075,12 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                         "Injected error in vm_execute_block"
                     )))
                 });
-                V::execute_block(transactions.clone(), &state_view)
-                    .map_err(anyhow::Error::from)?
+                V::execute_block(
+                    transactions.clone(),
+                    &state_view,
+                    catch_up_mode,
+                )
+                .map_err(anyhow::Error::from)?
             };
 
             // trace_code_block!("executor::process_vm_outputs", {"block",
@@ -895,14 +1096,19 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
 
             let (account_to_state, account_to_proof) = state_view.into();
 
-            let output = Self::process_vm_outputs(
-                account_to_state,
-                account_to_proof,
-                &transactions,
-                vm_outputs,
-                &parent_block_executed_trees,
-            )
-            .map_err(|err| format_err!("Failed to execute block: {}", err))?;
+            let output = self
+                .process_vm_outputs(
+                    account_to_state,
+                    account_to_proof,
+                    &transactions,
+                    vm_outputs,
+                    &parent_block_executed_trees,
+                    &parent_block_id,
+                    catch_up_mode,
+                )
+                .map_err(|err| {
+                    format_err!("Failed to execute block: {}", err)
+                })?;
 
             let parent_accu = parent_block_executed_trees.txn_accumulator();
 
@@ -929,6 +1135,12 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
         let _timer = DIEM_EXECUTOR_COMMIT_BLOCKS_SECONDS.start_timer();
         let block_id_to_commit =
             ledger_info_with_sigs.ledger_info().consensus_block_id();
+        let pos_state_to_commit = self
+            .get_executed_trees(
+                ledger_info_with_sigs.ledger_info().consensus_block_id(),
+            )?
+            .pos_state()
+            .clone();
 
         diem_info!(
             LogSchema::new(LogEntry::BlockExecutor)
@@ -1051,6 +1263,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 txns_to_commit,
                 first_version_to_commit,
                 Some(&ledger_info_with_sigs),
+                Some(pos_state_to_commit),
             )?;
         }
 
@@ -1110,16 +1323,15 @@ pub fn process_write_set(
                 match transaction {
                     Transaction::GenesisTransaction(_) => (),
                     Transaction::BlockMetadata(_) => {
-                        bail!("BlockMetadata: Write set should be a subset of read set.")
+                        // bail!("BlockMetadata: Write set should be a subset of
+                        // read set.")
                     }
                     Transaction::UserTransaction(txn) => match txn.payload() {
-                        TransactionPayload::Module(_)
-                        | TransactionPayload::Script(_)
-                        | TransactionPayload::ScriptFunction(_) => {
-                            bail!("Write set should be a subset of read set: {:?}.", txn)
-                        }
-                        TransactionPayload::PivotDecision(_) => continue,
                         TransactionPayload::WriteSet(_) => (),
+                        _ => bail!(
+                            "Write set should be a subset of read set: {:?}.",
+                            txn
+                        ),
                     },
                 }
 
