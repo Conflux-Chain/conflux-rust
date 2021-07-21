@@ -288,7 +288,6 @@ build_config! {
         (executive_trace, (bool), false)
 
         // TreeGraph Section.
-        (candidate_pivot_waiting_timeout_ms, (u64), 10_000)
         (is_consortium, (bool), false)
         (pos_config_path, (Option<String>), Some("./pos_config/pos_config.toml".to_string()))
         (pos_genesis_pivot_decision, (Option<H256>), None)

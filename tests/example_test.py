@@ -17,7 +17,7 @@ class ExampleTest(ConfluxTestFramework):
 
     def setup_network(self):
         self.setup_nodes(is_consortium=True, genesis_nodes=3)
-        connect_sample_nodes(self.nodes, self.log)
+        connect_sample_nodes(self.nodes, self.log, latency_max=0)
         sync_blocks(self.nodes)
 
     def run_test(self):
@@ -29,7 +29,7 @@ class ExampleTest(ConfluxTestFramework):
         assert (self.nodes[0].getblockcount() == 2)
 
         latest_pos_ref = self.latest_pos_ref()
-        for _ in range(3):
+        for _ in range(180):
             # Generate enough PoW block for PoS to progress
             self.nodes[0].generate_empty_blocks(600)
             # Leave some time for PoS to reach consensus
