@@ -52,8 +52,8 @@ impl VMExecutor for FakeVM {
                                 VMStatus::Error(StatusCode::CFX_INVALID_TX)
                             })?;
                         let validator_bytes = bcs::to_bytes(&EpochState {
-                            epoch: (state_view.pos_state().current_view()
-                                + 1) / 60
+                            epoch: (state_view.pos_state().current_view() + 1)
+                                / 60
                                 + 1,
                             verifier: validator_verifier,
                             vrf_seed,
