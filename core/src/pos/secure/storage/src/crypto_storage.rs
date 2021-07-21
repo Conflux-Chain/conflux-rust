@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::Error;
-use diem_crypto::PrivateKey;
 use diem_types::validator_config::{
     ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
 };

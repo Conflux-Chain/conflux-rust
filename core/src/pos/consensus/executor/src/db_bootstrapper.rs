@@ -5,7 +5,6 @@
 
 use crate::{vm::VMExecutor, Executor};
 use anyhow::{ensure, format_err, Result};
-use cfx_types::H256;
 use diem_crypto::{hash::PRE_GENESIS_BLOCK_ID, HashValue};
 use diem_logger::prelude::*;
 use diem_state_view::{StateView, StateViewId};

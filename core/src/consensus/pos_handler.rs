@@ -1,14 +1,11 @@
-use std::sync::Arc;
-
-use serde::{Deserialize, Serialize};
-
 use cfx_types::H256;
 use diem_crypto::HashValue;
 use diem_types::{
-    account_config, contract_event::ContractEvent, event::EventKey,
-    ledger_info::LedgerInfoWithSignatures, term_state::UnlockEvent,
+    contract_event::ContractEvent, ledger_info::LedgerInfoWithSignatures,
+    term_state::UnlockEvent,
 };
 use primitives::pos::{NodeId, PosBlockId};
+use std::sync::Arc;
 use storage_interface::DBReaderForPoW;
 
 pub type PosVerifier = PosHandler<PosConnection>;

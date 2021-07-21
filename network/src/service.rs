@@ -20,12 +20,9 @@ use crate::{
 };
 use cfx_addr::Network;
 use cfx_bytes::Bytes;
-use diem_crypto::{
-    ed25519::{Ed25519PrivateKey, Ed25519PublicKey},
-    PrivateKey, ValidCryptoMaterialStringExt,
-};
+use diem_crypto::{PrivateKey, ValidCryptoMaterialStringExt};
 use diem_types::{
-    account_address::{from_consensus_public_key, from_public_key},
+    account_address::from_consensus_public_key,
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
     },

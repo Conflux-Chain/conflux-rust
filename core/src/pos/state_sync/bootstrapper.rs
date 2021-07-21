@@ -8,12 +8,11 @@ use crate::pos::{
         executor_proxy::{ExecutorProxy, ExecutorProxyTrait},
     },
 };
-use diem_config::{config::NodeConfig, network_id::NodeNetworkId};
-use diem_logger::debug as diem_debug;
+use diem_config::config::NodeConfig;
 use diem_types::waypoint::Waypoint;
 use executor_types::ChunkExecutor;
 use futures::channel::mpsc;
-use std::{boxed::Box, collections::HashMap, sync::Arc};
+use std::{boxed::Box, sync::Arc};
 use storage_interface::DbReader;
 use subscription_service::ReconfigSubscription;
 use tokio::runtime::{Builder, Runtime};

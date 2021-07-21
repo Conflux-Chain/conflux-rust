@@ -17,7 +17,7 @@ use crate::pos::{
 };
 use anyhow::Result;
 use channel::diem_channel;
-use diem_config::{config::NodeConfig, network_id::NodeNetworkId};
+use diem_config::config::NodeConfig;
 use diem_infallible::{Mutex, RwLock};
 use diem_types::{
     on_chain_config::OnChainConfigPayload, transaction::SignedTransaction,
@@ -26,7 +26,7 @@ use futures::channel::{
     mpsc::{self, Receiver, UnboundedSender},
     oneshot,
 };
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use storage_interface::DbReader;
 use tokio::runtime::{Builder, Handle, Runtime};
 

@@ -30,7 +30,6 @@ use cfx_storage::{StorageConfiguration, StorageManager};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use core::str::FromStr;
 use parking_lot::Mutex;
-use pow_types::FakePowHandler;
 use primitives::{Block, BlockHeaderBuilder};
 use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
 use storage_interface::DBReaderForPoW;

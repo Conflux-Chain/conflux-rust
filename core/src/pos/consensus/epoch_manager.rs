@@ -41,7 +41,6 @@ use channel::diem_channel;
 use consensus_types::{
     common::{Author, Round},
     epoch_retrieval::EpochRetrievalRequest,
-    sync_info::SyncInfo,
 };
 use diem_config::config::{ConsensusConfig, ConsensusProposerType, NodeConfig};
 use diem_infallible::duration_since_epoch;
@@ -53,7 +52,6 @@ use diem_types::{
     epoch_state::EpochState,
     on_chain_config::{OnChainConfigPayload, ValidatorSet},
     transaction::SignedTransaction,
-    validator_verifier::ValidatorVerifier,
 };
 use futures::{
     channel::{mpsc, oneshot},

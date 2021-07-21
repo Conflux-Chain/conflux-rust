@@ -25,7 +25,6 @@ use metrics::{
     register_meter_with_group, register_queue, Meter, MeterTimer, Queue,
 };
 use parking_lot::RwLock;
-use pow_types::PowInterface;
 use primitives::{
     pos::PosBlockId, transaction::SignedTransaction, Block, BlockHeader,
     EpochNumber,

@@ -9,7 +9,6 @@ use crate::{
     session::{Session, PACKET_HEADER_VERSION},
     NetworkIoMessage,
 };
-use diem_crypto::ed25519::Ed25519PublicKey;
 use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 use io::IoContext;
 use mio::net::TcpStream;

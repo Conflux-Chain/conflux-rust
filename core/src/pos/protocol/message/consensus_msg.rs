@@ -9,9 +9,7 @@ use crate::{
     },
     sync::Error,
 };
-use consensus_types::epoch_retrieval::EpochRetrievalRequest;
-use diem_types::account_address::AccountAddress;
-use std::{cmp::Ordering, mem::discriminant};
+use std::mem::discriminant;
 
 impl Handleable for ConsensusMsg {
     fn handle(self, ctx: &Context) -> Result<(), Error> {

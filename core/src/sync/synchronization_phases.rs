@@ -11,13 +11,12 @@ use crate::{
         synchronization_state::SynchronizationState,
         SharedSynchronizationGraph,
     },
-    ConsensusGraph, SharedConsensusGraph,
+    ConsensusGraph,
 };
 use cfx_internal_common::StateAvailabilityBoundary;
 use cfx_parameters::sync::CATCH_UP_EPOCH_LAG_THRESHOLD;
 use network::NetworkContext;
 use parking_lot::RwLock;
-use pow_types::PowInterface;
 use std::{
     collections::HashMap,
     sync::{

@@ -13,7 +13,6 @@ use crate::{
     },
 };
 use anyhow::{anyhow, bail, ensure, format_err};
-use cfx_types::H256;
 use channel::{self, diem_channel, message_queues::QueueStyle};
 use consensus_types::{
     block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse},

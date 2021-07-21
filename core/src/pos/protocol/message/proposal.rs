@@ -11,7 +11,6 @@ use crate::{
 };
 
 use consensus_types::proposal_msg::ProposalMsg;
-use diem_types::account_address::AccountAddress;
 use std::mem::discriminant;
 
 impl Handleable for ProposalMsg {

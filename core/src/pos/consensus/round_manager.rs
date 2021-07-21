@@ -28,7 +28,7 @@ use crate::pos::{
 };
 use anyhow::{bail, ensure, Context, Result};
 use consensus_types::{
-    block::{Block, VRF_SEED},
+    block::Block,
     block_retrieval::{BlockRetrievalResponse, BlockRetrievalStatus},
     common::{Author, Round},
     proposal_msg::ProposalMsg,
@@ -46,7 +46,7 @@ use diem_types::{
     block_info::PivotBlockDecision,
     chain_id::ChainId,
     epoch_state::EpochState,
-    ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
+    ledger_info::LedgerInfoWithSignatures,
     transaction::{ElectionPayload, RawTransaction, SignedTransaction},
     validator_verifier::ValidatorVerifier,
 };

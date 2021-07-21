@@ -860,7 +860,7 @@ use crate::{
 };
 pub use crate::{common::pos::DiemHandle, configuration::Configuration};
 use blockgen::BlockGenerator;
-use cfx_storage::{state_manager::StateManagerTrait, StorageManager};
+use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use cfxcore::{
     block_data_manager::BlockDataManager,

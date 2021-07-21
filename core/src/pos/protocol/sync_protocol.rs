@@ -30,11 +30,8 @@ use consensus_types::{
     epoch_retrieval::EpochRetrievalRequest, proposal_msg::ProposalMsg,
     sync_info::SyncInfo, vote_msg::VoteMsg,
 };
-use diem_crypto::ed25519::Ed25519PublicKey;
 use diem_types::{
-    account_address::{
-        from_consensus_public_key, from_public_key, AccountAddress,
-    },
+    account_address::{from_consensus_public_key, AccountAddress},
     epoch_change::EpochChangeProof,
     validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
 };
@@ -44,9 +41,9 @@ use network::{
     node_table::NodeId, service::ProtocolVersion, NetworkContext,
     NetworkProtocolHandler, NetworkService, UpdateNodeOperation,
 };
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use serde::Deserialize;
-use std::{cmp::Eq, collections::HashMap, fmt::Debug, hash::Hash, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 #[derive(Default)]
 pub struct PeerState {

@@ -5,10 +5,7 @@ use crate::pos::consensus::liveness::proposer_election::ProposerElection;
 use consensus_types::common::{Author, Round};
 
 use cfx_types::U256;
-use consensus_types::{
-    block::{Block, VRF_SEED},
-    block_data::BlockData,
-};
+use consensus_types::{block::Block, block_data::BlockData};
 use diem_crypto::{VRFPrivateKey, VRFProof};
 use diem_logger::debug as diem_debug;
 use diem_types::{

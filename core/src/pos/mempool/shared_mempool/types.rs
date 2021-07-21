@@ -35,9 +35,7 @@ use futures::{
     task::{Context, Poll},
 };
 use network::node_table::NodeId;
-use std::{
-    collections::HashMap, fmt, pin::Pin, sync::Arc, task::Waker, time::Instant,
-};
+use std::{fmt, pin::Pin, sync::Arc, task::Waker, time::Instant};
 use storage_interface::DbReader;
 use subscription_service::ReconfigSubscription;
 use tokio::runtime::Handle;

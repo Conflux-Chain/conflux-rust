@@ -35,7 +35,6 @@ use cfx_parameters::light::{
     CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, HEARTBEAT_PERIOD, SYNC_PERIOD,
 };
 use cfx_types::H256;
-use diem_crypto::ed25519::Ed25519PublicKey;
 use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 use io::TimerToken;
 use network::{

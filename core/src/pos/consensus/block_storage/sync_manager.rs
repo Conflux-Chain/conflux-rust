@@ -8,22 +8,19 @@ use crate::pos::consensus::{
     persistent_liveness_storage::{PersistentLivenessStorage, RecoveryData},
     state_replication::StateComputer,
 };
-use anyhow::{bail, ensure, format_err};
+use anyhow::{bail, format_err};
 use consensus_types::{
     block::Block,
     block_retrieval::{BlockRetrievalRequest, BlockRetrievalStatus},
     common::Author,
     quorum_cert::QuorumCert,
-    sync_info::SyncInfo,
 };
 use diem_crypto::HashValue;
 use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress, epoch_change::EpochChangeProof,
     ledger_info::LedgerInfoWithSignatures,
-    term_state::ELECTION_AFTER_ACCEPTED_ROUND,
 };
-use mirai_annotations::checked_precondition;
 use rand::{prelude::*, Rng};
 use std::{clone::Clone, sync::Arc, time::Duration};
 

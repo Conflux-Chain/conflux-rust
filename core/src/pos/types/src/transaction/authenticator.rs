@@ -4,7 +4,7 @@
 use crate::account_address::AccountAddress;
 use anyhow::{bail, ensure, Error, Result};
 use diem_crypto::{
-    bls::{BLSPrivateKey, BLSPublicKey, BLSSignature},
+    bls::{BLSPublicKey, BLSSignature},
     ed25519::{Ed25519PublicKey, Ed25519Signature},
     hash::CryptoHash,
     multi_ed25519::{MultiEd25519PublicKey, MultiEd25519Signature},

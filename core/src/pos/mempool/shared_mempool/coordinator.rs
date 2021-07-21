@@ -8,13 +8,7 @@ use crate::pos::mempool::{
     counters,
     logging::{LogEntry, LogEvent, LogSchema},
     network::{MempoolSyncMsg, NetworkReceivers},
-    shared_mempool::{
-        tasks,
-        types::{
-            notify_subscribers, ScheduledBroadcast, SharedMempool,
-            SharedMempoolNotification,
-        },
-    },
+    shared_mempool::{tasks, types::SharedMempool},
     CommitNotification, ConsensusRequest, SubmissionStatus,
 };
 use anyhow::Result;
@@ -28,7 +22,7 @@ use diem_types::{
 };
 use futures::{
     channel::{mpsc, oneshot},
-    stream::{select_all, FuturesUnordered},
+    stream::FuturesUnordered,
     StreamExt,
 };
 use network::node_table::NodeId;

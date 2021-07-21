@@ -14,22 +14,14 @@ use crate::{
     },
 };
 use anyhow::{format_err, Context};
-use cfx_types::H256;
-use consensus_types::{
-    block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse},
-    epoch_retrieval::EpochRetrievalRequest,
-    proposal_msg::ProposalMsg,
-    sync_info::SyncInfo,
-    vote_msg::VoteMsg,
+use consensus_types::block_retrieval::{
+    BlockRetrievalRequest, BlockRetrievalResponse,
 };
-use diem_crypto::ed25519::Ed25519PublicKey;
 use diem_types::{
-    account_address::AccountAddress, epoch_change::EpochChangeProof,
-    validator_config::ConsensusPublicKey, PeerId,
+    account_address::AccountAddress, validator_config::ConsensusPublicKey,
 };
 use futures::channel::oneshot;
 use network::{node_table::NodeId, NetworkService};
-use serde::{Deserialize, Serialize};
 use std::{mem::discriminant, sync::Arc};
 
 /// The interface from Consensus to Networking layer.

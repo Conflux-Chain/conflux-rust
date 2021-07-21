@@ -14,7 +14,7 @@ use diem_crypto::{
 };
 use diem_types::{
     account_state_blob::AccountStateBlob,
-    block_info::{PivotBlockDecision, Round},
+    block_info::PivotBlockDecision,
     contract_event::ContractEvent,
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,

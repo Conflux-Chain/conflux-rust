@@ -10,7 +10,6 @@ use crate::{
     sync::Error,
 };
 use consensus_types::sync_info::SyncInfo;
-use diem_types::account_address::AccountAddress;
 use std::mem::discriminant;
 
 impl Handleable for SyncInfo {
