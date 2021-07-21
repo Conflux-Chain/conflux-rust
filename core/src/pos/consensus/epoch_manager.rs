@@ -515,6 +515,18 @@ impl EpochManager {
             EpochState {
                 epoch: payload.epoch(),
                 verifier: (&validator_set).into(),
+                // genesis pivot decision
+                vrf_seed: self
+                    .storage
+                    .diem_db()
+                    .get_latest_ledger_info()
+                    .expect("non-empty ledger info")
+                    .ledger_info()
+                    .pivot_decision()
+                    .unwrap()
+                    .block_hash
+                    .as_bytes()
+                    .to_vec(),
             }
         });
 
@@ -537,19 +549,13 @@ impl EpochManager {
             self.process_epoch(peer_id, consensus_msg).await?;
 
         if let Some(unverified_event) = maybe_unverified_event {
-            let epoch_vrf_seed = loop {
-                match self.storage.diem_db().get_term_vdf_output(self.epoch()) {
-                    Ok(seed) => break seed,
-                    // TODO(lpl): Use signal.
-                    Err(_) => {
-                        self.time_service.sleep(Duration::from_millis(100))
-                    }
-                }
-            };
             // same epoch -> run well-formedness + signature check
             let verified_event = unverified_event
                 .clone()
-                .verify(&self.epoch_state().verifier, &epoch_vrf_seed)
+                .verify(
+                    &self.epoch_state().verifier,
+                    self.epoch_state().vrf_seed.as_slice(),
+                )
                 .context("[EpochManager] Verify event")
                 .map_err(|err| {
                     diem_error!(

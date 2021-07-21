@@ -129,6 +129,8 @@ impl BlockInfo {
             next_epoch_state: Some(EpochState {
                 epoch: 1,
                 verifier: (&validator_set).into(),
+                // Only used in unit test.
+                vrf_seed: vec![],
             }),
             pivot: None,
         }

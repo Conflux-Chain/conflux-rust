@@ -63,9 +63,7 @@ use crate::{
     vm::VMExecutor,
 };
 use consensus_types::block::VRF_SEED;
-use diem_crypto::{
-    hash::PRE_GENESIS_BLOCK_ID, vdf_sha3::VdfSha3, VerifiableDelayFunction,
-};
+use diem_crypto::hash::PRE_GENESIS_BLOCK_ID;
 use diem_types::{
     on_chain_config::ValidatorSet,
     term_state::{
@@ -506,25 +504,9 @@ where V: VMExecutor
         if let Some(pivot_decision) = &pivot_decision {
             new_pos_state.set_pivot_decision(pivot_decision.clone());
         }
-        let mut next_epoch_state =
-            new_pos_state.next_view()?.map(|(epoch_state, term_seed)| {
-                // FIXME(lpl): Start this at a proper time.
-                if !catch_up_mode {
-                    let epoch = epoch_state.epoch;
-                    if self.db.reader.get_term_vdf_output(epoch).is_err() {
-                        // Only err is NotFound, so compute it.
-                        let writer = self.db.writer.clone();
-                        thread::spawn(move || {
-                            // FIXME(lpl): Set difficulty correctly.
-                            let vdf_output = VdfSha3 {}
-                                .solve(term_seed.as_slice(), 2)
-                                .unwrap();
-                            writer.put_term_vdf_output(epoch, vdf_output)
-                        });
-                    }
-                }
-                epoch_state
-            });
+        let mut next_epoch_state = new_pos_state
+            .next_view()?
+            .map(|(epoch_state, _term_seed)| epoch_state);
 
         let txn_blobs =
             itertools::zip_eq(vm_outputs.iter(), transactions.iter())
@@ -671,6 +653,10 @@ where V: VMExecutor
                 // increased from 0 to 1.
                 epoch: 1, //configuration.epoch(),
                 verifier: (&validator_set).into(),
+                vrf_seed: pivot_decision
+                    .as_ref()
+                    .map(|p| p.block_hash.as_bytes().to_vec())
+                    .unwrap_or(vec![]),
             })
         };
 

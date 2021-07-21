@@ -316,6 +316,18 @@ impl PosState {
     }
 
     pub fn pivot_decision(&self) -> &PivotBlockDecision { &self.pivot_decision }
+
+    pub fn current_term_seed(&self) -> &Vec<u8> {
+        self.target_term_seed(self.term_list.current_term)
+    }
+
+    pub fn target_term_seed(&self, target_term: u64) -> &Vec<u8> {
+        if target_term < (TERM_LIST_LEN as u64) {
+            &self.term_list.term_list[target_term as usize].seed
+        } else {
+            &self.term_list.term_list[TERM_LIST_LEN - 1].seed
+        }
+    }
 }
 
 /// Read-only functions used in `execute_block`
@@ -565,6 +577,11 @@ impl PosState {
                     // should be updated.
                     epoch: new_term + 1,
                     verifier,
+                    vrf_seed: self
+                        .pivot_decision
+                        .block_hash
+                        .as_bytes()
+                        .to_vec(),
                 },
                 term_seed,
             ))
@@ -577,6 +594,11 @@ impl PosState {
                     // should be updated.
                     epoch: 1,
                     verifier,
+                    vrf_seed: self
+                        .pivot_decision
+                        .block_hash
+                        .as_bytes()
+                        .to_vec(),
                 },
                 term_seed,
             ))

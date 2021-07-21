@@ -288,23 +288,10 @@ impl RoundManager {
             reason = new_round_event.reason
         );
         if self.proposer_election.is_random_election() {
-            // TODO(lpl): Only read during epoch change.
-            let epoch_seed = loop {
-                match self
-                    .storage
-                    .diem_db()
-                    .get_term_vdf_output(self.epoch_state.epoch)
-                {
-                    Ok(seed) => break seed,
-                    // TODO(lpl): Use signal.
-                    Err(e) => {
-                        diem_debug!("wait for term_vdf_output: {:?}", e);
-                        tokio::time::sleep(Duration::from_millis(100)).await
-                    }
-                }
-            };
-            self.proposer_election
-                .next_round(new_round_event.round, epoch_seed);
+            self.proposer_election.next_round(
+                new_round_event.round,
+                self.epoch_state.vrf_seed.clone(),
+            );
             self.round_state.setup_proposal_timeout();
         }
 
@@ -403,19 +390,7 @@ impl RoundManager {
         if let Some(target_term) =
             pos_state.next_elect_term(&proposal_generator.author())
         {
-            let epoch_vrf_seed = loop {
-                match self
-                    .storage
-                    .diem_db()
-                    .get_term_vdf_output(target_term + 1)
-                {
-                    Ok(seed) => break seed,
-                    // TODO(lpl): Use signal.
-                    Err(_) => {
-                        tokio::time::sleep(Duration::from_millis(100)).await
-                    }
-                }
-            };
+            let epoch_vrf_seed = pos_state.target_term_seed(target_term);
             let election_payload = ElectionPayload {
                 public_key: proposal_generator.public_key.clone(),
                 vrf_public_key: proposal_generator.vrf_public_key.clone(),
