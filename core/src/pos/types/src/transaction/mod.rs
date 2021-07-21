@@ -316,6 +316,27 @@ impl RawTransaction {
         }
     }
 
+    pub fn new_dispute(
+        sender: AccountAddress, sequence_number: u64,
+        dispute_payload: DisputePayload,
+    ) -> Self
+    {
+        RawTransaction {
+            sender,
+            sequence_number,
+            payload: TransactionPayload::Dispute(dispute_payload),
+            // Since write-set transactions bypass the VM, these fields aren't
+            // relevant.
+            max_gas_amount: 0,
+            gas_unit_price: 0,
+            gas_currency_code: XUS_NAME.to_owned(),
+            // Write-set transactions are special and important and shouldn't
+            // expire.
+            expiration_timestamp_secs: u64::max_value(),
+            chain_id: Default::default(),
+        }
+    }
+
     pub fn from_staking_event(
         staking_event: &StakingEvent, sender: AccountAddress,
     ) -> Result<Self> {
