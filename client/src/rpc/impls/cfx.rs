@@ -171,7 +171,7 @@ impl RpcImpl {
             _ => vec![],
         };
 
-        Ok(Bytes::new(code ))
+        Ok(Bytes::new(code))
     }
 
     fn balance(
