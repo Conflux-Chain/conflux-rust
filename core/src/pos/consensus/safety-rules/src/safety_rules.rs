@@ -307,7 +307,10 @@ impl SafetyRules {
         let author = self.persistent_storage.author()?;
         let expected_key = epoch_state.verifier.get_public_key(&author);
         let initialize_result = match expected_key {
-            None => Err(Error::ValidatorNotInSet(author.to_string())),
+            None => {
+                diem_debug!("guarded_initialize: epoch_set={:?}", epoch_state);
+                Err(Error::ValidatorNotInSet(author.to_string()))
+            }
             Some(expected_key) => {
                 let current_key = self.signer().ok().map(|s| s.public_key());
                 if current_key == Some(expected_key.clone()) {

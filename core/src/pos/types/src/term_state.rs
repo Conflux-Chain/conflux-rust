@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use diem_crypto::{HashValue, VRFProof, ValidCryptoMaterial};
 
 use crate::{
-    account_address::AccountAddress,
+    account_address::{from_consensus_public_key, AccountAddress},
     account_config,
     block_info::{PivotBlockDecision, Round},
     contract_event::ContractEvent,
@@ -794,12 +794,7 @@ impl NodeID {
     pub fn new(
         public_key: ConsensusPublicKey, vrf_public_key: ConsensusVRFPublicKey,
     ) -> Self {
-        let mut raw = public_key.to_bytes();
-        raw.append(&mut vrf_public_key.to_bytes());
-        let h = *HashValue::sha3_256_of(&raw);
-        let mut array = [0u8; AccountAddress::LENGTH];
-        array.copy_from_slice(&h[h.len() - AccountAddress::LENGTH..]);
-        let addr = AccountAddress::new(array);
+        let addr = from_consensus_public_key(&public_key, &vrf_public_key);
         Self {
             public_key,
             vrf_public_key,

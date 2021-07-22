@@ -29,7 +29,7 @@ class ExampleTest(ConfluxTestFramework):
         assert (self.nodes[0].getblockcount() == 2)
 
         latest_pos_ref = self.latest_pos_ref()
-        for _ in range(180):
+        for _ in range(360):
             # Generate enough PoW block for PoS to progress
             self.nodes[0].generate_empty_blocks(600)
             # Leave some time for PoS to reach consensus
