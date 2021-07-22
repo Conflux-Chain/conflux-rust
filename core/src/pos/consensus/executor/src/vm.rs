@@ -264,8 +264,10 @@ impl FakeVM {
                             return false;
                         }
                     };
-                if proposal1.block_data().round()
-                    != proposal2.block_data().round()
+                if (proposal1.block_data().epoch()
+                    != proposal2.block_data().epoch())
+                    || (proposal1.block_data().round()
+                        != proposal2.block_data().round())
                 {
                     diem_trace!("Two proposals are from different rounds");
                     return false;
@@ -301,8 +303,10 @@ impl FakeVM {
                         return false;
                     }
                 };
-                if vote1.vote_data().proposed().round()
-                    != vote2.vote_data().proposed().round()
+                if (vote1.vote_data().proposed().epoch()
+                    != vote2.vote_data().proposed().epoch())
+                    || (vote1.vote_data().proposed().round()
+                        != vote2.vote_data().proposed().round())
                 {
                     diem_trace!("Two votes are from different rounds");
                     return false;
