@@ -38,6 +38,7 @@ class ExampleTest(ConfluxTestFramework):
             new_pos_ref = self.latest_pos_ref()
             assert_ne(latest_pos_ref, new_pos_ref)
         # assert (self.nodes[0].getblockcount() == 6002)
+        exit()
 
     def latest_pos_ref(self):
         best_hash = self.nodes[0].best_block_hash()

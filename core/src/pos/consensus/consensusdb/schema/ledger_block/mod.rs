@@ -13,10 +13,10 @@
 //! `epoch` is serialized in big endian so that records in RocksDB will be in
 //! order of their numeric value.
 
+use super::LEDGER_BLOCK_CF_NAME;
 use anyhow::Result;
 use consensus_types::block::Block;
 use diem_crypto::hash::HashValue;
-use diemdb::schema::LEDGER_BLOCK_CF_NAME;
 use schemadb::{
     define_schema,
     schema::{KeyCodec, ValueCodec},

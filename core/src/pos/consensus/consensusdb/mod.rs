@@ -18,7 +18,9 @@ use anyhow::Result;
 use consensus_types::{block::Block, quorum_cert::QuorumCert};
 use diem_crypto::HashValue;
 use diem_logger::prelude::*;
-use schema::{BLOCK_CF_NAME, QC_CF_NAME, SINGLE_ENTRY_CF_NAME};
+use schema::{
+    BLOCK_CF_NAME, LEDGER_BLOCK_CF_NAME, QC_CF_NAME, SINGLE_ENTRY_CF_NAME,
+};
 use schemadb::{Options, ReadOptions, SchemaBatch, DB, DEFAULT_CF_NAME};
 use std::{collections::HashMap, iter::Iterator, path::Path, time::Instant};
 
@@ -33,6 +35,7 @@ impl ConsensusDB {
             BLOCK_CF_NAME,
             QC_CF_NAME,
             SINGLE_ENTRY_CF_NAME,
+            LEDGER_BLOCK_CF_NAME,
         ];
 
         let path = db_root_path.as_ref().join("consensusdb");

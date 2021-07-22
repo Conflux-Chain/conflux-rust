@@ -27,7 +27,7 @@ use std::convert::TryFrom;
 
 const TERM_LIST_LEN: usize = 6;
 // FIXME(lpl): Use correct value later.
-pub const ELECTION_AFTER_ACCEPTED_ROUND: Round = 120;
+pub const ELECTION_AFTER_ACCEPTED_ROUND: Round = 240;
 const ROUND_PER_TERM: Round = 60;
 /// A term `n` is open for election in the view range
 /// `(n * ROUND_PER_TERM - ELECTION_TERM_START_ROUND, n * ROUND_PER_TERM -
@@ -103,10 +103,12 @@ impl Eq for TermData {}
 impl TermData {
     fn next_term(
         &self, node_list: BinaryHeap<(HashValue, ElectionNodeID)>,
-    ) -> Self {
+        seed: Vec<u8>,
+    ) -> Self
+    {
         TermData {
             start_view: self.start_view + ROUND_PER_TERM,
-            seed: HashValue::sha3_256_of(&self.seed).to_vec(),
+            seed,
             node_list,
         }
     }
@@ -165,7 +167,7 @@ impl TermList {
         Ok(())
     }
 
-    pub fn new_term(&mut self, new_term: u64) {
+    pub fn new_term(&mut self, new_term: u64, new_seed: Vec<u8>) {
         diem_debug!(
             "new_term={}, start_view:{:?}",
             new_term,
@@ -186,7 +188,8 @@ impl TermList {
         );
         self.term_list.remove(0);
         let last_term = self.term_list.last().unwrap();
-        self.term_list.push(last_term.next_term(Default::default()));
+        self.term_list
+            .push(last_term.next_term(Default::default(), new_seed));
     }
 
     fn can_be_elected(
@@ -279,7 +282,7 @@ impl PosState {
         let mut term_list = Vec::new();
         let initial_term = TermData {
             start_view: 0,
-            seed: initial_seed,
+            seed: initial_seed.clone(),
             node_list,
         };
         term_list.push(initial_term);
@@ -287,7 +290,8 @@ impl PosState {
         // Duplicate the initial term for the first TERM_LIST_LEN + 2 terms.
         for _ in 0..(TERM_LIST_LEN + 1) {
             let last_term = term_list.last().unwrap();
-            let next_term = last_term.next_term(Default::default());
+            let next_term =
+                last_term.next_term(Default::default(), initial_seed.clone());
             term_list.push(next_term);
         }
         PosState {
@@ -465,24 +469,27 @@ impl PosState {
     /// Return `Some(target_term)` if `author` should send its election
     /// transaction.
     pub fn next_elect_term(&self, author: &AccountAddress) -> Option<u64> {
+        if self.term_list.current_term < (TERM_LIST_LEN - 1) as u64 {
+            return None;
+        }
         match self.node_map.get(author) {
             // This node has not staked in PoW.
             None => None,
             Some(node) => {
                 match &node.status {
                     NodeStatus::Accepted => {
-                        if (self.term_list.current_term + 1) * ROUND_PER_TERM
+                        if ((self.term_list.current_term + 1) * ROUND_PER_TERM
                             >= node.status_start_view
-                                + ELECTION_AFTER_ACCEPTED_ROUND
+                                + ELECTION_AFTER_ACCEPTED_ROUND)
                             && self
                                 .term_list
                                 .can_be_elected(TERM_LIST_LEN, author)
                         {
                             Some(self.term_list.current_term + 1)
-                        } else if (self.term_list.current_term + 2)
+                        } else if ((self.term_list.current_term + 2)
                             * ROUND_PER_TERM
                             >= node.status_start_view
-                                + ELECTION_AFTER_ACCEPTED_ROUND
+                                + ELECTION_AFTER_ACCEPTED_ROUND)
                             && self
                                 .term_list
                                 .can_be_elected(TERM_LIST_LEN + 1, author)
@@ -589,7 +596,7 @@ impl PosState {
     /// `get_new_committee` has been called before this to produce an
     /// EpochState. And `next_view` will not be called for blocks following
     /// a pending reconfiguration block.
-    pub fn next_view(&mut self) -> Result<Option<(EpochState, Vec<u8>)>> {
+    pub fn next_view(&mut self) -> Result<Option<EpochState>> {
         while let Some(retired_node) = self.retiring_nodes.pop_front() {
             let node = self.node_map.get_mut(&retired_node).expect("exists");
             assert_eq!(node.status, NodeStatus::Retired);
@@ -609,39 +616,28 @@ impl PosState {
         let epoch_state = if self.current_view % ROUND_PER_TERM == 0 {
             // generate new epoch for new term.
             let new_term = self.current_view / ROUND_PER_TERM;
-            self.term_list.new_term(new_term);
+            self.term_list.new_term(
+                new_term,
+                self.pivot_decision.block_hash.as_bytes().to_vec(),
+            );
             let (verifier, term_seed) = self.get_new_committee()?;
-            Some((
-                EpochState {
-                    // TODO(lpl): If we allow epoch changes within a term, this
-                    // should be updated.
-                    epoch: new_term + 1,
-                    verifier,
-                    vrf_seed: self
-                        .pivot_decision
-                        .block_hash
-                        .as_bytes()
-                        .to_vec(),
-                },
-                term_seed,
-            ))
+            Some(EpochState {
+                // TODO(lpl): If we allow epoch changes within a term, this
+                // should be updated.
+                epoch: new_term + 1,
+                verifier,
+                vrf_seed: term_seed.clone(),
+            })
         } else if self.current_view == 1 {
             let (verifier, term_seed) = self.get_new_committee()?;
             // genesis
-            Some((
-                EpochState {
-                    // TODO(lpl): If we allow epoch changes within a term, this
-                    // should be updated.
-                    epoch: 1,
-                    verifier,
-                    vrf_seed: self
-                        .pivot_decision
-                        .block_hash
-                        .as_bytes()
-                        .to_vec(),
-                },
-                term_seed,
-            ))
+            Some(EpochState {
+                // TODO(lpl): If we allow epoch changes within a term, this
+                // should be updated.
+                epoch: 1,
+                verifier,
+                vrf_seed: term_seed.clone(),
+            })
         } else {
             None
         };

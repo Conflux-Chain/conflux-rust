@@ -44,7 +44,6 @@ pub const TRANSACTION_BY_ACCOUNT_CF_NAME: ColumnFamilyName =
 pub const TRANSACTION_INFO_CF_NAME: ColumnFamilyName = "transaction_info";
 pub const LEDGER_INFO_BY_BLOCK_CF_NAME: ColumnFamilyName =
     "ledger_info_by_block";
-pub const LEDGER_BLOCK_CF_NAME: ColumnFamilyName = "ledger_block";
 pub const POS_STATE_CF_NAME: ColumnFamilyName = "pos_state";
 
 fn ensure_slice_len_eq(data: &[u8], len: usize) -> Result<()> {
