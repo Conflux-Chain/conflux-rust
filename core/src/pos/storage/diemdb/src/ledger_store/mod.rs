@@ -18,6 +18,7 @@ use crate::{
 use accumulator::{HashReader, MerkleAccumulator};
 use anyhow::{ensure, format_err, Result};
 use arc_swap::ArcSwap;
+use consensus_types::block::Block;
 use diem_crypto::{
     hash::{CryptoHash, TransactionAccumulatorHasher},
     HashValue,

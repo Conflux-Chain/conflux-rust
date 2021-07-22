@@ -57,6 +57,7 @@ use crate::{
     transaction_store::TransactionStore,
 };
 use anyhow::{ensure, Result};
+use consensus_types::block::Block;
 use diem_config::config::RocksdbConfig;
 use diem_crypto::hash::{
     CryptoHash, HashValue, SPARSE_MERKLE_PLACEHOLDER_HASH,
@@ -242,6 +243,7 @@ impl DiemDB {
             TRANSACTION_BY_ACCOUNT_CF_NAME,
             TRANSACTION_INFO_CF_NAME,
             LEDGER_INFO_BY_BLOCK_CF_NAME,
+            LEDGER_BLOCK_CF_NAME,
             POS_STATE_CF_NAME,
         ]
     }

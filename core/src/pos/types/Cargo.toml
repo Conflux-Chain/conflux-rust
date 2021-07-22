@@ -33,6 +33,7 @@ diem-crypto-derive = { path = "../crypto/crypto-derive" }
 move-core-types = { path = "./move-core-types" }
 cfx-types = { path = "../../../../cfx_types"}
 pow-types = {path = "./pow-types"}
+diem-logger = {path = "../common/logger"}
 
 [dev-dependencies]
 regex = "1.4.3"

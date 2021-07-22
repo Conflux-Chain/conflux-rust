@@ -13,7 +13,7 @@ mod block_tree;
 pub mod tracing;
 
 pub use block_store::{sync_manager::BlockRetriever, BlockStore};
-use consensus_types::sync_info::SyncInfo;
+use consensus_types::{block::Block, sync_info::SyncInfo};
 
 pub trait BlockReader: Send + Sync {
     /// Check if a block with the block_id exist in the BlockTree.
@@ -21,6 +21,10 @@ pub trait BlockReader: Send + Sync {
 
     /// Try to get a block with the block_id, return an Arc of it if found.
     fn get_block(&self, block_id: HashValue) -> Option<Arc<ExecutedBlock>>;
+
+    fn get_ledger_block(
+        &self, block_id: &HashValue,
+    ) -> anyhow::Result<Option<Block>>;
 
     /// Get the current root block of the BlockTree.
     fn root(&self) -> Arc<ExecutedBlock>;

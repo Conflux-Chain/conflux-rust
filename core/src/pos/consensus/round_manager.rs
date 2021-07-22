@@ -415,7 +415,10 @@ impl RoundManager {
             let (tx, rx) = oneshot::channel();
             self.tx_sender.send((signed_tx, tx)).await;
             rx.await?;
-            diem_debug!("broadcast_election sends");
+            diem_debug!(
+                "broadcast_election sends: target_term={}",
+                target_term
+            );
         }
         Ok(())
     }
@@ -1046,6 +1049,11 @@ impl RoundManager {
             if let Some(executed_block) = self.block_store.get_block(id) {
                 id = executed_block.parent_id();
                 blocks.push(executed_block.block().clone());
+            } else if let Ok(Some(block)) =
+                self.block_store.get_ledger_block(&id)
+            {
+                id = block.parent_id();
+                blocks.push(block);
             } else {
                 status = BlockRetrievalStatus::NotEnoughBlocks;
                 break;

@@ -8,6 +8,7 @@ mod schema;
 use crate::pos::consensus::{
     consensusdb::schema::{
         block::BlockSchema,
+        ledger_block::LedgerBlockSchema,
         quorum_certificate::QCSchema,
         single_entry::{SingleEntryKey, SingleEntrySchema},
     },
@@ -189,5 +190,21 @@ impl ConsensusDB {
         let mut iter = self.db.iter::<QCSchema>(ReadOptions::default())?;
         iter.seek_to_first();
         Ok(iter.collect::<Result<HashMap<HashValue, QuorumCert>>>()?)
+    }
+
+    pub fn get_ledger_block(
+        &self, block_id: &HashValue,
+    ) -> Result<Option<Block>, DbError> {
+        Ok(self.db.get::<LedgerBlockSchema>(block_id)?)
+    }
+
+    pub fn save_ledger_blocks(
+        &self, blocks: Vec<Block>,
+    ) -> Result<(), DbError> {
+        let mut batch = SchemaBatch::new();
+        for block in blocks {
+            batch.put::<LedgerBlockSchema>(&block.id(), &block)?;
+        }
+        self.commit(batch)
     }
 }

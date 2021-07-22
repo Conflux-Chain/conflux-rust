@@ -7,6 +7,10 @@
 //! All schemas are `pub(crate)` so not shown in rustdoc, refer to the source
 //! code to see details.
 
+use anyhow::{ensure, Result};
+
+use schemadb::ColumnFamilyName;
+
 pub(crate) mod epoch_by_version;
 pub(crate) mod event;
 pub(crate) mod event_accumulator;
@@ -22,9 +26,6 @@ pub(crate) mod transaction;
 pub(crate) mod transaction_accumulator;
 pub(crate) mod transaction_by_account;
 pub(crate) mod transaction_info;
-
-use anyhow::{ensure, Result};
-use schemadb::ColumnFamilyName;
 
 pub const EPOCH_BY_VERSION_CF_NAME: ColumnFamilyName = "epoch_by_version";
 pub const EVENT_ACCUMULATOR_CF_NAME: ColumnFamilyName = "event_accumulator";
@@ -43,6 +44,7 @@ pub const TRANSACTION_BY_ACCOUNT_CF_NAME: ColumnFamilyName =
 pub const TRANSACTION_INFO_CF_NAME: ColumnFamilyName = "transaction_info";
 pub const LEDGER_INFO_BY_BLOCK_CF_NAME: ColumnFamilyName =
     "ledger_info_by_block";
+pub const LEDGER_BLOCK_CF_NAME: ColumnFamilyName = "ledger_block";
 pub const POS_STATE_CF_NAME: ColumnFamilyName = "pos_state";
 
 fn ensure_slice_len_eq(data: &[u8], len: usize) -> Result<()> {

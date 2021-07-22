@@ -20,12 +20,14 @@ use crate::{
     validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
 };
+use diem_logger::prelude::*;
 use move_core_types::language_storage::TypeTag;
 use pow_types::StakingEvent;
 use std::convert::TryFrom;
 
 const TERM_LIST_LEN: usize = 6;
-pub const ELECTION_AFTER_ACCEPTED_ROUND: Round = 240;
+// FIXME(lpl): Use correct value later.
+pub const ELECTION_AFTER_ACCEPTED_ROUND: Round = 120;
 const ROUND_PER_TERM: Round = 60;
 /// A term `n` is open for election in the view range
 /// `(n * ROUND_PER_TERM - ELECTION_TERM_START_ROUND, n * ROUND_PER_TERM -
@@ -136,7 +138,7 @@ impl TermList {
     ) -> anyhow::Result<()> {
         let term_offset = event
             .start_term
-            .checked_sub(self.current_term)
+            .checked_sub(self.current_term - (TERM_LIST_LEN as u64 - 1))
             .ok_or(anyhow!("election start_term is too early"))?
             as usize;
         if term_offset >= self.term_list.len() {
@@ -164,19 +166,27 @@ impl TermList {
     }
 
     pub fn new_term(&mut self, new_term: u64) {
-        // This double-check should always pass.
-        if self.term_list[1].start_view
-            == new_term.saturating_mul(ROUND_PER_TERM)
-        {
-            if new_term <= TERM_LIST_LEN as u64 {
-                // The initial terms are not open for election.
-                return;
-            }
-            self.term_list.remove(0);
-            let last_term = self.term_list.last().unwrap();
-            self.term_list.push(last_term.next_term(Default::default()));
-            self.current_term = new_term;
+        diem_debug!(
+            "new_term={}, start_view:{:?}",
+            new_term,
+            self.term_list
+                .iter()
+                .map(|t| (t.start_view, t.node_list.len()))
+                .collect::<Vec<_>>()
+        );
+        self.current_term = new_term;
+        if new_term < TERM_LIST_LEN as u64 {
+            // The initial terms are not open for election.
+            return;
         }
+        // This double-check should always pass.
+        debug_assert!(
+            self.term_list[TERM_LIST_LEN].start_view
+                == new_term.saturating_mul(ROUND_PER_TERM)
+        );
+        self.term_list.remove(0);
+        let last_term = self.term_list.last().unwrap();
+        self.term_list.push(last_term.next_term(Default::default()));
     }
 
     fn can_be_elected(
@@ -184,13 +194,20 @@ impl TermList {
     ) -> bool {
         // TODO(lpl): Optimize by adding hash set to each term or adding another
         // field to node_map.
-        let start_term_offset = target_term_offset as usize - TERM_LIST_LEN;
+        let start_term_offset =
+            target_term_offset as usize - (TERM_LIST_LEN - 1);
         // The checking of `target_view` ensures that this is in range of
         // `term_list`.
         for i in start_term_offset..=target_term_offset {
             let term = &self.term_list[i as usize];
             for (_, addr) in &term.node_list {
                 if addr.node_id.addr == *author {
+                    diem_debug!(
+                        "can_be_elected: {:?} is in term {}:{}",
+                        author,
+                        i,
+                        term.start_view
+                    );
                     return false;
                 }
             }
@@ -270,7 +287,7 @@ impl PosState {
         // Duplicate the initial term for the first TERM_LIST_LEN + 2 terms.
         for _ in 0..(TERM_LIST_LEN + 1) {
             let last_term = term_list.last().unwrap();
-            let next_term = last_term.next_term(last_term.node_list.clone());
+            let next_term = last_term.next_term(Default::default());
             term_list.push(next_term);
         }
         PosState {
@@ -334,6 +351,11 @@ impl PosState {
         let node_id = NodeID::new(
             election_tx.public_key.clone(),
             election_tx.vrf_public_key.clone(),
+        );
+        diem_trace!(
+            "validate_election: {:?} {}",
+            node_id.addr,
+            election_tx.target_term
         );
         let node = match self.node_map.get(&node_id.addr) {
             Some(node) => node,
@@ -449,12 +471,23 @@ impl PosState {
             Some(node) => {
                 match &node.status {
                     NodeStatus::Accepted => {
-                        if self.term_list.can_be_elected(TERM_LIST_LEN, author)
+                        if (self.term_list.current_term + 1) * ROUND_PER_TERM
+                            >= node.status_start_view
+                                + ELECTION_AFTER_ACCEPTED_ROUND
+                            && self
+                                .term_list
+                                .can_be_elected(TERM_LIST_LEN, author)
                         {
-                            Some(
-                                self.term_list.current_term
-                                    + TERM_LIST_LEN as u64,
-                            )
+                            Some(self.term_list.current_term + 1)
+                        } else if (self.term_list.current_term + 2)
+                            * ROUND_PER_TERM
+                            >= node.status_start_view
+                                + ELECTION_AFTER_ACCEPTED_ROUND
+                            && self
+                                .term_list
+                                .can_be_elected(TERM_LIST_LEN + 1, author)
+                        {
+                            Some(self.term_list.current_term + 2)
                         } else {
                             // This node is still active and thus cannot be
                             // elected.
@@ -499,6 +532,7 @@ impl PosState {
 /// Write functions used apply changes (process events in PoS and PoW)
 impl PosState {
     pub fn register_node(&mut self, node_id: NodeID) -> Result<()> {
+        diem_trace!("register_node: {:?}", node_id);
         ensure!(
             !self.node_map.contains_key(&node_id.addr),
             "register an already registered address"
@@ -519,6 +553,11 @@ impl PosState {
     pub fn update_voting_power(
         &mut self, addr: &AccountAddress, increased_voting_power: u64,
     ) -> Result<()> {
+        diem_trace!(
+            "update_voting_power: {:?} {}",
+            addr,
+            increased_voting_power
+        );
         match self.node_map.get_mut(addr) {
             Some(node_status) => {
                 // TODO(lpl): Should we return error if the node has been
@@ -534,6 +573,11 @@ impl PosState {
     }
 
     pub fn new_node_elected(&mut self, event: &ElectionEvent) -> Result<()> {
+        diem_debug!(
+            "new_node_elected: {:?} {:?}",
+            event.node_id,
+            event.start_term
+        );
         let voting_power = self
             .node_map
             .get(&event.node_id.addr)
@@ -605,6 +649,7 @@ impl PosState {
     }
 
     pub fn retire_node(&mut self, retire_event: &RetireEvent) -> Result<()> {
+        diem_trace!("retire_node: {:?}", retire_event.node_id);
         match self.node_map.get_mut(&retire_event.node_id.addr) {
             Some(node) => match node.status {
                 NodeStatus::Accepted => {
