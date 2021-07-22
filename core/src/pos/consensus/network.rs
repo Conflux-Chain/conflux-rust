@@ -13,7 +13,6 @@ use crate::{
     },
 };
 use anyhow::{anyhow, bail, ensure, format_err};
-use cfx_types::H256;
 use channel::{self, diem_channel, message_queues::QueueStyle};
 use consensus_types::{
     block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse},
@@ -266,20 +265,6 @@ impl ConsensusNetworkSender {
             diem_warn!(
                 remote_peer = recipient,
                 error = "Failed to send a sync info msg to peer {:?}",
-                "{:?}",
-                e
-            );
-        }
-    }
-
-    pub async fn notify_epoch_change(&mut self, proof: EpochChangeProof) {
-        let msg = ConsensusMsg::EpochChangeProof(Box::new(proof));
-        let network_sender = self.network_sender.clone();
-        if let Err(e) =
-            network_sender.send_self_msg(self.author, msg.clone()).await
-        {
-            diem_warn!(
-                error = "Failed to notify to self an epoch change",
                 "{:?}",
                 e
             );

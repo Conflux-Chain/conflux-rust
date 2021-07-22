@@ -18,7 +18,7 @@ use crate::{
         debug_recompute::log_invalid_state_root, pastset_cache::PastSetCache,
         pos_handler::PosVerifier, MaybeExecutedTxExtraInfo, TransactionInfo,
     },
-    pos::pow_handler::{POS_TERM_EPOCHS, POW_CONFIRM_DELAY_EPOCH},
+    pos::pow_handler::POS_TERM_EPOCHS,
     pow::{target_difficulty, PowComputer, ProofOfWorkConfig},
     state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
     verification::VerificationConfig,

@@ -4,11 +4,9 @@
 //! Interface between State Sync and Network layers.
 
 use crate::pos::state_sync::{
-    chunk_request::GetChunkRequest, chunk_response::GetChunkResponse, counters,
+    chunk_request::GetChunkRequest, chunk_response::GetChunkResponse,
     error::Error,
 };
-use channel::message_queues::QueueStyle;
-use diem_metrics::IntCounterVec;
 use diem_types::PeerId;
 /*use network::{
     peer_manager::{ConnectionRequestSender, PeerManagerRequestSender},

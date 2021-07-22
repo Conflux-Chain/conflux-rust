@@ -27,12 +27,10 @@ use diem_types::{
     mempool_status::{MempoolStatus, MempoolStatusCode},
     on_chain_config::OnChainConfigPayload,
     transaction::SignedTransaction,
-    vm_status::DiscardedVMStatus,
 };
 use futures::{channel::oneshot, stream::FuturesUnordered};
 use network::node_table::NodeId;
 use rayon::prelude::*;
-use short_hex_str::AsShortHexStr;
 use std::{
     cmp,
     collections::HashSet,

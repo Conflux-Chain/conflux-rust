@@ -12,7 +12,7 @@ use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WsServer;
 
 use crate::{
-    common::{initialize_common_modules, ClientComponents, DiemHandle},
+    common::{initialize_common_modules, ClientComponents},
     configuration::Configuration,
     rpc::{
         extractor::RpcExtractor, impls::light::RpcImpl,

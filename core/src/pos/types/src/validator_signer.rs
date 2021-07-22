@@ -5,12 +5,11 @@ use crate::{
     account_address::AccountAddress,
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
-        ConsensusVRFPrivateKey, ConsensusVRFProof, ConsensusVRFPublicKey,
+        ConsensusVRFPrivateKey, ConsensusVRFPublicKey,
     },
 };
 use diem_crypto::{
     hash::CryptoHash, test_utils::TEST_SEED, PrivateKey, SigningKey, Uniform,
-    VRFPrivateKey,
 };
 use rand::{rngs::StdRng, SeedableRng};
 use serde::ser::Serialize;

@@ -17,12 +17,10 @@ pub struct LogSchema {
 #[derive(Serialize)]
 pub enum LogEvent {
     CommitViaBlock,
-    CommitViaSync,
     HelpPeerSync,
     NewEpoch,
     NewRound,
     Propose,
-    ReceiveBlockRetrieval,
     ReceiveEpochChangeProof,
     ReceiveEpochRetrieval,
     ReceiveMessageFromDifferentEpoch,

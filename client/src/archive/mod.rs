@@ -7,7 +7,7 @@ use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WsServer;
 
 use crate::{
-    common::{initialize_not_light_node_modules, ClientComponents, DiemHandle},
+    common::{initialize_not_light_node_modules, ClientComponents},
     configuration::Configuration,
 };
 use blockgen::BlockGenerator;

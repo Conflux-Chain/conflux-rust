@@ -234,6 +234,7 @@ impl fmt::Debug for BLSSignature {
     }
 }
 
+#[test]
 mod test {
     use crate as diem_crypto;
     use crate::{

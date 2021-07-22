@@ -182,9 +182,6 @@ pub fn decode_register_info(event: &LogEntry) -> Option<StakingEvent> {
 pub fn sync_with_pos() { todo!() }
 
 use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
-use diem_crypto::{bls::BLSPublicKey, ec_vrf::EcVrfPublicKey};
-use diem_types::validator_config::ConsensusPublicKey;
-use move_core_types::account_address::AccountAddress;
 use pow_types::StakingEvent::{self, IncreaseStake, Register};
 use primitives::log_entry::LogEntry;
 use solidity_abi::ABIDecodable;

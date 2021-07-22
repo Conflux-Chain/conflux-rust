@@ -27,10 +27,7 @@ use diem_types::{
     contract_event::ContractEvent,
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
-    move_resource::MoveStorage,
-    on_chain_config::{
-        self, config_address, OnChainConfigPayload, ON_CHAIN_CONFIG_REGISTRY,
-    },
+    on_chain_config,
     proof::accumulator::InMemoryAccumulator,
     term_state::ElectionEvent,
     transaction::{
@@ -62,19 +59,11 @@ use crate::{
     types::{ProcessedVMOutput, TransactionData},
     vm::VMExecutor,
 };
-use consensus_types::block::VRF_SEED;
 use diem_crypto::hash::PRE_GENESIS_BLOCK_ID;
-use diem_types::{
-    on_chain_config::ValidatorSet,
-    term_state::{
-        NodeID, PosState, RegisterEvent, RetireEvent, UpdateVotingPowerEvent,
-    },
-    transaction::TransactionPayload::UpdateVotingPower,
-    validator_verifier::ValidatorVerifier,
+use diem_types::term_state::{
+    NodeID, PosState, RegisterEvent, RetireEvent, UpdateVotingPowerEvent,
 };
-use itertools::Itertools;
 use pow_types::PowInterface;
-use std::thread;
 
 mod types;
 
@@ -172,12 +161,8 @@ where V: VMExecutor
                 block_hash: Default::default(),
                 height: 0,
             });
-        let pos_state = PosState::new(
-            VRF_SEED.to_vec(),
-            initial_nodes,
-            genesis_pivot_decision,
-            true,
-        );
+        let pos_state =
+            PosState::new(vec![], initial_nodes, genesis_pivot_decision, true);
         Self {
             db,
             cache: SpeculationCache::new_for_db_bootstrapping(

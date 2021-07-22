@@ -17,14 +17,10 @@ use crate::{
     epoch_state::EpochState,
     event::EventKey,
     transaction::{ElectionPayload, RetirePayload},
-    validator_config::{
-        ConsensusPublicKey, ConsensusVRFPrivateKey, ConsensusVRFPublicKey,
-    },
+    validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
 };
-use move_core_types::{
-    language_storage::TypeTag, value::MoveTypeLayout::Address,
-};
+use move_core_types::language_storage::TypeTag;
 use pow_types::StakingEvent;
 use std::convert::TryFrom;
 

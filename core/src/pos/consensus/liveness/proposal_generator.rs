@@ -13,23 +13,16 @@ use consensus_types::{
     quorum_cert::QuorumCert,
 };
 
-use crate::pos::pow_handler::PowHandler;
-use cfx_types::H256;
 use diem_crypto::PrivateKey;
 use diem_infallible::Mutex;
 use diem_logger::{debug as diem_debug, error as diem_error};
 use diem_types::{
-    block_info::PivotBlockDecision,
-    chain_id::ChainId,
-    contract_event::ContractEvent,
-    transaction::{ChangeSet, RawTransaction, TransactionPayload},
+    transaction::{RawTransaction, TransactionPayload},
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
         ConsensusVRFPublicKey,
     },
-    write_set::WriteSet,
 };
-use move_core_types::language_storage::TypeTag;
 use pow_types::PowInterface;
 use std::sync::Arc;
 

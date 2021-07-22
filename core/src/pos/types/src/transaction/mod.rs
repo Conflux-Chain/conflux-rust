@@ -54,7 +54,7 @@ pub use script::{
 
 use crate::{
     account_address::from_consensus_public_key,
-    block_info::{PivotBlockDecision, Round},
+    block_info::PivotBlockDecision,
     term_state::{
         DisputeEvent, ElectionEvent, NodeID, RegisterEvent, RetireEvent,
         UpdateVotingPowerEvent,

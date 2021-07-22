@@ -11,10 +11,7 @@ use diem_types::{
     block_info::PivotBlockDecision,
     contract_event::ContractEvent,
     epoch_state::EpochState,
-    mempool_status::MempoolStatusCode::VmError,
-    on_chain_config::{
-        self, config_address, new_epoch_event_key, OnChainConfig, ValidatorSet,
-    },
+    on_chain_config::{self, new_epoch_event_key, OnChainConfig, ValidatorSet},
     transaction::{
         ConflictSignature, DisputePayload, Transaction, TransactionOutput,
         TransactionPayload, TransactionStatus, WriteSetPayload,
@@ -22,7 +19,7 @@ use diem_types::{
     validator_info::ValidatorInfo,
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
     vm_status::{KeptVMStatus, StatusCode, VMStatus},
-    write_set::{WriteOp, WriteSet, WriteSetMut},
+    write_set::{WriteOp, WriteSetMut},
 };
 use move_core_types::language_storage::TypeTag;
 use std::collections::BTreeMap;

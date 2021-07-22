@@ -9,17 +9,11 @@ extern crate rustc_hex;
 extern crate serde;
 extern crate serde_derive;
 
-use cfxkey::{Error as EthkeyError, Generator, Public, Random};
+use cfxkey::Error as EthkeyError;
 use client::configuration::save_initial_nodes_to_file;
-use diem_crypto::{
-    bls::BLSPrivateKey,
-    ed25519::{Ed25519PrivateKey, Ed25519PublicKey, ED25519_PUBLIC_KEY_LENGTH},
-    Uniform, ValidCryptoMaterialStringExt,
-};
+use diem_crypto::{Uniform, ValidCryptoMaterialStringExt};
 use diem_types::{
-    account_address::{
-        from_consensus_public_key, from_public_key, AccountAddress,
-    },
+    account_address::from_consensus_public_key,
     contract_event::ContractEvent,
     on_chain_config::{new_epoch_event_key, ValidatorSet},
     transaction::{ChangeSet, Transaction, WriteSetPayload},
@@ -33,30 +27,22 @@ use diem_types::{
 };
 use diemdb::DiemDB;
 use docopt::Docopt;
-use executor::{
-    db_bootstrapper::{calculate_genesis, generate_waypoint, maybe_bootstrap},
-    vm::FakeVM,
-    Executor,
-};
-use keccak_hash::keccak;
+use executor::{db_bootstrapper::generate_waypoint, vm::FakeVM};
+
 use log::*;
 use move_core_types::language_storage::TypeTag;
-use primitives::account::AddressSpace::Contract;
+
 use rand::{rngs::StdRng, SeedableRng};
-use rustc_hex::{FromHexError, ToHex};
+use rustc_hex::FromHexError;
 use serde::Deserialize;
 use std::{
-    convert::TryFrom,
-    env,
-    fmt::{self, Write as FmtWrite},
+    env, fmt,
     fs::File,
     io::{self, Read, Write},
     num::ParseIntError,
     path::PathBuf,
     process,
     result::Result,
-    str::FromStr,
-    writeln,
 };
 use storage_interface::DbReaderWriter;
 use tempdir::TempDir;
@@ -236,7 +222,7 @@ where
         let mut rng = StdRng::from_seed([0u8; 32]);
         let mut public_keys = Vec::new();
 
-        for i in 0..num_validator {
+        for _i in 0..num_validator {
             let private_key = ConsensusPrivateKey::generate(&mut rng);
             let public_key = ConsensusPublicKey::from(&private_key);
             let vrf_private_key = ConsensusVRFPrivateKey::generate(&mut rng);

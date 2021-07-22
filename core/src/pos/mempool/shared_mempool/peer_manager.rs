@@ -19,7 +19,6 @@ use itertools::Itertools;
 //use network::transport::ConnectionMetadata;
 use network::node_table::NodeId;
 use serde::{Deserialize, Serialize};
-use short_hex_str::AsShortHexStr;
 use std::{
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet, HashMap},

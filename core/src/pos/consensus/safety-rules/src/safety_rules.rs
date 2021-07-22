@@ -11,7 +11,7 @@ use crate::{
     t_safety_rules::TSafetyRules,
 };
 use consensus_types::{
-    block::{Block, VRF_SEED},
+    block::Block,
     block_data::BlockData,
     common::{Author, Round},
     quorum_cert::QuorumCert,
@@ -24,7 +24,6 @@ use consensus_types::{
 use diem_crypto::{
     hash::{CryptoHash, HashValue},
     traits::Signature,
-    Uniform,
 };
 use diem_logger::prelude::*;
 use diem_types::{
@@ -34,7 +33,6 @@ use diem_types::{
     ledger_info::LedgerInfo,
     validator_config::{
         ConsensusPublicKey, ConsensusSignature, ConsensusVRFPrivateKey,
-        ConsensusVRFProof,
     },
     waypoint::Waypoint,
 };

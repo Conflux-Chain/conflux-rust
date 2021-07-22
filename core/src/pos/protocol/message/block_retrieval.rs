@@ -14,7 +14,6 @@ use crate::{
     sync::{Error, ProtocolConfiguration},
 };
 use consensus_types::block_retrieval::BlockRetrievalRequest;
-use diem_types::account_address::AccountAddress;
 use futures::channel::oneshot;
 use serde::{Deserialize, Serialize};
 use std::{any::Any, time::Duration};

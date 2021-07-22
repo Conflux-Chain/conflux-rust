@@ -1,18 +1,16 @@
 use crate::{
     executive::internal_contract::impls::pos::decode_register_info,
-    ConsensusGraph, SharedConsensusGraph,
+    ConsensusGraph,
 };
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
-use cfx_storage::storage_db::KeyValueDbAsAnyTrait;
 use cfx_types::H256;
-use diem_types::account_address::AccountAddress;
-use futures::{channel::oneshot, executor::block_on};
+use futures::channel::oneshot;
 use parking_lot::RwLock;
 use pow_types::{PowInterface, StakingEvent};
 use primitives::filter::LogFilter;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use tokio::runtime::Handle;
 
 // FIXME(lpl): Decide the value.
@@ -37,7 +35,7 @@ impl PowHandler {
     }
 
     pub fn stop(&self) {
-        let mut pow_consensus = &mut *self.pow_consensus.write();
+        let pow_consensus = &mut *self.pow_consensus.write();
         if pow_consensus.is_some() {
             info!(
                 "Stop PowHandler: current consensus strong_count={}",
@@ -118,7 +116,7 @@ impl PowInterface for PowHandler {
         self.executor.spawn(async move {
             let r =
                 Self::next_pivot_decision_impl(pow_consensus, &parent_decision);
-            callback.send(r);
+            assert!(callback.send(r).is_ok());
         });
         cb_receiver.await.expect("callback error")
     }

@@ -9,9 +9,7 @@ use crate::{
     },
     sync::Error,
 };
-use diem_types::{
-    account_address::AccountAddress, epoch_change::EpochChangeProof,
-};
+use diem_types::epoch_change::EpochChangeProof;
 use std::mem::discriminant;
 
 impl Handleable for EpochChangeProof {

@@ -38,11 +38,8 @@ use cfxcore::{
     transaction_pool::TxPoolConfig,
     NodeType,
 };
-use diem_crypto::{ValidCryptoMaterial, ValidCryptoMaterialStringExt};
-use diem_types::{
-    account_address::from_consensus_public_key,
-    validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
-};
+use diem_crypto::ValidCryptoMaterialStringExt;
+use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 use lazy_static::*;
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
