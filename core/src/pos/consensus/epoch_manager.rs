@@ -337,16 +337,32 @@ impl EpochManager {
         //         ledger_info
         //     ))?;
         // FIXME(lpl): Use ledger_info to sync needed blocks.
-        match self.processor_mut() {
-            RoundProcessor::Recovery(_) => {
-                bail!("start_new_epoch for Recovery processor");
+        for ledger_info in proof.get_all_ledger_infos() {
+            let mut new_epoch = false;
+            match self.processor_mut() {
+                RoundProcessor::Recovery(_) => {
+                    bail!("start_new_epoch for Recovery processor");
+                }
+                RoundProcessor::Normal(p) => {
+                    if ledger_info.ledger_info().epoch()
+                        == p.epoch_state().epoch
+                    {
+                        p.sync_to_ledger_info(&ledger_info, peer_id).await?;
+                        new_epoch = true;
+                    } else {
+                        diem_error!(
+                            "Unexpected epoch change: me={} get={}",
+                            p.epoch_state().epoch,
+                            ledger_info.ledger_info().epoch()
+                        );
+                    }
+                }
             }
-            RoundProcessor::Normal(p) => {
-                p.sync_to_ledger_info(ledger_info, peer_id).await?;
+            if new_epoch {
+                monitor!("reconfig", self.expect_new_epoch().await);
             }
         }
 
-        monitor!("reconfig", self.expect_new_epoch().await);
         Ok(())
     }
 
