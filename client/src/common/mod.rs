@@ -408,6 +408,7 @@ pub fn initialize_common_modules(
         notifications.clone(),
         *network.get_network_type(),
     );
+    diem_handler.pow_handler.initialize(consensus.clone());
     Ok((
         machine,
         secret_store,
