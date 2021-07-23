@@ -3,6 +3,7 @@
 
 //! Interface between Mempool and Network layers.
 
+use crate::pos::protocol::network_event::NetworkEvent;
 use channel::{diem_channel, message_queues::QueueStyle};
 use diem_types::transaction::SignedTransaction;
 use network::node_table::NodeId;
@@ -40,12 +41,20 @@ pub struct NetworkReceivers {
         (NodeId, Discriminant<MempoolSyncMsg>),
         (NodeId, MempoolSyncMsg),
     >,
+    pub network_events: diem_channel::Receiver<
+        (NodeId, Discriminant<NetworkEvent>),
+        (NodeId, NetworkEvent),
+    >,
 }
 
 pub struct NetworkTask {
     pub mempool_sync_message_tx: diem_channel::Sender<
         (NodeId, Discriminant<MempoolSyncMsg>),
         (NodeId, MempoolSyncMsg),
+    >,
+    pub network_events_tx: diem_channel::Sender<
+        (NodeId, Discriminant<NetworkEvent>),
+        (NodeId, NetworkEvent),
     >,
 }
 
@@ -58,12 +67,19 @@ impl NetworkTask {
             1,
             None, //Some(&counters::CONSENSUS_CHANNEL_MSGS),
         );
+        let (network_events_tx, network_events) = diem_channel::new(
+            QueueStyle::LIFO,
+            1,
+            None, //Some(&counters::CONSENSUS_CHANNEL_MSGS),
+        );
         (
             NetworkTask {
                 mempool_sync_message_tx,
+                network_events_tx,
             },
             NetworkReceivers {
                 mempool_sync_message,
+                network_events,
             },
         )
     }

@@ -78,9 +78,17 @@ pub(crate) async fn coordinator(
                 handle_mempool_reconfig_event(&mut smp, &bounded_executor, config_update).await;
             },
             (peer, backoff) = scheduled_broadcasts.select_next_some() => {
+                diem_debug!("scheduled_broadcasts");
                 tasks::execute_broadcast(peer, backoff, &mut smp, &mut scheduled_broadcasts, executor.clone());
             },
+            (peer, _) = network_receivers.network_events.select_next_some() => {
+                diem_debug!("network_events to scheduled_broadcasts");
+                // TODO(linxi): remove peer on disconnected
+                smp.peer_manager.add_peer(peer);
+                tasks::execute_broadcast(peer, true, &mut smp, &mut scheduled_broadcasts, executor.clone());
+            },
             (peer, msg) = network_receivers.mempool_sync_message.select_next_some() => {
+                diem_debug!("receive mempool_sync_message");
                 handle_mempool_sync_msg(&bounded_executor, &mut smp, peer, msg).await;
             }
             complete => break,
