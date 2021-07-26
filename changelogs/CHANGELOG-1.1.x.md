@@ -6,7 +6,7 @@
 - Raise error in `cfx_getBlockByHashWithPivotAssumption` if the provided block hash does not belong to the provided epoch.
 - Add `blockNumber` to the returned JSON object in `cfx_getBlockByHash`, `cfx_getBlockByEpochNumber`, and `cfx_getBlockByHashWithPivotAssumption`.
 - Add new RPC `cfx_getBlockByBlockNumber`.
-- Update `cfx_getCode` return an empty hex `0x` if account not exist, otherwise return an error. In order keep consistent with Ethereum.
+- Update `cfx_getCode` so that it returns an empty hex `0x` if the account does not exist instead of raising an error.
 
 
 # 1.1.4
