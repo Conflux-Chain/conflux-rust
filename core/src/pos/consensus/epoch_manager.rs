@@ -245,6 +245,7 @@ impl EpochManager {
                     )
                     .private_key(),
                 self.config.safety_rules.vrf_proposal_threshold,
+                epoch_state.clone(),
             )),
         }
     }
@@ -336,7 +337,6 @@ impl EpochManager {
         //         "[EpochManager] State sync to new epoch {}",
         //         ledger_info
         //     ))?;
-        // FIXME(lpl): Use ledger_info to sync needed blocks.
         for ledger_info in proof.get_all_ledger_infos() {
             let mut new_epoch = false;
             match self.processor_mut() {

@@ -125,7 +125,6 @@ where V: VMExecutor
     ) -> Self
     {
         // if initial_nodes.is_empty() {
-        //     // FIXME(lpl): Finalize if we want to hard code initial nodes.
         //     let access_paths = ON_CHAIN_CONFIG_REGISTRY
         //         .iter()
         //         .map(|config_id| config_id.access_path())

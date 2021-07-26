@@ -35,7 +35,7 @@ pub fn generate_waypoint<V: VMExecutor>(
 ) -> Result<Waypoint> {
     let tree_state = db.reader.get_latest_tree_state()?;
 
-    // FIXME(lpl): initial nodes are not passed.
+    // TODO(lpl): initial nodes are not passed.
     // genesis ledger info (including pivot decision) is not used.
     let committer =
         calculate_genesis::<V>(db, tree_state, genesis_txn, None, Vec::new())?;
