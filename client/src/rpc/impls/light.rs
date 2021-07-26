@@ -54,6 +54,7 @@ use cfx_addr::Network;
 use cfxcore::{
     light_protocol::QueryService, rpc_errors::ErrorKind::LightProtocol,
 };
+use diem_types::account_address::AccountAddress;
 
 // macro for reducing boilerplate for unsupported methods
 #[macro_use]
@@ -1108,6 +1109,11 @@ impl TestRpc for TestRpcImpl {
             fn save_node_db(&self) -> JsonRpcResult<()>;
             fn say_hello(&self) -> JsonRpcResult<String>;
             fn stop(&self) -> JsonRpcResult<()>;
+            fn pos_register(&self, voting_power: u64) -> JsonRpcResult<AccountAddress>;
+            fn pos_update_voting_power(
+                &self, pos_account: AccountAddress, increased_voting_power: u64,
+            ) -> JsonRpcResult<()>;
+            fn pos_retire(&self, pos_account: AccountAddress) -> JsonRpcResult<()>;
         }
     }
 

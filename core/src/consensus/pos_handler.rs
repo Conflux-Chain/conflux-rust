@@ -1,8 +1,11 @@
 use cfx_types::H256;
+use diem_config::keys::ConfigKey;
 use diem_crypto::HashValue;
 use diem_types::{
-    contract_event::ContractEvent, ledger_info::LedgerInfoWithSignatures,
+    contract_event::ContractEvent,
+    ledger_info::LedgerInfoWithSignatures,
     term_state::UnlockEvent,
+    validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
 };
 use primitives::pos::{NodeId, PosBlockId};
 use std::sync::Arc;
@@ -44,13 +47,20 @@ pub struct PosBlock {
 pub struct PosHandler<PoS: PosInterface> {
     pos: PoS,
     enable_height: u64,
+    conf: PosConfiguration,
 }
 
 impl<PoS: PosInterface> PosHandler<PoS> {
-    pub fn new(pos: PoS, enable_height: u64) -> Self {
+    pub fn new(pos: PoS, conf: PosConfiguration, enable_height: u64) -> Self {
         pos.initialize().expect("PoS handler initialization error");
-        Self { pos, enable_height }
+        Self {
+            pos,
+            enable_height,
+            conf,
+        }
     }
+
+    pub fn config(&self) -> &PosConfiguration { &self.conf }
 
     pub fn is_enabled_at_height(&self, height: u64) -> bool {
         height >= self.enable_height
@@ -125,9 +135,7 @@ pub struct PosConnection {
 }
 
 impl PosConnection {
-    pub fn new(
-        pos_storage: Arc<dyn DBReaderForPoW>, _conf: PosConfiguration,
-    ) -> Self {
+    pub fn new(pos_storage: Arc<dyn DBReaderForPoW>) -> Self {
         Self { pos_storage }
     }
 }
@@ -191,7 +199,10 @@ impl PosInterface for PosConnection {
     }
 }
 
-pub struct PosConfiguration {}
+pub struct PosConfiguration {
+    pub bls_key: ConfigKey<ConsensusPrivateKey>,
+    pub vrf_key: ConfigKey<ConsensusVRFPrivateKey>,
+}
 
 fn diem_hash_to_h256(h: &HashValue) -> PosBlockId { H256::from(h.as_ref()) }
 fn h256_to_diem_hash(h: &PosBlockId) -> HashValue {

@@ -1045,8 +1045,6 @@ impl Configuration {
         }
     }
 
-    pub fn pos_config(&self) -> PosConfiguration { PosConfiguration {} }
-
     pub fn common_params(&self) -> CommonParams {
         let mut params = CommonParams::default();
 
