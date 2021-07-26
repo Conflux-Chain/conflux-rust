@@ -475,7 +475,21 @@ impl EpochManager {
             self.tx_sender.clone(),
         );
         // Only check if we should send election after entering an new epoch.
-        if let Err(e) = processor.broadcast_election().await {
+        if let Err(e) = processor
+            .broadcast_election(
+                self.author,
+                self.config
+                    .safety_rules
+                    .test
+                    .as_ref()
+                    .expect("test config set")
+                    .consensus_key
+                    .as_ref()
+                    .expect("private key set in pos"),
+                self.config.safety_rules.vrf_private_key.as_ref().unwrap(),
+            )
+            .await
+        {
             diem_error!("error in broadcasting election tx: {:?}", e);
         }
         processor.start(last_vote).await;
