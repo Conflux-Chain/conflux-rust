@@ -242,7 +242,11 @@ where
                 format!("{},{}\n", public_key_str, vrf_public_key_str);
             public_key_file.write_all(public_key_str.as_bytes())?;
         }
-        save_initial_nodes_to_file("./initial_nodes.toml", public_keys.clone());
+        save_initial_nodes_to_file(
+            "./initial_nodes.toml",
+            public_keys.clone(),
+            num_genesis_validator,
+        );
         generate_genesis_from_public_keys(
             public_keys
                 .into_iter()

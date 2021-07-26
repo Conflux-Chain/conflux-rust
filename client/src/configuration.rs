@@ -1180,11 +1180,13 @@ pub fn parse_config_address_string(
 pub fn save_initial_nodes_to_file(
     path: &str,
     public_keys: Vec<(ConsensusPublicKey, ConsensusVRFPublicKey, u64)>,
+    initial_nodes_count: usize,
 )
 {
     let nodes = Value::Array(
         public_keys
             .into_iter()
+            .take(initial_nodes_count)
             .map(|(bls_key, vrf_key, voting_power)| {
                 let mut map = BTreeMap::new();
                 map.insert(
