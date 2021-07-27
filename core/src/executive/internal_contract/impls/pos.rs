@@ -10,32 +10,37 @@ use bls_signatures::{
 use cfx_types::{H256, U256};
 use tiny_keccak::{Hasher, Keccak};
 
-struct IndexStatus {
+pub struct IndexStatus {
     registered: u64,
     unlocked: u64,
 }
 
-impl IndexStatus {
-    fn get(
-        identifier: &H256, context: &mut InternalRefContext,
-        param: &ActionParams,
-    ) -> vm::Result<IndexStatus>
-    {
-        let data = context.storage_at(param, identifier.as_bytes())?;
-        Ok(IndexStatus {
-            registered: data.0[0],
-            unlocked: data.0[1],
-        })
+impl From<U256> for IndexStatus {
+    fn from(input: U256) -> Self {
+        IndexStatus {
+            registered: input.0[0],
+            unlocked: input.0[1],
+        }
     }
+}
 
-    fn set(
-        self, identifier: &H256, context: &mut InternalRefContext,
-        param: &ActionParams,
-    ) -> vm::Result<()>
-    {
-        let data = U256([self.registered, self.unlocked, 0, 0]);
-        context.set_storage(param, identifier.as_bytes().to_vec(), data)
+impl IndexStatus {
+    pub fn inc_unlocked(&mut self, number: u64) -> Result<(), &'static str> {
+        match self.unlocked.checked_add(number) {
+            None => Err("u64 overflow"),
+            Some(answer) if answer > self.registered => {
+                Err("The unlocked votes exceeds registered votes")
+            }
+            Some(answer) => {
+                self.unlocked = answer;
+                Ok(())
+            }
+        }
     }
+}
+
+impl Into<U256> for IndexStatus {
+    fn into(self) -> U256 { U256([self.registered, self.unlocked, 0, 0]) }
 }
 
 type Bytes = Vec<u8>;
@@ -67,7 +72,8 @@ fn update_vote_power(
     param: &ActionParams, context: &mut InternalRefContext,
 ) -> vm::Result<()>
 {
-    let mut status = IndexStatus::get(&identifier, context, param)?;
+    let mut status: IndexStatus =
+        context.storage_at(param, identifier.as_bytes())?.into();
     if !initialize_mode && status.registered == 0 {
         return Err(vm::Error::InternalContract(
             "uninitialized identifier".into(),
@@ -82,7 +88,11 @@ fn update_vote_power(
         vm::Error::InternalContract("registered index overflow".into()),
     )?;
     IncreaseStakeEvent::log(&identifier, &status.registered, param, context)?;
-    status.set(&identifier, context, param)?;
+    context.set_storage(
+        param,
+        identifier.as_bytes().to_vec(),
+        status.into(),
+    )?;
     Ok(())
 }
 
@@ -146,7 +156,8 @@ pub fn increase_stake(
 pub fn get_status(
     identifier: H256, param: &ActionParams, context: &mut InternalRefContext,
 ) -> vm::Result<(u64, u64)> {
-    let status = IndexStatus::get(&identifier, context, param)?;
+    let status: IndexStatus =
+        context.storage_at(param, identifier.as_bytes())?.into();
     Ok((status.registered, status.unlocked))
 }
 
@@ -178,10 +189,9 @@ pub fn decode_register_info(event: &LogEntry) -> Option<StakingEvent> {
     }
 }
 
-#[allow(unused)]
-pub fn sync_with_pos() { todo!() }
-
 use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
+use diem_types::validator_config::ConsensusPublicKey;
+use move_core_types::account_address::AccountAddress;
 use pow_types::StakingEvent::{self, IncreaseStake, Register};
 use primitives::log_entry::LogEntry;
 use solidity_abi::ABIDecodable;
