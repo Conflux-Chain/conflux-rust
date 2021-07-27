@@ -164,8 +164,8 @@ impl RpcImpl {
         let address = &address.hex_address;
 
         let code = match state_db.get_account(address)? {
-            Some(acc) => match state_db.get_code(address, &acc.code_hash) {
-                Ok(Some(code)) => (*code.code).clone(),
+            Some(acc) => match state_db.get_code(address, &acc.code_hash)? {
+                Some(code) => (*code.code).clone(),
                 _ => vec![],
             },
             None => vec![],
