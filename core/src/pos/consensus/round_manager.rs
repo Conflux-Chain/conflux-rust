@@ -47,7 +47,10 @@ use diem_types::{
     chain_id::ChainId,
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
-    transaction::{ElectionPayload, RawTransaction, SignedTransaction},
+    transaction::{
+        ConflictSignature, DisputePayload, ElectionPayload, RawTransaction,
+        SignedTransaction,
+    },
     validator_verifier::ValidatorVerifier,
 };
 use fail::fail_point;
@@ -991,6 +994,60 @@ impl RoundManager {
                 self.new_tc_aggregated(tc).await
             }
             VoteReceptionResult::VoteAdded(_) => Ok(()),
+            VoteReceptionResult::EquivocateVote((vote1, vote2)) => {
+                // Attack detected!
+                // Construct a transaction to dispute this signer.
+                // TODO(lpl): Allow non-committee member to dispute?
+                match &self.proposal_generator {
+                    Some(proposal_generator) => {
+                        ensure!(
+                            vote1.author() == vote2.author(),
+                            "incorrect author"
+                        );
+                        ensure!(
+                            vote1.vote_data().proposed().round()
+                                == vote2.vote_data().proposed().round(),
+                            "incorrect round"
+                        );
+                        let dispute_payload = DisputePayload {
+                            address: vote1.author(),
+                            bls_pub_key: self
+                                .epoch_state
+                                .verifier
+                                .get_public_key(&vote1.author())
+                                .expect("checked in verify"),
+                            vrf_pub_key: self
+                                .epoch_state
+                                .verifier
+                                .get_vrf_public_key(&vote1.author())
+                                .expect("checked in verify")
+                                .unwrap(),
+                            conflicting_votes: ConflictSignature::Vote((
+                                bcs::to_bytes(&vote1).expect("encoding error"),
+                                bcs::to_bytes(&vote2).expect("encoding error"),
+                            )),
+                        };
+                        let raw_tx = RawTransaction::new_dispute(
+                            proposal_generator.author(),
+                            0,
+                            dispute_payload,
+                        );
+                        let signed_tx = raw_tx
+                            .sign(
+                                &proposal_generator.private_key,
+                                proposal_generator.public_key.clone(),
+                            )?
+                            .into_inner();
+                        // TODO(lpl): Track disputed nodes to avoid sending
+                        // multiple dispute, and retry if needed?
+                        let (tx, rx) = oneshot::channel();
+                        self.tx_sender.send((signed_tx, tx)).await;
+                        rx.await?;
+                    }
+                    None => {}
+                }
+                bail!("EquivocateVote!")
+            }
             // Return error so that duplicate or invalid votes will not be
             // broadcast to others.
             r => bail!("vote not added with result {:?}", r),
