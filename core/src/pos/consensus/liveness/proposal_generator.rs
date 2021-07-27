@@ -13,20 +13,16 @@ use consensus_types::{
     quorum_cert::QuorumCert,
 };
 
-use crate::pos::pow_handler::PowHandler;
-use cfx_types::H256;
 use diem_crypto::PrivateKey;
 use diem_infallible::Mutex;
-use diem_logger::debug as diem_debug;
+use diem_logger::{debug as diem_debug, error as diem_error};
 use diem_types::{
-    block_info::PivotBlockDecision,
-    chain_id::ChainId,
-    contract_event::ContractEvent,
-    transaction::{ChangeSet, RawTransaction},
-    validator_config::{ConsensusPrivateKey, ConsensusPublicKey},
-    write_set::WriteSet,
+    transaction::{RawTransaction, TransactionPayload},
+    validator_config::{
+        ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
+        ConsensusVRFPublicKey,
+    },
 };
-use move_core_types::language_storage::TypeTag;
 use pow_types::PowInterface;
 use std::sync::Arc;
 
@@ -61,8 +57,10 @@ pub struct ProposalGenerator {
     // Handle the interaction with PoW consensus.
     pow_handler: Arc<dyn PowInterface>,
     // FIXME(lpl): Where to put them?
-    private_key: ConsensusPrivateKey,
-    public_key: ConsensusPublicKey,
+    pub private_key: ConsensusPrivateKey,
+    pub public_key: ConsensusPublicKey,
+    pub vrf_private_key: ConsensusVRFPrivateKey,
+    pub vrf_public_key: ConsensusVRFPublicKey,
 }
 
 impl ProposalGenerator {
@@ -71,6 +69,8 @@ impl ProposalGenerator {
         txn_manager: Arc<dyn TxnManager>, time_service: Arc<dyn TimeService>,
         max_block_size: u64, pow_handler: Arc<dyn PowInterface>,
         private_key: ConsensusPrivateKey, public_key: ConsensusPublicKey,
+        vrf_private_key: ConsensusVRFPrivateKey,
+        vrf_public_key: ConsensusVRFPublicKey,
     ) -> Self
     {
         Self {
@@ -83,6 +83,8 @@ impl ProposalGenerator {
             pow_handler,
             private_key,
             public_key,
+            vrf_private_key,
+            vrf_public_key,
         }
     }
 
@@ -181,7 +183,16 @@ impl ProposalGenerator {
                 .pivot_decision()
                 .map(|d| d.block_hash)
                 .unwrap_or_default();
+            let new_pivot_decision =
+                payload.iter().find_map(|tx| match tx.payload() {
+                    TransactionPayload::PivotDecision(decision) => {
+                        Some(decision.block_hash)
+                    }
+                    _ => None,
+                });
+            /*
             match self.pow_handler.next_pivot_decision(parent_decision).await {
+
                 Some((height, block_hash)) => {
                     let pivot_decision =
                         PivotBlockDecision { height, block_hash };
@@ -189,12 +200,41 @@ impl ProposalGenerator {
                         self.author,
                         0,
                         pivot_decision,
-                        ChainId::default(), // FIXME(lpl): Set chain id.
+                        ChainId::default(),
                     );
                     let signed_tx = raw_tx
                         .sign(&self.private_key, self.public_key.clone())?
                         .into_inner();
                     payload.push(signed_tx);
+             */
+            match new_pivot_decision {
+                Some(block_hash) => {
+                    // Included new registered or updated nodes as transactions.
+                    let staking_events = self
+                        .pow_handler
+                        .get_staking_events(parent_decision, block_hash)?;
+                    for event in staking_events {
+                        match RawTransaction::from_staking_event(
+                            &event,
+                            self.author,
+                        ) {
+                            Ok(raw_tx) => {
+                                let signed_tx = raw_tx
+                                    .sign(
+                                        &self.private_key,
+                                        self.public_key.clone(),
+                                    )?
+                                    .into_inner();
+                                payload.push(signed_tx);
+                            }
+                            // TODO(lpl): This is not supposed to happen, so
+                            // should we return error here?
+                            Err(e) => diem_error!(
+                                "Get invalid staking event: err={:?}",
+                                e
+                            ),
+                        }
+                    }
                 }
                 None => {
                     warn!("pos progress without new pivot decision");

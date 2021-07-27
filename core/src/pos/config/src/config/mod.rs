@@ -4,7 +4,7 @@
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fmt,
     fs::{self, File},
     io::{Read, Write},
@@ -44,7 +44,6 @@ pub use safety_rules_config::*;
 mod upstream_config;
 pub use upstream_config::*;
 mod test_config;
-use crate::network_id::NetworkId;
 use diem_secure_storage::{KVStorage, Storage};
 use diem_types::waypoint::Waypoint;
 pub use test_config::*;

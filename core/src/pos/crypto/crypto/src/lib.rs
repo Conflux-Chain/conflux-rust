@@ -23,6 +23,8 @@ pub mod noise;
 pub mod secp256k1;
 pub mod test_utils;
 pub mod traits;
+/// VDF SHA256.
+pub mod vdf_sha3;
 pub mod x25519;
 
 #[cfg(test)]

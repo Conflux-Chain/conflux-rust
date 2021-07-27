@@ -3,6 +3,8 @@
 
 #![forbid(unsafe_code)]
 
+pub use account_address::AccountAddress as PeerId;
+
 pub mod access_path;
 pub mod account_address;
 pub mod account_config;
@@ -37,7 +39,6 @@ pub mod vm_status;
 pub mod waypoint;
 pub mod write_set;
 
-pub use account_address::AccountAddress as PeerId;
-
+pub mod term_state;
 #[cfg(test)]
 mod unit_tests;

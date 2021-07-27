@@ -15,13 +15,17 @@ use super::{
     },
     logging::{LogEvent, LogSchema},
     metrics_safety_rules::MetricsSafetyRules,
-    network::{IncomingBlockRetrievalRequest, NetworkSender},
-    network_interface::ConsensusMsg,
+    network::{
+        ConsensusMsg, ConsensusNetworkSender, IncomingBlockRetrievalRequest,
+    },
     pending_votes::VoteReceptionResult,
     persistent_liveness_storage::{PersistentLivenessStorage, RecoveryData},
     state_replication::{StateComputer, TxnManager},
 };
-use crate::pos::protocol::message::block_retrieval_response::BlockRetrievalRpcResponse;
+use crate::pos::{
+    mempool::SubmissionStatus,
+    protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
+};
 use anyhow::{bail, ensure, Context, Result};
 use consensus_types::{
     block::Block,
@@ -34,12 +38,23 @@ use consensus_types::{
     vote::Vote,
     vote_msg::VoteMsg,
 };
+use diem_crypto::VRFPrivateKey;
 use diem_infallible::checked;
 use diem_logger::prelude::*;
 use diem_types::{
-    epoch_state::EpochState, validator_verifier::ValidatorVerifier,
+    account_address::AccountAddress,
+    block_info::PivotBlockDecision,
+    chain_id::ChainId,
+    epoch_state::EpochState,
+    ledger_info::LedgerInfoWithSignatures,
+    transaction::{ElectionPayload, RawTransaction, SignedTransaction},
+    validator_verifier::ValidatorVerifier,
 };
 use fail::fail_point;
+use futures::{
+    channel::{mpsc, oneshot},
+    SinkExt,
+};
 #[cfg(test)]
 use safety_rules::ConsensusState;
 use safety_rules::TSafetyRules;
@@ -56,11 +71,11 @@ pub enum UnverifiedEvent {
 
 impl UnverifiedEvent {
     pub fn verify(
-        self, validator: &ValidatorVerifier,
+        self, validator: &ValidatorVerifier, epoch_vrf_seed: &[u8],
     ) -> Result<VerifiedEvent, VerifyError> {
         Ok(match self {
             UnverifiedEvent::ProposalMsg(p) => {
-                p.verify(validator)?;
+                p.verify(validator, epoch_vrf_seed)?;
                 VerifiedEvent::ProposalMsg(p)
             }
             UnverifiedEvent::VoteMsg(v) => {
@@ -113,7 +128,7 @@ pub mod round_manager_fuzzing;
 /// and use the info to retrieve blocks from peers
 pub struct RecoveryManager {
     epoch_state: EpochState,
-    network: NetworkSender,
+    network: ConsensusNetworkSender,
     storage: Arc<dyn PersistentLivenessStorage>,
     state_computer: Arc<dyn StateComputer>,
     last_committed_round: Round,
@@ -121,7 +136,7 @@ pub struct RecoveryManager {
 
 impl RecoveryManager {
     pub fn new(
-        epoch_state: EpochState, network: NetworkSender,
+        epoch_state: EpochState, network: ConsensusNetworkSender,
         storage: Arc<dyn PersistentLivenessStorage>,
         state_computer: Arc<dyn StateComputer>, last_committed_round: Round,
     ) -> Self
@@ -193,10 +208,14 @@ pub struct RoundManager {
     // None if this is not a validator.
     proposal_generator: Option<ProposalGenerator>,
     safety_rules: MetricsSafetyRules,
-    network: NetworkSender,
+    network: ConsensusNetworkSender,
     txn_manager: Arc<dyn TxnManager>,
     storage: Arc<dyn PersistentLivenessStorage>,
     sync_only: bool,
+    tx_sender: mpsc::Sender<(
+        SignedTransaction,
+        oneshot::Sender<anyhow::Result<SubmissionStatus>>,
+    )>,
 }
 
 impl RoundManager {
@@ -205,9 +224,13 @@ impl RoundManager {
         round_state: RoundState,
         proposer_election: Box<dyn ProposerElection + Send + Sync>,
         proposal_generator: Option<ProposalGenerator>,
-        safety_rules: MetricsSafetyRules, network: NetworkSender,
+        safety_rules: MetricsSafetyRules, network: ConsensusNetworkSender,
         txn_manager: Arc<dyn TxnManager>,
         storage: Arc<dyn PersistentLivenessStorage>, sync_only: bool,
+        tx_sender: mpsc::Sender<(
+            SignedTransaction,
+            oneshot::Sender<anyhow::Result<SubmissionStatus>>,
+        )>,
     ) -> Self
     {
         counters::OP_COUNTERS
@@ -224,6 +247,7 @@ impl RoundManager {
             network,
             storage,
             sync_only,
+            tx_sender,
         }
     }
 
@@ -264,8 +288,16 @@ impl RoundManager {
             reason = new_round_event.reason
         );
         if self.proposer_election.is_random_election() {
-            self.proposer_election.next_round(new_round_event.round);
+            self.proposer_election.next_round(
+                new_round_event.round,
+                self.epoch_state.vrf_seed.clone(),
+            );
             self.round_state.setup_proposal_timeout();
+        }
+
+        // FIXME(lpl): Send with fixed timeout or PoW signal.
+        if let Err(e) = self.broadcast_pivot_decision().await {
+            diem_error!("error in broadcasting pivot decision tx: {:?}", e);
         }
         if let Some(ref proposal_generator) = self.proposal_generator {
             if self.proposer_election.is_valid_proposer(
@@ -283,6 +315,111 @@ impl RoundManager {
         Ok(())
     }
 
+    pub async fn broadcast_pivot_decision(&mut self) -> anyhow::Result<()> {
+        if self.proposal_generator.is_none() {
+            // Not an active validator, so do not need to sign pivot decision.
+            return Ok(());
+        }
+        diem_debug!("broadcast_pivot_decision starts");
+
+        let hqc = self.block_store.highest_quorum_cert();
+        let parent_block = hqc.certified_block();
+        // TODO(lpl): Check if this may happen.
+        if self.block_store.path_from_root(parent_block.id()).is_none() {
+            bail!("HQC {} already pruned", parent_block);
+        }
+
+        // FIXME(lpl): For now, sending default H256 will return the first
+        // pivot decision.
+        let parent_decision = parent_block
+            .pivot_decision()
+            .map(|d| d.block_hash)
+            .unwrap_or_default();
+        let pivot_decision = loop {
+            match self
+                .block_store
+                .pow_handler
+                .next_pivot_decision(parent_decision)
+                .await
+            {
+                Some(res) => break res,
+                None => {
+                    // No new pivot decision.
+                    diem_debug!("No new pivot decision");
+                    return Ok(());
+                }
+            }
+        };
+
+        let proposal_generator =
+            self.proposal_generator.as_ref().expect("checked");
+        diem_info!("Broadcast new pivot decision: {:?}", pivot_decision);
+        // It's allowed for a node to sign conflict pivot decision,
+        // so we do not need to persist this signing event.
+        let raw_tx = RawTransaction::new_pivot_decision(
+            proposal_generator.author(),
+            0,
+            PivotBlockDecision {
+                block_hash: pivot_decision.1,
+                height: pivot_decision.0,
+            },
+            ChainId::default(), // FIXME(lpl): Set chain id.
+        );
+        let signed_tx = raw_tx
+            .sign(
+                &proposal_generator.private_key,
+                proposal_generator.public_key.clone(),
+            )?
+            .into_inner();
+        let (tx, rx) = oneshot::channel();
+        self.tx_sender.send((signed_tx, tx)).await;
+        rx.await?;
+        diem_debug!("broadcast_pivot_decision sends");
+        Ok(())
+    }
+
+    pub async fn broadcast_election(&mut self) -> anyhow::Result<()> {
+        if self.proposal_generator.is_none() {
+            // Not an active validator, so do not need to send election tx.
+            return Ok(());
+        }
+        diem_debug!("broadcast_election starts");
+        let proposal_generator =
+            self.proposal_generator.as_ref().expect("checked");
+        let pos_state = self.storage.diem_db().get_latest_pos_state();
+        if let Some(target_term) =
+            pos_state.next_elect_term(&proposal_generator.author())
+        {
+            let epoch_vrf_seed = pos_state.target_term_seed(target_term);
+            let election_payload = ElectionPayload {
+                public_key: proposal_generator.public_key.clone(),
+                vrf_public_key: proposal_generator.vrf_public_key.clone(),
+                target_term,
+                vrf_proof: proposal_generator
+                    .vrf_private_key
+                    .compute(epoch_vrf_seed.as_slice())
+                    .unwrap(),
+            };
+            let raw_tx = RawTransaction::new_election(
+                proposal_generator.author(),
+                0,
+                election_payload,
+                ChainId::default(), // FIXME(lpl): Set chain id.
+            );
+            let signed_tx = raw_tx
+                .sign(
+                    &proposal_generator.private_key,
+                    proposal_generator.public_key.clone(),
+                )?
+                .into_inner();
+            let (tx, rx) = oneshot::channel();
+            self.tx_sender.send((signed_tx, tx)).await;
+            rx.await?;
+            diem_debug!("broadcast_election sends");
+        }
+        Ok(())
+    }
+
     async fn generate_proposal(
         &mut self, new_round_event: NewRoundEvent,
     ) -> anyhow::Result<ProposalMsg> {
@@ -294,7 +431,14 @@ impl RoundManager {
             .expect("checked by process_new_round_event")
             .generate_proposal(new_round_event.round)
             .await?;
-        let signed_proposal = self.safety_rules.sign_proposal(proposal)?;
+        let mut signed_proposal = self.safety_rules.sign_proposal(proposal)?;
+        if self.proposer_election.is_random_election() {
+            signed_proposal.set_vrf_proof(
+                self.proposer_election
+                    .gen_vrf_proof(signed_proposal.block_data())
+                    .unwrap(),
+            )
+        }
         observe_block(signed_proposal.timestamp_usecs(), BlockStage::SIGNED);
         diem_debug!(self.new_log(LogEvent::Propose), "{}", signed_proposal);
         // return proposal
@@ -344,7 +488,8 @@ impl RoundManager {
             // first time.
             // TODO(lpl): Do not send to the sender and the original author.
             self.network
-                .broadcast(ConsensusMsg::ProposalMsg(Box::new(proposal_msg)));
+                .broadcast(ConsensusMsg::ProposalMsg(Box::new(proposal_msg)))
+                .await;
             Ok(())
         } else {
             bail!(
@@ -358,7 +503,7 @@ impl RoundManager {
     /// Sync to the sync info sending from peer if it has newer certificates, if
     /// we have newer certificates and help_remote is set, send it back the
     /// local sync info.
-    async fn sync_up(
+    pub async fn sync_up(
         &mut self, sync_info: &SyncInfo, author: Author, help_remote: bool,
     ) -> anyhow::Result<()> {
         let local_sync_info = self.block_store.sync_info();
@@ -420,6 +565,39 @@ impl RoundManager {
         } else {
             Ok(())
         }
+    }
+
+    /// This can only be used in `EpochManager.start_new_epoch`.
+    pub async fn sync_to_ledger_info(
+        &mut self, ledger_info: &LedgerInfoWithSignatures,
+        peer_id: AccountAddress,
+    ) -> Result<()>
+    {
+        let mut retriever = self.create_block_retriever(peer_id);
+        if !self
+            .block_store
+            .block_exists(ledger_info.ledger_info().consensus_block_id())
+        {
+            let block_for_ledger_info = retriever
+                .retrieve_block_for_ledger_info(ledger_info)
+                .await?;
+            self.block_store
+                .insert_quorum_cert(
+                    block_for_ledger_info.quorum_cert(),
+                    &mut retriever,
+                )
+                .await?;
+            // `insert_quorum_cert` will wait for PoW to initialize if needed,
+            // so here we do not need to execute as catch_up_mode
+            // again.
+            self.block_store.execute_and_insert_block(
+                block_for_ledger_info,
+                false,
+                false,
+            );
+        };
+        self.block_store.commit(ledger_info.clone()).await?;
+        Ok(())
     }
 
     /// The function makes sure that it ensures the message_round equal to what
@@ -572,7 +750,7 @@ impl RoundManager {
             } else {
                 // Not a validator, just execute the block and wait for votes.
                 self.block_store
-                    .execute_and_insert_block(proposal)
+                    .execute_and_insert_block(proposal, false, false)
                     .context(
                         "[RoundManager] Failed to execute_and_insert the block",
                     )?;
@@ -634,8 +812,12 @@ impl RoundManager {
         observe_block(proposal.timestamp_usecs(), BlockStage::SYNCED);
 
         if self.proposer_election.is_random_election() {
-            // Wait for all proposals.
-            // FIXME(lpl): Execute to check validity.
+            self.block_store.execute_and_insert_block(
+                proposal.clone(),
+                false,
+                false,
+            )?;
+            // Keep the proposal, and choose to vote after proposal timeout.
             ensure!(
                 self.proposer_election.receive_proposal_candidate(proposal),
                 "Receive invalid or duplicate proposal from {}",
@@ -674,7 +856,7 @@ impl RoundManager {
     ) -> anyhow::Result<Vote> {
         let executed_block = self
             .block_store
-            .execute_and_insert_block(proposed_block)
+            .execute_and_insert_block(proposed_block, false, false)
             .context("[RoundManager] Failed to execute_and_insert the block")?;
         // notify mempool about failed txn
         let compute_result = executed_block.compute_result();
@@ -749,7 +931,8 @@ impl RoundManager {
                 .await
                 .context("[RoundManager] Add a new vote")?;
             self.network
-                .broadcast(ConsensusMsg::VoteMsg(Box::new(vote_msg)));
+                .broadcast(ConsensusMsg::VoteMsg(Box::new(vote_msg)))
+                .await;
         }
         Ok(())
     }

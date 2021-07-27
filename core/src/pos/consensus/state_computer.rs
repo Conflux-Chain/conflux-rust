@@ -1,6 +1,8 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::pos::state_sync::client::StateSyncClient;
+
 use super::{error::StateSyncError, state_replication::StateComputer};
 use anyhow::Result;
 use consensus_types::block::Block;
@@ -8,14 +10,13 @@ use diem_crypto::HashValue;
 use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_metrics::monitor;
-use diem_types::ledger_info::LedgerInfoWithSignatures;
+use diem_types::{
+    ledger_info::LedgerInfoWithSignatures, transaction::Transaction,
+};
 use executor_types::{
     BlockExecutor, Error as ExecutionError, StateComputeResult,
 };
 use fail::fail_point;
-//use state_sync::client::StateSyncClient;
-use diem_types::transaction::Transaction;
-use state_sync::client::StateSyncClient;
 use std::boxed::Box;
 
 /// Basic communication with the Execution module;
@@ -50,6 +51,7 @@ impl StateComputer for ExecutionProxy {
         block: &Block,
         // The parent block id.
         parent_block_id: HashValue,
+        catch_up_mode: bool,
     ) -> Result<StateComputeResult, ExecutionError>
     {
         fail_point!("consensus::compute", |_| {
@@ -68,7 +70,8 @@ impl StateComputer for ExecutionProxy {
             "execute_block",
             self.executor.lock().execute_block(
                 id_and_transactions_from_block(block),
-                parent_block_id
+                parent_block_id,
+                catch_up_mode
             )
         )
     }
@@ -130,8 +133,7 @@ fn id_and_transactions_from_block(
 ) -> (HashValue, Vec<Transaction>) {
     let id = block.id();
     // TODO(lpl): Do we need BlockMetadata?
-    // let mut transactions = vec![Transaction::BlockMetadata(block.into())];
-    let mut transactions = vec![];
+    let mut transactions = vec![Transaction::BlockMetadata(block.into())];
     transactions.extend(
         block
             .payload()

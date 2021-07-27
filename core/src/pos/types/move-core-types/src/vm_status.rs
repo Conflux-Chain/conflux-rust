@@ -501,6 +501,8 @@ pub enum StatusCode {
     FEATURE_UNDER_GATING = 26,
     // The transaction is not expected for Conflux PoS chain
     CFX_UNEXPECTED_TX = 27,
+    // The pos transaction does not pass validation based on pos state
+    CFX_INVALID_TX = 28,
 
     // When a code module/script is published it is verified. These are the
     // possible errors that can arise from the verification process.

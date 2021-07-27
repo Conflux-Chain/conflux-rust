@@ -7,7 +7,9 @@
 
 use anyhow::Result;
 use diem_crypto::HashValue;
-use diem_types::{access_path::AccessPath, transaction::Version};
+use diem_types::{
+    access_path::AccessPath, term_state::PosState, transaction::Version,
+};
 
 /// `StateView` is a trait that defines a read-only snapshot of the global
 /// state. It is passed to the VM for transaction execution, during which the VM
@@ -28,6 +30,8 @@ pub trait StateView: Sync {
     /// genesis state creation. Currently TransactionPayload::WriteSet is
     /// only valid for genesis state creation.
     fn is_genesis(&self) -> bool;
+
+    fn pos_state(&self) -> &PosState;
 }
 
 #[derive(Copy, Clone)]

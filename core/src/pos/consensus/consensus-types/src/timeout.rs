@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::common::Round;
-use diem_crypto::ed25519::Ed25519Signature;
 use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
 use diem_types::{
     validator_config::ConsensusSignature, validator_signer::ValidatorSigner,

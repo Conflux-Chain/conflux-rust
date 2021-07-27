@@ -4,6 +4,7 @@
 use crate::{
     epoch_change::Verifier,
     ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
+    on_chain_config::OnChainConfig,
     validator_verifier::ValidatorVerifier,
 };
 use anyhow::ensure;
@@ -18,7 +19,10 @@ use std::{collections::BTreeMap, fmt};
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct EpochState {
     pub epoch: u64,
+
     pub verifier: ValidatorVerifier,
+
+    pub vrf_seed: Vec<u8>,
 }
 
 impl EpochState {
@@ -26,8 +30,13 @@ impl EpochState {
         Self {
             epoch: 0,
             verifier: ValidatorVerifier::new(BTreeMap::new()),
+            vrf_seed: vec![],
         }
     }
+}
+
+impl OnChainConfig for EpochState {
+    const IDENTIFIER: &'static str = "DiemSystem";
 }
 
 impl Verifier for EpochState {

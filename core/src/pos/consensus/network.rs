@@ -1,23 +1,24 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{
-    counters,
-    network_interface::{ConsensusMsg, ConsensusNetworkSender},
-};
+use super::counters;
 use crate::{
     message::RequestId,
-    pos::protocol::message::{
-        block_retrieval::BlockRetrievalRpcRequest,
-        block_retrieval_response::BlockRetrievalRpcResponse,
+    pos::protocol::{
+        message::{
+            block_retrieval::BlockRetrievalRpcRequest,
+            block_retrieval_response::BlockRetrievalRpcResponse,
+        },
+        network_sender::NetworkSender,
     },
 };
 use anyhow::{anyhow, bail, ensure, format_err};
-use cfx_types::H256;
 use channel::{self, diem_channel, message_queues::QueueStyle};
 use consensus_types::{
     block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse},
     common::Author,
+    epoch_retrieval::EpochRetrievalRequest,
+    proposal_msg::ProposalMsg,
     sync_info::SyncInfo,
     vote_msg::VoteMsg,
 };
@@ -29,7 +30,33 @@ use diem_types::{
 };
 use futures::StreamExt;
 use network::node_table::NodeId;
+use serde::{Deserialize, Serialize};
 use std::{mem::Discriminant, time::Duration};
+
+/// Network type for consensus
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum ConsensusMsg {
+    /// RPC to get a chain of block of the given length starting from the given
+    /// block id.
+    BlockRetrievalRequest(Box<BlockRetrievalRequest>),
+    /// Carries the returned blocks and the retrieval status.
+    BlockRetrievalResponse(Box<BlockRetrievalResponse>),
+    /// Request to get a EpochChangeProof from current_epoch to target_epoch
+    EpochRetrievalRequest(Box<EpochRetrievalRequest>),
+    /// ProposalMsg contains the required information for the proposer election
+    /// protocol to make its choice (typically depends on round and
+    /// proposer info).
+    ProposalMsg(Box<ProposalMsg>),
+    /// This struct describes basic synchronization metadata.
+    SyncInfo(Box<SyncInfo>),
+    /// A vector of LedgerInfo with contiguous increasing epoch numbers to
+    /// prove a sequence of epoch changes from the first LedgerInfo's
+    /// epoch.
+    EpochChangeProof(Box<EpochChangeProof>),
+    /// VoteMsg is the struct that is ultimately sent by the voter in response
+    /// for receiving a proposal.
+    VoteMsg(Box<VoteMsg>),
+}
 
 /// The block retrieval request is used internally for implementing RPC: the
 /// callback is executed for carrying the response
@@ -54,28 +81,26 @@ pub struct NetworkReceivers {
 
 /// Implements the actual networking support for all consensus messaging.
 #[derive(Clone)]
-pub struct NetworkSender {
+pub struct ConsensusNetworkSender {
     author: Author,
-    network_sender: ConsensusNetworkSender,
+    network_sender: NetworkSender,
     validators: ValidatorVerifier,
 }
 
-impl NetworkSender {
+impl ConsensusNetworkSender {
     pub fn new(
-        author: Author, network_sender: ConsensusNetworkSender,
+        author: Author, network_sender: NetworkSender,
         validators: ValidatorVerifier,
     ) -> Self
     {
-        NetworkSender {
+        ConsensusNetworkSender {
             author,
             network_sender,
             validators,
         }
     }
 
-    pub fn network_sender(&self) -> &ConsensusNetworkSender {
-        &self.network_sender
-    }
+    pub fn network_sender(&self) -> &NetworkSender { &self.network_sender }
 
     /// Tries to retrieve num of blocks backwards starting from id from the
     /// given peer: the function returns a future that is fulfilled with
@@ -245,27 +270,16 @@ impl NetworkSender {
             );
         }
     }
-
-    pub async fn notify_epoch_change(&mut self, proof: EpochChangeProof) {
-        let msg = ConsensusMsg::EpochChangeProof(Box::new(proof));
-        let network_sender = self.network_sender.clone();
-        if let Err(e) =
-            network_sender.send_self_msg(self.author, msg.clone()).await
-        {
-            diem_warn!(
-                error = "Failed to notify to self an epoch change",
-                "{:?}",
-                e
-            );
-        }
-    }
 }
 
+/// Consensus network task
 pub struct NetworkTask {
+    /// consensus message sender
     pub consensus_messages_tx: diem_channel::Sender<
         (AccountAddress, Discriminant<ConsensusMsg>),
         (AccountAddress, ConsensusMsg),
     >,
+    /// block retrieval message sender
     pub block_retrieval_tx:
         diem_channel::Sender<AccountAddress, IncomingBlockRetrievalRequest>,
 }
@@ -296,5 +310,6 @@ impl NetworkTask {
         )
     }
 
+    /// start
     pub async fn start(self) {}
 }

@@ -1036,12 +1036,15 @@ impl ConsensusExecutionHandler {
         if self
             .pos_verifier
             .is_enabled_at_height(pivot_block.block_header.height())
+            && parent_pos_ref.is_some()
             && *pivot_block.block_header.pos_reference() != parent_pos_ref
+            // TODO(lpl): This condition is for genesis.
+            && parent_pos_ref.is_some()
         {
             // The pos_reference is continuous, so after seeing a new
             // pos_reference, we only need to process the new
             // unlock_txs in it.
-            for unlock_tx in self.pos_verifier.get_unlock_events(
+            for unlock_node_id in self.pos_verifier.get_unlock_nodes(
                 pivot_block
                     .block_header
                     .pos_reference()
@@ -1049,7 +1052,7 @@ impl ConsensusExecutionHandler {
                     .expect("checked before sync graph insertion"),
                 &parent_pos_ref.expect("checked"),
             ) {
-                state.update_pos_status(unlock_tx.node_id, 1);
+                state.update_pos_status(unlock_node_id, 1);
             }
         }
 

@@ -7,6 +7,7 @@ pub mod block_retrieval_response;
 pub mod consensus_msg;
 pub mod epoch_change;
 pub mod epoch_retrieval;
+pub mod mempool_sync_msg;
 pub mod proposal;
 pub mod sync_info;
 pub mod vote;
@@ -18,7 +19,7 @@ use crate::{
         GetMaybeRequestId, Message, MessageProtocolVersionBound, MsgId,
         RequestId, SetRequestId,
     },
-    pos::consensus::network_interface::ConsensusMsg,
+    pos::{consensus::network::ConsensusMsg, mempool::network::MempoolSyncMsg},
 };
 
 use block_retrieval::BlockRetrievalRpcRequest;
@@ -41,6 +42,7 @@ build_msgid! {
     EPOCH_CHANGE = 0x55
     EPOCH_RETRIEVAL = 0x56
     CONSENSUS_MSG = 0x57
+    MEMPOOL_SYNC_MSG = 0x58
     INVALID = 0xff
 }
 
@@ -138,6 +140,12 @@ mark_msg_version_bound!(
 build_msg_impl_with_request_id_and_serde_serialization! {BlockRetrievalRpcRequest, msgid::BLOCK_RETRIEVAL, "BlockRetrievalMessage"}
 mark_msg_version_bound!(
     BlockRetrievalRpcRequest,
+    HSB_PROTOCOL_VERSION,
+    HSB_PROTOCOL_VERSION
+);
+build_msg_impl_with_serde_serialization! {MempoolSyncMsg, msgid::MEMPOOL_SYNC_MSG, "ConsensusMsg"}
+mark_msg_version_bound!(
+    MempoolSyncMsg,
     HSB_PROTOCOL_VERSION,
     HSB_PROTOCOL_VERSION
 );

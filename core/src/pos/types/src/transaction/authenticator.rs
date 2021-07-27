@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::account_address::AccountAddress;
-use anyhow::{ensure, Error, Result};
+use anyhow::{bail, ensure, Error, Result};
 use diem_crypto::{
-    bls::{BLSPrivateKey, BLSPublicKey, BLSSignature},
+    bls::{BLSPublicKey, BLSSignature},
     ed25519::{Ed25519PublicKey, Ed25519Signature},
     hash::CryptoHash,
     multi_ed25519::{MultiEd25519PublicKey, MultiEd25519Signature},
@@ -40,6 +40,7 @@ pub enum Scheme {
     Ed25519 = 0,
     MultiEd25519 = 1,
     BLS = 2,
+    MultiBLS = 3,
     // ... add more schemes here
 }
 
@@ -49,6 +50,7 @@ impl fmt::Display for Scheme {
             Scheme::Ed25519 => "Ed25519",
             Scheme::MultiEd25519 => "MultiEd25519",
             Scheme::BLS => "bls",
+            Scheme::MultiBLS => "multi_bls",
         };
         write!(f, "Scheme::{}", display)
     }
@@ -70,6 +72,11 @@ pub enum TransactionAuthenticator {
     BLS {
         public_key: BLSPublicKey,
         signature: BLSSignature,
+    },
+    /// FIXME(lpl): Implement signature aggregation.
+    MultiBLS {
+        public_keys: Vec<BLSPublicKey>,
+        signatures: Vec<BLSSignature>,
     }, // ... add more schemes here
 }
 
@@ -80,6 +87,7 @@ impl TransactionAuthenticator {
             Self::Ed25519 { .. } => Scheme::Ed25519,
             Self::MultiEd25519 { .. } => Scheme::MultiEd25519,
             Self::BLS { .. } => Scheme::BLS,
+            Self::MultiBLS { .. } => Scheme::MultiBLS,
         }
     }
 
@@ -110,6 +118,15 @@ impl TransactionAuthenticator {
         }
     }
 
+    pub fn multi_bls(
+        public_keys: Vec<BLSPublicKey>, signatures: Vec<BLSSignature>,
+    ) -> Self {
+        Self::MultiBLS {
+            public_keys,
+            signatures,
+        }
+    }
+
     /// Return Ok if the authenticator's public key matches its signature, Err
     /// otherwise
     pub fn verify<T: Serialize + CryptoHash>(&self, message: &T) -> Result<()> {
@@ -126,6 +143,21 @@ impl TransactionAuthenticator {
                 public_key,
                 signature,
             } => signature.verify(message, public_key),
+            Self::MultiBLS {
+                public_keys,
+                signatures,
+            } => {
+                if public_keys.len() != signatures.len() {
+                    bail!("public keys and signature lengths do not match");
+                }
+                if signatures.len() == 0 {
+                    bail!("no signatures for MultiBLS signature")
+                }
+                for i in 0..public_keys.len() {
+                    signatures[i].verify(message, &public_keys[i])?;
+                }
+                Ok(())
+            }
         }
     }
 
@@ -137,6 +169,7 @@ impl TransactionAuthenticator {
                 public_key.to_bytes().to_vec()
             }
             Self::BLS { public_key, .. } => public_key.to_bytes().to_vec(),
+            Self::MultiBLS { public_keys, .. } => todo!(),
         }
     }
 
@@ -148,6 +181,7 @@ impl TransactionAuthenticator {
                 signature.to_bytes().to_vec()
             }
             Self::BLS { signature, .. } => signature.to_bytes().to_vec(),
+            Self::MultiBLS { signatures, .. } => todo!(),
         }
     }
 

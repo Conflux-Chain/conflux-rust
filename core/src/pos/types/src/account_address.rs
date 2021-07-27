@@ -7,20 +7,24 @@ use diem_crypto::{
     x25519, ValidCryptoMaterial,
 };
 
-use crate::validator_config::ConsensusPublicKey;
+use crate::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
+use cfx_types::H256;
 pub use move_core_types::account_address::AccountAddress;
+use tiny_keccak::{Hasher, Keccak};
 
 pub fn from_public_key(public_key: &Ed25519PublicKey) -> AccountAddress {
     AuthenticationKey::ed25519(public_key).derived_address()
 }
 
 pub fn from_consensus_public_key(
-    public_key: &ConsensusPublicKey,
+    public_key: &ConsensusPublicKey, vrf_public_key: &ConsensusVRFPublicKey,
 ) -> AccountAddress {
-    let h = *HashValue::sha3_256_of(&public_key.to_bytes());
-    let mut array = [0u8; AccountAddress::LENGTH];
-    array.copy_from_slice(&h[h.len() - AccountAddress::LENGTH..]);
-    AccountAddress::new(array)
+    let mut hasher = Keccak::v256();
+    hasher.update(public_key.to_bytes().as_slice());
+    hasher.update(vrf_public_key.to_bytes().as_slice());
+    let mut h = H256::default();
+    hasher.finalize(h.as_bytes_mut());
+    AccountAddress::new(h.0)
 }
 
 // Note: This is inconsistent with current types because AccountAddress is

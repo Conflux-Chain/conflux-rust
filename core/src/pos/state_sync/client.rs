@@ -1,8 +1,11 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{counters, error::Error, shared_components::SyncState};
-//use diem_mempool::CommitResponse;
+use crate::pos::{
+    mempool::CommitResponse,
+    state_sync::{counters, error::Error, shared_components::SyncState},
+};
+use diem_logger::prelude::*;
 use diem_types::{
     contract_event::ContractEvent, ledger_info::LedgerInfoWithSignatures,
     transaction::Transaction,
@@ -14,31 +17,6 @@ use futures::{
 };
 use std::time::{Duration, SystemTime};
 use tokio::time::timeout;
-
-#[derive(Debug)]
-pub struct CommitResponse {
-    pub success: bool,
-    /// The error message if `success` is false.
-    pub error_message: Option<String>,
-}
-
-impl CommitResponse {
-    // Returns a new CommitResponse without an error.
-    pub fn success() -> Self {
-        CommitResponse {
-            success: true,
-            error_message: None,
-        }
-    }
-
-    // Returns a new CommitResponse holding the given error message.
-    pub fn error(error_message: String) -> Self {
-        CommitResponse {
-            success: false,
-            error_message: Some(error_message),
-        }
-    }
-}
 
 /// A sync request for a specified target ledger info.
 pub struct SyncRequest {
@@ -123,6 +101,10 @@ impl StateSyncClient {
             committed_transactions: committed_txns,
             reconfiguration_events: reconfig_events,
         };
+        diem_debug!(
+            "state_sync::commit: {} reconfig events",
+            notification.reconfiguration_events.len()
+        );
 
         async move {
             sender

@@ -233,6 +233,7 @@ pub static WAIT_DURATION_S: Lazy<DurationHistogram> = Lazy::new(|| {
 // CHANNEL COUNTERS
 ///////////////////
 /// Count of the pending messages sent to itself in the channel
+#[allow(unused)]
 pub static PENDING_SELF_MESSAGES: Lazy<IntGauge> = Lazy::new(|| {
     register_int_gauge!(
         "diem_consensus_pending_self_messages",
@@ -260,6 +261,7 @@ pub static PENDING_PROPOSAL_TIMEOUTS: Lazy<IntGauge> = Lazy::new(|| {
 });
 
 /// Counter of pending network events to Consensus
+#[allow(unused)]
 pub static PENDING_CONSENSUS_NETWORK_EVENTS: Lazy<IntCounterVec> = Lazy::new(
     || {
         register_int_counter_vec!(

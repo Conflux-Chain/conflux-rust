@@ -4,12 +4,9 @@
 //! Convenience structs and functions for generating a random set of Diem ndoes
 //! without the genesis.blob.
 
-use crate::{
-    config::{
-        DiscoveryMethod, NetworkConfig, NodeConfig, Peer, PeerRole, PeerSet,
-        TestConfig, HANDSHAKE_VERSION,
-    },
-    network_id::NetworkId,
+use crate::config::{
+    NetworkConfig, NodeConfig, Peer, PeerRole, PeerSet, TestConfig,
+    HANDSHAKE_VERSION,
 };
 use rand::{rngs::StdRng, SeedableRng};
 use std::collections::{HashMap, HashSet};

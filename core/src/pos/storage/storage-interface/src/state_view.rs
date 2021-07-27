@@ -11,6 +11,7 @@ use diem_types::{
     account_state::AccountState,
     account_state_blob::AccountStateBlob,
     proof::SparseMerkleProof,
+    term_state::PosState,
     transaction::{Version, PRE_GENESIS_VERSION},
 };
 use parking_lot::RwLock;
@@ -83,6 +84,8 @@ pub struct VerifiedStateView<'a> {
     account_to_state_cache: RwLock<HashMap<AccountAddress, AccountState>>,
     account_to_proof_cache:
         RwLock<HashMap<HashValue, SparseMerkleProof<AccountStateBlob>>>,
+
+    pos_state: PosState,
 }
 
 impl<'a> VerifiedStateView<'a> {
@@ -95,6 +98,7 @@ impl<'a> VerifiedStateView<'a> {
         latest_persistent_version: Option<Version>,
         latest_persistent_state_root: HashValue,
         speculative_state: &'a SparseMerkleTree<AccountStateBlob>,
+        pos_state: PosState,
     ) -> Self
     {
         // Hack: When there's no transaction in the db but state tree root hash
@@ -118,6 +122,7 @@ impl<'a> VerifiedStateView<'a> {
             speculative_state,
             account_to_state_cache: RwLock::new(HashMap::new()),
             account_to_proof_cache: RwLock::new(HashMap::new()),
+            pos_state,
         }
     }
 }
@@ -212,4 +217,6 @@ impl<'a> StateView for VerifiedStateView<'a> {
     }
 
     fn is_genesis(&self) -> bool { self.latest_persistent_version.is_none() }
+
+    fn pos_state(&self) -> &PosState { &self.pos_state }
 }

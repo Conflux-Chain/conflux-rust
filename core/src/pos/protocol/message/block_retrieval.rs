@@ -14,7 +14,6 @@ use crate::{
     sync::{Error, ProtocolConfiguration},
 };
 use consensus_types::block_retrieval::BlockRetrievalRequest;
-use diem_types::account_address::AccountAddress;
 use futures::channel::oneshot;
 use serde::{Deserialize, Serialize};
 use std::{any::Any, time::Duration};
@@ -61,7 +60,7 @@ impl Request for BlockRetrievalRpcRequest {
 
 impl Handleable for BlockRetrievalRpcRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        let peer_address = ctx.get_peer_account_address();
+        let peer_address = ctx.get_peer_account_address()?;
         let req = self.request;
         debug!(
             "Received block retrieval request [block id: {}, request_id: {}]",
@@ -74,7 +73,7 @@ impl Handleable for BlockRetrievalRpcRequest {
             request_id: self.request_id,
         };
         ctx.manager
-            .network_task
+            .consensus_network_task
             .block_retrieval_tx
             .push(peer_address, req_with_callback)?;
         Ok(())

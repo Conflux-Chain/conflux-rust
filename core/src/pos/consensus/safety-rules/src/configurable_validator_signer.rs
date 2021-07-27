@@ -8,11 +8,10 @@ use diem_types::{
     account_address::AccountAddress,
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
-        ConsensusVRFPrivateKey, ConsensusVRFProof, ConsensusVRFPublicKey,
+        ConsensusVRFPrivateKey, ConsensusVRFPublicKey,
     },
     validator_signer::ValidatorSigner,
 };
-use rand::distributions::Open01;
 use serde::Serialize;
 
 /// A ConfigurableValidatorSigner is a ValidatorSigner wrapper that offers
@@ -81,17 +80,6 @@ impl ConfigurableValidatorSigner {
             ConfigurableValidatorSigner::Handle(handle) => {
                 handle.sign(message, storage)
             }
-        }
-    }
-
-    pub fn gen_vrf_proof(
-        &self, seed: &[u8],
-    ) -> Result<Option<ConsensusVRFProof>, Error> {
-        match self {
-            ConfigurableValidatorSigner::Signer(signer) => {
-                Ok(signer.gen_vrf_proof(seed))
-            }
-            ConfigurableValidatorSigner::Handle(handle) => todo!(),
         }
     }
 }

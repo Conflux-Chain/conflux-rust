@@ -278,9 +278,12 @@ pub fn initialize_common_modules(
             (ConfigKey::new(sk), vrf_sk.map(|key| ConfigKey::new(key)))
         })
         .unwrap();
+    let self_vrf_public_key =
+        self_vrf_private_key.as_ref().unwrap().public_key();
     pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
         author: from_consensus_public_key(
             self_pos_public_key.as_ref().unwrap(),
+            &self_vrf_public_key,
         ),
         consensus_key: Some(self_pos_private_key.clone()),
         execution_key: Some(self_pos_private_key),
@@ -290,12 +293,43 @@ pub fn initialize_common_modules(
     pos_config.consensus.safety_rules.export_consensus_key = true;
     pos_config.consensus.safety_rules.vrf_proposal_threshold =
         conf.raw_conf.vrf_proposal_threshold;
+
+    /*
+    let pos_start_epoch = 0;
+    let start_epoch_id = data_man
+        .executed_epoch_set_hashes_from_db(pos_start_epoch)
+        .expect("pos start epoch exists")
+        .last()
+        .cloned()
+        .expect("epoch not empty");
+    let initial_state_with_pos = data_man
+        .storage_manager
+        .get_state_no_commit(
+            data_man
+                .get_state_readonly_index(&start_epoch_id)
+                .expect("pos start epoch executed"),
+            false, /* try_open */
+        )
+        .unwrap()
+        .unwrap();
+    let initial_pos_nodes = vec![];
+     */
+    let initial_nodes = read_initial_nodes_from_file(
+        conf.raw_conf.pos_initial_nodes_path.as_str(),
+    )?
+    .into_iter()
+    .map(|(bls_key, vrf_key, voting_power)| {
+        (NodeID::new(bls_key, vrf_key), voting_power)
+    })
+    .collect();
+
     let diem_handler = start_pos_consensus(
         &pos_config,
         network.clone(),
         own_node_hash,
         conf.protocol_config(),
-        self_pos_public_key,
+        Some((self_pos_public_key.unwrap(), self_vrf_public_key)),
+        initial_nodes,
     );
     debug!("PoS initialized");
     let pos_connection = PosConnection::new(
@@ -303,7 +337,10 @@ pub fn initialize_common_modules(
         conf.pos_config(),
     );
     // FIXME(lpl): Set CIP height.
-    let pos_verifier = Arc::new(PosVerifier::new(pos_connection, 0));
+    let pos_verifier = Arc::new(PosVerifier::new(
+        pos_connection,
+        conf.raw_conf.pos_reference_enable_height,
+    ));
 
     let verification_config =
         conf.verification_config(machine.clone(), pos_verifier.clone());
@@ -330,7 +367,6 @@ pub fn initialize_common_modules(
         node_type,
         pos_verifier.clone(),
     ));
-    diem_handler.pow_handler.initialize(consensus.clone());
 
     let sync_config = conf.sync_graph_config();
 
@@ -343,6 +379,7 @@ pub fn initialize_common_modules(
         notifications.clone(),
         machine.clone(),
         pos_verifier.clone(),
+        diem_handler.pow_handler.clone(),
     ));
     let refresh_time =
         Duration::from_millis(conf.raw_conf.account_provider_refresh_time_ms);
@@ -451,6 +488,7 @@ pub fn initialize_not_light_node_modules(
         conf.state_sync_config(),
         SyncPhaseType::CatchUpRecoverBlockHeaderFromDB,
         light_provider,
+        consensus.clone(),
     ));
     sync.register().unwrap();
 
@@ -807,7 +845,9 @@ pub mod delegate_convert {
 use crate::{
     accounts::{account_provider, keys_path},
     common::pos::start_pos_consensus,
-    configuration::parse_config_address_string,
+    configuration::{
+        parse_config_address_string, read_initial_nodes_from_file,
+    },
     rpc::{
         extractor::RpcExtractor,
         impls::{
@@ -824,7 +864,7 @@ use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use cfxcore::{
     block_data_manager::BlockDataManager,
-    consensus::pos_handler::{FakeDiemDB, PosConnection, PosVerifier},
+    consensus::pos_handler::{PosConnection, PosVerifier},
     machine::{new_machine_with_builtin, Machine},
     pos::pow_handler::PowHandler,
     pow::PowComputer,
@@ -839,10 +879,12 @@ use cfxcore::{
 use cfxcore_accounts::AccountProvider;
 use cfxkey::public_to_address;
 use diem_config::{
-    config::{NodeConfig, SafetyRulesTestConfig, TestConfig},
+    config::{NodeConfig, SafetyRulesTestConfig},
     keys::ConfigKey,
 };
-use diem_types::account_address::{from_consensus_public_key, from_public_key};
+use diem_types::{
+    account_address::from_consensus_public_key, term_state::NodeID,
+};
 use jsonrpc_http_server::Server as HttpServer;
 use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WSServer;
