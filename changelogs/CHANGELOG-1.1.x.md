@@ -14,6 +14,7 @@
 - Update `cfx_getCode` so that it returns an empty hex `0x` if the account does not exist instead of raising an error.
 
 ### Configuration Improvement
+- Add `persist_block_number_index` to persist block number indices. It allows responding to block-number-related RPC requests for old epochs.
 - Add `storage_max_open_mpt_count` to configure maximal number of opened MPT.
 
 
