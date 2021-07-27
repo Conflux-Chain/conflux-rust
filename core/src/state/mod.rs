@@ -276,6 +276,7 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
         Ok(self.db.commit(epoch_id, debug_record)?)
     }
 }
+
 impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     for StateGeneric<StateDbStorage>
 {
@@ -858,6 +859,13 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
                 .set_storage(key, value, owner)
         }
         Ok(())
+    }
+
+    fn storage_lock(&self, identifier: H256) -> DbResult<U256> {
+        let current_value: IndexStatus = self
+            .storage_at(&POS_REGISTER_CONTRACT_ADDRESS, &identifier.as_bytes())?
+            .into();
+        Ok(*POS_VOTE_PRICE * current_value.locked())
     }
 
     fn update_pos_status(

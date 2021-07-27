@@ -35,6 +35,7 @@ use primitives::{
 };
 use rustc_hex::FromHex;
 use secret_store::SecretStore;
+use solidity_abi::ABIEncodable;
 use std::{
     collections::HashMap,
     fs::File,
@@ -42,7 +43,6 @@ use std::{
     sync::Arc,
 };
 use toml::Value;
-use solidity_abi::ABIEncodable;
 
 pub const DEV_GENESIS_PRI_KEY: &'static str =
     "46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f";
@@ -444,17 +444,19 @@ pub fn genesis_block(
 }
 
 fn register_transaction(
-    bls_priv_key: BLSPrivateKey, vrf_pub_key: EcVrfPublicKey, power: u64, genesis_chain_id: u32
-) {
+    bls_priv_key: BLSPrivateKey, vrf_pub_key: EcVrfPublicKey, power: u64,
+    genesis_chain_id: u32,
+)
+{
     /// TODO: test this function with new internal contracts.
     use bls_signatures::{
-        sigma_protocol, PrivateKey as BlsPrivKey, PublicKey as BlsPubKey, Serialize
+        sigma_protocol, PrivateKey as BlsPrivKey, PublicKey as BlsPubKey,
+        Serialize,
     };
     use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
-    use tiny_keccak::{Hasher, Keccak};
+    use rand08::{rngs::StdRng, CryptoRng, RngCore, SeedableRng};
     use solidity_abi::ABIEncodable;
-    use rand08::rngs::StdRng;
-    use rand08::{CryptoRng,SeedableRng,RngCore};
+    use tiny_keccak::{Hasher, Keccak};
 
     let bls_pub_key = bls_priv_key.public_key();
     let (commit, answer) = sigma_protocol::prove(
