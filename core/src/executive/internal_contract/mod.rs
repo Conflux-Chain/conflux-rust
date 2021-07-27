@@ -5,7 +5,7 @@
 mod activate_at;
 mod contracts;
 pub mod function;
-mod impls;
+pub mod impls;
 mod internal_context;
 
 pub use self::{

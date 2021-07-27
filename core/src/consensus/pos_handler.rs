@@ -1,11 +1,10 @@
 use cfx_types::H256;
 use diem_crypto::HashValue;
 use diem_types::{
-    account_config, contract_event::ContractEvent, event::EventKey,
-    ledger_info::LedgerInfoWithSignatures,
+    contract_event::ContractEvent, ledger_info::LedgerInfoWithSignatures,
+    term_state::UnlockEvent,
 };
 use primitives::pos::{NodeId, PosBlockId};
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use storage_interface::DBReaderForPoW;
 
@@ -40,27 +39,6 @@ pub struct PosBlock {
     hash: PosBlockId,
     round: u64,
     pivot_decision: H256,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct UnlockEvent {
-    /// The node id to unlock.
-    ///
-    /// The management contract should unlock the corresponding account.
-    pub node_id: NodeId,
-}
-
-impl UnlockEvent {
-    pub fn unlock_event_key() -> EventKey {
-        EventKey::new_from_address(
-            &account_config::pivot_chain_select_address(),
-            5,
-        )
-    }
-
-    pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
-        bcs::from_bytes(bytes).map_err(Into::into)
-    }
 }
 
 pub struct PosHandler<PoS: PosInterface> {
@@ -125,20 +103,20 @@ impl<PoS: PosInterface> PosHandler<PoS> {
         self.pos.latest_block()
     }
 
-    pub fn get_unlock_events(
+    pub fn get_unlock_nodes(
         &self, h: &PosBlockId, parent_pos_ref: &PosBlockId,
-    ) -> Vec<UnlockEvent> {
+    ) -> Vec<NodeId> {
         let unlock_event_key = UnlockEvent::unlock_event_key();
-        let mut unlock_events = Vec::new();
+        let mut unlock_nodes = Vec::new();
         for event in self.pos.get_events(parent_pos_ref, h) {
             if *event.key() == unlock_event_key {
-                unlock_events.push(
-                    UnlockEvent::from_bytes(event.event_data())
-                        .expect("key checked"),
-                );
+                let unlock_event = UnlockEvent::from_bytes(event.event_data())
+                    .expect("key checked");
+                unlock_nodes
+                    .push(H256::from_slice(unlock_event.node_id.as_ref()));
             }
         }
-        unlock_events
+        unlock_nodes
     }
 }
 

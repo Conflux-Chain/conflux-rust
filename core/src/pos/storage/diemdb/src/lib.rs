@@ -73,6 +73,7 @@ use diem_types::{
         AccountStateProof, AccumulatorConsistencyProof, EventProof,
         SparseMerkleProof, TransactionListProof,
     },
+    term_state::PosState,
     transaction::{
         TransactionInfo, TransactionListWithProof, TransactionToCommit,
         TransactionWithProof, Version, PRE_GENESIS_VERSION,
@@ -241,6 +242,7 @@ impl DiemDB {
             TRANSACTION_BY_ACCOUNT_CF_NAME,
             TRANSACTION_INFO_CF_NAME,
             LEDGER_INFO_BY_BLOCK_CF_NAME,
+            POS_STATE_CF_NAME,
         ]
     }
 
@@ -949,6 +951,15 @@ impl DbReader for DiemDB {
             self.ledger_store.get_root_hash(version)
         })
     }
+
+    fn get_pos_state(&self, block_id: &HashValue) -> Result<PosState> {
+        diem_debug!("get_pos_state:{}", block_id);
+        self.ledger_store.get_pos_state(block_id)
+    }
+
+    fn get_latest_pos_state(&self) -> Arc<PosState> {
+        self.ledger_store.get_latest_pos_state()
+    }
 }
 
 impl DbWriter for DiemDB {
@@ -962,6 +973,7 @@ impl DbWriter for DiemDB {
     fn save_transactions(
         &self, txns_to_commit: &[TransactionToCommit], first_version: Version,
         ledger_info_with_sigs: Option<&LedgerInfoWithSignatures>,
+        pos_state: Option<PosState>,
     ) -> Result<()>
     {
         gauged_api("save_transactions", || {
@@ -1007,6 +1019,12 @@ impl DbWriter for DiemDB {
                 // );
 
                 self.ledger_store.put_ledger_info(x, &mut cs)?;
+                if let Some(pos_state) = pos_state {
+                    self.ledger_store.put_pos_state(
+                        &x.ledger_info().consensus_block_id(),
+                        pos_state,
+                    );
+                }
             }
 
             // Persist.

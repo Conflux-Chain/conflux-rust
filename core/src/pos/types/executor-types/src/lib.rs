@@ -3,10 +3,11 @@
 
 #![forbid(unsafe_code)]
 
-mod error;
-pub use error::Error;
+use std::{cmp::max, collections::HashMap, sync::Arc};
 
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
+
 use diem_crypto::{
     hash::{TransactionAccumulatorHasher, SPARSE_MERKLE_PLACEHOLDER_HASH},
     HashValue,
@@ -18,16 +19,18 @@ use diem_types::{
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
     proof::{accumulator::InMemoryAccumulator, AccumulatorExtensionProof},
+    term_state::PosState,
     transaction::{
         Transaction, TransactionInfo, TransactionListWithProof,
         TransactionStatus, Version,
     },
     validator_config::ConsensusSignature,
 };
+pub use error::Error;
 use scratchpad::ProofRead;
-use serde::{Deserialize, Serialize};
-use std::{cmp::max, collections::HashMap, sync::Arc};
 use storage_interface::TreeState;
+
+mod error;
 
 type SparseMerkleProof = diem_types::proof::SparseMerkleProof<AccountStateBlob>;
 type SparseMerkleTree = scratchpad::SparseMerkleTree<AccountStateBlob>;
@@ -60,7 +63,7 @@ pub trait BlockExecutor: Send {
     /// Executes a block.
     fn execute_block(
         &mut self, block: (HashValue, Vec<Transaction>),
-        parent_block_id: HashValue,
+        parent_block_id: HashValue, catch_up_mode: bool,
     ) -> Result<StateComputeResult, Error>;
 
     /// Saves eligible blocks to persistent storage.
@@ -210,13 +213,6 @@ impl StateComputeResult {
         &self.pivot_decision
     }
 
-    pub fn update_pivot_decision(
-        &mut self, parent_pivot_decision: PivotBlockDecision,
-    ) {
-        debug_assert!(self.pivot_decision.is_none());
-        self.pivot_decision = Some(parent_pivot_decision);
-    }
-
     pub fn has_reconfiguration(&self) -> bool { self.epoch_state.is_some() }
 
     pub fn signature(&self) -> &Option<ConsensusSignature> { &self.signature }
@@ -241,6 +237,8 @@ pub struct ExecutedTrees {
     /// consistent with the `state_tree`.
     transaction_accumulator:
         Arc<InMemoryAccumulator<TransactionAccumulatorHasher>>,
+
+    pos_state: PosState,
 }
 
 impl From<TreeState> for ExecutedTrees {
@@ -249,25 +247,42 @@ impl From<TreeState> for ExecutedTrees {
             tree_state.account_state_root_hash,
             tree_state.ledger_frozen_subtree_hashes,
             tree_state.num_transactions,
+            // FIXME(lpl): Ensure this is not used.
+            PosState::new_empty(),
         )
     }
 }
 
 impl ExecutedTrees {
+    pub fn new_with_pos_state(
+        tree_state: TreeState, pos_state: PosState,
+    ) -> Self {
+        ExecutedTrees::new(
+            tree_state.account_state_root_hash,
+            tree_state.ledger_frozen_subtree_hashes,
+            tree_state.num_transactions,
+            pos_state,
+        )
+    }
+
     pub fn new_copy(
         state_tree: Arc<SparseMerkleTree>,
         transaction_accumulator: Arc<
             InMemoryAccumulator<TransactionAccumulatorHasher>,
         >,
+        pos_state: PosState,
     ) -> Self
     {
         Self {
             state_tree,
             transaction_accumulator,
+            pos_state,
         }
     }
 
     pub fn state_tree(&self) -> &Arc<SparseMerkleTree> { &self.state_tree }
+
+    pub fn pos_state(&self) -> &PosState { &self.pos_state }
 
     pub fn txn_accumulator(
         &self,
@@ -287,7 +302,7 @@ impl ExecutedTrees {
     pub fn new(
         state_root_hash: HashValue,
         frozen_subtrees_in_accumulator: Vec<HashValue>,
-        num_leaves_in_accumulator: u64,
+        num_leaves_in_accumulator: u64, pos_state: PosState,
     ) -> ExecutedTrees
     {
         ExecutedTrees {
@@ -299,11 +314,17 @@ impl ExecutedTrees {
                 )
                 .expect("The startup info read from storage should be valid."),
             ),
+            pos_state,
         }
     }
 
     pub fn new_empty() -> ExecutedTrees {
-        Self::new(*SPARSE_MERKLE_PLACEHOLDER_HASH, vec![], 0)
+        Self::new(
+            *SPARSE_MERKLE_PLACEHOLDER_HASH,
+            vec![],
+            0,
+            PosState::new_empty(),
+        )
     }
 }
 

@@ -254,7 +254,6 @@ pub fn impl_enum_signature(
     let priv_kt: syn::Type = private_key_type.parse().unwrap();
     let pub_kt: syn::Type = public_key_type.parse().unwrap();
     let mut res = impl_enum_tryfrom(name, variants);
-    let to_bytes_arms = match_enum_to_bytes(name, variants);
 
     let mut match_arms = quote! {};
     for variant in variants.variants.iter() {

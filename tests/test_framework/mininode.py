@@ -4,6 +4,9 @@
 `P2PConnection: A low-level connection object to a node's P2P interface
 P2PInterface: A high-level interface object for communicating to a node over P2P
 """
+import time
+from eth_utils import decode_hex
+
 from conflux import utils
 from conflux.config import DEFAULT_PY_TEST_CHAIN_ID
 from conflux.messages import *
@@ -420,7 +423,8 @@ class P2PInterface(P2PConnection):
             ip = get_ip_address()
         endpoint = NodeEndpoint(address=bytes(ip), tcp_port=32325, udp_port=32325)
         # FIXME: Use a valid pos_public_key.
-        hello = Hello(DEFAULT_PY_TEST_CHAIN_ID, [Capability(self.protocol, self.protocol_version)], endpoint, self.priv_key)
+        hello = Hello(DEFAULT_PY_TEST_CHAIN_ID, [Capability(self.protocol, self.protocol_version)], endpoint,
+                      decode_hex('ac4a9103a323cf3a0d64712de2cbacf6df5d4c2cad7458aa612696f60a6de0a0958da59c7736b71cf24139b1be94be1503efefa083263438fd07edd1e03246683ff58da8bdde286c321032765258d0c34f'))
 
         self.send_packet(PACKET_HELLO, rlp.encode(hello, Hello))
         self.had_hello = True
@@ -521,6 +525,8 @@ def network_thread_join(timeout=10):
 
 def start_p2p_connection(nodes, remote=False):
     p2p_connections = []
+    # TODO(lpl): Figure out why pos slows down node starting.
+    time.sleep(1)
 
     for node in nodes:
         conn = DefaultNode(remote)

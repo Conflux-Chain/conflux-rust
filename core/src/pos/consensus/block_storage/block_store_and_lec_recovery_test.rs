@@ -1,14 +1,17 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::pos::consensus::{
-    block_storage::{block_store::BlockStore, BlockReader},
-    persistent_liveness_storage::{
-        LedgerRecoveryData, RecoveryData, RootMetadata,
+use crate::pos::{
+    consensus::{
+        block_storage::{block_store::BlockStore, BlockReader},
+        persistent_liveness_storage::{
+            LedgerRecoveryData, RecoveryData, RootMetadata,
+        },
+        state_computer::ExecutionProxy,
+        test_utils::{EmptyStorage, TreeInserter},
+        util::mock_time_service::SimulatedTimeService,
     },
-    state_computer::ExecutionProxy,
-    test_utils::{EmptyStorage, TreeInserter},
-    util::mock_time_service::SimulatedTimeService,
+    state_sync::client::StateSyncClient,
 };
 use consensus_types::{block::Block, quorum_cert::QuorumCert};
 use diem_config::config::NodeConfig;
@@ -20,7 +23,6 @@ use execution_correctness::{
 use executor_test_helpers::start_storage_service;
 use executor_types::ExecutedTrees;
 use futures::channel::mpsc;
-use state_sync::client::StateSyncClient;
 use std::sync::Arc;
 use storage_interface::DbReader;
 

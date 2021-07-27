@@ -5,11 +5,12 @@ use crate::pos::consensus::liveness::proposer_election::ProposerElection;
 use consensus_types::common::{Author, Round};
 
 use cfx_types::U256;
-use consensus_types::block::{Block, VRF_SEED};
+use consensus_types::{block::Block, block_data::BlockData};
 use diem_crypto::{VRFPrivateKey, VRFProof};
 use diem_logger::debug as diem_debug;
 use diem_types::{
-    account_address::AccountAddress, validator_config::ConsensusVRFPrivateKey,
+    account_address::AccountAddress,
+    validator_config::{ConsensusVRFPrivateKey, ConsensusVRFProof},
 };
 use parking_lot::Mutex;
 use std::collections::HashMap;
@@ -36,8 +37,10 @@ impl VrfProposer {
             author,
             vrf_private_key,
             proposal_threshold,
+            // current_round and current_seed will not be used before
+            // `next_round` is called.
             current_round: Mutex::new(0),
-            current_seed: Mutex::new(VRF_SEED.to_vec()),
+            current_seed: Mutex::new(vec![]),
             proposal_candidates: Default::default(),
         }
     }
@@ -60,9 +63,12 @@ impl ProposerElection for VrfProposer {
             *self.current_round.lock(),
             "VRF election can not generate vrf_proof for other rounds"
         );
+        // TODO(lpl): Unify seed computation.
+        let mut round_seed = self.current_seed.lock().clone();
+        round_seed.extend_from_slice(&round.to_be_bytes());
         let vrf_output = self
             .vrf_private_key
-            .compute(&*self.current_seed.lock())
+            .compute(round_seed.as_slice())
             .unwrap()
             .to_hash()
             .unwrap();
@@ -71,9 +77,9 @@ impl ProposerElection for VrfProposer {
     }
 
     fn is_valid_proposal(&self, block: &Block) -> bool {
-        let vrf_number = U256::from_big_endian(
-            block.vrf_proof().unwrap().to_hash().unwrap().as_ref(),
-        );
+        // FIXME(lpl): Verify VRF.
+        let vrf_number =
+            block.vrf_proof().unwrap().to_hash().unwrap().to_u256();
         vrf_number <= self.proposal_threshold
     }
 
@@ -97,9 +103,8 @@ impl ProposerElection for VrfProposer {
         let mut chosen_proposal = None;
         let mut min_vrf_number = U256::MAX;
         for (_, b) in &*self.proposal_candidates.lock() {
-            let vrf_number = U256::from_big_endian(
-                b.vrf_proof().unwrap().to_hash().unwrap().as_ref(),
-            );
+            let vrf_number =
+                b.vrf_proof().unwrap().to_hash().unwrap().to_u256();
             if vrf_number < min_vrf_number {
                 chosen_proposal = Some(b.clone());
                 min_vrf_number = vrf_number
@@ -109,8 +114,21 @@ impl ProposerElection for VrfProposer {
         chosen_proposal
     }
 
-    fn next_round(&self, round: Round) {
+    fn next_round(&self, round: Round, new_seed: Vec<u8>) {
         *self.current_round.lock() = round;
         self.proposal_candidates.lock().clear();
+        *self.current_seed.lock() = new_seed;
+    }
+
+    fn gen_vrf_proof(
+        &self, block_data: &BlockData,
+    ) -> Option<ConsensusVRFProof> {
+        self.vrf_private_key
+            .compute(
+                block_data
+                    .vrf_round_seed(self.current_seed.lock().as_slice())
+                    .as_slice(),
+            )
+            .ok()
     }
 }

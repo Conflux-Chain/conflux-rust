@@ -371,14 +371,6 @@ impl BlockTree {
         res.reverse();
         Some(res)
     }
-
-    pub(super) fn max_pruned_blocks_in_mem(&self) -> usize {
-        self.max_pruned_blocks_in_mem
-    }
-
-    pub(super) fn get_all_block_id(&self) -> Vec<HashValue> {
-        self.id_to_block.keys().cloned().collect()
-    }
 }
 
 #[cfg(any(test, feature = "fuzzing"))]

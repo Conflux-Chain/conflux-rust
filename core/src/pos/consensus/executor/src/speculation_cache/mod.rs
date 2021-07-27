@@ -29,7 +29,7 @@ use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_types::{
     contract_event::ContractEvent, ledger_info::LedgerInfo,
-    transaction::Transaction,
+    term_state::PosState, transaction::Transaction,
 };
 use executor_types::{Error, ExecutedTrees};
 use std::{
@@ -139,8 +139,10 @@ impl SpeculationCache {
     pub fn new_with_startup_info(startup_info: StartupInfo) -> Self {
         let mut cache = Self::new();
         let ledger_info = startup_info.latest_ledger_info.ledger_info();
-        let committed_trees =
-            ExecutedTrees::from(startup_info.committed_tree_state);
+        let committed_trees = ExecutedTrees::new_with_pos_state(
+            startup_info.committed_tree_state,
+            startup_info.committed_pos_state,
+        );
         cache.update_block_tree_root(
             committed_trees,
             ledger_info,
@@ -148,15 +150,20 @@ impl SpeculationCache {
             vec![], /* latest_reconfig_events */
         );
         if let Some(synced_tree_state) = startup_info.synced_tree_state {
+            // FIXME(lpl): synced_tree_state.pos_state is left unhandled since
+            // this is not used.
             cache.update_synced_trees(ExecutedTrees::from(synced_tree_state));
         }
         cache
     }
 
-    pub fn new_for_db_bootstrapping(tree_state: TreeState) -> Self {
+    pub fn new_for_db_bootstrapping(
+        tree_state: TreeState, pos_state: PosState,
+    ) -> Self {
         // The DB-bootstrapper applies genesis txn on a local DB and create a
         // waypoint, assuming everything is synced and committed.
-        let executor_trees = ExecutedTrees::from(tree_state);
+        let mut executor_trees =
+            ExecutedTrees::new_with_pos_state(tree_state, pos_state);
         Self {
             synced_trees: executor_trees.clone(),
             committed_trees: executor_trees,

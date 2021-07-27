@@ -32,9 +32,6 @@ pub mod block_test_utils;
 #[path = "block_test.rs"]
 pub mod block_test;
 
-/// FIXME(lpl): Update seed according to VDF.
-pub const VRF_SEED: &[u8] = "seed".as_bytes();
-
 #[derive(Serialize, Clone, PartialEq, Eq)]
 /// Block has the core data of a consensus block that should be persistent when
 /// necessary. Each block must know the id of its parent and keep the
@@ -101,6 +98,11 @@ impl Block {
 
     pub fn vrf_proof(&self) -> Option<&ConsensusVRFProof> {
         self.vrf_proof.as_ref()
+    }
+
+    pub fn set_vrf_proof(&mut self, vrf_proof: ConsensusVRFProof) {
+        debug_assert!(self.vrf_proof.is_none());
+        self.vrf_proof = Some(vrf_proof);
     }
 
     pub fn timestamp_usecs(&self) -> u64 { self.block_data.timestamp_usecs() }
@@ -206,10 +208,8 @@ impl Block {
         block_data: BlockData, validator_signer: &ValidatorSigner,
     ) -> Self {
         let signature = validator_signer.sign(&block_data);
-        let vrf_proof = validator_signer
-            .gen_vrf_proof(&block_data.vrf_round_seed(VRF_SEED));
         Self::new_proposal_from_block_data_and_signature(
-            block_data, signature, vrf_proof,
+            block_data, signature, None,
         )
     }
 
@@ -241,13 +241,6 @@ impl Block {
                     format_err!("Missing signature in Proposal")
                 })?;
                 validator.verify(*author, &self.block_data, signature)?;
-                if let Some(vrf_proof) = &self.vrf_proof {
-                    validator.verify_vrf(
-                        *author,
-                        &self.block_data.vrf_round_seed(VRF_SEED),
-                        vrf_proof,
-                    )?;
-                }
                 self.quorum_cert().verify(validator)
             }
         }

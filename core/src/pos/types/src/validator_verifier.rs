@@ -7,9 +7,12 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt};
 use thiserror::Error;
 
-use crate::validator_config::{
-    ConsensusPublicKey, ConsensusSignature, ConsensusVRFProof,
-    ConsensusVRFPublicKey,
+use crate::{
+    on_chain_config::OnChainConfig,
+    validator_config::{
+        ConsensusPublicKey, ConsensusSignature, ConsensusVRFProof,
+        ConsensusVRFPublicKey,
+    },
 };
 #[cfg(any(test, feature = "fuzzing"))]
 use anyhow::{ensure, Result};
@@ -341,6 +344,10 @@ impl ValidatorVerifier {
 
     /// Returns quorum voting power.
     pub fn quorum_voting_power(&self) -> u64 { self.quorum_voting_power }
+}
+
+impl OnChainConfig for ValidatorVerifier {
+    const IDENTIFIER: &'static str = "DiemSystem";
 }
 
 /// Returns sum of voting power from Map of validator account addresses,

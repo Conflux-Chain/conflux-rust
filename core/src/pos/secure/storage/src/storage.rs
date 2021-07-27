@@ -5,7 +5,6 @@ use crate::{
     KVStorage, NamespacedStorage, OnDiskStorage, PublicKeyResponse,
     VaultStorage,
 };
-use diem_crypto::PrivateKey;
 use diem_types::validator_config::{
     ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
 };
