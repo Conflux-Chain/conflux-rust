@@ -619,6 +619,10 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     ) -> Result<()> {
         unimplemented!()
     }
+
+    fn storage_lock(&self, identifier: H256) -> Result<U256> {
+        unimplemented!()
+    }
 }
 
 impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>

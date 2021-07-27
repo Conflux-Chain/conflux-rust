@@ -37,6 +37,8 @@ impl IndexStatus {
             }
         }
     }
+
+    pub fn locked(&self) -> u64 { self.registered - self.unlocked }
 }
 
 impl Into<U256> for IndexStatus {

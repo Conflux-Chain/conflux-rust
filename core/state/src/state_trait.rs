@@ -209,6 +209,8 @@ pub trait StateOpsTrait {
     fn update_pos_status(
         &mut self, identifier: H256, number: u64,
     ) -> DbResult<()>;
+
+    fn storage_lock(&self, identifier: H256) -> DbResult<U256>;
 }
 
 pub trait CheckpointTrait: StateOpsTrait {
