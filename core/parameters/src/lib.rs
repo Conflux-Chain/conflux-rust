@@ -248,6 +248,8 @@ pub mod staking {
         /// SERVICE_CHARGE_RATE_SCALE = 0.05%`
         pub static ref SERVICE_CHARGE_RATE: U256 = U256::from(5);
         pub static ref SERVICE_CHARGE_RATE_SCALE: U256 = U256::from(10000);
+        /// This controls the tokens required for one PoS vote
+        pub static ref POS_VOTE_PRICE: U256 = U256::from(100)*ONE_CFX_IN_DRIP;
     }
 
     pub fn code_collateral_units(len: usize) -> u64 {

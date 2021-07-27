@@ -40,3 +40,8 @@ pub fn update_voting_power_address() -> AccountAddress {
     AccountAddress::from_hex_literal("0x1DE")
         .expect("Parsing valid hex literal should always succeed")
 }
+
+pub fn dispute_address() -> AccountAddress {
+    AccountAddress::from_hex_literal("0x1DF")
+        .expect("Parsing valid hex literal should always succeed")
+}

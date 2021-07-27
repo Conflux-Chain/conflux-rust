@@ -1,8 +1,9 @@
 use cfx_types::H256;
 use diem_crypto::HashValue;
 use diem_types::{
-    contract_event::ContractEvent, ledger_info::LedgerInfoWithSignatures,
-    term_state::UnlockEvent,
+    contract_event::ContractEvent,
+    ledger_info::LedgerInfoWithSignatures,
+    term_state::{DisputeEvent, UnlockEvent},
 };
 use primitives::pos::{NodeId, PosBlockId};
 use std::sync::Arc;
@@ -115,6 +116,23 @@ impl<PoS: PosInterface> PosHandler<PoS> {
             }
         }
         unlock_nodes
+    }
+
+    pub fn get_disputed_nodes(
+        &self, h: &PosBlockId, parent_pos_ref: &PosBlockId,
+    ) -> Vec<NodeId> {
+        let dispute_event_key = DisputeEvent::event_key();
+        let mut disputed_nodes = Vec::new();
+        for event in self.pos.get_events(parent_pos_ref, h) {
+            if *event.key() == dispute_event_key {
+                let dispute_event =
+                    DisputeEvent::from_bytes(event.event_data())
+                        .expect("key checked");
+                disputed_nodes
+                    .push(H256::from_slice(dispute_event.node_id.as_ref()));
+            }
+        }
+        disputed_nodes
     }
 }
 

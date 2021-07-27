@@ -34,7 +34,7 @@ pub enum VoteReceptionResult {
     DuplicateVote,
     /// The very same author has already voted for another proposal in this
     /// round (equivocation).
-    EquivocateVote,
+    EquivocateVote((Vote, Vote)),
     /// This block has just been certified after adding the vote.
     NewQuorumCertificate(Arc<QuorumCert>),
     /// The vote completes a new TimeoutCertificate
@@ -107,7 +107,10 @@ impl PendingVotes {
                     previous_vote = previously_seen_vote
                 );
 
-                return VoteReceptionResult::EquivocateVote;
+                return VoteReceptionResult::EquivocateVote((
+                    vote.clone(),
+                    previously_seen_vote.clone(),
+                ));
             }
         }
 
