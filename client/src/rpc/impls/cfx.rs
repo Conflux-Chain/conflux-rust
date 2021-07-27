@@ -146,12 +146,11 @@ impl RpcImpl {
         )
     }
 
-    // FIXME: unify the param name for epoch number.
     fn code(
-        &self, address: RpcAddress, num: Option<EpochNumber>,
+        &self, address: RpcAddress, epoch_num: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
         self.check_address_network(address.network)?;
-        let epoch_num = num.unwrap_or(EpochNumber::LatestState);
+        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
             "RPC Request: cfx_getCode address={:?} epoch_num={:?}",
@@ -160,24 +159,19 @@ impl RpcImpl {
 
         let state_db = self
             .consensus
-            .get_state_db_by_epoch_number(epoch_num.clone().into(), "num")?;
+            .get_state_db_by_epoch_number(epoch_num, "num")?;
 
         let address = &address.hex_address;
 
-        let acc = invalid_params_check(
-            "address",
-            state_db.get_account(address)?.ok_or(format!(
-                "Account[{:?}] epoch_number[{:?}] does not exist",
-                address, epoch_num,
-            )),
-        )?;
-
-        Ok(Bytes::new(
-            match state_db.get_code(address, &acc.code_hash) {
-                Ok(Some(code)) => (*code.code).clone(),
+        let code = match state_db.get_account(address)? {
+            Some(acc) => match state_db.get_code(address, &acc.code_hash)? {
+                Some(code) => (*code.code).clone(),
                 _ => vec![],
             },
-        ))
+            None => vec![],
+        };
+
+        Ok(Bytes::new(code))
     }
 
     fn balance(
