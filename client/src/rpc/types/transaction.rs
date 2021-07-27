@@ -19,6 +19,8 @@ pub struct Transaction {
     pub hash: H256,
     pub nonce: U256,
     pub block_hash: Option<H256>,
+    pub epoch_number: Option<U64>,
+    pub block_number: Option<U64>,
     pub transaction_index: Option<U64>,
     pub from: RpcAddress,
     pub to: Option<RpcAddress>,
@@ -50,6 +52,8 @@ impl Transaction {
             hash: Default::default(),
             nonce: Default::default(),
             block_hash: Default::default(),
+            epoch_number: Default::default(),
+            block_number: Default::default(),
             transaction_index: Default::default(),
             from: RpcAddress::null(network)?,
             to: Default::default(),
@@ -77,6 +81,8 @@ impl Transaction {
         let mut status: Option<U64> = None;
         let mut block_hash = None;
         let mut transaction_index = None;
+        let mut epoch_number: Option<U64> = None;
+        let mut block_number: Option<U64> = None;
         match maybe_packed_or_executed {
             None => {}
             Some(PackedOrExecuted::Packed(tx_index)) => {
@@ -86,6 +92,8 @@ impl Transaction {
             Some(PackedOrExecuted::Executed(receipt)) => {
                 block_hash = Some(receipt.block_hash);
                 transaction_index = Some(receipt.index.into());
+                epoch_number = Some(receipt.epoch_number);
+                block_number = Some(receipt.block_number);
                 if let Some(ref address) = receipt.contract_created {
                     contract_created = Some(address.clone());
                 }
@@ -96,6 +104,8 @@ impl Transaction {
             hash: t.transaction.hash().into(),
             nonce: t.nonce.into(),
             block_hash,
+            epoch_number,
+            block_number,
             transaction_index,
             status,
             contract_created,

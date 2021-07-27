@@ -42,7 +42,9 @@ pub struct Receipt {
     /// Block hash.
     pub block_hash: H256,
     /// Epoch number where this transaction was in.
-    pub epoch_number: Option<U64>,
+    pub epoch_number: U64,
+    /// Block number where this transaction was in.
+    pub block_number: U64,
     /// Address of the sender.
     pub from: RpcAddress,
     /// Address of the receiver, null when it's a contract creation
@@ -141,7 +143,8 @@ impl Receipt {
             logs_bloom: log_bloom,
             state_root: maybe_state_root
                 .map_or_else(Default::default, Into::into),
-            epoch_number: epoch_number.map(U64::from),
+            epoch_number: epoch_number.map_or_else(Default::default, U64::from),
+            block_number: U64::from(block_number),
             tx_exec_error_msg,
             gas_covered_by_sponsor: gas_sponsor_paid,
             storage_covered_by_sponsor: storage_sponsor_paid,
