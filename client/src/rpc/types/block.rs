@@ -29,6 +29,7 @@ use std::{convert::TryInto, sync::Arc};
 
 use crate::rpc::types::{transaction::PackedOrExecuted, Receipt, Transaction};
 use cfx_bytes::Bytes;
+use primitives::pos::PosBlockId;
 
 #[derive(PartialEq, Debug)]
 pub enum BlockTransactions {
@@ -135,6 +136,8 @@ pub struct Block {
     pub size: Option<U256>,
     /// Custom field
     pub custom: Vec<Bytes>,
+    /// PoS reference.
+    pub pos_reference: Option<PosBlockId>,
 }
 
 impl Block {
@@ -300,6 +303,7 @@ impl Block {
             transactions,
             custom: b.block_header.custom().clone(),
             size: Some(b.size().into()),
+            pos_reference: b.block_header.pos_reference().clone(),
         })
     }
 

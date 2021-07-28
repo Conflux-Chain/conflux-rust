@@ -2,10 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+mod pos;
+
 /// Hold all top-level components for a type of client.
 /// This struct implement ClientShutdownTrait.
 pub struct ClientComponents<BlockGenT, Rest> {
     pub data_manager_weak_ptr: Weak<BlockDataManager>,
+    pub diem_handler: DiemHandle,
     pub blockgen: Option<Arc<BlockGenT>>,
     pub other_components: Rest,
 }
@@ -30,21 +33,34 @@ impl<BlockGenT: 'static + Stopable, Rest> ClientTrait
 {
     fn take_out_components_for_shutdown(
         &self,
-    ) -> (Weak<BlockDataManager>, Option<Arc<dyn Stopable>>) {
+    ) -> (
+        Weak<BlockDataManager>,
+        Arc<PowHandler>,
+        Option<Arc<dyn Stopable>>,
+    ) {
+        debug!("take_out_components_for_shutdown");
         let data_manager_weak_ptr = self.data_manager_weak_ptr.clone();
         let blockgen: Option<Arc<dyn Stopable>> = match self.blockgen.clone() {
             Some(blockgen) => Some(blockgen),
             None => None,
         };
 
-        (data_manager_weak_ptr, blockgen)
+        (
+            data_manager_weak_ptr,
+            self.diem_handler.pow_handler.clone(),
+            blockgen,
+        )
     }
 }
 
 pub trait ClientTrait {
     fn take_out_components_for_shutdown(
         &self,
-    ) -> (Weak<BlockDataManager>, Option<Arc<dyn Stopable>>);
+    ) -> (
+        Weak<BlockDataManager>,
+        Arc<PowHandler>,
+        Option<Arc<dyn Stopable>>,
+    );
 }
 
 pub mod client_methods {
@@ -69,13 +85,15 @@ pub mod client_methods {
 
     /// Returns whether the shutdown is considered clean.
     pub fn shutdown(this: Box<dyn ClientTrait>) -> bool {
-        let (ledger_db, maybe_blockgen) =
+        let (ledger_db, pow_handler, maybe_blockgen) =
             this.take_out_components_for_shutdown();
         drop(this);
         if let Some(blockgen) = maybe_blockgen {
             blockgen.stop();
             drop(blockgen);
         }
+        pow_handler.stop();
+        drop(pow_handler);
 
         // Make sure ledger_db is properly dropped, so rocksdb can be closed
         // cleanly
@@ -118,7 +136,7 @@ pub mod client_methods {
 }
 
 pub fn initialize_common_modules(
-    conf: &Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
+    conf: &mut Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     node_type: NodeType,
 ) -> Result<
     (
@@ -127,6 +145,7 @@ pub fn initialize_common_modules(
         HashMap<Address, U256>,
         Arc<BlockDataManager>,
         Arc<PowComputer>,
+        Arc<PosVerifier>,
         Arc<TransactionPool>,
         Arc<ConsensusGraph>,
         Arc<SynchronizationGraph>,
@@ -136,6 +155,7 @@ pub fn initialize_common_modules(
         Arc<Notifications>,
         PubSubClient,
         Runtime,
+        DiemHandle,
     ),
     String,
 >
@@ -215,6 +235,9 @@ pub fn initialize_common_modules(
         conf.raw_conf.chain_id,
     );
     debug!("Initialize genesis_block={:?}", genesis_block);
+    if conf.raw_conf.pos_genesis_pivot_decision.is_none() {
+        conf.raw_conf.pos_genesis_pivot_decision = Some(genesis_block.hash());
+    }
 
     let pow_config = conf.pow_config();
     let pow = Arc::new(PowComputer::new(pow_config.use_octopus()));
@@ -229,7 +252,98 @@ pub fn initialize_common_modules(
         pow.clone(),
     ));
 
-    let verification_config = conf.verification_config(machine.clone());
+    let network = {
+        let mut network = NetworkService::new(network_config.clone());
+        network.start().unwrap();
+        Arc::new(network)
+    };
+
+    // initialize pos
+    let pos_config_path = match conf.raw_conf.pos_config_path.as_ref() {
+        Some(path) => Some(PathBuf::from(path)),
+        None => None,
+    };
+    let mut pos_config =
+        NodeConfig::load(pos_config_path.expect("empty pos config path"))
+            .expect("Failed to load node config");
+    let own_node_hash =
+        keccak(network.net_key_pair().expect("Error node key").public());
+    let self_pos_public_key = network.pos_public_key();
+    // TODO(lpl): Keep it properly and allow not running pos.
+    let (self_pos_private_key, self_vrf_private_key) = network_config
+        .config_path
+        .clone()
+        .map(|ref p| {
+            let (sk, vrf_sk) = load_pos_private_key(Path::new(&p)).unwrap();
+            (ConfigKey::new(sk), vrf_sk.map(|key| ConfigKey::new(key)))
+        })
+        .unwrap();
+    let self_vrf_public_key =
+        self_vrf_private_key.as_ref().unwrap().public_key();
+    pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
+        author: from_consensus_public_key(
+            self_pos_public_key.as_ref().unwrap(),
+            &self_vrf_public_key,
+        ),
+        consensus_key: Some(self_pos_private_key.clone()),
+        execution_key: Some(self_pos_private_key),
+        waypoint: Some(pos_config.base.waypoint.waypoint()),
+    });
+    pos_config.consensus.safety_rules.vrf_private_key = self_vrf_private_key;
+    pos_config.consensus.safety_rules.export_consensus_key = true;
+    pos_config.consensus.safety_rules.vrf_proposal_threshold =
+        conf.raw_conf.vrf_proposal_threshold;
+
+    /*
+    let pos_start_epoch = 0;
+    let start_epoch_id = data_man
+        .executed_epoch_set_hashes_from_db(pos_start_epoch)
+        .expect("pos start epoch exists")
+        .last()
+        .cloned()
+        .expect("epoch not empty");
+    let initial_state_with_pos = data_man
+        .storage_manager
+        .get_state_no_commit(
+            data_man
+                .get_state_readonly_index(&start_epoch_id)
+                .expect("pos start epoch executed"),
+            false, /* try_open */
+        )
+        .unwrap()
+        .unwrap();
+    let initial_pos_nodes = vec![];
+     */
+    let initial_nodes = read_initial_nodes_from_file(
+        conf.raw_conf.pos_initial_nodes_path.as_str(),
+    )?
+    .into_iter()
+    .map(|(bls_key, vrf_key, voting_power)| {
+        (NodeID::new(bls_key, vrf_key), voting_power)
+    })
+    .collect();
+
+    let diem_handler = start_pos_consensus(
+        &pos_config,
+        network.clone(),
+        own_node_hash,
+        conf.protocol_config(),
+        Some((self_pos_public_key.unwrap(), self_vrf_public_key)),
+        initial_nodes,
+    );
+    debug!("PoS initialized");
+    let pos_connection = PosConnection::new(
+        diem_handler.diem_db.clone() as Arc<dyn DBReaderForPoW>,
+        conf.pos_config(),
+    );
+    // FIXME(lpl): Set CIP height.
+    let pos_verifier = Arc::new(PosVerifier::new(
+        pos_connection,
+        conf.raw_conf.pos_reference_enable_height,
+    ));
+
+    let verification_config =
+        conf.verification_config(machine.clone(), pos_verifier.clone());
     let txpool = Arc::new(TransactionPool::new(
         conf.txpool_config(),
         verification_config.clone(),
@@ -249,8 +363,9 @@ pub fn initialize_common_modules(
         pow.clone(),
         notifications.clone(),
         conf.execution_config(),
-        conf.verification_config(machine.clone()),
+        verification_config.clone(),
         node_type,
+        pos_verifier.clone(),
     ));
 
     let sync_config = conf.sync_graph_config();
@@ -263,14 +378,9 @@ pub fn initialize_common_modules(
         sync_config,
         notifications.clone(),
         machine.clone(),
+        pos_verifier.clone(),
+        diem_handler.pow_handler.clone(),
     ));
-
-    let network = {
-        let mut network = NetworkService::new(network_config);
-        network.start().unwrap();
-        Arc::new(network)
-    };
-
     let refresh_time =
         Duration::from_millis(conf.raw_conf.account_provider_refresh_time_ms);
 
@@ -304,6 +414,7 @@ pub fn initialize_common_modules(
         genesis_accounts,
         data_man,
         pow,
+        pos_verifier,
         txpool,
         consensus,
         sync_graph,
@@ -313,11 +424,12 @@ pub fn initialize_common_modules(
         notifications,
         pubsub,
         runtime,
+        diem_handler,
     ))
 }
 
 pub fn initialize_not_light_node_modules(
-    conf: &Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
+    conf: &mut Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     node_type: NodeType,
 ) -> Result<
     (
@@ -334,6 +446,7 @@ pub fn initialize_not_light_node_modules(
         Option<WSServer>,
         Option<WSServer>,
         Runtime,
+        DiemHandle,
     ),
     String,
 >
@@ -344,6 +457,7 @@ pub fn initialize_not_light_node_modules(
         genesis_accounts,
         data_man,
         pow,
+        pos_verifier,
         txpool,
         consensus,
         sync_graph,
@@ -353,7 +467,8 @@ pub fn initialize_not_light_node_modules(
         _notifications,
         pubsub,
         runtime,
-    ) = initialize_common_modules(&conf, exit.clone(), node_type)?;
+        diem_handler,
+    ) = initialize_common_modules(conf, exit.clone(), node_type)?;
 
     let light_provider = Arc::new(LightProvider::new(
         consensus.clone(),
@@ -373,6 +488,7 @@ pub fn initialize_not_light_node_modules(
         conf.state_sync_config(),
         SyncPhaseType::CatchUpRecoverBlockHeaderFromDB,
         light_provider,
+        consensus.clone(),
     ));
     sync.register().unwrap();
 
@@ -441,6 +557,7 @@ pub fn initialize_not_light_node_modules(
         conf.pow_config(),
         pow.clone(),
         maybe_author.clone().unwrap_or_default(),
+        pos_verifier,
     ));
     if conf.is_dev_mode() {
         // If `dev_block_interval_ms` is None, blocks are generated after
@@ -555,6 +672,7 @@ pub fn initialize_not_light_node_modules(
         debug_rpc_ws_server,
         rpc_ws_server,
         runtime,
+        diem_handler,
     ))
 }
 
@@ -724,10 +842,12 @@ pub mod delegate_convert {
     */
 }
 
-pub use crate::configuration::Configuration;
 use crate::{
     accounts::{account_provider, keys_path},
-    configuration::parse_config_address_string,
+    common::pos::start_pos_consensus,
+    configuration::{
+        parse_config_address_string, read_initial_nodes_from_file,
+    },
     rpc::{
         extractor::RpcExtractor,
         impls::{
@@ -738,12 +858,15 @@ use crate::{
     },
     GENESIS_VERSION,
 };
+pub use crate::{common::pos::DiemHandle, configuration::Configuration};
 use blockgen::BlockGenerator;
 use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use cfxcore::{
     block_data_manager::BlockDataManager,
+    consensus::pos_handler::{PosConnection, PosVerifier},
     machine::{new_machine_with_builtin, Machine},
+    pos::pow_handler::PowHandler,
     pow::PowComputer,
     spec::genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
     statistics::Statistics,
@@ -755,21 +878,31 @@ use cfxcore::{
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::public_to_address;
+use diem_config::{
+    config::{NodeConfig, SafetyRulesTestConfig},
+    keys::ConfigKey,
+};
+use diem_types::{
+    account_address::from_consensus_public_key, term_state::NodeID,
+};
 use jsonrpc_http_server::Server as HttpServer;
 use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WSServer;
+use keccak_hash::keccak;
 use keylib::KeyPair;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
-use network::NetworkService;
+use network::{service::load_pos_private_key, NetworkService};
 use parking_lot::{Condvar, Mutex};
 use runtime::Runtime;
 use secret_store::{SecretStore, SharedSecretStore};
 use std::{
     collections::HashMap,
+    path::{Path, PathBuf},
     str::FromStr,
     sync::{Arc, Weak},
     thread,
     time::{Duration, Instant},
 };
+use storage_interface::DBReaderForPoW;
 use threadpool::ThreadPool;
 use txgen::{DirectTransactionGenerator, TransactionGenerator};

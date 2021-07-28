@@ -2,12 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::DynamicCapability,
-    state::{SnapshotChunkSync, Status},
-    synchronization_protocol_handler::SynchronizationProtocolHandler,
-    synchronization_state::SynchronizationState,
-    SharedSynchronizationGraph,
+use crate::{
+    pos::pow_handler::PowHandler,
+    sync::{
+        message::DynamicCapability,
+        state::{SnapshotChunkSync, Status},
+        synchronization_protocol_handler::SynchronizationProtocolHandler,
+        synchronization_state::SynchronizationState,
+        SharedSynchronizationGraph,
+    },
+    ConsensusGraph,
 };
 use cfx_internal_common::StateAvailabilityBoundary;
 use cfx_parameters::sync::CATCH_UP_EPOCH_LAG_THRESHOLD;
@@ -109,7 +113,7 @@ impl SynchronizationPhaseManager {
         initial_phase_type: SyncPhaseType,
         sync_state: Arc<SynchronizationState>,
         sync_graph: SharedSynchronizationGraph,
-        state_sync: Arc<SnapshotChunkSync>,
+        state_sync: Arc<SnapshotChunkSync>, consensus: Arc<ConsensusGraph>,
     ) -> Self
     {
         let sync_manager = SynchronizationPhaseManager {
@@ -136,7 +140,10 @@ impl SynchronizationPhaseManager {
             sync_state.clone(),
             sync_graph.clone(),
         )));
-        sync_manager.register_phase(Arc::new(NormalSyncPhase::new()));
+        sync_manager.register_phase(Arc::new(NormalSyncPhase::new(
+            sync_graph.pow_handler.clone(),
+            consensus,
+        )));
 
         sync_manager
     }
@@ -537,10 +544,20 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
     }
 }
 
-pub struct NormalSyncPhase {}
+pub struct NormalSyncPhase {
+    pow_handler: Arc<PowHandler>,
+    consensus: Arc<ConsensusGraph>,
+}
 
 impl NormalSyncPhase {
-    pub fn new() -> Self { NormalSyncPhase {} }
+    pub fn new(
+        pow_handler: Arc<PowHandler>, consensus: Arc<ConsensusGraph>,
+    ) -> Self {
+        NormalSyncPhase {
+            pow_handler,
+            consensus,
+        }
+    }
 }
 
 impl SynchronizationPhaseTrait for NormalSyncPhase {
@@ -563,6 +580,7 @@ impl SynchronizationPhaseTrait for NormalSyncPhase {
     )
     {
         info!("start phase {:?}", self.name());
+        self.pow_handler.initialize(self.consensus.clone());
         sync_handler.request_missing_terminals(io);
     }
 }

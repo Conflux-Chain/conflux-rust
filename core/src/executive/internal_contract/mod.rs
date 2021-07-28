@@ -5,12 +5,12 @@
 mod activate_at;
 mod contracts;
 pub mod function;
-mod impls;
+pub mod impls;
 mod internal_context;
 
 pub use self::{
     contracts::InternalContractMap,
-    impls::{get_reentrancy_allowance, suicide},
+    impls::{get_reentrancy_allowance, pos::IndexStatus, suicide},
     internal_context::InternalRefContext,
 };
 pub use solidity_abi::ABIDecodeError;
@@ -110,7 +110,6 @@ pub trait SolidityEventTrait: Send + Sync {
     fn log(
         indexed: &Self::Indexed, non_indexed: &Self::NonIndexed,
         param: &ActionParams, context: &mut InternalRefContext,
-        _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
         let mut topics = vec![Self::event_sig()];

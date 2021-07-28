@@ -22,7 +22,12 @@ use cfx_parameters::{
 use cfx_state::{state_trait::*, CleanupMode};
 use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{StorageManager, StorageManagerTrait};
-use cfx_types::{address_util::AddressUtil, Address, U256};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use diem_crypto::{
+    bls::{BLSPrivateKey, BLSPublicKey},
+    ec_vrf::EcVrfPublicKey,
+    PrivateKey, VRFPublicKey, ValidCryptoMaterial,
+};
 use keylib::KeyPair;
 use primitives::{
     storage::STORAGE_LAYOUT_REGULAR_V0, Action, Block, BlockHeaderBuilder,
@@ -30,6 +35,7 @@ use primitives::{
 };
 use rustc_hex::FromHex;
 use secret_store::SecretStore;
+use solidity_abi::ABIEncodable;
 use std::{
     collections::HashMap,
     fs::File,
@@ -435,6 +441,69 @@ pub fn genesis_block(
         serde_json::to_string(&debug_record).unwrap()
     );
     genesis
+}
+
+fn register_transaction(
+    bls_priv_key: BLSPrivateKey, vrf_pub_key: EcVrfPublicKey, power: u64,
+    genesis_chain_id: u32,
+)
+{
+    /// TODO: test this function with new internal contracts.
+    use bls_signatures::{
+        sigma_protocol, PrivateKey as BlsPrivKey, PublicKey as BlsPubKey,
+        Serialize,
+    };
+    use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
+    use rand08::{rngs::StdRng, CryptoRng, RngCore, SeedableRng};
+    use solidity_abi::ABIEncodable;
+    use tiny_keccak::{Hasher, Keccak};
+
+    let bls_pub_key = bls_priv_key.public_key();
+    let (commit, answer) = sigma_protocol::prove(
+        bls_priv_key.raw_key(),
+        &mut StdRng::seed_from_u64(0),
+    );
+
+    let mut encoded_commit = Vec::<u8>::new();
+    BlsPubKey::from(commit)
+        .write_bytes(&mut encoded_commit)
+        .expect("write to Vec<u8> never fails");
+
+    let mut encoded_answer = Vec::<u8>::new();
+    BlsPrivKey::from(answer)
+        .write_bytes(&mut encoded_answer)
+        .expect("write to Vec<u8> never fails");
+
+    let encoded_bls_pub_key = bls_pub_key.to_bytes();
+
+    let encoded_vrf_pub_key = vrf_pub_key.to_bytes();
+
+    let mut hasher = Keccak::v256();
+    hasher.update(encoded_bls_pub_key.as_slice());
+    hasher.update(encoded_vrf_pub_key.as_slice());
+    let mut computed_identifier = H256::default();
+    hasher.finalize(computed_identifier.as_bytes_mut());
+
+    let params = (
+        computed_identifier,
+        power,
+        encoded_bls_pub_key,
+        encoded_vrf_pub_key,
+        [encoded_commit, encoded_answer],
+    );
+
+    let mut call_data: Vec<u8> = "e335b451".from_hex().unwrap();
+    call_data.extend_from_slice(&params.abi_encode());
+
+    let mut tx = Transaction::default();
+    tx.nonce = 1.into();
+    tx.data = call_data;
+    tx.value = U256::zero();
+    tx.action = Action::Call(*POS_REGISTER_CONTRACT_ADDRESS);
+    tx.chain_id = genesis_chain_id;
+    tx.gas = 200000.into();
+    tx.gas_price = 1.into();
+    tx.storage_limit = 16000;
 }
 
 fn execute_genesis_transaction(

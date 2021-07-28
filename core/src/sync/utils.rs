@@ -3,10 +3,14 @@ use crate::{
     cache_config::CacheConfig,
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
+        pos_handler::{
+            FakeDiemDB, PosConfiguration, PosConnection, PosVerifier,
+        },
         ConsensusConfig, ConsensusInnerConfig,
     },
     db::NUM_COLUMNS,
     machine::new_machine_with_builtin,
+    pos::pow_handler::PowHandler,
     pow::{self, PowComputer, ProofOfWorkConfig},
     spec::genesis::genesis_block,
     statistics::Statistics,
@@ -28,7 +32,9 @@ use core::str::FromStr;
 use parking_lot::Mutex;
 use primitives::{Block, BlockHeaderBuilder};
 use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
+use storage_interface::DBReaderForPoW;
 use threadpool::ThreadPool;
+use tokio::runtime;
 
 pub fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: U256,
@@ -163,12 +169,19 @@ pub fn initialize_synchronization_graph_with_data_manager(
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
 {
     let machine = Arc::new(new_machine_with_builtin(Default::default(), vm));
+    let pos_connection = PosConnection::new(
+        Arc::new(FakeDiemDB {}) as Arc<dyn DBReaderForPoW>,
+        PosConfiguration {},
+    );
+    let pos_verifier = Arc::new(PosVerifier::new(pos_connection, u64::MAX));
+
     let verification_config = VerificationConfig::new(
         true, /* test_mode */
         REFEREE_DEFAULT_BOUND,
         MAX_BLOCK_SIZE_IN_BYTES,
         TRANSACTION_DEFAULT_EPOCH_BOUND,
         machine.clone(),
+        pos_verifier.clone(),
     );
 
     let txpool = Arc::new(TransactionPool::new(
@@ -206,6 +219,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
                 era_epoch_count,
                 enable_optimistic_execution: false,
                 enable_state_expose: false,
+                pos_pivot_decision_defer_epoch_count: 50,
                 debug_dump_dir_invalid_state_root: None,
                 debug_invalid_state_root_epoch: None,
             },
@@ -229,6 +243,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         },
         verification_config.clone(),
         NodeType::Archive,
+        pos_verifier.clone(),
     ));
 
     let sync = Arc::new(SynchronizationGraph::new(
@@ -239,6 +254,14 @@ pub fn initialize_synchronization_graph_with_data_manager(
         sync_config,
         notifications,
         machine,
+        pos_verifier.clone(),
+        Arc::new(PowHandler::new(
+            runtime::Builder::new_multi_thread()
+                .build()
+                .expect("Failed to create Tokio runtime!")
+                .handle()
+                .clone(),
+        )),
     ));
 
     (sync, consensus)

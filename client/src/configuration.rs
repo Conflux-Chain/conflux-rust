@@ -24,24 +24,29 @@ use cfxcore::{
     },
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
+        pos_handler::{PosConfiguration, PosVerifier},
         ConsensusConfig, ConsensusInnerConfig,
     },
     consensus_internal_parameters::*,
     consensus_parameters::*,
     light_protocol::LightNodeConfiguration,
     machine::Machine,
+    pos::pow_handler::POS_TERM_EPOCHS,
     spec::CommonParams,
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
     transaction_pool::TxPoolConfig,
     NodeType,
 };
+use diem_crypto::ValidCryptoMaterialStringExt;
+use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 use lazy_static::*;
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
 use parking_lot::RwLock;
 use rand::Rng;
 use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
+use toml::Value;
 use txgen::TransactionGeneratorConfig;
 
 lazy_static! {
@@ -286,7 +291,13 @@ build_config! {
         // TreeGraph Section.
         (candidate_pivot_waiting_timeout_ms, (u64), 10_000)
         (is_consortium, (bool), false)
-        (tg_config_path, (Option<String>), Some("./tg_config/tg_config.toml".to_string()))
+        (pos_config_path, (Option<String>), Some("./pos_config/pos_config.toml".to_string()))
+        (pos_genesis_pivot_decision, (Option<H256>), None)
+        (vrf_proposal_threshold, (U256), U256::MAX)
+        // Deferred epoch count before a confirmed epoch.
+        (pos_pivot_decision_defer_epoch_count, (u64), 50)
+        (pos_reference_enable_height, (u64), 0)
+        (pos_initial_nodes_path, (String), "./pos_config/initial_nodes.toml".to_string())
 
         // Light node section
         (ln_epoch_request_batch_size, (Option<usize>), None)
@@ -512,6 +523,9 @@ impl Configuration {
         } else {
             self.raw_conf.enable_optimistic_execution
         };
+        // FIXME(lpl): This is needed to return a valid cross-checkpoint pivot
+        // decision for now.
+        assert_eq!(self.raw_conf.era_epoch_count % POS_TERM_EPOCHS, 0);
         let mut conf = ConsensusConfig {
             chain_id: self.chain_id_params(),
             inner_conf: ConsensusInnerConfig {
@@ -526,7 +540,7 @@ impl Configuration {
                 era_epoch_count: self.raw_conf.era_epoch_count,
                 enable_optimistic_execution,
                 enable_state_expose: self.raw_conf.enable_state_expose,
-
+                pos_pivot_decision_defer_epoch_count: self.raw_conf.pos_pivot_decision_defer_epoch_count,
                 debug_dump_dir_invalid_state_root: if self
                     .raw_conf
                     .debug_invalid_state_root
@@ -602,7 +616,7 @@ impl Configuration {
     }
 
     pub fn verification_config(
-        &self, machine: Arc<Machine>,
+        &self, machine: Arc<Machine>, pos_verifier: Arc<PosVerifier>,
     ) -> VerificationConfig {
         VerificationConfig::new(
             self.is_test_mode(),
@@ -610,6 +624,7 @@ impl Configuration {
             self.raw_conf.max_block_size_in_bytes,
             self.raw_conf.transaction_epoch_bound,
             machine,
+            pos_verifier,
         )
     }
 
@@ -760,6 +775,10 @@ impl Configuration {
             } else {
                 self.raw_conf.dev_allow_phase_change_without_peer
             },
+            pos_genesis_pivot_decision: self
+                .raw_conf
+                .pos_genesis_pivot_decision
+                .expect("set to genesis if none"),
         }
     }
 
@@ -1030,6 +1049,8 @@ impl Configuration {
         }
     }
 
+    pub fn pos_config(&self) -> PosConfiguration { PosConfiguration {} }
+
     pub fn common_params(&self) -> CommonParams {
         let mut params = CommonParams::default();
 
@@ -1159,6 +1180,69 @@ pub fn parse_config_address_string(
             base32_err={:?}
             hex_err={:?}",
                 base32_err, hex_err))
+}
+
+pub fn save_initial_nodes_to_file(
+    path: &str,
+    public_keys: Vec<(ConsensusPublicKey, ConsensusVRFPublicKey, u64)>,
+)
+{
+    let nodes = Value::Array(
+        public_keys
+            .into_iter()
+            .map(|(bls_key, vrf_key, voting_power)| {
+                let mut map = BTreeMap::new();
+                map.insert(
+                    "bls_key".to_string(),
+                    Value::String(bls_key.to_encoded_string().unwrap()),
+                );
+                map.insert(
+                    "vrf_key".to_string(),
+                    Value::String(vrf_key.to_encoded_string().unwrap()),
+                );
+                map.insert(
+                    "voting_power".to_string(),
+                    Value::Integer(voting_power as i64),
+                );
+                Value::Table(map)
+            })
+            .collect(),
+    );
+    let mut conf = BTreeMap::new();
+    conf.insert("initial_nodes".to_string(), nodes);
+    fs::write(path, toml::to_string(&Value::Table(conf)).unwrap());
+}
+
+pub fn read_initial_nodes_from_file(
+    path: &str,
+) -> Result<Vec<(ConsensusPublicKey, ConsensusVRFPublicKey, u64)>, String> {
+    let mut file = File::open(path)
+        .map_err(|e| format!("failed to open initial nodes file: {:?}", e))?;
+
+    let mut nodes_str = String::new();
+    file.read_to_string(&mut nodes_str)
+        .map_err(|e| format!("failed to read initial nodes file: {:?}", e))?;
+
+    let config = nodes_str
+        .parse::<Value>()
+        .map_err(|e| format!("failed to parse initial nodes file: {:?}", e))?;
+    let mut nodes = Vec::new();
+    for map in config["initial_nodes"]
+        .as_array()
+        .ok_or(format!("failed to parse initial nodes file: Not an array"))?
+    {
+        let bls_key = ConsensusPublicKey::from_encoded_string(
+            map["bls_key"].as_str().unwrap(),
+        )
+        .map_err(|e| format!("wrong BLS key, err={:?}", e))?;
+        let vrf_key = ConsensusVRFPublicKey::from_encoded_string(
+            map["vrf_key"].as_str().unwrap(),
+        )
+        .map_err(|e| format!("wrong VRF key, err={:?}", e))?;
+        let voting_power = map["voting_power"].as_integer().unwrap() as u64;
+        nodes.push((bls_key, vrf_key, voting_power));
+    }
+    Ok(nodes)
 }
 
 #[cfg(test)]

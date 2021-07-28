@@ -7,7 +7,7 @@ mod executed;
 mod executive;
 #[cfg(test)]
 mod executive_tests;
-mod internal_contract;
+pub mod internal_contract;
 mod vm_exec;
 
 trait CollateralCheckResultToVmResult {
@@ -35,7 +35,7 @@ pub use self::{
         TransactOptions,
     },
     internal_contract::{
-        function, suicide, ABIDecodeError, InternalContractMap,
+        function, suicide, ABIDecodeError, IndexStatus, InternalContractMap,
         InternalContractTrait, InternalRefContext, SolidityFunctionTrait,
     },
 };

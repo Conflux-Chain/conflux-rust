@@ -48,6 +48,7 @@ use cfx_internal_common::{
 };
 use db_gc_manager::GCProgress;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
+use primitives::pos::PosBlockId;
 use std::{hash::Hash, path::Path, time::Duration};
 
 lazy_static! {
@@ -589,6 +590,16 @@ impl BlockDataManager {
     pub fn block_height_by_hash(&self, hash: &H256) -> Option<u64> {
         let result = self.block_header_by_hash(hash)?;
         Some(result.height())
+    }
+
+    /// Return `None` if the header does not exist.
+    /// Return `Some(None)` if the header exist but it does not have a PoS
+    /// reference field.
+    pub fn pos_reference_by_hash(
+        &self, hash: &H256,
+    ) -> Option<Option<PosBlockId>> {
+        self.block_header_by_hash(hash)
+            .map(|header| header.pos_reference().clone())
     }
 
     pub fn compact_block_by_hash(&self, hash: &H256) -> Option<CompactBlock> {

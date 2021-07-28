@@ -14,6 +14,7 @@ use crate::{
 use cfx_types::H256;
 use network::service::ProtocolVersion;
 use primitives::{MerkleHash, StateRoot};
+use rlp::Encodable;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 #[derive(RlpDecodable, RlpEncodable, Default)]

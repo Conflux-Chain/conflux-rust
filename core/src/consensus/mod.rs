@@ -7,6 +7,7 @@ pub mod consensus_inner;
 pub mod consensus_trait;
 pub mod debug_recompute;
 mod pastset_cache;
+pub mod pos_handler;
 
 pub use crate::consensus::{
     consensus_inner::{ConsensusGraphInner, ConsensusInnerConfig},
@@ -22,8 +23,11 @@ use crate::{
     block_data_manager::{
         BlockDataManager, BlockExecutionResultWithEpoch, DataVersionTuple,
     },
-    consensus::consensus_inner::{
-        consensus_executor::ConsensusExecutionConfiguration, StateBlameInfo,
+    consensus::{
+        consensus_inner::{
+            consensus_executor::ConsensusExecutionConfiguration, StateBlameInfo,
+        },
+        pos_handler::PosVerifier,
     },
     executive::ExecutionOutcome,
     pow::{PowComputer, ProofOfWorkConfig},
@@ -65,6 +69,7 @@ use primitives::{
     epoch::BlockHashOrEpochNumber,
     filter::{FilterError, LogFilter},
     log_entry::LocalizedLogEntry,
+    pos::PosBlockId,
     receipt::Receipt,
     EpochId, EpochNumber, SignedTransaction, TransactionIndex,
 };
@@ -230,12 +235,14 @@ impl ConsensusGraph {
         notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, node_type: NodeType,
+        pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         let inner =
             Arc::new(RwLock::new(ConsensusGraphInner::with_era_genesis(
                 pow_config,
                 pow.clone(),
+                pos_verifier.clone(),
                 data_man.clone(),
                 conf.inner_conf.clone(),
                 era_genesis_block_hash,
@@ -248,6 +255,7 @@ impl ConsensusGraph {
             execution_conf,
             verification_config,
             conf.bench_mode,
+            pos_verifier.clone(),
         );
         let confirmation_meter = ConfirmationMeter::new();
 
@@ -265,6 +273,7 @@ impl ConsensusGraph {
                 statistics,
                 notifications,
                 node_type,
+                pos_verifier,
             ),
             confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),
@@ -291,6 +300,7 @@ impl ConsensusGraph {
         notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_conf: VerificationConfig, node_type: NodeType,
+        pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
@@ -308,6 +318,7 @@ impl ConsensusGraph {
             execution_conf,
             verification_conf,
             node_type,
+            pos_verifier,
         )
     }
 
@@ -335,6 +346,7 @@ impl ConsensusGraph {
     pub fn check_mining_adaptive_block(
         &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
         referees: &Vec<H256>, difficulty: &U256,
+        pos_reference: Option<PosBlockId>,
     ) -> bool
     {
         let parent_index =
@@ -355,7 +367,68 @@ impl ConsensusGraph {
             parent_index,
             referee_indices,
             *difficulty,
+            pos_reference,
         )
+    }
+
+    /// After considering the latest `pos_reference`, `parent_hash` may become
+    /// an invalid choice, so this function tries to update the parent and
+    /// referee choices with `pos_reference` provided.
+    pub fn choose_correct_parent(
+        &self, parent_hash: &mut H256, referees: &mut Vec<H256>,
+        blame_info: &mut StateBlameInfo, pos_reference: Option<PosBlockId>,
+    )
+    {
+        let correct_parent_hash = {
+            // recompute `blame_info` needs locking `self.inner`, so we limit
+            // the lock scope here.
+            let mut inner = self.inner.write();
+            referees.retain(|h| inner.hash_to_arena_indices.contains_key(h));
+            let parent_index =
+                *inner.hash_to_arena_indices.get(parent_hash).expect(
+                    "parent_hash is the pivot chain tip,\
+                     so should still exist in ConsensusInner",
+                );
+            let referee_indices: Vec<_> = referees
+                .iter()
+                .map(|h| {
+                    *inner
+                        .hash_to_arena_indices
+                        .get(h)
+                        .expect("Checked by the caller")
+                })
+                .collect();
+            let correct_parent = inner.choose_correct_parent(
+                parent_index,
+                referee_indices,
+                pos_reference,
+            );
+            inner.arena[correct_parent].hash
+        };
+
+        if correct_parent_hash != *parent_hash {
+            debug!(
+                "Change parent from {:?} to {:?}",
+                parent_hash, correct_parent_hash
+            );
+
+            // correct_parent may be among referees, so check and remove it.
+            referees.retain(|i| *i != correct_parent_hash);
+
+            // Old parent is a valid block terminal to refer to.
+            if referees.len() < self.config.referee_bound {
+                referees.push(*parent_hash);
+            }
+
+            // correct_parent may not be on the pivot chain, so recompute
+            // blame_info if needed.
+            *blame_info = self
+                .force_compute_blame_and_deferred_state_for_generation(
+                    parent_hash,
+                )
+                .expect("blame info computation error");
+            *parent_hash = correct_parent_hash;
+        }
     }
 
     /// Convert EpochNumber to height based on the current ConsensusGraph
@@ -1770,6 +1843,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
         let new_consensus_inner = ConsensusGraphInner::with_era_genesis(
             old_consensus_inner.pow_config.clone(),
             old_consensus_inner.pow.clone(),
+            old_consensus_inner.pos_verifier.clone(),
             self.data_man.clone(),
             old_consensus_inner.inner_conf.clone(),
             &cur_era_genesis_hash,
