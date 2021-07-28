@@ -183,6 +183,8 @@ class TxRelayTest(ConfluxTestFramework):
         node0_tx["blockHash"] = None
         node0_tx["transactionIndex"] = None
         node0_tx["status"] = None
+        node0_tx["blockNumber"] = None
+        node0_tx["epochNumber"] = None
 
         assert_equal(light_tx, node0_tx)
 

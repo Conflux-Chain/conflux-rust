@@ -416,6 +416,8 @@ class LightRPCTest(ConfluxTestFramework):
             tx['blockHash'] = None
             tx['status'] = None
             tx['transactionIndex'] = None
+            tx['blockNumber'] = None
+            tx['epochNumber'] = None
 
         assert_equal(light_block, block)
 
