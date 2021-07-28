@@ -264,10 +264,10 @@ def wait_until(predicate,
 # Node functions
 ################
 
-def initialize_tg_config(dirname, nodes, genesis_nodes):
+def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id):
     tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/pos-genesis-tool")
     check_call([tg_config_gen, "random", "--num-validator={}".format(nodes),
-                "--num-genesis-validator={}".format(genesis_nodes)], cwd=dirname)
+                "--num-genesis-validator={}".format(genesis_nodes), "--chain-id={}".format(chain_id)], cwd=dirname)
     waypoint_path = os.path.join(dirname, 'waypoint_config')
     genesis_path = os.path.join(dirname, 'genesis_file')
     initial_nodes_path = os.path.join(dirname, 'initial_nodes.toml')

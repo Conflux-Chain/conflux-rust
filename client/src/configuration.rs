@@ -44,6 +44,7 @@ use lazy_static::*;
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
 use parking_lot::RwLock;
+use primitives::{SignedTransaction, Transaction};
 use rand::Rng;
 use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
 use toml::Value;
@@ -1179,15 +1180,20 @@ pub fn parse_config_address_string(
 
 pub fn save_initial_nodes_to_file(
     path: &str,
-    public_keys: Vec<(ConsensusPublicKey, ConsensusVRFPublicKey, u64)>,
-    initial_nodes_count: usize,
+    public_keys: Vec<(
+        ConsensusPublicKey,
+        ConsensusVRFPublicKey,
+        u64,
+        Transaction,
+    )>,
+    num_genesis_validator: usize,
 )
 {
     let nodes = Value::Array(
         public_keys
             .into_iter()
-            .take(initial_nodes_count)
-            .map(|(bls_key, vrf_key, voting_power)| {
+            .take(num_genesis_validator)
+            .map(|(bls_key, vrf_key, voting_power, tx)| {
                 let mut map = BTreeMap::new();
                 map.insert(
                     "bls_key".to_string(),
@@ -1201,6 +1207,10 @@ pub fn save_initial_nodes_to_file(
                     "voting_power".to_string(),
                     Value::Integer(voting_power as i64),
                 );
+                map.insert(
+                    "register_tx".to_string(),
+                    Value::String(serde_json::to_string(&tx).unwrap()),
+                );
                 Value::Table(map)
             })
             .collect(),
@@ -1212,7 +1222,10 @@ pub fn save_initial_nodes_to_file(
 
 pub fn read_initial_nodes_from_file(
     path: &str,
-) -> Result<Vec<(ConsensusPublicKey, ConsensusVRFPublicKey, u64)>, String> {
+) -> Result<
+    Vec<(ConsensusPublicKey, ConsensusVRFPublicKey, u64, Transaction)>,
+    String,
+> {
     let mut file = File::open(path)
         .map_err(|e| format!("failed to open initial nodes file: {:?}", e))?;
 
@@ -1237,7 +1250,9 @@ pub fn read_initial_nodes_from_file(
         )
         .map_err(|e| format!("wrong VRF key, err={:?}", e))?;
         let voting_power = map["voting_power"].as_integer().unwrap() as u64;
-        nodes.push((bls_key, vrf_key, voting_power));
+        let tx =
+            serde_json::from_str(map["register_tx"].as_str().unwrap()).unwrap();
+        nodes.push((bls_key, vrf_key, voting_power, tx));
     }
     Ok(nodes)
 }

@@ -52,7 +52,7 @@ metrics = { path = "../util/metrics" }
 network = { path = "../network" }
 num = "0.2"
 num-traits = { version = "0.2.8", default-features = false }
-parity-crypto = "0.4.0"
+parity-crypto = "0.9.0"
 parking_lot = "0.11"
 primal = "0.2.3"
 primitives = { path = "../primitives" }
@@ -90,7 +90,7 @@ unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git",
 strum = "0.20"
 strum_macros = "0.20"
 smart-default = "0.6.0"
-bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", branch = "temp_fast_decode"}
+bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", branch = "test"}
 tiny-keccak = {version = "2.0",  features = ["keccak"]}
 bcs = "0.1.2"
 async-trait = "0.1"

@@ -32,6 +32,7 @@ use executor::{db_bootstrapper::generate_waypoint, vm::FakeVM};
 use log::*;
 use move_core_types::language_storage::TypeTag;
 
+use cfxcore::spec::genesis::register_transaction;
 use rand::{rngs::StdRng, SeedableRng};
 use rustc_hex::FromHexError;
 use serde::Deserialize;
@@ -49,13 +50,14 @@ use tempdir::TempDir;
 
 const USAGE: &str = r#"
 Usage:
-    tgconfig random [--num-validator=<nv> --num-genesis-validator=<ng>]
+    tgconfig random [--num-validator=<nv> --num-genesis-validator=<ng> --chain-id=<id>]
     tgconfig frompub <pkfile>
 
 Options:
     -h, --help              Display this message and exit.
     --num-validator=<nv>    The number of validators.
     --num-genesis-validator=<ng>    The number of validators included in the genesis.
+    --chain-id=<id>         The chain id of the PoW chain.
 
 Commands:
     random                  Generate random key pairs for validators.
@@ -69,6 +71,7 @@ struct Args {
     arg_pkfile: String,
     flag_num_validator: usize,
     flag_num_genesis_validator: usize,
+    flag_chain_id: u32,
 }
 
 #[derive(Debug)]
@@ -215,6 +218,8 @@ where
             args.flag_num_genesis_validator
         };
 
+        let chain_id = args.flag_chain_id;
+
         let pivate_key_path = PathBuf::from("./private_key");
         let mut private_key_file = File::create(&pivate_key_path)?;
         let public_key_path = PathBuf::from("./public_key");
@@ -224,17 +229,28 @@ where
 
         for _i in 0..num_validator {
             let private_key = ConsensusPrivateKey::generate(&mut rng);
-            let public_key = ConsensusPublicKey::from(&private_key);
             let vrf_private_key = ConsensusVRFPrivateKey::generate(&mut rng);
-            let vrf_public_key = ConsensusVRFPublicKey::from(&vrf_private_key);
-            public_keys.push((public_key.clone(), vrf_public_key.clone(), 1));
-
             let private_key_str = private_key.to_encoded_string().unwrap();
             let vrf_private_key_str =
                 vrf_private_key.to_encoded_string().unwrap();
             let private_key_str =
                 format!("{},{}\n", private_key_str, vrf_private_key_str);
             private_key_file.write_all(private_key_str.as_bytes())?;
+
+            let public_key = ConsensusPublicKey::from(&private_key);
+            let vrf_public_key = ConsensusVRFPublicKey::from(&vrf_private_key);
+            let register_tx = register_transaction(
+                private_key,
+                vrf_public_key.clone(),
+                1,
+                chain_id,
+            );
+            public_keys.push((
+                public_key.clone(),
+                vrf_public_key.clone(),
+                1,
+                register_tx,
+            ));
             let public_key_str = public_key.to_encoded_string().unwrap();
             let vrf_public_key_str =
                 vrf_public_key.to_encoded_string().unwrap();
@@ -251,6 +267,9 @@ where
             public_keys
                 .into_iter()
                 .take(num_genesis_validator)
+                .map(|(bls_key, vrf_key, voting_power, _tx)| {
+                    (bls_key, vrf_key, voting_power)
+                })
                 .collect(),
         );
         Ok("Ok".into())
