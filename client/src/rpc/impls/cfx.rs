@@ -93,6 +93,7 @@ struct BlockExecInfo {
     block_receipts: Arc<BlockReceipts>,
     block: Arc<Block>,
     epoch_number: u64,
+    block_number: u64,
     maybe_state_root: Option<H256>,
     pivot_hash: H256,
 }
@@ -711,6 +712,9 @@ impl RpcImpl {
             return Ok(None);
         }
 
+        let block_number = self.consensus.get_block_number(&block_hash)?
+            .ok_or("Inconsistent state")?;
+
         let block = self
             .consensus
             .get_data_manager()
@@ -726,6 +730,7 @@ impl RpcImpl {
             block_receipts,
             block,
             epoch_number,
+            block_number,
             maybe_state_root,
             pivot_hash,
         }))
@@ -762,7 +767,7 @@ impl RpcImpl {
             tx_index,
             prior_gas_used,
             Some(exec_info.epoch_number),
-            exec_info.block_receipts.block_number,
+            exec_info.block_number,
             exec_info.maybe_state_root.clone(),
             tx_exec_error_msg,
             *self.sync.network.get_network_type(),
