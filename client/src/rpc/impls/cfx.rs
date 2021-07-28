@@ -712,7 +712,9 @@ impl RpcImpl {
             return Ok(None);
         }
 
-        let block_number = self.consensus.get_block_number(&block_hash)?
+        let block_number = self
+            .consensus
+            .get_block_number(&block_hash)?
             .ok_or("Inconsistent state")?;
 
         let block = self
