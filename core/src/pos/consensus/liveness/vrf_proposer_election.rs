@@ -91,8 +91,8 @@ impl ProposerElection for VrfProposer {
         {
             self.proposal_candidates
                 .lock()
-                .insert(block.author().unwrap(), block)
-                .is_none()
+                .insert(block.author().unwrap(), block);
+            true
         } else {
             false
         }

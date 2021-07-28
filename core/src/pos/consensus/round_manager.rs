@@ -823,7 +823,7 @@ impl RoundManager {
             // Keep the proposal, and choose to vote after proposal timeout.
             ensure!(
                 self.proposer_election.receive_proposal_candidate(proposal),
-                "Receive invalid or duplicate proposal from {}",
+                "Receive invalid proposal from {}",
                 author,
             );
         } else {
@@ -974,14 +974,6 @@ impl RoundManager {
             }
         }
         let block_id = vote.vote_data().proposed().id();
-        // Check if the block already had a QC
-        if self
-            .block_store
-            .get_quorum_cert_for_block(block_id)
-            .is_some()
-        {
-            return Ok(());
-        }
         // Add the vote and check whether it completes a new QC or a TC
         match self
             .round_state
