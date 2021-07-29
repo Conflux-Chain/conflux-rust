@@ -37,7 +37,7 @@ bcs = "0.1.2"
 cfxkey = { path = "../../../../../accounts/cfxkey" }
 cfx-types = { path = "../../../../../cfx_types" }
 parity-secp256k1 = "0.7.0"
-bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "2db6171ef35302989e5515209e5dbe6a7807a459"}
+bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "b3bdd32d594f95d2121fee73c6fbdf2e4f55ebb2"}
 #bls-signatures = {path = "/Users/lipeilun/conflux/bls-signatures"}
 vrf = "0.2.2"
 lazy_static = "1.4"

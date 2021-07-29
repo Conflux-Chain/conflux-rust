@@ -397,11 +397,7 @@ pub fn genesis_block(
         }
     }
 
-    let mut nonce = if need_to_execute {
-        7
-    } else {
-        0
-    };
+    let mut nonce = if need_to_execute { 7 } else { 0 };
     for (_node_id, _voting_power, mut tx) in initial_nodes {
         tx.nonce = nonce.into();
         let signed_tx = tx.fake_sign(genesis_account_address);

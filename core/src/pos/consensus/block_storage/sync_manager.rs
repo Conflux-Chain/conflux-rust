@@ -96,7 +96,10 @@ impl BlockStore {
         let mut pending = vec![];
         let mut retrieve_qc = qc.clone();
         loop {
-            if self.block_exists(retrieve_qc.certified_block().id()) {
+            // round 0 blocks is the genesis of every epoch.
+            if self.block_exists(retrieve_qc.certified_block().id())
+                || retrieve_qc.certified_block().round() == 0
+            {
                 break;
             }
             let mut blocks =

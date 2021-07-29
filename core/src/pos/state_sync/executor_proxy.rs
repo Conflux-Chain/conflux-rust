@@ -72,8 +72,30 @@ impl ExecutorProxy {
         mut reconfig_subscriptions: Vec<ReconfigSubscription>,
     ) -> Self
     {
-        let on_chain_configs = Self::fetch_all_configs(&*storage)
-            .expect("[state sync] Failed initial read of on-chain configs");
+        // TODO(lpl): Double check the `None` case here.
+        let on_chain_configs = if let Ok(Some(startup_info)) =
+            storage.get_startup_info()
+        {
+            if let Some(epoch_state) = startup_info.latest_epoch_state {
+                OnChainConfigPayload::new(
+                    epoch_state.epoch,
+                    Arc::new(
+                        ON_CHAIN_CONFIG_REGISTRY
+                            .iter()
+                            .cloned()
+                            .zip_eq(vec![bcs::to_bytes(&epoch_state).unwrap()])
+                            .collect(),
+                    ),
+                )
+            } else {
+                Self::fetch_all_configs(&*storage)
+                    .expect("[state sync] Failed initial read of on-chain configs")
+            }
+        } else {
+            Self::fetch_all_configs(&*storage)
+                .expect("[state sync] Failed initial read of on-chain configs")
+        };
+
         for subscription in reconfig_subscriptions.iter_mut() {
             subscription.publish(on_chain_configs.clone()).expect(
                 "[state sync] Failed to publish initial on-chain config",
