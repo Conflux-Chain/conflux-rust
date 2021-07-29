@@ -1,3 +1,11 @@
+# 1.1.6
+
+## Improvements
+
+### RPC Improvements
+
+- Add `blockNumber` to the returned JSON object in `cfx_getTransactionReceipt`. Add `blockNumber`, `epochNumber` to `cfx_getTransactionByHash`
+
 # 1.1.5
 
 ## Improvements
