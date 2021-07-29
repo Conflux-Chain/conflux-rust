@@ -314,6 +314,12 @@ impl RoundState {
 
     pub fn vote_sent(&self) -> Option<Vote> { self.vote_sent.clone() }
 
+    pub fn get_round_certificate(
+        &self, verifier: &ValidatorVerifier,
+    ) -> VoteReceptionResult {
+        self.pending_votes.get_certificate(verifier)
+    }
+
     /// Setup the timeout task and return the duration of the current timeout
     fn setup_timeout(&mut self) -> Duration {
         let timeout_sender = self.timeout_sender.clone();

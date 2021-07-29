@@ -40,7 +40,9 @@ pub trait ProposerElection {
     /// value.
     fn is_random_election(&self) -> bool { false }
 
-    fn receive_proposal_candidate(&self, _block: Block) -> bool {
+    fn receive_proposal_candidate(
+        &self, _block: Block,
+    ) -> anyhow::Result<bool> {
         unreachable!()
     }
 
