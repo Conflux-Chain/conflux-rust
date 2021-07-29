@@ -3,10 +3,19 @@
 ## Improvements
 
 ### RPC Improvements
-- Raise error in `cfx_getBlockByHashWithPivotAssumption` if the provided block hash does not belong to the provided epoch.
-- Add `blockNumber` to the returned JSON object in `cfx_getBlockByHash`, `cfx_getBlockByEpochNumber`, and `cfx_getBlockByHashWithPivotAssumption`.
+- Fix incorrect responses of `cfx_getBlockRewardInfo`. If the node needs to serve this RPC, it needs to clear all data and resync the chain.
+- Simplify EVM revert reason in RPC responses. This may cause incompatible issues if the user was decoding the error messages manually.
 - Add new RPC `cfx_getBlockByBlockNumber`.
+- Add `blockNumber` to the returned JSON object in `cfx_getBlockByHash`, `cfx_getBlockByEpochNumber`, and `cfx_getBlockByHashWithPivotAssumption`.
+- Accept pivot hash in `cfx_getEpochReceipts`.
+- Raise error in `cfx_getBlockByHashWithPivotAssumption` if the provided block hash does not belong to the provided epoch.
+- Fix returnData format of CallResult.
+- Fix incorrect `firstTxStatus` response of `cfx_getAccountPendingTransactions` if `start_nonce` is provided.
 - Update `cfx_getCode` so that it returns an empty hex `0x` if the account does not exist instead of raising an error.
+
+### Configuration Improvement
+- Add `persist_block_number_index` to persist block number indices. It allows responding to block-number-related RPC requests for old epochs.
+- Add `storage_max_open_mpt_count` to configure maximal number of opened MPT.
 
 
 # 1.1.4
