@@ -90,7 +90,7 @@ unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git",
 strum = "0.20"
 strum_macros = "0.20"
 smart-default = "0.6.0"
-bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", branch = "test"}
+bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "2db6171ef35302989e5515209e5dbe6a7807a459"}
 tiny-keccak = {version = "2.0",  features = ["keccak"]}
 bcs = "0.1.2"
 async-trait = "0.1"

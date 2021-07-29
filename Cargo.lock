@@ -464,13 +464,13 @@ dependencies = [
 [[package]]
 name = "bls-signatures"
 version = "0.10.0"
-source = "git+https://github.com/Conflux-Chain/bls-signatures.git?branch=test#8a6434a6b3d0a2d10680ca1c48eb59def98f6646"
+source = "git+https://github.com/Conflux-Chain/bls-signatures.git?rev=2db6171ef35302989e5515209e5dbe6a7807a459#2db6171ef35302989e5515209e5dbe6a7807a459"
 dependencies = [
  "fff",
  "groupy",
  "hkdf",
  "paired",
- "rand_core 0.6.3",
+ "rand_core 0.5.1",
  "rayon",
  "sha2",
  "thiserror",
