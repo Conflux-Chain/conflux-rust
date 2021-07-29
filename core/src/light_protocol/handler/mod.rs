@@ -62,8 +62,7 @@ const REQUEST_CLEANUP_TIMER: TimerToken = 1;
 const LOG_STATISTICS_TIMER: TimerToken = 2;
 const HEARTBEAT_TIMER: TimerToken = 3;
 const TOTAL_WEIGHT_IN_PAST_TIMER: TimerToken = 4;
-// FIXME(lpl): Rename.
-const CHECK_FUTURE_BLOCK_TIMER: TimerToken = 7;
+const CHECK_SYNC_NOT_READY_BLOCKS_TIMER: TimerToken = 7;
 
 /// Handler is responsible for maintaining peer meta-information and
 /// dispatching messages to the query and sync sub-handlers.
@@ -963,7 +962,7 @@ impl NetworkProtocolHandler for Handler {
         io.register_timer(TOTAL_WEIGHT_IN_PAST_TIMER, Duration::from_secs(20))
             .expect("Error registering total weight in past timer");
         io.register_timer(
-            CHECK_FUTURE_BLOCK_TIMER,
+            CHECK_SYNC_NOT_READY_BLOCKS_TIMER,
             Duration::from_millis(1000),
         )
         .expect("Error registering CHECK_FUTURE_BLOCK_TIMER");
@@ -1057,7 +1056,7 @@ impl NetworkProtocolHandler for Handler {
             TOTAL_WEIGHT_IN_PAST_TIMER => {
                 self.consensus.update_total_weight_delta_heartbeat();
             }
-            CHECK_FUTURE_BLOCK_TIMER => {
+            CHECK_SYNC_NOT_READY_BLOCKS_TIMER => {
                 self.headers
                     .graph
                     .check_not_ready_frontier(true /* is_light_node */);

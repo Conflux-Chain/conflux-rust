@@ -58,6 +58,14 @@ pub trait PersistentLivenessStorage: Send + Sync {
         &self, version: u64,
     ) -> Result<EpochChangeProof>;
 
+    fn save_ledger_blocks(&self, _blocks: Vec<Block>) -> Result<()> {
+        unimplemented!()
+    }
+
+    fn get_ledger_block(&self, _block_id: &HashValue) -> Result<Option<Block>> {
+        unimplemented!()
+    }
+
     /// Returns a handle of the diemdb.
     fn diem_db(&self) -> Arc<dyn DbReader>;
 }
@@ -453,4 +461,12 @@ impl PersistentLivenessStorage for StorageWriteProxy {
     }
 
     fn diem_db(&self) -> Arc<dyn DbReader> { self.diem_db.clone() }
+
+    fn save_ledger_blocks(&self, blocks: Vec<Block>) -> Result<()> {
+        Ok(self.db.save_ledger_blocks(blocks)?)
+    }
+
+    fn get_ledger_block(&self, block_id: &HashValue) -> Result<Option<Block>> {
+        Ok(self.db.get_ledger_block(block_id)?)
+    }
 }

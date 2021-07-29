@@ -8,6 +8,7 @@ mod schema;
 use crate::pos::consensus::{
     consensusdb::schema::{
         block::BlockSchema,
+        ledger_block::LedgerBlockSchema,
         quorum_certificate::QCSchema,
         single_entry::{SingleEntryKey, SingleEntrySchema},
     },
@@ -17,7 +18,9 @@ use anyhow::Result;
 use consensus_types::{block::Block, quorum_cert::QuorumCert};
 use diem_crypto::HashValue;
 use diem_logger::prelude::*;
-use schema::{BLOCK_CF_NAME, QC_CF_NAME, SINGLE_ENTRY_CF_NAME};
+use schema::{
+    BLOCK_CF_NAME, LEDGER_BLOCK_CF_NAME, QC_CF_NAME, SINGLE_ENTRY_CF_NAME,
+};
 use schemadb::{Options, ReadOptions, SchemaBatch, DB, DEFAULT_CF_NAME};
 use std::{collections::HashMap, iter::Iterator, path::Path, time::Instant};
 
@@ -32,6 +35,7 @@ impl ConsensusDB {
             BLOCK_CF_NAME,
             QC_CF_NAME,
             SINGLE_ENTRY_CF_NAME,
+            LEDGER_BLOCK_CF_NAME,
         ];
 
         let path = db_root_path.as_ref().join("consensusdb");
@@ -189,5 +193,21 @@ impl ConsensusDB {
         let mut iter = self.db.iter::<QCSchema>(ReadOptions::default())?;
         iter.seek_to_first();
         Ok(iter.collect::<Result<HashMap<HashValue, QuorumCert>>>()?)
+    }
+
+    pub fn get_ledger_block(
+        &self, block_id: &HashValue,
+    ) -> Result<Option<Block>, DbError> {
+        Ok(self.db.get::<LedgerBlockSchema>(block_id)?)
+    }
+
+    pub fn save_ledger_blocks(
+        &self, blocks: Vec<Block>,
+    ) -> Result<(), DbError> {
+        let mut batch = SchemaBatch::new();
+        for block in blocks {
+            batch.put::<LedgerBlockSchema>(&block.id(), &block)?;
+        }
+        self.commit(batch)
     }
 }

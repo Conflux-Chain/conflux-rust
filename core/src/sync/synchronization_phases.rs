@@ -580,7 +580,6 @@ impl SynchronizationPhaseTrait for NormalSyncPhase {
     )
     {
         info!("start phase {:?}", self.name());
-        self.pow_handler.initialize(self.consensus.clone());
         sync_handler.request_missing_terminals(io);
     }
 }

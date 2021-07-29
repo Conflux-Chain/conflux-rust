@@ -457,6 +457,7 @@ impl Session {
         }
 
         self.had_hello = Some(Instant::now());
+        // FIXME(lpl): Verify keys.
         let pos_public_key_bytes: Vec<u8> = rlp.val_at(3)?;
         trace!("pos_public_key_bytes: {:?}", pos_public_key_bytes);
         if pos_public_key_bytes.len() < BLS_PUBLIC_KEY_LENGTH {

@@ -86,8 +86,6 @@ impl<PoS: PosInterface> PosHandler<PoS> {
                 }
                 Some(b) => b.round,
             };
-            // FIXME(lpl): Decide if we want to allow pos blocks to be skipped.
-            // || me_round > p_round + 1
             if me_round < p_round {
                 warn!("Incorrect round: me={}, pred={}", me_round, p_round);
                 return false;

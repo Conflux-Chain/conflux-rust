@@ -38,6 +38,7 @@ use consensus_types::{
     vote::Vote,
     vote_msg::VoteMsg,
 };
+use diem_config::keys::ConfigKey;
 use diem_crypto::VRFPrivateKey;
 use diem_infallible::checked;
 use diem_logger::prelude::*;
@@ -50,6 +51,10 @@ use diem_types::{
     transaction::{
         ConflictSignature, DisputePayload, ElectionPayload, RawTransaction,
         SignedTransaction,
+    },
+    validator_config::{
+        ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
+        ConsensusVRFProof,
     },
     validator_verifier::ValidatorVerifier,
 };
@@ -319,6 +324,7 @@ impl RoundManager {
     }
 
     pub async fn broadcast_pivot_decision(&mut self) -> anyhow::Result<()> {
+        return Ok(());
         if self.proposal_generator.is_none() {
             // Not an active validator, so do not need to sign pivot decision.
             return Ok(());
@@ -381,44 +387,43 @@ impl RoundManager {
         Ok(())
     }
 
-    pub async fn broadcast_election(&mut self) -> anyhow::Result<()> {
-        if self.proposal_generator.is_none() {
-            // Not an active validator, so do not need to send election tx.
-            return Ok(());
-        }
+    pub async fn broadcast_election(
+        &mut self, author: AccountAddress,
+        private_key: &ConfigKey<ConsensusPrivateKey>,
+        vrf_private_key: &ConfigKey<ConsensusVRFPrivateKey>,
+    ) -> anyhow::Result<()>
+    {
+        // FIXME(lpl): Check pos_state to see if this node is ready to be
+        // elected.
         diem_debug!("broadcast_election starts");
-        let proposal_generator =
-            self.proposal_generator.as_ref().expect("checked");
         let pos_state = self.storage.diem_db().get_latest_pos_state();
-        if let Some(target_term) =
-            pos_state.next_elect_term(&proposal_generator.author())
-        {
+        if let Some(target_term) = pos_state.next_elect_term(&author) {
             let epoch_vrf_seed = pos_state.target_term_seed(target_term);
             let election_payload = ElectionPayload {
-                public_key: proposal_generator.public_key.clone(),
-                vrf_public_key: proposal_generator.vrf_public_key.clone(),
+                public_key: private_key.public_key(),
+                vrf_public_key: vrf_private_key.public_key(),
                 target_term,
-                vrf_proof: proposal_generator
-                    .vrf_private_key
+                vrf_proof: vrf_private_key
+                    .private_key()
                     .compute(epoch_vrf_seed.as_slice())
                     .unwrap(),
             };
             let raw_tx = RawTransaction::new_election(
-                proposal_generator.author(),
+                author,
                 0,
                 election_payload,
                 ChainId::default(), // FIXME(lpl): Set chain id.
             );
             let signed_tx = raw_tx
-                .sign(
-                    &proposal_generator.private_key,
-                    proposal_generator.public_key.clone(),
-                )?
+                .sign(&private_key.private_key(), private_key.public_key())?
                 .into_inner();
             let (tx, rx) = oneshot::channel();
             self.tx_sender.send((signed_tx, tx)).await;
             rx.await?;
-            diem_debug!("broadcast_election sends");
+            diem_debug!(
+                "broadcast_election sends: target_term={}",
+                target_term
+            );
         }
         Ok(())
     }
@@ -1103,6 +1108,11 @@ impl RoundManager {
             if let Some(executed_block) = self.block_store.get_block(id) {
                 id = executed_block.parent_id();
                 blocks.push(executed_block.block().clone());
+            } else if let Ok(Some(block)) =
+                self.block_store.get_ledger_block(&id)
+            {
+                id = block.parent_id();
+                blocks.push(block);
             } else {
                 status = BlockRetrievalStatus::NotEnoughBlocks;
                 break;

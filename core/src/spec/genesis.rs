@@ -28,6 +28,7 @@ use diem_crypto::{
     ec_vrf::EcVrfPublicKey,
     PrivateKey, VRFPublicKey, ValidCryptoMaterial,
 };
+use diem_types::term_state::NodeID;
 use keylib::KeyPair;
 use primitives::{
     storage::STORAGE_LAYOUT_REGULAR_V0, Action, Block, BlockHeaderBuilder,
@@ -166,6 +167,7 @@ pub fn genesis_block(
     genesis_accounts: HashMap<Address, U256>, test_net_version: Address,
     initial_difficulty: U256, machine: Arc<Machine>, need_to_execute: bool,
     genesis_chain_id: Option<u32>,
+    initial_nodes: Vec<(NodeID, u64, Transaction)>,
 ) -> Block
 {
     let mut state =
@@ -395,6 +397,14 @@ pub fn genesis_block(
         }
     }
 
+    let mut nonce = if need_to_execute { 7 } else { 0 };
+    for (_node_id, _voting_power, mut tx) in initial_nodes {
+        tx.nonce = nonce.into();
+        let signed_tx = tx.fake_sign(genesis_account_address);
+        execute_genesis_transaction(&signed_tx, &mut state, machine.clone());
+        nonce += 1;
+    }
+
     state
         .clean_account(&genesis_account_address)
         .expect("Clean account failed");
@@ -443,10 +453,10 @@ pub fn genesis_block(
     genesis
 }
 
-fn register_transaction(
+pub fn register_transaction(
     bls_priv_key: BLSPrivateKey, vrf_pub_key: EcVrfPublicKey, power: u64,
     genesis_chain_id: u32,
-)
+) -> Transaction
 {
     /// TODO: test this function with new internal contracts.
     use bls_signatures::{
@@ -504,6 +514,7 @@ fn register_transaction(
     tx.gas = 200000.into();
     tx.gas_price = 1.into();
     tx.storage_limit = 16000;
+    tx
 }
 
 fn execute_genesis_transaction(

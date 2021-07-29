@@ -240,6 +240,12 @@ impl BlockStore {
             .path_from_root(block_id_to_commit)
             .unwrap_or_else(Vec::new);
 
+        let ledger_blocks: Vec<Block> =
+            blocks_to_commit.iter().map(|b| b.block().clone()).collect();
+        self.storage
+            .save_ledger_blocks(ledger_blocks)
+            .expect("Failed to persist committed blocks");
+
         self.state_computer
             .commit(
                 blocks_to_commit.iter().map(|b| b.id()).collect(),
@@ -429,6 +435,12 @@ impl BlockReader for BlockStore {
 
     fn get_block(&self, block_id: HashValue) -> Option<Arc<ExecutedBlock>> {
         self.inner.read().get_block(&block_id)
+    }
+
+    fn get_ledger_block(
+        &self, block_id: &HashValue,
+    ) -> anyhow::Result<Option<Block>> {
+        self.storage.get_ledger_block(block_id)
     }
 
     fn root(&self) -> Arc<ExecutedBlock> { self.inner.read().root() }
