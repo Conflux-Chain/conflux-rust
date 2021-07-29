@@ -35,7 +35,8 @@ const ROUND_PER_TERM: Round = 60;
 const ELECTION_TERM_START_ROUND: Round = 120;
 const ELECTION_TERM_END_ROUND: Round = 30;
 
-const TERM_MAX_SIZE: usize = 16;
+const TERM_MAX_SIZE: usize = 10000;
+const TERM_ELECTED_SIZE: usize = 50;
 const UNLOCK_WAIT_VIEW: u64 = 20160;
 
 #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
@@ -203,7 +204,7 @@ impl TermList {
         // `term_list`.
         for i in start_term_offset..=target_term_offset {
             let term = &self.term_list[i as usize];
-            for (_, addr) in &term.node_list {
+            for (_, addr) in term.node_list.iter().take(TERM_ELECTED_SIZE) {
                 if addr.node_id.addr == *author {
                     diem_debug!(
                         "can_be_elected: {:?} is in term {}:{}",
@@ -425,7 +426,7 @@ impl PosState {
 
         // FIXME(lpl): Nodes in the current active term are not covered by this.
         for term in &self.term_list.term_list {
-            for (_, addr) in &term.node_list {
+            for (_, addr) in term.node_list.iter().take(TERM_ELECTED_SIZE) {
                 if addr.node_id == node_id {
                     bail!("Node in active term service cannot retire");
                 }
@@ -439,7 +440,7 @@ impl PosState {
         let mut voting_power_map = BTreeMap::new();
         for i in 0..TERM_LIST_LEN {
             let term = &self.term_list.term_list[i];
-            for (_, node_id) in &term.node_list {
+            for (_, node_id) in term.node_list.iter().take(TERM_ELECTED_SIZE) {
                 let voting_power = voting_power_map
                     .entry(node_id.node_id.addr.clone())
                     .or_insert(0 as u64);
@@ -881,6 +882,22 @@ pub struct DisputeEvent {
 impl DisputeEvent {
     pub fn event_key() -> EventKey {
         EventKey::new_from_address(&account_config::dispute_address(), 6)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
+        bcs::from_bytes(bytes).map_err(Into::into)
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct RewardDistributionEvent {}
+
+impl RewardDistributionEvent {
+    pub fn event_key() -> EventKey {
+        EventKey::new_from_address(
+            &account_config::reward_distribution_address(),
+            7,
+        )
     }
 
     pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {

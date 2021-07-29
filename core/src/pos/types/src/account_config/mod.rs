@@ -45,3 +45,8 @@ pub fn dispute_address() -> AccountAddress {
     AccountAddress::from_hex_literal("0x1DF")
         .expect("Parsing valid hex literal should always succeed")
 }
+
+pub fn reward_distribution_address() -> AccountAddress {
+    AccountAddress::from_hex_literal("0x1E0")
+        .expect("Parsing valid hex literal should always succeed")
+}
