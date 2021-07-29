@@ -85,17 +85,21 @@ impl ProposerElection for VrfProposer {
 
     fn is_random_election(&self) -> bool { true }
 
-    fn receive_proposal_candidate(&self, block: Block) -> bool {
-        if self.is_valid_proposal(&block)
-            && block.round() == *self.current_round.lock()
-        {
-            self.proposal_candidates
-                .lock()
-                .insert(block.author().unwrap(), block);
-            true
-        } else {
-            false
+    /// Return `Err` for invalid or unmatching blocks.
+    /// Return `Ok(true)` if the block is valid and received for the first time.
+    /// Return `Ok(false)` if the block was received before.
+    fn receive_proposal_candidate(&self, block: Block) -> anyhow::Result<bool> {
+        if !self.is_valid_proposal(&block) {
+            anyhow::bail!("Invalid proposal");
         }
+        if block.round() != *self.current_round.lock() {
+            anyhow::bail!("Incorrect round");
+        }
+        Ok(self
+            .proposal_candidates
+            .lock()
+            .insert(block.author().unwrap(), block)
+            .is_none())
     }
 
     /// Choose a proposal from all received proposal candidates to vote for.

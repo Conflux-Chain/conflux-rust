@@ -11,7 +11,7 @@ from test_framework.util import *
 class ExampleTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 4
-        self.conf_parameters["vrf_proposal_threshold"] = '"{}"'.format(int_to_hex(int(2 ** 256 / 2)))
+        # self.conf_parameters["vrf_proposal_threshold"] = '"{}"'.format(int_to_hex(int(2 ** 256 / 2)))
         self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = '600'
         # self.conf_parameters["log_level"] = '"trace"'
 

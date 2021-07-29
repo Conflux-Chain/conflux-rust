@@ -218,6 +218,46 @@ impl PendingVotes {
 
         VoteReceptionResult::VoteAdded(voting_power)
     }
+
+    pub fn get_certificate(
+        &self, validator_verifier: &ValidatorVerifier,
+    ) -> VoteReceptionResult {
+        for ledger_info in self.li_digest_to_votes.values() {
+            if validator_verifier
+                .check_voting_power(ledger_info.signatures().keys())
+                .is_ok()
+            {
+                let vote = self
+                    .author_to_vote
+                    .get(
+                        ledger_info
+                            .signatures()
+                            .keys()
+                            .next()
+                            .expect("enough voting power"),
+                    )
+                    .expect("vote was recorded");
+                return VoteReceptionResult::NewQuorumCertificate(Arc::new(
+                    QuorumCert::new(
+                        vote.vote_data().clone(),
+                        ledger_info.clone(),
+                    ),
+                ));
+            }
+        }
+        if let Some(partial_tc) = &self.maybe_partial_tc {
+            if validator_verifier
+                .check_voting_power(partial_tc.signatures().keys())
+                .is_ok()
+            {
+                return VoteReceptionResult::NewTimeoutCertificate(Arc::new(
+                    partial_tc.clone(),
+                ));
+            }
+        }
+        // TODO(lpl): Use another result
+        VoteReceptionResult::DuplicateVote
+    }
 }
 
 //
