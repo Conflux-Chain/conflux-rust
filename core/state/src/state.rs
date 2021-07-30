@@ -620,7 +620,7 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         unimplemented!()
     }
 
-    fn storage_lock(&self, identifier: H256) -> Result<U256> {
+    fn pos_locked_staking(&self, _address: &Address) -> Result<U256> {
         unimplemented!()
     }
 }

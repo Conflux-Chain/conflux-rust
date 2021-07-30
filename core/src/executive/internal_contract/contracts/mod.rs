@@ -40,8 +40,9 @@ mod macros {
 
 pub(super) use self::pos::{IncreaseStakeEvent, RegisterEvent};
 pub use self::{
-    admin::AdminControl, context::Context, reentrancy::AntiReentrancyConfig,
-    sponsor::SponsorWhitelistControl, staking::Staking,
+    admin::AdminControl, context::Context, pos::PoSRegister,
+    reentrancy::AntiReentrancyConfig, sponsor::SponsorWhitelistControl,
+    staking::Staking,
 };
 
 use super::{
@@ -196,6 +197,6 @@ pub fn all_internal_contracts() -> Vec<Box<dyn InternalContractTrait>> {
         Box::new(SponsorWhitelistControl::instance()),
         Box::new(AntiReentrancyConfig::instance()),
         Box::new(Context::instance()),
-        Box::new(future::PoS::instance()),
+        Box::new(PoSRegister::instance()),
     ]
 }

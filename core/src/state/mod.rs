@@ -9,7 +9,8 @@ pub use self::{
 
 use self::account_entry::{AccountEntry, AccountState};
 use crate::{
-    executive::IndexStatus, hash::KECCAK_EMPTY,
+    executive::{identifier_entry, index_entry, IndexStatus},
+    hash::KECCAK_EMPTY,
     transaction_pool::SharedTransactionPool,
 };
 use cfx_bytes::Bytes;
@@ -33,7 +34,9 @@ use cfx_statedb::{
     StateDbGeneric as StateDb,
 };
 use cfx_storage::{utils::access_mode, StorageState, StorageStateTrait};
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use cfx_types::{
+    address_util::AddressUtil, Address, BigEndianHash, H256, U256,
+};
 use parking_lot::{
     MappedRwLockWriteGuard, RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
@@ -861,9 +864,16 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         Ok(())
     }
 
-    fn storage_lock(&self, identifier: H256) -> DbResult<U256> {
+    fn pos_locked_staking(&self, address: &Address) -> DbResult<U256> {
+        let identifier = BigEndianHash::from_uint(&self.storage_at(
+            &POS_REGISTER_CONTRACT_ADDRESS,
+            &identifier_entry(address),
+        )?);
         let current_value: IndexStatus = self
-            .storage_at(&POS_REGISTER_CONTRACT_ADDRESS, &identifier.as_bytes())?
+            .storage_at(
+                &POS_REGISTER_CONTRACT_ADDRESS,
+                &index_entry(&identifier),
+            )?
             .into();
         Ok(*POS_VOTE_PRICE * current_value.locked())
     }
@@ -873,7 +883,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     ) -> DbResult<()> {
         let old_value = self.storage_at(
             &POS_REGISTER_CONTRACT_ADDRESS,
-            &identifier.as_bytes(),
+            &index_entry(&identifier),
         )?;
         assert!(!old_value.is_zero(), "If an identifier is unlocked, its index information must be non-zero");
         let mut status: IndexStatus = old_value.into();
@@ -883,7 +893,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         self.require_exists(&POS_REGISTER_CONTRACT_ADDRESS, false)?
             .change_storage_value(
                 &self.db,
-                identifier.as_bytes(),
+                &index_entry(&identifier),
                 status.into(),
             )?;
         Ok(())

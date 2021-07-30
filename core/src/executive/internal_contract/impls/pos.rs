@@ -7,12 +7,13 @@ use bls_signatures::{
     sigma_protocol::{decode_answer, decode_commit, verify},
     Error as CryptoError, PublicKey, Serialize,
 };
-use cfx_types::{H256, U256};
+use cfx_parameters::staking::POS_VOTE_PRICE;
+use cfx_types::{Address, BigEndianHash, H256, U256};
 use tiny_keccak::{Hasher, Keccak};
 
 pub struct IndexStatus {
-    registered: u64,
-    unlocked: u64,
+    pub registered: u64,
+    pub unlocked: u64,
 }
 
 impl From<U256> for IndexStatus {
@@ -47,6 +48,41 @@ impl Into<U256> for IndexStatus {
 
 type Bytes = Vec<u8>;
 
+type StorageEntryKey = Vec<u8>;
+
+fn prefix_and_hash(prefix: u64, data: &[u8]) -> StorageEntryKey {
+    let mut hasher = Keccak::v256();
+    hasher.update(&prefix.to_be_bytes());
+    hasher.update(data);
+    let mut hash = H256::default();
+    hasher.finalize(hash.as_bytes_mut());
+    hash.as_bytes().to_vec()
+}
+
+#[inline]
+pub fn index_entry(identifier: &H256) -> StorageEntryKey {
+    prefix_and_hash(0, identifier.as_bytes())
+}
+
+#[inline]
+pub fn address_entry(identifier: &H256) -> StorageEntryKey {
+    prefix_and_hash(1, identifier.as_bytes())
+}
+
+#[inline]
+pub fn identifier_entry(sender: &Address) -> StorageEntryKey {
+    prefix_and_hash(2, sender.as_bytes())
+}
+
+#[inline]
+fn address_to_u256(value: Address) -> U256 { H256::from(value).into_uint() }
+
+#[inline]
+fn u256_to_address(value: &U256) -> Address {
+    let addr: H256 = BigEndianHash::from_uint(value);
+    Address::from(addr)
+}
+
 fn decode_bls_pubkey(bls_pubkey: Bytes) -> Result<PublicKey, CryptoError> {
     PublicKey::from_bytes(bls_pubkey.as_slice())
 }
@@ -70,12 +106,14 @@ fn verify_bls_pubkey(
 }
 
 fn update_vote_power(
-    identifier: H256, vote_power: u64, initialize_mode: bool,
-    param: &ActionParams, context: &mut InternalRefContext,
+    identifier: H256, sender: Address, vote_power: u64, initialize_mode: bool,
+    params: &ActionParams, context: &mut InternalRefContext,
 ) -> vm::Result<()>
 {
-    let mut status: IndexStatus =
-        context.storage_at(param, identifier.as_bytes())?.into();
+    let status: IndexStatus = context
+        .storage_at(params, &index_entry(&identifier))?
+        .into();
+
     if !initialize_mode && status.registered == 0 {
         return Err(vm::Error::InternalContract(
             "uninitialized identifier".into(),
@@ -86,27 +124,53 @@ fn update_vote_power(
             "identifier has already been initialized".into(),
         ));
     }
+
+    let votes = status
+        .locked()
+        .checked_add(vote_power)
+        .ok_or(vm::Error::InternalContract("locked votes overflow".into()))?;
+    if context.state.staking_balance(&sender)? < *POS_VOTE_PRICE * votes {
+        return Err(vm::Error::InternalContract(
+            "Not enough staking balance".into(),
+        ));
+    }
+
+    let mut status = status;
     status.registered = status.registered.checked_add(vote_power).ok_or(
         vm::Error::InternalContract("registered index overflow".into()),
     )?;
-    IncreaseStakeEvent::log(&identifier, &status.registered, param, context)?;
-    context.set_storage(
-        param,
-        identifier.as_bytes().to_vec(),
-        status.into(),
-    )?;
+
+    IncreaseStakeEvent::log(&identifier, &status.registered, params, context)?;
+    context.set_storage(params, index_entry(&identifier), status.into())?;
     Ok(())
 }
 
+fn is_identifier_changeable(
+    sender: Address, params: &ActionParams, context: &mut InternalRefContext,
+) -> vm::Result<bool> {
+    let identifier = address_to_identifier(sender, params, context)?;
+    if identifier.is_zero() {
+        return Ok(true);
+    }
+    let status = get_status(identifier, params, context)?;
+    Ok(status.registered == status.unlocked)
+}
+
 pub fn register(
-    identifier: H256, vote_power: u64, bls_pubkey: Bytes, vrf_pubkey: Bytes,
-    bls_proof: [Bytes; 2], param: &ActionParams,
+    identifier: H256, sender: Address, vote_power: u64, bls_pubkey: Bytes,
+    vrf_pubkey: Bytes, bls_proof: [Bytes; 2], param: &ActionParams,
     context: &mut InternalRefContext,
 ) -> vm::Result<()>
 {
     if vote_power == 0 {
         return Err(vm::Error::InternalContract(
             "vote_power should be none zero".into(),
+        ));
+    }
+
+    if is_identifier_changeable(sender, param, context)? {
+        return Err(vm::Error::InternalContract(
+            "can not change identifier".into(),
         ));
     }
 
@@ -126,6 +190,12 @@ pub fn register(
             "Inconsistent identifier".into(),
         ));
     }
+    if identifier_to_address(identifier, param, context)? != Address::zero() {
+        return Err(vm::Error::InternalContract(
+            "identifier has already been registered".into(),
+        ));
+    }
+
     RegisterEvent::log(
         &identifier,
         &(verified_bls_pubkey, vrf_pubkey),
@@ -133,14 +203,24 @@ pub fn register(
         context,
     )?;
 
+    context.set_storage(
+        param,
+        address_entry(&identifier),
+        address_to_u256(sender),
+    );
+    context.set_storage(
+        param,
+        identifier_entry(&sender),
+        identifier.into_uint(),
+    );
     update_vote_power(
-        identifier, vote_power, /* allow_uninitialized */ true, param,
-        context,
+        identifier, sender, vote_power, /* allow_uninitialized */ true,
+        param, context,
     )
 }
 
 pub fn increase_stake(
-    identifier: H256, vote_power: u64, param: &ActionParams,
+    sender: Address, vote_power: u64, params: &ActionParams,
     context: &mut InternalRefContext,
 ) -> vm::Result<()>
 {
@@ -149,18 +229,37 @@ pub fn increase_stake(
             "vote_power should be none zero".into(),
         ));
     }
+
+    let identifier = address_to_identifier(sender, params, context)?;
+
     update_vote_power(
-        identifier, vote_power, /* allow_uninitialized */ false, param,
-        context,
+        identifier, sender, vote_power, /* allow_uninitialized */ false,
+        params, context,
     )
 }
 
 pub fn get_status(
-    identifier: H256, param: &ActionParams, context: &mut InternalRefContext,
-) -> vm::Result<(u64, u64)> {
-    let status: IndexStatus =
-        context.storage_at(param, identifier.as_bytes())?.into();
-    Ok((status.registered, status.unlocked))
+    identifier: H256, params: &ActionParams, context: &mut InternalRefContext,
+) -> vm::Result<IndexStatus> {
+    Ok(context
+        .storage_at(params, &index_entry(&identifier))?
+        .into())
+}
+
+pub fn identifier_to_address(
+    identifier: H256, params: &ActionParams, context: &mut InternalRefContext,
+) -> vm::Result<Address> {
+    Ok(u256_to_address(
+        &context.storage_at(params, &address_entry(&identifier))?,
+    ))
+}
+
+pub fn address_to_identifier(
+    address: Address, params: &ActionParams, context: &mut InternalRefContext,
+) -> vm::Result<H256> {
+    Ok(BigEndianHash::from_uint(
+        &context.storage_at(params, &identifier_entry(&address))?,
+    ))
 }
 
 pub fn decode_register_info(event: &LogEntry) -> Option<StakingEvent> {
