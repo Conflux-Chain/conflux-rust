@@ -50,6 +50,7 @@ use std::{collections::HashMap, fmt::Debug, mem::discriminant, sync::Arc};
 pub struct PeerState {
     id: NodeId,
     peer_hash: H256,
+    // TODO(lpl): Only keep AccountAddress?
     pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
 }
 
@@ -178,7 +179,7 @@ pub struct HotStuffSynchronizationProtocol {
     pub request_manager: Arc<RequestManager>,
     pub consensus_network_task: ConsensusNetworkTask,
     pub mempool_network_task: MempoolNetworkTask,
-    pub pos_peer_mapping: RwLock<HashMap<ConsensusPublicKey, H256>>,
+    pub pos_peer_mapping: RwLock<HashMap<AccountAddress, H256>>,
 }
 
 impl HotStuffSynchronizationProtocol {
@@ -578,15 +579,16 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
         }
 
         if let Some(public_key) = pos_public_key {
+            self.pos_peer_mapping.write().insert(
+                from_consensus_public_key(&public_key.0, &public_key.1),
+                peer_hash,
+            );
             if (add_new_peer) {
                 let event = NetworkEvent::PeerConnected;
                 self.mempool_network_task
                     .network_events_tx
                     .push((*node_id, discriminant(&event)), (*node_id, event));
             }
-            self.pos_peer_mapping
-                .write()
-                .insert(public_key.0.clone(), peer_hash);
             if let Some(state) = self.peers.get(&peer_hash) {
                 state.write().set_pos_public_key(Some(public_key));
             } else {
@@ -614,7 +616,12 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
         let peer_hash = keccak(*peer);
         if let Some(peer_state) = self.peers.remove(&peer_hash) {
             if let Some(pos_public_key) = &peer_state.read().pos_public_key {
-                self.pos_peer_mapping.write().remove(&pos_public_key.0);
+                self.pos_peer_mapping.write().remove(
+                    &from_consensus_public_key(
+                        &pos_public_key.0,
+                        &pos_public_key.1,
+                    ),
+                );
             }
         }
         self.request_manager.on_peer_disconnected(io, peer);

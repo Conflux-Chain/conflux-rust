@@ -36,6 +36,7 @@ diem-types = { path = "../../types" }
 num-variants = { path = "../../common/num-variants" }
 schemadb = { path = "../schemadb" }
 storage-interface = { path = "../storage-interface" }
+consensus-types = {path = "../../consensus/consensus-types"}
 
 [dev-dependencies]
 proptest = "1.0.0"

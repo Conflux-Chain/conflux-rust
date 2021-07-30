@@ -125,7 +125,6 @@ where V: VMExecutor
     ) -> Self
     {
         // if initial_nodes.is_empty() {
-        //     // FIXME(lpl): Finalize if we want to hard code initial nodes.
         //     let access_paths = ON_CHAIN_CONFIG_REGISTRY
         //         .iter()
         //         .map(|config_id| config_id.access_path())
@@ -489,9 +488,7 @@ where V: VMExecutor
         if let Some(pivot_decision) = &pivot_decision {
             new_pos_state.set_pivot_decision(pivot_decision.clone());
         }
-        let mut next_epoch_state = new_pos_state
-            .next_view()?
-            .map(|(epoch_state, _term_seed)| epoch_state);
+        let mut next_epoch_state = new_pos_state.next_view()?;
 
         let txn_blobs =
             itertools::zip_eq(vm_outputs.iter(), transactions.iter())

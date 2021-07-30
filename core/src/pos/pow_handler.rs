@@ -163,8 +163,22 @@ impl PowInterface for PowHandler {
         )
     }
 
-    async fn wait_for_initialization(&self) {
+    async fn wait_for_initialization(&self, last_decision: H256) {
         while self.pow_consensus.read().is_none() {
+            self.executor
+                .block_on(tokio::time::sleep(Duration::from_millis(200)))
+        }
+        // TODO(lpl): Wait for last_decision is stable?
+        // TODO(lpl): Delay events GC?
+        while self
+            .pow_consensus
+            .read()
+            .as_ref()
+            .unwrap()
+            .data_man
+            .get_epoch_execution_commitment(&last_decision)
+            .is_none()
+        {
             self.executor
                 .block_on(tokio::time::sleep(Duration::from_millis(200)))
         }

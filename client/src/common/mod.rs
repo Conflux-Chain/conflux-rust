@@ -220,6 +220,14 @@ pub fn initialize_common_modules(
             None => genesis::default(conf.is_test_or_dev_mode()),
         }
     };
+    let initial_nodes: Vec<_> = read_initial_nodes_from_file(
+        conf.raw_conf.pos_initial_nodes_path.as_str(),
+    )?
+    .into_iter()
+    .map(|(bls_key, vrf_key, voting_power, tx)| {
+        (NodeID::new(bls_key, vrf_key), voting_power, tx)
+    })
+    .collect();
 
     let consensus_conf = conf.consensus_config();
     let vm = VmFactory::new(1024 * 32);
@@ -233,6 +241,7 @@ pub fn initialize_common_modules(
         machine.clone(),
         conf.raw_conf.execute_genesis, /* need_to_execute */
         conf.raw_conf.chain_id,
+        initial_nodes.clone(),
     );
     debug!("Initialize genesis_block={:?}", genesis_block);
     if conf.raw_conf.pos_genesis_pivot_decision.is_none() {
@@ -315,14 +324,6 @@ pub fn initialize_common_modules(
         .unwrap();
     let initial_pos_nodes = vec![];
      */
-    let initial_nodes = read_initial_nodes_from_file(
-        conf.raw_conf.pos_initial_nodes_path.as_str(),
-    )?
-    .into_iter()
-    .map(|(bls_key, vrf_key, voting_power)| {
-        (NodeID::new(bls_key, vrf_key), voting_power)
-    })
-    .collect();
 
     let diem_handler = start_pos_consensus(
         &pos_config,
@@ -330,7 +331,10 @@ pub fn initialize_common_modules(
         own_node_hash,
         conf.protocol_config(),
         Some((self_pos_public_key.unwrap(), self_vrf_public_key)),
-        initial_nodes,
+        initial_nodes
+            .into_iter()
+            .map(|(node_id, voting_power, _tx)| (node_id, voting_power))
+            .collect(),
     );
     debug!("PoS initialized");
     let pos_connection = PosConnection::new(
@@ -413,6 +417,7 @@ pub fn initialize_common_modules(
         notifications.clone(),
         *network.get_network_type(),
     );
+    diem_handler.pow_handler.initialize(consensus.clone());
     Ok((
         machine,
         secret_store,

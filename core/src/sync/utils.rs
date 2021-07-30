@@ -149,6 +149,7 @@ pub fn initialize_data_manager(
         machine.clone(),
         false, /* need_to_execute */
         None,
+        vec![],
     ));
 
     let data_man = Arc::new(BlockDataManager::new(

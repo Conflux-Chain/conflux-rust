@@ -38,6 +38,7 @@ use consensus_types::{
     vote::Vote,
     vote_msg::VoteMsg,
 };
+use diem_config::keys::ConfigKey;
 use diem_crypto::VRFPrivateKey;
 use diem_infallible::checked;
 use diem_logger::prelude::*;
@@ -47,7 +48,14 @@ use diem_types::{
     chain_id::ChainId,
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
-    transaction::{ElectionPayload, RawTransaction, SignedTransaction},
+    transaction::{
+        ConflictSignature, DisputePayload, ElectionPayload, RawTransaction,
+        SignedTransaction,
+    },
+    validator_config::{
+        ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
+        ConsensusVRFProof,
+    },
     validator_verifier::ValidatorVerifier,
 };
 use fail::fail_point;
@@ -316,6 +324,7 @@ impl RoundManager {
     }
 
     pub async fn broadcast_pivot_decision(&mut self) -> anyhow::Result<()> {
+        return Ok(());
         if self.proposal_generator.is_none() {
             // Not an active validator, so do not need to sign pivot decision.
             return Ok(());
@@ -378,44 +387,43 @@ impl RoundManager {
         Ok(())
     }
 
-    pub async fn broadcast_election(&mut self) -> anyhow::Result<()> {
-        if self.proposal_generator.is_none() {
-            // Not an active validator, so do not need to send election tx.
-            return Ok(());
-        }
+    pub async fn broadcast_election(
+        &mut self, author: AccountAddress,
+        private_key: &ConfigKey<ConsensusPrivateKey>,
+        vrf_private_key: &ConfigKey<ConsensusVRFPrivateKey>,
+    ) -> anyhow::Result<()>
+    {
+        // FIXME(lpl): Check pos_state to see if this node is ready to be
+        // elected.
         diem_debug!("broadcast_election starts");
-        let proposal_generator =
-            self.proposal_generator.as_ref().expect("checked");
         let pos_state = self.storage.diem_db().get_latest_pos_state();
-        if let Some(target_term) =
-            pos_state.next_elect_term(&proposal_generator.author())
-        {
+        if let Some(target_term) = pos_state.next_elect_term(&author) {
             let epoch_vrf_seed = pos_state.target_term_seed(target_term);
             let election_payload = ElectionPayload {
-                public_key: proposal_generator.public_key.clone(),
-                vrf_public_key: proposal_generator.vrf_public_key.clone(),
+                public_key: private_key.public_key(),
+                vrf_public_key: vrf_private_key.public_key(),
                 target_term,
-                vrf_proof: proposal_generator
-                    .vrf_private_key
+                vrf_proof: vrf_private_key
+                    .private_key()
                     .compute(epoch_vrf_seed.as_slice())
                     .unwrap(),
             };
             let raw_tx = RawTransaction::new_election(
-                proposal_generator.author(),
+                author,
                 0,
                 election_payload,
                 ChainId::default(), // FIXME(lpl): Set chain id.
             );
             let signed_tx = raw_tx
-                .sign(
-                    &proposal_generator.private_key,
-                    proposal_generator.public_key.clone(),
-                )?
+                .sign(&private_key.private_key(), private_key.public_key())?
                 .into_inner();
             let (tx, rx) = oneshot::channel();
             self.tx_sender.send((signed_tx, tx)).await;
             rx.await?;
-            diem_debug!("broadcast_election sends");
+            diem_debug!(
+                "broadcast_election sends: target_term={}",
+                target_term
+            );
         }
         Ok(())
     }
@@ -472,24 +480,31 @@ impl RoundManager {
             .await
             .context("[RoundManager] Process proposal")?
         {
-            self.process_proposal(proposal_msg.clone().take_proposal())
-                .await?;
-            // If a proposal has been received and voted, it will return error.
-            //
-            // 1. For old leader elections where there is only one leader and we
-            // vote after receiving the first proposal, the error is
-            // returned in `execute_and_vote` because `vote_sent.
-            // is_none()` is false. 2. For VRF leader election, we
-            // return error when we insert a proposal from the same
-            // author to proposal_candidates.
-            //
-            // This ensures that there is no broadcast storm
-            // because we only broadcast a proposal when we receive it for the
-            // first time.
-            // TODO(lpl): Do not send to the sender and the original author.
-            self.network
-                .broadcast(ConsensusMsg::ProposalMsg(Box::new(proposal_msg)))
-                .await;
+            if self
+                .process_proposal(proposal_msg.clone().take_proposal())
+                .await?
+            {
+                // If a proposal has been received and voted, it will return
+                // error or false.
+                //
+                // 1. For old leader elections where there is only one leader
+                // and we vote after receiving the first
+                // proposal, the error is returned in
+                // `execute_and_vote` because `vote_sent.
+                // is_none()` is false. 2. For VRF leader election, we
+                // return Ok(false) when we insert a proposal from the same
+                // author to proposal_candidates.
+                //
+                // This ensures that there is no broadcast storm
+                // because we only broadcast a proposal when we receive it for
+                // the first time.
+                // TODO(lpl): Do not send to the sender and the original author.
+                self.network
+                    .broadcast(ConsensusMsg::ProposalMsg(Box::new(
+                        proposal_msg,
+                    )))
+                    .await;
+            }
             Ok(())
         } else {
             bail!(
@@ -678,6 +693,33 @@ impl RoundManager {
             );
         }
 
+        //
+        match self
+            .round_state
+            .get_round_certificate(&self.epoch_state.verifier)
+        {
+            VoteReceptionResult::NewQuorumCertificate(qc) => {
+                self.new_qc_aggregated(
+                    qc.clone(),
+                    qc.ledger_info()
+                        .signatures()
+                        .keys()
+                        .next()
+                        .expect("qc formed")
+                        .clone(),
+                )
+                .await?;
+                return Ok(());
+            }
+            VoteReceptionResult::NewTimeoutCertificate(tc) => {
+                self.new_tc_aggregated(tc).await?;
+                return Ok(());
+            }
+            _ => {
+                // No certificate formed, so enter normal timeout processing.
+            }
+        }
+
         if !self.is_validator() {
             return Ok(());
         }
@@ -780,7 +822,9 @@ impl RoundManager {
     /// 3. Try to vote for it following the safety rules.
     /// 4. In case a validator chooses to vote, send the vote to the
     /// representatives at the next round.
-    async fn process_proposal(&mut self, proposal: Block) -> Result<()> {
+    ///
+    /// Return `Ok(true)` if the block should be relayed.
+    async fn process_proposal(&mut self, proposal: Block) -> Result<bool> {
         let author = proposal
             .author()
             .expect("Proposal should be verified having an author");
@@ -817,12 +861,9 @@ impl RoundManager {
                 false,
                 false,
             )?;
-            // Keep the proposal, and choose to vote after proposal timeout.
-            ensure!(
-                self.proposer_election.receive_proposal_candidate(proposal),
-                "Receive invalid or duplicate proposal from {}",
-                author,
-            );
+            Ok(self
+                .proposer_election
+                .receive_proposal_candidate(proposal)?)
         } else {
             let proposal_round = proposal.round();
             let vote = self
@@ -841,8 +882,8 @@ impl RoundManager {
                 .proposer_election
                 .get_valid_proposer(proposal_round + 1);
             self.network.send_vote(vote_msg, vec![recipients]).await;
+            Ok(false)
         }
-        Ok(())
     }
 
     /// The function generates a VoteMsg for a given proposed_block:
@@ -927,12 +968,15 @@ impl RoundManager {
             .await
             .context("[RoundManager] Stop processing vote")?
         {
-            self.process_vote(vote_msg.vote())
+            let relay = self
+                .process_vote(vote_msg.vote())
                 .await
                 .context("[RoundManager] Add a new vote")?;
-            self.network
-                .broadcast(ConsensusMsg::VoteMsg(Box::new(vote_msg)))
-                .await;
+            if relay {
+                self.network
+                    .broadcast(ConsensusMsg::VoteMsg(Box::new(vote_msg)))
+                    .await;
+            }
         }
         Ok(())
     }
@@ -941,7 +985,9 @@ impl RoundManager {
     /// If a new QC / TC is formed then
     /// 1) fetch missing dependencies if required, and then
     /// 2) call process_certificates(), which will start a new round in return.
-    async fn process_vote(&mut self, vote: &Vote) -> anyhow::Result<()> {
+    ///
+    /// Return `Ok(true)` if the vote should be relayed.
+    async fn process_vote(&mut self, vote: &Vote) -> anyhow::Result<bool> {
         let round = vote.vote_data().proposed().round();
 
         diem_info!(
@@ -970,31 +1016,83 @@ impl RoundManager {
                 }
             }
         }
-        let block_id = vote.vote_data().proposed().id();
-        // Check if the block already had a QC
-        if self
-            .block_store
-            .get_quorum_cert_for_block(block_id)
-            .is_some()
-        {
-            return Ok(());
-        }
         // Add the vote and check whether it completes a new QC or a TC
+        let mut relay = true;
         match self
             .round_state
             .insert_vote(vote, &self.epoch_state.verifier)
         {
-            VoteReceptionResult::NewQuorumCertificate(qc) => {
-                self.new_qc_aggregated(qc, vote.author()).await
+            VoteReceptionResult::NewQuorumCertificate(_) => {
+                // self.new_qc_aggregated(qc, vote.author()).await?;
             }
-            VoteReceptionResult::NewTimeoutCertificate(tc) => {
-                self.new_tc_aggregated(tc).await
+            VoteReceptionResult::NewTimeoutCertificate(_) => {
+                // self.new_tc_aggregated(tc).await?;
             }
-            VoteReceptionResult::VoteAdded(_) => Ok(()),
+            VoteReceptionResult::VoteAdded(_) => {}
+            VoteReceptionResult::DuplicateVote => {
+                // Do not relay duplicate votes as we should have relayed it
+                // before.
+                relay = false;
+            }
+            VoteReceptionResult::EquivocateVote((vote1, vote2)) => {
+                // Attack detected!
+                // Construct a transaction to dispute this signer.
+                // TODO(lpl): Allow non-committee member to dispute?
+                match &self.proposal_generator {
+                    Some(proposal_generator) => {
+                        ensure!(
+                            vote1.author() == vote2.author(),
+                            "incorrect author"
+                        );
+                        ensure!(
+                            vote1.vote_data().proposed().round()
+                                == vote2.vote_data().proposed().round(),
+                            "incorrect round"
+                        );
+                        let dispute_payload = DisputePayload {
+                            address: vote1.author(),
+                            bls_pub_key: self
+                                .epoch_state
+                                .verifier
+                                .get_public_key(&vote1.author())
+                                .expect("checked in verify"),
+                            vrf_pub_key: self
+                                .epoch_state
+                                .verifier
+                                .get_vrf_public_key(&vote1.author())
+                                .expect("checked in verify")
+                                .unwrap(),
+                            conflicting_votes: ConflictSignature::Vote((
+                                bcs::to_bytes(&vote1).expect("encoding error"),
+                                bcs::to_bytes(&vote2).expect("encoding error"),
+                            )),
+                        };
+                        let raw_tx = RawTransaction::new_dispute(
+                            proposal_generator.author(),
+                            0,
+                            dispute_payload,
+                        );
+                        let signed_tx = raw_tx
+                            .sign(
+                                &proposal_generator.private_key,
+                                proposal_generator.public_key.clone(),
+                            )?
+                            .into_inner();
+                        // TODO(lpl): Track disputed nodes to avoid sending
+                        // multiple dispute, and retry if needed?
+                        let (tx, rx) = oneshot::channel();
+                        self.tx_sender.send((signed_tx, tx)).await;
+                        rx.await?;
+                    }
+                    None => {}
+                }
+                bail!("EquivocateVote!")
+            }
             // Return error so that duplicate or invalid votes will not be
             // broadcast to others.
             r => bail!("vote not added with result {:?}", r),
         }
+        Ok(relay)
     }
 
     async fn new_qc_aggregated(
@@ -1046,6 +1144,11 @@ impl RoundManager {
             if let Some(executed_block) = self.block_store.get_block(id) {
                 id = executed_block.parent_id();
                 blocks.push(executed_block.block().clone());
+            } else if let Ok(Some(block)) =
+                self.block_store.get_ledger_block(&id)
+            {
+                id = block.parent_id();
+                blocks.push(block);
             } else {
                 status = BlockRetrievalStatus::NotEnoughBlocks;
                 break;

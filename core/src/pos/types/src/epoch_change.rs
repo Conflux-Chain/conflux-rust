@@ -129,6 +129,10 @@ impl EpochChangeProof {
 
         Ok(self.ledger_info_with_sigs.last().unwrap())
     }
+
+    pub fn get_all_ledger_infos(&self) -> Vec<LedgerInfoWithSignatures> {
+        self.ledger_info_with_sigs.clone()
+    }
 }
 
 #[cfg(any(test, feature = "fuzzing"))]

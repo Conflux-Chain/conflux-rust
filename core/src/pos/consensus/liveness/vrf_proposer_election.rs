@@ -10,6 +10,7 @@ use diem_crypto::{VRFPrivateKey, VRFProof};
 use diem_logger::debug as diem_debug;
 use diem_types::{
     account_address::AccountAddress,
+    epoch_state::EpochState,
     validator_config::{ConsensusVRFPrivateKey, ConsensusVRFProof},
 };
 use parking_lot::Mutex;
@@ -25,12 +26,15 @@ pub struct VrfProposer {
     current_round: Mutex<Round>,
     current_seed: Mutex<Vec<u8>>,
     proposal_candidates: Mutex<HashMap<AccountAddress, Block>>,
+
+    // The epoch state of `current_round`, used to verify proposals.
+    epoch_state: EpochState,
 }
 
 impl VrfProposer {
     pub fn new(
         author: Author, vrf_private_key: ConsensusVRFPrivateKey,
-        proposal_threshold: U256,
+        proposal_threshold: U256, epoch_state: EpochState,
     ) -> Self
     {
         Self {
@@ -42,6 +46,7 @@ impl VrfProposer {
             current_round: Mutex::new(0),
             current_seed: Mutex::new(vec![]),
             proposal_candidates: Default::default(),
+            epoch_state,
         }
     }
 }
@@ -77,25 +82,56 @@ impl ProposerElection for VrfProposer {
     }
 
     fn is_valid_proposal(&self, block: &Block) -> bool {
+        let mut round_seed = self.current_seed.lock().clone();
+        round_seed.extend_from_slice(&block.round().to_be_bytes());
+        let vrf_hash = match self
+            .epoch_state
+            .verifier
+            .get_vrf_public_key(&block.author().expect("proposals have author"))
+        {
+            Some(Some(vrf_public_key)) => {
+                match block
+                    .vrf_proof()
+                    .unwrap()
+                    .verify(round_seed.as_slice(), &vrf_public_key)
+                {
+                    Ok(vrf_hash) => vrf_hash,
+                    Err(e) => {
+                        diem_debug!("is_valid_proposal: invalid proposal err={:?}, block={:?}", e, block);
+                        return false;
+                    }
+                }
+            }
+            _ => {
+                diem_debug!(
+                    "Receive block from non-validator: author={:?}",
+                    block.author()
+                );
+                return false;
+            }
+        };
         // FIXME(lpl): Verify VRF.
-        let vrf_number =
-            block.vrf_proof().unwrap().to_hash().unwrap().to_u256();
+        let vrf_number = vrf_hash.to_u256();
         vrf_number <= self.proposal_threshold
     }
 
     fn is_random_election(&self) -> bool { true }
 
-    fn receive_proposal_candidate(&self, block: Block) -> bool {
-        if self.is_valid_proposal(&block)
-            && block.round() == *self.current_round.lock()
-        {
-            self.proposal_candidates
-                .lock()
-                .insert(block.author().unwrap(), block)
-                .is_none()
-        } else {
-            false
+    /// Return `Err` for invalid or unmatching blocks.
+    /// Return `Ok(true)` if the block is valid and received for the first time.
+    /// Return `Ok(false)` if the block was received before.
+    fn receive_proposal_candidate(&self, block: Block) -> anyhow::Result<bool> {
+        if !self.is_valid_proposal(&block) {
+            anyhow::bail!("Invalid proposal");
         }
+        if block.round() != *self.current_round.lock() {
+            anyhow::bail!("Incorrect round");
+        }
+        Ok(self
+            .proposal_candidates
+            .lock()
+            .insert(block.author().unwrap(), block)
+            .is_none())
     }
 
     /// Choose a proposal from all received proposal candidates to vote for.

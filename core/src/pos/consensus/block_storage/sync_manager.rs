@@ -96,7 +96,10 @@ impl BlockStore {
         let mut pending = vec![];
         let mut retrieve_qc = qc.clone();
         loop {
-            if self.block_exists(retrieve_qc.certified_block().id()) {
+            // round 0 blocks is the genesis of every epoch.
+            if self.block_exists(retrieve_qc.certified_block().id())
+                || retrieve_qc.certified_block().round() == 0
+            {
                 break;
             }
             let mut blocks =
@@ -131,7 +134,15 @@ impl BlockStore {
             }
 
             // Wait for PoW to enter NormalPhase
-            self.pow_handler.wait_for_initialization();
+            self.pow_handler.wait_for_initialization(
+                self.get_block(pending.last().unwrap().id())
+                    .unwrap()
+                    .compute_result()
+                    .pivot_decision()
+                    .clone()
+                    .unwrap()
+                    .block_hash,
+            );
 
             // Execute the blocks in normal mode.
             while let Some(block) = pending.pop() {

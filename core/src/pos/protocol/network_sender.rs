@@ -44,7 +44,7 @@ impl NetworkSender {
     /// Send a single message to the destination peer using the
     /// `CONSENSUS_DIRECT_SEND_PROTOCOL` ProtocolId.
     pub fn send_to(
-        &mut self, recipient: ConsensusPublicKey, msg: &dyn Message,
+        &mut self, recipient: AccountAddress, msg: &dyn Message,
     ) -> Result<(), anyhow::Error> {
         if let Some(peer_hash) = self
             .protocol_handler
@@ -67,7 +67,7 @@ impl NetworkSender {
     /// Send a single message to the destination peers using the
     /// `CONSENSUS_DIRECT_SEND_PROTOCOL` ProtocolId.
     pub fn send_to_many(
-        &mut self, recipients: impl Iterator<Item = ConsensusPublicKey>,
+        &mut self, recipients: impl Iterator<Item = AccountAddress>,
         msg: &dyn Message,
     ) -> Result<(), anyhow::Error>
     {

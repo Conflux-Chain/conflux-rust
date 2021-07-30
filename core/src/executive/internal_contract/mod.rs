@@ -10,7 +10,7 @@ mod internal_context;
 
 pub use self::{
     contracts::InternalContractMap,
-    impls::{get_reentrancy_allowance, suicide},
+    impls::{get_reentrancy_allowance, pos::IndexStatus, suicide},
     internal_context::InternalRefContext,
 };
 pub use solidity_abi::ABIDecodeError;

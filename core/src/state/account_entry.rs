@@ -600,6 +600,22 @@ impl OverlayAccount {
         }
     }
 
+    pub fn change_storage_value<StateDbStorage: StorageStateTrait>(
+        &mut self, db: &StateDbGeneric<StateDbStorage>, key: &[u8], value: U256,
+    ) -> DbResult<()> {
+        let current_value = self.storage_at(db, key)?;
+        if !current_value.is_zero() {
+            // Constraint requirement: if a key appears in value_write_cache, it
+            // must be in owner_lv2_write cache. Safety: since
+            // current value is non-zero, this key must appears in
+            // lv2_write_cache because `storage_at` loaded it.
+            self.storage_value_write_cache.insert(key.to_vec(), value);
+        } else {
+            warn!("Change storage value outside transaction fails: current value is zero, tx {:?}, key {:?}", self.address, key);
+        }
+        Ok(())
+    }
+
     fn get_and_cache_storage<StateDbStorage: StorageStateTrait>(
         storage_value_read_cache: &mut HashMap<Vec<u8>, U256>,
         storage_owner_lv2_write_cache: &mut HashMap<Vec<u8>, Option<Address>>,

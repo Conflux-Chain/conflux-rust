@@ -245,6 +245,7 @@ impl EpochManager {
                     )
                     .private_key(),
                 self.config.safety_rules.vrf_proposal_threshold,
+                epoch_state.clone(),
             )),
         }
     }
@@ -269,17 +270,10 @@ impl EpochManager {
             .map_err(DbError::from)
             .context("[EpochManager] Failed to get epoch proof")?;
         let msg = ConsensusMsg::EpochChangeProof(Box::new(proof));
-        let pos_public_key = self
-            .epoch_state()
-            .verifier
-            .get_public_key(&peer_id)
-            .unwrap();
-        self.network_sender
-            .send_to(pos_public_key, &msg)
-            .context(format!(
-                "[EpochManager] Failed to send epoch proof to {}",
-                peer_id
-            ))
+        self.network_sender.send_to(peer_id, &msg).context(format!(
+            "[EpochManager] Failed to send epoch proof to {}",
+            peer_id
+        ))
     }
 
     async fn process_different_epoch(
@@ -311,17 +305,10 @@ impl EpochManager {
                 };
                 let msg =
                     ConsensusMsg::EpochRetrievalRequest(Box::new(request));
-                let pos_public_key = self
-                    .epoch_state()
-                    .verifier
-                    .get_public_key(&peer_id)
-                    .ok_or(anyhow::anyhow!("peer is not an validator"))?;
-                self.network_sender.send_to(pos_public_key, &msg).context(
-                    format!(
-                        "[EpochManager] Failed to send epoch retrieval to {}",
-                        peer_id
-                    ),
-                )
+                self.network_sender.send_to(peer_id, &msg).context(format!(
+                    "[EpochManager] Failed to send epoch retrieval to {}",
+                    peer_id
+                ))
             }
             Ordering::Equal => {
                 bail!("[EpochManager] Same epoch should not come to process_different_epoch");
@@ -350,17 +337,32 @@ impl EpochManager {
         //         "[EpochManager] State sync to new epoch {}",
         //         ledger_info
         //     ))?;
-        // FIXME(lpl): Use ledger_info to sync needed blocks.
-        match self.processor_mut() {
-            RoundProcessor::Recovery(_) => {
-                bail!("start_new_epoch for Recovery processor");
+        for ledger_info in proof.get_all_ledger_infos() {
+            let mut new_epoch = false;
+            match self.processor_mut() {
+                RoundProcessor::Recovery(_) => {
+                    bail!("start_new_epoch for Recovery processor");
+                }
+                RoundProcessor::Normal(p) => {
+                    if ledger_info.ledger_info().epoch()
+                        == p.epoch_state().epoch
+                    {
+                        p.sync_to_ledger_info(&ledger_info, peer_id).await?;
+                        new_epoch = true;
+                    } else {
+                        diem_error!(
+                            "Unexpected epoch change: me={} get={}",
+                            p.epoch_state().epoch,
+                            ledger_info.ledger_info().epoch()
+                        );
+                    }
+                }
             }
-            RoundProcessor::Normal(p) => {
-                p.sync_to_ledger_info(ledger_info, peer_id).await?;
+            if new_epoch {
+                monitor!("reconfig", self.expect_new_epoch().await);
             }
         }
 
-        monitor!("reconfig", self.expect_new_epoch().await);
         Ok(())
     }
 
@@ -473,7 +475,21 @@ impl EpochManager {
             self.tx_sender.clone(),
         );
         // Only check if we should send election after entering an new epoch.
-        if let Err(e) = processor.broadcast_election().await {
+        if let Err(e) = processor
+            .broadcast_election(
+                self.author,
+                self.config
+                    .safety_rules
+                    .test
+                    .as_ref()
+                    .expect("test config set")
+                    .consensus_key
+                    .as_ref()
+                    .expect("private key set in pos"),
+                self.config.safety_rules.vrf_private_key.as_ref().unwrap(),
+            )
+            .await
+        {
             diem_error!("error in broadcasting election tx: {:?}", e);
         }
         processor.start(last_vote).await;

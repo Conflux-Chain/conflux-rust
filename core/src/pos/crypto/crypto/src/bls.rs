@@ -45,6 +45,11 @@ pub struct BLSPublicKey(RawPublicKey);
 #[derive(DeserializeKey, Clone, SerializeKey, PartialEq)]
 pub struct BLSSignature(RawSignature);
 
+impl BLSPrivateKey {
+    ///
+    pub fn raw_key(self) -> RawPrivateKey { self.0 }
+}
+
 impl SigningKey for BLSPrivateKey {
     type SignatureMaterial = BLSSignature;
     type VerifyingKeyMaterial = BLSPublicKey;

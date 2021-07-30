@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use diem_crypto::{HashValue, VRFProof, ValidCryptoMaterial};
 
 use crate::{
-    account_address::AccountAddress,
+    account_address::{from_consensus_public_key, AccountAddress},
     account_config,
     block_info::{PivotBlockDecision, Round},
     contract_event::ContractEvent,
@@ -20,11 +20,13 @@ use crate::{
     validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
 };
+use diem_logger::prelude::*;
 use move_core_types::language_storage::TypeTag;
 use pow_types::StakingEvent;
 use std::convert::TryFrom;
 
 const TERM_LIST_LEN: usize = 6;
+// FIXME(lpl): Use correct value later.
 pub const ELECTION_AFTER_ACCEPTED_ROUND: Round = 240;
 const ROUND_PER_TERM: Round = 60;
 /// A term `n` is open for election in the view range
@@ -101,10 +103,12 @@ impl Eq for TermData {}
 impl TermData {
     fn next_term(
         &self, node_list: BinaryHeap<(HashValue, ElectionNodeID)>,
-    ) -> Self {
+        seed: Vec<u8>,
+    ) -> Self
+    {
         TermData {
             start_view: self.start_view + ROUND_PER_TERM,
-            seed: HashValue::sha3_256_of(&self.seed).to_vec(),
+            seed,
             node_list,
         }
     }
@@ -136,7 +140,7 @@ impl TermList {
     ) -> anyhow::Result<()> {
         let term_offset = event
             .start_term
-            .checked_sub(self.current_term)
+            .checked_sub(self.current_term - (TERM_LIST_LEN as u64 - 1))
             .ok_or(anyhow!("election start_term is too early"))?
             as usize;
         if term_offset >= self.term_list.len() {
@@ -163,20 +167,29 @@ impl TermList {
         Ok(())
     }
 
-    pub fn new_term(&mut self, new_term: u64) {
-        // This double-check should always pass.
-        if self.term_list[1].start_view
-            == new_term.saturating_mul(ROUND_PER_TERM)
-        {
-            if new_term <= TERM_LIST_LEN as u64 {
-                // The initial terms are not open for election.
-                return;
-            }
-            self.term_list.remove(0);
-            let last_term = self.term_list.last().unwrap();
-            self.term_list.push(last_term.next_term(Default::default()));
-            self.current_term = new_term;
+    pub fn new_term(&mut self, new_term: u64, new_seed: Vec<u8>) {
+        diem_debug!(
+            "new_term={}, start_view:{:?}",
+            new_term,
+            self.term_list
+                .iter()
+                .map(|t| (t.start_view, t.node_list.len()))
+                .collect::<Vec<_>>()
+        );
+        self.current_term = new_term;
+        if new_term < TERM_LIST_LEN as u64 {
+            // The initial terms are not open for election.
+            return;
         }
+        // This double-check should always pass.
+        debug_assert!(
+            self.term_list[TERM_LIST_LEN].start_view
+                == new_term.saturating_mul(ROUND_PER_TERM)
+        );
+        self.term_list.remove(0);
+        let last_term = self.term_list.last().unwrap();
+        self.term_list
+            .push(last_term.next_term(Default::default(), new_seed));
     }
 
     fn can_be_elected(
@@ -184,13 +197,20 @@ impl TermList {
     ) -> bool {
         // TODO(lpl): Optimize by adding hash set to each term or adding another
         // field to node_map.
-        let start_term_offset = target_term_offset as usize - TERM_LIST_LEN;
+        let start_term_offset =
+            target_term_offset as usize - (TERM_LIST_LEN - 1);
         // The checking of `target_view` ensures that this is in range of
         // `term_list`.
         for i in start_term_offset..=target_term_offset {
             let term = &self.term_list[i as usize];
             for (_, addr) in &term.node_list {
                 if addr.node_id.addr == *author {
+                    diem_debug!(
+                        "can_be_elected: {:?} is in term {}:{}",
+                        author,
+                        i,
+                        term.start_view
+                    );
                     return false;
                 }
             }
@@ -262,7 +282,7 @@ impl PosState {
         let mut term_list = Vec::new();
         let initial_term = TermData {
             start_view: 0,
-            seed: initial_seed,
+            seed: initial_seed.clone(),
             node_list,
         };
         term_list.push(initial_term);
@@ -270,7 +290,8 @@ impl PosState {
         // Duplicate the initial term for the first TERM_LIST_LEN + 2 terms.
         for _ in 0..(TERM_LIST_LEN + 1) {
             let last_term = term_list.last().unwrap();
-            let next_term = last_term.next_term(last_term.node_list.clone());
+            let next_term =
+                last_term.next_term(Default::default(), initial_seed.clone());
             term_list.push(next_term);
         }
         PosState {
@@ -334,6 +355,11 @@ impl PosState {
         let node_id = NodeID::new(
             election_tx.public_key.clone(),
             election_tx.vrf_public_key.clone(),
+        );
+        diem_trace!(
+            "validate_election: {:?} {}",
+            node_id.addr,
+            election_tx.target_term
         );
         let node = match self.node_map.get(&node_id.addr) {
             Some(node) => node,
@@ -443,18 +469,32 @@ impl PosState {
     /// Return `Some(target_term)` if `author` should send its election
     /// transaction.
     pub fn next_elect_term(&self, author: &AccountAddress) -> Option<u64> {
+        if self.term_list.current_term < (TERM_LIST_LEN - 1) as u64 {
+            return None;
+        }
         match self.node_map.get(author) {
             // This node has not staked in PoW.
             None => None,
             Some(node) => {
                 match &node.status {
                     NodeStatus::Accepted => {
-                        if self.term_list.can_be_elected(TERM_LIST_LEN, author)
+                        if ((self.term_list.current_term + 1) * ROUND_PER_TERM
+                            >= node.status_start_view
+                                + ELECTION_AFTER_ACCEPTED_ROUND)
+                            && self
+                                .term_list
+                                .can_be_elected(TERM_LIST_LEN, author)
                         {
-                            Some(
-                                self.term_list.current_term
-                                    + TERM_LIST_LEN as u64,
-                            )
+                            Some(self.term_list.current_term + 1)
+                        } else if ((self.term_list.current_term + 2)
+                            * ROUND_PER_TERM
+                            >= node.status_start_view
+                                + ELECTION_AFTER_ACCEPTED_ROUND)
+                            && self
+                                .term_list
+                                .can_be_elected(TERM_LIST_LEN + 1, author)
+                        {
+                            Some(self.term_list.current_term + 2)
                         } else {
                             // This node is still active and thus cannot be
                             // elected.
@@ -499,6 +539,7 @@ impl PosState {
 /// Write functions used apply changes (process events in PoS and PoW)
 impl PosState {
     pub fn register_node(&mut self, node_id: NodeID) -> Result<()> {
+        diem_trace!("register_node: {:?}", node_id);
         ensure!(
             !self.node_map.contains_key(&node_id.addr),
             "register an already registered address"
@@ -519,6 +560,11 @@ impl PosState {
     pub fn update_voting_power(
         &mut self, addr: &AccountAddress, increased_voting_power: u64,
     ) -> Result<()> {
+        diem_trace!(
+            "update_voting_power: {:?} {}",
+            addr,
+            increased_voting_power
+        );
         match self.node_map.get_mut(addr) {
             Some(node_status) => {
                 // TODO(lpl): Should we return error if the node has been
@@ -534,6 +580,11 @@ impl PosState {
     }
 
     pub fn new_node_elected(&mut self, event: &ElectionEvent) -> Result<()> {
+        diem_debug!(
+            "new_node_elected: {:?} {:?}",
+            event.node_id,
+            event.start_term
+        );
         let voting_power = self
             .node_map
             .get(&event.node_id.addr)
@@ -545,7 +596,7 @@ impl PosState {
     /// `get_new_committee` has been called before this to produce an
     /// EpochState. And `next_view` will not be called for blocks following
     /// a pending reconfiguration block.
-    pub fn next_view(&mut self) -> Result<Option<(EpochState, Vec<u8>)>> {
+    pub fn next_view(&mut self) -> Result<Option<EpochState>> {
         while let Some(retired_node) = self.retiring_nodes.pop_front() {
             let node = self.node_map.get_mut(&retired_node).expect("exists");
             assert_eq!(node.status, NodeStatus::Retired);
@@ -565,39 +616,28 @@ impl PosState {
         let epoch_state = if self.current_view % ROUND_PER_TERM == 0 {
             // generate new epoch for new term.
             let new_term = self.current_view / ROUND_PER_TERM;
-            self.term_list.new_term(new_term);
+            self.term_list.new_term(
+                new_term,
+                self.pivot_decision.block_hash.as_bytes().to_vec(),
+            );
             let (verifier, term_seed) = self.get_new_committee()?;
-            Some((
-                EpochState {
-                    // TODO(lpl): If we allow epoch changes within a term, this
-                    // should be updated.
-                    epoch: new_term + 1,
-                    verifier,
-                    vrf_seed: self
-                        .pivot_decision
-                        .block_hash
-                        .as_bytes()
-                        .to_vec(),
-                },
-                term_seed,
-            ))
+            Some(EpochState {
+                // TODO(lpl): If we allow epoch changes within a term, this
+                // should be updated.
+                epoch: new_term + 1,
+                verifier,
+                vrf_seed: term_seed.clone(),
+            })
         } else if self.current_view == 1 {
             let (verifier, term_seed) = self.get_new_committee()?;
             // genesis
-            Some((
-                EpochState {
-                    // TODO(lpl): If we allow epoch changes within a term, this
-                    // should be updated.
-                    epoch: 1,
-                    verifier,
-                    vrf_seed: self
-                        .pivot_decision
-                        .block_hash
-                        .as_bytes()
-                        .to_vec(),
-                },
-                term_seed,
-            ))
+            Some(EpochState {
+                // TODO(lpl): If we allow epoch changes within a term, this
+                // should be updated.
+                epoch: 1,
+                verifier,
+                vrf_seed: term_seed.clone(),
+            })
         } else {
             None
         };
@@ -605,6 +645,7 @@ impl PosState {
     }
 
     pub fn retire_node(&mut self, retire_event: &RetireEvent) -> Result<()> {
+        diem_trace!("retire_node: {:?}", retire_event.node_id);
         match self.node_map.get_mut(&retire_event.node_id.addr) {
             Some(node) => match node.status {
                 NodeStatus::Accepted => {
@@ -794,12 +835,7 @@ impl NodeID {
     pub fn new(
         public_key: ConsensusPublicKey, vrf_public_key: ConsensusVRFPublicKey,
     ) -> Self {
-        let mut raw = public_key.to_bytes();
-        raw.append(&mut vrf_public_key.to_bytes());
-        let h = *HashValue::sha3_256_of(&raw);
-        let mut array = [0u8; AccountAddress::LENGTH];
-        array.copy_from_slice(&h[h.len() - AccountAddress::LENGTH..]);
-        let addr = AccountAddress::new(array);
+        let addr = from_consensus_public_key(&public_key, &vrf_public_key);
         Self {
             public_key,
             vrf_public_key,
@@ -829,6 +865,22 @@ pub struct UnlockEvent {
 impl UnlockEvent {
     pub fn unlock_event_key() -> EventKey {
         EventKey::new_from_address(&account_config::unlock_address(), 5)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
+        bcs::from_bytes(bytes).map_err(Into::into)
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct DisputeEvent {
+    /// The node id to dispute.
+    pub node_id: AccountAddress,
+}
+
+impl DisputeEvent {
+    pub fn event_key() -> EventKey {
+        EventKey::new_from_address(&account_config::dispute_address(), 6)
     }
 
     pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {

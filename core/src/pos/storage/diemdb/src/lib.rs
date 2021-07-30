@@ -57,6 +57,7 @@ use crate::{
     transaction_store::TransactionStore,
 };
 use anyhow::{ensure, Result};
+use consensus_types::block::Block;
 use diem_config::config::RocksdbConfig;
 use diem_crypto::hash::{
     CryptoHash, HashValue, SPARSE_MERKLE_PLACEHOLDER_HASH,
