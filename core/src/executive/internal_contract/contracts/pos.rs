@@ -53,24 +53,30 @@ impl ExecutionTrait for Register {
         let (identifier, vote_power, bls_pubkey, vrf_pubkey, bls_proof) =
             inputs;
         register(
-            identifier, vote_power, bls_pubkey, vrf_pubkey, bls_proof, params,
+            identifier,
+            params.sender,
+            vote_power,
+            bls_pubkey,
+            vrf_pubkey,
+            bls_proof,
+            params,
             context,
         )
     }
 }
 
 make_solidity_function! {
-    struct IncreaseStake((H256, u64), "increaseStake(bytes32,uint64)");
+    struct IncreaseStake(u64, "increaseStake(uint64)");
 }
 impl_function_type!(IncreaseStake, "non_payable_write", gas: |spec: &Spec| spec.sstore_reset_gas);
 impl ExecutionTrait for IncreaseStake {
     fn execute_inner(
-        &self, inputs: (H256, u64), params: &ActionParams,
+        &self, inputs: u64, params: &ActionParams,
         context: &mut InternalRefContext,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        increase_stake(inputs.0, inputs.1, params, context)
+        increase_stake(params.sender, inputs, params, context)
     }
 }
 
@@ -85,7 +91,38 @@ impl ExecutionTrait for GetStatus {
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<(u64, u64)>
     {
-        get_status(inputs, params, context)
+        let status = get_status(inputs, params, context)?;
+        Ok((status.registered, status.unlocked))
+    }
+}
+
+make_solidity_function! {
+    struct IdentifierToAddress(H256, "identifierToAddress(bytes32)", Address);
+}
+impl_function_type!(IdentifierToAddress, "query_with_default_gas");
+impl ExecutionTrait for IdentifierToAddress {
+    fn execute_inner(
+        &self, inputs: H256, params: &ActionParams,
+        context: &mut InternalRefContext,
+        _tracer: &mut dyn Tracer<Output = ExecTrace>,
+    ) -> vm::Result<Address>
+    {
+        identifier_to_address(inputs, params, context)
+    }
+}
+
+make_solidity_function! {
+    struct AddressToIdentifier(Address, "addressToIdentifier(address)", H256);
+}
+impl_function_type!(AddressToIdentifier, "query_with_default_gas");
+impl ExecutionTrait for AddressToIdentifier {
+    fn execute_inner(
+        &self, inputs: Address, params: &ActionParams,
+        context: &mut InternalRefContext,
+        _tracer: &mut dyn Tracer<Output = ExecTrace>,
+    ) -> vm::Result<H256>
+    {
+        address_to_identifier(inputs, params, context)
     }
 }
 

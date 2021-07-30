@@ -210,7 +210,7 @@ pub trait StateOpsTrait {
         &mut self, identifier: H256, number: u64,
     ) -> DbResult<()>;
 
-    fn storage_lock(&self, identifier: H256) -> DbResult<U256>;
+    fn pos_locked_staking(&self, address: &Address) -> DbResult<U256>;
 }
 
 pub trait CheckpointTrait: StateOpsTrait {
