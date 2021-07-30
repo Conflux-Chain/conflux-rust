@@ -310,6 +310,8 @@ impl StorageWriteProxy {
         let db = Arc::new(ConsensusDB::new(config.storage.dir()));
         StorageWriteProxy { db, diem_db }
     }
+
+    pub fn consensus_db(&self) -> Arc<ConsensusDB> { self.db.clone() }
 }
 
 impl PersistentLivenessStorage for StorageWriteProxy {

@@ -338,6 +338,7 @@ pub fn initialize_common_modules(
     debug!("PoS initialized");
     let pos_connection = PosConnection::new(
         diem_handler.diem_db.clone() as Arc<dyn DBReaderForPoW>,
+        diem_handler.consensus_db.clone(),
         conf.pos_config(),
     );
     // FIXME(lpl): Set CIP height.
@@ -908,6 +909,6 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-use storage_interface::DBReaderForPoW;
+use storage_interface::{DBReaderForPoW, DbReader};
 use threadpool::ThreadPool;
 use txgen::{DirectTransactionGenerator, TransactionGenerator};

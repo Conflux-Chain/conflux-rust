@@ -231,6 +231,8 @@ pub struct PosState {
     /// view does not increase for blocks following a pending
     /// reconfiguration block.
     current_view: Round,
+    /// Current epoch state
+    epoch_state: EpochState,
     term_list: TermList,
 
     /// Track the nodes that have retired and are waiting to be unlocked.
@@ -295,9 +297,10 @@ impl PosState {
                 last_term.next_term(Default::default(), initial_seed.clone());
             term_list.push(next_term);
         }
-        PosState {
+        let mut pos_state = PosState {
             node_map,
             current_view: 0,
+            epoch_state: EpochState::empty(),
             term_list: TermList {
                 current_term: 0,
                 term_list,
@@ -305,13 +308,21 @@ impl PosState {
             retiring_nodes: Default::default(),
             pivot_decision: genesis_pivot_decision,
             catch_up_mode,
-        }
+        };
+        let (verifier, vrf_seed) = pos_state.get_new_committee().unwrap();
+        pos_state.epoch_state = EpochState {
+            epoch: 0,
+            verifier,
+            vrf_seed,
+        };
+        pos_state
     }
 
     pub fn new_empty() -> Self {
         Self {
             node_map: Default::default(),
             current_view: 0,
+            epoch_state: EpochState::empty(),
             term_list: TermList {
                 current_term: 0,
                 term_list: Default::default(),
@@ -346,6 +357,8 @@ impl PosState {
             &self.term_list.term_list[TERM_LIST_LEN - 1].seed
         }
     }
+
+    pub fn epoch_state(&self) -> &EpochState { &self.epoch_state }
 }
 
 /// Read-only functions used in `execute_block`
@@ -535,6 +548,18 @@ impl PosState {
     pub fn current_view(&self) -> u64 { self.current_view }
 
     pub fn catch_up_mode(&self) -> bool { self.catch_up_mode }
+
+    pub fn next_evicted_term(&self) -> Vec<AccountAddress> {
+        if self.current_view < (TERM_LIST_LEN - 1) as u64 * ROUND_PER_TERM {
+            return Vec::new();
+        } else {
+            self.term_list.term_list[0]
+                .node_list
+                .iter()
+                .map(|(_, address)| address.node_id.addr)
+                .collect()
+        }
+    }
 }
 
 /// Write functions used apply changes (process events in PoS and PoW)
@@ -642,6 +667,9 @@ impl PosState {
         } else {
             None
         };
+        if let Some(epoch_state) = &epoch_state {
+            self.epoch_state = epoch_state.clone();
+        }
         Ok(epoch_state)
     }
 
@@ -882,22 +910,6 @@ pub struct DisputeEvent {
 impl DisputeEvent {
     pub fn event_key() -> EventKey {
         EventKey::new_from_address(&account_config::dispute_address(), 6)
-    }
-
-    pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
-        bcs::from_bytes(bytes).map_err(Into::into)
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct RewardDistributionEvent {}
-
-impl RewardDistributionEvent {
-    pub fn event_key() -> EventKey {
-        EventKey::new_from_address(
-            &account_config::reward_distribution_address(),
-            7,
-        )
     }
 
     pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {

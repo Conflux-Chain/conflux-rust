@@ -723,8 +723,12 @@ where V: VMExecutor
         fail_point!("executor::vm_execute_chunk", |_| {
             Err(anyhow::anyhow!("Injected error in execute_chunk"))
         });
-        let vm_outputs =
-            V::execute_block(transactions.clone(), &state_view, true)?;
+        let vm_outputs = V::execute_block(
+            transactions.clone(),
+            &state_view,
+            true,
+            &self.db,
+        )?;
 
         // Since other validators have committed these transactions, their
         // status should all be TransactionStatus::Keep.
@@ -1061,6 +1065,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     transactions.clone(),
                     &state_view,
                     catch_up_mode,
+                    &self.db,
                 )
                 .map_err(anyhow::Error::from)?
             };

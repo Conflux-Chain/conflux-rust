@@ -8,6 +8,7 @@ use super::{
     util::time_service::ClockTimeService,
 };
 use crate::pos::{
+    consensus::consensusdb::ConsensusDB,
     mempool::{ConsensusRequest, SubmissionStatus},
     pow_handler::PowHandler,
     protocol::network_sender::NetworkSender,
@@ -40,7 +41,7 @@ pub fn start_consensus(
         SignedTransaction,
         oneshot::Sender<anyhow::Result<SubmissionStatus>>,
     )>,
-) -> (Runtime, Arc<PowHandler>, Arc<AtomicBool>)
+) -> (Runtime, Arc<PowHandler>, Arc<AtomicBool>, Arc<ConsensusDB>)
 {
     let stopped = Arc::new(AtomicBool::new(false));
     let runtime = runtime::Builder::new_multi_thread()
@@ -51,6 +52,7 @@ pub fn start_consensus(
         .build()
         .expect("Failed to create Tokio runtime!");
     let storage = Arc::new(StorageWriteProxy::new(node_config, diem_db));
+    let consensus_db = storage.consensus_db();
     let txn_manager = Arc::new(MempoolProxy::new(
         consensus_to_mempool_sender,
         node_config.consensus.mempool_poll_count,
@@ -93,5 +95,5 @@ pub fn start_consensus(
     ));
 
     diem_debug!("Consensus started.");
-    (runtime, pow_handler, stopped)
+    (runtime, pow_handler, stopped, consensus_db)
 }

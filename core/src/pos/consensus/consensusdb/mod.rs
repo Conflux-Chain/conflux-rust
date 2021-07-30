@@ -24,11 +24,13 @@ use schema::{
 use schemadb::{Options, ReadOptions, SchemaBatch, DB, DEFAULT_CF_NAME};
 use std::{collections::HashMap, iter::Iterator, path::Path, time::Instant};
 
+/// ConsensusDB
 pub struct ConsensusDB {
     db: DB,
 }
 
 impl ConsensusDB {
+    /// new
     pub fn new<P: AsRef<Path> + Clone>(db_root_path: P) -> Self {
         let column_families = vec![
             /* UNUSED CF = */ DEFAULT_CF_NAME,
@@ -55,6 +57,7 @@ impl ConsensusDB {
         Self { db }
     }
 
+    /// get_data
     pub fn get_data(
         &self,
     ) -> Result<(
@@ -84,6 +87,7 @@ impl ConsensusDB {
         ))
     }
 
+    /// save_highest_timeout_certificate
     pub fn save_highest_timeout_certificate(
         &self, highest_timeout_certificate: Vec<u8>,
     ) -> Result<(), DbError> {
@@ -96,6 +100,7 @@ impl ConsensusDB {
         Ok(())
     }
 
+    /// save_vote
     pub fn save_vote(&self, last_vote: Vec<u8>) -> Result<(), DbError> {
         let mut batch = SchemaBatch::new();
         batch.put::<SingleEntrySchema>(
@@ -105,6 +110,7 @@ impl ConsensusDB {
         self.commit(batch)
     }
 
+    /// save_blocks_and_quorum_certificates
     pub fn save_blocks_and_quorum_certificates(
         &self, block_data: Vec<Block>, qc_data: Vec<QuorumCert>,
     ) -> Result<(), DbError> {
@@ -124,6 +130,7 @@ impl ConsensusDB {
         self.commit(batch)
     }
 
+    /// delete_blocks_and_quorum_certificates
     pub fn delete_blocks_and_quorum_certificates(
         &self, block_ids: Vec<HashValue>,
     ) -> Result<(), DbError> {
@@ -172,6 +179,7 @@ impl ConsensusDB {
             .get::<SingleEntrySchema>(&SingleEntryKey::LastVoteMsg)?)
     }
 
+    /// delete_last_vote_msg
     pub fn delete_last_vote_msg(&self) -> Result<(), DbError> {
         let mut batch = SchemaBatch::new();
         batch.delete::<SingleEntrySchema>(&SingleEntryKey::LastVoteMsg)?;
@@ -195,12 +203,14 @@ impl ConsensusDB {
         Ok(iter.collect::<Result<HashMap<HashValue, QuorumCert>>>()?)
     }
 
+    /// get_ledger_block
     pub fn get_ledger_block(
         &self, block_id: &HashValue,
     ) -> Result<Option<Block>, DbError> {
         Ok(self.db.get::<LedgerBlockSchema>(block_id)?)
     }
 
+    /// save_ledger_blocks
     pub fn save_ledger_blocks(
         &self, blocks: Vec<Block>,
     ) -> Result<(), DbError> {

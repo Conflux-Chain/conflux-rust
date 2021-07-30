@@ -344,6 +344,12 @@ impl ValidatorVerifier {
 
     /// Returns quorum voting power.
     pub fn quorum_voting_power(&self) -> u64 { self.quorum_voting_power }
+
+    pub fn address_to_validator_info(
+        &self,
+    ) -> &BTreeMap<AccountAddress, ValidatorConsensusInfo> {
+        &self.address_to_validator_info
+    }
 }
 
 impl OnChainConfig for ValidatorVerifier {
