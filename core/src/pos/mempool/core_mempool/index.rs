@@ -7,6 +7,7 @@ use crate::pos::mempool::{
     counters,
     logging::{LogEntry, LogSchema},
 };
+use diem_crypto::HashValue;
 use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress, transaction::GovernanceRole,
@@ -14,13 +15,79 @@ use diem_types::{
 use rand::seq::SliceRandom;
 use std::{
     cmp::Ordering,
-    collections::{btree_set::Iter, BTreeMap, BTreeSet, HashMap},
+    collections::{
+        btree_set::Iter, hash_map::Values, BTreeMap, BTreeSet, HashMap,
+    },
     iter::Rev,
     ops::Bound,
     time::Duration,
 };
 
-pub type AccountTransactions = BTreeMap<u64, MempoolTransaction>;
+pub struct AccountTransactions {
+    normal_transaction: HashMap<HashValue, MempoolTransaction>,
+    pivot_decision_transaction: HashMap<HashValue, MempoolTransaction>,
+}
+
+pub type AccountTransactionIter<'a> = Values<'a, HashValue, MempoolTransaction>;
+
+impl AccountTransactions {
+    pub(crate) fn new() -> Self {
+        Self {
+            normal_transaction: HashMap::new(),
+            pivot_decision_transaction: HashMap::new(),
+        }
+    }
+
+    pub(crate) fn get(&self, hash: &HashValue) -> Option<&MempoolTransaction> {
+        if let Some(txn) = self.normal_transaction.get(hash) {
+            Some(txn)
+        } else {
+            self.pivot_decision_transaction.get(hash)
+        }
+    }
+
+    pub(crate) fn remove(
+        &mut self, hash: &HashValue,
+    ) -> Option<MempoolTransaction> {
+        if let Some(txn) = self.normal_transaction.remove(hash) {
+            Some(txn)
+        } else {
+            self.pivot_decision_transaction.remove(hash)
+        }
+    }
+
+    pub(crate) fn insert(
+        &mut self, hash: HashValue, txn: MempoolTransaction,
+        is_pivot_decision: bool,
+    )
+    {
+        if is_pivot_decision {
+            self.normal_transaction.insert(hash, txn);
+        } else {
+            self.pivot_decision_transaction.insert(hash, txn);
+        }
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.pivot_decision_transaction.len() + self.normal_transaction.len()
+    }
+
+    pub(crate) fn iter(&self) -> AccountTransactionIter {
+        self.normal_transaction.values()
+    }
+
+    pub(crate) fn iter_pivot_decision(&self) -> AccountTransactionIter {
+        self.pivot_decision_transaction.values()
+    }
+}
+
+pub type TxnPointer = (AccountAddress, HashValue);
+
+impl From<&MempoolTransaction> for TxnPointer {
+    fn from(transaction: &MempoolTransaction) -> Self {
+        (transaction.get_sender(), transaction.get_hash())
+    }
+}
 
 /// PriorityIndex represents the main Priority Queue in Mempool.
 /// It's used to form the transaction block for Consensus.
@@ -60,7 +127,7 @@ impl PriorityIndex {
             gas_ranking_score: txn.ranking_score,
             expiration_time: txn.expiration_time,
             address: txn.get_sender(),
-            sequence_number: txn.get_sequence_number(),
+            hash: txn.get_hash(),
             governance_role: txn.governance_role,
         }
     }
@@ -75,7 +142,7 @@ pub struct OrderedQueueKey {
     pub gas_ranking_score: u64,
     pub expiration_time: Duration,
     pub address: AccountAddress,
-    pub sequence_number: u64,
+    pub hash: HashValue,
     pub governance_role: GovernanceRole,
 }
 
@@ -107,7 +174,8 @@ impl Ord for OrderedQueueKey {
             Ordering::Equal => {}
             ordering => return ordering,
         }
-        self.sequence_number.cmp(&other.sequence_number).reverse()
+        // TODO(linxi): correct compare
+        self.hash.cmp(&other.hash).reverse()
     }
 }
 
@@ -144,7 +212,7 @@ impl TTLIndex {
         let ttl_key = TTLOrderingKey {
             expiration_time: now,
             address: AccountAddress::ZERO,
-            sequence_number: 0,
+            hash: HashValue::zero(),
         };
 
         let mut active = self.data.split_off(&ttl_key);
@@ -158,7 +226,7 @@ impl TTLIndex {
         TTLOrderingKey {
             expiration_time: (self.get_expiration_time)(txn),
             address: txn.get_sender(),
-            sequence_number: txn.get_sequence_number(),
+            hash: txn.get_hash(),
         }
     }
 
@@ -170,7 +238,7 @@ impl TTLIndex {
 pub struct TTLOrderingKey {
     pub expiration_time: Duration,
     pub address: AccountAddress,
-    pub sequence_number: u64,
+    pub hash: HashValue,
 }
 
 /// Be very careful with this, to not break the partial ordering.
@@ -179,8 +247,9 @@ pub struct TTLOrderingKey {
 impl Ord for TTLOrderingKey {
     fn cmp(&self, other: &TTLOrderingKey) -> Ordering {
         match self.expiration_time.cmp(&other.expiration_time) {
-            Ordering::Equal => (&self.address, self.sequence_number)
-                .cmp(&(&other.address, other.sequence_number)),
+            Ordering::Equal => {
+                (&self.address, self.hash).cmp(&(&other.address, other.hash))
+            }
             ordering => ordering,
         }
     }
@@ -191,13 +260,13 @@ impl Ord for TTLOrderingKey {
 /// included in the next consensus block (which means its status is != NotReady
 /// or its sequential to another "ready" transaction).
 ///
-/// It's represented as Map <timeline_id, (Address, sequence_number)>, where
+/// It's represented as Map <timeline_id, (Address, hash)>, where
 /// timeline_id is auto increment unique id of "ready" transaction in local
-/// Mempool. (Address, sequence_number) is a logical reference to transaction
+/// Mempool. (Address, hash) is a logical reference to transaction
 /// content in main storage.
 pub struct TimelineIndex {
     timeline_id: u64,
-    timeline: BTreeMap<u64, (AccountAddress, u64)>,
+    timeline: BTreeMap<u64, (AccountAddress, HashValue)>,
 }
 
 impl TimelineIndex {
@@ -211,13 +280,13 @@ impl TimelineIndex {
     /// Read all transactions from the timeline since <timeline_id>.
     pub(crate) fn read_timeline(
         &mut self, timeline_id: u64, count: usize,
-    ) -> Vec<(AccountAddress, u64)> {
+    ) -> Vec<(AccountAddress, HashValue)> {
         let mut batch = vec![];
-        for (_id, &(address, sequence_number)) in self
+        for (_id, &(address, hash)) in self
             .timeline
             .range((Bound::Excluded(timeline_id), Bound::Unbounded))
         {
-            batch.push((address, sequence_number));
+            batch.push((address, hash));
             if batch.len() == count {
                 break;
             }
@@ -229,7 +298,7 @@ impl TimelineIndex {
     /// `end_id` (inclusive).
     pub(crate) fn timeline_range(
         &mut self, start_id: u64, end_id: u64,
-    ) -> Vec<(AccountAddress, u64)> {
+    ) -> Vec<(AccountAddress, HashValue)> {
         self.timeline
             .range((Bound::Excluded(start_id), Bound::Included(end_id)))
             .map(|(_idx, txn)| txn)
@@ -238,10 +307,8 @@ impl TimelineIndex {
     }
 
     pub(crate) fn insert(&mut self, txn: &mut MempoolTransaction) {
-        self.timeline.insert(
-            self.timeline_id,
-            (txn.get_sender(), txn.get_sequence_number()),
-        );
+        self.timeline
+            .insert(self.timeline_id, (txn.get_sender(), txn.get_hash()));
         txn.timeline_state = TimelineState::Ready(self.timeline_id);
         self.timeline_id += 1;
     }
@@ -253,117 +320,4 @@ impl TimelineIndex {
     }
 
     pub(crate) fn size(&self) -> usize { self.timeline.len() }
-}
-
-/// ParkingLotIndex keeps track of "not_ready" transactions, e.g., transactions
-/// that can't be included in the next block because their sequence number is
-/// too high. We keep a separate index to be able to efficiently evict them when
-/// Mempool is full.
-pub struct ParkingLotIndex {
-    // DS invariants:
-    // 1. for each entry (account, txns) in `data`, `txns` is never empty
-    // 2. for all accounts, data.get(account_indices.get(`account`)) ==
-    // (account, sequence numbers of account's txns)
-    data: Vec<(AccountAddress, BTreeSet<u64>)>,
-    account_indices: HashMap<AccountAddress, usize>,
-    size: usize,
-}
-
-impl ParkingLotIndex {
-    pub(crate) fn new() -> Self {
-        Self {
-            data: vec![],
-            account_indices: HashMap::new(),
-            size: 0,
-        }
-    }
-
-    pub(crate) fn insert(&mut self, txn: &MempoolTransaction) {
-        let sender = &txn.txn.sender();
-        let sequence_number = txn.txn.sequence_number();
-        let is_new_entry = match self.account_indices.get(sender) {
-            Some(index) => {
-                if let Some((_account, seq_nums)) = self.data.get_mut(*index) {
-                    seq_nums.insert(sequence_number)
-                } else {
-                    counters::CORE_MEMPOOL_INVARIANT_VIOLATION_COUNT.inc();
-                    diem_error!(
-                        LogSchema::new(LogEntry::InvariantViolated),
-                        "Parking lot invariant violated: for account {}, account index exists but missing entry in data",
-                        sender
-                    );
-                    return;
-                }
-            }
-            None => {
-                let seq_nums =
-                    [sequence_number].iter().cloned().collect::<BTreeSet<_>>();
-                self.data.push((*sender, seq_nums));
-                self.account_indices.insert(*sender, self.data.len() - 1);
-                true
-            }
-        };
-        if is_new_entry {
-            self.size += 1;
-        }
-    }
-
-    pub(crate) fn remove(&mut self, txn: &MempoolTransaction) {
-        let sender = &txn.txn.sender();
-        if let Some(index) = self.account_indices.get(sender).cloned() {
-            if let Some((_account, txns)) = self.data.get_mut(index) {
-                if txns.remove(&txn.txn.sequence_number()) {
-                    self.size -= 1;
-                }
-
-                // maintain DS invariant
-                if txns.is_empty() {
-                    // remove account with no more txns
-                    self.data.swap_remove(index);
-                    self.account_indices.remove(sender);
-
-                    // update DS for account that was swapped in `swap_remove`
-                    if let Some((swapped_account, _)) = self.data.get(index) {
-                        self.account_indices.insert(*swapped_account, index);
-                    }
-                }
-            }
-        }
-    }
-
-    pub(crate) fn contains(
-        &self, account: &AccountAddress, seq_num: &u64,
-    ) -> bool {
-        self.account_indices
-            .get(&account)
-            .and_then(|idx| self.data.get(*idx))
-            .map_or(false, |(_account, txns)| txns.contains(seq_num))
-    }
-
-    /// Returns a random "non-ready" transaction (with highest sequence number
-    /// for that account).
-    pub(crate) fn get_poppable(&mut self) -> Option<TxnPointer> {
-        let mut rng = rand::thread_rng();
-        self.data.choose(&mut rng).and_then(|(sender, txns)| {
-            txns.iter().rev().next().map(|seq_num| (*sender, *seq_num))
-        })
-    }
-
-    pub(crate) fn size(&self) -> usize { self.size }
-}
-
-/// Logical pointer to `MempoolTransaction`.
-/// Includes Account's address and transaction sequence number.
-pub type TxnPointer = (AccountAddress, u64);
-
-impl From<&MempoolTransaction> for TxnPointer {
-    fn from(transaction: &MempoolTransaction) -> Self {
-        (transaction.get_sender(), transaction.get_sequence_number())
-    }
-}
-
-impl From<&OrderedQueueKey> for TxnPointer {
-    fn from(key: &OrderedQueueKey) -> Self {
-        (key.address, key.sequence_number)
-    }
 }

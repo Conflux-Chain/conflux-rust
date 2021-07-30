@@ -437,7 +437,7 @@ impl RoundManager {
             .proposal_generator
             .as_mut()
             .expect("checked by process_new_round_event")
-            .generate_proposal(new_round_event.round)
+            .generate_proposal(new_round_event.round, self.epoch_state.verifier.clone())
             .await?;
         let mut signed_proposal = self.safety_rules.sign_proposal(proposal)?;
         if self.proposer_election.is_random_election() {

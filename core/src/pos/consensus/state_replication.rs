@@ -5,7 +5,10 @@ use super::error::{MempoolError, StateSyncError};
 use anyhow::Result;
 use consensus_types::{block::Block, common::Payload};
 use diem_crypto::HashValue;
-use diem_types::ledger_info::LedgerInfoWithSignatures;
+use diem_types::{
+    ledger_info::LedgerInfoWithSignatures,
+    validator_verifier::ValidatorVerifier,
+};
 use executor_types::{Error as ExecutionError, StateComputeResult};
 
 /// Retrieves and updates the status of transactions on demand (e.g., via
@@ -16,7 +19,8 @@ pub trait TxnManager: Send + Sync {
     /// The `exclude_txns` list includes the transactions that are already
     /// pending in the branch of blocks consensus is trying to extend.
     async fn pull_txns(
-        &self, max_size: u64, exclude: Vec<&Payload>,
+        &self, max_size: u64, exclude: Vec<&Payload>, hash: HashValue,
+        validators: ValidatorVerifier,
     ) -> Result<Payload, MempoolError>;
 
     /// Notifies TxnManager about the executed result of the block,

@@ -579,7 +579,7 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
                 Transaction::UserTransaction(signed_txn) => {
                     Some(CommittedTransaction {
                         sender: signed_txn.sender(),
-                        sequence_number: signed_txn.sequence_number(),
+                        hash: signed_txn.hash(),
                     })
                 }
                 _ => None,

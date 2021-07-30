@@ -16,6 +16,7 @@ use crate::pos::{
 use anyhow::Result;
 use channel::diem_channel::Receiver;
 use diem_config::config::MempoolConfig;
+use diem_crypto::HashValue;
 use diem_infallible::{Mutex, RwLock};
 use diem_types::{
     account_address::AccountAddress,
@@ -24,6 +25,7 @@ use diem_types::{
         ConfigID, DiemVersion, OnChainConfig, OnChainConfigPayload, VMConfig,
     },
     transaction::SignedTransaction,
+    validator_verifier::ValidatorVerifier,
     vm_status::DiscardedVMStatus,
 };
 use futures::{
@@ -132,6 +134,10 @@ pub enum ConsensusRequest {
         u64,
         // transactions to exclude from requested block
         Vec<TransactionExclusion>,
+        // parent block id
+        HashValue,
+        // current validators
+        ValidatorVerifier,
         oneshot::Sender<Result<ConsensusResponse>>,
     ),
     /// Notifications about *rejected* committed txns.
@@ -144,14 +150,14 @@ pub enum ConsensusRequest {
 impl fmt::Display for ConsensusRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let payload = match self {
-            ConsensusRequest::GetBlockRequest(block_size, excluded_txns, _) => {
+            ConsensusRequest::GetBlockRequest(block_size, excluded_txns, parent_block_id, _, _) => {
                 let mut txns_str = "".to_string();
                 for tx in excluded_txns.iter() {
                     txns_str += &format!("{} ", tx);
                 }
                 format!(
-                    "GetBlockRequest [block_size: {}, excluded_txns: {}]",
-                    block_size, txns_str
+                    "GetBlockRequest [block_size: {}, excluded_txns: {}, parent_block_id: {}]",
+                    block_size, txns_str, parent_block_id
                 )
             }
             ConsensusRequest::RejectNotification(rejected_txns, _) => {
@@ -224,24 +230,24 @@ impl CommitResponse {
 /// Successfully executed and committed txn
 pub struct CommittedTransaction {
     pub sender: AccountAddress,
-    pub sequence_number: u64,
+    pub hash: HashValue,
 }
 
 impl fmt::Display for CommittedTransaction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.sender, self.sequence_number,)
+        write!(f, "{}:{}", self.sender, self.hash,)
     }
 }
 
 #[derive(Clone)]
 pub struct TransactionExclusion {
     pub sender: AccountAddress,
-    pub sequence_number: u64,
+    pub hash: HashValue,
 }
 
 impl fmt::Display for TransactionExclusion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.sender, self.sequence_number,)
+        write!(f, "{}:{}", self.sender, self.hash,)
     }
 }
 

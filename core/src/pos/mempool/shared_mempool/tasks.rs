@@ -37,6 +37,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use storage_interface::DbReader;
 use tokio::runtime::Handle;
 
 // ============================== //
@@ -104,7 +105,7 @@ pub(crate) async fn process_client_transaction_submission(
 
 /// Processes transactions from other nodes.
 pub(crate) async fn process_transaction_broadcast(
-    mut smp: SharedMempool, transactions: Vec<SignedTransaction>,
+    smp: SharedMempool, transactions: Vec<SignedTransaction>,
     request_id: Vec<u8>, timeline_state: TimelineState, peer: NodeId,
     timer: HistogramTimer,
 )
@@ -223,51 +224,19 @@ pub(crate) async fn process_incoming_transactions(
             storage_read_latency.as_secs_f64() / transactions.len() as f64,
         );
 
-    let transactions: Vec<_> = transactions
-        .into_iter()
-        .enumerate()
-        .filter_map(|(idx, t)| {
-            /*
-            if let Ok(sequence_number) = seq_numbers[idx] {
-                if t.sequence_number() >= sequence_number {
-                    return Some((t, sequence_number));
-                } else {
-                    statuses.push((
-                        t,
-                        (
-                            MempoolStatus::new(MempoolStatusCode::VmError),
-                            Some(DiscardedVMStatus::SEQUENCE_NUMBER_TOO_OLD),
-                        ),
-                    ));
-                }
-            } else {
-                // Failed to get transaction
-                statuses.push((
-                    t,
-                    (
-                        MempoolStatus::new(MempoolStatusCode::VmError),
-                        Some(DiscardedVMStatus::RESOURCE_DOES_NOT_EXIST),
-                    ),
-                ));
-            }
-            */
-            Some((t, seq_numbers[idx]))
-        })
-        .collect();
-
     // Track latency: VM validation
     let vm_validation_timer = counters::PROCESS_TXN_BREAKDOWN_LATENCY
         .with_label_values(&[counters::VM_VALIDATION_LABEL])
         .start_timer();
     let validation_results = transactions
         .par_iter()
-        .map(|t| smp.validator.read().validate_transaction(t.0.clone()))
+        .map(|t| smp.validator.read().validate_transaction(t.clone()))
         .collect::<Vec<_>>();
     vm_validation_timer.stop_and_record();
 
     {
         let mut mempool = smp.mempool.lock();
-        for (idx, (transaction, sequence_number)) in
+        for (idx, transaction) in
             transactions.into_iter().enumerate()
         {
             if let Some(validation_result) = &validation_results[idx] {
@@ -282,7 +251,6 @@ pub(crate) async fn process_incoming_transactions(
                             transaction.clone(),
                             gas_amount,
                             ranking_score,
-                            sequence_number,
                             timeline_state,
                             governance_role,
                         );
@@ -387,7 +355,7 @@ pub(crate) async fn process_state_sync_request(
 }
 
 pub(crate) async fn process_consensus_request(
-    mempool: &Mutex<CoreMempool>, req: ConsensusRequest,
+    db: Arc<dyn DbReader>, mempool: &Mutex<CoreMempool>, req: ConsensusRequest,
 ) {
     // Start latency timer
     let start_time = Instant::now();
@@ -400,11 +368,13 @@ pub(crate) async fn process_consensus_request(
         ConsensusRequest::GetBlockRequest(
             max_block_size,
             transactions,
+            parent_block_id,
+            validators,
             callback,
         ) => {
             let exclude_transactions: HashSet<TxnPointer> = transactions
                 .iter()
-                .map(|txn| (txn.sender, txn.sequence_number))
+                .map(|txn| (txn.sender, txn.hash))
                 .collect();
             let mut txns;
             {
@@ -416,7 +386,8 @@ pub(crate) async fn process_consensus_request(
                 let curr_time = diem_infallible::duration_since_epoch();
                 mempool.gc_by_expiration_time(curr_time);
                 let block_size = cmp::max(max_block_size, 1);
-                txns = mempool.get_block(block_size, exclude_transactions);
+                let pos_state = db.get_pos_state(&parent_block_id).expect("pos_state should exist");
+                txns = mempool.get_block(block_size, exclude_transactions, &pos_state, validators);
             }
             counters::mempool_service_transactions(
                 counters::GET_BLOCK_LABEL,
@@ -469,7 +440,7 @@ async fn commit_txns(
     for transaction in transactions {
         pool.remove_transaction(
             &transaction.sender,
-            transaction.sequence_number,
+            transaction.hash,
             is_rejected,
         );
     }
