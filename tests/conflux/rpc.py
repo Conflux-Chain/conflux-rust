@@ -306,6 +306,11 @@ class RpcClient:
         convert_b32_address_field_to_hex(block, "miner")
         return block
 
+    def block_by_block_number(self, block_number: str, include_txs: bool = False) -> dict:
+        block = self.node.cfx_getBlockByBlockNumber(block_number, include_txs)
+        convert_b32_address_field_to_hex(block, "miner")
+        return block
+
     def best_block_hash(self) -> str:
         return self.node.cfx_getBestBlockHash()
 
