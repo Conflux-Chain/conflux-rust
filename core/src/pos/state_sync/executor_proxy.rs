@@ -88,8 +88,9 @@ impl ExecutorProxy {
                     ),
                 )
             } else {
-                Self::fetch_all_configs(&*storage)
-                    .expect("[state sync] Failed initial read of on-chain configs")
+                Self::fetch_all_configs(&*storage).expect(
+                    "[state sync] Failed initial read of on-chain configs",
+                )
             }
         } else {
             Self::fetch_all_configs(&*storage)
