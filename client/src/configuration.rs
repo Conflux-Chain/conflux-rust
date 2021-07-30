@@ -44,7 +44,7 @@ use lazy_static::*;
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
 use parking_lot::RwLock;
-use primitives::{SignedTransaction, Transaction};
+use primitives::Transaction;
 use rand::Rng;
 use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
 use toml::Value;

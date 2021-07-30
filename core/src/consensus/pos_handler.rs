@@ -6,6 +6,7 @@ use diem_types::{
     account_state_blob::{AccountStateBlob, AccountStateWithProof},
     contract_event::{ContractEvent, EventWithProof},
     epoch_change::EpochChangeProof,
+    epoch_state::EpochState,
     event::EventKey,
     ledger_info::LedgerInfoWithSignatures,
     proof::{AccumulatorConsistencyProof, SparseMerkleProof},
@@ -51,6 +52,8 @@ pub trait PosInterface {
     fn get_rewarded_candidate_nodes(
         &self, block_id: &PosBlockId,
     ) -> Vec<NodeId>;
+
+    fn get_epoch_state(&self, block_id: &PosBlockId) -> EpochState;
 }
 
 #[allow(unused)]
@@ -181,14 +184,31 @@ impl<PoS: PosInterface> PosHandler<PoS> {
                     // round 0 is genesis and has not voters.
                     break;
                 }
-                let leader_status =
-                    elected.entry(block.author).or_insert(VoteCount::default());
-                leader_status.leader_count += 1;
-                leader_status.included_vote_count += block.voters.len() as u32;
+                for committee_member in self
+                    .pos
+                    // use `parent` here because the pos_state of an
+                    // epoch_ending block is next_epoch_state.
+                    .get_epoch_state(&block.parent)
+                    .verifier
+                    .address_to_validator_info()
+                    .keys()
+                {
+                    elected.insert(
+                        H256::from_slice(committee_member.as_ref()),
+                        VoteCount::default(),
+                    );
+                }
+                {
+                    let leader_status =
+                        elected.get_mut(&block.author).expect("in epoch state");
+                    leader_status.leader_count += 1;
+                    leader_status.included_vote_count +=
+                        block.voters.len() as u32;
+                }
                 for voter in block.voters {
                     elected
-                        .entry(voter)
-                        .or_insert(Default::default())
+                        .get_mut(&voter)
+                        .expect("in epoch state")
                         .vote_count += 1;
                 }
                 voted_block_id = block.parent;
@@ -324,6 +344,14 @@ impl PosInterface for PosConnection {
             .into_iter()
             .map(|address| H256::from_slice(address.as_ref()))
             .collect()
+    }
+
+    fn get_epoch_state(&self, block_id: &PosBlockId) -> EpochState {
+        self.pos_storage
+            .get_pos_state(&h256_to_diem_hash(block_id))
+            .expect("parent of an ending_epoch block")
+            .epoch_state()
+            .clone()
     }
 }
 

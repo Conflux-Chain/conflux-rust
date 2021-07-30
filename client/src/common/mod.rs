@@ -909,6 +909,6 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-use storage_interface::{DBReaderForPoW, DbReader};
+use storage_interface::DBReaderForPoW;
 use threadpool::ThreadPool;
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
