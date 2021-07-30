@@ -150,7 +150,13 @@ pub enum ConsensusRequest {
 impl fmt::Display for ConsensusRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let payload = match self {
-            ConsensusRequest::GetBlockRequest(block_size, excluded_txns, parent_block_id, _, _) => {
+            ConsensusRequest::GetBlockRequest(
+                block_size,
+                excluded_txns,
+                parent_block_id,
+                _,
+                _,
+            ) => {
                 let mut txns_str = "".to_string();
                 for tx in excluded_txns.iter() {
                     txns_str += &format!("{} ", tx);

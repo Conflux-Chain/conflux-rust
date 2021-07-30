@@ -4,8 +4,8 @@
 use crate::pos::mempool::{
     core_mempool::{
         index::{
-            AccountTransactionIter, AccountTransactions,
-            TTLIndex, TimelineIndex,
+            AccountTransactionIter, AccountTransactions, TTLIndex,
+            TimelineIndex,
         },
         transaction::{MempoolTransaction, TimelineState},
         ttl_cache::TtlCache,
@@ -25,7 +25,7 @@ use diem_types::{
     },
 };
 use std::{
-    collections::{HashMap, HashSet, hash_map::Values},
+    collections::{hash_map::Values, HashMap, HashSet},
     ops::Bound,
     time::{Duration, SystemTime},
 };
@@ -35,8 +35,7 @@ pub struct TransactionStore {
     // normal transactions
     transactions: AccountTransactions,
     // pivot decision helper structure
-    pivot_decisions:
-        HashMap<HashValue, HashSet<(AccountAddress, HashValue)>>,
+    pivot_decisions: HashMap<HashValue, HashSet<(AccountAddress, HashValue)>>,
 
     // TTLIndex based on client-specified expiration time
     expiration_time_index: TTLIndex,
@@ -51,8 +50,8 @@ pub struct TransactionStore {
     capacity: usize,
 }
 
-pub type PivotDecisionIter<'a> = Values<'a, HashValue, HashSet<(AccountAddress, HashValue)>>;
-
+pub type PivotDecisionIter<'a> =
+    Values<'a, HashValue, HashSet<(AccountAddress, HashValue)>>;
 
 impl TransactionStore {
     pub(crate) fn new(config: &MempoolConfig) -> Self {

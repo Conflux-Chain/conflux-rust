@@ -22,7 +22,7 @@ use diem_types::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
         ConsensusVRFPublicKey,
     },
-    validator_verifier::ValidatorVerifier
+    validator_verifier::ValidatorVerifier,
 };
 use pow_types::PowInterface;
 use std::sync::Arc;
@@ -109,7 +109,7 @@ impl ProposalGenerator {
     /// the caller. 3. In case a given round is not greater than the
     /// calculated parent, return an OldRound error.
     pub async fn generate_proposal(
-        &mut self, round: Round, validators: ValidatorVerifier
+        &mut self, round: Round, validators: ValidatorVerifier,
     ) -> anyhow::Result<BlockData> {
         {
             let mut last_round_generated = self.last_round_generated.lock();
@@ -169,7 +169,12 @@ impl ProposalGenerator {
 
             let mut payload = self
                 .txn_manager
-                .pull_txns(self.max_block_size, exclude_payload, parent_block.id(), validators)
+                .pull_txns(
+                    self.max_block_size,
+                    exclude_payload,
+                    parent_block.id(),
+                    validators,
+                )
                 .await
                 .context("Fail to retrieve txn")?;
             diem_debug!(

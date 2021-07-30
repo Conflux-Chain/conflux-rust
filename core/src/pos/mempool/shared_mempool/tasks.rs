@@ -236,9 +236,7 @@ pub(crate) async fn process_incoming_transactions(
 
     {
         let mut mempool = smp.mempool.lock();
-        for (idx, transaction) in
-            transactions.into_iter().enumerate()
-        {
+        for (idx, transaction) in transactions.into_iter().enumerate() {
             if let Some(validation_result) = &validation_results[idx] {
                 match validation_result.status() {
                     None => {
@@ -386,8 +384,14 @@ pub(crate) async fn process_consensus_request(
                 let curr_time = diem_infallible::duration_since_epoch();
                 mempool.gc_by_expiration_time(curr_time);
                 let block_size = cmp::max(max_block_size, 1);
-                let pos_state = db.get_pos_state(&parent_block_id).expect("pos_state should exist");
-                txns = mempool.get_block(block_size, exclude_transactions, &pos_state, validators);
+                //let pos_state =
+                // db.get_pos_state(&parent_block_id).expect("pos_state should
+                // exist");
+                txns = mempool.get_block(
+                    block_size,
+                    exclude_transactions,
+                    /* &pos_state, */ validators,
+                );
             }
             counters::mempool_service_transactions(
                 counters::GET_BLOCK_LABEL,

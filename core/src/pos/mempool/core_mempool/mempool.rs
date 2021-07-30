@@ -19,9 +19,9 @@ use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress,
     mempool_status::{MempoolStatus, MempoolStatusCode},
+    term_state::PosState,
     transaction::{GovernanceRole, SignedTransaction, TransactionPayload},
     validator_verifier::ValidatorVerifier,
-    term_state::PosState,
 };
 use std::{
     cmp::max,
@@ -137,8 +137,9 @@ impl Mempool {
     #[allow(clippy::explicit_counter_loop)]
     pub(crate) fn get_block(
         &mut self, batch_size: u64, mut seen: HashSet<TxnPointer>,
-        pos_state: &PosState, validators: ValidatorVerifier,
-    ) -> Vec<SignedTransaction> {
+        /* pos_state: &PosState, */ validators: ValidatorVerifier,
+    ) -> Vec<SignedTransaction>
+    {
         let mut block = vec![];
         let mut block_log = TxnsLog::new();
         // Helper DS. Helps to mitigate scenarios where account submits several
@@ -156,7 +157,7 @@ impl Mempool {
             if seen.contains(&TxnPointer::from(txn)) {
                 continue;
             }
-            let validate_result = match txn.txn.payload() {
+            /*let validate_result = match txn.txn.payload() {
                 TransactionPayload::Election(election_payload) => {
                     pos_state.validate_election(election_payload)
                 }
@@ -167,10 +168,11 @@ impl Mempool {
                   continue;
                 }
             };
-            if validate_result.is_ok() {
-                block.push(txn.txn.clone());
-                seen.insert((txn.get_sender(), txn.get_hash()));
-            }
+            */
+            //if validate_result.is_ok() {
+            block.push(txn.txn.clone());
+            seen.insert((txn.get_sender(), txn.get_hash()));
+            //}
         }
         // iterate all pivot decision transaction
         // TODO(linxi): use config instead of constant
