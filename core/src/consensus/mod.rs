@@ -65,6 +65,7 @@ use metrics::{
 };
 use parking_lot::{Mutex, RwLock};
 use primitives::{
+    compute_block_number,
     epoch::BlockHashOrEpochNumber,
     filter::{FilterError, LogFilter},
     log_entry::LocalizedLogEntry,
@@ -854,15 +855,14 @@ impl ConsensusGraph {
     }
 
     pub fn get_log_filter_epoch_range(
-        &self, filter: &LogFilter,
+        &self, from_epoch: EpochNumber, to_epoch: EpochNumber,
     ) -> Result<impl Iterator<Item = u64>, FilterError> {
         // lock so that we have a consistent view
         let _inner = self.inner.read_recursive();
 
         let from_epoch =
-            self.get_height_from_epoch_number(filter.from_epoch.clone())?;
-        let to_epoch =
-            self.get_height_from_epoch_number(filter.to_epoch.clone())?;
+            self.get_height_from_epoch_number(from_epoch.clone())?;
+        let to_epoch = self.get_height_from_epoch_number(to_epoch.clone())?;
 
         if from_epoch > to_epoch {
             return Err(FilterError::InvalidEpochNumber {
@@ -920,9 +920,10 @@ impl ConsensusGraph {
     }
 
     fn filter_logs_by_epochs(
-        &self, filter: LogFilter,
-    ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
-        assert!(filter.block_hashes.is_none());
+        &self, from_epoch: EpochNumber, to_epoch: EpochNumber,
+        filter: LogFilter,
+    ) -> Result<Vec<LocalizedLogEntry>, FilterError>
+    {
         let bloom_possibilities = filter.bloom_possibilities();
 
         let offset = filter.offset.unwrap_or(0);
@@ -934,7 +935,7 @@ impl ConsensusGraph {
 
         let mut logs = self
             // iterate over epochs in reverse order
-            .get_log_filter_epoch_range(&filter)?
+            .get_log_filter_epoch_range(from_epoch, to_epoch)?
             // we process epochs in each batch in parallel
             // but batches are processed one-by-one
             .chunks(self.config.get_logs_epoch_batch_size)
@@ -1027,10 +1028,8 @@ impl ConsensusGraph {
     }
 
     fn filter_logs_by_block_hashes(
-        &self, mut filter: LogFilter,
+        &self, block_hashes: Vec<H256>, filter: LogFilter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
-        assert!(filter.block_hashes.is_some());
-        let block_hashes = filter.block_hashes.take().unwrap();
         let bloom_possibilities = filter.bloom_possibilities();
 
         // keep a consistent view during filtering
@@ -1075,12 +1074,146 @@ impl ConsensusGraph {
         Ok(logs)
     }
 
+    fn filter_logs_by_block_numbers(
+        &self, from_block: u64, to_block: u64, filter: LogFilter,
+    ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
+        // check range
+        if from_block > to_block {
+            return Err(FilterError::InvalidBlockNumber {
+                from_block,
+                to_block,
+            });
+        }
+
+        // collect info from db
+        let from_hash = match self
+            .data_man
+            .hash_by_block_number(from_block, true /* update_cache */)
+        {
+            Some(h) => h,
+            None => bail!(FilterError::Custom(format!(
+                "Unable to find block hash for from_block {:?}",
+                from_block
+            ))),
+        };
+
+        let to_hash = match self
+            .data_man
+            .hash_by_block_number(to_block, true /* update_cache */)
+        {
+            Some(h) => h,
+            None => bail!(FilterError::Custom(format!(
+                "Unable to find block hash for to_block {:?}",
+                to_block
+            ))),
+        };
+
+        let from_epoch = match self.get_block_epoch_number(&from_hash) {
+            Some(e) => e,
+            None => bail!(FilterError::Custom(format!(
+                "Unable to find epoch number for block {:?}",
+                from_hash
+            ))),
+        };
+
+        let to_epoch = match self.get_block_epoch_number(&to_hash) {
+            Some(e) => e,
+            None => bail!(FilterError::Custom(format!(
+                "Unable to find epoch number for block {:?}",
+                to_hash
+            ))),
+        };
+
+        let (from_epoch_hashes, to_epoch_hashes) = {
+            let inner = self.inner.read();
+            (
+                inner.block_hashes_by_epoch(from_epoch)?,
+                inner.block_hashes_by_epoch(to_epoch)?,
+            )
+        };
+
+        // filter logs based on epochs
+        let epoch_range_logs = self.filter_logs_by_epochs(
+            EpochNumber::Number(from_epoch),
+            EpochNumber::Number(to_epoch),
+            filter,
+        )?;
+
+        // helper for finding relative position of `a` and `b` in `vec`
+        let rel_pos = |vec: &Vec<H256>, a: H256, b: H256| {
+            let position_a = vec.iter().position(|&h| a == h);
+            let position_b = vec.iter().position(|&h| b == h);
+
+            match (position_a, position_b) {
+                (Some(pa), Some(pb)) if pa < pb => "before",
+                (Some(pa), Some(pb)) if pa == pb => "equal",
+                (Some(pa), Some(pb)) if pa > pb => "after",
+                _ => "undefined",
+            }
+        };
+
+        // remove out-of-range blocks
+        let first = epoch_range_logs.iter().position(|l| {
+            l.epoch_number > from_epoch
+                || matches!(
+                    rel_pos(&from_epoch_hashes, l.block_hash, from_hash),
+                    "after" | "equal"
+                )
+        });
+
+        let last = epoch_range_logs
+            .iter()
+            .rev()
+            .position(|l| {
+                l.epoch_number < to_epoch
+                    || matches!(
+                        rel_pos(&to_epoch_hashes, l.block_hash, to_hash),
+                        "before" | "equal"
+                    )
+            })
+            .map(|i| epoch_range_logs.len() - i);
+
+        match (first, last) {
+            (Some(f), Some(l)) => Ok(epoch_range_logs[f..l].to_vec()),
+
+            // (None, _) means: all logs returned are in `from_epoch`,
+            // all from blocks with blocks numbers < `from_block`.
+            // (_, None) means: all logs returned are in `to_epoch`,
+            // all from blocks with blocks numbers > `to_block`.
+            _ => Ok(vec![]),
+        }
+    }
+
     pub fn logs(
         &self, filter: LogFilter,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError> {
-        match filter.block_hashes {
-            None => self.filter_logs_by_epochs(filter),
-            Some(_) => self.filter_logs_by_block_hashes(filter),
+        match &filter {
+            // filter by epoch numbers
+            LogFilter::EpochLogFilter {
+                from_epoch,
+                to_epoch,
+                ..
+            } => self.filter_logs_by_epochs(
+                from_epoch.clone(),
+                to_epoch.clone(),
+                filter,
+            ),
+
+            // filter by block hashes
+            LogFilter::BlockHashLogFilter { block_hashes, .. } => {
+                self.filter_logs_by_block_hashes(block_hashes.clone(), filter)
+            }
+
+            // filter by block numbers
+            LogFilter::BlockNumberLogFilter {
+                from_block,
+                to_block,
+                ..
+            } => self.filter_logs_by_block_numbers(
+                from_block.clone(),
+                to_block.clone(),
+                filter,
+            ),
         }
     }
 
@@ -1501,33 +1634,58 @@ impl ConsensusGraphTrait for ConsensusGraph {
     }
 
     fn get_block_epoch_number(&self, hash: &H256) -> Option<u64> {
-        self.inner.read_recursive().get_block_epoch_number(hash)
+        // try to get from memory
+        if let Some(e) =
+            self.inner.read_recursive().get_block_epoch_number(hash)
+        {
+            return Some(e);
+        }
+
+        // try to get from db
+        self.data_man.block_epoch_number(hash)
     }
 
     fn get_block_number(
         &self, block_hash: &H256,
     ) -> Result<Option<u64>, String> {
         let inner = self.inner.read_recursive();
-        let epoch_number = match inner.get_block_epoch_number(block_hash) {
+
+        let epoch_number = match inner
+            .get_block_epoch_number(block_hash)
+            .or_else(|| self.data_man.block_epoch_number(&block_hash))
+        {
             None => return Ok(None),
             Some(epoch_number) => epoch_number,
         };
-        let epoch_hash = match inner.epoch_hash(epoch_number) {
+
+        let blocks = match self
+            .get_block_hashes_by_epoch(EpochNumber::Number(epoch_number))
+            .ok()
+            .or_else(|| {
+                self.data_man
+                    .executed_epoch_set_hashes_from_db(epoch_number)
+            }) {
             None => return Ok(None),
-            Some(hash) => hash,
+            Some(hashes) => hashes,
         };
-        let blocks =
-            self.get_block_hashes_by_epoch(EpochNumber::Number(epoch_number))?;
+
+        let epoch_hash = blocks.last().expect("Epoch not empty");
+
         let start_block_number =
             match self.data_man.get_epoch_execution_context(&epoch_hash) {
                 None => return Ok(None),
                 Some(ctx) => ctx.start_block_number,
             };
+
         let index_of_block = match blocks.iter().position(|x| x == block_hash) {
             None => return Ok(None),
             Some(index) => index as u64,
         };
-        return Ok(Some(start_block_number + index_of_block));
+
+        return Ok(Some(compute_block_number(
+            start_block_number,
+            index_of_block,
+        )));
     }
 
     /// Find a trusted blame block for snapshot full sync
