@@ -409,7 +409,13 @@ pub fn genesis_block(
                 /* account_start_nonce = */ U256::zero(),
             )
             .unwrap();
-        state.deposit(&sender, &(U256::from(100) * U256::from(ONE_CFX_IN_DRIP)), 0).unwrap();
+        state
+            .deposit(
+                &sender,
+                &(U256::from(100) * U256::from(ONE_CFX_IN_DRIP)),
+                0,
+            )
+            .unwrap();
         let signed_tx = tx.fake_sign(sender);
         execute_genesis_transaction(&signed_tx, &mut state, machine.clone());
         sender_int += 1;

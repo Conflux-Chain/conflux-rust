@@ -339,17 +339,8 @@ impl RoundState {
     /// Setup the current round deadline and return the duration of the current
     /// round
     fn setup_deadline(&mut self) -> Duration {
-        let round_index_after_committed_round = {
-            if self.highest_committed_round == 0 {
-                // Genesis doesn't require the 3-chain rule for commit, hence
-                // start the index at the round after genesis.
-                self.current_round - 1
-            } else if self.current_round < self.highest_committed_round + 3 {
-                0
-            } else {
-                self.current_round - self.highest_committed_round - 3
-            }
-        } as usize;
+        let round_index_after_committed_round =
+            self.get_round_index_after_committed_round();
         let timeout = self
             .time_interval
             .get_round_duration(round_index_after_committed_round);
@@ -388,6 +379,21 @@ impl RoundState {
     /// FIXME(lpl): Decide a proper timeout setting.
     /// Currently it's set to half the round timeout.
     fn setup_proposal_deadline(&self) -> Duration {
+        let round_index_after_committed_round =
+            self.get_round_index_after_committed_round();
+        let timeout = self
+            .time_interval
+            .get_round_duration(round_index_after_committed_round)
+            / 2;
+        diem_debug!(
+            round = self.current_round,
+            "Set proposal selection deadline to {:?} from now",
+            timeout
+        );
+        timeout
+    }
+
+    fn get_round_index_after_committed_round(&self) -> usize {
         let round_index_after_committed_round = {
             if self.highest_committed_round == 0 {
                 // Genesis doesn't require the 3-chain rule for commit, hence
@@ -399,15 +405,6 @@ impl RoundState {
                 self.current_round - self.highest_committed_round - 3
             }
         } as usize;
-        let timeout = self
-            .time_interval
-            .get_round_duration(round_index_after_committed_round)
-            / 2;
-        diem_debug!(
-            round = self.current_round,
-            "Set proposal selection deadline to {:?} from now",
-            timeout
-        );
-        timeout
+        round_index_after_committed_round
     }
 }
