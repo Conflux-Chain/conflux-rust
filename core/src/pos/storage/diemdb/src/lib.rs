@@ -1091,6 +1091,19 @@ impl DBReaderForPoW for DiemDB {
         let events_vec = iter.collect::<Result<Vec<Vec<ContractEvent>>>>()?;
         Ok(events_vec.into_iter().flatten().collect())
     }
+
+    fn get_epoch_ending_blocks(
+        &self, start_epoch: u64, end_epoch: u64,
+    ) -> Result<Vec<HashValue>> {
+        let mut ending_blocks = Vec::new();
+        for ledger_info in self
+            .ledger_store
+            .get_epoch_ending_ledger_info_iter(start_epoch, end_epoch)?
+        {
+            ending_blocks.push(ledger_info?.ledger_info().consensus_block_id());
+        }
+        Ok(ending_blocks)
+    }
 }
 
 // Convert requested range and order to a range in ascending order.

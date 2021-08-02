@@ -35,7 +35,8 @@ const ROUND_PER_TERM: Round = 60;
 const ELECTION_TERM_START_ROUND: Round = 120;
 const ELECTION_TERM_END_ROUND: Round = 30;
 
-const TERM_MAX_SIZE: usize = 16;
+const TERM_MAX_SIZE: usize = 10000;
+const TERM_ELECTED_SIZE: usize = 50;
 const UNLOCK_WAIT_VIEW: u64 = 20160;
 
 #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
@@ -203,7 +204,7 @@ impl TermList {
         // `term_list`.
         for i in start_term_offset..=target_term_offset {
             let term = &self.term_list[i as usize];
-            for (_, addr) in &term.node_list {
+            for (_, addr) in term.node_list.iter().take(TERM_ELECTED_SIZE) {
                 if addr.node_id.addr == *author {
                     diem_debug!(
                         "can_be_elected: {:?} is in term {}:{}",
@@ -230,6 +231,8 @@ pub struct PosState {
     /// view does not increase for blocks following a pending
     /// reconfiguration block.
     current_view: Round,
+    /// Current epoch state
+    epoch_state: EpochState,
     term_list: TermList,
 
     /// Track the nodes that have retired and are waiting to be unlocked.
@@ -294,9 +297,10 @@ impl PosState {
                 last_term.next_term(Default::default(), initial_seed.clone());
             term_list.push(next_term);
         }
-        PosState {
+        let mut pos_state = PosState {
             node_map,
             current_view: 0,
+            epoch_state: EpochState::empty(),
             term_list: TermList {
                 current_term: 0,
                 term_list,
@@ -304,13 +308,21 @@ impl PosState {
             retiring_nodes: Default::default(),
             pivot_decision: genesis_pivot_decision,
             catch_up_mode,
-        }
+        };
+        let (verifier, vrf_seed) = pos_state.get_new_committee().unwrap();
+        pos_state.epoch_state = EpochState {
+            epoch: 0,
+            verifier,
+            vrf_seed,
+        };
+        pos_state
     }
 
     pub fn new_empty() -> Self {
         Self {
             node_map: Default::default(),
             current_view: 0,
+            epoch_state: EpochState::empty(),
             term_list: TermList {
                 current_term: 0,
                 term_list: Default::default(),
@@ -345,6 +357,8 @@ impl PosState {
             &self.term_list.term_list[TERM_LIST_LEN - 1].seed
         }
     }
+
+    pub fn epoch_state(&self) -> &EpochState { &self.epoch_state }
 }
 
 /// Read-only functions used in `execute_block`
@@ -425,7 +439,7 @@ impl PosState {
 
         // FIXME(lpl): Nodes in the current active term are not covered by this.
         for term in &self.term_list.term_list {
-            for (_, addr) in &term.node_list {
+            for (_, addr) in term.node_list.iter().take(TERM_ELECTED_SIZE) {
                 if addr.node_id == node_id {
                     bail!("Node in active term service cannot retire");
                 }
@@ -439,7 +453,7 @@ impl PosState {
         let mut voting_power_map = BTreeMap::new();
         for i in 0..TERM_LIST_LEN {
             let term = &self.term_list.term_list[i];
-            for (_, node_id) in &term.node_list {
+            for (_, node_id) in term.node_list.iter().take(TERM_ELECTED_SIZE) {
                 let voting_power = voting_power_map
                     .entry(node_id.node_id.addr.clone())
                     .or_insert(0 as u64);
@@ -534,6 +548,18 @@ impl PosState {
     pub fn current_view(&self) -> u64 { self.current_view }
 
     pub fn catch_up_mode(&self) -> bool { self.catch_up_mode }
+
+    pub fn next_evicted_term(&self) -> Vec<AccountAddress> {
+        if self.current_view < (TERM_LIST_LEN - 1) as u64 * ROUND_PER_TERM {
+            return Vec::new();
+        } else {
+            self.term_list.term_list[0]
+                .node_list
+                .iter()
+                .map(|(_, address)| address.node_id.addr)
+                .collect()
+        }
+    }
 }
 
 /// Write functions used apply changes (process events in PoS and PoW)
@@ -641,6 +667,9 @@ impl PosState {
         } else {
             None
         };
+        if let Some(epoch_state) = &epoch_state {
+            self.epoch_state = epoch_state.clone();
+        }
         Ok(epoch_state)
     }
 

@@ -505,7 +505,7 @@ impl SaveTransactionsRequest {
     }
 }
 
-pub trait DBReaderForPoW: Send + Sync {
+pub trait DBReaderForPoW: Send + Sync + DbReader {
     fn get_latest_ledger_info_option(&self)
         -> Option<LedgerInfoWithSignatures>;
 
@@ -517,4 +517,8 @@ pub trait DBReaderForPoW: Send + Sync {
     fn get_events_by_version(
         &self, start_version: u64, end_version: u64,
     ) -> Result<Vec<ContractEvent>>;
+
+    fn get_epoch_ending_blocks(
+        &self, start_epoch: u64, end_epoch: u64,
+    ) -> Result<Vec<HashValue>>;
 }
