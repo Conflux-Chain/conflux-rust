@@ -503,6 +503,13 @@ pub struct VoteCount {
     vote_count: u32,
 }
 
+impl VoteCount {
+    pub fn reward_points(&self) -> u64 {
+        // todo!(to be decided)
+        0u64
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct RewardDistributionEvent {
     pub candidates: Vec<NodeId>,

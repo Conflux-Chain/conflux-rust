@@ -48,32 +48,6 @@ impl Into<U256> for IndexStatus {
 
 type Bytes = Vec<u8>;
 
-type StorageEntryKey = Vec<u8>;
-
-fn prefix_and_hash(prefix: u64, data: &[u8]) -> StorageEntryKey {
-    let mut hasher = Keccak::v256();
-    hasher.update(&prefix.to_be_bytes());
-    hasher.update(data);
-    let mut hash = H256::default();
-    hasher.finalize(hash.as_bytes_mut());
-    hash.as_bytes().to_vec()
-}
-
-#[inline]
-pub fn index_entry(identifier: &H256) -> StorageEntryKey {
-    prefix_and_hash(0, identifier.as_bytes())
-}
-
-#[inline]
-pub fn address_entry(identifier: &H256) -> StorageEntryKey {
-    prefix_and_hash(1, identifier.as_bytes())
-}
-
-#[inline]
-pub fn identifier_entry(sender: &Address) -> StorageEntryKey {
-    prefix_and_hash(2, sender.as_bytes())
-}
-
 #[inline]
 fn address_to_u256(value: Address) -> U256 { H256::from(value).into_uint() }
 
@@ -139,6 +113,9 @@ fn update_vote_power(
     status.registered = status.registered.checked_add(vote_power).ok_or(
         vm::Error::InternalContract("registered index overflow".into()),
     )?;
+    context
+        .state
+        .add_total_pos_staking(*POS_VOTE_PRICE * vote_power);
 
     IncreaseStakeEvent::log(&identifier, &status.registered, params, context)?;
     context.set_storage(params, index_entry(&identifier), status.into())?;
@@ -289,6 +266,36 @@ pub fn decode_register_info(event: &LogEntry) -> Option<StakingEvent> {
         _ => unreachable!(),
     }
 }
+
+pub mod entries {
+    pub type StorageEntryKey = Vec<u8>;
+    use super::*;
+
+    fn prefix_and_hash(prefix: u64, data: &[u8]) -> StorageEntryKey {
+        let mut hasher = Keccak::v256();
+        hasher.update(&prefix.to_be_bytes());
+        hasher.update(data);
+        let mut hash = H256::default();
+        hasher.finalize(hash.as_bytes_mut());
+        hash.as_bytes().to_vec()
+    }
+
+    #[inline]
+    pub fn index_entry(identifier: &H256) -> StorageEntryKey {
+        prefix_and_hash(0, identifier.as_bytes())
+    }
+
+    #[inline]
+    pub fn address_entry(identifier: &H256) -> StorageEntryKey {
+        prefix_and_hash(1, identifier.as_bytes())
+    }
+
+    #[inline]
+    pub fn identifier_entry(sender: &Address) -> StorageEntryKey {
+        prefix_and_hash(2, sender.as_bytes())
+    }
+}
+use entries::*;
 
 use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
 use diem_types::validator_config::ConsensusPublicKey;

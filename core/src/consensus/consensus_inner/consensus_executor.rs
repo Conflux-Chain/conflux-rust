@@ -395,7 +395,7 @@ impl ConsensusExecutor {
                         pivot_arena_index,
                         inner,
                     )
-                    .unwrap();
+                        .unwrap();
                 }
 
                 let epoch_blocks =
@@ -1017,6 +1017,9 @@ impl ConsensusExecutionHandler {
             // program may restart by itself.
             .expect("Can not handle db error in consensus, crashing.");
 
+        let current_block_number =
+            start_block_number + epoch_receipts.len() as u64 - 1;
+
         if let Some(reward_execution_info) = reward_execution_info {
             // Calculate the block reward for blocks inside the epoch
             // All transaction fees are shared among blocks inside one epoch
@@ -1026,36 +1029,62 @@ impl ConsensusExecutionHandler {
                 epoch_hash,
                 on_local_pivot,
                 debug_record.as_deref_mut(),
-                self.machine.spec(start_block_number).account_start_nonce,
+                self.machine.spec(current_block_number).account_start_nonce,
             );
         }
 
         // TODO(peilun): Specify if we unlock before or after executing the
         // transactions.
-        let parent_pos_ref = self
+        let maybe_parent_pos_ref = self
             .data_man
             .block_header_by_hash(&pivot_block.block_header.parent_hash()) // `None` only for genesis.
             .and_then(|parent| parent.pos_reference().clone());
         if self
             .pos_verifier
             .is_enabled_at_height(pivot_block.block_header.height())
-            && parent_pos_ref.is_some()
-            && *pivot_block.block_header.pos_reference() != parent_pos_ref
-            // TODO(lpl): This condition is for genesis.
-            && parent_pos_ref.is_some()
+            && maybe_parent_pos_ref.is_some()
+            && *pivot_block.block_header.pos_reference() != maybe_parent_pos_ref
         {
+            let current_pos_ref = pivot_block
+                .block_header
+                .pos_reference()
+                .as_ref()
+                .expect("checked before sync graph insertion");
+            let parent_pos_ref = &maybe_parent_pos_ref.expect("checked");
             // The pos_reference is continuous, so after seeing a new
             // pos_reference, we only need to process the new
             // unlock_txs in it.
-            for unlock_node_id in self.pos_verifier.get_unlock_nodes(
-                pivot_block
-                    .block_header
-                    .pos_reference()
-                    .as_ref()
-                    .expect("checked before sync graph insertion"),
-                &parent_pos_ref.expect("checked"),
-            ) {
+            for unlock_node_id in self
+                .pos_verifier
+                .get_unlock_nodes(current_pos_ref, parent_pos_ref)
+            {
                 state.update_pos_status(unlock_node_id, 1);
+            }
+            for dispute_node_id in self
+                .pos_verifier
+                .get_disputed_nodes(current_pos_ref, parent_pos_ref)
+            {
+                todo!()
+            }
+            if let Some(reward_event) = self
+                .pos_verifier
+                .get_reward_distribution_event(current_pos_ref, parent_pos_ref)
+                .as_ref()
+                .and_then(|x| x.first())
+            {
+                let pos_points = reward_event
+                    .elected
+                    .iter()
+                    .map(|(node_id, count)| (node_id, count.reward_points()));
+                state
+                    .distribute_pos_interest(
+                        Box::new(pos_points),
+                        self.machine
+                            .spec(current_block_number)
+                            .account_start_nonce,
+                        current_block_number,
+                    )
+                    .expect("db error");
             }
         }
 

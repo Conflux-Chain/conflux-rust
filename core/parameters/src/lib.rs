@@ -209,6 +209,10 @@ pub mod staking {
     pub const BLOCKS_PER_DAY: u64 = BLOCKS_PER_SECOND * 60 * 60 * 24;
     /// This is the number of blocks per year.
     pub const BLOCKS_PER_YEAR: u64 = BLOCKS_PER_DAY * 365;
+    /// The inverse of interest rate
+    pub const INVERSE_INTEREST_RATE: u64 = 25;
+    /// The maximum of points distributed in one term
+    pub const MAX_POS_REWARD_POINTS: u64 = 1_234_567; // A temp value
 
     /// This is the storage collateral units for each KiB of code, amount in
     /// COLLATERAL_UNITs. Code collateral is calculated by each whole KiB
