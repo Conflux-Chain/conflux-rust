@@ -397,12 +397,22 @@ pub fn genesis_block(
         }
     }
 
-    let mut nonce = if need_to_execute { 7 } else { 0 };
+    let mut sender_int = 0;
     for (_node_id, _voting_power, mut tx) in initial_nodes {
-        tx.nonce = nonce.into();
-        let signed_tx = tx.fake_sign(genesis_account_address);
+        // TODO(lpl): Pass in signed tx so they can be retired.
+        let sender: Address = Address::from_low_u64_be(sender_int);
+        state
+            .add_balance(
+                &sender,
+                &(U256::from(200) * U256::from(ONE_CFX_IN_DRIP)),
+                CleanupMode::NoEmpty,
+                /* account_start_nonce = */ U256::zero(),
+            )
+            .unwrap();
+        state.deposit(&sender, &(U256::from(100) * U256::from(ONE_CFX_IN_DRIP)), 0).unwrap();
+        let signed_tx = tx.fake_sign(sender);
         execute_genesis_transaction(&signed_tx, &mut state, machine.clone());
-        nonce += 1;
+        sender_int += 1;
     }
 
     state
@@ -506,7 +516,7 @@ pub fn register_transaction(
     call_data.extend_from_slice(&params.abi_encode());
 
     let mut tx = Transaction::default();
-    tx.nonce = 1.into();
+    tx.nonce = 0.into();
     tx.data = call_data;
     tx.value = U256::zero();
     tx.action = Action::Call(*POS_REGISTER_CONTRACT_ADDRESS);

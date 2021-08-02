@@ -324,7 +324,6 @@ impl RoundManager {
     }
 
     pub async fn broadcast_pivot_decision(&mut self) -> anyhow::Result<()> {
-        return Ok(());
         if self.proposal_generator.is_none() {
             // Not an active validator, so do not need to sign pivot decision.
             return Ok(());
