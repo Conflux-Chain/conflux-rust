@@ -8,6 +8,7 @@ use super::{
     util::time_service::ClockTimeService,
 };
 use crate::pos::{
+    consensus::consensusdb::ConsensusDB,
     mempool::{ConsensusRequest, SubmissionStatus},
     pow_handler::PowHandler,
     protocol::network_sender::NetworkSender,
@@ -40,7 +41,7 @@ pub fn start_consensus(
         SignedTransaction,
         oneshot::Sender<anyhow::Result<SubmissionStatus>>,
     )>,
-) -> (Runtime, Arc<PowHandler>, Arc<AtomicBool>)
+) -> (Runtime, Arc<PowHandler>, Arc<AtomicBool>, Arc<ConsensusDB>)
 {
     let stopped = Arc::new(AtomicBool::new(false));
     let runtime = runtime::Builder::new_multi_thread()
@@ -51,6 +52,7 @@ pub fn start_consensus(
         .build()
         .expect("Failed to create Tokio runtime!");
     let storage = Arc::new(StorageWriteProxy::new(node_config, diem_db));
+    let consensus_db = storage.consensus_db();
     let txn_manager = Arc::new(MempoolProxy::new(
         consensus_to_mempool_sender,
         node_config.consensus.mempool_poll_count,
@@ -69,6 +71,8 @@ pub fn start_consensus(
         channel::new(1_024, &counters::PENDING_ROUND_TIMEOUTS);
     let (proposal_timeout_sender, proposal_timeout_receiver) =
         channel::new(1_024, &counters::PENDING_PROPOSAL_TIMEOUTS);
+    let (new_round_timeout_sender, new_round_timeout_receiver) =
+        channel::new(1_024, &counters::PENDING_NEW_ROUND_TIMEOUTS);
 
     let epoch_mgr = EpochManager::new(
         node_config,
@@ -76,6 +80,7 @@ pub fn start_consensus(
         network_sender,
         timeout_sender,
         proposal_timeout_sender,
+        new_round_timeout_sender,
         txn_manager,
         state_computer,
         storage,
@@ -88,10 +93,11 @@ pub fn start_consensus(
     runtime.spawn(epoch_mgr.start(
         timeout_receiver,
         proposal_timeout_receiver,
+        new_round_timeout_receiver,
         network_receiver,
         stopped.clone(),
     ));
 
     diem_debug!("Consensus started.");
-    (runtime, pow_handler, stopped)
+    (runtime, pow_handler, stopped, consensus_db)
 }

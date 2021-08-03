@@ -755,6 +755,8 @@ impl SignedTransaction {
         self.authenticator.clone()
     }
 
+    pub fn hash(&self) -> HashValue { self.raw_txn.hash() }
+
     pub fn sender(&self) -> AccountAddress { self.raw_txn.sender }
 
     pub fn into_raw_transaction(self) -> RawTransaction { self.raw_txn }

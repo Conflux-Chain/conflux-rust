@@ -7,6 +7,7 @@ use crate::pos::mempool::shared_mempool::{
 };
 use anyhow::Error;
 use diem_config::{config::PeerNetworkId, network_id::NetworkId};
+use diem_crypto::HashValue;
 use diem_logger::Schema;
 use diem_types::{
     account_address::AccountAddress, on_chain_config::OnChainConfigPayload,
@@ -15,36 +16,41 @@ use serde::Serialize;
 use std::{fmt, time::SystemTime};
 
 pub struct TxnsLog {
-    txns: Vec<(AccountAddress, u64, Option<String>, Option<SystemTime>)>,
+    txns: Vec<(
+        AccountAddress,
+        HashValue,
+        Option<String>,
+        Option<SystemTime>,
+    )>,
 }
 
 impl TxnsLog {
     pub fn new() -> Self { Self { txns: vec![] } }
 
-    pub fn new_txn(account: AccountAddress, seq_num: u64) -> Self {
+    pub fn new_txn(account: AccountAddress, hash: HashValue) -> Self {
         Self {
-            txns: vec![(account, seq_num, None, None)],
+            txns: vec![(account, hash, None, None)],
         }
     }
 
-    pub fn add(&mut self, account: AccountAddress, seq_num: u64) {
-        self.txns.push((account, seq_num, None, None));
+    pub fn add(&mut self, account: AccountAddress, hash: HashValue) {
+        self.txns.push((account, hash, None, None));
     }
 
     pub fn add_with_status(
-        &mut self, account: AccountAddress, seq_num: u64, status: &str,
+        &mut self, account: AccountAddress, hash: HashValue, status: &str,
     ) {
         self.txns
-            .push((account, seq_num, Some(status.to_string()), None));
+            .push((account, hash, Some(status.to_string()), None));
     }
 
     pub fn add_full_metadata(
-        &mut self, account: AccountAddress, seq_num: u64, status: &str,
+        &mut self, account: AccountAddress, hash: HashValue, status: &str,
         timestamp: Option<SystemTime>,
     )
     {
         self.txns
-            .push((account, seq_num, Some(status.to_string()), timestamp));
+            .push((account, hash, Some(status.to_string()), timestamp));
     }
 }
 
@@ -52,8 +58,8 @@ impl fmt::Display for TxnsLog {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut txns = "".to_string();
 
-        for (account, seq_num, status, timestamp) in self.txns.iter() {
-            let mut txn = format!("{}:{}", account, seq_num);
+        for (account, hash, status, timestamp) in self.txns.iter() {
+            let mut txn = format!("{}:{}", account, hash);
             if let Some(status) = status {
                 txn += &format!(":{}", status)
             }

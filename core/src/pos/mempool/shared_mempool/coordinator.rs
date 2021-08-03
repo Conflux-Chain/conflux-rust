@@ -69,7 +69,7 @@ pub(crate) async fn coordinator(
                 handle_client_event(&mut smp, &bounded_executor, msg, callback).await;
             },
             msg = consensus_requests.select_next_some() => {
-                tasks::process_consensus_request(&smp.mempool, msg).await;
+                tasks::process_consensus_request(smp.db.clone(), &smp.mempool, msg).await;
             }
             msg = state_sync_requests.select_next_some() => {
                 handle_state_sync_request(&mut smp, msg);
@@ -78,7 +78,7 @@ pub(crate) async fn coordinator(
                 handle_mempool_reconfig_event(&mut smp, &bounded_executor, config_update).await;
             },
             (peer, backoff) = scheduled_broadcasts.select_next_some() => {
-                diem_debug!("scheduled_broadcasts");
+                // diem_debug!("scheduled_broadcasts");
                 tasks::execute_broadcast(peer, backoff, &mut smp, &mut scheduled_broadcasts, executor.clone());
             },
             (peer, _) = network_receivers.network_events.select_next_some() => {
@@ -241,20 +241,4 @@ pub(crate) async fn gc_coordinator(
         LogEntry::GCRuntime,
         LogEvent::Terminated
     ));
-}
-
-/// Periodically logs a snapshot of transactions in core mempool.
-/// In the future we may want an interactive way to directly query mempool's
-/// internal state. For now, we will rely on this periodic snapshot to observe
-/// the internal state.
-pub(crate) async fn snapshot_job(
-    mempool: Arc<Mutex<CoreMempool>>, snapshot_interval_secs: u64,
-) {
-    let mut interval = IntervalStream::new(interval(Duration::from_secs(
-        snapshot_interval_secs,
-    )));
-    while let Some(_interval) = interval.next().await {
-        let snapshot = mempool.lock().gen_snapshot();
-        diem_debug!(LogSchema::new(LogEntry::MempoolSnapshot).txns(snapshot));
-    }
 }

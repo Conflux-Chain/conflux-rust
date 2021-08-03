@@ -1,15 +1,26 @@
+use crate::pos::consensus::ConsensusDB;
 use cfx_types::H256;
 use diem_config::keys::ConfigKey;
 use diem_crypto::HashValue;
 use diem_types::{
-    contract_event::ContractEvent,
+    account_address::AccountAddress,
+    account_state_blob::{AccountStateBlob, AccountStateWithProof},
+    contract_event::{ContractEvent, EventWithProof},
+    epoch_change::EpochChangeProof,
+    epoch_state::EpochState,
+    event::EventKey,
     ledger_info::LedgerInfoWithSignatures,
+    proof::{AccumulatorConsistencyProof, SparseMerkleProof},
     term_state::{DisputeEvent, UnlockEvent},
+    transaction::{TransactionListWithProof, TransactionWithProof, Version},
     validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
 };
 use primitives::pos::{NodeId, PosBlockId};
-use std::sync::Arc;
-use storage_interface::DBReaderForPoW;
+use serde::{Deserialize, Serialize};
+use std::{collections::BTreeMap, sync::Arc};
+use storage_interface::{
+    DBReaderForPoW, DbReader, Order, StartupInfo, TreeState,
+};
 
 pub type PosVerifier = PosHandler<PosConnection>;
 
@@ -35,13 +46,27 @@ pub trait PosInterface {
     fn get_events(
         &self, from: &PosBlockId, to: &PosBlockId,
     ) -> Vec<ContractEvent>;
+
+    fn get_epoch_ending_blocks(
+        &self, start_epoch: u64, end_epoch: u64,
+    ) -> Vec<PosBlockId>;
+
+    fn get_rewarded_candidate_nodes(
+        &self, block_id: &PosBlockId,
+    ) -> Vec<NodeId>;
+
+    fn get_epoch_state(&self, block_id: &PosBlockId) -> EpochState;
 }
 
 #[allow(unused)]
 pub struct PosBlock {
     hash: PosBlockId,
+    epoch: u64,
     round: u64,
     pivot_decision: H256,
+    parent: PosBlockId,
+    author: NodeId,
+    voters: Vec<NodeId>,
 }
 
 pub struct PosHandler<PoS: PosInterface> {
@@ -143,15 +168,87 @@ impl<PoS: PosInterface> PosHandler<PoS> {
         }
         disputed_nodes
     }
+
+    pub fn get_reward_distribution_event(
+        &self, h: &PosBlockId, parent_pos_ref: &PosBlockId,
+    ) -> Option<Vec<RewardDistributionEvent>> {
+        if h == parent_pos_ref {
+            return None;
+        }
+        let me_block = self.pos.get_committed_block(h)?;
+        let parent_block = self.pos.get_committed_block(parent_pos_ref)?;
+        if me_block.epoch == parent_block.epoch {
+            return None;
+        }
+        let epoch_ending_blocks = self
+            .pos
+            .get_epoch_ending_blocks(parent_block.epoch, me_block.epoch);
+        let mut events = Vec::new();
+        for ending_block in epoch_ending_blocks {
+            let mut elected = BTreeMap::new();
+            let mut voted_block_id = ending_block;
+            loop {
+                let block = self.pos.get_committed_block(&voted_block_id)?;
+                if block.round == 0 {
+                    // round 0 is genesis and has not voters.
+                    break;
+                }
+                for committee_member in self
+                    .pos
+                    // use `parent` here because the pos_state of an
+                    // epoch_ending block is next_epoch_state.
+                    .get_epoch_state(&block.parent)
+                    .verifier
+                    .address_to_validator_info()
+                    .keys()
+                {
+                    elected.insert(
+                        H256::from_slice(committee_member.as_ref()),
+                        VoteCount::default(),
+                    );
+                }
+                {
+                    let leader_status =
+                        elected.get_mut(&block.author).expect("in epoch state");
+                    leader_status.leader_count += 1;
+                    leader_status.included_vote_count +=
+                        block.voters.len() as u32;
+                }
+                for voter in block.voters {
+                    elected
+                        .get_mut(&voter)
+                        .expect("in epoch state")
+                        .vote_count += 1;
+                }
+                voted_block_id = block.parent;
+            }
+            let reward_event = RewardDistributionEvent {
+                candidates: self
+                    .pos
+                    .get_rewarded_candidate_nodes(&ending_block),
+                elected,
+            };
+            events.push(reward_event);
+        }
+        Some(events)
+    }
 }
 
 pub struct PosConnection {
     pos_storage: Arc<dyn DBReaderForPoW>,
+    pos_consensus_db: Arc<ConsensusDB>,
 }
 
 impl PosConnection {
-    pub fn new(pos_storage: Arc<dyn DBReaderForPoW>) -> Self {
-        Self { pos_storage }
+    pub fn new(
+        pos_storage: Arc<dyn DBReaderForPoW>,
+        pos_consensus_db: Arc<ConsensusDB>,
+    ) -> Self
+    {
+        Self {
+            pos_storage,
+            pos_consensus_db,
+        }
     }
 }
 
@@ -160,25 +257,45 @@ impl PosInterface for PosConnection {
 
     fn get_committed_block(&self, h: &PosBlockId) -> Option<PosBlock> {
         debug!("get_committed_block: {:?}", h);
+        let block_hash = h256_to_diem_hash(h);
         let ledger_info = self
             .pos_storage
-            .get_block_ledger_info(&h256_to_diem_hash(h))
+            .get_block_ledger_info(&block_hash)
             .map_err(|e| {
                 warn!("get_committed_block: err={:?}", e);
                 e
             })
             .ok()?;
+        debug_assert_eq!(
+            ledger_info.ledger_info().consensus_block_id(),
+            block_hash
+        );
+        let block = self
+            .pos_consensus_db
+            .get_ledger_block(&block_hash)
+            .map_err(|e| {
+                warn!("get_committed_block: err={:?}", e);
+                e
+            })
+            .ok()??;
+        debug_assert_eq!(block.id(), block_hash);
         debug!("pos_handler gets ledger_info={:?}", ledger_info);
         Some(PosBlock {
-            hash: diem_hash_to_h256(
-                &ledger_info.ledger_info().consensus_block_id(),
-            ),
+            hash: *h,
+            epoch: ledger_info.ledger_info().epoch(),
             round: ledger_info.ledger_info().round(),
             pivot_decision: ledger_info
                 .ledger_info()
                 .pivot_decision()
                 .unwrap()
                 .block_hash,
+            parent: diem_hash_to_h256(&block.parent_id()),
+            author: H256::from_slice(block.author().unwrap().as_ref()),
+            voters: ledger_info
+                .signatures()
+                .keys()
+                .map(|author| H256::from_slice(author.as_ref()))
+                .collect(),
         })
     }
 
@@ -205,12 +322,45 @@ impl PosInterface for PosConnection {
         let end_version = self
             .pos_storage
             .get_block_ledger_info(&h256_to_diem_hash(to))
-            .expect("err reading ledger info for from")
+            .expect("err reading ledger info for to")
             .ledger_info()
             .version();
         self.pos_storage
             .get_events_by_version(start_version, end_version)
             .expect("err reading events")
+    }
+
+    fn get_epoch_ending_blocks(
+        &self, start_epoch: u64, end_epoch: u64,
+    ) -> Vec<PosBlockId> {
+        self.pos_storage
+            .get_epoch_ending_blocks(start_epoch, end_epoch)
+            .expect("err reading epoch ending blocks")
+            .into_iter()
+            .map(|h| diem_hash_to_h256(&h))
+            .collect()
+    }
+
+    fn get_rewarded_candidate_nodes(
+        &self, block_id: &PosBlockId,
+    ) -> Vec<NodeId> {
+        let pos_state = self
+            .pos_storage
+            .get_pos_state(&h256_to_diem_hash(block_id))
+            .expect("block_id ends epoch");
+        pos_state
+            .next_evicted_term()
+            .into_iter()
+            .map(|address| H256::from_slice(address.as_ref()))
+            .collect()
+    }
+
+    fn get_epoch_state(&self, block_id: &PosBlockId) -> EpochState {
+        self.pos_storage
+            .get_pos_state(&h256_to_diem_hash(block_id))
+            .expect("parent of an ending_epoch block")
+            .epoch_state()
+            .clone()
     }
 }
 
@@ -243,4 +393,130 @@ impl DBReaderForPoW for FakeDiemDB {
     ) -> anyhow::Result<Vec<ContractEvent>> {
         todo!()
     }
+
+    fn get_epoch_ending_blocks(
+        &self, _start_epoch: u64, _end_epoch: u64,
+    ) -> anyhow::Result<Vec<HashValue>> {
+        todo!()
+    }
+}
+
+impl DbReader for FakeDiemDB {
+    fn get_epoch_ending_ledger_infos(
+        &self, start_epoch: u64, end_epoch: u64,
+    ) -> anyhow::Result<EpochChangeProof> {
+        todo!()
+    }
+
+    fn get_transactions(
+        &self, start_version: Version, batch_size: u64,
+        ledger_version: Version, fetch_events: bool,
+    ) -> anyhow::Result<TransactionListWithProof>
+    {
+        todo!()
+    }
+
+    fn get_events(
+        &self, event_key: &EventKey, start: u64, order: Order, limit: u64,
+    ) -> anyhow::Result<Vec<(u64, ContractEvent)>> {
+        todo!()
+    }
+
+    fn get_events_with_proofs(
+        &self, event_key: &EventKey, start: u64, order: Order, limit: u64,
+        known_version: Option<u64>,
+    ) -> anyhow::Result<Vec<EventWithProof>>
+    {
+        todo!()
+    }
+
+    fn get_block_timestamp(&self, version: u64) -> anyhow::Result<u64> {
+        todo!()
+    }
+
+    fn get_latest_account_state(
+        &self, address: AccountAddress,
+    ) -> anyhow::Result<Option<AccountStateBlob>> {
+        todo!()
+    }
+
+    fn get_latest_ledger_info(
+        &self,
+    ) -> anyhow::Result<LedgerInfoWithSignatures> {
+        todo!()
+    }
+
+    fn get_startup_info(&self) -> anyhow::Result<Option<StartupInfo>> {
+        todo!()
+    }
+
+    fn get_txn_by_account(
+        &self, address: AccountAddress, seq_num: u64, ledger_version: Version,
+        fetch_events: bool,
+    ) -> anyhow::Result<Option<TransactionWithProof>>
+    {
+        todo!()
+    }
+
+    fn get_state_proof_with_ledger_info(
+        &self, known_version: u64, ledger_info: LedgerInfoWithSignatures,
+    ) -> anyhow::Result<(EpochChangeProof, AccumulatorConsistencyProof)> {
+        todo!()
+    }
+
+    fn get_state_proof(
+        &self, known_version: u64,
+    ) -> anyhow::Result<(
+        LedgerInfoWithSignatures,
+        EpochChangeProof,
+        AccumulatorConsistencyProof,
+    )> {
+        todo!()
+    }
+
+    fn get_account_state_with_proof(
+        &self, address: AccountAddress, version: Version,
+        ledger_version: Version,
+    ) -> anyhow::Result<AccountStateWithProof>
+    {
+        todo!()
+    }
+
+    fn get_account_state_with_proof_by_version(
+        &self, address: AccountAddress, version: Version,
+    ) -> anyhow::Result<(
+        Option<AccountStateBlob>,
+        SparseMerkleProof<AccountStateBlob>,
+    )> {
+        todo!()
+    }
+
+    fn get_latest_state_root(&self) -> anyhow::Result<(Version, HashValue)> {
+        todo!()
+    }
+
+    fn get_latest_tree_state(&self) -> anyhow::Result<TreeState> { todo!() }
+
+    fn get_epoch_ending_ledger_info(
+        &self, known_version: u64,
+    ) -> anyhow::Result<LedgerInfoWithSignatures> {
+        todo!()
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Default)]
+pub struct VoteCount {
+    // The number of rounds that the node becomes the leader.
+    leader_count: u32,
+    // The total number of votes that the node includes as a leader.
+    included_vote_count: u32,
+    // The total number of votes that the node signs in the committed QCs
+    // within the term.
+    vote_count: u32,
+}
+
+#[derive(Clone, Serialize, Deserialize, Default)]
+pub struct RewardDistributionEvent {
+    pub candidates: Vec<NodeId>,
+    pub elected: BTreeMap<NodeId, VoteCount>,
 }

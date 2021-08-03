@@ -9,7 +9,7 @@ use cfx_types::H256;
 use futures::channel::oneshot;
 use parking_lot::RwLock;
 use pow_types::{PowInterface, StakingEvent};
-use primitives::filter::LogFilter;
+use primitives::filter::{LogFilter, LogFilterParams};
 use std::{sync::Arc, time::Duration};
 use tokio::runtime::Handle;
 
@@ -83,11 +83,16 @@ impl PowHandler {
             .data_man
             .block_height_by_hash(&me_decision)
             .ok_or(anyhow!("new decision block missing"))?;
-        let mut log_filter = LogFilter::default();
         // start_epoch has been processed by parent.
-        log_filter.from_epoch = (start_epoch + 1).into();
-        log_filter.to_epoch = end_epoch.into();
-        log_filter.address = Some(vec![*POS_REGISTER_CONTRACT_ADDRESS]);
+        let from_epoch = (start_epoch + 1).into();
+        let to_epoch = end_epoch.into();
+        let mut params = LogFilterParams::default();
+        params.address = Some(vec![*POS_REGISTER_CONTRACT_ADDRESS]);
+        let log_filter = LogFilter::EpochLogFilter {
+            from_epoch,
+            to_epoch,
+            params,
+        };
         Ok(pow_consensus
             .logs(log_filter)
             .map_err(|e| anyhow!("Logs not available: e={}", e))?

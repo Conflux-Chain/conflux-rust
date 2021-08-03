@@ -8,8 +8,10 @@ use crate::pos::mempool::{
 use super::{error::MempoolError, state_replication::TxnManager};
 use anyhow::{format_err, Result};
 use consensus_types::{block::Block, common::Payload};
+use diem_crypto::HashValue;
 use diem_logger::prelude::*;
 use diem_metrics::monitor;
+use diem_types::validator_verifier::ValidatorVerifier;
 use executor_types::StateComputeResult;
 use fail::fail_point;
 use futures::channel::{mpsc, oneshot};
@@ -52,11 +54,15 @@ impl MempoolProxy {
 
     async fn pull_internal(
         &self, max_size: u64, exclude_txns: Vec<TransactionExclusion>,
-    ) -> Result<Payload, MempoolError> {
+        parent_block_id: HashValue, validators: ValidatorVerifier,
+    ) -> Result<Payload, MempoolError>
+    {
         let (callback, callback_rcv) = oneshot::channel();
         let req = ConsensusRequest::GetBlockRequest(
             max_size,
             exclude_txns.clone(),
+            parent_block_id,
+            validators,
             callback,
         );
         // send to shared mempool
@@ -92,7 +98,9 @@ impl MempoolProxy {
 impl TxnManager for MempoolProxy {
     async fn pull_txns(
         &self, max_size: u64, exclude_payloads: Vec<&Payload>,
-    ) -> Result<Payload, MempoolError> {
+        parent_block_id: HashValue, validators: ValidatorVerifier,
+    ) -> Result<Payload, MempoolError>
+    {
         fail_point!("consensus::pull_txns", |_| {
             Err(anyhow::anyhow!("Injected error in pull_txns").into())
         });
@@ -101,7 +109,7 @@ impl TxnManager for MempoolProxy {
             for transaction in payload {
                 exclude_txns.push(TransactionExclusion {
                     sender: transaction.sender(),
-                    sequence_number: transaction.sequence_number(),
+                    hash: transaction.hash(),
                 });
             }
         }
@@ -111,8 +119,14 @@ impl TxnManager for MempoolProxy {
         let mut count = self.poll_count;
         let txns = loop {
             count -= 1;
-            let txns =
-                self.pull_internal(max_size, exclude_txns.clone()).await?;
+            let txns = self
+                .pull_internal(
+                    max_size,
+                    exclude_txns.clone(),
+                    parent_block_id,
+                    validators.clone(),
+                )
+                .await?;
             if txns.is_empty() && no_pending_txns && count > 0 {
                 std::thread::sleep(Duration::from_millis(NO_TXN_DELAY));
                 continue;

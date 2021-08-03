@@ -23,6 +23,7 @@ use diem_types::{
 };
 use move_core_types::language_storage::TypeTag;
 use std::collections::BTreeMap;
+use storage_interface::DbReaderWriter;
 
 /// This trait describes the VM's execution interface.
 pub trait VMExecutor: Send {
@@ -35,7 +36,7 @@ pub trait VMExecutor: Send {
     /// them.
     fn execute_block(
         transactions: Vec<Transaction>, state_view: &dyn StateView,
-        catch_up_mode: bool,
+        catch_up_mode: bool, db: &DbReaderWriter,
     ) -> Result<Vec<TransactionOutput>, VMStatus>;
 }
 
@@ -45,14 +46,14 @@ pub struct FakeVM;
 impl VMExecutor for FakeVM {
     fn execute_block(
         transactions: Vec<Transaction>, state_view: &dyn StateView,
-        catch_up_mode: bool,
+        catch_up_mode: bool, db: &DbReaderWriter,
     ) -> Result<Vec<TransactionOutput>, VMStatus>
     {
         let mut vm_outputs = Vec::new();
         for transaction in transactions {
             // Execute the transaction
             match transaction {
-                Transaction::BlockMetadata(_data) => {
+                Transaction::BlockMetadata(data) => {
                     let mut events = state_view.pos_state().get_unlock_events();
                     // FIXME(lpl)
                     if (state_view.pos_state().current_view() + 1) % 60 == 0 {
@@ -62,10 +63,11 @@ impl VMExecutor for FakeVM {
                             .map_err(|e| {
                                 VMStatus::Error(StatusCode::CFX_INVALID_TX)
                             })?;
+                        let epoch = (state_view.pos_state().current_view() + 1)
+                            / 60
+                            + 1;
                         let validator_bytes = bcs::to_bytes(&EpochState {
-                            epoch: (state_view.pos_state().current_view() + 1)
-                                / 60
-                                + 1,
+                            epoch,
                             verifier: validator_verifier,
                             vrf_seed,
                         })

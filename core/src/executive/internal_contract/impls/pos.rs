@@ -168,7 +168,7 @@ pub fn register(
         ));
     }
 
-    if is_identifier_changeable(sender, param, context)? {
+    if !is_identifier_changeable(sender, param, context)? {
         return Err(vm::Error::InternalContract(
             "can not change identifier".into(),
         ));

@@ -14,11 +14,14 @@ use crate::pos::mempool::{
     logging::{LogEntry, LogSchema, TxnsLog},
 };
 use diem_config::config::NodeConfig;
+use diem_crypto::HashValue;
 use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress,
     mempool_status::{MempoolStatus, MempoolStatusCode},
-    transaction::{GovernanceRole, SignedTransaction},
+    term_state::PosState,
+    transaction::{GovernanceRole, SignedTransaction, TransactionPayload},
+    validator_verifier::ValidatorVerifier,
 };
 use std::{
     cmp::max,
@@ -30,12 +33,12 @@ pub struct Mempool {
     // Stores the metadata of all transactions in mempool (of all states).
     transactions: TransactionStore,
 
-    sequence_number_cache: TtlCache<AccountAddress, u64>,
+    txn_hash_cache: TtlCache<AccountAddress, HashValue>,
     // For each transaction, an entry with a timestamp is added when the
     // transaction enters mempool. This is used to measure e2e latency of
     // transactions in the system, as well as the time it takes to pick it
     // up by consensus.
-    pub(crate) metrics_cache: TtlCache<(AccountAddress, u64), SystemTime>,
+    pub(crate) metrics_cache: TtlCache<(AccountAddress, HashValue), SystemTime>,
     pub system_transaction_timeout: Duration,
 }
 
@@ -43,7 +46,7 @@ impl Mempool {
     pub fn new(config: &NodeConfig) -> Self {
         Mempool {
             transactions: TransactionStore::new(&config.mempool),
-            sequence_number_cache: TtlCache::new(
+            txn_hash_cache: TtlCache::new(
                 config.mempool.capacity,
                 Duration::from_secs(100),
             ),
@@ -59,13 +62,11 @@ impl Mempool {
 
     /// This function will be called once the transaction has been stored.
     pub(crate) fn remove_transaction(
-        &mut self, sender: &AccountAddress, sequence_number: u64,
-        is_rejected: bool,
-    )
-    {
+        &mut self, sender: &AccountAddress, hash: HashValue, is_rejected: bool,
+    ) {
         diem_trace!(
             LogSchema::new(LogEntry::RemoveTxn)
-                .txns(TxnsLog::new_txn(*sender, sequence_number)),
+                .txns(TxnsLog::new_txn(*sender, hash)),
             is_rejected = is_rejected
         );
         let metric_label = if is_rejected {
@@ -73,34 +74,21 @@ impl Mempool {
         } else {
             counters::COMMIT_ACCEPTED_LABEL
         };
-        self.log_latency(*sender, sequence_number, metric_label);
-        self.metrics_cache.remove(&(*sender, sequence_number));
-
-        let current_seq_number = self
-            .sequence_number_cache
-            .remove(&sender)
-            .unwrap_or_default();
+        self.log_latency(*sender, hash, metric_label);
+        self.metrics_cache.remove(&(*sender, hash));
 
         if is_rejected {
-            if sequence_number >= current_seq_number {
-                self.transactions
-                    .reject_transaction(&sender, sequence_number);
-            }
+            self.transactions.reject_transaction(&sender, hash);
         } else {
-            // update current cached sequence number for account
-            let new_seq_number = max(current_seq_number, sequence_number + 1);
-            self.sequence_number_cache.insert(*sender, new_seq_number);
-            self.transactions
-                .commit_transaction(&sender, new_seq_number);
+            self.transactions.commit_transaction(&sender, hash);
+            self.txn_hash_cache.insert(*sender, hash);
         }
     }
 
     fn log_latency(
-        &mut self, account: AccountAddress, sequence_number: u64, metric: &str,
+        &mut self, account: AccountAddress, hash: HashValue, metric: &str,
     ) {
-        if let Some(&creation_time) =
-            self.metrics_cache.get(&(account, sequence_number))
-        {
+        if let Some(&creation_time) = self.metrics_cache.get(&(account, hash)) {
             if let Ok(time_delta) =
                 SystemTime::now().duration_since(creation_time)
             {
@@ -115,40 +103,19 @@ impl Mempool {
     /// Performs basic validation: checks account's sequence number.
     pub(crate) fn add_txn(
         &mut self, txn: SignedTransaction, gas_amount: u64, ranking_score: u64,
-        db_sequence_number: u64, timeline_state: TimelineState,
-        governance_role: GovernanceRole,
+        timeline_state: TimelineState, governance_role: GovernanceRole,
     ) -> MempoolStatus
     {
-        diem_trace!(
-            LogSchema::new(LogEntry::AddTxn)
-                .txns(TxnsLog::new_txn(txn.sender(), txn.sequence_number())),
-            committed_seq_number = db_sequence_number
-        );
-        let cached_value = self.sequence_number_cache.get(&txn.sender());
-        let sequence_number = cached_value
-            .map_or(db_sequence_number, |value| {
-                max(*value, db_sequence_number)
-            });
-        self.sequence_number_cache
-            .insert(txn.sender(), sequence_number);
-
-        // don't accept old transactions (e.g. seq is less than account's
-        // current seq_number)
-        if txn.sequence_number() < sequence_number {
-            return MempoolStatus::new(MempoolStatusCode::InvalidSeqNumber).with_message(format!(
-                "transaction sequence number is {}, current sequence number is  {}",
-                txn.sequence_number(),
-                sequence_number,
-            ));
-        }
+        diem_trace!(LogSchema::new(LogEntry::AddTxn)
+            .txns(TxnsLog::new_txn(txn.sender(), txn.hash())),);
+        let cached_value = self.txn_hash_cache.get(&txn.sender());
+        self.txn_hash_cache.insert(txn.sender(), txn.hash());
 
         let expiration_time = diem_infallible::duration_since_epoch()
             + self.system_transaction_timeout;
         if timeline_state != TimelineState::NonQualified {
-            self.metrics_cache.insert(
-                (txn.sender(), txn.sequence_number()),
-                SystemTime::now(),
-            );
+            self.metrics_cache
+                .insert((txn.sender(), txn.hash()), SystemTime::now());
         }
 
         let txn_info = MempoolTransaction::new(
@@ -160,7 +127,7 @@ impl Mempool {
             governance_role,
         );
 
-        self.transactions.insert(txn_info, sequence_number)
+        self.transactions.insert(txn_info)
     }
 
     /// Fetches next block of transactions for consensus.
@@ -170,8 +137,11 @@ impl Mempool {
     #[allow(clippy::explicit_counter_loop)]
     pub(crate) fn get_block(
         &mut self, batch_size: u64, mut seen: HashSet<TxnPointer>,
-    ) -> Vec<SignedTransaction> {
-        let mut result = vec![];
+        /* pos_state: &PosState, */ validators: ValidatorVerifier,
+    ) -> Vec<SignedTransaction>
+    {
+        let mut block = vec![];
+        let mut block_log = TxnsLog::new();
         // Helper DS. Helps to mitigate scenarios where account submits several
         // transactions with increasing gas price (e.g. user submits
         // transactions with sequence number 1, 2 and gas_price 1, 10
@@ -179,68 +149,85 @@ impl Mempool {
         // observed first in priority index iterator, but can't be
         // executed before first txn. Once observed, such txn will be saved in
         // `skipped` DS and rechecked once it's ancestor becomes available
-        let mut skipped = HashSet::new();
         let seen_size = seen.len();
         let mut txn_walked = 0usize;
-        // iterate over the queue of transactions based on gas price
-        'main: for txn in self.transactions.iter_queue() {
+        // iterate all normal transaction
+        for txn in self.transactions.iter() {
             txn_walked += 1;
             if seen.contains(&TxnPointer::from(txn)) {
                 continue;
             }
-            let seq = txn.sequence_number;
-            let account_sequence_number =
-                self.sequence_number_cache.get(&txn.address);
-            let seen_previous =
-                seq > 0 && seen.contains(&(txn.address, seq - 1));
-            // include transaction if it's "next" for given account or
-            // we've already sent its ancestor to Consensus
-            if seen_previous || account_sequence_number == Some(&seq) {
-                let ptr = TxnPointer::from(txn);
-                seen.insert(ptr);
-                result.push(ptr);
-                if (result.len() as u64) == batch_size {
-                    break;
+            /*let validate_result = match txn.txn.payload() {
+                TransactionPayload::Election(election_payload) => {
+                    pos_state.validate_election(election_payload)
                 }
-
-                // check if we can now include some transactions
-                // that were skipped before for given account
-                let mut skipped_txn = (txn.address, seq + 1);
-                while skipped.contains(&skipped_txn) {
-                    seen.insert(skipped_txn);
-                    result.push(skipped_txn);
-                    if (result.len() as u64) == batch_size {
-                        break 'main;
+                TransactionPayload::Retire(retire_payload) => {
+                    pos_state.validate_retire(retire_payload)
+                }
+                _ => {
+                  continue;
+                }
+            };
+            */
+            match txn.txn.payload() {
+                TransactionPayload::PivotDecision(_) => {
+                    seen.insert((txn.get_sender(), txn.get_hash()));
+                    continue;
+                }
+                _ => {}
+            }
+            //if validate_result.is_ok() {
+            block.push(txn.txn.clone());
+            seen.insert((txn.get_sender(), txn.get_hash()));
+            //}
+        }
+        let mut max_pivot_height = 0;
+        let mut chosen_pivot_tx = None;
+        // iterate all pivot decision transaction
+        // TODO(linxi): use config instead of constant
+        for pivot_decision_set in self.transactions.iter_pivot_decision() {
+            let mut cnt = 0;
+            let mut pivot_decision_opt = None;
+            for (account, hash) in pivot_decision_set.iter() {
+                if validators.get_public_key(account).is_some() {
+                    if let Some(txn) = self.transactions.get(hash) {
+                        cnt += 1;
+                        if pivot_decision_opt.is_none() {
+                            pivot_decision_opt = Some(txn);
+                        }
                     }
-                    skipped_txn = (txn.address, skipped_txn.1 + 1);
                 }
-            } else {
-                skipped.insert(TxnPointer::from(txn));
+            }
+            if (cnt * 3 >= validators.len() * 2 + 1) {
+                let pivot_decision = pivot_decision_opt.unwrap();
+                let pivot_height = match pivot_decision.payload() {
+                    TransactionPayload::PivotDecision(decision) => {
+                        decision.height
+                    }
+                    _ => unreachable!(),
+                };
+                if pivot_height > max_pivot_height {
+                    max_pivot_height = pivot_height;
+                    chosen_pivot_tx = Some(pivot_decision);
+                }
             }
         }
-        let result_size = result.len();
-        // convert transaction pointers to real values
-        let mut block_log = TxnsLog::new();
-        let block: Vec<_> = result
-            .into_iter()
-            .filter_map(|(address, seq)| {
-                block_log.add(address, seq);
-                self.transactions.get(&address, seq)
-            })
-            .collect();
+        if let Some(tx) = chosen_pivot_tx {
+            block.push(tx);
+        }
 
         diem_debug!(
             LogSchema::new(LogEntry::GetBlock).txns(block_log),
             seen_consensus = seen_size,
             walked = txn_walked,
             seen_after = seen.len(),
-            result_size = result_size,
+            result_size = block.len(),
             block_size = block.len()
         );
         for transaction in &block {
             self.log_latency(
                 transaction.sender(),
-                transaction.sequence_number(),
+                transaction.hash(),
                 counters::GET_BLOCK_STAGE_LABEL,
             );
         }
@@ -254,7 +241,7 @@ impl Mempool {
         let now = SystemTime::now();
         self.transactions.gc_by_system_ttl(&self.metrics_cache);
         self.metrics_cache.gc(now);
-        self.sequence_number_cache.gc(now);
+        self.txn_hash_cache.gc(now);
     }
 
     /// Garbage collection based on client-specified expiration time.
@@ -277,14 +264,5 @@ impl Mempool {
         &mut self, start_id: u64, end_id: u64,
     ) -> Vec<SignedTransaction> {
         self.transactions.timeline_range(start_id, end_id)
-    }
-
-    pub fn gen_snapshot(&self) -> TxnsLog {
-        self.transactions.gen_snapshot(&self.metrics_cache)
-    }
-
-    #[cfg(test)]
-    pub fn get_parking_lot_size(&self) -> usize {
-        self.transactions.get_parking_lot_size()
     }
 }
