@@ -110,7 +110,7 @@ impl<PoS: PosInterface> PosHandler<PoS> {
                 warn!("No pos block for me={:?}", me);
                 return false;
             }
-            Some(b) => b.round,
+            Some(b) => (b.epoch, b.round),
         };
         for p in preds {
             let p_round = match self.pos.get_committed_block(p) {
@@ -118,10 +118,10 @@ impl<PoS: PosInterface> PosHandler<PoS> {
                     warn!("No pos block for pred={:?}", p);
                     return false;
                 }
-                Some(b) => b.round,
+                Some(b) => (b.epoch, b.round),
             };
             if me_round < p_round {
-                warn!("Incorrect round: me={}, pred={}", me_round, p_round);
+                warn!("Incorrect round: me={:?}, pred={:?}", me_round, p_round);
                 return false;
             }
         }

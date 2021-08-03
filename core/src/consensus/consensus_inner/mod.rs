@@ -48,6 +48,7 @@ use std::{
     mem,
     sync::Arc,
 };
+use move_core_types::vm_status::StatusCode::POSITIVE_STACK_SIZE_AT_BLOCK_END;
 lazy_static! {
     static ref INVALID_BLAME_OR_STATE_ROOT_COUNTER: Arc<dyn Counter<usize>> =
         CounterUsize::register_with_group(
@@ -1681,6 +1682,10 @@ impl ConsensusGraphInner {
         match pos_reference {
             None => timer_chain_choice,
             Some(pos_reference) => {
+                if pos_reference == PosBlockId::default() {
+                    // The reference is pos genesis.
+                    return timer_chain_choice;
+                }
                 let pos_pivot_decision = self
                     .pos_verifier
                     .get_pivot_decision(&pos_reference)
