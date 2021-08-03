@@ -18,13 +18,14 @@ use cfx_types::{Address, H160, H256, H520, U128, U256, U512, U64};
 use cfxcore::{
     consensus::pos_handler::{PosHandler, PosVerifier},
     rpc_errors::invalid_params_check,
+    spec::genesis::register_transaction,
     BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
     SharedConsensusGraph, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
 use clap::crate_version;
-use diem_types::account_address::{AccountAddress, from_consensus_public_key};
+use diem_types::account_address::{from_consensus_public_key, AccountAddress};
 use jsonrpc_core::{
     Error as RpcError, Result as JsonRpcResult, Value as RpcValue,
 };
@@ -45,7 +46,6 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use cfxcore::spec::genesis::register_transaction;
 
 fn grouped_txs<T, F>(
     txs: Vec<Arc<SignedTransaction>>, converter: F,
@@ -655,8 +655,16 @@ impl RpcImpl {
     pub fn pos_register(
         &self, voting_power: u64,
     ) -> JsonRpcResult<(Bytes, AccountAddress)> {
-        let tx = register_transaction(self.pos_handler.config().bls_key.private_key(), self.pos_handler.config().vrf_key.public_key(), voting_power, 0);
-        let identifier = from_consensus_public_key(&self.pos_handler.config().bls_key.public_key(), &self.pos_handler.config().vrf_key.public_key());
+        let tx = register_transaction(
+            self.pos_handler.config().bls_key.private_key(),
+            self.pos_handler.config().vrf_key.public_key(),
+            voting_power,
+            0,
+        );
+        let identifier = from_consensus_public_key(
+            &self.pos_handler.config().bls_key.public_key(),
+            &self.pos_handler.config().vrf_key.public_key(),
+        );
         Ok((tx.data.into(), identifier))
     }
 

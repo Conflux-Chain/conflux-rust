@@ -113,7 +113,9 @@ pub trait TestRpc {
     fn save_node_db(&self) -> RpcResult<()>;
 
     #[rpc(name = "pos_register")]
-    fn pos_register(&self, voting_power: u64) -> RpcResult<(Bytes, AccountAddress)>;
+    fn pos_register(
+        &self, voting_power: u64,
+    ) -> RpcResult<(Bytes, AccountAddress)>;
 
     #[rpc(name = "pos_update_voting_power")]
     fn pos_update_voting_power(

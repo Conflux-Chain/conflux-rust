@@ -270,15 +270,26 @@ impl PosInterface for PosConnection {
             ledger_info.ledger_info().consensus_block_id(),
             block_hash
         );
-        let block = self
-            .pos_consensus_db
-            .get_ledger_block(&block_hash)
-            .map_err(|e| {
-                warn!("get_committed_block: err={:?}", e);
-                e
-            })
-            .ok()??;
-        debug_assert_eq!(block.id(), block_hash);
+
+        let parent;
+        let author;
+        if *h == PosBlockId::default() {
+            // genesis has no block, and its parent/author will not be used.
+            parent = PosBlockId::default();
+            author = NodeId::default();
+        } else {
+            let block = self
+                .pos_consensus_db
+                .get_ledger_block(&block_hash)
+                .map_err(|e| {
+                    warn!("get_committed_block: err={:?}", e);
+                    e
+                })
+                .ok()??;
+            debug_assert_eq!(block.id(), block_hash);
+            parent = diem_hash_to_h256(&block.parent_id());
+            author = H256::from_slice(block.author().unwrap().as_ref());
+        }
         debug!("pos_handler gets ledger_info={:?}", ledger_info);
         Some(PosBlock {
             hash: *h,
@@ -289,8 +300,8 @@ impl PosInterface for PosConnection {
                 .pivot_decision()
                 .unwrap()
                 .block_hash,
-            parent: diem_hash_to_h256(&block.parent_id()),
-            author: H256::from_slice(block.author().unwrap().as_ref()),
+            parent,
+            author,
             voters: ledger_info
                 .signatures()
                 .keys()
