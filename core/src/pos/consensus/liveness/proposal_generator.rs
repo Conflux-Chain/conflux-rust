@@ -192,10 +192,29 @@ impl ProposalGenerator {
             let new_pivot_decision =
                 payload.iter().find_map(|tx| match tx.payload() {
                     TransactionPayload::PivotDecision(decision) => {
-                        Some(decision.block_hash)
+                        if decision.height
+                            <= parent_block
+                                .block_info()
+                                .pivot_decision()
+                                .map(|d| d.height)
+                                .unwrap_or_default()
+                        {
+                            None
+                        } else {
+                            Some(decision.block_hash)
+                        }
                     }
                     _ => None,
                 });
+            if new_pivot_decision.is_none()
+                && payload.last().is_some()
+                && matches!(
+                    payload.last().unwrap().payload(),
+                    TransactionPayload::PivotDecision(_)
+                )
+            {
+                payload.pop();
+            }
             /*
             match self.pow_handler.next_pivot_decision(parent_decision).await {
 

@@ -103,6 +103,7 @@ pub struct EpochManager {
     network_sender: NetworkSender,
     timeout_sender: channel::Sender<Round>,
     proposal_timeout_sender: channel::Sender<Round>,
+    new_round_timeout_sender: channel::Sender<Round>,
     txn_manager: Arc<dyn TxnManager>,
     state_computer: Arc<dyn StateComputer>,
     storage: Arc<dyn PersistentLivenessStorage>,
@@ -125,6 +126,7 @@ impl EpochManager {
         network_sender: NetworkSender,
         timeout_sender: channel::Sender<Round>,
         proposal_timeout_sender: channel::Sender<Round>,
+        new_round_timeout_sender: channel::Sender<Round>,
         txn_manager: Arc<dyn TxnManager>,
         state_computer: Arc<dyn StateComputer>,
         storage: Arc<dyn PersistentLivenessStorage>,
@@ -149,6 +151,7 @@ impl EpochManager {
             network_sender,
             timeout_sender,
             proposal_timeout_sender,
+            new_round_timeout_sender,
             txn_manager,
             state_computer,
             storage,
@@ -177,6 +180,7 @@ impl EpochManager {
         &self, time_service: Arc<dyn TimeService>,
         timeout_sender: channel::Sender<Round>,
         proposal_timeout_sender: channel::Sender<Round>,
+        new_round_timeout_sender: channel::Sender<Round>,
     ) -> RoundState
     {
         // 1.5^6 ~= 11
@@ -191,6 +195,7 @@ impl EpochManager {
             time_service,
             timeout_sender,
             proposal_timeout_sender,
+            new_round_timeout_sender,
         )
     }
 
@@ -450,6 +455,7 @@ impl EpochManager {
             self.time_service.clone(),
             self.timeout_sender.clone(),
             self.proposal_timeout_sender.clone(),
+            self.new_round_timeout_sender.clone(),
         );
 
         diem_info!(epoch = epoch, "Create ProposerElection");
@@ -718,6 +724,17 @@ impl EpochManager {
         }
     }
 
+    async fn process_new_round_timeout(
+        &mut self, round: u64,
+    ) -> anyhow::Result<()> {
+        match self.processor_mut() {
+            RoundProcessor::Normal(p) => {
+                p.process_new_round_timeout(round).await
+            }
+            _ => unreachable!("RoundManager not started yet"),
+        }
+    }
+
     async fn expect_new_epoch(&mut self) {
         diem_debug!("expect_new_epoch: start");
         if let Some(payload) = self.reconfig_events.next().await {
@@ -732,6 +749,7 @@ impl EpochManager {
     pub async fn start(
         mut self, mut round_timeout_sender_rx: channel::Receiver<Round>,
         mut proposal_timeout_sender_rx: channel::Receiver<Round>,
+        mut new_round_timeout_sender_rx: channel::Receiver<Round>,
         mut network_receivers: NetworkReceivers, stopped: Arc<AtomicBool>,
     )
     {
@@ -756,7 +774,10 @@ impl EpochManager {
                         monitor!("process_local_timeout", self.process_local_timeout(round).await)
                     }
                     round = proposal_timeout_sender_rx.select_next_some() => {
-                        monitor!("process_local_timeout", self.process_proposal_timeout(round).await)
+                        monitor!("process_proposal_timeout", self.process_proposal_timeout(round).await)
+                    }
+                    round = new_round_timeout_sender_rx.select_next_some() => {
+                        monitor!("process_new_round_timeout", self.process_new_round_timeout(round).await)
                     }
                 }
             );

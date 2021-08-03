@@ -169,11 +169,20 @@ impl Mempool {
                 }
             };
             */
+            match txn.txn.payload() {
+                TransactionPayload::PivotDecision(_) => {
+                    seen.insert((txn.get_sender(), txn.get_hash()));
+                    continue;
+                }
+                _ => {}
+            }
             //if validate_result.is_ok() {
             block.push(txn.txn.clone());
             seen.insert((txn.get_sender(), txn.get_hash()));
             //}
         }
+        let mut max_pivot_height = 0;
+        let mut chosen_pivot_tx = None;
         // iterate all pivot decision transaction
         // TODO(linxi): use config instead of constant
         for pivot_decision_set in self.transactions.iter_pivot_decision() {
@@ -191,8 +200,20 @@ impl Mempool {
             }
             if (cnt * 3 >= validators.len() * 2 + 1) {
                 let pivot_decision = pivot_decision_opt.unwrap();
-                block.push(pivot_decision);
+                let pivot_height = match pivot_decision.payload() {
+                    TransactionPayload::PivotDecision(decision) => {
+                        decision.height
+                    }
+                    _ => unreachable!(),
+                };
+                if pivot_height > max_pivot_height {
+                    max_pivot_height = pivot_height;
+                    chosen_pivot_tx = Some(pivot_decision);
+                }
             }
+        }
+        if let Some(tx) = chosen_pivot_tx {
+            block.push(tx);
         }
 
         diem_debug!(
