@@ -480,7 +480,7 @@ pub fn register_transaction(
         Serialize,
     };
     use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
-    use rand08::{rngs::StdRng, CryptoRng, RngCore, SeedableRng};
+    use rand_08::{rngs::StdRng, CryptoRng, RngCore, SeedableRng};
     use solidity_abi::ABIEncodable;
     use tiny_keccak::{Hasher, Keccak};
 

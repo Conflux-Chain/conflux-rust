@@ -29,8 +29,14 @@ use cfx_parameters::{
 use cfx_storage::{StorageConfiguration, StorageManager};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use core::str::FromStr;
+use diem_config::keys::ConfigKey;
+use diem_crypto::Uniform;
+use diem_types::validator_config::{
+    ConsensusPrivateKey, ConsensusVRFPrivateKey,
+};
 use parking_lot::Mutex;
 use primitives::{Block, BlockHeaderBuilder};
+use rand_08::{prelude::StdRng, SeedableRng};
 use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
 use storage_interface::{DBReaderForPoW, DbReader};
 use threadpool::ThreadPool;
@@ -170,12 +176,19 @@ pub fn initialize_synchronization_graph_with_data_manager(
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
 {
     let machine = Arc::new(new_machine_with_builtin(Default::default(), vm));
+    let mut rng = StdRng::from_seed([0u8; 32]);
     let pos_connection = PosConnection::new(
         Arc::new(FakeDiemDB {}) as Arc<dyn DBReaderForPoW>,
         Arc::new(ConsensusDB::new(".")),
-        PosConfiguration {},
     );
-    let pos_verifier = Arc::new(PosVerifier::new(pos_connection, u64::MAX));
+    let pos_verifier = Arc::new(PosVerifier::new(
+        pos_connection,
+        PosConfiguration {
+            bls_key: ConfigKey::new(ConsensusPrivateKey::generate(&mut rng)),
+            vrf_key: ConfigKey::new(ConsensusVRFPrivateKey::generate(&mut rng)),
+        },
+        u64::MAX,
+    ));
 
     let verification_config = VerificationConfig::new(
         true, /* test_mode */

@@ -16,12 +16,16 @@ use cfx_addr::Network;
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_types::{Address, H160, H256, H520, U128, U256, U512, U64};
 use cfxcore::{
-    rpc_errors::invalid_params_check, BlockDataManager, ConsensusGraph,
-    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
+    consensus::pos_handler::{PosHandler, PosVerifier},
+    rpc_errors::invalid_params_check,
+    spec::genesis::register_transaction,
+    BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
+    SharedConsensusGraph, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
 use clap::crate_version;
+use diem_types::account_address::{from_consensus_public_key, AccountAddress};
 use jsonrpc_core::{
     Error as RpcError, Result as JsonRpcResult, Value as RpcValue,
 };
@@ -138,13 +142,14 @@ pub struct RpcImpl {
     network: Arc<NetworkService>,
     tx_pool: SharedTransactionPool,
     accounts: Arc<AccountProvider>,
+    pos_handler: Arc<PosVerifier>,
 }
 
 impl RpcImpl {
     pub fn new(
         exit: Arc<(Mutex<bool>, Condvar)>, consensus: SharedConsensusGraph,
         network: Arc<NetworkService>, tx_pool: SharedTransactionPool,
-        accounts: Arc<AccountProvider>,
+        accounts: Arc<AccountProvider>, pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         let data_man = consensus.get_data_manager().clone();
@@ -156,6 +161,7 @@ impl RpcImpl {
             network,
             tx_pool,
             accounts,
+            pos_handler: pos_verifier,
         }
     }
 
@@ -644,6 +650,32 @@ impl RpcImpl {
         self.exit.1.notify_all();
 
         Ok(())
+    }
+
+    pub fn pos_register(
+        &self, voting_power: u64,
+    ) -> JsonRpcResult<(Bytes, AccountAddress)> {
+        let tx = register_transaction(
+            self.pos_handler.config().bls_key.private_key(),
+            self.pos_handler.config().vrf_key.public_key(),
+            voting_power,
+            0,
+        );
+        let identifier = from_consensus_public_key(
+            &self.pos_handler.config().bls_key.public_key(),
+            &self.pos_handler.config().vrf_key.public_key(),
+        );
+        Ok((tx.data.into(), identifier))
+    }
+
+    pub fn pos_update_voting_power(
+        &self, pos_account: AccountAddress, increased_voting_power: u64,
+    ) -> JsonRpcResult<()> {
+        unimplemented!()
+    }
+
+    pub fn pos_retire(&self, pos_account: AccountAddress) -> JsonRpcResult<()> {
+        unimplemented!()
     }
 }
 

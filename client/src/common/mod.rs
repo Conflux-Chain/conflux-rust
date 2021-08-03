@@ -295,10 +295,11 @@ pub fn initialize_common_modules(
             &self_vrf_public_key,
         ),
         consensus_key: Some(self_pos_private_key.clone()),
-        execution_key: Some(self_pos_private_key),
+        execution_key: Some(self_pos_private_key.clone()),
         waypoint: Some(pos_config.base.waypoint.waypoint()),
     });
-    pos_config.consensus.safety_rules.vrf_private_key = self_vrf_private_key;
+    pos_config.consensus.safety_rules.vrf_private_key =
+        self_vrf_private_key.clone();
     pos_config.consensus.safety_rules.export_consensus_key = true;
     pos_config.consensus.safety_rules.vrf_proposal_threshold =
         conf.raw_conf.vrf_proposal_threshold;
@@ -339,11 +340,14 @@ pub fn initialize_common_modules(
     let pos_connection = PosConnection::new(
         diem_handler.diem_db.clone() as Arc<dyn DBReaderForPoW>,
         diem_handler.consensus_db.clone(),
-        conf.pos_config(),
     );
     // FIXME(lpl): Set CIP height.
     let pos_verifier = Arc::new(PosVerifier::new(
         pos_connection,
+        PosConfiguration {
+            bls_key: self_pos_private_key,
+            vrf_key: self_vrf_private_key.unwrap(),
+        },
         conf.raw_conf.pos_reference_enable_height,
     ));
 
@@ -404,6 +408,7 @@ pub fn initialize_common_modules(
         network.clone(),
         txpool.clone(),
         accounts.clone(),
+        pos_verifier.clone(),
     ));
 
     let runtime = Runtime::with_default_thread_count();
@@ -870,7 +875,7 @@ use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use cfxcore::{
     block_data_manager::BlockDataManager,
-    consensus::pos_handler::{PosConnection, PosVerifier},
+    consensus::pos_handler::{PosConfiguration, PosConnection, PosVerifier},
     machine::{new_machine_with_builtin, Machine},
     pos::pow_handler::PowHandler,
     pow::PowComputer,

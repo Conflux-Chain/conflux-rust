@@ -76,6 +76,7 @@ use cfxcore::{
     },
     trace::ErrorUnwind,
 };
+use diem_types::account_address::AccountAddress;
 use lazy_static::lazy_static;
 use metrics::{register_timer_with_group, ScopeTimer, Timer};
 use primitives::transaction::TransactionType;
@@ -1621,6 +1622,11 @@ impl TestRpc for TestRpcImpl {
             fn say_hello(&self) -> JsonRpcResult<String>;
             fn stop(&self) -> JsonRpcResult<()>;
             fn save_node_db(&self) -> JsonRpcResult<()>;
+            fn pos_register(&self, voting_power: u64) -> JsonRpcResult<(Bytes, AccountAddress)>;
+            fn pos_update_voting_power(
+                &self, pos_account: AccountAddress, increased_voting_power: u64,
+            ) -> JsonRpcResult<()>;
+            fn pos_retire(&self, pos_account: AccountAddress) -> JsonRpcResult<()>;
         }
 
         to self.rpc_impl {

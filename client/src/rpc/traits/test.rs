@@ -5,6 +5,7 @@
 use super::super::types::{BlameInfo, Block, Bytes};
 use cfx_types::{H256, U256};
 use cfxcore::PeerInfo;
+use diem_types::account_address::AccountAddress;
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_derive::rpc;
 use network::node_table::NodeId;
@@ -110,4 +111,17 @@ pub trait TestRpc {
 
     #[rpc(name = "save_node_db")]
     fn save_node_db(&self) -> RpcResult<()>;
+
+    #[rpc(name = "pos_register")]
+    fn pos_register(
+        &self, voting_power: u64,
+    ) -> RpcResult<(Bytes, AccountAddress)>;
+
+    #[rpc(name = "pos_update_voting_power")]
+    fn pos_update_voting_power(
+        &self, pos_account: AccountAddress, increased_voting_power: u64,
+    ) -> RpcResult<()>;
+
+    #[rpc(name = "pos_retire")]
+    fn pos_retire(&self, pos_account: AccountAddress) -> RpcResult<()>;
 }

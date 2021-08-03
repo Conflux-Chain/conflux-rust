@@ -59,7 +59,7 @@ primitives = { path = "../primitives" }
 priority-send-queue = { path = "../util/priority-send-queue" }
 prometheus = { version = "0.7.0", default-features = false }
 rand = "0.7"
-rand08 = { package = "rand", version = "0.8" }
+rand_08 = {package = "rand", version = "0.8"}
 rand_chacha="0.2.1"
 rand_xorshift="0.2"
 random-crash = { path = "../util/random_crash" }

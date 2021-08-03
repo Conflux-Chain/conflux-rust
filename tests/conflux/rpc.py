@@ -3,6 +3,7 @@ import random
 
 import eth_utils
 import rlp
+import json
 
 from .address import hex_to_b32_address, b32_address_to_hex
 from .config import DEFAULT_PY_TEST_CHAIN_ID, default_config
@@ -18,9 +19,17 @@ from test_framework.util import (
     assert_greater_than_or_equal,
     assert_is_hash_string,
     assert_is_hex_string,
-    wait_until, checktx
+    wait_until, checktx, get_contract_instance
 )
 
+
+file_dir = os.path.dirname(os.path.realpath(__file__))
+REQUEST_BASE = {
+    'gas': CONTRACT_DEFAULT_GAS,
+    'gasPrice': 1,
+    'chainId': 1,
+    "to": b'',
+}
 
 def convert_b32_address_field_to_hex(original_dict: dict, field_name: str):
     if original_dict is not None and field_name in original_dict and original_dict[field_name] not in [None, "null"]:
@@ -322,10 +331,10 @@ class RpcClient:
         return tx
 
     def new_tx(self, sender = None, receiver = None, nonce = None, gas_price=1, gas=21000, value=100, data=b'', sign=True, priv_key=None, storage_limit=None, epoch_height=0, chain_id=DEFAULT_PY_TEST_CHAIN_ID):
+        if priv_key is None:
+            priv_key = default_config["GENESIS_PRI_KEY"]
         if sender is None:
-            sender = self.GENESIS_ADDR
-            if priv_key is None:
-                priv_key = default_config["GENESIS_PRI_KEY"]
+            sender = eth_utils.encode_hex(priv_to_addr(priv_key))
 
         if receiver is None:
             receiver = self.COINBASE_ADDR
@@ -489,3 +498,36 @@ class RpcClient:
 
     def filter_trace(self, filter: dict):
         return self.node.trace_filter(filter)
+
+    def wait_for_pos_register(self, priv_key=None, voting_power=1):
+        if priv_key is None:
+            _, priv_key = self.rand_account()
+        address = eth_utils.encode_hex(priv_to_addr(priv_key))
+        initial_tx = self.new_tx(receiver=address, value=200 * 10 ** 18)
+        self.send_tx(initial_tx, wait_for_receipt=True)
+        stake_tx = self.new_tx(priv_key=priv_key, data=stake_tx_data(100), value=0, receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
+        self.send_tx(stake_tx, wait_for_receipt=True)
+        data, pos_identifier = self.node.pos_register(voting_power)
+        register_tx = self.new_tx(priv_key=priv_key, data=eth_utils.decode_hex(data), value=0, receiver="0x0888000000000000000000000000000000000005", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+        self.send_tx(register_tx, wait_for_receipt=True)
+        return pos_identifier
+
+
+def stake_tx_data(staking_value: int):
+    staking_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/Staking.json"), "r").read())
+    staking_contract = get_contract_instance(contract_dict=staking_contract_dict)
+    return get_contract_function_data(staking_contract, "deposit", args=[staking_value * 10 ** 18])
+
+
+def get_contract_function_data(contract, name, args):
+    func = getattr(contract.functions, name)
+    attrs = {
+        **REQUEST_BASE,
+    }
+    # if contract_addr:
+    #     attrs['receiver'] = decode_hex(contract_addr)
+    #     attrs['to'] = contract_addr
+    # else:
+    #     attrs['receiver'] = b''
+    tx_data = func(*args).buildTransaction(attrs)
+    return eth_utils.decode_hex(tx_data['data'])
