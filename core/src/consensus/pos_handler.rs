@@ -187,32 +187,35 @@ impl<PoS: PosInterface> PosHandler<PoS> {
         for ending_block in epoch_ending_blocks {
             let mut elected = BTreeMap::new();
             let mut voted_block_id = ending_block;
+            for committee_member in self
+                .pos
+                // use `parent` here because the pos_state of an
+                // epoch_ending block is next_epoch_state.
+                .get_epoch_state(
+                    &self.pos.get_committed_block(&ending_block)?.parent,
+                )
+                .verifier
+                .address_to_validator_info()
+                .keys()
+            {
+                elected.insert(
+                    H256::from_slice(committee_member.as_ref()),
+                    VoteCount::default(),
+                );
+            }
+            let min_vote = elected.len() * 2 / 3 + 1;
             loop {
                 let block = self.pos.get_committed_block(&voted_block_id)?;
                 if block.round == 0 {
                     // round 0 is genesis and has not voters.
                     break;
                 }
-                for committee_member in self
-                    .pos
-                    // use `parent` here because the pos_state of an
-                    // epoch_ending block is next_epoch_state.
-                    .get_epoch_state(&block.parent)
-                    .verifier
-                    .address_to_validator_info()
-                    .keys()
-                {
-                    elected.insert(
-                        H256::from_slice(committee_member.as_ref()),
-                        VoteCount::default(),
-                    );
-                }
                 {
                     let leader_status =
                         elected.get_mut(&block.author).expect("in epoch state");
                     leader_status.leader_count += 1;
                     leader_status.included_vote_count +=
-                        block.voters.len() as u32;
+                        (block.voters.len() - min_vote) as u32;
                 }
                 for voter in block.voters {
                     elected
