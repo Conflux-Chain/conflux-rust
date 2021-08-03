@@ -51,6 +51,7 @@ use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     sync::Arc,
 };
+use diem_types::term_state::MAX_TERM_POINTS;
 
 mod account_entry;
 #[cfg(test)]
@@ -370,7 +371,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
             )?;
             let address = Address::from(H256::from_uint(&address_value));
             let interest =
-                distributable_pos_interest * points / MAX_POS_REWARD_POINTS;
+                distributable_pos_interest * points / MAX_TERM_POINTS;
             self.add_balance(
                 &address,
                 &interest,
@@ -1808,7 +1809,7 @@ fn sqrt_u256(input: U256) -> U256 {
     /************************************************************
      ** Step 1: pick the most significant 64 bits and estimate an
      ** approximate root.
-     *********************************************************** **/
+     *********************************************************** * * * * **/
     let significant_bits = 64 - bits % 2;
     // The `rest_bits` must be even number.
     let rest_bits = bits - significant_bits;
@@ -1820,7 +1821,8 @@ fn sqrt_u256(input: U256) -> U256 {
 
     /******************************************************************
      ** Step 2: use the Newton's method to estimate the accurate value.
-     ***************************************************************** **/
+     ***************************************************************** * *
+     ** * * **/
     let mut root = init_root;
     // Will iterate for at most 4 rounds.
     while root * root > input {

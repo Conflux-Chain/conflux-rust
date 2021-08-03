@@ -1072,13 +1072,9 @@ impl ConsensusExecutionHandler {
                 .as_ref()
                 .and_then(|x| x.first())
             {
-                let pos_points = reward_event
-                    .elected
-                    .iter()
-                    .map(|(node_id, count)| (node_id, count.reward_points()));
                 state
                     .distribute_pos_interest(
-                        Box::new(pos_points),
+                        Box::new(reward_event.rewards()),
                         self.machine
                             .spec(current_block_number)
                             .account_start_nonce,
