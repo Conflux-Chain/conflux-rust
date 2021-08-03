@@ -24,6 +24,7 @@ use diem_types::{
 use move_core_types::language_storage::TypeTag;
 use std::collections::BTreeMap;
 use storage_interface::DbReaderWriter;
+use diem_types::term_state::ROUND_PER_TERM;
 
 /// This trait describes the VM's execution interface.
 pub trait VMExecutor: Send {
@@ -56,7 +57,7 @@ impl VMExecutor for FakeVM {
                 Transaction::BlockMetadata(data) => {
                     let mut events = state_view.pos_state().get_unlock_events();
                     // FIXME(lpl)
-                    if (state_view.pos_state().current_view() + 1) % 60 == 0 {
+                    if (state_view.pos_state().current_view() + 1) % ROUND_PER_TERM == 0 {
                         let (validator_verifier, vrf_seed) = state_view
                             .pos_state()
                             .get_new_committee()
@@ -64,7 +65,7 @@ impl VMExecutor for FakeVM {
                                 VMStatus::Error(StatusCode::CFX_INVALID_TX)
                             })?;
                         let epoch = (state_view.pos_state().current_view() + 1)
-                            / 60
+                            / ROUND_PER_TERM
                             + 1;
                         let validator_bytes = bcs::to_bytes(&EpochState {
                             epoch,

@@ -28,7 +28,7 @@ use std::convert::TryFrom;
 const TERM_LIST_LEN: usize = 6;
 // FIXME(lpl): Use correct value later.
 pub const ELECTION_AFTER_ACCEPTED_ROUND: Round = 240;
-const ROUND_PER_TERM: Round = 60;
+pub const ROUND_PER_TERM: Round = 60;
 /// A term `n` is open for election in the view range
 /// `(n * ROUND_PER_TERM - ELECTION_TERM_START_ROUND, n * ROUND_PER_TERM -
 /// ELECTION_TERM_END_ROUND]`
