@@ -3,6 +3,7 @@
 """
 import time
 
+from conflux.rpc import RpcClient
 from conflux.utils import int_to_hex
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
@@ -22,6 +23,9 @@ class ExampleTest(ConfluxTestFramework):
 
     def run_test(self):
         time.sleep(2)
+        client = RpcClient(self.nodes[3])
+        client.wait_for_pos_register()
+
         genesis = self.nodes[0].best_block_hash()
         self.log.info(genesis)
 
