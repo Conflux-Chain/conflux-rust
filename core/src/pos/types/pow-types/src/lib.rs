@@ -20,6 +20,7 @@ pub trait PowInterface: Send + Sync {
     async fn wait_for_initialization(&self, last_decision: H256);
 }
 
+#[derive(Debug)]
 pub enum StakingEvent {
     /// (address, bls_public_key, vrf_public_key)
     Register((H256, Vec<u8>, Vec<u8>)),

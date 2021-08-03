@@ -24,7 +24,12 @@ from test_framework.util import (
 
 
 file_dir = os.path.dirname(os.path.realpath(__file__))
-
+REQUEST_BASE = {
+    'gas': CONTRACT_DEFAULT_GAS,
+    'gasPrice': 1,
+    'chainId': 1,
+    "to": b'',
+}
 
 def convert_b32_address_field_to_hex(original_dict: dict, field_name: str):
     if original_dict is not None and field_name in original_dict and original_dict[field_name] not in [None, "null"]:
@@ -498,12 +503,12 @@ class RpcClient:
         if priv_key is None:
             _, priv_key = self.rand_account()
         address = eth_utils.encode_hex(priv_to_addr(priv_key))
-        initial_tx = self.new_tx(receiver=address, value=200)
+        initial_tx = self.new_tx(receiver=address, value=200 * 10 ** 18)
         self.send_tx(initial_tx, wait_for_receipt=True)
-        stake_tx = self.new_tx(priv_key=priv_key, data=stake_tx_data(100), value=0, receiver="0x0888000000000000000000000000000000000002")
+        stake_tx = self.new_tx(priv_key=priv_key, data=stake_tx_data(100), value=0, receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
         self.send_tx(stake_tx, wait_for_receipt=True)
         data, pos_identifier = self.node.pos_register(voting_power)
-        register_tx = self.new_tx(priv_key=priv_key, data=bytes(data), value=0, receiver="0x0888000000000000000000000000000000000005")
+        register_tx = self.new_tx(priv_key=priv_key, data=eth_utils.decode_hex(data), value=0, receiver="0x0888000000000000000000000000000000000005", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         self.send_tx(register_tx, wait_for_receipt=True)
         return pos_identifier
 
@@ -517,7 +522,7 @@ def stake_tx_data(staking_value: int):
 def get_contract_function_data(contract, name, args):
     func = getattr(contract.functions, name)
     attrs = {
-        # **ReentrancyTest.REQUEST_BASE
+        **REQUEST_BASE,
     }
     # if contract_addr:
     #     attrs['receiver'] = decode_hex(contract_addr)
