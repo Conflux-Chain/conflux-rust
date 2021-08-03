@@ -8,7 +8,7 @@ use channel::{diem_channel, message_queues::QueueStyle};
 use diem_types::transaction::SignedTransaction;
 use network::node_table::NodeId;
 use serde::{Deserialize, Serialize};
-use std::mem::Discriminant;
+use std::{fmt::Formatter, mem::Discriminant};
 
 /// Container for exchanging transactions with other Mempools.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -31,6 +31,19 @@ pub enum MempoolSyncMsg {
         /// (e.g., mempool is full).
         backoff: bool,
     },
+}
+
+impl std::fmt::Display for MempoolSyncMsg {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            Self::BroadcastTransactionsRequest { .. } => {
+                write!(f, "BroadcastTransactionsRequest")
+            }
+            Self::BroadcastTransactionsResponse { .. } => {
+                write!(f, "BroadcastTransactionsResponse")
+            }
+        }
+    }
 }
 
 /// Just a convenience struct to keep all the network proxy receiving queues in

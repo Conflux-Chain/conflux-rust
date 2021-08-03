@@ -12,7 +12,7 @@ class ExampleTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 4
         # self.conf_parameters["vrf_proposal_threshold"] = '"{}"'.format(int_to_hex(int(2 ** 256 / 2)))
-        self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = '600'
+        self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = '120'
         # self.conf_parameters["log_level"] = '"trace"'
 
     def setup_network(self):
@@ -31,7 +31,7 @@ class ExampleTest(ConfluxTestFramework):
         latest_pos_ref = self.latest_pos_ref()
         for _ in range(300):
             # Generate enough PoW block for PoS to progress
-            self.nodes[0].generate_empty_blocks(600)
+            self.nodes[0].generate_empty_blocks(60)
             # Leave some time for PoS to reach consensus
             time.sleep(3)
             self.nodes[0].generate_empty_blocks(1)

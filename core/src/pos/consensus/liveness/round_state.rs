@@ -171,6 +171,8 @@ pub struct RoundState {
     // To send timeout events for proposal selection to the subscriber (e.g.,
     // SMR)
     proposal_timeout_sender: channel::Sender<Round>,
+    new_round_timeout_sender: channel::Sender<Round>,
+    new_round_sent: bool,
     // Votes received for the current round.
     pending_votes: PendingVotes,
     // Vote sent locally for the current round.
@@ -212,6 +214,7 @@ impl RoundState {
         time_service: Arc<dyn TimeService>,
         timeout_sender: channel::Sender<Round>,
         proposal_timeout_sender: channel::Sender<Round>,
+        new_round_timeout_sender: channel::Sender<Round>,
     ) -> Self
     {
         // Our counters are initialized lazily, so they're not going to appear
@@ -229,6 +232,8 @@ impl RoundState {
             time_service,
             timeout_sender,
             proposal_timeout_sender,
+            new_round_timeout_sender,
+            new_round_sent: false,
             pending_votes: PendingVotes::new(),
             vote_sent: None,
             received_pivot_decisions: HashMap::new(),
@@ -268,6 +273,7 @@ impl RoundState {
         if new_round > self.current_round {
             // Start a new round.
             self.current_round = new_round;
+            self.new_round_sent = false;
             self.pending_votes = PendingVotes::new();
             self.vote_sent = None;
             let timeout = self.setup_timeout();
@@ -376,9 +382,44 @@ impl RoundState {
         timeout
     }
 
+    /// Setup the timeout task and return the duration of the current timeout
+    pub fn setup_new_round_timeout(&mut self) -> Option<Duration> {
+        if self.new_round_sent {
+            return None;
+        }
+        let new_round_timeout_sender = self.new_round_timeout_sender.clone();
+        let timeout = self.setup_new_round_deadline();
+        diem_trace!(
+            "Scheduling new round timeout of {} ms for round {}",
+            timeout.as_millis(),
+            self.current_round
+        );
+        self.time_service.run_after(
+            timeout,
+            SendTask::make(new_round_timeout_sender, self.current_round),
+        );
+        self.new_round_sent = true;
+        Some(timeout)
+    }
+
     /// FIXME(lpl): Decide a proper timeout setting.
     /// Currently it's set to half the round timeout.
     fn setup_proposal_deadline(&self) -> Duration {
+        let round_index_after_committed_round =
+            self.get_round_index_after_committed_round();
+        let timeout = self
+            .time_interval
+            .get_round_duration(round_index_after_committed_round)
+            / 2;
+        diem_debug!(
+            round = self.current_round,
+            "Set proposal selection deadline to {:?} from now",
+            timeout
+        );
+        timeout
+    }
+
+    fn setup_new_round_deadline(&self) -> Duration {
         let round_index_after_committed_round =
             self.get_round_index_after_committed_round();
         let timeout = self

@@ -78,7 +78,7 @@ pub(crate) async fn coordinator(
                 handle_mempool_reconfig_event(&mut smp, &bounded_executor, config_update).await;
             },
             (peer, backoff) = scheduled_broadcasts.select_next_some() => {
-                diem_debug!("scheduled_broadcasts");
+                // diem_debug!("scheduled_broadcasts");
                 tasks::execute_broadcast(peer, backoff, &mut smp, &mut scheduled_broadcasts, executor.clone());
             },
             (peer, _) = network_receivers.network_events.select_next_some() => {

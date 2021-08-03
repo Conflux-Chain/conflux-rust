@@ -251,11 +251,17 @@ pub static PENDING_ROUND_TIMEOUTS: Lazy<IntGauge> = Lazy::new(|| {
     .unwrap()
 });
 
-/// Count of the pending outbound round timeouts
 pub static PENDING_PROPOSAL_TIMEOUTS: Lazy<IntGauge> = Lazy::new(|| {
     register_int_gauge!(
         "diem_consensus_pending_proposal_timeouts",
         "Count of the pending outbound proposal timeouts"
+    )
+    .unwrap()
+});
+pub static PENDING_NEW_ROUND_TIMEOUTS: Lazy<IntGauge> = Lazy::new(|| {
+    register_int_gauge!(
+        "diem_consensus_pending_new_round_timeouts",
+        "Count of the pending outbound new round timeouts"
     )
     .unwrap()
 });

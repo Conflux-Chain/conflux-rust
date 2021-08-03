@@ -668,6 +668,44 @@ impl RoundManager {
         Ok(())
     }
 
+    pub async fn process_new_round_timeout(
+        &mut self, round: Round,
+    ) -> anyhow::Result<()> {
+        diem_debug!("process_new_round_timeout: round={}", round);
+        if round != self.round_state.current_round() {
+            return Ok(());
+        }
+
+        match self
+            .round_state
+            .get_round_certificate(&self.epoch_state.verifier)
+        {
+            VoteReceptionResult::NewQuorumCertificate(qc) => {
+                self.new_qc_aggregated(
+                    qc.clone(),
+                    qc.ledger_info()
+                        .signatures()
+                        .keys()
+                        .next()
+                        .expect("qc formed")
+                        .clone(),
+                )
+                .await?;
+            }
+            VoteReceptionResult::NewTimeoutCertificate(tc) => {
+                self.new_tc_aggregated(tc).await?;
+            }
+            _ => {
+                // No certificate formed. This should not happen.
+                anyhow::bail!(
+                    "New round timeout without new certificate! round={}",
+                    round
+                );
+            }
+        }
+        Ok(())
+    }
+
     /// The replica broadcasts a "timeout vote message", which includes the
     /// round signature, which can be aggregated to a TimeoutCertificate.
     /// The timeout vote message can be one of the following three options:
@@ -695,26 +733,13 @@ impl RoundManager {
             );
         }
 
-        //
         match self
             .round_state
             .get_round_certificate(&self.epoch_state.verifier)
         {
-            VoteReceptionResult::NewQuorumCertificate(qc) => {
-                self.new_qc_aggregated(
-                    qc.clone(),
-                    qc.ledger_info()
-                        .signatures()
-                        .keys()
-                        .next()
-                        .expect("qc formed")
-                        .clone(),
-                )
-                .await?;
-                return Ok(());
-            }
-            VoteReceptionResult::NewTimeoutCertificate(tc) => {
-                self.new_tc_aggregated(tc).await?;
+            VoteReceptionResult::NewQuorumCertificate(_)
+            | VoteReceptionResult::NewTimeoutCertificate(_) => {
+                // Certificate formed, so do not send timeout vote.
                 return Ok(());
             }
             _ => {
@@ -1024,11 +1049,11 @@ impl RoundManager {
             .round_state
             .insert_vote(vote, &self.epoch_state.verifier)
         {
-            VoteReceptionResult::NewQuorumCertificate(_) => {
-                // self.new_qc_aggregated(qc, vote.author()).await?;
-            }
-            VoteReceptionResult::NewTimeoutCertificate(_) => {
-                // self.new_tc_aggregated(tc).await?;
+            VoteReceptionResult::NewQuorumCertificate(_)
+            | VoteReceptionResult::NewTimeoutCertificate(_) => {
+                // Wait for extra time to gather more votes before entering the
+                // next round.
+                self.round_state.setup_new_round_timeout();
             }
             VoteReceptionResult::VoteAdded(_) => {}
             VoteReceptionResult::DuplicateVote => {

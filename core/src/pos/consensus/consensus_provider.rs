@@ -69,6 +69,8 @@ pub fn start_consensus(
         channel::new(1_024, &counters::PENDING_ROUND_TIMEOUTS);
     let (proposal_timeout_sender, proposal_timeout_receiver) =
         channel::new(1_024, &counters::PENDING_PROPOSAL_TIMEOUTS);
+    let (new_round_timeout_sender, new_round_timeout_receiver) =
+        channel::new(1_024, &counters::PENDING_NEW_ROUND_TIMEOUTS);
 
     let epoch_mgr = EpochManager::new(
         node_config,
@@ -76,6 +78,7 @@ pub fn start_consensus(
         network_sender,
         timeout_sender,
         proposal_timeout_sender,
+        new_round_timeout_sender,
         txn_manager,
         state_computer,
         storage,
@@ -88,6 +91,7 @@ pub fn start_consensus(
     runtime.spawn(epoch_mgr.start(
         timeout_receiver,
         proposal_timeout_receiver,
+        new_round_timeout_receiver,
         network_receiver,
         stopped.clone(),
     ));
