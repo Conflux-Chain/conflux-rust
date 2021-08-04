@@ -1072,6 +1072,7 @@ impl ConsensusExecutionHandler {
                 .as_ref()
                 .and_then(|x| x.first())
             {
+                debug!("distribute_pos_interest: {:?}", reward_event);
                 state
                     .distribute_pos_interest(
                         Box::new(reward_event.rewards()),

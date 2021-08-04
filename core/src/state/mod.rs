@@ -37,6 +37,7 @@ use cfx_storage::{utils::access_mode, StorageState, StorageStateTrait};
 use cfx_types::{
     address_util::AddressUtil, Address, BigEndianHash, H256, U256,
 };
+use diem_types::term_state::MAX_TERM_POINTS;
 use num::integer::Roots;
 use parking_lot::{
     MappedRwLockWriteGuard, RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard,
@@ -51,7 +52,6 @@ use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     sync::Arc,
 };
-use diem_types::term_state::MAX_TERM_POINTS;
 
 mod account_entry;
 #[cfg(test)]
@@ -1809,7 +1809,8 @@ fn sqrt_u256(input: U256) -> U256 {
     /************************************************************
      ** Step 1: pick the most significant 64 bits and estimate an
      ** approximate root.
-     *********************************************************** * * * * **/
+     *********************************************************** * * * * *
+     ** * * * * * **/
     let significant_bits = 64 - bits % 2;
     // The `rest_bits` must be even number.
     let rest_bits = bits - significant_bits;
@@ -1822,7 +1823,7 @@ fn sqrt_u256(input: U256) -> U256 {
     /******************************************************************
      ** Step 2: use the Newton's method to estimate the accurate value.
      ***************************************************************** * *
-     ** * * **/
+     ** * * * * * * * * **/
     let mut root = init_root;
     // Will iterate for at most 4 rounds.
     while root * root > input {

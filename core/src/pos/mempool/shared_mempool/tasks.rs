@@ -160,7 +160,10 @@ fn gen_ack_response(
     }
 
     diem_info!("gen_ack_response");
-    debug!("request[{:?}] from peer[{:?}] retry[{:?}]", request_id, peer, retry);
+    debug!(
+        "request[{:?}] from peer[{:?}] retry[{:?}]",
+        request_id, peer, retry
+    );
 
     update_ack_counter(&peer, counters::SENT_LABEL, retry, backoff);
     MempoolSyncMsg::BroadcastTransactionsResponse {

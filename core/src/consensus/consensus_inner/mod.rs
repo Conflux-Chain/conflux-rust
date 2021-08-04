@@ -3864,6 +3864,10 @@ impl ConsensusGraphInner {
     pub fn validate_pivot_decision(
         &self, ancestor_hash: &H256, me_hash: &H256,
     ) -> bool {
+        if ancestor_hash == me_hash {
+            // TODO(lpl): Do we want to allow duplicate pivot decision?
+            return true;
+        }
         debug!(
             "validate_pivot_decision: ancestor={:?}, me={:?}",
             ancestor_hash, me_hash
@@ -3879,8 +3883,8 @@ impl ConsensusGraphInner {
                 // Both in memory. Just use Link-Cut-Tree.
                 self.ancestor_at(*me, self.arena[*ancestor].height) == *ancestor
             }
-            // FIXME(lpl): Check if it's possible to go beyond checkpoint.
-            // FIXME(lpl): If we want to check ancestor and me are both on pivot
+            // TODO(lpl): Check if it's possible to go beyond checkpoint.
+            // TODO(lpl): If we want to check ancestor and me are both on pivot
             // chain, we might need to always persist
             // block_execution_result for full nodes. Or include
             // height in the validation?

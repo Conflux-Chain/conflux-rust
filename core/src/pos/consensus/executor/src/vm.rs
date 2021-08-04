@@ -1,7 +1,4 @@
-use consensus_types::{
-    block::Block, block_data::BlockType::Proposal, proposal_msg::ProposalMsg,
-    vote::Vote,
-};
+use consensus_types::{block::Block, vote::Vote};
 use diem_logger::{error as diem_error, prelude::*};
 use diem_state_view::StateView;
 use diem_types::{

@@ -238,7 +238,10 @@ impl ProposalGenerator {
                     let staking_events = self
                         .pow_handler
                         .get_staking_events(parent_decision, block_hash)?;
-                    diem_debug!("generate_proposal: staking_events={:?}", staking_events);
+                    diem_debug!(
+                        "generate_proposal: staking_events={:?}",
+                        staking_events
+                    );
                     for event in staking_events {
                         match RawTransaction::from_staking_event(
                             &event,

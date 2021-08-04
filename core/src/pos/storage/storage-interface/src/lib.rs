@@ -17,6 +17,7 @@ use diem_types::{
     proof::{
         definition::LeafCount, AccumulatorConsistencyProof, SparseMerkleProof,
     },
+    reward_distribution_event::RewardDistributionEvent,
     term_state::PosState,
     transaction::{
         TransactionInfo, TransactionListWithProof, TransactionToCommit,
@@ -422,6 +423,10 @@ pub trait DbWriter: Send + Sync {
         ledger_info_with_sigs: Option<&LedgerInfoWithSignatures>,
         pos_state: Option<PosState>,
     ) -> Result<()>;
+
+    fn save_reward_event(
+        &self, epoch: u64, event: &RewardDistributionEvent,
+    ) -> Result<()>;
 }
 
 #[derive(Clone)]
@@ -521,4 +526,6 @@ pub trait DBReaderForPoW: Send + Sync + DbReader {
     fn get_epoch_ending_blocks(
         &self, start_epoch: u64, end_epoch: u64,
     ) -> Result<Vec<HashValue>>;
+
+    fn get_reward_event(&self, epoch: u64) -> Result<RewardDistributionEvent>;
 }

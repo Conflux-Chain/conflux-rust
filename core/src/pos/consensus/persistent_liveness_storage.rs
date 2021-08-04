@@ -7,7 +7,7 @@ use super::{
 };
 use anyhow::{format_err, Context, Result};
 use consensus_types::{
-    block::Block, quorum_cert::QuorumCert,
+    block::Block, db::LedgerBlockRW, quorum_cert::QuorumCert,
     timeout_certificate::TimeoutCertificate, vote::Vote,
 };
 use diem_config::config::NodeConfig;
