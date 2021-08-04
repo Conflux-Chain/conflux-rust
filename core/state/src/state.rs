@@ -103,6 +103,22 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         .unwrap();
     }
 
+    fn add_total_pos_staking(&mut self, v: U256) { unimplemented!() }
+
+    fn inc_distributable_pos_interest(
+        &mut self, current_block_number: u64,
+    ) -> Result<()> {
+        unimplemented!()
+    }
+
+    fn distribute_pos_interest<'a>(
+        &mut self, pos_points: Box<dyn Iterator<Item = (&'a H256, u64)> + 'a>,
+        account_start_nonce: U256, current_block_number: u64,
+    ) -> Result<()>
+    {
+        unimplemented!()
+    }
+
     fn new_contract_with_admin(
         &mut self, _contract: &Address, _admin: &Address, _balance: U256,
         _nonce: U256, _storage_layout: Option<StorageLayout>,
@@ -570,6 +586,12 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
             )
             .unwrap_or(U256::zero());
     }
+
+    fn total_pos_staking_tokens(&self) -> U256 { unimplemented!() }
+
+    fn distributable_pos_interest(&self) -> U256 { unimplemented!() }
+
+    fn last_distribute_block(&self) -> u64 { unimplemented!() }
 
     fn remove_contract(&mut self, _address: &Address) -> Result<()> {
         unimplemented!()
