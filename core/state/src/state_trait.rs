@@ -53,6 +53,17 @@ pub trait StateOpsTrait {
     /// unlikely case that there are a lot of partial invalid blocks.
     fn subtract_total_issued(&mut self, v: U256);
 
+    fn add_total_pos_staking(&mut self, v: U256);
+
+    fn inc_distributable_pos_interest(
+        &mut self, current_block_number: u64,
+    ) -> DbResult<()>;
+
+    fn distribute_pos_interest<'a>(
+        &mut self, pos_points: Box<dyn Iterator<Item = (&'a H256, u64)> + 'a>,
+        account_start_nonce: U256, current_block_number: u64,
+    ) -> DbResult<()>;
+
     fn new_contract_with_admin(
         &mut self, contract: &Address, admin: &Address, balance: U256,
         nonce: U256, storage_layout: Option<StorageLayout>,
@@ -193,6 +204,12 @@ pub trait StateOpsTrait {
     fn total_staking_tokens(&self) -> U256;
 
     fn total_storage_tokens(&self) -> U256;
+
+    fn total_pos_staking_tokens(&self) -> U256;
+
+    fn distributable_pos_interest(&self) -> U256;
+
+    fn last_distribute_block(&self) -> u64;
 
     fn remove_contract(&mut self, address: &Address) -> DbResult<()>;
 

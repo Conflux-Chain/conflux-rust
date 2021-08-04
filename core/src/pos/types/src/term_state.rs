@@ -23,7 +23,7 @@ use crate::{
 use diem_logger::prelude::*;
 use move_core_types::language_storage::TypeTag;
 use pow_types::StakingEvent;
-use std::convert::TryFrom;
+use std::{convert::TryFrom, path::Component::RootDir};
 
 const TERM_LIST_LEN: usize = 6;
 // FIXME(lpl): Use correct value later.
@@ -38,6 +38,26 @@ const ELECTION_TERM_END_ROUND: Round = 30;
 const TERM_MAX_SIZE: usize = 10000;
 const TERM_ELECTED_SIZE: usize = 50;
 const UNLOCK_WAIT_VIEW: u64 = 20160;
+
+const BONUS_VOTE_MAX_SIZE: u64 = 100;
+
+pub const MAX_TERM_POINTS: u64 = 6_000_000;
+
+const ELECTION_PERCENTAGE: u64 = 20;
+const COMMITTEE_PERCENTAGE: u64 = 75;
+const LEADER_PERCENTAGE: u64 = 3;
+const BONUS_VOTE_PERCENTAGE: u64 = 2;
+
+pub const ELECTION_POINTS: u64 =
+    MAX_TERM_POINTS * ELECTION_PERCENTAGE / 100 / (TERM_MAX_SIZE as u64);
+pub const COMMITTEE_POINTS: u64 =
+    MAX_TERM_POINTS * COMMITTEE_PERCENTAGE / 100 / (TERM_ELECTED_SIZE as u64);
+pub const LEADER_POINTS: u64 =
+    MAX_TERM_POINTS * LEADER_PERCENTAGE / 100 / ROUND_PER_TERM;
+pub const BONUS_VOTE_POINTS: u64 = MAX_TERM_POINTS * BONUS_VOTE_PERCENTAGE
+    / 100
+    / ROUND_PER_TERM
+    / BONUS_VOTE_MAX_SIZE;
 
 #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
 pub enum NodeStatus {

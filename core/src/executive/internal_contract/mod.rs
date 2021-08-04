@@ -12,7 +12,7 @@ pub use self::{
     contracts::InternalContractMap,
     impls::{
         get_reentrancy_allowance,
-        pos::{identifier_entry, index_entry, IndexStatus},
+        pos::{entries as pos_internal_entries, IndexStatus},
         suicide,
     },
     internal_context::InternalRefContext,

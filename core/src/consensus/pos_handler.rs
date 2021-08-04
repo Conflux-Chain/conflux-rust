@@ -11,7 +11,10 @@ use diem_types::{
     event::EventKey,
     ledger_info::LedgerInfoWithSignatures,
     proof::{AccumulatorConsistencyProof, SparseMerkleProof},
-    term_state::{DisputeEvent, UnlockEvent},
+    term_state::{
+        DisputeEvent, UnlockEvent, BONUS_VOTE_POINTS, COMMITTEE_POINTS,
+        ELECTION_POINTS, LEADER_POINTS,
+    },
     transaction::{TransactionListWithProof, TransactionWithProof, Version},
     validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
 };
@@ -526,8 +529,28 @@ pub struct VoteCount {
     vote_count: u32,
 }
 
+impl VoteCount {
+    pub fn reward_points(&self) -> u64 {
+        self.leader_count as u64 * LEADER_POINTS
+            + self.included_vote_count as u64 * BONUS_VOTE_POINTS
+            + (self.vote_count > 0) as u64 * COMMITTEE_POINTS
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct RewardDistributionEvent {
     pub candidates: Vec<NodeId>,
     pub elected: BTreeMap<NodeId, VoteCount>,
+}
+
+impl RewardDistributionEvent {
+    pub fn rewards(&self) -> impl Iterator<Item = (&H256, u64)> {
+        let committee_rewards = self
+            .elected
+            .iter()
+            .map(|(id, vote_count)| (id, vote_count.reward_points()));
+        let participate_rewards =
+            self.candidates.iter().map(|id| (id, ELECTION_POINTS));
+        committee_rewards.chain(participate_rewards)
+    }
 }
