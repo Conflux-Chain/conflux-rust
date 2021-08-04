@@ -91,9 +91,10 @@ impl TransactionStore {
     ) -> MempoolStatus {
         let address = txn.get_sender();
         let hash = txn.get_hash();
+        let has_tx = self.get(&hash).is_some();
 
-        if self.get(&hash).is_some() {
-            MempoolStatus::new(MempoolStatusCode::Accepted);
+        if has_tx {
+            return MempoolStatus::new(MempoolStatusCode::Accepted);
         }
 
         self.timeline_index.insert(&mut txn);
@@ -120,6 +121,8 @@ impl TransactionStore {
             self.transactions.insert(hash, txn, false);
         }
         self.track_indices();
+        diem_debug!(LogSchema::new(LogEntry::AddTxn)
+            .txns(TxnsLog::new_txn(address, hash)), hash=hash, has_tx = has_tx);
 
         MempoolStatus::new(MempoolStatusCode::Accepted)
     }
