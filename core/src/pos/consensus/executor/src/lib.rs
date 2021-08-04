@@ -60,6 +60,7 @@ use crate::{
     types::{ProcessedVMOutput, TransactionData},
     vm::VMExecutor,
 };
+use cfx_types::H256;
 use consensus_types::db::{FakeLedgerBlockDB, LedgerBlockRW};
 use diem_crypto::hash::PRE_GENESIS_BLOCK_ID;
 use diem_types::term_state::{
@@ -1174,21 +1175,25 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 }
                 voted_block_id = block.parent_id();
             }
+
+            // Force retire the nodes that have not voted in this term.
+            for (node, vote_count) in &elected {
+                if vote_count.vote_count == 0 {
+                    pos_state_to_commit.retire_node(&node);
+                }
+            }
+
             let reward_event = RewardDistributionEvent {
                 candidates: pos_state_to_commit.next_evicted_term(),
-                elected,
+                elected: elected
+                    .into_iter()
+                    .map(|(k, v)| (H256::from_slice(k.as_ref()), v))
+                    .collect(),
             };
             self.db.writer.save_reward_event(
                 ledger_info_with_sigs.ledger_info().epoch(),
                 &reward_event,
             );
-
-            // Force retire the nodes that have not voted in this term.
-            for (node, vote_count) in &reward_event.elected {
-                if vote_count.vote_count == 0 {
-                    pos_state_to_commit.retire_node(node);
-                }
-            }
         }
 
         diem_info!(

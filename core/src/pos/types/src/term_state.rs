@@ -20,6 +20,7 @@ use crate::{
     validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
 };
+use cfx_types::H256;
 use diem_logger::prelude::*;
 use move_core_types::language_storage::TypeTag;
 use pow_types::StakingEvent;
@@ -569,14 +570,16 @@ impl PosState {
 
     pub fn catch_up_mode(&self) -> bool { self.catch_up_mode }
 
-    pub fn next_evicted_term(&self) -> Vec<AccountAddress> {
+    pub fn next_evicted_term(&self) -> Vec<H256> {
         if self.current_view < (TERM_LIST_LEN - 1) as u64 * ROUND_PER_TERM {
             return Vec::new();
         } else {
             self.term_list.term_list[0]
                 .node_list
                 .iter()
-                .map(|(_, address)| address.node_id.addr)
+                .map(|(_, address)| {
+                    H256::from_slice(address.node_id.addr.as_ref())
+                })
                 .collect()
         }
     }
