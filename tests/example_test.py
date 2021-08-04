@@ -11,7 +11,7 @@ from test_framework.util import *
 
 class ExampleTest(ConfluxTestFramework):
     def set_test_params(self):
-        self.num_nodes = 4
+        self.num_nodes = 3
         # self.conf_parameters["vrf_proposal_threshold"] = '"{}"'.format(int_to_hex(int(2 ** 256 / 2)))
         self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = '120'
         # self.conf_parameters["log_level"] = '"trace"'
@@ -23,7 +23,7 @@ class ExampleTest(ConfluxTestFramework):
 
     def run_test(self):
         time.sleep(2)
-        client = RpcClient(self.nodes[3])
+        client = RpcClient(self.nodes[2])
         client.wait_for_pos_register()
 
         genesis = self.nodes[0].best_block_hash()
@@ -42,6 +42,7 @@ class ExampleTest(ConfluxTestFramework):
             new_pos_ref = self.latest_pos_ref()
             assert_ne(latest_pos_ref, new_pos_ref)
         # assert (self.nodes[0].getblockcount() == 6002)
+        raise Exception("xxx")
 
     def latest_pos_ref(self):
         best_hash = self.nodes[0].best_block_hash()

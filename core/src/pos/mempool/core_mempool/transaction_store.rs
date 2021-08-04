@@ -151,6 +151,23 @@ impl TransactionStore {
             txns_log.add(transaction.get_sender(), transaction.get_hash());
             self.index_remove(&transaction);
             // handle pivot decision
+            let payload = transaction.txn.into_raw_transaction().into_payload();
+            if let TransactionPayload::PivotDecision(pivot_decision) = payload {
+                let pivot_decision_hash = pivot_decision.hash();
+                if let Some(indices) =
+                    self.pivot_decisions.remove(&pivot_decision_hash)
+                {
+                    for (_, hash) in indices {
+                        if let Some(txn) = self.transactions.remove(&hash) {
+                            txns_log.add(
+                                txn.get_sender(),
+                                txn.get_hash(),
+                            );
+                            self.index_remove(&txn);
+                        }
+                    }
+                }
+            }
         }
         diem_debug!(LogSchema::new(LogEntry::CleanCommittedTxn).txns(txns_log));
     }
