@@ -1129,7 +1129,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
 
         // TODO(lpl): Implement force_retire better?
         // Process pos_state to apply force_retire.
-        if ledger_info_with_sigs.ledger_info().ends_epoch() {
+        if ledger_info_with_sigs.ledger_info().ends_epoch() && ledger_info_with_sigs.ledger_info().epoch() != 0 {
             let ending_block =
                 ledger_info_with_sigs.ledger_info().consensus_block_id();
             let mut elected = BTreeMap::new();
