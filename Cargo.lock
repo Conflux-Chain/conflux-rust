@@ -1931,6 +1931,7 @@ dependencies = [
  "diem-proptest-helpers",
  "diem-temppath",
  "diem-types",
+ "executor-types",
  "itertools 0.10.1",
  "move-core-types",
  "num-derive",

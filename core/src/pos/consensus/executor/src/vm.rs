@@ -1,5 +1,5 @@
 use consensus_types::{
-    block::Block, block_data::BlockType::Proposal, proposal_msg::ProposalMsg,
+    block::Block,
     vote::Vote,
 };
 use diem_logger::{error as diem_error, prelude::*};

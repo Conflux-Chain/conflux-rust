@@ -673,14 +673,14 @@ impl PosState {
         Ok(epoch_state)
     }
 
-    pub fn retire_node(&mut self, retire_event: &RetireEvent) -> Result<()> {
-        diem_trace!("retire_node: {:?}", retire_event.node_id);
-        match self.node_map.get_mut(&retire_event.node_id.addr) {
+    pub fn retire_node(&mut self, addr: &AccountAddress) -> Result<()> {
+        diem_trace!("retire_node: {:?}", addr);
+        match self.node_map.get_mut(&addr) {
             Some(node) => match node.status {
                 NodeStatus::Accepted => {
                     node.status = NodeStatus::Retired;
                     node.status_start_view = self.current_view;
-                    self.retiring_nodes.push_back(retire_event.node_id.addr);
+                    self.retiring_nodes.push_back(*addr);
                     Ok(())
                 }
                 _ => Err(anyhow!(
@@ -741,7 +741,7 @@ impl ElectionEvent {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RetireEvent {
-    node_id: NodeID,
+    pub node_id: NodeID,
 }
 
 impl RetireEvent {

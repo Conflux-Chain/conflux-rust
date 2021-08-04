@@ -12,6 +12,7 @@ use diem_types::{
     event::EventKey,
     ledger_info::LedgerInfoWithSignatures,
     proof::{AccumulatorConsistencyProof, SparseMerkleProof},
+    reward_distribution_event::RewardDistributionEvent,
     term_state::{DisputeEvent, UnlockEvent},
     transaction::{TransactionListWithProof, TransactionWithProof, Version},
     validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
@@ -52,9 +53,7 @@ pub trait PosInterface {
         &self, start_epoch: u64, end_epoch: u64,
     ) -> Vec<PosBlockId>;
 
-    fn get_rewarded_candidate_nodes(
-        &self, block_id: &PosBlockId,
-    ) -> Vec<NodeId>;
+    fn get_reward_event(&self, epoch: u64) -> Option<RewardDistributionEvent>;
 
     fn get_epoch_state(&self, block_id: &PosBlockId) -> EpochState;
 }
@@ -181,58 +180,9 @@ impl<PoS: PosInterface> PosHandler<PoS> {
         if me_block.epoch == parent_block.epoch {
             return None;
         }
-        let epoch_ending_blocks = self
-            .pos
-            .get_epoch_ending_blocks(parent_block.epoch, me_block.epoch);
         let mut events = Vec::new();
-        for ending_block in epoch_ending_blocks {
-            let mut elected = BTreeMap::new();
-            let mut voted_block_id = ending_block;
-            for committee_member in self
-                .pos
-                // use `parent` here because the pos_state of an
-                // epoch_ending block is next_epoch_state.
-                .get_epoch_state(
-                    &self.pos.get_committed_block(&ending_block)?.parent,
-                )
-                .verifier
-                .address_to_validator_info()
-                .keys()
-            {
-                elected.insert(
-                    H256::from_slice(committee_member.as_ref()),
-                    VoteCount::default(),
-                );
-            }
-            let min_vote = elected.len() * 2 / 3 + 1;
-            loop {
-                let block = self.pos.get_committed_block(&voted_block_id)?;
-                if block.round == 0 {
-                    // round 0 is genesis and has not voters.
-                    break;
-                }
-                {
-                    let leader_status =
-                        elected.get_mut(&block.author).expect("in epoch state");
-                    leader_status.leader_count += 1;
-                    leader_status.included_vote_count +=
-                        (block.voters.len() - min_vote) as u32;
-                }
-                for voter in block.voters {
-                    elected
-                        .get_mut(&voter)
-                        .expect("in epoch state")
-                        .vote_count += 1;
-                }
-                voted_block_id = block.parent;
-            }
-            let reward_event = RewardDistributionEvent {
-                candidates: self
-                    .pos
-                    .get_rewarded_candidate_nodes(&ending_block),
-                elected,
-            };
-            events.push(reward_event);
+        for epoch in parent_block.epoch..me_block.epoch {
+            events.push(self.pos.get_reward_event(epoch)?);
         }
         Some(events)
     }
@@ -356,18 +306,8 @@ impl PosInterface for PosConnection {
             .collect()
     }
 
-    fn get_rewarded_candidate_nodes(
-        &self, block_id: &PosBlockId,
-    ) -> Vec<NodeId> {
-        let pos_state = self
-            .pos_storage
-            .get_pos_state(&h256_to_diem_hash(block_id))
-            .expect("block_id ends epoch");
-        pos_state
-            .next_evicted_term()
-            .into_iter()
-            .map(|address| H256::from_slice(address.as_ref()))
-            .collect()
+    fn get_reward_event(&self, epoch: u64) -> Option<RewardDistributionEvent> {
+        self.pos_storage.get_reward_event(epoch).ok()
     }
 
     fn get_epoch_state(&self, block_id: &PosBlockId) -> EpochState {
@@ -412,6 +352,12 @@ impl DBReaderForPoW for FakeDiemDB {
     fn get_epoch_ending_blocks(
         &self, _start_epoch: u64, _end_epoch: u64,
     ) -> anyhow::Result<Vec<HashValue>> {
+        todo!()
+    }
+
+    fn get_reward_event(
+        &self, epoch: u64,
+    ) -> anyhow::Result<RewardDistributionEvent> {
         todo!()
     }
 }
@@ -517,21 +463,4 @@ impl DbReader for FakeDiemDB {
     ) -> anyhow::Result<LedgerInfoWithSignatures> {
         todo!()
     }
-}
-
-#[derive(Clone, Serialize, Deserialize, Default)]
-pub struct VoteCount {
-    // The number of rounds that the node becomes the leader.
-    leader_count: u32,
-    // The total number of votes that the node includes as a leader.
-    included_vote_count: u32,
-    // The total number of votes that the node signs in the committed QCs
-    // within the term.
-    vote_count: u32,
-}
-
-#[derive(Clone, Serialize, Deserialize, Default)]
-pub struct RewardDistributionEvent {
-    pub candidates: Vec<NodeId>,
-    pub elected: BTreeMap<NodeId, VoteCount>,
 }
