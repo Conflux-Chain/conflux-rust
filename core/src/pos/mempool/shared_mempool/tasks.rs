@@ -159,6 +159,9 @@ fn gen_ack_response(
         }
     }
 
+    diem_info!("gen_ack_response");
+    debug!("request[{:?}] from peer[{:?}] retry[{:?}]", request_id, peer, retry);
+
     update_ack_counter(&peer, counters::SENT_LABEL, retry, backoff);
     MempoolSyncMsg::BroadcastTransactionsResponse {
         request_id,
@@ -201,21 +204,6 @@ pub(crate) async fn process_incoming_transactions(
     let mut statuses = vec![];
 
     let start_storage_read = Instant::now();
-    // Track latency: fetching seq number
-    let seq_numbers = transactions
-        .par_iter()
-        .map(|t| {
-            t.sequence_number()
-            /*
-            get_account_sequence_number(smp.db.as_ref(), t.sender()).map_err(
-                |e| {
-                    diem_error!(LogSchema::new(LogEntry::DBError).error(&e));
-                    counters::DB_ERROR.inc();
-                    e
-                },
-            )*/
-        })
-        .collect::<Vec<_>>();
     // Track latency for storage read fetching sequence number
     let storage_read_latency = start_storage_read.elapsed();
     counters::PROCESS_TXN_BREAKDOWN_LATENCY

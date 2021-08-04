@@ -181,6 +181,8 @@ impl PeerManager {
     pub fn execute_broadcast(
         &self, peer: NodeId, scheduled_backoff: bool, smp: &mut SharedMempool,
     ) {
+        diem_info!("start execute_broadcast");
+        debug!("execute_broadcast for peer[{:?}]", peer);
         // Start timer for tracking broadcast latency.
         let start_time = Instant::now();
 
@@ -188,6 +190,7 @@ impl PeerManager {
         let state = if let Some(state) = peer_states.get_mut(&peer) {
             state
         } else {
+            diem_info!("no state");
             // If we don't have any info about the node, we shouldn't broadcast
             // to it
             return;
@@ -270,6 +273,7 @@ impl PeerManager {
                 if pending_broadcasts
                     >= self.mempool_config.max_broadcasts_per_peer
                 {
+                    diem_info!("pending_broadcasts too much");
                     return;
                 }
             }
@@ -302,6 +306,7 @@ impl PeerManager {
         }
 
         if transactions.is_empty() {
+            diem_info!("transactions empty");
             return;
         }
 
@@ -321,6 +326,7 @@ impl PeerManager {
             )
             //.peer(&peer)
             .error(&e.into()));
+            diem_info!("send error");
             return;
         }
         // Update peer sync state with info from above broadcast.

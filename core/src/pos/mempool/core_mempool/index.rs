@@ -62,9 +62,9 @@ impl AccountTransactions {
     )
     {
         if is_pivot_decision {
-            self.normal_transaction.insert(hash, txn);
-        } else {
             self.pivot_decision_transaction.insert(hash, txn);
+        } else {
+            self.normal_transaction.insert(hash, txn);
         }
     }
 
