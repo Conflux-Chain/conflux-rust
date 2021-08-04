@@ -413,10 +413,14 @@ impl PosState {
             bail!("Election too soon after accepted");
         }
         let target_view = election_tx.target_term * ROUND_PER_TERM;
-        if target_view >= self.current_view + ELECTION_TERM_START_ROUND
+        if target_view > self.current_view + ELECTION_TERM_START_ROUND
             || target_view < self.current_view + ELECTION_TERM_END_ROUND
         {
-            bail!("Target term is not open for election");
+            bail!(
+                "Target term is not open for election: target={} current={}",
+                target_view,
+                self.current_view
+            );
         }
 
         let target_term_offset = election_tx.target_term as usize
