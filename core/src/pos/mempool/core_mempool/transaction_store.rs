@@ -91,9 +91,10 @@ impl TransactionStore {
     ) -> MempoolStatus {
         let address = txn.get_sender();
         let hash = txn.get_hash();
+        let has_tx = self.get(&hash).is_some();
 
-        if self.get(&hash).is_some() {
-            MempoolStatus::new(MempoolStatusCode::Accepted);
+        if has_tx {
+            return MempoolStatus::new(MempoolStatusCode::Accepted);
         }
 
         self.timeline_index.insert(&mut txn);
@@ -120,6 +121,8 @@ impl TransactionStore {
             self.transactions.insert(hash, txn, false);
         }
         self.track_indices();
+        diem_debug!(LogSchema::new(LogEntry::AddTxn)
+            .txns(TxnsLog::new_txn(address, hash)), hash=hash, has_tx = has_tx);
 
         MempoolStatus::new(MempoolStatusCode::Accepted)
     }
@@ -151,6 +154,23 @@ impl TransactionStore {
             txns_log.add(transaction.get_sender(), transaction.get_hash());
             self.index_remove(&transaction);
             // handle pivot decision
+            let payload = transaction.txn.into_raw_transaction().into_payload();
+            if let TransactionPayload::PivotDecision(pivot_decision) = payload {
+                let pivot_decision_hash = pivot_decision.hash();
+                if let Some(indices) =
+                    self.pivot_decisions.remove(&pivot_decision_hash)
+                {
+                    for (_, hash) in indices {
+                        if let Some(txn) = self.transactions.remove(&hash) {
+                            txns_log.add(
+                                txn.get_sender(),
+                                txn.get_hash(),
+                            );
+                            self.index_remove(&txn);
+                        }
+                    }
+                }
+            }
         }
         diem_debug!(LogSchema::new(LogEntry::CleanCommittedTxn).txns(txns_log));
     }
