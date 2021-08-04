@@ -67,8 +67,8 @@ pub struct PosBlock {
     epoch: u64,
     round: u64,
     pivot_decision: H256,
-    parent: PosBlockId,
-    author: NodeId,
+    // parent: PosBlockId,
+    // author: NodeId,
     voters: Vec<NodeId>,
 }
 
@@ -228,6 +228,7 @@ impl PosInterface for PosConnection {
             block_hash
         );
 
+        /*
         let parent;
         let author;
         if *h == PosBlockId::default() {
@@ -245,8 +246,10 @@ impl PosInterface for PosConnection {
                 .ok()??;
             debug_assert_eq!(block.id(), block_hash);
             parent = diem_hash_to_h256(&block.parent_id());
-            author = H256::from_slice(block.author().unwrap().as_ref());
+            // NIL block has no author.
+            author = H256::from_slice(block.author().unwrap_or(Default::default()).as_ref());
         }
+         */
         debug!("pos_handler gets ledger_info={:?}", ledger_info);
         Some(PosBlock {
             hash: *h,
@@ -257,8 +260,8 @@ impl PosInterface for PosConnection {
                 .pivot_decision()
                 .unwrap()
                 .block_hash,
-            parent,
-            author,
+            // parent,
+            // author,
             voters: ledger_info
                 .signatures()
                 .keys()

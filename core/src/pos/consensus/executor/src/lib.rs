@@ -1129,7 +1129,9 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
 
         // TODO(lpl): Implement force_retire better?
         // Process pos_state to apply force_retire.
-        if ledger_info_with_sigs.ledger_info().ends_epoch() && ledger_info_with_sigs.ledger_info().epoch() != 0 {
+        if ledger_info_with_sigs.ledger_info().ends_epoch()
+            && ledger_info_with_sigs.ledger_info().epoch() != 0
+        {
             let ending_block =
                 ledger_info_with_sigs.ledger_info().consensus_block_id();
             let mut elected = BTreeMap::new();
@@ -1153,8 +1155,9 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     .consensus_db
                     .get_ledger_block(&voted_block_id)?
                     .unwrap();
-                if block.round() == 0 {
-                    // round 0 is genesis and has not voters.
+                diem_trace!("count vote for block {:?}", block);
+                if block.quorum_cert().ledger_info().signatures().len() == 0 {
+                    // parent is round-0 virtual block and has not voters.
                     break;
                 }
                 if let Some(author) = block.author() {

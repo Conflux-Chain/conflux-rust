@@ -15,7 +15,6 @@ use tokio::runtime::Handle;
 
 // FIXME(lpl): Decide the value.
 pub const POS_TERM_EPOCHS: u64 = 50;
-pub const POW_CONFIRM_DELAY_EPOCH: u64 = 50;
 
 pub struct PowHandler {
     executor: Handle,
