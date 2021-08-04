@@ -114,16 +114,6 @@ where V: VMExecutor
         }
     }
 
-    fn reset_cache(&mut self) -> Result<(), Error> {
-        let startup_info = self
-            .db
-            .reader
-            .get_startup_info()?
-            .ok_or_else(|| format_err!("DB not bootstrapped."))?;
-        self.cache = SpeculationCache::new_with_startup_info(startup_info);
-        Ok(())
-    }
-
     pub fn new_on_unbootstrapped_db(
         db: DbReaderWriter, tree_state: TreeState,
         mut initial_nodes: Vec<(NodeID, u64)>,
@@ -994,8 +984,6 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
         Ok(Self::committed_block_id(self))
     }
 
-    fn reset(&mut self) -> Result<(), Error> { self.reset_cache() }
-
     fn execute_block(
         &mut self, block: (HashValue, Vec<Transaction>),
         parent_block_id: HashValue, catch_up_mode: bool,
@@ -1130,12 +1118,18 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
         let _timer = DIEM_EXECUTOR_COMMIT_BLOCKS_SECONDS.start_timer();
         let block_id_to_commit =
             ledger_info_with_sigs.ledger_info().consensus_block_id();
-        let pos_state_to_commit = self
+        let mut pos_state_to_commit = self
             .get_executed_trees(
                 ledger_info_with_sigs.ledger_info().consensus_block_id(),
             )?
             .pos_state()
             .clone();
+
+        // TODO(lpl): Implement force_retire better?
+        // Process pos_state to apply force_retire.
+        if ledger_info_with_sigs.ledger_info().next_epoch_state().is_some() {
+
+        }
 
         diem_info!(
             LogSchema::new(LogEntry::BlockExecutor)
