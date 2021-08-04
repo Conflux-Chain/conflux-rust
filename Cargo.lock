@@ -1022,6 +1022,7 @@ dependencies = [
 name = "client"
 version = "1.1.4"
 dependencies = [
+ "anyhow",
  "app_dirs",
  "bigdecimal",
  "blockgen",

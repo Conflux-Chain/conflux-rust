@@ -1810,7 +1810,7 @@ fn sqrt_u256(input: U256) -> U256 {
      ** Step 1: pick the most significant 64 bits and estimate an
      ** approximate root.
      *********************************************************** * * * * *
-     ** * * * * * **/
+     ** * * * * * * * **/
     let significant_bits = 64 - bits % 2;
     // The `rest_bits` must be even number.
     let rest_bits = bits - significant_bits;
@@ -1823,7 +1823,7 @@ fn sqrt_u256(input: U256) -> U256 {
     /******************************************************************
      ** Step 2: use the Newton's method to estimate the accurate value.
      ***************************************************************** * *
-     ** * * * * * * * * **/
+     ** * * * * * * * * * * **/
     let mut root = init_root;
     // Will iterate for at most 4 rounds.
     while root * root > input {
