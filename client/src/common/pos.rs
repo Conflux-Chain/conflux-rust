@@ -22,6 +22,7 @@ use cfxcore::{
     },
     sync::ProtocolConfiguration,
 };
+use consensus_types::db::FakeLedgerBlockDB;
 use diem_config::{config::NodeConfig, utils::get_genesis_txn};
 use diem_logger::prelude::*;
 use diem_types::{
@@ -128,7 +129,11 @@ fn setup_metrics(peer_id: PeerId, config: &NodeConfig) {
 }
 
 fn setup_chunk_executor(db: DbReaderWriter) -> Box<dyn ChunkExecutor> {
-    Box::new(Executor::<FakeVM>::new(db, Arc::new(FakePowHandler {})))
+    Box::new(Executor::<FakeVM>::new(
+        db,
+        Arc::new(FakePowHandler {}),
+        Arc::new(FakeLedgerBlockDB {}),
+    ))
 }
 
 pub fn setup_pos_environment(

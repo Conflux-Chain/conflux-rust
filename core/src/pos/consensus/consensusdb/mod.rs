@@ -15,7 +15,9 @@ use crate::pos::consensus::{
     error::DbError,
 };
 use anyhow::Result;
-use consensus_types::{block::Block, quorum_cert::QuorumCert};
+use consensus_types::{
+    block::Block, db::LedgerBlockRW, quorum_cert::QuorumCert,
+};
 use diem_crypto::HashValue;
 use diem_logger::prelude::*;
 use schema::{
@@ -202,22 +204,20 @@ impl ConsensusDB {
         iter.seek_to_first();
         Ok(iter.collect::<Result<HashMap<HashValue, QuorumCert>>>()?)
     }
+}
 
+impl LedgerBlockRW for ConsensusDB {
     /// get_ledger_block
-    pub fn get_ledger_block(
-        &self, block_id: &HashValue,
-    ) -> Result<Option<Block>, DbError> {
+    fn get_ledger_block(&self, block_id: &HashValue) -> Result<Option<Block>> {
         Ok(self.db.get::<LedgerBlockSchema>(block_id)?)
     }
 
     /// save_ledger_blocks
-    pub fn save_ledger_blocks(
-        &self, blocks: Vec<Block>,
-    ) -> Result<(), DbError> {
+    fn save_ledger_blocks(&self, blocks: Vec<Block>) -> Result<()> {
         let mut batch = SchemaBatch::new();
         for block in blocks {
             batch.put::<LedgerBlockSchema>(&block.id(), &block)?;
         }
-        self.commit(batch)
+        Ok(self.commit(batch)?)
     }
 }

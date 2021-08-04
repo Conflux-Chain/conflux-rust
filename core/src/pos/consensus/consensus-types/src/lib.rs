@@ -7,6 +7,7 @@ pub mod block;
 pub mod block_data;
 pub mod block_retrieval;
 pub mod common;
+pub mod db;
 pub mod epoch_retrieval;
 pub mod executed_block;
 pub mod proposal_msg;

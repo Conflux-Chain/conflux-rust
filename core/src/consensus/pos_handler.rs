@@ -1,5 +1,6 @@
 use crate::pos::consensus::ConsensusDB;
 use cfx_types::H256;
+use consensus_types::db::LedgerBlockRW;
 use diem_config::keys::ConfigKey;
 use diem_crypto::HashValue;
 use diem_types::{

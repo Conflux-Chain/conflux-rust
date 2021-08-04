@@ -381,6 +381,7 @@ impl RoundManager {
             .into_inner();
         let (tx, rx) = oneshot::channel();
         self.tx_sender.send((signed_tx, tx)).await;
+        // TODO(lpl): Check if we want to wait here.
         rx.await?;
         diem_debug!("broadcast_pivot_decision sends");
         Ok(())
@@ -418,6 +419,7 @@ impl RoundManager {
                 .into_inner();
             let (tx, rx) = oneshot::channel();
             self.tx_sender.send((signed_tx, tx)).await;
+            // TODO(lpl): Check if we want to wait here.
             rx.await?;
             diem_debug!(
                 "broadcast_election sends: target_term={}",

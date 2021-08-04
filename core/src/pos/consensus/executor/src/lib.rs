@@ -59,6 +59,7 @@ use crate::{
     types::{ProcessedVMOutput, TransactionData},
     vm::VMExecutor,
 };
+use consensus_types::db::{FakeLedgerBlockDB, LedgerBlockRW};
 use diem_crypto::hash::PRE_GENESIS_BLOCK_ID;
 use diem_types::term_state::{
     NodeID, PosState, RegisterEvent, RetireEvent, UpdateVotingPowerEvent,
@@ -79,6 +80,7 @@ type SparseMerkleProof = diem_types::proof::SparseMerkleProof<AccountStateBlob>;
 /// provide.
 pub struct Executor<V> {
     db: DbReaderWriter,
+    consensus_db: Arc<dyn LedgerBlockRW>,
     cache: SpeculationCache,
     phantom: PhantomData<V>,
     pow_handler: Arc<dyn PowInterface>,
@@ -92,7 +94,11 @@ where V: VMExecutor
     }
 
     /// Constructs an `Executor`.
-    pub fn new(db: DbReaderWriter, pow_handler: Arc<dyn PowInterface>) -> Self {
+    pub fn new(
+        db: DbReaderWriter, pow_handler: Arc<dyn PowInterface>,
+        consensus_db: Arc<dyn LedgerBlockRW>,
+    ) -> Self
+    {
         let startup_info = db
             .reader
             .get_startup_info()
@@ -101,6 +107,7 @@ where V: VMExecutor
 
         Self {
             db,
+            consensus_db,
             cache: SpeculationCache::new_with_startup_info(startup_info),
             phantom: PhantomData,
             pow_handler,
@@ -164,6 +171,7 @@ where V: VMExecutor
             PosState::new(vec![], initial_nodes, genesis_pivot_decision, true);
         Self {
             db,
+            consensus_db: Arc::new(FakeLedgerBlockDB {}),
             cache: SpeculationCache::new_for_db_bootstrapping(
                 tree_state, pos_state,
             ),
