@@ -142,7 +142,7 @@ impl<PoS: PosInterface> PosHandler<PoS> {
     pub fn get_unlock_nodes(
         &self, h: &PosBlockId, parent_pos_ref: &PosBlockId,
     ) -> Vec<NodeId> {
-        let unlock_event_key = UnlockEvent::unlock_event_key();
+        let unlock_event_key = UnlockEvent::event_key();
         let mut unlock_nodes = Vec::new();
         for event in self.pos.get_events(parent_pos_ref, h) {
             if *event.key() == unlock_event_key {

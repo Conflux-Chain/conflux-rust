@@ -549,6 +549,7 @@ impl EpochManager {
                     .to_vec(),
             }
         });
+        diem_debug!("start_processor: epoch_state={:?}", epoch_state);
 
         match self.storage.start() {
             LivenessStorageData::RecoveryData(initial_data) => {

@@ -403,6 +403,11 @@ where V: VMExecutor
                 if !catch_up_mode {
                     // Verify if the proposer has packed all staking events as
                     // expected.
+                    diem_debug!(
+                        "check staking events: parent={:?} me={:?}",
+                        parent_pivot_decision,
+                        pivot_decision
+                    );
                     let staking_events = self.pow_handler.get_staking_events(
                         parent_pivot_decision.block_hash,
                         pivot_decision.block_hash,
