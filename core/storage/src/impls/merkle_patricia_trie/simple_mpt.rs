@@ -88,10 +88,10 @@ pub fn simple_mpt_merkle_root(simple_mpt: &mut SimpleMpt) -> MerkleHash {
 pub fn simple_mpt_proof(
     simple_mpt: &mut SimpleMpt, access_key: &[u8],
 ) -> TrieProof {
-    let mut cursor = MptCursor::<
-        &mut dyn SnapshotMptTraitRead,
-        BasicPathNode<&mut dyn SnapshotMptTraitRead>,
-    >::new(simple_mpt);
+    let mut cursor =
+        MptCursor::<&mut dyn SnapshotMptTraitRead, BasicPathNode>::new(
+            simple_mpt,
+        );
 
     cursor.load_root().expect("load_root should succeed");
 
@@ -115,7 +115,7 @@ pub fn simple_mpt_proof(
 
 use crate::{
     impls::merkle_patricia_trie::{
-        mpt_cursor::{BasicPathNode, MptCursor},
+        mpt_cursor::{BasicPathNode, MptCursor, MptCursorPathOps},
         trie_node::TrieNodeTrait,
         walk::GetChildTrait,
         CompressedPathRaw, MptMerger, TrieProof,

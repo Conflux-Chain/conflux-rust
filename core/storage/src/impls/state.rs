@@ -140,7 +140,7 @@ impl State {
                 let mut mpt = self.snapshot_db.open_snapshot_mpt_shared()?;
                 let mut cursor = MptCursor::<
                     &mut dyn SnapshotMptTraitRead,
-                    BasicPathNode<&mut dyn SnapshotMptTraitRead>,
+                    BasicPathNode,
                 >::new(&mut mpt);
                 cursor.load_root()?;
                 cursor.open_path_for_key::<access_mode::Read>(access_key)?;
@@ -606,7 +606,7 @@ impl StateTraitExt for State {
         let mut mpt = self.snapshot_db.open_snapshot_mpt_shared()?;
         let mut cursor = MptCursor::<
             &mut dyn SnapshotMptTraitRead,
-            BasicPathNode<&mut dyn SnapshotMptTraitRead>,
+            BasicPathNode,
         >::new(&mut mpt);
         cursor.load_root()?;
         let snapshot =
@@ -897,7 +897,10 @@ use crate::{
         delta_mpt::{node_memory_manager::ActualSlabIndex, *},
         errors::*,
         merkle_patricia_trie::{
-            mpt_cursor::{BasicPathNode, CursorOpenPathTerminal, MptCursor},
+            mpt_cursor::{
+                BasicPathNode, CursorOpenPathTerminal, MptCursor,
+                MptCursorPathOps,
+            },
             KVInserter, MptKeyValue, TrieProof, VanillaChildrenTable,
         },
         node_merkle_proof::NodeMerkleProof,

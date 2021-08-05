@@ -39,10 +39,10 @@ pub fn check_key_value_load<Value: MptValueKind>(
     let mut checker_count = 0;
     let mut mpt = snapshot_db.open_snapshot_mpt_shared()?;
 
-    let mut cursor = MptCursor::<
-        &mut dyn SnapshotMptTraitRead,
-        BasicPathNode<&mut dyn SnapshotMptTraitRead>,
-    >::new(&mut mpt);
+    let mut cursor =
+        MptCursor::<&mut dyn SnapshotMptTraitRead, BasicPathNode>::new(
+            &mut mpt,
+        );
     cursor.load_root()?;
     while let Some((access_key, expected_value)) = kv_iter.next()? {
         let terminal =
@@ -73,7 +73,10 @@ use crate::{
     impls::{
         errors::*,
         merkle_patricia_trie::{
-            mpt_cursor::{BasicPathNode, CursorOpenPathTerminal, MptCursor},
+            mpt_cursor::{
+                BasicPathNode, CursorOpenPathTerminal, MptCursor,
+                MptCursorPathOps,
+            },
             TrieNodeTrait,
         },
         storage_db::snapshot_db_sqlite::SnapshotDbSqlite,

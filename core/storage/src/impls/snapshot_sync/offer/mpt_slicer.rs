@@ -3,10 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 pub struct MptSlicer<'a> {
-    cursor: MptCursor<
-        &'a mut dyn SnapshotMptTraitRead,
-        BasicPathNode<&'a mut dyn SnapshotMptTraitRead>,
-    >,
+    cursor: MptCursor<&'a mut dyn SnapshotMptTraitRead, BasicPathNode>,
 }
 
 impl<'a> MptSlicer<'a> {
@@ -31,7 +28,7 @@ impl<'a> MptSlicer<'a> {
         // or at the root node.
         let key = self
             .cursor
-            .get_path_nodes()
+            .path_nodes
             .last()
             .unwrap()
             .get_path_to_node()
@@ -44,7 +41,11 @@ impl<'a> MptSlicer<'a> {
     }
 
     pub fn advance(&mut self, mut rlp_size_limit: u64) -> Result<()> {
-        let current_node = self.cursor.current_node_mut();
+        let current_node = self
+            .cursor
+            .path_nodes
+            .last_mut()
+            .expect("Root exists in cursor");
         // First, check the value of this node, if we are the first time
         // visiting this node.
         if current_node.next_child_index == 0 {
@@ -79,21 +80,13 @@ impl<'a> MptSlicer<'a> {
             if *subtree_size <= rlp_size_limit {
                 rlp_size_limit -= *subtree_size;
             } else {
-                let child_node = unsafe {
-                    // Mute Rust borrow checker because there is no way
-                    // around. It's actually safe to open_child_index while
-                    // we immutably borrows the trie_node, because
-                    // open_child_index won't modify
-                    // trie_node.
-                    &mut *(current_node
-                        as *const BasicPathNode<
-                            &'a mut dyn SnapshotMptTraitRead,
-                        >
-                        as *mut BasicPathNode<&'a mut dyn SnapshotMptTraitRead>)
-                }
-                .open_child_index(this_child_index)?
-                // Unwrap is fine because the child is guaranteed to exist.
-                .unwrap();
+                let child_node = current_node
+                    .open_child_index_ro(
+                        &mut self.cursor.mpt,
+                        this_child_index,
+                    )?
+                    // Unwrap is fine because the child is guaranteed to exist.
+                    .unwrap();
 
                 drop(current_node);
 
@@ -103,7 +96,7 @@ impl<'a> MptSlicer<'a> {
         }
 
         // Pop-up because subtree isn't large enough.
-        if rlp_size_limit > 0 && self.cursor.get_path_nodes().len() > 1 {
+        if rlp_size_limit > 0 && self.cursor.path_nodes.len() > 1 {
             self.cursor.pop_one_node()?;
             return self.advance(rlp_size_limit);
         }

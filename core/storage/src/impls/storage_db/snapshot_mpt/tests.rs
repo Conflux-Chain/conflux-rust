@@ -54,10 +54,7 @@ fn check_snapshot_mpt_root() {
 }
 
 pub struct MptIter<'a> {
-    cursor: MptCursor<
-        &'a mut dyn SnapshotMptTraitRead,
-        BasicPathNode<&'a mut dyn SnapshotMptTraitRead>,
-    >,
+    cursor: MptCursor<&'a mut dyn SnapshotMptTraitRead, BasicPathNode>,
 }
 
 impl<'a> MptIter<'a> {
@@ -68,7 +65,7 @@ impl<'a> MptIter<'a> {
     }
 
     pub fn get_key_value(&self) -> Option<(&[u8], &[u8])> {
-        let last_node = self.cursor.get_path_nodes().last().unwrap();
+        let last_node = self.cursor.path_nodes.last().unwrap();
         let key = last_node.get_path_to_node().path_slice();
         if key.len() == 0 {
             None
@@ -80,7 +77,11 @@ impl<'a> MptIter<'a> {
 
     pub fn advance(&mut self) -> Result<()> {
         loop {
-            let current_node = self.cursor.current_node_mut();
+            let current_node = self
+                .cursor
+                .path_nodes
+                .last_mut()
+                .expect("Root exists in cursor");
             let mut down = false;
             for (this_child_index, &SubtreeMerkleWithSize { .. }) in
                 current_node
@@ -89,21 +90,13 @@ impl<'a> MptIter<'a> {
                     .iter()
                     .set_start_index(current_node.next_child_index)
             {
-                let child_node = unsafe {
-                    // Mute Rust borrow checker because there is no way
-                    // around. It's actually safe to open_child_index while
-                    // we immutably borrows the trie_node, because
-                    // open_child_index won't modify
-                    // trie_node.
-                    &mut *(current_node
-                        as *const BasicPathNode<
-                            &'a mut dyn SnapshotMptTraitRead,
-                        >
-                        as *mut BasicPathNode<&'a mut dyn SnapshotMptTraitRead>)
-                }
-                .open_child_index(this_child_index)?
-                // Unwrap is fine because the child is guaranteed to exist.
-                .unwrap();
+                let child_node = current_node
+                    .open_child_index_ro(
+                        &mut self.cursor.mpt,
+                        this_child_index,
+                    )?
+                    // Unwrap is fine because the child is guaranteed to exist.
+                    .unwrap();
 
                 drop(current_node);
                 down = true;
@@ -117,7 +110,7 @@ impl<'a> MptIter<'a> {
                 }
             }
             // Pop-up when all children are visited.
-            else if self.cursor.get_path_nodes().len() > 1 {
+            else if self.cursor.path_nodes.len() > 1 {
                 self.cursor.pop_one_node()?;
             } else {
                 break;

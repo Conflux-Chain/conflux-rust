@@ -6,10 +6,8 @@
 /// Delta MPT. For OneStepSync of Snapshot MPT, the verified slice can be
 /// applied to MptMerger to create the updated snapshot MPT.
 pub struct MptSliceVerifier {
-    key_value_inserter: MptCursorRw<
-        SliceMptRebuilder,
-        SliceVerifyReadWritePathNode<SliceMptRebuilder>,
-    >,
+    key_value_inserter:
+        MptCursorRw<SliceMptRebuilder, SliceVerifyReadWritePathNode>,
     left_key_bound: Vec<u8>,
     maybe_right_key_bound_excl: Option<Vec<u8>>,
 }
@@ -91,14 +89,7 @@ impl MptSliceVerifier {
         for (key, value) in keys.iter().zip(values.into_iter()) {
             self.key_value_inserter
                 .insert(key.borrow(), value.clone().into_boxed_slice())?;
-            if !self
-                .key_value_inserter
-                .current_node_mut()
-                .as_ref()
-                .mpt
-                .as_ref_assumed_owner()
-                .is_valid
-            {
+            if !self.key_value_inserter.mpt.is_valid {
                 break;
             }
         }
@@ -116,7 +107,7 @@ impl MptSliceVerifier {
         }
         let got_merkle = self.key_value_inserter.finish()?;
 
-        let mut builder = self.key_value_inserter.take_mpt().unwrap();
+        let mut builder = self.key_value_inserter.cursor.mpt;
         if got_merkle != builder.merkle_root {
             builder.is_valid = false;
         }
