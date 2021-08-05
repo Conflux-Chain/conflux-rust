@@ -2,37 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::{
-    types::{
-        errors::check_rpc_address_network, Block as RpcBlock,
-        BlockHashOrEpochNumber, Bytes, CheckBalanceAgainstTransactionResponse,
-        EpochNumber, RpcAddress, Status as RpcStatus,
-        Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
-    },
-    RpcResult,
+use std::{
+    collections::{BTreeMap, HashSet},
+    net::SocketAddr,
+    sync::Arc,
+    time::Duration,
 };
+
 use bigdecimal::BigDecimal;
-use cfx_addr::Network;
-use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-use cfx_types::{Address, H160, H256, H520, U128, U256, U512, U64};
-use cfxcore::{
-    consensus::pos_handler::{PosHandler, PosVerifier},
-    pos::mempool::SubmissionStatus,
-    rpc_errors::invalid_params_check,
-    spec::genesis::register_transaction,
-    BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
-    SharedConsensusGraph, SharedTransactionPool,
-};
-use cfxcore_accounts::AccountProvider;
-use cfxkey::Password;
 use clap::crate_version;
-use diem_types::{
-    account_address::{from_consensus_public_key, AccountAddress},
-    transaction::{
-        RawTransaction as DiemRawTransaction, RetirePayload,
-        SignedTransaction as DiemSignedTransaction,
-    },
-};
 use futures::{
     channel::{mpsc, oneshot},
     SinkExt,
@@ -41,21 +19,44 @@ use jsonrpc_core::{
     Error as RpcError, Result as JsonRpcResult, Value as RpcValue,
 };
 use keccak_hash::keccak;
+use num_bigint::{BigInt, ToBigInt};
+use parking_lot::{Condvar, Mutex};
+
+use cfx_addr::Network;
+use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+use cfx_types::{Address, H160, H256, H520, U128, U256, U512, U64};
+use cfxcore::{
+    consensus::pos_handler::PosVerifier, pos::mempool::SubmissionStatus,
+    rpc_errors::invalid_params_check, spec::genesis::register_transaction,
+    BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
+    SharedConsensusGraph, SharedTransactionPool,
+};
+use cfxcore_accounts::AccountProvider;
+use cfxkey::Password;
+use diem_types::{
+    account_address::{from_consensus_public_key, AccountAddress},
+    transaction::{
+        RawTransaction as DiemRawTransaction, RetirePayload,
+        SignedTransaction as DiemSignedTransaction,
+    },
+};
 use network::{
     node_table::{Node, NodeEndpoint, NodeEntry, NodeId},
     throttling::{self, THROTTLING_SERVICE},
     NetworkService, SessionDetails, UpdateNodeOperation,
 };
-use num_bigint::{BigInt, ToBigInt};
-use parking_lot::{Condvar, Mutex};
 use primitives::{
     transaction::TransactionType, Account, Action, SignedTransaction,
 };
-use std::{
-    collections::{BTreeMap, HashSet},
-    net::SocketAddr,
-    sync::Arc,
-    time::Duration,
+
+use crate::rpc::{
+    types::{
+        errors::check_rpc_address_network, Block as RpcBlock,
+        BlockHashOrEpochNumber, Bytes, CheckBalanceAgainstTransactionResponse,
+        EpochNumber, RpcAddress, Status as RpcStatus,
+        Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
+    },
+    RpcResult,
 };
 
 fn grouped_txs<T, F>(
