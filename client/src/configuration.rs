@@ -288,6 +288,7 @@ build_config! {
         (print_memory_usage_period_s, (Option<u64>), None)
         (target_block_gas_limit, (u64), DEFAULT_TARGET_BLOCK_GAS_LIMIT)
         (executive_trace, (bool), false)
+        (check_status_genesis, (bool), true)
 
         // TreeGraph Section.
         (is_consortium, (bool), false)
@@ -779,6 +780,7 @@ impl Configuration {
                 .raw_conf
                 .pos_genesis_pivot_decision
                 .expect("set to genesis if none"),
+            check_status_genesis: self.raw_conf.check_status_genesis,
         }
     }
 
