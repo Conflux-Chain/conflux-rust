@@ -24,7 +24,7 @@ use diem_crypto::{
     hash::{CryptoHash, EventAccumulatorHasher},
     multi_ed25519::{MultiEd25519PublicKey, MultiEd25519Signature},
     traits::SigningKey,
-    HashValue, VRFProof,
+    HashValue, PrivateKey, VRFProof,
 };
 use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
 use move_core_types::transaction_argument::convert_txn_args;
@@ -337,6 +337,27 @@ impl RawTransaction {
         }
     }
 
+    pub fn new_retire(
+        sender: AccountAddress, sequence_number: u64,
+        retire_payload: RetirePayload,
+    ) -> Self
+    {
+        RawTransaction {
+            sender,
+            sequence_number,
+            payload: TransactionPayload::Retire(retire_payload),
+            // Since write-set transactions bypass the VM, these fields aren't
+            // relevant.
+            max_gas_amount: 0,
+            gas_unit_price: 0,
+            gas_currency_code: XUS_NAME.to_owned(),
+            // Write-set transactions are special and important and shouldn't
+            // expire.
+            expiration_timestamp_secs: u64::max_value(),
+            chain_id: Default::default(),
+        }
+    }
+
     pub fn from_staking_event(
         staking_event: &StakingEvent, sender: AccountAddress,
     ) -> Result<Self> {
@@ -395,9 +416,10 @@ impl RawTransaction {
     /// For a transaction that has just been signed, its signature is expected
     /// to be valid.
     pub fn sign(
-        self, private_key: &ConsensusPrivateKey, public_key: ConsensusPublicKey,
+        self, private_key: &ConsensusPrivateKey,
     ) -> Result<SignatureCheckedTransaction> {
         let signature = private_key.sign(&self);
+        let public_key = private_key.public_key();
         Ok(SignatureCheckedTransaction(SignedTransaction::new(
             self, public_key, signature,
         )))

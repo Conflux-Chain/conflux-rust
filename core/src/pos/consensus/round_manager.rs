@@ -373,12 +373,8 @@ impl RoundManager {
             },
             ChainId::default(), // FIXME(lpl): Set chain id.
         );
-        let signed_tx = raw_tx
-            .sign(
-                &proposal_generator.private_key,
-                proposal_generator.public_key.clone(),
-            )?
-            .into_inner();
+        let signed_tx =
+            raw_tx.sign(&proposal_generator.private_key)?.into_inner();
         let (tx, rx) = oneshot::channel();
         self.tx_sender.send((signed_tx, tx)).await;
         // TODO(lpl): Check if we want to wait here.
@@ -414,9 +410,8 @@ impl RoundManager {
                 election_payload,
                 ChainId::default(), // FIXME(lpl): Set chain id.
             );
-            let signed_tx = raw_tx
-                .sign(&private_key.private_key(), private_key.public_key())?
-                .into_inner();
+            let signed_tx =
+                raw_tx.sign(&private_key.private_key())?.into_inner();
             let (tx, rx) = oneshot::channel();
             self.tx_sender.send((signed_tx, tx)).await;
             // TODO(lpl): Check if we want to wait here.
@@ -1102,10 +1097,7 @@ impl RoundManager {
                             dispute_payload,
                         );
                         let signed_tx = raw_tx
-                            .sign(
-                                &proposal_generator.private_key,
-                                proposal_generator.public_key.clone(),
-                            )?
+                            .sign(&proposal_generator.private_key)?
                             .into_inner();
                         // TODO(lpl): Track disputed nodes to avoid sending
                         // multiple dispute, and retry if needed?

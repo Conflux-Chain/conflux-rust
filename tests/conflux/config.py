@@ -53,5 +53,5 @@ small_local_test_conf = dict(
     persist_block_number_index = "true",
     execute_genesis = "false",
     dev_allow_phase_change_without_peer = "true",
-    check_status_genesis = "true",
+    check_status_genesis = "false",
 )

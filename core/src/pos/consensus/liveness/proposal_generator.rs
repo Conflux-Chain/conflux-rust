@@ -249,10 +249,7 @@ impl ProposalGenerator {
                         ) {
                             Ok(raw_tx) => {
                                 let signed_tx = raw_tx
-                                    .sign(
-                                        &self.private_key,
-                                        self.public_key.clone(),
-                                    )?
+                                    .sign(&self.private_key)?
                                     .into_inner();
                                 payload.push(signed_tx);
                             }

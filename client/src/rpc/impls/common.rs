@@ -28,9 +28,15 @@ use cfxkey::Password;
 use clap::crate_version;
 use diem_types::{
     account_address::{from_consensus_public_key, AccountAddress},
-    transaction::SignedTransaction as DiemSignedTransaction,
+    transaction::{
+        RawTransaction as DiemRawTransaction, RetirePayload,
+        SignedTransaction as DiemSignedTransaction,
+    },
 };
-use futures::channel::{mpsc, oneshot};
+use futures::{
+    channel::{mpsc, oneshot},
+    SinkExt,
+};
 use jsonrpc_core::{
     Error as RpcError, Result as JsonRpcResult, Value as RpcValue,
 };
@@ -148,10 +154,12 @@ pub struct RpcImpl {
     tx_pool: SharedTransactionPool,
     accounts: Arc<AccountProvider>,
     pos_handler: Arc<PosVerifier>,
-    pos_tx_sender: mpsc::Sender<(
-        DiemSignedTransaction,
-        oneshot::Sender<anyhow::Result<SubmissionStatus>>,
-    )>,
+    pos_tx_sender: Mutex<
+        mpsc::Sender<(
+            DiemSignedTransaction,
+            oneshot::Sender<anyhow::Result<SubmissionStatus>>,
+        )>,
+    >,
 }
 
 impl RpcImpl {
@@ -175,7 +183,7 @@ impl RpcImpl {
             tx_pool,
             accounts,
             pos_handler: pos_verifier,
-            pos_tx_sender,
+            pos_tx_sender: Mutex::new(pos_tx_sender),
         }
     }
 
@@ -688,8 +696,31 @@ impl RpcImpl {
         unimplemented!()
     }
 
-    pub fn pos_retire(&self, pos_account: AccountAddress) -> JsonRpcResult<()> {
-        unimplemented!()
+    pub fn pos_retire_self(&self) -> JsonRpcResult<()> {
+        let sender = from_consensus_public_key(
+            &self.pos_handler.config().bls_key.public_key(),
+            &self.pos_handler.config().vrf_key.public_key(),
+        );
+        let retire_tx = DiemRawTransaction::new_retire(
+            sender,
+            0,
+            RetirePayload {
+                public_key: self.pos_handler.config().bls_key.public_key(),
+                vrf_public_key: self.pos_handler.config().vrf_key.public_key(),
+            },
+        );
+        let signed_tx = retire_tx
+            .sign(&self.pos_handler.config().bls_key.private_key())
+            .map_err(|e| {
+                warn!("sign diem tx err={:?}", e);
+                RpcError::internal_error()
+            })?
+            .into_inner();
+        let (tx, _rx) = oneshot::channel();
+        futures::executor::block_on(
+            self.pos_tx_sender.lock().send((signed_tx, tx)),
+        );
+        Ok(())
     }
 }
 
