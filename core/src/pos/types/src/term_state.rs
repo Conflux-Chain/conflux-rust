@@ -467,14 +467,6 @@ impl PosState {
             bail!("Invalid node status for retiring");
         }
 
-        // FIXME(lpl): Nodes in the current active term are not covered by this.
-        for term in &self.term_list.term_list {
-            for (_, addr) in term.node_list.iter().take(TERM_ELECTED_SIZE) {
-                if addr.node_id == node_id {
-                    bail!("Node in active term service cannot retire");
-                }
-            }
-        }
         Ok(())
     }
 
