@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """An example functional test
 """
+import eth_utils
 import time
 
 from conflux.rpc import RpcClient
-from conflux.utils import int_to_hex
+from conflux.utils import int_to_hex, priv_to_addr
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 
@@ -24,7 +25,7 @@ class ExampleTest(ConfluxTestFramework):
     def run_test(self):
         time.sleep(2)
         client = RpcClient(self.nodes[3])
-        client.wait_for_pos_register()
+        _, priv_key = client.wait_for_pos_register()
 
         genesis = self.nodes[0].best_block_hash()
         self.log.info(genesis)
@@ -45,6 +46,10 @@ class ExampleTest(ConfluxTestFramework):
             self.nodes[0].generate_empty_blocks(1)
             new_pos_ref = self.latest_pos_ref()
             assert_ne(latest_pos_ref, new_pos_ref)
+
+        client.wait_for_unstake(priv_key)
+        print(client.get_balance(eth_utils.encode_hex(priv_to_addr(priv_key))))
+        exit()
         # assert (self.nodes[0].getblockcount() == 6002)
 
     def latest_pos_ref(self):
