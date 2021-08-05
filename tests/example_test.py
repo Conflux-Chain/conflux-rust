@@ -33,7 +33,11 @@ class ExampleTest(ConfluxTestFramework):
         assert (self.nodes[0].getblockcount() == 2)
 
         latest_pos_ref = self.latest_pos_ref()
-        for _ in range(300):
+        for i in range(300):
+            print(i)
+            # Retire node 3 after 5 min.
+            if i == 100:
+                client.pos_retire_self()
             # Generate enough PoW block for PoS to progress
             self.nodes[0].generate_empty_blocks(60)
             # Leave some time for PoS to reach consensus

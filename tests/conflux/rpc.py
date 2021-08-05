@@ -512,6 +512,9 @@ class RpcClient:
         self.send_tx(register_tx, wait_for_receipt=True)
         return pos_identifier
 
+    def pos_retire_self(self):
+        self.node.pos_retire_self()
+
 
 def stake_tx_data(staking_value: int):
     staking_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/Staking.json"), "r").read())
