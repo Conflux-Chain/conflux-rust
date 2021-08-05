@@ -374,8 +374,13 @@ impl PosState {
     pub fn target_term_seed(&self, target_term: u64) -> &Vec<u8> {
         if target_term < (TERM_LIST_LEN as u64) {
             &self.term_list.term_list[target_term as usize].seed
+        } else if target_term >= self.term_list.current_term {
+            let target_term_offset = (target_term - self.term_list.current_term)
+                as usize
+                + (TERM_LIST_LEN - 1);
+            &self.term_list.term_list[target_term_offset].seed
         } else {
-            &self.term_list.term_list[TERM_LIST_LEN - 1].seed
+            unreachable!("target_term_seed is only called for future terms.")
         }
     }
 
