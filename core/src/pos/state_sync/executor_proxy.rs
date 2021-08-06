@@ -76,7 +76,12 @@ impl ExecutorProxy {
         let on_chain_configs = if let Ok(Some(startup_info)) =
             storage.get_startup_info()
         {
-            if let Some(epoch_state) = startup_info.latest_epoch_state {
+            let epoch_state = startup_info.latest_epoch_state.or(startup_info
+                .latest_ledger_info
+                .ledger_info()
+                .next_epoch_state()
+                .cloned());
+            if let Some(epoch_state) = epoch_state {
                 OnChainConfigPayload::new(
                     epoch_state.epoch,
                     Arc::new(
