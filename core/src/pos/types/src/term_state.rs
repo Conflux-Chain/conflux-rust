@@ -476,9 +476,15 @@ impl PosState {
     /// Return `(validator_set, term_seed)`.
     pub fn get_new_committee(&self) -> Result<(ValidatorVerifier, Vec<u8>)> {
         let mut voting_power_map = BTreeMap::new();
+        let term_size_limit =
+            if self.term_list.current_term < TERM_LIST_LEN as u64 {
+                usize::MAX
+            } else {
+                TERM_ELECTED_SIZE
+            };
         for i in 0..TERM_LIST_LEN {
             let term = &self.term_list.term_list[i];
-            for (_, node_id) in term.node_list.iter().take(TERM_ELECTED_SIZE) {
+            for (_, node_id) in term.node_list.iter().take(term_size_limit) {
                 let voting_power = voting_power_map
                     .entry(node_id.node_id.addr.clone())
                     .or_insert(0 as u64);
@@ -658,6 +664,7 @@ impl PosState {
             let node = self.node_map.get_mut(&retired_node).expect("exists");
             assert_eq!(node.status, NodeStatus::Retired);
             if node.status_start_view + UNLOCK_WAIT_VIEW <= self.current_view {
+                diem_debug!("pos_state unlock {:?}", retired_node);
                 node.status = NodeStatus::Unlocked;
                 node.status_start_view = self.current_view;
             } else {

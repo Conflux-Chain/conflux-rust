@@ -16,15 +16,25 @@ class ExampleTest(ConfluxTestFramework):
         # self.conf_parameters["vrf_proposal_threshold"] = '"{}"'.format(int_to_hex(int(2 ** 256 / 2)))
         self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = '120'
         # self.conf_parameters["log_level"] = '"trace"'
+        self.conf_parameters["dev_allow_phase_change_without_peer"] = "false"
+
+    def setup_nodes(self):
+        self.add_nodes(self.num_nodes, genesis_nodes=self.num_nodes - 1)
+
+        # start half of the nodes as archive nodes
+        for i in range(self.num_nodes):
+            self.start_node(i, phase_to_wait=None)
 
     def setup_network(self):
-        self.setup_nodes(is_consortium=True, genesis_nodes=3)
+        self.setup_nodes()
         connect_sample_nodes(self.nodes, self.log, latency_max=0)
         sync_blocks(self.nodes)
+        for node in self.nodes:
+            node.wait_for_recovery(["NormalSyncPhase"], 30)
 
     def run_test(self):
         time.sleep(2)
-        client = RpcClient(self.nodes[3])
+        client = RpcClient(self.nodes[self.num_nodes - 1])
         _, priv_key = client.wait_for_pos_register()
 
         genesis = self.nodes[0].best_block_hash()
@@ -36,6 +46,8 @@ class ExampleTest(ConfluxTestFramework):
         latest_pos_ref = self.latest_pos_ref()
         for i in range(300):
             print(i)
+            if i == 20:
+                self.maybe_restart_node(5, 1, 1)
             # Retire node 3 after 5 min.
             if i == 100:
                 client.pos_retire_self()

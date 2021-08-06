@@ -1059,7 +1059,7 @@ impl NetworkProtocolHandler for Handler {
             CHECK_SYNC_NOT_READY_BLOCKS_TIMER => {
                 self.headers
                     .graph
-                    .check_not_ready_frontier(true /* is_light_node */);
+                    .check_not_ready_frontier(true /* header_only */);
             }
             // TODO(thegaram): add other timers (e.g. data_man gc)
             _ => warn!("Unknown timer {} triggered.", timer),

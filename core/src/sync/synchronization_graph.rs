@@ -1981,10 +1981,10 @@ impl SynchronizationGraph {
     /// Check if not_ready_frontier blocks become ready now.
     /// Blocks that are not ready because of missing pos references only become
     /// ready here.
-    pub fn check_not_ready_frontier(&self, is_light_node: bool) {
+    pub fn check_not_ready_frontier(&self, header_only: bool) {
         debug!("check_not_ready_frontier starts");
         let mut inner = self.inner.write();
-        if is_light_node {
+        if header_only {
             for b in inner.pos_not_ready_blocks_frontier.clone() {
                 debug!(
                     "check_not_ready_frontier: check {:?}",

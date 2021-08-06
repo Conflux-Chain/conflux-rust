@@ -587,6 +587,7 @@ impl RoundManager {
         peer_id: AccountAddress,
     ) -> Result<()>
     {
+        diem_debug!("sync_to_ledger_info: {:?}", ledger_info);
         let mut retriever = self.create_block_retriever(peer_id);
         if !self
             .block_store
@@ -606,7 +607,7 @@ impl RoundManager {
             // again.
             self.block_store.execute_and_insert_block(
                 block_for_ledger_info,
-                false,
+                true,
                 false,
             );
         };
