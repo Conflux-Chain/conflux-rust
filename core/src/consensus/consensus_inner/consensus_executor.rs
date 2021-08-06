@@ -905,6 +905,17 @@ impl ConsensusExecutionHandler {
         // FIXME: Currently we make the snapshotting decision when committing
         // FIXME: a new state.
 
+        // persist block number index
+        // note: we need to persist before execution because in some cases,
+        // execution is skipped. when `compute_epoch` is called, it is
+        // guaranteed that `epoch_hash` is on the current pivot chain.
+        for (index, hash) in epoch_block_hashes.iter().enumerate() {
+            self.data_man.insert_hash_by_block_number(
+                compute_block_number(start_block_number, index as u64),
+                hash,
+            );
+        }
+
         // Check if the state has been computed
         if !force_recompute
             && debug_record.is_none()
@@ -1052,14 +1063,6 @@ impl ConsensusExecutionHandler {
             compute_receipts_root(&epoch_receipts),
             BlockHeaderBuilder::compute_block_logs_bloom_hash(&epoch_receipts),
         );
-
-        // persist block number index
-        for (index, hash) in epoch_block_hashes.iter().enumerate() {
-            self.data_man.insert_hash_by_block_number(
-                compute_block_number(start_block_number, index as u64),
-                hash,
-            );
-        }
 
         let epoch_execution_commitment = self
             .data_man
