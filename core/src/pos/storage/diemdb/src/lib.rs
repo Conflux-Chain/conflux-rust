@@ -1102,7 +1102,7 @@ impl DBReaderForPoW for DiemDB {
     ) -> Result<Vec<ContractEvent>> {
         let iter = self.event_store.get_events_by_version_iter(
             start_version,
-            (end_version - start_version + 1) as usize,
+            (end_version - start_version) as usize,
         )?;
         let events_vec = iter.collect::<Result<Vec<Vec<ContractEvent>>>>()?;
         Ok(events_vec.into_iter().flatten().collect())

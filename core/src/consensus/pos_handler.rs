@@ -275,16 +275,14 @@ impl PosInterface for PosConnection {
     ) -> Vec<ContractEvent> {
         let start_version = self
             .pos_storage
-            .get_block_ledger_info(&h256_to_diem_hash(from))
+            .get_committed_block(&h256_to_diem_hash(from))
             .expect("err reading ledger info for from")
-            .ledger_info()
-            .version();
+            .version;
         let end_version = self
             .pos_storage
-            .get_block_ledger_info(&h256_to_diem_hash(to))
+            .get_committed_block(&h256_to_diem_hash(to))
             .expect("err reading ledger info for to")
-            .ledger_info()
-            .version();
+            .version;
         self.pos_storage
             .get_events_by_version(start_version, end_version)
             .expect("err reading events")
