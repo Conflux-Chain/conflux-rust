@@ -124,15 +124,23 @@ impl BlockStore {
                     match self.commit(block_qc.ledger_info().clone()).await {
                         Ok(()) => {}
                         Err(e) => {
-                            // TODO(lpl): Blocks not committed before crash should
-                            // be committed here? Make sure
+                            // TODO(lpl): Blocks not committed before crash
+                            // should be committed
+                            // here? Make sure
                             // they are recovered to
                             // BlockStore during start.
-                            diem_warn!("fetch_quorum_cert: commit error={:?}", e);
+                            diem_warn!(
+                                "fetch_quorum_cert: commit error={:?}",
+                                e
+                            );
                         }
                     }
                 } else {
-                    diem_debug!("skip commit, qc_round={} root_root={}", block_qc.commit_info().round(), self.root().round());
+                    diem_debug!(
+                        "skip commit, qc_round={} root_root={}",
+                        block_qc.commit_info().round(),
+                        self.root().round()
+                    );
                 }
             }
 

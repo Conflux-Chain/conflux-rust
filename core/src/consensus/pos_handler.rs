@@ -6,6 +6,7 @@ use diem_crypto::HashValue;
 use diem_types::{
     account_address::AccountAddress,
     account_state_blob::{AccountStateBlob, AccountStateWithProof},
+    committed_block::CommittedBlock,
     contract_event::{ContractEvent, EventWithProof},
     epoch_change::EpochChangeProof,
     epoch_state::EpochState,
@@ -67,9 +68,10 @@ pub struct PosBlock {
     epoch: u64,
     round: u64,
     pivot_decision: H256,
-    // parent: PosBlockId,
-    // author: NodeId,
-    voters: Vec<NodeId>,
+    version: u64,
+    /* parent: PosBlockId,
+     * author: NodeId,
+     * voters: Vec<NodeId>, */
 }
 
 pub struct PosHandler<PoS: PosInterface> {
@@ -215,18 +217,8 @@ impl PosInterface for PosConnection {
     fn get_committed_block(&self, h: &PosBlockId) -> Option<PosBlock> {
         debug!("get_committed_block: {:?}", h);
         let block_hash = h256_to_diem_hash(h);
-        let ledger_info = self
-            .pos_storage
-            .get_block_ledger_info(&block_hash)
-            .map_err(|e| {
-                warn!("get_committed_block: err={:?}", e);
-                e
-            })
-            .ok()?;
-        debug_assert_eq!(
-            ledger_info.ledger_info().consensus_block_id(),
-            block_hash
-        );
+        let committed_block =
+            self.pos_storage.get_committed_block(&block_hash).ok()?;
 
         /*
         let parent;
@@ -250,23 +242,20 @@ impl PosInterface for PosConnection {
             author = H256::from_slice(block.author().unwrap_or(Default::default()).as_ref());
         }
          */
-        debug!("pos_handler gets ledger_info={:?}", ledger_info);
+        debug!("pos_handler gets committed_block={:?}", committed_block);
         Some(PosBlock {
             hash: *h,
-            epoch: ledger_info.ledger_info().epoch(),
-            round: ledger_info.ledger_info().round(),
-            pivot_decision: ledger_info
-                .ledger_info()
-                .pivot_decision()
-                .unwrap()
-                .block_hash,
-            // parent,
-            // author,
-            voters: ledger_info
-                .signatures()
-                .keys()
-                .map(|author| H256::from_slice(author.as_ref()))
-                .collect(),
+            epoch: committed_block.epoch,
+            round: committed_block.round,
+            pivot_decision: committed_block.pivot_decision.block_hash,
+            /* parent,
+             * author,
+             * voters: ledger_info
+             *     .signatures()
+             *     .keys()
+             *     .map(|author| H256::from_slice(author.as_ref()))
+             *     .collect(), */
+            version: committed_block.version,
         })
     }
 
@@ -364,6 +353,12 @@ impl DBReaderForPoW for FakeDiemDB {
     fn get_reward_event(
         &self, epoch: u64,
     ) -> anyhow::Result<RewardDistributionEvent> {
+        todo!()
+    }
+
+    fn get_committed_block(
+        &self, block_hash: &HashValue,
+    ) -> anyhow::Result<CommittedBlock> {
         todo!()
     }
 }

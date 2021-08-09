@@ -46,11 +46,11 @@ class ExampleTest(ConfluxTestFramework):
         latest_pos_ref = self.latest_pos_ref()
         for i in range(300):
             print(i)
-            if i == 20:
+            if i == 50:
+                client.pos_retire_self()
+            if i == 100:
                 self.maybe_restart_node(5, 1, 1)
             # Retire node 3 after 5 min.
-            if i == 100:
-                client.pos_retire_self()
             # Generate enough PoW block for PoS to progress
             self.nodes[0].generate_empty_blocks(60)
             # Leave some time for PoS to reach consensus

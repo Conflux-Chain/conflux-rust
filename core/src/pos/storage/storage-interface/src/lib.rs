@@ -8,6 +8,7 @@ use diem_types::{
     account_address::AccountAddress,
     account_state::AccountState,
     account_state_blob::{AccountStateBlob, AccountStateWithProof},
+    committed_block::CommittedBlock,
     contract_event::{ContractEvent, EventWithProof},
     epoch_change::EpochChangeProof,
     epoch_state::EpochState,
@@ -427,6 +428,10 @@ pub trait DbWriter: Send + Sync {
     fn save_reward_event(
         &self, epoch: u64, event: &RewardDistributionEvent,
     ) -> Result<()>;
+
+    fn save_committed_block(
+        &self, block_hash: &HashValue, block: &CommittedBlock,
+    ) -> Result<()>;
 }
 
 #[derive(Clone)]
@@ -528,4 +533,8 @@ pub trait DBReaderForPoW: Send + Sync + DbReader {
     ) -> Result<Vec<HashValue>>;
 
     fn get_reward_event(&self, epoch: u64) -> Result<RewardDistributionEvent>;
+
+    fn get_committed_block(
+        &self, block_hash: &HashValue,
+    ) -> Result<CommittedBlock>;
 }
