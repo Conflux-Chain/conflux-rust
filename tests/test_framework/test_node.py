@@ -238,6 +238,7 @@ class TestNode:
     def clean_data(self):
         shutil.rmtree(os.path.join(self.datadir, "blockchain_data/blockchain_db"))
         shutil.rmtree(os.path.join(self.datadir, "blockchain_data/storage_db"))
+        shutil.rmtree(os.path.join(self.datadir, "diemdb"))
         self.log.info("Cleanup data for node %d", self.index)
 
     def stop_node(self, expected_stderr='', kill=False, wait=True):

@@ -168,6 +168,7 @@ impl PowInterface for PowHandler {
     }
 
     async fn wait_for_initialization(&self, last_decision: H256) {
+        debug!("wait_for_initialization: {:?}", last_decision);
         while self.pow_consensus.read().is_none() {
             self.executor
                 .block_on(tokio::time::sleep(Duration::from_millis(200)))

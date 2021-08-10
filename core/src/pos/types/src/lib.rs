@@ -39,6 +39,7 @@ pub mod vm_status;
 pub mod waypoint;
 pub mod write_set;
 
+pub mod committed_block;
 pub mod reward_distribution_event;
 pub mod term_state;
 #[cfg(test)]

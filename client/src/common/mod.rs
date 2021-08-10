@@ -409,6 +409,7 @@ pub fn initialize_common_modules(
         txpool.clone(),
         accounts.clone(),
         pos_verifier.clone(),
+        diem_handler.tx_sender.clone(),
     ));
 
     let runtime = Runtime::with_default_thread_count();
@@ -870,6 +871,7 @@ use crate::{
     GENESIS_VERSION,
 };
 pub use crate::{common::pos::DiemHandle, configuration::Configuration};
+use anyhow;
 use blockgen::BlockGenerator;
 use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, U256};

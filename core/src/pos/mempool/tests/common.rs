@@ -86,7 +86,7 @@ impl TestTransaction {
         let mut rng: StdRng = StdRng::from_seed(seed);
         let privkey = Ed25519PrivateKey::generate(&mut rng);
         raw_txn
-            .sign(&privkey, privkey.public_key())
+            .sign(&privkey)
             .expect("Failed to sign raw transaction.")
             .into_inner()
     }

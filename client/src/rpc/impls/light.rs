@@ -1114,7 +1114,7 @@ impl TestRpc for TestRpcImpl {
             fn pos_update_voting_power(
                 &self, pos_account: AccountAddress, increased_voting_power: u64,
             ) -> JsonRpcResult<()>;
-            fn pos_retire(&self, pos_account: AccountAddress) -> JsonRpcResult<()>;
+            fn pos_retire_self(&self) -> JsonRpcResult<()>;
         }
     }
 

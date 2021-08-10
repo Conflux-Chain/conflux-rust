@@ -63,8 +63,11 @@ use crate::{
 use cfx_types::H256;
 use consensus_types::db::{FakeLedgerBlockDB, LedgerBlockRW};
 use diem_crypto::hash::PRE_GENESIS_BLOCK_ID;
-use diem_types::term_state::{
-    NodeID, PosState, RegisterEvent, RetireEvent, UpdateVotingPowerEvent,
+use diem_types::{
+    committed_block::CommittedBlock,
+    term_state::{
+        NodeID, PosState, RegisterEvent, RetireEvent, UpdateVotingPowerEvent,
+    },
 };
 use pow_types::PowInterface;
 
@@ -341,6 +344,11 @@ where V: VMExecutor
                 if !catch_up_mode {
                     // Verify if the proposer has packed all staking events as
                     // expected.
+                    diem_debug!(
+                        "check staking events: parent={:?} me={:?}",
+                        parent_pivot_decision,
+                        pivot_decision
+                    );
                     let staking_events = self.pow_handler.get_staking_events(
                         parent_pivot_decision.block_hash,
                         pivot_decision.block_hash,
@@ -1085,8 +1093,6 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
     ) -> Result<(Vec<Transaction>, Vec<ContractEvent>), Error>
     {
         let _timer = DIEM_EXECUTOR_COMMIT_BLOCKS_SECONDS.start_timer();
-        let block_id_to_commit =
-            ledger_info_with_sigs.ledger_info().consensus_block_id();
         let mut pos_state_to_commit = self
             .get_executed_trees(
                 ledger_info_with_sigs.ledger_info().consensus_block_id(),
@@ -1169,8 +1175,9 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
         }
 
         diem_info!(
-            LogSchema::new(LogEntry::BlockExecutor)
-                .block_id(block_id_to_commit),
+            LogSchema::new(LogEntry::BlockExecutor).block_id(
+                ledger_info_with_sigs.ledger_info().consensus_block_id()
+            ),
             "commit_block"
         );
 
@@ -1211,6 +1218,46 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
             .map(|id| self.db_with_cache.get_block(id))
             .collect::<Result<Vec<_>, Error>>()?;
         let blocks = arc_blocks.iter().map(|b| b.lock()).collect::<Vec<_>>();
+        if ledger_info_with_sigs.ledger_info().epoch() != 0 {
+            for b in &blocks {
+                let ledger_block = self
+                    .consensus_db
+                    .get_ledger_block(&b.id())
+                    .unwrap()
+                    .unwrap();
+                self.db.writer.save_committed_block(
+                    &b.id(),
+                    &CommittedBlock {
+                        hash: b.id(),
+                        epoch: ledger_block.epoch(),
+                        round: ledger_block.round(),
+                        pivot_decision: b
+                            .output()
+                            .pivot_block()
+                            .clone()
+                            .unwrap(),
+                        version: b.output().version().unwrap(),
+                    },
+                );
+            }
+        } else {
+            self.db.writer.save_committed_block(
+                &ledger_info_with_sigs.ledger_info().consensus_block_id(),
+                &CommittedBlock {
+                    hash: ledger_info_with_sigs
+                        .ledger_info()
+                        .consensus_block_id(),
+                    epoch: 0,
+                    round: 0,
+                    pivot_decision: ledger_info_with_sigs
+                        .ledger_info()
+                        .pivot_decision()
+                        .unwrap()
+                        .clone(),
+                    version: ledger_info_with_sigs.ledger_info().version(),
+                },
+            );
+        }
         for (txn, txn_data) in blocks.iter().flat_map(|block| {
             itertools::zip_eq(
                 block.transactions(),
