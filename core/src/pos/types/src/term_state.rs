@@ -20,10 +20,11 @@ use crate::{
     validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
 };
+use cfx_types::H256;
 use diem_logger::prelude::*;
 use move_core_types::language_storage::TypeTag;
 use pow_types::StakingEvent;
-use std::convert::TryFrom;
+use std::{convert::TryFrom, path::Component::RootDir};
 
 const TERM_LIST_LEN: usize = 6;
 // FIXME(lpl): Use correct value later.
@@ -38,6 +39,26 @@ const ELECTION_TERM_END_ROUND: Round = 30;
 const TERM_MAX_SIZE: usize = 10000;
 const TERM_ELECTED_SIZE: usize = 50;
 const UNLOCK_WAIT_VIEW: u64 = 20160;
+
+const BONUS_VOTE_MAX_SIZE: u64 = 100;
+
+pub const MAX_TERM_POINTS: u64 = 6_000_000;
+
+const ELECTION_PERCENTAGE: u64 = 20;
+const COMMITTEE_PERCENTAGE: u64 = 75;
+const LEADER_PERCENTAGE: u64 = 3;
+const BONUS_VOTE_PERCENTAGE: u64 = 2;
+
+pub const ELECTION_POINTS: u64 =
+    MAX_TERM_POINTS * ELECTION_PERCENTAGE / 100 / (TERM_MAX_SIZE as u64);
+pub const COMMITTEE_POINTS: u64 =
+    MAX_TERM_POINTS * COMMITTEE_PERCENTAGE / 100 / (TERM_ELECTED_SIZE as u64);
+pub const LEADER_POINTS: u64 =
+    MAX_TERM_POINTS * LEADER_PERCENTAGE / 100 / ROUND_PER_TERM;
+pub const BONUS_VOTE_POINTS: u64 = MAX_TERM_POINTS * BONUS_VOTE_PERCENTAGE
+    / 100
+    / ROUND_PER_TERM
+    / BONUS_VOTE_MAX_SIZE;
 
 #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
 pub enum NodeStatus {
@@ -392,10 +413,14 @@ impl PosState {
             bail!("Election too soon after accepted");
         }
         let target_view = election_tx.target_term * ROUND_PER_TERM;
-        if target_view >= self.current_view + ELECTION_TERM_START_ROUND
+        if target_view > self.current_view + ELECTION_TERM_START_ROUND
             || target_view < self.current_view + ELECTION_TERM_END_ROUND
         {
-            bail!("Target term is not open for election");
+            bail!(
+                "Target term is not open for election: target={} current={}",
+                target_view,
+                self.current_view
+            );
         }
 
         let target_term_offset = election_tx.target_term as usize
@@ -549,14 +574,16 @@ impl PosState {
 
     pub fn catch_up_mode(&self) -> bool { self.catch_up_mode }
 
-    pub fn next_evicted_term(&self) -> Vec<AccountAddress> {
+    pub fn next_evicted_term(&self) -> Vec<H256> {
         if self.current_view < (TERM_LIST_LEN - 1) as u64 * ROUND_PER_TERM {
             return Vec::new();
         } else {
             self.term_list.term_list[0]
                 .node_list
                 .iter()
-                .map(|(_, address)| address.node_id.addr)
+                .map(|(_, address)| {
+                    H256::from_slice(address.node_id.addr.as_ref())
+                })
                 .collect()
         }
     }
@@ -673,14 +700,14 @@ impl PosState {
         Ok(epoch_state)
     }
 
-    pub fn retire_node(&mut self, retire_event: &RetireEvent) -> Result<()> {
-        diem_trace!("retire_node: {:?}", retire_event.node_id);
-        match self.node_map.get_mut(&retire_event.node_id.addr) {
+    pub fn retire_node(&mut self, addr: &AccountAddress) -> Result<()> {
+        diem_trace!("retire_node: {:?}", addr);
+        match self.node_map.get_mut(&addr) {
             Some(node) => match node.status {
                 NodeStatus::Accepted => {
                     node.status = NodeStatus::Retired;
                     node.status_start_view = self.current_view;
-                    self.retiring_nodes.push_back(retire_event.node_id.addr);
+                    self.retiring_nodes.push_back(*addr);
                     Ok(())
                 }
                 _ => Err(anyhow!(
@@ -741,7 +768,7 @@ impl ElectionEvent {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RetireEvent {
-    node_id: NodeID,
+    pub node_id: NodeID,
 }
 
 impl RetireEvent {

@@ -35,9 +35,9 @@ pub use self::{
         TransactOptions,
     },
     internal_contract::{
-        function, identifier_entry, index_entry, suicide, ABIDecodeError,
-        IndexStatus, InternalContractMap, InternalContractTrait,
-        InternalRefContext, SolidityFunctionTrait,
+        function, pos_internal_entries, suicide, ABIDecodeError, IndexStatus,
+        InternalContractMap, InternalContractTrait, InternalRefContext,
+        SolidityFunctionTrait,
     },
 };
 use crate::vm::Error as vmError;

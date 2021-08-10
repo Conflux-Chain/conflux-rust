@@ -10,7 +10,7 @@ use crate::{
     schema::{
         epoch_by_version::EpochByVersionSchema, ledger_info::LedgerInfoSchema,
         ledger_info_by_block::LedgerInfoByBlockSchema,
-        pos_state::PosStateSchema,
+        pos_state::PosStateSchema, reward_event::RewardEventSchema,
         transaction_accumulator::TransactionAccumulatorSchema,
         transaction_info::TransactionInfoSchema,
     },
@@ -32,6 +32,7 @@ use diem_types::{
         TransactionAccumulatorProof, TransactionAccumulatorRangeProof,
         TransactionInfoWithProof,
     },
+    reward_distribution_event::RewardDistributionEvent,
     term_state::PosState,
     transaction::{TransactionInfo, Version},
 };
@@ -475,6 +476,23 @@ impl LedgerStore {
 
     pub fn get_latest_pos_state(&self) -> Arc<PosState> {
         self.latest_pos_state.load().clone()
+    }
+
+    pub fn put_reward_event(
+        &self, epoch: u64, event: &RewardDistributionEvent,
+    ) -> Result<()> {
+        let mut cs = ChangeSet::new();
+        cs.batch.put::<RewardEventSchema>(&epoch, event)?;
+        self.db.write_schemas(cs.batch)
+    }
+
+    pub fn get_reward_event(
+        &self, epoch: u64,
+    ) -> Result<RewardDistributionEvent> {
+        self.db.get::<RewardEventSchema>(&epoch)?.ok_or_else(|| {
+            DiemDbError::NotFound(format!("RewardEvent of epoch {}", epoch))
+                .into()
+        })
     }
 }
 

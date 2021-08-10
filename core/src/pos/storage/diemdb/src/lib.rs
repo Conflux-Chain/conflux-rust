@@ -74,6 +74,7 @@ use diem_types::{
         AccountStateProof, AccumulatorConsistencyProof, EventProof,
         SparseMerkleProof, TransactionListProof,
     },
+    reward_distribution_event::RewardDistributionEvent,
     term_state::PosState,
     transaction::{
         TransactionInfo, TransactionListWithProof, TransactionToCommit,
@@ -244,6 +245,7 @@ impl DiemDB {
             TRANSACTION_INFO_CF_NAME,
             LEDGER_INFO_BY_BLOCK_CF_NAME,
             POS_STATE_CF_NAME,
+            REWARD_EVENT_CF_NAME,
         ]
     }
 
@@ -1066,6 +1068,12 @@ impl DbWriter for DiemDB {
             Ok(())
         })
     }
+
+    fn save_reward_event(
+        &self, epoch: u64, event: &RewardDistributionEvent,
+    ) -> Result<()> {
+        self.ledger_store.put_reward_event(epoch, event)
+    }
 }
 
 impl DBReaderForPoW for DiemDB {
@@ -1103,6 +1111,10 @@ impl DBReaderForPoW for DiemDB {
             ending_blocks.push(ledger_info?.ledger_info().consensus_block_id());
         }
         Ok(ending_blocks)
+    }
+
+    fn get_reward_event(&self, epoch: u64) -> Result<RewardDistributionEvent> {
+        self.ledger_store.get_reward_event(epoch)
     }
 }
 

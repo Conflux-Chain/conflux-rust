@@ -49,7 +49,8 @@ pub(crate) fn start_shared_mempool(
     consensus_requests: mpsc::Receiver<ConsensusRequest>,
     state_sync_requests: mpsc::Receiver<CommitNotification>,
     mempool_reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
-    db_with_cache: Arc<CachedDiemDB>, validator: Arc<RwLock<TransactionValidator>>,
+    db_with_cache: Arc<CachedDiemDB>,
+    validator: Arc<RwLock<TransactionValidator>>,
     subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
 )
 {
@@ -83,8 +84,8 @@ pub(crate) fn start_shared_mempool(
 }
 
 pub fn bootstrap(
-    config: &NodeConfig, db_with_cache: Arc<CachedDiemDB>, network_sender: NetworkSender,
-    network_receivers: NetworkReceivers,
+    config: &NodeConfig, db_with_cache: Arc<CachedDiemDB>,
+    network_sender: NetworkSender, network_receivers: NetworkReceivers,
     client_events: Receiver<(
         SignedTransaction,
         oneshot::Sender<Result<SubmissionStatus>>,

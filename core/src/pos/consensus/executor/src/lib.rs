@@ -4,7 +4,7 @@
 #![forbid(unsafe_code)]
 
 use std::{
-    collections::{hash_map, HashMap, HashSet},
+    collections::{hash_map, BTreeMap, HashMap, HashSet},
     convert::TryFrom,
     marker::PhantomData,
     sync::Arc,
@@ -31,6 +31,7 @@ use diem_types::{
     ledger_info::LedgerInfoWithSignatures,
     on_chain_config,
     proof::accumulator::InMemoryAccumulator,
+    reward_distribution_event::{RewardDistributionEvent, VoteCount},
     term_state::ElectionEvent,
     transaction::{
         Transaction, TransactionInfo, TransactionListWithProof,
@@ -59,6 +60,8 @@ use crate::{
     },
     vm::VMExecutor,
 };
+use cfx_types::H256;
+use consensus_types::db::{FakeLedgerBlockDB, LedgerBlockRW};
 use diem_crypto::hash::PRE_GENESIS_BLOCK_ID;
 use diem_types::term_state::{
     NodeID, PosState, RegisterEvent, RetireEvent, UpdateVotingPowerEvent,
@@ -76,6 +79,7 @@ type SparseMerkleProof = diem_types::proof::SparseMerkleProof<AccountStateBlob>;
 /// provide.
 pub struct Executor<V> {
     db_with_cache: Arc<CachedDiemDB>,
+    consensus_db: Arc<dyn LedgerBlockRW>,
     phantom: PhantomData<V>,
     pow_handler: Arc<dyn PowInterface>,
 }
@@ -90,16 +94,15 @@ where V: VMExecutor
     /// Constructs an `Executor`.
     pub fn new(
         db_with_cache: Arc<CachedDiemDB>, pow_handler: Arc<dyn PowInterface>,
-    ) -> Self {
+        consensus_db: Arc<dyn LedgerBlockRW>,
+    ) -> Self
+    {
         Self {
             db_with_cache,
+            consensus_db,
             phantom: PhantomData,
             pow_handler,
         }
-    }
-
-    fn reset_cache(&self) -> Result<(), Error> {
-        self.db_with_cache.reset_cache()
     }
 
     /// In case there is a new LI to be added to a LedgerStore, verify and
@@ -312,7 +315,7 @@ where V: VMExecutor
                 } else if *event.key() == retire_event_key {
                     let retire_event =
                         RetireEvent::from_bytes(event.event_data())?;
-                    new_pos_state.retire_node(&retire_event)?;
+                    new_pos_state.retire_node(&retire_event.node_id.addr)?;
                 }
             }
         }
@@ -804,7 +807,7 @@ impl<V: VMExecutor> ChunkExecutor for Executor<V> {
             DIEM_EXECUTOR_EXECUTE_AND_COMMIT_CHUNK_SECONDS.start_timer();
         // 1. Update the cache in executor to be consistent with latest synced
         // state.
-        self.reset_cache()?;
+        // self.reset_cache()?;
 
         diem_info!(
             LogSchema::new(LogEntry::ChunkExecutor)
@@ -950,8 +953,6 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
         Ok(self.committed_block_id())
     }
 
-    fn reset(&self) -> Result<(), Error> { self.reset_cache() }
-
     fn execute_block(
         &self, block: (HashValue, Vec<Transaction>),
         parent_block_id: HashValue, catch_up_mode: bool,
@@ -1086,12 +1087,86 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
         let _timer = DIEM_EXECUTOR_COMMIT_BLOCKS_SECONDS.start_timer();
         let block_id_to_commit =
             ledger_info_with_sigs.ledger_info().consensus_block_id();
-        let pos_state_to_commit = self
+        let mut pos_state_to_commit = self
             .get_executed_trees(
                 ledger_info_with_sigs.ledger_info().consensus_block_id(),
             )?
             .pos_state()
             .clone();
+
+        // TODO(lpl): Implement force_retire better?
+        // Process pos_state to apply force_retire.
+        if ledger_info_with_sigs.ledger_info().ends_epoch()
+            && ledger_info_with_sigs.ledger_info().epoch() != 0
+        {
+            let ending_block =
+                ledger_info_with_sigs.ledger_info().consensus_block_id();
+            let mut elected = BTreeMap::new();
+            let mut voted_block_id = ending_block;
+            // `self.cache.committed_trees` should be within this epoch and
+            // before ending_block.
+            for committee_member in self
+                .db_with_cache
+                .cache
+                .lock()
+                .committed_trees()
+                .pos_state()
+                .epoch_state()
+                .verifier
+                .address_to_validator_info()
+                .keys()
+            {
+                elected.insert(*committee_member, VoteCount::default());
+            }
+            let min_vote = elected.len() * 2 / 3 + 1;
+            loop {
+                let block = self
+                    .consensus_db
+                    .get_ledger_block(&voted_block_id)?
+                    .unwrap();
+                diem_trace!("count vote for block {:?}", block);
+                if block.quorum_cert().ledger_info().signatures().len() == 0 {
+                    // parent is round-0 virtual block and has not voters.
+                    break;
+                }
+                if let Some(author) = block.author() {
+                    let leader_status =
+                        elected.get_mut(&author).expect("in epoch state");
+                    leader_status.leader_count += 1;
+                    leader_status.included_vote_count +=
+                        (block.quorum_cert().ledger_info().signatures().len()
+                            - min_vote) as u32;
+                }
+                for voter in
+                    block.quorum_cert().ledger_info().signatures().keys()
+                {
+                    elected
+                        .get_mut(&voter)
+                        .expect("in epoch state")
+                        .vote_count += 1;
+                }
+                voted_block_id = block.parent_id();
+            }
+
+            // Force retire the nodes that have not voted in this term.
+            for (node, vote_count) in &elected {
+                if vote_count.vote_count == 0 {
+                    pos_state_to_commit.retire_node(&node);
+                }
+            }
+
+            let reward_event = RewardDistributionEvent {
+                candidates: pos_state_to_commit.next_evicted_term(),
+                elected: elected
+                    .into_iter()
+                    .map(|(k, v)| (H256::from_slice(k.as_ref()), v))
+                    .collect(),
+            };
+            self.db_with_cache.db.writer.save_reward_event(
+                ledger_info_with_sigs.ledger_info().epoch(),
+                &reward_event,
+            );
+        }
 
         diem_info!(
             LogSchema::new(LogEntry::BlockExecutor)

@@ -16,6 +16,7 @@ use crate::pos::{
 };
 use cached_diemdb::CachedDiemDB;
 use channel::diem_channel;
+use consensus_types::db::LedgerBlockRW;
 use diem_config::config::NodeConfig;
 use diem_logger::prelude::*;
 use diem_types::{
@@ -61,8 +62,11 @@ pub fn start_consensus(
         node_config.consensus.mempool_executed_txn_timeout_ms,
     ));
     let pow_handler = Arc::new(PowHandler::new(runtime.handle().clone()));
-    let executor =
-        Box::new(Executor::<FakeVM>::new(db_with_cache, pow_handler.clone()));
+    let executor = Box::new(Executor::<FakeVM>::new(
+        db_with_cache,
+        pow_handler.clone(),
+        consensus_db.clone() as Arc<dyn LedgerBlockRW>,
+    ));
     let state_computer =
         Arc::new(ExecutionProxy::new(executor, state_sync_client));
     let time_service =

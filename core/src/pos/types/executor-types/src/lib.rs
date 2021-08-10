@@ -13,6 +13,7 @@ use diem_crypto::{
     HashValue,
 };
 use diem_types::{
+    account_address::AccountAddress,
     account_state_blob::AccountStateBlob,
     block_info::PivotBlockDecision,
     contract_event::ContractEvent,
@@ -28,6 +29,7 @@ use diem_types::{
 };
 pub use error::Error;
 use scratchpad::ProofRead;
+use std::collections::BTreeMap;
 use storage_interface::TreeState;
 
 mod error;
@@ -58,10 +60,6 @@ pub trait ChunkExecutor: Send {
 pub trait BlockExecutor: Send {
     /// Get the latest committed block id
     fn committed_block_id(&self) -> Result<HashValue, Error>;
-
-    /// Reset the internal state including cache with newly fetched latest
-    /// committed block from storage.
-    fn reset(&self) -> Result<(), Error>;
 
     /// Executes a block.
     fn execute_block(

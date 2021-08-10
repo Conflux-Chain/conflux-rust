@@ -21,6 +21,7 @@ pub(crate) mod ledger_counters;
 pub(crate) mod ledger_info;
 pub(crate) mod ledger_info_by_block;
 pub(crate) mod pos_state;
+pub(crate) mod reward_event;
 pub(crate) mod stale_node_index;
 pub(crate) mod transaction;
 pub(crate) mod transaction_accumulator;
@@ -45,6 +46,7 @@ pub const TRANSACTION_INFO_CF_NAME: ColumnFamilyName = "transaction_info";
 pub const LEDGER_INFO_BY_BLOCK_CF_NAME: ColumnFamilyName =
     "ledger_info_by_block";
 pub const POS_STATE_CF_NAME: ColumnFamilyName = "pos_state";
+pub const REWARD_EVENT_CF_NAME: ColumnFamilyName = "reward_event";
 
 fn ensure_slice_len_eq(data: &[u8], len: usize) -> Result<()> {
     ensure!(
