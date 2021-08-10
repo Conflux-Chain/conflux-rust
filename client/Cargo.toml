@@ -74,6 +74,7 @@ cfx-parameters = { path = "../core/parameters" }
 strum = "0.20"
 strum_macros = "0.20"
 crash-handler = { path = "../core/src/pos/common/crash-handler" }
+cached-diemdb = { path = "../core/src/pos/storage/cached-diemdb" }
 diemdb = { path = "../core/src/pos/storage/diemdb" }
 diem-config = { path = "../core/src/pos/config" }
 diem-crypto = { path = "../core/src/pos/crypto/crypto" }

@@ -16,6 +16,7 @@ use crate::pos::{
     protocol::network_sender::NetworkSender,
 };
 use anyhow::Result;
+use cached_diemdb::CachedDiemDB;
 use channel::diem_channel;
 use diem_config::config::NodeConfig;
 use diem_infallible::{Mutex, RwLock};
@@ -48,7 +49,7 @@ pub(crate) fn start_shared_mempool(
     consensus_requests: mpsc::Receiver<ConsensusRequest>,
     state_sync_requests: mpsc::Receiver<CommitNotification>,
     mempool_reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
-    db: Arc<dyn DbReader>, validator: Arc<RwLock<TransactionValidator>>,
+    db_with_cache: Arc<CachedDiemDB>, validator: Arc<RwLock<TransactionValidator>>,
     subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
 )
 {
@@ -59,7 +60,7 @@ pub(crate) fn start_shared_mempool(
         mempool: mempool.clone(),
         config: config.mempool.clone(),
         network_sender,
-        db,
+        db_with_cache,
         validator,
         peer_manager,
         subscribers,
@@ -82,7 +83,7 @@ pub(crate) fn start_shared_mempool(
 }
 
 pub fn bootstrap(
-    config: &NodeConfig, db: Arc<dyn DbReader>, network_sender: NetworkSender,
+    config: &NodeConfig, db_with_cache: Arc<CachedDiemDB>, network_sender: NetworkSender,
     network_receivers: NetworkReceivers,
     client_events: Receiver<(
         SignedTransaction,
@@ -110,7 +111,7 @@ pub fn bootstrap(
         consensus_requests,
         state_sync_requests,
         mempool_reconfig_events,
-        db,
+        db_with_cache,
         validator,
         vec![],
     );

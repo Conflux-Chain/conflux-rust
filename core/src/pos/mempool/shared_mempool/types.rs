@@ -14,6 +14,7 @@ use crate::pos::{
     protocol::network_sender::NetworkSender,
 };
 use anyhow::Result;
+use cached_diemdb::CachedDiemDB;
 use channel::diem_channel::Receiver;
 use diem_config::config::MempoolConfig;
 use diem_crypto::HashValue;
@@ -38,7 +39,6 @@ use futures::{
 };
 use network::node_table::NodeId;
 use std::{fmt, pin::Pin, sync::Arc, task::Waker, time::Instant};
-use storage_interface::DbReader;
 use subscription_service::ReconfigSubscription;
 use tokio::runtime::Handle;
 
@@ -48,7 +48,7 @@ pub(crate) struct SharedMempool {
     pub mempool: Arc<Mutex<CoreMempool>>,
     pub config: MempoolConfig,
     pub network_sender: NetworkSender,
-    pub db: Arc<dyn DbReader>,
+    pub db_with_cache: Arc<CachedDiemDB>,
     pub validator: Arc<RwLock<TransactionValidator>>,
     pub peer_manager: Arc<PeerManager>,
     pub subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,

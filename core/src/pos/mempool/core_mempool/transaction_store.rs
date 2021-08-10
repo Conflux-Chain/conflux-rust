@@ -121,8 +121,12 @@ impl TransactionStore {
             self.transactions.insert(hash, txn, false);
         }
         self.track_indices();
-        diem_debug!(LogSchema::new(LogEntry::AddTxn)
-            .txns(TxnsLog::new_txn(address, hash)), hash=hash, has_tx = has_tx);
+        diem_debug!(
+            LogSchema::new(LogEntry::AddTxn)
+                .txns(TxnsLog::new_txn(address, hash)),
+            hash = hash,
+            has_tx = has_tx
+        );
 
         MempoolStatus::new(MempoolStatusCode::Accepted)
     }
@@ -162,10 +166,7 @@ impl TransactionStore {
                 {
                     for (_, hash) in indices {
                         if let Some(txn) = self.transactions.remove(&hash) {
-                            txns_log.add(
-                                txn.get_sender(),
-                                txn.get_hash(),
-                            );
+                            txns_log.add(txn.get_sender(), txn.get_hash());
                             self.index_remove(&txn);
                         }
                     }

@@ -112,6 +112,7 @@ executor = {path = "./src/pos/consensus/executor"}
 consensus-types = { path = "./src/pos/consensus/consensus-types" }
 safety-rules = { path = "./src/pos/consensus/safety-rules" }
 diemdb = { path = "./src/pos/storage/diemdb" }
+cached-diemdb = { path = "./src/pos/storage/cached-diemdb" }
 schemadb = { path = "./src/pos/storage/schemadb" }
 storage-interface = { path = "./src/pos/storage/storage-interface" }
 short-hex-str = { path = "./src/pos/common/short-hex-str" }

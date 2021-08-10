@@ -69,7 +69,7 @@ pub(crate) async fn coordinator(
                 handle_client_event(&mut smp, &bounded_executor, msg, callback).await;
             },
             msg = consensus_requests.select_next_some() => {
-                tasks::process_consensus_request(smp.db.clone(), &smp.mempool, msg).await;
+                tasks::process_consensus_request(smp.db_with_cache.db.reader.clone(), &smp.mempool, msg).await;
             }
             msg = state_sync_requests.select_next_some() => {
                 handle_state_sync_request(&mut smp, msg);

@@ -14,6 +14,7 @@ use crate::pos::{
     protocol::network_sender::NetworkSender,
     state_sync::client::StateSyncClient,
 };
+use cached_diemdb::CachedDiemDB;
 use channel::diem_channel;
 use diem_config::config::NodeConfig;
 use diem_logger::prelude::*;
@@ -34,7 +35,7 @@ pub fn start_consensus(
     network_receiver: NetworkReceivers,
     consensus_to_mempool_sender: mpsc::Sender<ConsensusRequest>,
     state_sync_client: StateSyncClient, diem_db: Arc<dyn DbReader>,
-    db_rw: DbReaderWriter,
+    db_with_cache: Arc<CachedDiemDB>,
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
     author: AccountAddress,
     tx_sender: mpsc::Sender<(
@@ -61,7 +62,7 @@ pub fn start_consensus(
     ));
     let pow_handler = Arc::new(PowHandler::new(runtime.handle().clone()));
     let executor =
-        Box::new(Executor::<FakeVM>::new(db_rw, pow_handler.clone()));
+        Box::new(Executor::<FakeVM>::new(db_with_cache, pow_handler.clone()));
     let state_computer =
         Arc::new(ExecutionProxy::new(executor, state_sync_client));
     let time_service =
