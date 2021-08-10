@@ -1225,7 +1225,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     .get_ledger_block(&b.id())
                     .unwrap()
                     .unwrap();
-                self.db.writer.save_committed_block(
+                self.db_with_cache.db.writer.save_committed_block(
                     &b.id(),
                     &CommittedBlock {
                         hash: b.id(),
@@ -1241,7 +1241,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 );
             }
         } else {
-            self.db.writer.save_committed_block(
+            self.db_with_cache.db.writer.save_committed_block(
                 &ledger_info_with_sigs.ledger_info().consensus_block_id(),
                 &CommittedBlock {
                     hash: ledger_info_with_sigs
