@@ -161,11 +161,9 @@ impl ProposalGenerator {
             // it.
             let timestamp = self.time_service.get_current_timestamp();
 
-            let parent_block = if let Some(p) = pending_blocks.last() {
-                p.clone()
-            } else {
-                self.block_store.root()
-            };
+            // TODO(lpl): Check what to do if `parent_block !=
+            // hqc.certified_block()`
+            let parent_block = pending_blocks.first().expect("root pushed");
 
             let mut payload = self
                 .txn_manager
@@ -239,8 +237,8 @@ impl ProposalGenerator {
                         .pow_handler
                         .get_staking_events(parent_decision, block_hash)?;
                     diem_debug!(
-                        "generate_proposal: staking_events={:?}",
-                        staking_events
+                        "generate_proposal: staking_events={:?} parent={:?} me={:?}",
+                        staking_events, parent_block.block_info().pivot_decision(), payload.last()
                     );
                     for event in staking_events {
                         match RawTransaction::from_staking_event(
@@ -249,10 +247,7 @@ impl ProposalGenerator {
                         ) {
                             Ok(raw_tx) => {
                                 let signed_tx = raw_tx
-                                    .sign(
-                                        &self.private_key,
-                                        self.public_key.clone(),
-                                    )?
+                                    .sign(&self.private_key)?
                                     .into_inner();
                                 payload.push(signed_tx);
                             }

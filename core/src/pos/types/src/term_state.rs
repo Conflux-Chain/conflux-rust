@@ -223,7 +223,10 @@ impl TermList {
             target_term_offset as usize - (TERM_LIST_LEN - 1);
         // The checking of `target_view` ensures that this is in range of
         // `term_list`.
-        for i in start_term_offset..=target_term_offset {
+        // For any valid `target_term_offset`, always checks to the end of
+        // `term_list` because it's within the service time of
+        // `target_term`.
+        for i in start_term_offset..=(TERM_LIST_LEN + 1) {
             let term = &self.term_list[i as usize];
             for (_, addr) in term.node_list.iter().take(TERM_ELECTED_SIZE) {
                 if addr.node_id.addr == *author {
@@ -374,8 +377,13 @@ impl PosState {
     pub fn target_term_seed(&self, target_term: u64) -> &Vec<u8> {
         if target_term < (TERM_LIST_LEN as u64) {
             &self.term_list.term_list[target_term as usize].seed
+        } else if target_term >= self.term_list.current_term {
+            let target_term_offset = (target_term - self.term_list.current_term)
+                as usize
+                + (TERM_LIST_LEN - 1);
+            &self.term_list.term_list[target_term_offset].seed
         } else {
-            &self.term_list.term_list[TERM_LIST_LEN - 1].seed
+            unreachable!("target_term_seed is only called for future terms.")
         }
     }
 
@@ -462,23 +470,21 @@ impl PosState {
             bail!("Invalid node status for retiring");
         }
 
-        // FIXME(lpl): Nodes in the current active term are not covered by this.
-        for term in &self.term_list.term_list {
-            for (_, addr) in term.node_list.iter().take(TERM_ELECTED_SIZE) {
-                if addr.node_id == node_id {
-                    bail!("Node in active term service cannot retire");
-                }
-            }
-        }
         Ok(())
     }
 
     /// Return `(validator_set, term_seed)`.
     pub fn get_new_committee(&self) -> Result<(ValidatorVerifier, Vec<u8>)> {
         let mut voting_power_map = BTreeMap::new();
+        let term_size_limit =
+            if self.term_list.current_term < TERM_LIST_LEN as u64 {
+                usize::MAX
+            } else {
+                TERM_ELECTED_SIZE
+            };
         for i in 0..TERM_LIST_LEN {
             let term = &self.term_list.term_list[i];
-            for (_, node_id) in term.node_list.iter().take(TERM_ELECTED_SIZE) {
+            for (_, node_id) in term.node_list.iter().take(term_size_limit) {
                 let voting_power = voting_power_map
                     .entry(node_id.node_id.addr.clone())
                     .or_insert(0 as u64);
@@ -488,14 +494,18 @@ impl PosState {
         let mut address_to_validator_info = BTreeMap::new();
         for (addr, voting_power) in voting_power_map {
             let node_data = self.node_map.get(&addr).expect("node in node_map");
-            address_to_validator_info.insert(
-                addr,
-                ValidatorConsensusInfo::new(
-                    node_data.public_key.clone(),
-                    node_data.vrf_public_key.clone(),
-                    voting_power,
-                ),
-            );
+            // Retired nodes are not removed from term_list,
+            // but we do not include them in the new committee.
+            if matches!(node_data.status, NodeStatus::Accepted) {
+                address_to_validator_info.insert(
+                    addr,
+                    ValidatorConsensusInfo::new(
+                        node_data.public_key.clone(),
+                        node_data.vrf_public_key.clone(),
+                        voting_power,
+                    ),
+                );
+            }
         }
 
         Ok((
@@ -554,7 +564,7 @@ impl PosState {
             assert_eq!(node.status, NodeStatus::Retired);
             if node.status_start_view + UNLOCK_WAIT_VIEW <= self.current_view {
                 let unlock_event = ContractEvent::new(
-                    ElectionEvent::event_key(),
+                    UnlockEvent::event_key(),
                     0, /* sequence_number */
                     TypeTag::Vector(Box::new(TypeTag::U8)), /* TypeTag::ByteArray */
                     bcs::to_bytes(&UnlockEvent {
@@ -654,6 +664,7 @@ impl PosState {
             let node = self.node_map.get_mut(&retired_node).expect("exists");
             assert_eq!(node.status, NodeStatus::Retired);
             if node.status_start_view + UNLOCK_WAIT_VIEW <= self.current_view {
+                diem_debug!("pos_state unlock {:?}", retired_node);
                 node.status = NodeStatus::Unlocked;
                 node.status_start_view = self.current_view;
             } else {
@@ -666,28 +677,28 @@ impl PosState {
         // Increase view after updating node status above to get a correct
         // `status_start_view`.
         self.current_view += 1;
-        let epoch_state = if self.current_view % ROUND_PER_TERM == 0 {
-            // generate new epoch for new term.
-            let new_term = self.current_view / ROUND_PER_TERM;
-            self.term_list.new_term(
-                new_term,
-                self.pivot_decision.block_hash.as_bytes().to_vec(),
-            );
-            let (verifier, term_seed) = self.get_new_committee()?;
-            Some(EpochState {
-                // TODO(lpl): If we allow epoch changes within a term, this
-                // should be updated.
-                epoch: new_term + 1,
-                verifier,
-                vrf_seed: term_seed.clone(),
-            })
-        } else if self.current_view == 1 {
+        let epoch_state = if self.current_view == 1 {
             let (verifier, term_seed) = self.get_new_committee()?;
             // genesis
             Some(EpochState {
                 // TODO(lpl): If we allow epoch changes within a term, this
                 // should be updated.
                 epoch: 1,
+                verifier,
+                vrf_seed: term_seed.clone(),
+            })
+        } else if self.current_view % ROUND_PER_TERM == 0 {
+            let new_term = self.current_view / ROUND_PER_TERM;
+            let (verifier, term_seed) = self.get_new_committee()?;
+            // generate new epoch for new term.
+            self.term_list.new_term(
+                new_term,
+                self.pivot_decision.block_hash.as_bytes().to_vec(),
+            );
+            Some(EpochState {
+                // TODO(lpl): If we allow epoch changes within a term, this
+                // should be updated.
+                epoch: new_term + 1,
                 verifier,
                 vrf_seed: term_seed.clone(),
             })
@@ -919,7 +930,7 @@ pub struct UnlockEvent {
 }
 
 impl UnlockEvent {
-    pub fn unlock_event_key() -> EventKey {
+    pub fn event_key() -> EventKey {
         EventKey::new_from_address(&account_config::unlock_address(), 5)
     }
 

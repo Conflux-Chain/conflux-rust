@@ -39,14 +39,17 @@ impl Handleable for StatusV2 {
             );
             bail!(ErrorKind::InvalidStatus("chain_id mismatches".into()));
         }
-
         let genesis_hash = ctx.manager.graph.data_man.true_genesis.hash();
-        if genesis_hash != self.genesis_hash {
-            debug!(
+        if ctx.manager.protocol_config.check_status_genesis {
+            if genesis_hash != self.genesis_hash {
+                debug!(
                 "Peer {:?} genesis hash mismatches (ours: {:?}, theirs: {:?})",
                 ctx.node_id, genesis_hash, self.genesis_hash
             );
-            bail!(ErrorKind::InvalidStatus("genesis hash mismatches".into()));
+                bail!(ErrorKind::InvalidStatus(
+                    "genesis hash mismatches".into()
+                ));
+            }
         }
 
         let latest: HashSet<H256> =
@@ -149,12 +152,16 @@ impl Handleable for StatusV3 {
         drop(chain_id);
 
         let genesis_hash = ctx.manager.graph.data_man.true_genesis.hash();
-        if genesis_hash != self.genesis_hash {
-            debug!(
+        if ctx.manager.protocol_config.check_status_genesis {
+            if genesis_hash != self.genesis_hash {
+                debug!(
                 "Peer {:?} genesis hash mismatches (ours: {:?}, theirs: {:?})",
                 ctx.node_id, genesis_hash, self.genesis_hash
             );
-            bail!(ErrorKind::InvalidStatus("genesis hash mismatches".into()));
+                bail!(ErrorKind::InvalidStatus(
+                    "genesis hash mismatches".into()
+                ));
+            }
         }
 
         let latest: HashSet<H256> =

@@ -2,6 +2,53 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use std::{
+    collections::{BTreeMap, HashSet},
+    net::SocketAddr,
+    sync::Arc,
+    time::Duration,
+};
+
+use bigdecimal::BigDecimal;
+use clap::crate_version;
+use futures::{
+    channel::{mpsc, oneshot},
+    SinkExt,
+};
+use jsonrpc_core::{
+    Error as RpcError, Result as JsonRpcResult, Value as RpcValue,
+};
+use keccak_hash::keccak;
+use num_bigint::{BigInt, ToBigInt};
+use parking_lot::{Condvar, Mutex};
+
+use cfx_addr::Network;
+use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+use cfx_types::{Address, H160, H256, H520, U128, U256, U512, U64};
+use cfxcore::{
+    consensus::pos_handler::PosVerifier, pos::mempool::SubmissionStatus,
+    rpc_errors::invalid_params_check, spec::genesis::register_transaction,
+    BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
+    SharedConsensusGraph, SharedTransactionPool,
+};
+use cfxcore_accounts::AccountProvider;
+use cfxkey::Password;
+use diem_types::{
+    account_address::{from_consensus_public_key, AccountAddress},
+    transaction::{
+        RawTransaction as DiemRawTransaction, RetirePayload,
+        SignedTransaction as DiemSignedTransaction,
+    },
+};
+use network::{
+    node_table::{Node, NodeEndpoint, NodeEntry, NodeId},
+    throttling::{self, THROTTLING_SERVICE},
+    NetworkService, SessionDetails, UpdateNodeOperation,
+};
+use primitives::{
+    transaction::TransactionType, Account, Action, SignedTransaction,
+};
+
 use crate::rpc::{
     types::{
         errors::check_rpc_address_network, Block as RpcBlock,
@@ -10,41 +57,6 @@ use crate::rpc::{
         Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
     },
     RpcResult,
-};
-use bigdecimal::BigDecimal;
-use cfx_addr::Network;
-use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-use cfx_types::{Address, H160, H256, H520, U128, U256, U512, U64};
-use cfxcore::{
-    consensus::pos_handler::{PosHandler, PosVerifier},
-    rpc_errors::invalid_params_check,
-    spec::genesis::register_transaction,
-    BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
-    SharedConsensusGraph, SharedTransactionPool,
-};
-use cfxcore_accounts::AccountProvider;
-use cfxkey::Password;
-use clap::crate_version;
-use diem_types::account_address::{from_consensus_public_key, AccountAddress};
-use jsonrpc_core::{
-    Error as RpcError, Result as JsonRpcResult, Value as RpcValue,
-};
-use keccak_hash::keccak;
-use network::{
-    node_table::{Node, NodeEndpoint, NodeEntry, NodeId},
-    throttling::{self, THROTTLING_SERVICE},
-    NetworkService, SessionDetails, UpdateNodeOperation,
-};
-use num_bigint::{BigInt, ToBigInt};
-use parking_lot::{Condvar, Mutex};
-use primitives::{
-    transaction::TransactionType, Account, Action, SignedTransaction,
-};
-use std::{
-    collections::{BTreeMap, HashSet},
-    net::SocketAddr,
-    sync::Arc,
-    time::Duration,
 };
 
 fn grouped_txs<T, F>(
@@ -143,6 +155,12 @@ pub struct RpcImpl {
     tx_pool: SharedTransactionPool,
     accounts: Arc<AccountProvider>,
     pos_handler: Arc<PosVerifier>,
+    pos_tx_sender: Mutex<
+        mpsc::Sender<(
+            DiemSignedTransaction,
+            oneshot::Sender<anyhow::Result<SubmissionStatus>>,
+        )>,
+    >,
 }
 
 impl RpcImpl {
@@ -150,6 +168,10 @@ impl RpcImpl {
         exit: Arc<(Mutex<bool>, Condvar)>, consensus: SharedConsensusGraph,
         network: Arc<NetworkService>, tx_pool: SharedTransactionPool,
         accounts: Arc<AccountProvider>, pos_verifier: Arc<PosVerifier>,
+        pos_tx_sender: mpsc::Sender<(
+            DiemSignedTransaction,
+            oneshot::Sender<anyhow::Result<SubmissionStatus>>,
+        )>,
     ) -> Self
     {
         let data_man = consensus.get_data_manager().clone();
@@ -162,6 +184,7 @@ impl RpcImpl {
             tx_pool,
             accounts,
             pos_handler: pos_verifier,
+            pos_tx_sender: Mutex::new(pos_tx_sender),
         }
     }
 
@@ -674,8 +697,31 @@ impl RpcImpl {
         unimplemented!()
     }
 
-    pub fn pos_retire(&self, pos_account: AccountAddress) -> JsonRpcResult<()> {
-        unimplemented!()
+    pub fn pos_retire_self(&self) -> JsonRpcResult<()> {
+        let sender = from_consensus_public_key(
+            &self.pos_handler.config().bls_key.public_key(),
+            &self.pos_handler.config().vrf_key.public_key(),
+        );
+        let retire_tx = DiemRawTransaction::new_retire(
+            sender,
+            0,
+            RetirePayload {
+                public_key: self.pos_handler.config().bls_key.public_key(),
+                vrf_public_key: self.pos_handler.config().vrf_key.public_key(),
+            },
+        );
+        let signed_tx = retire_tx
+            .sign(&self.pos_handler.config().bls_key.private_key())
+            .map_err(|e| {
+                warn!("sign diem tx err={:?}", e);
+                RpcError::internal_error()
+            })?
+            .into_inner();
+        let (tx, _rx) = oneshot::channel();
+        futures::executor::block_on(
+            self.pos_tx_sender.lock().send((signed_tx, tx)),
+        );
+        Ok(())
     }
 }
 

@@ -8,6 +8,7 @@ use crate::{
     change_set::ChangeSet,
     errors::DiemDbError,
     schema::{
+        committed_block::CommittedBlockSchema,
         epoch_by_version::EpochByVersionSchema, ledger_info::LedgerInfoSchema,
         ledger_info_by_block::LedgerInfoByBlockSchema,
         pos_state::PosStateSchema, reward_event::RewardEventSchema,
@@ -25,6 +26,7 @@ use diem_crypto::{
 };
 use diem_logger::prelude::*;
 use diem_types::{
+    committed_block::CommittedBlock,
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
     proof::{
@@ -493,6 +495,28 @@ impl LedgerStore {
             DiemDbError::NotFound(format!("RewardEvent of epoch {}", epoch))
                 .into()
         })
+    }
+
+    pub fn put_committed_block(
+        &self, block_hash: &HashValue, block: &CommittedBlock,
+    ) -> Result<()> {
+        let mut cs = ChangeSet::new();
+        cs.batch.put::<CommittedBlockSchema>(block_hash, block)?;
+        self.db.write_schemas(cs.batch)
+    }
+
+    pub fn get_committed_block(
+        &self, block_hash: &HashValue,
+    ) -> Result<CommittedBlock> {
+        self.db
+            .get::<CommittedBlockSchema>(&block_hash)?
+            .ok_or_else(|| {
+                DiemDbError::NotFound(format!(
+                    "committed block of id {}",
+                    block_hash
+                ))
+                .into()
+            })
     }
 }
 

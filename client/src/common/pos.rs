@@ -11,7 +11,7 @@ use cfxcore::{
         },
         mempool::{
             self as diem_mempool, gen_mempool_reconfig_subscription,
-            network::NetworkTask as MempoolNetworkTask,
+            network::NetworkTask as MempoolNetworkTask, SubmissionStatus,
         },
         pow_handler::PowHandler,
         protocol::{
@@ -29,13 +29,20 @@ use diem_types::{
     account_address::{from_consensus_public_key, AccountAddress},
     block_info::PivotBlockDecision,
     term_state::NodeID,
+    transaction::SignedTransaction,
     validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
     PeerId,
 };
 use diemdb::DiemDB;
 use executor::{db_bootstrapper::maybe_bootstrap, vm::FakeVM, Executor};
 use executor_types::ChunkExecutor;
-use futures::{channel::mpsc::channel, executor::block_on};
+use futures::{
+    channel::{
+        mpsc::{self, channel},
+        oneshot,
+    },
+    executor::block_on,
+};
 use network::NetworkService;
 use pow_types::FakePowHandler;
 use std::{
@@ -57,6 +64,10 @@ pub struct DiemHandle {
     pub pow_handler: Arc<PowHandler>,
     pub diem_db: Arc<DiemDB>,
     pub consensus_db: Arc<ConsensusDB>,
+    pub tx_sender: mpsc::Sender<(
+        SignedTransaction,
+        oneshot::Sender<anyhow::Result<SubmissionStatus>>,
+    )>,
     pub stopped: Arc<AtomicBool>,
     _mempool: Runtime,
     _state_sync_bootstrapper: StateSyncBootstrapper,
@@ -297,7 +308,7 @@ pub fn setup_pos_environment(
                     from_consensus_public_key(&public_key.0, &public_key.1)
                 },
             ),
-            mp_client_sender,
+            mp_client_sender.clone(),
         );
     debug!("Consensus started in {} ms", instant.elapsed().as_millis());
 
@@ -309,6 +320,7 @@ pub fn setup_pos_environment(
         _mempool: mempool,
         diem_db,
         consensus_db,
+        tx_sender: mp_client_sender,
     }
 }
 

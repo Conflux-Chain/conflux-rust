@@ -113,29 +113,40 @@ impl BlockStore {
 
         if !pending.is_empty() {
             // Execute the blocks in catch_up mode.
-            let mut dup_pending = pending.clone();
-            while let Some(block) = dup_pending.pop() {
+            while let Some(block) = pending.pop() {
                 let block_qc = block.quorum_cert().clone();
                 self.insert_single_quorum_cert(block_qc.clone())?;
                 self.execute_and_insert_block(
                     block, true, /* catch_up_mode */
                     true, /* force_recompute */
                 )?;
-                match self.commit(block_qc.ledger_info().clone()).await {
-                    Ok(()) => {}
-                    Err(e) => {
-                        // TODO(lpl): Blocks not committed before crash should
-                        // be committed here? Make sure
-                        // they are recovered to
-                        // BlockStore during start.
-                        diem_warn!("fetch_quorum_cert: commit error={:?}", e);
+                if block_qc.commit_info().round() > self.root().round() {
+                    match self.commit(block_qc.ledger_info().clone()).await {
+                        Ok(()) => {}
+                        Err(e) => {
+                            // TODO(lpl): Blocks not committed before crash
+                            // should be committed
+                            // here? Make sure
+                            // they are recovered to
+                            // BlockStore during start.
+                            diem_warn!(
+                                "fetch_quorum_cert: commit error={:?}",
+                                e
+                            );
+                        }
                     }
+                } else {
+                    diem_debug!(
+                        "skip commit, qc_round={} root_root={}",
+                        block_qc.commit_info().round(),
+                        self.root().round()
+                    );
                 }
             }
 
             // Wait for PoW to enter NormalPhase
             self.pow_handler.wait_for_initialization(
-                self.get_block(pending.last().unwrap().id())
+                self.get_block(qc.certified_block().id())
                     .unwrap()
                     .compute_result()
                     .pivot_decision()
@@ -143,29 +154,7 @@ impl BlockStore {
                     .unwrap()
                     .block_hash,
             );
-
-            // Execute the blocks in normal mode.
-            while let Some(block) = pending.pop() {
-                let block_qc = block.quorum_cert().clone();
-                self.insert_single_quorum_cert(block_qc.clone())?;
-                self.execute_and_insert_block(
-                    block, false, /* catch_up_mode */
-                    true,  /* force_recompute */
-                )?;
-                match self.commit(block_qc.ledger_info().clone()).await {
-                    Ok(()) => {}
-                    Err(e) => {
-                        // TODO(lpl): Blocks not committed before crash should
-                        // be committed here? Make sure
-                        // they are recovered to
-                        // BlockStore during start.
-                        diem_warn!("fetch_quorum_cert: commit error={:?}", e);
-                    }
-                }
-            }
         }
-
-        // Re-execute pos_state after finishing PoW catching-up.
 
         self.insert_single_quorum_cert(qc)
     }

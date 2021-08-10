@@ -415,6 +415,7 @@ pub struct ProtocolConfiguration {
     pub max_chunk_number_in_manifest: usize,
     pub allow_phase_change_without_peer: bool,
     pub pos_genesis_pivot_decision: H256,
+    pub check_status_genesis: bool,
 }
 
 impl SynchronizationProtocolHandler {
@@ -1873,8 +1874,9 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             CHECK_FUTURE_BLOCK_TIMER => {
                 self.check_future_blocks(io);
-                self.graph
-                    .check_not_ready_frontier(false /* is_light_node */);
+                self.graph.check_not_ready_frontier(
+                    self.insert_header_to_consensus(),
+                );
             }
             CHECK_REQUEST_TIMER => {
                 self.remove_expired_flying_request(io);

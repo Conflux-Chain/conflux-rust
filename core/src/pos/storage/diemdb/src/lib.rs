@@ -66,6 +66,7 @@ use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress,
     account_state_blob::{AccountStateBlob, AccountStateWithProof},
+    committed_block::CommittedBlock,
     contract_event::{ContractEvent, EventWithProof},
     epoch_change::EpochChangeProof,
     event::EventKey,
@@ -246,6 +247,7 @@ impl DiemDB {
             LEDGER_INFO_BY_BLOCK_CF_NAME,
             POS_STATE_CF_NAME,
             REWARD_EVENT_CF_NAME,
+            COMMITTED_BLOCK_CF_NAME,
         ]
     }
 
@@ -627,52 +629,6 @@ impl DbReader for DiemDB {
         })
     }
 
-    fn get_latest_account_state(
-        &self, address: AccountAddress,
-    ) -> Result<Option<AccountStateBlob>> {
-        gauged_api("get_latest_account_state", || {
-            let ledger_info_with_sigs =
-                self.ledger_store.get_latest_ledger_info()?;
-            let version = ledger_info_with_sigs.ledger_info().version();
-            let (blob, _proof) = self
-                .state_store
-                .get_account_state_with_proof_by_version(address, version)?;
-            Ok(blob)
-        })
-    }
-
-    fn get_latest_ledger_info(&self) -> Result<LedgerInfoWithSignatures> {
-        gauged_api("get_latest_ledger_info", || {
-            self.ledger_store.get_latest_ledger_info()
-        })
-    }
-
-    /// Returns a transaction that is the `seq_num`-th one associated with the
-    /// given account. If the transaction with given `seq_num` doesn't
-    /// exist, returns `None`.
-    fn get_txn_by_account(
-        &self, address: AccountAddress, seq_num: u64, ledger_version: Version,
-        fetch_events: bool,
-    ) -> Result<Option<TransactionWithProof>>
-    {
-        gauged_api("get_txn_by_account", || {
-            self.transaction_store
-                .lookup_transaction_by_account(
-                    address,
-                    seq_num,
-                    ledger_version,
-                )?
-                .map(|version| {
-                    self.get_transaction_with_proof(
-                        version,
-                        ledger_version,
-                        fetch_events,
-                    )
-                })
-                .transpose()
-        })
-    }
-
     // ======================= State Synchronizer Internal APIs
     // ===================================
     /// Gets a batch of transactions for the purpose of synchronizing state to
@@ -766,12 +722,73 @@ impl DbReader for DiemDB {
         })
     }
 
-    /// Gets ledger info at specified version and ensures it's an epoch ending.
-    fn get_epoch_ending_ledger_info(
-        &self, version: u64,
-    ) -> Result<LedgerInfoWithSignatures> {
-        gauged_api("get_epoch_ending_ledger_info", || {
-            self.ledger_store.get_epoch_ending_ledger_info(version)
+    fn get_block_timestamp(&self, version: u64) -> Result<u64> {
+        gauged_api("get_block_timestamp", || {
+            let ts = match self.transaction_store.get_block_metadata(version)? {
+                Some((_v, block_meta)) => block_meta.into_inner().1,
+                // genesis timestamp is 0
+                None => 0,
+            };
+            Ok(ts)
+        })
+    }
+
+    fn get_last_version_before_timestamp(
+        &self, timestamp: u64, ledger_version: Version,
+    ) -> Result<Version> {
+        gauged_api("get_last_version_before_timestamp", || {
+            self.event_store
+                .get_last_version_before_timestamp(timestamp, ledger_version)
+        })
+    }
+
+    fn get_latest_account_state(
+        &self, address: AccountAddress,
+    ) -> Result<Option<AccountStateBlob>> {
+        gauged_api("get_latest_account_state", || {
+            let ledger_info_with_sigs =
+                self.ledger_store.get_latest_ledger_info()?;
+            let version = ledger_info_with_sigs.ledger_info().version();
+            let (blob, _proof) = self
+                .state_store
+                .get_account_state_with_proof_by_version(address, version)?;
+            Ok(blob)
+        })
+    }
+
+    fn get_latest_ledger_info(&self) -> Result<LedgerInfoWithSignatures> {
+        gauged_api("get_latest_ledger_info", || {
+            self.ledger_store.get_latest_ledger_info()
+        })
+    }
+
+    fn get_startup_info(&self) -> Result<Option<StartupInfo>> {
+        gauged_api("get_startup_info", || self.ledger_store.get_startup_info())
+    }
+
+    /// Returns a transaction that is the `seq_num`-th one associated with the
+    /// given account. If the transaction with given `seq_num` doesn't
+    /// exist, returns `None`.
+    fn get_txn_by_account(
+        &self, address: AccountAddress, seq_num: u64, ledger_version: Version,
+        fetch_events: bool,
+    ) -> Result<Option<TransactionWithProof>>
+    {
+        gauged_api("get_txn_by_account", || {
+            self.transaction_store
+                .lookup_transaction_by_account(
+                    address,
+                    seq_num,
+                    ledger_version,
+                )?
+                .map(|version| {
+                    self.get_transaction_with_proof(
+                        version,
+                        ledger_version,
+                        fetch_events,
+                    )
+                })
+                .transpose()
         })
     }
 
@@ -870,10 +887,6 @@ impl DbReader for DiemDB {
         })
     }
 
-    fn get_startup_info(&self) -> Result<Option<StartupInfo>> {
-        gauged_api("get_startup_info", || self.ledger_store.get_startup_info())
-    }
-
     fn get_account_state_with_proof_by_version(
         &self, address: AccountAddress, version: Version,
     ) -> Result<(
@@ -921,23 +934,12 @@ impl DbReader for DiemDB {
         })
     }
 
-    fn get_block_timestamp(&self, version: u64) -> Result<u64> {
-        gauged_api("get_block_timestamp", || {
-            let ts = match self.transaction_store.get_block_metadata(version)? {
-                Some((_v, block_meta)) => block_meta.into_inner().1,
-                // genesis timestamp is 0
-                None => 0,
-            };
-            Ok(ts)
-        })
-    }
-
-    fn get_last_version_before_timestamp(
-        &self, timestamp: u64, ledger_version: Version,
-    ) -> Result<Version> {
-        gauged_api("get_last_version_before_timestamp", || {
-            self.event_store
-                .get_last_version_before_timestamp(timestamp, ledger_version)
+    /// Gets ledger info at specified version and ensures it's an epoch ending.
+    fn get_epoch_ending_ledger_info(
+        &self, version: u64,
+    ) -> Result<LedgerInfoWithSignatures> {
+        gauged_api("get_epoch_ending_ledger_info", || {
+            self.ledger_store.get_epoch_ending_ledger_info(version)
         })
     }
 
@@ -1074,6 +1076,12 @@ impl DbWriter for DiemDB {
     ) -> Result<()> {
         self.ledger_store.put_reward_event(epoch, event)
     }
+
+    fn save_committed_block(
+        &self, block_hash: &HashValue, block: &CommittedBlock,
+    ) -> Result<()> {
+        self.ledger_store.put_committed_block(block_hash, block)
+    }
 }
 
 impl DBReaderForPoW for DiemDB {
@@ -1094,7 +1102,7 @@ impl DBReaderForPoW for DiemDB {
     ) -> Result<Vec<ContractEvent>> {
         let iter = self.event_store.get_events_by_version_iter(
             start_version,
-            (end_version - start_version + 1) as usize,
+            (end_version - start_version) as usize,
         )?;
         let events_vec = iter.collect::<Result<Vec<Vec<ContractEvent>>>>()?;
         Ok(events_vec.into_iter().flatten().collect())
@@ -1115,6 +1123,12 @@ impl DBReaderForPoW for DiemDB {
 
     fn get_reward_event(&self, epoch: u64) -> Result<RewardDistributionEvent> {
         self.ledger_store.get_reward_event(epoch)
+    }
+
+    fn get_committed_block(
+        &self, block_hash: &HashValue,
+    ) -> Result<CommittedBlock> {
+        self.ledger_store.get_committed_block(block_hash)
     }
 }
 

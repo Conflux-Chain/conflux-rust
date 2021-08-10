@@ -2,10 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::{
-    impls::RpcImplConfiguration, rpc_apis::ApiSet, HttpConfiguration,
-    TcpConfiguration, WsConfiguration,
-};
+use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
+
+use lazy_static::*;
+use parking_lot::RwLock;
+use rand::Rng;
+use toml::Value;
+
 use cfx_addr::{cfx_addr_decode, Network};
 use cfx_internal_common::{ChainIdParams, ChainIdParamsInner};
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
@@ -40,15 +43,15 @@ use cfxcore::{
 };
 use diem_crypto::ValidCryptoMaterialStringExt;
 use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
-use lazy_static::*;
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
-use parking_lot::RwLock;
 use primitives::Transaction;
-use rand::Rng;
-use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
-use toml::Value;
 use txgen::TransactionGeneratorConfig;
+
+use crate::rpc::{
+    impls::RpcImplConfiguration, rpc_apis::ApiSet, HttpConfiguration,
+    TcpConfiguration, WsConfiguration,
+};
 
 lazy_static! {
     pub static ref CHAIN_ID: RwLock<Option<ChainIdParams>> = Default::default();
@@ -288,6 +291,7 @@ build_config! {
         (print_memory_usage_period_s, (Option<u64>), None)
         (target_block_gas_limit, (u64), DEFAULT_TARGET_BLOCK_GAS_LIMIT)
         (executive_trace, (bool), false)
+        (check_status_genesis, (bool), true)
 
         // TreeGraph Section.
         (is_consortium, (bool), false)
@@ -779,6 +783,7 @@ impl Configuration {
                 .raw_conf
                 .pos_genesis_pivot_decision
                 .expect("set to genesis if none"),
+            check_status_genesis: self.raw_conf.check_status_genesis,
         }
     }
 
@@ -1261,8 +1266,9 @@ pub fn read_initial_nodes_from_file(
 
 #[cfg(test)]
 mod tests {
-    use crate::configuration::parse_config_address_string;
     use cfx_addr::Network;
+
+    use crate::configuration::parse_config_address_string;
 
     #[test]
     fn test_config_address_string() {
