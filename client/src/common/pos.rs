@@ -1,6 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use cached_diemdb::CachedDiemDB;
 use cfx_types::H256;
 use cfxcore::{
     pos::{
@@ -141,7 +142,7 @@ fn setup_metrics(peer_id: PeerId, config: &NodeConfig) {
 
 fn setup_chunk_executor(db: DbReaderWriter) -> Box<dyn ChunkExecutor> {
     Box::new(Executor::<FakeVM>::new(
-        db,
+        Arc::new(CachedDiemDB::new(db)),
         Arc::new(FakePowHandler {}),
         Arc::new(FakeLedgerBlockDB {}),
     ))
@@ -262,6 +263,8 @@ pub fn setup_pos_environment(
     let (mp_client_sender, mp_client_events) =
         channel(AC_SMP_CHANNEL_BUFFER_SIZE);
 
+    let db_with_cache = Arc::new(CachedDiemDB::new(db_rw));
+
     // TODO (linxi): pos rpc
     //let rpc_runtime = bootstrap_rpc(&node_config, chain_id, diem_db.clone(),
     // mp_client_sender);
@@ -269,7 +272,7 @@ pub fn setup_pos_environment(
     instant = Instant::now();
     let mempool = diem_mempool::bootstrap(
         node_config,
-        Arc::clone(&db_rw.reader),
+        db_with_cache.clone(),
         network_sender.clone(),
         mempool_network_receiver,
         mp_client_events,
@@ -300,7 +303,7 @@ pub fn setup_pos_environment(
             consensus_to_mempool_sender,
             state_sync_client,
             diem_db.clone(),
-            db_rw,
+            db_with_cache,
             consensus_reconfig_events,
             own_pos_public_key.map_or_else(
                 || AccountAddress::random(),

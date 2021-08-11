@@ -583,6 +583,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4964518bd3b4a8190e832886cdc0da9794f12e8e6c1613a9e90ff331c4c8724b"
 
 [[package]]
+name = "cached-diemdb"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "consensus-types",
+ "diem-crypto",
+ "diem-infallible",
+ "diem-logger",
+ "diem-types",
+ "diemdb",
+ "executor-types",
+ "serde",
+ "storage-interface",
+]
+
+[[package]]
 name = "cast"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -780,6 +796,7 @@ dependencies = [
  "bn",
  "bounded-executor",
  "byteorder",
+ "cached-diemdb",
  "cfx-addr",
  "cfx-bytes",
  "cfx-internal-common",
@@ -1026,6 +1043,7 @@ dependencies = [
  "app_dirs",
  "bigdecimal",
  "blockgen",
+ "cached-diemdb",
  "cfx-addr",
  "cfx-bytes",
  "cfx-internal-common",
@@ -2164,6 +2182,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
+ "cached-diemdb",
  "cfx-types",
  "consensus-types",
  "diem-crypto",

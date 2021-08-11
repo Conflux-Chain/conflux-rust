@@ -18,10 +18,7 @@
 #[cfg(test)]
 mod test;
 
-use crate::{
-    logging::{LogEntry, LogSchema},
-    types::ProcessedVMOutput,
-};
+use crate::logging::{LogEntry, LogSchema};
 use anyhow::{format_err, Result};
 use consensus_types::block::Block;
 use diem_crypto::{hash::PRE_GENESIS_BLOCK_ID, HashValue};
@@ -31,7 +28,7 @@ use diem_types::{
     contract_event::ContractEvent, ledger_info::LedgerInfo,
     term_state::PosState, transaction::Transaction,
 };
-use executor_types::{Error, ExecutedTrees};
+use executor_types::{Error, ExecutedTrees, ProcessedVMOutput};
 use std::{
     collections::HashMap,
     sync::{Arc, Weak},
@@ -40,7 +37,7 @@ use storage_interface::{StartupInfo, TreeState};
 
 /// The struct that stores all speculation result of its counterpart in
 /// consensus.
-pub(crate) struct SpeculationBlock {
+pub struct SpeculationBlock {
     // The block id of which the output is computed from.
     id: HashValue,
     // The transactions in the block.
@@ -111,7 +108,7 @@ impl Drop for SpeculationBlock {
 /// owner is their parent block. So when a block is dropped, all its descendants
 /// will be dropped recursively. In the meanwhile, wheir entries in the block
 /// map will be removed by each block's drop().
-pub(crate) struct SpeculationCache {
+pub struct SpeculationCache {
     synced_trees: ExecutedTrees,
     committed_trees: ExecutedTrees,
     committed_txns_and_events: (Vec<Transaction>, Vec<ContractEvent>),

@@ -3,6 +3,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::{ExecutedTrees, StateComputeResult};
 use diem_crypto::{hash::EventAccumulatorHasher, HashValue};
 use diem_types::{
     account_address::AccountAddress,
@@ -13,7 +14,6 @@ use diem_types::{
     proof::accumulator::InMemoryAccumulator,
     transaction::{TransactionStatus, Version},
 };
-use executor_types::{ExecutedTrees, StateComputeResult};
 use std::{collections::HashMap, sync::Arc};
 
 /// The entire set of data associated with a transaction. In addition to the

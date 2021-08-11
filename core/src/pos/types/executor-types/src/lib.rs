@@ -33,6 +33,9 @@ use std::collections::BTreeMap;
 use storage_interface::TreeState;
 
 mod error;
+mod processed_vm_output;
+
+pub use self::processed_vm_output::{ProcessedVMOutput, TransactionData};
 
 type SparseMerkleProof = diem_types::proof::SparseMerkleProof<AccountStateBlob>;
 type SparseMerkleTree = scratchpad::SparseMerkleTree<AccountStateBlob>;
@@ -43,7 +46,7 @@ pub trait ChunkExecutor: Send {
     /// if execution results match the proofs. Returns a vector of
     /// reconfiguration events in the chunk
     fn execute_and_commit_chunk(
-        &mut self,
+        &self,
         txn_list_with_proof: TransactionListWithProof,
         // Target LI that has been verified independently: the proofs are
         // relative to this version.
@@ -56,11 +59,11 @@ pub trait ChunkExecutor: Send {
 
 pub trait BlockExecutor: Send {
     /// Get the latest committed block id
-    fn committed_block_id(&mut self) -> Result<HashValue, Error>;
+    fn committed_block_id(&self) -> Result<HashValue, Error>;
 
     /// Executes a block.
     fn execute_block(
-        &mut self, block: (HashValue, Vec<Transaction>),
+        &self, block: (HashValue, Vec<Transaction>),
         parent_block_id: HashValue, catch_up_mode: bool,
     ) -> Result<StateComputeResult, Error>;
 
@@ -79,14 +82,14 @@ pub trait BlockExecutor: Send {
     /// were kept from the submitted blocks, and Vec<ContractEvents> is a
     /// vector of reconfiguration events in the submitted blocks
     fn commit_blocks(
-        &mut self, block_ids: Vec<HashValue>,
+        &self, block_ids: Vec<HashValue>,
         ledger_info_with_sigs: LedgerInfoWithSignatures,
     ) -> Result<(Vec<Transaction>, Vec<ContractEvent>), Error>;
 }
 
 pub trait TransactionReplayer: Send {
     fn replay_chunk(
-        &mut self, first_version: Version, txns: Vec<Transaction>,
+        &self, first_version: Version, txns: Vec<Transaction>,
         txn_infos: Vec<TransactionInfo>,
     ) -> Result<()>;
 
