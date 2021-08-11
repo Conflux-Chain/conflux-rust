@@ -1138,6 +1138,7 @@ dependencies = [
  "random-crash",
  "rayon",
  "rlp",
+ "rpassword 5.0.1",
  "runtime",
  "rustc-hex",
  "secret-store",
@@ -1227,7 +1228,7 @@ dependencies = [
  "primitives",
  "rand 0.8.4",
  "rlp",
- "rpassword",
+ "rpassword 4.0.5",
  "runtime",
  "rustc-hex",
  "secret-store",
@@ -5188,6 +5189,16 @@ name = "rpassword"
 version = "4.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99371657d3c8e4d816fb6221db98fa408242b0b53bac08f8676a41f8554fe99f"
+dependencies = [
+ "libc",
+ "winapi 0.3.9",
+]
+
+[[package]]
+name = "rpassword"
+version = "5.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffc936cf8a7ea60c58f030fd36a612a48f440610214dc54bc36431f9ea0c3efb"
 dependencies = [
  "libc",
  "winapi 0.3.9",

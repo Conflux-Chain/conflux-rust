@@ -1,14 +1,12 @@
+use std::path::{Path, PathBuf};
+
 use anyhow::Result;
 use pkcs8::{
     AlgorithmIdentifier, EncryptedPrivateKeyDocument, ObjectIdentifier,
-    PrivateKeyDocument, PrivateKeyInfo,
+    PrivateKeyInfo,
 };
 use rand::{prelude::StdRng, rngs::OsRng, SeedableRng};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{
-    convert::TryFrom,
-    path::{Path, PathBuf},
-};
+use serde::{de::DeserializeOwned, Serialize};
 
 const OID: &str = "1.0.0";
 

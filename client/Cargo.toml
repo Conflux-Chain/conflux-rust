@@ -91,6 +91,7 @@ fail = "0.4.0"
 storage-interface = { path = "../core/src/pos/storage/storage-interface" }
 consensus-types = {path = "../core/src/pos/consensus/consensus-types"}
 anyhow = "1.0.38"
+rpassword = "5.0.1"
 
 [dev-dependencies]
 criterion = "0.2"

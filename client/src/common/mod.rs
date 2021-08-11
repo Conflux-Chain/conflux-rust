@@ -162,6 +162,32 @@ pub fn initialize_common_modules(
 {
     info!("Working directory: {:?}", std::env::current_dir());
 
+    // TODO(lpl): Keep it properly and allow not running pos.
+    let (self_pos_private_key, self_vrf_private_key) = {
+        let key_path = Path::new(&conf.raw_conf.pos_private_key_path);
+        if key_path.exists() {
+            let passwd = if conf.is_test_or_dev_mode() {
+                vec![0]
+            } else {
+                rpassword::read_password_from_tty(Some("PoS key detected, please input your encryption password.\n Password:"))?.into_bytes()
+            };
+            let (sk, vrf_sk): (ConsensusPrivateKey, ConsensusVRFPrivateKey) =
+                load_pri_key(key_path, &passwd).unwrap();
+            (ConfigKey::new(sk), ConfigKey::new(vrf_sk))
+        } else {
+            let passwd = rpassword::read_password_from_tty(Some("PoS key is not detected and will be generated instead, please input your encryption password. This password is needed when you restart the node"))?.into_bytes();
+            let mut rng = StdRng::from_rng(OsRng).unwrap();
+            let private_key = ConsensusPrivateKey::generate(&mut rng);
+            let vrf_private_key = ConsensusVRFPrivateKey::generate(&mut rng);
+            save_pri_key(
+                private_key_dir.join(PathBuf::from(i.to_string())),
+                &passwd,
+                &(&private_key, &vrf_private_key),
+            );
+            (ConfigKey::new(private_key), ConfigKey::new(vrf_private_key))
+        }
+    };
+
     metrics::initialize(conf.metrics_config());
 
     let worker_thread_pool = Arc::new(Mutex::new(ThreadPool::with_name(
@@ -278,16 +304,6 @@ pub fn initialize_common_modules(
     let own_node_hash =
         keccak(network.net_key_pair().expect("Error node key").public());
     let self_pos_public_key = network.pos_public_key();
-    // TODO(lpl): Keep it properly and allow not running pos.
-    let (self_pos_private_key, self_vrf_private_key) = network_config
-        .config_path
-        .clone()
-        .map(|ref p| {
-            let (sk, vrf_sk): (ConsensusPrivateKey, ConsensusVRFPrivateKey) =
-                load_pri_key(Path::new(&p), &[0]).unwrap();
-            (ConfigKey::new(sk), ConfigKey::new(vrf_sk))
-        })
-        .unwrap();
     let self_vrf_public_key = self_vrf_private_key.public_key();
     pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
         author: from_consensus_public_key(
@@ -895,7 +911,10 @@ use diem_config::{
     config::{NodeConfig, SafetyRulesTestConfig},
     keys::ConfigKey,
 };
-use diem_crypto::key_file::load_pri_key;
+use diem_crypto::{
+    key_file::{load_pri_key, save_pri_key},
+    Uniform,
+};
 use diem_types::{
     account_address::from_consensus_public_key,
     term_state::NodeID,
@@ -909,6 +928,7 @@ use keylib::KeyPair;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use network::{service::load_pos_private_key, NetworkService};
 use parking_lot::{Condvar, Mutex};
+use rand::{prelude::StdRng, rngs::OsRng};
 use runtime::Runtime;
 use secret_store::{SecretStore, SharedSecretStore};
 use std::{
