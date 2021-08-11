@@ -30,6 +30,8 @@ pub mod x25519;
 #[cfg(test)]
 mod unit_tests;
 
+/// Utility to store encrypted private keys
+pub mod key_file;
 #[cfg(mirai)]
 mod tags;
 

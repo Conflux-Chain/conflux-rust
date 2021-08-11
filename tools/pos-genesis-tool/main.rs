@@ -33,6 +33,7 @@ use log::*;
 use move_core_types::language_storage::TypeTag;
 
 use cfxcore::spec::genesis::register_transaction;
+use diem_crypto::key_file::save_pri_key;
 use rand::{rngs::StdRng, SeedableRng};
 use rustc_hex::FromHexError;
 use serde::Deserialize;
@@ -220,22 +221,21 @@ where
 
         let chain_id = args.flag_chain_id;
 
-        let pivate_key_path = PathBuf::from("./private_key");
-        let mut private_key_file = File::create(&pivate_key_path)?;
+        let private_key_dir = PathBuf::from("./private_keys");
+        std::fs::create_dir(&private_key_dir)?;
         let public_key_path = PathBuf::from("./public_key");
         let mut public_key_file = File::create(&public_key_path)?;
         let mut rng = StdRng::from_seed([0u8; 32]);
         let mut public_keys = Vec::new();
 
-        for _i in 0..num_validator {
+        for i in 0..num_validator {
             let private_key = ConsensusPrivateKey::generate(&mut rng);
             let vrf_private_key = ConsensusVRFPrivateKey::generate(&mut rng);
-            let private_key_str = private_key.to_encoded_string().unwrap();
-            let vrf_private_key_str =
-                vrf_private_key.to_encoded_string().unwrap();
-            let private_key_str =
-                format!("{},{}\n", private_key_str, vrf_private_key_str);
-            private_key_file.write_all(private_key_str.as_bytes())?;
+            save_pri_key(
+                private_key_dir.join(PathBuf::from(i.to_string())),
+                &[0],
+                &(&private_key, &vrf_private_key),
+            );
 
             let public_key = ConsensusPublicKey::from(&private_key);
             let vrf_public_key = ConsensusVRFPublicKey::from(&vrf_private_key);

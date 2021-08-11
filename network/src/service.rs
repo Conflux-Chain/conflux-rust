@@ -20,7 +20,9 @@ use crate::{
 };
 use cfx_addr::Network;
 use cfx_bytes::Bytes;
-use diem_crypto::{PrivateKey, ValidCryptoMaterialStringExt};
+use diem_crypto::{
+    key_file::load_pri_key, PrivateKey, ValidCryptoMaterialStringExt,
+};
 use diem_types::{
     account_address::from_consensus_public_key,
     validator_config::{
@@ -559,8 +561,11 @@ impl NetworkServiceInner {
             .config_path
             .clone()
             .map(|ref p| {
-                let (sk, vrf_sk) = load_pos_private_key(Path::new(&p)).unwrap();
-                (sk.public_key(), vrf_sk.unwrap().public_key())
+                let (sk, vrf_sk): (
+                    ConsensusPrivateKey,
+                    ConsensusVRFPrivateKey,
+                ) = load_pri_key(Path::new(&p), &[0]).unwrap();
+                (sk.public_key(), vrf_sk.public_key())
             })
             .unwrap();
         info!("Self pos public key: {:?}", pos_public_key);

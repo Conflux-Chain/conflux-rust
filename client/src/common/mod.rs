@@ -283,12 +283,12 @@ pub fn initialize_common_modules(
         .config_path
         .clone()
         .map(|ref p| {
-            let (sk, vrf_sk) = load_pos_private_key(Path::new(&p)).unwrap();
-            (ConfigKey::new(sk), vrf_sk.map(|key| ConfigKey::new(key)))
+            let (sk, vrf_sk): (ConsensusPrivateKey, ConsensusVRFPrivateKey) =
+                load_pri_key(Path::new(&p), &[0]).unwrap();
+            (ConfigKey::new(sk), ConfigKey::new(vrf_sk))
         })
         .unwrap();
-    let self_vrf_public_key =
-        self_vrf_private_key.as_ref().unwrap().public_key();
+    let self_vrf_public_key = self_vrf_private_key.public_key();
     pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
         author: from_consensus_public_key(
             self_pos_public_key.as_ref().unwrap(),
@@ -299,7 +299,7 @@ pub fn initialize_common_modules(
         waypoint: Some(pos_config.base.waypoint.waypoint()),
     });
     pos_config.consensus.safety_rules.vrf_private_key =
-        self_vrf_private_key.clone();
+        Some(self_vrf_private_key.clone());
     pos_config.consensus.safety_rules.export_consensus_key = true;
     pos_config.consensus.safety_rules.vrf_proposal_threshold =
         conf.raw_conf.vrf_proposal_threshold;
@@ -346,7 +346,7 @@ pub fn initialize_common_modules(
         pos_connection,
         PosConfiguration {
             bls_key: self_pos_private_key,
-            vrf_key: self_vrf_private_key.unwrap(),
+            vrf_key: self_vrf_private_key,
         },
         conf.raw_conf.pos_reference_enable_height,
     ));
@@ -895,8 +895,11 @@ use diem_config::{
     config::{NodeConfig, SafetyRulesTestConfig},
     keys::ConfigKey,
 };
+use diem_crypto::key_file::load_pri_key;
 use diem_types::{
-    account_address::from_consensus_public_key, term_state::NodeID,
+    account_address::from_consensus_public_key,
+    term_state::NodeID,
+    validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
 };
 use jsonrpc_http_server::Server as HttpServer;
 use jsonrpc_tcp_server::Server as TcpServer;
