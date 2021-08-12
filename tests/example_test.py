@@ -35,7 +35,7 @@ class ExampleTest(ConfluxTestFramework):
     def run_test(self):
         time.sleep(2)
         client = RpcClient(self.nodes[self.num_nodes - 1])
-        _, priv_key = client.wait_for_pos_register()
+        # _, priv_key = client.wait_for_pos_register()
 
         genesis = self.nodes[0].best_block_hash()
         self.log.info(genesis)
@@ -59,8 +59,8 @@ class ExampleTest(ConfluxTestFramework):
             new_pos_ref = self.latest_pos_ref()
             assert_ne(latest_pos_ref, new_pos_ref)
 
-        client.wait_for_unstake(priv_key)
-        assert client.get_balance(eth_utils.encode_hex(priv_to_addr(priv_key))) > 100 * 10**18
+        # client.wait_for_unstake(priv_key)
+        # assert client.get_balance(eth_utils.encode_hex(priv_to_addr(priv_key))) > 100 * 10**18
         # assert (self.nodes[0].getblockcount() == 6002)
 
     def latest_pos_ref(self):
