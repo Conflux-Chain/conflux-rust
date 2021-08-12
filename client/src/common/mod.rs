@@ -162,6 +162,32 @@ pub fn initialize_common_modules(
 {
     info!("Working directory: {:?}", std::env::current_dir());
 
+    // TODO(lpl): Keep it properly and allow not running pos.
+    let (self_pos_private_key, self_vrf_private_key) = {
+        let key_path = Path::new(&conf.raw_conf.pos_private_key_path);
+        if key_path.exists() {
+            let passwd = if conf.is_test_or_dev_mode() {
+                vec![]
+            } else {
+                rpassword::read_password_from_tty(Some("PoS key detected, please input your encryption password.\nPassword:")).map_err(|e| format!("{:?}", e))?.into_bytes()
+            };
+            let (sk, vrf_sk): (ConsensusPrivateKey, ConsensusVRFPrivateKey) =
+                load_pri_key(key_path, &passwd).unwrap();
+            (ConfigKey::new(sk), ConfigKey::new(vrf_sk))
+        } else {
+            let passwd = if conf.is_test_or_dev_mode() {
+                vec![]
+            } else {
+                rpassword::read_password_from_tty(Some("PoS key is not detected and will be generated instead, please input your encryption password. This password is needed when you restart the node\nPassword:")).map_err(|e| format!("{:?}", e))?.into_bytes()
+            };
+            let mut rng = StdRng::from_rng(OsRng).unwrap();
+            let private_key = ConsensusPrivateKey::generate(&mut rng);
+            let vrf_private_key = ConsensusVRFPrivateKey::generate(&mut rng);
+            save_pri_key(key_path, &passwd, &(&private_key, &vrf_private_key));
+            (ConfigKey::new(private_key), ConfigKey::new(vrf_private_key))
+        }
+    };
+
     metrics::initialize(conf.metrics_config());
 
     let worker_thread_pool = Arc::new(Mutex::new(ThreadPool::with_name(
@@ -263,7 +289,7 @@ pub fn initialize_common_modules(
 
     let network = {
         let mut network = NetworkService::new(network_config.clone());
-        network.start().unwrap();
+        network.start((self_pos_private_key.public_key(), self_vrf_private_key.public_key())).unwrap();
         Arc::new(network)
     };
 
@@ -278,17 +304,7 @@ pub fn initialize_common_modules(
     let own_node_hash =
         keccak(network.net_key_pair().expect("Error node key").public());
     let self_pos_public_key = network.pos_public_key();
-    // TODO(lpl): Keep it properly and allow not running pos.
-    let (self_pos_private_key, self_vrf_private_key) = network_config
-        .config_path
-        .clone()
-        .map(|ref p| {
-            let (sk, vrf_sk) = load_pos_private_key(Path::new(&p)).unwrap();
-            (ConfigKey::new(sk), vrf_sk.map(|key| ConfigKey::new(key)))
-        })
-        .unwrap();
-    let self_vrf_public_key =
-        self_vrf_private_key.as_ref().unwrap().public_key();
+    let self_vrf_public_key = self_vrf_private_key.public_key();
     pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
         author: from_consensus_public_key(
             self_pos_public_key.as_ref().unwrap(),
@@ -299,7 +315,7 @@ pub fn initialize_common_modules(
         waypoint: Some(pos_config.base.waypoint.waypoint()),
     });
     pos_config.consensus.safety_rules.vrf_private_key =
-        self_vrf_private_key.clone();
+        Some(self_vrf_private_key.clone());
     pos_config.consensus.safety_rules.export_consensus_key = true;
     pos_config.consensus.safety_rules.vrf_proposal_threshold =
         conf.raw_conf.vrf_proposal_threshold;
@@ -346,7 +362,7 @@ pub fn initialize_common_modules(
         pos_connection,
         PosConfiguration {
             bls_key: self_pos_private_key,
-            vrf_key: self_vrf_private_key.unwrap(),
+            vrf_key: self_vrf_private_key,
         },
         conf.raw_conf.pos_reference_enable_height,
     ));
@@ -895,8 +911,14 @@ use diem_config::{
     config::{NodeConfig, SafetyRulesTestConfig},
     keys::ConfigKey,
 };
+use diem_crypto::{
+    key_file::{load_pri_key, save_pri_key},
+    Uniform,
+};
 use diem_types::{
-    account_address::from_consensus_public_key, term_state::NodeID,
+    account_address::from_consensus_public_key,
+    term_state::NodeID,
+    validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
 };
 use jsonrpc_http_server::Server as HttpServer;
 use jsonrpc_tcp_server::Server as TcpServer;
@@ -906,6 +928,7 @@ use keylib::KeyPair;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use network::{service::load_pos_private_key, NetworkService};
 use parking_lot::{Condvar, Mutex};
+use rand_08::{prelude::StdRng, rngs::OsRng, SeedableRng};
 use runtime::Runtime;
 use secret_store::{SecretStore, SharedSecretStore};
 use std::{

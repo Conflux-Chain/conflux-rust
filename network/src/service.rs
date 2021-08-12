@@ -20,7 +20,9 @@ use crate::{
 };
 use cfx_addr::Network;
 use cfx_bytes::Bytes;
-use diem_crypto::{PrivateKey, ValidCryptoMaterialStringExt};
+use diem_crypto::{
+    key_file::load_pri_key, PrivateKey, ValidCryptoMaterialStringExt,
+};
 use diem_types::{
     account_address::from_consensus_public_key,
     validator_config::{
@@ -47,6 +49,7 @@ use std::{
     sync::{atomic::Ordering as AtomicOrdering, Arc},
     time::{Duration, Instant},
 };
+use diem_types::validator_config::ConsensusVRFPublicKey;
 
 const MAX_SESSIONS: usize = 2048;
 
@@ -182,29 +185,6 @@ impl NetworkService {
 
     pub fn network_id(&self) -> u64 { self.config.id }
 
-    pub fn start_io_service(&mut self) -> Result<(), Error> {
-        let raw_io_service =
-            IoService::<NetworkIoMessage>::start(self.network_poll.clone())?;
-        self.io_service = Some(raw_io_service);
-
-        if self.inner.is_none() {
-            if self.config.test_mode {
-                BYPASS_CRYPTOGRAPHY.store(true, AtomicOrdering::Relaxed);
-            }
-
-            let inner = Arc::new(match self.config.test_mode {
-                true => NetworkServiceInner::new_with_latency(&self.config)?,
-                false => NetworkServiceInner::new(&self.config)?,
-            });
-            self.io_service
-                .as_ref()
-                .unwrap()
-                .register_handler(inner.clone())?;
-            self.inner = Some(inner);
-        }
-        Ok(())
-    }
-
     pub fn start_network_poll(&self) -> Result<(), Error> {
         let handler = self.inner.as_ref().unwrap().clone();
         let main_event_loop_channel =
@@ -223,7 +203,7 @@ impl NetworkService {
     }
 
     /// Create and start the event loop inside the NetworkService
-    pub fn start(&mut self) -> Result<(), Error> {
+    pub fn start(&mut self, pos_pub_keys: (ConsensusPublicKey, ConsensusVRFPublicKey)) -> Result<(), Error> {
         let raw_io_service =
             IoService::<NetworkIoMessage>::start(self.network_poll.clone())?;
         self.io_service = Some(raw_io_service);
@@ -234,8 +214,8 @@ impl NetworkService {
             }
 
             let inner = Arc::new(match self.config.test_mode {
-                true => NetworkServiceInner::new_with_latency(&self.config)?,
-                false => NetworkServiceInner::new(&self.config)?,
+                true => NetworkServiceInner::new_with_latency(&self.config, pos_pub_keys)?,
+                false => NetworkServiceInner::new(&self.config, pos_pub_keys)?,
             });
             self.io_service
                 .as_ref()
@@ -523,6 +503,7 @@ impl DelayedQueue {
 impl NetworkServiceInner {
     pub fn new(
         config: &NetworkConfiguration,
+        pos_pub_keys: (ConsensusPublicKey, ConsensusVRFPublicKey),
     ) -> Result<NetworkServiceInner, Error> {
         let mut listen_address = match config.listen_address {
             None => SocketAddr::V4(SocketAddrV4::new(
@@ -555,15 +536,7 @@ impl NetworkServiceInner {
                     },
                 )
         };
-        let (pos_public_key, vrf_public_key) = config
-            .config_path
-            .clone()
-            .map(|ref p| {
-                let (sk, vrf_sk) = load_pos_private_key(Path::new(&p)).unwrap();
-                (sk.public_key(), vrf_sk.unwrap().public_key())
-            })
-            .unwrap();
-        info!("Self pos public key: {:?}", pos_public_key);
+        info!("Self pos public key: {:?}", pos_pub_keys);
 
         info!("Self node id: {:?}", *keys.public());
 
@@ -649,7 +622,7 @@ impl NetworkServiceInner {
                 MAX_SESSIONS,
                 config.max_incoming_peers,
                 &config.session_ip_limit_config,
-                Some((pos_public_key, vrf_public_key)),
+                Some(pos_pub_keys),
             ),
             handlers: RwLock::new(HashMap::new()),
             timers: RwLock::new(HashMap::new()),
@@ -680,8 +653,9 @@ impl NetworkServiceInner {
 
     pub fn new_with_latency(
         config: &NetworkConfiguration,
+        pos_pub_keys: (ConsensusPublicKey, ConsensusVRFPublicKey),
     ) -> Result<NetworkServiceInner, Error> {
-        let r = NetworkServiceInner::new(config);
+        let r = NetworkServiceInner::new(config, pos_pub_keys);
         if r.is_err() {
             return r;
         }

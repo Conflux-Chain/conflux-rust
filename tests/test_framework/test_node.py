@@ -133,7 +133,7 @@ class TestNode:
         # potentially interfere with our attempt to authenticate
         delete_cookie_file(self.datadir)
         my_env = os.environ.copy()
-        my_env["RUST_BACKTRACE"] = "full"
+        my_env["RUST_BACKTRACE"] = "1"
         if self.remote:
             # If no_pssh is False, we have started the conflux nodes before this, so
             # we can just skip the start here.

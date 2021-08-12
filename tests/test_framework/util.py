@@ -17,6 +17,7 @@ import solcx
 import web3
 from sys import platform
 import yaml
+import shutil
 
 from test_framework.simple_rpc_proxy import SimpleRpcProxy
 from . import coverage
@@ -272,8 +273,7 @@ def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id):
     genesis_path = os.path.join(dirname, 'genesis_file')
     initial_nodes_path = os.path.join(dirname, 'initial_nodes.toml')
     waypoint = open(waypoint_path, 'r').readlines()[0].strip()
-    private_keys = open(os.path.join(dirname, "private_key")).readlines()
-    print('private_keys: {}'.format(private_keys))
+    private_keys_dir = os.path.join(dirname, "private_keys")
     for n in range(nodes):
         datadir = get_datadir_path(dirname, n)
         if not os.path.isdir(datadir):
@@ -309,8 +309,7 @@ def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id):
         }
         with open(os.path.join(datadir, 'validator_full_node.yaml'), 'w') as f:
             f.write(yaml.dump(validator_config, default_flow_style=False))
-        with open(os.path.join(net_config_dir, 'pos_key'), 'w') as f:
-            f.write(private_keys[n][:-1])
+        shutil.copyfile(os.path.join(private_keys_dir, str(n)), os.path.join(net_config_dir, 'pos_key'))
 
 
 def initialize_datadir(dirname, n, port_min, conf_parameters, extra_files: dict = {}):
@@ -326,6 +325,7 @@ def initialize_datadir(dirname, n, port_min, conf_parameters, extra_files: dict 
             "jsonrpc_http_port": str(remote_rpc_port(n)),
             "pos_config_path": "\'{}\'".format(os.path.join(datadir, "validator_full_node.yaml")),
             "pos_initial_nodes_path": "\'{}\'".format(os.path.join(dirname, "initial_nodes.toml")),
+            "pos_private_key_path": "'{}'".format(os.path.join(datadir, "blockchain_data", "net_config", "pos_key"))
         }
         local_conf.update(conflux.config.small_local_test_conf)
         local_conf.update(conf_parameters)
