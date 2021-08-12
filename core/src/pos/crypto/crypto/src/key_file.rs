@@ -32,12 +32,10 @@ pub fn save_pri_key<P: AsRef<Path>, K: Serialize>(
 }
 
 /// Load `passwd` encrypted private key from `path`.
-pub fn load_pri_key<'de, P: Into<PathBuf>, K: DeserializeOwned>(
+pub fn load_pri_key<'de, P: AsRef<Path>, K: DeserializeOwned>(
     path: P, passwd: impl AsRef<[u8]>,
 ) -> Result<K> {
-    let mut path_buf = path.into();
-    path_buf.push("pos_key");
-    let encrypted = EncryptedPrivateKeyDocument::read_der_file(path_buf)?;
+    let encrypted = EncryptedPrivateKeyDocument::read_der_file(path)?;
     let encoded_keys = encrypted.decrypt(passwd)?;
     Ok(bcs::from_bytes(
         encoded_keys.private_key_info().private_key,

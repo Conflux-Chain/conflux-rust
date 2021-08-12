@@ -233,7 +233,7 @@ where
             let vrf_private_key = ConsensusVRFPrivateKey::generate(&mut rng);
             save_pri_key(
                 private_key_dir.join(PathBuf::from(i.to_string())),
-                &[0],
+                &[],
                 &(&private_key, &vrf_private_key),
             );
 

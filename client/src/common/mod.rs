@@ -167,23 +167,23 @@ pub fn initialize_common_modules(
         let key_path = Path::new(&conf.raw_conf.pos_private_key_path);
         if key_path.exists() {
             let passwd = if conf.is_test_or_dev_mode() {
-                vec![0]
+                vec![]
             } else {
-                rpassword::read_password_from_tty(Some("PoS key detected, please input your encryption password.\n Password:"))?.into_bytes()
+                rpassword::read_password_from_tty(Some("PoS key detected, please input your encryption password.\nPassword:")).map_err(|e| format!("{:?}", e))?.into_bytes()
             };
             let (sk, vrf_sk): (ConsensusPrivateKey, ConsensusVRFPrivateKey) =
                 load_pri_key(key_path, &passwd).unwrap();
             (ConfigKey::new(sk), ConfigKey::new(vrf_sk))
         } else {
-            let passwd = rpassword::read_password_from_tty(Some("PoS key is not detected and will be generated instead, please input your encryption password. This password is needed when you restart the node"))?.into_bytes();
+            let passwd = if conf.is_test_or_dev_mode() {
+                vec![]
+            } else {
+                rpassword::read_password_from_tty(Some("PoS key is not detected and will be generated instead, please input your encryption password. This password is needed when you restart the node\nPassword:")).map_err(|e| format!("{:?}", e))?.into_bytes()
+            };
             let mut rng = StdRng::from_rng(OsRng).unwrap();
             let private_key = ConsensusPrivateKey::generate(&mut rng);
             let vrf_private_key = ConsensusVRFPrivateKey::generate(&mut rng);
-            save_pri_key(
-                private_key_dir.join(PathBuf::from(i.to_string())),
-                &passwd,
-                &(&private_key, &vrf_private_key),
-            );
+            save_pri_key(key_path, &passwd, &(&private_key, &vrf_private_key));
             (ConfigKey::new(private_key), ConfigKey::new(vrf_private_key))
         }
     };
@@ -289,7 +289,7 @@ pub fn initialize_common_modules(
 
     let network = {
         let mut network = NetworkService::new(network_config.clone());
-        network.start().unwrap();
+        network.start((self_pos_private_key.public_key(), self_vrf_private_key.public_key())).unwrap();
         Arc::new(network)
     };
 
@@ -928,7 +928,7 @@ use keylib::KeyPair;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use network::{service::load_pos_private_key, NetworkService};
 use parking_lot::{Condvar, Mutex};
-use rand::{prelude::StdRng, rngs::OsRng};
+use rand_08::{prelude::StdRng, rngs::OsRng, SeedableRng};
 use runtime::Runtime;
 use secret_store::{SecretStore, SharedSecretStore};
 use std::{

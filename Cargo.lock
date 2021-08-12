@@ -1134,6 +1134,7 @@ dependencies = [
  "pow-types",
  "primitives",
  "rand 0.7.3",
+ "rand 0.8.4",
  "rand_xorshift 0.2.0",
  "random-crash",
  "rayon",
