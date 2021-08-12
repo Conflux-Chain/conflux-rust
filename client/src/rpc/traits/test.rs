@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::types::{BlameInfo, Block, Bytes};
-use cfx_types::{H256, U256};
+use cfx_types::{H256, U256, U64};
 use cfxcore::PeerInfo;
 use diem_types::account_address::AccountAddress;
 use jsonrpc_core::Result as RpcResult;
@@ -114,12 +114,12 @@ pub trait TestRpc {
 
     #[rpc(name = "pos_register")]
     fn pos_register(
-        &self, voting_power: u64,
+        &self, voting_power: U64,
     ) -> RpcResult<(Bytes, AccountAddress)>;
 
     #[rpc(name = "pos_update_voting_power")]
     fn pos_update_voting_power(
-        &self, pos_account: AccountAddress, increased_voting_power: u64,
+        &self, pos_account: AccountAddress, increased_voting_power: U64,
     ) -> RpcResult<()>;
 
     #[rpc(name = "pos_retire_self")]

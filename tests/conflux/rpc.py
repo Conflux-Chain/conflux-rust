@@ -9,7 +9,7 @@ from .address import hex_to_b32_address, b32_address_to_hex
 from .config import DEFAULT_PY_TEST_CHAIN_ID, default_config
 from .transactions import CONTRACT_DEFAULT_GAS, Transaction, UnsignedTransaction
 from .filter import Filter
-from .utils import priv_to_addr, sha3_256, int_to_bytes, convert_to_nodeid
+from .utils import priv_to_addr, sha3_256, int_to_bytes, convert_to_nodeid, int_to_hex
 
 import sys
 sys.path.append("..")
@@ -507,7 +507,7 @@ class RpcClient:
         self.send_tx(initial_tx, wait_for_receipt=True)
         stake_tx = self.new_tx(priv_key=priv_key, data=stake_tx_data(stake_value), value=0, receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
         self.send_tx(stake_tx, wait_for_receipt=True)
-        data, pos_identifier = self.node.pos_register(voting_power)
+        data, pos_identifier = self.node.pos_register(int_to_hex(voting_power))
         register_tx = self.new_tx(priv_key=priv_key, data=eth_utils.decode_hex(data), value=0, receiver="0x0888000000000000000000000000000000000005", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         self.send_tx(register_tx, wait_for_receipt=True)
         return pos_identifier, priv_key

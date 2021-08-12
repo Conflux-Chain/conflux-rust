@@ -676,12 +676,12 @@ impl RpcImpl {
     }
 
     pub fn pos_register(
-        &self, voting_power: u64,
+        &self, voting_power: U64,
     ) -> JsonRpcResult<(Bytes, AccountAddress)> {
         let tx = register_transaction(
             self.pos_handler.config().bls_key.private_key(),
             self.pos_handler.config().vrf_key.public_key(),
-            voting_power,
+            voting_power.as_u64(),
             0,
         );
         let identifier = from_consensus_public_key(
@@ -692,7 +692,7 @@ impl RpcImpl {
     }
 
     pub fn pos_update_voting_power(
-        &self, pos_account: AccountAddress, increased_voting_power: u64,
+        &self, pos_account: AccountAddress, increased_voting_power: U64,
     ) -> JsonRpcResult<()> {
         unimplemented!()
     }
