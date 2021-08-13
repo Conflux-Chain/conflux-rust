@@ -1,19 +1,11 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{
-    counters, epoch_manager::EpochManager, network::NetworkReceivers,
-    persistent_liveness_storage::StorageWriteProxy,
-    state_computer::ExecutionProxy, txn_manager::MempoolProxy,
-    util::time_service::ClockTimeService,
-};
-use crate::pos::{
-    consensus::consensusdb::ConsensusDB,
-    mempool::{ConsensusRequest, SubmissionStatus},
-    pow_handler::PowHandler,
-    protocol::network_sender::NetworkSender,
-    state_sync::client::StateSyncClient,
-};
+use std::sync::{atomic::AtomicBool, Arc};
+
+use futures::channel::{mpsc, oneshot};
+use tokio::runtime::{self, Runtime};
+
 use cached_diemdb::CachedDiemDB;
 use channel::diem_channel;
 use consensus_types::db::LedgerBlockRW;
@@ -24,10 +16,21 @@ use diem_types::{
     transaction::SignedTransaction,
 };
 use executor::{vm::FakeVM, Executor};
-use futures::channel::{mpsc, oneshot};
-use std::sync::{atomic::AtomicBool, Arc};
-use storage_interface::{DbReader, DbReaderWriter};
-use tokio::runtime::{self, Runtime};
+use storage_interface::DbReader;
+
+use crate::pos::{
+    mempool::{ConsensusRequest, SubmissionStatus},
+    pow_handler::PowHandler,
+    protocol::network_sender::NetworkSender,
+    state_sync::client::StateSyncClient,
+};
+
+use super::{
+    counters, epoch_manager::EpochManager, network::NetworkReceivers,
+    persistent_liveness_storage::StorageWriteProxy,
+    state_computer::ExecutionProxy, txn_manager::MempoolProxy,
+    util::time_service::ClockTimeService,
+};
 
 /// Helper function to start consensus based on configuration and return the
 /// runtime
@@ -43,7 +46,7 @@ pub fn start_consensus(
         SignedTransaction,
         oneshot::Sender<anyhow::Result<SubmissionStatus>>,
     )>,
-) -> (Runtime, Arc<PowHandler>, Arc<AtomicBool>, Arc<ConsensusDB>)
+) -> (Runtime, Arc<PowHandler>, Arc<AtomicBool>)
 {
     let stopped = Arc::new(AtomicBool::new(false));
     let runtime = runtime::Builder::new_multi_thread()
@@ -104,5 +107,5 @@ pub fn start_consensus(
     ));
 
     diem_debug!("Consensus started.");
-    (runtime, pow_handler, stopped, consensus_db)
+    (runtime, pow_handler, stopped)
 }

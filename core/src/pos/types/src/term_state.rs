@@ -1,13 +1,18 @@
 use std::{
     cmp::Ordering,
     collections::{BTreeMap, BinaryHeap, HashMap, VecDeque},
+    convert::TryFrom,
     fmt::{Debug, Formatter},
 };
 
 use anyhow::{anyhow, bail, ensure, Result};
 use serde::{Deserialize, Serialize};
 
-use diem_crypto::{HashValue, VRFProof, ValidCryptoMaterial};
+use cfx_types::H256;
+use diem_crypto::{HashValue, VRFProof};
+use diem_logger::prelude::*;
+use move_core_types::language_storage::TypeTag;
+use pow_types::StakingEvent;
 
 use crate::{
     account_address::{from_consensus_public_key, AccountAddress},
@@ -20,11 +25,6 @@ use crate::{
     validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
 };
-use cfx_types::H256;
-use diem_logger::prelude::*;
-use move_core_types::language_storage::TypeTag;
-use pow_types::StakingEvent;
-use std::{convert::TryFrom, path::Component::RootDir};
 
 const TERM_LIST_LEN: usize = 6;
 // FIXME(lpl): Use correct value later.
@@ -168,7 +168,7 @@ impl TermList {
         if term_offset >= self.term_list.len() {
             bail!("election start_term is too late");
         }
-        let mut term = &mut self.term_list[term_offset];
+        let term = &mut self.term_list[term_offset];
 
         for nonce in 0..voting_power {
             // Hash after appending the nonce to get multiple identifier for
@@ -209,9 +209,12 @@ impl TermList {
                 == new_term.saturating_mul(ROUND_PER_TERM)
         );
         self.term_list.remove(0);
-        let last_term = self.term_list.last().unwrap();
-        self.term_list
-            .push(last_term.next_term(Default::default(), new_seed));
+        let new_term = self
+            .term_list
+            .last()
+            .unwrap()
+            .next_term(Default::default(), new_seed);
+        self.term_list.push(new_term);
     }
 
     fn can_be_elected(

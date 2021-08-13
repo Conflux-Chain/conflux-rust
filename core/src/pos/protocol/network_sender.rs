@@ -2,6 +2,14 @@
 // TreeGraph is free software and distributed under Apache License 2.0.
 // See https://www.apache.org/licenses/LICENSE-2.0
 
+use std::{mem::discriminant, sync::Arc};
+
+use anyhow::{format_err, Context};
+use futures::channel::oneshot;
+
+use diem_types::account_address::AccountAddress;
+use network::{node_table::NodeId, NetworkService};
+
 use crate::{
     message::Message,
     pos::{
@@ -13,16 +21,6 @@ use crate::{
         },
     },
 };
-use anyhow::{format_err, Context};
-use consensus_types::block_retrieval::{
-    BlockRetrievalRequest, BlockRetrievalResponse,
-};
-use diem_types::{
-    account_address::AccountAddress, validator_config::ConsensusPublicKey,
-};
-use futures::channel::oneshot;
-use network::{node_table::NodeId, NetworkService};
-use std::{mem::discriminant, sync::Arc};
 
 /// The interface from Consensus to Networking layer.
 ///
@@ -136,7 +134,8 @@ impl NetworkSender {
                 HSB_PROTOCOL_ID,
                 |io| msg.send(io, peer_id),
             )
-            .map_err(|_| format_err!("send message failed"))?;
+            .map_err(|e| format_err!("context failed: {:#}", e))?
+            .map_err(|e| format_err!("send message failed: {:#}", e))?;
         Ok(())
     }
 }

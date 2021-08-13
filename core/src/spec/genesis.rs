@@ -2,15 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    executive::{
-        contract_address, ExecutionOutcome, Executive, TransactOptions,
-    },
-    machine::Machine,
-    state::State,
-    verification::{compute_receipts_root, compute_transaction_root},
-    vm::{CreateContractAddress, Env},
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{BufRead, BufReader, Read},
+    sync::Arc,
 };
+
+use rustc_hex::FromHex;
+use toml::Value;
+
 use cfx_bytes::Bytes;
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::{
@@ -24,9 +25,7 @@ use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{StorageManager, StorageManagerTrait};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use diem_crypto::{
-    bls::{BLSPrivateKey, BLSPublicKey},
-    ec_vrf::EcVrfPublicKey,
-    PrivateKey, VRFPublicKey, ValidCryptoMaterial,
+    bls::BLSPrivateKey, ec_vrf::EcVrfPublicKey, PrivateKey, ValidCryptoMaterial,
 };
 use diem_types::term_state::NodeID;
 use keylib::KeyPair;
@@ -34,16 +33,18 @@ use primitives::{
     storage::STORAGE_LAYOUT_REGULAR_V0, Action, Block, BlockHeaderBuilder,
     BlockReceipts, SignedTransaction, Transaction,
 };
-use rustc_hex::FromHex;
 use secret_store::SecretStore;
 use solidity_abi::ABIEncodable;
-use std::{
-    collections::HashMap,
-    fs::File,
-    io::{BufRead, BufReader, Read},
-    sync::Arc,
+
+use crate::{
+    executive::{
+        contract_address, ExecutionOutcome, Executive, TransactOptions,
+    },
+    machine::Machine,
+    state::State,
+    verification::{compute_receipts_root, compute_transaction_root},
+    vm::{CreateContractAddress, Env},
 };
-use toml::Value;
 
 pub const DEV_GENESIS_PRI_KEY: &'static str =
     "46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f";
@@ -398,7 +399,7 @@ pub fn genesis_block(
     }
 
     let mut sender_int = 0;
-    for (_node_id, _voting_power, mut tx) in initial_nodes {
+    for (_node_id, _voting_power, tx) in initial_nodes {
         // TODO(lpl): Pass in signed tx so they can be retired.
         let sender: Address = Address::from_low_u64_be(sender_int);
         state
@@ -480,7 +481,7 @@ pub fn register_transaction(
         Serialize,
     };
     use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
-    use rand_08::{rngs::StdRng, CryptoRng, RngCore, SeedableRng};
+    use rand_08::{rngs::StdRng, SeedableRng};
     use solidity_abi::ABIEncodable;
     use tiny_keccak::{Hasher, Keccak};
 

@@ -114,6 +114,7 @@ impl<T: CryptoKVStorage> CryptoStorage for T {
 
 /// Private helper method to generate a new ed25519 key pair using entropy from
 /// the OS.
+#[allow(unused)]
 fn new_ed25519_key_pair() -> (Ed25519PrivateKey, Ed25519PublicKey) {
     new_key_pair()
 }

@@ -10,54 +10,19 @@
 //! the underlying Key-Value storage system, and implements diem data structures
 //! on top of it.
 
-#[cfg(any(feature = "diemsum"))]
-pub mod diemsum;
-// Used in this and other crates for testing.
-#[cfg(any(test, feature = "fuzzing"))]
-pub mod test_helper;
-
-pub mod backup;
-pub mod errors;
-pub mod metrics;
-pub mod schema;
-
-mod change_set;
-mod event_store;
-mod ledger_counters;
-mod ledger_store;
-mod pruner;
-mod state_store;
-mod system_store;
-mod transaction_store;
-
-#[cfg(any(test, feature = "fuzzing"))]
-#[allow(dead_code)]
-mod diemdb_test;
-
-#[cfg(feature = "fuzzing")]
-pub use diemdb_test::test_save_blocks_impl;
-
-use crate::{
-    backup::{backup_handler::BackupHandler, restore_handler::RestoreHandler},
-    change_set::{ChangeSet, SealedChangeSet},
-    errors::DiemDbError,
-    event_store::EventStore,
-    ledger_counters::LedgerCounters,
-    ledger_store::LedgerStore,
-    metrics::{
-        DIEM_STORAGE_API_LATENCY_SECONDS, DIEM_STORAGE_COMMITTED_TXNS,
-        DIEM_STORAGE_LATEST_TXN_VERSION, DIEM_STORAGE_LEDGER_VERSION,
-        DIEM_STORAGE_NEXT_BLOCK_EPOCH, DIEM_STORAGE_OTHER_TIMERS_SECONDS,
-        DIEM_STORAGE_ROCKSDB_PROPERTIES,
-    },
-    pruner::Pruner,
-    schema::*,
-    state_store::StateStore,
-    system_store::SystemStore,
-    transaction_store::TransactionStore,
+use std::{
+    collections::HashMap,
+    iter::Iterator,
+    path::Path,
+    sync::{mpsc, Arc, Mutex},
+    thread::{self, JoinHandle},
+    time::{Duration, Instant},
 };
+
 use anyhow::{ensure, Result};
-use consensus_types::block::Block;
+use itertools::{izip, zip_eq};
+use once_cell::sync::Lazy;
+
 use diem_config::config::RocksdbConfig;
 use diem_crypto::hash::{
     CryptoHash, HashValue, SPARSE_MERKLE_PLACEHOLDER_HASH,
@@ -82,20 +47,56 @@ use diem_types::{
         TransactionWithProof, Version, PRE_GENESIS_VERSION,
     },
 };
-use itertools::{izip, zip_eq};
-use once_cell::sync::Lazy;
+#[cfg(feature = "fuzzing")]
+pub use diemdb_test::test_save_blocks_impl;
 use schemadb::{ColumnFamilyName, Options, DB, DEFAULT_CF_NAME};
-use std::{
-    collections::HashMap,
-    iter::Iterator,
-    path::Path,
-    sync::{mpsc, Arc, Mutex},
-    thread::{self, JoinHandle},
-    time::{Duration, Instant},
-};
 use storage_interface::{
     DBReaderForPoW, DbReader, DbWriter, Order, StartupInfo, TreeState,
 };
+
+use crate::{
+    backup::{backup_handler::BackupHandler, restore_handler::RestoreHandler},
+    change_set::{ChangeSet, SealedChangeSet},
+    errors::DiemDbError,
+    event_store::EventStore,
+    ledger_counters::LedgerCounters,
+    ledger_store::LedgerStore,
+    metrics::{
+        DIEM_STORAGE_API_LATENCY_SECONDS, DIEM_STORAGE_COMMITTED_TXNS,
+        DIEM_STORAGE_LATEST_TXN_VERSION, DIEM_STORAGE_LEDGER_VERSION,
+        DIEM_STORAGE_NEXT_BLOCK_EPOCH, DIEM_STORAGE_OTHER_TIMERS_SECONDS,
+        DIEM_STORAGE_ROCKSDB_PROPERTIES,
+    },
+    pruner::Pruner,
+    schema::*,
+    state_store::StateStore,
+    system_store::SystemStore,
+    transaction_store::TransactionStore,
+};
+
+#[cfg(any(feature = "diemsum"))]
+pub mod diemsum;
+// Used in this and other crates for testing.
+#[cfg(any(test, feature = "fuzzing"))]
+pub mod test_helper;
+
+pub mod backup;
+pub mod errors;
+pub mod metrics;
+pub mod schema;
+
+mod change_set;
+mod event_store;
+mod ledger_counters;
+mod ledger_store;
+mod pruner;
+mod state_store;
+mod system_store;
+mod transaction_store;
+
+#[cfg(any(test, feature = "fuzzing"))]
+#[allow(dead_code)]
+mod diemdb_test;
 
 const MAX_LIMIT: u64 = 1000;
 
@@ -1005,7 +1006,7 @@ impl DbWriter for DiemDB {
             // Gather db mutations to `batch`.
             let mut cs = ChangeSet::new();
 
-            let new_root_hash = self.save_transactions_impl(
+            let _new_root_hash = self.save_transactions_impl(
                 txns_to_commit,
                 first_version,
                 &mut cs,
@@ -1028,7 +1029,7 @@ impl DbWriter for DiemDB {
                     self.ledger_store.put_pos_state(
                         &x.ledger_info().consensus_block_id(),
                         pos_state,
-                    );
+                    )?;
                 }
             }
 

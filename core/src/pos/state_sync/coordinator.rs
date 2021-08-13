@@ -1,6 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(unused)]
 use crate::pos::{
     mempool::{CommitNotification, CommitResponse, CommittedTransaction},
     state_sync::{
@@ -237,7 +238,7 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
                 }
             }
         }
-        diem_error!("Coordinator stops");
+        // diem_error!("Coordinator stops");
     }
 
     /*fn process_new_peer(

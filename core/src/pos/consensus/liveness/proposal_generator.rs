@@ -1,19 +1,16 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::pos::consensus::{
-    block_storage::BlockReader, state_replication::TxnManager,
-    util::time_service::TimeService,
-};
+use std::sync::Arc;
+
 use anyhow::{bail, ensure, format_err, Context};
+
 use consensus_types::{
     block::Block,
     block_data::BlockData,
     common::{Author, Round},
     quorum_cert::QuorumCert,
 };
-
-use diem_crypto::PrivateKey;
 use diem_infallible::Mutex;
 use diem_logger::{debug as diem_debug, error as diem_error};
 use diem_types::{
@@ -25,7 +22,11 @@ use diem_types::{
     validator_verifier::ValidatorVerifier,
 };
 use pow_types::PowInterface;
-use std::sync::Arc;
+
+use crate::pos::consensus::{
+    block_storage::BlockReader, state_replication::TxnManager,
+    util::time_service::TimeService,
+};
 
 #[cfg(test)]
 #[path = "proposal_generator_test.rs"]

@@ -13,7 +13,6 @@ use diem_crypto::{
     HashValue,
 };
 use diem_types::{
-    account_address::AccountAddress,
     account_state_blob::AccountStateBlob,
     block_info::PivotBlockDecision,
     contract_event::ContractEvent,
@@ -29,13 +28,12 @@ use diem_types::{
 };
 pub use error::Error;
 use scratchpad::ProofRead;
-use std::collections::BTreeMap;
 use storage_interface::TreeState;
+
+pub use self::processed_vm_output::{ProcessedVMOutput, TransactionData};
 
 mod error;
 mod processed_vm_output;
-
-pub use self::processed_vm_output::{ProcessedVMOutput, TransactionData};
 
 type SparseMerkleProof = diem_types::proof::SparseMerkleProof<AccountStateBlob>;
 type SparseMerkleTree = scratchpad::SparseMerkleTree<AccountStateBlob>;

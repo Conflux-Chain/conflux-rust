@@ -2,30 +2,12 @@
 // TreeGraph is free software and distributed under Apache License 2.0.
 // See https://www.apache.org/licenses/LICENSE-2.0
 
-use super::{HSB_PROTOCOL_ID, HSB_PROTOCOL_VERSION};
-use crate::{
-    message::{GetMaybeRequestId, Message, MsgId},
-    pos::{
-        consensus::network::NetworkTask as ConsensusNetworkTask,
-        mempool::network::{MempoolSyncMsg, NetworkTask as MempoolNetworkTask},
-        protocol::{
-            message::{block_retrieval::BlockRetrievalRpcRequest, msgid},
-            network_event::NetworkEvent,
-            request_manager::{
-                request_handler::AsAny, RequestManager, RequestMessage,
-            },
-        },
-    },
-    sync::{Error, ErrorKind, CHECK_RPC_REQUEST_TIMER},
-};
+use std::{collections::HashMap, fmt::Debug, mem::discriminant, sync::Arc};
 
-use crate::{
-    pos::{
-        consensus::network::ConsensusMsg,
-        protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
-    },
-    sync::ProtocolConfiguration,
-};
+use keccak_hash::keccak;
+use parking_lot::RwLock;
+use serde::Deserialize;
+
 use cfx_types::H256;
 use consensus_types::{
     epoch_retrieval::EpochRetrievalRequest, proposal_msg::ProposalMsg,
@@ -37,14 +19,33 @@ use diem_types::{
     validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
 };
 use io::TimerToken;
-use keccak_hash::keccak;
 use network::{
     node_table::NodeId, service::ProtocolVersion, NetworkContext,
     NetworkProtocolHandler, NetworkService, UpdateNodeOperation,
 };
-use parking_lot::RwLock;
-use serde::Deserialize;
-use std::{collections::HashMap, fmt::Debug, mem::discriminant, sync::Arc};
+
+use crate::{
+    message::{GetMaybeRequestId, Message, MsgId},
+    pos::{
+        consensus::network::{
+            ConsensusMsg, NetworkTask as ConsensusNetworkTask,
+        },
+        mempool::network::{MempoolSyncMsg, NetworkTask as MempoolNetworkTask},
+        protocol::{
+            message::{
+                block_retrieval::BlockRetrievalRpcRequest,
+                block_retrieval_response::BlockRetrievalRpcResponse, msgid,
+            },
+            network_event::NetworkEvent,
+            request_manager::{
+                request_handler::AsAny, RequestManager, RequestMessage,
+            },
+        },
+    },
+    sync::{Error, ErrorKind, ProtocolConfiguration, CHECK_RPC_REQUEST_TIMER},
+};
+
+use super::{HSB_PROTOCOL_ID, HSB_PROTOCOL_VERSION};
 
 #[derive(Default)]
 pub struct PeerState {
@@ -517,7 +518,7 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
 
     fn on_peer_connected(
         &self, io: &dyn NetworkContext, node_id: &NodeId,
-        peer_protocol_version: ProtocolVersion,
+        _peer_protocol_version: ProtocolVersion,
         pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     )
     {
@@ -587,7 +588,8 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
                 let event = NetworkEvent::PeerConnected;
                 self.mempool_network_task
                     .network_events_tx
-                    .push((*node_id, discriminant(&event)), (*node_id, event));
+                    .push((*node_id, discriminant(&event)), (*node_id, event))
+                    .expect("error sending network_events");
             }
             if let Some(state) = self.peers.get(&peer_hash) {
                 state.write().set_pos_public_key(Some(public_key));

@@ -24,8 +24,6 @@ mod macros {
     pub use cfx_types::H256;
     pub use keccak_hash::keccak;
 
-    pub(super) use super::SolFnTable;
-
     pub use super::super::{
         activate_at::{BlockNumber, IsActive},
         function::{

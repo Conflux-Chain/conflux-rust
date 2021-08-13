@@ -159,7 +159,7 @@ impl SpeculationCache {
     ) -> Self {
         // The DB-bootstrapper applies genesis txn on a local DB and create a
         // waypoint, assuming everything is synced and committed.
-        let mut executor_trees =
+        let executor_trees =
             ExecutedTrees::new_with_pos_state(tree_state, pos_state);
         Self {
             synced_trees: executor_trees.clone(),

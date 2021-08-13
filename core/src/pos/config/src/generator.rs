@@ -22,7 +22,7 @@ pub fn validator_swarm(
     let mut nodes = Vec::new();
 
     for index in 0..count {
-        let mut node =
+        let node =
             NodeConfig::random_with_template(index as u32, template, &mut rng);
         if randomize_ports {
             //node.randomize_ports();

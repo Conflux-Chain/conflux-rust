@@ -23,9 +23,9 @@
 #[macro_use]
 extern crate log;
 
-#[path = "rocksdb/mod.rs"]
-mod impls;
-
 pub use self::impls::{
     db_config, open_database, DatabaseCompactionProfile, SystemDB,
 };
+
+#[path = "rocksdb/mod.rs"]
+mod impls;

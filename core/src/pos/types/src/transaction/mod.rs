@@ -1,10 +1,44 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    collections::HashMap,
+    convert::TryFrom,
+    fmt::{self, Display, Formatter},
+    ops::Deref,
+};
+
+use anyhow::{ensure, format_err, Error, Result};
+#[cfg(any(test, feature = "fuzzing"))]
+use proptest_derive::Arbitrary;
+use serde::{Deserialize, Serialize};
+
+pub use change_set::ChangeSet;
+use diem_crypto::{
+    hash::{CryptoHash, EventAccumulatorHasher},
+    multi_ed25519::{MultiEd25519PublicKey, MultiEd25519Signature},
+    traits::SigningKey,
+    HashValue, PrivateKey, VRFProof,
+};
+use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
+pub use module::Module;
+use move_core_types::{
+    language_storage::TypeTag, transaction_argument::convert_txn_args,
+};
+use pow_types::StakingEvent;
+pub use script::{
+    ArgumentABI, Script, ScriptABI, ScriptFunction, ScriptFunctionABI,
+    TransactionScriptABI, TypeArgumentABI,
+};
+pub use transaction_argument::{
+    parse_transaction_argument, TransactionArgument,
+};
+
 use crate::{
     account_address::AccountAddress,
     account_config::XUS_NAME,
     account_state_blob::AccountStateBlob,
+    block_info::PivotBlockDecision,
     block_metadata::BlockMetadata,
     chain_id::ChainId,
     contract_event::ContractEvent,
@@ -13,28 +47,19 @@ use crate::{
         accumulator::InMemoryAccumulator, TransactionInfoWithProof,
         TransactionListProof,
     },
+    term_state::{
+        DisputeEvent, ElectionEvent, NodeID, RegisterEvent, RetireEvent,
+        UpdateVotingPowerEvent,
+    },
     transaction::authenticator::TransactionAuthenticator,
+    validator_config::{
+        ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
+        ConsensusVRFProof, ConsensusVRFPublicKey,
+    },
     vm_status::{
         DiscardedVMStatus, KeptVMStatus, StatusCode, StatusType, VMStatus,
     },
     write_set::WriteSet,
-};
-use anyhow::{ensure, format_err, Error, Result};
-use diem_crypto::{
-    hash::{CryptoHash, EventAccumulatorHasher},
-    multi_ed25519::{MultiEd25519PublicKey, MultiEd25519Signature},
-    traits::SigningKey,
-    HashValue, PrivateKey, VRFProof,
-};
-use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
-use move_core_types::transaction_argument::convert_txn_args;
-#[cfg(any(test, feature = "fuzzing"))]
-use proptest_derive::Arbitrary;
-use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    convert::TryFrom,
-    fmt::{self, Display, Formatter},
 };
 
 pub mod authenticator;
@@ -44,32 +69,6 @@ pub mod metadata;
 mod module;
 mod script;
 mod transaction_argument;
-
-pub use change_set::ChangeSet;
-pub use module::Module;
-pub use script::{
-    ArgumentABI, Script, ScriptABI, ScriptFunction, ScriptFunctionABI,
-    TransactionScriptABI, TypeArgumentABI,
-};
-
-use crate::{
-    account_address::from_consensus_public_key,
-    block_info::PivotBlockDecision,
-    term_state::{
-        DisputeEvent, ElectionEvent, NodeID, RegisterEvent, RetireEvent,
-        UpdateVotingPowerEvent,
-    },
-    validator_config::{
-        ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
-        ConsensusVRFProof, ConsensusVRFPublicKey,
-    },
-};
-use move_core_types::language_storage::TypeTag;
-use pow_types::StakingEvent;
-use std::ops::Deref;
-pub use transaction_argument::{
-    parse_transaction_argument, TransactionArgument,
-};
 
 pub type Version = u64; // Height - also used for MVCC in StateDB
 

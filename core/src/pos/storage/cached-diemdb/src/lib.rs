@@ -2,45 +2,25 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-mod logging;
-mod speculation_cache;
+use std::sync::Arc;
 
-use anyhow::{anyhow, bail, ensure, format_err, Result};
+use anyhow::{format_err, Result};
+
 use diem_crypto::HashValue;
 use diem_infallible::Mutex;
 use diem_types::{
-    account_address::{AccountAddress, HashAccountAddress},
-    account_state::AccountState,
-    account_state_blob::AccountStateBlob,
     block_info::PivotBlockDecision,
     contract_event::ContractEvent,
-    epoch_state::EpochState,
-    ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
-    on_chain_config,
-    proof::accumulator::InMemoryAccumulator,
-    term_state::{
-        ElectionEvent, NodeID, PosState, RegisterEvent, RetireEvent,
-        UpdateVotingPowerEvent,
-    },
-    transaction::{
-        Transaction, TransactionInfo, TransactionListWithProof,
-        TransactionOutput, TransactionPayload, TransactionStatus,
-        TransactionToCommit, Version,
-    },
-    write_set::{WriteOp, WriteSet},
+    ledger_info::LedgerInfo,
+    term_state::{NodeID, PosState},
+    transaction::Transaction,
 };
-
-use executor_types::{
-    BlockExecutor, ChunkExecutor, Error, ExecutedTrees, ProcessedVMOutput,
-    ProofReader, StateComputeResult, TransactionReplayer,
-};
-use storage_interface::{
-    state_view::VerifiedStateView, DbReaderWriter, TreeState,
-};
-
-use std::sync::Arc;
-
+use executor_types::{Error, ExecutedTrees, ProcessedVMOutput};
 pub use speculation_cache::{SpeculationBlock, SpeculationCache};
+use storage_interface::{DbReaderWriter, TreeState};
+
+mod logging;
+mod speculation_cache;
 
 pub struct CachedDiemDB {
     pub db: DbReaderWriter,

@@ -1,18 +1,11 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use super::counters;
-use crate::{
-    message::RequestId,
-    pos::protocol::{
-        message::{
-            block_retrieval::BlockRetrievalRpcRequest,
-            block_retrieval_response::BlockRetrievalRpcResponse,
-        },
-        network_sender::NetworkSender,
-    },
-};
+use std::{mem::Discriminant, time::Duration};
+
 use anyhow::{anyhow, bail, ensure, format_err};
+use serde::{Deserialize, Serialize};
+
 use channel::{self, diem_channel, message_queues::QueueStyle};
 use consensus_types::{
     block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse},
@@ -28,10 +21,20 @@ use diem_types::{
     account_address::AccountAddress, epoch_change::EpochChangeProof,
     validator_verifier::ValidatorVerifier,
 };
-use futures::StreamExt;
 use network::node_table::NodeId;
-use serde::{Deserialize, Serialize};
-use std::{mem::Discriminant, time::Duration};
+
+use crate::{
+    message::RequestId,
+    pos::protocol::{
+        message::{
+            block_retrieval::BlockRetrievalRpcRequest,
+            block_retrieval_response::BlockRetrievalRpcResponse,
+        },
+        network_sender::NetworkSender,
+    },
+};
+
+use super::counters;
 
 /// Network type for consensus
 #[derive(Clone, Debug, Deserialize, Serialize)]

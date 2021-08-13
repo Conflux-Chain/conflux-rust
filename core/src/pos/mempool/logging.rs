@@ -1,6 +1,6 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
-
+#![allow(unused)]
 use crate::pos::mempool::shared_mempool::{
     peer_manager::BatchId,
     types::{CommitNotification, ConsensusRequest},

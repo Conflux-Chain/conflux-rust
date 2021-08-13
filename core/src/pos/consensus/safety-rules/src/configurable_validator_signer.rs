@@ -1,18 +1,20 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{Error, PersistentSafetyStorage};
+use serde::Serialize;
+
 use diem_crypto::hash::CryptoHash;
 use diem_global_constants::CONSENSUS_KEY;
 use diem_types::{
     account_address::AccountAddress,
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
-        ConsensusVRFPrivateKey, ConsensusVRFPublicKey,
+        ConsensusVRFPrivateKey,
     },
     validator_signer::ValidatorSigner,
 };
-use serde::Serialize;
+
+use crate::{Error, PersistentSafetyStorage};
 
 /// A ConfigurableValidatorSigner is a ValidatorSigner wrapper that offers
 /// either a ValidatorSigner instance or a ValidatorHandle instance, depending
@@ -56,16 +58,6 @@ impl ConfigurableValidatorSigner {
         match self {
             ConfigurableValidatorSigner::Signer(signer) => signer.public_key(),
             ConfigurableValidatorSigner::Handle(handle) => handle.key_version(),
-        }
-    }
-
-    /// Returns the VRF public key associated with the signer configuration.
-    pub fn vrf_public_key(&self) -> Option<ConsensusVRFPublicKey> {
-        match self {
-            ConfigurableValidatorSigner::Signer(signer) => {
-                signer.vrf_public_key()
-            }
-            ConfigurableValidatorSigner::Handle(handle) => todo!(),
         }
     }
 

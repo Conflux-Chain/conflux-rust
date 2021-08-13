@@ -235,7 +235,8 @@ where
                 private_key_dir.join(PathBuf::from(i.to_string())),
                 &[],
                 &(&private_key, &vrf_private_key),
-            );
+            )
+            .expect("Error saving private keys");
 
             let public_key = ConsensusPublicKey::from(&private_key);
             let vrf_public_key = ConsensusVRFPublicKey::from(&vrf_private_key);

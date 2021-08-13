@@ -692,7 +692,7 @@ impl RpcImpl {
     }
 
     pub fn pos_update_voting_power(
-        &self, pos_account: AccountAddress, increased_voting_power: U64,
+        &self, _pos_account: AccountAddress, _increased_voting_power: U64,
     ) -> JsonRpcResult<()> {
         unimplemented!()
     }
@@ -720,7 +720,8 @@ impl RpcImpl {
         let (tx, _rx) = oneshot::channel();
         futures::executor::block_on(
             self.pos_tx_sender.lock().send((signed_tx, tx)),
-        );
+        )
+        .map_err(|_| RpcError::internal_error())?;
         Ok(())
     }
 }

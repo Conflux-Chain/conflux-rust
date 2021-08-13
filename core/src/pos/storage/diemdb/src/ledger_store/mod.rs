@@ -4,22 +4,13 @@
 //! This file defines ledger store APIs that are related to the main ledger
 //! accumulator, from the root(LedgerInfo) to leaf(TransactionInfo).
 
-use crate::{
-    change_set::ChangeSet,
-    errors::DiemDbError,
-    schema::{
-        committed_block::CommittedBlockSchema,
-        epoch_by_version::EpochByVersionSchema, ledger_info::LedgerInfoSchema,
-        ledger_info_by_block::LedgerInfoByBlockSchema,
-        pos_state::PosStateSchema, reward_event::RewardEventSchema,
-        transaction_accumulator::TransactionAccumulatorSchema,
-        transaction_info::TransactionInfoSchema,
-    },
-};
-use accumulator::{HashReader, MerkleAccumulator};
+use std::{ops::Deref, sync::Arc};
+
 use anyhow::{ensure, format_err, Result};
 use arc_swap::ArcSwap;
-use consensus_types::block::Block;
+use itertools::Itertools;
+
+use accumulator::{HashReader, MerkleAccumulator};
 use diem_crypto::{
     hash::{CryptoHash, TransactionAccumulatorHasher},
     HashValue,
@@ -38,10 +29,21 @@ use diem_types::{
     term_state::PosState,
     transaction::{TransactionInfo, Version},
 };
-use itertools::Itertools;
 use schemadb::{ReadOptions, SchemaIterator, DB};
-use std::{ops::Deref, sync::Arc};
 use storage_interface::{StartupInfo, TreeState};
+
+use crate::{
+    change_set::ChangeSet,
+    errors::DiemDbError,
+    schema::{
+        committed_block::CommittedBlockSchema,
+        epoch_by_version::EpochByVersionSchema, ledger_info::LedgerInfoSchema,
+        ledger_info_by_block::LedgerInfoByBlockSchema,
+        pos_state::PosStateSchema, reward_event::RewardEventSchema,
+        transaction_accumulator::TransactionAccumulatorSchema,
+        transaction_info::TransactionInfoSchema,
+    },
+};
 
 #[derive(Debug)]
 pub(crate) struct LedgerStore {

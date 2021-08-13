@@ -58,7 +58,7 @@ pub struct BlockInfo {
 
 impl BlockInfo {
     pub fn new(
-        epoch: u64, round: Round, id: HashValue, executed_state_id: HashValue,
+        epoch: u64, round: Round, id: HashValue, _executed_state_id: HashValue,
         version: Version, timestamp_usecs: u64,
         next_epoch_state: Option<EpochState>,
         pivot: Option<PivotBlockDecision>,

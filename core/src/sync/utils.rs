@@ -1,16 +1,39 @@
+use std::{
+    collections::HashMap, path::Path, str::FromStr, sync::Arc, time::Duration,
+};
+
+use parking_lot::Mutex;
+use rand_08::{prelude::StdRng, SeedableRng};
+use threadpool::ThreadPool;
+use tokio::runtime;
+
+use cfx_internal_common::ChainIdParamsInner;
+use cfx_parameters::{
+    block::{MAX_BLOCK_SIZE_IN_BYTES, REFEREE_DEFAULT_BOUND},
+    consensus::{GENESIS_GAS_LIMIT, TRANSACTION_DEFAULT_EPOCH_BOUND},
+    WORKER_COMPUTATION_PARALLELISM,
+};
+use cfx_storage::{StorageConfiguration, StorageManager};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use diem_config::keys::ConfigKey;
+use diem_crypto::Uniform;
+use diem_types::validator_config::{
+    ConsensusPrivateKey, ConsensusVRFPrivateKey,
+};
+use primitives::{Block, BlockHeaderBuilder};
+use storage_interface::{mock::MockDbReader, DBReaderForPoW};
+
 use crate::{
     block_data_manager::{BlockDataManager, DataManagerConfiguration, DbType},
     cache_config::CacheConfig,
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
-        pos_handler::{
-            FakeDiemDB, PosConfiguration, PosConnection, PosVerifier,
-        },
+        pos_handler::{PosConfiguration, PosConnection, PosVerifier},
         ConsensusConfig, ConsensusInnerConfig,
     },
     db::NUM_COLUMNS,
     machine::new_machine_with_builtin,
-    pos::{consensus::ConsensusDB, pow_handler::PowHandler},
+    pos::pow_handler::PowHandler,
     pow::{self, PowComputer, ProofOfWorkConfig},
     spec::genesis::genesis_block,
     statistics::Statistics,
@@ -20,27 +43,6 @@ use crate::{
     vm_factory::VmFactory,
     ConsensusGraph, NodeType, Notifications, TransactionPool,
 };
-use cfx_internal_common::ChainIdParamsInner;
-use cfx_parameters::{
-    block::{MAX_BLOCK_SIZE_IN_BYTES, REFEREE_DEFAULT_BOUND},
-    consensus::{GENESIS_GAS_LIMIT, TRANSACTION_DEFAULT_EPOCH_BOUND},
-    WORKER_COMPUTATION_PARALLELISM,
-};
-use cfx_storage::{StorageConfiguration, StorageManager};
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
-use core::str::FromStr;
-use diem_config::keys::ConfigKey;
-use diem_crypto::Uniform;
-use diem_types::validator_config::{
-    ConsensusPrivateKey, ConsensusVRFPrivateKey,
-};
-use parking_lot::Mutex;
-use primitives::{Block, BlockHeaderBuilder};
-use rand_08::{prelude::StdRng, SeedableRng};
-use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
-use storage_interface::{DBReaderForPoW, DbReader};
-use threadpool::ThreadPool;
-use tokio::runtime;
 
 pub fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: U256,
@@ -178,8 +180,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
     let machine = Arc::new(new_machine_with_builtin(Default::default(), vm));
     let mut rng = StdRng::from_seed([0u8; 32]);
     let pos_connection = PosConnection::new(
-        Arc::new(FakeDiemDB {}) as Arc<dyn DBReaderForPoW>,
-        Arc::new(ConsensusDB::new(".")),
+        Arc::new(MockDbReader {}) as Arc<dyn DBReaderForPoW>
     );
     let pos_verifier = Arc::new(PosVerifier::new(
         pos_connection,

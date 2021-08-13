@@ -183,7 +183,8 @@ pub fn initialize_common_modules(
             let mut rng = StdRng::from_rng(OsRng).unwrap();
             let private_key = ConsensusPrivateKey::generate(&mut rng);
             let vrf_private_key = ConsensusVRFPrivateKey::generate(&mut rng);
-            save_pri_key(key_path, &passwd, &(&private_key, &vrf_private_key));
+            save_pri_key(key_path, &passwd, &(&private_key, &vrf_private_key))
+                .expect("error saving private key");
             (ConfigKey::new(private_key), ConfigKey::new(vrf_private_key))
         }
     };
@@ -359,8 +360,7 @@ pub fn initialize_common_modules(
     );
     debug!("PoS initialized");
     let pos_connection = PosConnection::new(
-        diem_handler.diem_db.clone() as Arc<dyn DBReaderForPoW>,
-        diem_handler.consensus_db.clone(),
+        diem_handler.diem_db.clone() as Arc<dyn DBReaderForPoW>
     );
     // FIXME(lpl): Set CIP height.
     let pos_verifier = Arc::new(PosVerifier::new(
@@ -892,7 +892,6 @@ use crate::{
     GENESIS_VERSION,
 };
 pub use crate::{common::pos::DiemHandle, configuration::Configuration};
-use anyhow;
 use blockgen::BlockGenerator;
 use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, U256};
@@ -931,7 +930,7 @@ use jsonrpc_ws_server::Server as WSServer;
 use keccak_hash::keccak;
 use keylib::KeyPair;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
-use network::{service::load_pos_private_key, NetworkService};
+use network::NetworkService;
 use parking_lot::{Condvar, Mutex};
 use rand_08::{prelude::StdRng, rngs::OsRng, SeedableRng};
 use runtime::Runtime;

@@ -545,8 +545,8 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
 }
 
 pub struct NormalSyncPhase {
-    pow_handler: Arc<PowHandler>,
-    consensus: Arc<ConsensusGraph>,
+    _pow_handler: Arc<PowHandler>,
+    _consensus: Arc<ConsensusGraph>,
 }
 
 impl NormalSyncPhase {
@@ -554,8 +554,8 @@ impl NormalSyncPhase {
         pow_handler: Arc<PowHandler>, consensus: Arc<ConsensusGraph>,
     ) -> Self {
         NormalSyncPhase {
-            pow_handler,
-            consensus,
+            _pow_handler: pow_handler,
+            _consensus: consensus,
         }
     }
 }

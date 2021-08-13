@@ -103,17 +103,17 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         .unwrap();
     }
 
-    fn add_total_pos_staking(&mut self, v: U256) { unimplemented!() }
+    fn add_total_pos_staking(&mut self, _v: U256) { unimplemented!() }
 
     fn inc_distributable_pos_interest(
-        &mut self, current_block_number: u64,
+        &mut self, _current_block_number: u64,
     ) -> Result<()> {
         unimplemented!()
     }
 
     fn distribute_pos_interest<'a>(
-        &mut self, pos_points: Box<dyn Iterator<Item = (&'a H256, u64)> + 'a>,
-        account_start_nonce: U256, current_block_number: u64,
+        &mut self, _pos_points: Box<dyn Iterator<Item = (&'a H256, u64)> + 'a>,
+        _account_start_nonce: U256, _current_block_number: u64,
     ) -> Result<()>
     {
         unimplemented!()
@@ -637,7 +637,7 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     }
 
     fn update_pos_status(
-        &mut self, identifier: H256, number: u64,
+        &mut self, _identifier: H256, _number: u64,
     ) -> Result<()> {
         unimplemented!()
     }

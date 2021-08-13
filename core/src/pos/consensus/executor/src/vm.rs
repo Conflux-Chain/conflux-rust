@@ -1,11 +1,10 @@
+use std::collections::BTreeMap;
+
 use consensus_types::{block::Block, vote::Vote};
 use diem_logger::{error as diem_error, prelude::*};
 use diem_state_view::StateView;
 use diem_types::{
-    access_path::AccessPath,
     account_address::from_consensus_public_key,
-    account_config::pivot_chain_select_address,
-    block_info::PivotBlockDecision,
     contract_event::ContractEvent,
     epoch_state::EpochState,
     on_chain_config::{self, new_epoch_event_key, OnChainConfig, ValidatorSet},
@@ -14,14 +13,11 @@ use diem_types::{
         ConflictSignature, DisputePayload, Transaction, TransactionOutput,
         TransactionPayload, TransactionStatus, WriteSetPayload,
     },
-    validator_info::ValidatorInfo,
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
     vm_status::{KeptVMStatus, StatusCode, VMStatus},
     write_set::{WriteOp, WriteSetMut},
 };
 use move_core_types::language_storage::TypeTag;
-use std::collections::BTreeMap;
-use storage_interface::DbReaderWriter;
 
 /// This trait describes the VM's execution interface.
 pub trait VMExecutor: Send {
@@ -34,7 +30,7 @@ pub trait VMExecutor: Send {
     /// them.
     fn execute_block(
         transactions: Vec<Transaction>, state_view: &dyn StateView,
-        catch_up_mode: bool, db: &DbReaderWriter,
+        catch_up_mode: bool,
     ) -> Result<Vec<TransactionOutput>, VMStatus>;
 }
 
@@ -44,14 +40,14 @@ pub struct FakeVM;
 impl VMExecutor for FakeVM {
     fn execute_block(
         transactions: Vec<Transaction>, state_view: &dyn StateView,
-        catch_up_mode: bool, db: &DbReaderWriter,
+        catch_up_mode: bool,
     ) -> Result<Vec<TransactionOutput>, VMStatus>
     {
         let mut vm_outputs = Vec::new();
         for transaction in transactions {
             // Execute the transaction
             match transaction {
-                Transaction::BlockMetadata(data) => {
+                Transaction::BlockMetadata(_) => {
                     let mut events = state_view.pos_state().get_unlock_events();
                     diem_debug!("get_unlock_events: {}", events.len());
                     // FIXME(lpl)
@@ -63,6 +59,7 @@ impl VMExecutor for FakeVM {
                             .pos_state()
                             .get_new_committee()
                             .map_err(|e| {
+                                diem_warn!("get_new_committee error: {:?}", e);
                                 VMStatus::Error(StatusCode::CFX_INVALID_TX)
                             })?;
                         let epoch = (state_view.pos_state().current_view() + 1)
