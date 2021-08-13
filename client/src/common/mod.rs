@@ -289,7 +289,12 @@ pub fn initialize_common_modules(
 
     let network = {
         let mut network = NetworkService::new(network_config.clone());
-        network.start((self_pos_private_key.public_key(), self_vrf_private_key.public_key())).unwrap();
+        network
+            .start((
+                self_pos_private_key.public_key(),
+                self_vrf_private_key.public_key(),
+            ))
+            .unwrap();
         Arc::new(network)
     };
 

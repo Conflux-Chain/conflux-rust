@@ -70,7 +70,7 @@ impl Default for StorageConfig {
             // Gigabytes of disk space depending on the size of an
             // average account blob.
             prune_window: Some(1_000_000),
-            data_dir: PathBuf::from("/opt/diem/data"),
+            data_dir: PathBuf::from("./pos_db"),
             // Default read/write/connection timeout, in milliseconds
             timeout_ms: 30_000,
             rocksdb_config: RocksdbConfig::default(),
