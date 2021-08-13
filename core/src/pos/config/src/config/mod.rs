@@ -98,7 +98,7 @@ pub struct BaseConfig {
 impl Default for BaseConfig {
     fn default() -> BaseConfig {
         BaseConfig {
-            data_dir: PathBuf::from("/opt/diem/data"),
+            data_dir: PathBuf::from("./pos_db"),
             role: RoleType::Validator,
             waypoint: WaypointConfig::None,
         }

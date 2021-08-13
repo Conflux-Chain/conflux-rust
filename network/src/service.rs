@@ -27,6 +27,7 @@ use diem_types::{
     account_address::from_consensus_public_key,
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
+        ConsensusVRFPublicKey,
     },
 };
 use keccak_hash::keccak;
@@ -49,7 +50,6 @@ use std::{
     sync::{atomic::Ordering as AtomicOrdering, Arc},
     time::{Duration, Instant},
 };
-use diem_types::validator_config::ConsensusVRFPublicKey;
 
 const MAX_SESSIONS: usize = 2048;
 
@@ -203,7 +203,9 @@ impl NetworkService {
     }
 
     /// Create and start the event loop inside the NetworkService
-    pub fn start(&mut self, pos_pub_keys: (ConsensusPublicKey, ConsensusVRFPublicKey)) -> Result<(), Error> {
+    pub fn start(
+        &mut self, pos_pub_keys: (ConsensusPublicKey, ConsensusVRFPublicKey),
+    ) -> Result<(), Error> {
         let raw_io_service =
             IoService::<NetworkIoMessage>::start(self.network_poll.clone())?;
         self.io_service = Some(raw_io_service);
@@ -214,7 +216,10 @@ impl NetworkService {
             }
 
             let inner = Arc::new(match self.config.test_mode {
-                true => NetworkServiceInner::new_with_latency(&self.config, pos_pub_keys)?,
+                true => NetworkServiceInner::new_with_latency(
+                    &self.config,
+                    pos_pub_keys,
+                )?,
                 false => NetworkServiceInner::new(&self.config, pos_pub_keys)?,
             });
             self.io_service
@@ -504,7 +509,8 @@ impl NetworkServiceInner {
     pub fn new(
         config: &NetworkConfiguration,
         pos_pub_keys: (ConsensusPublicKey, ConsensusVRFPublicKey),
-    ) -> Result<NetworkServiceInner, Error> {
+    ) -> Result<NetworkServiceInner, Error>
+    {
         let mut listen_address = match config.listen_address {
             None => SocketAddr::V4(SocketAddrV4::new(
                 Ipv4Addr::new(0, 0, 0, 0),
@@ -654,7 +660,8 @@ impl NetworkServiceInner {
     pub fn new_with_latency(
         config: &NetworkConfiguration,
         pos_pub_keys: (ConsensusPublicKey, ConsensusVRFPublicKey),
-    ) -> Result<NetworkServiceInner, Error> {
+    ) -> Result<NetworkServiceInner, Error>
+    {
         let r = NetworkServiceInner::new(config, pos_pub_keys);
         if r.is_err() {
             return r;
