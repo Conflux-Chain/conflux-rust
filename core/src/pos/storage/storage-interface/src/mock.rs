@@ -3,23 +3,21 @@
 
 //! This module provides mock dbreader for tests.
 
-use crate::{DbReader, Order, StartupInfo, TreeState};
+use crate::{DBReaderForPoW, DbReader, Order, StartupInfo, TreeState};
 use anyhow::Result;
 use diem_crypto::HashValue;
 use diem_types::{
     account_address::AccountAddress,
-    account_config::AccountResource,
-    account_state::AccountState,
     account_state_blob::{AccountStateBlob, AccountStateWithProof},
+    committed_block::CommittedBlock,
     contract_event::{ContractEvent, EventWithProof},
     epoch_change::EpochChangeProof,
-    event::{EventHandle, EventKey},
+    event::EventKey,
     ledger_info::LedgerInfoWithSignatures,
     proof::{AccumulatorConsistencyProof, SparseMerkleProof},
+    reward_distribution_event::RewardDistributionEvent,
     transaction::{TransactionListWithProof, TransactionWithProof, Version},
 };
-use move_core_types::move_resource::MoveResource;
-use std::convert::TryFrom;
 
 /// This is a mock of the dbreader in tests.
 pub struct MockDbReader;
@@ -62,7 +60,7 @@ impl DbReader for MockDbReader {
     fn get_latest_account_state(
         &self, _address: AccountAddress,
     ) -> Result<Option<AccountStateBlob>> {
-        Ok(Some(get_mock_account_state_blob()))
+        unimplemented!()
     }
 
     /// Returns the latest ledger info.
@@ -128,21 +126,40 @@ impl DbReader for MockDbReader {
     }
 }
 
-fn get_mock_account_state_blob() -> AccountStateBlob {
-    let account_resource = AccountResource::new(
-        0,
-        vec![],
-        None,
-        None,
-        EventHandle::random_handle(0),
-        EventHandle::random_handle(0),
-    );
+impl DBReaderForPoW for MockDbReader {
+    fn get_latest_ledger_info_option(
+        &self,
+    ) -> Option<LedgerInfoWithSignatures> {
+        todo!()
+    }
 
-    let mut account_state = AccountState::default();
-    account_state.insert(
-        AccountResource::resource_path(),
-        bcs::to_bytes(&account_resource).unwrap(),
-    );
+    fn get_block_ledger_info(
+        &self, _consensus_block_id: &HashValue,
+    ) -> anyhow::Result<LedgerInfoWithSignatures> {
+        todo!()
+    }
 
-    AccountStateBlob::try_from(&account_state).unwrap()
+    fn get_events_by_version(
+        &self, _start_version: u64, _end_version: u64,
+    ) -> anyhow::Result<Vec<ContractEvent>> {
+        todo!()
+    }
+
+    fn get_epoch_ending_blocks(
+        &self, _start_epoch: u64, _end_epoch: u64,
+    ) -> anyhow::Result<Vec<HashValue>> {
+        todo!()
+    }
+
+    fn get_reward_event(
+        &self, _epoch: u64,
+    ) -> anyhow::Result<RewardDistributionEvent> {
+        todo!()
+    }
+
+    fn get_committed_block(
+        &self, _block_hash: &HashValue,
+    ) -> anyhow::Result<CommittedBlock> {
+        todo!()
+    }
 }

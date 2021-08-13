@@ -1059,9 +1059,11 @@ impl ConsensusExecutionHandler {
                 .get_unlock_nodes(current_pos_ref, parent_pos_ref)
             {
                 debug!("unlock node: {:?}", unlock_node_id);
-                state.update_pos_status(unlock_node_id, 1);
+                state
+                    .update_pos_status(unlock_node_id, 1)
+                    .expect("db error");
             }
-            for dispute_node_id in self
+            for _dispute_node_id in self
                 .pos_verifier
                 .get_disputed_nodes(current_pos_ref, parent_pos_ref)
             {

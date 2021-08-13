@@ -169,7 +169,7 @@ impl TransactionAuthenticator {
                 public_key.to_bytes().to_vec()
             }
             Self::BLS { public_key, .. } => public_key.to_bytes().to_vec(),
-            Self::MultiBLS { public_keys, .. } => todo!(),
+            Self::MultiBLS { .. } => todo!(),
         }
     }
 
@@ -181,7 +181,7 @@ impl TransactionAuthenticator {
                 signature.to_bytes().to_vec()
             }
             Self::BLS { signature, .. } => signature.to_bytes().to_vec(),
-            Self::MultiBLS { signatures, .. } => todo!(),
+            Self::MultiBLS { .. } => todo!(),
         }
     }
 

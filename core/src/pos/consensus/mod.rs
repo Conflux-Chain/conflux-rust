@@ -10,7 +10,6 @@
 
 #![cfg_attr(not(feature = "fuzzing"), deny(missing_docs))]
 #![cfg_attr(feature = "fuzzing", allow(dead_code))]
-#![recursion_limit = "512"]
 
 mod block_storage;
 mod consensusdb;
@@ -39,7 +38,6 @@ mod util;
 pub mod consensus_provider;
 
 pub use self::network::NetworkTask;
-pub use consensusdb::ConsensusDB;
 #[cfg(feature = "fuzzing")]
 pub use round_manager::round_manager_fuzzing;
 pub use util::config_subscription::gen_consensus_reconfig_subscription;

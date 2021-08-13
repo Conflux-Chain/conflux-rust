@@ -34,7 +34,7 @@ use std::{
 };
 use thiserror::Error;
 
-#[cfg(any(feature = "testing", feature = "fuzzing"))]
+// #[cfg(any(feature = "testing", feature = "fuzzing"))]
 pub mod mock;
 pub mod state_view;
 

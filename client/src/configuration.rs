@@ -27,8 +27,7 @@ use cfxcore::{
     },
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
-        pos_handler::{PosConfiguration, PosVerifier},
-        ConsensusConfig, ConsensusInnerConfig,
+        pos_handler::PosVerifier, ConsensusConfig, ConsensusInnerConfig,
     },
     consensus_internal_parameters::*,
     consensus_parameters::*,
@@ -1225,7 +1224,7 @@ pub fn save_initial_nodes_to_file(
     );
     let mut conf = BTreeMap::new();
     conf.insert("initial_nodes".to_string(), nodes);
-    fs::write(path, toml::to_string(&Value::Table(conf)).unwrap());
+    fs::write(path, toml::to_string(&Value::Table(conf)).unwrap()).unwrap();
 }
 
 pub fn read_initial_nodes_from_file(

@@ -7,7 +7,7 @@ use cfxcore::{
     pos::{
         consensus::{
             consensus_provider::start_consensus,
-            gen_consensus_reconfig_subscription, ConsensusDB,
+            gen_consensus_reconfig_subscription,
             NetworkTask as ConsensusNetworkTask,
         },
         mempool::{
@@ -64,7 +64,6 @@ pub struct DiemHandle {
     // pow handler
     pub pow_handler: Arc<PowHandler>,
     pub diem_db: Arc<DiemDB>,
-    pub consensus_db: Arc<ConsensusDB>,
     pub tx_sender: mpsc::Sender<(
         SignedTransaction,
         oneshot::Sender<anyhow::Result<SubmissionStatus>>,
@@ -295,24 +294,23 @@ pub fn setup_pos_environment(
     // Initialize and start consensus.
     instant = Instant::now();
     debug!("own_pos_public_key: {:?}", own_pos_public_key);
-    let (consensus_runtime, pow_handler, stopped, consensus_db) =
-        start_consensus(
-            node_config,
-            network_sender,
-            consensus_network_receiver,
-            consensus_to_mempool_sender,
-            state_sync_client,
-            diem_db.clone(),
-            db_with_cache,
-            consensus_reconfig_events,
-            own_pos_public_key.map_or_else(
-                || AccountAddress::random(),
-                |public_key| {
-                    from_consensus_public_key(&public_key.0, &public_key.1)
-                },
-            ),
-            mp_client_sender.clone(),
-        );
+    let (consensus_runtime, pow_handler, stopped) = start_consensus(
+        node_config,
+        network_sender,
+        consensus_network_receiver,
+        consensus_to_mempool_sender,
+        state_sync_client,
+        diem_db.clone(),
+        db_with_cache,
+        consensus_reconfig_events,
+        own_pos_public_key.map_or_else(
+            || AccountAddress::random(),
+            |public_key| {
+                from_consensus_public_key(&public_key.0, &public_key.1)
+            },
+        ),
+        mp_client_sender.clone(),
+    );
     debug!("Consensus started in {} ms", instant.elapsed().as_millis());
 
     DiemHandle {
@@ -322,7 +320,6 @@ pub fn setup_pos_environment(
         _state_sync_bootstrapper: state_sync_bootstrapper,
         _mempool: mempool,
         diem_db,
-        consensus_db,
         tx_sender: mp_client_sender,
     }
 }

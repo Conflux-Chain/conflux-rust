@@ -14,11 +14,15 @@ use anyhow::{anyhow, bail, ensure, format_err, Result};
 use fail::fail_point;
 
 use cached_diemdb::CachedDiemDB;
+use cfx_types::H256;
+use consensus_types::db::LedgerBlockRW;
 use diem_crypto::{
-    hash::{CryptoHash, EventAccumulatorHasher, TransactionAccumulatorHasher},
+    hash::{
+        CryptoHash, EventAccumulatorHasher, TransactionAccumulatorHasher,
+        PRE_GENESIS_BLOCK_ID,
+    },
     HashValue,
 };
-use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_state_view::StateViewId;
 use diem_types::{
@@ -26,13 +30,17 @@ use diem_types::{
     account_state::AccountState,
     account_state_blob::AccountStateBlob,
     block_info::PivotBlockDecision,
+    committed_block::CommittedBlock,
     contract_event::ContractEvent,
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
     on_chain_config,
     proof::accumulator::InMemoryAccumulator,
     reward_distribution_event::{RewardDistributionEvent, VoteCount},
-    term_state::ElectionEvent,
+    term_state::{
+        ElectionEvent, PosState, RegisterEvent, RetireEvent,
+        UpdateVotingPowerEvent,
+    },
     transaction::{
         Transaction, TransactionInfo, TransactionListWithProof,
         TransactionOutput, TransactionPayload, TransactionStatus,
@@ -44,9 +52,8 @@ use executor_types::{
     BlockExecutor, ChunkExecutor, Error, ExecutedTrees, ProcessedVMOutput,
     ProofReader, StateComputeResult, TransactionData, TransactionReplayer,
 };
-use storage_interface::{
-    state_view::VerifiedStateView, DbReaderWriter, TreeState,
-};
+use pow_types::PowInterface;
+use storage_interface::state_view::VerifiedStateView;
 
 use crate::{
     logging::{LogEntry, LogSchema},
@@ -60,16 +67,6 @@ use crate::{
     },
     vm::VMExecutor,
 };
-use cfx_types::H256;
-use consensus_types::db::{FakeLedgerBlockDB, LedgerBlockRW};
-use diem_crypto::hash::PRE_GENESIS_BLOCK_ID;
-use diem_types::{
-    committed_block::CommittedBlock,
-    term_state::{
-        NodeID, PosState, RegisterEvent, RetireEvent, UpdateVotingPowerEvent,
-    },
-};
-use pow_types::PowInterface;
 
 pub mod db_bootstrapper;
 mod logging;
@@ -288,7 +285,6 @@ where V: VMExecutor
         let mut txn_info_hashes = vec![];
 
         let proof_reader = ProofReader::new(account_to_proof);
-        let new_epoch_event_key = on_chain_config::new_epoch_event_key();
         let pivot_select_event_key =
             PivotBlockDecision::pivot_select_event_key();
         let election_event_key = ElectionEvent::event_key();
@@ -673,12 +669,8 @@ where V: VMExecutor
         fail_point!("executor::vm_execute_chunk", |_| {
             Err(anyhow::anyhow!("Injected error in execute_chunk"))
         });
-        let vm_outputs = V::execute_block(
-            transactions.clone(),
-            &state_view,
-            true,
-            &self.db_with_cache.db,
-        )?;
+        let vm_outputs =
+            V::execute_block(transactions.clone(), &state_view, true)?;
 
         // Since other validators have committed these transactions, their
         // status should all be TransactionStatus::Keep.
@@ -1038,7 +1030,6 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     transactions.clone(),
                     &state_view,
                     catch_up_mode,
-                    &self.db_with_cache.db,
                 )
                 .map_err(anyhow::Error::from)?
             };
@@ -1157,7 +1148,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
             // Force retire the nodes that have not voted in this term.
             for (node, vote_count) in &elected {
                 if vote_count.vote_count == 0 {
-                    pos_state_to_commit.retire_node(&node);
+                    pos_state_to_commit.retire_node(&node)?;
                 }
             }
 
@@ -1171,7 +1162,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
             self.db_with_cache.db.writer.save_reward_event(
                 ledger_info_with_sigs.ledger_info().epoch(),
                 &reward_event,
-            );
+            )?;
         }
 
         diem_info!(
@@ -1238,7 +1229,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                             .unwrap(),
                         version: b.output().version().unwrap(),
                     },
-                );
+                )?;
             }
         } else {
             self.db_with_cache.db.writer.save_committed_block(
@@ -1256,7 +1247,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                         .clone(),
                     version: ledger_info_with_sigs.ledger_info().version(),
                 },
-            );
+            )?;
         }
         for (txn, txn_data) in blocks.iter().flat_map(|block| {
             itertools::zip_eq(

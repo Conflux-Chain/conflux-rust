@@ -831,7 +831,7 @@ impl<H: CryptoHasher> AccumulatorExtensionProof<H> {
     }
 
     pub fn verify(
-        &self, original_root: HashValue,
+        &self, _original_root: HashValue,
     ) -> anyhow::Result<InMemoryAccumulator<H>> {
         let original_tree = InMemoryAccumulator::<H>::new(
             self.frozen_subtree_roots.clone(),

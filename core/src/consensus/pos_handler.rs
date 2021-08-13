@@ -1,32 +1,17 @@
-use crate::pos::consensus::ConsensusDB;
+use std::sync::Arc;
+
 use cfx_types::H256;
-use consensus_types::db::LedgerBlockRW;
 use diem_config::keys::ConfigKey;
 use diem_crypto::HashValue;
 use diem_types::{
-    account_address::AccountAddress,
-    account_state_blob::{AccountStateBlob, AccountStateWithProof},
-    committed_block::CommittedBlock,
-    contract_event::{ContractEvent, EventWithProof},
-    epoch_change::EpochChangeProof,
+    contract_event::ContractEvent,
     epoch_state::EpochState,
-    event::EventKey,
-    ledger_info::LedgerInfoWithSignatures,
-    proof::{AccumulatorConsistencyProof, SparseMerkleProof},
     reward_distribution_event::RewardDistributionEvent,
-    term_state::{
-        DisputeEvent, UnlockEvent, BONUS_VOTE_POINTS, COMMITTEE_POINTS,
-        ELECTION_POINTS, LEADER_POINTS,
-    },
-    transaction::{TransactionListWithProof, TransactionWithProof, Version},
+    term_state::{DisputeEvent, UnlockEvent},
     validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
 };
 use primitives::pos::{NodeId, PosBlockId};
-use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, sync::Arc};
-use storage_interface::{
-    DBReaderForPoW, DbReader, Order, StartupInfo, TreeState,
-};
+use storage_interface::DBReaderForPoW;
 
 pub type PosVerifier = PosHandler<PosConnection>;
 
@@ -195,19 +180,11 @@ impl<PoS: PosInterface> PosHandler<PoS> {
 
 pub struct PosConnection {
     pos_storage: Arc<dyn DBReaderForPoW>,
-    pos_consensus_db: Arc<ConsensusDB>,
 }
 
 impl PosConnection {
-    pub fn new(
-        pos_storage: Arc<dyn DBReaderForPoW>,
-        pos_consensus_db: Arc<ConsensusDB>,
-    ) -> Self
-    {
-        Self {
-            pos_storage,
-            pos_consensus_db,
-        }
+    pub fn new(pos_storage: Arc<dyn DBReaderForPoW>) -> Self {
+        Self { pos_storage }
     }
 }
 
@@ -320,146 +297,4 @@ pub struct PosConfiguration {
 fn diem_hash_to_h256(h: &HashValue) -> PosBlockId { H256::from(h.as_ref()) }
 fn h256_to_diem_hash(h: &PosBlockId) -> HashValue {
     HashValue::new(h.to_fixed_bytes())
-}
-
-pub struct FakeDiemDB {}
-impl DBReaderForPoW for FakeDiemDB {
-    fn get_latest_ledger_info_option(
-        &self,
-    ) -> Option<LedgerInfoWithSignatures> {
-        todo!()
-    }
-
-    fn get_block_ledger_info(
-        &self, _consensus_block_id: &HashValue,
-    ) -> anyhow::Result<LedgerInfoWithSignatures> {
-        todo!()
-    }
-
-    fn get_events_by_version(
-        &self, _start_version: u64, _end_version: u64,
-    ) -> anyhow::Result<Vec<ContractEvent>> {
-        todo!()
-    }
-
-    fn get_epoch_ending_blocks(
-        &self, _start_epoch: u64, _end_epoch: u64,
-    ) -> anyhow::Result<Vec<HashValue>> {
-        todo!()
-    }
-
-    fn get_reward_event(
-        &self, epoch: u64,
-    ) -> anyhow::Result<RewardDistributionEvent> {
-        todo!()
-    }
-
-    fn get_committed_block(
-        &self, block_hash: &HashValue,
-    ) -> anyhow::Result<CommittedBlock> {
-        todo!()
-    }
-}
-
-impl DbReader for FakeDiemDB {
-    fn get_epoch_ending_ledger_infos(
-        &self, start_epoch: u64, end_epoch: u64,
-    ) -> anyhow::Result<EpochChangeProof> {
-        todo!()
-    }
-
-    fn get_transactions(
-        &self, start_version: Version, batch_size: u64,
-        ledger_version: Version, fetch_events: bool,
-    ) -> anyhow::Result<TransactionListWithProof>
-    {
-        todo!()
-    }
-
-    fn get_events(
-        &self, event_key: &EventKey, start: u64, order: Order, limit: u64,
-    ) -> anyhow::Result<Vec<(u64, ContractEvent)>> {
-        todo!()
-    }
-
-    fn get_events_with_proofs(
-        &self, event_key: &EventKey, start: u64, order: Order, limit: u64,
-        known_version: Option<u64>,
-    ) -> anyhow::Result<Vec<EventWithProof>>
-    {
-        todo!()
-    }
-
-    fn get_block_timestamp(&self, version: u64) -> anyhow::Result<u64> {
-        todo!()
-    }
-
-    fn get_latest_account_state(
-        &self, address: AccountAddress,
-    ) -> anyhow::Result<Option<AccountStateBlob>> {
-        todo!()
-    }
-
-    fn get_latest_ledger_info(
-        &self,
-    ) -> anyhow::Result<LedgerInfoWithSignatures> {
-        todo!()
-    }
-
-    fn get_startup_info(&self) -> anyhow::Result<Option<StartupInfo>> {
-        todo!()
-    }
-
-    fn get_txn_by_account(
-        &self, address: AccountAddress, seq_num: u64, ledger_version: Version,
-        fetch_events: bool,
-    ) -> anyhow::Result<Option<TransactionWithProof>>
-    {
-        todo!()
-    }
-
-    fn get_state_proof_with_ledger_info(
-        &self, known_version: u64, ledger_info: LedgerInfoWithSignatures,
-    ) -> anyhow::Result<(EpochChangeProof, AccumulatorConsistencyProof)> {
-        todo!()
-    }
-
-    fn get_state_proof(
-        &self, known_version: u64,
-    ) -> anyhow::Result<(
-        LedgerInfoWithSignatures,
-        EpochChangeProof,
-        AccumulatorConsistencyProof,
-    )> {
-        todo!()
-    }
-
-    fn get_account_state_with_proof(
-        &self, address: AccountAddress, version: Version,
-        ledger_version: Version,
-    ) -> anyhow::Result<AccountStateWithProof>
-    {
-        todo!()
-    }
-
-    fn get_account_state_with_proof_by_version(
-        &self, address: AccountAddress, version: Version,
-    ) -> anyhow::Result<(
-        Option<AccountStateBlob>,
-        SparseMerkleProof<AccountStateBlob>,
-    )> {
-        todo!()
-    }
-
-    fn get_latest_state_root(&self) -> anyhow::Result<(Version, HashValue)> {
-        todo!()
-    }
-
-    fn get_latest_tree_state(&self) -> anyhow::Result<TreeState> { todo!() }
-
-    fn get_epoch_ending_ledger_info(
-        &self, known_version: u64,
-    ) -> anyhow::Result<LedgerInfoWithSignatures> {
-        todo!()
-    }
 }

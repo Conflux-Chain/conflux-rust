@@ -1,12 +1,12 @@
-use crate::{
-    account_address::AccountAddress,
-    term_state::{
-        BONUS_VOTE_POINTS, COMMITTEE_POINTS, ELECTION_POINTS, LEADER_POINTS,
-    },
-};
-use cfx_types::H256;
-use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
+use serde::{Deserialize, Serialize};
+
+use cfx_types::H256;
+
+use crate::term_state::{
+    BONUS_VOTE_POINTS, COMMITTEE_POINTS, ELECTION_POINTS, LEADER_POINTS,
+};
 
 #[derive(Clone, Serialize, Deserialize, Default, Debug, Eq, PartialEq)]
 pub struct VoteCount {

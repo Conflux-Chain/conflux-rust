@@ -100,7 +100,7 @@ impl<V: VMExecutor> GenesisCommitter<V> {
 
     pub fn waypoint(&self) -> Waypoint { self.waypoint }
 
-    pub fn commit(mut self) -> Result<()> {
+    pub fn commit(self) -> Result<()> {
         self.executor.commit_blocks(
             vec![genesis_block_id()],
             self.ledger_info_with_sigs,
@@ -128,7 +128,7 @@ pub fn calculate_genesis<V: VMExecutor>(
         initial_nodes,
         genesis_pivot_decision.clone(),
     ));
-    let mut executor = Executor::<V>::new(
+    let executor = Executor::<V>::new(
         db_with_cache,
         // This will not be used in genesis execution.
         Arc::new(FakePowHandler {}),

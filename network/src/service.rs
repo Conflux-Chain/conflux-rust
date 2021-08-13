@@ -2,7 +2,39 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::DisconnectReason;
+use std::{
+    cmp::{min, Ordering},
+    collections::{BinaryHeap, HashMap, HashSet, VecDeque},
+    fmt::Formatter,
+    fs,
+    io::{self, Read, Write},
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::{atomic::Ordering as AtomicOrdering, Arc},
+    time::{Duration, Instant},
+};
+
+use keccak_hash::keccak;
+use mio::{tcp::*, udp::*, *};
+use parity_path::restrict_permissions_owner;
+use parking_lot::{Mutex, RwLock};
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+
+use cfx_addr::Network;
+use cfx_bytes::Bytes;
+use diem_crypto::ValidCryptoMaterialStringExt;
+use diem_types::{
+    account_address::from_consensus_public_key,
+    validator_config::{
+        ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
+        ConsensusVRFPublicKey,
+    },
+};
+use keylib::{sign, Generator, KeyPair, Random, Secret};
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use priority_send_queue::SendQueuePriority;
+
 use crate::{
     discovery::Discovery,
     handshake::BYPASS_CRYPTOGRAPHY,
@@ -18,38 +50,8 @@ use crate::{
     NetworkProtocolHandler, PeerInfo, ProtocolId, ProtocolInfo,
     UpdateNodeOperation, NODE_TAG_ARCHIVE, NODE_TAG_NODE_TYPE,
 };
-use cfx_addr::Network;
-use cfx_bytes::Bytes;
-use diem_crypto::{
-    key_file::load_pri_key, PrivateKey, ValidCryptoMaterialStringExt,
-};
-use diem_types::{
-    account_address::from_consensus_public_key,
-    validator_config::{
-        ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
-        ConsensusVRFPublicKey,
-    },
-};
-use keccak_hash::keccak;
-use keylib::{sign, Generator, KeyPair, Random, Secret};
-use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
-use mio::{tcp::*, udp::*, *};
-use parity_path::restrict_permissions_owner;
-use parking_lot::{Mutex, RwLock};
-use priority_send_queue::SendQueuePriority;
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::{
-    cmp::{min, Ordering},
-    collections::{BinaryHeap, HashMap, HashSet, VecDeque},
-    fmt::Formatter,
-    fs,
-    io::{self, Read, Write},
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
-    path::{Path, PathBuf},
-    str::FromStr,
-    sync::{atomic::Ordering as AtomicOrdering, Arc},
-    time::{Duration, Instant},
-};
+
+use super::DisconnectReason;
 
 const MAX_SESSIONS: usize = 2048;
 

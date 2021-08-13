@@ -15,8 +15,6 @@ use diem_types::PeerId;
 };*/
 use serde::{Deserialize, Serialize};
 
-const STATE_SYNC_MAX_BUFFER_SIZE: usize = 1;
-
 /// State sync network messages
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum StateSyncMessage {

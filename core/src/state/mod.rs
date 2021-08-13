@@ -2,17 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub use self::{
-    account_entry::{OverlayAccount, COMMISSION_PRIVILEGE_SPECIAL_KEY},
-    substate::{cleanup_mode, CallStackInfo, Substate},
+use std::{
+    collections::{hash_map::Entry, HashMap, HashSet},
+    sync::Arc,
 };
 
-use self::account_entry::{AccountEntry, AccountState};
-use crate::{
-    executive::{pos_internal_entries, IndexStatus},
-    hash::KECCAK_EMPTY,
-    transaction_pool::SharedTransactionPool,
+use num::integer::Roots;
+use parking_lot::{
+    MappedRwLockWriteGuard, RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
+
 use cfx_bytes::Bytes;
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
@@ -38,19 +37,23 @@ use cfx_types::{
     address_util::AddressUtil, Address, BigEndianHash, H256, U256,
 };
 use diem_types::term_state::MAX_TERM_POINTS;
-use num::integer::Roots;
-use parking_lot::{
-    MappedRwLockWriteGuard, RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard,
-};
 #[cfg(test)]
 use primitives::storage::STORAGE_LAYOUT_REGULAR_V0;
 use primitives::{
     Account, DepositList, EpochId, SkipInputCheck, SponsorInfo, StorageKey,
     StorageLayout, StorageValue, VoteStakeList,
 };
-use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
-    sync::Arc,
+
+use crate::{
+    executive::{pos_internal_entries, IndexStatus},
+    hash::KECCAK_EMPTY,
+    transaction_pool::SharedTransactionPool,
+};
+
+use self::account_entry::{AccountEntry, AccountState};
+pub use self::{
+    account_entry::{OverlayAccount, COMMISSION_PRIVILEGE_SPECIAL_KEY},
+    substate::{cleanup_mode, CallStackInfo, Substate},
 };
 
 mod account_entry;
@@ -1800,7 +1803,6 @@ trait AccountEntryProtectedMethods {
 }
 
 fn sqrt_u256(input: U256) -> U256 {
-    use std::ops::{Shl, Shr};
     let bits = input.bits();
     if bits <= 64 {
         return input.as_u64().sqrt().into();

@@ -1,15 +1,25 @@
-use super::super::contracts::{IncreaseStakeEvent, RegisterEvent};
-use crate::{
-    executive::{internal_contract::SolidityEventTrait, InternalRefContext},
-    vm::{self, ActionParams},
-};
 use bls_signatures::{
     sigma_protocol::{decode_answer, decode_commit, verify},
     Error as CryptoError, PublicKey, Serialize,
 };
-use cfx_parameters::staking::POS_VOTE_PRICE;
-use cfx_types::{Address, BigEndianHash, H256, U256};
 use tiny_keccak::{Hasher, Keccak};
+
+use cfx_parameters::{
+    internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS,
+    staking::POS_VOTE_PRICE,
+};
+use cfx_types::{Address, BigEndianHash, H256, U256};
+use entries::*;
+use pow_types::StakingEvent::{self, IncreaseStake, Register};
+use primitives::log_entry::LogEntry;
+use solidity_abi::ABIDecodable;
+
+use crate::{
+    executive::{internal_contract::SolidityEventTrait, InternalRefContext},
+    vm::{self, ActionParams},
+};
+
+use super::super::contracts::{IncreaseStakeEvent, RegisterEvent};
 
 pub struct IndexStatus {
     pub registered: u64,
@@ -184,12 +194,12 @@ pub fn register(
         param,
         address_entry(&identifier),
         address_to_u256(sender),
-    );
+    )?;
     context.set_storage(
         param,
         identifier_entry(&sender),
         identifier.into_uint(),
-    );
+    )?;
     update_vote_power(
         identifier, sender, vote_power, /* allow_uninitialized */ true,
         param, context,
@@ -268,8 +278,9 @@ pub fn decode_register_info(event: &LogEntry) -> Option<StakingEvent> {
 }
 
 pub mod entries {
-    pub type StorageEntryKey = Vec<u8>;
     use super::*;
+
+    pub type StorageEntryKey = Vec<u8>;
 
     fn prefix_and_hash(prefix: u64, data: &[u8]) -> StorageEntryKey {
         let mut hasher = Keccak::v256();
@@ -295,11 +306,3 @@ pub mod entries {
         prefix_and_hash(2, sender.as_bytes())
     }
 }
-use entries::*;
-
-use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
-use diem_types::validator_config::ConsensusPublicKey;
-use move_core_types::account_address::AccountAddress;
-use pow_types::StakingEvent::{self, IncreaseStake, Register};
-use primitives::log_entry::LogEntry;
-use solidity_abi::ABIDecodable;

@@ -1,24 +1,22 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{
+    fmt,
+    sync::Arc,
+    time::Duration,
+};
+
+use serde::Serialize;
+
+use consensus_types::{common::Round, sync_info::SyncInfo, vote::Vote};
+use diem_logger::{prelude::*, Schema};
+use diem_types::validator_verifier::ValidatorVerifier;
+
 use crate::pos::consensus::{
     counters,
     pending_votes::{PendingVotes, VoteReceptionResult},
     util::time_service::{SendTask, TimeService},
-};
-use consensus_types::{common::Round, sync_info::SyncInfo, vote::Vote};
-use diem_logger::{prelude::*, Schema};
-use diem_types::{
-    account_address::AccountAddress, block_info::PivotBlockDecision,
-    validator_config::ConsensusSignature,
-    validator_verifier::ValidatorVerifier,
-};
-use serde::Serialize;
-use std::{
-    collections::{BTreeMap, HashMap},
-    fmt,
-    sync::Arc,
-    time::Duration,
 };
 
 /// A reason for starting a new round: introduced for monitoring / debug
@@ -177,11 +175,6 @@ pub struct RoundState {
     pending_votes: PendingVotes,
     // Vote sent locally for the current round.
     vote_sent: Option<Vote>,
-
-    received_pivot_decisions: HashMap<
-        PivotBlockDecision,
-        BTreeMap<AccountAddress, ConsensusSignature>,
-    >,
 }
 
 #[derive(Default, Schema)]
@@ -236,7 +229,6 @@ impl RoundState {
             new_round_sent: false,
             pending_votes: PendingVotes::new(),
             vote_sent: None,
-            received_pivot_decisions: HashMap::new(),
         }
     }
 

@@ -1,32 +1,17 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{
-    block_storage::{
-        tracing::{observe_block, BlockStage},
-        BlockReader, BlockRetriever, BlockStore,
-    },
-    counters,
-    error::VerifyError,
-    liveness::{
-        proposal_generator::ProposalGenerator,
-        proposer_election::ProposerElection,
-        round_state::{NewRoundEvent, NewRoundReason, RoundState},
-    },
-    logging::{LogEvent, LogSchema},
-    metrics_safety_rules::MetricsSafetyRules,
-    network::{
-        ConsensusMsg, ConsensusNetworkSender, IncomingBlockRetrievalRequest,
-    },
-    pending_votes::VoteReceptionResult,
-    persistent_liveness_storage::{PersistentLivenessStorage, RecoveryData},
-    state_replication::{StateComputer, TxnManager},
-};
-use crate::pos::{
-    mempool::SubmissionStatus,
-    protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
-};
+use std::{sync::Arc, time::Duration};
+
 use anyhow::{bail, ensure, Context, Result};
+use fail::fail_point;
+use futures::{
+    channel::{mpsc, oneshot},
+    SinkExt,
+};
+use serde::Serialize;
+use termion::color::*;
+
 use consensus_types::{
     block::Block,
     block_retrieval::{BlockRetrievalResponse, BlockRetrievalStatus},
@@ -52,23 +37,39 @@ use diem_types::{
         ConflictSignature, DisputePayload, ElectionPayload, RawTransaction,
         SignedTransaction,
     },
-    validator_config::{
-        ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
-        ConsensusVRFProof,
-    },
+    validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
     validator_verifier::ValidatorVerifier,
-};
-use fail::fail_point;
-use futures::{
-    channel::{mpsc, oneshot},
-    SinkExt,
 };
 #[cfg(test)]
 use safety_rules::ConsensusState;
 use safety_rules::TSafetyRules;
-use serde::Serialize;
-use std::{sync::Arc, time::Duration};
-use termion::color::*;
+
+use crate::pos::{
+    mempool::SubmissionStatus,
+    protocol::message::block_retrieval_response::BlockRetrievalRpcResponse,
+};
+
+use super::{
+    block_storage::{
+        tracing::{observe_block, BlockStage},
+        BlockReader, BlockRetriever, BlockStore,
+    },
+    counters,
+    error::VerifyError,
+    liveness::{
+        proposal_generator::ProposalGenerator,
+        proposer_election::ProposerElection,
+        round_state::{NewRoundEvent, NewRoundReason, RoundState},
+    },
+    logging::{LogEvent, LogSchema},
+    metrics_safety_rules::MetricsSafetyRules,
+    network::{
+        ConsensusMsg, ConsensusNetworkSender, IncomingBlockRetrievalRequest,
+    },
+    pending_votes::VoteReceptionResult,
+    persistent_liveness_storage::{PersistentLivenessStorage, RecoveryData},
+    state_replication::{StateComputer, TxnManager},
+};
 
 #[derive(Serialize, Clone)]
 pub enum UnverifiedEvent {
@@ -376,9 +377,9 @@ impl RoundManager {
         let signed_tx =
             raw_tx.sign(&proposal_generator.private_key)?.into_inner();
         let (tx, rx) = oneshot::channel();
-        self.tx_sender.send((signed_tx, tx)).await;
+        self.tx_sender.send((signed_tx, tx)).await?;
         // TODO(lpl): Check if we want to wait here.
-        rx.await?;
+        rx.await??;
         diem_debug!("broadcast_pivot_decision sends");
         Ok(())
     }
@@ -413,9 +414,9 @@ impl RoundManager {
             let signed_tx =
                 raw_tx.sign(&private_key.private_key())?.into_inner();
             let (tx, rx) = oneshot::channel();
-            self.tx_sender.send((signed_tx, tx)).await;
+            self.tx_sender.send((signed_tx, tx)).await?;
             // TODO(lpl): Check if we want to wait here.
-            rx.await?;
+            rx.await??;
             diem_debug!(
                 "broadcast_election sends: target_term={}",
                 target_term
@@ -609,7 +610,7 @@ impl RoundManager {
                 block_for_ledger_info,
                 true,
                 false,
-            );
+            )?;
         };
         self.block_store.commit(ledger_info.clone()).await?;
         Ok(())
@@ -1103,8 +1104,8 @@ impl RoundManager {
                         // TODO(lpl): Track disputed nodes to avoid sending
                         // multiple dispute, and retry if needed?
                         let (tx, rx) = oneshot::channel();
-                        self.tx_sender.send((signed_tx, tx)).await;
-                        rx.await?;
+                        self.tx_sender.send((signed_tx, tx)).await?;
+                        rx.await??;
                     }
                     None => {}
                 }
@@ -1187,7 +1188,7 @@ impl RoundManager {
         };
         self.network
             .network_sender()
-            .send_message_with_peer_id(&request.peer_id, &response);
+            .send_message_with_peer_id(&request.peer_id, &response)?;
         Ok(())
     }
 

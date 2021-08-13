@@ -37,7 +37,6 @@ use link_cut_tree::{CaterpillarMinLinkCutTree, SizeMinLinkCutTree};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{Counter, CounterUsize};
-use move_core_types::vm_status::StatusCode::POSITIVE_STACK_SIZE_AT_BLOCK_END;
 use primitives::{
     pos::PosBlockId, Block, BlockHeader, BlockHeaderBuilder, EpochId,
 };

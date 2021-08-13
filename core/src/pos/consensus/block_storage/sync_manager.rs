@@ -144,16 +144,18 @@ impl BlockStore {
                 }
             }
 
-            // Wait for PoW to enter NormalPhase
-            self.pow_handler.wait_for_initialization(
-                self.get_block(qc.certified_block().id())
-                    .unwrap()
-                    .compute_result()
-                    .pivot_decision()
-                    .clone()
-                    .unwrap()
-                    .block_hash,
-            );
+            // Wait for PoW to process fetched PoS references.
+            self.pow_handler
+                .wait_for_initialization(
+                    self.get_block(qc.certified_block().id())
+                        .unwrap()
+                        .compute_result()
+                        .pivot_decision()
+                        .clone()
+                        .unwrap()
+                        .block_hash,
+                )
+                .await;
         }
 
         self.insert_single_quorum_cert(qc)
@@ -239,7 +241,7 @@ impl BlockRetriever {
         &'a mut self, qc: &'a QuorumCert, num_blocks: u64,
     ) -> anyhow::Result<Vec<Block>> {
         let block_id = qc.certified_block().id();
-        let mut peers: Vec<&AccountAddress> =
+        let peers: Vec<&AccountAddress> =
             qc.ledger_info().signatures().keys().collect();
         self.request_block(num_blocks, block_id, peers).await
     }
@@ -248,7 +250,7 @@ impl BlockRetriever {
         &mut self, ledger_info: &LedgerInfoWithSignatures,
     ) -> anyhow::Result<Block> {
         let block_id = ledger_info.ledger_info().consensus_block_id();
-        let mut peers: Vec<&AccountAddress> =
+        let peers: Vec<&AccountAddress> =
             ledger_info.signatures().keys().collect();
         let mut blocks = self.request_block(1, block_id, peers).await?;
         if blocks.len() == 1 {
