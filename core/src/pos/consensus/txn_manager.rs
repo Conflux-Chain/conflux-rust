@@ -11,6 +11,7 @@ use crate::pos::mempool::{
 
 use super::{error::MempoolError, state_replication::TxnManager};
 use anyhow::{format_err, Result};
+use async_oneshot::oneshot;
 use consensus_types::{block::Block, common::Payload};
 use diem_crypto::HashValue;
 use diem_logger::prelude::*;
@@ -18,7 +19,7 @@ use diem_metrics::monitor;
 use diem_types::validator_verifier::ValidatorVerifier;
 use executor_types::StateComputeResult;
 use fail::fail_point;
-use futures::channel::{mpsc, oneshot};
+use futures::channel::mpsc;
 use std::time::Duration;
 use tokio::time::timeout;
 
@@ -61,7 +62,7 @@ impl MempoolProxy {
         parent_block_id: HashValue, validators: ValidatorVerifier,
     ) -> Result<Payload, MempoolError>
     {
-        let (callback, callback_rcv) = oneshot::channel();
+        let (callback, callback_rcv) = oneshot();
         let req = ConsensusRequest::GetBlockRequest(
             max_size,
             exclude_txns.clone(),
@@ -87,13 +88,15 @@ impl MempoolProxy {
                 "[consensus] did not receive GetBlockResponse on time"
             )
             .into()),
-            Ok(resp) => match resp.map_err(anyhow::Error::from)?? {
-                ConsensusResponse::GetBlockResponse(txns) => Ok(txns),
-                _ => Err(anyhow::anyhow!(
-                    "[consensus] did not receive expected GetBlockResponse"
-                )
-                .into()),
-            },
+            Ok(resp) => {
+                match resp.map_err(|e| anyhow::anyhow!("{:?}", e))?? {
+                    ConsensusResponse::GetBlockResponse(txns) => Ok(txns),
+                    _ => Err(anyhow::anyhow!(
+                        "[consensus] did not receive expected GetBlockResponse"
+                    )
+                    .into()),
+                }
+            }
         }
     }
 }
@@ -174,7 +177,7 @@ impl TxnManager for MempoolProxy {
             return Ok(());
         }
 
-        let (callback, callback_rcv) = oneshot::channel();
+        let (callback, callback_rcv) = oneshot();
         let req = ConsensusRequest::RejectNotification(rejected_txns, callback);
 
         // send to shared mempool
