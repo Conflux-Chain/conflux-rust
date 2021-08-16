@@ -112,7 +112,7 @@ impl ClockTimeService {
 impl TimeService for ClockTimeService {
     fn run_after(&self, timeout: Duration, mut t: Box<dyn ScheduledTask>) {
         let task = async move {
-            std::thread::sleep(timeout);
+            tokio::time::sleep(timeout).await;
             t.run().await;
         };
         self.executor.spawn(task);
