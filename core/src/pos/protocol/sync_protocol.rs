@@ -25,7 +25,7 @@ use network::{
 };
 
 use crate::{
-    message::{GetMaybeRequestId, Message, MsgId},
+    message::{Message, MsgId},
     pos::{
         consensus::network::{
             ConsensusMsg, NetworkTask as ConsensusNetworkTask,
@@ -584,7 +584,7 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
                 from_consensus_public_key(&public_key.0, &public_key.1),
                 peer_hash,
             );
-            if (add_new_peer) {
+            if add_new_peer {
                 let event = NetworkEvent::PeerConnected;
                 self.mempool_network_task
                     .network_events_tx
@@ -626,6 +626,13 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
                 );
             }
         }
+        // notify pos mempool
+        let event = NetworkEvent::PeerDisconnected;
+        self.mempool_network_task
+            .network_events_tx
+            .push((*peer, discriminant(&event)), (*peer, event))
+            .expect("error sending network_events");
+
         self.request_manager.on_peer_disconnected(io, peer);
         info!(
             "hsb on_peer_disconnected: peer={}, peer count {}",

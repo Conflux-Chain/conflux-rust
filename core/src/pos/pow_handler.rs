@@ -10,7 +10,7 @@ use futures::channel::oneshot;
 use parking_lot::RwLock;
 use pow_types::{PowInterface, StakingEvent};
 use primitives::filter::{LogFilter, LogFilterParams};
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 use tokio::runtime::Handle;
 
 // FIXME(lpl): Decide the value.

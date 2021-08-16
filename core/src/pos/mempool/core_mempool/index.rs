@@ -2,23 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// This module provides various indexes used by Mempool.
-use crate::pos::mempool::{
-    core_mempool::transaction::{MempoolTransaction, TimelineState},
-    counters,
-    logging::{LogEntry, LogSchema},
+use crate::pos::mempool::core_mempool::transaction::{
+    MempoolTransaction, TimelineState,
 };
 use diem_crypto::HashValue;
-use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress, transaction::GovernanceRole,
 };
-use rand::seq::SliceRandom;
 use std::{
     cmp::Ordering,
-    collections::{
-        btree_set::Iter, hash_map::Values, BTreeMap, BTreeSet, HashMap,
-    },
-    iter::Rev,
+    collections::{hash_map::Values, BTreeMap, BTreeSet, HashMap},
     ops::Bound,
     time::Duration,
 };
@@ -68,10 +61,6 @@ impl AccountTransactions {
         }
     }
 
-    pub(crate) fn len(&self) -> usize {
-        self.pivot_decision_transaction.len() + self.normal_transaction.len()
-    }
-
     pub(crate) fn iter(&self) -> AccountTransactionIter {
         self.normal_transaction.values()
     }
@@ -87,54 +76,6 @@ impl From<&MempoolTransaction> for TxnPointer {
     fn from(transaction: &MempoolTransaction) -> Self {
         (transaction.get_sender(), transaction.get_hash())
     }
-}
-
-/// PriorityIndex represents the main Priority Queue in Mempool.
-/// It's used to form the transaction block for Consensus.
-/// Transactions are ordered by gas price. Second level ordering is done by
-/// expiration time.
-///
-/// We don't store the full content of transactions in the index.
-/// Instead we use `OrderedQueueKey` - logical reference to the transaction in
-/// the main store.
-pub struct PriorityIndex {
-    data: BTreeSet<OrderedQueueKey>,
-}
-
-pub type PriorityQueueIter<'a> = Rev<Iter<'a, OrderedQueueKey>>;
-
-impl PriorityIndex {
-    pub(crate) fn new() -> Self {
-        Self {
-            data: BTreeSet::new(),
-        }
-    }
-
-    pub(crate) fn insert(&mut self, txn: &MempoolTransaction) {
-        self.data.insert(self.make_key(&txn));
-    }
-
-    pub(crate) fn remove(&mut self, txn: &MempoolTransaction) {
-        self.data.remove(&self.make_key(&txn));
-    }
-
-    pub(crate) fn contains(&self, txn: &MempoolTransaction) -> bool {
-        self.data.contains(&self.make_key(txn))
-    }
-
-    fn make_key(&self, txn: &MempoolTransaction) -> OrderedQueueKey {
-        OrderedQueueKey {
-            gas_ranking_score: txn.ranking_score,
-            expiration_time: txn.expiration_time,
-            address: txn.get_sender(),
-            hash: txn.get_hash(),
-            governance_role: txn.governance_role,
-        }
-    }
-
-    pub(crate) fn iter(&self) -> PriorityQueueIter { self.data.iter().rev() }
-
-    pub(crate) fn size(&self) -> usize { self.data.len() }
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Hash)]

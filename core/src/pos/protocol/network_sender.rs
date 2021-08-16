@@ -4,7 +4,7 @@
 
 use std::{mem::discriminant, sync::Arc};
 
-use anyhow::{format_err, Context};
+use anyhow::format_err;
 use futures::channel::oneshot;
 
 use diem_types::account_address::AccountAddress;
