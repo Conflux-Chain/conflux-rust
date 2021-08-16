@@ -181,8 +181,7 @@ impl PeerManager {
     pub fn execute_broadcast(
         &self, peer: NodeId, scheduled_backoff: bool, smp: &mut SharedMempool,
     ) {
-        diem_info!("start execute_broadcast");
-        debug!("execute_broadcast for peer[{:?}]", peer);
+        trace!("execute_broadcast for peer[{:?}]", peer);
         // Start timer for tracking broadcast latency.
         let start_time = Instant::now();
 
