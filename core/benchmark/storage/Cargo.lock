@@ -188,7 +188,7 @@ version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "489d6c0ed21b11d038c31b6ceccca973e65d73ba3bd8ecb9a2babf5546164643"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder",
  "safemem",
 ]
 
@@ -284,7 +284,7 @@ name = "blooms-db"
 version = "0.1.0"
 source = "git+https://github.com/paritytech/parity-ethereum?tag=v2.4.0#c7d8ee1dd7c5d0167b589616c77945abdc5c5928"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder",
  "ethbloom 0.5.3",
  "parking_lot 0.7.1",
  "tiny-keccak 1.5.0",
@@ -292,21 +292,10 @@ dependencies = [
 
 [[package]]
 name = "bn"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "110f279b7f5e161fa755841785d5c4181510b31287dc0b47d09ed6d158975906"
-dependencies = [
- "byteorder 0.5.3",
- "rand 0.3.23",
- "rustc-serialize",
-]
-
-[[package]]
-name = "bn"
 version = "0.4.4"
-source = "git+https://github.com/paritytech/bn?rev=635c4cdd560bc0c8b262e6bf809dc709da8bcd7e#635c4cdd560bc0c8b262e6bf809dc709da8bcd7e"
+source = "git+https://github.com/Conflux-Chain/bn.git?rev=635c4cdd560bc0c8b262e6bf809dc709da8bcd7e#635c4cdd560bc0c8b262e6bf809dc709da8bcd7e"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder",
  "crunchy 0.2.2",
  "lazy_static",
  "rand 0.5.6",
@@ -331,12 +320,6 @@ dependencies = [
 
 [[package]]
 name = "byteorder"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fc10e8cc6b2580fda3f36eb6dc5316657f812a3df879a44a66fc9f0fdbc4855"
-
-[[package]]
-name = "byteorder"
 version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
@@ -347,7 +330,7 @@ version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "206fdffcfa2df7cbe15601ef46c813fce0965eb3286db6b56c583b814b51c81c"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder",
  "iovec",
 ]
 
@@ -540,8 +523,8 @@ name = "cfxcore"
 version = "1.1.4"
 dependencies = [
  "bit-set",
- "bn 0.4.4",
- "byteorder 1.4.3",
+ "bn",
+ "byteorder",
  "cfx-addr",
  "cfx-bytes",
  "cfx-internal-common",
@@ -1208,8 +1191,8 @@ version = "1.12.0"
 source = "git+https://github.com/paritytech/parity-ethereum?tag=v2.4.0#c7d8ee1dd7c5d0167b589616c77945abdc5c5928"
 dependencies = [
  "ansi_term 0.10.2",
- "bn 0.4.3",
- "byteorder 1.4.3",
+ "bn",
+ "byteorder",
  "common-types",
  "crossbeam",
  "error-chain",
@@ -1423,7 +1406,7 @@ name = "ethkey"
 version = "0.3.0"
 source = "git+https://github.com/paritytech/parity-ethereum?tag=v2.4.0#c7d8ee1dd7c5d0167b589616c77945abdc5c5928"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder",
  "edit-distance",
  "eth-secp256k1",
  "ethereum-types 0.4.2",
@@ -1490,7 +1473,7 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3367952ceb191f4ab95dd5685dc163ac539e36202f9fcfd0cb22f9f9c542fefc"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder",
  "libc",
  "rand 0.7.3",
  "rustc-hex 2.1.0",
@@ -1503,7 +1486,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11498d382790b7a8f2fd211780bec78619bba81cdad3a283997c0c41f836759c"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder",
  "rand 0.7.3",
  "rustc-hex 2.1.0",
  "static_assertions",
@@ -3004,7 +2987,7 @@ version = "0.31.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "511379a8194230c2395d2f5fa627a5a7e108a9f976656ce723ae68fca4097bfc"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder",
 ]
 
 [[package]]
@@ -3287,7 +3270,7 @@ dependencies = [
 name = "primitives"
 version = "0.1.0"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder",
  "cfx-bytes",
  "cfx-types",
  "cfxkey",
@@ -3358,7 +3341,7 @@ version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "efb0dcbddbb600f47a7098d33762a00552c671992171637f5bb310b37fe1f0e4"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder",
  "log 0.4.14",
  "parity-wasm",
 ]
@@ -3747,7 +3730,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "16d1effe9845d54f90e7be8420ee49e5c94623140b97ee4bc6fb5bfddb745720"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder",
  "ethereum-types 0.4.2",
  "rustc-hex 2.1.0",
 ]
@@ -4732,7 +4715,7 @@ version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "754ba11732b9161b94c41798e5197e5e75388d012f760c42adb5000353e98646"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder",
  "crunchy 0.1.6",
  "heapsize",
  "rustc-hex 2.1.0",
@@ -4744,7 +4727,7 @@ version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9db035e67dfaf7edd9aebfe8676afcd63eed53c8a4044fed514c8cccf1835177"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder",
  "crunchy 0.2.2",
  "rustc-hex 2.1.0",
  "static_assertions",
@@ -4880,7 +4863,7 @@ name = "vm"
 version = "0.1.0"
 source = "git+https://github.com/paritytech/parity-ethereum?tag=v2.4.0#c7d8ee1dd7c5d0167b589616c77945abdc5c5928"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder",
  "ethereum-types 0.4.2",
  "ethjson",
  "keccak-hash 0.1.2",
@@ -4908,7 +4891,7 @@ name = "wasm"
 version = "0.1.0"
 source = "git+https://github.com/paritytech/parity-ethereum?tag=v2.4.0#c7d8ee1dd7c5d0167b589616c77945abdc5c5928"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder",
  "ethereum-types 0.4.2",
  "libc",
  "log 0.4.14",
@@ -4924,7 +4907,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4a6d379e9332b1b1f52c5a87f2481c85c7c931d8ec411963dfb8f26b1ec1e3"
 dependencies = [
- "byteorder 1.4.3",
+ "byteorder",
  "memory_units",
  "nan-preserving-float",
  "parity-wasm",
