@@ -1,11 +1,7 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    fmt,
-    sync::Arc,
-    time::Duration,
-};
+use std::{fmt, sync::Arc, time::Duration};
 
 use serde::Serialize;
 

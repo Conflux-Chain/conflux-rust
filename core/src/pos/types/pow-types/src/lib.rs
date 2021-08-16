@@ -16,8 +16,6 @@ pub trait PowInterface: Send + Sync {
     fn get_staking_events(
         &self, parent_decision: H256, me_decision: H256,
     ) -> Result<Vec<StakingEvent>>;
-
-    async fn wait_for_initialization(&self, last_decision: H256);
 }
 
 #[derive(Debug)]
@@ -51,6 +49,4 @@ impl PowInterface for FakePowHandler {
     ) -> Result<Vec<StakingEvent>> {
         todo!()
     }
-
-    async fn wait_for_initialization(&self, _last_decision: H256) { todo!() }
 }
