@@ -19,6 +19,7 @@ use crate::pos::mempool::{
     CommitNotification, CommitResponse, CommittedTransaction, ConsensusRequest,
     ConsensusResponse, SubmissionStatus,
 };
+use cached_diemdb::CachedDiemDB;
 use anyhow::Result;
 use diem_infallible::{Mutex, RwLock};
 use diem_logger::prelude::*;
@@ -37,7 +38,6 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use storage_interface::DbReader;
 use tokio::runtime::Handle;
 
 // ============================== //
@@ -348,7 +348,7 @@ pub(crate) async fn process_state_sync_request(
 }
 
 pub(crate) async fn process_consensus_request(
-    db: Arc<dyn DbReader>, mempool: &Mutex<CoreMempool>, req: ConsensusRequest,
+    db: Arc<CachedDiemDB>, mempool: &Mutex<CoreMempool>, req: ConsensusRequest,
 ) {
     // Start latency timer
     let start_time = Instant::now();

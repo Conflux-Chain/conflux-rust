@@ -8,6 +8,7 @@ use anyhow::{format_err, Result};
 
 use diem_crypto::HashValue;
 use diem_infallible::Mutex;
+use diem_logger::prelude::*;
 use diem_types::{
     block_info::PivotBlockDecision,
     contract_event::ContractEvent,
@@ -40,6 +41,38 @@ impl CachedDiemDB {
             cache: Mutex::new(SpeculationCache::new_with_startup_info(
                 startup_info,
             )),
+        }
+    }
+
+    fn get_executed_trees(
+        &self, block_id: HashValue,
+    ) -> Result<ExecutedTrees, Error> {
+        diem_debug!("get_executed_trees:{} {}", block_id, self.cache.lock().committed_block_id());
+        let executed_trees =
+            if block_id == self.cache.lock().committed_block_id() {
+                self.cache.lock().committed_trees().clone()
+            } else {
+                self.get_block(&block_id)?
+                    .lock()
+                    .output()
+                    .executed_trees()
+                    .clone()
+            };
+
+        Ok(executed_trees)
+    }
+
+    pub fn get_pos_state(
+        &self, block_id: &HashValue,
+    ) -> Result<PosState, Error> {
+        if let Ok(executed_tree) = self.get_executed_trees(*block_id) {
+            Ok(executed_tree.pos_state().clone())
+        } else {
+            self.db.reader.get_pos_state(block_id).map_err(|_| {
+                Error::InternalError {
+                    error: "pos state not found".to_string(),
+                }
+            })
         }
     }
 
