@@ -23,7 +23,7 @@ use std::{
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet, HashMap},
     ops::Add,
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, SystemTime},
 };
 //use vm_validator::vm_validator::TransactionValidation;
 
@@ -147,27 +147,11 @@ impl PeerManager {
         is_new_peer
     }
 
-    /*/// Disables a peer if it can be restarted, otherwise removes it
-    pub fn disable_peer(&self, peer: PeerNetworkId) {
-        // Validators can be restarted ata  later time
-        // TODO: Determine why there's this optimization
-        // TODO: What about garbage collection of validators
-        if peer.raw_network_id().is_validator_network() {
-            if let Some(state) = self.peer_states.lock().get_mut(&peer) {
-                counters::active_upstream_peers(&peer.raw_network_id()).dec();
-                state.is_alive = false;
-            }
-        } else {
-            // All other nodes have their state immediately restarted anyways,
-            // so let's free them TODO: Why is the Validator
-            // optimization not applied here
-            self.peer_states.lock().remove(&peer);
-            counters::active_upstream_peers(&peer.raw_network_id()).dec();
-        }
-
-        // Always update prioritized peers to be in line with peer states
+    /// Disables a peer if it can be restarted, otherwise removes it
+    pub fn disable_peer(&self, peer: NodeId) {
+        self.peer_states.lock().remove(&peer);
         self.update_prioritized_peers();
-    }*/
+    }
 
     pub fn is_backoff_mode(&self, peer: &NodeId) -> bool {
         if let Some(state) = self.peer_states.lock().get(peer) {
@@ -182,9 +166,6 @@ impl PeerManager {
         &self, peer: NodeId, scheduled_backoff: bool, smp: &mut SharedMempool,
     ) {
         trace!("execute_broadcast for peer[{:?}]", peer);
-        // Start timer for tracking broadcast latency.
-        let start_time = Instant::now();
-
         let mut peer_states = self.peer_states.lock();
         let state = if let Some(state) = peer_states.get_mut(&peer) {
             state
@@ -224,7 +205,6 @@ impl PeerManager {
 
         let batch_id: BatchId;
         let transactions: Vec<SignedTransaction>;
-        let mut metric_label = None;
         {
             let mut mempool = smp.mempool.lock();
 
@@ -281,12 +261,6 @@ impl PeerManager {
             let (new_batch_id, new_transactions) =
                 match std::cmp::max(expired, retry) {
                     Some(id) => {
-                        metric_label = if Some(id) == expired {
-                            Some(counters::EXPIRED_BROADCAST_LABEL)
-                        } else {
-                            Some(counters::RETRY_BROADCAST_LABEL)
-                        };
-
                         let txns = mempool.timeline_range(id.0, id.1);
                         (*id, txns)
                     }
@@ -309,7 +283,6 @@ impl PeerManager {
             return;
         }
 
-        let num_txns = transactions.len();
         if let Err(e) = smp.network_sender.send_message_with_peer_id(
             &peer,
             &MempoolSyncMsg::BroadcastTransactionsRequest {
@@ -342,7 +315,6 @@ impl PeerManager {
             &smp.subscribers,
         );
 
-        let latency = start_time.elapsed();
         diem_trace!(LogSchema::event_log(
             LogEntry::BroadcastTransaction,
             LogEvent::Success
@@ -350,35 +322,6 @@ impl PeerManager {
         //.peer(&peer)
         .batch_id(&batch_id)
         .backpressure(scheduled_backoff));
-        /*
-        let peer_id = peer.peer_id().short_str();
-        let network_id = peer.raw_network_id();
-        counters::SHARED_MEMPOOL_TRANSACTION_BROADCAST_SIZE
-            .with_label_values(&[network_id.as_str(), peer_id.as_str()])
-            .observe(num_txns as f64);
-        counters::shared_mempool_pending_broadcasts(&peer)
-            .set(state.broadcast_info.sent_batches.len() as i64);
-        counters::SHARED_MEMPOOL_BROADCAST_LATENCY
-            .with_label_values(&[network_id.as_str(), peer_id.as_str()])
-            .observe(latency.as_secs_f64());
-        if let Some(label) = metric_label {
-            counters::SHARED_MEMPOOL_BROADCAST_TYPE_COUNT
-                .with_label_values(&[
-                    network_id.as_str(),
-                    peer_id.as_str(),
-                    label,
-                ])
-                .inc();
-        }
-        if scheduled_backoff {
-            counters::SHARED_MEMPOOL_BROADCAST_TYPE_COUNT
-                .with_label_values(&[
-                    network_id.as_str(),
-                    peer_id.as_str(),
-                    counters::BACKPRESSURE_BROADCAST_LABEL,
-                ])
-                .inc();
-        }*/
     }
 
     fn update_prioritized_peers(&self) {
@@ -393,7 +336,7 @@ impl PeerManager {
             peer_states
                 .iter()
                 .filter(|(_, state)| state.is_alive)
-                .map(|(peer, state)| {
+                .map(|(peer, _state)| {
                     (
                         peer.clone(),
                         PeerRole::Validator, /* state.metadata.role */
@@ -443,7 +386,7 @@ impl PeerManager {
         if let Some(sent_timestamp) =
             sync_state.broadcast_info.sent_batches.remove(&batch_id)
         {
-            let rtt = timestamp
+            let _rtt = timestamp
                 .duration_since(sent_timestamp)
                 .expect("failed to calculate mempool broadcast RTT");
 

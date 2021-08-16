@@ -102,7 +102,7 @@ impl StateComputer for ExecutionProxy {
 
     /// Synchronize to a commit that not present locally.
     async fn sync_to(
-        &self, target: LedgerInfoWithSignatures,
+        &self, _target: LedgerInfoWithSignatures,
     ) -> Result<(), StateSyncError> {
         fail_point!("consensus::sync_to", |_| {
             Err(anyhow::anyhow!("Injected error in sync_to").into())

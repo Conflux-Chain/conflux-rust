@@ -174,7 +174,7 @@ fn gen_ack_response(
 }
 
 pub(crate) fn update_ack_counter(
-    peer: &NodeId, direction_label: &str, retry: bool, backoff: bool,
+    _peer: &NodeId, _direction_label: &str, _retry: bool, _backoff: bool,
 ) {
     /*
     if retry {
@@ -221,7 +221,11 @@ pub(crate) async fn process_incoming_transactions(
         .start_timer();
     let validation_results = transactions
         .par_iter()
-        .map(|t| smp.validator.read().validate_transaction(t.clone()))
+        .map(|t| {
+            smp.validator
+                .read()
+                .validate_transaction(&t, smp.commited_pos_state.clone())
+        })
         .collect::<Vec<_>>();
     vm_validation_timer.stop_and_record();
 
@@ -274,7 +278,7 @@ fn log_txn_process_results(
             return;
         }
     };
-    for (txn, (mempool_status, maybe_vm_status)) in results.iter() {
+    for (txn, (_mempool_status, maybe_vm_status)) in results.iter() {
         if let Some(vm_status) = maybe_vm_status {
             diem_trace!(
                 SecurityEvent::InvalidTransactionMempool,
@@ -375,13 +379,14 @@ pub(crate) async fn process_consensus_request(
                 let curr_time = diem_infallible::duration_since_epoch();
                 mempool.gc_by_expiration_time(curr_time);
                 let block_size = cmp::max(max_block_size, 1);
-                //let pos_state =
-                // db.get_pos_state(&parent_block_id).expect("pos_state should
-                // exist");
+                let pos_state = db
+                    .get_pos_state(&parent_block_id)
+                    .expect("pos_state should exist");
                 txns = mempool.get_block(
                     block_size,
                     exclude_transactions,
-                    /* &pos_state, */ validators,
+                    &pos_state,
+                    validators,
                 );
             }
             counters::mempool_service_transactions(

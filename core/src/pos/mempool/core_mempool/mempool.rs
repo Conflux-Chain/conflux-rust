@@ -18,13 +18,12 @@ use diem_crypto::HashValue;
 use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress,
-    mempool_status::{MempoolStatus, MempoolStatusCode},
+    mempool_status::MempoolStatus,
     term_state::PosState,
     transaction::{GovernanceRole, SignedTransaction, TransactionPayload},
     validator_verifier::ValidatorVerifier,
 };
 use std::{
-    cmp::max,
     collections::HashSet,
     time::{Duration, SystemTime},
 };
@@ -33,7 +32,6 @@ pub struct Mempool {
     // Stores the metadata of all transactions in mempool (of all states).
     transactions: TransactionStore,
 
-    txn_hash_cache: TtlCache<AccountAddress, HashValue>,
     // For each transaction, an entry with a timestamp is added when the
     // transaction enters mempool. This is used to measure e2e latency of
     // transactions in the system, as well as the time it takes to pick it
@@ -46,10 +44,6 @@ impl Mempool {
     pub fn new(config: &NodeConfig) -> Self {
         Mempool {
             transactions: TransactionStore::new(&config.mempool),
-            txn_hash_cache: TtlCache::new(
-                config.mempool.capacity,
-                Duration::from_secs(100),
-            ),
             metrics_cache: TtlCache::new(
                 config.mempool.capacity,
                 Duration::from_secs(100),
@@ -81,7 +75,6 @@ impl Mempool {
             self.transactions.reject_transaction(&sender, hash);
         } else {
             self.transactions.commit_transaction(&sender, hash);
-            self.txn_hash_cache.insert(*sender, hash);
         }
     }
 
@@ -108,8 +101,6 @@ impl Mempool {
     {
         diem_trace!(LogSchema::new(LogEntry::AddTxn)
             .txns(TxnsLog::new_txn(txn.sender(), txn.hash())),);
-        let cached_value = self.txn_hash_cache.get(&txn.sender());
-        self.txn_hash_cache.insert(txn.sender(), txn.hash());
 
         let expiration_time = diem_infallible::duration_since_epoch()
             + self.system_transaction_timeout;
@@ -136,8 +127,8 @@ impl Mempool {
     /// committed yet,  mempool should filter out such transactions.
     #[allow(clippy::explicit_counter_loop)]
     pub(crate) fn get_block(
-        &mut self, batch_size: u64, mut seen: HashSet<TxnPointer>,
-        /* pos_state: &PosState, */ validators: ValidatorVerifier,
+        &mut self, _batch_size: u64, mut seen: HashSet<TxnPointer>,
+        pos_state: &PosState, validators: ValidatorVerifier,
     ) -> Vec<SignedTransaction>
     {
         let mut block = vec![];
@@ -157,29 +148,26 @@ impl Mempool {
             if seen.contains(&TxnPointer::from(txn)) {
                 continue;
             }
-            /*let validate_result = match txn.txn.payload() {
+            let validate_result = match txn.txn.payload() {
                 TransactionPayload::Election(election_payload) => {
                     pos_state.validate_election(election_payload)
                 }
                 TransactionPayload::Retire(retire_payload) => {
                     pos_state.validate_retire(retire_payload)
                 }
-                _ => {
-                  continue;
-                }
-            };
-            */
-            match txn.txn.payload() {
                 TransactionPayload::PivotDecision(_) => {
                     seen.insert((txn.get_sender(), txn.get_hash()));
                     continue;
                 }
-                _ => {}
+                _ => {
+                    continue;
+                }
+            };
+            if validate_result.is_ok() {
+                block.push(txn.txn.clone());
+                block_log.add(txn.get_sender(), txn.get_hash());
+                seen.insert((txn.get_sender(), txn.get_hash()));
             }
-            //if validate_result.is_ok() {
-            block.push(txn.txn.clone());
-            seen.insert((txn.get_sender(), txn.get_hash()));
-            //}
         }
         let mut max_pivot_height = 0;
         let mut chosen_pivot_tx = None;
@@ -198,7 +186,7 @@ impl Mempool {
                     }
                 }
             }
-            if (cnt * 3 >= validators.len() * 2 + 1) {
+            if cnt * 3 >= validators.len() * 2 + 1 {
                 let pivot_decision = pivot_decision_opt.unwrap();
                 let pivot_height = match pivot_decision.payload() {
                     TransactionPayload::PivotDecision(decision) => {
@@ -213,6 +201,7 @@ impl Mempool {
             }
         }
         if let Some(tx) = chosen_pivot_tx {
+            block_log.add(tx.sender(), tx.hash());
             block.push(tx);
         }
 
@@ -241,7 +230,6 @@ impl Mempool {
         let now = SystemTime::now();
         self.transactions.gc_by_system_ttl(&self.metrics_cache);
         self.metrics_cache.gc(now);
-        self.txn_hash_cache.gc(now);
     }
 
     /// Garbage collection based on client-specified expiration time.

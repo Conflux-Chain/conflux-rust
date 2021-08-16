@@ -34,7 +34,6 @@ use primitives::{
     BlockReceipts, SignedTransaction, Transaction,
 };
 use secret_store::SecretStore;
-use solidity_abi::ABIEncodable;
 
 use crate::{
     executive::{

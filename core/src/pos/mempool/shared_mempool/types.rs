@@ -25,6 +25,7 @@ use diem_types::{
     on_chain_config::{
         ConfigID, DiemVersion, OnChainConfig, OnChainConfigPayload, VMConfig,
     },
+    term_state::PosState,
     transaction::SignedTransaction,
     validator_verifier::ValidatorVerifier,
     vm_status::DiscardedVMStatus,
@@ -52,11 +53,18 @@ pub(crate) struct SharedMempool {
     pub validator: Arc<RwLock<TransactionValidator>>,
     pub peer_manager: Arc<PeerManager>,
     pub subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
+    pub commited_pos_state: Arc<PosState>,
+}
+
+impl SharedMempool {
+    pub(crate) fn update_pos_state(&mut self) {
+        self.commited_pos_state =
+            self.db_with_cache.db.reader.get_latest_pos_state();
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum SharedMempoolNotification {
-    PeerStateChange,
     NewTransactions,
     ACK,
     Broadcast,

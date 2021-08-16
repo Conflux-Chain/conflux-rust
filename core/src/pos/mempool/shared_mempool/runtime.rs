@@ -28,7 +28,6 @@ use futures::channel::{
     oneshot,
 };
 use std::sync::Arc;
-use storage_interface::DbReader;
 use tokio::runtime::{Builder, Handle, Runtime};
 
 /// Bootstrap of SharedMempool.
@@ -61,10 +60,11 @@ pub(crate) fn start_shared_mempool(
         mempool: mempool.clone(),
         config: config.mempool.clone(),
         network_sender,
-        db_with_cache,
+        db_with_cache: db_with_cache.clone(),
         validator,
         peer_manager,
         subscribers,
+        commited_pos_state: db_with_cache.db.reader.get_latest_pos_state(),
     };
 
     executor.spawn(coordinator(

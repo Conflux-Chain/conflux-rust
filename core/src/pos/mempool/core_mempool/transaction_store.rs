@@ -19,14 +19,10 @@ use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress,
     mempool_status::{MempoolStatus, MempoolStatusCode},
-    transaction::{
-        authenticator::TransactionAuthenticator, SignedTransaction,
-        TransactionPayload,
-    },
+    transaction::{SignedTransaction, TransactionPayload},
 };
 use std::{
     collections::{hash_map::Values, HashMap, HashSet},
-    ops::Bound,
     time::{Duration, SystemTime},
 };
 
@@ -217,9 +213,7 @@ impl TransactionStore {
     ) -> (Vec<SignedTransaction>, u64) {
         let mut batch = vec![];
         let mut last_timeline_id = timeline_id;
-        for (address, hash) in
-            self.timeline_index.read_timeline(timeline_id, count)
-        {
+        for (_, hash) in self.timeline_index.read_timeline(timeline_id, count) {
             if let Some(txn) = self.transactions.get(&hash) {
                 batch.push(txn.txn.clone());
                 if let TimelineState::Ready(timeline_id) = txn.timeline_state {
@@ -236,7 +230,7 @@ impl TransactionStore {
         self.timeline_index
             .timeline_range(start_id, end_id)
             .iter()
-            .filter_map(|(account, hash)| {
+            .filter_map(|(_, hash)| {
                 self.transactions.get(hash).map(|txn| txn.txn.clone())
             })
             .collect()
@@ -265,7 +259,7 @@ impl TransactionStore {
 
     fn gc(
         &mut self, now: Duration, by_system_ttl: bool,
-        metrics_cache: &TtlCache<(AccountAddress, HashValue), SystemTime>,
+        _metrics_cache: &TtlCache<(AccountAddress, HashValue), SystemTime>,
     )
     {
         let (metric_label, index, log_event) = if by_system_ttl {
@@ -293,6 +287,7 @@ impl TransactionStore {
         let mut gc_txns_log = TxnsLog::new();
         while let Some(key) = gc_iter.next() {
             if let Some(txn) = self.transactions.remove(&key.hash) {
+                gc_txns_log.add(txn.get_sender(), txn.get_hash());
                 self.index_remove(&txn);
             }
         }

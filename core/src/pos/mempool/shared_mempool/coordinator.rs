@@ -3,13 +3,16 @@
 
 //! Processes that are directly spawned by shared mempool runtime initialization
 
-use crate::pos::mempool::{
-    core_mempool::{CoreMempool, TimelineState},
-    counters,
-    logging::{LogEntry, LogEvent, LogSchema},
-    network::{MempoolSyncMsg, NetworkReceivers},
-    shared_mempool::{tasks, types::SharedMempool},
-    CommitNotification, ConsensusRequest, SubmissionStatus,
+use crate::pos::{
+    mempool::{
+        core_mempool::{CoreMempool, TimelineState},
+        counters,
+        logging::{LogEntry, LogEvent, LogSchema},
+        network::{MempoolSyncMsg, NetworkReceivers},
+        shared_mempool::{tasks, types::SharedMempool},
+        CommitNotification, ConsensusRequest, SubmissionStatus,
+    },
+    protocol::network_event::NetworkEvent,
 };
 use anyhow::Result;
 use bounded_executor::BoundedExecutor;
@@ -81,11 +84,17 @@ pub(crate) async fn coordinator(
                 // diem_debug!("scheduled_broadcasts");
                 tasks::execute_broadcast(peer, backoff, &mut smp, &mut scheduled_broadcasts, executor.clone());
             },
-            (peer, _) = network_receivers.network_events.select_next_some() => {
+            (peer, event) = network_receivers.network_events.select_next_some() => {
                 diem_debug!("network_events to scheduled_broadcasts");
-                // TODO(linxi): remove peer on disconnected
-                smp.peer_manager.add_peer(peer);
-                tasks::execute_broadcast(peer, true, &mut smp, &mut scheduled_broadcasts, executor.clone());
+                match event {
+                        NetworkEvent::PeerConnected => {
+                        smp.peer_manager.add_peer(peer);
+                        tasks::execute_broadcast(peer, true, &mut smp, &mut scheduled_broadcasts, executor.clone());
+                    }
+                    NetworkEvent::PeerDisconnected => {
+                        smp.peer_manager.disable_peer(peer);
+                    }
+                }
             },
             (peer, msg) = network_receivers.mempool_sync_message.select_next_some() => {
                 diem_debug!("receive mempool_sync_message");
@@ -136,6 +145,7 @@ fn handle_state_sync_request(smp: &mut SharedMempool, msg: CommitNotification) {
         counters::STATE_SYNC_EVENT_LABEL,
         counters::SPAWN_LABEL,
     );
+    smp.update_pos_state();
     tokio::spawn(tasks::process_state_sync_request(smp.mempool.clone(), msg));
 }
 

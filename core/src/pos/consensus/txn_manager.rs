@@ -142,14 +142,14 @@ impl TxnManager for MempoolProxy {
 
     // Consensus notifies mempool of executed transactions
     async fn notify(
-        &self, block: &Block, compute_results: &StateComputeResult,
+        &self, _block: &Block, _compute_results: &StateComputeResult,
     ) -> Result<(), MempoolError> {
-        let mut rejected_txns = vec![];
-        let txns = match block.payload() {
+        // TODO: reject txns
+        let rejected_txns = vec![];
+        /*let txns = match block.payload() {
             Some(txns) => txns,
             None => return Ok(()),
         };
-        /*
         // skip the block metadata txn result
         for (txn, status) in txns
             .iter()
