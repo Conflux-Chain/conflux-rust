@@ -1,6 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// Copyright 2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 //! This module implements `JellyfishMerkleIterator`. Initialized with a version
 //! and a key, the iterator generates all the key-value pairs in this version of
 //! the tree, starting from the smallest key that is greater or equal to the

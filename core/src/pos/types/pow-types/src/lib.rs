@@ -1,3 +1,7 @@
+// Copyright 2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 use anyhow::Result;
 use async_trait::async_trait;
 use cfx_types::H256;

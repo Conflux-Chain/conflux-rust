@@ -1,6 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// Copyright 2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 /// This wraps around `futures::stream::futures_unorderd::FuturesUnordered` to provide similar
 /// functionality except that there's limit on concurrency. This allows us to manage more futures
 /// without activation too many of them at the same time.

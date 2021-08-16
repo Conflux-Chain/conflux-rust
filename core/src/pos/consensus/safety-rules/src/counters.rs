@@ -1,6 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// Copyright 2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 use diem_secure_push_metrics::{
     register_histogram_vec, register_int_counter_vec, register_int_gauge_vec,
     HistogramTimer, HistogramVec, IntCounterVec, IntGaugeVec,

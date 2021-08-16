@@ -1,6 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// Copyright 2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 use consensus_types::block::block_test_utils;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use diem_crypto::{ed25519::Ed25519PrivateKey, Uniform};

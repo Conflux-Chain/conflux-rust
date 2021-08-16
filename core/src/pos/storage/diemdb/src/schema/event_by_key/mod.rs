@@ -1,6 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// Copyright 2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 //! This module defines physical storage schema for an event index via which a
 //! ContractEvent ( represented by a <txn_version, event_idx> tuple so that it
 //! can be fetched from `EventSchema`) can be found by <access_path,

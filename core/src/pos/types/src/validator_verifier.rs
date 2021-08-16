@@ -1,6 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// Copyright 2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 use crate::{account_address::AccountAddress, on_chain_config::ValidatorSet};
 use diem_crypto::{hash::CryptoHash, Signature, VRFPublicKey, VerifyingKey};
 use serde::{Deserialize, Serialize};

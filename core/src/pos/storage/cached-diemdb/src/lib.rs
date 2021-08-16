@@ -47,7 +47,11 @@ impl CachedDiemDB {
     fn get_executed_trees(
         &self, block_id: HashValue,
     ) -> Result<ExecutedTrees, Error> {
-        diem_debug!("get_executed_trees:{} {}", block_id, self.cache.lock().committed_block_id());
+        diem_debug!(
+            "get_executed_trees:{} {}",
+            block_id,
+            self.cache.lock().committed_block_id()
+        );
         let executed_trees =
             if block_id == self.cache.lock().committed_block_id() {
                 self.cache.lock().committed_trees().clone()

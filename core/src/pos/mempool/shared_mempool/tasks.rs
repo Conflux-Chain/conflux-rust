@@ -1,6 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// Copyright 2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 //! Tasks that are executed by coordinators (short-lived compared to
 //! coordinators)
 
@@ -19,8 +23,8 @@ use crate::pos::mempool::{
     CommitNotification, CommitResponse, CommittedTransaction, ConsensusRequest,
     ConsensusResponse, SubmissionStatus,
 };
-use cached_diemdb::CachedDiemDB;
 use anyhow::Result;
+use cached_diemdb::CachedDiemDB;
 use diem_infallible::{Mutex, RwLock};
 use diem_logger::prelude::*;
 use diem_metrics::HistogramTimer;

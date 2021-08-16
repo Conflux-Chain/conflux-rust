@@ -1,6 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// Copyright 2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 //! An implementation of HKDF, the HMAC-based Extract-and-Expand Key Derivation
 //! Function for the Diem project based on [RFC 5869](https://tools.ietf.org/html/rfc5869).
 //!
