@@ -1,6 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// Copyright 2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 //! This file defines system store APIs that operates data not part of the Diem
 //! core data structures but information with regard to system running status,
 //! statistics, etc.

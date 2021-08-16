@@ -1,6 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// Copyright 2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 //! This module implements an in-memory Sparse Merkle Tree that is similar to
 //! what we use in storage to represent world state. This tree will store only a
 //! small portion of the state -- the part of accounts that have been modified

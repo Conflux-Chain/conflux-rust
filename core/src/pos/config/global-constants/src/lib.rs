@@ -1,6 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// Copyright 2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 //! The purpose of this crate is to offer a single source of truth for the
 //! definitions of shared constants within the Diem codebase. This is useful
 //! because many different components within Diem often require access to global

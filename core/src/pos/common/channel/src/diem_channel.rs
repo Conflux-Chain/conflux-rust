@@ -1,6 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// Copyright 2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 //! diem_channel provides an mpsc channel which has two ends
 //! `diem_channel::Receiver` and `diem_channel::Sender` similar to existing mpsc
 //! data structures. What makes it different from existing mpsc channels is that

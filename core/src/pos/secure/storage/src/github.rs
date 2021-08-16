@@ -1,6 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// Copyright 2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 use crate::{CryptoKVStorage, Error, GetResponse, KVStorage};
 use diem_github_client::Client;
 use diem_time_service::{TimeService, TimeServiceTrait};

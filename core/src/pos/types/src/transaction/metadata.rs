@@ -1,6 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// Copyright 2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 //! This file implements Diem transaction metadata types to allow
 //! easy parsing and introspection into metadata, whether the transaction
 //! is using regular subaddressing, is subject to travel rule or corresponds

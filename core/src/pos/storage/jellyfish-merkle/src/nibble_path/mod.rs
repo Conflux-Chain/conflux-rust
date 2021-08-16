@@ -1,6 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// Copyright 2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 //! NibblePath library simplify operations with nibbles in a compact format for
 //! modified sparse Merkle tree by providing powerful iterators advancing by
 //! either bit or nibble.

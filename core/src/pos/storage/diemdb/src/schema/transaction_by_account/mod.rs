@@ -1,6 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// Copyright 2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 //! This module defines physical storage schema for a transaction index via
 //! which the version of a transaction sent by `account_address` with
 //! `sequence_number` can be found. With the version one can resort to

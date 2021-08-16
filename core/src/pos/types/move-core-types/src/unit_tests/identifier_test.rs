@@ -1,6 +1,10 @@
 // Copyright (c) The Diem Core Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+// Copyright 2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 use crate::identifier::{IdentStr, Identifier, ALLOWED_IDENTIFIERS};
 use bcs::test_helpers::assert_canonical_encode_decode;
 use once_cell::sync::Lazy;
