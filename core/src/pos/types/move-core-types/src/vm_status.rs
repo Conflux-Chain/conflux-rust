@@ -503,6 +503,13 @@ pub enum StatusCode {
     CFX_UNEXPECTED_TX = 27,
     // The pos transaction does not pass validation based on pos state
     CFX_INVALID_TX = 28,
+    ELECTION_NON_EXISITENT_NODE = 29,
+    ELECTION_NON_ACCEPTED_NODE = 30,
+    ELECTION_TERGET_TERM_NOT_OPEN = 31,
+    ELECTION_TOO_SOON = 32,
+    RETIRE_NON_EXISITENT_NODE=33,
+    RETIRE_NON_ACCEPTED_NODE=34,
+    PIVOT_DECISION_HEIGHT_TOO_OLD=35,
 
     // When a code module/script is published it is verified. These are the
     // possible errors that can arise from the verification process.

@@ -1005,7 +1005,7 @@ impl NetworkProtocolHandler for Provider {
     }
 
     fn on_peer_connected(
-        &self, io: &dyn NetworkContext, node_id: &NodeId,
+        &self, _io: &dyn NetworkContext, node_id: &NodeId,
         peer_protocol_version: ProtocolVersion,
         _pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     )

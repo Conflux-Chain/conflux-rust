@@ -41,8 +41,6 @@ impl MempoolTransaction {
     pub(crate) fn get_hash(&self) -> HashValue { self.txn.hash() }
 
     pub(crate) fn get_sender(&self) -> AccountAddress { self.txn.sender() }
-
-    pub(crate) fn get_gas_price(&self) -> u64 { self.txn.gas_unit_price() }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Deserialize, Hash, Serialize)]

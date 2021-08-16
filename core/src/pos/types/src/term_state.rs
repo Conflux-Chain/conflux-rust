@@ -11,7 +11,9 @@ use serde::{Deserialize, Serialize};
 use cfx_types::H256;
 use diem_crypto::{HashValue, VRFProof};
 use diem_logger::prelude::*;
-use move_core_types::language_storage::TypeTag;
+use move_core_types::{
+    language_storage::TypeTag, vm_status::DiscardedVMStatus,
+};
 use pow_types::StakingEvent;
 
 use crate::{
@@ -391,6 +393,81 @@ impl PosState {
     }
 
     pub fn epoch_state(&self) -> &EpochState { &self.epoch_state }
+}
+
+/// Read-only functions use in `TransactionValidator`
+impl PosState {
+    pub fn validate_election_simple(
+        &self, election_tx: &ElectionPayload,
+    ) -> Option<DiscardedVMStatus> {
+        let node_id = NodeID::new(
+            election_tx.public_key.clone(),
+            election_tx.vrf_public_key.clone(),
+        );
+        diem_trace!(
+            "validate_election_simple: {:?} {}",
+            node_id.addr,
+            election_tx.target_term
+        );
+        let node = match self.node_map.get(&node_id.addr) {
+            Some(node) => node,
+            None => {
+                return Some(DiscardedVMStatus::ELECTION_NON_EXISITENT_NODE);
+            }
+        };
+
+        if !matches!(node.status, NodeStatus::Accepted) {
+            return Some(DiscardedVMStatus::ELECTION_NON_ACCEPTED_NODE);
+        }
+        if election_tx
+            .target_term
+            .checked_mul(ROUND_PER_TERM)
+            .is_none()
+        {
+            return Some(DiscardedVMStatus::ELECTION_TERGET_TERM_NOT_OPEN);
+        }
+
+        let target_view = election_tx.target_term * ROUND_PER_TERM;
+        if node.status_start_view + ELECTION_AFTER_ACCEPTED_ROUND > target_view
+        {
+            return Some(DiscardedVMStatus::ELECTION_TOO_SOON);
+        }
+        if target_view > self.current_view + ELECTION_TERM_START_ROUND
+            || target_view < self.current_view + ELECTION_TERM_END_ROUND
+        {
+            return Some(DiscardedVMStatus::ELECTION_TERGET_TERM_NOT_OPEN);
+        }
+        None
+    }
+
+    pub fn validate_retire_simple(
+        &self, retire_tx: &RetirePayload,
+    ) -> Option<DiscardedVMStatus> {
+        let node_id = NodeID::new(
+            retire_tx.public_key.clone(),
+            retire_tx.vrf_public_key.clone(),
+        );
+        let node = match self.node_map.get(&node_id.addr) {
+            Some(node) => node,
+            None => {
+                return Some(DiscardedVMStatus::RETIRE_NON_EXISITENT_NODE);
+            }
+        };
+        if !matches!(node.status, NodeStatus::Accepted) {
+            return Some(DiscardedVMStatus::RETIRE_NON_ACCEPTED_NODE);
+        }
+
+        None
+    }
+
+    pub fn validate_pivot_decision_simple(
+        &self, pivot_decision_tx: &PivotBlockDecision,
+    ) -> Option<DiscardedVMStatus> {
+        if pivot_decision_tx.height <= self.pivot_decision.height {
+            return Some(DiscardedVMStatus::PIVOT_DECISION_HEIGHT_TOO_OLD);
+        }
+        None
+    }
 }
 
 /// Read-only functions used in `execute_block`

@@ -59,7 +59,7 @@ impl NewNetworkSender for StateSyncSender {
 
 impl StateSyncSender {
     pub fn send_to(
-        &mut self, recipient: PeerId, message: StateSyncMessage,
+        &mut self, _recipient: PeerId, _message: StateSyncMessage,
     ) -> Result<(), Error> {
         Ok(())
         /*let protocol = ProtocolId::StateSyncDirectSend;
