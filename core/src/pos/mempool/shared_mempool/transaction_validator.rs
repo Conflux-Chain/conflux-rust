@@ -29,9 +29,6 @@ impl TransactionValidator {
             TransactionPayload::Election(election_payload) => {
                 pos_state.validate_election_simple(election_payload)
             }
-            TransactionPayload::Retire(retire_payload) => {
-                pos_state.validate_retire_simple(retire_payload)
-            }
             TransactionPayload::PivotDecision(pivot_decision) => {
                 pos_state.validate_pivot_decision_simple(pivot_decision)
             }
