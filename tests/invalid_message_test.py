@@ -34,7 +34,8 @@ class InvalidMessageTest(ConfluxTestFramework):
         node.disconnect_p2ps()
         # Wait for disconnection
         time.sleep(0.5)
-        node.add_p2p_connection(DefaultNode())
+        genesis = node.cfx_getBlockByEpochNumber("0x0", False)["hash"]
+        node.add_p2p_connection(DefaultNode(genesis))
         network_thread_start()
         node.p2p.wait_for_status()
 
@@ -46,20 +47,20 @@ class InvalidMessageTest(ConfluxTestFramework):
         wait = [True]
 
         h = WaitHandler(self.nodes[0].p2p, GET_BLOCK_HEADERS_RESPONSE)
-        self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hashes=[self.nodes[0].p2p.genesis.hash]))
+        self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hashes=[self.nodes[0].p2p.genesis]))
         h.wait()
 
         def assert_length(_node, msg):
             assert_equal(len(msg.headers), 1)
         h = WaitHandler(self.nodes[0].p2p, GET_BLOCK_HEADERS_RESPONSE, assert_length)
-        self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hashes=[self.nodes[0].p2p.genesis.hash]))
+        self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hashes=[self.nodes[0].p2p.genesis]))
         h.wait()
         self.reconnect(self.nodes[0])
 
     def _test_new_block(self):
         self.log.info("Test New Block")
         genesis = self.nodes[0].p2p.genesis
-        new_block = create_block(genesis.hash, 1)
+        new_block = create_block(genesis, 1)
         self.send_msg(NewBlock(block=new_block))
         wait_until(lambda: self.nodes[0].best_block_hash() == new_block.hash_hex())
 

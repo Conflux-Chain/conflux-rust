@@ -150,12 +150,12 @@ pub enum ConsensusRequest {
         HashValue,
         // current validators
         ValidatorVerifier,
-        async_oneshot::Sender<Result<ConsensusResponse>>,
+        oneshot::Sender<Result<ConsensusResponse>>,
     ),
     /// Notifications about *rejected* committed txns.
     RejectNotification(
         Vec<CommittedTransaction>,
-        async_oneshot::Sender<Result<ConsensusResponse>>,
+        oneshot::Sender<Result<ConsensusResponse>>,
     ),
 }
 

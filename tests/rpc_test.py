@@ -127,7 +127,7 @@ class RpcTest(ConfluxTestFramework):
         default_node.start_time = datetime.datetime.now()
         default_node.latency_ms = latency_ms
         handler = WaitHandler(default_node, GET_BLOCK_HEADERS_RESPONSE, on_block_headers)
-        self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hashes=[default_node.genesis.block_header.hash]))
+        self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hashes=[default_node.genesis]))
         handler.wait()
 
     def _test_getstatus(self):

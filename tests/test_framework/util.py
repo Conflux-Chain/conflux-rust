@@ -8,7 +8,7 @@ import logging
 import os
 import random
 import re
-from subprocess import CalledProcessError, check_call
+from subprocess import CalledProcessError, check_output
 import time
 import socket
 import threading
@@ -265,16 +265,20 @@ def wait_until(predicate,
 # Node functions
 ################
 
-def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id):
+def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, start_index=None):
     tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/pos-genesis-tool")
-    check_call([tg_config_gen, "random", "--num-validator={}".format(nodes),
+    try:
+        check_output([tg_config_gen, "random", "--num-validator={}".format(nodes),
                 "--num-genesis-validator={}".format(genesis_nodes), "--chain-id={}".format(chain_id)], cwd=dirname)
+    except CalledProcessError as e:
+        print(e.output)
     waypoint_path = os.path.join(dirname, 'waypoint_config')
     genesis_path = os.path.join(dirname, 'genesis_file')
-    initial_nodes_path = os.path.join(dirname, 'initial_nodes.toml')
     waypoint = open(waypoint_path, 'r').readlines()[0].strip()
     private_keys_dir = os.path.join(dirname, "private_keys")
-    for n in range(nodes):
+    if start_index is None:
+        start_index = 0
+    for n in range(start_index, start_index + nodes):
         datadir = get_datadir_path(dirname, n)
         if not os.path.isdir(datadir):
             os.makedirs(datadir)

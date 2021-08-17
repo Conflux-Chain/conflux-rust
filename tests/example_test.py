@@ -44,7 +44,7 @@ class ExampleTest(ConfluxTestFramework):
         assert (self.nodes[0].getblockcount() == 2)
 
         latest_pos_ref = self.latest_pos_ref()
-        for i in range(300):
+        for i in range(150):
             print(i)
             if i == 50:
                 client.pos_retire_self()
