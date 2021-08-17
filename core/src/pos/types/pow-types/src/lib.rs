@@ -25,9 +25,11 @@ pub trait PowInterface: Send + Sync {
 #[derive(Debug)]
 pub enum StakingEvent {
     /// (address, bls_public_key, vrf_public_key)
-    Register((H256, Vec<u8>, Vec<u8>)),
+    Register(H256, Vec<u8>, Vec<u8>),
     /// (address, updated_voting_power)
-    IncreaseStake((H256, u64)),
+    IncreaseStake(H256, u64),
+    /// (address)
+    Retire(H256),
 }
 
 /// This is just used to execute PoS genesis, where pow_handler will not be

@@ -910,11 +910,11 @@ impl RegisterEvent {
         &self, staking_event: &StakingEvent,
     ) -> Result<bool> {
         match staking_event {
-            StakingEvent::Register((
+            StakingEvent::Register(
                 addr_h256,
                 bls_pub_key_bytes,
                 vrf_pub_key_bytes,
-            )) => {
+            ) => {
                 let addr = AccountAddress::from_bytes(addr_h256)?;
                 let public_key =
                     ConsensusPublicKey::try_from(bls_pub_key_bytes.as_slice())?;
@@ -963,7 +963,7 @@ impl UpdateVotingPowerEvent {
         &self, staking_event: &StakingEvent,
     ) -> Result<bool> {
         match staking_event {
-            StakingEvent::IncreaseStake((addr_h256, updated_voting_power)) => {
+            StakingEvent::IncreaseStake(addr_h256, updated_voting_power) => {
                 let addr = AccountAddress::from_bytes(addr_h256)?;
                 Ok(self.node_address == addr
                     && self.voting_power == *updated_voting_power)

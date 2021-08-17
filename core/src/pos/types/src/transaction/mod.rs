@@ -365,11 +365,11 @@ impl RawTransaction {
         staking_event: &StakingEvent, sender: AccountAddress,
     ) -> Result<Self> {
         let payload = match staking_event {
-            StakingEvent::Register((
+            StakingEvent::Register(
                 addr_h256,
                 bls_pub_key_bytes,
                 vrf_pub_key_bytes,
-            )) => {
+            ) => {
                 let addr = AccountAddress::from_bytes(addr_h256)?;
                 let public_key =
                     ConsensusPublicKey::try_from(bls_pub_key_bytes.as_slice())?;
@@ -387,7 +387,7 @@ impl RawTransaction {
                     vrf_public_key,
                 })
             }
-            StakingEvent::IncreaseStake((addr_h256, updated_voting_power)) => {
+            StakingEvent::IncreaseStake(addr_h256, updated_voting_power) => {
                 let addr = AccountAddress::from_bytes(addr_h256)?;
                 TransactionPayload::UpdateVotingPower(
                     UpdateVotingPowerPayload {
@@ -396,6 +396,7 @@ impl RawTransaction {
                     },
                 )
             }
+            StakingEvent::Retire(identifier) => {todo!{}}
         };
         Ok(RawTransaction {
             sender,
