@@ -10,7 +10,7 @@ use cfx_parameters::{
 };
 use cfx_types::{Address, BigEndianHash, H256, U256};
 use entries::*;
-use pow_types::StakingEvent::{self, IncreaseStake, Register,Retire};
+use pow_types::StakingEvent::{self, IncreaseStake, Register, Retire};
 use primitives::log_entry::LogEntry;
 use solidity_abi::ABIDecodable;
 
@@ -232,10 +232,8 @@ pub fn increase_stake(
 }
 
 pub fn retire(
-    sender: Address, params: &ActionParams,
-    context: &mut InternalRefContext,
-) -> vm::Result<()>
-{
+    sender: Address, params: &ActionParams, context: &mut InternalRefContext,
+) -> vm::Result<()> {
     let identifier = address_to_identifier(sender, params, context)?;
 
     if identifier.is_zero() {
@@ -254,7 +252,7 @@ pub fn retire(
         ));
     }
 
-    RetireEvent::log(&identifier,&(),params,context)?;
+    RetireEvent::log(&identifier, &(), params, context)?;
     Ok(())
 }
 

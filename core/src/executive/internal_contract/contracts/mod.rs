@@ -36,7 +36,7 @@ mod macros {
     pub use crate::spec::CommonParams;
 }
 
-pub(super) use self::pos::{IncreaseStakeEvent, RegisterEvent,RetireEvent};
+pub(super) use self::pos::{IncreaseStakeEvent, RegisterEvent, RetireEvent};
 pub use self::{
     admin::AdminControl, context::Context, pos::PoSRegister,
     reentrancy::AntiReentrancyConfig, sponsor::SponsorWhitelistControl,

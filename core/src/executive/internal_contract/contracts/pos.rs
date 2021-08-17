@@ -90,8 +90,7 @@ make_solidity_function! {
 impl_function_type!(Retire, "non_payable_write", gas: |spec: &Spec| spec.sstore_reset_gas);
 impl ExecutionTrait for Retire {
     fn execute_inner(
-        &self, _: (), params: &ActionParams,
-        context: &mut InternalRefContext,
+        &self, _: (), params: &ActionParams, context: &mut InternalRefContext,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {

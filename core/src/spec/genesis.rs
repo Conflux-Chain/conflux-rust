@@ -10,6 +10,7 @@ use std::{
 };
 
 use rustc_hex::FromHex;
+use serde::{Deserialize, Serialize};
 use toml::Value;
 
 use cfx_bytes::Bytes;
@@ -27,7 +28,7 @@ use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use diem_crypto::{
     bls::BLSPrivateKey, ec_vrf::EcVrfPublicKey, PrivateKey, ValidCryptoMaterial,
 };
-use diem_types::term_state::NodeID;
+use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 use keylib::KeyPair;
 use primitives::{
     storage::STORAGE_LAYOUT_REGULAR_V0, Action, Block, BlockHeaderBuilder,
@@ -166,8 +167,7 @@ pub fn genesis_block(
     storage_manager: &Arc<StorageManager>,
     genesis_accounts: HashMap<Address, U256>, test_net_version: Address,
     initial_difficulty: U256, machine: Arc<Machine>, need_to_execute: bool,
-    genesis_chain_id: Option<u32>,
-    initial_nodes: Vec<(NodeID, u64, Transaction)>,
+    genesis_chain_id: Option<u32>, initial_nodes: &GenesisPosState,
 ) -> Block
 {
     let mut state =
@@ -397,13 +397,11 @@ pub fn genesis_block(
         }
     }
 
-    let mut sender_int = 0;
-    for (_node_id, _voting_power, tx) in initial_nodes {
+    for node in &initial_nodes.initial_nodes {
         // TODO(lpl): Pass in signed tx so they can be retired.
-        let sender: Address = Address::from_low_u64_be(sender_int);
         state
             .add_balance(
-                &sender,
+                &node.address,
                 &(U256::from(200) * U256::from(ONE_CFX_IN_DRIP)),
                 CleanupMode::NoEmpty,
                 /* account_start_nonce = */ U256::zero(),
@@ -411,14 +409,13 @@ pub fn genesis_block(
             .unwrap();
         state
             .deposit(
-                &sender,
+                &node.address,
                 &(U256::from(100) * U256::from(ONE_CFX_IN_DRIP)),
                 0,
             )
             .unwrap();
-        let signed_tx = tx.fake_sign(sender);
+        let signed_tx = node.register_tx.clone().fake_sign(node.address);
         execute_genesis_transaction(&signed_tx, &mut state, machine.clone());
-        sender_int += 1;
     }
 
     state
@@ -598,4 +595,18 @@ pub fn load_file(
     }
 
     Ok(accounts)
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct GenesisPosNodeInfo {
+    pub address: Address,
+    pub bls_key: ConsensusPublicKey,
+    pub vrf_key: ConsensusVRFPublicKey,
+    pub voting_power: u64,
+    pub register_tx: Transaction,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct GenesisPosState {
+    pub initial_nodes: Vec<GenesisPosNodeInfo>,
 }

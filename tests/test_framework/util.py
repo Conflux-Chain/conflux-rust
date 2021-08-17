@@ -314,6 +314,7 @@ def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, start_index=No
         with open(os.path.join(datadir, 'validator_full_node.yaml'), 'w') as f:
             f.write(yaml.dump(validator_config, default_flow_style=False))
         shutil.copyfile(os.path.join(private_keys_dir, str(n)), os.path.join(net_config_dir, 'pos_key'))
+        shutil.copyfile(os.path.join(private_keys_dir, "pow_sk"+str(n)), os.path.join(datadir, 'pow_sk'))
 
 
 def initialize_datadir(dirname, n, port_min, conf_parameters, extra_files: dict = {}):

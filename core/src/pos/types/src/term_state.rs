@@ -447,11 +447,7 @@ impl PosState {
     pub fn validate_retire_simple(
         &self, retire_tx: &RetirePayload,
     ) -> Option<DiscardedVMStatus> {
-        let node_id = NodeID::new(
-            retire_tx.public_key.clone(),
-            retire_tx.vrf_public_key.clone(),
-        );
-        let node = match self.node_map.get(&node_id.addr) {
+        let node = match self.node_map.get(&retire_tx.node_id) {
             Some(node) => node,
             None => {
                 return Some(DiscardedVMStatus::RETIRE_NON_EXISITENT_NODE);
@@ -542,11 +538,7 @@ impl PosState {
     pub fn validate_retire(
         &self, retire_payload: &RetirePayload,
     ) -> Result<()> {
-        let node_id = NodeID::new(
-            retire_payload.public_key.clone(),
-            retire_payload.vrf_public_key.clone(),
-        );
-        let node = match self.node_map.get(&node_id.addr) {
+        let node = match self.node_map.get(&retire_payload.node_id) {
             Some(node) => node,
             None => return Err(anyhow!("Retirement for non-existent node.")),
         };
@@ -863,17 +855,11 @@ impl ElectionEvent {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RetireEvent {
-    pub node_id: NodeID,
+    pub node_id: AccountAddress,
 }
 
 impl RetireEvent {
-    pub fn new(
-        public_key: ConsensusPublicKey, vrf_public_key: ConsensusVRFPublicKey,
-    ) -> Self {
-        RetireEvent {
-            node_id: NodeID::new(public_key, vrf_public_key),
-        }
-    }
+    pub fn new(node_id: AccountAddress) -> Self { RetireEvent { node_id } }
 
     pub fn event_key() -> EventKey {
         EventKey::new_from_address(&account_config::retire_address(), 4)
@@ -881,6 +867,18 @@ impl RetireEvent {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         bcs::from_bytes(bytes).map_err(Into::into)
+    }
+
+    pub fn matches_staking_event(
+        &self, staking_event: &StakingEvent,
+    ) -> Result<bool> {
+        match staking_event {
+            StakingEvent::Retire(addr_h256) => {
+                let addr = AccountAddress::from_bytes(addr_h256)?;
+                Ok(self.node_id == addr)
+            }
+            _ => Ok(false),
+        }
     }
 }
 

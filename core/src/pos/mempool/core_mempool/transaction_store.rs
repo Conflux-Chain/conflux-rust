@@ -47,7 +47,7 @@ pub struct TransactionStore {
     timeline_index: TimelineIndex,
 
     // configuration
-    capacity: usize,
+    _capacity: usize,
 }
 
 pub type PivotDecisionIter<'a> =
@@ -72,7 +72,7 @@ impl TransactionStore {
             timeline_index: TimelineIndex::new(),
 
             // configuration
-            capacity: config.capacity,
+            _capacity: config.capacity,
         }
     }
 
