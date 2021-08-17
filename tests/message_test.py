@@ -25,7 +25,7 @@ class MessageTest(ConfluxTestFramework):
         # Use the mininode and blocktools functionality to manually build a block
         # Calling the generate_empty_blocks() rpc is easier, but this allows us to exactly
         # control the blocks and transactions.
-        blocks = [default_node.genesis.block_header.hash]
+        blocks = [default_node.genesis]
         new_block = create_block(blocks[0], 1)
 
         # This message is not used in current Conflux sync protocol

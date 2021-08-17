@@ -361,7 +361,7 @@ pub(crate) async fn process_consensus_request(
             .consensus_msg(&req)
     );
 
-    let (resp, mut callback, counter_label) = match req {
+    let (resp, callback, counter_label) = match req {
         ConsensusRequest::GetBlockRequest(
             max_block_size,
             transactions,

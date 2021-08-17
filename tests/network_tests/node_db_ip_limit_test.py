@@ -21,30 +21,31 @@ class NodeDatabaseIpLimitTests(ConfluxTestFramework):
 
     def run_test(self):
         client = RpcClient(self.nodes[0])
+        self.genesis = client.block_by_epoch("0x0", False)["hash"]
 
         self.test_same_ip_replace_always(client)
         self.test_subnet_quota(client)
 
     def test_same_ip_replace_always(self, client: RpcClient):
-        n1 = DefaultNode()
+        n1 = DefaultNode(self.genesis)
         client.add_node(n1.key, "192.168.0.100", 5678)
         assert client.get_node(n1.key) is not None
 
-        n2 = DefaultNode()
+        n2 = DefaultNode(self.genesis)
         client.add_node(n2.key, "192.168.0.100", 5678)
         assert client.get_node(n1.key) is None
         assert client.get_node(n2.key) is not None
 
     def test_subnet_quota(self, client: RpcClient):
-        n1 = DefaultNode()
+        n1 = DefaultNode(self.genesis)
         client.add_node(n1.key, "192.168.1.200", 5678)
         assert client.get_node(n1.key) is not None
 
-        n2 = DefaultNode()
+        n2 = DefaultNode(self.genesis)
         client.add_node(n2.key, "192.168.1.201", 5678)
         assert client.get_node(n2.key) is not None
 
-        n3 = DefaultNode()
+        n3 = DefaultNode(self.genesis)
         client.add_node(n3.key, "192.168.1.202", 5678)
         assert client.get_node(n3.key) is not None
 

@@ -126,7 +126,7 @@ impl PowInterface for PowHandler {
                 Self::next_pivot_decision_impl(pow_consensus, &parent_decision);
             assert!(callback.send(r).is_ok());
         });
-        cb_receiver.await.expect("callback error")
+        cb_receiver.await.ok().flatten()
     }
 
     fn validate_proposal_pivot_decision(

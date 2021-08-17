@@ -586,10 +586,13 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
             );
             if add_new_peer {
                 let event = NetworkEvent::PeerConnected;
-                self.mempool_network_task
+                if let Err(e) = self
+                    .mempool_network_task
                     .network_events_tx
                     .push((*node_id, discriminant(&event)), (*node_id, event))
-                    .expect("error sending network_events");
+                {
+                    warn!("error sending PeerConnected: e={:?}", e);
+                }
             }
             if let Some(state) = self.peers.get(&peer_hash) {
                 state.write().set_pos_public_key(Some(public_key));
@@ -628,10 +631,13 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
         }
         // notify pos mempool
         let event = NetworkEvent::PeerDisconnected;
-        self.mempool_network_task
+        if let Err(e) = self
+            .mempool_network_task
             .network_events_tx
             .push((*peer, discriminant(&event)), (*peer, event))
-            .expect("error sending network_events");
+        {
+            warn!("error sending PeerDisconnected: e={:?}", e);
+        }
 
         self.request_manager.on_peer_disconnected(io, peer);
         info!(

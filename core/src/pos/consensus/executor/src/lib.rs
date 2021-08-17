@@ -1134,9 +1134,16 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     let leader_status =
                         elected.get_mut(&author).expect("in epoch state");
                     leader_status.leader_count += 1;
+                    let included =
+                        block.quorum_cert().ledger_info().signatures().len();
+                    debug_assert!(
+                        included >= min_vote,
+                        "sig:{}, min_vote:{}",
+                        included,
+                        min_vote
+                    );
                     leader_status.included_vote_count +=
-                        (block.quorum_cert().ledger_info().signatures().len()
-                            - min_vote) as u32;
+                        (included - min_vote) as u32;
                 }
                 for voter in
                     block.quorum_cert().ledger_info().signatures().keys()

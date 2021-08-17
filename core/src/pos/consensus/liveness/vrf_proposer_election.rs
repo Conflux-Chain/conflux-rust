@@ -150,7 +150,11 @@ impl ProposerElection for VrfProposer {
                 min_vrf_number = vrf_number
             }
         }
-        diem_debug!("choose_proposal_to_vote: {:?}", chosen_proposal);
+        diem_debug!(
+            "choose_proposal_to_vote: {:?}, data={:?}",
+            chosen_proposal,
+            chosen_proposal.as_ref().map(|b| b.block_data())
+        );
         chosen_proposal
     }
 
