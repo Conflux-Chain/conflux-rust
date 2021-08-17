@@ -329,7 +329,7 @@ def initialize_datadir(dirname, n, port_min, conf_parameters, extra_files: dict 
             "jsonrpc_ws_port": str(pubsub_port(n)),
             "jsonrpc_http_port": str(remote_rpc_port(n)),
             "pos_config_path": "\'{}\'".format(os.path.join(datadir, "validator_full_node.yaml")),
-            "pos_initial_nodes_path": "\'{}\'".format(os.path.join(dirname, "initial_nodes.toml")),
+            "pos_initial_nodes_path": "\'{}\'".format(os.path.join(dirname, "initial_nodes.json")),
             "pos_private_key_path": "'{}'".format(os.path.join(datadir, "blockchain_data", "net_config", "pos_key"))
         }
         local_conf.update(conflux.config.small_local_test_conf)

@@ -270,7 +270,7 @@ where
             });
         }
         save_initial_nodes_to_file(
-            "./initial_nodes.toml",
+            "./initial_nodes.json",
             GenesisPosState {
                 initial_nodes: genesis_nodes[..num_genesis_validator].to_vec(),
             },
