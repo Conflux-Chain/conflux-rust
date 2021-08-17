@@ -10,7 +10,7 @@ use cfx_parameters::{
 };
 use cfx_types::{Address, BigEndianHash, H256, U256};
 use entries::*;
-use pow_types::StakingEvent::{self, IncreaseStake, Register};
+use pow_types::StakingEvent::{self, IncreaseStake, Register,Retire};
 use primitives::log_entry::LogEntry;
 use solidity_abi::ABIDecodable;
 
@@ -19,7 +19,7 @@ use crate::{
     vm::{self, ActionParams},
 };
 
-use super::super::contracts::{IncreaseStakeEvent, RegisterEvent};
+use super::super::contracts::{IncreaseStakeEvent, RegisterEvent, RetireEvent};
 
 pub struct IndexStatus {
     pub registered: u64,
@@ -219,10 +219,43 @@ pub fn increase_stake(
 
     let identifier = address_to_identifier(sender, params, context)?;
 
+    if identifier.is_zero() {
+        return Err(vm::Error::InternalContract(
+            "The sender has not register a PoS identifier".into(),
+        ));
+    }
+
     update_vote_power(
         identifier, sender, vote_power, /* allow_uninitialized */ false,
         params, context,
     )
+}
+
+pub fn retire(
+    sender: Address, params: &ActionParams,
+    context: &mut InternalRefContext,
+) -> vm::Result<()>
+{
+    let identifier = address_to_identifier(sender, params, context)?;
+
+    if identifier.is_zero() {
+        return Err(vm::Error::InternalContract(
+            "The sender has not register a PoS identifier".into(),
+        ));
+    }
+
+    let status: IndexStatus = context
+        .storage_at(params, &index_entry(&identifier))?
+        .into();
+
+    if status.locked() == 0 {
+        return Err(vm::Error::InternalContract(
+            "The PoS account is fully unlocked".into(),
+        ));
+    }
+
+    RetireEvent::log(&identifier,&(),params,context)?;
+    Ok(())
 }
 
 pub fn get_status(
@@ -265,13 +298,18 @@ pub fn decode_register_info(event: &LogEntry) -> Option<StakingEvent> {
                 event.topics.get(1).expect("Second topic is identifier");
             let (verified_bls_pubkey, vrf_pubkey) =
                 <(Bytes, Bytes)>::abi_decode(&event.data).unwrap();
-            Some(Register((*identifier, verified_bls_pubkey, vrf_pubkey)))
+            Some(Register(*identifier, verified_bls_pubkey, vrf_pubkey))
         }
         sig if sig == IncreaseStakeEvent::event_sig() => {
             let identifier =
                 event.topics.get(1).expect("Second topic is identifier");
             let power = u64::abi_decode(&event.data).unwrap();
-            Some(IncreaseStake((*identifier, power)))
+            Some(IncreaseStake(*identifier, power))
+        }
+        sig if sig == RetireEvent::event_sig() => {
+            let identifier =
+                event.topics.get(1).expect("Second topic is identifier");
+            Some(Retire(*identifier))
         }
         _ => unreachable!(),
     }
