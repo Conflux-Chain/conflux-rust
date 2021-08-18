@@ -71,10 +71,7 @@ lazy_static! {
         KeyPair::from_secret(DEV_GENESIS_PRI_KEY_2.parse().unwrap()).unwrap();
 }
 
-pub fn default(dev_or_test_mode: bool) -> HashMap<Address, U256> {
-    if !dev_or_test_mode {
-        return HashMap::new();
-    }
+pub fn default(_dev_or_test_mode: bool) -> HashMap<Address, U256> {
     let mut accounts: HashMap<Address, U256> = HashMap::new();
     // FIXME: Decide the genesis initialization for mainnet.
     let balance = U256::from_dec_str("5000000000000000000000000000000000")
