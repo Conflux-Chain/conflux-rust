@@ -501,7 +501,7 @@ class RpcClient:
 
     def wait_for_pos_register(self, priv_key=None, stake_value=100, voting_power=1):
         if priv_key is None:
-            _, priv_key = self.rand_account()
+            priv_key = self.node.pow_sk
         address = eth_utils.encode_hex(priv_to_addr(priv_key))
         initial_tx = self.new_tx(receiver=address, value=2 * stake_value * 10 ** 18)
         self.send_tx(initial_tx, wait_for_receipt=True)
@@ -517,7 +517,7 @@ class RpcClient:
         self.send_tx(unstake_tx, wait_for_receipt=True)
 
     def pos_retire_self(self):
-        retire_tx = self.new_tx(priv_key=self.node.pow_sk, data=retire_tx_data(), value=0, receiver=0x0888000000000000000000000000000000000005, gas=CONTRACT_DEFAULT_GAS)
+        retire_tx = self.new_tx(priv_key=self.node.pow_sk, data=retire_tx_data(), value=0, receiver="0x0888000000000000000000000000000000000005", gas=CONTRACT_DEFAULT_GAS)
         self.send_tx(retire_tx, wait_for_receipt=True)
 
 
