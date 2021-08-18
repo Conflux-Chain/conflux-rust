@@ -543,7 +543,8 @@ impl PosState {
             None => return Err(anyhow!("Retirement for non-existent node.")),
         };
         if !matches!(node.status, NodeStatus::Accepted) {
-            bail!("Invalid node status for retiring");
+            // PoW allows retiring more than once, so do not return error here.
+            diem_warn!("Invalid node status for retiring");
         }
 
         Ok(())
@@ -797,9 +798,12 @@ impl PosState {
                     self.retiring_nodes.push_back(*addr);
                     Ok(())
                 }
-                _ => Err(anyhow!(
-                    "Node retirement is processed in invalid status"
-                )),
+                _ => {
+                    diem_warn!(
+                        "Node retirement is processed in invalid status"
+                    );
+                    Ok(())
+                }
             },
             None => Err(anyhow!("Retiring node does not exist")),
         }
