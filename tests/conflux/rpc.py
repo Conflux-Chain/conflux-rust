@@ -501,7 +501,7 @@ class RpcClient:
 
     def wait_for_pos_register(self, priv_key=None, stake_value=100, voting_power=1):
         if priv_key is None:
-            _, priv_key = self.rand_account()
+            priv_key = self.node.pow_sk
         address = eth_utils.encode_hex(priv_to_addr(priv_key))
         initial_tx = self.new_tx(receiver=address, value=2 * stake_value * 10 ** 18)
         self.send_tx(initial_tx, wait_for_receipt=True)
@@ -512,13 +512,13 @@ class RpcClient:
         self.send_tx(register_tx, wait_for_receipt=True)
         return pos_identifier, priv_key
 
-    def pos_retire_self(self):
-        self.node.pos_retire_self()
-
     def wait_for_unstake(self, priv_key, unstake_value=100):
         unstake_tx = self.new_tx(priv_key=priv_key, data=unstake_tx_data(unstake_value), value=0, receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
         self.send_tx(unstake_tx, wait_for_receipt=True)
 
+    def pos_retire_self(self):
+        retire_tx = self.new_tx(priv_key=self.node.pow_sk, data=retire_tx_data(), value=0, receiver="0x0888000000000000000000000000000000000005", gas=CONTRACT_DEFAULT_GAS)
+        self.send_tx(retire_tx, wait_for_receipt=True)
 
 
 def stake_tx_data(staking_value: int):
@@ -526,11 +526,15 @@ def stake_tx_data(staking_value: int):
     staking_contract = get_contract_instance(contract_dict=staking_contract_dict)
     return get_contract_function_data(staking_contract, "deposit", args=[staking_value * 10 ** 18])
 
-
 def unstake_tx_data(unstaking_value: int):
     staking_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/Staking.json"), "r").read())
     staking_contract = get_contract_instance(contract_dict=staking_contract_dict)
     return get_contract_function_data(staking_contract, "withdraw", args=[unstaking_value * 10 ** 18])
+
+def retire_tx_data():
+    register_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/PoSRegister.json"), "r").read())
+    register_contract = get_contract_instance(contract_dict=register_contract_dict)
+    return get_contract_function_data(register_contract, "retire", args=[])
 
 def get_contract_function_data(contract, name, args):
     func = getattr(contract.functions, name)

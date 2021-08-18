@@ -9,9 +9,31 @@ extern crate rustc_hex;
 extern crate serde;
 extern crate serde_derive;
 
-use cfxkey::Error as EthkeyError;
+use std::{
+    env, fmt,
+    fs::File,
+    io::{self, Read, Write},
+    num::ParseIntError,
+    path::PathBuf,
+    process,
+    result::Result,
+};
+
+use docopt::Docopt;
+use log::*;
+use rand::{rngs::StdRng, SeedableRng};
+use rustc_hex::FromHexError;
+use serde::Deserialize;
+use tempdir::TempDir;
+
+use cfxcore::spec::genesis::{
+    register_transaction, GenesisPosNodeInfo, GenesisPosState,
+};
+use cfxkey::{Error as EthkeyError, Generator, KeyPair, Random};
 use client::configuration::save_initial_nodes_to_file;
-use diem_crypto::{Uniform, ValidCryptoMaterialStringExt};
+use diem_crypto::{
+    key_file::save_pri_key, Uniform, ValidCryptoMaterialStringExt,
+};
 use diem_types::{
     account_address::from_consensus_public_key,
     contract_event::ContractEvent,
@@ -26,28 +48,10 @@ use diem_types::{
     write_set::WriteSet,
 };
 use diemdb::DiemDB;
-use docopt::Docopt;
 use executor::{db_bootstrapper::generate_waypoint, vm::FakeVM};
-
-use log::*;
 use move_core_types::language_storage::TypeTag;
-
-use cfxcore::spec::genesis::register_transaction;
-use diem_crypto::key_file::save_pri_key;
-use rand::{rngs::StdRng, SeedableRng};
-use rustc_hex::FromHexError;
-use serde::Deserialize;
-use std::{
-    env, fmt,
-    fs::File,
-    io::{self, Read, Write},
-    num::ParseIntError,
-    path::PathBuf,
-    process,
-    result::Result,
-};
+use std::path::Path;
 use storage_interface::DbReaderWriter;
-use tempdir::TempDir;
 
 const USAGE: &str = r#"
 Usage:
@@ -226,9 +230,10 @@ where
         let public_key_path = PathBuf::from("./public_key");
         let mut public_key_file = File::create(&public_key_path)?;
         let mut rng = StdRng::from_seed([0u8; 32]);
-        let mut public_keys = Vec::new();
+        let mut genesis_nodes = Vec::new();
 
         for i in 0..num_validator {
+            let pow_keypair: KeyPair = Random.generate().unwrap();
             let private_key = ConsensusPrivateKey::generate(&mut rng);
             let vrf_private_key = ConsensusVRFPrivateKey::generate(&mut rng);
             save_pri_key(
@@ -237,6 +242,10 @@ where
                 &(&private_key, &vrf_private_key),
             )
             .expect("Error saving private keys");
+            File::create(
+                private_key_dir.join(Path::new(&format!("pow_sk{}", i))),
+            )?
+            .write_all(pow_keypair.secret().as_bytes())?;
 
             let public_key = ConsensusPublicKey::from(&private_key);
             let vrf_public_key = ConsensusVRFPublicKey::from(&vrf_private_key);
@@ -246,31 +255,31 @@ where
                 1,
                 chain_id,
             );
-            public_keys.push((
-                public_key.clone(),
-                vrf_public_key.clone(),
-                1,
-                register_tx,
-            ));
             let public_key_str = public_key.to_encoded_string().unwrap();
             let vrf_public_key_str =
                 vrf_public_key.to_encoded_string().unwrap();
             let public_key_str =
                 format!("{},{}\n", public_key_str, vrf_public_key_str);
             public_key_file.write_all(public_key_str.as_bytes())?;
+            genesis_nodes.push(GenesisPosNodeInfo {
+                address: pow_keypair.address(),
+                bls_key: public_key,
+                vrf_key: vrf_public_key,
+                voting_power: 1,
+                register_tx,
+            });
         }
         save_initial_nodes_to_file(
-            "./initial_nodes.toml",
-            public_keys.clone(),
-            num_genesis_validator,
+            "./initial_nodes.json",
+            GenesisPosState {
+                initial_nodes: genesis_nodes[..num_genesis_validator].to_vec(),
+            },
         );
         generate_genesis_from_public_keys(
-            public_keys
+            genesis_nodes
                 .into_iter()
                 .take(num_genesis_validator)
-                .map(|(bls_key, vrf_key, voting_power, _tx)| {
-                    (bls_key, vrf_key, voting_power)
-                })
+                .map(|node| (node.bls_key, node.vrf_key, node.voting_power))
                 .collect(),
         );
         Ok("Ok".into())

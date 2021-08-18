@@ -76,6 +76,7 @@ class TestNode:
         self.cleanup_on_exit = True
         # self.key = "0x" + "0"*125+"{:03d}".format(self.index);
         self.p2ps = []
+        self.pow_sk = open(os.path.join(self.datadir, "pow_sk"), "rb").read()
 
     def _node_msg(self, msg: str) -> str:
         """Return a modified msg that identifies this node by its index as a debugging aid."""

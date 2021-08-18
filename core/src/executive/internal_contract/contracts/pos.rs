@@ -22,13 +22,14 @@ make_solidity_contract! {
     pub struct PoSRegister(POS_REGISTER_CONTRACT_ADDRESS, generate_fn_table, initialize: |params: &CommonParams| params.transition_numbers.cip72b, is_active: |spec: &Spec| spec.cip72);
 }
 fn generate_fn_table() -> SolFnTable {
-    make_function_table!(Register, IncreaseStake, GetStatus)
+    make_function_table!(Register, IncreaseStake, GetStatus, Retire)
 }
 group_impl_is_active!(
     |spec: &Spec| spec.cip72,
     Register,
     IncreaseStake,
-    GetStatus
+    GetStatus,
+    Retire
 );
 
 make_solidity_event! {
@@ -90,8 +91,7 @@ make_solidity_function! {
 impl_function_type!(Retire, "non_payable_write", gas: |spec: &Spec| spec.sstore_reset_gas);
 impl ExecutionTrait for Retire {
     fn execute_inner(
-        &self, _: (), params: &ActionParams,
-        context: &mut InternalRefContext,
+        &self, _: (), params: &ActionParams, context: &mut InternalRefContext,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {

@@ -35,7 +35,7 @@ use crate::{
     machine::new_machine_with_builtin,
     pos::pow_handler::PowHandler,
     pow::{self, PowComputer, ProofOfWorkConfig},
-    spec::genesis::genesis_block,
+    spec::genesis::{genesis_block, GenesisPosState},
     statistics::Statistics,
     sync::{SyncGraphConfig, SynchronizationGraph},
     transaction_pool::TxPoolConfig,
@@ -151,7 +151,9 @@ pub fn initialize_data_manager(
         machine.clone(),
         false, /* need_to_execute */
         None,
-        vec![],
+        &GenesisPosState {
+            initial_nodes: vec![],
+        },
     ));
 
     let data_man = Arc::new(BlockDataManager::new(

@@ -314,6 +314,7 @@ def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, start_index=No
         with open(os.path.join(datadir, 'validator_full_node.yaml'), 'w') as f:
             f.write(yaml.dump(validator_config, default_flow_style=False))
         shutil.copyfile(os.path.join(private_keys_dir, str(n)), os.path.join(net_config_dir, 'pos_key'))
+        shutil.copyfile(os.path.join(private_keys_dir, "pow_sk"+str(n)), os.path.join(datadir, 'pow_sk'))
 
 
 def initialize_datadir(dirname, n, port_min, conf_parameters, extra_files: dict = {}):
@@ -328,7 +329,7 @@ def initialize_datadir(dirname, n, port_min, conf_parameters, extra_files: dict 
             "jsonrpc_ws_port": str(pubsub_port(n)),
             "jsonrpc_http_port": str(remote_rpc_port(n)),
             "pos_config_path": "\'{}\'".format(os.path.join(datadir, "validator_full_node.yaml")),
-            "pos_initial_nodes_path": "\'{}\'".format(os.path.join(dirname, "initial_nodes.toml")),
+            "pos_initial_nodes_path": "\'{}\'".format(os.path.join(dirname, "initial_nodes.json")),
             "pos_private_key_path": "'{}'".format(os.path.join(datadir, "blockchain_data", "net_config", "pos_key"))
         }
         local_conf.update(conflux.config.small_local_test_conf)

@@ -315,10 +315,6 @@ where V: VMExecutor
                     let election_event =
                         ElectionEvent::from_bytes(event.event_data())?;
                     new_pos_state.new_node_elected(&election_event)?;
-                } else if *event.key() == retire_event_key {
-                    let retire_event =
-                        RetireEvent::from_bytes(event.event_data())?;
-                    new_pos_state.retire_node(&retire_event.node_id.addr)?;
                 }
             }
         }
@@ -384,6 +380,17 @@ where V: VMExecutor
                                     &update_voting_power_event.node_address,
                                     update_voting_power_event.voting_power,
                                 )?;
+                            } else if *event.key() == retire_event_key {
+                                let retire_event = RetireEvent::from_bytes(
+                                    event.event_data(),
+                                )?;
+                                match retire_event.matches_staking_event(staking_events_iter.next().ok_or(anyhow!("More staking transactions packed than actual pow events"))?) {
+                                    Ok(true) => {}
+                                    Ok(false) => bail!("Packed staking transactions unmatch PoW events)"),
+                                    Err(e) => diem_error!("error decoding pow events: err={:?}", e),
+                                }
+                                new_pos_state
+                                    .retire_node(&retire_event.node_id)?;
                             }
                         }
                     }

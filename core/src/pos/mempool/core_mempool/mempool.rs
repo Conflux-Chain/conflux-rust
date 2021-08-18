@@ -156,9 +156,6 @@ impl Mempool {
                 TransactionPayload::Election(election_payload) => {
                     pos_state.validate_election(election_payload)
                 }
-                TransactionPayload::Retire(retire_payload) => {
-                    pos_state.validate_retire(retire_payload)
-                }
                 TransactionPayload::PivotDecision(_) => {
                     seen.insert((txn.get_sender(), txn.get_hash()));
                     continue;
