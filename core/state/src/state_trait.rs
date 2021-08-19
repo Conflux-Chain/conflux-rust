@@ -180,6 +180,10 @@ pub trait StateOpsTrait {
         &mut self, address: &Address, by: &U256, cleanup_mode: CleanupMode,
         account_start_nonce: U256,
     ) -> DbResult<()>;
+    fn add_pos_interest(
+        &mut self, address: &Address, by: &U256, cleanup_mode: CleanupMode,
+        account_start_nonce: U256,
+    ) -> DbResult<()>;
     fn transfer_balance(
         &mut self, from: &Address, to: &Address, by: &U256,
         cleanup_mode: CleanupMode, account_start_nonce: U256,

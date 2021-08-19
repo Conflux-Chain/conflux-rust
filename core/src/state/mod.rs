@@ -297,11 +297,12 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     /// Calculate the secondary reward for the next block number.
     fn bump_block_number_accumulate_interest(&mut self) -> U256 {
         assert!(self.world_statistics_checkpoints.get_mut().is_empty());
-        self.world_statistics.accumulate_interest_rate =
-            self.world_statistics.accumulate_interest_rate
-                * (*INTEREST_RATE_PER_BLOCK_SCALE
-                    + self.world_statistics.interest_rate_per_block)
-                / *INTEREST_RATE_PER_BLOCK_SCALE;
+        // Stop issuing interest for staking.
+        // self.world_statistics.accumulate_interest_rate =
+        //     self.world_statistics.accumulate_interest_rate
+        //         * (*INTEREST_RATE_PER_BLOCK_SCALE +
+        //           self.world_statistics.interest_rate_per_block)
+        //         / *INTEREST_RATE_PER_BLOCK_SCALE;
         let secondary_reward = self.world_statistics.total_storage_tokens
             * self.world_statistics.interest_rate_per_block
             / *INTEREST_RATE_PER_BLOCK_SCALE;
@@ -375,14 +376,13 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
             let address = Address::from(H256::from_uint(&address_value));
             let interest =
                 distributable_pos_interest * points / MAX_TERM_POINTS;
-            self.add_balance(
+            self.add_pos_interest(
                 &address,
                 &interest,
                 CleanupMode::ForceCreate, /* Same as distributing block
                                            * reward. */
                 account_start_nonce,
             )?;
-            self.add_total_issued(interest);
         }
         self.world_statistics.distributable_pos_interest = U256::zero();
         self.world_statistics.last_distribute_block = current_block_number;
@@ -759,6 +759,18 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
                 set.insert(*address);
             }
         }
+        Ok(())
+    }
+
+    fn add_pos_interest(
+        &mut self, address: &Address, interest: &U256,
+        cleanup_mode: CleanupMode, account_start_nonce: U256,
+    ) -> DbResult<()>
+    {
+        self.add_total_issued(*interest);
+        self.add_balance(address, interest, cleanup_mode, account_start_nonce);
+        self.require_or_new_basic_account(address, &account_start_nonce)?
+            .record_interest_receive(interest);
         Ok(())
     }
 
