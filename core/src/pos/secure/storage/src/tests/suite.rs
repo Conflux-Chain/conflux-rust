@@ -8,8 +8,8 @@
 use crate::{CryptoStorage, Error, KVStorage, Storage};
 
 use diem_crypto::{
-    ed25519::Ed25519PrivateKey, test_utils::TestDiemCrypto, HashValue,
-    PrivateKey, Signature, Uniform,
+    bls::BLSPrivateKey, test_utils::TestDiemCrypto, HashValue, PrivateKey,
+    Signature, Uniform,
 };
 
 /// This suite contains tests for secure storage backends. We test the correct
@@ -71,7 +71,7 @@ fn test_set_reset_get(storage: &mut Storage) {
 /// the correct errors are returned on these operations.
 fn test_get_non_existent(storage: &mut Storage) {
     assert_eq!(
-        storage.get::<Ed25519PrivateKey>(CRYPTO_KEY).unwrap_err(),
+        storage.get::<BLSPrivateKey>(CRYPTO_KEY).unwrap_err(),
         Error::KeyNotSet(CRYPTO_KEY.to_string())
     );
     assert_eq!(
@@ -123,8 +123,8 @@ fn test_get_public_key_previous_version(storage: &mut Storage) {
 /// This test stores various key/value pairs in storage, updates them, retrieves
 /// the values to ensure the correct value types are returned.
 fn test_get_set(storage: &mut Storage) {
-    let crypto_private_1 = Ed25519PrivateKey::generate_for_testing();
-    let crypto_private_2 = Ed25519PrivateKey::generate_for_testing();
+    let crypto_private_1 = BLSPrivateKey::generate_for_testing();
+    let crypto_private_2 = BLSPrivateKey::generate_for_testing();
     let u64_1 = 10;
     let u64_2 = 647;
 
@@ -133,7 +133,7 @@ fn test_get_set(storage: &mut Storage) {
 
     assert_eq!(storage.get::<u64>(U64_KEY).unwrap().value, u64_1);
     assert_eq!(
-        storage.get::<Ed25519PrivateKey>(CRYPTO_KEY).unwrap().value,
+        storage.get::<BLSPrivateKey>(CRYPTO_KEY).unwrap().value,
         crypto_private_1
     );
 
@@ -142,7 +142,7 @@ fn test_get_set(storage: &mut Storage) {
 
     assert_eq!(storage.get::<u64>(U64_KEY).unwrap().value, u64_2);
     assert_eq!(
-        storage.get::<Ed25519PrivateKey>(CRYPTO_KEY).unwrap().value,
+        storage.get::<BLSPrivateKey>(CRYPTO_KEY).unwrap().value,
         crypto_private_2
     );
 }
@@ -207,10 +207,10 @@ fn test_import_key(storage: &mut Storage) {
 fn test_verify_incorrect_value_types(storage: &mut Storage) {
     storage.set(U64_KEY, 10).unwrap();
     storage
-        .set(CRYPTO_KEY, Ed25519PrivateKey::generate_for_testing())
+        .set(CRYPTO_KEY, BLSPrivateKey::generate_for_testing())
         .unwrap();
 
-    storage.get::<Ed25519PrivateKey>(U64_KEY).unwrap_err();
+    storage.get::<BLSPrivateKey>(U64_KEY).unwrap_err();
     storage.get::<u64>(CRYPTO_KEY).unwrap_err();
 }
 
@@ -257,7 +257,7 @@ fn test_create_and_get_non_existent_version(storage: &mut Storage) {
 
     // Get a non-existent version of the new key pair and verify failure
     let non_existent_public_key =
-        Ed25519PrivateKey::generate_for_testing().public_key();
+        BLSPrivateKey::generate_for_testing().public_key();
     assert!(
         storage.export_private_key_for_version(CRYPTO_NAME, non_existent_public_key).is_err(),
         "We have tried to retrieve a non-existent private key version -- the call should have failed!",

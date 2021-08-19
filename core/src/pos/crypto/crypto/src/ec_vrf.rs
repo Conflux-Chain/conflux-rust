@@ -189,3 +189,31 @@ impl Uniform for EcVrfPrivateKey {
         )
     }
 }
+
+#[cfg(any(test, feature = "fuzzing"))]
+use crate::test_utils::{self, KeyPair};
+
+/// Produces a uniformly random bls keypair from a seed
+#[cfg(any(test, feature = "fuzzing"))]
+pub fn keypair_strategy(
+) -> impl Strategy<Value = KeyPair<EcVrfPrivateKey, EcVrfPublicKey>> {
+    test_utils::uniform_keypair_strategy::<EcVrfPrivateKey, EcVrfPublicKey>()
+}
+
+#[cfg(any(test, feature = "fuzzing"))]
+use proptest::prelude::*;
+
+#[cfg(any(test, feature = "fuzzing"))]
+impl proptest::arbitrary::Arbitrary for EcVrfPublicKey {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+        crate::test_utils::uniform_keypair_strategy::<
+            EcVrfPrivateKey,
+            EcVrfPublicKey,
+        >()
+        .prop_map(|v| v.public_key)
+        .boxed()
+    }
+}

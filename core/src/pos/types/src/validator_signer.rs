@@ -134,7 +134,11 @@ pub mod proptests {
             rand_signer(),
             LazyJust::new(|| {
                 let genesis_key = ConsensusPrivateKey::genesis();
-                ValidatorSigner::new(AccountAddress::random(), genesis_key)
+                ValidatorSigner::new(
+                    AccountAddress::random(),
+                    genesis_key,
+                    None,
+                )
             })
         ]
     }
@@ -158,7 +162,7 @@ pub mod proptests {
         #[test]
         fn test_new_signer(signing_key in arb_signing_key()){
             let public_key = signing_key.public_key();
-            let signer = ValidatorSigner::new(AccountAddress::random(), signing_key);
+            let signer = ValidatorSigner::new(AccountAddress::random(), signing_key, None);
             prop_assert_eq!(public_key, signer.public_key());
         }
 

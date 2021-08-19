@@ -97,6 +97,7 @@ pub fn test_save_blocks_impl(
             &txns_to_commit,
             cur_ver, /* first_version */
             Some(ledger_info_with_sigs),
+            None,
         )
         .unwrap();
 
@@ -157,6 +158,7 @@ fn test_sync_transactions_impl(
                 &txns_to_commit[..batch1_len],
                 cur_ver, /* first_version */
                 None,
+                None,
             )
             .unwrap();
         }
@@ -164,6 +166,7 @@ fn test_sync_transactions_impl(
             &txns_to_commit[batch1_len..],
             cur_ver + batch1_len as u64, /* first_version */
             Some(&ledger_info_with_sigs),
+            None,
         )
         .unwrap();
 

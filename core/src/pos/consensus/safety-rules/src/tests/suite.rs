@@ -12,7 +12,7 @@ use consensus_types::{
     vote_proposal::MaybeSignedVoteProposal,
 };
 use diem_crypto::{
-    ed25519::Ed25519PrivateKey,
+    bls::BLSPrivateKey,
     hash::{CryptoHash, HashValue},
 };
 use diem_global_constants::CONSENSUS_KEY;
@@ -26,7 +26,7 @@ type Proof = test_utils::Proof;
 
 fn make_proposal_with_qc_and_proof(
     round: Round, proof: Proof, qc: QuorumCert, signer: &ValidatorSigner,
-    exec_key: Option<&Ed25519PrivateKey>,
+    exec_key: Option<&BLSPrivateKey>,
 ) -> MaybeSignedVoteProposal
 {
     test_utils::make_proposal_with_qc_and_proof(
@@ -42,7 +42,7 @@ fn make_proposal_with_qc_and_proof(
 fn make_proposal_with_parent(
     round: Round, parent: &MaybeSignedVoteProposal,
     committed: Option<&MaybeSignedVoteProposal>, signer: &ValidatorSigner,
-    exec_key: Option<&Ed25519PrivateKey>,
+    exec_key: Option<&BLSPrivateKey>,
 ) -> MaybeSignedVoteProposal
 {
     test_utils::make_proposal_with_parent(
@@ -61,7 +61,7 @@ pub type Callback = Box<
     ) -> (
         Box<dyn TSafetyRules + Send + Sync>,
         ValidatorSigner,
-        Option<Ed25519PrivateKey>,
+        Option<BLSPrivateKey>,
     ),
 >;
 
@@ -823,6 +823,7 @@ fn test_validator_not_in_set(safety_rules: &Callback) {
     next_epoch_state.verifier = ValidatorVerifier::new_single(
         rand_signer.author(),
         rand_signer.public_key(),
+        None,
     );
     let a2 = test_utils::make_proposal_with_parent_and_overrides(
         vec![],
@@ -860,7 +861,8 @@ fn test_reconcile_key(_safety_rules: &Callback) {
 
     let new_pub_key =
         storage.internal_store().rotate_key(CONSENSUS_KEY).unwrap();
-    let mut safety_rules = Box::new(SafetyRules::new(storage, false, false));
+    let mut safety_rules =
+        Box::new(SafetyRules::new(storage, false, false, None));
 
     let (mut proof, genesis_qc) = test_utils::make_genesis(&signer);
     let round = genesis_qc.certified_block().round();
@@ -876,7 +878,7 @@ fn test_reconcile_key(_safety_rules: &Callback) {
     let mut next_epoch_state = EpochState::empty();
     next_epoch_state.epoch = 2;
     next_epoch_state.verifier =
-        ValidatorVerifier::new_single(signer.author(), new_pub_key);
+        ValidatorVerifier::new_single(signer.author(), new_pub_key, None);
     let a2 = test_utils::make_proposal_with_parent_and_overrides(
         vec![],
         round + 2,
@@ -935,6 +937,7 @@ fn test_key_not_in_store(safety_rules: &Callback) {
     next_epoch_state.verifier = ValidatorVerifier::new_single(
         signer.author(),
         rand_signer.public_key(),
+        None,
     );
     let a2 = test_utils::make_proposal_with_parent_and_overrides(
         vec![],

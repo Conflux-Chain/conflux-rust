@@ -17,7 +17,7 @@ use crate::{
 };
 use bcs::test_helpers::assert_canonical_encode_decode;
 use diem_crypto::{
-    ed25519::{self, Ed25519PrivateKey, Ed25519Signature},
+    bls::{self, BLSPrivateKey, BLSSignature},
     PrivateKey, Uniform,
 };
 use proptest::prelude::*;
@@ -36,8 +36,8 @@ fn test_invalid_signature() {
             0,
             ChainId::test(),
         ),
-        Ed25519PrivateKey::generate_for_testing().public_key(),
-        Ed25519Signature::try_from(&[1u8; 64][..]).unwrap(),
+        BLSPrivateKey::generate_for_testing().public_key(),
+        BLSSignature::try_from(&[1u8; 96][..]).unwrap(),
     );
     txn.check_signature()
         .expect_err("signature checking should fail");
@@ -91,8 +91,8 @@ fn test_general_metadata_constructor_and_setters() {
 
 proptest! {
     #[test]
-    fn test_sign_raw_transaction(raw_txn in any::<RawTransaction>(), keypair in ed25519::keypair_strategy()) {
-        let txn = raw_txn.sign(&keypair.private_key, keypair.public_key).unwrap();
+    fn test_sign_raw_transaction(raw_txn in any::<RawTransaction>(), keypair in bls::keypair_strategy()) {
+        let txn = raw_txn.sign(&keypair.private_key).unwrap();
         let signed_txn = txn.into_inner();
         assert!(signed_txn.check_signature().is_ok());
     }
