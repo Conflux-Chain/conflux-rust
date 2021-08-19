@@ -2221,10 +2221,10 @@ impl ConsensusGraphInner {
             .skipped_epoch_set_hashes_from_db(epoch_number)
             .ok_or(
                 format!(
-                "Skipped epoch set not in db epoch_number={}, in mem err={:?}",
-                epoch_number, e
-            )
-                .into(),
+                    "Skipped epoch set not in db epoch_number={}, in mem err={:?}",
+                    epoch_number, e
+                )
+                    .into(),
             )
     }
 
@@ -2879,10 +2879,10 @@ impl ConsensusGraphInner {
                         }
                         if vote_valid
                             && !self.arena[cur].data.state_valid.expect(
-                                "state_valid for me has been computed in \
+                            "state_valid for me has been computed in \
                             wait_and_compute_state_valid_locked by the caller, \
                             so the precedents should have state_valid",
-                            )
+                        )
                         {
                             vote_valid = false;
                         }
@@ -3888,14 +3888,16 @@ impl ConsensusGraphInner {
             // block_execution_result for full nodes. Or include
             // height in the validation?
             (_, Some(_me)) => {
-                // Only `me` is in memory. Use in-memory data first, then loop
-                // with header parent.
-                warn!("ancestor not in consensus graph");
+                error!(
+                    "ancestor not in consensus graph: processed={}",
+                    self.pivot_block_processed(ancestor_hash)
+                );
+                // ancestor is before checkpoint and is on pivot chain, so me
+                // must be in the subtree.
                 true
             }
             (_, _) => {
-                // Even `me` is not in memory. Have to loop with parent.
-                warn!("ancestor and me are both not in consensus graph");
+                error!("ancestor and me are both not in consensus graph, processed={} {}", self.pivot_block_processed(ancestor_hash), self.pivot_block_processed(me_hash));
                 true
             }
         }
@@ -4056,6 +4058,19 @@ impl ConsensusGraphInner {
         }
 
         new_parent
+    }
+
+    pub fn pivot_block_processed(&self, pivot_hash: &H256) -> bool {
+        if let Some(height) = self.data_man.block_height_by_hash(pivot_hash) {
+            if let Ok(epoch_hash) =
+                self.get_pivot_hash_from_epoch_number(height)
+            {
+                if epoch_hash == *pivot_hash {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }
 
