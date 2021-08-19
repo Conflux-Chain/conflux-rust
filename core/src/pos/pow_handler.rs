@@ -182,20 +182,16 @@ impl PowInterface for PowHandler {
             // on the pivot chain. Note that for full nodes, there
             // is no other persisted data to check for old blocks.
             {
-                let consensus_guard = self.pow_consensus.read();
-                let consensus = consensus_guard.as_ref().unwrap();
-                if let Some(height) =
-                    consensus.data_man.block_height_by_hash(&last_decision)
+                if self
+                    .pow_consensus
+                    .read()
+                    .as_ref()
+                    .unwrap()
+                    .inner
+                    .read()
+                    .pivot_block_processed(&last_decision)
                 {
-                    if let Ok(epoch_hash) = consensus
-                        .inner
-                        .read()
-                        .get_pivot_hash_from_epoch_number(height)
-                    {
-                        if epoch_hash == last_decision {
-                            return;
-                        }
-                    }
+                    return;
                 }
             }
             tokio::time::sleep(Duration::from_millis(200)).await
