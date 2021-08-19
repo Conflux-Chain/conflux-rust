@@ -14,7 +14,7 @@ use crate::{
     vote_data::VoteData,
 };
 use diem_crypto::{
-    ed25519::Ed25519PrivateKey,
+    bls::BLSPrivateKey,
     hash::{CryptoHash, HashValue},
 };
 use diem_types::{
@@ -96,6 +96,7 @@ prop_compose! {
                     block.quorum_cert().clone(),
                 ),
                 signature: Some(block.signature().unwrap().clone()),
+                vrf_proof: None,
             }
         }
 }
@@ -154,7 +155,7 @@ prop_compose! {
 /// This creates a block forest with keys extracted from a specific
 /// vector
 fn block_forest_from_keys(
-    depth: u32, keypairs: Vec<Ed25519PrivateKey>,
+    depth: u32, keypairs: Vec<BLSPrivateKey>,
 ) -> impl Strategy<Value = LinearizedBlockForest> {
     let leaf = leaf_strategy().prop_map(|block| vec![block]);
     // Note that having `expected_branch_size` of 1 seems to generate
@@ -168,7 +169,7 @@ fn block_forest_from_keys(
 /// This returns keys and a block forest created from them
 pub fn block_forest_and_its_keys(
     quorum_size: usize, depth: u32,
-) -> impl Strategy<Value = (Vec<Ed25519PrivateKey>, LinearizedBlockForest)> {
+) -> impl Strategy<Value = (Vec<BLSPrivateKey>, LinearizedBlockForest)> {
     proptest::collection::vec(proptests::arb_signing_key(), quorum_size)
         .prop_flat_map(move |private_key| {
             (
@@ -226,6 +227,7 @@ pub fn placeholder_certificate_for_block(
             genesis_ledger_info.version(),
             genesis_ledger_info.timestamp_usecs(),
             None,
+            None,
         ),
         BlockInfo::new(
             genesis_ledger_info.epoch() + 1,
@@ -234,6 +236,7 @@ pub fn placeholder_certificate_for_block(
             genesis_ledger_info.transaction_accumulator_hash(),
             genesis_ledger_info.version(),
             genesis_ledger_info.timestamp_usecs(),
+            None,
             None,
         ),
     );

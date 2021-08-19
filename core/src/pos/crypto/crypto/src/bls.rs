@@ -4,6 +4,7 @@
 
 use crate::{
     hash::{CryptoHash, CryptoHasher},
+    traits::*,
     CryptoMaterialError, PrivateKey, PublicKey, Signature, SigningKey, Uniform,
     ValidCryptoMaterial, ValidCryptoMaterialStringExt, VerifyingKey,
 };
@@ -28,6 +29,8 @@ use std::fmt::{self, Formatter};
 pub const BLS_PRIVATE_KEY_LENGTH: usize = 32;
 /// Public key length in bytes.
 pub const BLS_PUBLIC_KEY_LENGTH: usize = 48;
+/// Signature length in bytes.
+pub const BLS_SIGNATURE_LENGTH: usize = 96;
 
 #[cfg(not(mirai))]
 struct ValidatedPublicKeyTag {}
@@ -35,6 +38,17 @@ struct ValidatedPublicKeyTag {}
 /// BLS signature private key
 #[derive(DeserializeKey, SerializeKey, SilentDebug, SilentDisplay)]
 pub struct BLSPrivateKey(RawPrivateKey);
+
+#[cfg(feature = "assert-private-keys-not-cloneable")]
+static_assertions::assert_not_impl_any!(BLSPrivateKey: Clone);
+
+#[cfg(any(test, feature = "cloneable-private-keys"))]
+impl Clone for BLSPrivateKey {
+    fn clone(&self) -> Self {
+        let serialized: &[u8] = &(self.to_bytes());
+        BLSPrivateKey::try_from(serialized).unwrap()
+    }
+}
 
 /// BLS signature public key
 #[derive(DeserializeKey, Clone, SerializeKey, PartialEq)]
@@ -49,6 +63,12 @@ impl BLSPrivateKey {
     ///
     pub fn raw_key(self) -> RawPrivateKey { self.0 }
 }
+
+impl PartialEq<Self> for BLSPrivateKey {
+    fn eq(&self, other: &Self) -> bool { self.to_bytes() == other.to_bytes() }
+}
+
+impl Eq for BLSPrivateKey {}
 
 impl SigningKey for BLSPrivateKey {
     type SignatureMaterial = BLSSignature;
@@ -85,6 +105,15 @@ impl VerifyingKey for BLSPublicKey {
 
 impl PrivateKey for BLSPrivateKey {
     type PublicKeyMaterial = BLSPublicKey;
+}
+
+impl BLSSignature {
+    /// return an all-zero signature (for test only)
+    #[cfg(any(test, feature = "fuzzing"))]
+    pub fn dummy_signature() -> Self {
+        let bytes = [0u8; BLS_SIGNATURE_LENGTH];
+        Self::try_from(&bytes[..]).unwrap()
+    }
 }
 
 impl Signature for BLSSignature {
@@ -200,6 +229,14 @@ impl ValidCryptoMaterial for BLSPrivateKey {
     fn to_bytes(&self) -> Vec<u8> { self.0.as_bytes() }
 }
 
+impl Genesis for BLSPrivateKey {
+    fn genesis() -> Self {
+        let mut buf = [0u8; BLS_PRIVATE_KEY_LENGTH];
+        buf[BLS_PRIVATE_KEY_LENGTH - 1] = 1;
+        Self::try_from(buf.as_ref()).unwrap()
+    }
+}
+
 impl ValidCryptoMaterial for BLSPublicKey {
     fn to_bytes(&self) -> Vec<u8> { self.0.as_bytes() }
 }
@@ -239,7 +276,35 @@ impl fmt::Debug for BLSSignature {
     }
 }
 
-#[test]
+#[cfg(any(test, feature = "fuzzing"))]
+use crate::test_utils::{self, KeyPair};
+
+/// Produces a uniformly random bls keypair from a seed
+#[cfg(any(test, feature = "fuzzing"))]
+pub fn keypair_strategy(
+) -> impl Strategy<Value = KeyPair<BLSPrivateKey, BLSPublicKey>> {
+    test_utils::uniform_keypair_strategy::<BLSPrivateKey, BLSPublicKey>()
+}
+
+#[cfg(any(test, feature = "fuzzing"))]
+use proptest::prelude::*;
+
+#[cfg(any(test, feature = "fuzzing"))]
+impl proptest::arbitrary::Arbitrary for BLSPublicKey {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+        crate::test_utils::uniform_keypair_strategy::<
+            BLSPrivateKey,
+            BLSPublicKey,
+        >()
+        .prop_map(|v| v.public_key)
+        .boxed()
+    }
+}
+
+#[cfg(test)]
 mod test {
     use crate as diem_crypto;
     use crate::{

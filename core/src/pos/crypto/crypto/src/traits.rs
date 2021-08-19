@@ -375,10 +375,6 @@ pub(crate) mod private {
     impl Sealed for crate::multi_ed25519::MultiEd25519PublicKey {}
     impl Sealed for crate::multi_ed25519::MultiEd25519Signature {}
 
-    impl Sealed for crate::secp256k1::Secp256k1PublicKey {}
-    impl Sealed for crate::secp256k1::Secp256k1PrivateKey {}
-    impl Sealed for crate::secp256k1::Secp256k1Signature {}
-
     impl Sealed for crate::bls::BLSPublicKey {}
     impl Sealed for crate::bls::BLSPrivateKey {}
     impl Sealed for crate::bls::BLSSignature {}

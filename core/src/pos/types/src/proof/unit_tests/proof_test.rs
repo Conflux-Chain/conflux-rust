@@ -23,7 +23,8 @@ use crate::{
     vm_status::KeptVMStatus,
 };
 use diem_crypto::{
-    ed25519::Ed25519PrivateKey,
+    bls::BLSPrivateKey,
+    ec_vrf::EcVrfPrivateKey,
     hash::{
         CryptoHash, TestOnlyHash, TestOnlyHasher, ACCUMULATOR_PLACEHOLDER_HASH,
         GENESIS_BLOCK_ID, SPARSE_MERKLE_PLACEHOLDER_HASH,
@@ -306,7 +307,16 @@ fn test_verify_transaction() {
     .hash();
     let consensus_data_hash = b"c".test_only_hash();
     let ledger_info = LedgerInfo::new(
-        BlockInfo::new(0, 0, *GENESIS_BLOCK_ID, root_hash, 2, 10000, None),
+        BlockInfo::new(
+            0,
+            0,
+            *GENESIS_BLOCK_ID,
+            root_hash,
+            2,
+            10000,
+            None,
+            None,
+        ),
         consensus_data_hash,
     );
 
@@ -386,11 +396,16 @@ fn test_verify_account_state_and_event() {
     let txn_info0_hash = b"hellohello".test_only_hash();
     let txn_info1_hash = b"worldworld".test_only_hash();
 
-    let privkey = Ed25519PrivateKey::generate_for_testing();
+    let privkey = BLSPrivateKey::generate_for_testing();
+    let vrf_private_key = EcVrfPrivateKey::generate_for_testing();
     let pubkey = privkey.public_key();
+    let vrf_public_key = vrf_private_key.public_key();
     let txn2_hash = Transaction::UserTransaction(
         RawTransaction::new_script(
-            crate::account_address::from_public_key(&pubkey),
+            crate::account_address::from_consensus_public_key(
+                &pubkey,
+                &vrf_public_key,
+            ),
             /* sequence_number = */ 0,
             Script::new(vec![], vec![], vec![]),
             /* max_gas_amount = */ 0,
@@ -399,7 +414,7 @@ fn test_verify_account_state_and_event() {
             /* expiration_timestamp_secs = */ 0,
             ChainId::test(),
         )
-        .sign(&privkey, pubkey)
+        .sign(&privkey)
         .expect("Signing failed.")
         .into_inner(),
     )
@@ -437,7 +452,16 @@ fn test_verify_account_state_and_event() {
     // LedgerInfo.
     let consensus_data_hash = b"consensus_data".test_only_hash();
     let ledger_info = LedgerInfo::new(
-        BlockInfo::new(0, 0, *GENESIS_BLOCK_ID, root_hash, 2, 10000, None),
+        BlockInfo::new(
+            0,
+            0,
+            *GENESIS_BLOCK_ID,
+            root_hash,
+            2,
+            10000,
+            None,
+            None,
+        ),
         consensus_data_hash,
     );
 

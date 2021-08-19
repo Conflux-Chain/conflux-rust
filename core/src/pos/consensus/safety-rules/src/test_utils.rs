@@ -19,7 +19,7 @@ use consensus_types::{
     vote_proposal::{MaybeSignedVoteProposal, VoteProposal},
 };
 use diem_crypto::{
-    ed25519::Ed25519PrivateKey,
+    bls::BLSPrivateKey,
     hash::{CryptoHash, TransactionAccumulatorHasher},
     traits::SigningKey,
     Uniform,
@@ -49,6 +49,7 @@ pub fn make_genesis(
     let validator_info = ValidatorInfo::new_with_test_network_keys(
         signer.author(),
         signer.public_key(),
+        None,
         1,
     );
     let validator_set = ValidatorSet::new(vec![validator_info]);
@@ -63,7 +64,7 @@ pub fn make_genesis(
 
 pub fn make_proposal_with_qc_and_proof(
     payload: Payload, round: Round, proof: Proof, qc: QuorumCert,
-    validator_signer: &ValidatorSigner, exec_key: Option<&Ed25519PrivateKey>,
+    validator_signer: &ValidatorSigner, exec_key: Option<&BLSPrivateKey>,
 ) -> MaybeSignedVoteProposal
 {
     let vote_proposal = VoteProposal::new(
@@ -76,6 +77,7 @@ pub fn make_proposal_with_qc_and_proof(
             validator_signer,
         ),
         None,
+        None,
     );
     let signature = exec_key.map(|key| key.sign(&vote_proposal));
     MaybeSignedVoteProposal {
@@ -86,7 +88,7 @@ pub fn make_proposal_with_qc_and_proof(
 
 pub fn make_proposal_with_qc(
     round: Round, qc: QuorumCert, validator_signer: &ValidatorSigner,
-    exec_key: Option<&Ed25519PrivateKey>,
+    exec_key: Option<&BLSPrivateKey>,
 ) -> MaybeSignedVoteProposal
 {
     make_proposal_with_qc_and_proof(
@@ -103,7 +105,7 @@ pub fn make_proposal_with_parent_and_overrides(
     payload: Payload, round: Round, parent: &MaybeSignedVoteProposal,
     committed: Option<&MaybeSignedVoteProposal>,
     validator_signer: &ValidatorSigner, epoch: Option<u64>,
-    next_epoch_state: Option<EpochState>, exec_key: Option<&Ed25519PrivateKey>,
+    next_epoch_state: Option<EpochState>, exec_key: Option<&BLSPrivateKey>,
 ) -> MaybeSignedVoteProposal
 {
     let block_epoch = match epoch {
@@ -136,6 +138,7 @@ pub fn make_proposal_with_parent_and_overrides(
         parent_output.version(),
         parent.block().timestamp_usecs(),
         None,
+        None,
     );
 
     let vote_data = VoteData::new(
@@ -163,6 +166,7 @@ pub fn make_proposal_with_parent_and_overrides(
                 tree.version(),
                 committed.block().timestamp_usecs(),
                 next_epoch_state,
+                None,
             );
             LedgerInfo::new(commit_block_info, vote_data.hash())
         }
@@ -199,7 +203,7 @@ pub fn make_proposal_with_parent_and_overrides(
 pub fn make_proposal_with_parent(
     payload: Payload, round: Round, parent: &MaybeSignedVoteProposal,
     committed: Option<&MaybeSignedVoteProposal>,
-    validator_signer: &ValidatorSigner, exec_key: Option<&Ed25519PrivateKey>,
+    validator_signer: &ValidatorSigner, exec_key: Option<&BLSPrivateKey>,
 ) -> MaybeSignedVoteProposal
 {
     make_proposal_with_parent_and_overrides(
@@ -218,7 +222,12 @@ pub fn validator_signers_to_ledger_info(
     signers: &[&ValidatorSigner],
 ) -> LedgerInfo {
     let infos = signers.iter().map(|v| {
-        ValidatorInfo::new_with_test_network_keys(v.author(), v.public_key(), 1)
+        ValidatorInfo::new_with_test_network_keys(
+            v.author(),
+            v.public_key(),
+            None,
+            1,
+        )
     });
     let validator_set = ValidatorSet::new(infos.collect());
     LedgerInfo::mock_genesis(Some(validator_set))
@@ -236,7 +245,7 @@ pub fn test_storage(signer: &ValidatorSigner) -> PersistentSafetyStorage {
         storage,
         signer.author(),
         signer.private_key().clone(),
-        Ed25519PrivateKey::generate_for_testing(),
+        BLSPrivateKey::generate_for_testing(),
         waypoint,
         true,
     )
@@ -248,7 +257,7 @@ pub fn test_safety_rules() -> SafetyRules {
     let storage = test_storage(&signer);
     let (epoch_change_proof, _) = make_genesis(&signer);
 
-    let mut safety_rules = SafetyRules::new(storage, true, false);
+    let mut safety_rules = SafetyRules::new(storage, true, false, None);
     safety_rules.initialize(&epoch_change_proof).unwrap();
     safety_rules
 }
@@ -258,7 +267,7 @@ pub fn test_safety_rules() -> SafetyRules {
 pub fn test_safety_rules_uninitialized() -> SafetyRules {
     let signer = ValidatorSigner::from_int(0);
     let storage = test_storage(&signer);
-    SafetyRules::new(storage, true, false)
+    SafetyRules::new(storage, true, false, None)
 }
 
 /// Returns a simple serializer for testing purposes.

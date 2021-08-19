@@ -82,6 +82,7 @@ fn to_blocks_to_commit(
                 partial_ledger_info.version(),
                 partial_ledger_info.timestamp_usecs(),
                 partial_ledger_info.next_epoch_state().cloned(),
+                None,
             );
             let ledger_info = LedgerInfo::new(
                 block_info,

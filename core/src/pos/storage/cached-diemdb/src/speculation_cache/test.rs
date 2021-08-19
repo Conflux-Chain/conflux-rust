@@ -39,6 +39,7 @@ fn gen_ledger_info(block_id: HashValue, reconfig: bool) -> LedgerInfo {
             } else {
                 None
             },
+            None,
         ),
         HashValue::zero(),
     )

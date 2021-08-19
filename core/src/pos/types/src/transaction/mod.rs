@@ -433,20 +433,6 @@ impl RawTransaction {
         )))
     }
 
-    #[cfg(any(test, feature = "fuzzing"))]
-    pub fn multi_sign_for_testing(
-        self, private_key: &Ed25519PrivateKey, public_key: Ed25519PublicKey,
-    ) -> Result<SignatureCheckedTransaction> {
-        let signature = private_key.sign(&self);
-        Ok(SignatureCheckedTransaction(
-            SignedTransaction::new_multisig(
-                self,
-                public_key.into(),
-                signature.into(),
-            ),
-        ))
-    }
-
     pub fn into_payload(self) -> TransactionPayload { self.payload }
 
     pub fn format_for_client(

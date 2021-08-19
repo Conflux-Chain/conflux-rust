@@ -185,6 +185,7 @@ mod tests {
             let epoch_state = EpochState {
                 epoch: *epoch + 1,
                 verifier: next_verifier.clone(),
+                vrf_seed: vec![],
             };
             let ledger_info = LedgerInfo::new(
                 BlockInfo::new(
@@ -195,6 +196,7 @@ mod tests {
                     current_version,
                     0,
                     Some(epoch_state),
+                    None,
                 ),
                 HashValue::zero(),
             );
@@ -218,6 +220,7 @@ mod tests {
             .verify(&EpochState {
                 epoch: all_epoch[0],
                 verifier: validator_verifier[0].clone(),
+                vrf_seed: vec![]
             })
             .is_ok());
 
@@ -228,7 +231,8 @@ mod tests {
         assert!(proof_2
             .verify(&EpochState {
                 epoch: all_epoch[2],
-                verifier: validator_verifier[2].clone()
+                verifier: validator_verifier[2].clone(),
+                vrf_seed: vec![]
             })
             .is_ok());
 
@@ -236,7 +240,8 @@ mod tests {
         assert!(proof_1
             .verify(&EpochState {
                 epoch: all_epoch[4],
-                verifier: validator_verifier[4].clone()
+                verifier: validator_verifier[4].clone(),
+                vrf_seed: vec![]
             })
             .is_ok());
 
@@ -245,7 +250,8 @@ mod tests {
         assert!(proof_3
             .verify(&EpochState {
                 epoch: all_epoch[0],
-                verifier: validator_verifier[0].clone()
+                verifier: validator_verifier[0].clone(),
+                vrf_seed: vec![]
             })
             .is_err());
 
@@ -256,7 +262,8 @@ mod tests {
         assert!(proof_4
             .verify(&EpochState {
                 epoch: all_epoch[3],
-                verifier: validator_verifier[3].clone()
+                verifier: validator_verifier[3].clone(),
+                vrf_seed: vec![]
             })
             .is_err());
 
@@ -267,7 +274,8 @@ mod tests {
         assert!(proof_5
             .verify(&EpochState {
                 epoch: all_epoch[9],
-                verifier: validator_verifier[9].clone()
+                verifier: validator_verifier[9].clone(),
+                vrf_seed: vec![]
             })
             .is_err());
 
@@ -282,7 +290,8 @@ mod tests {
         assert!(proof_6
             .verify(&EpochState {
                 epoch: all_epoch[0],
-                verifier: validator_verifier[0].clone()
+                verifier: validator_verifier[0].clone(),
+                vrf_seed: vec![]
             })
             .is_err());
 

@@ -240,6 +240,24 @@ impl PivotBlockDecision {
     }
 }
 
+#[cfg(any(test, feature = "fuzzing"))]
+use proptest::prelude::*;
+
+#[cfg(any(test, feature = "fuzzing"))]
+impl proptest::arbitrary::Arbitrary for PivotBlockDecision {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+        any::<u8>()
+            .prop_map(|_seed| PivotBlockDecision {
+                height: 0,
+                block_hash: H256::zero(),
+            })
+            .boxed()
+    }
+}
+
 impl MoveResource for PivotBlockDecision {
     const MODULE_NAME: &'static str = "pivot_decision";
     const STRUCT_NAME: &'static str = "pivot_decision";
