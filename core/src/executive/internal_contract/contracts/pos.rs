@@ -22,14 +22,23 @@ make_solidity_contract! {
     pub struct PoSRegister(POS_REGISTER_CONTRACT_ADDRESS, generate_fn_table, initialize: |params: &CommonParams| params.transition_numbers.cip72b, is_active: |spec: &Spec| spec.cip72);
 }
 fn generate_fn_table() -> SolFnTable {
-    make_function_table!(Register, IncreaseStake, GetStatus, Retire)
+    make_function_table!(
+        Register,
+        IncreaseStake,
+        Retire,
+        GetStatus,
+        IdentifierToAddress,
+        AddressToIdentifier
+    )
 }
 group_impl_is_active!(
     |spec: &Spec| spec.cip72,
     Register,
     IncreaseStake,
     GetStatus,
-    Retire
+    Retire,
+    IdentifierToAddress,
+    AddressToIdentifier
 );
 
 make_solidity_event! {

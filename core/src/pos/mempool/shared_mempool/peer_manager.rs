@@ -169,7 +169,8 @@ impl PeerManager {
     pub fn execute_broadcast(
         &self, peer: NodeId, scheduled_backoff: bool, smp: &mut SharedMempool,
     ) {
-        trace!("execute_broadcast for peer[{:?}]", peer);
+        diem_info!("start execute_broadcast");
+        debug!("execute_broadcast for peer[{:?}]", peer);
         let mut peer_states = self.peer_states.lock();
         let state = if let Some(state) = peer_states.get_mut(&peer) {
             state
