@@ -1,2 +1,2 @@
 export RUST_BACKTRACE=1
-./conflux --config tethys.toml 2> stderr.txt
+./conflux --config pos_testnet.toml 2> stderr.txt
