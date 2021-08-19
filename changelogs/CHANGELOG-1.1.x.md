@@ -1,10 +1,14 @@
 # 1.1.6
 
+
 ## Improvements
 
 ### RPC Improvements
-
 - Add `blockNumber` to the returned JSON object in `cfx_getTransactionReceipt`. Add `blockNumber`, `epochNumber` to `cfx_getTransactionByHash`
+
+## Bug fixes
+- Fix issue where the block number index is not updated after repeated pivot chain switches. This issue results in `cfx_getBlockByBlockNumber` returning incorrect blocks occasionally. Similarly, log filtering (`cfx_getLogs`) using block numbers is also affected. For this fix to take effect for blocks executed previously, please re-sync the blockchain.
+
 
 # 1.1.5
 
