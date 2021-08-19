@@ -2333,8 +2333,7 @@ checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
 [[package]]
 name = "fff"
 version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7edbba9b259baf4dea8d2167240013ca63a75f7719fc75145a906e9f2c6b3f7b"
+source = "git+https://github.com/Conflux-Chain/ff.git?rev=c0e8a5911a285526cc79fe14d500e1553d3c9174#c0e8a5911a285526cc79fe14d500e1553d3c9174"
 dependencies = [
  "byteorder",
  "cc",
@@ -2347,8 +2346,7 @@ dependencies = [
 [[package]]
 name = "fff_derive"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78dcbbfd77fe2bb6535a6ab35f643bf94d4c3ad30590dcbd0574fcc638747535"
+source = "git+https://github.com/Conflux-Chain/ff.git?rev=c0e8a5911a285526cc79fe14d500e1553d3c9174#c0e8a5911a285526cc79fe14d500e1553d3c9174"
 dependencies = [
  "num-bigint",
  "num-integer",
