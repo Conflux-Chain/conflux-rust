@@ -19,7 +19,7 @@ use crate::{
     },
     waypoint::Waypoint,
 };
-use diem_crypto::{ed25519::Ed25519Signature, hash::HashValue};
+use diem_crypto::{bls::BLSSignature, hash::HashValue};
 use proptest::{
     collection::{size_range, vec, SizeRange},
     prelude::*,
@@ -76,12 +76,14 @@ fn into_epoch_state(epoch: u64, signers: &[ValidatorSigner]) -> EpochState {
                         signer.author(),
                         ValidatorConsensusInfo::new(
                             signer.public_key(),
+                            None,
                             1, /* voting power */
                         ),
                     )
                 })
                 .collect(),
         ),
+        vrf_seed: vec![],
     }
 }
 
@@ -89,7 +91,7 @@ fn into_epoch_state(epoch: u64, signers: &[ValidatorSigner]) -> EpochState {
 /// signers and a `LedgerInfo`.
 fn sign_ledger_info(
     signers: &[ValidatorSigner], ledger_info: &LedgerInfo,
-) -> BTreeMap<AccountAddress, Ed25519Signature> {
+) -> BTreeMap<AccountAddress, BLSSignature> {
     signers
         .iter()
         .map(|s| (s.author(), s.sign(ledger_info)))
@@ -108,6 +110,7 @@ fn new_mock_ledger_info(
             version,
             0, /* timestamp_usecs */
             next_epoch_state,
+            None,
         ),
         HashValue::zero(),
     )
@@ -489,6 +492,7 @@ proptest! {
                         HashValue::zero(), /* executed_state_id */
                         good_li.version(),
                         42, /* bad timestamp_usecs */
+                        None,
                         None,
                     ),
                     HashValue::zero(),

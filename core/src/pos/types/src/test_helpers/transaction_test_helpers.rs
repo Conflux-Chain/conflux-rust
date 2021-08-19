@@ -15,7 +15,7 @@ use crate::{
     },
     write_set::WriteSet,
 };
-use diem_crypto::{ed25519::*, traits::*};
+use diem_crypto::{bls::*, traits::*};
 
 const MAX_GAS_AMOUNT: u64 = 1_000_000;
 const TEST_GAS_PRICE: u64 = 0;
@@ -33,9 +33,8 @@ fn expiration_time(seconds: u64) -> u64 {
 
 // Test helper for transaction creation
 pub fn get_test_signed_module_publishing_transaction(
-    sender: AccountAddress, sequence_number: u64,
-    private_key: &Ed25519PrivateKey, public_key: Ed25519PublicKey,
-    module: Module,
+    sender: AccountAddress, sequence_number: u64, private_key: &BLSPrivateKey,
+    public_key: BLSPublicKey, module: Module,
 ) -> SignedTransaction
 {
     let expiration_time = expiration_time(10);
@@ -57,11 +56,10 @@ pub fn get_test_signed_module_publishing_transaction(
 
 // Test helper for transaction creation
 pub fn get_test_signed_transaction(
-    sender: AccountAddress, sequence_number: u64,
-    private_key: &Ed25519PrivateKey, public_key: Ed25519PublicKey,
-    script: Option<Script>, expiration_timestamp_secs: u64,
-    gas_unit_price: u64, gas_currency_code: String,
-    max_gas_amount: Option<u64>,
+    sender: AccountAddress, sequence_number: u64, private_key: &BLSPrivateKey,
+    public_key: BLSPublicKey, script: Option<Script>,
+    expiration_timestamp_secs: u64, gas_unit_price: u64,
+    gas_currency_code: String, max_gas_amount: Option<u64>,
 ) -> SignedTransaction
 {
     let raw_txn = RawTransaction::new_script(
@@ -85,10 +83,10 @@ pub fn get_test_signed_transaction(
 // Test helper for creating transactions for which the signature hasn't been
 // checked.
 pub fn get_test_unchecked_transaction(
-    sender: AccountAddress, sequence_number: u64,
-    private_key: &Ed25519PrivateKey, public_key: Ed25519PublicKey,
-    script: Option<Script>, expiration_time: u64, gas_unit_price: u64,
-    gas_currency_code: String, max_gas_amount: Option<u64>,
+    sender: AccountAddress, sequence_number: u64, private_key: &BLSPrivateKey,
+    public_key: BLSPublicKey, script: Option<Script>, expiration_time: u64,
+    gas_unit_price: u64, gas_currency_code: String,
+    max_gas_amount: Option<u64>,
 ) -> SignedTransaction
 {
     get_test_unchecked_transaction_(
@@ -108,11 +106,10 @@ pub fn get_test_unchecked_transaction(
 // Test helper for creating transactions for which the signature hasn't been
 // checked.
 fn get_test_unchecked_transaction_(
-    sender: AccountAddress, sequence_number: u64,
-    private_key: &Ed25519PrivateKey, public_key: Ed25519PublicKey,
-    script: Option<Script>, expiration_timestamp_secs: u64,
-    gas_unit_price: u64, gas_currency_code: String,
-    max_gas_amount: Option<u64>, chain_id: ChainId,
+    sender: AccountAddress, sequence_number: u64, private_key: &BLSPrivateKey,
+    public_key: BLSPublicKey, script: Option<Script>,
+    expiration_timestamp_secs: u64, gas_unit_price: u64,
+    gas_currency_code: String, max_gas_amount: Option<u64>, chain_id: ChainId,
 ) -> SignedTransaction
 {
     let raw_txn = RawTransaction::new_script(
@@ -136,9 +133,8 @@ fn get_test_unchecked_transaction_(
 // Test helper for transaction creation. Short version for
 // get_test_signed_transaction Omits some fields
 pub fn get_test_signed_txn(
-    sender: AccountAddress, sequence_number: u64,
-    private_key: &Ed25519PrivateKey, public_key: Ed25519PublicKey,
-    script: Option<Script>,
+    sender: AccountAddress, sequence_number: u64, private_key: &BLSPrivateKey,
+    public_key: BLSPublicKey, script: Option<Script>,
 ) -> SignedTransaction
 {
     let expiration_time = expiration_time(10);
@@ -156,9 +152,8 @@ pub fn get_test_signed_txn(
 }
 
 pub fn get_test_unchecked_txn(
-    sender: AccountAddress, sequence_number: u64,
-    private_key: &Ed25519PrivateKey, public_key: Ed25519PublicKey,
-    script: Option<Script>,
+    sender: AccountAddress, sequence_number: u64, private_key: &BLSPrivateKey,
+    public_key: BLSPublicKey, script: Option<Script>,
 ) -> SignedTransaction
 {
     let expiration_time = expiration_time(10);
@@ -176,9 +171,8 @@ pub fn get_test_unchecked_txn(
 }
 
 pub fn get_test_txn_with_chain_id(
-    sender: AccountAddress, sequence_number: u64,
-    private_key: &Ed25519PrivateKey, public_key: Ed25519PublicKey,
-    chain_id: ChainId,
+    sender: AccountAddress, sequence_number: u64, private_key: &BLSPrivateKey,
+    public_key: BLSPublicKey, chain_id: ChainId,
 ) -> SignedTransaction
 {
     let expiration_time = expiration_time(10);
@@ -197,9 +191,8 @@ pub fn get_test_txn_with_chain_id(
 }
 
 pub fn get_write_set_txn(
-    sender: AccountAddress, sequence_number: u64,
-    private_key: &Ed25519PrivateKey, public_key: Ed25519PublicKey,
-    write_set: Option<WriteSet>,
+    sender: AccountAddress, sequence_number: u64, private_key: &BLSPrivateKey,
+    _public_key: BLSPublicKey, write_set: Option<WriteSet>,
 ) -> SignatureCheckedTransaction
 {
     let write_set = write_set.unwrap_or_default();
@@ -209,6 +202,6 @@ pub fn get_write_set_txn(
         write_set,
         ChainId::test(),
     )
-    .sign(&private_key, public_key)
+    .sign(&private_key)
     .unwrap()
 }

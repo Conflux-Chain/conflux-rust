@@ -8,8 +8,6 @@
 use crate::account_address::AccountAddress;
 use hex::FromHex;
 #[cfg(any(test, feature = "fuzzing"))]
-use proptest_derive::Arbitrary;
-#[cfg(any(test, feature = "fuzzing"))]
 use rand::{rngs::OsRng, RngCore};
 use serde::{de, ser, Deserialize, Serialize};
 use std::{
@@ -22,8 +20,20 @@ use std::{
 /// user can listen to. By design, the lower part of EventKey is the same as
 /// account address.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct EventKey([u8; EventKey::LENGTH]);
+
+#[cfg(any(test, feature = "fuzzing"))]
+use proptest::prelude::*;
+
+#[cfg(any(test, feature = "fuzzing"))]
+impl proptest::arbitrary::Arbitrary for EventKey {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
+        any::<u8>().prop_map(|_seed| EventKey::random()).boxed()
+    }
+}
 
 impl EventKey {
     /// The number of bytes in an EventKey.

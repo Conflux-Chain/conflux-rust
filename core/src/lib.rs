@@ -19,6 +19,7 @@ extern crate db as ext_db;
 extern crate lazy_static;
 #[macro_use]
 extern crate static_assertions;
+extern crate substrate_bn as bn;
 
 #[macro_use]
 pub mod message;

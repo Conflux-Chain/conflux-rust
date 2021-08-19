@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 bit-set = "0.4"
-bn = { git = "https://github.com/paritytech/bn", default-features = false, rev="635c4cdd560bc0c8b262e6bf809dc709da8bcd7e" }
+substrate-bn = { git = "https://github.com/paritytech/bn", default-features = false, rev="63f8c587356a67b33c7396af98e065b66fca5dda" }
 byteorder = "1.0"
 cfxkey = { path = "../accounts/cfxkey" }
 cfx-addr = { path = "../cfx_addr/rust" }
@@ -90,7 +90,7 @@ unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git",
 strum = "0.20"
 strum_macros = "0.20"
 smart-default = "0.6.0"
-bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "b3bdd32d594f95d2121fee73c6fbdf2e4f55ebb2"}
+bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "836339081bb832450408c0fec5d6bd0015370bb0"}
 tiny-keccak = {version = "2.0",  features = ["keccak"]}
 bcs = "0.1.2"
 async-trait = "0.1"

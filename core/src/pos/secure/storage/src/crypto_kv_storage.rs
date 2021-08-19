@@ -6,11 +6,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{CryptoStorage, Error, KVStorage, PublicKeyResponse};
-use diem_crypto::{
-    ed25519::{Ed25519PrivateKey, Ed25519PublicKey},
-    hash::CryptoHash,
-    PrivateKey, SigningKey, Uniform,
-};
+use diem_crypto::{hash::CryptoHash, PrivateKey, SigningKey, Uniform};
 use diem_types::validator_config::{
     ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
 };
@@ -114,13 +110,6 @@ impl<T: CryptoKVStorage> CryptoStorage for T {
         let private_key = self.export_private_key_for_version(name, version)?;
         Ok(private_key.sign(message))
     }
-}
-
-/// Private helper method to generate a new ed25519 key pair using entropy from
-/// the OS.
-#[allow(unused)]
-fn new_ed25519_key_pair() -> (Ed25519PrivateKey, Ed25519PublicKey) {
-    new_key_pair()
 }
 
 fn new_key_pair<SK: SigningKey + Uniform>() -> (SK, SK::PublicKeyMaterial) {

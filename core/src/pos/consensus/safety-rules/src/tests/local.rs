@@ -6,7 +6,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{test_utils, tests::suite, SafetyRulesManager};
-use diem_crypto::{ed25519::Ed25519PrivateKey, Uniform};
+use diem_crypto::{bls::BLSPrivateKey, Uniform};
 use diem_types::validator_signer::ValidatorSigner;
 
 #[test]
@@ -32,13 +32,14 @@ fn safety_rules(
             storage,
             verify_vote_proposal_signature,
             export_consensus_key,
+            None,
         );
         let safety_rules = safety_rules_manager.client();
         (
             safety_rules,
             signer,
             if verify_vote_proposal_signature {
-                Some(Ed25519PrivateKey::generate_for_testing())
+                Some(BLSPrivateKey::generate_for_testing())
             } else {
                 None
             },

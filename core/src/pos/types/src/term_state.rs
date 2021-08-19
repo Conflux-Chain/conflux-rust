@@ -12,6 +12,9 @@ use std::{
 use anyhow::{anyhow, bail, ensure, Result};
 use serde::{Deserialize, Serialize};
 
+#[cfg(any(test, feature = "fuzzing"))]
+use proptest_derive::Arbitrary;
+
 use cfx_types::H256;
 use diem_crypto::{HashValue, VRFProof};
 use diem_logger::prelude::*;
@@ -67,13 +70,15 @@ pub const BONUS_VOTE_POINTS: u64 = MAX_TERM_POINTS * BONUS_VOTE_PERCENTAGE
     / BONUS_VOTE_MAX_SIZE;
 
 #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub enum NodeStatus {
     Accepted,
     Retired,
     Unlocked,
 }
 
-#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct NodeData {
     public_key: ConsensusPublicKey,
     vrf_public_key: Option<ConsensusVRFPublicKey>,
@@ -86,7 +91,8 @@ pub struct NodeData {
 #[derive(
     Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Ord, PartialOrd,
 )]
-struct ElectionNodeID {
+#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+pub struct ElectionNodeID {
     node_id: NodeID,
     nonce: u64,
 }
@@ -97,7 +103,8 @@ impl ElectionNodeID {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct TermData {
     start_view: Round,
     seed: Vec<u8>,
@@ -148,7 +155,8 @@ impl TermData {
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct TermList {
     /// The current active term.
     /// After the first `TERM_LIST_LEN` terms, it should be the term of
@@ -255,6 +263,7 @@ impl TermList {
 
 // FIXME(lpl): Check if we only need the latest version persisted.
 #[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct PosState {
     /// All the nodes that have staked in PoW.
     /// Nodes are only inserted and will never be removed.
@@ -976,6 +985,7 @@ impl UpdateVotingPowerEvent {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct NodeID {
     public_key: ConsensusPublicKey,
     vrf_public_key: ConsensusVRFPublicKey,

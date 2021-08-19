@@ -214,6 +214,7 @@ mod test {
                 123,
                 1000,
                 Some(EpochState::empty()),
+                None,
             ),
             HashValue::zero(),
         );

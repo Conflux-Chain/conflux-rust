@@ -495,7 +495,7 @@ dependencies = [
 [[package]]
 name = "bls-signatures"
 version = "0.10.0"
-source = "git+https://github.com/Conflux-Chain/bls-signatures.git?rev=b3bdd32d594f95d2121fee73c6fbdf2e4f55ebb2#b3bdd32d594f95d2121fee73c6fbdf2e4f55ebb2"
+source = "git+https://github.com/Conflux-Chain/bls-signatures.git?rev=836339081bb832450408c0fec5d6bd0015370bb0#836339081bb832450408c0fec5d6bd0015370bb0"
 dependencies = [
  "fff",
  "groupy",
@@ -505,18 +505,6 @@ dependencies = [
  "rayon",
  "sha2",
  "thiserror",
-]
-
-[[package]]
-name = "bn"
-version = "0.4.4"
-source = "git+https://github.com/paritytech/bn?rev=635c4cdd560bc0c8b262e6bf809dc709da8bcd7e#635c4cdd560bc0c8b262e6bf809dc709da8bcd7e"
-dependencies = [
- "byteorder",
- "crunchy",
- "lazy_static",
- "rand 0.5.6",
- "rustc-hex",
 ]
 
 [[package]]
@@ -825,7 +813,6 @@ dependencies = [
  "bcs",
  "bit-set 0.4.0",
  "bls-signatures",
- "bn",
  "bounded-executor",
  "byteorder",
  "cached-diemdb",
@@ -925,6 +912,7 @@ dependencies = [
  "strum 0.20.0",
  "strum_macros 0.20.1",
  "subscription-service",
+ "substrate-bn",
  "tempdir",
  "thiserror",
  "threadpool",
@@ -1719,7 +1707,6 @@ dependencies = [
  "mirai-annotations",
  "once_cell",
  "openssl",
- "parity-secp256k1",
  "parking_lot 0.11.1",
  "pkcs8",
  "proptest",
@@ -4887,15 +4874,6 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.5.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c618c47cd3ebd209790115ab837de41425723956ad3ce2e6a7f09890947cacb9"
-dependencies = [
- "rand_core 0.3.1",
-]
-
-[[package]]
-name = "rand"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a6b1679d49b24bbfe0c803429aa1874472f50d9b363131f0e89fc356b544d03"
@@ -5856,6 +5834,18 @@ dependencies = [
  "anyhow",
  "channel",
  "diem-types",
+]
+
+[[package]]
+name = "substrate-bn"
+version = "0.6.0"
+source = "git+https://github.com/paritytech/bn?rev=63f8c587356a67b33c7396af98e065b66fca5dda#63f8c587356a67b33c7396af98e065b66fca5dda"
+dependencies = [
+ "byteorder",
+ "crunchy",
+ "lazy_static",
+ "rand 0.8.4",
+ "rustc-hex",
 ]
 
 [[package]]

@@ -66,10 +66,10 @@ fn get_column_families() -> Vec<ColumnFamilyName> {
 }
 
 fn open_db(dir: &diem_temppath::TempPath) -> DB {
-    let mut db_opts = rocksdb::Options::default();
+    let mut db_opts = rocksdb::DBOptions::default();
     db_opts.create_if_missing(true);
     db_opts.create_missing_column_families(true);
-    DB::open(&dir.path(), "test", get_column_families(), &db_opts)
+    DB::open(&dir.path(), "test", get_column_families(), db_opts)
         .expect("Failed to open DB.")
 }
 
@@ -78,7 +78,7 @@ fn open_db_read_only(dir: &diem_temppath::TempPath) -> DB {
         &dir.path(),
         "test",
         get_column_families(),
-        &rocksdb::Options::default(),
+        rocksdb::DBOptions::default(),
     )
     .expect("Failed to open DB.")
 }
@@ -325,7 +325,7 @@ fn test_report_size() {
         db.write_schemas(db_batch).unwrap();
     }
 
-    db.flush_all().unwrap();
+    db.flush_all(true).unwrap();
 
     assert!(
         db.get_property("TestCF1", "rocksdb.estimate-live-data-size")

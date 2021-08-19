@@ -10,7 +10,7 @@ use crate::{
     account_address::{self, AccountAddress},
     account_config::{
         AccountResource, BalanceResource, KeyRotationCapabilityResource,
-        WithdrawCapabilityResource,
+        WithdrawCapabilityResource, XUS_NAME,
     },
     account_state_blob::AccountStateBlob,
     block_info::{BlockInfo, Round},
@@ -28,17 +28,16 @@ use crate::{
         TransactionListWithProof, TransactionPayload, TransactionStatus,
         TransactionToCommit, Version, WriteSetPayload,
     },
+    validator_config::{
+        ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
+        ConsensusVRFPrivateKey, ConsensusVRFPublicKey,
+    },
     validator_info::ValidatorInfo,
     validator_signer::ValidatorSigner,
     vm_status::{KeptVMStatus, VMStatus},
     write_set::{WriteOp, WriteSet, WriteSetMut},
 };
-use diem_crypto::{
-    ed25519::{self, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature},
-    test_utils::KeyPair,
-    traits::*,
-    HashValue,
-};
+use diem_crypto::{bls, ec_vrf, test_utils::KeyPair, traits::*, HashValue};
 use move_core_types::language_storage::TypeTag;
 use proptest::{
     collection::{vec, SizeRange},
@@ -127,8 +126,10 @@ impl Arbitrary for ChangeSet {
 #[derive(Debug)]
 struct AccountInfo {
     address: AccountAddress,
-    private_key: Ed25519PrivateKey,
-    public_key: Ed25519PublicKey,
+    private_key: ConsensusPrivateKey,
+    public_key: ConsensusPublicKey,
+    vrf_private_key: ConsensusVRFPrivateKey,
+    vrf_public_key: ConsensusVRFPublicKey,
     sequence_number: u64,
     sent_event_handle: EventHandle,
     received_event_handle: EventHandle,
@@ -136,13 +137,21 @@ struct AccountInfo {
 
 impl AccountInfo {
     pub fn new(
-        private_key: Ed25519PrivateKey, public_key: Ed25519PublicKey,
-    ) -> Self {
-        let address = account_address::from_public_key(&public_key);
+        private_key: ConsensusPrivateKey, public_key: ConsensusPublicKey,
+        vrf_private_key: ConsensusVRFPrivateKey,
+        vrf_public_key: ConsensusVRFPublicKey,
+    ) -> Self
+    {
+        let address = account_address::from_consensus_public_key(
+            &public_key,
+            &vrf_public_key,
+        );
         Self {
             address,
             private_key,
             public_key,
+            vrf_private_key,
+            vrf_public_key,
             sequence_number: 0,
             sent_event_handle: EventHandle::new_from_address(&address, 0),
             received_event_handle: EventHandle::new_from_address(&address, 1),
@@ -161,15 +170,28 @@ pub struct AccountInfoUniverse {
 
 impl AccountInfoUniverse {
     fn new(
-        keypairs: Vec<(Ed25519PrivateKey, Ed25519PublicKey)>, epoch: u64,
-        round: Round, next_version: Version,
+        keypairs: Vec<(
+            (ConsensusPrivateKey, ConsensusPublicKey),
+            (ConsensusVRFPrivateKey, ConsensusVRFPublicKey),
+        )>,
+        epoch: u64, round: Round, next_version: Version,
     ) -> Self
     {
         let accounts = keypairs
             .into_iter()
-            .map(|(private_key, public_key)| {
-                AccountInfo::new(private_key, public_key)
-            })
+            .map(
+                |(
+                    (private_key, public_key),
+                    (vrf_private_key, vrf_public_key),
+                )| {
+                    AccountInfo::new(
+                        private_key,
+                        public_key,
+                        vrf_private_key,
+                        vrf_public_key,
+                    )
+                },
+            )
             .collect();
         let validator_set_by_epoch =
             vec![(0, Vec::new())].into_iter().collect();
@@ -240,18 +262,26 @@ impl Arbitrary for AccountInfoUniverse {
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(num_accounts: Self::Parameters) -> Self::Strategy {
-        vec(ed25519::keypair_strategy(), num_accounts)
-            .prop_map(|kps| {
-                let kps: Vec<_> = kps
-                    .into_iter()
-                    .map(|k| (k.private_key, k.public_key))
-                    .collect();
-                AccountInfoUniverse::new(
-                    kps, /* epoch = */ 0, /* round = */ 0,
-                    /* next_version = */ 0,
-                )
-            })
-            .boxed()
+        vec(
+            (bls::keypair_strategy(), ec_vrf::keypair_strategy()),
+            num_accounts,
+        )
+        .prop_map(|kps| {
+            let kps: Vec<_> = kps
+                .into_iter()
+                .map(|k| {
+                    (
+                        (k.0.private_key, k.0.public_key),
+                        (k.1.private_key, k.1.public_key),
+                    )
+                })
+                .collect();
+            AccountInfoUniverse::new(
+                kps, /* epoch = */ 0, /* round = */ 0,
+                /* next_version = */ 0,
+            )
+        })
+        .boxed()
     }
 
     fn arbitrary() -> Self::Strategy {
@@ -390,6 +420,56 @@ fn new_raw_transaction(
             signer,
             chain_id,
         ),
+        TransactionPayload::Election(election_payload) => {
+            RawTransaction::new_election(
+                sender,
+                sequence_number,
+                election_payload,
+                chain_id,
+            )
+        }
+        TransactionPayload::Retire(retire_payload) => {
+            RawTransaction::new_retire(sender, sequence_number, retire_payload)
+        }
+        TransactionPayload::Register(register_payload) => RawTransaction::new(
+            sender,
+            sequence_number,
+            TransactionPayload::Register(register_payload),
+            0,
+            0,
+            XUS_NAME.to_owned(),
+            u64::max_value(),
+            chain_id,
+        ),
+        TransactionPayload::UpdateVotingPower(update_voting_power_payload) => {
+            RawTransaction::new(
+                sender,
+                sequence_number,
+                TransactionPayload::UpdateVotingPower(
+                    update_voting_power_payload,
+                ),
+                0,
+                0,
+                XUS_NAME.to_owned(),
+                u64::max_value(),
+                chain_id,
+            )
+        }
+        TransactionPayload::PivotDecision(pivot_decision) => {
+            RawTransaction::new_pivot_decision(
+                sender,
+                sequence_number,
+                pivot_decision,
+                chain_id,
+            )
+        }
+        TransactionPayload::Dispute(dispute_payload) => {
+            RawTransaction::new_dispute(
+                sender,
+                sequence_number,
+                dispute_payload,
+            )
+        }
     }
 }
 
@@ -412,13 +492,17 @@ impl SignatureCheckedTransaction {
     // SignedTransaction, just one kind of them.
     pub fn script_strategy(
         keypair_strategy: impl Strategy<
-            Value = KeyPair<Ed25519PrivateKey, Ed25519PublicKey>,
+            Value = KeyPair<ConsensusPrivateKey, ConsensusPublicKey>,
+        >,
+        vrf_keypair_strategy: impl Strategy<
+            Value = KeyPair<ConsensusVRFPrivateKey, ConsensusVRFPublicKey>,
         >,
         gas_currency_code_strategy: impl Strategy<Value = String>,
     ) -> impl Strategy<Value = Self>
     {
         Self::strategy_impl(
             keypair_strategy,
+            vrf_keypair_strategy,
             TransactionPayload::script_strategy(),
             gas_currency_code_strategy,
         )
@@ -426,13 +510,17 @@ impl SignatureCheckedTransaction {
 
     pub fn module_strategy(
         keypair_strategy: impl Strategy<
-            Value = KeyPair<Ed25519PrivateKey, Ed25519PublicKey>,
+            Value = KeyPair<ConsensusPrivateKey, ConsensusPublicKey>,
+        >,
+        vrf_keypair_strategy: impl Strategy<
+            Value = KeyPair<ConsensusVRFPrivateKey, ConsensusVRFPublicKey>,
         >,
         gas_currency_code_strategy: impl Strategy<Value = String>,
     ) -> impl Strategy<Value = Self>
     {
         Self::strategy_impl(
             keypair_strategy,
+            vrf_keypair_strategy,
             TransactionPayload::module_strategy(),
             gas_currency_code_strategy,
         )
@@ -440,13 +528,17 @@ impl SignatureCheckedTransaction {
 
     pub fn write_set_strategy(
         keypair_strategy: impl Strategy<
-            Value = KeyPair<Ed25519PrivateKey, Ed25519PublicKey>,
+            Value = KeyPair<ConsensusPrivateKey, ConsensusPublicKey>,
+        >,
+        vrf_keypair_strategy: impl Strategy<
+            Value = KeyPair<ConsensusVRFPrivateKey, ConsensusVRFPublicKey>,
         >,
         gas_currency_code_strategy: impl Strategy<Value = String>,
     ) -> impl Strategy<Value = Self>
     {
         Self::strategy_impl(
             keypair_strategy,
+            vrf_keypair_strategy,
             TransactionPayload::write_set_strategy(),
             gas_currency_code_strategy,
         )
@@ -454,13 +546,17 @@ impl SignatureCheckedTransaction {
 
     pub fn genesis_strategy(
         keypair_strategy: impl Strategy<
-            Value = KeyPair<Ed25519PrivateKey, Ed25519PublicKey>,
+            Value = KeyPair<ConsensusPrivateKey, ConsensusPublicKey>,
+        >,
+        vrf_keypair_strategy: impl Strategy<
+            Value = KeyPair<ConsensusVRFPrivateKey, ConsensusVRFPublicKey>,
         >,
         gas_currency_code_strategy: impl Strategy<Value = String>,
     ) -> impl Strategy<Value = Self>
     {
         Self::strategy_impl(
             keypair_strategy,
+            vrf_keypair_strategy,
             TransactionPayload::genesis_strategy(),
             gas_currency_code_strategy,
         )
@@ -468,7 +564,10 @@ impl SignatureCheckedTransaction {
 
     fn strategy_impl(
         keypair_strategy: impl Strategy<
-            Value = KeyPair<Ed25519PrivateKey, Ed25519PublicKey>,
+            Value = KeyPair<ConsensusPrivateKey, ConsensusPublicKey>,
+        >,
+        vrf_keypair_strategy: impl Strategy<
+            Value = KeyPair<ConsensusVRFPrivateKey, ConsensusVRFPublicKey>,
         >,
         payload_strategy: impl Strategy<Value = TransactionPayload>,
         gas_currency_code_strategy: impl Strategy<Value = String>,
@@ -476,41 +575,33 @@ impl SignatureCheckedTransaction {
     {
         (
             keypair_strategy,
+            vrf_keypair_strategy,
             payload_strategy,
             gas_currency_code_strategy,
         )
-            .prop_flat_map(|(keypair, payload, gas_currency_code)| {
-                let address =
-                    account_address::from_public_key(&keypair.public_key);
-                (
-                    Just(keypair),
-                    RawTransaction::strategy_impl(
-                        Just(address),
-                        Just(payload),
-                        Just(gas_currency_code),
-                    ),
-                )
-            })
+            .prop_flat_map(
+                |(keypair, vrf_keypair, payload, gas_currency_code)| {
+                    let address = account_address::from_consensus_public_key(
+                        &keypair.public_key,
+                        &vrf_keypair.public_key,
+                    );
+                    (
+                        Just(keypair),
+                        RawTransaction::strategy_impl(
+                            Just(address),
+                            Just(payload),
+                            Just(gas_currency_code),
+                        ),
+                    )
+                },
+            )
             .prop_flat_map(|(keypair, raw_txn)| {
-                prop_oneof![
-                    Just(
-                        raw_txn
-                            .clone()
-                            .sign(
-                                &keypair.private_key,
-                                keypair.public_key.clone()
-                            )
-                            .expect("signing should always work")
-                    ),
-                    Just(
-                        raw_txn
-                            .multi_sign_for_testing(
-                                &keypair.private_key,
-                                keypair.public_key
-                            )
-                            .expect("signing should always work")
-                    ),
-                ]
+                prop_oneof![Just(
+                    raw_txn
+                        .clone()
+                        .sign(&keypair.private_key)
+                        .expect("signing should always work")
+                )]
             })
     }
 }
@@ -528,7 +619,7 @@ impl SignatureCheckedTransactionGen {
             self.raw_transaction_gen.materialize(sender_index, universe);
         let account_info = universe.get_account_info(sender_index);
         raw_txn
-            .sign(&account_info.private_key, account_info.public_key.clone())
+            .sign(&account_info.private_key)
             .expect("Signing raw transaction should work.")
     }
 }
@@ -539,7 +630,8 @@ impl Arbitrary for SignatureCheckedTransaction {
 
     fn arbitrary_with(_args: ()) -> Self::Strategy {
         Self::strategy_impl(
-            ed25519::keypair_strategy(),
+            bls::keypair_strategy(),
+            ec_vrf::keypair_strategy(),
             any::<TransactionPayload>(),
             any::<String>(),
         )
@@ -595,8 +687,8 @@ prop_compose! {
 }
 
 prop_compose! {
-    fn arb_pubkey()(keypair in ed25519::keypair_strategy()) -> AccountAddress {
-            account_address::from_public_key(&keypair.public_key)
+    fn arb_pubkey()(keypair in bls::keypair_strategy(), vrf_keypair in ec_vrf::keypair_strategy()) -> AccountAddress {
+        account_address::from_consensus_public_key(&keypair.public_key, &vrf_keypair.public_key)
     }
 }
 
@@ -658,10 +750,11 @@ impl Arbitrary for Module {
 prop_compose! {
     fn arb_validator_signature_for_ledger_info(ledger_info: LedgerInfo)(
         ledger_info in Just(ledger_info),
-        keypair in ed25519::keypair_strategy(),
-    ) -> (AccountAddress, Ed25519Signature) {
+        keypair in bls::keypair_strategy(),
+        vrf_keypair in ec_vrf::keypair_strategy(),
+    ) -> (AccountAddress, ConsensusSignature) {
         let signature = keypair.private_key.sign(&ledger_info);
-        (account_address::from_public_key(&keypair.public_key), signature)
+        (account_address::from_consensus_public_key(&keypair.public_key, &vrf_keypair.public_key), signature)
     }
 }
 
@@ -1047,6 +1140,7 @@ impl ValidatorSetGen {
                 ValidatorSigner::new(
                     account.address,
                     account.private_key.clone(),
+                    None,
                 )
             })
             .collect()
@@ -1090,6 +1184,7 @@ impl BlockInfoGen {
                     ValidatorInfo::new_with_test_network_keys(
                         signer.author(),
                         signer.public_key(),
+                        None,
                         1, /* consensus_voting_power */
                     )
                 })
@@ -1097,6 +1192,7 @@ impl BlockInfoGen {
             let next_epoch_state = EpochState {
                 epoch: current_epoch + 1,
                 verifier: (&ValidatorSet::new(next_validator_infos)).into(),
+                vrf_seed: vec![],
             };
 
             universe.get_and_bump_epoch();
@@ -1114,6 +1210,7 @@ impl BlockInfoGen {
             universe.bump_and_get_version(block_size),
             self.timestamp_usecs,
             next_epoch_state,
+            None,
         )
     }
 }
