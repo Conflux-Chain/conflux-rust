@@ -328,16 +328,16 @@ where V: VMExecutor
                 );
 
                 // The check and event processing below will be skipped during
-                // PoS catching up, because pow_handler has not
-                // set its `pow_consensus`.
-                if !self.pow_handler.validate_proposal_pivot_decision(
-                    parent_pivot_decision.block_hash,
-                    pivot_decision.block_hash,
-                ) {
-                    bail!("Invalid pivot decision for block");
-                }
-
+                // PoS catching up, because pow has not processed these pivot
+                // decisions.
                 if !catch_up_mode {
+                    if !self.pow_handler.validate_proposal_pivot_decision(
+                        parent_pivot_decision.block_hash,
+                        pivot_decision.block_hash,
+                    ) {
+                        bail!("Invalid pivot decision for block");
+                    }
+
                     // Verify if the proposer has packed all staking events as
                     // expected.
                     diem_debug!(

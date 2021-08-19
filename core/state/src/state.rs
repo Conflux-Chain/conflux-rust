@@ -507,6 +507,14 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         unimplemented!()
     }
 
+    fn add_pos_interest(
+        &mut self, _address: &Address, _by: &U256, _cleanup_mode: CleanupMode,
+        _account_start_nonce: U256,
+    ) -> Result<()>
+    {
+        unimplemented!()
+    }
+
     fn transfer_balance(
         &mut self, _from: &Address, _to: &Address, _by: &U256,
         _cleanup_mode: CleanupMode, _account_start_nonce: U256,

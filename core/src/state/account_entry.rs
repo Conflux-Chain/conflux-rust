@@ -467,6 +467,10 @@ impl OverlayAccount {
         self.collateral_for_storage -= *by;
     }
 
+    pub fn record_interest_receive(&mut self, interest: &U256) {
+        self.accumulated_interest_return += *interest;
+    }
+
     pub fn cache_code<StateDbStorage: StorageStateTrait>(
         &mut self, db: &StateDbGeneric<StateDbStorage>,
     ) -> DbResult<bool> {
