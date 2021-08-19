@@ -14,7 +14,6 @@ use futures::{
     SinkExt,
 };
 use serde::Serialize;
-use termion::color::*;
 
 use consensus_types::{
     block::Block,
@@ -959,9 +958,10 @@ impl RoundManager {
             .safety_rules
             .construct_and_sign_vote(&maybe_signed_vote_proposal)
             .context(format!(
-                "[RoundManager] SafetyRules {}Rejected{} {}",
-                Fg(Red),
-                Fg(Reset),
+                "[RoundManager] SafetyRules {}Rejected",
+                // TODO(lpl): Remove color because `termion` does not support
+                // windows. Fg(Red),
+                // Fg(Reset),
                 executed_block.block()
             ))?;
         observe_block(
