@@ -18,7 +18,6 @@ use diem_types::ledger_info::LedgerInfoWithSignatures;
 use executor_types::{Error, StateComputeResult};
 use futures::channel::mpsc;
 use std::{collections::HashMap, sync::Arc};
-use termion::color::*;
 
 pub struct MockStateComputer {
     state_sync_client: mpsc::UnboundedSender<Payload>,
