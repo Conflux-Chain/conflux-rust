@@ -14,7 +14,7 @@ use futures::channel::oneshot;
 use parking_lot::RwLock;
 use pow_types::{PowInterface, StakingEvent};
 use primitives::filter::{LogFilter, LogFilterParams};
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use tokio::runtime::Handle;
 
 // FIXME(lpl): Decide the value.
@@ -177,16 +177,27 @@ impl PowInterface for PowHandler {
             tokio::time::sleep(Duration::from_millis(200)).await
         }
         // TODO(lpl): Wait for last_decision is stable?
-        // TODO(lpl): Delay events GC?
-        while self
-            .pow_consensus
-            .read()
-            .as_ref()
-            .unwrap()
-            .data_man
-            .get_epoch_execution_commitment(&last_decision)
-            .is_none()
-        {
+        loop {
+            // Check epoch hash set to see if last_decision is processed and is
+            // on the pivot chain. Note that for full nodes, there
+            // is no other persisted data to check for old blocks.
+            {
+                let consensus_guard = self.pow_consensus.read();
+                let consensus = consensus_guard.as_ref().unwrap();
+                if let Some(height) =
+                    consensus.data_man.block_height_by_hash(&last_decision)
+                {
+                    if let Ok(epoch_hash) = consensus
+                        .inner
+                        .read()
+                        .get_pivot_hash_from_epoch_number(height)
+                    {
+                        if epoch_hash == last_decision {
+                            return;
+                        }
+                    }
+                }
+            }
             tokio::time::sleep(Duration::from_millis(200)).await
         }
     }
