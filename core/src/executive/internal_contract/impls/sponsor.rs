@@ -8,13 +8,13 @@ use crate::{
     vm::{self, ActionParams, Spec},
 };
 use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
-use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
+use cfx_state::{state_trait::StateOpsTxTrait, SubstateTrait};
 use cfx_types::{address_util::AddressUtil, Address, U256};
 
 /// Implementation of `set_sponsor_for_gas(address,uint256)`.
 pub fn set_sponsor_for_gas(
     contract_address: Address, upper_bound: U256, params: &ActionParams,
-    spec: &Spec, state: &mut dyn StateOpsTrait,
+    spec: &Spec, state: &mut dyn StateOpsTxTrait,
     substate: &mut dyn SubstateTrait,
     tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
 ) -> vm::Result<()>
@@ -124,7 +124,7 @@ pub fn set_sponsor_for_gas(
 /// Implementation of `set_sponsor_for_collateral(address)`.
 pub fn set_sponsor_for_collateral(
     contract_address: Address, params: &ActionParams, spec: &Spec,
-    state: &mut dyn StateOpsTrait, substate: &mut dyn SubstateTrait,
+    state: &mut dyn StateOpsTxTrait, substate: &mut dyn SubstateTrait,
     tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
 ) -> vm::Result<()>
 {
@@ -212,7 +212,7 @@ pub fn set_sponsor_for_collateral(
 /// `addPrivilegeByAdmin(address,address[])`.
 pub fn add_privilege(
     contract: Address, addresses: Vec<Address>, params: &ActionParams,
-    state: &mut dyn StateOpsTrait,
+    state: &mut dyn StateOpsTxTrait,
 ) -> vm::Result<()>
 {
     for user_addr in addresses {
@@ -230,7 +230,7 @@ pub fn add_privilege(
 /// `removePrivilegeByAdmin(address,address[])`.
 pub fn remove_privilege(
     contract: Address, addresses: Vec<Address>, params: &ActionParams,
-    state: &mut dyn StateOpsTrait,
+    state: &mut dyn StateOpsTxTrait,
 ) -> vm::Result<()>
 {
     for user_addr in addresses {

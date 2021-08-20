@@ -25,9 +25,13 @@ pub trait StateTrait {
     fn delete_test_only(
         &mut self, access_key: StorageKey,
     ) -> Result<Option<Box<[u8]>>>;
+    // Iterate everything prefixed by access_key and return the key value pairs.
+    fn iterate_all(
+        &self, access_key_prefix: StorageKey,
+    ) -> Result<Option<Vec<MptKeyValue>>>;
     // Delete everything prefixed by access_key and return deleted key value
     // pairs.
-    fn delete_all<AM: access_mode::AccessMode>(
+    fn delete_all(
         &mut self, access_key_prefix: StorageKey,
     ) -> Result<Option<Vec<MptKeyValue>>>;
 
@@ -56,7 +60,6 @@ use super::{
     impls::{
         errors::*, node_merkle_proof::NodeMerkleProof, state_proof::StateProof,
     },
-    utils::access_mode,
     MptKeyValue, StateRootWithAuxInfo,
 };
 use primitives::{EpochId, NodeMerkleTriplet, StaticBool, StorageKey};

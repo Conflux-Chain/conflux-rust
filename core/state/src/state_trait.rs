@@ -2,52 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub trait StateTrait: CheckpointTrait {
-    type Substate: SubstateTrait;
-
-    /// Collects the cache (`ownership_change` in `OverlayAccount`) of storage
-    /// change and write to substate.
-    /// It is idempotent. But its execution is costly.
-    fn collect_ownership_changed(
-        &mut self, substate: &mut Self::Substate,
-    ) -> DbResult<()>;
-
-    /// Charge and refund all the storage collaterals.
-    /// The suicided addresses are skimmed because their collateral have been
-    /// checked out. This function should only be called in post-processing
-    /// of a transaction.
-    fn settle_collateral_for_all(
-        &mut self, substate: &Self::Substate, account_start_nonce: U256,
-    ) -> DbResult<CollateralCheckResult>;
-
-    // FIXME: add doc string.
-    fn collect_and_settle_collateral(
-        &mut self, original_sender: &Address, storage_limit: &U256,
-        substate: &mut Self::Substate, account_start_nonce: U256,
-    ) -> DbResult<CollateralCheckResult>;
-
-    // TODO: maybe we can find a better interface for doing the suicide
-    // post-processing.
-    fn record_storage_and_whitelist_entries_release(
-        &mut self, address: &Address, substate: &mut Self::Substate,
-    ) -> DbResult<()>;
-
-    fn compute_state_root(
-        &mut self, debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> DbResult<StateRootWithAuxInfo>;
-
-    fn commit(
-        &mut self, epoch_id: EpochId,
-        debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> DbResult<StateRootWithAuxInfo>;
-}
-
-pub trait StateOpsTrait {
+// Methods in StateOpsTrait that is used in transaction.
+pub trait StateOpsTxTrait {
     /// Calculate the secondary reward for the next block number.
     fn bump_block_number_accumulate_interest(&mut self) -> U256;
-
-    /// Maintain `total_issued_tokens`.
-    fn add_total_issued(&mut self, v: U256);
 
     /// Maintain `total_issued_tokens`. This is only used in the extremely
     /// unlikely case that there are a lot of partial invalid blocks.
@@ -69,15 +27,13 @@ pub trait StateOpsTrait {
     ) -> DbResult<Option<Address>>;
 
     fn set_sponsor_for_gas(
-        &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
-        upper_bound: &U256,
+        &mut self, address: &Address, sponsor: &Address,
+        sponsor_balance: &U256, upper_bound: &U256,
     ) -> DbResult<()>;
 
     fn set_sponsor_for_collateral(
-        &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
+        &mut self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
     ) -> DbResult<()>;
-
-    fn sponsor_info(&self, address: &Address) -> DbResult<Option<SponsorInfo>>;
 
     fn sponsor_gas_bound(&self, address: &Address) -> DbResult<U256>;
 
@@ -153,8 +109,6 @@ pub trait StateOpsTrait {
 
     fn vote_stake_list_length(&self, address: &Address) -> DbResult<usize>;
 
-    fn clean_account(&mut self, address: &Address) -> DbResult<()>;
-
     fn inc_nonce(
         &mut self, address: &Address, account_start_nonce: &U256,
     ) -> DbResult<()>;
@@ -188,12 +142,6 @@ pub trait StateOpsTrait {
         &mut self, address: &Address, current_block_number: u64,
     ) -> DbResult<()>;
 
-    fn total_issued_tokens(&self) -> U256;
-
-    fn total_staking_tokens(&self) -> U256;
-
-    fn total_storage_tokens(&self) -> U256;
-
     fn remove_contract(&mut self, address: &Address) -> DbResult<()>;
 
     fn exists(&self, address: &Address) -> DbResult<bool>;
@@ -207,7 +155,7 @@ pub trait StateOpsTrait {
     ) -> DbResult<()>;
 }
 
-pub trait CheckpointTrait: StateOpsTrait {
+pub trait CheckpointTxDeltaTrait {
     /// Create a recoverable checkpoint of this state. Return the checkpoint
     /// index. The checkpoint records any old value which is alive at the
     /// creation time of the checkpoint and updated after that and before
@@ -222,6 +170,71 @@ pub trait CheckpointTrait: StateOpsTrait {
 
     /// Revert to the last checkpoint and discard it.
     fn revert_to_checkpoint(&mut self);
+}
+
+// Methods in CheckpointTrait that is used in transaction.
+pub trait CheckpointTxTrait: StateOpsTxTrait + CheckpointTxDeltaTrait {}
+
+pub trait StateTxDeltaTrait {
+    type Substate: SubstateTrait;
+
+    /// Collects the cache (`ownership_change` in `OverlayAccount`) of storage
+    /// change and write to substate.
+    /// It is idempotent. But its execution is costly.
+    fn collect_ownership_changed(
+        &mut self, substate: &mut Self::Substate,
+    ) -> DbResult<()>;
+
+    /// Charge and refund all the storage collaterals.
+    /// The suicided addresses are skimmed because their collateral have been
+    /// checked out. This function should only be called in post-processing
+    /// of a transaction.
+    fn settle_collateral_for_all(
+        &mut self, substate: &Self::Substate, account_start_nonce: U256,
+    ) -> DbResult<CollateralCheckResult>;
+
+    // FIXME: add doc string.
+    fn collect_and_settle_collateral(
+        &mut self, original_sender: &Address, storage_limit: &U256,
+        substate: &mut Self::Substate, account_start_nonce: U256,
+    ) -> DbResult<CollateralCheckResult>;
+
+    // TODO: maybe we can find a better interface for doing the suicide
+    // post-processing.
+    fn record_storage_and_whitelist_entries_release(
+        &mut self, address: &Address, substate: &mut Self::Substate,
+    ) -> DbResult<()>;
+}
+
+// Methods in StateTrait that is used in transaction.
+pub trait StateTxTrait: CheckpointTxTrait + StateTxDeltaTrait {}
+
+pub trait StateOpsTrait: StateOpsTxTrait {
+    /// Maintain `total_issued_tokens`.
+    fn add_total_issued(&mut self, v: U256);
+
+    fn sponsor_info(&self, address: &Address) -> DbResult<Option<SponsorInfo>>;
+
+    fn clean_account(&mut self, address: &Address) -> DbResult<()>;
+
+    fn total_issued_tokens(&self) -> U256;
+
+    fn total_staking_tokens(&self) -> U256;
+
+    fn total_storage_tokens(&self) -> U256;
+}
+
+pub trait CheckpointTrait: StateOpsTrait + CheckpointTxDeltaTrait {}
+
+pub trait StateTrait: CheckpointTrait + StateTxDeltaTrait {
+    fn compute_state_root(
+        &mut self, debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> DbResult<StateRootWithAuxInfo>;
+
+    fn commit(
+        &mut self, epoch_id: EpochId,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> DbResult<StateRootWithAuxInfo>;
 }
 
 use super::{CleanupMode, CollateralCheckResult};

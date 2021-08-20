@@ -2,7 +2,7 @@ use crate::{
     state::CallStackInfo,
     vm::{self, ActionParams, Env, Spec},
 };
-use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
+use cfx_state::{state_trait::StateOpsTxTrait, SubstateTrait};
 use cfx_types::{H256, U256};
 
 /// The internal contracts need to access the context parameter directly, e.g.,
@@ -13,7 +13,7 @@ pub struct InternalRefContext<'a> {
     pub env: &'a Env,
     pub spec: &'a Spec,
     pub callstack: &'a mut CallStackInfo,
-    pub state: &'a mut dyn StateOpsTrait,
+    pub state: &'a mut dyn StateOpsTxTrait,
     pub substate: &'a mut dyn SubstateTrait,
     pub static_flag: bool,
 }

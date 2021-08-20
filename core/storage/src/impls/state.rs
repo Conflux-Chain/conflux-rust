@@ -100,7 +100,7 @@ impl State {
     {
         // Get won't create any new nodes so it's fine to pass an empty
         // owned_node_set.
-        let mut empty_owned_node_set: Option<OwnedNodeSet> =
+        let empty_owned_node_set: Option<OwnedNodeSet> =
             Some(Default::default());
 
         match maybe_root_node {
@@ -109,7 +109,7 @@ impl State {
                 let maybe_value = SubTrieVisitor::new(
                     mpt,
                     root_node.clone(),
-                    &mut empty_owned_node_set,
+                    empty_owned_node_set.as_ref().unwrap(),
                 )?
                 .get(access_key)?;
 
@@ -119,7 +119,7 @@ impl State {
                         SubTrieVisitor::new(
                             mpt,
                             root_node,
-                            &mut empty_owned_node_set,
+                            empty_owned_node_set.as_ref().unwrap(),
                         )?
                         .get_proof(access_key)?,
                     ),
@@ -238,16 +238,19 @@ impl StateTrait for State {
         self.pre_modification();
 
         let root_node = self.get_or_create_delta_root_node()?;
-        self.delta_trie_root = SubTrieVisitor::new(
+        let visitor = SubTrieVisitor::new(
             &self.delta_trie,
             root_node,
-            &mut self.owned_node_set,
-        )?
-        .set(
-            &access_key.to_delta_mpt_key_bytes(&self.delta_trie_key_padding),
-            value,
-        )?
-        .into();
+            self.owned_node_set.as_ref().unwrap(),
+        )?;
+        self.delta_trie_root = visitor
+            .set(
+                &access_key
+                    .to_delta_mpt_key_bytes(&self.delta_trie_key_padding),
+                value,
+                self.owned_node_set.as_mut().unwrap(),
+            )?
+            .into();
 
         Ok(())
     }
@@ -268,16 +271,131 @@ impl StateTrait for State {
                 let (old_value, _, root_node) = SubTrieVisitor::new(
                     &self.delta_trie,
                     old_root_node,
-                    &mut self.owned_node_set,
+                    self.owned_node_set.as_ref().unwrap(),
                 )?
                 .delete(
                     &access_key
                         .to_delta_mpt_key_bytes(&self.delta_trie_key_padding),
+                    self.owned_node_set.as_mut().unwrap(),
                 )?;
                 self.delta_trie_root =
                     root_node.map(|maybe_node| maybe_node.into());
                 Ok(old_value)
             }
+        }
+    }
+
+    fn iterate_all(
+        &self, access_key_prefix: StorageKey,
+    ) -> Result<Option<Vec<MptKeyValue>>> {
+        self.ensure_temp_slab_for_db_load();
+
+        // Retrieve and delete key/value pairs from delta trie
+        let delta_trie_kvs = match &self.delta_trie_root {
+            None => None,
+            Some(old_root_node) => {
+                let delta_mpt_key_prefix = access_key_prefix
+                    .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
+                SubTrieVisitor::new(
+                    &self.delta_trie,
+                    old_root_node.clone(),
+                    self.owned_node_set.as_ref().unwrap(),
+                )?
+                .traversal(
+                    &delta_mpt_key_prefix,
+                    &delta_mpt_key_prefix,
+                    self.owned_node_set.as_ref().unwrap(),
+                )?
+            }
+        };
+
+        // Retrieve key/value pairs from intermediate trie
+        let intermediate_trie_kvs = match &self.intermediate_trie_root {
+            None => None,
+            Some(root_node) => {
+                if self.maybe_intermediate_trie_key_padding.is_some()
+                    && self.maybe_intermediate_trie.is_some()
+                {
+                    let intermediate_trie_key_padding = self
+                        .maybe_intermediate_trie_key_padding
+                        .as_ref()
+                        .unwrap();
+                    let intermediate_mpt_key_prefix = access_key_prefix
+                        .to_delta_mpt_key_bytes(intermediate_trie_key_padding);
+                    let values = SubTrieVisitor::new(
+                        self.maybe_intermediate_trie.as_ref().unwrap(),
+                        root_node.clone(),
+                        self.owned_node_set.as_ref().unwrap(),
+                    )?
+                    .traversal(
+                        &intermediate_mpt_key_prefix,
+                        &intermediate_mpt_key_prefix,
+                        self.owned_node_set.as_ref().unwrap(),
+                    )?;
+
+                    values
+                } else {
+                    None
+                }
+            }
+        };
+
+        // Retrieve key/value pairs from snapshot
+        let mut kv_iterator = self.snapshot_db.snapshot_kv_iterator()?.take();
+        let lower_bound_incl = access_key_prefix.to_key_bytes();
+        let upper_bound_excl =
+            to_key_prefix_iter_upper_bound(&lower_bound_incl);
+        let mut kvs = kv_iterator
+            .iter_range(
+                lower_bound_incl.as_slice(),
+                upper_bound_excl.as_ref().map(|v| &**v),
+            )?
+            .take();
+
+        let mut snapshot_kvs = Vec::new();
+        while let Some((key, value)) = kvs.next()? {
+            snapshot_kvs.push((key, value));
+        }
+
+        let mut result = Vec::new();
+        // This is used to keep track of the deleted keys.
+        let mut deleted_keys = HashSet::new();
+        if let Some(kvs) = delta_trie_kvs {
+            for (k, v) in kvs {
+                let storage_key = StorageKey::from_delta_mpt_key(&k);
+                let k = storage_key.to_key_bytes();
+                deleted_keys.insert(k.clone());
+                if v.len() > 0 {
+                    result.push((k, v));
+                }
+            }
+        }
+
+        if let Some(kvs) = intermediate_trie_kvs {
+            for (k, v) in kvs {
+                let storage_key = StorageKey::from_delta_mpt_key(&k);
+                let k = storage_key.to_key_bytes();
+                if !deleted_keys.contains(&k) {
+                    deleted_keys.insert(k.clone());
+                    if v.len() > 0 {
+                        result.push((k, v));
+                    }
+                }
+            }
+        }
+
+        // No need to check v.len() because there are no tombStone values in
+        // snapshot.
+        for (k, v) in snapshot_kvs {
+            if !deleted_keys.contains(&k) {
+                result.push((k, v));
+            }
+        }
+
+        if result.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(result))
         }
     }
 
@@ -289,16 +407,10 @@ impl StateTrait for State {
     /// key/value pairs in Intermediate Trie and Snapshot DB, we try to
     /// enumerate all key/value pairs and set tombstone in Delta Trie only when
     /// necessary.
-    ///
-    /// When AM is Read, only calculate the key values to be deleted.
-    fn delete_all<AM: access_mode::AccessMode>(
+    fn delete_all(
         &mut self, access_key_prefix: StorageKey,
     ) -> Result<Option<Vec<MptKeyValue>>> {
-        if AM::is_read_only() {
-            self.ensure_temp_slab_for_db_load();
-        } else {
-            self.pre_modification();
-        }
+        self.pre_modification();
 
         // Retrieve and delete key/value pairs from delta trie
         let delta_trie_kvs = match &self.delta_trie_root {
@@ -306,25 +418,18 @@ impl StateTrait for State {
             Some(old_root_node) => {
                 let delta_mpt_key_prefix = access_key_prefix
                     .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
-                let deleted = if AM::is_read_only() {
-                    SubTrieVisitor::new(
-                        &self.delta_trie,
-                        old_root_node.clone(),
-                        &mut self.owned_node_set,
-                    )?
-                    .traversal(&delta_mpt_key_prefix, &delta_mpt_key_prefix)?
-                } else {
-                    let (deleted, _, root_node) = SubTrieVisitor::new(
-                        &self.delta_trie,
-                        old_root_node.clone(),
-                        &mut self.owned_node_set,
-                    )?
-                    .delete_all(&delta_mpt_key_prefix, &delta_mpt_key_prefix)?;
-                    self.delta_trie_root =
-                        root_node.map(|maybe_node| maybe_node.into());
-
-                    deleted
-                };
+                let (deleted, _, root_node) = SubTrieVisitor::new(
+                    &self.delta_trie,
+                    old_root_node.clone(),
+                    self.owned_node_set.as_ref().unwrap(),
+                )?
+                .delete_all(
+                    &delta_mpt_key_prefix,
+                    &delta_mpt_key_prefix,
+                    self.owned_node_set.as_mut().unwrap(),
+                )?;
+                self.delta_trie_root =
+                    root_node.map(|maybe_node| maybe_node.into());
                 deleted
             }
         };
@@ -345,11 +450,12 @@ impl StateTrait for State {
                     let values = SubTrieVisitor::new(
                         self.maybe_intermediate_trie.as_ref().unwrap(),
                         root_node.clone(),
-                        &mut self.owned_node_set,
+                        self.owned_node_set.as_ref().unwrap(),
                     )?
                     .traversal(
                         &intermediate_mpt_key_prefix,
                         &intermediate_mpt_key_prefix,
+                        self.owned_node_set.as_ref().unwrap(),
                     )?;
 
                     values
@@ -394,7 +500,7 @@ impl StateTrait for State {
             for (k, v) in kvs {
                 let storage_key = StorageKey::from_delta_mpt_key(&k);
                 // Only delete non-empty keys.
-                if v.len() > 0 && !AM::is_read_only() {
+                if v.len() > 0 {
                     self.delete(storage_key)?;
                 }
                 let k = storage_key.to_key_bytes();
@@ -411,9 +517,7 @@ impl StateTrait for State {
         // snapshot.
         for (k, v) in snapshot_kvs {
             let storage_key = StorageKey::from_key_bytes::<SkipInputCheck>(&k);
-            if !AM::is_read_only() {
-                self.delete(storage_key)?;
-            }
+            self.delete(storage_key)?;
             if !deleted_keys.contains(&k) {
                 result.push((k, v));
             }
@@ -513,13 +617,11 @@ impl StateTraitExt for State {
                 let key = access_key
                     .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
 
-                let mut owned_node_set = Some(Default::default());
-
                 let mut visitor = SubTrieVisitor::new(
                     &self.delta_trie,
                     root_node.clone(),
                     // won't create any new nodes
-                    &mut owned_node_set,
+                    &mut Default::default(),
                 )?;
 
                 let delta = visitor.get_merkle_hash_wo_compressed_path(&key)?;
@@ -531,7 +633,7 @@ impl StateTraitExt for State {
                             &self.delta_trie,
                             root_node.clone(),
                             // won't create any new nodes
-                            &mut Some(Default::default()),
+                            &mut Default::default(),
                         )?
                         .get_proof(&key)?,
                     ),
@@ -563,13 +665,11 @@ impl StateTraitExt for State {
                 let key = access_key
                     .to_delta_mpt_key_bytes(&intermediate_trie_key_padding);
 
-                let mut owned_node_set = Some(Default::default());
-
                 let mut visitor = SubTrieVisitor::new(
                     &intermediate_trie,
                     root_node.clone(),
                     // won't create any new nodes
-                    &mut owned_node_set,
+                    &mut Default::default(),
                 )?;
 
                 let intermediate =
@@ -582,7 +682,7 @@ impl StateTraitExt for State {
                             &intermediate_trie,
                             root_node.clone(),
                             // won't create any new nodes
-                            &mut Some(Default::default()),
+                            &mut Default::default(),
                         )?
                         .get_proof(&key)?,
                     ),
@@ -906,6 +1006,7 @@ use crate::{
     },
     state::*,
     storage_db::*,
+    subtrie_visitor::SubTrieVisitor,
     utils::{access_mode, to_key_prefix_iter_upper_bound},
 };
 use cfx_internal_common::{StateRootAuxInfo, StateRootWithAuxInfo};

@@ -11,13 +11,14 @@ use cfx_parameters::{
     consensus::ONE_CFX_IN_DRIP,
     internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
 };
-use cfx_state::state_trait::StateOpsTrait;
+use cfx_state::state_trait::StateOpsTxTrait;
 use cfx_types::{Address, U256};
 
 /// Implementation of `deposit(uint256)`.
 pub fn deposit(
     amount: U256, params: &ActionParams, env: &Env,
-    state: &mut dyn StateOpsTrait, tracer: &mut dyn Tracer<Output = ExecTrace>,
+    state: &mut dyn StateOpsTxTrait,
+    tracer: &mut dyn Tracer<Output = ExecTrace>,
 ) -> vm::Result<()>
 {
     if amount < U256::from(ONE_CFX_IN_DRIP) {
@@ -40,7 +41,8 @@ pub fn deposit(
 /// Implementation of `withdraw(uint256)`.
 pub fn withdraw(
     amount: U256, params: &ActionParams, env: &Env,
-    state: &mut dyn StateOpsTrait, tracer: &mut dyn Tracer<Output = ExecTrace>,
+    state: &mut dyn StateOpsTxTrait,
+    tracer: &mut dyn Tracer<Output = ExecTrace>,
 ) -> vm::Result<()>
 {
     state.remove_expired_vote_stake_info(&params.sender, env.number)?;
@@ -68,7 +70,7 @@ pub fn withdraw(
 /// Implementation of `getVoteLocked(address,uint)`.
 pub fn vote_lock(
     amount: U256, unlock_block_number: U256, params: &ActionParams, env: &Env,
-    state: &mut dyn StateOpsTrait,
+    state: &mut dyn StateOpsTxTrait,
 ) -> vm::Result<()>
 {
     let unlock_block_number = unlock_block_number.low_u64();
@@ -90,7 +92,7 @@ pub fn vote_lock(
 /// Implementation of `getLockedStakingBalance(address,uint)`.
 pub fn get_locked_staking(
     address: Address, block_number: U256, current_block_number: u64,
-    state: &mut dyn StateOpsTrait,
+    state: &mut dyn StateOpsTxTrait,
 ) -> vm::Result<U256>
 {
     let mut block_number = block_number.low_u64();
@@ -103,7 +105,7 @@ pub fn get_locked_staking(
 /// Implementation of `getVotePower(address,uint)`.
 pub fn get_vote_power(
     address: Address, block_number: U256, current_block_number: u64,
-    state: &mut dyn StateOpsTrait,
+    state: &mut dyn StateOpsTxTrait,
 ) -> vm::Result<U256>
 {
     let mut block_number = block_number.low_u64();

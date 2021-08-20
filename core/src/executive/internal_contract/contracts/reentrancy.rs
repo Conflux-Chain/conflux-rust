@@ -13,7 +13,7 @@ use crate::{
     vm,
 };
 use cfx_parameters::internal_contract_addresses::ANTI_REENTRANCY_CONTRACT_ADDRESS;
-use cfx_state::state_trait::StateOpsTrait;
+use cfx_state::state_trait::StateOpsTxTrait;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 
 make_solidity_contract! {

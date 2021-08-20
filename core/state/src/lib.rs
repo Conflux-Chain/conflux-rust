@@ -8,7 +8,7 @@ pub(self) mod state_object_cache;
 pub mod state_trait;
 pub mod substate_trait;
 
-pub use state_trait::StateTrait;
+pub use state_trait::{StateTrait, StateTxTrait};
 pub use substate_trait::{SubstateMngTrait, SubstateTrait};
 
 #[derive(Copy, Clone, PartialEq, Debug)]
@@ -47,14 +47,14 @@ pub trait StateDbOps {
     where T: ::rlp::Decodable;
 
     fn set<T>(
-        &mut self, key: StorageKey, value: &T,
+        &self, key: StorageKey, value: &T,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>
     where
         T: ::rlp::Encodable + IsDefault;
 
     fn delete(
-        &mut self, key: StorageKey,
+        &self, key: StorageKey,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>;
 }
@@ -72,7 +72,7 @@ impl<StateDbStorage: StorageStateTrait> StateDbOps
     }
 
     fn set<T>(
-        &mut self, key: StorageKey, value: &T,
+        &self, key: StorageKey, value: &T,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>
     where
@@ -82,7 +82,7 @@ impl<StateDbStorage: StorageStateTrait> StateDbOps
     }
 
     fn delete(
-        &mut self, key: StorageKey,
+        &self, key: StorageKey,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>
     {

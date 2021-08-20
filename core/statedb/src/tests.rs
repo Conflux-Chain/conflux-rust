@@ -5,7 +5,7 @@
 use super::StateDbGeneric;
 use cfx_internal_common::StateRootWithAuxInfo;
 use cfx_storage::{
-    utils::access_mode, ErrorKind, MptKeyValue, Result, StorageStateTrait,
+    ErrorKind, MptKeyValue, Result, StorageStateTrait,
 };
 use primitives::{EpochId, StorageKey, MERKLE_NULL_NODE};
 use std::{cell::RefCell, collections::HashMap};
@@ -59,7 +59,30 @@ impl StorageStateTrait for MockStorage {
         Ok(())
     }
 
-    fn delete_all<AM: access_mode::AccessMode>(
+    fn iterate_all(
+        &self, access_key_prefix: StorageKey,
+    ) -> Result<Option<Vec<MptKeyValue>>> {
+        let prefix = access_key_prefix.to_key_bytes();
+
+        let keys_to_iterate: Vec<_> = self
+            .contents
+            .keys()
+            .filter(|k| k.starts_with(&prefix[..]))
+            .cloned()
+            .collect();
+
+        let mut kvs = vec![];
+
+        for k in keys_to_iterate {
+            *self.num_reads.borrow_mut() += 1; // TODO: Is this safe?
+            let v = self.contents.get(&k).unwrap();
+            kvs.push((k.clone(), v.clone()));
+        }
+
+        Ok(Some(kvs))
+    }
+
+    fn delete_all(
         &mut self, access_key_prefix: StorageKey,
     ) -> Result<Option<Vec<MptKeyValue>>> {
         let prefix = access_key_prefix.to_key_bytes();
@@ -78,10 +101,8 @@ impl StorageStateTrait for MockStorage {
             let v = self.contents.get(&k).unwrap();
             deleted_kvs.push((k.clone(), v.clone()));
 
-            if !AM::is_read_only() {
-                *self.num_writes.get_mut() += 1;
-                self.contents.remove(&k);
-            }
+            *self.num_writes.get_mut() += 1;
+            self.contents.remove(&k);
         }
 
         Ok(Some(deleted_kvs))
@@ -162,7 +183,7 @@ fn test_basic() {
 
     // delete (00, v0) and (01, v0)
     state_db
-        .delete_all::<access_mode::Write>(storage_key(b"0"), None)
+        .delete_all(storage_key(b"0"), None)
         .unwrap();
 
     state_db.commit(MERKLE_NULL_NODE, None).unwrap();
@@ -204,7 +225,7 @@ fn test_checkpoint() {
 
     // delete (00, v0) and (01, v0)
     state_db
-        .delete_all::<access_mode::Write>(storage_key(b"0"), None)
+        .delete_all(storage_key(b"0"), None)
         .unwrap();
 
     // discard checkpoint #1

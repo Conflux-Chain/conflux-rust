@@ -28,8 +28,9 @@ use crate::{
 };
 use cfx_parameters::staking::*;
 use cfx_state::{
-    state_trait::StateOpsTrait, substate_trait::SubstateMngTrait, CleanupMode,
-    CollateralCheckResult, StateTrait, SubstateTrait,
+    state_trait::{StateOpsTxTrait, StateTxTrait},
+    substate_trait::SubstateMngTrait,
+    CleanupMode, CollateralCheckResult, SubstateTrait,
 };
 use cfx_statedb::Result as DbResult;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256, U512, U64};
@@ -351,7 +352,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     }
 
     fn transfer_exec_balance(
-        params: &ActionParams, spec: &Spec, state: &mut dyn StateOpsTrait,
+        params: &ActionParams, spec: &Spec, state: &mut dyn StateOpsTxTrait,
         substate: &mut dyn SubstateTrait, account_start_nonce: U256,
     ) -> DbResult<()>
     {
@@ -369,7 +370,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     }
 
     fn transfer_exec_balance_and_init_contract(
-        params: &ActionParams, spec: &Spec, state: &mut dyn StateOpsTrait,
+        params: &ActionParams, spec: &Spec, state: &mut dyn StateOpsTxTrait,
         substate: &mut dyn SubstateTrait,
         storage_layout: Option<StorageLayout>, contract_start_nonce: U256,
     ) -> DbResult<()>
@@ -404,7 +405,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// storage collateral change from the cache to substate, merge substate to
     /// its parent and settles down bytecode for newly created contract. If the
     /// execution fails, this function reverts state and drops substate.
-    fn process_return<State: StateTrait<Substate = Substate>>(
+    fn process_return<State: StateTxTrait<Substate = Substate>>(
         mut self, result: vm::Result<GasLeft>, state: &mut State,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
@@ -466,7 +467,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// Execute the executive. If a sub-call/create action is required, a
     /// resume trap error is returned. The caller is then expected to call
     /// `resume` to continue the execution.
-    pub fn exec<State: StateTrait<Substate = Substate>>(
+    pub fn exec<State: StateTxTrait<Substate = Substate>>(
         mut self, state: &mut State, parent_substate: &mut Substate,
         callstack: &mut CallStackInfo,
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
@@ -557,7 +558,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         self.process_output(output, state, parent_substate, callstack, tracer)
     }
 
-    pub fn resume<State: StateTrait<Substate = Substate>>(
+    pub fn resume<State: StateTxTrait<Substate = Substate>>(
         mut self, result: vm::Result<ExecutiveResult>, state: &mut State,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
         tracer: &mut dyn Tracer<Output = ExecTrace>,
@@ -603,7 +604,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     }
 
     #[inline]
-    fn process_output<State: StateTrait<Substate = Substate>>(
+    fn process_output<State: StateTxTrait<Substate = Substate>>(
         self, output: ExecTrapResult<GasLeft>, state: &mut State,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
@@ -631,7 +632,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// Execute the top call-create executive. This function handles resume
     /// traps and sub-level tracing. The caller is expected to handle
     /// current-level tracing.
-    pub fn consume<State: StateTrait<Substate = Substate>>(
+    pub fn consume<State: StateTxTrait<Substate = Substate>>(
         self, state: &'a mut State, top_substate: &mut Substate,
         tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
     ) -> DbResult<vm::Result<FinalizationResult>>
@@ -777,7 +778,7 @@ pub type Executive<'a> = ExecutiveGeneric<'a, Substate, State>;
 pub struct ExecutiveGeneric<
     'a,
     Substate: SubstateTrait,
-    State: StateTrait<Substate = Substate>,
+    State: StateTxTrait<Substate = Substate>,
 > {
     pub state: &'a mut State,
     env: &'a Env,
@@ -790,7 +791,7 @@ pub struct ExecutiveGeneric<
 impl<
         'a,
         Substate: SubstateMngTrait,
-        State: StateTrait<Substate = Substate>,
+        State: StateTxTrait<Substate = Substate>,
     > ExecutiveGeneric<'a, Substate, State>
 {
     /// Basic constructor.

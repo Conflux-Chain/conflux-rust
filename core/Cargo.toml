@@ -61,7 +61,7 @@ rand = "0.7"
 rand_chacha="0.2.1"
 rand_xorshift="0.2"
 random-crash = { path = "../util/random_crash" }
-rayon = "1.0"
+rayon = "1.5"
 rlp = "0.4.0"
 rlp_derive = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 rustc-hex = "2.1"

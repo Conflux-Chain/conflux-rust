@@ -22,7 +22,7 @@ pub struct StateObjectCache {
 }
 
 pub struct ModifyAndUpdate<'a, StateDb: StateDbOps, T: CachedObject> {
-    db: &'a mut StateDb,
+    db: &'a StateDb,
     key: T::HashKeyType,
     value: &'a mut Option<T>,
     debug_record: Option<&'a mut ComputeEpochDebugRecord>,
@@ -161,7 +161,7 @@ impl StateObjectCache {
         cache: &'c RwLock<
             HashMap<<Value as CachedObject>::HashKeyType, Option<Value>>,
         >,
-        key: &Key, db: &'c mut StateDb, default: F,
+        key: &Key, db: &'c StateDb, default: F,
         debug_record: Option<&'c mut ComputeEpochDebugRecord>,
     ) -> Result<
         GuardedValue<
@@ -223,8 +223,7 @@ impl StateObjectCache {
 
     pub fn modify_and_update_commission_privilege<'a, StateDb: StateDbOps>(
         &'a self, contract_address: &Address, user_address: &Address,
-        db: &'a mut StateDb,
-        debug_record: Option<&'a mut ComputeEpochDebugRecord>,
+        db: &'a StateDb, debug_record: Option<&'a mut ComputeEpochDebugRecord>,
     ) -> Result<
         GuardedValue<
             RwLockWriteGuard<

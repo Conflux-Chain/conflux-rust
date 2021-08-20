@@ -51,7 +51,11 @@ mod impls {
         storage: Storage,
 
         /// Checkpoints allow callers to revert un-committed changes.
-        checkpoints: Vec<Checkpoint>,
+        // TODO: Remove the lock. The prefetcher needs the immutable reference
+        // of db, but Executive::transact eventually calls update_checkpoint.
+        // The prefetcher does not access the "checkpoints" field, so the lock
+        // is theoretically avoidable, but is just too hard to avoid.
+        checkpoints: Mutex<Vec<Checkpoint>>,
     }
 
     // We skip the accessed_entries for getting original value.
@@ -89,13 +93,13 @@ mod impls {
             StateDb {
                 accessed_entries: Default::default(),
                 storage,
-                checkpoints: Default::default(),
+                checkpoints: Mutex::new(Default::default()),
             }
         }
 
         /// Set `key` to `value` in latest checkpoint if not set previously.
-        fn update_checkpoint(&mut self, key: &Key, value: Option<Value>) {
-            if let Some(checkpoint) = self.checkpoints.last_mut() {
+        fn update_checkpoint(&self, key: &Key, value: Option<Value>) {
+            if let Some(checkpoint) = self.checkpoints.lock().last_mut() {
                 // only insert if key not in checkpoint already
                 checkpoint.entry(key.clone()).or_insert(value);
             }
@@ -142,11 +146,11 @@ mod impls {
         /// This method will read from db if `key` is not present.
         /// This method will also update the latest checkpoint if necessary.
         fn modify_single_value(
-            &mut self, key: StorageKey, value: Option<Box<[u8]>>,
+            &self, key: StorageKey, value: Option<Box<[u8]>>,
         ) -> Result<()> {
             let key_bytes = key.to_key_bytes();
-            let mut entry =
-                self.accessed_entries.get_mut().entry(key_bytes.clone());
+            let mut accessed_entries = self.accessed_entries.write();
+            let mut entry = accessed_entries.entry(key_bytes.clone());
             let value = value.map(Into::into);
 
             let old_value = match &mut entry {
@@ -178,7 +182,7 @@ mod impls {
         }
 
         pub fn set_raw(
-            &mut self, key: StorageKey, value: Box<[u8]>,
+            &self, key: StorageKey, value: Box<[u8]>,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
         ) -> Result<()>
         {
@@ -194,7 +198,7 @@ mod impls {
         }
 
         pub fn delete(
-            &mut self, key: StorageKey,
+            &self, key: StorageKey,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
         ) -> Result<()>
         {
@@ -209,25 +213,71 @@ mod impls {
             self.modify_single_value(key, None)
         }
 
-        pub fn delete_all<AM: access_mode::AccessMode>(
-            &mut self, key_prefix: StorageKey,
+        pub fn iterate_all(
+            &self, key_prefix: StorageKey,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
         ) -> Result<Vec<MptKeyValue>>
         {
             let key_bytes = key_prefix.to_key_bytes();
             if let Some(record) = debug_record {
                 record.state_ops.push(StateOp::StorageLevelOp {
-                    op_name: if AM::is_read_only() {
-                        "iterate"
-                    } else {
-                        "delete_all"
-                    }
-                    .into(),
+                    op_name: "iterate".into(),
                     key: key_bytes.clone(),
                     maybe_value: None,
-                })
+                });
             }
-            let accessed_entries = self.accessed_entries.get_mut();
+            let accessed_entries = self.accessed_entries.read();
+
+            let iter_range_upper_bound =
+                to_key_prefix_iter_upper_bound(&key_bytes);
+            let iter_range = match &iter_range_upper_bound {
+                None => accessed_entries
+                    .range::<[u8], _>((Included(&*key_bytes), Unbounded)),
+
+                Some(upper_bound) => accessed_entries.range::<[u8], _>((
+                    Included(&*key_bytes),
+                    Excluded(&**upper_bound),
+                )),
+            };
+            let mut iterated_kvs = vec![];
+            for (k, v) in iter_range {
+                if v.current_value != None {
+                    iterated_kvs.push((
+                        k.clone(),
+                        (&**v.current_value.as_ref().unwrap()).into(),
+                    ));
+                }
+            }
+
+            let deleted = self.storage.iterate_all(key_prefix)?;
+            // We must update the accessed_entries.
+            if let Some(storage_deleted) = &deleted {
+                for (k, v) in storage_deleted {
+                    match accessed_entries.get(k) {
+                        // Nothing to do for existing entry, because we have
+                        // already scanned through accessed_entries.
+                        Some(_) => {}
+                        None => iterated_kvs.push((k.clone(), v.clone())),
+                    }
+                }
+            }
+            Ok(iterated_kvs)
+        }
+
+        pub fn delete_all(
+            &self, key_prefix: StorageKey,
+            debug_record: Option<&mut ComputeEpochDebugRecord>,
+        ) -> Result<Vec<MptKeyValue>>
+        {
+            let key_bytes = key_prefix.to_key_bytes();
+            if let Some(record) = debug_record {
+                record.state_ops.push(StateOp::StorageLevelOp {
+                    op_name: "delete_all".into(),
+                    key: key_bytes.clone(),
+                    maybe_value: None,
+                });
+            }
+            let mut accessed_entries = self.accessed_entries.write();
             // First, all new keys in the subtree shall be deleted.
             let iter_range_upper_bound =
                 to_key_prefix_iter_upper_bound(&key_bytes);
@@ -251,14 +301,11 @@ mod impls {
                         k.clone(),
                         (&**v.current_value.as_ref().unwrap()).into(),
                     ));
-                    if !AM::is_read_only() {
-                        v.current_value = None;
-                    }
+                    v.current_value = None;
                 }
             }
             // Then, remove all un-modified existing keys.
-            let deleted =
-                self.storage.delete_all::<access_mode::Read>(key_prefix)?;
+            let deleted = self.storage.iterate_all(key_prefix)?;
             // We must update the accessed_entries.
             if let Some(storage_deleted) = &deleted {
                 for (k, v) in storage_deleted {
@@ -272,22 +319,18 @@ mod impls {
                     };
                     if was_vacant {
                         deleted_kvs.push((k.clone(), v.clone()));
-                        if !AM::is_read_only() {
-                            entry.or_insert(EntryValue::new_modified(
-                                Some((&**v).into()),
-                                None,
-                            ));
-                        }
+                        entry.or_insert(EntryValue::new_modified(
+                            Some((&**v).into()),
+                            None,
+                        ));
                     }
                 }
             }
 
-            // update latest checkpoint if necessary
-            if !AM::is_read_only() {
-                for (k, v) in &deleted_kvs {
-                    let v: Value = Some(v.clone().into());
-                    self.update_checkpoint(k, Some(v));
-                }
+            // update latest checkpoint
+            for (k, v) in &deleted_kvs {
+                let v: Value = Some(v.clone().into());
+                self.update_checkpoint(k, Some(v));
             }
 
             Ok(deleted_kvs)
@@ -475,7 +518,7 @@ mod impls {
             debug_record: Option<&mut ComputeEpochDebugRecord>,
         ) -> Result<StateRootWithAuxInfo>
         {
-            if !self.checkpoints.is_empty() {
+            if !self.checkpoints.get_mut().is_empty() {
                 panic!("Active checkpoints during state-db commit");
             }
 
@@ -525,14 +568,16 @@ mod impls {
 
     impl<Storage: StorageStateTrait> StateDbCheckpointMethods for StateDb<Storage> {
         fn checkpoint(&mut self) -> usize {
-            trace!("Creating checkpoint #{}", self.checkpoints.len());
-            self.checkpoints.push(BTreeMap::new()); // no values are modified yet
-            self.checkpoints.len() - 1
+            let checkpoints = self.checkpoints.get_mut();
+            trace!("Creating checkpoint #{}", checkpoints.len());
+            checkpoints.push(BTreeMap::new()); // no values are modified yet
+            checkpoints.len() - 1
         }
 
         fn discard_checkpoint(&mut self) {
             // checkpoint `n` (to be discarded)
-            let latest = match self.checkpoints.pop() {
+            let checkpoints = self.checkpoints.get_mut();
+            let latest = match checkpoints.pop() {
                 Some(checkpoint) => checkpoint,
                 None => {
                     // TODO: panic?
@@ -541,10 +586,10 @@ mod impls {
                 }
             };
 
-            trace!("Discarding checkpoint #{}", self.checkpoints.len());
+            trace!("Discarding checkpoint #{}", checkpoints.len());
 
             // checkpoint `n - 1`
-            let previous = match self.checkpoints.last_mut() {
+            let previous = match checkpoints.last_mut() {
                 Some(checkpoint) => checkpoint,
                 None => return,
             };
@@ -560,7 +605,8 @@ mod impls {
         }
 
         fn revert_to_checkpoint(&mut self) {
-            let checkpoint = match self.checkpoints.pop() {
+            let checkpoints = self.checkpoints.get_mut();
+            let checkpoint = match checkpoints.pop() {
                 Some(checkpoint) => checkpoint,
                 None => {
                     // TODO: panic?
@@ -569,7 +615,8 @@ mod impls {
                 }
             };
 
-            trace!("Reverting to checkpoint #{}", self.checkpoints.len());
+            trace!("Reverting to checkpoint #{}", checkpoints.len());
+            drop(checkpoints);
 
             // revert all modified keys to their old version
             for (k, v) in checkpoint {
@@ -628,13 +675,13 @@ mod impls {
     };
     use cfx_storage::{
         state::{NoProof, WithProof},
-        utils::{access_mode, to_key_prefix_iter_upper_bound},
+        utils::to_key_prefix_iter_upper_bound,
         MptKeyValue, StateProof, StorageRootProof, StorageStateTrait,
         StorageStateTraitExt,
     };
     use cfx_types::{address_util::AddressUtil, Address};
     use hashbrown::HashMap;
-    use parking_lot::RwLock;
+    use parking_lot::{Mutex, RwLock};
     use primitives::{
         EpochId, SkipInputCheck, StorageKey, StorageLayout, StorageRoot,
     };

@@ -8,11 +8,7 @@ use crate::{
     test_helpers::get_state_for_genesis_write, vm::Spec,
 };
 use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
-use cfx_state::{
-    state_trait::{CheckpointTrait, StateOpsTrait},
-    substate_trait::SubstateMngTrait,
-    StateTrait,
-};
+use cfx_state::{StateTrait, state_trait::{CheckpointTxDeltaTrait, StateOpsTrait, StateOpsTxTrait, StateTxDeltaTrait}, substate_trait::SubstateMngTrait};
 use cfx_statedb::StateDb;
 use cfx_storage::{
     tests::new_state_manager_for_unit_test, StateIndex, StorageManager,
@@ -823,10 +819,10 @@ fn kill_account_with_checkpoints() {
         .set_storage_layout(&a, StorageLayout::Regular(0))
         .unwrap();
     // We don't charge the collateral in this test.
-    state_0
-        .require_exists(&a, /* require_code = */ false)
+    state_0.io
+        .require_exists(&mut state_0.info, &a, /* require_code = */ false)
         .unwrap()
-        .commit_ownership_change(&state_0.db, &mut Substate::new())
+        .commit_ownership_change(&state_0.io.db, &mut Substate::new())
         .unwrap();
     state_0
         .add_sponsor_balance_for_collateral(
@@ -881,8 +877,9 @@ fn check_result_of_simple_payment_to_killed_account() {
     let storage_manager = new_state_manager_for_unit_test();
     let mut state_0 = get_state_for_genesis_write(&storage_manager);
     let sender_addr = DEV_GENESIS_KEY_PAIR.address();
-    state_0
+    state_0.io
         .require_or_new_basic_account(
+            &mut state_0.info,
             &sender_addr,
             &Spec::new_spec_for_test().account_start_nonce,
         )
@@ -905,10 +902,10 @@ fn check_result_of_simple_payment_to_killed_account() {
         .set_storage_layout(&a, StorageLayout::Regular(0))
         .unwrap();
     // We don't charge the collateral in this test.
-    state_0
-        .require_exists(&a, /* require_code = */ false)
+    state_0.io
+        .require_exists(&mut state_0.info, &a, /* require_code = */ false)
         .unwrap()
-        .commit_ownership_change(&state_0.db, &mut Substate::new())
+        .commit_ownership_change(&state_0.io.db, &mut Substate::new())
         .unwrap();
     state_0
         .add_collateral_for_storage(
@@ -947,7 +944,7 @@ fn check_result_of_simple_payment_to_killed_account() {
     let state = get_state(&storage_manager, &epoch_id);
     assert_eq!(state.code_hash(&a).unwrap(), Some(KECCAK_EMPTY));
     assert_eq!(state.code(&a).unwrap(), None);
-    assert_eq!(state.db.get_raw(code_key).unwrap(), None);
+    assert_eq!(state.io.db.get_raw(code_key).unwrap(), None);
     assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
 }
 
@@ -1093,8 +1090,9 @@ fn create_contract_fail_previous_storage() {
     // parking_lot::lock_api::MappedRwLockWriteGuard must be used, so we drop()
     // it.
     drop(
-        state
+        state.io
             .require_or_new_basic_account(
+                &mut state.info,
                 &a,
                 &Spec::new_spec_for_test().account_start_nonce,
             )

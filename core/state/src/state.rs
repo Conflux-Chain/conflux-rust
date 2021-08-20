@@ -14,82 +14,11 @@ pub struct State<StateDbStorage, Substate: SubstateMngTrait> {
     _substate_marker: PhantomData<Substate>,
 }
 
-impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait> StateTrait
-    for State<StateDbStorage, Substate>
-{
-    type Substate = Substate;
-
-    fn collect_ownership_changed(
-        &mut self, _substate: &mut Self::Substate,
-    ) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn settle_collateral_for_all(
-        &mut self, _substate: &Self::Substate, _account_start_nonce: U256,
-    ) -> Result<CollateralCheckResult> {
-        unimplemented!()
-    }
-
-    fn collect_and_settle_collateral(
-        &mut self, _original_sender: &Address, _storage_limit: &U256,
-        _substate: &mut Self::Substate, _account_start_nonce: U256,
-    ) -> Result<CollateralCheckResult>
-    {
-        unimplemented!()
-    }
-
-    fn record_storage_and_whitelist_entries_release(
-        &mut self, _address: &Address, _substate: &mut Self::Substate,
-    ) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn compute_state_root(
-        &mut self, debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> Result<StateRootWithAuxInfo> {
-        self.db.compute_state_root(debug_record)
-    }
-
-    fn commit(
-        &mut self, epoch_id: EpochId,
-        debug_record: Option<&mut ComputeEpochDebugRecord>,
-    ) -> Result<StateRootWithAuxInfo>
-    {
-        self.db.commit(epoch_id, debug_record)
-    }
-}
-
 impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
-    CheckpointTrait for State<StateDbStorage, Substate>
-{
-    fn checkpoint(&mut self) -> usize { self.db.checkpoint() }
-
-    fn discard_checkpoint(&mut self) { self.db.discard_checkpoint(); }
-
-    fn revert_to_checkpoint(&mut self) {
-        // Drop the cache because of the revert.
-        self.cache.clear();
-        self.db.revert_to_checkpoint();
-    }
-}
-
-impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
-    StateOpsTrait for State<StateDbStorage, Substate>
+    StateOpsTxTrait for State<StateDbStorage, Substate>
 {
     fn bump_block_number_accumulate_interest(&mut self) -> U256 {
         unimplemented!()
-    }
-
-    fn add_total_issued(&mut self, v: U256) {
-        let new_total_issued = self.total_issued_tokens() + v;
-        self.set_storage(
-            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-            TOTAL_TOKENS_KEY.to_vec(),
-            new_total_issued,
-            *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-        )
-        .unwrap();
     }
 
     fn subtract_total_issued(&mut self, v: U256) {
@@ -145,24 +74,19 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     }
 
     fn set_sponsor_for_gas(
-        &self, _address: &Address, _sponsor: &Address, _sponsor_balance: &U256,
-        _upper_bound: &U256,
+        &mut self, _address: &Address, _sponsor: &Address,
+        _sponsor_balance: &U256, _upper_bound: &U256,
     ) -> Result<()>
     {
         unimplemented!()
     }
 
     fn set_sponsor_for_collateral(
-        &self, _address: &Address, _sponsor: &Address, _sponsor_balance: &U256,
-    ) -> Result<()> {
+        &mut self, _address: &Address, _sponsor: &Address,
+        _sponsor_balance: &U256,
+    ) -> Result<()>
+    {
         unimplemented!()
-    }
-
-    fn sponsor_info(&self, address: &Address) -> Result<Option<SponsorInfo>> {
-        Ok(self
-            .get_account(address)?
-            .as_ref()
-            .map(|a| a.sponsor_info.clone()))
     }
 
     fn sponsor_gas_bound(&self, address: &Address) -> Result<U256> {
@@ -447,10 +371,6 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
             .map_or(0, |vote_stake_list| vote_stake_list.len()))
     }
 
-    fn clean_account(&mut self, _address: &Address) -> Result<()> {
-        unimplemented!()
-    }
-
     fn inc_nonce(
         &mut self, _address: &Address, _account_start_nonce: &U256,
     ) -> Result<()> {
@@ -544,33 +464,6 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
             )
     }
 
-    fn total_issued_tokens(&self) -> U256 {
-        return self
-            .storage_at(
-                &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-                TOTAL_TOKENS_KEY,
-            )
-            .unwrap_or(U256::zero());
-    }
-
-    fn total_staking_tokens(&self) -> U256 {
-        return self
-            .storage_at(
-                &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-                TOTAL_BANK_TOKENS_KEY,
-            )
-            .unwrap_or(U256::zero());
-    }
-
-    fn total_storage_tokens(&self) -> U256 {
-        return self
-            .storage_at(
-                &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-                TOTAL_STORAGE_TOKENS_KEY,
-            )
-            .unwrap_or(U256::zero());
-    }
-
     fn remove_contract(&mut self, _address: &Address) -> Result<()> {
         unimplemented!()
     }
@@ -616,6 +509,138 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
 }
 
 impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
+    CheckpointTxDeltaTrait for State<StateDbStorage, Substate>
+{
+    fn checkpoint(&mut self) -> usize { self.db.checkpoint() }
+
+    fn discard_checkpoint(&mut self) { self.db.discard_checkpoint(); }
+
+    fn revert_to_checkpoint(&mut self) {
+        // Drop the cache because of the revert.
+        self.cache.clear();
+        self.db.revert_to_checkpoint();
+    }
+}
+
+impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
+    CheckpointTxTrait for State<StateDbStorage, Substate>
+{
+}
+
+impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
+    StateTxDeltaTrait for State<StateDbStorage, Substate>
+{
+    type Substate = Substate;
+
+    fn collect_ownership_changed(
+        &mut self, _substate: &mut Self::Substate,
+    ) -> Result<()> {
+        unimplemented!()
+    }
+
+    fn settle_collateral_for_all(
+        &mut self, _substate: &Self::Substate, _account_start_nonce: U256,
+    ) -> Result<CollateralCheckResult> {
+        unimplemented!()
+    }
+
+    fn collect_and_settle_collateral(
+        &mut self, _original_sender: &Address, _storage_limit: &U256,
+        _substate: &mut Self::Substate, _account_start_nonce: U256,
+    ) -> Result<CollateralCheckResult>
+    {
+        unimplemented!()
+    }
+
+    fn record_storage_and_whitelist_entries_release(
+        &mut self, _address: &Address, _substate: &mut Self::Substate,
+    ) -> Result<()> {
+        unimplemented!()
+    }
+}
+
+impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait> StateTxTrait
+    for State<StateDbStorage, Substate>
+{
+}
+
+impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait> StateTrait
+    for State<StateDbStorage, Substate>
+{
+    fn compute_state_root(
+        &mut self, debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> Result<StateRootWithAuxInfo> {
+        self.db.compute_state_root(debug_record)
+    }
+
+    fn commit(
+        &mut self, epoch_id: EpochId,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> Result<StateRootWithAuxInfo>
+    {
+        self.db.commit(epoch_id, debug_record)
+    }
+}
+
+impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
+    StateOpsTrait for State<StateDbStorage, Substate>
+{
+    fn add_total_issued(&mut self, v: U256) {
+        let new_total_issued = self.total_issued_tokens() + v;
+        self.set_storage(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            TOTAL_TOKENS_KEY.to_vec(),
+            new_total_issued,
+            *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+        )
+        .unwrap();
+    }
+
+    fn sponsor_info(&self, address: &Address) -> Result<Option<SponsorInfo>> {
+        Ok(self
+            .get_account(address)?
+            .as_ref()
+            .map(|a| a.sponsor_info.clone()))
+    }
+
+    fn clean_account(&mut self, _address: &Address) -> Result<()> {
+        unimplemented!()
+    }
+
+    fn total_issued_tokens(&self) -> U256 {
+        return self
+            .storage_at(
+                &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+                TOTAL_TOKENS_KEY,
+            )
+            .unwrap_or(U256::zero());
+    }
+
+    fn total_staking_tokens(&self) -> U256 {
+        return self
+            .storage_at(
+                &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+                TOTAL_BANK_TOKENS_KEY,
+            )
+            .unwrap_or(U256::zero());
+    }
+
+    fn total_storage_tokens(&self) -> U256 {
+        return self
+            .storage_at(
+                &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+                TOTAL_STORAGE_TOKENS_KEY,
+            )
+            .unwrap_or(U256::zero());
+    }
+}
+
+impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
+    CheckpointTrait for State<StateDbStorage, Substate>
+{
+}
+
+impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     State<StateDbStorage, Substate>
 {
     fn get_account(
@@ -653,7 +678,7 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     }
 
     fn modify_and_update_commission_privilege<'a>(
-        &'a mut self, contract_address: &Address, user_address: &Address,
+        &'a self, contract_address: &Address, user_address: &Address,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
     ) -> Result<
         impl AsMut<
@@ -667,7 +692,7 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         self.cache.modify_and_update_commission_privilege(
             contract_address,
             user_address,
-            &mut self.db,
+            &self.db,
             debug_record,
         )
     }
@@ -756,9 +781,13 @@ use crate::{
     cache_object::{CachedAccount, CachedCommissionPrivilege},
     maybe_address,
     state_object_cache::{ModifyAndUpdate, StateObjectCache},
-    state_trait::{CheckpointTrait, StateOpsTrait},
+    state_trait::{
+        CheckpointTrait, CheckpointTxDeltaTrait, CheckpointTxTrait,
+        StateOpsTrait, StateOpsTxTrait, StateTrait, StateTxDeltaTrait,
+        StateTxTrait,
+    },
     substate_trait::SubstateMngTrait,
-    CleanupMode, CollateralCheckResult, StateTrait,
+    CleanupMode, CollateralCheckResult,
 };
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,

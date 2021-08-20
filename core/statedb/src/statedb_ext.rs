@@ -7,7 +7,7 @@ pub trait StateDbExt {
     where T: ::rlp::Decodable;
 
     fn set<T>(
-        &mut self, key: StorageKey, value: &T,
+        &self, key: StorageKey, value: &T,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>
     where
@@ -82,7 +82,7 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
     }
 
     fn set<T>(
-        &mut self, key: StorageKey, value: &T,
+        &self, key: StorageKey, value: &T,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>
     where

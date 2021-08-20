@@ -7,7 +7,7 @@ use crate::{
     trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, Spec},
 };
-use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
+use cfx_state::{state_trait::StateOpsTxTrait, SubstateTrait};
 use cfx_types::{address_util::AddressUtil, Address, U256};
 
 /// The Actual Implementation of `suicide`.
@@ -19,7 +19,7 @@ use cfx_types::{address_util::AddressUtil, Address, U256};
 ///   4. kill the contract
 pub fn suicide(
     contract_address: &Address, refund_address: &Address,
-    state: &mut dyn StateOpsTrait, spec: &Spec,
+    state: &mut dyn StateOpsTxTrait, spec: &Spec,
     substate: &mut dyn SubstateTrait,
     tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
 ) -> vm::Result<()>
@@ -66,7 +66,7 @@ pub fn suicide(
 pub fn set_admin(
     contract_address: Address, new_admin_address: Address,
     contract_in_creation: Option<&Address>, params: &ActionParams,
-    state: &mut dyn StateOpsTrait,
+    state: &mut dyn StateOpsTxTrait,
 ) -> vm::Result<()>
 {
     let requester = &params.sender;
@@ -96,7 +96,7 @@ pub fn set_admin(
 /// The input should consist of 20 bytes `contract_address`
 pub fn destroy(
     contract_address: Address, params: &ActionParams,
-    state: &mut dyn StateOpsTrait, spec: &Spec,
+    state: &mut dyn StateOpsTxTrait, spec: &Spec,
     substate: &mut dyn SubstateTrait,
     tracer: &mut dyn Tracer<Output = ExecTrace>,
 ) -> vm::Result<()>

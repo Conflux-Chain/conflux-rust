@@ -10,7 +10,7 @@ use crate::{
     vm,
 };
 use cfx_parameters::internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS;
-use cfx_state::state_trait::StateOpsTrait;
+use cfx_state::state_trait::StateOpsTxTrait;
 use cfx_types::{Address, U256};
 
 // Definitions for the whole contract.
@@ -45,7 +45,7 @@ impl_function_type!(Deposit, "non_payable_write");
 impl UpfrontPaymentTrait for Deposit {
     fn upfront_gas_payment(
         &self, _: &Self::Input, params: &ActionParams, spec: &Spec,
-        state: &dyn StateOpsTrait,
+        state: &dyn StateOpsTxTrait,
     ) -> U256
     {
         let length = state.deposit_list_length(&params.sender).unwrap_or(0);
@@ -72,7 +72,7 @@ impl_function_type!(Withdraw, "non_payable_write");
 impl UpfrontPaymentTrait for Withdraw {
     fn upfront_gas_payment(
         &self, _input: &Self::Input, params: &ActionParams, spec: &Spec,
-        state: &dyn StateOpsTrait,
+        state: &dyn StateOpsTxTrait,
     ) -> U256
     {
         let length = state.deposit_list_length(&params.sender).unwrap_or(0);
@@ -99,7 +99,7 @@ impl_function_type!(VoteLock, "non_payable_write");
 impl UpfrontPaymentTrait for VoteLock {
     fn upfront_gas_payment(
         &self, _input: &Self::Input, params: &ActionParams, spec: &Spec,
-        state: &dyn StateOpsTrait,
+        state: &dyn StateOpsTxTrait,
     ) -> U256
     {
         let length = state.vote_stake_list_length(&params.sender).unwrap_or(0);
@@ -142,7 +142,7 @@ impl_function_type!(GetLockedStakingBalance, "query");
 impl UpfrontPaymentTrait for GetLockedStakingBalance {
     fn upfront_gas_payment(
         &self, (address, _): &(Address, U256), _: &ActionParams, spec: &Spec,
-        state: &dyn StateOpsTrait,
+        state: &dyn StateOpsTxTrait,
     ) -> U256
     {
         let length = state.vote_stake_list_length(address).unwrap_or(0);
@@ -174,7 +174,7 @@ impl_function_type!(GetVotePower, "query");
 impl UpfrontPaymentTrait for GetVotePower {
     fn upfront_gas_payment(
         &self, (address, _): &(Address, U256), _: &ActionParams, spec: &Spec,
-        state: &dyn StateOpsTrait,
+        state: &dyn StateOpsTxTrait,
     ) -> U256
     {
         let length = state.vote_stake_list_length(address).unwrap_or(0);

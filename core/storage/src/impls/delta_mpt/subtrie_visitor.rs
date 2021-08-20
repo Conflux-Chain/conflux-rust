@@ -2,49 +2,41 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+type MerklePatriciaTrie = DeltaMpt;
+
 pub struct SubTrieVisitor<'trie, 'db: 'trie> {
     root: CowNodeRef,
 
     trie_ref: &'trie MerklePatriciaTrie,
     db: ReturnAfterUse<'trie, ArcDeltaDbWrapper>,
     phantom: PhantomData<&'db ArcDeltaDbWrapper>,
-
-    /// We use ReturnAfterUse because only one SubTrieVisitor(the deepest) can
-    /// hold the mutable reference of owned_node_set.
-    owned_node_set: ReturnAfterUse<'trie, OwnedNodeSet>,
 }
 
-type MerklePatriciaTrie = DeltaMpt;
-
-impl<'trie> SubTrieVisitor<'trie, 'trie> {
+impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
     pub fn new(
         trie_ref: &'trie MerklePatriciaTrie, root: NodeRefDeltaMpt,
-        owned_node_set: &'trie mut Option<OwnedNodeSet>,
+        owned_node_set: &OwnedNodeSet,
     ) -> Result<Self>
     {
         Ok(Self {
             trie_ref,
             db: ReturnAfterUse::new_from_value(trie_ref.get_arc_db()?),
             phantom: PhantomData,
-            root: CowNodeRef::new(
-                root,
-                owned_node_set.as_ref().unwrap(),
-                trie_ref.get_mpt_id(),
-            ),
-            owned_node_set: ReturnAfterUse::new(owned_node_set),
+            root: CowNodeRef::new(root, owned_node_set, trie_ref.get_mpt_id()),
         })
     }
-}
 
-impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
     fn new_visitor_for_subtree<'a>(
         &'a mut self, child_node: NodeRefDeltaMpt,
+        owned_node_set: &OwnedNodeSet,
     ) -> SubTrieVisitor<'a, 'db>
-    where 'trie: 'a {
+    where
+        'trie: 'a,
+    {
         let trie_ref = self.trie_ref;
         let cow_child_node = CowNodeRef::new(
             child_node,
-            self.owned_node_set.get_ref(),
+            owned_node_set,
             self.trie_ref.get_mpt_id(),
         );
         SubTrieVisitor {
@@ -54,9 +46,6 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
             ),
             phantom: PhantomData,
             root: cow_child_node,
-            owned_node_set: ReturnAfterUse::new_from_origin(
-                &mut self.owned_node_set,
-            ),
         }
     }
 
@@ -252,7 +241,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
     /// Returns (deleted value, is root node replaced, the current root node for
     /// the subtree).
     pub fn delete(
-        mut self, key: KeyPart,
+        mut self, key: KeyPart, owned_node_set: &mut OwnedNodeSet,
     ) -> Result<(Option<Box<[u8]>>, bool, Option<NodeRefDeltaMptCompact>)> {
         let node_memory_manager = self.node_memory_manager();
         let allocator = node_memory_manager.get_allocator();
@@ -283,10 +272,8 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                                 trie_node,
                             )
                         };
-                        node_cow.delete_node(
-                            node_memory_manager,
-                            self.owned_node_set.get_mut(),
-                        );
+                        node_cow
+                            .delete_node(node_memory_manager, owned_node_set);
                         Ok((Some(value), true, None))
                     }
                     TrieNodeAction::MergePath {
@@ -300,7 +287,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                         let trie_node = GuardedValue::take(trie_node_ref);
                         let merged_node_cow = node_cow.cow_merge_path(
                             self.get_trie_ref(),
-                            self.owned_node_set.get_mut(),
+                            owned_node_set,
                             trie_node,
                             child_node_ref,
                             child_index,
@@ -316,7 +303,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                         let value = unsafe {
                             node_cow.cow_delete_value_unchecked(
                                 &node_memory_manager,
-                                self.owned_node_set.get_mut(),
+                                owned_node_set,
                                 trie_node,
                             )?
                         };
@@ -332,8 +319,11 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
             } => {
                 drop(trie_node_ref);
                 let result = self
-                    .new_visitor_for_subtree(child_node.clone().into())
-                    .delete(key_remaining);
+                    .new_visitor_for_subtree(
+                        child_node.clone().into(),
+                        owned_node_set,
+                    )
+                    .delete(key_remaining, owned_node_set);
                 if result.is_err() {
                     node_cow.into_child();
                     return result;
@@ -361,7 +351,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                             let trie_node = GuardedValue::take(trie_node_ref);
                             let merged_node_cow = node_cow.cow_merge_path(
                                 self.get_trie_ref(),
-                                self.owned_node_set.get_mut(),
+                                owned_node_set,
                                 trie_node,
                                 child_node_ref,
                                 child_index,
@@ -379,7 +369,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                                     node_cow
                                         .cow_modify(
                                             &allocator,
-                                            self.owned_node_set.get_mut(),
+                                            owned_node_set,
                                             trie_node,
                                         )?
                                         .delete_child_unchecked(child_index);
@@ -388,7 +378,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                                     node_cow
                                         .cow_modify(
                                             &allocator,
-                                            self.owned_node_set.get_mut(),
+                                            owned_node_set,
                                             trie_node,
                                         )?
                                         .replace_child_unchecked(
@@ -416,11 +406,13 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
     /// the subtree).
     pub fn delete_all(
         mut self, key: KeyPart, key_remaining: KeyPart,
+        owned_node_set: &mut OwnedNodeSet,
     ) -> Result<(
         Option<Vec<MptKeyValue>>,
         bool,
         Option<NodeRefDeltaMptCompact>,
-    )> {
+    )>
+    {
         let node_memory_manager = self.node_memory_manager();
         let allocator = node_memory_manager.get_allocator();
         let mut node_cow = self.root.take();
@@ -467,8 +459,11 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
             } => {
                 drop(trie_node_ref);
                 let result = self
-                    .new_visitor_for_subtree(child_node.clone().into())
-                    .delete_all(key, key_remaining);
+                    .new_visitor_for_subtree(
+                        child_node.clone().into(),
+                        owned_node_set,
+                    )
+                    .delete_all(key, key_remaining, owned_node_set);
                 if result.is_err() {
                     node_cow.into_child();
                     return result;
@@ -498,7 +493,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                             let trie_node = GuardedValue::take(trie_node_ref);
                             let merged_node_cow = node_cow.cow_merge_path(
                                 self.get_trie_ref(),
-                                self.owned_node_set.get_mut(),
+                                owned_node_set,
                                 trie_node,
                                 child_node_ref,
                                 child_index,
@@ -520,7 +515,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                                     node_cow
                                         .cow_modify(
                                             &allocator,
-                                            self.owned_node_set.get_mut(),
+                                            owned_node_set,
                                             trie_node,
                                         )?
                                         .delete_child_unchecked(child_index);
@@ -529,7 +524,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                                     node_cow
                                         .cow_modify(
                                             &allocator,
-                                            self.owned_node_set.get_mut(),
+                                            owned_node_set,
                                             trie_node,
                                         )?
                                         .replace_child_unchecked(
@@ -557,7 +552,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
         let mut old_values = vec![];
         node_cow.delete_subtree(
             self.get_trie_ref(),
-            self.owned_node_set.get_ref(),
+            owned_node_set,
             trie_node,
             key_prefix,
             &mut old_values,
@@ -570,7 +565,9 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
     /// return all key/value pairs given the prefix
     pub fn traversal(
         mut self, key: KeyPart, key_remaining: KeyPart,
-    ) -> Result<Option<Vec<MptKeyValue>>> {
+        owned_node_set: &OwnedNodeSet,
+    ) -> Result<Option<Vec<MptKeyValue>>>
+    {
         let node_memory_manager = self.node_memory_manager();
         let allocator = node_memory_manager.get_allocator();
         let mut node_cow = self.root.take();
@@ -611,8 +608,11 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
             } => {
                 drop(trie_node_ref);
                 let values = self
-                    .new_visitor_for_subtree(child_node.clone().into())
-                    .traversal(key, key_remaining)?;
+                    .new_visitor_for_subtree(
+                        child_node.clone().into(),
+                        owned_node_set,
+                    )
+                    .traversal(key, key_remaining, owned_node_set)?;
                 return Ok(values);
             }
         }
@@ -620,7 +620,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
         let trie_node = GuardedValue::take(trie_node_ref);
         let mut values = vec![];
         node_cow.iterate_internal(
-            self.owned_node_set.get_ref(),
+            owned_node_set,
             self.get_trie_ref(),
             trie_node,
             key_prefix,
@@ -644,7 +644,9 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
     /// The visitor can only be used once to modify.
     unsafe fn insert_checked_value(
         mut self, key: KeyPart, value: Box<[u8]>,
-    ) -> Result<(bool, NodeRefDeltaMptCompact)> {
+        owned_node_set: &mut OwnedNodeSet,
+    ) -> Result<(bool, NodeRefDeltaMptCompact)>
+    {
         let node_memory_manager = self.node_memory_manager();
         let allocator = node_memory_manager.get_allocator();
         let mut node_cow = self.root.take();
@@ -664,7 +666,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                 let trie_node = GuardedValue::take(trie_node_ref);
                 node_cow.cow_replace_value_valid(
                     &node_memory_manager,
-                    self.owned_node_set.get_mut(),
+                    owned_node_set,
                     trie_node,
                     value,
                 )?;
@@ -678,8 +680,11 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
             } => {
                 drop(trie_node_ref);
                 let result = self
-                    .new_visitor_for_subtree(child_node.clone().into())
-                    .insert_checked_value(key_remaining, value);
+                    .new_visitor_for_subtree(
+                        child_node.clone().into(),
+                        owned_node_set,
+                    )
+                    .insert_checked_value(key_remaining, value, owned_node_set);
                 if result.is_err() {
                     node_cow.into_child();
                     return result;
@@ -695,11 +700,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                             &mut *self.db.get_mut().to_owned_read()?,
                         )?);
                     node_cow
-                        .cow_modify(
-                            &allocator,
-                            self.owned_node_set.get_mut(),
-                            trie_node,
-                        )?
+                        .cow_modify(&allocator, owned_node_set, trie_node)?
                         .replace_child_unchecked(child_index, new_child_node);
 
                     Ok((node_ref_changed, node_cow.into_child().unwrap()))
@@ -723,7 +724,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                 let (new_node_cow, new_node_entry) =
                     CowNodeRef::new_uninitialized_node(
                         &allocator,
-                        self.owned_node_set.get_mut(),
+                        owned_node_set,
                         self.trie_ref.get_mpt_id(),
                     )?;
                 let mut new_node = MemOptimizedTrieNode::default();
@@ -733,7 +734,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                 let trie_node = GuardedValue::take(trie_node_ref);
                 node_cow.cow_set_compressed_path(
                     &node_memory_manager,
-                    self.owned_node_set.get_mut(),
+                    owned_node_set,
                     unmatched_path_remaining,
                     trie_node,
                 )?;
@@ -757,7 +758,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                         let (child_node_cow, child_node_entry) =
                             CowNodeRef::new_uninitialized_node(
                                 &allocator,
-                                self.owned_node_set.get_mut(),
+                                owned_node_set,
                                 self.trie_ref.get_mpt_id(),
                             )?;
                         let mut new_child_node =
@@ -789,7 +790,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                 let (child_node_cow, child_node_entry) =
                     CowNodeRef::new_uninitialized_node(
                         &allocator,
-                        self.owned_node_set.get_mut(),
+                        owned_node_set,
                         self.trie_ref.get_mpt_id(),
                     )?;
                 let mut new_child_node = MemOptimizedTrieNode::default();
@@ -801,11 +802,7 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
                 let node_ref_changed = !is_owned;
                 let trie_node = GuardedValue::take(trie_node_ref);
                 node_cow
-                    .cow_modify(
-                        &allocator,
-                        self.owned_node_set.get_mut(),
-                        trie_node,
-                    )?
+                    .cow_modify(&allocator, owned_node_set, trie_node)?
                     .add_new_child_unchecked(
                         child_index,
                         child_node_cow.into_child().unwrap(),
@@ -817,13 +814,13 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
     }
 
     pub fn set(
-        self, key: KeyPart, value: Box<[u8]>,
+        self, key: KeyPart, value: Box<[u8]>, owned_node_set: &mut OwnedNodeSet,
     ) -> Result<NodeRefDeltaMpt> {
         TrieNodeDeltaMpt::check_key_size(key)?;
         TrieNodeDeltaMpt::check_value_size(&value)?;
         let new_root;
         unsafe {
-            new_root = self.insert_checked_value(key, value)?.1;
+            new_root = self.insert_checked_value(key, value, owned_node_set)?.1;
         }
         Ok(new_root.into())
     }

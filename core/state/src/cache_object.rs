@@ -20,7 +20,7 @@ pub trait CachedObject: Encodable + IsDefault + Sized {
     // This method also checks if the value IsDefault, if so map the update to a
     // deletion.
     fn update<StateDb: StateDbOps>(
-        &self, key: &Self::HashKeyType, db: &mut StateDb,
+        &self, key: &Self::HashKeyType, db: &StateDb,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>
     {
@@ -32,7 +32,7 @@ pub trait CachedObject: Encodable + IsDefault + Sized {
     }
 
     fn delete<StateDb: StateDbOps>(
-        key: &Self::HashKeyType, db: &mut StateDb,
+        key: &Self::HashKeyType, db: &StateDb,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>
     {

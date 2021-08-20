@@ -10,11 +10,11 @@ pub trait SubstateTrait {
     fn logs_mut(&mut self) -> &mut Vec<LogEntry>;
 
     fn storage_at(
-        &self, state: &dyn StateOpsTrait, address: &Address, key: &[u8],
+        &self, state: &dyn StateOpsTxTrait, address: &Address, key: &[u8],
     ) -> DbResult<U256>;
 
     fn set_storage(
-        &mut self, state: &mut dyn StateOpsTrait, address: &Address,
+        &mut self, state: &mut dyn StateOpsTxTrait, address: &Address,
         key: Vec<u8>, value: U256, owner: Address,
     ) -> DbResult<()>;
 
@@ -40,7 +40,7 @@ pub trait SubstateMngTrait: SubstateTrait {
     fn new() -> Self;
 }
 
-use crate::state_trait::StateOpsTrait;
+use crate::state_trait::StateOpsTxTrait;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, U256};
 use primitives::LogEntry;

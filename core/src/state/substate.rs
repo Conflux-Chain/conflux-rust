@@ -6,7 +6,8 @@ use super::CleanupMode;
 use crate::evm::{CleanDustMode, Spec};
 use cfx_parameters::internal_contract_addresses::ADMIN_CONTROL_CONTRACT_ADDRESS;
 use cfx_state::{
-    state_trait::StateOpsTrait, substate_trait::SubstateMngTrait, SubstateTrait,
+    state_trait::StateOpsTxTrait, substate_trait::SubstateMngTrait,
+    SubstateTrait,
 };
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, U256};
@@ -167,7 +168,7 @@ impl SubstateTrait for Substate {
     // Let VM access storage from substate so that storage ownership can be
     // maintained without help from state.
     fn storage_at(
-        &self, state: &dyn StateOpsTrait, address: &Address, key: &[u8],
+        &self, state: &dyn StateOpsTxTrait, address: &Address, key: &[u8],
     ) -> DbResult<U256> {
         state.storage_at(address, key)
     }
@@ -175,7 +176,7 @@ impl SubstateTrait for Substate {
     // Let VM access storage from substate so that storage ownership can be
     // maintained without help from state.
     fn set_storage(
-        &mut self, state: &mut dyn StateOpsTrait, address: &Address,
+        &mut self, state: &mut dyn StateOpsTxTrait, address: &Address,
         key: Vec<u8>, value: U256, owner: Address,
     ) -> DbResult<()>
     {

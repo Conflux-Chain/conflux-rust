@@ -5,7 +5,7 @@
 use crate::{
     bytes::Bytes,
     hash::{keccak, KECCAK_EMPTY},
-    state::{AccountEntryProtectedMethods, StateGeneric},
+    state::{AccountEntryProtectedMethods, StateGenericIO},
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::staking::COLLATERAL_UNITS_PER_STORAGE_KEY;
@@ -733,7 +733,8 @@ impl OverlayAccount {
     }
 
     pub fn commit<StateDbStorage: StorageStateTrait>(
-        &mut self, state: &mut StateGeneric<StateDbStorage>, address: &Address,
+        &mut self, state: &mut StateGenericIO<StateDbStorage>,
+        address: &Address,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()>
     {
@@ -949,7 +950,7 @@ mod tests {
 
         assert!(account.as_account().unwrap().is_default());
 
-        account.cache_staking_info(true, true, &state.db).unwrap();
+        account.cache_staking_info(true, true, &state.io.db).unwrap();
         assert!(account.vote_stake_list().unwrap().is_default());
         assert!(account.deposit_list().unwrap().is_default());
     }

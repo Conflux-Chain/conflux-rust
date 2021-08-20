@@ -2,373 +2,514 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub fn prefetch_accounts<'a>(
-    prefetcher: &'a ExecutionStatePrefetcher, task_epoch_id: EpochId,
-    state: &State, account_vec: Vec<&'a Address>,
-) -> PrefetchTaskHandle<'a>
+// pub state: &'a Arc<Mutex<State>>,
+// pub address_waiters: Vec<(&'a Address, Arc<(Mutex<bool>, Condvar)>)>,
+// pub canceled: AtomicBool,
+
+pub fn prefetch_accounts_worker<StateDbStorage: StorageStateTrait>(
+    state: &StateGenericIO<StateDbStorage>,
+    accounts: Vec<(&Address, Arc<(Mutex<bool>, Condvar)>)>,
+    cancel: &AtomicBool,
+)
 {
-    // transmute the references so that they can be passed into threads.
-    let state = unsafe { std::mem::transmute::<&State, &'static State>(state) };
-    let accounts = unsafe {
-        std::mem::transmute::<&[&Address], &'static [&'static Address]>(
-            &account_vec,
-        )
-    };
-
-    prefetcher.add_task(task_epoch_id, state, accounts).ok();
-
-    PrefetchTaskHandle {
-        prefetcher: Some(prefetcher),
-        state,
-        task_epoch_id,
-        accounts: account_vec,
+    for (address, waiter) in accounts {
+        if cancel.load(Ordering::Relaxed) {
+            break;
+        }
+        // Ignore db errors for now
+        let _ = state.try_load(address);
+        let (mtx, condvar) = waiter.deref();
+        let mut ready = mtx.lock();
+        *ready = true;
+        condvar.notify_all();
     }
 }
 
 pub struct ExecutionStatePrefetcher {
-    task_sender: Mutex<CancelableTaskSender<PrefetchTaskKey>>,
-    workers: Vec<Arc<PrefetcherThreadWorker>>,
-    worker_join_handles: Vec<JoinHandle<()>>,
-
-    join_handle: Mutex<Option<JoinHandle<()>>>,
-}
-
-struct PrefetcherThreadWorker {
-    task_queue_sender: Mutex<
-        mpsc::Sender<(
-            EpochId,
-            u64,
-            &'static State,
-            &'static [&'static Address],
-        )>,
-    >,
-    /// All threads should be processing the same task.
-    /// Abort the current task when the cancel task id matches.
-    cancel_task_id: AtomicU64,
-    current_task_id: RwLock<(EpochId, u64)>,
-}
-
-impl PrefetcherThreadWorker {
-    fn new(
-        task_queue_sender: mpsc::Sender<(
-            EpochId,
-            u64,
-            &'static State,
-            &'static [&'static Address],
-        )>,
-    ) -> Self
-    {
-        Self {
-            task_queue_sender: Mutex::new(task_queue_sender),
-            cancel_task_id: Default::default(),
-            current_task_id: Default::default(),
-        }
-    }
-
-    /// Unsafe because there shouldn't be concurrent calls to this function.
-    /// It also doesn't wait for the task to finish.
-    unsafe fn signal_current_task_cancellation(&self, task_epoch_id: &EpochId) {
-        let current_task = self.current_task_id.read();
-        if PrefetchTaskKey::key_matches(&current_task.0, task_epoch_id) {
-            self.cancel_task_id.store(current_task.1, Ordering::Relaxed);
-        }
-    }
-
-    fn send_new_task(
-        &self, task_epoch_id: EpochId, task_id: u64, state: &'static State,
-        addresses: &'static [&'static Address],
-    )
-    {
-        self.task_queue_sender
-            .lock()
-            .send((task_epoch_id, task_id, state, addresses))
-            .ok();
-    }
-
-    /// Unsafe because we only want the Prefetcher to stop the thread.
-    unsafe fn stop(&self) {
-        self.task_queue_sender
-            .lock()
-            .send((Default::default(), 0, &*null(), &[]))
-            .ok();
-    }
-
-    fn prefetch_accounts(
-        &self, task_id: u64, state: &'static State,
-        accounts: &'static [&'static Address],
-    ) -> DbResult<()>
-    {
-        self.cancel_task_id.store(0, Ordering::Relaxed);
-        for address in accounts {
-            let cancel_task_id = self.cancel_task_id.load(Ordering::Relaxed);
-            if cancel_task_id != 0 {
-                if cancel_task_id == task_id {
-                    break;
-                }
-                self.cancel_task_id.store(0, Ordering::Relaxed);
-            }
-            state.try_load(address)?;
-        }
-
-        Ok(())
-    }
-
-    fn run(
-        &self,
-        task_queue: mpsc::Receiver<(
-            EpochId,
-            u64,
-            &'static State,
-            &'static [&'static Address],
-        )>,
-        task_finish_signal: mpsc::Sender<()>,
-    )
-    {
-        while let Ok((task_epoch_id, task_id, state, accounts)) =
-            task_queue.recv()
-        {
-            if task_id == 0 {
-                // Stopped by the Prefetcher.
-                return;
-            } else {
-                *self.current_task_id.write() = (task_epoch_id, task_id);
-
-                // prefetch accounts, ignore db errors for now
-                let _ = self.prefetch_accounts(task_id, state, accounts);
-
-                task_finish_signal.send(()).expect(
-                    // Should not return error.
-                    &concat!(file!(), ":", line!(), ":", column!()),
-                );
-            }
-        }
-        error!("State prefetch worker stopped due to exception.");
-    }
+    pub pool: ThreadPool,
 }
 
 impl ExecutionStatePrefetcher {
     pub fn new(
         num_threads: usize,
-    ) -> io::Result<Arc<ExecutionStatePrefetcher>> {
-        let mut thread_finish_signal_receivers =
-            Vec::with_capacity(num_threads);
-        let mut workers = Vec::with_capacity(num_threads);
-        let mut worker_join_handles = Vec::with_capacity(num_threads);
+    ) -> Result<ExecutionStatePrefetcher, ThreadPoolBuildError> {
+        Ok(ExecutionStatePrefetcher {
+            pool: ThreadPoolBuilder::new().num_threads(num_threads).build()?,
+        })
+    }
+}
 
-        // Start worker threads.
-        for i in 0..num_threads {
-            let (task_queue_sender, task_queue_receiver) = mpsc::channel();
-            let (task_finish_sender, task_finish_receiver) = mpsc::channel();
-            let worker =
-                Arc::new(PrefetcherThreadWorker::new(task_queue_sender));
-            let worker_to_run = worker.clone();
-            let worker_join_handle = thread::Builder::new()
-                .name(format!("Execution state prefetcher worker thread {}", i))
-                .spawn(move || {
-                    worker_to_run.run(task_queue_receiver, task_finish_sender)
-                })?;
+pub struct StateWithWaiters<'a, StateDbStorage: StorageStateTrait> {
+    pub io: &'a StateGenericIO<StateDbStorage>,
+    pub info: &'a mut StateGenericInfo,
+    pub address_waiters: HashMap<&'a Address, Arc<(Mutex<bool>, Condvar)>>,
+}
 
-            thread_finish_signal_receivers.push(task_finish_receiver);
-            workers.push(worker);
-            worker_join_handles.push(worker_join_handle);
+impl<'a, StateDbStorage: StorageStateTrait>
+    StateWithWaiters<'a, StateDbStorage>
+{
+    fn prepare_address(&self, addr: &'a Address) {
+        if let Some(waiter) = self.address_waiters.get(addr) {
+            let (mtx, condvar) = waiter.deref();
+            let mut ready = mtx.lock();
+            if !*ready {
+                condvar.wait(&mut ready);
+            }
         }
+    }
+}
 
-        // Start task queue controller.
-        let (task_sender, task_receiver) = new_cancellable_task_channel();
-        let prefetcher = Arc::new(Self {
-            task_sender: Mutex::new(task_sender),
-            workers,
-            worker_join_handles,
-            join_handle: Default::default(),
-        });
+impl<'a, StateDbStorage: StorageStateTrait>
+    StateWithWaiters<'a, StateDbStorage>
+{
+}
 
-        let prefetcher_to_run = prefetcher.clone();
-        let prefetcher_join_handle = thread::Builder::new()
-            .name("Execution state prefetcher".into())
-            .spawn(move || {
-                prefetcher_to_run
-                    .run(thread_finish_signal_receivers, task_receiver);
-            })?;
-        *prefetcher.join_handle.lock() = Some(prefetcher_join_handle);
-
-        Ok(prefetcher)
+// What we are doing here is actually inserting prepare_address before
+// ensure_account_loaded
+impl<'a, StateDbStorage: StorageStateTrait> StateOpsTxTrait
+    for StateWithWaiters<'a, StateDbStorage>
+{
+    fn bump_block_number_accumulate_interest(&mut self) -> U256 {
+        self.info.bump_block_number_accumulate_interest()
     }
 
-    pub fn stop(&self) { self.task_sender.lock().stop().ok(); }
+    fn subtract_total_issued(&mut self, v: U256) {
+        self.info.subtract_total_issued(v)
+    }
 
-    pub fn add_task(
-        &self, task_epoch_id: EpochId, state: &'static State,
-        accounts: &'static [&'static Address],
-    ) -> Result<(), SendError<bool>>
+    fn new_contract_with_admin(
+        &mut self, contract: &Address, admin: &Address, balance: U256,
+        nonce: U256, storage_layout: Option<StorageLayout>,
+    ) -> DbResult<()>
     {
-        self.task_sender.lock().send(PrefetchTaskKey(
-            task_epoch_id,
-            state,
-            accounts,
-        ))
+        self.io.new_contract_with_admin(
+            &mut self.info,
+            contract,
+            admin,
+            balance,
+            nonce,
+            storage_layout,
+        )
     }
 
-    // Return false when the task does not exist in the queue. It may already
-    // finished processing.
-    pub fn wait_for_task(&self, task_epoch_id: &EpochId) -> bool {
-        match self.task_sender.lock().wait_for(task_epoch_id) {
-            Some((cond_var, mut mutex)) => {
-                cond_var.wait(&mut mutex);
-                true
-            }
-            _ => false,
+    fn balance(&self, address: &Address) -> DbResult<U256> {
+        self.prepare_address(address);
+        self.io.balance(address)
+    }
+
+    fn is_contract_with_code(&self, address: &Address) -> DbResult<bool> {
+        if !address.is_contract_address() {
+            return Ok(false);
         }
+        self.prepare_address(address);
+        self.io
+            .ensure_account_loaded(address, RequireCache::None, |acc| {
+                acc.map_or(false, |acc| acc.code_hash() != KECCAK_EMPTY)
+            })
     }
 
-    pub fn cancel_task(&self, task_epoch_id: &EpochId) {
-        if self.task_sender.lock().remove(task_epoch_id) {
-            // Inform workers about the cancellation.
-            unsafe {
-                for worker in &self.workers {
-                    worker.signal_current_task_cancellation(task_epoch_id);
-                }
-            }
-        }
+    fn sponsor_for_gas(&self, address: &Address) -> DbResult<Option<Address>> {
+        self.prepare_address(address);
+        self.io.sponsor_for_gas(address)
     }
 
-    #[inline]
-    fn wait_for_current_task(
-        finish_signal_receivers: &mut [mpsc::Receiver<()>],
-    ) {
-        for receiver in finish_signal_receivers {
-            receiver.recv().expect(
-                // Should not return error.
-                &concat!(file!(), ":", line!(), ":", column!()),
-            );
-        }
+    fn sponsor_for_collateral(
+        &self, address: &Address,
+    ) -> DbResult<Option<Address>> {
+        self.prepare_address(address);
+        self.io.sponsor_for_collateral(address)
     }
 
-    fn run(
-        &self, mut finish_signal_receivers: Vec<mpsc::Receiver<()>>,
-        task_receiver: CancelableTaskReceiver<PrefetchTaskKey>,
-    )
+    fn set_sponsor_for_gas(
+        &mut self, address: &Address, sponsor: &Address,
+        sponsor_balance: &U256, upper_bound: &U256,
+    ) -> DbResult<()>
     {
-        let mut current_task_id = 0u64;
-        loop {
-            match task_receiver.recv() {
-                Ok(PrefetchTaskKey(task_epoch_id, state, accounts)) => {
-                    if current_task_id == std::u64::MAX {
-                        current_task_id = 1;
-                    } else {
-                        current_task_id += 1;
-                    }
+        self.prepare_address(address);
+        self.io.set_sponsor_for_gas(
+            self.info,
+            address,
+            sponsor,
+            sponsor_balance,
+            upper_bound,
+        )
+    }
 
-                    // Dispatch split task to workers.
-                    let num_accounts = accounts.len();
-                    let num_threads = self.workers.len();
-                    for thread_idx in 0..num_threads {
-                        let range_start =
-                            num_accounts * thread_idx / num_threads;
-                        let range_end =
-                            num_accounts * (thread_idx + 1) / num_threads;
+    fn set_sponsor_for_collateral(
+        &mut self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
+    ) -> DbResult<()> {
+        self.prepare_address(address);
+        self.io.set_sponsor_for_collateral(
+            self.info,
+            address,
+            sponsor,
+            sponsor_balance,
+        )
+    }
 
-                        self.workers[thread_idx].send_new_task(
-                            task_epoch_id,
-                            current_task_id,
-                            state,
-                            &accounts[range_start..range_end],
-                        );
-                    }
+    fn sponsor_gas_bound(&self, address: &Address) -> DbResult<U256> {
+        self.prepare_address(address);
+        self.io.sponsor_gas_bound(address)
+    }
 
-                    Self::wait_for_current_task(&mut finish_signal_receivers);
-                }
-                Err(StopOr::Stop) => {
-                    // Stop
-                    return;
-                }
-                Err(_) => {
-                    // Exception
-                    break;
-                }
+    fn sponsor_balance_for_gas(&self, address: &Address) -> DbResult<U256> {
+        self.prepare_address(address);
+        self.io.sponsor_balance_for_gas(address)
+    }
+
+    fn sponsor_balance_for_collateral(
+        &self, address: &Address,
+    ) -> DbResult<U256> {
+        self.prepare_address(address);
+        self.io.sponsor_balance_for_collateral(address)
+    }
+
+    fn set_admin(
+        &mut self, contract_address: &Address, admin: &Address,
+    ) -> DbResult<()> {
+        self.io.set_admin(self.info, contract_address, admin)
+    }
+
+    fn sub_sponsor_balance_for_gas(
+        &mut self, address: &Address, by: &U256,
+    ) -> DbResult<()> {
+        self.io.sub_sponsor_balance_for_gas(self.info, address, by)
+    }
+
+    fn add_sponsor_balance_for_gas(
+        &mut self, address: &Address, by: &U256,
+    ) -> DbResult<()> {
+        self.io.add_sponsor_balance_for_gas(self.info, address, by)
+    }
+
+    fn sub_sponsor_balance_for_collateral(
+        &mut self, address: &Address, by: &U256,
+    ) -> DbResult<()> {
+        self.io
+            .sub_sponsor_balance_for_collateral(self.info, address, by)
+    }
+
+    fn add_sponsor_balance_for_collateral(
+        &mut self, address: &Address, by: &U256,
+    ) -> DbResult<()> {
+        self.io
+            .add_sponsor_balance_for_collateral(self.info, address, by)
+    }
+
+    fn check_commission_privilege(
+        &self, contract_address: &Address, user: &Address,
+    ) -> DbResult<bool> {
+        self.prepare_address(&SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS);
+        self.io.check_commission_privilege(contract_address, user)
+    }
+
+    fn add_commission_privilege(
+        &mut self, contract_address: Address, contract_owner: Address,
+        user: Address,
+    ) -> DbResult<()>
+    {
+        self.io.add_commission_privilege(
+            self.info,
+            contract_address,
+            contract_owner,
+            user,
+        )
+    }
+
+    fn remove_commission_privilege(
+        &mut self, contract_address: Address, contract_owner: Address,
+        user: Address,
+    ) -> DbResult<()>
+    {
+        self.io.remove_commission_privilege(
+            self.info,
+            contract_address,
+            contract_owner,
+            user,
+        )
+    }
+
+    fn nonce(&self, address: &Address) -> DbResult<U256> {
+        self.prepare_address(address);
+        self.io.nonce(address)
+    }
+
+    fn init_code(
+        &mut self, address: &Address, code: Vec<u8>, owner: Address,
+    ) -> DbResult<()> {
+        self.io.init_code(self.info, address, code, owner)
+    }
+
+    fn code_hash(&self, address: &Address) -> DbResult<Option<H256>> {
+        self.prepare_address(address);
+        self.io.code_hash(address)
+    }
+
+    fn code_size(&self, address: &Address) -> DbResult<Option<usize>> {
+        self.prepare_address(address);
+        self.io.code_size(address)
+    }
+
+    fn code_owner(&self, address: &Address) -> DbResult<Option<Address>> {
+        self.prepare_address(address);
+        self.io.code_owner(address)
+    }
+
+    fn code(&self, address: &Address) -> DbResult<Option<Arc<Vec<u8>>>> {
+        self.prepare_address(address);
+        self.io.code(address)
+    }
+
+    fn staking_balance(&self, address: &Address) -> DbResult<U256> {
+        self.prepare_address(address);
+        self.io.staking_balance(address)
+    }
+
+    fn collateral_for_storage(&self, address: &Address) -> DbResult<U256> {
+        self.prepare_address(address);
+        self.io.collateral_for_storage(address)
+    }
+
+    fn admin(&self, address: &Address) -> DbResult<Address> {
+        self.prepare_address(address);
+        self.io.admin(address)
+    }
+
+    fn withdrawable_staking_balance(
+        &self, address: &Address, current_block_number: u64,
+    ) -> DbResult<U256> {
+        self.prepare_address(address);
+        self.io
+            .withdrawable_staking_balance(address, current_block_number)
+    }
+
+    fn locked_staking_balance_at_block_number(
+        &self, address: &Address, block_number: u64,
+    ) -> DbResult<U256> {
+        self.prepare_address(address);
+        self.io
+            .locked_staking_balance_at_block_number(address, block_number)
+    }
+
+    fn deposit_list_length(&self, address: &Address) -> DbResult<usize> {
+        self.prepare_address(address);
+        self.io.deposit_list_length(address)
+    }
+
+    fn vote_stake_list_length(&self, address: &Address) -> DbResult<usize> {
+        self.prepare_address(address);
+        self.io.vote_stake_list_length(address)
+    }
+
+    fn inc_nonce(
+        &mut self, address: &Address, account_start_nonce: &U256,
+    ) -> DbResult<()> {
+        self.io.inc_nonce(self.info, address, account_start_nonce)
+    }
+
+    fn set_nonce(&mut self, address: &Address, nonce: &U256) -> DbResult<()> {
+        self.io.set_nonce(self.info, address, nonce)
+    }
+
+    fn sub_balance(
+        &mut self, address: &Address, by: &U256, cleanup_mode: &mut CleanupMode,
+    ) -> DbResult<()> {
+        if !by.is_zero() {
+            self.io
+                .require_exists(self.info, address, false)?
+                .sub_balance(by);
+        }
+
+        if let CleanupMode::TrackTouched(ref mut set) = *cleanup_mode {
+            if self.exists(address)? {
+                // prepare_address here
+                set.insert(*address);
             }
         }
-        error!("State prefetcher stopped due to exception.");
+        Ok(())
+    }
+
+    fn add_balance(
+        &mut self, address: &Address, by: &U256, cleanup_mode: CleanupMode,
+        account_start_nonce: U256,
+    ) -> DbResult<()>
+    {
+        self.prepare_address(address);
+        self.io.add_balance(
+            self.info,
+            address,
+            by,
+            cleanup_mode,
+            account_start_nonce,
+        )
+    }
+
+    fn transfer_balance(
+        &mut self, from: &Address, to: &Address, by: &U256,
+        cleanup_mode: CleanupMode, account_start_nonce: U256,
+    ) -> DbResult<()>
+    {
+        self.io.transfer_balance(
+            &mut self.info,
+            from,
+            to,
+            by,
+            cleanup_mode,
+            account_start_nonce,
+        )
+    }
+
+    fn deposit(
+        &mut self, address: &Address, amount: &U256, current_block_number: u64,
+    ) -> DbResult<()> {
+        self.io
+            .deposit(self.info, address, amount, current_block_number)
+    }
+
+    fn withdraw(&mut self, address: &Address, amount: &U256) -> DbResult<U256> {
+        self.io.withdraw(self.info, address, amount)
+    }
+
+    fn vote_lock(
+        &mut self, address: &Address, amount: &U256, unlock_block_number: u64,
+    ) -> DbResult<()> {
+        self.io
+            .vote_lock(self.info, address, amount, unlock_block_number)
+    }
+
+    fn remove_expired_vote_stake_info(
+        &mut self, address: &Address, current_block_number: u64,
+    ) -> DbResult<()> {
+        self.io.remove_expired_vote_stake_info(
+            self.info,
+            address,
+            current_block_number,
+        )
+    }
+
+    fn remove_contract(&mut self, address: &Address) -> DbResult<()> {
+        self.io.remove_contract(self.info, address)
+    }
+
+    fn exists(&self, address: &Address) -> DbResult<bool> {
+        self.prepare_address(address);
+        self.io.exists(address)
+    }
+
+    fn exists_and_not_null(&self, address: &Address) -> DbResult<bool> {
+        self.prepare_address(address);
+        self.io.exists_and_not_null(address)
+    }
+
+    fn storage_at(&self, address: &Address, key: &[u8]) -> DbResult<U256> {
+        self.prepare_address(address);
+        self.io.storage_at(address, key)
+    }
+
+    fn set_storage(
+        &mut self, address: &Address, key: Vec<u8>, value: U256, owner: Address,
+    ) -> DbResult<()> {
+        if self.storage_at(address, &key)? != value {
+            // prepare_address here
+            self.io
+                .require_exists(self.info, address, false)?
+                .set_storage(key, value, owner)
+        }
+        Ok(())
     }
 }
 
-impl Drop for ExecutionStatePrefetcher {
-    fn drop(&mut self) {
-        // Signal the prefetcher to exit.
-        self.stop();
+impl<'a, StateDbStorage: StorageStateTrait> CheckpointTxDeltaTrait
+    for StateWithWaiters<'a, StateDbStorage>
+{
+    fn checkpoint(&mut self) -> usize { self.info.checkpoint() }
 
-        // Let workers stop after the current task.
-        for worker in &self.workers {
-            unsafe {
-                worker.stop();
-            }
-        }
-        // Cancel the current task.
-        if let Some(key) = &*self.task_sender.lock().current_task() {
-            self.cancel_task(key);
-        }
+    fn discard_checkpoint(&mut self) { self.info.discard_checkpoint() }
 
-        for join_handle in self.worker_join_handles.split_off(0) {
-            join_handle.join().ok();
-        }
-
-        let self_join_handle = self.join_handle.lock().take().unwrap();
-        self_join_handle.join().ok();
+    fn revert_to_checkpoint(&mut self) {
+        self.io.revert_to_checkpoint(&mut self.info)
     }
 }
 
-pub struct PrefetchTaskHandle<'a> {
-    pub prefetcher: Option<&'a ExecutionStatePrefetcher>,
-    pub state: &'a State,
-    pub task_epoch_id: EpochId,
-    pub accounts: Vec<&'a Address>,
+impl<'a, StateDbStorage: StorageStateTrait> CheckpointTxTrait
+    for StateWithWaiters<'a, StateDbStorage>
+{
 }
 
-impl PrefetchTaskHandle<'_> {
-    pub fn wait_for_task(&self) -> bool {
-        match self.prefetcher.as_ref() {
-            None => false,
-            Some(prefetcher) => prefetcher.wait_for_task(&self.task_epoch_id),
-        }
+impl<'a, StateDbStorage: StorageStateTrait> StateTxDeltaTrait
+    for StateWithWaiters<'a, StateDbStorage>
+{
+    type Substate = Substate;
+
+    fn collect_ownership_changed(
+        &mut self, substate: &mut Self::Substate,
+    ) -> DbResult<()> {
+        self.io.collect_ownership_changed(self.info, substate)
+    }
+
+    fn settle_collateral_for_all(
+        &mut self, substate: &Self::Substate, account_start_nonce: U256,
+    ) -> DbResult<CollateralCheckResult> {
+        self.io.settle_collateral_for_all(
+            &mut self.info,
+            substate,
+            account_start_nonce,
+        )
+    }
+
+    fn collect_and_settle_collateral(
+        &mut self, original_sender: &Address, storage_limit: &U256,
+        substate: &mut Substate, account_start_nonce: U256,
+    ) -> DbResult<CollateralCheckResult>
+    {
+        self.io.collect_and_settle_collateral(
+            &mut self.info,
+            original_sender,
+            storage_limit,
+            substate,
+            account_start_nonce,
+        )
+    }
+
+    fn record_storage_and_whitelist_entries_release(
+        &mut self, address: &Address, substate: &mut Self::Substate,
+    ) -> DbResult<()> {
+        self.io.record_storage_and_whitelist_entries_release(
+            self.info, address, substate,
+        )
     }
 }
 
-impl Drop for PrefetchTaskHandle<'_> {
-    fn drop(&mut self) {
-        match self.prefetcher.take() {
-            None => {}
-            Some(prefetcher) => prefetcher.cancel_task(&self.task_epoch_id),
-        }
-        // To mute the compiler's complain over the variable isn't used.
-        self.accounts.clear();
-    }
+impl<'a, StateDbStorage: StorageStateTrait> StateTxTrait
+    for StateWithWaiters<'a, StateDbStorage>
+{
 }
 
-struct PrefetchTaskKey(
-    pub EpochId,
-    pub &'static State,
-    pub &'static [&'static Address],
-);
+use crate::state::{
+    DbResult, RequireCache, StateGenericIO, StateGenericInfo, StorageLayout,
+    SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+};
+use cfx_state::{
+    state_trait::{
+        CheckpointTxDeltaTrait, CheckpointTxTrait, StateOpsTxTrait,
+        StateTxDeltaTrait, StateTxTrait,
+    },
+    CleanupMode, CollateralCheckResult,
+};
+use cfx_storage::{
+    utils::deref_plus_impl_or_borrow_self::DerefPlusSelf, StorageStateTrait,
+};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 
-impl CancelByKey for PrefetchTaskKey {
-    type Key = EpochId;
-
-    #[inline]
-    fn key(&self) -> &Self::Key { &self.0 }
-}
-
-use crate::state::State;
-use cfx_statedb::Result as DbResult;
-use cfx_types::Address;
-use cfx_utils::cancellable_task_channel::*;
-use parking_lot::{Mutex, RwLock};
-use primitives::EpochId;
+use keccak_hash::KECCAK_EMPTY;
+use parking_lot::{Condvar, Mutex};
+use rayon::{ThreadPool, ThreadPoolBuildError, ThreadPoolBuilder};
 use std::{
-    io,
-    ptr::null,
+    collections::HashMap,
     sync::{
-        atomic::{AtomicU64, Ordering},
-        mpsc::{self, SendError},
+        atomic::{AtomicBool, Ordering},
         Arc,
     },
-    thread::{self, JoinHandle},
 };
+
+use super::Substate;

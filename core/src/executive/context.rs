@@ -18,7 +18,7 @@ use crate::{
 use cfx_parameters::staking::{
     code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
-use cfx_state::{StateTrait, SubstateMngTrait, SubstateTrait};
+use cfx_state::{StateTxTrait, SubstateMngTrait, SubstateTrait};
 use cfx_types::{Address, H256, U256};
 use primitives::transaction::UNSIGNED_SENDER;
 use std::sync::Arc;
@@ -58,7 +58,7 @@ pub struct Context<
     'a, /* Lifetime of transaction executive. */
     'b, /* Lifetime of call-create executive. */
     Substate: SubstateTrait,
-    State: StateTrait<Substate = Substate>,
+    State: StateTxTrait<Substate = Substate>,
 > {
     state: &'b mut State,
     callstack: &'b mut CallStackInfo,
@@ -102,7 +102,7 @@ impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
     /// executive. For the parameters shared between executives (like `&mut
     /// State`), the executive should activate `LocalContext` by passing in
     /// these parameters.
-    pub fn activate<State: StateTrait<Substate = Substate>>(
+    pub fn activate<State: StateTxTrait<Substate = Substate>>(
         &'b mut self, state: &'b mut State, callstack: &'b mut CallStackInfo,
     ) -> Context<'a, 'b, Substate, State> {
         Context {
@@ -117,7 +117,7 @@ impl<
         'a,
         'b,
         Substate: SubstateMngTrait,
-        State: StateTrait<Substate = Substate>,
+        State: StateTxTrait<Substate = Substate>,
     > ContextTrait for Context<'a, 'b, Substate, State>
 {
     fn storage_at(&self, key: &Vec<u8>) -> vm::Result<U256> {
@@ -464,9 +464,7 @@ mod tests {
         vm::{Context as ContextTrait, Env, Spec},
     };
     use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
-    use cfx_state::{
-        state_trait::StateOpsTrait, substate_trait::SubstateMngTrait,
-    };
+    use cfx_state::{state_trait::StateOpsTxTrait, substate_trait::SubstateMngTrait};
     use cfx_storage::{
         new_storage_manager_for_testing, tests::FakeStateManager,
     };

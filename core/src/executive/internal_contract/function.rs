@@ -9,7 +9,7 @@ use crate::{
     trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, CallType, GasLeft, ReturnData, Spec},
 };
-use cfx_state::state_trait::StateOpsTrait;
+use cfx_state::state_trait::StateOpsTxTrait;
 use cfx_types::U256;
 use solidity_abi::{ABIDecodable, ABIEncodable};
 
@@ -97,7 +97,7 @@ pub trait ExecutionTrait: Send + Sync + InterfaceTrait {
 pub trait UpfrontPaymentTrait: Send + Sync + InterfaceTrait {
     fn upfront_gas_payment(
         &self, input: &Self::Input, params: &ActionParams, spec: &Spec,
-        state: &dyn StateOpsTrait,
+        state: &dyn StateOpsTxTrait,
     ) -> U256;
 }
 
@@ -195,7 +195,7 @@ macro_rules! impl_function_type {
         $(
             impl UpfrontPaymentTrait for $name {
                 fn upfront_gas_payment(
-                    &self, _input: &Self::Input, _params: &ActionParams, spec: &Spec, _state: &dyn StateOpsTrait,
+                    &self, _input: &Self::Input, _params: &ActionParams, spec: &Spec, _state: &dyn StateOpsTxTrait,
                 ) -> U256 {
                     U256::from($gas(spec))
                 }
@@ -210,7 +210,7 @@ macro_rules! impl_function_type {
 
         impl UpfrontPaymentTrait for $name {
             fn upfront_gas_payment(
-                &self, _input: &Self::Input, _params: &ActionParams, spec: &Spec, _state: &dyn StateOpsTrait,
+                &self, _input: &Self::Input, _params: &ActionParams, spec: &Spec, _state: &dyn StateOpsTxTrait,
             ) -> U256 {
                 U256::from(spec.balance_gas)
             }

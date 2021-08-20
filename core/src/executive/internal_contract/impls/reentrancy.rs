@@ -1,11 +1,12 @@
 use cfx_parameters::internal_contract_addresses::ANTI_REENTRANCY_CONTRACT_ADDRESS;
-use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
+use cfx_state::{state_trait::StateOpsTxTrait, SubstateTrait};
 use cfx_statedb::Result as DbResult;
 use cfx_types::Address;
 
 pub fn set_reentrancy_allowance(
-    contract_address: &Address, allowance: bool, state: &mut dyn StateOpsTrait,
-    substate: &mut dyn SubstateTrait, storage_owner: Address,
+    contract_address: &Address, allowance: bool,
+    state: &mut dyn StateOpsTxTrait, substate: &mut dyn SubstateTrait,
+    storage_owner: Address,
 ) -> DbResult<()>
 {
     substate.set_storage(
@@ -18,7 +19,7 @@ pub fn set_reentrancy_allowance(
 }
 
 pub fn get_reentrancy_allowance(
-    contract_address: &Address, state: &mut dyn StateOpsTrait,
+    contract_address: &Address, state: &mut dyn StateOpsTxTrait,
     substate: &mut dyn SubstateTrait,
 ) -> DbResult<bool>
 {

@@ -101,7 +101,7 @@ pub fn load_secrets_file(
 }
 
 pub fn initialize_internal_contract_accounts(
-    state: &mut dyn StateOpsTrait, addresses: &[Address],
+    state: &mut dyn StateOpsTxTrait, addresses: &[Address],
     contract_start_nonce: U256,
 )
 {

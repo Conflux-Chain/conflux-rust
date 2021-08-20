@@ -500,7 +500,7 @@ fn test_set_delete_all() {
         let key_prefix = &key[0..(2 + rng.gen::<usize>() % 2)];
 
         let value = state
-            .delete_all::<access_mode::Write>(StorageKey::AccountKey(
+            .delete_all(StorageKey::AccountKey(
                 key_prefix,
             ))
             .expect("Failed to delete key.");
@@ -518,7 +518,7 @@ fn test_set_delete_all() {
         }
 
         let value = state
-            .delete_all::<access_mode::Write>(StorageKey::AccountKey(key))
+            .delete_all(StorageKey::AccountKey(key))
             .expect("Failed to delete key.");
         assert_eq!(value, None);
     }
@@ -699,7 +699,6 @@ use crate::{
         generate_keys, get_rng_for_test, new_state_manager_for_unit_test,
         FakeStateManager, TEST_NUMBER_OF_KEYS,
     },
-    utils::access_mode,
     StateRootWithAuxInfo,
 };
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};

@@ -49,11 +49,28 @@ impl<Storage: StateTrait + StateTraitExt> StateTrait
         Ok(val)
     }
 
-    // `delete_all<Read>` is a kind of read operation so we need to record it
-    fn delete_all<AM: access_mode::AccessMode>(
+    fn iterate_all(
+        &self, access_key_prefix: StorageKey,
+    ) -> Result<Option<Vec<MptKeyValue>>> {
+        let kvs = match self.storage.iterate_all(access_key_prefix)? {
+            None => return Ok(None),
+            Some(kvs) => kvs,
+        };
+        let mut proof_merger = self.proof_merger.lock();
+
+        for (k, _) in &kvs {
+            let access_key = StorageKey::from_key_bytes::<CheckInput>(k)?;
+            let (_, proof) = self.storage.get_with_proof(access_key)?;
+            proof_merger.merge(proof);
+        }
+
+        Ok(Some(kvs))
+    }
+
+    fn delete_all(
         &mut self, access_key_prefix: StorageKey,
     ) -> Result<Option<Vec<MptKeyValue>>> {
-        let kvs = match self.storage.delete_all::<AM>(access_key_prefix)? {
+        let kvs = match self.storage.delete_all(access_key_prefix)? {
             None => return Ok(None),
             Some(kvs) => kvs,
         };
@@ -75,7 +92,6 @@ use crate::{
         errors::*, merkle_patricia_trie::MptKeyValue, state_proof::StateProof,
     },
     state::*,
-    utils::access_mode,
     StateProofMerger,
 };
 use cfx_internal_common::StateRootWithAuxInfo;
