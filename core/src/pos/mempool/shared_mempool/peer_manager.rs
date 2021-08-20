@@ -169,8 +169,8 @@ impl PeerManager {
     pub fn execute_broadcast(
         &self, peer: NodeId, scheduled_backoff: bool, smp: &mut SharedMempool,
     ) {
-        diem_info!("start execute_broadcast");
-        debug!("execute_broadcast for peer[{:?}]", peer);
+        // diem_trace!("start execute_broadcast");
+        trace!("execute_broadcast for peer[{:?}]", peer);
         let mut peer_states = self.peer_states.lock();
         let state = if let Some(state) = peer_states.get_mut(&peer) {
             state
@@ -284,7 +284,7 @@ impl PeerManager {
         }
 
         if transactions.is_empty() {
-            diem_info!("transactions empty");
+            // diem_trace!("transactions empty");
             return;
         }
 
