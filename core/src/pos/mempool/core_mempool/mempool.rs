@@ -192,6 +192,26 @@ impl Mempool {
                 )
                 .is_ok()
             {
+                if pivot_decision_opt.is_none() {
+                    // This should not happen!
+                    diem_error!(
+                        "txpool_pivot_decision: {:?}",
+                        pivot_decision_set
+                    );
+                    for (account, hash) in pivot_decision_set.iter() {
+                        diem_error!("tx: {:?} {:?}:", account, hash);
+                        if validators.get_public_key(account).is_some() {
+                            diem_error!(
+                                "validator power: {:?}",
+                                validators.get_voting_power(account)
+                            );
+                            if let Some(txn) = self.transactions.get(hash) {
+                                diem_error!("found tx: {:?}", txn);
+                            }
+                        }
+                    }
+                    continue;
+                }
                 let pivot_decision = pivot_decision_opt.unwrap();
                 let pivot_height = match pivot_decision.payload() {
                     TransactionPayload::PivotDecision(decision) => {
