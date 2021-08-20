@@ -1113,7 +1113,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
             let mut voted_block_id = ending_block;
             // `self.cache.committed_trees` should be within this epoch and
             // before ending_block.
-            for committee_member in self
+            let verifier = self
                 .db_with_cache
                 .cache
                 .lock()
@@ -1121,12 +1121,12 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 .pos_state()
                 .epoch_state()
                 .verifier
-                .address_to_validator_info()
-                .keys()
+                // Clone to avoid possible deadlock.
+                .clone();
+            for committee_member in verifier.address_to_validator_info().keys()
             {
                 elected.insert(*committee_member, VoteCount::default());
             }
-            let min_vote = elected.len() * 2 / 3 + 1;
             loop {
                 let block = self
                     .consensus_db
@@ -1141,16 +1141,15 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     let leader_status =
                         elected.get_mut(&author).expect("in epoch state");
                     leader_status.leader_count += 1;
-                    let included =
-                        block.quorum_cert().ledger_info().signatures().len();
-                    debug_assert!(
-                        included >= min_vote,
-                        "sig:{}, min_vote:{}",
-                        included,
-                        min_vote
-                    );
-                    leader_status.included_vote_count +=
-                        (included - min_vote) as u32;
+                    leader_status.included_vote_count += verifier
+                        .extra_vote_count(
+                            block
+                                .quorum_cert()
+                                .ledger_info()
+                                .signatures()
+                                .keys(),
+                        )
+                        .unwrap();
                 }
                 for voter in
                     block.quorum_cert().ledger_info().signatures().keys()
@@ -1158,7 +1157,8 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     elected
                         .get_mut(&voter)
                         .expect("in epoch state")
-                        .vote_count += 1;
+                        .vote_count +=
+                        verifier.get_voting_power(voter).unwrap();
                 }
                 voted_block_id = block.parent_id();
             }

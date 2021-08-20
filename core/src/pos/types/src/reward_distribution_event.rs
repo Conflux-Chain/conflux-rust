@@ -17,10 +17,10 @@ pub struct VoteCount {
     // The number of rounds that the node becomes the leader.
     pub leader_count: u32,
     // The total number of votes that the node includes as a leader.
-    pub included_vote_count: u32,
+    pub included_vote_count: u64,
     // The total number of votes that the node signs in the committed QCs
     // within the term.
-    pub vote_count: u32,
+    pub vote_count: u64,
 }
 
 impl VoteCount {
