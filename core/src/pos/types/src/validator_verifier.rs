@@ -354,6 +354,21 @@ impl ValidatorVerifier {
     ) -> &BTreeMap<AccountAddress, ValidatorConsensusInfo> {
         &self.address_to_validator_info
     }
+
+    /// Return the extra vote compared to `quorum_voting_power`.
+    pub fn extra_vote_count<'a>(
+        &self, signers: impl Iterator<Item = &'a AccountAddress>,
+    ) -> anyhow::Result<u64> {
+        let mut total_count = 0;
+        for signer in signers {
+            total_count += self
+                .get_voting_power(signer)
+                .ok_or(anyhow::anyhow!("Signer is not a validator"))?;
+        }
+        total_count.checked_sub(self.quorum_voting_power).ok_or(
+            anyhow::anyhow!("counted voting power overflows total power"),
+        )
+    }
 }
 
 impl OnChainConfig for ValidatorVerifier {

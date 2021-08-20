@@ -173,21 +173,25 @@ impl Mempool {
         let mut max_pivot_height = 0;
         let mut chosen_pivot_tx = None;
         // iterate all pivot decision transaction
-        // TODO(linxi): use config instead of constant
+        // FIXME(lpl): Pull PivotDecision with all signatures.
         for pivot_decision_set in self.transactions.iter_pivot_decision() {
-            let mut cnt = 0;
             let mut pivot_decision_opt = None;
             for (account, hash) in pivot_decision_set.iter() {
                 if validators.get_public_key(account).is_some() {
                     if let Some(txn) = self.transactions.get(hash) {
-                        cnt += 1;
                         if pivot_decision_opt.is_none() {
                             pivot_decision_opt = Some(txn);
+                            break;
                         }
                     }
                 }
             }
-            if cnt * 3 >= validators.len() * 2 + 1 {
+            if validators
+                .check_voting_power(
+                    pivot_decision_set.iter().map(|(addr, _)| addr),
+                )
+                .is_ok()
+            {
                 let pivot_decision = pivot_decision_opt.unwrap();
                 let pivot_height = match pivot_decision.payload() {
                     TransactionPayload::PivotDecision(decision) => {

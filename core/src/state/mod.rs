@@ -768,7 +768,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     ) -> DbResult<()>
     {
         self.add_total_issued(*interest);
-        self.add_balance(address, interest, cleanup_mode, account_start_nonce);
+        self.add_balance(address, interest, cleanup_mode, account_start_nonce)?;
         self.require_or_new_basic_account(address, &account_start_nonce)?
             .record_interest_receive(interest);
         Ok(())
