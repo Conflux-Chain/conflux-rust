@@ -133,6 +133,7 @@ impl LogFilter {
             topics,
             offset,
             limit,
+            trusted: false,
         };
 
         // choose filter type based on fields

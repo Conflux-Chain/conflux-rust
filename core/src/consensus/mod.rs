@@ -856,7 +856,9 @@ impl ConsensusGraph {
 
     pub fn get_log_filter_epoch_range(
         &self, from_epoch: EpochNumber, to_epoch: EpochNumber,
-    ) -> Result<impl Iterator<Item = u64>, FilterError> {
+        check_range: bool,
+    ) -> Result<impl Iterator<Item = u64>, FilterError>
+    {
         // lock so that we have a consistent view
         let _inner = self.inner.read_recursive();
 
@@ -878,14 +880,16 @@ impl ConsensusGraph {
             });
         }
 
-        if let Some(max_gap) = self.config.get_logs_filter_max_epoch_range {
-            // The range includes both ends.
-            if to_epoch - from_epoch + 1 > max_gap {
-                return Err(FilterError::EpochNumberGapTooLarge {
-                    from_epoch,
-                    to_epoch,
-                    max_gap,
-                });
+        if check_range {
+            if let Some(max_gap) = self.config.get_logs_filter_max_epoch_range {
+                // The range includes both ends.
+                if to_epoch - from_epoch + 1 > max_gap {
+                    return Err(FilterError::EpochNumberGapTooLarge {
+                        from_epoch,
+                        to_epoch,
+                        max_gap,
+                    });
+                }
             }
         }
 
@@ -935,7 +939,7 @@ impl ConsensusGraph {
 
         let mut logs = self
             // iterate over epochs in reverse order
-            .get_log_filter_epoch_range(from_epoch, to_epoch)?
+            .get_log_filter_epoch_range(from_epoch, to_epoch, !filter.trusted)?
             // we process epochs in each batch in parallel
             // but batches are processed one-by-one
             .chunks(self.config.get_logs_epoch_batch_size)

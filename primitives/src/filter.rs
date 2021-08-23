@@ -208,6 +208,13 @@ pub struct LogFilterParams {
     /// If specified, should only return *last* `n` logs
     /// after the offset has been applied.
     pub limit: Option<usize>,
+
+    /// Indicate if the log filter can be trusted, so we do not need to check
+    /// other fields.
+    ///
+    /// It is `false` if the Filter is constructed from RPCs,
+    /// and `true` if it is generated within the process with trusted logics.
+    pub trusted: bool,
 }
 
 impl Default for LogFilterParams {
@@ -217,6 +224,7 @@ impl Default for LogFilterParams {
             topics: vec![None, None, None, None],
             offset: None,
             limit: None,
+            trusted: false,
         }
     }
 }
