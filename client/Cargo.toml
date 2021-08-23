@@ -73,7 +73,7 @@ strum = "0.20"
 strum_macros = "0.20"
 
 [dev-dependencies]
-criterion = "0.2"
+criterion = "0.3"
 cfx-parameters = { path = "../core/parameters" }
 cfxcore = { path = "../core", features = ["testonly_code"] }
 serial_test = "0.5.1"

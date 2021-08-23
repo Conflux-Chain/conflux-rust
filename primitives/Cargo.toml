@@ -22,7 +22,7 @@ siphasher = "0.3"
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
 
 [dev-dependencies]
-criterion = "0.2"
+criterion = "0.3"
 serde_json = "1.0"
 
 [[bench]]
