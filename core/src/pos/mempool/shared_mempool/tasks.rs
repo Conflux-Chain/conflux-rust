@@ -65,12 +65,14 @@ pub(crate) fn execute_broadcast(
         smp.config.shared_mempool_tick_interval_ms
     };
 
-    scheduled_broadcasts.push(ScheduledBroadcast::new(
-        Instant::now() + Duration::from_millis(interval_ms),
-        peer,
-        schedule_backoff,
-        executor,
-    ))
+    if peer_manager.contains_peer(&peer) {
+        scheduled_broadcasts.push(ScheduledBroadcast::new(
+            Instant::now() + Duration::from_millis(interval_ms),
+            peer,
+            schedule_backoff,
+            executor,
+        ))
+    }
 }
 
 // =============================== //

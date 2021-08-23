@@ -293,6 +293,11 @@ impl TransactionStore {
             if let Some(txn) = self.transactions.remove(&key.hash) {
                 gc_txns_log.add(txn.get_sender(), txn.get_hash());
                 self.index_remove(&txn);
+                if let TransactionPayload::PivotDecision(pivot_decision) =
+                    txn.txn.into_raw_transaction().into_payload()
+                {
+                    self.pivot_decisions.remove(&pivot_decision.hash());
+                }
             }
         }
 

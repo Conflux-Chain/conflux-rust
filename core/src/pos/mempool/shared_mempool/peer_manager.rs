@@ -126,6 +126,7 @@ impl PeerManager {
         peer: NodeId, //metadata: ConnectionMetadata,
     ) -> bool
     {
+        debug!("PeerManager::add_peer [{:?}]", peer);
         let mut peer_states = self.peer_states.lock();
         let is_new_peer = !peer_states.contains_key(&peer);
         //if self.is_upstream_peer(&peer, Some(&metadata)) {
@@ -153,6 +154,7 @@ impl PeerManager {
 
     /// Disables a peer if it can be restarted, otherwise removes it
     pub fn disable_peer(&self, peer: NodeId) {
+        debug!("PeerManager::disable_peer [{:?}]", peer);
         self.peer_states.lock().remove(&peer);
         self.update_prioritized_peers();
     }
@@ -164,6 +166,10 @@ impl PeerManager {
             // If we don't have sync state, we shouldn't backoff
             false
         }
+    }
+
+    pub fn contains_peer(&self, peer: &NodeId) -> bool {
+        return self.peer_states.lock().contains_key(peer);
     }
 
     pub fn execute_broadcast(
