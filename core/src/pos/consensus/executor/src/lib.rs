@@ -867,6 +867,7 @@ impl<V: VMExecutor> ChunkExecutor for Executor<V> {
             first_version,
             ledger_info_to_commit.as_ref(),
             None,
+            vec![],
         )?;
 
         // 5. Cache maintenance.
@@ -937,6 +938,7 @@ impl<V: VMExecutor> TransactionReplayer for Executor<V> {
                 first_version,
                 None,
                 None,
+                vec![],
             )?;
 
             self.db_with_cache
@@ -1227,6 +1229,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
             .map(|id| self.db_with_cache.get_block(id))
             .collect::<Result<Vec<_>, Error>>()?;
         let blocks = arc_blocks.iter().map(|b| b.lock()).collect::<Vec<_>>();
+        let mut committed_blocks = Vec::new();
         if ledger_info_with_sigs.ledger_info().epoch() != 0 {
             for b in &blocks {
                 let ledger_block = self
@@ -1234,38 +1237,26 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     .get_ledger_block(&b.id())
                     .unwrap()
                     .unwrap();
-                self.db_with_cache.db.writer.save_committed_block(
-                    &b.id(),
-                    &CommittedBlock {
-                        hash: b.id(),
-                        epoch: ledger_block.epoch(),
-                        round: ledger_block.round(),
-                        pivot_decision: b
-                            .output()
-                            .pivot_block()
-                            .clone()
-                            .unwrap(),
-                        version: b.output().version().unwrap(),
-                    },
-                )?;
+                committed_blocks.push(CommittedBlock {
+                    hash: b.id(),
+                    epoch: ledger_block.epoch(),
+                    round: ledger_block.round(),
+                    pivot_decision: b.output().pivot_block().clone().unwrap(),
+                    version: b.output().version().unwrap(),
+                });
             }
         } else {
-            self.db_with_cache.db.writer.save_committed_block(
-                &ledger_info_with_sigs.ledger_info().consensus_block_id(),
-                &CommittedBlock {
-                    hash: ledger_info_with_sigs
-                        .ledger_info()
-                        .consensus_block_id(),
-                    epoch: 0,
-                    round: 0,
-                    pivot_decision: ledger_info_with_sigs
-                        .ledger_info()
-                        .pivot_decision()
-                        .unwrap()
-                        .clone(),
-                    version: ledger_info_with_sigs.ledger_info().version(),
-                },
-            )?;
+            committed_blocks.push(CommittedBlock {
+                hash: ledger_info_with_sigs.ledger_info().consensus_block_id(),
+                epoch: 0,
+                round: 0,
+                pivot_decision: ledger_info_with_sigs
+                    .ledger_info()
+                    .pivot_decision()
+                    .unwrap()
+                    .clone(),
+                version: ledger_info_with_sigs.ledger_info().version(),
+            });
         }
         for (txn, txn_data) in blocks.iter().flat_map(|block| {
             itertools::zip_eq(
@@ -1351,6 +1342,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 first_version_to_commit,
                 Some(&ledger_info_with_sigs),
                 Some(pos_state_to_commit),
+                committed_blocks,
             )?;
         }
 

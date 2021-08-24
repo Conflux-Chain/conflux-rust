@@ -505,10 +505,10 @@ impl LedgerStore {
 
     pub fn put_committed_block(
         &self, block_hash: &HashValue, block: &CommittedBlock,
-    ) -> Result<()> {
-        let mut cs = ChangeSet::new();
-        cs.batch.put::<CommittedBlockSchema>(block_hash, block)?;
-        self.db.write_schemas(cs.batch)
+        cs: &mut ChangeSet,
+    ) -> Result<()>
+    {
+        cs.batch.put::<CommittedBlockSchema>(block_hash, block)
     }
 
     pub fn get_committed_block(
