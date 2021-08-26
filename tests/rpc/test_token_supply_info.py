@@ -21,7 +21,7 @@ class TestTokenSupplyInfo(RpcClient):
     def test_token_supply_info(self):
         file_dir = os.path.dirname(os.path.realpath(__file__))
         genesis_staking = 200000000000000000000
-        genesis_collateral = 312500000000000000
+        genesis_collateral = 375000000000000000
 
         # Two test accounts and genesis accounts
         info = self.get_supply_info()
@@ -72,6 +72,6 @@ class TestTokenSupplyInfo(RpcClient):
         h = self.epoch_number()
         self.generate_blocks(17 - h)
         info = self.get_supply_info()
-        assert_equal(int(info["totalIssued"], 16), 10000005000000007000000000198186199)
+        assert_equal(int(info["totalIssued"], 16), 10000005000000007000000000237823439)
         assert_equal(int(info["totalStaking"], 16), 10**18 + genesis_staking)
         assert_equal(int(info["totalCollateral"], 16), 512 * 976562500000000 + genesis_collateral)

@@ -426,15 +426,11 @@ pub trait DbWriter: Send + Sync {
     fn save_transactions(
         &self, txns_to_commit: &[TransactionToCommit], first_version: Version,
         ledger_info_with_sigs: Option<&LedgerInfoWithSignatures>,
-        pos_state: Option<PosState>,
+        pos_state: Option<PosState>, committed_blocks: Vec<CommittedBlock>,
     ) -> Result<()>;
 
     fn save_reward_event(
         &self, epoch: u64, event: &RewardDistributionEvent,
-    ) -> Result<()>;
-
-    fn save_committed_block(
-        &self, block_hash: &HashValue, block: &CommittedBlock,
     ) -> Result<()>;
 }
 

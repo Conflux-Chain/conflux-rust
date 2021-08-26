@@ -27,7 +27,7 @@ class StorageMaintenanceTest(ConfluxTestFramework):
         priv_key = default_config["GENESIS_PRI_KEY"]
         sender = eth_utils.encode_hex(priv_to_addr(priv_key))
         # 7000000000000000000 plus genesis collateral_for_storage for PoS genesis accounts.
-        block_reward = 7000000000079274479
+        block_reward = 7000000000118911719
 
         # deploy storage test contract
         bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), CONTRACT_PATH)
