@@ -46,8 +46,10 @@ impl Request for BlockRetrievalRpcRequest {
     fn notify_error(&mut self, error: Error) {
         let res_tx = self.response_tx.take();
         if let Some(tx) = res_tx {
-            tx.send(Err(error))
-                .expect("send ResponseTX EmptyError should succeed");
+            if let Err(e) = tx.send(Err(error)) {
+                // receiver dropped, we can just drop this error.
+                debug!("send ResponseTX EmptyError: e={:?}", e);
+            }
         }
     }
 
