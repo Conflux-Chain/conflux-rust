@@ -537,6 +537,9 @@ jsonrpc_local_http_port=12539
 # 1 for testnet
 # 1029 for Tethys
 #
+
+node_table_promotion_timeout_s = 9600
+
 chain_id = 8888
 unnamed_21autumn_transition_number=0
 unnamed_21autumn_transition_height=0
