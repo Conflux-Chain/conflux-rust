@@ -7,9 +7,11 @@ pub use debug::LocalRpc;
 pub use pubsub::PubSub;
 pub use test::TestRpc;
 pub use trace::Trace;
+pub use pos::Pos;
 
 pub mod cfx;
 pub mod debug;
 pub mod pubsub;
 pub mod test;
 pub mod trace;
+pub mod pos;

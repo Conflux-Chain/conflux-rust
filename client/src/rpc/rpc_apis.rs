@@ -11,6 +11,7 @@ pub enum Api {
     Pubsub,
     Test,
     Trace,
+    Pos,
 }
 
 impl FromStr for Api {
@@ -24,6 +25,7 @@ impl FromStr for Api {
             "pubsub" => Ok(Pubsub),
             "test" => Ok(Test),
             "trace" => Ok(Trace),
+            "pos" => Ok(Pos),
             _ => Err("Unknown api type".into()),
         }
     }

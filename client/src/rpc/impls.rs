@@ -21,3 +21,4 @@ pub mod common;
 pub mod light;
 pub mod pubsub;
 pub mod trace;
+pub mod pos;

@@ -51,6 +51,7 @@ use self::{
     },
     traits::{
         cfx::Cfx, debug::LocalRpc, pubsub::PubSub, test::TestRpc, trace::Trace,
+        pos::Pos,
     },
 };
 
@@ -66,6 +67,7 @@ use crate::{
 pub use metadata::Metadata;
 use std::collections::HashSet;
 use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
+use crate::rpc::impls::pos::PosHandler;
 
 #[derive(Debug, PartialEq)]
 pub struct TcpConfiguration {
@@ -226,6 +228,10 @@ fn setup_rpc_apis(
                 );
                 handler.extend_with(RpcProxy::new(trace, interceptor));
             }
+            Api::Pos => {
+                let pos = PosHandler::new().to_delegate();
+                handler.extend_with(pos);
+            }
         }
     }
     handler
@@ -296,6 +302,9 @@ fn setup_rpc_apis_light(
             }
             Api::Trace => {
                 warn!("Light nodes do not support trace RPC");
+            }
+            Api::Pos => {
+                warn!("Light nodes do not support PoS RPC");
             }
         }
     }

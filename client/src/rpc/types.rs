@@ -25,6 +25,7 @@ mod token_supply_info;
 mod trace;
 mod trace_filter;
 mod transaction;
+pub mod pos;
 
 pub use self::{
     account::Account,
