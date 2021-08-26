@@ -15,10 +15,15 @@ impl Handleable for ConsensusMsg {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_consensus_msg, msg={:?}", &self);
         let peer_address = ctx.get_peer_account_address()?;
+        let author = match &self {
+            ConsensusMsg::ProposalMsg(p) => p.proposer(),
+            ConsensusMsg::VoteMsg(v) => v.vote().author(),
+            _ => peer_address,
+        };
         ctx.manager
             .consensus_network_task
             .consensus_messages_tx
-            .push((peer_address, discriminant(&self)), (peer_address, self))?;
+            .push((author, discriminant(&self)), (peer_address, self))?;
         Ok(())
     }
 }
