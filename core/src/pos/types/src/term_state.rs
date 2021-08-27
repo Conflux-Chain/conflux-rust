@@ -47,7 +47,7 @@ const ELECTION_TERM_END_ROUND: Round = 30;
 
 const TERM_MAX_SIZE: usize = 10000;
 const TERM_ELECTED_SIZE: usize = 50;
-const UNLOCK_WAIT_VIEW: u64 = 20160;
+const UNLOCK_WAIT_VIEW: u64 = 480;
 
 const BONUS_VOTE_MAX_SIZE: u64 = 100;
 
