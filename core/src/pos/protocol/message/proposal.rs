@@ -24,11 +24,12 @@ impl Handleable for ProposalMsg {
             "proposal received must be from the sending peer"
         );*/
 
+        let author = self.proposer();
         let msg = ConsensusMsg::ProposalMsg(Box::new(self));
         ctx.manager
             .consensus_network_task
             .consensus_messages_tx
-            .push((peer_address, discriminant(&msg)), (peer_address, msg))?;
+            .push((author, discriminant(&msg)), (peer_address, msg))?;
         Ok(())
     }
 }

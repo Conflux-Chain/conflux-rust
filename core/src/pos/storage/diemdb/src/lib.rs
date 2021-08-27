@@ -983,7 +983,7 @@ impl DbWriter for DiemDB {
     fn save_transactions(
         &self, txns_to_commit: &[TransactionToCommit], first_version: Version,
         ledger_info_with_sigs: Option<&LedgerInfoWithSignatures>,
-        pos_state: Option<PosState>,
+        pos_state: Option<PosState>, committed_blocks: Vec<CommittedBlock>,
     ) -> Result<()>
     {
         gauged_api("save_transactions", || {
@@ -1015,6 +1015,10 @@ impl DbWriter for DiemDB {
                 first_version,
                 &mut cs,
             )?;
+            for b in committed_blocks {
+                self.ledger_store
+                    .put_committed_block(&b.hash, &b, &mut cs)?;
+            }
 
             // If expected ledger info is provided, verify result root hash and
             // save the ledger info.
@@ -1080,12 +1084,6 @@ impl DbWriter for DiemDB {
         &self, epoch: u64, event: &RewardDistributionEvent,
     ) -> Result<()> {
         self.ledger_store.put_reward_event(epoch, event)
-    }
-
-    fn save_committed_block(
-        &self, block_hash: &HashValue, block: &CommittedBlock,
-    ) -> Result<()> {
-        self.ledger_store.put_committed_block(block_hash, block)
     }
 }
 

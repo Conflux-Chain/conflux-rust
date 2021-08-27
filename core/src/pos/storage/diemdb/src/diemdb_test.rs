@@ -98,6 +98,7 @@ pub fn test_save_blocks_impl(
             cur_ver, /* first_version */
             Some(ledger_info_with_sigs),
             None,
+            vec![],
         )
         .unwrap();
 
@@ -159,6 +160,7 @@ fn test_sync_transactions_impl(
                 cur_ver, /* first_version */
                 None,
                 None,
+                vec![],
             )
             .unwrap();
         }
@@ -167,6 +169,7 @@ fn test_sync_transactions_impl(
             cur_ver + batch1_len as u64, /* first_version */
             Some(&ledger_info_with_sigs),
             None,
+            vec![],
         )
         .unwrap();
 
