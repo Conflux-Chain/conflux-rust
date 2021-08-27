@@ -419,6 +419,12 @@ where V: VMExecutor
                                     &update_voting_power_event.node_address,
                                     update_voting_power_event.voting_power,
                                 )?;
+                            } else if *event.key() == retire_event_key {
+                                let retire_event = RetireEvent::from_bytes(
+                                    event.event_data(),
+                                )?;
+                                new_pos_state
+                                    .retire_node(&retire_event.node_id)?;
                             }
                         }
                     }
