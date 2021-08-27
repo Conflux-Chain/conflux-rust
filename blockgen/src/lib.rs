@@ -358,15 +358,16 @@ impl BlockGenerator {
 
         let best_block_hash = best_info.best_block_hash.clone();
         let mut referee = best_info.bounded_terminal_block_hashes.clone();
-        referee.retain(|r| *r != best_block_hash);
         let maybe_pos_reference = if self
             .pos_verifier
             .is_enabled_at_height(best_info.best_epoch_number + 1)
         {
+            // FIXME(lpl): Check parent pos ref.
             Some(self.pos_verifier.get_latest_pos_reference())
         } else {
             None
         };
+        referee.retain(|r| *r != best_block_hash);
 
         self.assemble_new_block_impl(
             best_block_hash,

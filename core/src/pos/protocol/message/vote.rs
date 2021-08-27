@@ -24,11 +24,12 @@ impl Handleable for VoteMsg {
         );*/
 
         //self.verify(&ctx.manager.network_task.epoch_info.read().verifier)?;
+        let author = self.vote().author();
         let msg = ConsensusMsg::VoteMsg(Box::new(self));
         ctx.manager
             .consensus_network_task
             .consensus_messages_tx
-            .push((peer_address, discriminant(&msg)), (peer_address, msg))?;
+            .push((author, discriminant(&msg)), (peer_address, msg))?;
         Ok(())
     }
 }

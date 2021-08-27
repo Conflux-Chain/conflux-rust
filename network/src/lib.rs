@@ -239,6 +239,7 @@ pub enum NetworkIoMessage {
         handler: Arc<dyn NetworkProtocolHandler + Sync>,
         protocol: ProtocolId,
         version: ProtocolVersion,
+        callback: std::sync::mpsc::SyncSender<()>,
     },
     /// Register a new protocol timer
     AddTimer {
