@@ -389,8 +389,10 @@ where V: VMExecutor
                                     Ok(false) => bail!("Packed staking transactions unmatch PoW events)"),
                                     Err(e) => diem_error!("error decoding pow events: err={:?}", e),
                                 }
-                                new_pos_state
-                                    .retire_node(&retire_event.node_id)?;
+                                new_pos_state.retire_node(
+                                    &retire_event.node_id,
+                                    retire_event.votes,
+                                )?;
                             }
                         }
                     }
@@ -1174,7 +1176,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
             // Force retire the nodes that have not voted in this term.
             for (node, vote_count) in &elected {
                 if vote_count.vote_count == 0 {
-                    pos_state_to_commit.retire_node(&node)?;
+                    pos_state_to_commit.force_retire_node(&node)?;
                 }
             }
 

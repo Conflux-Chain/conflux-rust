@@ -396,9 +396,10 @@ impl RawTransaction {
                     },
                 )
             }
-            StakingEvent::Retire(identifier) => {
+            StakingEvent::Retire(identifier, votes) => {
                 TransactionPayload::Retire(RetirePayload {
                     node_id: AccountAddress::new(identifier.0),
+                    votes: *votes,
                 })
             }
         };
@@ -575,11 +576,12 @@ impl ElectionPayload {
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RetirePayload {
     pub node_id: AccountAddress,
+    pub votes: u64,
 }
 
 impl RetirePayload {
     pub fn to_event(&self) -> ContractEvent {
-        let event = RetireEvent::new(self.node_id);
+        let event = RetireEvent::new(self.node_id, self.votes);
         ContractEvent::new(
             RetireEvent::event_key(),
             0,                                      /* sequence_number */

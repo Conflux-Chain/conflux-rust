@@ -1065,13 +1065,13 @@ impl ConsensusExecutionHandler {
             // The pos_reference is continuous, so after seeing a new
             // pos_reference, we only need to process the new
             // unlock_txs in it.
-            for unlock_node_id in self
+            for (unlock_node_id, votes) in self
                 .pos_verifier
                 .get_unlock_nodes(current_pos_ref, parent_pos_ref)
             {
                 debug!("unlock node: {:?}", unlock_node_id);
                 state
-                    .update_pos_status(unlock_node_id, 1)
+                    .update_pos_status(unlock_node_id, votes)
                     .expect("db error");
             }
             for _dispute_node_id in self

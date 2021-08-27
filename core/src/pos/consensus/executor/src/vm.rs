@@ -55,9 +55,11 @@ impl VMExecutor for FakeVM {
                         % ROUND_PER_TERM
                         == 0
                     {
+                        let term = (state_view.pos_state().current_view() + 1)
+                            / ROUND_PER_TERM;
                         let (validator_verifier, vrf_seed) = state_view
                             .pos_state()
-                            .get_new_committee()
+                            .get_committee_at(term)
                             .map_err(|e| {
                                 diem_warn!("get_new_committee error: {:?}", e);
                                 VMStatus::Error(StatusCode::CFX_INVALID_TX)
