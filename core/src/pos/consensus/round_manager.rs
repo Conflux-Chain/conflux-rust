@@ -1177,7 +1177,8 @@ impl RoundManager {
                 id = block.parent_id();
                 blocks.push(block);
             } else {
-                status = BlockRetrievalStatus::NotEnoughBlocks;
+                // TODO(lpl): This error may be needed in the future.
+                // status = BlockRetrievalStatus::NotEnoughBlocks;
                 break;
             }
         }
