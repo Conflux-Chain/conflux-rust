@@ -104,12 +104,11 @@ impl BlockStore {
         loop {
             // round 0 blocks is the genesis of every epoch.
             if self.block_exists(retrieve_qc.certified_block().id())
-                || retrieve_qc.certified_block().round() == 0
+                || retrieve_qc.certified_block().round() <= self.root().round()
             {
                 break;
             }
-            // This will not underflow because of the check in
-            // `need_fetch_for_quorum_cert`.
+            // This will not underflow because of the check above.
             let round_gap =
                 retrieve_qc.certified_block().round() - self.root().round();
             let mut blocks = retriever
@@ -132,7 +131,7 @@ impl BlockStore {
             while let Some(block) = pending.pop() {
                 // We may receive more blocks than needed in a batch, so check
                 // again here.
-                if self.block_exists(block.id()) || block.round() == 0 {
+                if self.block_exists(block.id()) || block.round() <= self.root().round() {
                     continue;
                 }
 
