@@ -426,7 +426,7 @@ where V: VMExecutor
                                     event.event_data(),
                                 )?;
                                 new_pos_state
-                                    .retire_node(&retire_event.node_id)?;
+                                    .retire_node(&retire_event.node_id,retire_event.votes)?;
                             }
                         }
                     }

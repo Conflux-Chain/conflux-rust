@@ -989,6 +989,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         )?;
         assert!(!old_value.is_zero(), "If an identifier is unlocked, its index information must be non-zero");
         let mut status: IndexStatus = old_value.into();
+        let new_unlocked = number - status.unlocked;
         status
             .set_unlocked(number);
             // .expect("Incorrect unlock information");
@@ -999,7 +1000,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
                 status.into(),
             )?;
         self.world_statistics.total_pos_staking_tokens -=
-            *POS_VOTE_PRICE * number;
+            *POS_VOTE_PRICE * new_unlocked;
         Ok(())
     }
 }

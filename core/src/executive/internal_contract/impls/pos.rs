@@ -49,7 +49,7 @@ impl IndexStatus {
             }
         }
     }
-    #[allow(unused)]
+
     pub fn set_unlocked(&mut self, number: u64)  {
 
                 self.unlocked = number;
