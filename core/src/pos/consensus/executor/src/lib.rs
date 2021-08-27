@@ -1231,7 +1231,8 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
         let blocks = arc_blocks.iter().map(|b| b.lock()).collect::<Vec<_>>();
         let mut committed_blocks = Vec::new();
         if ledger_info_with_sigs.ledger_info().epoch() != 0 {
-            for b in &blocks {
+            let mut signatures_vec = Vec::new();
+            for (i, b) in blocks.iter().enumerate() {
                 let ledger_block = self
                     .consensus_db
                     .get_ledger_block(&b.id())
@@ -1243,7 +1244,29 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     round: ledger_block.round(),
                     pivot_decision: b.output().pivot_block().clone().unwrap(),
                     version: b.output().version().unwrap(),
+                    timestamp: ledger_block.timestamp_usecs(),
+                    // Set the signatures after the loop.
+                    signatures: Default::default(),
                 });
+                // The signatures of each block is in the qc of the next block.
+                if i != 0 {
+                    signatures_vec.push((
+                        Some(ledger_block.quorum_cert().certified_block().id()),
+                        ledger_block
+                            .quorum_cert()
+                            .ledger_info()
+                            .signatures()
+                            .clone(),
+                    ));
+                }
+            }
+            signatures_vec
+                .push((None, ledger_info_with_sigs.signatures().clone()));
+            for (i, signatures) in signatures_vec.into_iter().enumerate() {
+                if let Some(id) = &signatures.0 {
+                    assert_eq!(*id, committed_blocks[i].hash);
+                }
+                committed_blocks[i].signatures = signatures.1;
             }
         } else {
             committed_blocks.push(CommittedBlock {
@@ -1256,6 +1279,10 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     .unwrap()
                     .clone(),
                 version: ledger_info_with_sigs.ledger_info().version(),
+                timestamp: ledger_info_with_sigs
+                    .ledger_info()
+                    .timestamp_usecs(),
+                signatures: ledger_info_with_sigs.signatures().clone(),
             });
         }
         for (txn, txn_data) in blocks.iter().flat_map(|block| {

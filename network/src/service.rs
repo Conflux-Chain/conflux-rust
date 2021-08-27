@@ -277,13 +277,17 @@ impl NetworkService {
         protocol: ProtocolId, version: ProtocolVersion,
     ) -> Result<(), Error>
     {
+        let (tx, rx) = std::sync::mpsc::sync_channel(0);
         self.io_service.as_ref().unwrap().send_message(
             NetworkIoMessage::AddHandler {
                 handler,
                 protocol,
                 version,
+                callback: tx,
             },
         )?;
+        // Only error if channel closed.
+        rx.recv().expect("protocol register error");
         Ok(())
     }
 
@@ -1666,6 +1670,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 handler,
                 protocol,
                 version,
+                callback,
             } => {
                 let h = handler.clone();
                 let network_context =
@@ -1695,6 +1700,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                     "Protocol {:?} version {:?} registered.",
                     protocol, version
                 );
+                callback.send(()).expect("protocol register error");
             }
             NetworkIoMessage::AddTimer {
                 ref protocol,
