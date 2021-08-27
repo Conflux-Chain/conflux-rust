@@ -130,6 +130,12 @@ impl BlockStore {
         if !pending.is_empty() {
             // Execute the blocks in catch_up mode.
             while let Some(block) = pending.pop() {
+                // We may receive more blocks than needed in a batch, so check
+                // again here.
+                if self.block_exists(block.id()) || block.round() == 0 {
+                    continue;
+                }
+
                 let block_qc = block.quorum_cert().clone();
                 self.insert_single_quorum_cert(block_qc.clone())?;
                 self.execute_and_insert_block(
