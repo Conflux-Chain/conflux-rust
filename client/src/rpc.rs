@@ -229,7 +229,7 @@ fn setup_rpc_apis(
                 handler.extend_with(RpcProxy::new(trace, interceptor));
             }
             Api::Pos => {
-                let pos = PosHandler::new().to_delegate();
+                let pos = PosHandler::new(rpc.diem_db.clone()).to_delegate();
                 handler.extend_with(pos);
             }
         }

@@ -81,6 +81,7 @@ use lazy_static::lazy_static;
 use metrics::{register_timer_with_group, ScopeTimer, Timer};
 use primitives::transaction::TransactionType;
 use serde::Serialize;
+use diemdb::DiemDB;
 
 lazy_static! {
     static ref SEND_RAW_TX_TIMER: Arc<dyn Timer> =
@@ -107,6 +108,7 @@ pub struct RpcImpl {
     maybe_txgen: Option<Arc<TransactionGenerator>>,
     maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
     accounts: Arc<AccountProvider>,
+    pub diem_db: Arc<DiemDB>,
 }
 
 impl RpcImpl {
@@ -116,6 +118,7 @@ impl RpcImpl {
         maybe_txgen: Option<Arc<TransactionGenerator>>,
         maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
         config: RpcImplConfiguration, accounts: Arc<AccountProvider>,
+        diem_db: Arc<DiemDB>,
     ) -> Self
     {
         RpcImpl {
@@ -127,6 +130,7 @@ impl RpcImpl {
             maybe_direct_txgen,
             config,
             accounts,
+            diem_db,
         }
     }
 

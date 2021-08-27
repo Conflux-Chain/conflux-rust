@@ -628,6 +628,7 @@ pub fn initialize_not_light_node_modules(
         maybe_direct_txgen,
         conf.rpc_impl_config(),
         accounts,
+        diem_handler.diem_db.clone(),
     ));
 
     let debug_rpc_http_server = super::rpc::start_http(
