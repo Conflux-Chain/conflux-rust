@@ -79,7 +79,8 @@ impl BlockRetrievalResponse {
     {
         ensure!(
             self.status != BlockRetrievalStatus::Succeeded
-                || self.blocks.len() as u64 == num_blocks,
+                || (self.blocks.len() as u64 <= num_blocks
+                    && !self.blocks.is_empty()),
             "not enough blocks returned, expect {}, get {}",
             num_blocks,
             self.blocks.len(),
