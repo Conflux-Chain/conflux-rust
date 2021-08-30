@@ -55,7 +55,7 @@ pub const OUT_QUEUE_LOCKED_VIEWS: u64 = 10080;
 
 pub use incentives::*;
 mod incentives {
-    use super::{TERM_MAX_SIZE,TERM_ELECTED_SIZE,ROUND_PER_TERM};
+    use super::{ROUND_PER_TERM, TERM_ELECTED_SIZE, TERM_MAX_SIZE};
     const BONUS_VOTE_MAX_SIZE: u64 = 100;
 
     pub const MAX_TERM_POINTS: u64 = 6_000_000;
@@ -67,8 +67,9 @@ mod incentives {
 
     pub const ELECTION_POINTS: u64 =
         MAX_TERM_POINTS * ELECTION_PERCENTAGE / 100 / (TERM_MAX_SIZE as u64);
-    pub const COMMITTEE_POINTS: u64 =
-        MAX_TERM_POINTS * COMMITTEE_PERCENTAGE / 100 / (TERM_ELECTED_SIZE as u64);
+    pub const COMMITTEE_POINTS: u64 = MAX_TERM_POINTS * COMMITTEE_PERCENTAGE
+        / 100
+        / (TERM_ELECTED_SIZE as u64);
     pub const LEADER_POINTS: u64 =
         MAX_TERM_POINTS * LEADER_PERCENTAGE / 100 / ROUND_PER_TERM;
     pub const BONUS_VOTE_POINTS: u64 = MAX_TERM_POINTS * BONUS_VOTE_PERCENTAGE
@@ -77,9 +78,7 @@ mod incentives {
         / BONUS_VOTE_MAX_SIZE;
 }
 
-
-
-use lock_status::{ NodeLockStatus};
+use lock_status::NodeLockStatus;
 use std::collections::HashSet;
 
 pub mod lock_status {
@@ -443,10 +442,15 @@ impl TermList {
     }
 
     fn committee_for_term(&self, term: u64) -> &[TermData] {
-        let first_term = term.saturating_sub(TERM_LIST_LEN as u64-1) as usize;
-        let last_term = first_term + TERM_LIST_LEN -1;
-        if first_term <self.start_term() as usize || last_term >=self.electing_term_number() as usize {
-            panic!("Can not get committee for term {}, current term {}", term, self.current_term);
+        let first_term = term.saturating_sub(TERM_LIST_LEN as u64 - 1) as usize;
+        let last_term = first_term + TERM_LIST_LEN - 1;
+        if first_term < self.start_term() as usize
+            || last_term >= self.electing_term_number() as usize
+        {
+            panic!(
+                "Can not get committee for term {}, current term {}",
+                term, self.current_term
+            );
         }
         let start_offset = first_term - self.start_term() as usize;
         let end_offset = last_term - self.start_term() as usize;
@@ -526,16 +530,19 @@ impl TermList {
             .next_term(Default::default(), new_seed);
         self.term_list.push(new_term);
         self.electing_index -= 1;
-        assert_eq!(self.electing_index,6);
+        assert_eq!(self.electing_index, 6);
     }
 
     pub fn finalize_election(&mut self) {
-        diem_debug!("Finalize election of term {}",self.electing_term_number());
+        diem_debug!(
+            "Finalize election of term {}",
+            self.electing_term_number()
+        );
         let finalize_term = self.electing_term_mut();
         let candy_map = finalize_term.node_list.finalize_elect();
         self.candy_rewards = candy_map;
         self.electing_index += 1;
-        assert_eq!(self.electing_index,7);
+        assert_eq!(self.electing_index, 7);
     }
 
     fn serving_votes(
@@ -862,8 +869,15 @@ impl PosState {
     }
 
     /// Return `(validator_set, term_seed)`.
-    pub fn get_committee_at(&self, term: u64) -> Result<(ValidatorVerifier, Vec<u8>)> {
-        diem_debug!("Get committee at term {} in view {}, term list start at {}", term, self.current_view, self.term_list.start_term());
+    pub fn get_committee_at(
+        &self, term: u64,
+    ) -> Result<(ValidatorVerifier, Vec<u8>)> {
+        diem_debug!(
+            "Get committee at term {} in view {}, term list start at {}",
+            term,
+            self.current_view,
+            self.term_list.start_term()
+        );
         let mut voting_power_map = BTreeMap::new();
         for term_data in self.term_list.committee_for_term(term) {
             for (addr, votes) in term_data.node_list.committee().0.iter() {
@@ -920,7 +934,7 @@ impl PosState {
                 Some(self.term_list.electing_term_number())
             } else {
                 None
-            }
+            };
         }
 
         None
@@ -1063,7 +1077,9 @@ impl PosState {
                 verifier,
                 vrf_seed: term_seed.clone(),
             })
-        } else if self.current_view>=FIRST_END_ELECTION_VIEW && self.current_view % ROUND_PER_TERM == ROUND_PER_TERM / 2 {
+        } else if self.current_view >= FIRST_END_ELECTION_VIEW
+            && self.current_view % ROUND_PER_TERM == ROUND_PER_TERM / 2
+        {
             self.term_list.finalize_election();
             None
         } else {
@@ -1109,7 +1125,11 @@ impl PosState {
         &mut self, address: &AccountAddress, views: Vec<View>,
     ) {
         for view in views {
-            diem_trace!("{:?} will update lock status at view {}", address,view);
+            diem_trace!(
+                "{:?} will update lock status at view {}",
+                address,
+                view
+            );
             self.node_map_hint.entry(view).or_default().insert(*address);
         }
     }

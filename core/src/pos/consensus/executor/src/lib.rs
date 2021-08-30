@@ -425,8 +425,10 @@ where V: VMExecutor
                                 let retire_event = RetireEvent::from_bytes(
                                     event.event_data(),
                                 )?;
-                                new_pos_state
-                                    .retire_node(&retire_event.node_id,retire_event.votes)?;
+                                new_pos_state.retire_node(
+                                    &retire_event.node_id,
+                                    retire_event.votes,
+                                )?;
                             }
                         }
                     }

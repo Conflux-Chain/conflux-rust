@@ -50,13 +50,7 @@ impl IndexStatus {
         }
     }
 
-    pub fn set_unlocked(&mut self, number: u64)  {
-
-                self.unlocked = number;
-
-
-    }
-
+    pub fn set_unlocked(&mut self, number: u64) { self.unlocked = number; }
 
     pub fn locked(&self) -> u64 { self.registered - self.unlocked }
 }
@@ -241,8 +235,10 @@ pub fn increase_stake(
 }
 
 pub fn retire(
-    sender: Address, votes: u64, params: &ActionParams, context: &mut InternalRefContext,
-) -> vm::Result<()> {
+    sender: Address, votes: u64, params: &ActionParams,
+    context: &mut InternalRefContext,
+) -> vm::Result<()>
+{
     let identifier = address_to_identifier(sender, params, context)?;
 
     if identifier.is_zero() {

@@ -990,9 +990,8 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         assert!(!old_value.is_zero(), "If an identifier is unlocked, its index information must be non-zero");
         let mut status: IndexStatus = old_value.into();
         let new_unlocked = number - status.unlocked;
-        status
-            .set_unlocked(number);
-            // .expect("Incorrect unlock information");
+        status.set_unlocked(number);
+        // .expect("Incorrect unlock information");
         self.require_exists(&POS_REGISTER_CONTRACT_ADDRESS, false)?
             .change_storage_value(
                 &self.db,
