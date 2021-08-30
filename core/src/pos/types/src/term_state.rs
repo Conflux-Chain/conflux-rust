@@ -357,18 +357,19 @@ impl ElectingHeap {
                 break;
             }
         }
-        let candy_map = elected_map.clone();
+        let mut candy_map = elected_map.clone();
         for (_, node_id) in self.0.into_vec().drain(..) {
-            *elected_map.0.entry(node_id.node_id.addr).or_insert(0) += 1;
+            *candy_map.0.entry(node_id.node_id.addr).or_insert(0) += 1;
         }
         (elected_map, candy_map)
     }
 
     fn add_node(&mut self, hash: HashValue, node_id: ElectionNodeID) {
+        let is_not_full_set = self.0.len() < TERM_MAX_SIZE;
         if self
             .0
             .peek()
-            .map_or(true, |(max_value, _)| hash < *max_value)
+            .map_or(true, |(max_value, _)| is_not_full_set || hash < *max_value)
         {
             self.0.push((hash, node_id.clone()));
             self.1.insert(node_id.node_id.addr.clone());
