@@ -145,8 +145,11 @@ impl LogFilter {
         ) {
             // block hash filter
             (None, None, None, None, Some(_)) => {
+                let mut hashes = block_hashes.unwrap();
+                hashes.sort();
+                hashes.dedup();
                 Ok(PrimitiveFilter::BlockHashLogFilter {
-                    block_hashes: block_hashes.unwrap(),
+                    block_hashes: hashes,
                     params,
                 })
             }
