@@ -125,7 +125,9 @@ impl PowInterface for PowHandler {
         self.executor.spawn(async move {
             let r =
                 Self::next_pivot_decision_impl(pow_consensus, &parent_decision);
-            assert!(callback.send(r).is_ok());
+            if let Err(e) = callback.send(r) {
+                debug!("send next_pivot_decision err={:?}", e);
+            }
         });
         cb_receiver.await.ok().flatten()
     }
