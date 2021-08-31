@@ -21,7 +21,7 @@
 //! Cost spec and other parameterisations for the EVM.
 
 use crate::spec::CommonParams;
-use cfx_types::U256;
+use cfx_types::{address_util::AddressUtil, Address, U256};
 use primitives::BlockNumber;
 
 /// Definition of the cost spec and other parameterisations for the VM.
@@ -140,6 +140,8 @@ pub struct Spec {
     pub cip72: bool,
     /// CIP-78: Correct `is_sponsored` fields in receipt
     pub cip78: bool,
+    /// CIP-80: Ethereum compatible signature recover
+    pub cip80: bool,
 }
 
 /// Wasm cost table
@@ -269,6 +271,7 @@ impl Spec {
             cip71b: false,
             cip72: false,
             cip78: false,
+            cip80: false,
         }
     }
 
@@ -282,6 +285,7 @@ impl Spec {
         spec.cip71b = number >= params.transition_numbers.cip71b;
         spec.cip72 = number >= params.transition_numbers.cip72b;
         spec.cip78 = number >= params.transition_numbers.cip78;
+        spec.cip80 = number >= params.transition_numbers.cip80;
         spec
     }
 
@@ -294,6 +298,14 @@ impl Spec {
     pub fn wasm(&self) -> &WasmCosts {
         // *** Prefer PANIC here instead of silently breaking consensus! ***
         self.wasm.as_ref().expect("Wasm spec expected to exist while checking wasm contract. Misconfigured client?")
+    }
+
+    pub fn is_valid_address(&self, address: &Address) -> bool {
+        if self.cip80 {
+            address.is_cip80_valid_address()
+        } else {
+            address.is_genesis_valid_address()
+        }
     }
 }
 

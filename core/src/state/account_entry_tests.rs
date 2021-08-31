@@ -20,8 +20,7 @@ fn test_overlay_account_create() {
     let mut address = Address::random();
     address.set_user_account_type_bits();
     let account =
-        Account::new_empty_with_balance(&address, &U256::zero(), &U256::zero())
-            .unwrap();
+        Account::new_empty_with_balance(&address, &U256::zero(), &U256::zero());
     // test new from account 1
     let overlay_account = OverlayAccount::from_loaded(&address, account);
     assert!(overlay_account.deposit_list().is_none());
@@ -61,8 +60,7 @@ fn test_overlay_account_create() {
             admin,
             sponsor_info: sponsor_info.clone(),
         },
-    )
-    .unwrap();
+    );
 
     // test new from account 2
     let overlay_account = OverlayAccount::from_loaded(&contract_addr, account);
@@ -81,7 +79,7 @@ fn test_overlay_account_create() {
 
     // test new basic
     let overlay_account =
-        OverlayAccount::new_basic(&user_addr, 1011.into(), 12345.into(), None);
+        OverlayAccount::new_basic(&user_addr, 1011.into(), 12345.into());
     assert!(overlay_account.deposit_list().is_none());
     assert!(overlay_account.vote_stake_list().is_none());
     assert_eq!(*overlay_account.address(), user_addr);
@@ -158,8 +156,7 @@ fn test_deposit_and_withdraw() {
     let mut address = Address::random();
     address.set_user_account_type_bits();
     let account =
-        Account::new_empty_with_balance(&address, &U256::zero(), &U256::zero())
-            .unwrap();
+        Account::new_empty_with_balance(&address, &U256::zero(), &U256::zero());
     let mut accumulated_interest_rate = vec![*ACCUMULATED_INTEREST_RATE_SCALE];
     for _ in 0..100000 {
         let last = *accumulated_interest_rate.last().unwrap();
@@ -452,8 +449,7 @@ fn init_test_account() -> OverlayAccount {
         &address,
         &10_000_000.into(),
         &U256::zero(),
-    )
-    .unwrap();
+    );
 
     let mut overlay_account =
         OverlayAccount::from_loaded(&address, account.clone());
@@ -666,8 +662,7 @@ fn test_clone_overwrite() {
             admin,
             sponsor_info,
         },
-    )
-    .unwrap();
+    );
 
     let admin = Address::random();
     let sponsor_info = SponsorInfo {
@@ -689,34 +684,33 @@ fn test_clone_overwrite() {
             admin,
             sponsor_info,
         },
-    )
-    .unwrap();
+    );
 
     let mut overlay_account1 =
         OverlayAccount::from_loaded(&address, account1.clone());
     let mut overlay_account2 =
         OverlayAccount::from_loaded(&address, account2.clone());
-    assert_eq!(account1, overlay_account1.as_account().unwrap());
-    assert_eq!(account2, overlay_account2.as_account().unwrap());
+    assert_eq!(account1, overlay_account1.as_account());
+    assert_eq!(account2, overlay_account2.as_account());
 
     overlay_account1.set_storage(vec![0; 32], U256::zero(), address);
-    assert_eq!(account1, overlay_account1.as_account().unwrap());
+    assert_eq!(account1, overlay_account1.as_account());
     assert_eq!(overlay_account1.storage_value_write_cache().len(), 1);
     assert_eq!(overlay_account1.storage_owner_lv1_write_cache().len(), 1);
     let overlay_account = overlay_account1.clone_basic();
-    assert_eq!(account1, overlay_account.as_account().unwrap());
+    assert_eq!(account1, overlay_account.as_account());
     assert_eq!(overlay_account.storage_value_write_cache().len(), 0);
     assert_eq!(overlay_account.storage_owner_lv1_write_cache().len(), 0);
     let overlay_account = overlay_account1.clone_dirty();
-    assert_eq!(account1, overlay_account.as_account().unwrap());
+    assert_eq!(account1, overlay_account.as_account());
     assert_eq!(overlay_account.storage_value_write_cache().len(), 1);
     assert_eq!(overlay_account.storage_owner_lv1_write_cache().len(), 1);
 
     overlay_account2.set_storage(vec![0; 32], U256::zero(), address);
     overlay_account2.set_storage(vec![1; 32], U256::zero(), address);
     overlay_account1.overwrite_with(overlay_account2);
-    assert_ne!(account1, overlay_account1.as_account().unwrap());
-    assert_eq!(account2, overlay_account1.as_account().unwrap());
+    assert_ne!(account1, overlay_account1.as_account());
+    assert_eq!(account2, overlay_account1.as_account());
     assert_eq!(overlay_account1.storage_value_write_cache().len(), 2);
     assert_eq!(overlay_account1.storage_owner_lv1_write_cache().len(), 2);
 }

@@ -70,12 +70,10 @@ pub struct CachedAccount {
 }
 
 impl CachedAccount {
-    pub fn new_basic(
-        address: &Address, balance: &U256, nonce: &U256,
-    ) -> Result<Self> {
-        Ok(Self {
-            object: Account::new_empty_with_balance(address, balance, nonce)?,
-        })
+    pub fn new_basic(address: &Address, balance: &U256, nonce: &U256) -> Self {
+        Self {
+            object: Account::new_empty_with_balance(address, balance, nonce),
+        }
     }
 }
 

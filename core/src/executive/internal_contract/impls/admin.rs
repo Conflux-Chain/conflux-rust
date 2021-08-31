@@ -3,12 +3,23 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    executive::InternalRefContext,
     state::cleanup_mode,
     trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, Spec},
 };
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{address_util::AddressUtil, Address, U256};
+
+fn available_admin_address(spec: &Spec, address: &Address) -> bool {
+    if spec.cip80 {
+        true
+    } else {
+        // Before CIP-80, Only allow user account to be admin, if not to clear
+        // admin.
+        address.is_user_account_address() || address.is_null_address()
+    }
+}
 
 /// The Actual Implementation of `suicide`.
 /// The contract which has non zero `collateral_for_storage` cannot suicide,
@@ -27,7 +38,8 @@ pub fn suicide(
     substate.suicides_mut().insert(contract_address.clone());
     let balance = state.balance(contract_address)?;
 
-    if refund_address == contract_address || !refund_address.is_valid_address()
+    if refund_address == contract_address
+        || !spec.is_valid_address(refund_address)
     {
         tracer.prepare_internal_transfer_action(
             *contract_address,
@@ -65,29 +77,36 @@ pub fn suicide(
 /// `new_admin_address`
 pub fn set_admin(
     contract_address: Address, new_admin_address: Address,
-    contract_in_creation: Option<&Address>, params: &ActionParams,
-    state: &mut dyn StateOpsTrait,
+    params: &ActionParams, context: &mut InternalRefContext,
 ) -> vm::Result<()>
 {
     let requester = &params.sender;
     debug!(
         "set_admin requester {:?} contract {:?}, \
          new_admin {:?}, contract_in_creation {:?}",
-        requester, contract_address, new_admin_address, contract_in_creation,
+        requester,
+        contract_address,
+        new_admin_address,
+        context.callstack.contract_in_creation(),
     );
-    if contract_address.is_contract_address()
-        && state.exists(&contract_address)?
+
+    let clear_admin_in_create = context.callstack.contract_in_creation()
+        == Some(&contract_address)
+        && new_admin_address.is_null_address();
+
+    if context.is_contract_address(&contract_address)?
+        && context.state.exists(&contract_address)?
         // Allow set admin if requester matches or in contract creation to clear admin.
-        && (state.admin(&contract_address)?.eq(requester)
-            || contract_in_creation == Some(&contract_address)
-                && new_admin_address.is_null_address())
+        && (context.state.admin(&contract_address)?.eq(requester)
+            || clear_admin_in_create)
         // Only allow user account to be admin, if not to clear admin.
-        && (new_admin_address.is_user_account_address()
-            || new_admin_address.is_null_address())
+        && available_admin_address(&context.spec, &new_admin_address)
     {
         debug!("set_admin to {:?}", new_admin_address);
         // Admin is cleared by set new_admin_address to null address.
-        state.set_admin(&contract_address, &new_admin_address)?;
+        context
+            .state
+            .set_admin(&contract_address, &new_admin_address)?;
     }
     Ok(())
 }

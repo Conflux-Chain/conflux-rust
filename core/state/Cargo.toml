@@ -27,3 +27,4 @@ default = ["primitives"]
 # we have to define a feature for test code.
 # https://users.rust-lang.org/t/cfg-test-doesnt-propagate-to-external-crates/13046
 testonly_code = []
+new_state_impl = []

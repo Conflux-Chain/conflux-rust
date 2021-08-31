@@ -305,27 +305,14 @@ pub struct ContractAccount {
 impl Account {
     pub fn address(&self) -> &Address { &self.address_local_info }
 
-    pub fn set_address(
-        &mut self, address: Address,
-    ) -> Result<(), AccountError> {
-        Self::check_address_space(&address)?;
+    pub fn set_address(&mut self, address: Address) {
         self.address_local_info = address;
-        Ok(())
-    }
-
-    pub fn check_address_space(address: &Address) -> Result<(), AccountError> {
-        if address.is_valid_address() {
-            Ok(())
-        } else {
-            Err(AccountError::ReservedAddressSpace(*address))
-        }
     }
 
     pub fn new_empty_with_balance(
         address: &Address, balance: &U256, nonce: &U256,
-    ) -> Result<Account, AccountError> {
-        Self::check_address_space(address)?;
-        Ok(Self {
+    ) -> Account {
+        Self {
             address_local_info: *address,
             balance: *balance,
             nonce: *nonce,
@@ -335,7 +322,7 @@ impl Account {
             accumulated_interest_return: 0.into(),
             admin: Address::zero(),
             sponsor_info: Default::default(),
-        })
+        }
     }
 
     fn from_basic_account(address: Address, a: BasicAccount) -> Self {
@@ -352,26 +339,17 @@ impl Account {
         }
     }
 
-    pub fn from_contract_account(
-        address: Address, a: ContractAccount,
-    ) -> Result<Self, AccountError> {
-        if address.is_contract_address() {
-            Ok(Self {
-                address_local_info: address,
-                balance: a.balance,
-                nonce: a.nonce,
-                code_hash: a.code_hash,
-                staking_balance: a.staking_balance,
-                collateral_for_storage: a.collateral_for_storage,
-                accumulated_interest_return: a.accumulated_interest_return,
-                admin: a.admin,
-                sponsor_info: a.sponsor_info,
-            })
-        } else {
-            Err(AccountError::AddressSpaceMismatch(
-                address,
-                AddressSpace::Contract,
-            ))
+    pub fn from_contract_account(address: Address, a: ContractAccount) -> Self {
+        Self {
+            address_local_info: address,
+            balance: a.balance,
+            nonce: a.nonce,
+            code_hash: a.code_hash,
+            staking_balance: a.staking_balance,
+            collateral_for_storage: a.collateral_for_storage,
+            accumulated_interest_return: a.accumulated_interest_return,
+            admin: a.admin,
+            sponsor_info: a.sponsor_info,
         }
     }
 
@@ -401,30 +379,36 @@ impl Account {
     pub fn new_from_rlp(
         address: Address, rlp: &Rlp,
     ) -> Result<Self, AccountError> {
-        if address.is_contract_address() {
-            Self::from_contract_account(address, ContractAccount::decode(rlp)?)
-        } else if address.is_valid_address() {
-            Ok(Self::from_basic_account(
+        let account = match rlp.item_count()? {
+            9 => Self::from_contract_account(
                 address,
-                BasicAccount::decode(rlp)?,
-            ))
-        } else {
-            Err(AccountError::ReservedAddressSpace(address))
-        }
+                ContractAccount::decode(rlp)?,
+            ),
+            5 => Self::from_basic_account(address, BasicAccount::decode(rlp)?),
+            _ => {
+                return Err(AccountError::InvalidRlp(
+                    DecoderError::RlpIncorrectListLen,
+                ));
+            }
+        };
+        Ok(account)
     }
 }
 
 impl Encodable for Account {
     fn rlp_append(&self, stream: &mut RlpStream) {
-        if self.address_local_info.is_contract_address() {
+        // After CIP-80, an address started by 0x8 is still stored as
+        // contract format in underlying db, even if it may be a normal address.
+        // In order to achieve backward compatible.
+        if self.code_hash != KECCAK_EMPTY
+            || self.address_local_info.is_contract_address()
+        {
             // A contract address can hold balance before its initialization
             // as a recipient of a simple transaction.
             // So we always determine how to serialize by the address type bits.
             stream.append_internal(&self.to_contract_account());
-        } else if self.address_local_info.is_valid_address() {
-            stream.append_internal(&self.to_basic_account());
         } else {
-            unreachable!("other types of address are not supported yet.");
+            stream.append_internal(&self.to_basic_account());
         }
     }
 }

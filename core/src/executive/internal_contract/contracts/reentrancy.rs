@@ -14,7 +14,7 @@ use crate::{
 };
 use cfx_parameters::internal_contract_addresses::ANTI_REENTRANCY_CONTRACT_ADDRESS;
 use cfx_state::state_trait::StateOpsTrait;
-use cfx_types::{address_util::AddressUtil, Address, U256};
+use cfx_types::{Address, U256};
 
 make_solidity_contract! {
     pub struct AntiReentrancyConfig(ANTI_REENTRANCY_CONTRACT_ADDRESS,
@@ -48,7 +48,7 @@ impl ExecutionTrait for AllowReentrancy {
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        if params.sender.is_contract_address() {
+        if context.is_contract_address(&params.sender)? {
             let storage_owner = params.storage_owner;
             let contract_address = params.sender;
             set_reentrancy_allowance(
@@ -76,7 +76,7 @@ impl ExecutionTrait for AllowReentrancyByAdmin {
     ) -> vm::Result<()>
     {
         let (contract, allowance) = input;
-        if contract.is_contract_address()
+        if context.is_contract_address(&contract)?
             && &params.sender == &context.state.admin(&contract)?
         {
             let storage_owner = params.storage_owner;

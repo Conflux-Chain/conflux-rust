@@ -2,8 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+#[cfg(feature = "new_state_impl")]
 pub(self) mod cache_object;
+#[cfg(feature = "new_state_impl")]
 pub mod state;
+#[cfg(feature = "new_state_impl")]
 pub(self) mod state_object_cache;
 pub mod state_trait;
 pub mod substate_trait;

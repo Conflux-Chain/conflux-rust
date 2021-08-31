@@ -12,11 +12,11 @@ use cfx_parameters::staking::COLLATERAL_UNITS_PER_STORAGE_KEY;
 use cfx_state::SubstateTrait;
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
 use cfx_storage::StorageStateTrait;
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use cfx_types::{Address, H256, U256};
 use parking_lot::RwLock;
 use primitives::{
-    account::AccountError, Account, CodeInfo, DepositInfo, DepositList,
-    SponsorInfo, StorageKey, StorageLayout, StorageValue, VoteStakeList,
+    Account, CodeInfo, DepositInfo, DepositList, SponsorInfo, StorageKey,
+    StorageLayout, StorageValue, VoteStakeList,
 };
 use std::{collections::HashMap, sync::Arc};
 
@@ -135,11 +135,7 @@ impl OverlayAccount {
 
     /// Create an OverlayAccount of basic account when the account doesn't exist
     /// before.
-    pub fn new_basic(
-        address: &Address, balance: U256, nonce: U256,
-        storage_layout: Option<StorageLayout>,
-    ) -> Self
-    {
+    pub fn new_basic(address: &Address, balance: U256, nonce: U256) -> Self {
         OverlayAccount {
             address: address.clone(),
             balance,
@@ -150,11 +146,7 @@ impl OverlayAccount {
             storage_value_write_cache: HashMap::new(),
             storage_owner_lv2_write_cache: Default::default(),
             storage_owner_lv1_write_cache: HashMap::new(),
-            storage_layout_change: if address.is_builtin_address() {
-                storage_layout
-            } else {
-                None
-            },
+            storage_layout_change: None,
             staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
             accumulated_interest_return: 0.into(),
@@ -162,12 +154,13 @@ impl OverlayAccount {
             vote_stake_list: None,
             code_hash: KECCAK_EMPTY,
             code: None,
-            is_newly_created_contract: address.is_contract_address(),
+            is_newly_created_contract: false,
         }
     }
 
     /// Create an OverlayAccount of contract account when the account doesn't
     /// exist before.
+    #[cfg(test)]
     pub fn new_contract(
         address: &Address, balance: U256, nonce: U256,
         storage_layout: Option<StorageLayout>,
@@ -211,7 +204,7 @@ impl OverlayAccount {
         }
     }
 
-    pub fn as_account(&self) -> Result<Account, AccountError> {
+    pub fn as_account(&self) -> Account {
         let mut account = Account::default();
 
         account.balance = self.balance;
@@ -222,12 +215,13 @@ impl OverlayAccount {
         account.accumulated_interest_return = self.accumulated_interest_return;
         account.admin = self.admin;
         account.sponsor_info = self.sponsor_info.clone();
-        account.set_address(self.address)?;
 
-        Ok(account)
+        account
     }
 
-    pub fn is_contract(&self) -> bool { self.address.is_contract_address() }
+    pub fn is_contract(&self) -> bool {
+        self.code_hash != KECCAK_EMPTY || self.is_newly_created_contract
+    }
 
     pub fn address(&self) -> &Address { &self.address }
 
@@ -566,6 +560,7 @@ impl OverlayAccount {
         self.storage_layout_change.as_ref()
     }
 
+    #[cfg(test)]
     pub fn set_storage_layout(&mut self, layout: StorageLayout) {
         self.storage_layout_change = Some(layout);
     }
@@ -814,7 +809,7 @@ impl OverlayAccount {
 
         state.db.set::<Account>(
             StorageKey::new_account_key(address),
-            &self.as_account()?,
+            &self.as_account(),
             debug_record,
         )?;
 
@@ -947,7 +942,7 @@ mod tests {
         let storage_manager = new_state_manager_for_unit_test();
         let state = get_state_for_genesis_write(&storage_manager);
 
-        assert!(account.as_account().unwrap().is_default());
+        assert!(account.as_account().is_default());
 
         account.cache_staking_info(true, true, &state.db).unwrap();
         assert!(account.vote_stake_list().unwrap().is_default());
@@ -970,7 +965,6 @@ mod tests {
             &normal_addr,
             U256::zero(),
             U256::zero(),
-            /* storage_layout = */ None,
         ));
         test_account_is_default(&mut OverlayAccount::new_contract(
             &contract_addr,
@@ -982,7 +976,6 @@ mod tests {
             &builtin_addr,
             U256::zero(),
             U256::zero(),
-            /* storage_layout = */ None,
         ));
     }
 }

@@ -183,8 +183,7 @@ fn test_snapshot_random_read_performance() {
             &address,
             &DEFAULT_BALANCE.into(),
             &0.into(),
-        )
-        .unwrap();
+        );
         let account_key = StorageKey::new_account_key(&address);
         state_0
             .set(account_key, rlp::encode(&account).into())
