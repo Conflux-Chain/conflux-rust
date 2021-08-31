@@ -10,6 +10,7 @@ use diemdb::DiemDB;
 use std::sync::Arc;
 use storage_interface::DbReader;
 use cfxcore::consensus::pos_handler::PosVerifier;
+use cfx_types::{U64};
 
 pub struct PosHandler {
     diem_db: Arc<DiemDB>,
@@ -30,9 +31,9 @@ impl PosHandler {
         let epoch_state = state.epoch_state();
         let block_number = state.current_view();
         Status{
-            chain_id: 1,  // TODO find the chain_id
-            epoch: epoch_state.epoch,
-            block_number,
+            chain_id: U64::from(1),  // TODO find the chain_id
+            epoch: U64::from(epoch_state.epoch),
+            block_number: U64::from(block_number),
             catch_up_mode: state.catch_up_mode(),
             pivot_decision: decision.clone(),
         }
