@@ -128,7 +128,7 @@
 //!
 //! `SampleRate` determines how often the sampled statement will occur.
 //!
-//! ```
+//! ```ignore
 //! use diem_logger::{
 //!     info,
 //!     sample::{self, SampleRate, Sampling},

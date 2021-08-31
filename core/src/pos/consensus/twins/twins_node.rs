@@ -4,7 +4,7 @@
 // Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-
+/*
 use crate::pos::consensus::{
     counters,
     epoch_manager::EpochManager,
@@ -243,3 +243,4 @@ impl SMRNode {
         smr_nodes
     }
 }
+*/

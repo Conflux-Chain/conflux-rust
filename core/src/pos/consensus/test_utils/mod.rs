@@ -4,7 +4,7 @@
 // Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-
+/*
 use crate::pos::consensus::block_storage::{BlockReader, BlockStore};
 use consensus_types::{
     block::{block_test_utils::certificate_for_genesis, Block},
@@ -204,3 +204,4 @@ where F: Future {
         .block_on(async { timeout(TEST_TIMEOUT, f).await })
         .expect("test timed out")
 }
+*/

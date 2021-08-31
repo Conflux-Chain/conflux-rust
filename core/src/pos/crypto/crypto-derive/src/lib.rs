@@ -21,8 +21,12 @@
 //!   domain-separation hasher structures described in `diem_crypto::hash` (look
 //!   there for details). This derive macro has for sole difference that it
 //!   automatically picks a unique salt for you, using the Serde name. For a
-//!   container `Foo`, this is usually equivalent to: ```ignore define_hasher! {
-//!   ( FooHasher, FOO_HASHER, b"Foo" ) } ```
+//!   container `Foo`, this is usually equivalent to:
+//!
+//! ```ignore
+//! define_hasher! {
+//!   ( FooHasher, FOO_HASHER, b"Foo" ) }
+//! ```
 //!
 //! # Unions of Signing Traits, in detail
 //!

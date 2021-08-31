@@ -45,7 +45,9 @@
 //!
 //! To obtain a `hash()` method for any new type `MyNewStruct`, it is (strongly)
 //! recommended to use the derive macros of `serde` and `diem_crypto_derive` as
-//! follows: ```
+//! follows:
+//!
+//! ```
 //! use diem_crypto::hash::CryptoHash;
 //! use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
 //! use serde::{Deserialize, Serialize};
@@ -55,7 +57,7 @@
 //! let value = MyNewStruct { /*...*/ };
 //! value.hash();
 //! ```
-//! 
+//!
 //! Under the hood, this will generate a new implementation `MyNewStructHasher`
 //! for the trait `CryptoHasher` and implement the trait `CryptoHash` for
 //! `MyNewStruct` using BCS.
@@ -69,6 +71,7 @@
 //!
 //! For any new structure `MyNewStruct` that needs to be hashed, it is
 //! recommended to simply use the derive macro [`CryptoHasher`](https://doc.rust-lang.org/reference/procedural-macros.html).
+//!
 //! ```
 //! use diem_crypto_derive::CryptoHasher;
 //! use serde::Deserialize;
@@ -76,7 +79,7 @@
 //! #[serde(rename = "OptionalCustomSerdeName")]
 //! struct MyNewStruct {/* ... */}
 //! ```
-//! 
+//!
 //! The macro `CryptoHasher` will define a hasher automatically called
 //! `MyNewStructHasher`, and derive a salt using the name of the type as seen by
 //! the Serde library. In the example above, this name was changed using the
@@ -90,11 +93,13 @@
 //!
 //! This library also provides a few customized hashers defined in the code as
 //! follows:
+//!
 //! ```
 //! # // To get around that there's no way to doc-test a non-exported macro:
 //! # macro_rules! define_hasher { ($e:expr) => () }
 //! define_hasher! { (MyNewDataHasher, MY_NEW_DATA_HASHER, MY_NEW_DATA_SEED,
-//! b"MyUniqueSaltString") } ```
+//! b"MyUniqueSaltString") }
+//! ```
 //!
 //! # Using a hasher directly
 //!

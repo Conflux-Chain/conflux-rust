@@ -4,7 +4,7 @@
 // Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-
+/*
 use crate::pos::consensus::{
     block_storage::{block_store::sync_manager::NeedFetchResult, BlockReader},
     pending_votes::{PendingVotes, VoteReceptionResult},
@@ -413,3 +413,4 @@ fn test_need_fetch_for_qc() {
         NeedFetchResult::QCAlreadyExist,
     );
 }
+*/

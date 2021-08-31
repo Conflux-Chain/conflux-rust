@@ -212,7 +212,9 @@ where
 
     /// From left to right, gets frozen subtree root hashes of the accumulator.
     /// For example, if the accumulator has 5 leaves, `x` and `e` are
-    /// returned. ```text
+    /// returned.
+    ///
+    /// ```text
     ///                 root
     ///                /    \
     ///              /        \
