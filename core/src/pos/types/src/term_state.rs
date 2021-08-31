@@ -1044,10 +1044,10 @@ impl PosState {
         if let Some(addresses) = self.node_map_hint.remove(&self.current_view) {
             for address in addresses {
                 let node = self.node_map.get_mut(&address).expect("exists");
-                let (new_votes_locked, update_views) =
+                let (new_votes_unlocked, update_views) =
                     node.lock_status.update(self.current_view);
                 self.record_update_views(&address, update_views);
-                if new_votes_locked {
+                if new_votes_unlocked {
                     self.unlock_event_hint.insert(address);
                 }
             }
