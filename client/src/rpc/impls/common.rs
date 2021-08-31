@@ -42,6 +42,7 @@ use network::{
 use primitives::{
     transaction::TransactionType, Account, Action, SignedTransaction,
 };
+use diemdb::DiemDB;
 
 use crate::rpc::{
     types::{
@@ -148,13 +149,14 @@ pub struct RpcImpl {
     network: Arc<NetworkService>,
     tx_pool: SharedTransactionPool,
     accounts: Arc<AccountProvider>,
-    pos_handler: Arc<PosVerifier>,
+    pub pos_handler: Arc<PosVerifier>,
     _pos_tx_sender: Mutex<
         mpsc::Sender<(
             DiemSignedTransaction,
             oneshot::Sender<anyhow::Result<SubmissionStatus>>,
         )>,
     >,
+    pub diem_db: Arc<DiemDB>,
 }
 
 impl RpcImpl {
@@ -166,6 +168,7 @@ impl RpcImpl {
             DiemSignedTransaction,
             oneshot::Sender<anyhow::Result<SubmissionStatus>>,
         )>,
+        diem_db: Arc<DiemDB>,
     ) -> Self
     {
         let data_man = consensus.get_data_manager().clone();
@@ -179,6 +182,7 @@ impl RpcImpl {
             accounts,
             pos_handler: pos_verifier,
             _pos_tx_sender: Mutex::new(pos_tx_sender),
+            diem_db,
         }
     }
 

@@ -9,15 +9,18 @@ use crate::rpc::types::pos::Status;
 use diemdb::DiemDB;
 use std::sync::Arc;
 use storage_interface::DbReader;
+use cfxcore::consensus::pos_handler::PosVerifier;
 
 pub struct PosHandler {
-    diem_db: Arc<DiemDB>
+    diem_db: Arc<DiemDB>,
+    pos_handler: Arc<PosVerifier>,
 }
 
 impl PosHandler {
-    pub fn new(diem_db: Arc<DiemDB>) -> Self {
+    pub fn new(diem_db: Arc<DiemDB>, pos_verifier: Arc<PosVerifier>,) -> Self {
         PosHandler{
             diem_db,
+            pos_handler: pos_verifier,
         }
     }
 
@@ -25,11 +28,11 @@ impl PosHandler {
         let state = self.diem_db.get_latest_pos_state();
         let decision = state.pivot_decision();
         let epoch_state = state.epoch_state();
-        let round = state.current_view();
+        let block_number = state.current_view();
         Status{
             chain_id: 1,  // TODO find the chain_id
             epoch: epoch_state.epoch,
-            block_number: round,
+            block_number,
             catch_up_mode: state.catch_up_mode(),
             pivot_decision: decision.clone(),
         }

@@ -429,6 +429,7 @@ pub fn initialize_common_modules(
         accounts.clone(),
         pos_verifier.clone(),
         diem_handler.tx_sender.clone(),
+        diem_handler.diem_db.clone(),
     ));
 
     let runtime = Runtime::with_default_thread_count();
@@ -628,7 +629,6 @@ pub fn initialize_not_light_node_modules(
         maybe_direct_txgen,
         conf.rpc_impl_config(),
         accounts,
-        diem_handler.diem_db.clone(),
     ));
 
     let debug_rpc_http_server = super::rpc::start_http(
