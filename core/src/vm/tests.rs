@@ -219,7 +219,7 @@ impl Context for MockContext {
         _: &mut dyn Tracer<Output = ExecTrace>, _account_start_nonce: U256,
     ) -> Result<()>
     {
-        if !refund_address.is_valid_address() {
+        if !refund_address.is_genesis_valid_address() {
             return Err(Error::InvalidAddress(*refund_address));
         }
         // The following code is from Parity, but it confuse me. Why refund

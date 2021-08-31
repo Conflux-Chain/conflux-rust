@@ -46,7 +46,7 @@ pub trait StateOpsTrait {
     /// Calculate the secondary reward for the next block number.
     fn bump_block_number_accumulate_interest(&mut self) -> U256;
 
-    /// Maintain `total_issued_tokens`.
+    /// Maintain `total_issued_tokens`.s
     fn add_total_issued(&mut self, v: U256);
 
     /// Maintain `total_issued_tokens`. This is only used in the extremely

@@ -120,9 +120,6 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     }
 
     fn is_contract_with_code(&self, address: &Address) -> Result<bool> {
-        if !address.is_contract_address() {
-            return Ok(false);
-        }
         Ok(self
             .get_account(address)?
             .as_ref()
@@ -721,7 +718,6 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         )
     }
 
-    #[allow(dead_code)]
     fn require_or_new_basic_account<'a>(
         &'a mut self, address: &Address, account_start_nonce: &U256,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
@@ -769,7 +765,7 @@ use cfx_statedb::{
     TOTAL_BANK_TOKENS_KEY, TOTAL_STORAGE_TOKENS_KEY, TOTAL_TOKENS_KEY,
 };
 use cfx_storage::{utils::guarded_value::NonCopy, StorageStateTrait};
-use cfx_types::{address_util::AddressUtil, Address, H256};
+use cfx_types::{Address, H256};
 use keccak_hash::{keccak, KECCAK_EMPTY};
 use primitives::{
     CodeInfo, DepositList, EpochId, SponsorInfo, StorageLayout, StorageValue,

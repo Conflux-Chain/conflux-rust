@@ -9,9 +9,7 @@ use crate::rpc::types::{
 use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
-use cfx_types::{
-    address_util::AddressUtil, BigEndianHash, H256, H520, U128, U256, U64,
-};
+use cfx_types::{BigEndianHash, H256, H520, U128, U256, U64};
 use cfxcore::{
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
@@ -20,7 +18,6 @@ use cfxcore::{
     SharedSynchronizationService, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
-use cfxkey::is_compatible_public;
 use delegate::delegate;
 use jsonrpc_core::{BoxFuture, Error as JsonRpcError, Result as JsonRpcResult};
 use network::{
@@ -29,9 +26,9 @@ use network::{
 };
 use parking_lot::Mutex;
 use primitives::{
-    filter::LogFilter, transaction::Action::Call, Account, Block,
-    BlockReceipts, DepositInfo, SignedTransaction, StorageKey, StorageRoot,
-    StorageValue, TransactionIndex, TransactionWithSignature, VoteStakeInfo,
+    filter::LogFilter, Account, Block, BlockReceipts, DepositInfo,
+    SignedTransaction, StorageKey, StorageRoot, StorageValue, TransactionIndex,
+    TransactionWithSignature, VoteStakeInfo,
 };
 use random_crash::*;
 use rlp::Rlp;
@@ -78,7 +75,6 @@ use cfxcore::{
 };
 use lazy_static::lazy_static;
 use metrics::{register_timer_with_group, ScopeTimer, Timer};
-use primitives::transaction::TransactionType;
 use serde::Serialize;
 
 lazy_static! {
@@ -344,11 +340,11 @@ impl RpcImpl {
             Some(t) => t,
             None => account_result_to_rpc_result(
                 "address",
-                Account::new_empty_with_balance(
+                Ok(Account::new_empty_with_balance(
                     address,
                     &U256::zero(), /* balance */
                     &U256::zero(), /* nonce */
-                ),
+                )),
             )?,
         };
 
@@ -385,17 +381,11 @@ impl RpcImpl {
         let tx: TransactionWithSignature =
             invalid_params_check("raw", Rlp::new(&raw.into_vec()).as_val())?;
 
-        if tx.transaction_type() == TransactionType::EthereumLike {
-            if let Ok(pubkey) = tx.recover_public() {
-                if !is_compatible_public(&pubkey) {
-                    bail!(invalid_params("tx", "Sending Ethereum like transaction from invalid address: the sender address should start by 0x1 (by Ethereum address rule)."))
-                }
-            } else {
-                bail!(invalid_params(
-                    "tx",
-                    "Can not recover pubkey for Ethereum like tx"
-                ))
-            }
+        if tx.recover_public().is_err() {
+            bail!(invalid_params(
+                "tx",
+                "Can not recover pubkey for Ethereum like tx"
+            ));
         }
 
         let r = self.send_transaction_with_signature(tx);
@@ -445,11 +435,12 @@ impl RpcImpl {
     fn send_transaction_with_signature(
         &self, tx: TransactionWithSignature,
     ) -> RpcResult<H256> {
-        if let Call(address) = &tx.transaction.action {
-            if !address.is_valid_address() {
-                bail!(invalid_params("tx", "Sending transactions to invalid address. The first four bits must be 0x0 (built-in/reserved), 0x1 (user-account), or 0x8 (contract)."));
-            }
-        }
+        // if let Call(address) = &tx.transaction.action {
+        //     if !address.is_valid_address() {
+        //         bail!(invalid_params("tx", "Sending transactions to invalid
+        // address. The first four bits must be 0x0 (built-in/reserved), 0x1
+        // (user-account), or 0x8 (contract)."));     }
+        // }
         if self.sync.catch_up_mode() {
             warn!("Ignore send_transaction request {}. Cannot send transaction when the node is still in catch-up mode.", tx.hash());
             bail!(request_rejected_in_catch_up_mode(None));

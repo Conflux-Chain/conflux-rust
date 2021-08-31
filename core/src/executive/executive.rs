@@ -943,12 +943,12 @@ impl<
         let mut storage_sponsored = false;
         match tx.action {
             Action::Call(ref address) => {
-                if !address.is_valid_address() {
+                if !spec.is_valid_address(address) {
                     return Ok(ExecutionOutcome::NotExecutedDrop(
                         TxDropError::InvalidRecipientAddress(*address),
                     ));
                 }
-                if address.is_contract_address() {
+                if self.state.is_contract_with_code(address)? {
                     code_address = *address;
                     if self
                         .state

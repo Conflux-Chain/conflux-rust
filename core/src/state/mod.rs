@@ -251,7 +251,7 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
                         address,
                         debug_record.as_deref_mut(),
                     )?;
-                    self.accounts_to_notify.push(Ok(account.as_account()?));
+                    self.accounts_to_notify.push(Ok(account.as_account()));
                 }
             }
         }
@@ -331,7 +331,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn is_contract_with_code(&self, address: &Address) -> DbResult<bool> {
-        if !address.is_contract_address() {
+        if !address.maybe_contract_address() {
             return Ok(false);
         }
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
@@ -680,21 +680,9 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     ) -> DbResult<()>
     {
         let exists = self.exists(address)?;
-        if !address.is_valid_address() {
-            // Sending to invalid addresses are not allowed. Note that this
-            // check is required because at serialization we assume
-            // only valid addresses.
-            //
-            // There are checks to forbid it at transact level.
-            //
-            // The logic here is intended for incorrect miner coin-base. In this
-            // case, the mining reward get lost.
-            debug!(
-                "add_balance: address does not already exist and is not a valid address. {:?}",
-                address
-            );
-            return Ok(());
-        }
+
+        // The caller should guarantee the validity of address.
+
         if !by.is_zero()
             || (cleanup_mode == CleanupMode::ForceCreate && !exists)
         {
@@ -1002,7 +990,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             self.sub_collateral_for_storage(addr, &sub, account_start_nonce)?;
         }
         if !inc.is_zero() {
-            let balance = if addr.is_contract_address() {
+            let balance = if self.is_contract_with_code(addr)? {
                 self.sponsor_balance_for_collateral(addr)?
             } else {
                 self.balance(addr)?
@@ -1409,6 +1397,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         }
     }
 
+    #[cfg(test)]
     pub fn set_storage_layout(
         &mut self, address: &Address, layout: StorageLayout,
     ) -> DbResult<()> {
@@ -1519,23 +1508,19 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         &self, address: &Address, account_start_nonce: &U256,
     ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>> {
         self.require_or_set(address, false, |address| {
-            if address.is_valid_address() {
-                // Note that it is possible to first send money to a pre-calculated contract
-                // address and then deploy contracts. So we are going to *allow* sending to a contract
-                // address and use new_basic() to create a *stub* there. Because the contract serialization
-                // is a super-set of the normal address serialization, this should just work.
-                Ok(OverlayAccount::new_basic(
-                    address,
-                    U256::zero(),
-                    account_start_nonce.into(),
-                    None,
-                ))
-            } else {
-                unreachable!(
-                    "address does not already exist and is not an user account. {:?}",
-                    address
-                )
-            }
+            // It is guaranteed that the address is valid.
+
+            // Note that it is possible to first send money to a pre-calculated
+            // contract address and then deploy contracts. So we are
+            // going to *allow* sending to a contract address and
+            // use new_basic() to create a *stub* there. Because the contract
+            // serialization is a super-set of the normal address
+            // serialization, this should just work.
+            Ok(OverlayAccount::new_basic(
+                address,
+                U256::zero(),
+                account_start_nonce.into(),
+            ))
         })
     }
 
