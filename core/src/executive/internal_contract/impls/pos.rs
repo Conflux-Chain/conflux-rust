@@ -36,6 +36,7 @@ impl From<U256> for IndexStatus {
 }
 
 impl IndexStatus {
+    #[allow(unused)]
     pub fn inc_unlocked(&mut self, number: u64) -> Result<(), &'static str> {
         match self.unlocked.checked_add(number) {
             None => Err("u64 overflow"),
@@ -48,6 +49,8 @@ impl IndexStatus {
             }
         }
     }
+
+    pub fn set_unlocked(&mut self, number: u64) { self.unlocked = number; }
 
     pub fn locked(&self) -> u64 { self.registered - self.unlocked }
 }
@@ -232,8 +235,10 @@ pub fn increase_stake(
 }
 
 pub fn retire(
-    sender: Address, params: &ActionParams, context: &mut InternalRefContext,
-) -> vm::Result<()> {
+    sender: Address, votes: u64, params: &ActionParams,
+    context: &mut InternalRefContext,
+) -> vm::Result<()>
+{
     let identifier = address_to_identifier(sender, params, context)?;
 
     if identifier.is_zero() {
@@ -252,7 +257,7 @@ pub fn retire(
         ));
     }
 
-    RetireEvent::log(&identifier, &(), params, context)?;
+    RetireEvent::log(&identifier, &votes, params, context)?;
     Ok(())
 }
 
@@ -307,7 +312,8 @@ pub fn decode_register_info(event: &LogEntry) -> Option<StakingEvent> {
         sig if sig == RetireEvent::event_sig() => {
             let identifier =
                 event.topics.get(1).expect("Second topic is identifier");
-            Some(Retire(*identifier))
+            let votes = u64::abi_decode(&event.data).unwrap();
+            Some(Retire(*identifier, votes))
         }
         _ => unreachable!(),
     }

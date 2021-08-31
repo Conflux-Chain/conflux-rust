@@ -131,7 +131,9 @@ impl BlockStore {
             while let Some(block) = pending.pop() {
                 // We may receive more blocks than needed in a batch, so check
                 // again here.
-                if self.block_exists(block.id()) || block.round() <= self.root().round() {
+                if self.block_exists(block.id())
+                    || block.round() <= self.root().round()
+                {
                     continue;
                 }
 
