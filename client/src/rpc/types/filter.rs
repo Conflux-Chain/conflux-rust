@@ -148,7 +148,9 @@ impl LogFilter {
             (None, None, None, None, Some(_)) => {
                 let hashes = {
                     let mut hash_set = HashSet::new();
-                    block_hashes.unwrap().into_iter()
+                    block_hashes
+                        .unwrap()
+                        .into_iter()
                         .filter(|&p| hash_set.insert(p))
                         .collect::<Vec<_>>()
                 };
