@@ -504,11 +504,15 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         state.checkpoint();
 
         let contract_address = self.get_recipient().clone();
-        let allow_reentrancy = get_reentrancy_allowance(
-            &contract_address,
-            state,
-            &mut self.context.substate,
-        )?;
+        let allow_reentrancy = if self.context.spec.cip71a {
+            get_reentrancy_allowance(
+                &contract_address,
+                state,
+                &mut self.context.substate,
+            )?
+        } else {
+            false
+        };
         callstack.push(contract_address, is_create, allow_reentrancy);
 
         // Pre execution: transfer value and init contract.

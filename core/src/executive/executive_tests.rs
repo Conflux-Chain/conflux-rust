@@ -49,6 +49,7 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(test)]
 fn make_byzantium_machine(max_depth: usize) -> Machine {
     let mut machine = crate::machine::new_machine_with_builtin(
         Default::default(),
@@ -370,7 +371,7 @@ fn test_call_to_create() {
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
     state
-        .new_contract(&address, U256::zero(), U256::one())
+        .new_contract_with_code(&address, U256::zero(), U256::one())
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state
         .add_balance(
@@ -444,7 +445,7 @@ fn test_revert() {
         )
         .unwrap();
     state
-        .new_contract(&contract_address, U256::zero(), U256::one())
+        .new_contract_with_code(&contract_address, U256::zero(), U256::one())
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state
         .commit(BigEndianHash::from_uint(&U256::from(1)), None)

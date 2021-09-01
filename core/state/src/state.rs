@@ -444,7 +444,9 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
             .map_or(0, |vote_stake_list| vote_stake_list.len()))
     }
 
-    fn clean_account(&mut self, _address: &Address) -> Result<()> {
+    fn genesis_special_clean_account(
+        &mut self, _address: &Address,
+    ) -> Result<()> {
         unimplemented!()
     }
 

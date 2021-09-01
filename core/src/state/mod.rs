@@ -245,6 +245,10 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
                     killed_addresses.push(*address);
                     self.accounts_to_notify.push(Err(*address));
                 }
+                Some(account) if account.removed_without_update() => {
+                    killed_addresses.push(*address);
+                    self.accounts_to_notify.push(Err(*address));
+                }
                 Some(account) => {
                     account.commit(
                         self,
@@ -628,9 +632,21 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         )
     }
 
+    // This is a special implementation to fix the bug in function
+    // `clean_account` while not changing the genesis result.
+    fn genesis_special_clean_account(
+        &mut self, address: &Address,
+    ) -> DbResult<()> {
+        let mut account = Account::new_empty(address);
+        account.code_hash = H256::default();
+        *&mut *self.require_or_new_basic_account(address, &U256::zero())? =
+            OverlayAccount::from_loaded(address, account);
+        Ok(())
+    }
+
     fn clean_account(&mut self, address: &Address) -> DbResult<()> {
         *&mut *self.require_or_new_basic_account(address, &U256::zero())? =
-            OverlayAccount::from_loaded(address, Default::default());
+            OverlayAccount::from_loaded(address, Account::new_empty(address));
         Ok(())
     }
 
@@ -806,7 +822,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
             self.cache.get_mut(),
             self.checkpoints.get_mut(),
             address,
-            AccountEntry::new_dirty(None),
+            AccountEntry::new_dirty(Some(OverlayAccount::new_removed(address))),
         );
 
         Ok(())
@@ -1037,6 +1053,15 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 Some(STORAGE_LAYOUT_REGULAR_V0),
             ))),
         );
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub fn new_contract_with_code(
+        &mut self, contract: &Address, balance: U256, nonce: U256,
+    ) -> DbResult<()> {
+        self.new_contract(contract, balance, nonce)?;
+        self.init_code(&contract, vec![0x12, 0x34], Address::zero())?;
         Ok(())
     }
 

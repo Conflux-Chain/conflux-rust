@@ -153,6 +153,10 @@ pub trait StateOpsTrait {
 
     fn vote_stake_list_length(&self, address: &Address) -> DbResult<usize>;
 
+    fn genesis_special_clean_account(
+        &mut self, address: &Address,
+    ) -> DbResult<()>;
+
     fn clean_account(&mut self, address: &Address) -> DbResult<()>;
 
     fn inc_nonce(

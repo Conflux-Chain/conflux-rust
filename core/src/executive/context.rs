@@ -721,7 +721,11 @@ mod tests {
         contract_address.set_contract_type_bits();
         origin.address = contract_address;
         state
-            .new_contract(&contract_address, U256::zero(), U256::one())
+            .new_contract_with_code(
+                &contract_address,
+                U256::zero(),
+                U256::one(),
+            )
             .expect(&concat!(file!(), ":", line!(), ":", column!()));
         state
             .init_code(

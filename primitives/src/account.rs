@@ -248,7 +248,7 @@ pub struct SponsorInfo {
     pub sponsor_balance_for_collateral: U256,
 }
 
-#[derive(Clone, Default, Debug, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub struct Account {
     /// This field is not part of Account data, but kept for convenience. It
     /// should be rarely used except for debugging.
@@ -307,6 +307,10 @@ impl Account {
 
     pub fn set_address(&mut self, address: Address) {
         self.address_local_info = address;
+    }
+
+    pub fn new_empty(address: &Address) -> Account {
+        Self::new_empty_with_balance(address, &U256::from(0), &U256::from(0))
     }
 
     pub fn new_empty_with_balance(
@@ -380,7 +384,7 @@ impl Account {
         address: Address, rlp: &Rlp,
     ) -> Result<Self, AccountError> {
         let account = match rlp.item_count()? {
-            9 => Self::from_contract_account(
+            8 => Self::from_contract_account(
                 address,
                 ContractAccount::decode(rlp)?,
             ),
@@ -400,7 +404,10 @@ impl Encodable for Account {
         // After CIP-80, an address started by 0x8 is still stored as
         // contract format in underlying db, even if it may be a normal address.
         // In order to achieve backward compatible.
-        if self.code_hash != KECCAK_EMPTY
+        //
+        // It is impossible to have an all-zero hash value. But some previous
+        // bug make one of the genesis accounts has all zero genesis hash.
+        if self.code_hash != KECCAK_EMPTY && !self.code_hash.is_zero()
             || self.address_local_info.is_contract_address()
         {
             // A contract address can hold balance before its initialization
@@ -440,4 +447,79 @@ impl fmt::Display for AccountError {
 
 impl std::error::Error for AccountError {
     fn description(&self) -> &str { "Account error" }
+}
+
+#[cfg(test)]
+fn test_random_account(
+    type_bit: Option<u8>, non_empty_hash: bool, contract_type: bool,
+) {
+    let mut address = Address::random();
+    address.set_address_type_bits(type_bit.unwrap_or(0x40));
+
+    let admin = Address::random();
+    let sponsor_info = SponsorInfo {
+        sponsor_for_gas: Address::random(),
+        sponsor_for_collateral: Address::random(),
+        sponsor_balance_for_gas: U256::from(123),
+        sponsor_balance_for_collateral: U256::from(124),
+        sponsor_gas_bound: U256::from(2),
+    };
+
+    let code_hash = if non_empty_hash {
+        H256::random()
+    } else {
+        KECCAK_EMPTY
+    };
+
+    let account = if contract_type {
+        Account::from_contract_account(
+            address,
+            ContractAccount {
+                balance: 1000.into(),
+                nonce: 123.into(),
+                code_hash,
+                staking_balance: 10000000.into(),
+                collateral_for_storage: 23.into(),
+                accumulated_interest_return: 456.into(),
+                admin,
+                sponsor_info,
+            },
+        )
+    } else {
+        Account::from_basic_account(
+            address,
+            BasicAccount {
+                balance: 1000.into(),
+                nonce: 123.into(),
+                staking_balance: 10000000.into(),
+                collateral_for_storage: 23.into(),
+                accumulated_interest_return: 456.into(),
+            },
+        )
+    };
+    assert_eq!(
+        account,
+        Account::new_from_rlp(
+            account.address_local_info,
+            &Rlp::new(&account.rlp_bytes())
+        )
+        .unwrap()
+    );
+}
+
+#[test]
+fn test_account_serde() {
+    // Original normal address
+    test_random_account(Some(0x10), false, false);
+    // Original contract address
+    test_random_account(Some(0x80), true, true);
+    // Uninitialized contract address && new normal address
+    test_random_account(Some(0x80), false, true);
+
+    // New normal address
+    test_random_account(None, false, false);
+    test_random_account(Some(0x80), false, false);
+
+    test_random_account(None, true, true);
+    test_random_account(Some(0x80), true, true);
 }
