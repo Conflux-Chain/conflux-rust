@@ -253,6 +253,7 @@ impl DiemDB {
             POS_STATE_CF_NAME,
             REWARD_EVENT_CF_NAME,
             COMMITTED_BLOCK_CF_NAME,
+            COMMITTED_BLOCK_BY_VIEW_CF_NAME,
         ]
     }
 
@@ -996,28 +997,28 @@ impl DbWriter for DiemDB {
                 "txns_to_commit is empty while ledger_info_with_sigs is None.",
             );
 
+            // Gather db mutations to `batch`.
+            let mut cs = ChangeSet::new();
+
             if let Some(x) = ledger_info_with_sigs {
                 let claimed_last_version = x.ledger_info().version();
                 ensure!(
-                claimed_last_version + 1 == first_version + num_txns,
-                "Transaction batch not applicable: first_version {}, num_txns {}, last_version {}",
-                first_version,
-                num_txns,
-                claimed_last_version,
-            );
+                    claimed_last_version + 1 == first_version + num_txns,
+                    "Transaction batch not applicable: first_version {}, num_txns {}, last_version {}",
+                    first_version,
+                    num_txns,
+                    claimed_last_version,
+                );
             }
-
-            // Gather db mutations to `batch`.
-            let mut cs = ChangeSet::new();
 
             let _new_root_hash = self.save_transactions_impl(
                 txns_to_commit,
                 first_version,
                 &mut cs,
             )?;
+
             for b in committed_blocks {
-                self.ledger_store
-                    .put_committed_block(&b.hash, &b, &mut cs)?;
+                self.ledger_store.put_committed_block(&b, &mut cs)?;
             }
 
             // If expected ledger info is provided, verify result root hash and
@@ -1034,9 +1035,11 @@ impl DbWriter for DiemDB {
 
                 self.ledger_store.put_ledger_info(x, &mut cs)?;
                 if let Some(pos_state) = pos_state {
+                    // ledger_info and pos_state are always `Some` for now.
                     self.ledger_store.put_pos_state(
                         &x.ledger_info().consensus_block_id(),
                         pos_state,
+                        &mut cs,
                     )?;
                 }
             }
@@ -1128,10 +1131,14 @@ impl DBReaderForPoW for DiemDB {
         self.ledger_store.get_reward_event(epoch)
     }
 
-    fn get_committed_block(
+    fn get_committed_block_by_hash(
         &self, block_hash: &HashValue,
     ) -> Result<CommittedBlock> {
-        self.ledger_store.get_committed_block(block_hash)
+        self.ledger_store.get_committed_block_by_hash(block_hash)
+    }
+
+    fn get_committed_block_hash_by_view(&self, view: u64) -> Result<HashValue> {
+        self.ledger_store.get_committed_block_hash_by_view(view)
     }
 }
 

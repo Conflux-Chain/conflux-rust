@@ -161,9 +161,15 @@ impl DBReaderForPoW for MockDbReader {
         todo!()
     }
 
-    fn get_committed_block(
+    fn get_committed_block_by_hash(
         &self, _block_hash: &HashValue,
     ) -> anyhow::Result<CommittedBlock> {
+        todo!()
+    }
+
+    fn get_committed_block_hash_by_view(
+        &self, _view: u64,
+    ) -> Result<HashValue> {
         todo!()
     }
 }
