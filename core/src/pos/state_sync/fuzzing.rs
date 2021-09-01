@@ -4,7 +4,7 @@
 // Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-
+/*
 use crate::pos::state_sync::{
     chunk_request::{GetChunkRequest, TargetType},
     chunk_response::{GetChunkResponse, ResponseLedgerInfo},
@@ -157,3 +157,4 @@ impl Arbitrary for ResponseLedgerInfo {
         .boxed()
     }
 }
+*/

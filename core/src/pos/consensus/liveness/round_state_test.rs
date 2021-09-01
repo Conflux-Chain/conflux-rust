@@ -4,7 +4,7 @@
 // Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-
+/*
 use crate::pos::consensus::{
     liveness::round_state::{
         ExponentialTimeInterval, NewRoundEvent, NewRoundReason, RoundState,
@@ -150,3 +150,4 @@ fn generate_sync_info(
     let timeout_cert = TimeoutCertificate::new(Timeout::new(1, timeout_round));
     SyncInfo::new(quorum_cert, commit_cert, Some(timeout_cert))
 }
+*/

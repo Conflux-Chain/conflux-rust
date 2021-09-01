@@ -64,7 +64,7 @@ pub fn offsets(bit: Index) -> (usize, usize, usize) {
 /// assert_eq!(Some(5), average_ones(0b100010));
 /// assert_eq!(None, average_ones(0));
 /// assert_eq!(None, average_ones(1));
-/// ````
+/// ```
 // TODO: Can 64/32 bit variants be merged to one implementation?
 // Seems that this would need integer generics to do.
 #[cfg(feature = "parallel")]

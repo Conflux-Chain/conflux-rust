@@ -237,7 +237,7 @@ mod tests {
 
     #[test]
     fn test_display_impls() {
-        let hex = "1000000000000000ca843279e3427144cead5e4d5999a3d0";
+        let hex = "100000000000000000000000000000000000000000000000ca843279e3427144cead5e4d5999a3d0";
 
         let key = EventKey::from_hex(hex).unwrap();
 
@@ -263,8 +263,8 @@ mod tests {
 
     #[test]
     fn test_serde_json() {
-        let hex = "1000000000000000ca843279e3427144cead5e4d5999a3d0";
-        let json_hex = "\"1000000000000000ca843279e3427144cead5e4d5999a3d0\"";
+        let hex = "100000000000000000000000000000000000000000000000ca843279e3427144cead5e4d5999a3d0";
+        let json_hex = "\"100000000000000000000000000000000000000000000000ca843279e3427144cead5e4d5999a3d0\"";
 
         let key = EventKey::from_hex(hex).unwrap();
 

@@ -10,7 +10,9 @@
 //! small portion of the state -- the part of accounts that have been modified
 //! by uncommitted transactions. For example, if we execute a transaction T_i on
 //! top of committed state and it modified account A, we will end up having the
-//! following tree: ```text
+//! following tree:
+//!
+//! ```text
 //!              S_i
 //!             /   \
 //!            o     y
@@ -23,7 +25,9 @@
 //! This Sparse Merkle Tree is immutable once constructed. If the next
 //! transaction T_{i+1} modified another account B that lives in the subtree at
 //! y, a new tree will be constructed and the structure will look like the
-//! following: ```text
+//! following:
+//!
+//! ```text
 //!                 S_i        S_{i+1}
 //!                /   \      /       \
 //!               /     y   /          \
@@ -60,11 +64,14 @@
 //!
 //! This Sparse Merkle Tree serves a dual purpose. First, to support a leader
 //! based consensus algorithm, we need to build a tree of transactions like the
-//! following: ```text
+//! following:
+//!
+//! ```text
 //! Committed -> T5 -> T6  -> T7
 //!              └---> T6' -> T7'
 //!                    └----> T7"
 //! ```
+//!
 //! Once T5 is executed, we will have a tree that stores the modified portion of
 //! the state. Later when we execute T6 on top of T5, the output of T5 can be
 //! visible to T6.
@@ -461,7 +468,9 @@ where V: Clone + CryptoHash
 
     /// Constructs a subtree with a list of siblings and a leaf. For example, if
     /// `bits` are [false, false, true] and `siblings` are [a, b, c], the
-    /// resulting subtree will look like: ```text
+    /// resulting subtree will look like:
+    ///
+    /// ```text
     ///          x
     ///         / \
     ///        c   o

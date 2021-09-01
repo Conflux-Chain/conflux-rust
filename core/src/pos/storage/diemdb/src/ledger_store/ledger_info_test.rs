@@ -142,6 +142,7 @@ proptest! {
         }
     }
 
+    /*
     #[test]
     fn test_get_startup_info(
         (ledger_infos_with_sigs, txn_infos) in arb_ledger_infos_with_sigs()
@@ -180,7 +181,7 @@ proptest! {
         } else {
             assert!(startup_info.synced_tree_state.is_none());
         }
-    }
+    }*/
 }
 
 fn set_up(
