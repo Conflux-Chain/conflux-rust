@@ -35,6 +35,7 @@ use super::{
     state_computer::ExecutionProxy, txn_manager::MempoolProxy,
     util::time_service::ClockTimeService,
 };
+use crate::pos::consensus::ConsensusDB;
 
 /// Helper function to start consensus based on configuration and return the
 /// runtime
@@ -50,7 +51,7 @@ pub fn start_consensus(
         SignedTransaction,
         oneshot::Sender<anyhow::Result<SubmissionStatus>>,
     )>,
-) -> (Runtime, Arc<PowHandler>, Arc<AtomicBool>)
+) -> (Runtime, Arc<PowHandler>, Arc<AtomicBool>, Arc<ConsensusDB>)
 {
     let stopped = Arc::new(AtomicBool::new(false));
     let runtime = runtime::Builder::new_multi_thread()
@@ -111,5 +112,5 @@ pub fn start_consensus(
     ));
 
     diem_debug!("Consensus started.");
-    (runtime, pow_handler, stopped)
+    (runtime, pow_handler, stopped, consensus_db)
 }
