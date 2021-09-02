@@ -4,14 +4,16 @@
 
 use crate::rpc::traits::pos::Pos;
 use jsonrpc_core::Result as JsonRpcResult;
-use crate::rpc::types::pos::{Status, Account};
-// use crate::common::delegate_convert::into_jsonrpc_result;
+use diem_types::account_address::AccountAddress;
+use crate::rpc::types::pos::{
+    Status, Block, BlockTransactions, Account, BlockNumber, Decision, Signature
+};
 use diemdb::DiemDB;
 use std::sync::Arc;
-use storage_interface::DbReader;
-use cfxcore::consensus::pos_handler::PosVerifier;
-use cfx_types::{H256, U64};
-use diem_types::account_address::AccountAddress;
+use storage_interface::{DbReader, DBReaderForPoW};
+use cfxcore::consensus::pos_handler::{PosVerifier};
+use cfx_types::{U64, H256, hexstr_to_h256};
+use diem_crypto::hash::{HashValue};
 
 pub struct PosHandler {
     diem_db: Arc<DiemDB>,
@@ -32,11 +34,10 @@ impl PosHandler {
         let epoch_state = state.epoch_state();
         let block_number = state.current_view();
         Status{
-            chain_id: U64::from(1),  // TODO find the chain_id
             epoch: U64::from(epoch_state.epoch),
             block_number: U64::from(block_number),
             catch_up_mode: state.catch_up_mode(),
-            pivot_decision: decision.clone(),
+            pivot_decision: Decision::from(decision.clone()),
         }
     }
 
@@ -58,13 +59,85 @@ impl PosHandler {
         }
         None
     }
+
+    fn block_by_hash_impl(&self, hash: H256) -> Option<Block> {
+        let hash_value = HashValue::from_slice(hash.as_bytes()).unwrap();
+        let block = self.diem_db.get_committed_block(&hash_value);
+
+        match block {
+            Ok(b) => {
+                let signatures = b.signatures
+                    .iter()
+                    .map(|(a, s)| Signature{ account: H256::from(a.to_u8()), signature: s.to_string() })
+                    .collect();
+                Some(Block{
+                    hash,
+                    height: Default::default(), // TODO
+                    epoch: U64::from(b.epoch),
+                    round: U64::from(b.round),
+                    version: U64::from(b.version),
+                    miner: H256::from(b.miner.to_u8()),
+                    parent_hash: hexstr_to_h256(b.parent_hash.to_hex().as_str()),
+                    timestamp: U64::from(b.timestamp),
+                    pivot_decision: Some(Decision::from(b.pivot_decision)),
+                    transactions: BlockTransactions::Hashes(vec![]),   // TODO
+                    signatures
+                })
+            }
+            Err(_) => {
+                None
+            }
+        }
+    }
+
+    fn block_by_number_impl(&self, number: BlockNumber) -> Option<Block> {
+        match number {
+            BlockNumber::Num(num) => {
+                println!("{}", num);
+                None
+            }
+            BlockNumber::Earliest => None,
+            BlockNumber::Latest => {
+                let latest_ledger = self.diem_db.get_latest_ledger_info_option().unwrap();
+                let ledger_info = latest_ledger.ledger_info();
+                let pivot_decision = ledger_info.pivot_decision().map(|p| Decision::from(p.clone()));
+                let signatures = latest_ledger.signatures()
+                    .iter()
+                    .map(|(a, s)| Signature{ account: H256::from(a.to_u8()), signature: s.to_string() })
+                    .collect();
+                let block = Block{
+                    hash: hexstr_to_h256(ledger_info.consensus_block_id().to_hex().as_str()),
+                    height: Default::default(),  // TODO
+                    epoch: U64::from(ledger_info.epoch()),
+                    round: U64::from(ledger_info.round()),
+                    version: U64::from(ledger_info.version()),
+                    miner: Default::default(), // TODO
+                    parent_hash: Default::default(), // TODO
+                    timestamp: U64::from(ledger_info.timestamp_usecs()),
+                    pivot_decision,
+                    transactions: BlockTransactions::Hashes(vec![]), // TODO
+                    signatures
+                };
+                Some(block)
+            }
+        }
+    }
 }
 
 impl Pos for PosHandler {
     fn pos_status(&self) -> JsonRpcResult<Status> {
         let status = self.status_impl();
         Ok(status)
-        // into_jsonrpc_result(Ok(status))
+    }
+
+    fn pos_block_by_hash(&self, hash: H256) -> JsonRpcResult<Option<Block>> {
+        let block = self.block_by_hash_impl(hash);
+        Ok(block)
+    }
+
+    fn pos_block_by_number(&self, number: BlockNumber) -> JsonRpcResult<Option<Block>> {
+        let block = self.block_by_number_impl(number);
+        Ok(block)
     }
 
     fn pos_account(&self, address: H256, view: U64) -> JsonRpcResult<Option<Account>> {

@@ -3,14 +3,12 @@
 // See http://www.gnu.org/licenses/
 
 use serde_derive::Serialize;
-use diem_types::block_info::PivotBlockDecision;
 use cfx_types::{U64};
+use super::Decision;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Status {
-    ///
-    pub chain_id: U64,
     ///
     pub block_number: U64,
     ///
@@ -18,17 +16,16 @@ pub struct Status {
     ///
     pub catch_up_mode: bool,
     ///
-    pub pivot_decision: PivotBlockDecision,
+    pub pivot_decision: Decision,
 }
 
 impl Default for Status {
     fn default() -> Status {
-        let default_decision = PivotBlockDecision {
-            height: 0,
+        let default_decision = Decision {
+            height: U64::from(0),
             block_hash: Default::default()
         };
         Status {
-            chain_id: U64::default(),
             epoch: U64::default(),
             block_number: U64::default(),
             catch_up_mode: false,

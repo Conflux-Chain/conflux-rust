@@ -9,4 +9,5 @@ use cfx_types::{H256};
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
     pub hash: H256,
+    pub from: H256,
 }
