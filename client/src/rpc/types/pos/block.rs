@@ -2,12 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use serde::{
-    Serialize, Serializer,
-};
+use super::{Decision, Transaction};
 use cfx_types::{H256, U64};
-use super::Transaction;
-use super::Decision;
+use serde::{Serialize, Serializer};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

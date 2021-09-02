@@ -2,9 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use serde_derive::Serialize;
-use cfx_types::{U64};
 use super::Decision;
+use cfx_types::U64;
+use serde_derive::Serialize;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,7 +23,7 @@ impl Default for Status {
     fn default() -> Status {
         let default_decision = Decision {
             height: U64::from(0),
-            block_hash: Default::default()
+            block_hash: Default::default(),
         };
         Status {
             epoch: U64::default(),

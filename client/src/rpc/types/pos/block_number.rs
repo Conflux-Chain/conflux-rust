@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{U64, H256};
+use cfx_types::{H256, U64};
 use serde::{
     de::{Error, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
@@ -20,7 +20,7 @@ pub enum BlockNumber {
 }
 
 impl Default for BlockNumber {
-   fn default() -> Self { BlockNumber::Latest }
+    fn default() -> Self { BlockNumber::Latest }
 }
 
 impl FromStr for BlockNumber {
@@ -45,24 +45,20 @@ impl Into<BlockNumber> for u64 {
 
 impl<'a> Deserialize<'a> for BlockNumber {
     fn deserialize<D>(deserializer: D) -> Result<BlockNumber, D::Error>
-        where D: Deserializer<'a> {
+    where D: Deserializer<'a> {
         deserializer.deserialize_any(BlockNumberVisitor)
     }
 }
 
 impl Serialize for BlockNumber {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer {
+    where S: Serializer {
         match *self {
             BlockNumber::Num(ref x) => {
                 serializer.serialize_str(&format!("0x{:x}", x))
             }
-            BlockNumber::Earliest => {
-                serializer.serialize_str("earliest")
-            }
-            BlockNumber::Latest => {
-                serializer.serialize_str("latest")
-            }
+            BlockNumber::Earliest => serializer.serialize_str("earliest"),
+            BlockNumber::Latest => serializer.serialize_str("latest"),
         }
     }
 }
@@ -73,19 +69,16 @@ impl<'a> Visitor<'a> for BlockNumberVisitor {
     type Value = BlockNumber;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            formatter,
-            "an block number or 'latest' or 'earliest'"
-        )
+        write!(formatter, "an block number or 'latest' or 'earliest'")
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-        where E: Error {
+    where E: Error {
         value.parse().map_err(Error::custom)
     }
 
     fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
-        where E: Error {
+    where E: Error {
         self.visit_str(value.as_ref())
     }
 }
@@ -100,14 +93,14 @@ impl<'a> Deserialize<'a> for BlockHashOrBlockNumber {
     fn deserialize<D>(
         deserializer: D,
     ) -> Result<BlockHashOrBlockNumber, D::Error>
-        where D: Deserializer<'a> {
+    where D: Deserializer<'a> {
         deserializer.deserialize_any(BlockHashOrBlockNumberVisitor)
     }
 }
 
 impl Serialize for BlockHashOrBlockNumber {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where S: Serializer {
+    where S: Serializer {
         match self {
             BlockHashOrBlockNumber::BlockNumber(block_number) => {
                 block_number.serialize(serializer)
@@ -132,7 +125,7 @@ impl<'a> Visitor<'a> for BlockHashOrBlockNumberVisitor {
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-        where E: Error {
+    where E: Error {
         if value.starts_with("hash:0x") {
             Ok(BlockHashOrBlockNumber::BlockHash(
                 value[7..].parse().map_err(Error::custom)?,
@@ -145,7 +138,7 @@ impl<'a> Visitor<'a> for BlockHashOrBlockNumberVisitor {
     }
 
     fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
-        where E: Error {
+    where E: Error {
         self.visit_str(value.as_ref())
     }
 }

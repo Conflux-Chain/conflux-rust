@@ -3,21 +3,21 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_types::{H256, U64};
-use serde_derive::Serialize;
 use diem_types::block_info::PivotBlockDecision;
+use serde_derive::Serialize;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Decision {
     pub block_hash: H256,
-    pub height: U64
+    pub height: U64,
 }
 
 impl From<PivotBlockDecision> for Decision {
     fn from(pd: PivotBlockDecision) -> Self {
-        Decision{
+        Decision {
             block_hash: pd.block_hash,
-            height: U64::from(pd.height)
+            height: U64::from(pd.height),
         }
     }
 }
