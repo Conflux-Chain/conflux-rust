@@ -34,6 +34,7 @@ use diem_types::{
     account_address::{from_consensus_public_key, AccountAddress},
     transaction::SignedTransaction as DiemSignedTransaction,
 };
+use diemdb::DiemDB;
 use network::{
     node_table::{Node, NodeEndpoint, NodeEntry, NodeId},
     throttling::{self, THROTTLING_SERVICE},
@@ -42,7 +43,6 @@ use network::{
 use primitives::{
     transaction::TransactionType, Account, Action, SignedTransaction,
 };
-use diemdb::DiemDB;
 
 use crate::rpc::{
     types::{

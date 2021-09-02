@@ -50,8 +50,8 @@ use self::{
         trace::TraceHandler,
     },
     traits::{
-        cfx::Cfx, debug::LocalRpc, pubsub::PubSub, test::TestRpc, trace::Trace,
-        pos::Pos,
+        cfx::Cfx, debug::LocalRpc, pos::Pos, pubsub::PubSub, test::TestRpc,
+        trace::Trace,
     },
 };
 
@@ -60,6 +60,7 @@ use crate::{
     configuration::Configuration,
     rpc::{
         error_codes::request_rejected_too_many_request_error,
+        impls::pos::PosHandler,
         interceptor::{RpcInterceptor, RpcProxy},
         rpc_apis::{Api, ApiSet},
     },
@@ -67,7 +68,6 @@ use crate::{
 pub use metadata::Metadata;
 use std::collections::HashSet;
 use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
-use crate::rpc::impls::pos::PosHandler;
 
 #[derive(Debug, PartialEq)]
 pub struct TcpConfiguration {
@@ -229,7 +229,11 @@ fn setup_rpc_apis(
                 handler.extend_with(RpcProxy::new(trace, interceptor));
             }
             Api::Pos => {
-                let pos = PosHandler::new(common.diem_db.clone(), common.pos_handler.clone()).to_delegate();
+                let pos = PosHandler::new(
+                    common.diem_db.clone(),
+                    common.pos_handler.clone(),
+                )
+                .to_delegate();
                 handler.extend_with(pos);
             }
         }

@@ -2,8 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use serde_derive::Serialize;
 use diem_types::block_info::PivotBlockDecision;
+use serde_derive::Serialize;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -24,8 +24,7 @@ impl Default for Status {
     fn default() -> Status {
         let default_decision = PivotBlockDecision {
             height: 0,
-            block_hash:
-            Default::default()
+            block_hash: Default::default(),
         };
         Status {
             chain_id: 0,
@@ -36,4 +35,3 @@ impl Default for Status {
         }
     }
 }
-

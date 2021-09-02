@@ -2,16 +2,18 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::traits::pos::Pos;
+use crate::rpc::{
+    traits::pos::Pos,
+    types::pos::{Account, Status},
+};
 use jsonrpc_core::Result as JsonRpcResult;
-use crate::rpc::types::pos::{Status, Account};
 // use crate::common::delegate_convert::into_jsonrpc_result;
+use cfx_types::{H256, U64};
+use cfxcore::consensus::pos_handler::PosVerifier;
+use diem_types::account_address::AccountAddress;
 use diemdb::DiemDB;
 use std::sync::Arc;
 use storage_interface::DbReader;
-use cfxcore::consensus::pos_handler::PosVerifier;
-use cfx_types::{H256, U64};
-use diem_types::account_address::AccountAddress;
 
 pub struct PosHandler {
     diem_db: Arc<DiemDB>,
@@ -32,7 +34,7 @@ impl PosHandler {
         let epoch_state = state.epoch_state();
         let block_number = state.current_view();
         Status {
-            chain_id: 1,  // TODO find the chain_id
+            chain_id: 1, // TODO find the chain_id
             epoch: epoch_state.epoch,
             block_number,
             catch_up_mode: state.catch_up_mode(),
@@ -67,7 +69,9 @@ impl Pos for PosHandler {
         // into_jsonrpc_result(Ok(status))
     }
 
-    fn pos_account(&self, address: H256, view: U64) -> JsonRpcResult<Option<Account>> {
+    fn pos_account(
+        &self, address: H256, view: U64,
+    ) -> JsonRpcResult<Option<Account>> {
         Ok(self.account_impl(address, view))
     }
 }

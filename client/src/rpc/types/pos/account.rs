@@ -2,9 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use serde_derive::Serialize;
+use cfx_types::{H256, U64};
 use diem_types::term_state::NodeStatus;
-use cfx_types::{U64, H256};
+use serde_derive::Serialize;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -25,7 +25,7 @@ impl Default for Account {
             address: Default::default(),
             status: NodeStatus::Accepted,
             status_start_view: Default::default(),
-            voting_power: Default::default()
+            voting_power: Default::default(),
         }
     }
 }

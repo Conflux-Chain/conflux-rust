@@ -1,7 +1,4 @@
-mod status;
 mod account;
+mod status;
 
-pub use self::{
-    status::Status,
-    account::Account
-};
+pub use self::{account::Account, status::Status};
