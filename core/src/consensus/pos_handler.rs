@@ -202,8 +202,10 @@ impl PosInterface for PosConnection {
     fn get_committed_block(&self, h: &PosBlockId) -> Option<PosBlock> {
         debug!("get_committed_block: {:?}", h);
         let block_hash = h256_to_diem_hash(h);
-        let committed_block =
-            self.pos_storage.get_committed_block(&block_hash).ok()?;
+        let committed_block = self
+            .pos_storage
+            .get_committed_block_by_hash(&block_hash)
+            .ok()?;
 
         /*
         let parent;
@@ -260,12 +262,12 @@ impl PosInterface for PosConnection {
     ) -> Vec<ContractEvent> {
         let start_version = self
             .pos_storage
-            .get_committed_block(&h256_to_diem_hash(from))
+            .get_committed_block_by_hash(&h256_to_diem_hash(from))
             .expect("err reading ledger info for from")
             .version;
         let end_version = self
             .pos_storage
-            .get_committed_block(&h256_to_diem_hash(to))
+            .get_committed_block_by_hash(&h256_to_diem_hash(to))
             .expect("err reading ledger info for to")
             .version;
         self.pos_storage
