@@ -156,7 +156,7 @@ fn execute_genesis_transaction(genesis_txn: Transaction) -> Waypoint {
 fn generate_genesis_from_public_keys(
     public_keys: Vec<(ConsensusPublicKey, ConsensusVRFPublicKey, u64)>,
 ) {
-    let genesis_path = PathBuf::from("./genesis_file");
+    let genesis_path = PathBuf::from("../../run/pos_config/genesis_file");
     let waypoint_path = PathBuf::from("./waypoint_config");
     let mut genesis_file = File::create(&genesis_path).unwrap();
     let mut waypoint_file = File::create(&waypoint_path).unwrap();

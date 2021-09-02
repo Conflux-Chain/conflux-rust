@@ -43,12 +43,12 @@ impl ApiSet {
         match *self {
             ApiSet::List(ref apis) => apis.clone(),
             ApiSet::All => {
-                [Api::Cfx, Api::Debug, Api::Pubsub, Api::Test, Api::Trace]
+                [Api::Cfx, Api::Debug, Api::Pubsub, Api::Test, Api::Trace, Api::Pos]
                     .iter()
                     .cloned()
                     .collect()
             }
-            ApiSet::Safe => [Api::Cfx, Api::Pubsub].iter().cloned().collect(),
+            ApiSet::Safe => [Api::Cfx, Api::Pubsub, Api::Pos].iter().cloned().collect(),
         }
     }
 }
