@@ -23,8 +23,6 @@ pub mod configuration;
 pub mod full;
 pub mod light;
 pub mod rpc;
-#[cfg(test)]
-mod tests;
 
 /// Used in Genesis author to indicate test-net/main-net version.
 /// Increased for every test-net/main-net release with reset.

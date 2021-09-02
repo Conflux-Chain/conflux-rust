@@ -18,13 +18,17 @@ use crate::{
 use bcs::test_helpers::assert_canonical_encode_decode;
 use diem_crypto::{
     bls::{self, BLSPrivateKey, BLSSignature},
-    PrivateKey, Uniform,
+    PrivateKey, SigningKey, Uniform,
 };
 use proptest::prelude::*;
 use std::convert::TryFrom;
 
 #[test]
 fn test_invalid_signature() {
+    let private_key = BLSPrivateKey::generate_for_testing();
+    let message = vec![0];
+    let sig = private_key.sign_arbitrary_message(&message[..]);
+    let sig_bytes = bcs::to_bytes(&sig).unwrap();
     let txn: SignedTransaction = SignedTransaction::new(
         RawTransaction::new_script(
             AccountAddress::random(),
@@ -37,7 +41,7 @@ fn test_invalid_signature() {
             ChainId::test(),
         ),
         BLSPrivateKey::generate_for_testing().public_key(),
-        BLSSignature::try_from(&[1u8; 96][..]).unwrap(),
+        bcs::from_bytes(&sig_bytes[..]).unwrap(),
     );
     txn.check_signature()
         .expect_err("signature checking should fail");

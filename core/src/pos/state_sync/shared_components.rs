@@ -83,6 +83,7 @@ impl SyncState {
     }
 }
 
+/*
 #[cfg(any(feature = "fuzzing", test))]
 pub(crate) mod test_utils {
     use crate::{
@@ -196,3 +197,4 @@ pub(crate) mod test_utils {
         .unwrap()
     }
 }
+*/

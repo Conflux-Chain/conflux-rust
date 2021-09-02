@@ -4,7 +4,7 @@
 // Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-
+/*
 use crate::pos::consensus::liveness::{
     proposer_election::ProposerElection, round_proposer_election::RoundProposer,
 };
@@ -85,3 +85,4 @@ fn test_round_proposer() {
     assert_eq!(pe.get_valid_proposer(2), chosen_author_round2);
     assert_eq!(pe.get_valid_proposer(3), chosen_author_round1);
 }
+*/

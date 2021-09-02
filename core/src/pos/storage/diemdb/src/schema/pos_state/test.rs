@@ -9,6 +9,7 @@ use super::*;
 use proptest::prelude::*;
 use schemadb::schema::assert_encode_decode;
 
+/*
 proptest! {
     #[test]
     fn test_encode_decode(
@@ -18,3 +19,4 @@ proptest! {
         assert_encode_decode::<PosStateSchema>(&block_id, &pos_state);
     }
 }
+*/

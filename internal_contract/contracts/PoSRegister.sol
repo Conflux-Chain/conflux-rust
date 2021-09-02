@@ -21,7 +21,7 @@ function increaseStake(uint64 votePower) external;
 /**
  * @dev 为 msg.sender 解锁全部 PoS 票数
  */
-function retire() external;
+function retire(uint64 votePower) external;
 
 /**
  * @dev 查询给定 PoS 账户锁仓情况，返回"总抵押票数"和"已解锁票数"

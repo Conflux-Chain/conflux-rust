@@ -33,7 +33,7 @@ impl VoteCount {
 
 #[derive(Clone, Serialize, Deserialize, Default, Debug, Eq, PartialEq)]
 pub struct RewardDistributionEvent {
-    pub candidates: Vec<H256>,
+    pub candidates: BTreeMap<H256, u64>,
     pub elected: BTreeMap<H256, VoteCount>,
 }
 
@@ -43,8 +43,10 @@ impl RewardDistributionEvent {
             .elected
             .iter()
             .map(|(id, vote_count)| (id, vote_count.reward_points()));
-        let participate_rewards =
-            self.candidates.iter().map(|id| (id, ELECTION_POINTS));
+        let participate_rewards = self
+            .candidates
+            .iter()
+            .map(|(id, cnt)| (id, ELECTION_POINTS * cnt));
         committee_rewards.chain(participate_rewards)
     }
 }

@@ -4,6 +4,8 @@
 
 mod pos;
 
+use std::fs::create_dir_all;
+
 /// Hold all top-level components for a type of client.
 /// This struct implement ClientShutdownTrait.
 pub struct ClientComponents<BlockGenT, Rest> {
@@ -175,6 +177,7 @@ pub fn initialize_common_modules(
                 load_pri_key(key_path, &passwd).unwrap();
             (ConfigKey::new(sk), ConfigKey::new(vrf_sk))
         } else {
+            create_dir_all(key_path.parent().unwrap()).unwrap();
             let passwd = if conf.is_test_or_dev_mode() {
                 vec![]
             } else {

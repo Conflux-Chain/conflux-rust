@@ -139,7 +139,7 @@ mod tests {
     use lru_time_cache::LruCache;
     use parking_lot::RwLock;
     use std::{sync::Arc, time::Duration};
-    use tokio::{runtime::Runtime, time::delay_for};
+    use tokio::{runtime::Runtime, time::sleep};
 
     #[test]
     fn test_set() {
@@ -206,14 +206,14 @@ mod tests {
         // request item, wait, then request again
         let fut2 = async move {
             let res2 = item2.await;
-            delay_for(Duration::from_millis(2 * DELAY)).await;
+            sleep(Duration::from_millis(2 * DELAY)).await;
             let res3 = item3.await;
             (res2, res3)
         };
 
         // wait, then provide item
         let fut3 = async move {
-            delay_for(Duration::from_millis(DELAY)).await;
+            sleep(Duration::from_millis(DELAY)).await;
 
             verified
                 .write()

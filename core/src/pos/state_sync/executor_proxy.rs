@@ -397,6 +397,7 @@ impl ExecutorProxyTrait for ExecutorProxy {
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -930,3 +931,4 @@ mod tests {
         (reconfig_events, ledger_info_with_sigs)
     }
 }
+*/
