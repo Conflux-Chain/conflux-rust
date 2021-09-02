@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::pos::consensus::ConsensusDB;
 use cfx_types::H256;
 use diem_config::keys::ConfigKey;
 use diem_crypto::HashValue;
@@ -181,11 +182,17 @@ impl<PoS: PosInterface> PosHandler<PoS> {
 
 pub struct PosConnection {
     pos_storage: Arc<dyn DBReaderForPoW>,
+    consensus_db: Arc<ConsensusDB>,
 }
 
 impl PosConnection {
-    pub fn new(pos_storage: Arc<dyn DBReaderForPoW>) -> Self {
-        Self { pos_storage }
+    pub fn new(
+        pos_storage: Arc<dyn DBReaderForPoW>, consensus_db: Arc<ConsensusDB>,
+    ) -> Self {
+        Self {
+            pos_storage,
+            consensus_db,
+        }
     }
 }
 
