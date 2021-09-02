@@ -2,12 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::traits::pos::Pos;
 use jsonrpc_core::Result as JsonRpcResult;
 use diem_types::account_address::AccountAddress;
 use crate::rpc::types::pos::{
     Status, Block, BlockTransactions, Account, BlockNumber, Decision, Signature
 };
+use crate::rpc::Pos;
 use diemdb::DiemDB;
 use std::sync::Arc;
 use storage_interface::{DbReader, DBReaderForPoW};
@@ -42,7 +42,7 @@ impl PosHandler {
     }
 
     fn account_impl(&self, address: H256, view: U64) -> Option<Account> {
-        let state = self.diem_db.get_latest_pos_state();
+        /*let state = self.diem_db.get_latest_pos_state();
         let account_address = AccountAddress::from_hex(address);
 
         if let Ok(a) = account_address {
@@ -56,7 +56,7 @@ impl PosHandler {
                     voting_power: U64::from(node_data.voting_power()),
                 });
             };
-        }
+        }*/
         None
     }
 
@@ -140,7 +140,9 @@ impl Pos for PosHandler {
         Ok(block)
     }
 
-    fn pos_account(&self, address: H256, view: U64) -> JsonRpcResult<Option<Account>> {
+    fn pos_account(
+        &self, address: H256, view: U64,
+    ) -> JsonRpcResult<Option<Account>> {
         Ok(self.account_impl(address, view))
     }
 }

@@ -4,7 +4,7 @@
 // Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-
+/*
 #[cfg(test)]
 mod common;
 #[cfg(test)]
@@ -19,3 +19,4 @@ mod shared_mempool_test;
 pub mod fuzzing;
 #[cfg(any(feature = "fuzzing", test))]
 pub mod mocks;
+*/

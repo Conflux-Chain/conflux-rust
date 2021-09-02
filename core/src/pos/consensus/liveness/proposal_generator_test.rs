@@ -4,7 +4,7 @@
 // Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-
+/*
 use crate::pos::consensus::{
     block_storage::BlockReader,
     liveness::proposal_generator::ProposalGenerator,
@@ -104,3 +104,4 @@ async fn test_old_proposal_generation() {
     let proposal_err = proposal_generator.generate_proposal(1).await.err();
     assert!(proposal_err.is_some());
 }
+*/

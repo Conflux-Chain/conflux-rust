@@ -33,7 +33,9 @@ pub struct InMemoryAccumulator<H> {
     /// Represents the roots of all the full subtrees from left to right in
     /// this accumulator. For example, if we have the following
     /// accumulator, this vector will have two hashes that correspond to
-    /// `X` and `e`. ```text
+    /// `X` and `e`.
+    ///
+    /// ```text
     ///                 root
     ///                /    \
     ///              /        \
@@ -116,7 +118,9 @@ where H: CryptoHasher
         // For example, this accumulator originally had N = 7 leaves. Appending
         // a leaf is like adding one to this number N: 0b0111 + 1 =
         // 0b1000. Every time we carry a bit to the left we merge the
-        // rightmost two subtrees and compute their parent. ```text
+        // rightmost two subtrees and compute their parent.
+        //
+        // ```text
         //       A
         //     /   \
         //    /     \

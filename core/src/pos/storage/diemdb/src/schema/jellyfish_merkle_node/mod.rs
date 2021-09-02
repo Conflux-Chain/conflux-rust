@@ -7,7 +7,9 @@
 
 //! This module defines physical storage schema for nodes in the state Jellyfish
 //! Merkle Tree. Node is identified by
-//! [NodeKey](jellyfish-merkle::node_type::NodeKey). ```text
+//! [NodeKey](jellyfish-merkle::node_type::NodeKey).
+//!
+//! ```text
 //! |<----key--->|<-----value----->|
 //! |  node_key  | serialized_node |
 //! ```

@@ -50,7 +50,7 @@ make_solidity_event! {
 }
 
 make_solidity_event! {
-    pub struct RetireEvent("Retire(bytes32)", indexed: H256, non_indexed: ());
+    pub struct RetireEvent("Retire(bytes32,uint64)", indexed: H256, non_indexed: u64);
 }
 
 make_solidity_function! {
@@ -95,16 +95,17 @@ impl ExecutionTrait for IncreaseStake {
 }
 
 make_solidity_function! {
-    struct Retire((), "retire()");
+    struct Retire(u64, "retire(uint64)");
 }
 impl_function_type!(Retire, "non_payable_write", gas: |spec: &Spec| spec.sstore_reset_gas);
 impl ExecutionTrait for Retire {
     fn execute_inner(
-        &self, _: (), params: &ActionParams, context: &mut InternalRefContext,
+        &self, votes: u64, params: &ActionParams,
+        context: &mut InternalRefContext,
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        retire(params.sender, params, context)
+        retire(params.sender, votes, params, context)
     }
 }
 

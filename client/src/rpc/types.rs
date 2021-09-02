@@ -14,6 +14,7 @@ pub mod errors;
 mod filter;
 mod index;
 mod log;
+pub mod pos;
 mod provenance;
 pub mod pubsub;
 mod receipt;
@@ -25,7 +26,6 @@ mod token_supply_info;
 mod trace;
 mod trace_filter;
 mod transaction;
-pub mod pos;
 
 pub use self::{
     account::Account,

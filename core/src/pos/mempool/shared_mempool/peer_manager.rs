@@ -484,6 +484,7 @@ fn compare_prioritized_peers(
     }
 }
 
+/*
 #[cfg(test)]
 mod test {
     use super::*;
@@ -543,3 +544,4 @@ mod test {
         assert_eq!(Ordering::Equal, compare_prioritized_peers(&val_1, &val_1));
     }
 }
+*/

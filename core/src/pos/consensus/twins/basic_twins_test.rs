@@ -4,7 +4,7 @@
 // Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-
+/*
 use crate::pos::consensus::{
     network_interface::ConsensusMsg,
     network_tests::{NetworkPlayground, TwinId},
@@ -324,3 +324,4 @@ fn twins_commit_test() {
         }
     });
 }
+*/

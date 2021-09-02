@@ -1839,6 +1839,7 @@ impl<T: ExecutorProxyTrait> StateSyncCoordinator<T> {
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use crate::pos::{
@@ -2742,3 +2743,4 @@ mod tests {
             .process_new_peer(peer.network_id(), connection_metadata);
     }
 }
+*/

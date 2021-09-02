@@ -4,7 +4,7 @@
 // Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-
+/*
 use crate::pos::{
     consensus::{
         block_storage::{block_store::BlockStore, BlockReader},
@@ -199,3 +199,4 @@ fn test_block_store_restart() {
         let _c1 = inserter.insert_block(&b1, 6, None);
     }
 }
+*/

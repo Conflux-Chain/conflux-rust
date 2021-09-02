@@ -166,7 +166,13 @@
       "type": "function"
     },
     {
-      "inputs": [],
+      "inputs": [
+        {
+          "internalType": "uint64",
+          "name": "votes",
+          "type": "uint64"
+        }
+      ],
       "name": "retire",
       "outputs": [],
       "stateMutability": "nonpayable",

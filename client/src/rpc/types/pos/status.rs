@@ -33,4 +33,3 @@ impl Default for Status {
         }
     }
 }
-

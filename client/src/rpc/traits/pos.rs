@@ -2,9 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_types::{H256, U64};
 use jsonrpc_core::Result as JsonRpcResult;
 use jsonrpc_derive::rpc;
-use cfx_types::{H256, U64};
 use crate::rpc::types::pos::{
     Status, Block, Account, BlockNumber
 };

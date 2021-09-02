@@ -79,10 +79,12 @@ mod test {
     #[test]
     fn address_hash() {
         let address: AccountAddress =
-            "ca843279e3427144cead5e4d5999a3d0".parse().unwrap();
+            "ca843279e3427144cead5e4d5999a3d0ca843279e3427144cead5e4d5999a3d0"
+                .parse()
+                .unwrap();
 
         let hash_vec = &Vec::from_hex(
-            "6403c4906e79cf4536edada922040805c6a8d0e735fa4516a9cc40038bd125c8",
+            "81fdf1b3fe04abd62ada9adc8852fab3d1b145b875c259f017e697ea2f4da249",
         )
         .expect("You must provide a valid Hex format");
 
