@@ -87,9 +87,23 @@ pub struct NodeData {
     voting_power: u64,
 }
 
+impl NodeData{
+    pub fn status(&self) -> NodeStatus{
+        self.status
+    }
+
+    pub fn status_start_view(&self) -> Round{
+        self.status_start_view
+    }
+
+    pub fn voting_power(&self) -> u64{
+        self.voting_power
+    }
+}
+
 /// A node becomes its voting power number of ElectionNodes for election.
 #[derive(
-    Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Ord, PartialOrd,
+Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Ord, PartialOrd,
 )]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct ElectionNodeID {
@@ -406,6 +420,8 @@ impl PosState {
     }
 
     pub fn epoch_state(&self) -> &EpochState { &self.epoch_state }
+
+    pub fn account_node_data(&self, account_address: AccountAddress) -> Option<&NodeData> { self.node_map.get(&account_address) }
 }
 
 /// Read-only functions use in `TransactionValidator`
@@ -503,9 +519,9 @@ impl PosState {
         }
         if node.status_start_view + ELECTION_AFTER_ACCEPTED_ROUND
             > election_tx
-                .target_term
-                .checked_mul(ROUND_PER_TERM)
-                .ok_or(anyhow!("start view overflow"))?
+            .target_term
+            .checked_mul(ROUND_PER_TERM)
+            .ok_or(anyhow!("start view overflow"))?
         {
             bail!("Election too soon after accepted");
         }
@@ -615,19 +631,19 @@ impl PosState {
                     NodeStatus::Accepted => {
                         if ((self.term_list.current_term + 1) * ROUND_PER_TERM
                             >= node.status_start_view
-                                + ELECTION_AFTER_ACCEPTED_ROUND)
+                            + ELECTION_AFTER_ACCEPTED_ROUND)
                             && self
-                                .term_list
-                                .can_be_elected(TERM_LIST_LEN, author)
+                            .term_list
+                            .can_be_elected(TERM_LIST_LEN, author)
                         {
                             Some(self.term_list.current_term + 1)
                         } else if ((self.term_list.current_term + 2)
                             * ROUND_PER_TERM
                             >= node.status_start_view
-                                + ELECTION_AFTER_ACCEPTED_ROUND)
+                            + ELECTION_AFTER_ACCEPTED_ROUND)
                             && self
-                                .term_list
-                                .can_be_elected(TERM_LIST_LEN + 1, author)
+                            .term_list
+                            .can_be_elected(TERM_LIST_LEN + 1, author)
                         {
                             Some(self.term_list.current_term + 2)
                         } else {
@@ -656,7 +672,7 @@ impl PosState {
                     bcs::to_bytes(&UnlockEvent {
                         node_id: *retired_node,
                     })
-                    .unwrap(),
+                        .unwrap(),
                 );
                 unlocked_nodes.push(unlock_event);
             } else {
