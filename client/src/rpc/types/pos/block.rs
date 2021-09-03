@@ -26,7 +26,7 @@ pub struct Block {
     ///
     pub timestamp: U64,
     ///
-    pub pivot_decision: Option<U64>,
+    pub pivot_decision: U64,
     ///
     pub transactions: BlockTransactions,
     ///

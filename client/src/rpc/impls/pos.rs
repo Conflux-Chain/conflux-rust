@@ -107,7 +107,7 @@ impl PosHandler {
                         b.parent_hash.to_hex().as_str(),
                     ),
                     timestamp: U64::from(b.timestamp),
-                    pivot_decision: Some(U64::from(b.pivot_decision.height)),
+                    pivot_decision: U64::from(b.pivot_decision.height),
                     transactions: BlockTransactions::Hashes(vec![]), // TODO
                     signatures,
                 })
