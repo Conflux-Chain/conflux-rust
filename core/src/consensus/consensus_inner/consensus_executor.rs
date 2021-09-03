@@ -1215,7 +1215,7 @@ impl ConsensusExecutionHandler {
             let spec = self.machine.spec(env.number);
             let secondary_reward =
                 state.bump_block_number_accumulate_interest();
-            state.inc_distributable_pos_interest(env.number);
+            state.inc_distributable_pos_interest(env.number)?;
             initialize_internal_contract_accounts(
                 state,
                 self.machine.internal_contracts().initialized_at(env.number),
