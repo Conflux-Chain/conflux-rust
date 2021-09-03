@@ -53,9 +53,7 @@ impl ApiSet {
             .iter()
             .cloned()
             .collect(),
-            ApiSet::Safe => {
-                [Api::Cfx, Api::Pubsub, Api::Pos].iter().cloned().collect()
-            }
+            ApiSet::Safe => [Api::Cfx, Api::Pubsub].iter().cloned().collect(),
         }
     }
 }
