@@ -21,4 +21,5 @@ pub struct CommittedBlock {
     pub version: u64,
     pub timestamp: u64,
     pub signatures: BTreeMap<AccountAddress, ConsensusSignature>,
+    pub view: u64,
 }

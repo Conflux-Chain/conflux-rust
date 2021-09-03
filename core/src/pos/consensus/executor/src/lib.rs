@@ -1242,6 +1242,8 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
         let mut committed_blocks = Vec::new();
         if ledger_info_with_sigs.ledger_info().epoch() != 0 {
             let mut signatures_vec = Vec::new();
+            let first_view =
+                pos_state_to_commit.current_view() - blocks.len() as u64 + 1;
             for (i, b) in blocks.iter().enumerate() {
                 let ledger_block = self
                     .consensus_db
@@ -1260,6 +1262,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     timestamp: ledger_block.timestamp_usecs(),
                     // Set the signatures after the loop.
                     signatures: Default::default(),
+                    view: first_view + i as u64,
                 });
                 // The signatures of each block is in the qc of the next block.
                 if i != 0 {
@@ -1298,6 +1301,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     .ledger_info()
                     .timestamp_usecs(),
                 signatures: ledger_info_with_sigs.signatures().clone(),
+                view: 0,
             });
         }
         for (txn, txn_data) in blocks.iter().flat_map(|block| {

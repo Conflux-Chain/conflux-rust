@@ -33,7 +33,7 @@ use crate::{
     },
     db::NUM_COLUMNS,
     machine::new_machine_with_builtin,
-    pos::pow_handler::PowHandler,
+    pos::{consensus::ConsensusDB, pow_handler::PowHandler},
     pow::{self, PowComputer, ProofOfWorkConfig},
     spec::genesis::{genesis_block, GenesisPosState},
     statistics::Statistics,
@@ -182,7 +182,8 @@ pub fn initialize_synchronization_graph_with_data_manager(
     let machine = Arc::new(new_machine_with_builtin(Default::default(), vm));
     let mut rng = StdRng::from_seed([0u8; 32]);
     let pos_connection = PosConnection::new(
-        Arc::new(MockDbReader {}) as Arc<dyn DBReaderForPoW>
+        Arc::new(MockDbReader {}) as Arc<dyn DBReaderForPoW>,
+        Arc::new(ConsensusDB::new("pos_db")),
     );
     let pos_verifier = Arc::new(PosVerifier::new(
         pos_connection,
