@@ -4,8 +4,7 @@
 
 use crate::rpc::{
     types::pos::{
-        Account, Block, BlockNumber, BlockTransactions, Decision, Signature,
-        Status,
+        Account, Block, BlockNumber, BlockTransactions, Signature, Status,
     },
     Pos,
 };
@@ -40,7 +39,7 @@ impl PosHandler {
             epoch: U64::from(epoch_state.epoch),
             block_number: U64::from(block_number),
             catch_up_mode: state.catch_up_mode(),
-            pivot_decision: Decision::from(decision.clone()),
+            pivot_decision: U64::from(decision.height),
         }
     }
 
@@ -66,7 +65,6 @@ impl PosHandler {
     fn block_by_hash_impl(&self, hash: H256) -> Option<Block> {
         let hash_value = HashValue::from_slice(hash.as_bytes()).unwrap();
         let block = self.diem_db.get_committed_block(&hash_value);
-
         match block {
             Ok(b) => {
                 let signatures = b
@@ -88,7 +86,7 @@ impl PosHandler {
                         b.parent_hash.to_hex().as_str(),
                     ),
                     timestamp: U64::from(b.timestamp),
-                    pivot_decision: Some(Decision::from(b.pivot_decision)),
+                    pivot_decision: Some(U64::from(b.pivot_decision.height)),
                     transactions: BlockTransactions::Hashes(vec![]), // TODO
                     signatures,
                 })
@@ -105,36 +103,8 @@ impl PosHandler {
             }
             BlockNumber::Earliest => None,
             BlockNumber::Latest => {
-                let latest_ledger =
-                    self.diem_db.get_latest_ledger_info_option().unwrap();
-                let ledger_info = latest_ledger.ledger_info();
-                let pivot_decision = ledger_info
-                    .pivot_decision()
-                    .map(|p| Decision::from(p.clone()));
-                let signatures = latest_ledger
-                    .signatures()
-                    .iter()
-                    .map(|(a, s)| Signature {
-                        account: H256::from(a.to_u8()),
-                        signature: s.to_string(),
-                    })
-                    .collect();
-                let block = Block {
-                    hash: hexstr_to_h256(
-                        ledger_info.consensus_block_id().to_hex().as_str(),
-                    ),
-                    height: Default::default(), // TODO
-                    epoch: U64::from(ledger_info.epoch()),
-                    round: U64::from(ledger_info.round()),
-                    version: U64::from(ledger_info.version()),
-                    miner: Default::default(), // TODO
-                    parent_hash: Default::default(), // TODO
-                    timestamp: U64::from(ledger_info.timestamp_usecs()),
-                    pivot_decision,
-                    transactions: BlockTransactions::Hashes(vec![]), // TODO
-                    signatures,
-                };
-                Some(block)
+                let hash = self.pos_handler.get_latest_pos_reference();
+                self.block_by_hash_impl(hash)
             }
         }
     }

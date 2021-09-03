@@ -1251,7 +1251,8 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 committed_blocks.push(CommittedBlock {
                     hash: b.id(),
                     epoch: ledger_block.epoch(),
-                    miner: ledger_block.author().unwrap(),
+                    miner: ledger_block.author().unwrap(), /* TODO handle no
+                                                            * author */
                     parent_hash: ledger_block.parent_id(),
                     round: ledger_block.round(),
                     pivot_decision: b.output().pivot_block().clone().unwrap(),
