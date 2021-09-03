@@ -5,13 +5,17 @@
 use crate::rpc::{
     types::pos::{
         Account, Block, BlockNumber, BlockTransactions, Signature, Status,
+        Transaction,
     },
     Pos,
 };
 use cfx_types::{hexstr_to_h256, H256, U64};
 use cfxcore::consensus::pos_handler::PosVerifier;
 use diem_crypto::hash::HashValue;
-use diem_types::account_address::AccountAddress;
+use diem_types::{
+    account_address::AccountAddress,
+    transaction::{Transaction as CoreTransaction, TransactionStatus},
+};
 use diemdb::DiemDB;
 use jsonrpc_core::Result as JsonRpcResult;
 use std::sync::Arc;
@@ -127,5 +131,23 @@ impl Pos for PosHandler {
         &self, address: H256, view: U64,
     ) -> JsonRpcResult<Option<Account>> {
         Ok(self.account_impl(address, view))
+    }
+
+    fn pos_transaction_by_version(
+        &self, version: U64,
+    ) -> JsonRpcResult<Option<Transaction>> {
+        let tx = self.diem_db.get_transaction(version.as_u64());
+        match tx {
+            Ok(CoreTransaction::UserTransaction(signed_tx)) => {
+                Ok(Some(Transaction {
+                    hash: hexstr_to_h256(signed_tx.hash().to_hex().as_str()),
+                    from: H256::from(signed_tx.sender().to_u8()),
+                    version,
+                    payload: signed_tx.payload().clone(),
+                    status: TransactionStatus::Retry, // TODO
+                }))
+            }
+            _ => Ok(None),
+        }
     }
 }

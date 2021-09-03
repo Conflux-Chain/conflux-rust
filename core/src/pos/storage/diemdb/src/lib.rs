@@ -47,8 +47,9 @@ use diem_types::{
     reward_distribution_event::RewardDistributionEvent,
     term_state::PosState,
     transaction::{
-        TransactionInfo, TransactionListWithProof, TransactionToCommit,
-        TransactionWithProof, Version, PRE_GENESIS_VERSION,
+        Transaction, TransactionInfo, TransactionListWithProof,
+        TransactionToCommit, TransactionWithProof, Version,
+        PRE_GENESIS_VERSION,
     },
 };
 #[cfg(feature = "fuzzing")]
@@ -412,6 +413,11 @@ impl DiemDB {
             events,
             proof,
         })
+    }
+
+    // TODO check if already have methods can do this
+    pub fn get_transaction(&self, version: Version) -> Result<Transaction> {
+        self.transaction_store.get_transaction(version)
     }
 
     // ================================== Backup APIs

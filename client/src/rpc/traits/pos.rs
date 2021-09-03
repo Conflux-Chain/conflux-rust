@@ -2,7 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::pos::{Account, Block, BlockNumber, Status};
+use crate::rpc::types::pos::{
+    Account, Block, BlockNumber, Status, Transaction,
+};
 use cfx_types::{H256, U64};
 use jsonrpc_core::Result as JsonRpcResult;
 use jsonrpc_derive::rpc;
@@ -25,4 +27,9 @@ pub trait Pos {
     fn pos_block_by_number(
         &self, number: BlockNumber,
     ) -> JsonRpcResult<Option<Block>>;
+
+    #[rpc(name = "pos_getTransactionByVersion")]
+    fn pos_transaction_by_version(
+        &self, version: U64,
+    ) -> JsonRpcResult<Option<Transaction>>;
 }
