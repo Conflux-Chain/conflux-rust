@@ -3,17 +3,18 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::{
+    traits::pos::Pos,
     types::pos::{
-        Account, Block, BlockNumber, BlockTransactions, Signature, Status,
-        Transaction,
+        Account, Block, BlockNumber, BlockTransactions, NodeLockStatus,
+        Signature, Status, Transaction,
     },
-    Pos,
 };
 use cfx_types::{hexstr_to_h256, H256, U64};
 use cfxcore::consensus::pos_handler::PosVerifier;
 use diem_crypto::hash::HashValue;
 use diem_types::{
     account_address::AccountAddress,
+    term_state::lock_status::StatusList,
     transaction::{Transaction as CoreTransaction, TransactionStatus},
 };
 use diemdb::DiemDB;
@@ -47,23 +48,39 @@ impl PosHandler {
         }
     }
 
-    fn account_impl(&self, address: H256, view: U64) -> Option<Account> {
-        /*let state = self.diem_db.get_latest_pos_state();
+    fn account_impl(&self, address: H256, _view: U64) -> Account {
+        let state = self.diem_db.get_latest_pos_state();
         let account_address = AccountAddress::from_hex(address);
 
-        if let Ok(a) = account_address {
-            let maybe_node_data = state.account_node_data(a);
+        if let Ok(addr) = account_address {
+            let maybe_node_data = state.account_node_data(addr);
 
             if let Some(node_data) = maybe_node_data {
-                return Some(Account {
+                let lock_status = node_data.lock_status();
+                return Account {
                     address,
-                    status: node_data.status(),
-                    status_start_view: U64::from(node_data.status_start_view()),
-                    voting_power: U64::from(node_data.voting_power()),
-                });
+                    block_number: U64::from(state.current_view()),
+                    status: NodeLockStatus {
+                        in_queue: sum_votes(&lock_status.in_queue),
+                        locked: U64::from(lock_status.locked),
+                        out_queue: sum_votes(&lock_status.out_queue),
+                        unlocked: U64::from(lock_status.unlocked()),
+                        available_votes: U64::from(
+                            lock_status.available_votes(),
+                        ),
+                        force_retired: lock_status.force_retired(),
+                        exempt_from_forfeit: lock_status
+                            .exempt_from_forfeit()
+                            .map(U64::from),
+                    },
+                };
             };
-        }*/
-        None
+        }
+
+        let mut default_acct: Account = Account::default();
+        default_acct.address = address;
+        default_acct.block_number = U64::from(state.current_view());
+        return default_acct;
     }
 
     fn block_by_hash_impl(&self, hash: H256) -> Option<Block> {
@@ -114,6 +131,14 @@ impl PosHandler {
     }
 }
 
+fn sum_votes(list: &StatusList) -> U64 {
+    let mut sum: u64 = 0;
+    for item in list.iter() {
+        sum += item.votes;
+    }
+    U64::from(sum)
+}
+
 impl Pos for PosHandler {
     fn pos_status(&self) -> JsonRpcResult<Status> { Ok(self.status_impl()) }
 
@@ -127,9 +152,7 @@ impl Pos for PosHandler {
         Ok(self.block_by_number_impl(number))
     }
 
-    fn pos_account(
-        &self, address: H256, view: U64,
-    ) -> JsonRpcResult<Option<Account>> {
+    fn pos_account(&self, address: H256, view: U64) -> JsonRpcResult<Account> {
         Ok(self.account_impl(address, view))
     }
 

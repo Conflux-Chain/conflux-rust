@@ -16,9 +16,7 @@ pub trait Pos {
     fn pos_status(&self) -> JsonRpcResult<Status>;
 
     #[rpc(name = "pos_getAccount")]
-    fn pos_account(
-        &self, address: H256, view: U64,
-    ) -> JsonRpcResult<Option<Account>>;
+    fn pos_account(&self, address: H256, view: U64) -> JsonRpcResult<Account>;
 
     #[rpc(name = "pos_getBlockByHash")]
     fn pos_block_by_hash(&self, hash: H256) -> JsonRpcResult<Option<Block>>;

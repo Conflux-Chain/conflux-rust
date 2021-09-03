@@ -122,6 +122,16 @@ pub mod lock_status {
     pub type ViewHints = Vec<View>;
 
     impl NodeLockStatus {
+        pub fn unlocked(&self) -> u64 { self.unlocked }
+
+        pub fn force_retired(&self) -> bool { self.force_retired }
+
+        pub fn exempt_from_forfeit(&self) -> Option<u64> {
+            self.exempt_from_forfeit
+        }
+    }
+
+    impl NodeLockStatus {
         #[must_use]
         pub(super) fn update(&mut self, view: View) -> (bool, Vec<View>) {
             let mut new_votes_unlocked = false;
@@ -254,13 +264,9 @@ pub struct NodeData {
     lock_status: NodeLockStatus,
 }
 
-/*impl NodeData {
-    pub fn status(&self) -> NodeStatus { self.status }
-
-    pub fn status_start_view(&self) -> Round { self.status_start_view }
-
-    pub fn voting_power(&self) -> u64 { self.voting_power }
-}*/
+impl NodeData {
+    pub fn lock_status(&self) -> &NodeLockStatus { &self.lock_status }
+}
 
 /// A node becomes its voting power number of ElectionNodes for election.
 #[derive(
