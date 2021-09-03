@@ -98,7 +98,7 @@ impl PosHandler {
                     .collect();
                 Some(Block {
                     hash,
-                    height: Default::default(), // TODO
+                    height: U64::from(b.view),
                     epoch: U64::from(b.epoch),
                     round: U64::from(b.round),
                     version: U64::from(b.version),
@@ -119,8 +119,14 @@ impl PosHandler {
     fn block_by_number_impl(&self, number: BlockNumber) -> Option<Block> {
         match number {
             BlockNumber::Num(num) => {
-                println!("{}", num);
-                None
+                let hash =
+                    self.diem_db.get_committed_block_hash_by_view(num.as_u64());
+                match hash {
+                    Ok(h) => self.block_by_hash_impl(hexstr_to_h256(
+                        h.to_hex().as_str(),
+                    )),
+                    Err(_) => None,
+                }
             }
             BlockNumber::Earliest => None,
             BlockNumber::Latest => {
