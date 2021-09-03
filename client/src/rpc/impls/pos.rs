@@ -85,7 +85,7 @@ impl PosHandler {
 
     fn block_by_hash_impl(&self, hash: H256) -> Option<Block> {
         let hash_value = HashValue::from_slice(hash.as_bytes()).unwrap();
-        let block = self.diem_db.get_committed_block(&hash_value);
+        let block = self.diem_db.get_committed_block_by_hash(&hash_value);
         match block {
             Ok(b) => {
                 let signatures = b
