@@ -43,7 +43,6 @@ impl PosHandler {
         Status {
             epoch: U64::from(epoch_state.epoch),
             block_number: U64::from(block_number),
-            catch_up_mode: state.catch_up_mode(),
             pivot_decision: U64::from(decision.height),
         }
     }

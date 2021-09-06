@@ -13,8 +13,6 @@ pub struct Status {
     ///
     pub epoch: U64,
     ///
-    pub catch_up_mode: bool,
-    ///
     pub pivot_decision: U64,
 }
 
@@ -23,7 +21,6 @@ impl Default for Status {
         Status {
             epoch: U64::default(),
             block_number: U64::default(),
-            catch_up_mode: false,
             pivot_decision: U64::default(),
         }
     }
