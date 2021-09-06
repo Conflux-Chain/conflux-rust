@@ -840,7 +840,7 @@ impl PosState {
         }
         let target_view = election_tx.target_term * ROUND_PER_TERM;
         if target_view > self.current_view + ELECTION_TERM_START_ROUND
-            || target_view < self.current_view + ELECTION_TERM_END_ROUND
+            || target_view <= self.current_view + ELECTION_TERM_END_ROUND
         {
             bail!(
                 "Target term is not open for election: target={} current={}",
