@@ -61,6 +61,7 @@ pub enum AddressType {
     Contract,
     Null,
     User,
+    Unknown
 }
 
 impl fmt::Display for Network {
@@ -128,6 +129,7 @@ impl AddressType {
     const CONTRACT: &'static str = "contract";
     const NULL: &'static str = "null";
     const USER: &'static str = "user";
+    const UNKNOWN: &'static str = "unknown";
 
     pub fn parse(text: &str) -> Result<Self, DecodingError> {
         if text == Self::BUILTIN {
@@ -139,9 +141,7 @@ impl AddressType {
         } else if text == Self::USER {
             Ok(Self::User)
         } else {
-            Err(DecodingError::InvalidOption(
-                OptionError::InvalidAddressType(text.into()),
-            ))
+            Ok(Self::Unknown)
         }
     }
 
@@ -158,7 +158,7 @@ impl AddressType {
             }
             address_util::TYPE_BITS_CONTRACT => Ok(Self::Contract),
             address_util::TYPE_BITS_USER_ACCOUNT => Ok(Self::User),
-            n => Err(EncodingError::InvalidAddressType(n)),
+            _ => Ok(Self::Unknown),
         }
     }
 
@@ -168,6 +168,7 @@ impl AddressType {
             Self::Contract => Self::CONTRACT,
             Self::Null => Self::NULL,
             Self::User => Self::USER,
+            Self::Unknown => Self::UNKNOWN,
         }
     }
 }
