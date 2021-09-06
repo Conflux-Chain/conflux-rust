@@ -1,5 +1,6 @@
 use std::{
-    collections::HashMap, path::Path, str::FromStr, sync::Arc, time::Duration,
+    collections::HashMap, env, path::Path, str::FromStr, sync::Arc,
+    time::Duration,
 };
 
 use parking_lot::Mutex;
@@ -183,7 +184,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
     let mut rng = StdRng::from_seed([0u8; 32]);
     let pos_connection = PosConnection::new(
         Arc::new(MockDbReader {}) as Arc<dyn DBReaderForPoW>,
-        Arc::new(ConsensusDB::new("pos_db")),
+        Arc::new(ConsensusDB::new(env::temp_dir())),
     );
     let pos_verifier = Arc::new(PosVerifier::new(
         pos_connection,
