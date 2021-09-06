@@ -90,6 +90,10 @@ impl SpeculationBlock {
         self.output = output;
         self.children = vec![];
     }
+
+    pub fn replace_pos_state(&mut self, new_pos_state: PosState) {
+        self.output.replace_pos_state(new_pos_state)
+    }
 }
 
 /// drop() will clean the current block entry from the global map.

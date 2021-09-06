@@ -1193,6 +1193,11 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 ledger_info_with_sigs.ledger_info().epoch(),
                 &reward_event,
             )?;
+            self.db_with_cache
+                .get_block(&ending_block)
+                .expect("latest committed block not pruned")
+                .lock()
+                .replace_pos_state(pos_state_to_commit.clone());
         }
 
         diem_info!(
