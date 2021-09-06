@@ -432,6 +432,8 @@ pub trait DbWriter: Send + Sync {
     fn save_reward_event(
         &self, epoch: u64, event: &RewardDistributionEvent,
     ) -> Result<()>;
+
+    fn delete_pos_state_by_block(&self, block_id: &HashValue) -> Result<()>;
 }
 
 #[derive(Clone)]

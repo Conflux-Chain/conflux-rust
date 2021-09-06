@@ -1412,11 +1412,15 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
             block.output().executed_trees().state_tree().prune()
         }
 
-        self.db_with_cache.prune(
+        let old_committed_block = self.db_with_cache.prune(
             ledger_info_with_sigs.ledger_info(),
             committed_txns.clone(),
             reconfig_events.clone(),
         )?;
+        self.db_with_cache
+            .db
+            .writer
+            .delete_pos_state_by_block(&old_committed_block)?;
 
         // Now that the blocks are persisted successfully, we can reply to
         // consensus
