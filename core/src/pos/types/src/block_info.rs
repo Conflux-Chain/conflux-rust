@@ -207,6 +207,7 @@ impl Display for BlockInfo {
     BCSCryptoHash,
     CryptoHasher,
 )]
+#[serde(rename_all = "camelCase")]
 pub struct PivotBlockDecision {
     pub height: u64,
     pub block_hash: H256,

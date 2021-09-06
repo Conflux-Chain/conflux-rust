@@ -433,6 +433,7 @@ pub fn initialize_common_modules(
         accounts.clone(),
         pos_verifier.clone(),
         diem_handler.tx_sender.clone(),
+        diem_handler.diem_db.clone(),
     ));
 
     let runtime = Runtime::with_default_thread_count();

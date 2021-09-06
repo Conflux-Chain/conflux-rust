@@ -122,6 +122,16 @@ pub mod lock_status {
     pub type ViewHints = Vec<View>;
 
     impl NodeLockStatus {
+        pub fn unlocked(&self) -> u64 { self.unlocked }
+
+        pub fn force_retired(&self) -> bool { self.force_retired }
+
+        pub fn exempt_from_forfeit(&self) -> Option<u64> {
+            self.exempt_from_forfeit
+        }
+    }
+
+    impl NodeLockStatus {
         #[must_use]
         pub(super) fn update(&mut self, view: View) -> (bool, Vec<View>) {
             let mut new_votes_unlocked = false;
@@ -252,6 +262,10 @@ pub struct NodeData {
     public_key: ConsensusPublicKey,
     vrf_public_key: Option<ConsensusVRFPublicKey>,
     lock_status: NodeLockStatus,
+}
+
+impl NodeData {
+    pub fn lock_status(&self) -> &NodeLockStatus { &self.lock_status }
 }
 
 /// A node becomes its voting power number of ElectionNodes for election.
@@ -719,6 +733,12 @@ impl PosState {
     }
 
     pub fn epoch_state(&self) -> &EpochState { &self.epoch_state }
+
+    pub fn account_node_data(
+        &self, account_address: AccountAddress,
+    ) -> Option<&NodeData> {
+        self.node_map.get(&account_address)
+    }
 }
 
 /// Read-only functions use in `TransactionValidator`

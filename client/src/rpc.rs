@@ -50,7 +50,8 @@ use self::{
         trace::TraceHandler,
     },
     traits::{
-        cfx::Cfx, debug::LocalRpc, pubsub::PubSub, test::TestRpc, trace::Trace,
+        cfx::Cfx, debug::LocalRpc, pos::Pos, pubsub::PubSub, test::TestRpc,
+        trace::Trace,
     },
 };
 
@@ -59,6 +60,7 @@ use crate::{
     configuration::Configuration,
     rpc::{
         error_codes::request_rejected_too_many_request_error,
+        impls::pos::PosHandler,
         interceptor::{RpcInterceptor, RpcProxy},
         rpc_apis::{Api, ApiSet},
     },
@@ -226,6 +228,14 @@ fn setup_rpc_apis(
                 );
                 handler.extend_with(RpcProxy::new(trace, interceptor));
             }
+            Api::Pos => {
+                let pos = PosHandler::new(
+                    common.diem_db.clone(),
+                    common.pos_handler.clone(),
+                )
+                .to_delegate();
+                handler.extend_with(pos);
+            }
         }
     }
     handler
@@ -296,6 +306,9 @@ fn setup_rpc_apis_light(
             }
             Api::Trace => {
                 warn!("Light nodes do not support trace RPC");
+            }
+            Api::Pos => {
+                warn!("Light nodes do not support PoS RPC");
             }
         }
     }
