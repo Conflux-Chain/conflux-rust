@@ -298,7 +298,8 @@ where
             let vrf_public_key =
                 ConsensusVRFPublicKey::from_encoded_string(key_array[1])
                     .unwrap();
-            public_keys.push((public_key, vrf_public_key, 1));
+            let voting_power: u64 = key_array[2].parse().unwrap();
+            public_keys.push((public_key, vrf_public_key, voting_power));
         }
         generate_genesis_from_public_keys(public_keys);
         Ok("Ok".into())

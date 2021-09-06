@@ -305,8 +305,6 @@ pub fn initialize_common_modules(
     let mut pos_config =
         NodeConfig::load(pos_config_path.expect("empty pos config path"))
             .expect("Failed to load node config");
-    let own_node_hash =
-        keccak(network.net_key_pair().expect("Error node key").public());
     let self_pos_public_key = network.pos_public_key();
     let self_vrf_public_key = self_vrf_private_key.public_key();
     pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
@@ -348,7 +346,6 @@ pub fn initialize_common_modules(
     let diem_handler = start_pos_consensus(
         &pos_config,
         network.clone(),
-        own_node_hash,
         conf.protocol_config(),
         Some((self_pos_public_key.unwrap(), self_vrf_public_key)),
         initial_nodes
@@ -370,6 +367,15 @@ pub fn initialize_common_modules(
         PosConfiguration {
             bls_key: self_pos_private_key,
             vrf_key: self_vrf_private_key,
+            diem_conf: pos_config,
+            protocol_conf: conf.protocol_config(),
+            initial_nodes: initial_nodes
+                .initial_nodes
+                .into_iter()
+                .map(|node| {
+                    (NodeID::new(node.bls_key, node.vrf_key), node.voting_power)
+                })
+                .collect(),
         },
         conf.raw_conf.pos_reference_enable_height,
     ));
@@ -411,7 +417,6 @@ pub fn initialize_common_modules(
         notifications.clone(),
         machine.clone(),
         pos_verifier.clone(),
-        diem_handler.pow_handler.clone(),
     ));
     let refresh_time =
         Duration::from_millis(conf.raw_conf.account_provider_refresh_time_ms);
@@ -432,7 +437,6 @@ pub fn initialize_common_modules(
         txpool.clone(),
         accounts.clone(),
         pos_verifier.clone(),
-        diem_handler.tx_sender.clone(),
         diem_handler.diem_db.clone(),
     ));
 

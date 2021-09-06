@@ -141,7 +141,6 @@ impl SynchronizationPhaseManager {
             sync_graph.clone(),
         )));
         sync_manager.register_phase(Arc::new(NormalSyncPhase::new(
-            sync_graph.pow_handler.clone(),
             consensus,
         )));
 
@@ -545,16 +544,14 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
 }
 
 pub struct NormalSyncPhase {
-    _pow_handler: Arc<PowHandler>,
     _consensus: Arc<ConsensusGraph>,
 }
 
 impl NormalSyncPhase {
     pub fn new(
-        pow_handler: Arc<PowHandler>, consensus: Arc<ConsensusGraph>,
+        consensus: Arc<ConsensusGraph>,
     ) -> Self {
         NormalSyncPhase {
-            _pow_handler: pow_handler,
             _consensus: consensus,
         }
     }

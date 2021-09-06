@@ -13,6 +13,10 @@ use diem_types::{
 };
 use primitives::pos::{NodeId, PosBlockId};
 use storage_interface::DBReaderForPoW;
+use diem_config::config::NodeConfig;
+use crate::sync::ProtocolConfiguration;
+use diem_types::term_state::NodeID;
+use network::NetworkService;
 
 pub type PosVerifier = PosHandler<PosConnection>;
 
@@ -62,6 +66,7 @@ pub struct PosBlock {
 
 pub struct PosHandler<PoS: PosInterface> {
     pos: PoS,
+    network: Arc<NetworkService>,
     enable_height: u64,
     conf: PosConfiguration,
 }
@@ -302,6 +307,9 @@ impl PosInterface for PosConnection {
 pub struct PosConfiguration {
     pub bls_key: ConfigKey<ConsensusPrivateKey>,
     pub vrf_key: ConfigKey<ConsensusVRFPrivateKey>,
+    pub diem_conf: NodeConfig,
+    pub protocol_conf: ProtocolConfiguration,
+    pub initial_nodes: Vec<(NodeID, u64)>,
 }
 
 fn diem_hash_to_h256(h: &HashValue) -> PosBlockId { H256::from(h.as_ref()) }

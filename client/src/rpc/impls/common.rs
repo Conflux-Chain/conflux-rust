@@ -150,12 +150,6 @@ pub struct RpcImpl {
     tx_pool: SharedTransactionPool,
     accounts: Arc<AccountProvider>,
     pub pos_handler: Arc<PosVerifier>,
-    _pos_tx_sender: Mutex<
-        mpsc::Sender<(
-            DiemSignedTransaction,
-            oneshot::Sender<anyhow::Result<SubmissionStatus>>,
-        )>,
-    >,
     pub diem_db: Arc<DiemDB>,
 }
 
@@ -164,10 +158,6 @@ impl RpcImpl {
         exit: Arc<(Mutex<bool>, Condvar)>, consensus: SharedConsensusGraph,
         network: Arc<NetworkService>, tx_pool: SharedTransactionPool,
         accounts: Arc<AccountProvider>, pos_verifier: Arc<PosVerifier>,
-        pos_tx_sender: mpsc::Sender<(
-            DiemSignedTransaction,
-            oneshot::Sender<anyhow::Result<SubmissionStatus>>,
-        )>,
         diem_db: Arc<DiemDB>,
     ) -> Self
     {
@@ -181,7 +171,6 @@ impl RpcImpl {
             tx_pool,
             accounts,
             pos_handler: pos_verifier,
-            _pos_tx_sender: Mutex::new(pos_tx_sender),
             diem_db,
         }
     }

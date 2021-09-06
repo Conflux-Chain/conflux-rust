@@ -275,13 +275,6 @@ pub fn initialize_synchronization_graph_with_data_manager(
         notifications,
         machine,
         pos_verifier.clone(),
-        Arc::new(PowHandler::new(
-            runtime::Builder::new_multi_thread()
-                .build()
-                .expect("Failed to create Tokio runtime!")
-                .handle()
-                .clone(),
-        )),
     ));
 
     (sync, consensus)

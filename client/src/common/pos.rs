@@ -60,6 +60,7 @@ use std::{
 };
 use storage_interface::DbReaderWriter;
 use tokio::runtime::Runtime;
+use keccak_hash::keccak;
 
 const AC_SMP_CHANNEL_BUFFER_SIZE: usize = 1_024;
 const INTRA_NODE_CHANNEL_BUFFER_SIZE: usize = 1;
@@ -80,7 +81,7 @@ pub struct DiemHandle {
 }
 
 pub fn start_pos_consensus(
-    config: &NodeConfig, network: Arc<NetworkService>, own_node_hash: H256,
+    config: &NodeConfig, network: Arc<NetworkService>,
     protocol_config: ProtocolConfiguration,
     own_pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     initial_nodes: Vec<(NodeID, u64)>,
@@ -128,7 +129,6 @@ pub fn start_pos_consensus(
     setup_pos_environment(
         &config,
         network,
-        own_node_hash,
         protocol_config,
         own_pos_public_key,
         initial_nodes,
@@ -154,7 +154,7 @@ fn setup_chunk_executor(db: DbReaderWriter) -> Box<dyn ChunkExecutor> {
 
 pub fn setup_pos_environment(
     node_config: &NodeConfig, network: Arc<NetworkService>,
-    own_node_hash: H256, protocol_config: ProtocolConfiguration,
+    protocol_config: ProtocolConfiguration,
     own_pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     initial_nodes: Vec<(NodeID, u64)>,
 ) -> DiemHandle
@@ -215,6 +215,8 @@ pub fn setup_pos_environment(
         ConsensusNetworkTask::new();
     let (mempool_network_task, mempool_network_receiver) =
         MempoolNetworkTask::new();
+    let own_node_hash =
+        keccak(network.net_key_pair().expect("Error node key").public());
     let protocol_handler = Arc::new(HotStuffSynchronizationProtocol::new(
         own_node_hash,
         consensus_network_task,

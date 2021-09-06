@@ -58,7 +58,8 @@ class ExampleTest(ConfluxTestFramework):
             time.sleep(3)
             self.nodes[0].generate_empty_blocks(1)
             new_pos_ref = self.latest_pos_ref()
-            assert_ne(latest_pos_ref, new_pos_ref)
+            if i >= 10:
+                assert_ne(latest_pos_ref, new_pos_ref)
 
         client.wait_for_unstake(priv_key)
         assert client.get_balance(eth_utils.encode_hex(priv_to_addr(priv_key))) > 100 * 10**18

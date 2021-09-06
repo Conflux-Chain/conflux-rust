@@ -977,7 +977,6 @@ pub struct SynchronizationGraph {
     pub future_blocks: FutureBlockContainer,
 
     machine: Arc<Machine>,
-    pub pow_handler: Arc<PowHandler>,
 }
 
 impl MallocSizeOf for SynchronizationGraph {
@@ -1008,7 +1007,7 @@ impl SynchronizationGraph {
         verification_config: VerificationConfig, pow_config: ProofOfWorkConfig,
         pow: Arc<PowComputer>, sync_config: SyncGraphConfig,
         notifications: Arc<Notifications>, machine: Arc<Machine>,
-        pos_verifier: Arc<PosVerifier>, pow_handler: Arc<PowHandler>,
+        pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         let data_man = consensus.get_data_manager().clone();
@@ -1046,7 +1045,6 @@ impl SynchronizationGraph {
             consensus_unprocessed_count: consensus_unprocessed_count.clone(),
             new_block_hashes: notifications.new_block_hashes.clone(),
             machine,
-            pow_handler,
         };
 
         // It receives `BLOCK_GRAPH_READY` blocks in order and handles them in
