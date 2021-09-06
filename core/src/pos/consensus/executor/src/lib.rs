@@ -1296,7 +1296,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     .ledger_info()
                     .timestamp_usecs(),
                 signatures: ledger_info_with_sigs.signatures().clone(),
-                view: 0,
+                view: 1,
             });
         }
         for (txn, txn_data) in blocks.iter().flat_map(|block| {
