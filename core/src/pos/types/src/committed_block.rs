@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommittedBlock {
     pub hash: HashValue,
-    pub miner: AccountAddress,
+    pub miner: Option<AccountAddress>,
     pub parent_hash: HashValue,
     pub epoch: u64,
     pub round: u64,

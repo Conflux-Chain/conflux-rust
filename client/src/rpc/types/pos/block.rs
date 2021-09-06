@@ -20,7 +20,7 @@ pub struct Block {
     ///
     pub version: U64,
     ///
-    pub miner: H256,
+    pub miner: Option<H256>,
     ///
     pub parent_hash: H256,
     ///
