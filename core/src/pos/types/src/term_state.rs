@@ -50,8 +50,8 @@ const FIRST_END_ELECTION_VIEW: u64 =
 
 const TERM_MAX_SIZE: usize = 10000;
 const TERM_ELECTED_SIZE: usize = 50;
-pub const IN_QUEUE_LOCKED_VIEWS: u64 = 10080;
-pub const OUT_QUEUE_LOCKED_VIEWS: u64 = 10080;
+pub const IN_QUEUE_LOCKED_VIEWS: u64 = 600;
+pub const OUT_QUEUE_LOCKED_VIEWS: u64 = 600;
 
 pub use incentives::*;
 mod incentives {
