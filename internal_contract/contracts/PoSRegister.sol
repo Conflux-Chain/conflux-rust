@@ -54,5 +54,5 @@ event IncreaseStake(bytes32 indexed identifier, uint64 votePower);
 /**
  * @dev retire 函数执行成功时产生一个 Retire 事件
  */
-event Retire(bytes32 indexed identifier);
+event Retire(bytes32 indexed identifier, uint64 votePower);
 }
