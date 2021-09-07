@@ -22,38 +22,30 @@ use cfx_addr::Network;
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_types::{Address, H160, H256, H520, U128, U256, U512, U64};
 use cfxcore::{
-    BlockDataManager,
-    consensus::pos_handler::{PosConnection, PosVerifier},
-    ConsensusGraph,
-    ConsensusGraphTrait, PeerInfo, rpc_errors::invalid_params_check, SharedConsensusGraph,
-    SharedTransactionPool, spec::genesis::register_transaction,
+    consensus::pos_handler::PosVerifier, rpc_errors::invalid_params_check,
+    spec::genesis::register_transaction, BlockDataManager, ConsensusGraph,
+    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
 };
-use cfxcore::pos::pos::start_pos_consensus;
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
-use diem_types::account_address::{AccountAddress, from_consensus_public_key};
-use diemdb::DiemDB;
+use diem_types::account_address::{from_consensus_public_key, AccountAddress};
 use network::{
-    NetworkService,
     node_table::{Node, NodeEndpoint, NodeEntry, NodeId},
-    SessionDetails, throttling::{self, THROTTLING_SERVICE}, UpdateNodeOperation,
+    throttling::{self, THROTTLING_SERVICE},
+    NetworkService, SessionDetails, UpdateNodeOperation,
 };
 use primitives::{
-    Account, Action, SignedTransaction, transaction::TransactionType,
+    transaction::TransactionType, Account, Action, SignedTransaction,
 };
-use storage_interface::DBReaderForPoW;
 
-use crate::{
-    rpc::{
-        RpcResult,
-        types::{
-            Block as RpcBlock, BlockHashOrEpochNumber,
-            Bytes, CheckBalanceAgainstTransactionResponse,
-            EpochNumber, errors::check_rpc_address_network, RpcAddress,
-            Status as RpcStatus, Transaction as RpcTransaction,
-            TxPoolPendingInfo, TxWithPoolInfo,
-        },
+use crate::rpc::{
+    types::{
+        errors::check_rpc_address_network, Block as RpcBlock,
+        BlockHashOrEpochNumber, Bytes, CheckBalanceAgainstTransactionResponse,
+        EpochNumber, RpcAddress, Status as RpcStatus,
+        Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
     },
+    RpcResult,
 };
 
 fn grouped_txs<T, F>(
@@ -152,7 +144,6 @@ pub struct RpcImpl {
     tx_pool: SharedTransactionPool,
     accounts: Arc<AccountProvider>,
     pub pos_handler: Arc<PosVerifier>,
-    pub diem_db: Arc<DiemDB>,
 }
 
 impl RpcImpl {
@@ -160,7 +151,6 @@ impl RpcImpl {
         exit: Arc<(Mutex<bool>, Condvar)>, consensus: SharedConsensusGraph,
         network: Arc<NetworkService>, tx_pool: SharedTransactionPool,
         accounts: Arc<AccountProvider>, pos_verifier: Arc<PosVerifier>,
-        diem_db: Arc<DiemDB>,
     ) -> Self
     {
         let data_man = consensus.get_data_manager().clone();
@@ -173,7 +163,6 @@ impl RpcImpl {
             tx_pool,
             accounts,
             pos_handler: pos_verifier,
-            diem_db,
         }
     }
 
@@ -688,26 +677,11 @@ impl RpcImpl {
 
     pub fn pos_retire_self(&self) -> JsonRpcResult<()> { unimplemented!() }
 
-    pub fn pos_start(&self) -> JsonRpcResult<()> {
-        let diem_handler = start_pos_consensus(
-            &self.pos_handler.conf.diem_conf,
+    pub fn pos_start(&self) -> RpcResult<()> {
+        self.pos_handler.initialize(
             self.network.clone(),
-            self.pos_handler.conf.protocol_conf.clone(),
-            Some((
-                self.pos_handler.conf.bls_key.public_key(),
-                self.pos_handler.conf.vrf_key.public_key(),
-            )),
-            self.pos_handler.conf.initial_nodes.clone(),
-        );
-        debug!("PoS initialized");
-        let pos_connection = PosConnection::new(
-            diem_handler.diem_db.clone() as Arc<dyn DBReaderForPoW>,
-            diem_handler.consensus_db.clone(),
-        );
-        self.pos_handler.initialize(pos_connection);
-        diem_handler
-            .pow_handler
-            .initialize(self.consensus.clone().to_arc_consensus());
+            self.consensus.clone().to_arc_consensus(),
+        )?;
         Ok(())
     }
 }

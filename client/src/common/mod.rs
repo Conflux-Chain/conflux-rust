@@ -21,21 +21,21 @@ use threadpool::ThreadPool;
 
 use blockgen::BlockGenerator;
 use cfx_storage::StorageManager;
-use cfx_types::{Address, address_util::AddressUtil, U256};
+use cfx_types::{address_util::AddressUtil, Address, U256};
+pub use cfxcore::pos::pos::DiemHandle;
 use cfxcore::{
     block_data_manager::BlockDataManager,
     consensus::pos_handler::{PosConfiguration, PosVerifier},
-    ConsensusGraph,
-    LightProvider,
-    machine::{Machine, new_machine_with_builtin},
-    NodeType,
-    Notifications,
+    machine::{new_machine_with_builtin, Machine},
     pow::PowComputer,
-    spec::genesis::{self, DEV_GENESIS_KEY_PAIR_2, genesis_block}, statistics::Statistics, Stopable, sync::SyncPhaseType, SynchronizationGraph,
-    SynchronizationService, TransactionPool, vm_factory::VmFactory,
+    spec::genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
+    statistics::Statistics,
+    sync::SyncPhaseType,
+    vm_factory::VmFactory,
+    ConsensusGraph, LightProvider, NodeType, Notifications, Stopable,
+    SynchronizationGraph, SynchronizationService, TransactionPool,
     WORKER_COMPUTATION_PARALLELISM,
 };
-pub use cfxcore::pos::pos::DiemHandle;
 use cfxcore_accounts::AccountProvider;
 use cfxkey::public_to_address;
 use diem_config::{
@@ -48,22 +48,19 @@ use diem_crypto::{
 };
 use diem_types::{
     account_address::from_consensus_public_key,
-    term_state::NodeID,
     validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
 };
 use keylib::KeyPair;
-use malloc_size_of::{MallocSizeOf, MallocSizeOfOps, new_malloc_size_ops};
+use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use network::NetworkService;
 use runtime::Runtime;
 use secret_store::{SecretStore, SharedSecretStore};
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
 
+pub use crate::configuration::Configuration;
 use crate::{
     accounts::{account_provider, keys_path},
-    configuration::{
-        parse_config_address_string, read_initial_nodes_from_file,
-    },
-    GENESIS_VERSION,
+    configuration::parse_config_address_string,
     rpc::{
         extractor::RpcExtractor,
         impls::{
@@ -72,8 +69,9 @@ use crate::{
         },
         setup_debug_rpc_apis, setup_public_rpc_apis,
     },
+    GENESIS_VERSION,
 };
-pub use crate::configuration::Configuration;
+use cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
 
 /// Hold all top-level components for a type of client.
 /// This struct implement ClientShutdownTrait.
@@ -307,9 +305,11 @@ pub fn initialize_common_modules(
             None => genesis::default(conf.is_test_or_dev_mode()),
         }
     };
+
     let initial_nodes = read_initial_nodes_from_file(
         conf.raw_conf.pos_initial_nodes_path.as_str(),
-    )?;
+    )
+    .ok();
 
     let consensus_conf = conf.consensus_config();
     let vm = VmFactory::new(1024 * 32);
@@ -407,20 +407,13 @@ pub fn initialize_common_modules(
             vrf_key: self_vrf_private_key,
             diem_conf: pos_config,
             protocol_conf: conf.protocol_config(),
-            initial_nodes: initial_nodes
-                .initial_nodes
-                .iter()
-                .map(|node| {
-                    (
-                        NodeID::new(node.bls_key.clone(), node.vrf_key.clone()),
-                        node.voting_power,
-                    )
-                })
-                .collect(),
+            pos_initial_nodes_path: conf
+                .raw_conf
+                .pos_initial_nodes_path
+                .clone(),
         },
         conf.raw_conf.pos_reference_enable_height,
     ));
-
     let verification_config =
         conf.verification_config(machine.clone(), pos_verifier.clone());
     let txpool = Arc::new(TransactionPool::new(
@@ -446,6 +439,18 @@ pub fn initialize_common_modules(
         node_type,
         pos_verifier.clone(),
     ));
+
+    for terminal in data_man
+        .terminals_from_db()
+        .unwrap_or(vec![data_man.get_cur_consensus_era_genesis_hash()])
+    {
+        if data_man.block_height_by_hash(&terminal).unwrap()
+            >= conf.raw_conf.pos_reference_enable_height
+        {
+            pos_verifier.initialize(network.clone(), consensus.clone())?;
+            break;
+        }
+    }
 
     let sync_config = conf.sync_graph_config();
 
@@ -478,7 +483,6 @@ pub fn initialize_common_modules(
         txpool.clone(),
         accounts.clone(),
         pos_verifier.clone(),
-        diem_handler.diem_db.clone(),
     ));
 
     let runtime = Runtime::with_default_thread_count();
@@ -813,8 +817,8 @@ pub mod delegate_convert {
     use std::hint::unreachable_unchecked;
 
     use jsonrpc_core::{
-        BoxFuture,
-        Error as JsonRpcError, futures::{Future, future::IntoFuture}, Result as JsonRpcResult,
+        futures::{future::IntoFuture, Future},
+        BoxFuture, Error as JsonRpcError, Result as JsonRpcResult,
     };
 
     use crate::rpc::{

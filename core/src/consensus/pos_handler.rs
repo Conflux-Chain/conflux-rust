@@ -13,11 +13,22 @@ use diem_types::{
     validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
 };
 use primitives::pos::{NodeId, PosBlockId};
-use storage_interface::DBReaderForPoW;
+use storage_interface::{DBReaderForPoW, DbReader};
 
-use crate::{pos::consensus::ConsensusDB, sync::ProtocolConfiguration};
+use crate::{
+    pos::{
+        consensus::ConsensusDB,
+        pos::{start_pos_consensus, DiemHandle},
+    },
+    spec::genesis::GenesisPosState,
+    sync::ProtocolConfiguration,
+    ConsensusGraph,
+};
+use diemdb::DiemDB;
+use network::NetworkService;
+use std::{fs, io::Read};
 
-pub type PosVerifier = PosHandler<PosConnection>;
+pub type PosVerifier = PosHandler;
 
 /// This includes the interfaces that the PoW consensus needs from the PoS
 /// consensus.
@@ -25,7 +36,7 @@ pub type PosVerifier = PosHandler<PosConnection>;
 /// We assume the PoS service will be always available after `initialize()`
 /// returns, so all the other interfaces will panic if the PoS service is not
 /// ready.
-pub trait PosInterface {
+pub trait PosInterface: Send + Sync {
     /// Wait for initialization.
     fn initialize(&self) -> Result<(), String>;
 
@@ -49,6 +60,8 @@ pub trait PosInterface {
     fn get_reward_event(&self, epoch: u64) -> Option<RewardDistributionEvent>;
 
     fn get_epoch_state(&self, block_id: &PosBlockId) -> EpochState;
+
+    fn diem_db(&self) -> &Arc<DiemDB>;
 }
 
 #[allow(unused)]
@@ -63,30 +76,66 @@ pub struct PosBlock {
      * voters: Vec<NodeId>, */
 }
 
-pub struct PosHandler<PoS: PosInterface> {
-    pos: OnceCell<PoS>,
+pub struct PosHandler {
+    pos: OnceCell<Box<dyn PosInterface>>,
+    // Keep all tokio Runtime so they will not be dropped directly.
+    diem_handler: OnceCell<DiemHandle>,
     enable_height: u64,
     pub conf: PosConfiguration,
 }
 
-impl<PoS: PosInterface> PosHandler<PoS> {
+impl PosHandler {
     pub fn new(conf: PosConfiguration, enable_height: u64) -> Self {
         Self {
             pos: OnceCell::new(),
+            diem_handler: OnceCell::new(),
             enable_height,
             conf,
         }
     }
 
-    pub fn initialize(&self, pos: PoS) {
-        if self.pos.set(pos).is_err() {
-            panic!("PoS initialized twice!")
+    pub fn initialize(
+        &self, network: Arc<NetworkService>, consensus: Arc<ConsensusGraph>,
+    ) -> Result<(), String> {
+        if self.pos.get().is_some() {
+            bail!("Initializing already-initialized PosHandler!");
         }
+        let initial_nodes = read_initial_nodes_from_file(
+            self.conf.pos_initial_nodes_path.as_str(),
+        )?;
+        let diem_handler = start_pos_consensus(
+            &self.conf.diem_conf,
+            network.clone(),
+            self.conf.protocol_conf.clone(),
+            Some((
+                self.conf.bls_key.public_key(),
+                self.conf.vrf_key.public_key(),
+            )),
+            initial_nodes
+                .initial_nodes
+                .into_iter()
+                .map(|node| {
+                    (NodeID::new(node.bls_key, node.vrf_key), node.voting_power)
+                })
+                .collect(),
+        );
+        debug!("PoS initialized");
+        let pos_connection = PosConnection::new(
+            diem_handler.diem_db.clone(),
+            diem_handler.consensus_db.clone(),
+        );
+        diem_handler.pow_handler.initialize(consensus);
+        if self.pos.set(Box::new(pos_connection)).is_err()
+            || self.diem_handler.set(diem_handler).is_err()
+        {
+            bail!("PoS initialized twice!");
+        }
+        Ok(())
     }
 
     pub fn config(&self) -> &PosConfiguration { &self.conf }
 
-    fn pos(&self) -> &PoS { self.pos.get().unwrap() }
+    fn pos(&self) -> &Box<dyn PosInterface> { self.pos.get().unwrap() }
 
     pub fn is_enabled_at_height(&self, height: u64) -> bool {
         height >= self.enable_height
@@ -188,16 +237,18 @@ impl<PoS: PosInterface> PosHandler<PoS> {
         }
         Some(events)
     }
+
+    pub fn diem_db(&self) -> &Arc<DiemDB> { self.pos().diem_db() }
 }
 
 pub struct PosConnection {
-    pos_storage: Arc<dyn DBReaderForPoW>,
+    pos_storage: Arc<DiemDB>,
     consensus_db: Arc<ConsensusDB>,
 }
 
 impl PosConnection {
     pub fn new(
-        pos_storage: Arc<dyn DBReaderForPoW>, consensus_db: Arc<ConsensusDB>,
+        pos_storage: Arc<DiemDB>, consensus_db: Arc<ConsensusDB>,
     ) -> Self {
         Self {
             pos_storage,
@@ -307,6 +358,8 @@ impl PosInterface for PosConnection {
             .epoch_state()
             .clone()
     }
+
+    fn diem_db(&self) -> &Arc<DiemDB> { &self.pos_storage }
 }
 
 pub struct PosConfiguration {
@@ -314,10 +367,28 @@ pub struct PosConfiguration {
     pub vrf_key: ConfigKey<ConsensusVRFPrivateKey>,
     pub diem_conf: NodeConfig,
     pub protocol_conf: ProtocolConfiguration,
-    pub initial_nodes: Vec<(NodeID, u64)>,
+    pub pos_initial_nodes_path: String,
 }
 
 fn diem_hash_to_h256(h: &HashValue) -> PosBlockId { H256::from(h.as_ref()) }
 fn h256_to_diem_hash(h: &PosBlockId) -> HashValue {
     HashValue::new(h.to_fixed_bytes())
+}
+
+pub fn save_initial_nodes_to_file(path: &str, genesis_nodes: GenesisPosState) {
+    fs::write(path, serde_json::to_string(&genesis_nodes).unwrap()).unwrap();
+}
+
+pub fn read_initial_nodes_from_file(
+    path: &str,
+) -> Result<GenesisPosState, String> {
+    let mut file = fs::File::open(path)
+        .map_err(|e| format!("failed to open initial nodes file: {:?}", e))?;
+
+    let mut nodes_str = String::new();
+    file.read_to_string(&mut nodes_str)
+        .map_err(|e| format!("failed to read initial nodes file: {:?}", e))?;
+
+    serde_json::from_str(nodes_str.as_str())
+        .map_err(|e| format!("failed to parse initial nodes file: {:?}", e))
 }

@@ -26,11 +26,13 @@ use rustc_hex::FromHexError;
 use serde::Deserialize;
 use tempdir::TempDir;
 
-use cfxcore::spec::genesis::{
-    register_transaction, GenesisPosNodeInfo, GenesisPosState,
+use cfxcore::{
+    consensus::pos_handler::save_initial_nodes_to_file,
+    spec::genesis::{
+        register_transaction, GenesisPosNodeInfo, GenesisPosState,
+    },
 };
 use cfxkey::{Error as EthkeyError, Generator, KeyPair, Random};
-use client::configuration::save_initial_nodes_to_file;
 use diem_crypto::{
     key_file::save_pri_key, Uniform, ValidCryptoMaterialStringExt,
 };

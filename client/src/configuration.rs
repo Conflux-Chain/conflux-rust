@@ -33,7 +33,7 @@ use cfxcore::{
     light_protocol::LightNodeConfiguration,
     machine::Machine,
     pos::pow_handler::POS_TERM_EPOCHS,
-    spec::{genesis::GenesisPosState, CommonParams},
+    spec::CommonParams,
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
     transaction_pool::TxPoolConfig,
@@ -1183,24 +1183,6 @@ pub fn parse_config_address_string(
             base32_err={:?}
             hex_err={:?}",
                 base32_err, hex_err))
-}
-
-pub fn save_initial_nodes_to_file(path: &str, genesis_nodes: GenesisPosState) {
-    fs::write(path, serde_json::to_string(&genesis_nodes).unwrap()).unwrap();
-}
-
-pub fn read_initial_nodes_from_file(
-    path: &str,
-) -> Result<GenesisPosState, String> {
-    let mut file = File::open(path)
-        .map_err(|e| format!("failed to open initial nodes file: {:?}", e))?;
-
-    let mut nodes_str = String::new();
-    file.read_to_string(&mut nodes_str)
-        .map_err(|e| format!("failed to read initial nodes file: {:?}", e))?;
-
-    serde_json::from_str(nodes_str.as_str())
-        .map_err(|e| format!("failed to parse initial nodes file: {:?}", e))
 }
 
 #[cfg(test)]

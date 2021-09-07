@@ -17,26 +17,23 @@ use diem_types::{
     term_state::lock_status::StatusList,
     transaction::{Transaction as CoreTransaction, TransactionStatus},
 };
-use diemdb::DiemDB;
 use jsonrpc_core::Result as JsonRpcResult;
 use std::sync::Arc;
 use storage_interface::{DBReaderForPoW, DbReader};
 
 pub struct PosHandler {
-    diem_db: Arc<DiemDB>,
     pos_handler: Arc<PosVerifier>,
 }
 
 impl PosHandler {
-    pub fn new(diem_db: Arc<DiemDB>, pos_verifier: Arc<PosVerifier>) -> Self {
+    pub fn new(pos_verifier: Arc<PosVerifier>) -> Self {
         PosHandler {
-            diem_db,
             pos_handler: pos_verifier,
         }
     }
 
     fn status_impl(&self) -> Status {
-        let state = self.diem_db.get_latest_pos_state();
+        let state = self.pos_handler.diem_db().get_latest_pos_state();
         let decision = state.pivot_decision();
         let epoch_state = state.epoch_state();
         let block_number = state.current_view();
@@ -48,7 +45,7 @@ impl PosHandler {
     }
 
     fn account_impl(&self, address: H256, _view: U64) -> Account {
-        let state = self.diem_db.get_latest_pos_state();
+        let state = self.pos_handler.diem_db().get_latest_pos_state();
         let account_address = AccountAddress::from_hex(address);
 
         if let Ok(addr) = account_address {
@@ -84,7 +81,10 @@ impl PosHandler {
 
     fn block_by_hash_impl(&self, hash: H256) -> Option<Block> {
         let hash_value = HashValue::from_slice(hash.as_bytes()).unwrap();
-        let block = self.diem_db.get_committed_block_by_hash(&hash_value);
+        let block = self
+            .pos_handler
+            .diem_db()
+            .get_committed_block_by_hash(&hash_value);
         match block {
             Ok(b) => {
                 let signatures = b
@@ -118,8 +118,10 @@ impl PosHandler {
     fn block_by_number_impl(&self, number: BlockNumber) -> Option<Block> {
         match number {
             BlockNumber::Num(num) => {
-                let hash =
-                    self.diem_db.get_committed_block_hash_by_view(num.as_u64());
+                let hash = self
+                    .pos_handler
+                    .diem_db()
+                    .get_committed_block_hash_by_view(num.as_u64());
                 match hash {
                     Ok(h) => self.block_by_hash_impl(hexstr_to_h256(
                         h.to_hex().as_str(),
@@ -164,7 +166,7 @@ impl Pos for PosHandler {
     fn pos_transaction_by_version(
         &self, version: U64,
     ) -> JsonRpcResult<Option<Transaction>> {
-        let tx = self.diem_db.get_transaction(version.as_u64());
+        let tx = self.pos_handler.diem_db().get_transaction(version.as_u64());
         match tx {
             Ok(CoreTransaction::UserTransaction(signed_tx)) => {
                 Ok(Some(Transaction {

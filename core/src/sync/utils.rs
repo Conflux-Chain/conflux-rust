@@ -1,6 +1,5 @@
 use std::{
-    collections::HashMap, env, path::Path, str::FromStr, sync::Arc,
-    time::Duration,
+    collections::HashMap, path::Path, str::FromStr, sync::Arc, time::Duration,
 };
 
 use parking_lot::Mutex;
@@ -149,9 +148,9 @@ pub fn initialize_data_manager(
         machine.clone(),
         false, /* need_to_execute */
         None,
-        &GenesisPosState {
+        &Some(GenesisPosState {
             initial_nodes: vec![],
-        },
+        }),
     ));
 
     let data_man = Arc::new(BlockDataManager::new(
@@ -180,12 +179,13 @@ pub fn initialize_synchronization_graph_with_data_manager(
     let machine = Arc::new(new_machine_with_builtin(Default::default(), vm));
     let mut rng = StdRng::from_seed([0u8; 32]);
     let pos_verifier = Arc::new(PosVerifier::new(
+        // These configurations will not be used.
         PosConfiguration {
             bls_key: ConfigKey::new(ConsensusPrivateKey::generate(&mut rng)),
             vrf_key: ConfigKey::new(ConsensusVRFPrivateKey::generate(&mut rng)),
             diem_conf: Default::default(),
             protocol_conf: Default::default(),
-            initial_nodes: vec![],
+            pos_initial_nodes_path: "".to_string(),
         },
         u64::MAX,
     ));
