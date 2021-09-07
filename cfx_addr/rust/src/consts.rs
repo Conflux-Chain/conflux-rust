@@ -5,7 +5,7 @@
 // Modification based on https://github.com/hlb8122/rust-bitcoincash-addr in MIT License.
 // A copy of the original license is included in LICENSE.rust-bitcoincash-addr.
 
-use super::errors::{DecodingError, EncodingError, OptionError};
+use super::errors::{DecodingError, EncodingError};
 
 use cfx_types::address_util::{self, AddressUtil};
 use std::{fmt, string::ToString};
@@ -61,6 +61,7 @@ pub enum AddressType {
     Contract,
     Null,
     User,
+    Unknown,
 }
 
 impl fmt::Display for Network {
@@ -127,6 +128,7 @@ impl AddressType {
     const BUILTIN: &'static str = "builtin";
     const CONTRACT: &'static str = "contract";
     const NULL: &'static str = "null";
+    const UNKNOWN: &'static str = "unknown";
     const USER: &'static str = "user";
 
     pub fn parse(text: &str) -> Result<Self, DecodingError> {
@@ -139,9 +141,7 @@ impl AddressType {
         } else if text == Self::USER {
             Ok(Self::User)
         } else {
-            Err(DecodingError::InvalidOption(
-                OptionError::InvalidAddressType(text.into()),
-            ))
+            Ok(Self::Unknown)
         }
     }
 
@@ -158,7 +158,7 @@ impl AddressType {
             }
             address_util::TYPE_BITS_CONTRACT => Ok(Self::Contract),
             address_util::TYPE_BITS_USER_ACCOUNT => Ok(Self::User),
-            n => Err(EncodingError::InvalidAddressType(n)),
+            _ => Ok(Self::Unknown),
         }
     }
 
@@ -168,6 +168,7 @@ impl AddressType {
             Self::Contract => Self::CONTRACT,
             Self::Null => Self::NULL,
             Self::User => Self::USER,
+            Self::Unknown => Self::UNKNOWN,
         }
     }
 }
