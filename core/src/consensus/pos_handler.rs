@@ -1,22 +1,21 @@
 use std::sync::Arc;
 
-use crate::pos::consensus::ConsensusDB;
+use once_cell::sync::OnceCell;
+
 use cfx_types::H256;
-use diem_config::keys::ConfigKey;
+use diem_config::{config::NodeConfig, keys::ConfigKey};
 use diem_crypto::HashValue;
 use diem_types::{
     contract_event::ContractEvent,
     epoch_state::EpochState,
     reward_distribution_event::RewardDistributionEvent,
-    term_state::{DisputeEvent, UnlockEvent},
+    term_state::{DisputeEvent, NodeID, UnlockEvent},
     validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
 };
 use primitives::pos::{NodeId, PosBlockId};
 use storage_interface::DBReaderForPoW;
-use diem_config::config::NodeConfig;
-use crate::sync::ProtocolConfiguration;
-use diem_types::term_state::NodeID;
-use network::NetworkService;
+
+use crate::{pos::consensus::ConsensusDB, sync::ProtocolConfiguration};
 
 pub type PosVerifier = PosHandler<PosConnection>;
 
@@ -65,30 +64,36 @@ pub struct PosBlock {
 }
 
 pub struct PosHandler<PoS: PosInterface> {
-    pos: PoS,
-    network: Arc<NetworkService>,
+    pos: OnceCell<PoS>,
     enable_height: u64,
-    conf: PosConfiguration,
+    pub conf: PosConfiguration,
 }
 
 impl<PoS: PosInterface> PosHandler<PoS> {
-    pub fn new(pos: PoS, conf: PosConfiguration, enable_height: u64) -> Self {
-        pos.initialize().expect("PoS handler initialization error");
+    pub fn new(conf: PosConfiguration, enable_height: u64) -> Self {
         Self {
-            pos,
+            pos: OnceCell::new(),
             enable_height,
             conf,
         }
     }
 
+    pub fn initialize(&self, pos: PoS) {
+        if self.pos.set(pos).is_err() {
+            panic!("PoS initialized twice!")
+        }
+    }
+
     pub fn config(&self) -> &PosConfiguration { &self.conf }
+
+    fn pos(&self) -> &PoS { self.pos.get().unwrap() }
 
     pub fn is_enabled_at_height(&self, height: u64) -> bool {
         height >= self.enable_height
     }
 
     pub fn is_committed(&self, h: &PosBlockId) -> bool {
-        self.pos.get_committed_block(h).is_some()
+        self.pos().get_committed_block(h).is_some()
     }
 
     /// Check if `me` is equal to or extends `preds` (parent and referees).
@@ -101,7 +106,7 @@ impl<PoS: PosInterface> PosHandler<PoS> {
     pub fn verify_against_predecessors(
         &self, me: &PosBlockId, preds: &Vec<PosBlockId>,
     ) -> bool {
-        let me_round = match self.pos.get_committed_block(me) {
+        let me_round = match self.pos().get_committed_block(me) {
             None => {
                 warn!("No pos block for me={:?}", me);
                 return false;
@@ -109,7 +114,7 @@ impl<PoS: PosInterface> PosHandler<PoS> {
             Some(b) => (b.epoch, b.round),
         };
         for p in preds {
-            let p_round = match self.pos.get_committed_block(p) {
+            let p_round = match self.pos().get_committed_block(p) {
                 None => {
                     warn!("No pos block for pred={:?}", p);
                     return false;
@@ -125,11 +130,11 @@ impl<PoS: PosInterface> PosHandler<PoS> {
     }
 
     pub fn get_pivot_decision(&self, h: &PosBlockId) -> Option<H256> {
-        self.pos.get_committed_block(h).map(|b| b.pivot_decision)
+        self.pos().get_committed_block(h).map(|b| b.pivot_decision)
     }
 
     pub fn get_latest_pos_reference(&self) -> PosBlockId {
-        self.pos.latest_block()
+        self.pos().latest_block()
     }
 
     pub fn get_unlock_nodes(
@@ -137,7 +142,7 @@ impl<PoS: PosInterface> PosHandler<PoS> {
     ) -> Vec<(NodeId, u64)> {
         let unlock_event_key = UnlockEvent::event_key();
         let mut unlock_nodes = Vec::new();
-        for event in self.pos.get_events(parent_pos_ref, h) {
+        for event in self.pos().get_events(parent_pos_ref, h) {
             if *event.key() == unlock_event_key {
                 let unlock_event = UnlockEvent::from_bytes(event.event_data())
                     .expect("key checked");
@@ -154,7 +159,7 @@ impl<PoS: PosInterface> PosHandler<PoS> {
     ) -> Vec<NodeId> {
         let dispute_event_key = DisputeEvent::event_key();
         let mut disputed_nodes = Vec::new();
-        for event in self.pos.get_events(parent_pos_ref, h) {
+        for event in self.pos().get_events(parent_pos_ref, h) {
             if *event.key() == dispute_event_key {
                 let dispute_event =
                     DisputeEvent::from_bytes(event.event_data())
@@ -172,14 +177,14 @@ impl<PoS: PosInterface> PosHandler<PoS> {
         if h == parent_pos_ref {
             return None;
         }
-        let me_block = self.pos.get_committed_block(h)?;
-        let parent_block = self.pos.get_committed_block(parent_pos_ref)?;
+        let me_block = self.pos().get_committed_block(h)?;
+        let parent_block = self.pos().get_committed_block(parent_pos_ref)?;
         if me_block.epoch == parent_block.epoch {
             return None;
         }
         let mut events = Vec::new();
         for epoch in parent_block.epoch..me_block.epoch {
-            events.push(self.pos.get_reward_event(epoch)?);
+            events.push(self.pos().get_reward_event(epoch)?);
         }
         Some(events)
     }

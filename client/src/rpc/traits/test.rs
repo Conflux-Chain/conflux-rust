@@ -124,4 +124,7 @@ pub trait TestRpc {
 
     #[rpc(name = "pos_retire_self")]
     fn pos_retire_self(&self) -> RpcResult<()>;
+
+    #[rpc(name = "pos_start")]
+    fn pos_start(&self) -> RpcResult<()>;
 }

@@ -2,34 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    block_data_manager::{BlockDataManager, BlockStatus},
-    channel::Channel,
-    consensus::{pos_handler::PosVerifier, SharedConsensusGraph},
-    error::{BlockError, Error, ErrorKind},
-    machine::Machine,
-    pos::pow_handler::PowHandler,
-    pow::{PowComputer, ProofOfWorkConfig},
-    state_exposer::{SyncGraphBlockState, STATE_EXPOSER},
-    statistics::SharedStatistics,
-    sync::synchronization_protocol_handler::FutureBlockContainer,
-    verification::*,
-    ConsensusGraph, Notifications,
-};
-use cfx_types::{H256, U256};
-use dag::{Graph, RichDAG, RichTreeGraph, TreeGraph, DAG};
-use futures::executor::block_on;
-use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
-use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
-use metrics::{
-    register_meter_with_group, register_queue, Meter, MeterTimer, Queue,
-};
-use parking_lot::RwLock;
-use primitives::{
-    pos::PosBlockId, transaction::SignedTransaction, Block, BlockHeader,
-    EpochNumber,
-};
-use slab::Slab;
 use std::{
     cmp::max,
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
@@ -41,8 +13,38 @@ use std::{
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+
+use futures::executor::block_on;
+use parking_lot::RwLock;
+use slab::Slab;
 use tokio02::sync::mpsc::error::TryRecvError;
 use unexpected::{Mismatch, OutOfBounds};
+
+use cfx_types::{H256, U256};
+use dag::{Graph, RichDAG, RichTreeGraph, TreeGraph, DAG};
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
+use metrics::{
+    register_meter_with_group, register_queue, Meter, MeterTimer, Queue,
+};
+use primitives::{
+    pos::PosBlockId, transaction::SignedTransaction, Block, BlockHeader,
+    EpochNumber,
+};
+
+use crate::{
+    block_data_manager::{BlockDataManager, BlockStatus},
+    channel::Channel,
+    consensus::{pos_handler::PosVerifier, SharedConsensusGraph},
+    error::{BlockError, Error, ErrorKind},
+    machine::Machine,
+    pow::{PowComputer, ProofOfWorkConfig},
+    state_exposer::{SyncGraphBlockState, STATE_EXPOSER},
+    statistics::SharedStatistics,
+    sync::synchronization_protocol_handler::FutureBlockContainer,
+    verification::*,
+    ConsensusGraph, Notifications,
+};
 
 lazy_static! {
     static ref SYNC_INSERT_HEADER: Arc<dyn Meter> =

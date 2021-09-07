@@ -3,7 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    pos::pow_handler::PowHandler,
     sync::{
         message::DynamicCapability,
         state::{SnapshotChunkSync, Status},
@@ -140,9 +139,7 @@ impl SynchronizationPhaseManager {
             sync_state.clone(),
             sync_graph.clone(),
         )));
-        sync_manager.register_phase(Arc::new(NormalSyncPhase::new(
-            consensus,
-        )));
+        sync_manager.register_phase(Arc::new(NormalSyncPhase::new(consensus)));
 
         sync_manager
     }
@@ -548,9 +545,7 @@ pub struct NormalSyncPhase {
 }
 
 impl NormalSyncPhase {
-    pub fn new(
-        consensus: Arc<ConsensusGraph>,
-    ) -> Self {
+    pub fn new(consensus: Arc<ConsensusGraph>) -> Self {
         NormalSyncPhase {
             _consensus: consensus,
         }

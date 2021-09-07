@@ -72,7 +72,6 @@ impl LightClient {
             notifications,
             pubsub,
             runtime,
-            diem_handler,
         ) = initialize_common_modules(
             &mut conf,
             exit.clone(),
@@ -165,7 +164,6 @@ impl LightClient {
 
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
-            diem_handler,
             blockgen: None,
             other_components: LightClientExtraComponents {
                 consensus,

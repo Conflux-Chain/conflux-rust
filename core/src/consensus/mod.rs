@@ -1858,4 +1858,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
         self.confirmation_meter.clear();
     }
+
+    fn to_arc_consensus(self: Arc<Self>) -> Arc<ConsensusGraph> { self.clone() }
 }

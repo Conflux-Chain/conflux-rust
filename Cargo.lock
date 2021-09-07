@@ -830,6 +830,7 @@ dependencies = [
  "clap",
  "consensus-types",
  "criterion",
+ "crash-handler",
  "dag",
  "db",
  "derivative",
