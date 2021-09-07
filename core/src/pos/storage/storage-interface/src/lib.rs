@@ -432,6 +432,8 @@ pub trait DbWriter: Send + Sync {
     fn save_reward_event(
         &self, epoch: u64, event: &RewardDistributionEvent,
     ) -> Result<()>;
+
+    fn delete_pos_state_by_block(&self, block_id: &HashValue) -> Result<()>;
 }
 
 #[derive(Clone)]
@@ -534,7 +536,9 @@ pub trait DBReaderForPoW: Send + Sync + DbReader {
 
     fn get_reward_event(&self, epoch: u64) -> Result<RewardDistributionEvent>;
 
-    fn get_committed_block(
+    fn get_committed_block_by_hash(
         &self, block_hash: &HashValue,
     ) -> Result<CommittedBlock>;
+
+    fn get_committed_block_hash_by_view(&self, view: u64) -> Result<HashValue>;
 }

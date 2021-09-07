@@ -41,6 +41,7 @@ use crate::{
     errors::DiemDbError,
     schema::{
         committed_block::CommittedBlockSchema,
+        committed_block_by_view::CommittedBlockByViewSchema,
         epoch_by_version::EpochByVersionSchema, ledger_info::LedgerInfoSchema,
         ledger_info_by_block::LedgerInfoByBlockSchema,
         pos_state::PosStateSchema, reward_event::RewardEventSchema,
@@ -448,10 +449,9 @@ impl LedgerStore {
     }
 
     pub fn put_pos_state(
-        &self, block_hash: &HashValue, pos_state: PosState,
+        &self, block_hash: &HashValue, pos_state: PosState, cs: &mut ChangeSet,
     ) -> Result<()> {
         diem_debug!("put_pos_state: {}", block_hash);
-        let mut cs = ChangeSet::new();
         cs.batch.put::<PosStateSchema>(block_hash, &pos_state)?;
 
         // replace pos state later to avoid clone.
@@ -460,6 +460,12 @@ impl LedgerStore {
         {
             self.latest_pos_state.store(Arc::new(pos_state));
         }
+        Ok(())
+    }
+
+    pub fn delete_pos_state(&self, block_hash: &HashValue) -> Result<()> {
+        let mut cs = ChangeSet::new();
+        cs.batch.delete::<PosStateSchema>(block_hash)?;
         self.db.write_schemas(cs.batch)
     }
 
@@ -504,14 +510,14 @@ impl LedgerStore {
     }
 
     pub fn put_committed_block(
-        &self, block_hash: &HashValue, block: &CommittedBlock,
-        cs: &mut ChangeSet,
-    ) -> Result<()>
-    {
-        cs.batch.put::<CommittedBlockSchema>(block_hash, block)
+        &self, block: &CommittedBlock, cs: &mut ChangeSet,
+    ) -> Result<()> {
+        cs.batch.put::<CommittedBlockSchema>(&block.hash, block)?;
+        cs.batch
+            .put::<CommittedBlockByViewSchema>(&block.view, &block.hash)
     }
 
-    pub fn get_committed_block(
+    pub fn get_committed_block_by_hash(
         &self, block_hash: &HashValue,
     ) -> Result<CommittedBlock> {
         self.db
@@ -520,6 +526,20 @@ impl LedgerStore {
                 DiemDbError::NotFound(format!(
                     "committed block of id {}",
                     block_hash
+                ))
+                .into()
+            })
+    }
+
+    pub fn get_committed_block_hash_by_view(
+        &self, view: u64,
+    ) -> Result<HashValue> {
+        self.db
+            .get::<CommittedBlockByViewSchema>(&view)?
+            .ok_or_else(|| {
+                DiemDbError::NotFound(format!(
+                    "committed block of view {}",
+                    view
                 ))
                 .into()
             })

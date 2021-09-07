@@ -16,7 +16,7 @@ use cfxcore::{
 };
 use cfxkey::{Generator, KeyPair, Random};
 use client::{archive::ArchiveClient, configuration::Configuration};
-use criterion::{criterion_group, criterion_main, Benchmark, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use parking_lot::{Condvar, Mutex};
 use primitives::{Action, Transaction};
 use std::{sync::Arc, time::Duration};
@@ -59,9 +59,9 @@ fn txexe_benchmark(c: &mut Criterion) {
         epoch_height: 0,
         transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
     };
-    c.bench(
-        "Execute 1 transaction",
-        Benchmark::new("Execute 1 transaction", move |b| {
+    let mut group = c.benchmark_group("Execute 1 transaction");
+    group
+        .bench_function("Execute 1 transaction", move |b| {
             let mut state = State::new(StateDb::new(
                 handler
                     .other_components
@@ -92,8 +92,7 @@ fn txexe_benchmark(c: &mut Criterion) {
             })
         })
         .measurement_time(Duration::from_secs(10))
-        .warm_up_time(Duration::from_secs(10)),
-    );
+        .warm_up_time(Duration::from_secs(10));
 }
 
 criterion_group!(benches, txexe_benchmark);

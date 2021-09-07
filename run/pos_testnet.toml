@@ -113,7 +113,7 @@ log_conf="log.yaml"
 #
 # tcp_port=32323
 
-# `public_tcp_port` is the public TCP port that other nodes should connect to. It might be different from 
+# `public_tcp_port` is the public TCP port that other nodes should connect to. It might be different from
 # the tcp_port in case the machine is behind a NAT. The default is as same as `tcp_port`.
 #
 # public_tcp_port=32323
@@ -134,7 +134,7 @@ log_conf="log.yaml"
 # `jsonrpc_cors` is used to control the rpc domain validation policies.
 # The value should be "none", "all", or a list string split by commas without space.
 # If not set, domain validation is disabled.
-# By default, the values are not set. 
+# By default, the values are not set.
 #
 # jsonrpc_cors="all"
 
@@ -154,7 +154,7 @@ jsonrpc_local_http_port=12539
 
 # Specify the APIs available through the public JSON-RPC interfaces (HTTP, TCP, WebSocket)
 # using a comma-delimited list of API names.
-# Possible names are: all, safe, cfx, debug, pubsub, test, trace.
+# Possible names are: all, safe, cfx, pos, debug, pubsub, test, trace, pos.
 # `safe` only includes `cfx` and `pubsub`.
 #
 # public_rpc_apis = "safe"

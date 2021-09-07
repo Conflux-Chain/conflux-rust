@@ -4,12 +4,9 @@
 // Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-
+/*
 use super::{
-    network::{NetworkReceivers, NetworkSender},
-    network_interface::{
-        ConsensusMsg, ConsensusNetworkEvents, ConsensusNetworkSender,
-    },
+    network::{NetworkReceivers, ConsensusMsg, ConsensusNetworkSender},
     test_utils::{
         self, consensus_runtime, placeholder_ledger_info, timed_block_on,
     },
@@ -27,17 +24,6 @@ use consensus_types::{
 use diem_infallible::{Mutex, RwLock};
 use diem_types::{block_info::BlockInfo, PeerId};
 use futures::{channel::mpsc, SinkExt, StreamExt};
-use network::{
-    peer_manager::{
-        conn_notifs_channel, ConnectionRequestSender, PeerManagerNotification,
-        PeerManagerRequest, PeerManagerRequestSender,
-    },
-    protocols::{
-        network::{NewNetworkEvents, NewNetworkSender},
-        rpc::InboundRpcRequest,
-    },
-    ProtocolId,
-};
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -519,7 +505,8 @@ impl DropConfigRound {
 
 #[cfg(test)]
 mod tests {
-    use super::{network::NetworkTask, *};
+    use super::*;
+    use super::network::NetworkTask;
     use bytes::Bytes;
     use consensus_types::block_retrieval::{
         BlockRetrievalRequest, BlockRetrievalResponse, BlockRetrievalStatus,
@@ -527,7 +514,6 @@ mod tests {
     use diem_crypto::HashValue;
     use diem_types::validator_verifier::random_validator_verifier;
     use futures::{channel::oneshot, future};
-    use network::protocols::direct_send::Message;
 
     #[test]
     fn test_split_network_round() {
@@ -853,3 +839,4 @@ mod tests {
         timed_block_on(&mut runtime, future::join(f_network_task, f_check));
     }
 }
+*/

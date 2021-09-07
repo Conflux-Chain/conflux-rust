@@ -28,6 +28,8 @@ use diem_types::{
 use rand::{prelude::*, Rng};
 use std::{clone::Clone, sync::Arc, time::Duration};
 
+pub const BLOCK_FETCH_BATCH_MAX_SIZE: u64 = 60;
+
 #[derive(Debug, PartialEq)]
 /// Whether we need to do block retrieval if we want to insert a Quorum Cert.
 pub enum NeedFetchResult {
@@ -102,22 +104,39 @@ impl BlockStore {
         loop {
             // round 0 blocks is the genesis of every epoch.
             if self.block_exists(retrieve_qc.certified_block().id())
-                || retrieve_qc.certified_block().round() == 0
+                || retrieve_qc.certified_block().round() <= self.root().round()
             {
                 break;
             }
-            let mut blocks =
-                retriever.retrieve_block_for_qc(&retrieve_qc, 1).await?;
-            // retrieve_block_for_qc guarantees that blocks has exactly 1
-            // element
-            let block = blocks.remove(0);
-            retrieve_qc = block.quorum_cert().clone();
-            pending.push(block);
+            // This will not underflow because of the check above.
+            let round_gap =
+                retrieve_qc.certified_block().round() - self.root().round();
+            let mut blocks = retriever
+                .retrieve_block_for_qc(
+                    &retrieve_qc,
+                    round_gap.min(BLOCK_FETCH_BATCH_MAX_SIZE),
+                )
+                .await?;
+            // retriever ensures that the blocks are chained.
+            retrieve_qc = blocks
+                .last()
+                .expect("checked by retriever")
+                .quorum_cert()
+                .clone();
+            pending.append(&mut blocks);
         }
 
         if !pending.is_empty() {
             // Execute the blocks in catch_up mode.
             while let Some(block) = pending.pop() {
+                // We may receive more blocks than needed in a batch, so check
+                // again here.
+                if self.block_exists(block.id())
+                    || block.round() <= self.root().round()
+                {
+                    continue;
+                }
+
                 let block_qc = block.quorum_cert().clone();
                 self.insert_single_quorum_cert(block_qc.clone())?;
                 self.execute_and_insert_block(
@@ -230,11 +249,9 @@ impl BlockRetriever {
 
     /// Retrieve chain of n blocks for given QC
     ///
-    /// Returns Result with Vec that has a guaranteed size of num_blocks
+    /// Returns Result with Vec that has a size of `[1, num_blocks]`.
     /// This guarantee is based on BlockRetrievalResponse::verify that ensures
-    /// that number of blocks in response is equal to number of blocks
-    /// requested.  This method will continue until the quorum certificate
-    /// members all fail to return the missing chain.
+    /// that number of blocks in response is within the range.
     ///
     /// The first attempt of block retrieval will always be sent to
     /// preferred_peer to allow the leader to drive quorum certificate

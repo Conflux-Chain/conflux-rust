@@ -4,6 +4,8 @@
 
 mod pos;
 
+use std::fs::create_dir_all;
+
 /// Hold all top-level components for a type of client.
 /// This struct implement ClientShutdownTrait.
 pub struct ClientComponents<BlockGenT, Rest> {
@@ -175,6 +177,7 @@ pub fn initialize_common_modules(
                 load_pri_key(key_path, &passwd).unwrap();
             (ConfigKey::new(sk), ConfigKey::new(vrf_sk))
         } else {
+            create_dir_all(key_path.parent().unwrap()).unwrap();
             let passwd = if conf.is_test_or_dev_mode() {
                 vec![]
             } else {
@@ -358,7 +361,8 @@ pub fn initialize_common_modules(
     );
     debug!("PoS initialized");
     let pos_connection = PosConnection::new(
-        diem_handler.diem_db.clone() as Arc<dyn DBReaderForPoW>
+        diem_handler.diem_db.clone() as Arc<dyn DBReaderForPoW>,
+        diem_handler.consensus_db.clone(),
     );
     // FIXME(lpl): Set CIP height.
     let pos_verifier = Arc::new(PosVerifier::new(
@@ -429,6 +433,7 @@ pub fn initialize_common_modules(
         accounts.clone(),
         pos_verifier.clone(),
         diem_handler.tx_sender.clone(),
+        diem_handler.diem_db.clone(),
     ));
 
     let runtime = Runtime::with_default_thread_count();
@@ -605,7 +610,7 @@ pub fn initialize_not_light_node_modules(
                 .expect("Mining thread spawn error");
         }
     } else if let Some(author) = maybe_author {
-        if !author.is_valid_address() || author.is_builtin_address() {
+        if !author.is_genesis_valid_address() || author.is_builtin_address() {
             panic!("mining-author must be user address or contract address, otherwise you will not get mining rewards!!!");
         }
         if blockgen.pow_config.enable_mining() {

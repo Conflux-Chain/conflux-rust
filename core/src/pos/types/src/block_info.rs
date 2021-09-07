@@ -25,6 +25,7 @@ use std::fmt::{Display, Formatter};
 /// The round of a block is a consensus-internal counter, which starts with 0
 /// and increases monotonically.
 pub type Round = u64;
+pub type View = u64;
 
 // Constants for the initial genesis block.
 pub const GENESIS_EPOCH: u64 = 0;
@@ -206,6 +207,7 @@ impl Display for BlockInfo {
     BCSCryptoHash,
     CryptoHasher,
 )]
+#[serde(rename_all = "camelCase")]
 pub struct PivotBlockDecision {
     pub height: u64,
     pub block_hash: H256,

@@ -14,6 +14,7 @@ pub mod errors;
 mod filter;
 mod index;
 mod log;
+pub mod pos;
 mod provenance;
 pub mod pubsub;
 mod receipt;

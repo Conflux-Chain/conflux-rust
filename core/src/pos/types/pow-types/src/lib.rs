@@ -30,8 +30,8 @@ pub enum StakingEvent {
     Register(H256, Vec<u8>, Vec<u8>),
     /// (address, updated_voting_power)
     IncreaseStake(H256, u64),
-    /// (address)
-    Retire(H256),
+    /// (address, unlock_voting_power)
+    Retire(H256, u64),
 }
 
 /// This is just used to execute PoS genesis, where pow_handler will not be

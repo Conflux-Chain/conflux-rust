@@ -308,7 +308,7 @@ impl fmt::Display for PendingVotes {
 //
 // Tests
 //
-
+/*
 #[cfg(test)]
 mod tests {
     use super::{PendingVotes, VoteReceptionResult};
@@ -468,3 +468,4 @@ mod tests {
         };
     }
 }
+*/

@@ -12,6 +12,7 @@ use crate::{
         pos_handler::PosVerifier,
         ConsensusGraphInner,
     },
+    evm::Spec,
     executive::{
         revert_reason_decode, ExecutionError, ExecutionOutcome, Executive,
         TransactOptions,
@@ -1040,7 +1041,7 @@ impl ConsensusExecutionHandler {
                 epoch_hash,
                 on_local_pivot,
                 debug_record.as_deref_mut(),
-                self.machine.spec(current_block_number).account_start_nonce,
+                self.machine.spec(current_block_number),
             );
         }
 
@@ -1065,13 +1066,13 @@ impl ConsensusExecutionHandler {
             // The pos_reference is continuous, so after seeing a new
             // pos_reference, we only need to process the new
             // unlock_txs in it.
-            for unlock_node_id in self
+            for (unlock_node_id, votes) in self
                 .pos_verifier
                 .get_unlock_nodes(current_pos_ref, parent_pos_ref)
             {
                 debug!("unlock node: {:?}", unlock_node_id);
                 state
-                    .update_pos_status(unlock_node_id, 1)
+                    .update_pos_status(unlock_node_id, votes)
                     .expect("db error");
             }
             for _dispute_node_id in self
@@ -1215,6 +1216,7 @@ impl ConsensusExecutionHandler {
             let spec = self.machine.spec(env.number);
             let secondary_reward =
                 state.bump_block_number_accumulate_interest();
+            state.inc_distributable_pos_interest(env.number)?;
             initialize_internal_contract_accounts(
                 state,
                 self.machine.internal_contracts().initialized_at(env.number),
@@ -1412,8 +1414,7 @@ impl ConsensusExecutionHandler {
     fn process_rewards_and_fees(
         &self, state: &mut State, reward_info: &RewardExecutionInfo,
         epoch_later: &H256, on_local_pivot: bool,
-        mut debug_record: Option<&mut ComputeEpochDebugRecord>,
-        account_start_nonce: U256,
+        mut debug_record: Option<&mut ComputeEpochDebugRecord>, spec: Spec,
     )
     {
         /// (Fee, SetOfPackingBlockHash)
@@ -1680,14 +1681,16 @@ impl ConsensusExecutionHandler {
         debug!("Give rewards merged_reward={:?}", merged_rewards);
 
         for (address, reward) in merged_rewards {
-            state
-                .add_balance(
-                    &address,
-                    &reward,
-                    CleanupMode::ForceCreate,
-                    account_start_nonce,
-                )
-                .unwrap();
+            if spec.is_valid_address(&address) {
+                state
+                    .add_balance(
+                        &address,
+                        &reward,
+                        CleanupMode::ForceCreate,
+                        spec.account_start_nonce,
+                    )
+                    .unwrap();
+            }
 
             if let Some(debug_out) = &mut debug_record {
                 debug_out

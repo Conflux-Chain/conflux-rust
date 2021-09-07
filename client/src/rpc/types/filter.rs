@@ -374,6 +374,7 @@ mod tests {
                 ],
                 offset: Some(1),
                 limit: Some(2),
+                trusted: false,
             },
         };
 
@@ -421,6 +422,7 @@ mod tests {
                 ],
                 offset: Some(1),
                 limit: Some(2),
+                trusted: false,
             },
         };
 
@@ -476,6 +478,7 @@ mod tests {
                 ],
                 offset: Some(1),
                 limit: Some(2),
+                trusted: false,
             },
         };
 

@@ -4,7 +4,7 @@
 // Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-
+/*
 use crate::pos::consensus::liveness::{
     proposer_election::ProposerElection,
     rotating_proposer_election::RotatingProposer,
@@ -154,3 +154,4 @@ fn test_fixed_proposer() {
     assert!(!pe.is_valid_proposer(another_author, 1));
     assert_eq!(pe.get_valid_proposer(1), chosen_author);
 }
+*/

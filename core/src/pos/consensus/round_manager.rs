@@ -1169,15 +1169,22 @@ impl RoundManager {
         let mut id = request.req.block_id();
         while (blocks.len() as u64) < request.req.num_blocks() {
             if let Some(executed_block) = self.block_store.get_block(id) {
+                if executed_block.block().is_genesis_block() {
+                    break;
+                }
                 id = executed_block.parent_id();
                 blocks.push(executed_block.block().clone());
             } else if let Ok(Some(block)) =
                 self.block_store.get_ledger_block(&id)
             {
+                if block.is_genesis_block() {
+                    break;
+                }
                 id = block.parent_id();
                 blocks.push(block);
             } else {
-                status = BlockRetrievalStatus::NotEnoughBlocks;
+                // TODO(lpl): This error may be needed in the future.
+                // status = BlockRetrievalStatus::NotEnoughBlocks;
                 break;
             }
         }

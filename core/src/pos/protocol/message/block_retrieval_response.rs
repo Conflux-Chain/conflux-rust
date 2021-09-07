@@ -9,7 +9,7 @@ use crate::{
         request_manager::AsAny,
         sync_protocol::{Context, Handleable, RpcResponse},
     },
-    sync::Error,
+    sync::{Error, ErrorKind},
 };
 use consensus_types::block_retrieval::BlockRetrievalResponse;
 use serde::{Deserialize, Serialize};
@@ -41,8 +41,11 @@ impl Handleable for BlockRetrievalRpcResponse {
             Ok(req) => {
                 let res_tx = req.response_tx.take();
                 if let Some(tx) = res_tx {
-                    tx.send(Ok(Box::new(self)))
-                        .expect("send response tx should succeed");
+                    if let Err(e) = tx.send(Ok(Box::new(self))) {
+                        bail!(ErrorKind::UnexpectedMessage(
+                            format!("{:?}", e).into()
+                        ))
+                    }
                 }
             }
             Err(e) => {

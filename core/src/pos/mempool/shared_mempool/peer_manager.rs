@@ -176,7 +176,7 @@ impl PeerManager {
         &self, peer: NodeId, scheduled_backoff: bool, smp: &mut SharedMempool,
     ) {
         // diem_trace!("start execute_broadcast");
-        trace!("execute_broadcast for peer[{:?}]", peer);
+        // trace!("execute_broadcast for peer[{:?}]", peer);
         let mut peer_states = self.peer_states.lock();
         let state = if let Some(state) = peer_states.get_mut(&peer) {
             state
@@ -484,6 +484,7 @@ fn compare_prioritized_peers(
     }
 }
 
+/*
 #[cfg(test)]
 mod test {
     use super::*;
@@ -543,3 +544,4 @@ mod test {
         assert_eq!(Ordering::Equal, compare_prioritized_peers(&val_1, &val_1));
     }
 }
+*/

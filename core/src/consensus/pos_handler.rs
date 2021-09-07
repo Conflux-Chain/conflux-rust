@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::pos::consensus::ConsensusDB;
 use cfx_types::H256;
 use diem_config::keys::ConfigKey;
 use diem_crypto::HashValue;
@@ -128,15 +129,16 @@ impl<PoS: PosInterface> PosHandler<PoS> {
 
     pub fn get_unlock_nodes(
         &self, h: &PosBlockId, parent_pos_ref: &PosBlockId,
-    ) -> Vec<NodeId> {
+    ) -> Vec<(NodeId, u64)> {
         let unlock_event_key = UnlockEvent::event_key();
         let mut unlock_nodes = Vec::new();
         for event in self.pos.get_events(parent_pos_ref, h) {
             if *event.key() == unlock_event_key {
                 let unlock_event = UnlockEvent::from_bytes(event.event_data())
                     .expect("key checked");
-                unlock_nodes
-                    .push(H256::from_slice(unlock_event.node_id.as_ref()));
+                let node_id = H256::from_slice(unlock_event.node_id.as_ref());
+                let votes = unlock_event.unlocked;
+                unlock_nodes.push((node_id, votes));
             }
         }
         unlock_nodes
@@ -180,11 +182,17 @@ impl<PoS: PosInterface> PosHandler<PoS> {
 
 pub struct PosConnection {
     pos_storage: Arc<dyn DBReaderForPoW>,
+    consensus_db: Arc<ConsensusDB>,
 }
 
 impl PosConnection {
-    pub fn new(pos_storage: Arc<dyn DBReaderForPoW>) -> Self {
-        Self { pos_storage }
+    pub fn new(
+        pos_storage: Arc<dyn DBReaderForPoW>, consensus_db: Arc<ConsensusDB>,
+    ) -> Self {
+        Self {
+            pos_storage,
+            consensus_db,
+        }
     }
 }
 
@@ -194,8 +202,10 @@ impl PosInterface for PosConnection {
     fn get_committed_block(&self, h: &PosBlockId) -> Option<PosBlock> {
         debug!("get_committed_block: {:?}", h);
         let block_hash = h256_to_diem_hash(h);
-        let committed_block =
-            self.pos_storage.get_committed_block(&block_hash).ok()?;
+        let committed_block = self
+            .pos_storage
+            .get_committed_block_by_hash(&block_hash)
+            .ok()?;
 
         /*
         let parent;
@@ -252,12 +262,12 @@ impl PosInterface for PosConnection {
     ) -> Vec<ContractEvent> {
         let start_version = self
             .pos_storage
-            .get_committed_block(&h256_to_diem_hash(from))
+            .get_committed_block_by_hash(&h256_to_diem_hash(from))
             .expect("err reading ledger info for from")
             .version;
         let end_version = self
             .pos_storage
-            .get_committed_block(&h256_to_diem_hash(to))
+            .get_committed_block_by_hash(&h256_to_diem_hash(to))
             .expect("err reading ledger info for to")
             .version;
         self.pos_storage

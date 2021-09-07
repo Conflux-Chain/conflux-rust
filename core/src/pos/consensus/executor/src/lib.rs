@@ -389,8 +389,10 @@ where V: VMExecutor
                                     Ok(false) => bail!("Packed staking transactions unmatch PoW events)"),
                                     Err(e) => diem_error!("error decoding pow events: err={:?}", e),
                                 }
-                                new_pos_state
-                                    .retire_node(&retire_event.node_id)?;
+                                new_pos_state.retire_node(
+                                    &retire_event.node_id,
+                                    retire_event.votes,
+                                )?;
                             }
                         }
                     }
@@ -423,8 +425,10 @@ where V: VMExecutor
                                 let retire_event = RetireEvent::from_bytes(
                                     event.event_data(),
                                 )?;
-                                new_pos_state
-                                    .retire_node(&retire_event.node_id)?;
+                                new_pos_state.retire_node(
+                                    &retire_event.node_id,
+                                    retire_event.votes,
+                                )?;
                             }
                         }
                     }
@@ -1174,7 +1178,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
             // Force retire the nodes that have not voted in this term.
             for (node, vote_count) in &elected {
                 if vote_count.vote_count == 0 {
-                    pos_state_to_commit.retire_node(&node)?;
+                    pos_state_to_commit.force_retire_node(&node)?;
                 }
             }
 
@@ -1189,6 +1193,11 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 ledger_info_with_sigs.ledger_info().epoch(),
                 &reward_event,
             )?;
+            self.db_with_cache
+                .get_block(&ending_block)
+                .expect("latest committed block not pruned")
+                .lock()
+                .replace_pos_state(pos_state_to_commit.clone());
         }
 
         diem_info!(
@@ -1238,6 +1247,8 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
         let mut committed_blocks = Vec::new();
         if ledger_info_with_sigs.ledger_info().epoch() != 0 {
             let mut signatures_vec = Vec::new();
+            let first_view =
+                pos_state_to_commit.current_view() - blocks.len() as u64 + 1;
             for (i, b) in blocks.iter().enumerate() {
                 let ledger_block = self
                     .consensus_db
@@ -1247,12 +1258,15 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 committed_blocks.push(CommittedBlock {
                     hash: b.id(),
                     epoch: ledger_block.epoch(),
+                    miner: ledger_block.author(),
+                    parent_hash: ledger_block.parent_id(),
                     round: ledger_block.round(),
                     pivot_decision: b.output().pivot_block().clone().unwrap(),
                     version: b.output().version().unwrap(),
                     timestamp: ledger_block.timestamp_usecs(),
                     // Set the signatures after the loop.
                     signatures: Default::default(),
+                    view: first_view + i as u64,
                 });
                 // The signatures of each block is in the qc of the next block.
                 if i != 0 {
@@ -1279,6 +1293,8 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 hash: ledger_info_with_sigs.ledger_info().consensus_block_id(),
                 epoch: 0,
                 round: 0,
+                miner: None,
+                parent_hash: HashValue::default(),
                 pivot_decision: ledger_info_with_sigs
                     .ledger_info()
                     .pivot_decision()
@@ -1289,6 +1305,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     .ledger_info()
                     .timestamp_usecs(),
                 signatures: ledger_info_with_sigs.signatures().clone(),
+                view: 1,
             });
         }
         for (txn, txn_data) in blocks.iter().flat_map(|block| {
@@ -1394,11 +1411,15 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
             block.output().executed_trees().state_tree().prune()
         }
 
-        self.db_with_cache.prune(
+        let old_committed_block = self.db_with_cache.prune(
             ledger_info_with_sigs.ledger_info(),
             committed_txns.clone(),
             reconfig_events.clone(),
         )?;
+        self.db_with_cache
+            .db
+            .writer
+            .delete_pos_state_by_block(&old_committed_block)?;
 
         // Now that the blocks are persisted successfully, we can reply to
         // consensus

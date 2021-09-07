@@ -90,6 +90,10 @@ impl SpeculationBlock {
         self.output = output;
         self.children = vec![];
     }
+
+    pub fn replace_pos_state(&mut self, new_pos_state: PosState) {
+        self.output.replace_pos_state(new_pos_state)
+    }
 }
 
 /// drop() will clean the current block entry from the global map.
@@ -283,11 +287,13 @@ impl SpeculationCache {
         Ok(())
     }
 
+    /// Return the previous committed block id.
     pub fn prune(
         &mut self, committed_ledger_info: &LedgerInfo,
         committed_txns: Vec<Transaction>, reconfig_events: Vec<ContractEvent>,
-    ) -> Result<(), Error>
+    ) -> Result<HashValue, Error>
     {
+        let old_committed_root = self.committed_block_id;
         let arc_latest_committed_block =
             self.get_block(&committed_ledger_info.consensus_block_id())?;
         let latest_committed_block = arc_latest_committed_block.lock();
@@ -298,7 +304,7 @@ impl SpeculationCache {
             committed_txns,
             reconfig_events,
         );
-        Ok(())
+        Ok(old_committed_root)
     }
 
     // This function is intended to be called internally.

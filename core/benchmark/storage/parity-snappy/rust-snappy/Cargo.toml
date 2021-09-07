@@ -12,4 +12,4 @@ libc = "0.2"
 parity-snappy-sys = { package = "snappy-sys", git = "https://github.com/busyjay/rust-snappy", branch = "static-link" }
 
 [dev-dependencies]
-rand = "0.5"
+rand = "0.7"

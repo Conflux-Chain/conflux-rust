@@ -16,6 +16,7 @@ use diem_types::{
     contract_event::ContractEvent,
     epoch_state::EpochState,
     proof::accumulator::InMemoryAccumulator,
+    term_state::PosState,
     transaction::{TransactionStatus, Version},
 };
 use std::{collections::HashMap, sync::Arc};
@@ -174,5 +175,9 @@ impl ProcessedVMOutput {
                 .collect(),
             self.pivot_block().clone(),
         )
+    }
+
+    pub fn replace_pos_state(&mut self, new_pos_state: PosState) {
+        self.executed_trees.pos_state = new_pos_state;
     }
 }

@@ -26,7 +26,7 @@ use pow_types::StakingEvent;
 use crate::{
     account_address::{from_consensus_public_key, AccountAddress},
     account_config,
-    block_info::{PivotBlockDecision, Round},
+    block_info::{PivotBlockDecision, Round, View},
     contract_event::ContractEvent,
     epoch_state::EpochState,
     event::EventKey,
@@ -36,38 +36,217 @@ use crate::{
 };
 
 const TERM_LIST_LEN: usize = 6;
-// FIXME(lpl): Use correct value later.
-pub const ELECTION_AFTER_ACCEPTED_ROUND: Round = 240;
 pub const ROUND_PER_TERM: Round = 60;
 /// A term `n` is open for election in the view range
 /// `(n * ROUND_PER_TERM - ELECTION_TERM_START_ROUND, n * ROUND_PER_TERM -
 /// ELECTION_TERM_END_ROUND]`
-const ELECTION_TERM_START_ROUND: Round = 120;
+const ELECTION_TERM_START_ROUND: Round = 90;
 const ELECTION_TERM_END_ROUND: Round = 30;
+// The view to start election in the whole PoS consensus protocol.
+const FIRST_START_ELECTION_VIEW: u64 =
+    TERM_LIST_LEN as u64 * ROUND_PER_TERM - ELECTION_TERM_START_ROUND;
+const FIRST_END_ELECTION_VIEW: u64 =
+    TERM_LIST_LEN as u64 * ROUND_PER_TERM - ELECTION_TERM_END_ROUND;
 
 const TERM_MAX_SIZE: usize = 10000;
 const TERM_ELECTED_SIZE: usize = 50;
-const UNLOCK_WAIT_VIEW: u64 = 480;
+pub const IN_QUEUE_LOCKED_VIEWS: u64 = 10080;
+pub const OUT_QUEUE_LOCKED_VIEWS: u64 = 10080;
 
-const BONUS_VOTE_MAX_SIZE: u64 = 100;
+pub use incentives::*;
+mod incentives {
+    use super::{ROUND_PER_TERM, TERM_ELECTED_SIZE, TERM_MAX_SIZE};
+    const BONUS_VOTE_MAX_SIZE: u64 = 100;
 
-pub const MAX_TERM_POINTS: u64 = 6_000_000;
+    pub const MAX_TERM_POINTS: u64 = 6_000_000;
 
-const ELECTION_PERCENTAGE: u64 = 20;
-const COMMITTEE_PERCENTAGE: u64 = 75;
-const LEADER_PERCENTAGE: u64 = 3;
-const BONUS_VOTE_PERCENTAGE: u64 = 2;
+    const ELECTION_PERCENTAGE: u64 = 20;
+    const COMMITTEE_PERCENTAGE: u64 = 75;
+    const LEADER_PERCENTAGE: u64 = 3;
+    const BONUS_VOTE_PERCENTAGE: u64 = 2;
 
-pub const ELECTION_POINTS: u64 =
-    MAX_TERM_POINTS * ELECTION_PERCENTAGE / 100 / (TERM_MAX_SIZE as u64);
-pub const COMMITTEE_POINTS: u64 =
-    MAX_TERM_POINTS * COMMITTEE_PERCENTAGE / 100 / (TERM_ELECTED_SIZE as u64);
-pub const LEADER_POINTS: u64 =
-    MAX_TERM_POINTS * LEADER_PERCENTAGE / 100 / ROUND_PER_TERM;
-pub const BONUS_VOTE_POINTS: u64 = MAX_TERM_POINTS * BONUS_VOTE_PERCENTAGE
-    / 100
-    / ROUND_PER_TERM
-    / BONUS_VOTE_MAX_SIZE;
+    pub const ELECTION_POINTS: u64 =
+        MAX_TERM_POINTS * ELECTION_PERCENTAGE / 100 / (TERM_MAX_SIZE as u64);
+    pub const COMMITTEE_POINTS: u64 = MAX_TERM_POINTS * COMMITTEE_PERCENTAGE
+        / 100
+        / (TERM_ELECTED_SIZE as u64);
+    pub const LEADER_POINTS: u64 =
+        MAX_TERM_POINTS * LEADER_PERCENTAGE / 100 / ROUND_PER_TERM;
+    pub const BONUS_VOTE_POINTS: u64 = MAX_TERM_POINTS * BONUS_VOTE_PERCENTAGE
+        / 100
+        / ROUND_PER_TERM
+        / BONUS_VOTE_MAX_SIZE;
+}
+
+use lock_status::NodeLockStatus;
+use std::collections::HashSet;
+
+pub mod lock_status {
+    use super::*;
+    #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
+    #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+    pub struct StatusItem {
+        pub view: View,
+        pub votes: u64,
+    }
+
+    pub type StatusList = VecDeque<StatusItem>;
+
+    #[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Debug, Default)]
+    #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+    pub struct NodeLockStatus {
+        pub in_queue: StatusList,
+        pub locked: u64,
+        pub out_queue: StatusList,
+        unlocked: u64,
+
+        // Equals to the summation of in_queue + locked
+        available_votes: u64,
+
+        force_retired: bool,
+        // If the staking is forfeited, the unlocked votes before forfeiting is
+        // exempted.
+        exempt_from_forfeit: Option<u64>,
+    }
+
+    pub struct NodeElectionStatus {
+        pub serving_votes: StatusList,
+        pub election_votes: StatusList,
+    }
+
+    pub struct UpdateHint {
+        pub address: AccountAddress,
+        pub view: View,
+    }
+
+    pub type ViewHints = Vec<View>;
+
+    impl NodeLockStatus {
+        pub fn unlocked(&self) -> u64 { self.unlocked }
+
+        pub fn force_retired(&self) -> bool { self.force_retired }
+
+        pub fn exempt_from_forfeit(&self) -> Option<u64> {
+            self.exempt_from_forfeit
+        }
+    }
+
+    impl NodeLockStatus {
+        #[must_use]
+        pub(super) fn update(&mut self, view: View) -> (bool, Vec<View>) {
+            let mut new_votes_unlocked = false;
+            let mut update_views = vec![];
+
+            while let Some(item) = self.in_queue.pop_front() {
+                if item.view > view {
+                    self.in_queue.push_front(item);
+                    break;
+                }
+                self.locked += item.votes;
+            }
+
+            while let Some(item) = self.out_queue.pop_front() {
+                if item.view > view {
+                    self.out_queue.push_front(item);
+                    break;
+                }
+                self.unlocked += item.votes;
+                new_votes_unlocked = true;
+            }
+
+            if self.force_retired {
+                update_views = self.new_unlock(view, self.locked).expect(
+                    "Passed in votes is always no less than self.locked",
+                );
+            }
+
+            if self.exempt_from_forfeit.is_some() {
+                new_votes_unlocked = false
+            }
+
+            (new_votes_unlocked, update_views)
+        }
+
+        #[must_use]
+        pub(super) fn new_lock(
+            &mut self, view: View, votes: u64, initialize_mode: bool,
+        ) -> Vec<View> {
+            if votes == 0 {
+                return vec![];
+            }
+            self.available_votes += votes;
+
+            return if IN_QUEUE_LOCKED_VIEWS > 0 && !initialize_mode {
+                let exit_queue_view = view + IN_QUEUE_LOCKED_VIEWS;
+                self.in_queue.push_back(StatusItem {
+                    view: exit_queue_view,
+                    votes,
+                });
+                vec![exit_queue_view]
+            } else {
+                self.locked += votes;
+                vec![]
+            };
+        }
+
+        #[must_use]
+        pub(super) fn new_unlock(
+            &mut self, view: View, votes: u64,
+        ) -> Result<Vec<View>> {
+            if votes == 0 {
+                return Ok(vec![]);
+            }
+            if self.locked < votes {
+                bail!("not enough votes to unlock");
+            }
+            self.locked -= votes;
+            self.available_votes -= votes;
+
+            return Ok(if OUT_QUEUE_LOCKED_VIEWS > 0 {
+                let exit_queue_view = view + OUT_QUEUE_LOCKED_VIEWS;
+                self.out_queue.push_back(StatusItem {
+                    view: exit_queue_view,
+                    votes,
+                });
+                vec![exit_queue_view]
+            } else {
+                self.unlocked += votes;
+                vec![]
+            });
+        }
+
+        #[must_use]
+        pub(super) fn force_retire(&mut self, view: View) -> Vec<View> {
+            if self.force_retired {
+                return vec![];
+            }
+
+            self.force_retired = true;
+            self.new_unlock(view, self.locked)
+                .expect("Passed in votes is always no less than self.locked")
+        }
+
+        #[allow(unused)]
+        pub(super) fn forfeit(&mut self) {
+            if self.exempt_from_forfeit.is_some() {
+                return;
+            }
+            self.exempt_from_forfeit = Some(self.unlocked)
+        }
+
+        pub fn available_votes(&self) -> u64 {
+            if self.force_retired || self.exempt_from_forfeit.is_some() {
+                0
+            } else {
+                self.available_votes
+            }
+        }
+
+        pub fn unlocked_votes(&self) -> u64 {
+            self.exempt_from_forfeit.unwrap_or(self.unlocked)
+        }
+    }
+}
 
 #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
@@ -82,9 +261,11 @@ pub enum NodeStatus {
 pub struct NodeData {
     public_key: ConsensusPublicKey,
     vrf_public_key: Option<ConsensusVRFPublicKey>,
-    status: NodeStatus,
-    status_start_view: Round,
-    voting_power: u64,
+    lock_status: NodeLockStatus,
+}
+
+impl NodeData {
+    pub fn lock_status(&self) -> &NodeLockStatus { &self.lock_status }
 }
 
 /// A node becomes its voting power number of ElectionNodes for election.
@@ -103,22 +284,132 @@ impl ElectionNodeID {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+pub struct ElectingHeap(
+    BinaryHeap<(HashValue, ElectionNodeID)>,
+    HashSet<AccountAddress>,
+);
+
+#[derive(Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+pub struct ElectedMap(BTreeMap<AccountAddress, u64>);
+pub type CandyMap = ElectedMap;
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
+pub enum NodeList {
+    Electing(ElectingHeap),
+    Elected(ElectedMap),
+}
+
+impl Default for NodeList {
+    fn default() -> Self { NodeList::Electing(Default::default()) }
+}
+
+impl NodeList {
+    fn len(&self) -> usize {
+        match self {
+            NodeList::Electing(heap) => heap.0.len(),
+            NodeList::Elected(map) => map.0.len(),
+        }
+    }
+
+    fn add_node(&mut self, vrf_output: HashValue, node_id: ElectionNodeID) {
+        if let NodeList::Electing(heap) = self {
+            heap.add_node(vrf_output, node_id);
+        } else {
+            panic!("The term is finalized");
+        }
+    }
+
+    #[must_use]
+    fn finalize_elect(&mut self) -> CandyMap {
+        if let NodeList::Electing(heap) = self {
+            let electing_heap = std::mem::take(heap);
+            let (elected_heap, candy_map) = electing_heap.finalize();
+            *self = NodeList::Elected(elected_heap);
+            return candy_map;
+        } else {
+            panic!("The term is finalized");
+        }
+    }
+
+    fn has_elected(&self, addr: &AccountAddress) -> bool {
+        if let NodeList::Electing(heap) = self {
+            heap.1.contains(addr)
+        } else {
+            panic!("The term is finalized");
+        }
+    }
+
+    fn serving_votes(&self, address: &AccountAddress) -> u64 {
+        if let NodeList::Elected(map) = self {
+            map.0.get(address).cloned().unwrap_or(0)
+        } else {
+            panic!("The term is not finalized");
+        }
+    }
+
+    fn committee(&self) -> &ElectedMap {
+        if let NodeList::Elected(map) = self {
+            map
+        } else {
+            panic!("The term is not finalized");
+        }
+    }
+}
+
+impl ElectingHeap {
+    fn finalize(mut self) -> (ElectedMap, CandyMap) {
+        let mut elected_map = ElectedMap::default();
+        let mut count = 0usize;
+        while let Some((_, node_id)) = self.0.pop() {
+            *elected_map.0.entry(node_id.node_id.addr).or_insert(0) += 1;
+            count += 1;
+            if count >= TERM_ELECTED_SIZE {
+                break;
+            }
+        }
+        let mut candy_map = elected_map.clone();
+        for (_, node_id) in self.0.into_vec().drain(..) {
+            *candy_map.0.entry(node_id.node_id.addr).or_insert(0) += 1;
+        }
+        (elected_map, candy_map)
+    }
+
+    fn add_node(&mut self, hash: HashValue, node_id: ElectionNodeID) {
+        let is_not_full_set = self.0.len() < TERM_MAX_SIZE;
+        if self
+            .0
+            .peek()
+            .map_or(true, |(max_value, _)| is_not_full_set || hash < *max_value)
+        {
+            self.0.push((hash, node_id.clone()));
+            self.1.insert(node_id.node_id.addr.clone());
+            if self.0.len() > TERM_MAX_SIZE {
+                self.0.pop();
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct TermData {
     start_view: Round,
     seed: Vec<u8>,
     /// (VRF.val, NodeID)
-    node_list: BinaryHeap<(HashValue, ElectionNodeID)>,
+    node_list: NodeList,
 }
 
-impl PartialEq for TermData {
+impl PartialEq for ElectingHeap {
     fn eq(&self, other: &Self) -> bool {
-        if self.start_view != other.start_view || self.seed != other.seed {
+        if self.1 != other.1 {
             return false;
         }
-        let mut iter_self = self.node_list.iter();
-        let mut iter_other = other.node_list.iter();
+        let mut iter_self = self.0.iter();
+        let mut iter_other = other.0.iter();
         while let Some(node) = iter_self.next() {
             match iter_other.next() {
                 None => return false,
@@ -133,25 +424,15 @@ impl PartialEq for TermData {
     }
 }
 
-impl Eq for TermData {}
+impl Eq for ElectingHeap {}
 
 impl TermData {
-    fn next_term(
-        &self, node_list: BinaryHeap<(HashValue, ElectionNodeID)>,
-        seed: Vec<u8>,
-    ) -> Self
-    {
+    fn next_term(&self, node_list: NodeList, seed: Vec<u8>) -> Self {
         TermData {
             start_view: self.start_view + ROUND_PER_TERM,
             seed,
             node_list,
         }
-    }
-}
-
-impl TermData {
-    fn add_node(&mut self, vrf_output: HashValue, node_id: ElectionNodeID) {
-        self.node_list.push((vrf_output, node_id))
     }
 }
 
@@ -166,6 +447,50 @@ pub struct TermList {
     /// + 2`. The first `TERM_LIST_LEN` terms are used to validate new
     /// election transactions, and the last 2 terms are open for election.
     term_list: Vec<TermData>,
+    candy_rewards: CandyMap,
+    electing_index: usize,
+}
+
+impl TermList {
+    fn start_term(&self) -> u64 {
+        self.current_term.saturating_sub(TERM_LIST_LEN as u64 - 1)
+    }
+
+    fn committee_for_term(&self, term: u64) -> &[TermData] {
+        let first_term = term.saturating_sub(TERM_LIST_LEN as u64 - 1) as usize;
+        let last_term = first_term + TERM_LIST_LEN - 1;
+        if first_term < self.start_term() as usize
+            || last_term >= self.electing_term_number() as usize
+        {
+            panic!(
+                "Can not get committee for term {}, current term {}",
+                term, self.current_term
+            );
+        }
+        let start_offset = first_term - self.start_term() as usize;
+        let end_offset = last_term - self.start_term() as usize;
+        &self.term_list[start_offset..=end_offset]
+    }
+
+    fn get_term_by_number(&self, term_number: u64) -> Option<&TermData> {
+        let start_term = self.start_term();
+        if term_number < start_term {
+            return None;
+        }
+        self.term_list.get((term_number - start_term) as usize)
+    }
+
+    fn electing_term_number(&self) -> u64 {
+        self.start_term() + self.electing_index as u64
+    }
+
+    fn electing_term_mut(&mut self) -> &mut TermData {
+        &mut self.term_list[self.electing_index]
+    }
+
+    fn electing_term(&self) -> &TermData {
+        &self.term_list[self.electing_index]
+    }
 }
 
 impl TermList {
@@ -174,15 +499,10 @@ impl TermList {
     pub fn new_node_elected(
         &mut self, event: &ElectionEvent, voting_power: u64,
     ) -> anyhow::Result<()> {
-        let term_offset = event
-            .start_term
-            .checked_sub(self.current_term - (TERM_LIST_LEN as u64 - 1))
-            .ok_or(anyhow!("election start_term is too early"))?
-            as usize;
-        if term_offset >= self.term_list.len() {
-            bail!("election start_term is too late");
+        if event.start_term != self.electing_term_number() {
+            bail!("term is not open for election, opening term {}, election term {}", self.electing_term_number(),event.start_term);
         }
-        let term = &mut self.term_list[term_offset];
+        let term = self.electing_term_mut();
 
         for nonce in 0..voting_power {
             // Hash after appending the nonce to get multiple identifier for
@@ -190,15 +510,10 @@ impl TermList {
             let mut b = event.vrf_output.to_vec();
             b.append(&mut nonce.to_le_bytes().to_vec());
             let priority = HashValue::sha3_256_of(&b);
-            term.add_node(
+            term.node_list.add_node(
                 priority,
                 ElectionNodeID::new(event.node_id.clone(), nonce),
             );
-            if term.node_list.len() > TERM_MAX_SIZE {
-                // TODO: Decide if we want to keep the previously elected nodes
-                // to avoid duplicated election.
-                term.node_list.pop();
-            }
         }
         Ok(())
     }
@@ -229,40 +544,47 @@ impl TermList {
             .unwrap()
             .next_term(Default::default(), new_seed);
         self.term_list.push(new_term);
+        self.electing_index -= 1;
+        assert_eq!(self.electing_index, 6);
     }
 
-    fn can_be_elected(
+    pub fn finalize_election(&mut self) {
+        diem_debug!(
+            "Finalize election of term {}",
+            self.electing_term_number()
+        );
+        let finalize_term = self.electing_term_mut();
+        let candy_map = finalize_term.node_list.finalize_elect();
+        self.candy_rewards = candy_map;
+        self.electing_index += 1;
+        assert_eq!(self.electing_index, 7);
+    }
+
+    fn serving_votes(
         &self, target_term_offset: usize, author: &AccountAddress,
-    ) -> bool {
+    ) -> u64 {
+        assert!(target_term_offset < TERM_LIST_LEN + 2);
         // TODO(lpl): Optimize by adding hash set to each term or adding another
         // field to node_map.
         let start_term_offset =
             target_term_offset as usize - (TERM_LIST_LEN - 1);
+
         // The checking of `target_view` ensures that this is in range of
         // `term_list`.
         // For any valid `target_term_offset`, always checks to the end of
         // `term_list` because it's within the service time of
         // `target_term`.
-        for i in start_term_offset..=(TERM_LIST_LEN + 1) {
+        let mut serving_votes = Vec::with_capacity(TERM_LIST_LEN);
+        for i in start_term_offset..target_term_offset {
             let term = &self.term_list[i as usize];
-            for (_, addr) in term.node_list.iter().take(TERM_ELECTED_SIZE) {
-                if addr.node_id.addr == *author {
-                    diem_debug!(
-                        "can_be_elected: {:?} is in term {}:{}",
-                        author,
-                        i,
-                        term.start_view
-                    );
-                    return false;
-                }
-            }
+            serving_votes.push(term.node_list.serving_votes(author));
         }
-        true
+        return serving_votes.iter().sum();
     }
 }
 
 // FIXME(lpl): Check if we only need the latest version persisted.
-#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Eq, PartialEq, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct PosState {
     /// All the nodes that have staked in PoW.
@@ -282,6 +604,9 @@ pub struct PosState {
     retiring_nodes: VecDeque<AccountAddress>,
     /// Current pivot decision.
     pivot_decision: PivotBlockDecision,
+
+    node_map_hint: HashMap<View, HashSet<AccountAddress>>,
+    unlock_event_hint: HashSet<AccountAddress>,
 
     catch_up_mode: bool,
 }
@@ -303,40 +628,39 @@ impl PosState {
     ) -> Self
     {
         let mut node_map = HashMap::new();
-        let mut node_list = BinaryHeap::new();
+        let mut node_list = BTreeMap::default();
         for (node_id, voting_power) in initial_nodes {
+            let mut lock_status = NodeLockStatus::default();
+            // The genesis block should not have updates for lock status.
+            let _ = lock_status.new_lock(0, voting_power, true);
             node_map.insert(
                 node_id.addr.clone(),
                 NodeData {
                     public_key: node_id.public_key.clone(),
                     vrf_public_key: Some(node_id.vrf_public_key.clone()),
-                    status: NodeStatus::Accepted,
-                    status_start_view: 0,
-                    voting_power,
+                    lock_status,
                 },
             );
             // VRF output of initial terms will not be used, because these terms
             // are not open for election.
-            for nonce in 0..voting_power {
-                node_list.push((
-                    Default::default(),
-                    ElectionNodeID::new(node_id.clone(), nonce),
-                ));
-            }
+            node_list.insert(node_id.addr, voting_power);
         }
         let mut term_list = Vec::new();
         let initial_term = TermData {
             start_view: 0,
             seed: initial_seed.clone(),
-            node_list,
+            node_list: NodeList::Elected(ElectedMap(node_list.clone())),
         };
         term_list.push(initial_term);
         // TODO(lpl): The initial terms can have different node list.
         // Duplicate the initial term for the first TERM_LIST_LEN + 2 terms.
-        for _ in 0..(TERM_LIST_LEN + 1) {
+        for i in 0..(TERM_LIST_LEN + 1) {
             let last_term = term_list.last().unwrap();
-            let next_term =
+            let mut next_term =
                 last_term.next_term(Default::default(), initial_seed.clone());
+            if i < TERM_LIST_LEN - 1 {
+                let _ = next_term.node_list.finalize_elect();
+            }
             term_list.push(next_term);
         }
         let mut pos_state = PosState {
@@ -346,12 +670,16 @@ impl PosState {
             term_list: TermList {
                 current_term: 0,
                 term_list,
+                electing_index: TERM_LIST_LEN,
+                candy_rewards: ElectedMap(node_list),
             },
             retiring_nodes: Default::default(),
             pivot_decision: genesis_pivot_decision,
+            node_map_hint: Default::default(),
+            unlock_event_hint: Default::default(),
             catch_up_mode,
         };
-        let (verifier, vrf_seed) = pos_state.get_new_committee().unwrap();
+        let (verifier, vrf_seed) = pos_state.get_committee_at(0).unwrap();
         pos_state.epoch_state = EpochState {
             epoch: 0,
             verifier,
@@ -368,8 +696,12 @@ impl PosState {
             term_list: TermList {
                 current_term: 0,
                 term_list: Default::default(),
+                electing_index: 0,
+                candy_rewards: Default::default(),
             },
             retiring_nodes: Default::default(),
+            node_map_hint: Default::default(),
+            unlock_event_hint: Default::default(),
             pivot_decision: PivotBlockDecision {
                 block_hash: Default::default(),
                 height: 0,
@@ -388,24 +720,25 @@ impl PosState {
 
     pub fn pivot_decision(&self) -> &PivotBlockDecision { &self.pivot_decision }
 
-    pub fn current_term_seed(&self) -> &Vec<u8> {
-        self.target_term_seed(self.term_list.current_term)
-    }
+    // pub fn current_term_seed(&self) -> &Vec<u8> {
+    //     self.target_term_seed(self.term_list.current_term)
+    // }
 
     pub fn target_term_seed(&self, target_term: u64) -> &Vec<u8> {
-        if target_term < (TERM_LIST_LEN as u64) {
-            &self.term_list.term_list[target_term as usize].seed
-        } else if target_term >= self.term_list.current_term {
-            let target_term_offset = (target_term - self.term_list.current_term)
-                as usize
-                + (TERM_LIST_LEN - 1);
-            &self.term_list.term_list[target_term_offset].seed
-        } else {
-            unreachable!("target_term_seed is only called for future terms.")
-        }
+        &self
+            .term_list
+            .get_term_by_number(target_term)
+            .expect("term not in term list")
+            .seed
     }
 
     pub fn epoch_state(&self) -> &EpochState { &self.epoch_state }
+
+    pub fn account_node_data(
+        &self, account_address: AccountAddress,
+    ) -> Option<&NodeData> {
+        self.node_map.get(&account_address)
+    }
 }
 
 /// Read-only functions use in `TransactionValidator`
@@ -429,9 +762,9 @@ impl PosState {
             }
         };
 
-        if !matches!(node.status, NodeStatus::Accepted) {
-            return Some(DiscardedVMStatus::ELECTION_NON_ACCEPTED_NODE);
-        }
+        // if !matches!(node.status, NodeStatus::Accepted) {
+        //     return Some(DiscardedVMStatus::ELECTION_NON_ACCEPTED_NODE);
+        // }
         if election_tx
             .target_term
             .checked_mul(ROUND_PER_TERM)
@@ -441,9 +774,12 @@ impl PosState {
         }
 
         let target_view = election_tx.target_term * ROUND_PER_TERM;
-        if node.status_start_view + ELECTION_AFTER_ACCEPTED_ROUND > target_view
-        {
-            return Some(DiscardedVMStatus::ELECTION_TOO_SOON);
+        // if node.status_start_view + ELECTION_AFTER_ACCEPTED_ROUND >
+        // target_view {
+        //     return Some(DiscardedVMStatus::ELECTION_TOO_SOON);
+        // }
+        if node.lock_status.available_votes() == 0 {
+            return Some(DiscardedVMStatus::ELECTION_WITHOUT_VOTES);
         }
         if target_view > self.current_view + ELECTION_TERM_START_ROUND
             || target_view < self.current_view + ELECTION_TERM_END_ROUND
@@ -462,8 +798,9 @@ impl PosState {
                 return Some(DiscardedVMStatus::RETIRE_NON_EXISITENT_NODE);
             }
         };
-        if !matches!(node.status, NodeStatus::Accepted) {
-            return Some(DiscardedVMStatus::RETIRE_NON_ACCEPTED_NODE);
+
+        if node.lock_status.locked < retire_tx.votes {
+            return Some(DiscardedVMStatus::RETIRE_WITHOUT_ENOUGH_VOTES);
         }
 
         None
@@ -498,20 +835,12 @@ impl PosState {
             None => return Err(anyhow!("Election for non-existent node.")),
         };
 
-        if !matches!(node.status, NodeStatus::Accepted) {
-            bail!("Invalid node status for election");
-        }
-        if node.status_start_view + ELECTION_AFTER_ACCEPTED_ROUND
-            > election_tx
-                .target_term
-                .checked_mul(ROUND_PER_TERM)
-                .ok_or(anyhow!("start view overflow"))?
-        {
-            bail!("Election too soon after accepted");
+        if node.lock_status.available_votes() == 0 {
+            bail!("Election without any votes");
         }
         let target_view = election_tx.target_term * ROUND_PER_TERM;
         if target_view > self.current_view + ELECTION_TERM_START_ROUND
-            || target_view < self.current_view + ELECTION_TERM_END_ROUND
+            || target_view <= self.current_view + ELECTION_TERM_END_ROUND
         {
             bail!(
                 "Target term is not open for election: target={} current={}",
@@ -534,11 +863,12 @@ impl PosState {
             bail!("Invalid VRF proof for election")
         }
 
-        if !self
-            .term_list
-            .can_be_elected(target_term_offset, &node_id.addr)
+        if node.lock_status.available_votes()
+            <= self
+                .term_list
+                .serving_votes(target_term_offset, &node_id.addr)
         {
-            bail!("Node in active term service cannot be elected");
+            bail!("Election without enough votes");
         }
 
         Ok(())
@@ -551,30 +881,29 @@ impl PosState {
             Some(node) => node,
             None => return Err(anyhow!("Retirement for non-existent node.")),
         };
-        if !matches!(node.status, NodeStatus::Accepted) {
+        if node.lock_status.locked < retire_payload.votes {
             // PoW allows retiring more than once, so do not return error here.
-            diem_warn!("Invalid node status for retiring");
+            bail!("not enough votes for retire");
         }
 
         Ok(())
     }
 
     /// Return `(validator_set, term_seed)`.
-    pub fn get_new_committee(&self) -> Result<(ValidatorVerifier, Vec<u8>)> {
+    pub fn get_committee_at(
+        &self, term: u64,
+    ) -> Result<(ValidatorVerifier, Vec<u8>)> {
+        diem_debug!(
+            "Get committee at term {} in view {}, term list start at {}",
+            term,
+            self.current_view,
+            self.term_list.start_term()
+        );
         let mut voting_power_map = BTreeMap::new();
-        let term_size_limit =
-            if self.term_list.current_term < TERM_LIST_LEN as u64 {
-                usize::MAX
-            } else {
-                TERM_ELECTED_SIZE
-            };
-        for i in 0..TERM_LIST_LEN {
-            let term = &self.term_list.term_list[i];
-            for (_, node_id) in term.node_list.iter().take(term_size_limit) {
-                let voting_power = voting_power_map
-                    .entry(node_id.node_id.addr.clone())
-                    .or_insert(0 as u64);
-                *voting_power += 1;
+        for term_data in self.term_list.committee_for_term(term) {
+            for (addr, votes) in term_data.node_list.committee().0.iter() {
+                *voting_power_map.entry(addr.clone()).or_insert(0 as u64) +=
+                    votes;
             }
         }
         let mut address_to_validator_info = BTreeMap::new();
@@ -582,7 +911,11 @@ impl PosState {
             let node_data = self.node_map.get(&addr).expect("node in node_map");
             // Retired nodes are not removed from term_list,
             // but we do not include them in the new committee.
-            if matches!(node_data.status, NodeStatus::Accepted) {
+            let voting_power = std::cmp::min(
+                voting_power,
+                node_data.lock_status.available_votes(),
+            );
+            if voting_power > 0 {
                 address_to_validator_info.insert(
                     addr,
                     ValidatorConsensusInfo::new(
@@ -604,84 +937,61 @@ impl PosState {
     /// Return `Some(target_term)` if `author` should send its election
     /// transaction.
     pub fn next_elect_term(&self, author: &AccountAddress) -> Option<u64> {
-        if self.term_list.current_term < (TERM_LIST_LEN - 1) as u64 {
+        if self.current_view < FIRST_START_ELECTION_VIEW as u64 {
             return None;
         }
-        match self.node_map.get(author) {
-            // This node has not staked in PoW.
-            None => None,
-            Some(node) => {
-                match &node.status {
-                    NodeStatus::Accepted => {
-                        if ((self.term_list.current_term + 1) * ROUND_PER_TERM
-                            >= node.status_start_view
-                                + ELECTION_AFTER_ACCEPTED_ROUND)
-                            && self
-                                .term_list
-                                .can_be_elected(TERM_LIST_LEN, author)
-                        {
-                            Some(self.term_list.current_term + 1)
-                        } else if ((self.term_list.current_term + 2)
-                            * ROUND_PER_TERM
-                            >= node.status_start_view
-                                + ELECTION_AFTER_ACCEPTED_ROUND)
-                            && self
-                                .term_list
-                                .can_be_elected(TERM_LIST_LEN + 1, author)
-                        {
-                            Some(self.term_list.current_term + 2)
-                        } else {
-                            // This node is still active and thus cannot be
-                            // elected.
-                            None
-                        }
-                    }
-                    // This node has retired and will never be elected again.
-                    _ => None,
-                }
-            }
+
+        if self.term_list.electing_term().node_list.has_elected(author) {
+            return None;
         }
+
+        if let Some(node) = self.node_map.get(author) {
+            let available_votes = node.lock_status.available_votes();
+            let serving_votes = self
+                .term_list
+                .serving_votes(self.term_list.electing_index, author);
+
+            return if available_votes > serving_votes {
+                Some(self.term_list.electing_term_number())
+            } else {
+                None
+            };
+        }
+
+        None
     }
 
     pub fn get_unlock_events(&self) -> Vec<ContractEvent> {
         let mut unlocked_nodes = Vec::new();
-        for retired_node in &self.retiring_nodes {
-            let node = self.node_map.get(&retired_node).expect("exists");
-            assert_eq!(node.status, NodeStatus::Retired);
-            if node.status_start_view + UNLOCK_WAIT_VIEW <= self.current_view {
-                let unlock_event = ContractEvent::new(
-                    UnlockEvent::event_key(),
-                    0, /* sequence_number */
-                    TypeTag::Vector(Box::new(TypeTag::U8)), /* TypeTag::ByteArray */
-                    bcs::to_bytes(&UnlockEvent {
-                        node_id: *retired_node,
-                    })
-                    .unwrap(),
-                );
-                unlocked_nodes.push(unlock_event);
-            } else {
-                break;
-            }
+        for addr in &self.unlock_event_hint {
+            let node = self.node_map.get(&addr).expect("exists");
+            let unlock_event = ContractEvent::new(
+                UnlockEvent::event_key(),
+                0,                                      /* sequence_number */
+                TypeTag::Vector(Box::new(TypeTag::U8)), /* TypeTag::ByteArray */
+                bcs::to_bytes(&UnlockEvent {
+                    node_id: *addr,
+                    unlocked: node.lock_status.unlocked_votes(),
+                })
+                .unwrap(),
+            );
+            unlocked_nodes.push(unlock_event);
         }
-        unlocked_nodes
+
+        return unlocked_nodes;
     }
 
     pub fn current_view(&self) -> u64 { self.current_view }
 
     pub fn catch_up_mode(&self) -> bool { self.catch_up_mode }
 
-    pub fn next_evicted_term(&self) -> Vec<H256> {
-        if self.current_view < (TERM_LIST_LEN - 1) as u64 * ROUND_PER_TERM {
-            return Vec::new();
-        } else {
-            self.term_list.term_list[0]
-                .node_list
-                .iter()
-                .map(|(_, address)| {
-                    H256::from_slice(address.node_id.addr.as_ref())
-                })
-                .collect()
-        }
+    pub fn next_evicted_term(&mut self) -> BTreeMap<H256, u64> {
+        let candy_rewards = std::mem::take(&mut self.term_list.candy_rewards);
+        candy_rewards
+            .0
+            .iter()
+            .map(|(id, cnt)| (H256::from(id.to_u8()), *cnt))
+            .collect()
     }
 }
 
@@ -698,9 +1008,7 @@ impl PosState {
             NodeData {
                 public_key: node_id.public_key,
                 vrf_public_key: Some(node_id.vrf_public_key),
-                status: NodeStatus::Accepted,
-                status_start_view: self.current_view,
-                voting_power: 0,
+                lock_status: NodeLockStatus::default(),
             },
         );
         Ok(())
@@ -714,18 +1022,16 @@ impl PosState {
             addr,
             increased_voting_power
         );
-        match self.node_map.get_mut(addr) {
-            Some(node_status) => {
-                // TODO(lpl): Should we return error if the node has been
-                // retired?
-                if matches!(node_status.status, NodeStatus::Accepted) {
-                    node_status.voting_power = increased_voting_power;
-                    node_status.status_start_view = self.current_view;
-                }
-                Ok(())
-            }
+        let update_views = match self.node_map.get_mut(addr) {
+            Some(node_status) => node_status.lock_status.new_lock(
+                self.current_view,
+                increased_voting_power,
+                false,
+            ),
             None => bail!("increase voting power of a non-existent node!"),
-        }
+        };
+        self.record_update_views(addr, update_views);
+        Ok(())
     }
 
     pub fn new_node_elected(&mut self, event: &ElectionEvent) -> Result<()> {
@@ -738,7 +1044,8 @@ impl PosState {
             .node_map
             .get(&event.node_id.addr)
             .expect("checked in execution")
-            .voting_power;
+            .lock_status
+            .available_votes();
         self.term_list.new_node_elected(event, voting_power)
     }
 
@@ -746,25 +1053,28 @@ impl PosState {
     /// EpochState. And `next_view` will not be called for blocks following
     /// a pending reconfiguration block.
     pub fn next_view(&mut self) -> Result<Option<EpochState>> {
-        while let Some(retired_node) = self.retiring_nodes.pop_front() {
-            let node = self.node_map.get_mut(&retired_node).expect("exists");
-            assert_eq!(node.status, NodeStatus::Retired);
-            if node.status_start_view + UNLOCK_WAIT_VIEW <= self.current_view {
-                diem_debug!("pos_state unlock {:?}", retired_node);
-                node.status = NodeStatus::Unlocked;
-                node.status_start_view = self.current_view;
-            } else {
-                // This node and other nodes are not unlocked.
-                self.retiring_nodes.push_front(retired_node);
-                break;
-            }
-        }
-
         // Increase view after updating node status above to get a correct
         // `status_start_view`.
         self.current_view += 1;
+
+        println!("current view {}", self.current_view);
+
+        // Update the status for the all.
+        self.unlock_event_hint.clear();
+        if let Some(addresses) = self.node_map_hint.remove(&self.current_view) {
+            for address in addresses {
+                let node = self.node_map.get_mut(&address).expect("exists");
+                let (new_votes_unlocked, update_views) =
+                    node.lock_status.update(self.current_view);
+                self.record_update_views(&address, update_views);
+                if new_votes_unlocked {
+                    self.unlock_event_hint.insert(address);
+                }
+            }
+        }
+
         let epoch_state = if self.current_view == 1 {
-            let (verifier, term_seed) = self.get_new_committee()?;
+            let (verifier, term_seed) = self.get_committee_at(0)?;
             // genesis
             Some(EpochState {
                 // TODO(lpl): If we allow epoch changes within a term, this
@@ -775,7 +1085,7 @@ impl PosState {
             })
         } else if self.current_view % ROUND_PER_TERM == 0 {
             let new_term = self.current_view / ROUND_PER_TERM;
-            let (verifier, term_seed) = self.get_new_committee()?;
+            let (verifier, term_seed) = self.get_committee_at(new_term)?;
             // generate new epoch for new term.
             self.term_list.new_term(
                 new_term,
@@ -788,6 +1098,11 @@ impl PosState {
                 verifier,
                 vrf_seed: term_seed.clone(),
             })
+        } else if self.current_view >= FIRST_END_ELECTION_VIEW
+            && self.current_view % ROUND_PER_TERM == ROUND_PER_TERM / 2
+        {
+            self.term_list.finalize_election();
+            None
         } else {
             None
         };
@@ -797,24 +1112,46 @@ impl PosState {
         Ok(epoch_state)
     }
 
-    pub fn retire_node(&mut self, addr: &AccountAddress) -> Result<()> {
+    pub fn retire_node(
+        &mut self, addr: &AccountAddress, votes: u64,
+    ) -> Result<()> {
+        diem_trace!("retire_node: {:?} {}", addr, votes);
+        let views = match self.node_map.get_mut(&addr) {
+            Some(node) => {
+                node.lock_status.new_unlock(self.current_view, votes)?
+            }
+            None => {
+                return Err(anyhow!("Retiring node does not exist"));
+            }
+        };
+        self.record_update_views(addr, views);
+        Ok(())
+    }
+
+    pub fn force_retire_node(&mut self, addr: &AccountAddress) -> Result<()> {
         diem_trace!("retire_node: {:?}", addr);
-        match self.node_map.get_mut(&addr) {
-            Some(node) => match node.status {
-                NodeStatus::Accepted => {
-                    node.status = NodeStatus::Retired;
-                    node.status_start_view = self.current_view;
-                    self.retiring_nodes.push_back(*addr);
-                    Ok(())
-                }
-                _ => {
-                    diem_warn!(
-                        "Node retirement is processed in invalid status"
-                    );
-                    Ok(())
-                }
-            },
-            None => Err(anyhow!("Retiring node does not exist")),
+        let views = match self.node_map.get_mut(&addr) {
+            Some(node) => node.lock_status.force_retire(self.current_view),
+            None => {
+                return Err(anyhow!("Retiring node does not exist"));
+            }
+        };
+        self.record_update_views(addr, views);
+        Ok(())
+    }
+}
+
+impl PosState {
+    pub fn record_update_views(
+        &mut self, address: &AccountAddress, views: Vec<View>,
+    ) {
+        for view in views {
+            diem_trace!(
+                "{:?} will update lock status at view {}",
+                address,
+                view
+            );
+            self.node_map_hint.entry(view).or_default().insert(*address);
         }
     }
 }
@@ -869,10 +1206,13 @@ impl ElectionEvent {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RetireEvent {
     pub node_id: AccountAddress,
+    pub votes: u64,
 }
 
 impl RetireEvent {
-    pub fn new(node_id: AccountAddress) -> Self { RetireEvent { node_id } }
+    pub fn new(node_id: AccountAddress, votes: u64) -> Self {
+        RetireEvent { node_id, votes }
+    }
 
     pub fn event_key() -> EventKey {
         EventKey::new_from_address(&account_config::retire_address(), 4)
@@ -886,7 +1226,7 @@ impl RetireEvent {
         &self, staking_event: &StakingEvent,
     ) -> Result<bool> {
         match staking_event {
-            StakingEvent::Retire(addr_h256) => {
+            StakingEvent::Retire(addr_h256, _votes) => {
                 let addr = AccountAddress::from_bytes(addr_h256)?;
                 Ok(self.node_id == addr)
             }
@@ -1023,6 +1363,7 @@ pub struct UnlockEvent {
     ///
     /// The management contract should unlock the corresponding account.
     pub node_id: AccountAddress,
+    pub unlocked: u64,
 }
 
 impl UnlockEvent {

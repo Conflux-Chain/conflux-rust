@@ -13,10 +13,13 @@ use std::collections::BTreeMap;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommittedBlock {
     pub hash: HashValue,
+    pub miner: Option<AccountAddress>,
+    pub parent_hash: HashValue,
     pub epoch: u64,
     pub round: u64,
     pub pivot_decision: PivotBlockDecision,
     pub version: u64,
     pub timestamp: u64,
     pub signatures: BTreeMap<AccountAddress, ConsensusSignature>,
+    pub view: u64,
 }

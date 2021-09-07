@@ -16,6 +16,7 @@ use anyhow::{ensure, Result};
 use schemadb::ColumnFamilyName;
 
 pub(crate) mod committed_block;
+pub(crate) mod committed_block_by_view;
 pub(crate) mod epoch_by_version;
 pub(crate) mod event;
 pub(crate) mod event_accumulator;
@@ -53,6 +54,8 @@ pub const LEDGER_INFO_BY_BLOCK_CF_NAME: ColumnFamilyName =
 pub const POS_STATE_CF_NAME: ColumnFamilyName = "pos_state";
 pub const REWARD_EVENT_CF_NAME: ColumnFamilyName = "reward_event";
 pub const COMMITTED_BLOCK_CF_NAME: ColumnFamilyName = "committed_block";
+pub const COMMITTED_BLOCK_BY_VIEW_CF_NAME: ColumnFamilyName =
+    "committed_block_by_view";
 
 fn ensure_slice_len_eq(data: &[u8], len: usize) -> Result<()> {
     ensure!(

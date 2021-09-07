@@ -272,6 +272,8 @@ mod test {
         fn msg_id(&self) -> u16 { self.msg_id }
 
         fn msg_name(&self) -> &'static str { "TestMessageIdEncodeDecode" }
+
+        fn encode(&self) -> Vec<u8> { vec![] }
     }
 
     #[test]
