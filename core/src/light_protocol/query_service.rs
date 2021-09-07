@@ -433,7 +433,7 @@ impl QueryService {
         debug!("get_code epoch={:?} address={:?}", epoch, address);
 
         // do not query peers for non-contract addresses
-        if !address.is_contract_address() && !address.is_builtin_address() {
+        if !address.maybe_contract_address() && !address.is_builtin_address() {
             return Ok(None);
         }
 
