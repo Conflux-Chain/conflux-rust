@@ -1094,6 +1094,10 @@ impl DbWriter for DiemDB {
     ) -> Result<()> {
         self.ledger_store.put_reward_event(epoch, event)
     }
+
+    fn delete_pos_state_by_block(&self, block_id: &HashValue) -> Result<()> {
+        self.ledger_store.delete_pos_state(block_id)
+    }
 }
 
 impl DBReaderForPoW for DiemDB {

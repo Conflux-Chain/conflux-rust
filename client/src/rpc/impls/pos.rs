@@ -101,7 +101,7 @@ impl PosHandler {
                     epoch: U64::from(b.epoch),
                     round: U64::from(b.round),
                     version: U64::from(b.version),
-                    miner: H256::from(b.miner.to_u8()),
+                    miner: b.miner.map(|m| H256::from(m.to_u8())),
                     parent_hash: hexstr_to_h256(
                         b.parent_hash.to_hex().as_str(),
                     ),

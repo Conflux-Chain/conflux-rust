@@ -182,7 +182,7 @@ impl CachedDiemDB {
     pub fn prune(
         &self, committed_ledger_info: &LedgerInfo,
         committed_txns: Vec<Transaction>, reconfig_events: Vec<ContractEvent>,
-    ) -> Result<(), Error>
+    ) -> Result<HashValue, Error>
     {
         self.cache.lock().prune(
             committed_ledger_info,

@@ -463,6 +463,12 @@ impl LedgerStore {
         Ok(())
     }
 
+    pub fn delete_pos_state(&self, block_hash: &HashValue) -> Result<()> {
+        let mut cs = ChangeSet::new();
+        cs.batch.delete::<PosStateSchema>(block_hash)?;
+        self.db.write_schemas(cs.batch)
+    }
+
     /// Read LedgerInfo by block id from the database.
     pub fn get_block_ledger_info(
         &self, consensus_block_id: &HashValue,
