@@ -27,6 +27,7 @@ use crate::{
 use diemdb::DiemDB;
 use network::NetworkService;
 use std::{fs, io::Read};
+use parking_lot::Mutex;
 
 pub type PosVerifier = PosHandler;
 
@@ -79,7 +80,7 @@ pub struct PosBlock {
 pub struct PosHandler {
     pos: OnceCell<Box<dyn PosInterface>>,
     // Keep all tokio Runtime so they will not be dropped directly.
-    diem_handler: OnceCell<DiemHandle>,
+    diem_handler: Mutex<Option<DiemHandle>>,
     enable_height: u64,
     pub conf: PosConfiguration,
 }
@@ -88,7 +89,7 @@ impl PosHandler {
     pub fn new(conf: PosConfiguration, enable_height: u64) -> Self {
         Self {
             pos: OnceCell::new(),
-            diem_handler: OnceCell::new(),
+            diem_handler: Mutex::new(None),
             enable_height,
             conf,
         }
@@ -126,10 +127,10 @@ impl PosHandler {
         );
         diem_handler.pow_handler.initialize(consensus);
         if self.pos.set(Box::new(pos_connection)).is_err()
-            || self.diem_handler.set(diem_handler).is_err()
         {
             bail!("PoS initialized twice!");
         }
+        *self.diem_handler.lock() = Some(diem_handler);
         Ok(())
     }
 
@@ -239,6 +240,10 @@ impl PosHandler {
     }
 
     pub fn diem_db(&self) -> &Arc<DiemDB> { self.pos().diem_db() }
+
+    pub fn stop(&self) {
+        self.diem_handler.lock().take();
+    }
 }
 
 pub struct PosConnection {

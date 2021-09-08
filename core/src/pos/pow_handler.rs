@@ -43,6 +43,7 @@ impl PowHandler {
     pub fn stop(&self) {
         let pow_consensus = &mut *self.pow_consensus.write();
         if pow_consensus.is_some() {
+            debug!("Consensus ref count:{}", Weak::strong_count(pow_consensus.as_ref().unwrap()));
             *pow_consensus = None;
         }
     }

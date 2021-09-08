@@ -2,13 +2,23 @@
 """An example functional test
 """
 import eth_utils
+import os
 import time
+from eth_utils import keccak, decode_hex
+import eth_abi
 
+from conflux.filter import Filter
 from conflux.rpc import RpcClient
 from conflux.utils import int_to_hex, priv_to_addr
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
+from test_framework.blocktools import encode_hex_0x
 
+
+def address_to_topic(address):
+    return "0x" + address[2:].zfill(64)
+REGISTER_TOPIC = encode_hex_0x(keccak(b"Register(bytes32,bytes,bytes)"))
+INCREASE_STAKE_TOPIC = encode_hex_0x(keccak(b"IncreaseStake(bytes32,uint64)"))
 
 class ExampleTest(ConfluxTestFramework):
     def set_test_params(self):
@@ -17,9 +27,11 @@ class ExampleTest(ConfluxTestFramework):
         self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = '120'
         # self.conf_parameters["log_level"] = '"trace"'
         self.conf_parameters["dev_allow_phase_change_without_peer"] = "false"
+        self.conf_parameters["pos_reference_enable_height"] = 600
 
     def setup_nodes(self):
-        self.add_nodes(self.num_nodes, genesis_nodes=self.num_nodes - 1)
+        self.add_nodes(self.num_nodes)
+        os.remove(os.path.join(self.options.tmpdir, "initial_nodes.json"))
 
         # start half of the nodes as archive nodes
         for i in range(self.num_nodes):
@@ -33,9 +45,27 @@ class ExampleTest(ConfluxTestFramework):
             node.wait_for_recovery(["NormalSyncPhase"], 30)
 
     def run_test(self):
-        time.sleep(2)
+        # Pos contract enabled, stake and register in the first hard-fork phase.
+        for node in self.nodes:
+            client = RpcClient(node)
+            pos_identifier, _ = client.wait_for_pos_register()
+            sync_blocks(self.nodes)
         client = RpcClient(self.nodes[self.num_nodes - 1])
-        _, priv_key = client.wait_for_pos_register()
+
+        voting_power_map = {}
+        pub_keys_map = {}
+        logs = client.get_logs(filter=Filter(from_epoch="earliest", to_epoch="latest_state", address=["0x0888000000000000000000000000000000000005"]))
+        for log in logs:
+            pos_identifier = log["topics"][1]
+            if log["topics"][0] == REGISTER_TOPIC:
+                print("register", log)
+                bls_pub_key, vrf_pub_key = eth_abi.decode_abi(["bytes", "bytes"], decode_hex(log["data"]))
+                pub_keys_map[pos_identifier] = (encode_hex_0x(bls_pub_key), encode_hex_0x(vrf_pub_key))
+                print(pub_keys_map[pos_identifier])
+            elif log["topics"][0] == INCREASE_STAKE_TOPIC:
+                print("increase_stake", log)
+                assert pos_identifier in pub_keys_map
+                voting_power_map[pos_identifier] = log["data"]
 
         genesis = self.nodes[0].best_block_hash()
         self.log.info(genesis)
@@ -48,7 +78,7 @@ class ExampleTest(ConfluxTestFramework):
             print(i)
             if i == 50:
                 client.pos_retire_self()
-            if i == 10:
+            if i == 100:
                 self.maybe_restart_node(5, 1, 1)
             # Retire node 3 after 5 min.
             # Generate enough PoW block for PoS to progress

@@ -78,6 +78,7 @@ use cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
 pub struct ClientComponents<BlockGenT, Rest> {
     pub data_manager_weak_ptr: Weak<BlockDataManager>,
     pub blockgen: Option<Arc<BlockGenT>>,
+    pub pos_handler: Option<Arc<PosVerifier>>,
     pub other_components: Rest,
 }
 
@@ -101,7 +102,11 @@ impl<BlockGenT: 'static + Stopable, Rest> ClientTrait
 {
     fn take_out_components_for_shutdown(
         &self,
-    ) -> (Weak<BlockDataManager>, Option<Arc<dyn Stopable>>) {
+    ) -> (
+        Weak<BlockDataManager>,
+        Option<Arc<PosVerifier>>,
+        Option<Arc<dyn Stopable>>,
+    ) {
         debug!("take_out_components_for_shutdown");
         let data_manager_weak_ptr = self.data_manager_weak_ptr.clone();
         let blockgen: Option<Arc<dyn Stopable>> = match self.blockgen.clone() {
@@ -109,14 +114,18 @@ impl<BlockGenT: 'static + Stopable, Rest> ClientTrait
             None => None,
         };
 
-        (data_manager_weak_ptr, blockgen)
+        (data_manager_weak_ptr, self.pos_handler.clone(), blockgen)
     }
 }
 
 pub trait ClientTrait {
     fn take_out_components_for_shutdown(
         &self,
-    ) -> (Weak<BlockDataManager>, Option<Arc<dyn Stopable>>);
+    ) -> (
+        Weak<BlockDataManager>,
+        Option<Arc<PosVerifier>>,
+        Option<Arc<dyn Stopable>>,
+    );
 }
 
 pub mod client_methods {
@@ -154,12 +163,16 @@ pub mod client_methods {
 
     /// Returns whether the shutdown is considered clean.
     pub fn shutdown(this: Box<dyn ClientTrait>) -> bool {
-        let (ledger_db, maybe_blockgen) =
+        let (ledger_db, maybe_pos_handler, maybe_blockgen) =
             this.take_out_components_for_shutdown();
         drop(this);
         if let Some(blockgen) = maybe_blockgen {
             blockgen.stop();
             drop(blockgen);
+        }
+        if let Some(pos_handler) = maybe_pos_handler {
+            pos_handler.stop();
+            drop(pos_handler);
         }
 
         // Make sure ledger_db is properly dropped, so rocksdb can be closed
@@ -528,6 +541,7 @@ pub fn initialize_not_light_node_modules(
         Option<TcpServer>,
         Option<WSServer>,
         Option<WSServer>,
+        Arc<PosVerifier>,
         Runtime,
     ),
     String,
@@ -638,7 +652,7 @@ pub fn initialize_not_light_node_modules(
         conf.pow_config(),
         pow.clone(),
         maybe_author.clone().unwrap_or_default(),
-        pos_verifier,
+        pos_verifier.clone(),
     ));
     if conf.is_dev_mode() {
         // If `dev_block_interval_ms` is None, blocks are generated after
@@ -752,6 +766,7 @@ pub fn initialize_not_light_node_modules(
         rpc_tcp_server,
         debug_rpc_ws_server,
         rpc_ws_server,
+        pos_verifier,
         runtime,
     ))
 }

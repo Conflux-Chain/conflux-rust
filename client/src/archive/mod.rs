@@ -68,6 +68,7 @@ impl ArchiveClient {
             rpc_tcp_server,
             debug_rpc_ws_server,
             rpc_ws_server,
+            pos_handler,
             runtime,
         ) = initialize_not_light_node_modules(
             &mut conf,
@@ -77,6 +78,7 @@ impl ArchiveClient {
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
             blockgen: Some(blockgen),
+            pos_handler: Some(pos_handler),
             other_components: ArchiveClientExtraComponents {
                 consensus,
                 debug_rpc_http_server,

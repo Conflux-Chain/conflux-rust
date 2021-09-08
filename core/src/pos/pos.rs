@@ -334,5 +334,9 @@ pub fn setup_pos_environment(
 }
 
 impl Drop for DiemHandle {
-    fn drop(&mut self) { self.stopped.store(true, Ordering::SeqCst); }
+    fn drop(&mut self) {
+        debug!("Drop DiemHandle");
+        self.stopped.store(true, Ordering::SeqCst);
+        self.pow_handler.stop();
+    }
 }
