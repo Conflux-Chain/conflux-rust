@@ -7,9 +7,10 @@ import time
 from eth_utils import keccak, decode_hex
 import eth_abi
 
+from conflux.config import DEFAULT_PY_TEST_CHAIN_ID
 from conflux.filter import Filter
 from conflux.rpc import RpcClient
-from conflux.utils import int_to_hex, priv_to_addr
+from conflux.utils import int_to_hex, priv_to_addr, parse_as_int
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 from test_framework.blocktools import encode_hex_0x
@@ -58,14 +59,18 @@ class ExampleTest(ConfluxTestFramework):
         for log in logs:
             pos_identifier = log["topics"][1]
             if log["topics"][0] == REGISTER_TOPIC:
-                print("register", log)
                 bls_pub_key, vrf_pub_key = eth_abi.decode_abi(["bytes", "bytes"], decode_hex(log["data"]))
                 pub_keys_map[pos_identifier] = (encode_hex_0x(bls_pub_key), encode_hex_0x(vrf_pub_key))
                 print(pub_keys_map[pos_identifier])
             elif log["topics"][0] == INCREASE_STAKE_TOPIC:
-                print("increase_stake", log)
                 assert pos_identifier in pub_keys_map
-                voting_power_map[pos_identifier] = log["data"]
+                voting_power_map[pos_identifier] = parse_as_int(log["data"])
+        with open("public_keys", "w") as f:
+            for pos_identifier in pub_keys_map.keys():
+                f.write(",".join([pub_keys_map[pos_identifier][0], pub_keys_map[pos_identifier][1], str(voting_power_map[pos_identifier])]) + "\n")
+        initialize_tg_config(self.options.tmpdir, len(self.nodes), len(self.nodes), DEFAULT_PY_TEST_CHAIN_ID, len(self.nodes), pkfile="public_keys")
+        for node in self.nodes:
+            node.pos_start()
 
         genesis = self.nodes[0].best_block_hash()
         self.log.info(genesis)

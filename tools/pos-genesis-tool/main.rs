@@ -234,6 +234,7 @@ where
         let mut rng = StdRng::from_seed([0u8; 32]);
         let mut genesis_nodes = Vec::new();
 
+        let voting_power = 1;
         for i in 0..num_validator {
             let pow_keypair: KeyPair = Random.generate().unwrap();
             let private_key = ConsensusPrivateKey::generate(&mut rng);
@@ -254,14 +255,14 @@ where
             let register_tx = register_transaction(
                 private_key,
                 vrf_public_key.clone(),
-                1,
+                voting_power,
                 chain_id,
             );
             let public_key_str = public_key.to_encoded_string().unwrap();
             let vrf_public_key_str =
                 vrf_public_key.to_encoded_string().unwrap();
             let public_key_str =
-                format!("{},{}\n", public_key_str, vrf_public_key_str);
+                format!("{},{},{}\n", public_key_str, vrf_public_key_str, voting_power);
             public_key_file.write_all(public_key_str.as_bytes())?;
             genesis_nodes.push(GenesisPosNodeInfo {
                 address: pow_keypair.address(),
