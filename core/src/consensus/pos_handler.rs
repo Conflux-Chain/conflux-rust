@@ -26,8 +26,8 @@ use crate::{
 };
 use diemdb::DiemDB;
 use network::NetworkService;
-use std::{fs, io::Read};
 use parking_lot::Mutex;
+use std::{fs, io::Read};
 
 pub type PosVerifier = PosHandler;
 
@@ -79,6 +79,7 @@ pub struct PosBlock {
 
 pub struct PosHandler {
     pos: OnceCell<Box<dyn PosInterface>>,
+    network: Mutex<Option<Arc<NetworkService>>>,
     // Keep all tokio Runtime so they will not be dropped directly.
     diem_handler: Mutex<Option<DiemHandle>>,
     enable_height: u64,
@@ -86,9 +87,14 @@ pub struct PosHandler {
 }
 
 impl PosHandler {
-    pub fn new(conf: PosConfiguration, enable_height: u64) -> Self {
+    pub fn new(
+        network: Arc<NetworkService>, conf: PosConfiguration,
+        enable_height: u64,
+    ) -> Self
+    {
         Self {
             pos: OnceCell::new(),
+            network: Mutex::new(Some(network)),
             diem_handler: Mutex::new(None),
             enable_height,
             conf,
@@ -96,7 +102,7 @@ impl PosHandler {
     }
 
     pub fn initialize(
-        &self, network: Arc<NetworkService>, consensus: Arc<ConsensusGraph>,
+        &self, consensus: Arc<ConsensusGraph>,
     ) -> Result<(), String> {
         if self.pos.get().is_some() {
             bail!("Initializing already-initialized PosHandler!");
@@ -106,7 +112,7 @@ impl PosHandler {
         )?;
         let diem_handler = start_pos_consensus(
             &self.conf.diem_conf,
-            network.clone(),
+            self.network.lock().take().expect("pos not initialized"),
             self.conf.protocol_conf.clone(),
             Some((
                 self.conf.bls_key.public_key(),
@@ -126,8 +132,7 @@ impl PosHandler {
             diem_handler.consensus_db.clone(),
         );
         diem_handler.pow_handler.initialize(consensus);
-        if self.pos.set(Box::new(pos_connection)).is_err()
-        {
+        if self.pos.set(Box::new(pos_connection)).is_err() {
             bail!("PoS initialized twice!");
         }
         *self.diem_handler.lock() = Some(diem_handler);
@@ -181,7 +186,10 @@ impl PosHandler {
 
     pub fn get_pivot_decision(&self, h: &PosBlockId) -> Option<H256> {
         // Return None if `pos` has not been initialized
-        self.pos.get()?.get_committed_block(h).map(|b| b.pivot_decision)
+        self.pos
+            .get()?
+            .get_committed_block(h)
+            .map(|b| b.pivot_decision)
     }
 
     pub fn get_latest_pos_reference(&self) -> PosBlockId {
@@ -243,6 +251,7 @@ impl PosHandler {
     pub fn diem_db(&self) -> &Arc<DiemDB> { self.pos().diem_db() }
 
     pub fn stop(&self) {
+        self.network.lock().take();
         self.diem_handler.lock().take();
     }
 }

@@ -261,8 +261,10 @@ where
             let public_key_str = public_key.to_encoded_string().unwrap();
             let vrf_public_key_str =
                 vrf_public_key.to_encoded_string().unwrap();
-            let public_key_str =
-                format!("{},{},{}\n", public_key_str, vrf_public_key_str, voting_power);
+            let public_key_str = format!(
+                "{},{},{}\n",
+                public_key_str, vrf_public_key_str, voting_power
+            );
             public_key_file.write_all(public_key_str.as_bytes())?;
             genesis_nodes.push(GenesisPosNodeInfo {
                 address: pow_keypair.address(),
@@ -303,7 +305,11 @@ where
                 ConsensusVRFPublicKey::from_encoded_string(key_array[1])
                     .unwrap();
             let voting_power: u64 = key_array[2].parse().unwrap();
-            public_keys.push((public_key.clone(), vrf_public_key.clone(), voting_power));
+            public_keys.push((
+                public_key.clone(),
+                vrf_public_key.clone(),
+                voting_power,
+            ));
             genesis_nodes.push(GenesisPosNodeInfo {
                 // Not used in PoS genesis.
                 address: Default::default(),

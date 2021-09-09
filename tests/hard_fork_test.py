@@ -29,6 +29,7 @@ class ExampleTest(ConfluxTestFramework):
         # self.conf_parameters["log_level"] = '"trace"'
         self.conf_parameters["dev_allow_phase_change_without_peer"] = "false"
         self.conf_parameters["pos_reference_enable_height"] = 600
+        self.conf_parameters["era_epoch_count"] = 200
         self.rpc_timewait = 6000
 
     def setup_nodes(self):
@@ -70,8 +71,6 @@ class ExampleTest(ConfluxTestFramework):
             for pos_identifier in pub_keys_map.keys():
                 f.write(",".join([pub_keys_map[pos_identifier][0][2:], pub_keys_map[pos_identifier][1][2:], str(voting_power_map[pos_identifier])]) + "\n")
         initialize_tg_config(self.options.tmpdir, len(self.nodes), len(self.nodes), DEFAULT_PY_TEST_CHAIN_ID, pkfile="public_key")
-        for node in self.nodes:
-            node.pos_start()
 
         genesis = self.nodes[0].best_block_hash()
         self.log.info(genesis)
@@ -81,6 +80,12 @@ class ExampleTest(ConfluxTestFramework):
         latest_pos_ref = self.latest_pos_ref()
         for i in range(150):
             print(i)
+            if i == 10:
+                self.stop_node(5, clean=True)
+                self.start_node(5, phase_to_wait=None)
+                self.nodes[5].wait_for_recovery(["NormalSyncPhase"], 30)
+            if i == 20:
+                self.maybe_restart_node(5, 1, 0)
             if i == 50:
                 client.pos_retire_self()
             if i == 100:

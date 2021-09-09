@@ -181,7 +181,7 @@ pub struct SynchronizationGraphInner {
     /// `CatchUpFillBlockBodyPhase`.
     pub block_to_fill_set: HashSet<H256>,
     machine: Arc<Machine>,
-    pos_verifier: Arc<PosVerifier>,
+    pub pos_verifier: Arc<PosVerifier>,
 }
 
 impl MallocSizeOf for SynchronizationGraphInner {
@@ -1062,6 +1062,7 @@ impl SynchronizationGraph {
                 let mut priority_queue: BinaryHeap<(u64, H256)> = BinaryHeap::new();
                 let mut reverse_map : HashMap<H256, Vec<H256>> = HashMap::new();
                 let mut counter_map = HashMap::new();
+                let mut pos_started = false;
 
                 'outer: loop {
                     // Only block when we have processed all received blocks.
@@ -1084,6 +1085,15 @@ impl SynchronizationGraph {
                             Ok(hash) => if !reverse_map.contains_key(&hash) {
                                 debug!("Worker thread receive: block = {}", hash);
                                 let header = data_man.block_header_by_hash(&hash).expect("Header must exist before sending to the consensus worker!");
+
+                                // start pos with an era advance.
+                                if !pos_started && pos_verifier.is_enabled_at_height(header.height() + consensus.get_config().inner_conf.era_epoch_count) {
+                                    if let Err(e) = pos_verifier.initialize(consensus.clone().to_arc_consensus()) {
+                                        info!("PoS already started before the expected height: e={}", e);
+                                    }
+                                    pos_started = true;
+                                }
+
                                 let mut cnt: usize = 0;
                                 let parent_hash = header.parent_hash();
                                 if let Some(v) = reverse_map.get_mut(parent_hash) {

@@ -678,10 +678,8 @@ impl RpcImpl {
     pub fn pos_retire_self(&self) -> JsonRpcResult<()> { unimplemented!() }
 
     pub fn pos_start(&self) -> RpcResult<()> {
-        self.pos_handler.initialize(
-            self.network.clone(),
-            self.consensus.clone().to_arc_consensus(),
-        )?;
+        self.pos_handler
+            .initialize(self.consensus.clone().to_arc_consensus())?;
         Ok(())
     }
 }

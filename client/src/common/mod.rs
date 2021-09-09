@@ -319,10 +319,14 @@ pub fn initialize_common_modules(
         }
     };
 
-    let initial_nodes = read_initial_nodes_from_file(
-        conf.raw_conf.pos_initial_nodes_path.as_str(),
-    )
-    .ok();
+    // Only try to setup PoW genesis block if pos is enabled from genesis.
+    let initial_nodes = if conf.raw_conf.pos_reference_enable_height == 0 {
+        Some(read_initial_nodes_from_file(
+            conf.raw_conf.pos_initial_nodes_path.as_str(),
+        ).expect("Genesis must have been initialized with pos"))
+    } else {
+        None
+    };
 
     let consensus_conf = conf.consensus_config();
     let vm = VmFactory::new(1024 * 32);
@@ -415,6 +419,7 @@ pub fn initialize_common_modules(
 
     // FIXME(lpl): Set CIP height.
     let pos_verifier = Arc::new(PosVerifier::new(
+        network.clone(),
         PosConfiguration {
             bls_key: self_pos_private_key,
             vrf_key: self_vrf_private_key,
@@ -460,7 +465,7 @@ pub fn initialize_common_modules(
         if data_man.block_height_by_hash(&terminal).unwrap()
             >= conf.raw_conf.pos_reference_enable_height
         {
-            pos_verifier.initialize(network.clone(), consensus.clone())?;
+            pos_verifier.initialize(consensus.clone())?;
             break;
         }
     }
