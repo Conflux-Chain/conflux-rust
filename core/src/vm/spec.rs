@@ -99,6 +99,8 @@ pub struct Spec {
     pub extcodehash_gas: usize,
     /// Price of SUICIDE
     pub suicide_gas: usize,
+    /// Price for retiring PoS node.
+    pub retire_gas: usize,
     /// Amount of additional gas to pay when SUICIDE credits a non-existant
     /// account
     pub suicide_to_new_account_cost: usize,
@@ -253,6 +255,7 @@ impl Spec {
             extcodehash_gas: 400,
             balance_gas: 400,
             suicide_gas: 5000,
+            retire_gas: 5_000_000,
             suicide_to_new_account_cost: 25000,
             sub_gas_cap_divisor: Some(64),
             no_empty: true,
