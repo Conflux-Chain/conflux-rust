@@ -268,7 +268,7 @@ where
                 address: pow_keypair.address(),
                 bls_key: public_key,
                 vrf_key: vrf_public_key,
-                voting_power: 1,
+                voting_power,
                 register_tx,
             });
         }
@@ -294,6 +294,7 @@ where
         let mut lines = contents.as_str().lines();
 
         let mut public_keys = Vec::new();
+        let mut genesis_nodes = Vec::new();
         while let Some(key_str) = lines.next() {
             let key_array: Vec<_> = key_str.split(",").collect();
             let public_key =
@@ -302,8 +303,23 @@ where
                 ConsensusVRFPublicKey::from_encoded_string(key_array[1])
                     .unwrap();
             let voting_power: u64 = key_array[2].parse().unwrap();
-            public_keys.push((public_key, vrf_public_key, voting_power));
+            public_keys.push((public_key.clone(), vrf_public_key.clone(), voting_power));
+            genesis_nodes.push(GenesisPosNodeInfo {
+                // Not used in PoS genesis.
+                address: Default::default(),
+                bls_key: public_key,
+                vrf_key: vrf_public_key,
+                voting_power,
+                // Not used in PoS genesis.
+                register_tx: Default::default(),
+            });
         }
+        save_initial_nodes_to_file(
+            "./initial_nodes.json",
+            GenesisPosState {
+                initial_nodes: genesis_nodes,
+            },
+        );
         generate_genesis_from_public_keys(public_keys);
         Ok("Ok".into())
     } else {

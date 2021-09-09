@@ -66,10 +66,10 @@ class ExampleTest(ConfluxTestFramework):
             elif log["topics"][0] == INCREASE_STAKE_TOPIC:
                 assert pos_identifier in pub_keys_map
                 voting_power_map[pos_identifier] = parse_as_int(log["data"])
-        with open("public_keys", "w") as f:
+        with open(os.path.join(self.options.tmpdir, "public_key"), "w") as f:
             for pos_identifier in pub_keys_map.keys():
-                f.write(",".join([pub_keys_map[pos_identifier][0], pub_keys_map[pos_identifier][1], str(voting_power_map[pos_identifier])]) + "\n")
-        initialize_tg_config(self.options.tmpdir, len(self.nodes), len(self.nodes), DEFAULT_PY_TEST_CHAIN_ID, len(self.nodes), pkfile="public_keys")
+                f.write(",".join([pub_keys_map[pos_identifier][0][2:], pub_keys_map[pos_identifier][1][2:], str(voting_power_map[pos_identifier])]) + "\n")
+        initialize_tg_config(self.options.tmpdir, len(self.nodes), len(self.nodes), DEFAULT_PY_TEST_CHAIN_ID, pkfile="public_key")
         for node in self.nodes:
             node.pos_start()
 
@@ -77,7 +77,6 @@ class ExampleTest(ConfluxTestFramework):
         self.log.info(genesis)
 
         self.nodes[0].generate_empty_blocks(1)
-        assert (self.nodes[0].getblockcount() == 2)
 
         latest_pos_ref = self.latest_pos_ref()
         for i in range(150):
@@ -96,8 +95,8 @@ class ExampleTest(ConfluxTestFramework):
             if i >= 10:
                 assert_ne(latest_pos_ref, new_pos_ref)
 
-        client.wait_for_unstake(priv_key)
-        assert client.get_balance(eth_utils.encode_hex(priv_to_addr(priv_key))) > 100 * 10**18
+        client.wait_for_unstake(client.node.pow_sk)
+        assert client.get_balance(eth_utils.encode_hex(priv_to_addr(client.node.pow_sk))) > 100 * 10**18
         # assert (self.nodes[0].getblockcount() == 6002)
 
     def latest_pos_ref(self):
