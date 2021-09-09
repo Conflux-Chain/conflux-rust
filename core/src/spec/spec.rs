@@ -80,6 +80,9 @@ pub struct CommonParams {
 
 #[derive(Default, Debug, Clone)]
 pub struct TransitionsBlockNumber {
+    /// CIP43: Introduce Finality via Voting Among Staked
+    pub cip43a: BlockNumber,
+    pub cip43b: BlockNumber,
     /// CIP62: Enable EC-related builtin contract
     pub cip62: BlockNumber,
     /// CIP64: Get current epoch number through internal contract

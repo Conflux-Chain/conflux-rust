@@ -55,6 +55,7 @@ pub struct PosBlock {
     round: u64,
     pivot_decision: H256,
     version: u64,
+    view: u64,
     /* parent: PosBlockId,
      * author: NodeId,
      * voters: Vec<NodeId>, */
@@ -125,6 +126,10 @@ impl<PoS: PosInterface> PosHandler<PoS> {
 
     pub fn get_latest_pos_reference(&self) -> PosBlockId {
         self.pos.latest_block()
+    }
+
+    pub fn get_pos_view(&self, h: &PosBlockId) -> Option<u64> {
+        self.pos.get_committed_block(h).map(|b| b.view)
     }
 
     pub fn get_unlock_nodes(
@@ -235,6 +240,7 @@ impl PosInterface for PosConnection {
             epoch: committed_block.epoch,
             round: committed_block.round,
             pivot_decision: committed_block.pivot_decision.block_hash,
+            view: committed_block.view,
             /* parent,
              * author,
              * voters: ledger_info
