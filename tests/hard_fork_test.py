@@ -29,6 +29,7 @@ class ExampleTest(ConfluxTestFramework):
         # self.conf_parameters["log_level"] = '"trace"'
         self.conf_parameters["dev_allow_phase_change_without_peer"] = "false"
         self.conf_parameters["pos_reference_enable_height"] = 600
+        self.rpc_timewait = 6000
 
     def setup_nodes(self):
         self.add_nodes(self.num_nodes)

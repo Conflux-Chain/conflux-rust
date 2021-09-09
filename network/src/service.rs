@@ -1097,6 +1097,7 @@ impl NetworkServiceInner {
                                 pos_public_key_opt = pos_public_key;
                             }
                             SessionData::Message { data, protocol } => {
+                                drop(sess);
                                 match self.handlers.read().get(&protocol) {
                                     None => warn!(
                                         "No handler found for protocol: {:?}",
@@ -1672,6 +1673,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 version,
                 callback,
             } => {
+                debug!("Receive AddHandler");
                 let h = handler.clone();
                 let network_context =
                     NetworkContext::new(io, h, *protocol, self);
@@ -1679,7 +1681,9 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                     .protocol_handler()
                     .initialize(&network_context);
                 self.handlers.write().insert(*protocol, handler.clone());
+                debug!("lock handlers");
                 let protocols = &mut *self.metadata.protocols.write();
+                debug!("lock protocols");
                 for protocol_info in protocols.iter() {
                     assert_ne!(
                         protocol, &protocol_info.protocol,

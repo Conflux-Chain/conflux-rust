@@ -180,7 +180,8 @@ impl PosHandler {
     }
 
     pub fn get_pivot_decision(&self, h: &PosBlockId) -> Option<H256> {
-        self.pos().get_committed_block(h).map(|b| b.pivot_decision)
+        // Return None if `pos` has not been initialized
+        self.pos.get()?.get_committed_block(h).map(|b| b.pivot_decision)
     }
 
     pub fn get_latest_pos_reference(&self) -> PosBlockId {
