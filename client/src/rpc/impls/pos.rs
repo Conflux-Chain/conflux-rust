@@ -60,9 +60,9 @@ impl PosHandler {
                     address,
                     block_number: U64::from(state.current_view()),
                     status: NodeLockStatus {
-                        in_queue: sum_votes(&lock_status.in_queue),
+                        in_queue: map_votes(&lock_status.in_queue),
                         locked: U64::from(lock_status.locked),
-                        out_queue: sum_votes(&lock_status.out_queue),
+                        out_queue: map_votes(&lock_status.out_queue),
                         unlocked: U64::from(lock_status.unlocked()),
                         available_votes: U64::from(
                             lock_status.available_votes(),
@@ -136,12 +136,12 @@ impl PosHandler {
     }
 }
 
-fn sum_votes(list: &StatusList) -> U64 {
-    let mut sum: u64 = 0;
+fn map_votes(list: &StatusList) -> Vec<(U64,U64)> {
+    let mut ans = Vec::with_capacity(list.len());
     for item in list.iter() {
-        sum += item.votes;
+        ans.push((U64::from(item.view),U64::from(item.votes)));
     }
-    U64::from(sum)
+    ans
 }
 
 impl Pos for PosHandler {
