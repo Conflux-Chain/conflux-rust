@@ -27,7 +27,7 @@ class MessageTest(ConfluxTestFramework):
         # control the blocks and transactions.
         block_hash = self.nodes[0].generate_empty_blocks(1)[0]
         blocks = [decode_hex(block_hash)]
-        new_block = create_block(blocks[0], 1)
+        new_block = create_block(blocks[0], 2)
 
         # This message is not used in current Conflux sync protocol
         # self.log.info("Send GetBlockHashes message")
