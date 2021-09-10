@@ -173,6 +173,14 @@ impl PowInterface for PowHandler {
             parent_decision, me_decision
         );
         let pow_consensus = pow_consensus.unwrap();
+        if parent_decision == pow_consensus.data_man.true_genesis.hash() {
+            // `me_decision` is the first actual pow_decision. It may be far from genesis,
+            // so getting all event can be slow or even unavailable.
+            // We just drop all events before this first pow_decision. And in normal cases,
+            // these events have been processed to produce the PoS genesis, so they should
+            // not be packed again.
+            return Ok(vec![]);
+        }
         Self::get_staking_events_impl(
             pow_consensus,
             parent_decision,
