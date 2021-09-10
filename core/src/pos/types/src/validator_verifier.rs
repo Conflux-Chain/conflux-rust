@@ -76,6 +76,8 @@ impl ValidatorConsensusInfo {
             voting_power,
         }
     }
+
+    pub fn voting_power(&self) -> u64 { self.voting_power }
 }
 
 /// Supports validation of signatures for known authors with individual voting
@@ -348,6 +350,9 @@ impl ValidatorVerifier {
 
     /// Returns quorum voting power.
     pub fn quorum_voting_power(&self) -> u64 { self.quorum_voting_power }
+
+    // Returns total voting power.
+    pub fn total_voting_power(&self) -> u64 { self.total_voting_power }
 
     pub fn address_to_validator_info(
         &self,

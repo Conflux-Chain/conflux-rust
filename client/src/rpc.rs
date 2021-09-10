@@ -232,6 +232,7 @@ fn setup_rpc_apis(
                 let pos = PosHandler::new(
                     common.diem_db.clone(),
                     common.pos_handler.clone(),
+                    common.pos_consensus_db.clone(),
                 )
                 .to_delegate();
                 handler.extend_with(pos);
