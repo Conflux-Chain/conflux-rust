@@ -1673,7 +1673,6 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 version,
                 callback,
             } => {
-                debug!("Receive AddHandler");
                 let h = handler.clone();
                 let network_context =
                     NetworkContext::new(io, h, *protocol, self);
@@ -1681,25 +1680,25 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                     .protocol_handler()
                     .initialize(&network_context);
                 self.handlers.write().insert(*protocol, handler.clone());
-                debug!("lock handlers");
-                let protocols = &mut *self.metadata.protocols.write();
-                debug!("lock protocols");
-                for protocol_info in protocols.iter() {
-                    assert_ne!(
-                        protocol, &protocol_info.protocol,
-                        "Do not register same protocol twice"
+                {
+                    let protocols = &mut *self.metadata.protocols.write();
+                    for protocol_info in protocols.iter() {
+                        assert_ne!(
+                            protocol, &protocol_info.protocol,
+                            "Do not register same protocol twice"
+                        );
+                    }
+                    protocols.push(ProtocolInfo {
+                        protocol: *protocol,
+                        version: *version,
+                    });
+                    self.metadata.minimum_peer_protocol_version.write().push(
+                        ProtocolInfo {
+                            protocol: *protocol,
+                            version: handler.minimum_supported_version(),
+                        },
                     );
                 }
-                protocols.push(ProtocolInfo {
-                    protocol: *protocol,
-                    version: *version,
-                });
-                self.metadata.minimum_peer_protocol_version.write().push(
-                    ProtocolInfo {
-                        protocol: *protocol,
-                        version: handler.minimum_supported_version(),
-                    },
-                );
                 info!(
                     "Protocol {:?} version {:?} registered.",
                     protocol, version

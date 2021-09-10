@@ -10,12 +10,14 @@ use crate::{
         consensus::{
             consensus_provider::start_consensus,
             gen_consensus_reconfig_subscription,
-            network::NetworkTask as ConsensusNetworkTask, ConsensusDB,
+            network::NetworkReceivers as ConsensusNetworkReceivers,
+            ConsensusDB,
         },
         mempool as diem_mempool,
         mempool::{
             gen_mempool_reconfig_subscription,
-            network::NetworkTask as MempoolNetworkTask, SubmissionStatus,
+            network::NetworkReceivers as MemPoolNetworkReceivers,
+            SubmissionStatus,
         },
         pow_handler::PowHandler,
         protocol::{
@@ -48,7 +50,6 @@ use futures::{
     },
     executor::block_on,
 };
-use keccak_hash::keccak;
 use network::NetworkService;
 use pow_types::FakePowHandler;
 use std::{
@@ -85,6 +86,9 @@ pub fn start_pos_consensus(
     protocol_config: ProtocolConfiguration,
     own_pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     initial_nodes: Vec<(NodeID, u64)>,
+    consensus_network_receiver: ConsensusNetworkReceivers,
+    mempool_network_receiver: MemPoolNetworkReceivers,
+    hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
 ) -> DiemHandle
 {
     crash_handler::setup_panic_handler();
@@ -132,6 +136,9 @@ pub fn start_pos_consensus(
         protocol_config,
         own_pos_public_key,
         initial_nodes,
+        consensus_network_receiver,
+        mempool_network_receiver,
+        hsb_protocol,
     )
 }
 
@@ -157,6 +164,9 @@ pub fn setup_pos_environment(
     protocol_config: ProtocolConfiguration,
     own_pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     initial_nodes: Vec<(NodeID, u64)>,
+    consensus_network_receiver: ConsensusNetworkReceivers,
+    mempool_network_receiver: MemPoolNetworkReceivers,
+    hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
 ) -> DiemHandle
 {
     // TODO(lpl): Handle port conflict.
@@ -210,21 +220,6 @@ pub fn setup_pos_environment(
         instant.elapsed().as_millis()
     );
 
-    // initialize hotstuff protocol handler
-    let (consensus_network_task, consensus_network_receiver) =
-        ConsensusNetworkTask::new();
-    let (mempool_network_task, mempool_network_receiver) =
-        MempoolNetworkTask::new();
-    let own_node_hash =
-        keccak(network.net_key_pair().expect("Error node key").public());
-    let protocol_handler = Arc::new(HotStuffSynchronizationProtocol::new(
-        own_node_hash,
-        consensus_network_task,
-        mempool_network_task,
-        protocol_config,
-    ));
-    protocol_handler.clone().register(network.clone()).unwrap();
-
     instant = Instant::now();
     let chunk_executor = setup_chunk_executor(db_rw.clone());
     debug!(
@@ -263,7 +258,7 @@ pub fn setup_pos_environment(
 
     let network_sender = NetworkSender {
         network,
-        protocol_handler,
+        protocol_handler: hsb_protocol,
     };
 
     let (mp_client_sender, mp_client_events) =

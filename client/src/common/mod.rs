@@ -321,9 +321,12 @@ pub fn initialize_common_modules(
 
     // Only try to setup PoW genesis block if pos is enabled from genesis.
     let initial_nodes = if conf.raw_conf.pos_reference_enable_height == 0 {
-        Some(read_initial_nodes_from_file(
-            conf.raw_conf.pos_initial_nodes_path.as_str(),
-        ).expect("Genesis must have been initialized with pos"))
+        Some(
+            read_initial_nodes_from_file(
+                conf.raw_conf.pos_initial_nodes_path.as_str(),
+            )
+            .expect("Genesis must have been initialized with pos"),
+        )
     } else {
         None
     };
