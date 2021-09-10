@@ -1060,13 +1060,9 @@ impl Configuration {
             .raw_conf
             .unnamed_21autumn_transition_number
             .unwrap_or(default_transition_time);
-        params.transition_numbers.cip71a = self
+        params.transition_numbers.cip71 = self
             .raw_conf
             .unnamed_21autumn_transition_number
-            .unwrap_or(default_transition_time);
-        params.transition_numbers.cip71b = self
-            .raw_conf
-            .unnamed_21autumn_cip71_deferred_transition
             .unwrap_or(default_transition_time);
         params.transition_numbers.cip72b = self
             .raw_conf
