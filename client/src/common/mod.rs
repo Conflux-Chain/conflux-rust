@@ -366,7 +366,7 @@ pub fn initialize_common_modules(
     let network = {
         let mut network = NetworkService::new(network_config.clone());
         network
-            .start((
+            .initialize((
                 self_pos_private_key.public_key(),
                 self_vrf_private_key.public_key(),
             ))
@@ -422,7 +422,7 @@ pub fn initialize_common_modules(
 
     // FIXME(lpl): Set CIP height.
     let pos_verifier = Arc::new(PosVerifier::new(
-        network.clone(),
+        Some(network.clone()),
         PosConfiguration {
             bls_key: self_pos_private_key,
             vrf_key: self_vrf_private_key,
@@ -760,6 +760,8 @@ pub fn initialize_not_light_node_modules(
         conf.http_config(),
         setup_public_rpc_apis(common_impl, rpc_impl, pubsub, &conf),
     )?;
+
+    network.start();
 
     Ok((
         data_man,

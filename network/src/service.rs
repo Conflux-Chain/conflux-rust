@@ -205,7 +205,7 @@ impl NetworkService {
     }
 
     /// Create and start the event loop inside the NetworkService
-    pub fn start(
+    pub fn initialize(
         &mut self, pos_pub_keys: (ConsensusPublicKey, ConsensusVRFPublicKey),
     ) -> Result<(), Error> {
         let raw_io_service =
@@ -230,7 +230,10 @@ impl NetworkService {
                 .register_handler(inner.clone())?;
             self.inner = Some(inner);
         }
+        Ok(())
+    }
 
+    pub fn start(&self) {
         let handler = self.inner.as_ref().unwrap().clone();
         let main_event_loop_channel =
             self.io_service.as_ref().unwrap().channel();
@@ -244,7 +247,6 @@ impl NetworkService {
                 MAX_SESSIONS,
                 STOP_NET_POLL,
             );
-        Ok(())
     }
 
     /// Add a P2P peer to the client as a trusted node

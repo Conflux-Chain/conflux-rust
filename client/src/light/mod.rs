@@ -162,6 +162,8 @@ impl LightClient {
             ),
         )?;
 
+        network.start();
+
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
             blockgen: None,

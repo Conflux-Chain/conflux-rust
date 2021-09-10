@@ -40,7 +40,6 @@ use crate::{
     vm_factory::VmFactory,
     ConsensusGraph, NodeType, Notifications, TransactionPool,
 };
-use network::{NetworkConfiguration, NetworkService};
 
 pub fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: U256,

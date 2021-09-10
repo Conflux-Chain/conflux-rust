@@ -97,7 +97,7 @@ pub struct PosHandler {
     consensus_network_receiver: Mutex<Option<ConsensusNetworkReceivers>>,
     mempool_network_receiver: Mutex<Option<MemPoolNetworkReceivers>>,
     enable_height: u64,
-    hsb_protocol_handler: Arc<HotStuffSynchronizationProtocol>,
+    hsb_protocol_handler: Option<Arc<HotStuffSynchronizationProtocol>>,
     pub conf: PosConfiguration,
 }
 
@@ -107,36 +107,40 @@ impl PosHandler {
         enable_height: u64,
     ) -> Self
     {
+        let mut pos = Self {
+            pos: OnceCell::new(),
+            network: Mutex::new(network.clone()),
+            diem_handler: Mutex::new(None),
+            consensus_network_receiver: Mutex::new(None),
+            mempool_network_receiver: Mutex::new(None),
+            enable_height,
+            hsb_protocol_handler: None,
+            conf,
+        };
         if let Some(network) = &network {
             // initialize hotstuff protocol handler
             let (consensus_network_task, consensus_network_receiver) =
                 ConsensusNetworkTask::new();
             let (mempool_network_task, mempool_network_receiver) =
                 MempoolNetworkTask::new();
-            let own_node_hash =
-                keccak(network.net_key_pair().expect("Error node key").public());
-            let protocol_handler = Arc::new(HotStuffSynchronizationProtocol::new(
-                own_node_hash,
-                consensus_network_task,
-                mempool_network_task,
-                conf.protocol_conf.clone(),
-            ));
+            let own_node_hash = keccak(
+                network.net_key_pair().expect("Error node key").public(),
+            );
+            let protocol_handler =
+                Arc::new(HotStuffSynchronizationProtocol::new(
+                    own_node_hash,
+                    consensus_network_task,
+                    mempool_network_task,
+                    pos.conf.protocol_conf.clone(),
+                ));
             protocol_handler.clone().register(network.clone()).unwrap();
+            *pos.consensus_network_receiver.lock() =
+                Some(consensus_network_receiver);
+            *pos.mempool_network_receiver.lock() =
+                Some(mempool_network_receiver);
+            pos.hsb_protocol_handler = Some(protocol_handler);
         }
-        Self {
-            pos: OnceCell::new(),
-            network: Mutex::new(network),
-            diem_handler: Mutex::new(None),
-            consensus_network_receiver: Mutex::new(Some(
-                consensus_network_receiver,
-            )),
-            mempool_network_receiver: Mutex::new(Some(
-                mempool_network_receiver,
-            )),
-            enable_height,
-            hsb_protocol_handler: protocol_handler,
-            conf,
-        }
+        pos
     }
 
     pub fn initialize(
@@ -171,7 +175,7 @@ impl PosHandler {
                 .lock()
                 .take()
                 .expect("not initialized"),
-            self.hsb_protocol_handler.clone(),
+            self.hsb_protocol_handler.clone().expect("set in new"),
         );
         debug!("PoS initialized");
         let pos_connection = PosConnection::new(
