@@ -180,10 +180,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
     let machine = Arc::new(new_machine_with_builtin(Default::default(), vm));
     let mut rng = StdRng::from_seed([0u8; 32]);
     let pos_verifier = Arc::new(PosVerifier::new(
-        Arc::new(NetworkService::new(NetworkConfiguration::new(
-            0,
-            Default::default(),
-        ))),
+        None,
         // These configurations will not be used.
         PosConfiguration {
             bls_key: ConfigKey::new(ConsensusPrivateKey::generate(&mut rng)),

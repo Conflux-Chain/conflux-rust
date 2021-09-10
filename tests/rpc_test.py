@@ -4,6 +4,7 @@ import time
 import os
 import types
 import shutil
+from eth_utils import decode_hex
 
 from conflux.messages import GetBlockHeaders, GET_BLOCK_HEADERS_RESPONSE
 from test_framework.mininode import start_p2p_connection
@@ -121,7 +122,7 @@ class RpcTest(ConfluxTestFramework):
             assert msec >= node.latency_ms - 100
 
         self.log.info("Test addlatency")
-        block_hash = self.nodes[0].generate_empty_blocks(1)[0]
+        block_hash = decode_hex(self.nodes[0].generate_empty_blocks(1)[0])
         default_node = start_p2p_connection([self.nodes[0]])[0]
         latency_ms = 1000
         self.nodes[0].addlatency(default_node.key, latency_ms)

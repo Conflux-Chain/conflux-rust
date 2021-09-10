@@ -26,7 +26,7 @@ class MessageTest(ConfluxTestFramework):
         # Calling the generate_empty_blocks() rpc is easier, but this allows us to exactly
         # control the blocks and transactions.
         block_hash = self.nodes[0].generate_empty_blocks(1)[0]
-        blocks = [block_hash]
+        blocks = [decode_hex(block_hash)]
         new_block = create_block(blocks[0], 1)
 
         # This message is not used in current Conflux sync protocol

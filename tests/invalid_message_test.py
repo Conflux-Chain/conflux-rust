@@ -44,7 +44,7 @@ class InvalidMessageTest(ConfluxTestFramework):
         # self.nodes[0].p2p.send_packet(0, b'')
         # self.nodes[0].p2p.send_packet(0xff, b'')
         # self.nodes[0].p2p.send_packet(PACKET_PROTOCOL, b'')
-        block_hash = self.nodes[0].generate_empty_blocks(1)[0]
+        block_hash = decode_hex(self.nodes[0].generate_empty_blocks(1)[0])
         wait = [True]
 
         h = WaitHandler(self.nodes[0].p2p, GET_BLOCK_HEADERS_RESPONSE)

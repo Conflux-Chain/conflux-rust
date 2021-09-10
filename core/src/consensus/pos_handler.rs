@@ -103,27 +103,29 @@ pub struct PosHandler {
 
 impl PosHandler {
     pub fn new(
-        network: Arc<NetworkService>, conf: PosConfiguration,
+        network: Option<Arc<NetworkService>>, conf: PosConfiguration,
         enable_height: u64,
     ) -> Self
     {
-        // initialize hotstuff protocol handler
-        let (consensus_network_task, consensus_network_receiver) =
-            ConsensusNetworkTask::new();
-        let (mempool_network_task, mempool_network_receiver) =
-            MempoolNetworkTask::new();
-        let own_node_hash =
-            keccak(network.net_key_pair().expect("Error node key").public());
-        let protocol_handler = Arc::new(HotStuffSynchronizationProtocol::new(
-            own_node_hash,
-            consensus_network_task,
-            mempool_network_task,
-            conf.protocol_conf.clone(),
-        ));
-        protocol_handler.clone().register(network.clone()).unwrap();
+        if let Some(network) = &network {
+            // initialize hotstuff protocol handler
+            let (consensus_network_task, consensus_network_receiver) =
+                ConsensusNetworkTask::new();
+            let (mempool_network_task, mempool_network_receiver) =
+                MempoolNetworkTask::new();
+            let own_node_hash =
+                keccak(network.net_key_pair().expect("Error node key").public());
+            let protocol_handler = Arc::new(HotStuffSynchronizationProtocol::new(
+                own_node_hash,
+                consensus_network_task,
+                mempool_network_task,
+                conf.protocol_conf.clone(),
+            ));
+            protocol_handler.clone().register(network.clone()).unwrap();
+        }
         Self {
             pos: OnceCell::new(),
-            network: Mutex::new(Some(network)),
+            network: Mutex::new(network),
             diem_handler: Mutex::new(None),
             consensus_network_receiver: Mutex::new(Some(
                 consensus_network_receiver,
