@@ -19,7 +19,7 @@ type VrfPubKey = Bytes;
 type BlsProof = [Bytes; 2];
 
 make_solidity_contract! {
-    pub struct PoSRegister(POS_REGISTER_CONTRACT_ADDRESS, generate_fn_table, initialize: |params: &CommonParams| params.transition_numbers.cip72b, is_active: |spec: &Spec| spec.cip72);
+    pub struct PoSRegister(POS_REGISTER_CONTRACT_ADDRESS, generate_fn_table, initialize: |params: &CommonParams| params.transition_numbers.cip43a, is_active: |spec: &Spec| spec.cip43_contract);
 }
 fn generate_fn_table() -> SolFnTable {
     make_function_table!(
@@ -32,7 +32,7 @@ fn generate_fn_table() -> SolFnTable {
     )
 }
 group_impl_is_active!(
-    |spec: &Spec| spec.cip72,
+    |spec: &Spec| spec.cip43_contract,
     Register,
     IncreaseStake,
     GetStatus,
@@ -64,6 +64,11 @@ impl ExecutionTrait for Register {
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
+        if !context.spec.cip43_init && context.env.pos_view.is_none() {
+            return Err(vm::Error::InternalContract(
+                "Cannot register after initialization stage and before the PoS chain launched".into(),
+            ));
+        }
         let (identifier, vote_power, bls_pubkey, vrf_pubkey, bls_proof) =
             inputs;
         register(
@@ -90,6 +95,11 @@ impl ExecutionTrait for IncreaseStake {
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
+        if !context.spec.cip43_init && context.env.pos_view.is_none() {
+            return Err(vm::Error::InternalContract(
+                "Cannot increase stake after initialization stage and before the PoS chain launched".into(),
+            ));
+        }
         increase_stake(params.sender, inputs, params, context)
     }
 }
@@ -105,6 +115,11 @@ impl ExecutionTrait for Retire {
         _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
+        if context.env.pos_view.is_none() {
+            return Err(vm::Error::InternalContract(
+                "Cannot retire before the PoS chain launched".into(),
+            ));
+        }
         retire(params.sender, votes, params, context)
     }
 }
