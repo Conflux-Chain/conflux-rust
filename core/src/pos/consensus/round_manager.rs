@@ -828,6 +828,7 @@ impl RoundManager {
                 Ok(())
             }
         } else {
+            debug!("No proposal to vote: round={}", round);
             // No proposal to vote. Send Timeout earlier.
             self.process_local_timeout(round).await
         }

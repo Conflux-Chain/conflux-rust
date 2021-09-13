@@ -205,7 +205,7 @@ impl NetworkService {
     }
 
     /// Create and start the event loop inside the NetworkService
-    pub fn start(
+    pub fn initialize(
         &mut self, pos_pub_keys: (ConsensusPublicKey, ConsensusVRFPublicKey),
     ) -> Result<(), Error> {
         let raw_io_service =
@@ -230,7 +230,10 @@ impl NetworkService {
                 .register_handler(inner.clone())?;
             self.inner = Some(inner);
         }
+        Ok(())
+    }
 
+    pub fn start(&self) {
         let handler = self.inner.as_ref().unwrap().clone();
         let main_event_loop_channel =
             self.io_service.as_ref().unwrap().channel();
@@ -244,7 +247,6 @@ impl NetworkService {
                 MAX_SESSIONS,
                 STOP_NET_POLL,
             );
-        Ok(())
     }
 
     /// Add a P2P peer to the client as a trusted node
@@ -1097,6 +1099,7 @@ impl NetworkServiceInner {
                                 pos_public_key_opt = pos_public_key;
                             }
                             SessionData::Message { data, protocol } => {
+                                drop(sess);
                                 match self.handlers.read().get(&protocol) {
                                     None => warn!(
                                         "No handler found for protocol: {:?}",
@@ -1679,23 +1682,25 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                     .protocol_handler()
                     .initialize(&network_context);
                 self.handlers.write().insert(*protocol, handler.clone());
-                let protocols = &mut *self.metadata.protocols.write();
-                for protocol_info in protocols.iter() {
-                    assert_ne!(
-                        protocol, &protocol_info.protocol,
-                        "Do not register same protocol twice"
+                {
+                    let protocols = &mut *self.metadata.protocols.write();
+                    for protocol_info in protocols.iter() {
+                        assert_ne!(
+                            protocol, &protocol_info.protocol,
+                            "Do not register same protocol twice"
+                        );
+                    }
+                    protocols.push(ProtocolInfo {
+                        protocol: *protocol,
+                        version: *version,
+                    });
+                    self.metadata.minimum_peer_protocol_version.write().push(
+                        ProtocolInfo {
+                            protocol: *protocol,
+                            version: handler.minimum_supported_version(),
+                        },
                     );
                 }
-                protocols.push(ProtocolInfo {
-                    protocol: *protocol,
-                    version: *version,
-                });
-                self.metadata.minimum_peer_protocol_version.write().push(
-                    ProtocolInfo {
-                        protocol: *protocol,
-                        version: handler.minimum_supported_version(),
-                    },
-                );
                 info!(
                     "Protocol {:?} version {:?} registered.",
                     protocol, version

@@ -2,16 +2,83 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-mod pos;
+use std::{
+    collections::HashMap,
+    fs::create_dir_all,
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::{Arc, Weak},
+    thread,
+    time::{Duration, Instant},
+};
 
-use std::fs::create_dir_all;
+use jsonrpc_http_server::Server as HttpServer;
+use jsonrpc_tcp_server::Server as TcpServer;
+use jsonrpc_ws_server::Server as WSServer;
+use parking_lot::{Condvar, Mutex};
+use rand_08::{prelude::StdRng, rngs::OsRng, SeedableRng};
+use threadpool::ThreadPool;
+
+use blockgen::BlockGenerator;
+use cfx_storage::StorageManager;
+use cfx_types::{address_util::AddressUtil, Address, U256};
+pub use cfxcore::pos::pos::DiemHandle;
+use cfxcore::{
+    block_data_manager::BlockDataManager,
+    consensus::pos_handler::{PosConfiguration, PosVerifier},
+    machine::{new_machine_with_builtin, Machine},
+    pow::PowComputer,
+    spec::genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
+    statistics::Statistics,
+    sync::SyncPhaseType,
+    vm_factory::VmFactory,
+    ConsensusGraph, LightProvider, NodeType, Notifications, Stopable,
+    SynchronizationGraph, SynchronizationService, TransactionPool,
+    WORKER_COMPUTATION_PARALLELISM,
+};
+use cfxcore_accounts::AccountProvider;
+use cfxkey::public_to_address;
+use diem_config::{
+    config::{NodeConfig, SafetyRulesTestConfig},
+    keys::ConfigKey,
+};
+use diem_crypto::{
+    key_file::{load_pri_key, save_pri_key},
+    Uniform,
+};
+use diem_types::{
+    account_address::from_consensus_public_key,
+    validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
+};
+use keylib::KeyPair;
+use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
+use network::NetworkService;
+use runtime::Runtime;
+use secret_store::{SecretStore, SharedSecretStore};
+use txgen::{DirectTransactionGenerator, TransactionGenerator};
+
+pub use crate::configuration::Configuration;
+use crate::{
+    accounts::{account_provider, keys_path},
+    configuration::parse_config_address_string,
+    rpc::{
+        extractor::RpcExtractor,
+        impls::{
+            cfx::RpcImpl, common::RpcImpl as CommonRpcImpl,
+            pubsub::PubSubClient,
+        },
+        setup_debug_rpc_apis, setup_public_rpc_apis,
+    },
+    GENESIS_VERSION,
+};
+use cfxcore::consensus::pos_handler::read_initial_nodes_from_file;
 
 /// Hold all top-level components for a type of client.
 /// This struct implement ClientShutdownTrait.
 pub struct ClientComponents<BlockGenT, Rest> {
     pub data_manager_weak_ptr: Weak<BlockDataManager>,
-    pub diem_handler: DiemHandle,
     pub blockgen: Option<Arc<BlockGenT>>,
+    pub pos_handler: Option<Arc<PosVerifier>>,
     pub other_components: Rest,
 }
 
@@ -37,7 +104,7 @@ impl<BlockGenT: 'static + Stopable, Rest> ClientTrait
         &self,
     ) -> (
         Weak<BlockDataManager>,
-        Arc<PowHandler>,
+        Option<Arc<PosVerifier>>,
         Option<Arc<dyn Stopable>>,
     ) {
         debug!("take_out_components_for_shutdown");
@@ -47,11 +114,7 @@ impl<BlockGenT: 'static + Stopable, Rest> ClientTrait
             None => None,
         };
 
-        (
-            data_manager_weak_ptr,
-            self.diem_handler.pow_handler.clone(),
-            blockgen,
-        )
+        (data_manager_weak_ptr, self.pos_handler.clone(), blockgen)
     }
 }
 
@@ -60,12 +123,25 @@ pub trait ClientTrait {
         &self,
     ) -> (
         Weak<BlockDataManager>,
-        Arc<PowHandler>,
+        Option<Arc<PosVerifier>>,
         Option<Arc<dyn Stopable>>,
     );
 }
 
 pub mod client_methods {
+    use std::{
+        sync::{Arc, Weak},
+        thread,
+        time::{Duration, Instant},
+    };
+
+    use ctrlc::CtrlC;
+    use parking_lot::{Condvar, Mutex};
+
+    use cfxcore::block_data_manager::BlockDataManager;
+
+    use super::ClientTrait;
+
     pub fn run(
         this: Box<dyn ClientTrait>, exit_cond_var: Arc<(Mutex<bool>, Condvar)>,
     ) -> bool {
@@ -87,15 +163,17 @@ pub mod client_methods {
 
     /// Returns whether the shutdown is considered clean.
     pub fn shutdown(this: Box<dyn ClientTrait>) -> bool {
-        let (ledger_db, pow_handler, maybe_blockgen) =
+        let (ledger_db, maybe_pos_handler, maybe_blockgen) =
             this.take_out_components_for_shutdown();
         drop(this);
         if let Some(blockgen) = maybe_blockgen {
             blockgen.stop();
             drop(blockgen);
         }
-        pow_handler.stop();
-        drop(pow_handler);
+        if let Some(pos_handler) = maybe_pos_handler {
+            pos_handler.stop();
+            drop(pos_handler);
+        }
 
         // Make sure ledger_db is properly dropped, so rocksdb can be closed
         // cleanly
@@ -126,15 +204,6 @@ pub mod client_methods {
         eprintln!("Shutdown timeout reached, exiting uncleanly.");
         false
     }
-    use super::ClientTrait;
-    use cfxcore::block_data_manager::BlockDataManager;
-    use ctrlc::CtrlC;
-    use parking_lot::{Condvar, Mutex};
-    use std::{
-        sync::{Arc, Weak},
-        thread,
-        time::{Duration, Instant},
-    };
 }
 
 pub fn initialize_common_modules(
@@ -157,7 +226,6 @@ pub fn initialize_common_modules(
         Arc<Notifications>,
         PubSubClient,
         Runtime,
-        DiemHandle,
     ),
     String,
 >
@@ -250,9 +318,18 @@ pub fn initialize_common_modules(
             None => genesis::default(conf.is_test_or_dev_mode()),
         }
     };
-    let initial_nodes = read_initial_nodes_from_file(
-        conf.raw_conf.pos_initial_nodes_path.as_str(),
-    )?;
+
+    // Only try to setup PoW genesis block if pos is enabled from genesis.
+    let initial_nodes = if conf.raw_conf.pos_reference_enable_height == 0 {
+        Some(
+            read_initial_nodes_from_file(
+                conf.raw_conf.pos_initial_nodes_path.as_str(),
+            )
+            .expect("Genesis must have been initialized with pos"),
+        )
+    } else {
+        None
+    };
 
     let consensus_conf = conf.consensus_config();
     let vm = VmFactory::new(1024 * 32);
@@ -289,7 +366,7 @@ pub fn initialize_common_modules(
     let network = {
         let mut network = NetworkService::new(network_config.clone());
         network
-            .start((
+            .initialize((
                 self_pos_private_key.public_key(),
                 self_vrf_private_key.public_key(),
             ))
@@ -305,8 +382,6 @@ pub fn initialize_common_modules(
     let mut pos_config =
         NodeConfig::load(pos_config_path.expect("empty pos config path"))
             .expect("Failed to load node config");
-    let own_node_hash =
-        keccak(network.net_key_pair().expect("Error node key").public());
     let self_pos_public_key = network.pos_public_key();
     let self_vrf_public_key = self_vrf_private_key.public_key();
     pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
@@ -345,35 +420,21 @@ pub fn initialize_common_modules(
     let initial_pos_nodes = vec![];
      */
 
-    let diem_handler = start_pos_consensus(
-        &pos_config,
-        network.clone(),
-        own_node_hash,
-        conf.protocol_config(),
-        Some((self_pos_public_key.unwrap(), self_vrf_public_key)),
-        initial_nodes
-            .initial_nodes
-            .into_iter()
-            .map(|node| {
-                (NodeID::new(node.bls_key, node.vrf_key), node.voting_power)
-            })
-            .collect(),
-    );
-    debug!("PoS initialized");
-    let pos_connection = PosConnection::new(
-        diem_handler.diem_db.clone() as Arc<dyn DBReaderForPoW>,
-        diem_handler.consensus_db.clone(),
-    );
     // FIXME(lpl): Set CIP height.
     let pos_verifier = Arc::new(PosVerifier::new(
-        pos_connection,
+        Some(network.clone()),
         PosConfiguration {
             bls_key: self_pos_private_key,
             vrf_key: self_vrf_private_key,
+            diem_conf: pos_config,
+            protocol_conf: conf.protocol_config(),
+            pos_initial_nodes_path: conf
+                .raw_conf
+                .pos_initial_nodes_path
+                .clone(),
         },
         conf.raw_conf.pos_reference_enable_height,
     ));
-
     let verification_config =
         conf.verification_config(machine.clone(), pos_verifier.clone());
     let txpool = Arc::new(TransactionPool::new(
@@ -400,6 +461,18 @@ pub fn initialize_common_modules(
         pos_verifier.clone(),
     ));
 
+    for terminal in data_man
+        .terminals_from_db()
+        .unwrap_or(vec![data_man.get_cur_consensus_era_genesis_hash()])
+    {
+        if data_man.block_height_by_hash(&terminal).unwrap()
+            >= conf.raw_conf.pos_reference_enable_height
+        {
+            pos_verifier.initialize(consensus.clone())?;
+            break;
+        }
+    }
+
     let sync_config = conf.sync_graph_config();
 
     let sync_graph = Arc::new(SynchronizationGraph::new(
@@ -411,7 +484,6 @@ pub fn initialize_common_modules(
         notifications.clone(),
         machine.clone(),
         pos_verifier.clone(),
-        diem_handler.pow_handler.clone(),
     ));
     let refresh_time =
         Duration::from_millis(conf.raw_conf.account_provider_refresh_time_ms);
@@ -432,9 +504,6 @@ pub fn initialize_common_modules(
         txpool.clone(),
         accounts.clone(),
         pos_verifier.clone(),
-        diem_handler.tx_sender.clone(),
-        diem_handler.diem_db.clone(),
-        diem_handler.consensus_db.clone(),
     ));
 
     let runtime = Runtime::with_default_thread_count();
@@ -444,7 +513,6 @@ pub fn initialize_common_modules(
         notifications.clone(),
         *network.get_network_type(),
     );
-    diem_handler.pow_handler.initialize(consensus.clone());
     Ok((
         machine,
         secret_store,
@@ -461,7 +529,6 @@ pub fn initialize_common_modules(
         notifications,
         pubsub,
         runtime,
-        diem_handler,
     ))
 }
 
@@ -482,8 +549,8 @@ pub fn initialize_not_light_node_modules(
         Option<TcpServer>,
         Option<WSServer>,
         Option<WSServer>,
+        Arc<PosVerifier>,
         Runtime,
-        DiemHandle,
     ),
     String,
 >
@@ -504,7 +571,6 @@ pub fn initialize_not_light_node_modules(
         _notifications,
         pubsub,
         runtime,
-        diem_handler,
     ) = initialize_common_modules(conf, exit.clone(), node_type)?;
 
     let light_provider = Arc::new(LightProvider::new(
@@ -594,7 +660,7 @@ pub fn initialize_not_light_node_modules(
         conf.pow_config(),
         pow.clone(),
         maybe_author.clone().unwrap_or_default(),
-        pos_verifier,
+        pos_verifier.clone(),
     ));
     if conf.is_dev_mode() {
         // If `dev_block_interval_ms` is None, blocks are generated after
@@ -695,6 +761,8 @@ pub fn initialize_not_light_node_modules(
         setup_public_rpc_apis(common_impl, rpc_impl, pubsub, &conf),
     )?;
 
+    network.start();
+
     Ok((
         data_man,
         pow,
@@ -708,8 +776,8 @@ pub fn initialize_not_light_node_modules(
         rpc_tcp_server,
         debug_rpc_ws_server,
         rpc_ws_server,
+        pos_verifier,
         runtime,
-        diem_handler,
     ))
 }
 
@@ -771,15 +839,17 @@ pub fn initialize_txgens(
 }
 
 pub mod delegate_convert {
-    use crate::rpc::{
-        error_codes::{codes::EXCEPTION_ERROR, invalid_params},
-        JsonRpcErrorKind, RpcBoxFuture, RpcError, RpcErrorKind, RpcResult,
-    };
+    use std::hint::unreachable_unchecked;
+
     use jsonrpc_core::{
         futures::{future::IntoFuture, Future},
         BoxFuture, Error as JsonRpcError, Result as JsonRpcResult,
     };
-    use std::hint::unreachable_unchecked;
+
+    use crate::rpc::{
+        error_codes::{codes::EXCEPTION_ERROR, invalid_params},
+        JsonRpcErrorKind, RpcBoxFuture, RpcError, RpcErrorKind, RpcResult,
+    };
 
     pub trait Into<T> {
         fn into(x: Self) -> T;
@@ -878,75 +948,3 @@ pub mod delegate_convert {
     }
     */
 }
-
-use crate::{
-    accounts::{account_provider, keys_path},
-    common::pos::start_pos_consensus,
-    configuration::{
-        parse_config_address_string, read_initial_nodes_from_file,
-    },
-    rpc::{
-        extractor::RpcExtractor,
-        impls::{
-            cfx::RpcImpl, common::RpcImpl as CommonRpcImpl,
-            pubsub::PubSubClient,
-        },
-        setup_debug_rpc_apis, setup_public_rpc_apis,
-    },
-    GENESIS_VERSION,
-};
-pub use crate::{common::pos::DiemHandle, configuration::Configuration};
-use blockgen::BlockGenerator;
-use cfx_storage::StorageManager;
-use cfx_types::{address_util::AddressUtil, Address, U256};
-use cfxcore::{
-    block_data_manager::BlockDataManager,
-    consensus::pos_handler::{PosConfiguration, PosConnection, PosVerifier},
-    machine::{new_machine_with_builtin, Machine},
-    pos::pow_handler::PowHandler,
-    pow::PowComputer,
-    spec::genesis::{self, genesis_block, DEV_GENESIS_KEY_PAIR_2},
-    statistics::Statistics,
-    sync::SyncPhaseType,
-    vm_factory::VmFactory,
-    ConsensusGraph, LightProvider, NodeType, Notifications, Stopable,
-    SynchronizationGraph, SynchronizationService, TransactionPool,
-    WORKER_COMPUTATION_PARALLELISM,
-};
-use cfxcore_accounts::AccountProvider;
-use cfxkey::public_to_address;
-use diem_config::{
-    config::{NodeConfig, SafetyRulesTestConfig},
-    keys::ConfigKey,
-};
-use diem_crypto::{
-    key_file::{load_pri_key, save_pri_key},
-    Uniform,
-};
-use diem_types::{
-    account_address::from_consensus_public_key,
-    term_state::NodeID,
-    validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
-};
-use jsonrpc_http_server::Server as HttpServer;
-use jsonrpc_tcp_server::Server as TcpServer;
-use jsonrpc_ws_server::Server as WSServer;
-use keccak_hash::keccak;
-use keylib::KeyPair;
-use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
-use network::NetworkService;
-use parking_lot::{Condvar, Mutex};
-use rand_08::{prelude::StdRng, rngs::OsRng, SeedableRng};
-use runtime::Runtime;
-use secret_store::{SecretStore, SharedSecretStore};
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-    str::FromStr,
-    sync::{Arc, Weak},
-    thread,
-    time::{Duration, Instant},
-};
-use storage_interface::DBReaderForPoW;
-use threadpool::ThreadPool;
-use txgen::{DirectTransactionGenerator, TransactionGenerator};

@@ -26,11 +26,13 @@ use rustc_hex::FromHexError;
 use serde::Deserialize;
 use tempdir::TempDir;
 
-use cfxcore::spec::genesis::{
-    register_transaction, GenesisPosNodeInfo, GenesisPosState,
+use cfxcore::{
+    consensus::pos_handler::save_initial_nodes_to_file,
+    spec::genesis::{
+        register_transaction, GenesisPosNodeInfo, GenesisPosState,
+    },
 };
 use cfxkey::{Error as EthkeyError, Generator, KeyPair, Random};
-use client::configuration::save_initial_nodes_to_file;
 use diem_crypto::{
     key_file::save_pri_key, Uniform, ValidCryptoMaterialStringExt,
 };
@@ -232,6 +234,7 @@ where
         let mut rng = StdRng::from_seed([0u8; 32]);
         let mut genesis_nodes = Vec::new();
 
+        let voting_power = 1;
         for i in 0..num_validator {
             let pow_keypair: KeyPair = Random.generate().unwrap();
             let private_key = ConsensusPrivateKey::generate(&mut rng);
@@ -252,20 +255,22 @@ where
             let register_tx = register_transaction(
                 private_key,
                 vrf_public_key.clone(),
-                1,
+                voting_power,
                 chain_id,
             );
             let public_key_str = public_key.to_encoded_string().unwrap();
             let vrf_public_key_str =
                 vrf_public_key.to_encoded_string().unwrap();
-            let public_key_str =
-                format!("{},{}\n", public_key_str, vrf_public_key_str);
+            let public_key_str = format!(
+                "{},{},{}\n",
+                public_key_str, vrf_public_key_str, voting_power
+            );
             public_key_file.write_all(public_key_str.as_bytes())?;
             genesis_nodes.push(GenesisPosNodeInfo {
                 address: pow_keypair.address(),
                 bls_key: public_key,
                 vrf_key: vrf_public_key,
-                voting_power: 1,
+                voting_power,
                 register_tx,
             });
         }
@@ -291,6 +296,7 @@ where
         let mut lines = contents.as_str().lines();
 
         let mut public_keys = Vec::new();
+        let mut genesis_nodes = Vec::new();
         while let Some(key_str) = lines.next() {
             let key_array: Vec<_> = key_str.split(",").collect();
             let public_key =
@@ -298,8 +304,28 @@ where
             let vrf_public_key =
                 ConsensusVRFPublicKey::from_encoded_string(key_array[1])
                     .unwrap();
-            public_keys.push((public_key, vrf_public_key, 1));
+            let voting_power: u64 = key_array[2].parse().unwrap();
+            public_keys.push((
+                public_key.clone(),
+                vrf_public_key.clone(),
+                voting_power,
+            ));
+            genesis_nodes.push(GenesisPosNodeInfo {
+                // Not used in PoS genesis.
+                address: Default::default(),
+                bls_key: public_key,
+                vrf_key: vrf_public_key,
+                voting_power,
+                // Not used in PoS genesis.
+                register_tx: Default::default(),
+            });
         }
+        save_initial_nodes_to_file(
+            "./initial_nodes.json",
+            GenesisPosState {
+                initial_nodes: genesis_nodes,
+            },
+        );
         generate_genesis_from_public_keys(public_keys);
         Ok("Ok".into())
     } else {

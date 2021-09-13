@@ -357,6 +357,10 @@ class ConfluxTestFramework:
         node.start(extra_args, *args, **kwargs)
         node.wait_for_rpc_connection()
         node.wait_for_nodeid()
+        # try:
+        #     node.pos_start()
+        # except Exception as e:
+        #     print(e)
         if phase_to_wait is not None:
             node.wait_for_recovery(phase_to_wait, wait_time)
 

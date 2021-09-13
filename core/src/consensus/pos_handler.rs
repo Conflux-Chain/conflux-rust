@@ -1,20 +1,47 @@
 use std::sync::Arc;
 
-use crate::pos::consensus::ConsensusDB;
+use once_cell::sync::OnceCell;
+
 use cfx_types::H256;
-use diem_config::keys::ConfigKey;
+use diem_config::{config::NodeConfig, keys::ConfigKey};
 use diem_crypto::HashValue;
 use diem_types::{
     contract_event::ContractEvent,
     epoch_state::EpochState,
     reward_distribution_event::RewardDistributionEvent,
-    term_state::{DisputeEvent, UnlockEvent},
+    term_state::{DisputeEvent, NodeID, UnlockEvent},
     validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
 };
+use keccak_hash::keccak;
 use primitives::pos::{NodeId, PosBlockId};
-use storage_interface::DBReaderForPoW;
+use storage_interface::{DBReaderForPoW, DbReader};
 
-pub type PosVerifier = PosHandler<PosConnection>;
+use crate::{
+    pos::{
+        consensus::{
+            network::{
+                NetworkReceivers as ConsensusNetworkReceivers,
+                NetworkTask as ConsensusNetworkTask,
+            },
+            ConsensusDB,
+        },
+        mempool::network::{
+            NetworkReceivers as MemPoolNetworkReceivers,
+            NetworkTask as MempoolNetworkTask,
+        },
+        pos::{start_pos_consensus, DiemHandle},
+        protocol::sync_protocol::HotStuffSynchronizationProtocol,
+    },
+    spec::genesis::GenesisPosState,
+    sync::ProtocolConfiguration,
+    ConsensusGraph,
+};
+use diemdb::DiemDB;
+use network::NetworkService;
+use parking_lot::Mutex;
+use std::{fs, io::Read};
+
+pub type PosVerifier = PosHandler;
 
 /// This includes the interfaces that the PoW consensus needs from the PoS
 /// consensus.
@@ -22,7 +49,7 @@ pub type PosVerifier = PosHandler<PosConnection>;
 /// We assume the PoS service will be always available after `initialize()`
 /// returns, so all the other interfaces will panic if the PoS service is not
 /// ready.
-pub trait PosInterface {
+pub trait PosInterface: Send + Sync {
     /// Wait for initialization.
     fn initialize(&self) -> Result<(), String>;
 
@@ -46,6 +73,10 @@ pub trait PosInterface {
     fn get_reward_event(&self, epoch: u64) -> Option<RewardDistributionEvent>;
 
     fn get_epoch_state(&self, block_id: &PosBlockId) -> EpochState;
+
+    fn diem_db(&self) -> &Arc<DiemDB>;
+
+    fn consensus_db(&self) -> &Arc<ConsensusDB>;
 }
 
 #[allow(unused)]
@@ -61,30 +92,117 @@ pub struct PosBlock {
      * voters: Vec<NodeId>, */
 }
 
-pub struct PosHandler<PoS: PosInterface> {
-    pos: PoS,
+pub struct PosHandler {
+    pos: OnceCell<Box<dyn PosInterface>>,
+    network: Mutex<Option<Arc<NetworkService>>>,
+    // Keep all tokio Runtime so they will not be dropped directly.
+    diem_handler: Mutex<Option<DiemHandle>>,
+    consensus_network_receiver: Mutex<Option<ConsensusNetworkReceivers>>,
+    mempool_network_receiver: Mutex<Option<MemPoolNetworkReceivers>>,
     enable_height: u64,
-    conf: PosConfiguration,
+    hsb_protocol_handler: Option<Arc<HotStuffSynchronizationProtocol>>,
+    pub conf: PosConfiguration,
 }
 
-impl<PoS: PosInterface> PosHandler<PoS> {
-    pub fn new(pos: PoS, conf: PosConfiguration, enable_height: u64) -> Self {
-        pos.initialize().expect("PoS handler initialization error");
-        Self {
-            pos,
+impl PosHandler {
+    pub fn new(
+        network: Option<Arc<NetworkService>>, conf: PosConfiguration,
+        enable_height: u64,
+    ) -> Self
+    {
+        let mut pos = Self {
+            pos: OnceCell::new(),
+            network: Mutex::new(network.clone()),
+            diem_handler: Mutex::new(None),
+            consensus_network_receiver: Mutex::new(None),
+            mempool_network_receiver: Mutex::new(None),
             enable_height,
+            hsb_protocol_handler: None,
             conf,
+        };
+        if let Some(network) = &network {
+            // initialize hotstuff protocol handler
+            let (consensus_network_task, consensus_network_receiver) =
+                ConsensusNetworkTask::new();
+            let (mempool_network_task, mempool_network_receiver) =
+                MempoolNetworkTask::new();
+            let own_node_hash = keccak(
+                network.net_key_pair().expect("Error node key").public(),
+            );
+            let protocol_handler =
+                Arc::new(HotStuffSynchronizationProtocol::new(
+                    own_node_hash,
+                    consensus_network_task,
+                    mempool_network_task,
+                    pos.conf.protocol_conf.clone(),
+                ));
+            protocol_handler.clone().register(network.clone()).unwrap();
+            *pos.consensus_network_receiver.lock() =
+                Some(consensus_network_receiver);
+            *pos.mempool_network_receiver.lock() =
+                Some(mempool_network_receiver);
+            pos.hsb_protocol_handler = Some(protocol_handler);
         }
+        pos
+    }
+
+    pub fn initialize(
+        &self, consensus: Arc<ConsensusGraph>,
+    ) -> Result<(), String> {
+        if self.pos.get().is_some() {
+            bail!("Initializing already-initialized PosHandler!");
+        }
+        let initial_nodes = read_initial_nodes_from_file(
+            self.conf.pos_initial_nodes_path.as_str(),
+        )?;
+        let diem_handler = start_pos_consensus(
+            &self.conf.diem_conf,
+            self.network.lock().take().expect("pos not initialized"),
+            self.conf.protocol_conf.clone(),
+            Some((
+                self.conf.bls_key.public_key(),
+                self.conf.vrf_key.public_key(),
+            )),
+            initial_nodes
+                .initial_nodes
+                .into_iter()
+                .map(|node| {
+                    (NodeID::new(node.bls_key, node.vrf_key), node.voting_power)
+                })
+                .collect(),
+            self.consensus_network_receiver
+                .lock()
+                .take()
+                .expect("not initialized"),
+            self.mempool_network_receiver
+                .lock()
+                .take()
+                .expect("not initialized"),
+            self.hsb_protocol_handler.clone().expect("set in new"),
+        );
+        debug!("PoS initialized");
+        let pos_connection = PosConnection::new(
+            diem_handler.diem_db.clone(),
+            diem_handler.consensus_db.clone(),
+        );
+        diem_handler.pow_handler.initialize(consensus);
+        if self.pos.set(Box::new(pos_connection)).is_err() {
+            bail!("PoS initialized twice!");
+        }
+        *self.diem_handler.lock() = Some(diem_handler);
+        Ok(())
     }
 
     pub fn config(&self) -> &PosConfiguration { &self.conf }
+
+    fn pos(&self) -> &Box<dyn PosInterface> { self.pos.get().unwrap() }
 
     pub fn is_enabled_at_height(&self, height: u64) -> bool {
         height >= self.enable_height
     }
 
     pub fn is_committed(&self, h: &PosBlockId) -> bool {
-        self.pos.get_committed_block(h).is_some()
+        self.pos().get_committed_block(h).is_some()
     }
 
     /// Check if `me` is equal to or extends `preds` (parent and referees).
@@ -97,7 +215,7 @@ impl<PoS: PosInterface> PosHandler<PoS> {
     pub fn verify_against_predecessors(
         &self, me: &PosBlockId, preds: &Vec<PosBlockId>,
     ) -> bool {
-        let me_round = match self.pos.get_committed_block(me) {
+        let me_round = match self.pos().get_committed_block(me) {
             None => {
                 warn!("No pos block for me={:?}", me);
                 return false;
@@ -105,7 +223,7 @@ impl<PoS: PosInterface> PosHandler<PoS> {
             Some(b) => (b.epoch, b.round),
         };
         for p in preds {
-            let p_round = match self.pos.get_committed_block(p) {
+            let p_round = match self.pos().get_committed_block(p) {
                 None => {
                     warn!("No pos block for pred={:?}", p);
                     return false;
@@ -121,15 +239,19 @@ impl<PoS: PosInterface> PosHandler<PoS> {
     }
 
     pub fn get_pivot_decision(&self, h: &PosBlockId) -> Option<H256> {
-        self.pos.get_committed_block(h).map(|b| b.pivot_decision)
+        // Return None if `pos` has not been initialized
+        self.pos
+            .get()?
+            .get_committed_block(h)
+            .map(|b| b.pivot_decision)
     }
 
     pub fn get_latest_pos_reference(&self) -> PosBlockId {
-        self.pos.latest_block()
+        self.pos().latest_block()
     }
 
     pub fn get_pos_view(&self, h: &PosBlockId) -> Option<u64> {
-        self.pos.get_committed_block(h).map(|b| b.view)
+        self.pos().get_committed_block(h).map(|b| b.view)
     }
 
     pub fn get_unlock_nodes(
@@ -137,7 +259,7 @@ impl<PoS: PosInterface> PosHandler<PoS> {
     ) -> Vec<(NodeId, u64)> {
         let unlock_event_key = UnlockEvent::event_key();
         let mut unlock_nodes = Vec::new();
-        for event in self.pos.get_events(parent_pos_ref, h) {
+        for event in self.pos().get_events(parent_pos_ref, h) {
             if *event.key() == unlock_event_key {
                 let unlock_event = UnlockEvent::from_bytes(event.event_data())
                     .expect("key checked");
@@ -154,7 +276,7 @@ impl<PoS: PosInterface> PosHandler<PoS> {
     ) -> Vec<NodeId> {
         let dispute_event_key = DisputeEvent::event_key();
         let mut disputed_nodes = Vec::new();
-        for event in self.pos.get_events(parent_pos_ref, h) {
+        for event in self.pos().get_events(parent_pos_ref, h) {
             if *event.key() == dispute_event_key {
                 let dispute_event =
                     DisputeEvent::from_bytes(event.event_data())
@@ -172,27 +294,40 @@ impl<PoS: PosInterface> PosHandler<PoS> {
         if h == parent_pos_ref {
             return None;
         }
-        let me_block = self.pos.get_committed_block(h)?;
-        let parent_block = self.pos.get_committed_block(parent_pos_ref)?;
+        let me_block = self.pos().get_committed_block(h)?;
+        let parent_block = self.pos().get_committed_block(parent_pos_ref)?;
         if me_block.epoch == parent_block.epoch {
             return None;
         }
         let mut events = Vec::new();
         for epoch in parent_block.epoch..me_block.epoch {
-            events.push(self.pos.get_reward_event(epoch)?);
+            events.push(self.pos().get_reward_event(epoch)?);
         }
         Some(events)
+    }
+
+    pub fn diem_db(&self) -> &Arc<DiemDB> { self.pos().diem_db() }
+
+    pub fn consensus_db(&self) -> &Arc<ConsensusDB> {
+        self.pos().consensus_db()
+    }
+
+    pub fn stop(&self) {
+        self.network.lock().take();
+        self.diem_handler.lock().take();
+        self.consensus_network_receiver.lock().take();
+        self.mempool_network_receiver.lock().take();
     }
 }
 
 pub struct PosConnection {
-    pos_storage: Arc<dyn DBReaderForPoW>,
+    pos_storage: Arc<DiemDB>,
     consensus_db: Arc<ConsensusDB>,
 }
 
 impl PosConnection {
     pub fn new(
-        pos_storage: Arc<dyn DBReaderForPoW>, consensus_db: Arc<ConsensusDB>,
+        pos_storage: Arc<DiemDB>, consensus_db: Arc<ConsensusDB>,
     ) -> Self {
         Self {
             pos_storage,
@@ -303,14 +438,39 @@ impl PosInterface for PosConnection {
             .epoch_state()
             .clone()
     }
+
+    fn diem_db(&self) -> &Arc<DiemDB> { &self.pos_storage }
+
+    fn consensus_db(&self) -> &Arc<ConsensusDB> { &self.consensus_db }
 }
 
 pub struct PosConfiguration {
     pub bls_key: ConfigKey<ConsensusPrivateKey>,
     pub vrf_key: ConfigKey<ConsensusVRFPrivateKey>,
+    pub diem_conf: NodeConfig,
+    pub protocol_conf: ProtocolConfiguration,
+    pub pos_initial_nodes_path: String,
 }
 
 fn diem_hash_to_h256(h: &HashValue) -> PosBlockId { H256::from(h.as_ref()) }
 fn h256_to_diem_hash(h: &PosBlockId) -> HashValue {
     HashValue::new(h.to_fixed_bytes())
+}
+
+pub fn save_initial_nodes_to_file(path: &str, genesis_nodes: GenesisPosState) {
+    fs::write(path, serde_json::to_string(&genesis_nodes).unwrap()).unwrap();
+}
+
+pub fn read_initial_nodes_from_file(
+    path: &str,
+) -> Result<GenesisPosState, String> {
+    let mut file = fs::File::open(path)
+        .map_err(|e| format!("failed to open initial nodes file: {:?}", e))?;
+
+    let mut nodes_str = String::new();
+    file.read_to_string(&mut nodes_str)
+        .map_err(|e| format!("failed to read initial nodes file: {:?}", e))?;
+
+    serde_json::from_str(nodes_str.as_str())
+        .map_err(|e| format!("failed to parse initial nodes file: {:?}", e))
 }

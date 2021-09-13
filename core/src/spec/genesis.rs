@@ -167,7 +167,7 @@ pub fn genesis_block(
     storage_manager: &Arc<StorageManager>,
     genesis_accounts: HashMap<Address, U256>, test_net_version: Address,
     initial_difficulty: U256, machine: Arc<Machine>, need_to_execute: bool,
-    genesis_chain_id: Option<u32>, initial_nodes: &GenesisPosState,
+    genesis_chain_id: Option<u32>, initial_nodes: &Option<GenesisPosState>,
 ) -> Block
 {
     let mut state =
@@ -397,25 +397,31 @@ pub fn genesis_block(
         }
     }
 
-    for node in &initial_nodes.initial_nodes {
-        // TODO(lpl): Pass in signed tx so they can be retired.
-        state
-            .add_balance(
-                &node.address,
-                &(U256::from(200) * U256::from(ONE_CFX_IN_DRIP)),
-                CleanupMode::NoEmpty,
-                /* account_start_nonce = */ U256::zero(),
-            )
-            .unwrap();
-        state
-            .deposit(
-                &node.address,
-                &(U256::from(100) * U256::from(ONE_CFX_IN_DRIP)),
-                0,
-            )
-            .unwrap();
-        let signed_tx = node.register_tx.clone().fake_sign(node.address);
-        execute_genesis_transaction(&signed_tx, &mut state, machine.clone());
+    if let Some(initial_nodes) = initial_nodes {
+        for node in &initial_nodes.initial_nodes {
+            // TODO(lpl): Pass in signed tx so they can be retired.
+            state
+                .add_balance(
+                    &node.address,
+                    &(U256::from(200) * U256::from(ONE_CFX_IN_DRIP)),
+                    CleanupMode::NoEmpty,
+                    /* account_start_nonce = */ U256::zero(),
+                )
+                .unwrap();
+            state
+                .deposit(
+                    &node.address,
+                    &(U256::from(100) * U256::from(ONE_CFX_IN_DRIP)),
+                    0,
+                )
+                .unwrap();
+            let signed_tx = node.register_tx.clone().fake_sign(node.address);
+            execute_genesis_transaction(
+                &signed_tx,
+                &mut state,
+                machine.clone(),
+            );
+        }
     }
 
     state

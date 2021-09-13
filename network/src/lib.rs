@@ -202,7 +202,7 @@ impl NetworkConfiguration {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct DiscoveryConfiguration {
     pub discover_node_count: u32,
     pub expire_time: Duration,

@@ -829,6 +829,7 @@ dependencies = [
  "channel",
  "clap",
  "consensus-types",
+ "crash-handler",
  "criterion",
  "dag",
  "db",

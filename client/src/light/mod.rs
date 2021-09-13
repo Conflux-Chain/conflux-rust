@@ -62,7 +62,7 @@ impl LightClient {
             _genesis_accounts,
             data_man,
             pow,
-            _pos_verifier,
+            pos_verifier,
             txpool,
             consensus,
             sync_graph,
@@ -72,7 +72,6 @@ impl LightClient {
             notifications,
             pubsub,
             runtime,
-            diem_handler,
         ) = initialize_common_modules(
             &mut conf,
             exit.clone(),
@@ -163,10 +162,12 @@ impl LightClient {
             ),
         )?;
 
+        network.start();
+
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
-            diem_handler,
             blockgen: None,
+            pos_handler: Some(pos_verifier),
             other_components: LightClientExtraComponents {
                 consensus,
                 debug_rpc_http_server,

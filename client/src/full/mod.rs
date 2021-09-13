@@ -61,13 +61,13 @@ impl FullClient {
             rpc_tcp_server,
             debug_rpc_ws_server,
             rpc_ws_server,
+            pos_handler,
             runtime,
-            diem_handler,
         ) = initialize_not_light_node_modules(&mut conf, exit, NodeType::Full)?;
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
-            diem_handler,
             blockgen: Some(blockgen),
+            pos_handler: Some(pos_handler),
             other_components: FullClientExtraComponents {
                 consensus,
                 debug_rpc_http_server,

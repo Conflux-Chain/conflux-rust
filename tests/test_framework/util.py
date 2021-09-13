@@ -265,11 +265,15 @@ def wait_until(predicate,
 # Node functions
 ################
 
-def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, start_index=None):
+def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id,  start_index=None, pkfile=None,):
     tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/pos-genesis-tool")
     try:
-        check_output([tg_config_gen, "random", "--num-validator={}".format(nodes),
-                "--num-genesis-validator={}".format(genesis_nodes), "--chain-id={}".format(chain_id)], cwd=dirname)
+        if pkfile is None:
+            check_output([tg_config_gen, "random", "--num-validator={}".format(nodes),
+                    "--num-genesis-validator={}".format(genesis_nodes), "--chain-id={}".format(chain_id)], cwd=dirname)
+        else:
+            print([tg_config_gen, "frompub", pkfile], dirname)
+            check_output([tg_config_gen, "frompub", pkfile], cwd=dirname)
     except CalledProcessError as e:
         print(e.output)
     waypoint_path = os.path.join(dirname, 'waypoint_config')
@@ -278,13 +282,14 @@ def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, start_index=No
     private_keys_dir = os.path.join(dirname, "private_keys")
     if start_index is None:
         start_index = 0
+    print(start_index, nodes)
     for n in range(start_index, start_index + nodes):
         datadir = get_datadir_path(dirname, n)
         if not os.path.isdir(datadir):
             os.makedirs(datadir)
         net_config_dir = os.path.join(datadir, 'blockchain_data', 'net_config')
-        os.makedirs(net_config_dir)
-        os.makedirs(os.path.join(datadir, 'diemdb'))
+        os.makedirs(net_config_dir, exist_ok = True)
+        os.makedirs(os.path.join(datadir, 'diemdb'), exist_ok = True)
         validator_config = {}
         validator_config['base'] = {
             'data_dir': os.path.join(datadir, 'diemdb'),

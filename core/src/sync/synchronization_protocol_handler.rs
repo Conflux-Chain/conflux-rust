@@ -378,7 +378,7 @@ pub struct SynchronizationProtocolHandler {
     light_provider: Arc<LightProvider>,
 }
 
-#[derive(Clone, DeriveMallocSizeOf)]
+#[derive(Clone, Default, DeriveMallocSizeOf)]
 pub struct ProtocolConfiguration {
     pub is_consortium: bool,
     pub send_tx_period: Duration,

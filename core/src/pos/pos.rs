@@ -5,18 +5,19 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cached_diemdb::CachedDiemDB;
-use cfx_types::H256;
-use cfxcore::{
+use crate::{
     pos::{
         consensus::{
             consensus_provider::start_consensus,
-            gen_consensus_reconfig_subscription, ConsensusDB,
-            NetworkTask as ConsensusNetworkTask,
+            gen_consensus_reconfig_subscription,
+            network::NetworkReceivers as ConsensusNetworkReceivers,
+            ConsensusDB,
         },
+        mempool as diem_mempool,
         mempool::{
-            self as diem_mempool, gen_mempool_reconfig_subscription,
-            network::NetworkTask as MempoolNetworkTask, SubmissionStatus,
+            gen_mempool_reconfig_subscription,
+            network::NetworkReceivers as MemPoolNetworkReceivers,
+            SubmissionStatus,
         },
         pow_handler::PowHandler,
         protocol::{
@@ -27,6 +28,7 @@ use cfxcore::{
     },
     sync::ProtocolConfiguration,
 };
+use cached_diemdb::CachedDiemDB;
 use consensus_types::db::FakeLedgerBlockDB;
 use diem_config::{config::NodeConfig, utils::get_genesis_txn};
 use diem_logger::prelude::*;
@@ -80,10 +82,13 @@ pub struct DiemHandle {
 }
 
 pub fn start_pos_consensus(
-    config: &NodeConfig, network: Arc<NetworkService>, own_node_hash: H256,
+    config: &NodeConfig, network: Arc<NetworkService>,
     protocol_config: ProtocolConfiguration,
     own_pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     initial_nodes: Vec<(NodeID, u64)>,
+    consensus_network_receiver: ConsensusNetworkReceivers,
+    mempool_network_receiver: MemPoolNetworkReceivers,
+    hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
 ) -> DiemHandle
 {
     crash_handler::setup_panic_handler();
@@ -128,10 +133,12 @@ pub fn start_pos_consensus(
     setup_pos_environment(
         &config,
         network,
-        own_node_hash,
         protocol_config,
         own_pos_public_key,
         initial_nodes,
+        consensus_network_receiver,
+        mempool_network_receiver,
+        hsb_protocol,
     )
 }
 
@@ -154,9 +161,12 @@ fn setup_chunk_executor(db: DbReaderWriter) -> Box<dyn ChunkExecutor> {
 
 pub fn setup_pos_environment(
     node_config: &NodeConfig, network: Arc<NetworkService>,
-    own_node_hash: H256, protocol_config: ProtocolConfiguration,
+    protocol_config: ProtocolConfiguration,
     own_pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     initial_nodes: Vec<(NodeID, u64)>,
+    consensus_network_receiver: ConsensusNetworkReceivers,
+    mempool_network_receiver: MemPoolNetworkReceivers,
+    hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
 ) -> DiemHandle
 {
     // TODO(lpl): Handle port conflict.
@@ -210,19 +220,6 @@ pub fn setup_pos_environment(
         instant.elapsed().as_millis()
     );
 
-    // initialize hotstuff protocol handler
-    let (consensus_network_task, consensus_network_receiver) =
-        ConsensusNetworkTask::new();
-    let (mempool_network_task, mempool_network_receiver) =
-        MempoolNetworkTask::new();
-    let protocol_handler = Arc::new(HotStuffSynchronizationProtocol::new(
-        own_node_hash,
-        consensus_network_task,
-        mempool_network_task,
-        protocol_config,
-    ));
-    protocol_handler.clone().register(network.clone()).unwrap();
-
     instant = Instant::now();
     let chunk_executor = setup_chunk_executor(db_rw.clone());
     debug!(
@@ -261,7 +258,7 @@ pub fn setup_pos_environment(
 
     let network_sender = NetworkSender {
         network,
-        protocol_handler,
+        protocol_handler: hsb_protocol,
     };
 
     let (mp_client_sender, mp_client_events) =
@@ -332,5 +329,9 @@ pub fn setup_pos_environment(
 }
 
 impl Drop for DiemHandle {
-    fn drop(&mut self) { self.stopped.store(true, Ordering::SeqCst); }
+    fn drop(&mut self) {
+        debug!("Drop DiemHandle");
+        self.stopped.store(true, Ordering::SeqCst);
+        self.pow_handler.stop();
+    }
 }
