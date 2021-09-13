@@ -884,12 +884,8 @@ impl PosState {
             );
         }
 
-        let target_term_offset = election_tx.target_term as usize
-            - self.term_list.current_term as usize
-            + (TERM_LIST_LEN - 1);
-        if target_term_offset != self.term_list.electing_index {
-            panic!("Maybe inconsistent term information: target term {:?}, current view {:?}, current term {:?}", election_tx.target_term, self.current_view,self.term_list.current_term);
-        }
+        let target_term_offset = election_tx.target_term as usize - self.term_list.start_term();
+        assert_eq!(target_term_offset , self.term_list.electing_index);
         if election_tx
             .vrf_proof
             .verify(
