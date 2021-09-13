@@ -130,7 +130,7 @@ fn update_vote_power(
         .state
         .add_total_pos_staking(*POS_VOTE_PRICE * vote_power);
 
-    IncreaseStakeEvent::log(&identifier, &status.registered, params, context)?;
+    IncreaseStakeEvent::log(&identifier, &vote_power, params, context)?;
     context.set_storage(params, index_entry(&identifier), status.into())?;
     Ok(())
 }
