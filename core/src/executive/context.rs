@@ -495,6 +495,7 @@ mod tests {
             accumulated_gas_used: 0.into(),
             gas_limit: 0.into(),
             epoch_height: 0,
+            pos_view: None,
             transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
         }
     }
