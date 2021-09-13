@@ -179,20 +179,14 @@ impl Mempool {
         // FIXME(lpl): Pull PivotDecision with all signatures.
         for pivot_decision_set in self.transactions.iter_pivot_decision() {
             let mut pivot_decision_opt = None;
-            let mut cnt = 0;
             for (account, hash) in pivot_decision_set.iter() {
                 if validators.get_public_key(account).is_some() {
-                    cnt += 1;
                     if pivot_decision_opt.is_none() {
                         if let Some(txn) = self.transactions.get(hash) {
                             pivot_decision_opt = Some(txn);
                         }
                     }
                 }
-            }
-            // TODO(linxi): maybe other parameters
-            if cnt * 3 < validators.len() * 2 {
-                continue;
             }
             if validators
                 .check_voting_power(
@@ -237,8 +231,11 @@ impl Mempool {
                     }
                 }
             }
-            let new_tx =
-                SignedTransaction::new_multisig(tx.raw_txn(), vec![], vec![]);
+            let new_tx = SignedTransaction::new_multisig(
+                tx.raw_txn(),
+                public_keys,
+                signatures,
+            );
             block_log.add(new_tx.sender(), new_tx.hash());
             block.push(new_tx);
         }
