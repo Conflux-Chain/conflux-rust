@@ -6,6 +6,9 @@ use crate::rpc::types::pos::{
     Account, Block, BlockNumber, CommitteeState, Status, Transaction,
 };
 use cfx_types::{H256, U64};
+use diem_types::{
+    epoch_state::EpochState, ledger_info::LedgerInfoWithSignatures,
+};
 use jsonrpc_core::Result as JsonRpcResult;
 use jsonrpc_derive::rpc;
 
@@ -37,6 +40,25 @@ pub trait Pos {
         &self, version: U64,
     ) -> JsonRpcResult<Option<Transaction>>;
 
+    // debug rpc
     #[rpc(name = "pos_getConsensusBlocks")]
     fn pos_consensus_blocks(&self) -> JsonRpcResult<Vec<Block>>;
+
+    // debug rpc
+    #[rpc(name = "pos_getEpochState")]
+    fn pos_get_epoch_state(
+        &self, epoch: U64,
+    ) -> JsonRpcResult<Option<EpochState>>;
+
+    // debug rpc
+    #[rpc(name = "pos_getLedgerInfoByEpoch")]
+    fn pos_get_ledger_info_by_epoch(
+        &self, epoch: U64,
+    ) -> JsonRpcResult<Option<LedgerInfoWithSignatures>>;
+
+    // debug rpc
+    #[rpc(name = "pos_getLedgerInfosByEpoch")]
+    fn pos_get_ledger_infos_by_epoch(
+        &self, start_epoch: U64, end_epoch: U64,
+    ) -> JsonRpcResult<Vec<LedgerInfoWithSignatures>>;
 }

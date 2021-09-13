@@ -19,5 +19,5 @@ pub use self::{
     decision::Decision,
     node_lock_status::NodeLockStatus,
     status::Status,
-    transaction::Transaction,
+    transaction::{RpcTransactionStatus, Transaction},
 };

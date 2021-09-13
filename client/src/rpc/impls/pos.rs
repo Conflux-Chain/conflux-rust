@@ -8,8 +8,8 @@ use crate::{
         traits::pos::Pos,
         types::pos::{
             Account, Block, BlockNumber, BlockTransactions, CommitteeState,
-            NodeLockStatus, RpcCommittee, RpcTermData, Signature, Status,
-            Transaction,
+            NodeLockStatus, RpcCommittee, RpcTermData, RpcTransactionStatus,
+            Signature, Status, Transaction,
         },
         RpcResult,
     },
@@ -23,7 +23,7 @@ use diem_types::{
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
     term_state::{lock_status::StatusList, PosState, TERM_LIST_LEN},
-    transaction::{Transaction as CoreTransaction, TransactionStatus},
+    transaction::Transaction as CoreTransaction,
 };
 use itertools::Itertools;
 use jsonrpc_core::Result as JsonRpcResult;
@@ -166,13 +166,27 @@ impl PosHandler {
         let epoch_change_proof = self
             .pos_handler
             .diem_db()
-            .get_epoch_ending_ledger_infos(epoch, epoch)
+            .get_epoch_ending_ledger_infos(epoch, epoch + 1)
             .ok()?;
         let ledger_infos = epoch_change_proof.get_all_ledger_infos();
         if ledger_infos.len() > 0 {
             Some(ledger_infos[0].clone())
         } else {
             None
+        }
+    }
+
+    fn ledger_infos_by_epoch(
+        &self, start_epoch: u64, end_epoch: u64,
+    ) -> Vec<LedgerInfoWithSignatures> {
+        let epoch_change_proof = self
+            .pos_handler
+            .diem_db()
+            .get_epoch_ending_ledger_infos(start_epoch, end_epoch)
+            .ok();
+        match epoch_change_proof {
+            None => vec![],
+            Some(proof) => proof.get_all_ledger_infos(),
         }
     }
 
@@ -212,16 +226,13 @@ impl PosHandler {
                     round: U64::from(b.round),
                     version: U64::from(b.version),
                     miner: b.miner.map(|m| H256::from(m.to_u8())),
-                    parent_hash: hexstr_to_h256(
-                        b.parent_hash.to_hex().as_str(),
-                    ),
+                    parent_hash: hash_value_to_h256(b.parent_hash),
                     timestamp: U64::from(b.timestamp),
                     pivot_decision: Some(U64::from(b.pivot_decision.height)),
                     transactions: BlockTransactions::Hashes(vec![]), // TODO
                     signatures: vec![],
                 };
                 // get signatures info
-                // TODO how to get epoch 1's votes info
                 if let Some(epoch_state) =
                     self.epoch_state_by_epoch_number(b.epoch)
                 {
@@ -244,7 +255,7 @@ impl PosHandler {
                 };
                 Some(block)
             }
-            Err(_) => self.consensus_block_hash(hash),
+            Err(_) => self.consensus_block_by_hash(hash),
         }
     }
 
@@ -257,9 +268,9 @@ impl PosHandler {
                         .diem_db()
                         .get_committed_block_hash_by_view(num.as_u64())
                         .ok()?;
-                    self.block_by_hash(hexstr_to_h256(hash.to_hex().as_str()))
+                    self.block_by_hash(hash_value_to_h256(hash))
                 } else {
-                    self.consensus_block_number(num)
+                    self.consensus_block_by_number(num)
                 }
             }
             BlockNumber::LatestCommitted => {
@@ -310,15 +321,13 @@ impl PosHandler {
             .filter(|b| b.epoch() == latest_epoch_state.epoch)
             .map(|b| {
                 let mut rpc_block = Block {
-                    hash: hexstr_to_h256(b.id().to_hex().as_str()),
+                    hash: hash_value_to_h256(b.id()),
                     height: U64::from(current_height),
                     epoch: U64::from(b.epoch()),
                     round: U64::from(b.round()),
                     version: Default::default(),
                     miner: b.author().map(|a| H256::from(a.to_u8())),
-                    parent_hash: hexstr_to_h256(
-                        b.parent_id().to_hex().as_str(),
-                    ),
+                    parent_hash: hash_value_to_h256(b.parent_id()),
                     timestamp: U64::from(b.timestamp_usecs()),
                     pivot_decision: Default::default(),
                     transactions: BlockTransactions::Hashes(vec![]), // TODO
@@ -356,25 +365,56 @@ impl PosHandler {
         Some(rpc_blocks)
     }
 
-    fn consensus_block_number(&self, number: U64) -> Option<Block> {
+    fn consensus_block_by_number(&self, number: U64) -> Option<Block> {
         self.consensus_blocks()?
             .into_iter()
             .find(|b| b.height == number)
     }
 
-    fn consensus_block_hash(&self, hash: H256) -> Option<Block> {
+    fn consensus_block_by_hash(&self, hash: H256) -> Option<Block> {
         self.consensus_blocks()?
             .into_iter()
             .find(|b| b.hash == hash)
     }
+
+    fn tx_by_version(&self, version: u64) -> Option<Transaction> {
+        let diem_db = self.pos_handler.diem_db();
+        if let CoreTransaction::UserTransaction(signed_tx) =
+            diem_db.get_transaction(version).ok()?
+        {
+            let block_hash = diem_db
+                .get_transaction_block_meta(version)
+                .ok()
+                .unwrap_or(None)
+                .map(|(_v, meta)| hash_value_to_h256(meta.id()));
+            let status = diem_db
+                .get_transaction_info(version)
+                .ok()
+                .map(|tx| RpcTransactionStatus::from(tx.status().clone()));
+            Some(Transaction {
+                hash: hash_value_to_h256(signed_tx.hash()),
+                from: H256::from(signed_tx.sender().to_u8()),
+                block_hash,
+                version: U64::from(version),
+                payload: signed_tx.payload().clone(),
+                status,
+            })
+        } else {
+            None
+        }
+    }
 }
 
-fn map_votes(list: &StatusList) -> Vec<(U64,U64)> {
+fn map_votes(list: &StatusList) -> Vec<(U64, U64)> {
     let mut ans = Vec::with_capacity(list.len());
     for item in list.iter() {
-        ans.push((U64::from(item.view),U64::from(item.votes)));
+        ans.push((U64::from(item.view), U64::from(item.votes)));
     }
     ans
+}
+
+fn hash_value_to_h256(h: HashValue) -> H256 {
+    hexstr_to_h256(h.to_hex().as_str())
 }
 
 impl Pos for PosHandler {
@@ -405,22 +445,33 @@ impl Pos for PosHandler {
     fn pos_transaction_by_version(
         &self, version: U64,
     ) -> JsonRpcResult<Option<Transaction>> {
-        let tx = self.pos_handler.diem_db().get_transaction(version.as_u64());
-        match tx {
-            Ok(CoreTransaction::UserTransaction(signed_tx)) => {
-                Ok(Some(Transaction {
-                    hash: hexstr_to_h256(signed_tx.hash().to_hex().as_str()),
-                    from: H256::from(signed_tx.sender().to_u8()),
-                    version,
-                    payload: signed_tx.payload().clone(),
-                    status: TransactionStatus::Retry, // TODO
-                }))
-            }
-            _ => Ok(None),
-        }
+        Ok(self.tx_by_version(version.as_u64()))
     }
 
     fn pos_consensus_blocks(&self) -> JsonRpcResult<Vec<Block>> {
         Ok(self.consensus_blocks().unwrap_or(vec![]))
+    }
+
+    fn pos_get_epoch_state(
+        &self, epoch: U64,
+    ) -> JsonRpcResult<Option<EpochState>> {
+        Ok(self.epoch_state_by_epoch_number(epoch.as_u64()))
+    }
+
+    fn pos_get_ledger_info_by_epoch(
+        &self, epoch: U64,
+    ) -> JsonRpcResult<Option<LedgerInfoWithSignatures>> {
+        Ok(self.ledger_info_by_epoch(epoch.as_u64()))
+    }
+
+    fn pos_get_ledger_infos_by_epoch(
+        &self, start_epoch: U64, end_epoch: U64,
+    ) -> JsonRpcResult<Vec<LedgerInfoWithSignatures>> {
+        Ok(
+            self.ledger_infos_by_epoch(
+                start_epoch.as_u64(),
+                end_epoch.as_u64(),
+            ),
+        )
     }
 }

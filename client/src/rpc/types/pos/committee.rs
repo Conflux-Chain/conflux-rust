@@ -43,7 +43,7 @@ impl RpcCommittee {
 #[derive(Debug, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcTermData {
-    pub start_view: U64,
+    pub start_block_number: U64,
     pub is_finalized: bool,
     pub top_electing_nodes: Vec<NodeVotingPower>,
 }
@@ -54,7 +54,7 @@ impl From<&TermData> for RpcTermData {
         match term_data.node_list() {
             NodeList::Electing(electing_heap) => {
                 value.is_finalized = false;
-                value.start_view = U64::from(term_data.start_view());
+                value.start_block_number = U64::from(term_data.start_view());
                 for (account, votes) in electing_heap.read_top_electing() {
                     value.top_electing_nodes.push(NodeVotingPower::new(
                         H256::from(account.to_u8()),
@@ -64,7 +64,7 @@ impl From<&TermData> for RpcTermData {
             }
             NodeList::Elected(elected) => {
                 value.is_finalized = true;
-                value.start_view = U64::from(term_data.start_view());
+                value.start_block_number = U64::from(term_data.start_view());
                 for (account, votes) in elected.inner() {
                     value.top_electing_nodes.push(NodeVotingPower::new(
                         H256::from(account.to_u8()),
@@ -80,14 +80,14 @@ impl From<&TermData> for RpcTermData {
 #[derive(Debug, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct NodeVotingPower {
-    pub account_address: H256,
+    pub address: H256,
     pub voting_power: U64,
 }
 
 impl NodeVotingPower {
-    pub fn new(account_address: H256, voting_power: u64) -> Self {
+    pub fn new(address: H256, voting_power: u64) -> Self {
         NodeVotingPower {
-            account_address,
+            address,
             voting_power: U64::from(voting_power),
         }
     }
