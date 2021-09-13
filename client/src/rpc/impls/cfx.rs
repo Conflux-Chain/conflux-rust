@@ -4,7 +4,8 @@
 
 use crate::rpc::types::{
     call_request::rpc_call_request_network, errors::check_rpc_address_network,
-    RpcAddress, SponsorInfo, TokenSupplyInfo, MAX_GAS_CALL_REQUEST,
+    PoSEconomics, RpcAddress, SponsorInfo, TokenSupplyInfo,
+    MAX_GAS_CALL_REQUEST,
 };
 use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
@@ -372,6 +373,24 @@ impl RpcImpl {
             .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
 
         Ok(state_db.get_accumulate_interest_rate()?.into())
+    }
+
+    /// Returns accumulate interest rate of the given epoch
+    fn pos_economics(
+        &self, epoch_num: Option<EpochNumber>,
+    ) -> RpcResult<PoSEconomics> {
+        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
+
+        Ok(PoSEconomics {
+            total_pos_staking_tokens: state_db
+                .get_total_pos_staking_tokens()?,
+            distributable_pos_interest: state_db
+                .get_distributable_pos_interest()?,
+            last_distribute_block: state_db.get_last_distribute_block()?,
+        })
     }
 
     fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256> {
@@ -1553,6 +1572,7 @@ impl Cfx for CfxHandler {
             fn account(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
+            fn pos_economics(&self, num: Option<EpochNumber>) -> BoxFuture<PoSEconomics>;
             fn admin(&self, address: RpcAddress, num: Option<EpochNumber>)
                 -> BoxFuture<Option<RpcAddress>>;
             fn sponsor_info(&self, address: RpcAddress, num: Option<EpochNumber>)

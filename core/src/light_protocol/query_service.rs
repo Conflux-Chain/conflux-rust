@@ -30,14 +30,17 @@ use cfx_parameters::{
         TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM,
     },
 };
-use cfx_statedb::{ACCUMULATE_INTEREST_RATE_KEY, INTEREST_RATE_KEY};
+use cfx_statedb::{
+    ACCUMULATE_INTEREST_RATE_KEY, DISTRIBUTABLE_POS_INTEREST_KEY,
+    INTEREST_RATE_KEY, LAST_DISTRIBUTE_BLOCK_KEY, TOTAL_POS_STAKING_TOKENS_KEY,
+};
 use cfx_types::{
     address_util::AddressUtil, BigEndianHash, Bloom, H160, H256,
     KECCAK_EMPTY_BLOOM, U256,
 };
 use futures::{
     future::{self, Either},
-    stream, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
+    stream, try_join, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
 };
 use network::{service::ProtocolVersion, NetworkContext, NetworkService};
 use primitives::{
@@ -580,6 +583,41 @@ impl QueryService {
         self.retrieve_state_entry::<U256>(epoch, key)
             .await
             .map(|opt| opt.unwrap_or_default())
+    }
+
+    pub async fn get_pos_economics(
+        &self, epoch: EpochNumber,
+    ) -> Result<[U256; 3], Error> {
+        debug!("get_PoSEconomics epoch={:?}", epoch);
+
+        let epoch = self.get_height_from_epoch_number(epoch)?;
+
+        let key1 = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            TOTAL_POS_STAKING_TOKENS_KEY,
+        )
+        .to_key_bytes();
+        let key2 = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            DISTRIBUTABLE_POS_INTEREST_KEY,
+        )
+        .to_key_bytes();
+        let key3 = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            LAST_DISTRIBUTE_BLOCK_KEY,
+        )
+        .to_key_bytes();
+
+        let total_pos_staking = try_join!(
+            self.retrieve_state_entry::<U256>(epoch, key1),
+            self.retrieve_state_entry::<U256>(epoch, key2),
+            self.retrieve_state_entry::<U256>(epoch, key3)
+        )?;
+        Ok([
+            total_pos_staking.0.unwrap_or_default(),
+            total_pos_staking.1.unwrap_or_default(),
+            total_pos_staking.2.unwrap_or_default(),
+        ])
     }
 
     pub async fn get_tx_info(&self, hash: H256) -> Result<TxInfo, Error> {

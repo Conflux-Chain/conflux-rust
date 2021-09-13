@@ -42,7 +42,7 @@ use crate::{
             BlockHashOrEpochNumber, Bytes, CallRequest,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
             EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
-            LogFilter as RpcFilter, Receipt as RpcReceipt,
+            LogFilter as RpcFilter, PoSEconomics, Receipt as RpcReceipt,
             RewardInfo as RpcRewardInfo, RpcAddress, SendTxRequest,
             SponsorInfo, Status as RpcStatus, SyncGraphStates, TokenSupplyInfo,
             Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
@@ -970,6 +970,32 @@ impl RpcImpl {
         Box::new(fut.boxed().compat())
     }
 
+    pub fn pos_economics(
+        &self, epoch: Option<EpochNumber>,
+    ) -> RpcBoxFuture<PoSEconomics> {
+        let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
+
+        info!("RPC Request: cfx_getPoSEconomics epoch={:?}", epoch);
+
+        // clone to avoid lifetime issues due to capturing `self`
+        let light = self.light.clone();
+
+        let fut = async move {
+            Ok(light
+                .get_pos_economics(epoch)
+                .await
+                .map(|ans| PoSEconomics {
+                    total_pos_staking_tokens: ans[0],
+                    distributable_pos_interest: ans[1],
+                    last_distribute_block: ans[2].as_u64(),
+                })
+                .map_err(|e| e.to_string())
+                .map_err(RpcError::invalid_params)?)
+        };
+
+        Box::new(fut.boxed().compat())
+    }
+
     fn check_balance_against_transaction(
         &self, account_addr: RpcAddress, contract_addr: RpcAddress,
         gas_limit: U256, gas_price: U256, storage_limit: U256,
@@ -1060,6 +1086,7 @@ impl Cfx for CfxHandler {
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn next_nonce(&self, address: RpcAddress, num: Option<BlockHashOrEpochNumber>) -> BoxFuture<U256>;
+            fn pos_economics(&self, num: Option<EpochNumber>) -> BoxFuture<PoSEconomics>;
             fn send_raw_transaction(&self, raw: Bytes) -> JsonRpcResult<H256>;
             fn sponsor_info(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<SponsorInfo>;
             fn staking_balance(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<U256>;
