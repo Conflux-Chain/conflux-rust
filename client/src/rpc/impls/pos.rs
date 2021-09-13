@@ -15,9 +15,7 @@ use crate::{
     },
 };
 use cfx_types::{hexstr_to_h256, H256, U64};
-use cfxcore::{
-    consensus::pos_handler::PosVerifier, pos::consensus::ConsensusDB,
-};
+use cfxcore::consensus::pos_handler::PosVerifier;
 use consensus_types::block::Block as ConsensusBlock;
 use diem_crypto::hash::HashValue;
 use diem_types::{
@@ -27,7 +25,6 @@ use diem_types::{
     term_state::{lock_status::StatusList, PosState, TERM_LIST_LEN},
     transaction::{Transaction as CoreTransaction, TransactionStatus},
 };
-use diemdb::DiemDB;
 use itertools::Itertools;
 use jsonrpc_core::Result as JsonRpcResult;
 use std::sync::Arc;
@@ -35,23 +32,28 @@ use storage_interface::{DBReaderForPoW, DbReader};
 
 pub struct PosHandler {
     pos_handler: Arc<PosVerifier>,
-    consensus_db: Arc<ConsensusDB>,
 }
 
 impl PosHandler {
     pub fn new(pos_verifier: Arc<PosVerifier>) -> Self {
         PosHandler {
-            pos_handler,
-            consensus_db,
+            pos_handler: pos_verifier,
         }
     }
 
     fn current_height(&self) -> u64 {
-        self.diem_db.get_latest_pos_state().current_view()
+        self.pos_handler
+            .diem_db()
+            .get_latest_pos_state()
+            .current_view()
     }
 
     fn current_epoch(&self) -> u64 {
-        self.diem_db.get_latest_pos_state().epoch_state().epoch
+        self.pos_handler
+            .diem_db()
+            .get_latest_pos_state()
+            .epoch_state()
+            .epoch
     }
 
     fn status_impl(&self) -> Status {
@@ -115,7 +117,7 @@ impl PosHandler {
         &self, view: Option<U64>,
     ) -> Result<Arc<PosState>, String> {
         let state = match view {
-            None => self.diem_db.get_latest_pos_state(),
+            None => self.pos_handler.diem_db().get_latest_pos_state(),
             Some(v) => {
                 let latest_view = self.current_height();
                 let v = v.as_u64();
@@ -124,10 +126,11 @@ impl PosHandler {
                 }
 
                 let state = self
-                    .diem_db
+                    .pos_handler
+                    .diem_db()
                     .get_committed_block_hash_by_view(v)
                     .and_then(|block_hash| {
-                        self.diem_db.get_pos_state(&block_hash)
+                        self.pos_handler.diem_db().get_pos_state(&block_hash)
                     })
                     .map_err(|_| format!("PoS state of {} not found", v))?;
                 Arc::new(state)
@@ -161,7 +164,8 @@ impl PosHandler {
         &self, epoch: u64,
     ) -> Option<LedgerInfoWithSignatures> {
         let epoch_change_proof = self
-            .diem_db
+            .pos_handler
+            .diem_db()
             .get_epoch_ending_ledger_infos(epoch, epoch)
             .ok()?;
         let ledger_infos = epoch_change_proof.get_all_ledger_infos();
@@ -179,7 +183,11 @@ impl PosHandler {
         }
         if epoch == self.current_epoch() {
             return Some(
-                self.diem_db.get_latest_pos_state().epoch_state().clone(),
+                self.pos_handler
+                    .diem_db()
+                    .get_latest_pos_state()
+                    .epoch_state()
+                    .clone(),
             );
         }
         if let Some(ledger_info) = self.ledger_info_by_epoch(epoch - 1) {
@@ -243,10 +251,11 @@ impl PosHandler {
     fn block_by_number(&self, number: BlockNumber) -> Option<Block> {
         match number {
             BlockNumber::Num(num) => {
-                if num.as_u64() <= self.current_height() {let hash = self
-                    .pos_handler
-                    .diem_db()
-                    .get_committed_block_hash_by_view(num.as_u64())
+                if num.as_u64() <= self.current_height() {
+                    let hash = self
+                        .pos_handler
+                        .diem_db()
+                        .get_committed_block_hash_by_view(num.as_u64())
                         .ok()?;
                     self.block_by_hash(hexstr_to_h256(hash.to_hex().as_str()))
                 } else {
@@ -265,11 +274,15 @@ impl PosHandler {
     }
 
     fn consensus_blocks(&self) -> Option<Vec<Block>> {
-        let blocks = self.consensus_db.get_blocks().ok()?;
+        let blocks = self.pos_handler.consensus_db().get_blocks().ok()?;
         if blocks.len() == 0 {
             return Some(vec![]);
         }
-        let qcs = self.consensus_db.get_quorum_certificates().ok()?;
+        let qcs = self
+            .pos_handler
+            .consensus_db()
+            .get_quorum_certificates()
+            .ok()?;
         // sort by epoch and round
         let blocks: Vec<ConsensusBlock> = blocks
             .into_iter()
@@ -280,12 +293,17 @@ impl PosHandler {
             .collect();
         // find first block's height
         let committed_block = self
-            .diem_db
+            .pos_handler
+            .diem_db()
             .get_committed_block_by_hash(&blocks[0].id())
             .ok()?;
         let mut current_height = committed_block.view;
-        let latest_epoch_state =
-            self.diem_db.get_latest_pos_state().epoch_state().clone();
+        let latest_epoch_state = self
+            .pos_handler
+            .diem_db()
+            .get_latest_pos_state()
+            .epoch_state()
+            .clone();
         // map to Committed block
         let rpc_blocks = blocks
             .into_iter()

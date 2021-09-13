@@ -504,9 +504,6 @@ pub fn initialize_common_modules(
         txpool.clone(),
         accounts.clone(),
         pos_verifier.clone(),
-        diem_handler.tx_sender.clone(),
-        diem_handler.diem_db.clone(),
-        diem_handler.consensus_db.clone(),
     ));
 
     let runtime = Runtime::with_default_thread_count();

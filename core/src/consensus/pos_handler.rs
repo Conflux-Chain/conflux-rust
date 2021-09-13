@@ -75,6 +75,8 @@ pub trait PosInterface: Send + Sync {
     fn get_epoch_state(&self, block_id: &PosBlockId) -> EpochState;
 
     fn diem_db(&self) -> &Arc<DiemDB>;
+
+    fn consensus_db(&self) -> &Arc<ConsensusDB>;
 }
 
 #[allow(unused)]
@@ -249,7 +251,7 @@ impl PosHandler {
     }
 
     pub fn get_pos_view(&self, h: &PosBlockId) -> Option<u64> {
-        self.pos.get_committed_block(h).map(|b| b.view)
+        self.pos().get_committed_block(h).map(|b| b.view)
     }
 
     pub fn get_unlock_nodes(
@@ -305,6 +307,10 @@ impl PosHandler {
     }
 
     pub fn diem_db(&self) -> &Arc<DiemDB> { self.pos().diem_db() }
+
+    pub fn consensus_db(&self) -> &Arc<ConsensusDB> {
+        self.pos().consensus_db()
+    }
 
     pub fn stop(&self) {
         self.network.lock().take();
@@ -434,6 +440,8 @@ impl PosInterface for PosConnection {
     }
 
     fn diem_db(&self) -> &Arc<DiemDB> { &self.pos_storage }
+
+    fn consensus_db(&self) -> &Arc<ConsensusDB> { &self.consensus_db }
 }
 
 pub struct PosConfiguration {
