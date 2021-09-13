@@ -369,10 +369,10 @@ impl PosHandler {
     }
 }
 
-fn map_votes(list: &StatusList) -> Vec<(U64,U64)> {
+fn map_votes(list: &StatusList) -> Vec<(U64, U64)> {
     let mut ans = Vec::with_capacity(list.len());
     for item in list.iter() {
-        ans.push((U64::from(item.view),U64::from(item.votes)));
+        ans.push((U64::from(item.view), U64::from(item.votes)));
     }
     ans
 }

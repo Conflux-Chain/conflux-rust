@@ -9,7 +9,6 @@ use crate::{
     trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, CallType, GasLeft, ReturnData, Spec},
 };
-use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::U256;
 use solidity_abi::{ABIDecodable, ABIEncodable};
 

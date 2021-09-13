@@ -10,7 +10,6 @@ use crate::{
     vm,
 };
 use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
-use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{Address, U256};
 
 make_solidity_contract! {

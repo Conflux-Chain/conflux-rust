@@ -77,12 +77,16 @@ impl NetworkSender {
 
     /// Send a msg to all connected PoS nodes. They may or may not be
     /// validators.
-    pub fn send_to_all_others(
-        &mut self, msg: &dyn Message,
+    pub fn send_to_others(
+        &mut self, msg: &dyn Message, exclude: &Vec<AccountAddress>,
     ) -> Result<(), anyhow::Error> {
         // The node itself is not included in pos_peer_mapping.
-        for peer_hash in self.protocol_handler.pos_peer_mapping.read().values()
+        for (node_id, peer_hash) in
+            self.protocol_handler.pos_peer_mapping.read().iter()
         {
+            if exclude.contains(node_id) {
+                continue;
+            }
             if let Some(peer) = self.protocol_handler.peers.get(peer_hash) {
                 let peer_id = peer.read().get_id();
                 self.send_message_with_peer_id(&peer_id, msg)?;
