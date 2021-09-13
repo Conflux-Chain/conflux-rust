@@ -1071,6 +1071,15 @@ impl Configuration {
 
         params.transition_heights.cip40 =
             self.raw_conf.tanzanite_transition_height;
+        params.transition_numbers.cip43a = self
+            .raw_conf
+            .unnamed_21autumn_transition_height
+            .unwrap_or(default_transition_time);
+        if self.is_test_or_dev_mode() {
+            params.transition_numbers.cip43b = u64::MAX;
+        } else {
+            params.transition_numbers.cip43b = params.transition_numbers.cip43a;
+        }
         params.transition_numbers.cip62 = if self.is_test_or_dev_mode() {
             0u64
         } else {

@@ -128,6 +128,9 @@ pub struct Spec {
     pub contract_start_nonce: U256,
     /// Start nonce for a new account
     pub account_start_nonce: U256,
+    /// CIP-43: Introduce Finality via Voting Among Staked
+    pub cip43_init: bool,
+    pub cip43_contract: bool,
     /// CIP-62: Enable EC-related builtin contract
     pub cip62: bool,
     /// CIP-64: Get current epoch number through internal contract
@@ -265,6 +268,8 @@ impl Spec {
             kill_dust: CleanDustMode::Off,
             keep_unsigned_nonce: false,
             wasm: None,
+            cip43_init: false,
+            cip43_contract: false,
             cip62: false,
             cip64: false,
             cip71a: false,
@@ -279,6 +284,9 @@ impl Spec {
         params: &CommonParams, number: BlockNumber,
     ) -> Spec {
         let mut spec = Self::genesis_spec();
+        spec.cip43_contract = number >= params.transition_numbers.cip43a;
+        spec.cip43_init = number >= params.transition_numbers.cip43a
+            && number < params.transition_numbers.cip43b;
         spec.cip62 = number >= params.transition_numbers.cip62;
         spec.cip64 = number >= params.transition_numbers.cip64;
         spec.cip71a = number >= params.transition_numbers.cip71a;

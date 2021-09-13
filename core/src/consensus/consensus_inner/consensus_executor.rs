@@ -1200,6 +1200,10 @@ impl ConsensusExecutionHandler {
                 block.hash(),
                 block.transactions.len()
             );
+            let pos_view_number = pivot_block
+                .block_header
+                .pos_reference()
+                .and_then(|ref id| self.pos_verifier.get_pos_view(id));
             let mut env = Env {
                 number: block_number,
                 author: block.block_header.author().clone(),
@@ -1209,6 +1213,7 @@ impl ConsensusExecutionHandler {
                 last_hash: last_block_hash,
                 gas_limit: U256::from(block.block_header.gas_limit()),
                 epoch_height: pivot_block.block_header.height(),
+                pos_view: pos_view_number,
                 transaction_epoch_bound: self
                     .verification_config
                     .transaction_epoch_bound,
@@ -1765,6 +1770,9 @@ impl ConsensusExecutionHandler {
         }
         let best_block_header = best_block_header.unwrap();
         let block_height = best_block_header.height() + 1;
+        let pos_view = best_block_header
+            .pos_reference()
+            .and_then(|ref id| self.pos_verifier.get_pos_view(id));
         let start_block_number = match self.data_man.get_epoch_execution_context(epoch_id) {
             Some(v) => v.start_block_number + epoch_size as u64,
             None => bail!("cannot obtain the execution context. Database is potentially corrupted!"),
@@ -1821,6 +1829,7 @@ impl ConsensusExecutionHandler {
             last_hash: epoch_id.clone(),
             gas_limit: tx.gas.clone(),
             epoch_height: block_height,
+            pos_view,
             transaction_epoch_bound: self
                 .verification_config
                 .transaction_epoch_bound,

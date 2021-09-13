@@ -7,7 +7,7 @@ use diem_types::transaction::{TransactionPayload, TransactionStatus};
 use serde_derive::Serialize;
 
 // TODO event
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
     pub hash: H256,

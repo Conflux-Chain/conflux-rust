@@ -14,6 +14,8 @@ pub struct Status {
     pub epoch: U64,
     ///
     pub pivot_decision: U64,
+    ///
+    pub latest_voted: Option<U64>,
 }
 
 impl Default for Status {
@@ -22,6 +24,7 @@ impl Default for Status {
             epoch: U64::default(),
             block_number: U64::default(),
             pivot_decision: U64::default(),
+            latest_voted: None,
         }
     }
 }

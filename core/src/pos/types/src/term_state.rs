@@ -35,7 +35,7 @@ use crate::{
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
 };
 
-const TERM_LIST_LEN: usize = 6;
+pub const TERM_LIST_LEN: usize = 6;
 pub const ROUND_PER_TERM: Round = 60;
 /// A term `n` is open for election in the view range
 /// `(n * ROUND_PER_TERM - ELECTION_TERM_START_ROUND, n * ROUND_PER_TERM -
@@ -54,8 +54,10 @@ pub const IN_QUEUE_LOCKED_VIEWS: u64 = 10080;
 pub const OUT_QUEUE_LOCKED_VIEWS: u64 = 10080;
 
 pub use incentives::*;
+
 mod incentives {
     use super::{ROUND_PER_TERM, TERM_ELECTED_SIZE, TERM_MAX_SIZE};
+
     const BONUS_VOTE_MAX_SIZE: u64 = 100;
 
     pub const MAX_TERM_POINTS: u64 = 6_000_000;
@@ -83,6 +85,7 @@ use std::collections::HashSet;
 
 pub mod lock_status {
     use super::*;
+
     #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
     #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
     pub struct StatusItem {
@@ -294,6 +297,7 @@ pub struct ElectingHeap(
 #[derive(Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct ElectedMap(BTreeMap<AccountAddress, u64>);
+
 pub type CandyMap = ElectedMap;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -360,7 +364,25 @@ impl NodeList {
     }
 }
 
+impl ElectedMap {
+    pub fn inner(&self) -> &BTreeMap<AccountAddress, u64> { &self.0 }
+}
+
 impl ElectingHeap {
+    pub fn read_top_electing(&self) -> BTreeMap<AccountAddress, u64> {
+        let mut top_electing: BTreeMap<AccountAddress, u64> = BTreeMap::new();
+        let mut clone = self.clone();
+        let mut count = 0usize;
+        while let Some((_, node_id)) = clone.0.pop() {
+            *top_electing.entry(node_id.node_id.addr).or_insert(0) += 1;
+            count += 1;
+            if count >= TERM_ELECTED_SIZE {
+                break;
+            }
+        }
+        top_electing
+    }
+
     fn finalize(mut self) -> (ElectedMap, CandyMap) {
         let mut elected_map = ElectedMap::default();
         let mut count = 0usize;
@@ -401,6 +423,12 @@ pub struct TermData {
     seed: Vec<u8>,
     /// (VRF.val, NodeID)
     node_list: NodeList,
+}
+
+impl TermData {
+    pub fn start_view(&self) -> u64 { self.start_view }
+
+    pub fn node_list(&self) -> &NodeList { &self.node_list }
 }
 
 impl PartialEq for ElectingHeap {
@@ -491,6 +519,8 @@ impl TermList {
     fn electing_term(&self) -> &TermData {
         &self.term_list[self.electing_index]
     }
+
+    pub fn term_list(&self) -> &Vec<TermData> { &self.term_list }
 }
 
 impl TermList {
@@ -617,6 +647,9 @@ impl Debug for PosState {
     ) -> std::result::Result<(), std::fmt::Error> {
         f.debug_struct("PosState")
             .field("view", &self.current_view)
+            .field("node_map", &self.node_map)
+            .field("term_list", &self.term_list)
+            .field("epoch_state", &self.epoch_state)
             .finish()
     }
 }
@@ -733,6 +766,8 @@ impl PosState {
     }
 
     pub fn epoch_state(&self) -> &EpochState { &self.epoch_state }
+
+    pub fn term_list(&self) -> &TermList { &self.term_list }
 
     pub fn account_node_data(
         &self, account_address: AccountAddress,

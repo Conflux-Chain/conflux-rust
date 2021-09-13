@@ -6,7 +6,7 @@ use super::Transaction;
 use cfx_types::{H256, U64};
 use serde::{Serialize, Serializer};
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Block {
     ///
@@ -26,23 +26,25 @@ pub struct Block {
     ///
     pub timestamp: U64,
     ///
-    pub pivot_decision: U64,
+    pub pivot_decision: Option<U64>,
     ///
     pub transactions: BlockTransactions,
     ///
     pub signatures: Vec<Signature>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Signature {
     ///
     pub account: H256,
     ///
-    pub signature: String,
+    // pub signature: String,
+    ///
+    pub votes: U64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BlockTransactions {
     /// Only hashes
     Hashes(Vec<H256>),
