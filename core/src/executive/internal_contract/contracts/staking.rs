@@ -44,12 +44,15 @@ impl_function_type!(Deposit, "non_payable_write");
 
 impl UpfrontPaymentTrait for Deposit {
     fn upfront_gas_payment(
-        &self, _: &Self::Input, params: &ActionParams, spec: &Spec,
-        state: &dyn StateOpsTrait,
+        &self, _: &Self::Input, params: &ActionParams,
+        context: &InternalRefContext,
     ) -> U256
     {
-        let length = state.deposit_list_length(&params.sender).unwrap_or(0);
-        U256::from(2 * spec.sstore_reset_gas) * U256::from(length + 1)
+        let length = context
+            .state
+            .deposit_list_length(&params.sender)
+            .unwrap_or(0);
+        U256::from(2 * context.spec.sstore_reset_gas) * U256::from(length + 1)
     }
 }
 
@@ -71,12 +74,15 @@ impl_function_type!(Withdraw, "non_payable_write");
 
 impl UpfrontPaymentTrait for Withdraw {
     fn upfront_gas_payment(
-        &self, _input: &Self::Input, params: &ActionParams, spec: &Spec,
-        state: &dyn StateOpsTrait,
+        &self, _input: &Self::Input, params: &ActionParams,
+        context: &InternalRefContext,
     ) -> U256
     {
-        let length = state.deposit_list_length(&params.sender).unwrap_or(0);
-        U256::from(2 * spec.sstore_reset_gas) * U256::from(length)
+        let length = context
+            .state
+            .deposit_list_length(&params.sender)
+            .unwrap_or(0);
+        U256::from(2 * context.spec.sstore_reset_gas) * U256::from(length)
     }
 }
 
@@ -98,12 +104,15 @@ impl_function_type!(VoteLock, "non_payable_write");
 
 impl UpfrontPaymentTrait for VoteLock {
     fn upfront_gas_payment(
-        &self, _input: &Self::Input, params: &ActionParams, spec: &Spec,
-        state: &dyn StateOpsTrait,
+        &self, _input: &Self::Input, params: &ActionParams,
+        context: &InternalRefContext,
     ) -> U256
     {
-        let length = state.vote_stake_list_length(&params.sender).unwrap_or(0);
-        U256::from(2 * spec.sstore_reset_gas) * U256::from(length)
+        let length = context
+            .state
+            .vote_stake_list_length(&params.sender)
+            .unwrap_or(0);
+        U256::from(2 * context.spec.sstore_reset_gas) * U256::from(length)
     }
 }
 
@@ -141,12 +150,12 @@ impl_function_type!(GetLockedStakingBalance, "query");
 
 impl UpfrontPaymentTrait for GetLockedStakingBalance {
     fn upfront_gas_payment(
-        &self, (address, _): &(Address, U256), _: &ActionParams, spec: &Spec,
-        state: &dyn StateOpsTrait,
+        &self, (address, _): &(Address, U256), _: &ActionParams,
+        context: &InternalRefContext,
     ) -> U256
     {
-        let length = state.vote_stake_list_length(address).unwrap_or(0);
-        U256::from(spec.sload_gas) * U256::from(length + 1)
+        let length = context.state.vote_stake_list_length(address).unwrap_or(0);
+        U256::from(context.spec.sload_gas) * U256::from(length + 1)
     }
 }
 
@@ -173,12 +182,12 @@ impl_function_type!(GetVotePower, "query");
 
 impl UpfrontPaymentTrait for GetVotePower {
     fn upfront_gas_payment(
-        &self, (address, _): &(Address, U256), _: &ActionParams, spec: &Spec,
-        state: &dyn StateOpsTrait,
+        &self, (address, _): &(Address, U256), _: &ActionParams,
+        context: &InternalRefContext,
     ) -> U256
     {
-        let length = state.vote_stake_list_length(address).unwrap_or(0);
-        U256::from(spec.sload_gas) * U256::from(length + 1)
+        let length = context.state.vote_stake_list_length(address).unwrap_or(0);
+        U256::from(context.spec.sload_gas) * U256::from(length + 1)
     }
 }
 
