@@ -78,12 +78,15 @@ impl BlockStore {
             if qc.ends_epoch() {
                 retriever
                     .network
-                    .broadcast(ConsensusMsg::EpochChangeProof(Box::new(
-                        EpochChangeProof::new(
-                            vec![finality_proof.clone()],
-                            /* more = */ false,
-                        ),
-                    )))
+                    .broadcast(
+                        ConsensusMsg::EpochChangeProof(Box::new(
+                            EpochChangeProof::new(
+                                vec![finality_proof.clone()],
+                                /* more = */ false,
+                            ),
+                        )),
+                        vec![],
+                    )
                     .await;
             }
         }

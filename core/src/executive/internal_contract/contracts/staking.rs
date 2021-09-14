@@ -10,7 +10,6 @@ use crate::{
     vm,
 };
 use cfx_parameters::internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS;
-use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{Address, U256};
 
 // Definitions for the whole contract.

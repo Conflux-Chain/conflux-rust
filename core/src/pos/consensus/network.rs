@@ -89,7 +89,7 @@ pub struct NetworkReceivers {
 /// Implements the actual networking support for all consensus messaging.
 #[derive(Clone)]
 pub struct ConsensusNetworkSender {
-    author: Author,
+    pub author: Author,
     network_sender: NetworkSender,
     validators: ValidatorVerifier,
 }
@@ -188,13 +188,17 @@ impl ConsensusNetworkSender {
     /// the message is delivered or sent out. It does not give indication
     /// about when the message is delivered to the recipients, as well as
     /// there is no indication about the network failures.
-    pub async fn broadcast(&mut self, msg: ConsensusMsg) {
-        if let Err(err) = self
-            .network_sender
-            .send_self_msg(self.author, msg.clone())
-            .await
-        {
-            diem_error!("Error broadcasting to self: {:?}", err);
+    pub async fn broadcast(
+        &mut self, msg: ConsensusMsg, exclude: Vec<AccountAddress>,
+    ) {
+        if !exclude.contains(&self.author) {
+            if let Err(err) = self
+                .network_sender
+                .send_self_msg(self.author, msg.clone())
+                .await
+            {
+                diem_error!("Error broadcasting to self: {:?}", err);
+            }
         }
 
         /*
@@ -220,7 +224,7 @@ impl ConsensusNetworkSender {
          */
         // TODO(lpl): It may be sufficient to broadcast some messages to only
         // validators.
-        if let Err(err) = self.network_sender.send_to_all_others(&msg) {
+        if let Err(err) = self.network_sender.send_to_others(&msg, &exclude) {
             diem_error!(error = ?err, "Error broadcasting message");
         }
     }
