@@ -362,7 +362,7 @@ jsonrpc_local_http_port=12539
 # Whether to persist block number indices.
 # This only needs to be enabled if you want to use RPCs that take block numbers as an input.
 #
-# persist_block_number_index = false
+# persist_block_number_index = true
 
 # ---------------- Transaction Cache Parameters -----------------
 

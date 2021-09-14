@@ -37,7 +37,7 @@ class ReentrancyTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
         if self.mode == OLD_MODE:
-            self.conf_parameters["unnamed_21autumn_cip71_deferred_transition"] = 1_000_000_000
+            self.conf_parameters["unnamed_21autumn_transition_number"] = 1_000_000_000
 
     def setup_network(self):
         self.setup_nodes()
@@ -213,10 +213,7 @@ class ReentrancyTest(ConfluxTestFramework):
             # In the old mode, the second withdraw_balance will fail.
             rest_balance, attacker_rest = 1 * CFX, 0
         elif self.mode == NEW_MODE:
-            # In the new mode, the fist withdraw_balance will fail because changing attack mode triggers anti-reentrancy.
-            rest_balance, attacker_rest = 2 * CFX, 1 * CFX
-        elif self.mode == NO_PROTECTION:
-            # If there is no protection
+            # In the new mode, the protection is closed.
             rest_balance, attacker_rest = 0, 0
             attack_benefit = 1 * CFX
         else:

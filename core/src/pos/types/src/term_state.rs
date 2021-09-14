@@ -884,8 +884,9 @@ impl PosState {
             );
         }
 
-        let target_term_offset = election_tx.target_term as usize - self.term_list.start_term();
-        assert_eq!(target_term_offset , self.term_list.electing_index);
+        let target_term_offset =
+            (election_tx.target_term - self.term_list.start_term()) as usize;
+        assert_eq!(target_term_offset, self.term_list.electing_index);
         if election_tx
             .vrf_proof
             .verify(
