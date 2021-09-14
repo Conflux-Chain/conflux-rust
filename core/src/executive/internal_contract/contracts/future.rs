@@ -1,4 +1,4 @@
-use super::macros::*;
+use super::{macros::*, SolFnTable};
 use crate::vm::Spec;
 use cfx_parameters::internal_contract_addresses::*;
 use cfx_types::Address;
