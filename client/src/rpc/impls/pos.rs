@@ -68,7 +68,7 @@ impl PosHandler {
             .map(|b| U64::from(b.height));
         Status {
             epoch: U64::from(epoch_state.epoch),
-            block_number: U64::from(block_number),
+            latest_committed: U64::from(block_number),
             pivot_decision: U64::from(decision.height),
             latest_voted,
         }
@@ -219,7 +219,7 @@ impl PosHandler {
                     height: U64::from(b.view),
                     epoch: U64::from(b.epoch),
                     round: U64::from(b.round),
-                    version: U64::from(b.version),
+                    next_tx_number: U64::from(b.version),
                     miner: b.miner.map(|m| H256::from(m.to_u8())),
                     parent_hash: hash_value_to_h256(b.parent_hash),
                     timestamp: U64::from(b.timestamp),
@@ -320,7 +320,7 @@ impl PosHandler {
                     height: U64::from(current_height),
                     epoch: U64::from(b.epoch()),
                     round: U64::from(b.round()),
-                    version: Default::default(),
+                    next_tx_number: Default::default(),
                     miner: b.author().map(|a| H256::from(a.to_u8())),
                     parent_hash: hash_value_to_h256(b.parent_id()),
                     timestamp: U64::from(b.timestamp_usecs()),
@@ -330,7 +330,7 @@ impl PosHandler {
                 };
                 current_height += 1;
                 if let Some(qc) = qcs.get(&b.id()) {
-                    rpc_block.version = U64::from(qc.commit_info().version());
+                    rpc_block.next_tx_number = U64::from(qc.commit_info().version());
                     rpc_block.pivot_decision = qc
                         .commit_info()
                         .pivot_decision()
@@ -374,28 +374,46 @@ impl PosHandler {
 
     fn tx_by_version(&self, version: u64) -> Option<Transaction> {
         let diem_db = self.pos_handler.diem_db();
-        if let CoreTransaction::UserTransaction(signed_tx) =
-            diem_db.get_transaction(version).ok()?
-        {
-            let block_hash = diem_db
-                .get_transaction_block_meta(version)
-                .ok()
-                .unwrap_or(None)
-                .map(|(_v, meta)| hash_value_to_h256(meta.id()));
-            let status = diem_db
-                .get_transaction_info(version)
-                .ok()
-                .map(|tx| RpcTransactionStatus::from(tx.status().clone()));
-            Some(Transaction {
-                hash: hash_value_to_h256(signed_tx.hash()),
-                from: H256::from(signed_tx.sender().to_u8()),
-                block_hash,
-                version: U64::from(version),
-                payload: signed_tx.payload().clone(),
-                status,
-            })
-        } else {
-            None
+        match diem_db.get_transaction(version).ok()? {
+            CoreTransaction::UserTransaction(signed_tx) => {
+                let block_hash = diem_db
+                    .get_transaction_block_meta(version)
+                    .ok()
+                    .unwrap_or(None)
+                    .map(|(_v, meta)| hash_value_to_h256(meta.id()));
+                let status = diem_db
+                    .get_transaction_info(version)
+                    .ok()
+                    .map(|tx| RpcTransactionStatus::from(tx.status().clone()));
+                Some(Transaction {
+                    hash: hash_value_to_h256(signed_tx.hash()),
+                    from: H256::from(signed_tx.sender().to_u8()),
+                    block_hash,
+                    number: U64::from(version),
+                    payload: Some(signed_tx.payload().clone()),
+                    status,
+                })
+            }
+            CoreTransaction::GenesisTransaction(_) => None,
+            CoreTransaction::BlockMetadata(block_meta) => {
+                let mut tx = Transaction {
+                    hash: Default::default(),
+                    from: Default::default(), // TODO
+                    block_hash: Some(hash_value_to_h256(block_meta.id())),
+                    number: U64::from(version),
+                    payload: None,
+                    status: None,
+                };
+                if let Some(tx_info) =
+                    diem_db.get_transaction_info(version).ok()
+                {
+                    let status =
+                        RpcTransactionStatus::from(tx_info.status().clone());
+                    tx.status = Some(status);
+                    tx.hash = hash_value_to_h256(tx_info.transaction_hash());
+                }
+                Some(tx)
+            }
         }
     }
 }
@@ -437,10 +455,10 @@ impl Pos for PosHandler {
         Ok(self.block_by_number(number))
     }
 
-    fn pos_transaction_by_version(
-        &self, version: U64,
+    fn pos_transaction_by_number(
+        &self, number: U64,
     ) -> JsonRpcResult<Option<Transaction>> {
-        Ok(self.tx_by_version(version.as_u64()))
+        Ok(self.tx_by_version(number.as_u64()))
     }
 
     fn pos_consensus_blocks(&self) -> JsonRpcResult<Vec<Block>> {

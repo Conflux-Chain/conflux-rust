@@ -18,7 +18,7 @@ pub struct Block {
     ///
     pub round: U64,
     ///
-    pub version: U64,
+    pub next_tx_number: U64,
     ///
     pub miner: Option<H256>,
     ///
