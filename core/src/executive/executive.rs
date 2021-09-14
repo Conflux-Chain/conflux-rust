@@ -10,7 +10,6 @@ use crate::{
     executive::{
         context::LocalContext,
         executed::{ExecutionOutcome, ToRepackError},
-        internal_contract::get_reentrancy_allowance,
         vm_exec::{BuiltinExec, InternalContractExec, NoopExec},
         CollateralCheckResultToVmResult, InternalContractTrait, TxDropError,
     },
@@ -504,16 +503,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         state.checkpoint();
 
         let contract_address = self.get_recipient().clone();
-        let allow_reentrancy = if self.context.spec.cip71a {
-            get_reentrancy_allowance(
-                &contract_address,
-                state,
-                &mut self.context.substate,
-            )?
-        } else {
-            false
-        };
-        callstack.push(contract_address, is_create, allow_reentrancy);
+        callstack.push(contract_address, is_create);
 
         // Pre execution: transfer value and init contract.
         let spec = self.context.spec;
