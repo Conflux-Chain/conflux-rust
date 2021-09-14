@@ -5,7 +5,7 @@
 use std::{
     collections::HashMap,
     fs::create_dir_all,
-    path::{Path, PathBuf},
+    path::Path,
     str::FromStr,
     sync::{Arc, Weak},
     thread,
@@ -38,17 +38,13 @@ use cfxcore::{
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::public_to_address;
-use diem_config::{
-    config::{NodeConfig, SafetyRulesTestConfig},
-    keys::ConfigKey,
-};
+use diem_config::keys::ConfigKey;
 use diem_crypto::{
     key_file::{load_pri_key, save_pri_key},
     Uniform,
 };
-use diem_types::{
-    account_address::from_consensus_public_key,
-    validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
+use diem_types::validator_config::{
+    ConsensusPrivateKey, ConsensusVRFPrivateKey,
 };
 use keylib::KeyPair;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
@@ -374,64 +370,18 @@ pub fn initialize_common_modules(
         Arc::new(network)
     };
 
-    // initialize pos
-    let pos_config_path = match conf.raw_conf.pos_config_path.as_ref() {
-        Some(path) => Some(PathBuf::from(path)),
-        None => None,
-    };
-    let mut pos_config =
-        NodeConfig::load(pos_config_path.expect("empty pos config path"))
-            .expect("Failed to load node config");
-    let self_pos_public_key = network.pos_public_key();
-    let self_vrf_public_key = self_vrf_private_key.public_key();
-    pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
-        author: from_consensus_public_key(
-            self_pos_public_key.as_ref().unwrap(),
-            &self_vrf_public_key,
-        ),
-        consensus_key: Some(self_pos_private_key.clone()),
-        execution_key: Some(self_pos_private_key.clone()),
-        waypoint: Some(pos_config.base.waypoint.waypoint()),
-    });
-    pos_config.consensus.safety_rules.vrf_private_key =
-        Some(self_vrf_private_key.clone());
-    pos_config.consensus.safety_rules.export_consensus_key = true;
-    pos_config.consensus.safety_rules.vrf_proposal_threshold =
-        conf.raw_conf.vrf_proposal_threshold;
-
-    /*
-    let pos_start_epoch = 0;
-    let start_epoch_id = data_man
-        .executed_epoch_set_hashes_from_db(pos_start_epoch)
-        .expect("pos start epoch exists")
-        .last()
-        .cloned()
-        .expect("epoch not empty");
-    let initial_state_with_pos = data_man
-        .storage_manager
-        .get_state_no_commit(
-            data_man
-                .get_state_readonly_index(&start_epoch_id)
-                .expect("pos start epoch executed"),
-            false, /* try_open */
-        )
-        .unwrap()
-        .unwrap();
-    let initial_pos_nodes = vec![];
-     */
-
-    // FIXME(lpl): Set CIP height.
     let pos_verifier = Arc::new(PosVerifier::new(
         Some(network.clone()),
         PosConfiguration {
             bls_key: self_pos_private_key,
             vrf_key: self_vrf_private_key,
-            diem_conf: pos_config,
+            diem_conf_path: conf.raw_conf.pos_config_path.clone(),
             protocol_conf: conf.protocol_config(),
             pos_initial_nodes_path: conf
                 .raw_conf
                 .pos_initial_nodes_path
                 .clone(),
+            vrf_proposal_threshold: conf.raw_conf.vrf_proposal_threshold,
         },
         conf.raw_conf.pos_reference_enable_height,
     ));

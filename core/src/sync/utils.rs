@@ -184,9 +184,10 @@ pub fn initialize_synchronization_graph_with_data_manager(
         PosConfiguration {
             bls_key: ConfigKey::new(ConsensusPrivateKey::generate(&mut rng)),
             vrf_key: ConfigKey::new(ConsensusVRFPrivateKey::generate(&mut rng)),
-            diem_conf: Default::default(),
+            diem_conf_path: Default::default(),
             protocol_conf: Default::default(),
             pos_initial_nodes_path: "".to_string(),
+            vrf_proposal_threshold: Default::default(),
         },
         u64::MAX,
     ));

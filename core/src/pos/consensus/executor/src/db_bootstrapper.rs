@@ -64,6 +64,11 @@ pub fn maybe_bootstrap<V: VMExecutor>(
         diem_info!(waypoint = %waypoint, "Skip genesis txn.");
         return Ok(false);
     }
+    diem_debug!(
+        "genesis_txn={:?}, initial_nodes={:?} ",
+        genesis_txn,
+        initial_nodes,
+    );
 
     let committer = calculate_genesis::<V>(
         db,
@@ -168,6 +173,11 @@ pub fn calculate_genesis<V: VMExecutor>(
     let executed_trees = executor.get_executed_trees(block_id)?;
     let state_view = executor
         .get_executed_state_view(StateViewId::Miscellaneous, &executed_trees);
+    diem_debug!(
+        "after genesis: epoch_state={:?}, pos_state={:?}",
+        next_epoch_state,
+        state_view.pos_state().epoch_state()
+    );
     let timestamp_usecs = if genesis_version == 0 {
         // TODO(aldenhu): fix existing tests before using real timestamp and
         // check on-chain epoch.

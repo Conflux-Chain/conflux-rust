@@ -28,7 +28,10 @@ class ExampleTest(ConfluxTestFramework):
         self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = '120'
         # self.conf_parameters["log_level"] = '"trace"'
         self.conf_parameters["dev_allow_phase_change_without_peer"] = "false"
-        self.conf_parameters["pos_reference_enable_height"] = 600
+        self.conf_parameters["unnamed_21autumn_transition_height"] = 300
+        self.conf_parameters["unnamed_21autumn_transition_number"] = 300
+        self.conf_parameters["unnamed_21autumn_cip43_init_end"] = 500
+        self.conf_parameters["pos_reference_enable_height"] = 1000
         self.conf_parameters["era_epoch_count"] = 200
         self.rpc_timewait = 6000
 
@@ -49,15 +52,24 @@ class ExampleTest(ConfluxTestFramework):
 
     def run_test(self):
         # Pos contract enabled, stake and register in the first hard-fork phase.
+        client = RpcClient(self.nodes[self.num_nodes - 1])
+        client.generate_empty_blocks(300)
+        sync_blocks(self.nodes)
         for node in self.nodes:
             client = RpcClient(node)
             pos_identifier, _ = client.wait_for_pos_register()
             sync_blocks(self.nodes)
         client = RpcClient(self.nodes[self.num_nodes - 1])
 
+        # generate blocks until we are after pos initialization and before pos start.
+        best_epoch = client.epoch_number()
+        client.generate_empty_blocks(600 - best_epoch)
+        sync_blocks(self.nodes)
+
         voting_power_map = {}
         pub_keys_map = {}
         logs = client.get_logs(filter=Filter(from_epoch="earliest", to_epoch="latest_state", address=["0x0888000000000000000000000000000000000005"]))
+        print("logs=", logs)
         for log in logs:
             pos_identifier = log["topics"][1]
             if log["topics"][0] == REGISTER_TOPIC:
@@ -67,15 +79,14 @@ class ExampleTest(ConfluxTestFramework):
             elif log["topics"][0] == INCREASE_STAKE_TOPIC:
                 assert pos_identifier in pub_keys_map
                 voting_power_map[pos_identifier] = parse_as_int(log["data"])
-        with open(os.path.join(self.options.tmpdir, "public_key"), "w") as f:
+        with open(os.path.join(self.options.tmpdir, "public_keys"), "w") as f:
             for pos_identifier in pub_keys_map.keys():
                 f.write(",".join([pub_keys_map[pos_identifier][0][2:], pub_keys_map[pos_identifier][1][2:], str(voting_power_map[pos_identifier])]) + "\n")
-        initialize_tg_config(self.options.tmpdir, len(self.nodes), len(self.nodes), DEFAULT_PY_TEST_CHAIN_ID, pkfile="public_key")
+        initialize_tg_config(self.options.tmpdir, len(self.nodes), len(self.nodes), DEFAULT_PY_TEST_CHAIN_ID, pkfile="public_keys")
 
-        genesis = self.nodes[0].best_block_hash()
-        self.log.info(genesis)
-
-        self.nodes[0].generate_empty_blocks(1)
+        # generate blocks until pos start
+        self.nodes[0].generate_empty_blocks(400)
+        sync_blocks(self.nodes)
 
         latest_pos_ref = self.latest_pos_ref()
         for i in range(150):
