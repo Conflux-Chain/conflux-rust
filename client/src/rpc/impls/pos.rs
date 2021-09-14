@@ -116,10 +116,11 @@ impl PosHandler {
     fn pos_state_by_view(
         &self, view: Option<U64>,
     ) -> Result<Arc<PosState>, String> {
+        let latest_state = self.pos_handler.diem_db().get_latest_pos_state();
         let state = match view {
-            None => self.pos_handler.diem_db().get_latest_pos_state(),
+            None => latest_state,
             Some(v) => {
-                let latest_view = self.current_height();
+                let latest_view = latest_state.current_view();
                 let v = v.as_u64();
                 if v > latest_view {
                     bail!("Specified block {} is not executed, the latest block number is {}", v, latest_view)
@@ -142,52 +143,46 @@ impl PosHandler {
     fn committee_by_block_number(
         &self, view: Option<U64>,
     ) -> RpcResult<CommitteeState> {
-        let mut state = CommitteeState::default();
         let pos_state = self.pos_state_by_view(view)?;
 
-        state.current_committee =
+        let current_committee =
             RpcCommittee::from_epoch_state(pos_state.epoch_state());
 
         // get future term data
-        let term_list = pos_state.term_list().term_list();
-        for i in TERM_LIST_LEN..=TERM_LIST_LEN + 1 {
-            if let Some(term_data) = term_list.get(i) {
-                state.elections.push(RpcTermData::from(term_data))
-            }
-        }
+        let elections = pos_state.term_list().term_list()
+            [TERM_LIST_LEN..=TERM_LIST_LEN + 1]
+            .iter()
+            .map(|term_data| RpcTermData::from(term_data))
+            .collect();
 
-        Ok(state)
+        Ok(CommitteeState {
+            current_committee,
+            elections,
+        })
     }
 
     // get epoch ending ledger info
     fn ledger_info_by_epoch(
         &self, epoch: u64,
     ) -> Option<LedgerInfoWithSignatures> {
-        let epoch_change_proof = self
-            .pos_handler
+        self.pos_handler
             .diem_db()
             .get_epoch_ending_ledger_infos(epoch, epoch + 1)
-            .ok()?;
-        let ledger_infos = epoch_change_proof.get_all_ledger_infos();
-        if ledger_infos.len() > 0 {
-            Some(ledger_infos[0].clone())
-        } else {
-            None
-        }
+            .ok()?
+            .get_all_ledger_infos()
+            .first()
+            .map(|l| l.clone())
     }
 
     fn ledger_infos_by_epoch(
         &self, start_epoch: u64, end_epoch: u64,
     ) -> Vec<LedgerInfoWithSignatures> {
-        let epoch_change_proof = self
-            .pos_handler
+        self.pos_handler
             .diem_db()
             .get_epoch_ending_ledger_infos(start_epoch, end_epoch)
-            .ok();
-        match epoch_change_proof {
-            None => vec![],
-            Some(proof) => proof.get_all_ledger_infos(),
-        }
+            .ok()
+            .map(|proof| proof.get_all_ledger_infos())
+            .unwrap_or(vec![])
     }
 
     // get epoch state
