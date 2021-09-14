@@ -4,8 +4,7 @@
 
 pub(super) mod admin;
 pub(crate) mod pos;
-pub(super) mod reentrancy;
 pub(super) mod sponsor;
 pub(super) mod staking;
 
-pub use self::{admin::suicide, reentrancy::get_reentrancy_allowance};
+pub use self::admin::suicide;

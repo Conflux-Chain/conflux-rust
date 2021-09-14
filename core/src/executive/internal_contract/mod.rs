@@ -11,7 +11,6 @@ mod internal_context;
 pub use self::{
     contracts::InternalContractMap,
     impls::{
-        get_reentrancy_allowance,
         pos::{entries as pos_internal_entries, IndexStatus},
         suicide,
     },

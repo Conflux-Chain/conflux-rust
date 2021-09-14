@@ -7,7 +7,6 @@ mod context;
 mod future;
 #[allow(unused)]
 mod pos;
-mod reentrancy;
 mod sponsor;
 mod staking;
 
@@ -39,7 +38,7 @@ mod macros {
 pub(super) use self::pos::{IncreaseStakeEvent, RegisterEvent, RetireEvent};
 pub use self::{
     admin::AdminControl, context::Context, pos::PoSRegister,
-    reentrancy::AntiReentrancyConfig, sponsor::SponsorWhitelistControl,
+    sponsor::SponsorWhitelistControl,
     staking::Staking,
 };
 
@@ -187,13 +186,14 @@ impl InternalContractMap {
     }
 }
 
-/// All Built-in contracts.
+/// All Built-in contracts. All these addresses will be initialized as an
+/// internal contract in the genesis block of test mode.
 pub fn all_internal_contracts() -> Vec<Box<dyn InternalContractTrait>> {
     vec![
         Box::new(AdminControl::instance()),
         Box::new(Staking::instance()),
         Box::new(SponsorWhitelistControl::instance()),
-        Box::new(AntiReentrancyConfig::instance()),
+        Box::new(future::AntiReentrancyConfig::instance()),
         Box::new(Context::instance()),
         Box::new(PoSRegister::instance()),
     ]

@@ -138,9 +138,7 @@ pub struct Spec {
     /// CIP-64: Get current epoch number through internal contract
     pub cip64: bool,
     /// CIP-71: Configurable anti-reentrancy: if configuration enabled
-    pub cip71a: bool,
-    /// CIP-71: Configurable anti-reentrancy: existing bug fixed
-    pub cip71b: bool,
+    pub cip71: bool,
     /// CIP-72: Accept Ethereum transaction signature
     pub cip72: bool,
     /// CIP-78: Correct `is_sponsored` fields in receipt
@@ -275,8 +273,7 @@ impl Spec {
             cip43_contract: false,
             cip62: false,
             cip64: false,
-            cip71a: false,
-            cip71b: false,
+            cip71: false,
             cip72: false,
             cip78: false,
             cip80: false,
@@ -292,8 +289,7 @@ impl Spec {
             && number < params.transition_numbers.cip43b;
         spec.cip62 = number >= params.transition_numbers.cip62;
         spec.cip64 = number >= params.transition_numbers.cip64;
-        spec.cip71a = number >= params.transition_numbers.cip71a;
-        spec.cip71b = number >= params.transition_numbers.cip71b;
+        spec.cip71 = number >= params.transition_numbers.cip71;
         spec.cip72 = number >= params.transition_numbers.cip72b;
         spec.cip78 = number >= params.transition_numbers.cip78;
         spec.cip80 = number >= params.transition_numbers.cip80;
