@@ -11,7 +11,6 @@ use std::{
 
 use bigdecimal::BigDecimal;
 use clap::crate_version;
-use futures::channel::{mpsc, oneshot};
 use jsonrpc_core::{
     Error as RpcError, Result as JsonRpcResult, Value as RpcValue,
 };
@@ -23,18 +22,13 @@ use cfx_addr::Network;
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_types::{Address, H160, H256, H520, U128, U256, U512, U64};
 use cfxcore::{
-    consensus::pos_handler::PosVerifier, pos::mempool::SubmissionStatus,
-    rpc_errors::invalid_params_check, spec::genesis::register_transaction,
-    BlockDataManager, ConsensusGraph, ConsensusGraphTrait, PeerInfo,
-    SharedConsensusGraph, SharedTransactionPool,
+    consensus::pos_handler::PosVerifier, rpc_errors::invalid_params_check,
+    spec::genesis::register_transaction, BlockDataManager, ConsensusGraph,
+    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
-use diem_types::{
-    account_address::{from_consensus_public_key, AccountAddress},
-    transaction::SignedTransaction as DiemSignedTransaction,
-};
-use diemdb::DiemDB;
+use diem_types::account_address::{from_consensus_public_key, AccountAddress};
 use network::{
     node_table::{Node, NodeEndpoint, NodeEntry, NodeId},
     throttling::{self, THROTTLING_SERVICE},
@@ -150,13 +144,6 @@ pub struct RpcImpl {
     tx_pool: SharedTransactionPool,
     accounts: Arc<AccountProvider>,
     pub pos_handler: Arc<PosVerifier>,
-    _pos_tx_sender: Mutex<
-        mpsc::Sender<(
-            DiemSignedTransaction,
-            oneshot::Sender<anyhow::Result<SubmissionStatus>>,
-        )>,
-    >,
-    pub diem_db: Arc<DiemDB>,
 }
 
 impl RpcImpl {
@@ -164,11 +151,6 @@ impl RpcImpl {
         exit: Arc<(Mutex<bool>, Condvar)>, consensus: SharedConsensusGraph,
         network: Arc<NetworkService>, tx_pool: SharedTransactionPool,
         accounts: Arc<AccountProvider>, pos_verifier: Arc<PosVerifier>,
-        pos_tx_sender: mpsc::Sender<(
-            DiemSignedTransaction,
-            oneshot::Sender<anyhow::Result<SubmissionStatus>>,
-        )>,
-        diem_db: Arc<DiemDB>,
     ) -> Self
     {
         let data_man = consensus.get_data_manager().clone();
@@ -181,8 +163,6 @@ impl RpcImpl {
             tx_pool,
             accounts,
             pos_handler: pos_verifier,
-            _pos_tx_sender: Mutex::new(pos_tx_sender),
-            diem_db,
         }
     }
 
@@ -696,6 +676,12 @@ impl RpcImpl {
     }
 
     pub fn pos_retire_self(&self) -> JsonRpcResult<()> { unimplemented!() }
+
+    pub fn pos_start(&self) -> RpcResult<()> {
+        self.pos_handler
+            .initialize(self.consensus.clone().to_arc_consensus())?;
+        Ok(())
+    }
 }
 
 // Debug RPC implementation

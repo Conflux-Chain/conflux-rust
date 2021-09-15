@@ -1,12 +1,10 @@
 use std::{
-    collections::HashMap, env, path::Path, str::FromStr, sync::Arc,
-    time::Duration,
+    collections::HashMap, path::Path, str::FromStr, sync::Arc, time::Duration,
 };
 
 use parking_lot::Mutex;
 use rand_08::{prelude::StdRng, SeedableRng};
 use threadpool::ThreadPool;
-use tokio::runtime;
 
 use cfx_internal_common::ChainIdParamsInner;
 use cfx_parameters::{
@@ -22,19 +20,17 @@ use diem_types::validator_config::{
     ConsensusPrivateKey, ConsensusVRFPrivateKey,
 };
 use primitives::{Block, BlockHeaderBuilder};
-use storage_interface::{mock::MockDbReader, DBReaderForPoW};
 
 use crate::{
     block_data_manager::{BlockDataManager, DataManagerConfiguration, DbType},
     cache_config::CacheConfig,
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
-        pos_handler::{PosConfiguration, PosConnection, PosVerifier},
+        pos_handler::{PosConfiguration, PosVerifier},
         ConsensusConfig, ConsensusInnerConfig,
     },
     db::NUM_COLUMNS,
     machine::new_machine_with_builtin,
-    pos::{consensus::ConsensusDB, pow_handler::PowHandler},
     pow::{self, PowComputer, ProofOfWorkConfig},
     spec::genesis::{genesis_block, GenesisPosState},
     statistics::Statistics,
@@ -152,9 +148,9 @@ pub fn initialize_data_manager(
         machine.clone(),
         false, /* need_to_execute */
         None,
-        &GenesisPosState {
+        &Some(GenesisPosState {
             initial_nodes: vec![],
-        },
+        }),
     ));
 
     let data_man = Arc::new(BlockDataManager::new(
@@ -182,15 +178,16 @@ pub fn initialize_synchronization_graph_with_data_manager(
 {
     let machine = Arc::new(new_machine_with_builtin(Default::default(), vm));
     let mut rng = StdRng::from_seed([0u8; 32]);
-    let pos_connection = PosConnection::new(
-        Arc::new(MockDbReader {}) as Arc<dyn DBReaderForPoW>,
-        Arc::new(ConsensusDB::new(env::temp_dir())),
-    );
     let pos_verifier = Arc::new(PosVerifier::new(
-        pos_connection,
+        None,
+        // These configurations will not be used.
         PosConfiguration {
             bls_key: ConfigKey::new(ConsensusPrivateKey::generate(&mut rng)),
             vrf_key: ConfigKey::new(ConsensusVRFPrivateKey::generate(&mut rng)),
+            diem_conf_path: Default::default(),
+            protocol_conf: Default::default(),
+            pos_initial_nodes_path: "".to_string(),
+            vrf_proposal_threshold: Default::default(),
         },
         u64::MAX,
     ));
@@ -275,13 +272,6 @@ pub fn initialize_synchronization_graph_with_data_manager(
         notifications,
         machine,
         pos_verifier.clone(),
-        Arc::new(PowHandler::new(
-            runtime::Builder::new_multi_thread()
-                .build()
-                .expect("Failed to create Tokio runtime!")
-                .handle()
-                .clone(),
-        )),
     ));
 
     (sync, consensus)

@@ -29,6 +29,7 @@ class P2PTest(ConfluxTestFramework):
         # Make sure that after cleaning the local data for a node,
         # it goes through all the phases to download data as a normal node.
         self.conf_parameters["dev_allow_phase_change_without_peer"] = "false"
+        self.conf_parameters["pos_reference_enable_height"] = 600
 
         self.stop_probability = 0.01
         self.clean_probability = 0.5

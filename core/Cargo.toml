@@ -125,6 +125,7 @@ async-oneshot = "0.5.0"
 proptest = { version = "1.0.0", optional = true }
 proptest-derive = { version = "0.3.0", optional = true }
 diem-temppath = { path = "./src/pos/common/temppath" }
+crash-handler = { path = "../core/src/pos/common/crash-handler" }
 
 [dev-dependencies]
 criterion = "0.3"

@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{H256, U64};
+use cfx_types::U64;
 use serde::{
     de::{Error, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
@@ -15,12 +15,14 @@ pub enum BlockNumber {
     Num(U64),
     /// Earliest block (true genesis)
     Earliest,
-    /// The latest (cur_era_genesis)
-    Latest,
+    /// The latest committed
+    LatestCommitted,
+    /// The latest voted
+    LatestVoted,
 }
 
 impl Default for BlockNumber {
-    fn default() -> Self { BlockNumber::Latest }
+    fn default() -> Self { BlockNumber::LatestCommitted }
 }
 
 impl FromStr for BlockNumber {
@@ -28,7 +30,8 @@ impl FromStr for BlockNumber {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "latest" => Ok(BlockNumber::Latest),
+            "latest_committed" => Ok(BlockNumber::LatestCommitted),
+            "latest_voted" => Ok(BlockNumber::LatestVoted),
             "earliest" => Ok(BlockNumber::Earliest),
             _ if s.starts_with("0x") => u64::from_str_radix(&s[2..], 16)
                 .map(U64::from)
@@ -58,7 +61,12 @@ impl Serialize for BlockNumber {
                 serializer.serialize_str(&format!("0x{:x}", x))
             }
             BlockNumber::Earliest => serializer.serialize_str("earliest"),
-            BlockNumber::Latest => serializer.serialize_str("latest"),
+            BlockNumber::LatestCommitted => {
+                serializer.serialize_str("latest_committed")
+            }
+            BlockNumber::LatestVoted => {
+                serializer.serialize_str("latest_voted")
+            }
         }
     }
 }
@@ -69,72 +77,12 @@ impl<'a> Visitor<'a> for BlockNumberVisitor {
     type Value = BlockNumber;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        write!(formatter, "an block number or 'latest' or 'earliest'")
+        write!(formatter, "an block number or 'latest_committed' or 'latest_voted' or 'earliest'")
     }
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
     where E: Error {
         value.parse().map_err(Error::custom)
-    }
-
-    fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
-    where E: Error {
-        self.visit_str(value.as_ref())
-    }
-}
-
-#[derive(Debug, PartialEq, Clone, Hash, Eq)]
-pub enum BlockHashOrBlockNumber {
-    BlockHash(H256),
-    BlockNumber(BlockNumber),
-}
-
-impl<'a> Deserialize<'a> for BlockHashOrBlockNumber {
-    fn deserialize<D>(
-        deserializer: D,
-    ) -> Result<BlockHashOrBlockNumber, D::Error>
-    where D: Deserializer<'a> {
-        deserializer.deserialize_any(BlockHashOrBlockNumberVisitor)
-    }
-}
-
-impl Serialize for BlockHashOrBlockNumber {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
-        match self {
-            BlockHashOrBlockNumber::BlockNumber(block_number) => {
-                block_number.serialize(serializer)
-            }
-            BlockHashOrBlockNumber::BlockHash(block_hash) => {
-                serializer.serialize_str(&format!("hash:{:#x}", block_hash))
-            }
-        }
-    }
-}
-
-struct BlockHashOrBlockNumberVisitor;
-
-impl<'a> Visitor<'a> for BlockHashOrBlockNumberVisitor {
-    type Value = BlockHashOrBlockNumber;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            formatter,
-            "an block number or 'latest' or 'earliest', or 'hash:<BLOCK_HASH>'"
-        )
-    }
-
-    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-    where E: Error {
-        if value.starts_with("hash:0x") {
-            Ok(BlockHashOrBlockNumber::BlockHash(
-                value[7..].parse().map_err(Error::custom)?,
-            ))
-        } else {
-            value.parse().map_err(Error::custom).map(|block_number| {
-                BlockHashOrBlockNumber::BlockNumber(block_number)
-            })
-        }
     }
 
     fn visit_string<E>(self, value: String) -> Result<Self::Value, E>

@@ -78,6 +78,7 @@ use crate::{
     system_store::SystemStore,
     transaction_store::TransactionStore,
 };
+use diem_types::block_metadata::BlockMetadata;
 
 #[cfg(any(feature = "diemsum"))]
 pub mod diemsum;
@@ -419,6 +420,18 @@ impl DiemDB {
     // TODO check if already have methods can do this
     pub fn get_transaction(&self, version: Version) -> Result<Transaction> {
         self.transaction_store.get_transaction(version)
+    }
+
+    pub fn get_transaction_block_meta(
+        &self, version: Version,
+    ) -> Result<Option<(Version, BlockMetadata)>> {
+        self.transaction_store.get_block_metadata(version)
+    }
+
+    pub fn get_transaction_info(
+        &self, version: u64,
+    ) -> Result<TransactionInfo> {
+        self.ledger_store.get_transaction_info(version)
     }
 
     // ================================== Backup APIs

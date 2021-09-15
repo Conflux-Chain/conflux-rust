@@ -194,14 +194,14 @@ impl ConsensusDB {
     }
 
     /// Get all consensus blocks.
-    fn get_blocks(&self) -> Result<HashMap<HashValue, Block>, DbError> {
+    pub fn get_blocks(&self) -> Result<HashMap<HashValue, Block>, DbError> {
         let mut iter = self.db.iter::<BlockSchema>(ReadOptions::default())?;
         iter.seek_to_first();
         Ok(iter.collect::<Result<HashMap<HashValue, Block>>>()?)
     }
 
     /// Get all consensus QCs.
-    fn get_quorum_certificates(
+    pub fn get_quorum_certificates(
         &self,
     ) -> Result<HashMap<HashValue, QuorumCert>, DbError> {
         let mut iter = self.db.iter::<QCSchema>(ReadOptions::default())?;

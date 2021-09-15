@@ -99,6 +99,8 @@ pub struct Spec {
     pub extcodehash_gas: usize,
     /// Price of SUICIDE
     pub suicide_gas: usize,
+    /// Price for retiring PoS node.
+    pub retire_gas: usize,
     /// Amount of additional gas to pay when SUICIDE credits a non-existant
     /// account
     pub suicide_to_new_account_cost: usize,
@@ -128,14 +130,15 @@ pub struct Spec {
     pub contract_start_nonce: U256,
     /// Start nonce for a new account
     pub account_start_nonce: U256,
+    /// CIP-43: Introduce Finality via Voting Among Staked
+    pub cip43_init: bool,
+    pub cip43_contract: bool,
     /// CIP-62: Enable EC-related builtin contract
     pub cip62: bool,
     /// CIP-64: Get current epoch number through internal contract
     pub cip64: bool,
     /// CIP-71: Configurable anti-reentrancy: if configuration enabled
-    pub cip71a: bool,
-    /// CIP-71: Configurable anti-reentrancy: existing bug fixed
-    pub cip71b: bool,
+    pub cip71: bool,
     /// CIP-72: Accept Ethereum transaction signature
     pub cip72: bool,
     /// CIP-78: Correct `is_sponsored` fields in receipt
@@ -253,6 +256,7 @@ impl Spec {
             extcodehash_gas: 400,
             balance_gas: 400,
             suicide_gas: 5000,
+            retire_gas: 5_000_000,
             suicide_to_new_account_cost: 25000,
             sub_gas_cap_divisor: Some(64),
             no_empty: true,
@@ -265,10 +269,11 @@ impl Spec {
             kill_dust: CleanDustMode::Off,
             keep_unsigned_nonce: false,
             wasm: None,
+            cip43_init: false,
+            cip43_contract: false,
             cip62: false,
             cip64: false,
-            cip71a: false,
-            cip71b: false,
+            cip71: false,
             cip72: false,
             cip78: false,
             cip80: false,
@@ -279,10 +284,12 @@ impl Spec {
         params: &CommonParams, number: BlockNumber,
     ) -> Spec {
         let mut spec = Self::genesis_spec();
+        spec.cip43_contract = number >= params.transition_numbers.cip43a;
+        spec.cip43_init = number >= params.transition_numbers.cip43a
+            && number < params.transition_numbers.cip43b;
         spec.cip62 = number >= params.transition_numbers.cip62;
         spec.cip64 = number >= params.transition_numbers.cip64;
-        spec.cip71a = number >= params.transition_numbers.cip71a;
-        spec.cip71b = number >= params.transition_numbers.cip71b;
+        spec.cip71 = number >= params.transition_numbers.cip71;
         spec.cip72 = number >= params.transition_numbers.cip72b;
         spec.cip78 = number >= params.transition_numbers.cip78;
         spec.cip80 = number >= params.transition_numbers.cip80;

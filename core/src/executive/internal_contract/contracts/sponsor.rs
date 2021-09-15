@@ -10,7 +10,6 @@ use crate::{
     vm,
 };
 use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
-use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{Address, U256};
 
 make_solidity_contract! {
@@ -102,11 +101,11 @@ impl_function_type!(AddPrivilege, "non_payable_write");
 
 impl UpfrontPaymentTrait for AddPrivilege {
     fn upfront_gas_payment(
-        &self, input: &Vec<Address>, _: &ActionParams, spec: &Spec,
-        _: &dyn StateOpsTrait,
+        &self, input: &Vec<Address>, _: &ActionParams,
+        context: &InternalRefContext,
     ) -> U256
     {
-        U256::from(spec.sstore_reset_gas) * input.len()
+        U256::from(context.spec.sstore_reset_gas) * input.len()
     }
 }
 
@@ -134,11 +133,11 @@ impl_function_type!(RemovePrivilege, "non_payable_write");
 
 impl UpfrontPaymentTrait for RemovePrivilege {
     fn upfront_gas_payment(
-        &self, input: &Vec<Address>, _: &ActionParams, spec: &Spec,
-        _: &dyn StateOpsTrait,
+        &self, input: &Vec<Address>, _: &ActionParams,
+        context: &InternalRefContext,
     ) -> U256
     {
-        U256::from(spec.sstore_reset_gas) * input.len()
+        U256::from(context.spec.sstore_reset_gas) * input.len()
     }
 }
 
@@ -293,10 +292,10 @@ impl_function_type!(AddPrivilegeByAdmin, "non_payable_write");
 impl UpfrontPaymentTrait for AddPrivilegeByAdmin {
     fn upfront_gas_payment(
         &self, (_contract, addresses): &(Address, Vec<Address>),
-        _: &ActionParams, spec: &Spec, _: &dyn StateOpsTrait,
+        _: &ActionParams, context: &InternalRefContext,
     ) -> U256
     {
-        U256::from(spec.sstore_reset_gas) * addresses.len()
+        U256::from(context.spec.sstore_reset_gas) * addresses.len()
     }
 }
 
@@ -324,10 +323,10 @@ impl_function_type!(RemovePrivilegeByAdmin, "non_payable_write");
 impl UpfrontPaymentTrait for RemovePrivilegeByAdmin {
     fn upfront_gas_payment(
         &self, (_contract, addresses): &(Address, Vec<Address>),
-        _: &ActionParams, spec: &Spec, _: &dyn StateOpsTrait,
+        _: &ActionParams, context: &InternalRefContext,
     ) -> U256
     {
-        U256::from(spec.sstore_reset_gas) * addresses.len()
+        U256::from(context.spec.sstore_reset_gas) * addresses.len()
     }
 }
 

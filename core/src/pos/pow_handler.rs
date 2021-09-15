@@ -14,7 +14,10 @@ use futures::channel::oneshot;
 use parking_lot::RwLock;
 use pow_types::{PowInterface, StakingEvent};
 use primitives::filter::{LogFilter, LogFilterParams};
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, Weak},
+    time::Duration,
+};
 use tokio::runtime::Handle;
 
 // FIXME(lpl): Decide the value.
@@ -22,7 +25,7 @@ pub const POS_TERM_EPOCHS: u64 = 50;
 
 pub struct PowHandler {
     executor: Handle,
-    pow_consensus: RwLock<Option<Arc<ConsensusGraph>>>,
+    pow_consensus: RwLock<Option<Weak<ConsensusGraph>>>,
 }
 
 impl PowHandler {
@@ -34,15 +37,15 @@ impl PowHandler {
     }
 
     pub fn initialize(&self, pow_consensus: Arc<ConsensusGraph>) {
-        *self.pow_consensus.write() = Some(pow_consensus);
+        *self.pow_consensus.write() = Some(Arc::downgrade(&pow_consensus));
     }
 
     pub fn stop(&self) {
         let pow_consensus = &mut *self.pow_consensus.write();
         if pow_consensus.is_some() {
-            info!(
-                "Stop PowHandler: current consensus strong_count={}",
-                Arc::strong_count(pow_consensus.as_ref().unwrap())
+            debug!(
+                "Consensus ref count:{}",
+                Weak::strong_count(pow_consensus.as_ref().unwrap())
             );
             *pow_consensus = None;
         }
@@ -116,7 +119,8 @@ impl PowInterface for PowHandler {
     async fn next_pivot_decision(
         &self, parent_decision: H256,
     ) -> Option<(u64, H256)> {
-        let pow_consensus = self.pow_consensus.read().clone();
+        let pow_consensus =
+            self.pow_consensus.read().clone().and_then(|c| c.upgrade());
         if pow_consensus.is_none() {
             return None;
         }
@@ -135,7 +139,8 @@ impl PowInterface for PowHandler {
     fn validate_proposal_pivot_decision(
         &self, parent_decision: H256, me_decision: H256,
     ) -> bool {
-        let pow_consensus = self.pow_consensus.read().clone();
+        let pow_consensus =
+            self.pow_consensus.read().clone().and_then(|c| c.upgrade());
         if pow_consensus.is_none() {
             return true;
         }
@@ -157,7 +162,8 @@ impl PowInterface for PowHandler {
     fn get_staking_events(
         &self, parent_decision: H256, me_decision: H256,
     ) -> Result<Vec<StakingEvent>> {
-        let pow_consensus = self.pow_consensus.read().clone();
+        let pow_consensus =
+            self.pow_consensus.read().clone().and_then(|c| c.upgrade());
         if pow_consensus.is_none() {
             // This case will be reached during pos recovery.
             bail!("PoW consensus not initialized");
@@ -167,6 +173,15 @@ impl PowInterface for PowHandler {
             parent_decision, me_decision
         );
         let pow_consensus = pow_consensus.unwrap();
+        if parent_decision == pow_consensus.data_man.true_genesis.hash() {
+            // `me_decision` is the first actual pow_decision. It may be far
+            // from genesis, so getting all event can be slow or
+            // even unavailable. We just drop all events before this
+            // first pow_decision. And in normal cases, these events
+            // have been processed to produce the PoS genesis, so they should
+            // not be packed again.
+            return Ok(vec![]);
+        }
         Self::get_staking_events_impl(
             pow_consensus,
             parent_decision,
@@ -189,6 +204,8 @@ impl PowInterface for PowHandler {
                     .pow_consensus
                     .read()
                     .as_ref()
+                    .unwrap()
+                    .upgrade()
                     .unwrap()
                     .inner
                     .read()

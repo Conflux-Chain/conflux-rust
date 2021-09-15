@@ -44,16 +44,17 @@ class InvalidMessageTest(ConfluxTestFramework):
         # self.nodes[0].p2p.send_packet(0, b'')
         # self.nodes[0].p2p.send_packet(0xff, b'')
         # self.nodes[0].p2p.send_packet(PACKET_PROTOCOL, b'')
+        block_hash = decode_hex(self.nodes[0].generate_empty_blocks(1)[0])
         wait = [True]
 
         h = WaitHandler(self.nodes[0].p2p, GET_BLOCK_HEADERS_RESPONSE)
-        self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hashes=[self.nodes[0].p2p.genesis]))
+        self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hashes=[block_hash]))
         h.wait()
 
         def assert_length(_node, msg):
             assert_equal(len(msg.headers), 1)
         h = WaitHandler(self.nodes[0].p2p, GET_BLOCK_HEADERS_RESPONSE, assert_length)
-        self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hashes=[self.nodes[0].p2p.genesis]))
+        self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hashes=[block_hash]))
         h.wait()
         self.reconnect(self.nodes[0])
 

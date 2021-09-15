@@ -15,6 +15,8 @@ use std::{
     sync::Arc,
 };
 
+const HEADER_LIST_MIN_LEN: usize = 13;
+
 #[derive(Clone, Debug, Eq)]
 pub struct BlockHeaderRlpPart {
     /// Parent hash.
@@ -202,12 +204,9 @@ impl BlockHeader {
     /// Place this header(except nonce) into an RLP stream `stream`.
     fn stream_rlp_without_nonce(&self, stream: &mut RlpStream) {
         let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
-        // FIXME(lpl): Handle hard fork.
-        let list_len = if self.custom.is_empty() {
-            14
-        } else {
-            14 + self.custom.len()
-        };
+        let list_len = HEADER_LIST_MIN_LEN
+            + self.pos_reference.is_some() as usize
+            + self.custom.len();
         stream
             .begin_list(list_len)
             .append(&self.parent_hash)
@@ -222,25 +221,23 @@ impl BlockHeader {
             .append(&self.difficulty)
             .append(&adaptive_n)
             .append(&self.gas_limit)
-            .append_list(&self.referee_hashes)
-            .append(&self.pos_reference);
+            .append_list(&self.referee_hashes);
+        if self.pos_reference.is_some() {
+            stream.append(&self.pos_reference);
+        }
 
-        if list_len > 14 {
-            for b in &self.custom {
-                stream.append_raw(b, 1);
-            }
+        for b in &self.custom {
+            stream.append_raw(b, 1);
         }
     }
 
     /// Place this header into an RLP stream `stream`.
     fn stream_rlp(&self, stream: &mut RlpStream) {
         let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
-        // FIXME(lpl): Handle hard fork.
-        let list_len = if self.custom.is_empty() {
-            15
-        } else {
-            15 + self.custom.len()
-        };
+        let list_len = HEADER_LIST_MIN_LEN
+            + 1
+            + self.pos_reference.is_some() as usize
+            + self.custom.len();
         stream
             .begin_list(list_len)
             .append(&self.parent_hash)
@@ -256,24 +253,22 @@ impl BlockHeader {
             .append(&adaptive_n)
             .append(&self.gas_limit)
             .append_list(&self.referee_hashes)
-            .append(&self.nonce)
-            .append(&self.pos_reference);
-        if list_len > 15 {
-            for b in &self.custom {
-                stream.append_raw(b, 1);
-            }
+            .append(&self.nonce);
+        if self.pos_reference.is_some() {
+            stream.append(&self.pos_reference);
+        }
+        for b in &self.custom {
+            stream.append_raw(b, 1);
         }
     }
 
     /// Place this header and its `pow_hash` into an RLP stream `stream`.
     pub fn stream_rlp_with_pow_hash(&self, stream: &mut RlpStream) {
         let adaptive_n = if self.adaptive { 1 as u8 } else { 0 as u8 };
-        // FIXME(lpl): Handle hard fork.
-        let list_len = if self.custom.is_empty() {
-            16
-        } else {
-            16 + self.custom.len()
-        };
+        let list_len = HEADER_LIST_MIN_LEN
+            + 2
+            + self.pos_reference.is_some() as usize
+            + self.custom.len();
         stream
             .begin_list(list_len)
             .append(&self.parent_hash)
@@ -290,15 +285,15 @@ impl BlockHeader {
             .append(&self.gas_limit)
             .append_list(&self.referee_hashes)
             .append(&self.nonce)
-            .append(&self.pos_reference)
             // Just encode the Option for future compatibility.
             // It should always be Some when it is being inserted to db.
             .append(&self.pow_hash);
+        if self.pos_reference.is_some() {
+            stream.append(&self.pos_reference);
+        }
 
-        if list_len > 16 {
-            for b in &self.custom {
-                stream.append_raw(b, 1);
-            }
+        for b in &self.custom {
+            stream.append_raw(b, 1);
         }
     }
 
@@ -320,11 +315,13 @@ impl BlockHeader {
             referee_hashes: r.list_at(12)?,
             custom: vec![],
             nonce: r.val_at(13)?,
-            pos_reference: r.val_at(14)?,
+            pos_reference: r.val_at(15).unwrap_or(None),
         };
-        let pow_hash = r.val_at(15)?;
+        let pow_hash = r.val_at(14)?;
 
-        for i in 16..r.item_count()? {
+        for i in
+            (15 + rlp_part.pos_reference.is_some() as usize)..r.item_count()?
+        {
             rlp_part.custom.push(r.at(i)?.as_raw().to_vec())
         }
 
@@ -578,9 +575,11 @@ impl Decodable for BlockHeader {
             referee_hashes: r.list_at(12)?,
             custom: vec![],
             nonce: r.val_at(13)?,
-            pos_reference: r.val_at(14)?,
+            pos_reference: r.val_at(14).unwrap_or(None),
         };
-        for i in 15..r.item_count()? {
+        for i in
+            (14 + rlp_part.pos_reference.is_some() as usize)..r.item_count()?
+        {
             rlp_part.custom.push(r.at(i)?.as_raw().to_vec())
         }
 

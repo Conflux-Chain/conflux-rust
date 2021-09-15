@@ -3,9 +3,9 @@ use cfx_types::U64;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NodeLockStatus {
-    pub in_queue: U64,
+    pub in_queue: Vec<(U64, U64)>,
     pub locked: U64,
-    pub out_queue: U64,
+    pub out_queue: Vec<(U64, U64)>,
     pub unlocked: U64,
 
     // Equals to the summation of in_queue + locked

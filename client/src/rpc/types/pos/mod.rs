@@ -5,6 +5,7 @@
 mod account;
 mod block;
 mod block_number;
+mod committee;
 mod decision;
 mod node_lock_status;
 mod status;
@@ -14,8 +15,9 @@ pub use self::{
     account::Account,
     block::{Block, BlockTransactions, Signature},
     block_number::BlockNumber,
+    committee::{CommitteeState, NodeVotingPower, RpcCommittee, RpcTermData},
     decision::Decision,
     node_lock_status::NodeLockStatus,
     status::Status,
-    transaction::Transaction,
+    transaction::{RpcTransactionStatus, Transaction},
 };

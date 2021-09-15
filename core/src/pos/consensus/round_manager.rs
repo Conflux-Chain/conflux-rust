@@ -320,7 +320,7 @@ impl RoundManager {
                     self.generate_proposal(new_round_event).await?,
                 ));
                 let mut network = self.network.clone();
-                network.broadcast(proposal_msg).await;
+                network.broadcast(proposal_msg, vec![]).await;
                 counters::PROPOSALS_COUNT.inc();
             }
         }
@@ -502,10 +502,13 @@ impl RoundManager {
                 // because we only broadcast a proposal when we receive it for
                 // the first time.
                 // TODO(lpl): Do not send to the sender and the original author.
+                let exclude =
+                    vec![proposal_msg.proposer(), self.network.author];
                 self.network
-                    .broadcast(ConsensusMsg::ProposalMsg(Box::new(
-                        proposal_msg,
-                    )))
+                    .broadcast(
+                        ConsensusMsg::ProposalMsg(Box::new(proposal_msg)),
+                        exclude,
+                    )
                     .await;
             }
             Ok(())
@@ -726,9 +729,12 @@ impl RoundManager {
 
         if self.sync_only {
             self.network
-                .broadcast(ConsensusMsg::SyncInfo(Box::new(
-                    self.block_store.sync_info(),
-                )))
+                .broadcast(
+                    ConsensusMsg::SyncInfo(Box::new(
+                        self.block_store.sync_info(),
+                    )),
+                    vec![],
+                )
                 .await;
             bail!(
                 "[RoundManager] sync_only flag is set, broadcasting SyncInfo"
@@ -790,7 +796,7 @@ impl RoundManager {
             timeout_vote,
             self.block_store.sync_info(),
         )));
-        self.network.broadcast(timeout_vote_msg).await;
+        self.network.broadcast(timeout_vote_msg, vec![]).await;
         diem_error!(
             round = round,
             voted = use_last_vote,
@@ -815,7 +821,10 @@ impl RoundManager {
                 self.round_state.record_vote(vote.clone());
                 let vote_msg = VoteMsg::new(vote, self.block_store.sync_info());
                 self.network
-                    .broadcast(ConsensusMsg::VoteMsg(Box::new(vote_msg)))
+                    .broadcast(
+                        ConsensusMsg::VoteMsg(Box::new(vote_msg)),
+                        vec![],
+                    )
                     .await;
                 Ok(())
             } else {
@@ -828,6 +837,7 @@ impl RoundManager {
                 Ok(())
             }
         } else {
+            debug!("No proposal to vote: round={}", round);
             // No proposal to vote. Send Timeout earlier.
             self.process_local_timeout(round).await
         }
@@ -1003,8 +1013,13 @@ impl RoundManager {
                 .await
                 .context("[RoundManager] Add a new vote")?;
             if relay {
+                let exclude =
+                    vec![vote_msg.vote().author(), self.network.author];
                 self.network
-                    .broadcast(ConsensusMsg::VoteMsg(Box::new(vote_msg)))
+                    .broadcast(
+                        ConsensusMsg::VoteMsg(Box::new(vote_msg)),
+                        exclude,
+                    )
                     .await;
             }
         }

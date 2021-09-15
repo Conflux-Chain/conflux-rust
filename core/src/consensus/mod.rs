@@ -380,6 +380,23 @@ impl ConsensusGraph {
     )
     {
         let correct_parent_hash = {
+            if let Some(pos_ref) = &pos_reference {
+                loop {
+                    let inner = self.inner.read();
+                    let pivot_decision = inner
+                        .pos_verifier
+                        .get_pivot_decision(pos_ref)
+                        .expect("pos ref committed");
+                    if inner.pivot_block_processed(&pivot_decision) {
+                        // If this pos ref is processed in catching-up, its
+                        // pivot decision may have not been processed
+                        break;
+                    } else {
+                        warn!("Wait for PoW to catch up with PoS");
+                        sleep(Duration::from_secs(1));
+                    }
+                }
+            }
             // recompute `blame_info` needs locking `self.inner`, so we limit
             // the lock scope here.
             let mut inner = self.inner.write();
@@ -1813,6 +1830,15 @@ impl ConsensusGraphTrait for ConsensusGraph {
                 &self.data_man.get_cur_consensus_era_stable_hash(),
             )
             .expect("stable exists");
+
+        if self.best_epoch_number() < stable_genesis_height {
+            // For an archive node, if its terminals are overwritten with
+            // earlier blocks during recovery, it's possible to
+            // reach here with a pivot chain before stable era
+            // checkpoint. Here we wait for it to recover the missing headers
+            // after the overwritten terminals.
+            return false;
+        }
         if let Some(target_epoch) = self.config.sync_state_starting_epoch {
             if stable_genesis_height < target_epoch {
                 return false;
@@ -1858,4 +1884,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
         self.confirmation_meter.clear();
     }
+
+    fn to_arc_consensus(self: Arc<Self>) -> Arc<ConsensusGraph> { self }
 }

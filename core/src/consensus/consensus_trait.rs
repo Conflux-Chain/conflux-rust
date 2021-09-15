@@ -9,6 +9,7 @@ use crate::{
     state::State,
     statistics::SharedStatistics,
     transaction_pool::SharedTransactionPool,
+    ConsensusGraph,
 };
 use cfx_statedb::StateDb;
 use cfx_types::{H256, U256};
@@ -20,6 +21,8 @@ pub trait ConsensusGraphTrait: Send + Sync {
     type ConsensusConfig;
 
     fn as_any(&self) -> &dyn Any;
+
+    fn to_arc_consensus(self: Arc<Self>) -> Arc<ConsensusGraph>;
 
     fn get_config(&self) -> &Self::ConsensusConfig;
 

@@ -33,7 +33,7 @@ use cfxcore::{
     light_protocol::LightNodeConfiguration,
     machine::Machine,
     pos::pow_handler::POS_TERM_EPOCHS,
-    spec::{genesis::GenesisPosState, CommonParams},
+    spec::CommonParams,
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
     transaction_pool::TxPoolConfig,
@@ -140,7 +140,7 @@ build_config! {
         (tanzanite_transition_height, (u64), TANZANITE_HEIGHT)
         (unnamed_21autumn_transition_number, (Option<u64>), None)
         (unnamed_21autumn_transition_height, (Option<u64>), None)
-        (unnamed_21autumn_cip71_deferred_transition, (Option<u64>), None)
+        (unnamed_21autumn_cip43_init_end, (Option<u64>), None)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
@@ -282,7 +282,7 @@ build_config! {
         (get_logs_epoch_batch_size, (usize), 32)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (persist_tx_index, (bool), false)
-        (persist_block_number_index, (bool), false)
+        (persist_block_number_index, (bool), true)
         (print_memory_usage_period_s, (Option<u64>), None)
         (target_block_gas_limit, (u64), DEFAULT_TARGET_BLOCK_GAS_LIMIT)
         (executive_trace, (bool), false)
@@ -1071,6 +1071,21 @@ impl Configuration {
 
         params.transition_heights.cip40 =
             self.raw_conf.tanzanite_transition_height;
+        params.transition_numbers.cip43a = self
+            .raw_conf
+            .unnamed_21autumn_transition_height
+            .unwrap_or(default_transition_time);
+        if self.is_test_or_dev_mode() {
+            params.transition_numbers.cip43b = self
+                .raw_conf
+                .unnamed_21autumn_cip43_init_end
+                .unwrap_or(u64::MAX);
+        } else {
+            params.transition_numbers.cip43b = self
+                .raw_conf
+                .unnamed_21autumn_cip43_init_end
+                .unwrap_or(params.transition_numbers.cip43a);
+        }
         params.transition_numbers.cip62 = if self.is_test_or_dev_mode() {
             0u64
         } else {
@@ -1080,13 +1095,9 @@ impl Configuration {
             .raw_conf
             .unnamed_21autumn_transition_number
             .unwrap_or(default_transition_time);
-        params.transition_numbers.cip71a = self
+        params.transition_numbers.cip71 = self
             .raw_conf
             .unnamed_21autumn_transition_number
-            .unwrap_or(default_transition_time);
-        params.transition_numbers.cip71b = self
-            .raw_conf
-            .unnamed_21autumn_cip71_deferred_transition
             .unwrap_or(default_transition_time);
         params.transition_numbers.cip72b = self
             .raw_conf
@@ -1183,24 +1194,6 @@ pub fn parse_config_address_string(
             base32_err={:?}
             hex_err={:?}",
                 base32_err, hex_err))
-}
-
-pub fn save_initial_nodes_to_file(path: &str, genesis_nodes: GenesisPosState) {
-    fs::write(path, serde_json::to_string(&genesis_nodes).unwrap()).unwrap();
-}
-
-pub fn read_initial_nodes_from_file(
-    path: &str,
-) -> Result<GenesisPosState, String> {
-    let mut file = File::open(path)
-        .map_err(|e| format!("failed to open initial nodes file: {:?}", e))?;
-
-    let mut nodes_str = String::new();
-    file.read_to_string(&mut nodes_str)
-        .map_err(|e| format!("failed to read initial nodes file: {:?}", e))?;
-
-    serde_json::from_str(nodes_str.as_str())
-        .map_err(|e| format!("failed to parse initial nodes file: {:?}", e))
 }
 
 #[cfg(test)]
