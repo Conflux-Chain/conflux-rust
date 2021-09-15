@@ -330,7 +330,8 @@ impl PosHandler {
                 };
                 current_height += 1;
                 if let Some(qc) = qcs.get(&b.id()) {
-                    rpc_block.next_tx_number = U64::from(qc.commit_info().version());
+                    rpc_block.next_tx_number =
+                        U64::from(qc.commit_info().version());
                     rpc_block.pivot_decision = qc
                         .commit_info()
                         .pivot_decision()

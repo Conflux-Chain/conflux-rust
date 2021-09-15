@@ -1089,9 +1089,10 @@ impl SynchronizationGraph {
                                 // start pos with an era advance.
                                 if !pos_started && pos_verifier.is_enabled_at_height(header.height() + consensus.get_config().inner_conf.era_epoch_count) {
                                     if let Err(e) = pos_verifier.initialize(consensus.clone().to_arc_consensus()) {
-                                        info!("PoS already started before the expected height: e={}", e);
+                                        info!("PoS cannot be started at the expected height: e={}", e);
+                                    } else {
+                                        pos_started = true;
                                     }
-                                    pos_started = true;
                                 }
 
                                 let mut cnt: usize = 0;
