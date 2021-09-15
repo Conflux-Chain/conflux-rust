@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use once_cell::sync::OnceCell;
 
-use cfx_types::H256;
+use cfx_types::{H256, U256};
 use diem_config::{config::NodeConfig, keys::ConfigKey};
 use diem_crypto::HashValue;
 use diem_types::{
@@ -36,10 +36,12 @@ use crate::{
     sync::ProtocolConfiguration,
     ConsensusGraph,
 };
+use diem_config::config::SafetyRulesTestConfig;
+use diem_types::account_address::from_consensus_public_key;
 use diemdb::DiemDB;
 use network::NetworkService;
 use parking_lot::Mutex;
-use std::{fs, io::Read};
+use std::{fs, io::Read, path::PathBuf};
 
 pub type PosVerifier = PosHandler;
 
@@ -152,24 +154,48 @@ impl PosHandler {
         if self.pos.get().is_some() {
             bail!("Initializing already-initialized PosHandler!");
         }
+        let pos_config_path = match self.conf.diem_conf_path.as_ref() {
+            Some(path) => PathBuf::from(path),
+            None => bail!("No pos config!"),
+        };
+
+        let network = self.network.lock().take().expect("pos not initialized");
+        let mut pos_config = NodeConfig::load(pos_config_path)
+            .expect("Failed to load node config");
+        pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
+            author: from_consensus_public_key(
+                &self.conf.bls_key.public_key(),
+                &self.conf.vrf_key.public_key(),
+            ),
+            consensus_key: Some(self.conf.bls_key.clone()),
+            execution_key: Some(self.conf.bls_key.clone()),
+            waypoint: Some(pos_config.base.waypoint.waypoint()),
+        });
+        pos_config.consensus.safety_rules.vrf_private_key =
+            Some(self.conf.vrf_key.clone());
+        pos_config.consensus.safety_rules.export_consensus_key = true;
+        pos_config.consensus.safety_rules.vrf_proposal_threshold =
+            self.conf.vrf_proposal_threshold;
+
         let initial_nodes = read_initial_nodes_from_file(
             self.conf.pos_initial_nodes_path.as_str(),
-        )?;
+        )?
+        .initial_nodes
+        .into_iter()
+        .map(|node| {
+            (NodeID::new(node.bls_key, node.vrf_key), node.voting_power)
+        })
+        .collect();
+        debug!("PoS initial nodes={:?}", initial_nodes);
         let diem_handler = start_pos_consensus(
-            &self.conf.diem_conf,
-            self.network.lock().take().expect("pos not initialized"),
+            &pos_config,
+            network,
             self.conf.protocol_conf.clone(),
             Some((
                 self.conf.bls_key.public_key(),
                 self.conf.vrf_key.public_key(),
             )),
-            initial_nodes
-                .initial_nodes
-                .into_iter()
-                .map(|node| {
-                    (NodeID::new(node.bls_key, node.vrf_key), node.voting_power)
-                })
-                .collect(),
+            initial_nodes,
             self.consensus_network_receiver
                 .lock()
                 .take()
@@ -447,9 +473,10 @@ impl PosInterface for PosConnection {
 pub struct PosConfiguration {
     pub bls_key: ConfigKey<ConsensusPrivateKey>,
     pub vrf_key: ConfigKey<ConsensusVRFPrivateKey>,
-    pub diem_conf: NodeConfig,
+    pub diem_conf_path: Option<String>,
     pub protocol_conf: ProtocolConfiguration,
     pub pos_initial_nodes_path: String,
+    pub vrf_proposal_threshold: U256,
 }
 
 fn diem_hash_to_h256(h: &HashValue) -> PosBlockId { H256::from(h.as_ref()) }
