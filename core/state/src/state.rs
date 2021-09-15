@@ -114,7 +114,7 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     fn distribute_pos_interest<'a>(
         &mut self, _pos_points: Box<dyn Iterator<Item = (&'a H256, u64)> + 'a>,
         _account_start_nonce: U256, _current_block_number: u64,
-    ) -> Result<()>
+    ) -> Result<Vec<(Address, H256, U256)>>
     {
         unimplemented!()
     }

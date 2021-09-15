@@ -317,7 +317,7 @@ impl PosHandler {
 
     pub fn get_reward_distribution_event(
         &self, h: &PosBlockId, parent_pos_ref: &PosBlockId,
-    ) -> Option<Vec<RewardDistributionEvent>> {
+    ) -> Option<Vec<(u64, RewardDistributionEvent)>> {
         if h == parent_pos_ref {
             return None;
         }
@@ -328,7 +328,7 @@ impl PosHandler {
         }
         let mut events = Vec::new();
         for epoch in parent_block.epoch..me_block.epoch {
-            events.push(self.pos().get_reward_event(epoch)?);
+            events.push((epoch, self.pos().get_reward_event(epoch)?));
         }
         Some(events)
     }

@@ -1178,6 +1178,18 @@ impl BlockDataManager {
         )
     }
 
+    pub fn insert_pos_reward(
+        &self, pos_epoch: u64, pos_reward: &PosRewardInfo,
+    ) {
+        self.db_manager.insert_pos_reward(pos_epoch, pos_reward)
+    }
+
+    pub fn pos_reward_by_pos_reward(
+        &self, pos_epoch: u64,
+    ) -> Option<PosRewardInfo> {
+        self.db_manager.pos_reward_by_pos_reward(pos_epoch)
+    }
+
     pub fn remove_epoch_execution_commitment(&self, block_hash: &H256) {
         self.epoch_execution_commitments.write().remove(block_hash);
     }

@@ -1,6 +1,6 @@
 use crate::trace::trace::BlockExecTraces;
 use cfx_internal_common::{DatabaseDecodable, DatabaseEncodable};
-use cfx_types::{Bloom, H256, U256};
+use cfx_types::{Address, Bloom, H256, U256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use primitives::BlockReceipts;
@@ -325,6 +325,41 @@ impl MallocSizeOf for BlamedHeaderVerifiedRoots {
     fn size_of(&self, _ops: &mut MallocSizeOfOps) -> usize { 0 }
 }
 
+#[derive(Clone, Debug, RlpEncodable, RlpDecodable)]
+pub struct PosRewardForAccount {
+    pub address: Address,
+    pub pos_identifier: H256,
+    pub reward: U256,
+}
+
+#[derive(Clone, Debug, RlpEncodable, RlpDecodable)]
+pub struct PosRewardInfo {
+    pub account_rewards: Vec<PosRewardForAccount>,
+    /// The PoW epoch hash where the reward is distributed in its execution.
+    pub execution_epoch_hash: H256,
+}
+
+impl PosRewardInfo {
+    pub fn new(
+        account_reward_list: Vec<(Address, H256, U256)>,
+        execution_epoch_hash: H256,
+    ) -> Self
+    {
+        let account_rewards = account_reward_list
+            .into_iter()
+            .map(|(address, pos_identifier, reward)| PosRewardForAccount {
+                address,
+                pos_identifier,
+                reward,
+            })
+            .collect();
+        Self {
+            account_rewards,
+            execution_epoch_hash,
+        }
+    }
+}
+
 pub fn db_encode_list<T>(list: &[T]) -> Vec<u8>
 where T: DatabaseEncodable {
     let mut rlp_stream = RlpStream::new();
@@ -351,3 +386,4 @@ impl_db_encoding_as_rlp!(CheckpointHashes);
 impl_db_encoding_as_rlp!(EpochExecutionContext);
 impl_db_encoding_as_rlp!(BlockRewardResult);
 impl_db_encoding_as_rlp!(BlamedHeaderVerifiedRoots);
+impl_db_encoding_as_rlp!(PosRewardInfo);
