@@ -152,16 +152,26 @@ impl PosHandler {
         &self, consensus: Arc<ConsensusGraph>,
     ) -> Result<(), String> {
         if self.pos.get().is_some() {
-            bail!("Initializing already-initialized PosHandler!");
+            warn!("Initializing already-initialized PosHandler!");
+            return Ok(());
         }
         let pos_config_path = match self.conf.diem_conf_path.as_ref() {
             Some(path) => PathBuf::from(path),
             None => bail!("No pos config!"),
         };
 
-        let network = self.network.lock().take().expect("pos not initialized");
         let mut pos_config = NodeConfig::load(pos_config_path)
-            .expect("Failed to load node config");
+            .map_err(|e| format!("Failed to load node config: e={:?}", e))?;
+        let initial_nodes = read_initial_nodes_from_file(
+            self.conf.pos_initial_nodes_path.as_str(),
+        )?
+        .initial_nodes
+        .into_iter()
+        .map(|node| {
+            (NodeID::new(node.bls_key, node.vrf_key), node.voting_power)
+        })
+        .collect();
+        let network = self.network.lock().take().expect("pos not initialized");
         pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
             author: from_consensus_public_key(
                 &self.conf.bls_key.public_key(),
@@ -177,15 +187,6 @@ impl PosHandler {
         pos_config.consensus.safety_rules.vrf_proposal_threshold =
             self.conf.vrf_proposal_threshold;
 
-        let initial_nodes = read_initial_nodes_from_file(
-            self.conf.pos_initial_nodes_path.as_str(),
-        )?
-        .initial_nodes
-        .into_iter()
-        .map(|node| {
-            (NodeID::new(node.bls_key, node.vrf_key), node.voting_power)
-        })
-        .collect();
         debug!("PoS initial nodes={:?}", initial_nodes);
         let diem_handler = start_pos_consensus(
             &pos_config,
