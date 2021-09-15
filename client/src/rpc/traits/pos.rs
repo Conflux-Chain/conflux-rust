@@ -35,9 +35,9 @@ pub trait Pos {
         &self, number: BlockNumber,
     ) -> JsonRpcResult<Option<Block>>;
 
-    #[rpc(name = "pos_getTransactionByVersion")]
-    fn pos_transaction_by_version(
-        &self, version: U64,
+    #[rpc(name = "pos_getTransactionByNumber")]
+    fn pos_transaction_by_number(
+        &self, number: U64,
     ) -> JsonRpcResult<Option<Transaction>>;
 
     // debug rpc

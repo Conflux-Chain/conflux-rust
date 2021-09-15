@@ -9,7 +9,7 @@ use serde_derive::Serialize;
 #[serde(rename_all = "camelCase")]
 pub struct Status {
     ///
-    pub block_number: U64,
+    pub latest_committed: U64,
     ///
     pub epoch: U64,
     ///
@@ -22,7 +22,7 @@ impl Default for Status {
     fn default() -> Status {
         Status {
             epoch: U64::default(),
-            block_number: U64::default(),
+            latest_committed: U64::default(),
             pivot_decision: U64::default(),
             latest_voted: None,
         }

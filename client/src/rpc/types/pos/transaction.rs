@@ -15,8 +15,8 @@ pub struct Transaction {
     pub hash: H256,
     pub from: H256,
     pub block_hash: Option<H256>,
-    pub version: U64,
-    pub payload: TransactionPayload,
+    pub number: U64,
+    pub payload: Option<TransactionPayload>,
     pub status: Option<RpcTransactionStatus>,
 }
 
