@@ -241,14 +241,12 @@ pub(crate) async fn process_incoming_transactions(
             if let Some(validation_result) = &validation_results[idx] {
                 match validation_result.status() {
                     None => {
-                        let gas_amount = transaction.max_gas_amount();
                         let ranking_score = validation_result.score();
                         let governance_role =
                             validation_result.governance_role();
                         diem_debug!("process_incoming_transaction: add_txn");
                         let mempool_status = mempool.add_txn(
                             transaction.clone(),
-                            gas_amount,
                             ranking_score,
                             timeline_state,
                             governance_role,

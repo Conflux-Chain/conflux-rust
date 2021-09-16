@@ -370,7 +370,6 @@ impl RoundManager {
         // so we do not need to persist this signing event.
         let raw_tx = RawTransaction::new_pivot_decision(
             proposal_generator.author(),
-            0,
             PivotBlockDecision {
                 block_hash: pivot_decision.1,
                 height: pivot_decision.0,
@@ -410,7 +409,6 @@ impl RoundManager {
             };
             let raw_tx = RawTransaction::new_election(
                 author,
-                0,
                 election_payload,
                 ChainId::default(), // FIXME(lpl): Set chain id.
             );
@@ -1114,7 +1112,6 @@ impl RoundManager {
                         };
                         let raw_tx = RawTransaction::new_dispute(
                             proposal_generator.author(),
-                            0,
                             dispute_payload,
                         );
                         let signed_tx = raw_tx

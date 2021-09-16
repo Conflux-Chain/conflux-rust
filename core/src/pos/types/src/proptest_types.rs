@@ -361,8 +361,7 @@ impl RawTransaction {
 }
 
 fn new_raw_transaction(
-    sender: AccountAddress, sequence_number: u64, payload: TransactionPayload,
-    max_gas_amount: u64, gas_unit_price: u64, gas_currency_code: String,
+    sender: AccountAddress, payload: TransactionPayload,
     expiration_time_secs: u64,
 ) -> RawTransaction
 {
@@ -370,32 +369,20 @@ fn new_raw_transaction(
     match payload {
         TransactionPayload::Module(module) => RawTransaction::new_module(
             sender,
-            sequence_number,
             module,
-            max_gas_amount,
-            gas_unit_price,
-            gas_currency_code,
             expiration_time_secs,
             chain_id,
         ),
         TransactionPayload::Script(script) => RawTransaction::new_script(
             sender,
-            sequence_number,
             script,
-            max_gas_amount,
-            gas_unit_price,
-            gas_currency_code,
             expiration_time_secs,
             chain_id,
         ),
         TransactionPayload::ScriptFunction(script_fn) => {
             RawTransaction::new_script_function(
                 sender,
-                sequence_number,
                 script_fn,
-                max_gas_amount,
-                gas_unit_price,
-                gas_currency_code,
                 expiration_time_secs,
                 chain_id,
             )
@@ -403,72 +390,41 @@ fn new_raw_transaction(
         TransactionPayload::WriteSet(WriteSetPayload::Direct(write_set)) => {
             // It's a bit unfortunate that max_gas_amount etc is generated but
             // not used, but it isn't a huge deal.
-            RawTransaction::new_change_set(
-                sender,
-                sequence_number,
-                write_set,
-                chain_id,
-            )
+            RawTransaction::new_change_set(sender, write_set, chain_id)
         }
         TransactionPayload::WriteSet(WriteSetPayload::Script {
             execute_as: signer,
             script,
         }) => RawTransaction::new_writeset_script(
-            sender,
-            sequence_number,
-            script,
-            signer,
-            chain_id,
+            sender, script, signer, chain_id,
         ),
         TransactionPayload::Election(election_payload) => {
-            RawTransaction::new_election(
-                sender,
-                sequence_number,
-                election_payload,
-                chain_id,
-            )
+            RawTransaction::new_election(sender, election_payload, chain_id)
         }
         TransactionPayload::Retire(retire_payload) => {
-            RawTransaction::new_retire(sender, sequence_number, retire_payload)
+            RawTransaction::new_retire(sender, retire_payload)
         }
         TransactionPayload::Register(register_payload) => RawTransaction::new(
             sender,
-            sequence_number,
             TransactionPayload::Register(register_payload),
             0,
-            0,
-            XUS_NAME.to_owned(),
-            u64::max_value(),
             chain_id,
         ),
         TransactionPayload::UpdateVotingPower(update_voting_power_payload) => {
             RawTransaction::new(
                 sender,
-                sequence_number,
                 TransactionPayload::UpdateVotingPower(
                     update_voting_power_payload,
                 ),
                 0,
-                0,
-                XUS_NAME.to_owned(),
-                u64::max_value(),
                 chain_id,
             )
         }
         TransactionPayload::PivotDecision(pivot_decision) => {
-            RawTransaction::new_pivot_decision(
-                sender,
-                sequence_number,
-                pivot_decision,
-                chain_id,
-            )
+            RawTransaction::new_pivot_decision(sender, pivot_decision, chain_id)
         }
         TransactionPayload::Dispute(dispute_payload) => {
-            RawTransaction::new_dispute(
-                sender,
-                sequence_number,
-                dispute_payload,
-            )
+            RawTransaction::new_dispute(sender, dispute_payload)
         }
     }
 }
