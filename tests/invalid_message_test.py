@@ -2,6 +2,7 @@
 from rlp.sedes import Binary, BigEndianInt
 
 from conflux import utils, trie
+from conflux.rpc import RpcClient
 from conflux.utils import encode_hex, bytes_to_int, int_to_hex, str_to_bytes
 from test_framework.blocktools import create_block, create_transaction
 from test_framework.test_framework import ConfluxTestFramework
@@ -60,8 +61,10 @@ class InvalidMessageTest(ConfluxTestFramework):
 
     def _test_new_block(self):
         self.log.info("Test New Block")
-        genesis = self.nodes[0].p2p.genesis
-        new_block = create_block(genesis, 1)
+        client = RpcClient(self.nodes[0])
+        best_block = client.best_block_hash()
+        best_epoch = client.epoch_number()
+        new_block = create_block(decode_hex(best_block), best_epoch + 1)
         self.send_msg(NewBlock(block=new_block))
         wait_until(lambda: self.nodes[0].best_block_hash() == new_block.hash_hex())
 
@@ -69,7 +72,7 @@ class InvalidMessageTest(ConfluxTestFramework):
         self.nodes[0].p2p.send_protocol_packet(rlp.encode([0]) + int_to_bytes(NEW_BLOCK))
         time.sleep(1)
         assert_equal(self.nodes[0].best_block_hash(), new_block.hash_hex())
-        assert_equal(self.nodes[0].getblockcount(), 2)
+        assert_equal(self.nodes[0].getblockcount(), 3)
         self.reconnect(self.nodes[0])
 
         # Wrong-length parent hash
@@ -77,7 +80,7 @@ class InvalidMessageTest(ConfluxTestFramework):
         self.send_msg(NewBlock(block=invalid_block))
         time.sleep(1)
         assert_equal(self.nodes[0].best_block_hash(), new_block.hash_hex())
-        assert_equal(self.nodes[0].getblockcount(), 2)
+        assert_equal(self.nodes[0].getblockcount(), 3)
         self.reconnect(self.nodes[0])
 
         # Wrong-length author
@@ -85,7 +88,7 @@ class InvalidMessageTest(ConfluxTestFramework):
         self.send_msg(NewBlock(block=invalid_block))
         time.sleep(1)
         assert_equal(self.nodes[0].best_block_hash(), new_block.hash_hex())
-        assert_equal(self.nodes[0].getblockcount(), 2)
+        assert_equal(self.nodes[0].getblockcount(), 3)
         self.reconnect(self.nodes[0])
 
         # Wrong-length root
@@ -93,7 +96,7 @@ class InvalidMessageTest(ConfluxTestFramework):
         self.send_msg(NewBlock(block=invalid_block))
         time.sleep(1)
         assert_equal(self.nodes[0].best_block_hash(), new_block.hash_hex())
-        assert_equal(self.nodes[0].getblockcount(), 2)
+        assert_equal(self.nodes[0].getblockcount(), 3)
         self.reconnect(self.nodes[0])
 
         # Nonexistent parent
@@ -101,7 +104,7 @@ class InvalidMessageTest(ConfluxTestFramework):
         self.send_msg(NewBlock(block=invalid_block))
         time.sleep(1)
         assert_equal(self.nodes[0].best_block_hash(), new_block.hash_hex())
-        assert_equal(self.nodes[0].getblockcount(), 2)
+        assert_equal(self.nodes[0].getblockcount(), 3)
         self.reconnect(self.nodes[0])
 
         # Invalid height
@@ -109,7 +112,7 @@ class InvalidMessageTest(ConfluxTestFramework):
         self.send_msg(NewBlock(block=invalid_block))
         time.sleep(1)
         assert_equal(self.nodes[0].best_block_hash(), new_block.hash_hex())
-        assert_equal(self.nodes[0].getblockcount(), 2)
+        assert_equal(self.nodes[0].getblockcount(), 3)
         self.reconnect(self.nodes[0])
 
         sync_blocks(self.nodes)
