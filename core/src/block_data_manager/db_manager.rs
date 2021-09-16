@@ -3,11 +3,12 @@ use crate::{
         db_decode_list, db_encode_list, BlamedHeaderVerifiedRoots,
         BlockExecutionResultWithEpoch, BlockRewardResult, BlockTracesWithEpoch,
         CheckpointHashes, DataVersionTuple, EpochExecutionContext,
-        LocalBlockInfo,
+        LocalBlockInfo, PosRewardInfo,
     },
     db::{
         COL_BLAMED_HEADER_VERIFIED_ROOTS, COL_BLOCKS, COL_BLOCK_TRACES,
-        COL_EPOCH_NUMBER, COL_HASH_BY_BLOCK_NUMBER, COL_MISC, COL_TX_INDEX,
+        COL_EPOCH_NUMBER, COL_HASH_BY_BLOCK_NUMBER, COL_MISC,
+        COL_REWARD_BY_POS_EPOCH, COL_TX_INDEX,
     },
     pow::PowComputer,
     verification::VerificationConfig,
@@ -48,6 +49,7 @@ enum DBTable {
     BlamedHeaderVerifiedRoots,
     BlockTraces,
     HashByBlockNumber,
+    RewardByPosEpoch,
 }
 
 fn rocks_db_col(table: DBTable) -> u32 {
@@ -59,6 +61,7 @@ fn rocks_db_col(table: DBTable) -> u32 {
         DBTable::BlamedHeaderVerifiedRoots => COL_BLAMED_HEADER_VERIFIED_ROOTS,
         DBTable::BlockTraces => COL_BLOCK_TRACES,
         DBTable::HashByBlockNumber => COL_HASH_BY_BLOCK_NUMBER,
+        DBTable::RewardByPosEpoch => COL_REWARD_BY_POS_EPOCH,
     }
 }
 
@@ -71,6 +74,7 @@ fn sqlite_db_table(table: DBTable) -> String {
         DBTable::BlamedHeaderVerifiedRoots => "blamed_header_verified_roots",
         DBTable::BlockTraces => "block_traces",
         DBTable::HashByBlockNumber => "hash_by_block_number",
+        DBTable::RewardByPosEpoch => "reward_by_pos_epoch",
     }
     .into()
 }
@@ -481,6 +485,25 @@ impl DBManager {
 
     pub fn gc_progress_from_db(&self) -> Option<u64> {
         self.load_decodable_val(DBTable::Misc, GC_PROGRESS_KEY)
+    }
+
+    pub fn insert_pos_reward(
+        &self, pos_epoch: u64, pos_reward: &PosRewardInfo,
+    ) {
+        self.insert_encodable_val(
+            DBTable::RewardByPosEpoch,
+            &pos_epoch.to_be_bytes(),
+            pos_reward,
+        );
+    }
+
+    pub fn pos_reward_by_pos_reward(
+        &self, pos_epoch: u64,
+    ) -> Option<PosRewardInfo> {
+        self.load_decodable_val(
+            DBTable::RewardByPosEpoch,
+            &pos_epoch.to_be_bytes(),
+        )
     }
 
     /// The functions below are private utils used by the DBManager to access

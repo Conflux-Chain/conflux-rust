@@ -362,16 +362,20 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         Ok(())
     }
 
+    /// Distribute PoS interest to the PoS committee according to their reward
+    /// points. Return the rewarded PoW accounts and their rewarded
+    /// interest.
     fn distribute_pos_interest<'a>(
         &mut self, pos_points: Box<dyn Iterator<Item = (&'a H256, u64)> + 'a>,
         account_start_nonce: U256, current_block_number: u64,
-    ) -> DbResult<()>
+    ) -> DbResult<Vec<(Address, H256, U256)>>
     {
         assert!(self.world_statistics_checkpoints.get_mut().is_empty());
 
         let distributable_pos_interest =
             self.world_statistics.distributable_pos_interest;
 
+        let mut account_rewards = Vec::new();
         for (identifier, points) in pos_points {
             let address_value = self.storage_at(
                 &POS_REGISTER_CONTRACT_ADDRESS,
@@ -380,6 +384,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
             let address = Address::from(H256::from_uint(&address_value));
             let interest =
                 distributable_pos_interest * points / MAX_TERM_POINTS;
+            account_rewards.push((address, *identifier, interest));
             self.add_pos_interest(
                 &address,
                 &interest,
@@ -391,7 +396,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         self.world_statistics.distributable_pos_interest = U256::zero();
         self.world_statistics.last_distribute_block = current_block_number;
 
-        Ok(())
+        Ok(account_rewards)
     }
 
     fn new_contract_with_admin(

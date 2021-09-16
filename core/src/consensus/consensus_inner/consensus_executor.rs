@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    block_data_manager::{BlockDataManager, BlockRewardResult},
+    block_data_manager::{BlockDataManager, BlockRewardResult, PosRewardInfo},
     consensus::{
         consensus_inner::{
             consensus_new_block_handler::ConsensusNewBlockHandler,
@@ -1079,16 +1079,16 @@ impl ConsensusExecutionHandler {
                 .pos_verifier
                 .get_disputed_nodes(current_pos_ref, parent_pos_ref)
             {
-                todo!()
+                // FIXME(lpl): Implement dispute.
             }
-            if let Some(reward_event) = self
+            if let Some((pos_epoch, reward_event)) = self
                 .pos_verifier
                 .get_reward_distribution_event(current_pos_ref, parent_pos_ref)
                 .as_ref()
                 .and_then(|x| x.first())
             {
                 debug!("distribute_pos_interest: {:?}", reward_event);
-                state
+                let account_rewards = state
                     .distribute_pos_interest(
                         Box::new(reward_event.rewards()),
                         self.machine
@@ -1097,6 +1097,10 @@ impl ConsensusExecutionHandler {
                         current_block_number,
                     )
                     .expect("db error");
+                self.data_man.insert_pos_reward(
+                    *pos_epoch,
+                    &PosRewardInfo::new(account_rewards, *epoch_hash),
+                )
             }
         }
 
