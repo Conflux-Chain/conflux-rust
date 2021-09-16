@@ -37,7 +37,9 @@ use crate::{
     ConsensusGraph,
 };
 use diem_config::config::SafetyRulesTestConfig;
-use diem_types::account_address::from_consensus_public_key;
+use diem_types::{
+    account_address::from_consensus_public_key, chain_id::ChainId,
+};
 use diemdb::DiemDB;
 use network::NetworkService;
 use parking_lot::Mutex;
@@ -186,6 +188,7 @@ impl PosHandler {
         pos_config.consensus.safety_rules.export_consensus_key = true;
         pos_config.consensus.safety_rules.vrf_proposal_threshold =
             self.conf.vrf_proposal_threshold;
+        pos_config.consensus.chain_id = ChainId::new(network.network_id());
 
         debug!("PoS initial nodes={:?}", initial_nodes);
         let diem_handler = start_pos_consensus(
@@ -317,7 +320,7 @@ impl PosHandler {
 
     pub fn get_reward_distribution_event(
         &self, h: &PosBlockId, parent_pos_ref: &PosBlockId,
-    ) -> Option<Vec<RewardDistributionEvent>> {
+    ) -> Option<Vec<(u64, RewardDistributionEvent)>> {
         if h == parent_pos_ref {
             return None;
         }
@@ -328,7 +331,7 @@ impl PosHandler {
         }
         let mut events = Vec::new();
         for epoch in parent_block.epoch..me_block.epoch {
-            events.push(self.pos().get_reward_event(epoch)?);
+            events.push((epoch, self.pos().get_reward_event(epoch)?));
         }
         Some(events)
     }

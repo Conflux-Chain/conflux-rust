@@ -99,7 +99,7 @@ impl Mempool {
     /// Used to add a transaction to the Mempool.
     /// Performs basic validation: checks account's sequence number.
     pub(crate) fn add_txn(
-        &mut self, txn: SignedTransaction, gas_amount: u64, ranking_score: u64,
+        &mut self, txn: SignedTransaction, ranking_score: u64,
         timeline_state: TimelineState, governance_role: GovernanceRole,
     ) -> MempoolStatus
     {
@@ -116,7 +116,6 @@ impl Mempool {
         let txn_info = MempoolTransaction::new(
             txn,
             expiration_time,
-            gas_amount,
             ranking_score,
             timeline_state,
             governance_role,

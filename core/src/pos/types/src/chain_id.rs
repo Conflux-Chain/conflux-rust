@@ -46,7 +46,7 @@ impl NamedChain {
         Ok(ChainId::new(reserved_chain.id()))
     }
 
-    pub fn id(&self) -> u8 { *self as u8 }
+    pub fn id(&self) -> u64 { *self as u64 }
 
     pub fn from_chain_id(chain_id: &ChainId) -> Result<NamedChain, String> {
         match chain_id.id() {
@@ -63,7 +63,7 @@ impl NamedChain {
 /// Note: u7 in a u8 is uleb-compatible, and any usage of this should be aware
 /// that this field maybe updated to be uleb64 in the future
 #[derive(Clone, Copy, Deserialize, Eq, Hash, PartialEq, Serialize)]
-pub struct ChainId(u8);
+pub struct ChainId(u64);
 
 pub fn deserialize_config_chain_id<'de, D>(
     deserializer: D,
@@ -90,7 +90,7 @@ where D: Deserializer<'de> {
         ) -> std::result::Result<Self::Value, E>
         where E: serde::de::Error {
             Ok(ChainId::new(
-                u8::try_from(value).map_err(serde::de::Error::custom)?,
+                u64::try_from(value).map_err(serde::de::Error::custom)?,
             ))
         }
     }
@@ -141,7 +141,7 @@ impl FromStr for ChainId {
     fn from_str(s: &str) -> Result<Self> {
         ensure!(!s.is_empty(), "Cannot create chain ID from empty string");
         NamedChain::str_to_chain_id(s).or_else(|_err| {
-            let value = s.parse::<u8>()?;
+            let value = s.parse::<u64>()?;
             ensure!(value > 0, "cannot have chain ID with 0");
             Ok(ChainId::new(value))
         })
@@ -149,12 +149,12 @@ impl FromStr for ChainId {
 }
 
 impl ChainId {
-    pub fn new(id: u8) -> Self {
+    pub fn new(id: u64) -> Self {
         assert!(id > 0, "cannot have chain ID with 0");
         Self(id)
     }
 
-    pub fn id(&self) -> u8 { self.0 }
+    pub fn id(&self) -> u64 { self.0 }
 
     pub fn test() -> Self { ChainId::new(NamedChain::TESTING.id()) }
 }

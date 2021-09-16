@@ -62,7 +62,7 @@ pub trait StateOpsTrait {
     fn distribute_pos_interest<'a>(
         &mut self, pos_points: Box<dyn Iterator<Item = (&'a H256, u64)> + 'a>,
         account_start_nonce: U256, current_block_number: u64,
-    ) -> DbResult<()>;
+    ) -> DbResult<Vec<(Address, H256, U256)>>;
 
     fn new_contract_with_admin(
         &mut self, contract: &Address, admin: &Address, balance: U256,
