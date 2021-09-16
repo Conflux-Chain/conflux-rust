@@ -228,6 +228,7 @@ pub struct RoundManager {
         SignedTransaction,
         oneshot::Sender<anyhow::Result<SubmissionStatus>>,
     )>,
+    chain_id: ChainId,
 }
 
 impl RoundManager {
@@ -243,6 +244,7 @@ impl RoundManager {
             SignedTransaction,
             oneshot::Sender<anyhow::Result<SubmissionStatus>>,
         )>,
+        chain_id: ChainId,
     ) -> Self
     {
         counters::OP_COUNTERS
@@ -260,6 +262,7 @@ impl RoundManager {
             storage,
             sync_only,
             tx_sender,
+            chain_id,
         }
     }
 
@@ -374,7 +377,7 @@ impl RoundManager {
                 block_hash: pivot_decision.1,
                 height: pivot_decision.0,
             },
-            ChainId::default(), // FIXME(lpl): Set chain id.
+            self.chain_id,
         );
         let signed_tx =
             raw_tx.sign(&proposal_generator.private_key)?.into_inner();
@@ -410,7 +413,7 @@ impl RoundManager {
             let raw_tx = RawTransaction::new_election(
                 author,
                 election_payload,
-                ChainId::default(), // FIXME(lpl): Set chain id.
+                self.chain_id,
             );
             let signed_tx =
                 raw_tx.sign(&private_key.private_key())?.into_inner();
