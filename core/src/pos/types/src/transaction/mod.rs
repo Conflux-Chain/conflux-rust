@@ -336,7 +336,12 @@ impl RawTransaction {
     pub fn sign(
         self, private_key: &ConsensusPrivateKey,
     ) -> Result<SignatureCheckedTransaction> {
-        let signature = private_key.sign(&self);
+        let signature = match self.payload {
+            TransactionPayload::PivotDecision(ref pivot_decision) => {
+                private_key.sign(pivot_decision)
+            }
+            _ => private_key.sign(&self),
+        };
         let public_key = private_key.public_key();
         Ok(SignatureCheckedTransaction(SignedTransaction::new(
             self, public_key, signature,
@@ -695,7 +700,12 @@ impl SignedTransaction {
     /// Checks that the signature of given transaction. Returns
     /// `Ok(SignatureCheckedTransaction)` if the signature is valid.
     pub fn check_signature(self) -> Result<SignatureCheckedTransaction> {
-        self.authenticator.verify(&self.raw_txn)?;
+        match self.payload() {
+            TransactionPayload::PivotDecision(pivot_decision) => {
+                self.authenticator.verify(pivot_decision)?
+            }
+            _ => self.authenticator.verify(&self.raw_txn)?,
+        }
         Ok(SignatureCheckedTransaction(self))
     }
 

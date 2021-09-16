@@ -933,7 +933,7 @@ impl PosState {
     ) -> Result<()>
     {
         if pivot_decision_tx.height <= self.pivot_decision.height {
-            return Err(anyhow!("Pivot Decision height too small"));
+            return Err(anyhow!(format!("Pivot Decision height too small, found[{}], expect[{}]", pivot_decision_tx.height, self.pivot_decision.height)));
         }
         // TODO(linxi): validate public_keys and signatures
         Ok(())
