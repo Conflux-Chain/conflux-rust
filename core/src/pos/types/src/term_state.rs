@@ -31,9 +31,7 @@ use crate::{
     epoch_state::EpochState,
     event::EventKey,
     transaction::{ElectionPayload, RetirePayload},
-    validator_config::{
-        ConsensusPublicKey, ConsensusSignature, ConsensusVRFPublicKey,
-    },
+    validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
 };
 
@@ -923,19 +921,6 @@ impl PosState {
             bail!("not enough votes for retire");
         }
 
-        Ok(())
-    }
-
-    pub fn validate_pivot_decision(
-        &self, pivot_decision_tx: &PivotBlockDecision,
-        _public_keys: Vec<ConsensusPublicKey>,
-        _signatures: Vec<ConsensusSignature>,
-    ) -> Result<()>
-    {
-        if pivot_decision_tx.height <= self.pivot_decision.height {
-            return Err(anyhow!("Pivot Decision height too small"));
-        }
-        // TODO(linxi): validate public_keys and signatures
         Ok(())
     }
 

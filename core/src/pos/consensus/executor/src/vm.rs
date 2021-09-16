@@ -10,9 +10,8 @@ use diem_types::{
     on_chain_config::{self, new_epoch_event_key, OnChainConfig, ValidatorSet},
     term_state::ROUND_PER_TERM,
     transaction::{
-        authenticator::TransactionAuthenticator, ConflictSignature,
-        DisputePayload, Transaction, TransactionOutput, TransactionPayload,
-        TransactionStatus, WriteSetPayload,
+        ConflictSignature, DisputePayload, Transaction, TransactionOutput,
+        TransactionPayload, TransactionStatus, WriteSetPayload,
     },
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
     vm_status::{KeptVMStatus, StatusCode, VMStatus},
@@ -155,35 +154,6 @@ impl VMExecutor for FakeVM {
                             vec![retire_payload.to_event()]
                         }
                         TransactionPayload::PivotDecision(pivot_decision) => {
-                            if !catch_up_mode {
-                                let authenticator = trans.authenticator();
-                                let (public_keys, signatures) = match authenticator {
-                                    TransactionAuthenticator::MultiBLS{public_keys, signatures} => {
-                                        Ok((public_keys, signatures))
-                                    },
-                                    _ => {
-                                        Err(VMStatus::Error(
-                                            StatusCode::CFX_INVALID_TX,
-                                        ))
-                                    }
-                                }?;
-                                state_view
-                                    .pos_state()
-                                    .validate_pivot_decision(
-                                        pivot_decision,
-                                        public_keys,
-                                        signatures,
-                                    )
-                                    .map_err(|e| {
-                                        diem_error!(
-                                            "pivot decision tx error: {:?}",
-                                            e
-                                        );
-                                        VMStatus::Error(
-                                            StatusCode::CFX_INVALID_TX,
-                                        )
-                                    })?;
-                            }
                             vec![pivot_decision.to_event()]
                         }
                         TransactionPayload::Register(register) => {

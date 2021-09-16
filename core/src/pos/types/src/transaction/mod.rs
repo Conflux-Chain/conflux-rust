@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 pub use change_set::ChangeSet;
 use diem_crypto::{
     hash::{CryptoHash, EventAccumulatorHasher},
+    multi_ed25519::{MultiEd25519PublicKey, MultiEd25519Signature},
     traits::SigningKey,
     HashValue, PrivateKey, VRFProof,
 };
@@ -654,12 +655,12 @@ impl SignedTransaction {
     }
 
     pub fn new_multisig(
-        raw_txn: RawTransaction, public_keys: Vec<ConsensusPublicKey>,
-        signatures: Vec<ConsensusSignature>,
+        raw_txn: RawTransaction, public_key: MultiEd25519PublicKey,
+        signature: MultiEd25519Signature,
     ) -> SignedTransaction
     {
         let authenticator =
-            TransactionAuthenticator::multi_bls(public_keys, signatures);
+            TransactionAuthenticator::multi_ed25519(public_key, signature);
         SignedTransaction {
             raw_txn,
             authenticator,
@@ -669,8 +670,6 @@ impl SignedTransaction {
     pub fn authenticator(&self) -> TransactionAuthenticator {
         self.authenticator.clone()
     }
-
-    pub fn raw_txn(&self) -> RawTransaction { self.raw_txn.clone() }
 
     pub fn hash(&self) -> HashValue { self.raw_txn.hash() }
 

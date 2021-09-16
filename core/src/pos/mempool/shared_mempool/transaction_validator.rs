@@ -1,8 +1,8 @@
 use diem_types::{
     term_state::PosState,
     transaction::{
-        authenticator::TransactionAuthenticator, GovernanceRole,
-        SignedTransaction, TransactionPayload, VMValidatorResult,
+        GovernanceRole, SignedTransaction, TransactionPayload,
+        VMValidatorResult,
     },
 };
 use move_core_types::vm_status::DiscardedVMStatus;
@@ -23,17 +23,6 @@ impl TransactionValidator {
                 0,
                 GovernanceRole::Validator,
             ));
-        }
-
-        match tx.authenticator() {
-            TransactionAuthenticator::BLS { .. } => {}
-            _ => {
-                return Some(VMValidatorResult::new(
-                    Some(DiscardedVMStatus::INVALID_SIGNATURE),
-                    0,
-                    GovernanceRole::Validator,
-                ));
-            }
         }
 
         let result = match tx.payload() {
