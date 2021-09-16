@@ -4,7 +4,7 @@
 // Copyright 2021 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-
+/*
 use crate::pos::consensus::block_storage::{BlockReader, BlockStore};
 use consensus_types::{
     block::{block_test_utils::certificate_for_genesis, Block},
@@ -16,7 +16,6 @@ use consensus_types::{
 use diem_crypto::HashValue;
 use diem_logger::Level;
 use diem_types::{ledger_info::LedgerInfo, validator_signer::ValidatorSigner};
-use pow_types::FakePowHandler;
 use std::{future::Future, sync::Arc, time::Duration};
 use tokio::{runtime, time::timeout};
 
@@ -25,7 +24,7 @@ mod mock_storage;
 #[cfg(any(test, feature = "fuzzing"))]
 mod mock_txn_manager;
 
-use super::util::mock_time_service::SimulatedTimeService;
+use crate::util::mock_time_service::SimulatedTimeService;
 use consensus_types::{
     block::block_test_utils::gen_test_certificate, common::Payload,
 };
@@ -80,7 +79,6 @@ pub fn build_empty_tree() -> Arc<BlockStore> {
         Arc::new(EmptyStateComputer),
         10, // max pruned blocks in mem
         Arc::new(SimulatedTimeService::new()),
-        Arc::new(FakePowHandler {}),
     ))
 }
 
@@ -206,3 +204,4 @@ where F: Future {
         .block_on(async { timeout(TEST_TIMEOUT, f).await })
         .expect("test timed out")
 }
+*/
