@@ -551,7 +551,7 @@ where V: VMExecutor
             ));
         }
 
-        // FIXME(lpl): For genesis.
+        // TODO(lpl): For genesis.
         if next_epoch_state.is_some()
             && next_epoch_state.as_ref().unwrap().epoch == 1
         {
@@ -683,7 +683,7 @@ where V: VMExecutor
             cache.synced_trees().version(),
             cache.synced_trees().state_root(),
             cache.synced_trees().state_tree(),
-            // FIXME(lpl): State sync not used yet.
+            // TODO(lpl): State sync not used yet.
             PosState::new_empty(),
         );
 
