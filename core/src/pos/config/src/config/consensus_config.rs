@@ -6,7 +6,9 @@
 // See http://www.gnu.org/licenses/
 
 use crate::config::SafetyRulesConfig;
-use diem_types::{account_address::AccountAddress, block_info::Round};
+use diem_types::{
+    account_address::AccountAddress, block_info::Round, chain_id::ChainId,
+};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
 
@@ -31,6 +33,8 @@ pub struct ConsensusConfig {
     pub sync_only: bool,
     // how many times to wait for txns from mempool when propose
     pub mempool_poll_count: u64,
+
+    pub chain_id: ChainId,
 }
 
 impl Default for ConsensusConfig {
@@ -48,6 +52,7 @@ impl Default for ConsensusConfig {
             safety_rules: SafetyRulesConfig::default(),
             sync_only: false,
             mempool_poll_count: 1,
+            chain_id: Default::default(),
         }
     }
 }

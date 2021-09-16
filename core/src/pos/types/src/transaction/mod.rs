@@ -39,7 +39,6 @@ pub use transaction_argument::{
 
 use crate::{
     account_address::AccountAddress,
-    account_config::XUS_NAME,
     account_state_blob::AccountStateBlob,
     block_info::PivotBlockDecision,
     block_metadata::BlockMetadata,
@@ -95,24 +94,8 @@ pub struct RawTransaction {
     /// Sender's address.
     sender: AccountAddress,
 
-    /// Sequence number of this transaction. This must match the sequence
-    /// number stored in the sender's account at the time the transaction
-    /// executes.
-    sequence_number: u64,
-
     /// The transaction payload, e.g., a script to execute.
     payload: TransactionPayload,
-
-    /// Maximal total gas to spend for this transaction.
-    max_gas_amount: u64,
-
-    /// Price to be paid per gas unit.
-    gas_unit_price: u64,
-
-    /// The currency code, e.g., "XUS", used to pay for gas. The
-    /// `max_gas_amount` and `gas_unit_price` values refer to units of this
-    /// currency.
-    gas_currency_code: String,
 
     /// Expiration timestamp for this transaction, represented
     /// as seconds from the Unix Epoch. If the current blockchain timestamp
@@ -131,19 +114,13 @@ impl RawTransaction {
     /// It can be either to publish a module, to execute a script, or to issue a
     /// writeset transaction.
     pub fn new(
-        sender: AccountAddress, sequence_number: u64,
-        payload: TransactionPayload, max_gas_amount: u64, gas_unit_price: u64,
-        gas_currency_code: String, expiration_timestamp_secs: u64,
-        chain_id: ChainId,
+        sender: AccountAddress, payload: TransactionPayload,
+        expiration_timestamp_secs: u64, chain_id: ChainId,
     ) -> Self
     {
         RawTransaction {
             sender,
-            sequence_number,
             payload,
-            max_gas_amount,
-            gas_unit_price,
-            gas_currency_code,
             expiration_timestamp_secs,
             chain_id,
         }
@@ -154,18 +131,13 @@ impl RawTransaction {
     /// A script transaction contains only code to execute. No publishing is
     /// allowed in scripts.
     pub fn new_script(
-        sender: AccountAddress, sequence_number: u64, script: Script,
-        max_gas_amount: u64, gas_unit_price: u64, gas_currency_code: String,
-        expiration_timestamp_secs: u64, chain_id: ChainId,
+        sender: AccountAddress, script: Script, expiration_timestamp_secs: u64,
+        chain_id: ChainId,
     ) -> Self
     {
         RawTransaction {
             sender,
-            sequence_number,
             payload: TransactionPayload::Script(script),
-            max_gas_amount,
-            gas_unit_price,
-            gas_currency_code,
             expiration_timestamp_secs,
             chain_id,
         }
@@ -176,19 +148,13 @@ impl RawTransaction {
     /// A script transaction contains only code to execute. No publishing is
     /// allowed in scripts.
     pub fn new_script_function(
-        sender: AccountAddress, sequence_number: u64,
-        script_function: ScriptFunction, max_gas_amount: u64,
-        gas_unit_price: u64, gas_currency_code: String,
+        sender: AccountAddress, script_function: ScriptFunction,
         expiration_timestamp_secs: u64, chain_id: ChainId,
     ) -> Self
     {
         RawTransaction {
             sender,
-            sequence_number,
             payload: TransactionPayload::ScriptFunction(script_function),
-            max_gas_amount,
-            gas_unit_price,
-            gas_currency_code,
             expiration_timestamp_secs,
             chain_id,
         }
@@ -199,52 +165,36 @@ impl RawTransaction {
     /// A module transaction is the only way to publish code. Only one module
     /// per transaction can be published.
     pub fn new_module(
-        sender: AccountAddress, sequence_number: u64, module: Module,
-        max_gas_amount: u64, gas_unit_price: u64, gas_currency_code: String,
-        expiration_timestamp_secs: u64, chain_id: ChainId,
+        sender: AccountAddress, module: Module, expiration_timestamp_secs: u64,
+        chain_id: ChainId,
     ) -> Self
     {
         RawTransaction {
             sender,
-            sequence_number,
             payload: TransactionPayload::Module(module),
-            max_gas_amount,
-            gas_unit_price,
-            gas_currency_code,
             expiration_timestamp_secs,
             chain_id,
         }
     }
 
     pub fn new_write_set(
-        sender: AccountAddress, sequence_number: u64, write_set: WriteSet,
-        chain_id: ChainId,
-    ) -> Self
-    {
+        sender: AccountAddress, write_set: WriteSet, chain_id: ChainId,
+    ) -> Self {
         Self::new_change_set(
             sender,
-            sequence_number,
             ChangeSet::new(write_set, vec![]),
             chain_id,
         )
     }
 
     pub fn new_change_set(
-        sender: AccountAddress, sequence_number: u64, change_set: ChangeSet,
-        chain_id: ChainId,
-    ) -> Self
-    {
+        sender: AccountAddress, change_set: ChangeSet, chain_id: ChainId,
+    ) -> Self {
         RawTransaction {
             sender,
-            sequence_number,
             payload: TransactionPayload::WriteSet(WriteSetPayload::Direct(
                 change_set,
             )),
-            // Since write-set transactions bypass the VM, these fields aren't
-            // relevant.
-            max_gas_amount: 0,
-            gas_unit_price: 0,
-            gas_currency_code: XUS_NAME.to_owned(),
             // Write-set transactions are special and important and shouldn't
             // expire.
             expiration_timestamp_secs: u64::max_value(),
@@ -253,22 +203,16 @@ impl RawTransaction {
     }
 
     pub fn new_writeset_script(
-        sender: AccountAddress, sequence_number: u64, script: Script,
-        signer: AccountAddress, chain_id: ChainId,
+        sender: AccountAddress, script: Script, signer: AccountAddress,
+        chain_id: ChainId,
     ) -> Self
     {
         RawTransaction {
             sender,
-            sequence_number,
             payload: TransactionPayload::WriteSet(WriteSetPayload::Script {
                 execute_as: signer,
                 script,
             }),
-            // Since write-set transactions bypass the VM, these fields aren't
-            // relevant.
-            max_gas_amount: 0,
-            gas_unit_price: 0,
-            gas_currency_code: XUS_NAME.to_owned(),
             // Write-set transactions are special and important and shouldn't
             // expire.
             expiration_timestamp_secs: u64::max_value(),
@@ -277,19 +221,13 @@ impl RawTransaction {
     }
 
     pub fn new_pivot_decision(
-        sender: AccountAddress, sequence_number: u64,
-        pivot_decision: PivotBlockDecision, chain_id: ChainId,
+        sender: AccountAddress, pivot_decision: PivotBlockDecision,
+        chain_id: ChainId,
     ) -> Self
     {
         RawTransaction {
             sender,
-            sequence_number,
             payload: TransactionPayload::PivotDecision(pivot_decision),
-            // Since write-set transactions bypass the VM, these fields aren't
-            // relevant.
-            max_gas_amount: 0,
-            gas_unit_price: 0,
-            gas_currency_code: XUS_NAME.to_owned(),
             // Write-set transactions are special and important and shouldn't
             // expire.
             expiration_timestamp_secs: u64::max_value(),
@@ -298,19 +236,13 @@ impl RawTransaction {
     }
 
     pub fn new_election(
-        sender: AccountAddress, sequence_number: u64,
-        election_payload: ElectionPayload, chain_id: ChainId,
+        sender: AccountAddress, election_payload: ElectionPayload,
+        chain_id: ChainId,
     ) -> Self
     {
         RawTransaction {
             sender,
-            sequence_number,
             payload: TransactionPayload::Election(election_payload),
-            // Since write-set transactions bypass the VM, these fields aren't
-            // relevant.
-            max_gas_amount: 0,
-            gas_unit_price: 0,
-            gas_currency_code: XUS_NAME.to_owned(),
             // Write-set transactions are special and important and shouldn't
             // expire.
             expiration_timestamp_secs: u64::max_value(),
@@ -319,19 +251,11 @@ impl RawTransaction {
     }
 
     pub fn new_dispute(
-        sender: AccountAddress, sequence_number: u64,
-        dispute_payload: DisputePayload,
-    ) -> Self
-    {
+        sender: AccountAddress, dispute_payload: DisputePayload,
+    ) -> Self {
         RawTransaction {
             sender,
-            sequence_number,
             payload: TransactionPayload::Dispute(dispute_payload),
-            // Since write-set transactions bypass the VM, these fields aren't
-            // relevant.
-            max_gas_amount: 0,
-            gas_unit_price: 0,
-            gas_currency_code: XUS_NAME.to_owned(),
             // Write-set transactions are special and important and shouldn't
             // expire.
             expiration_timestamp_secs: u64::max_value(),
@@ -340,19 +264,11 @@ impl RawTransaction {
     }
 
     pub fn new_retire(
-        sender: AccountAddress, sequence_number: u64,
-        retire_payload: RetirePayload,
-    ) -> Self
-    {
+        sender: AccountAddress, retire_payload: RetirePayload,
+    ) -> Self {
         RawTransaction {
             sender,
-            sequence_number,
             payload: TransactionPayload::Retire(retire_payload),
-            // Since write-set transactions bypass the VM, these fields aren't
-            // relevant.
-            max_gas_amount: 0,
-            gas_unit_price: 0,
-            gas_currency_code: XUS_NAME.to_owned(),
             // Write-set transactions are special and important and shouldn't
             // expire.
             expiration_timestamp_secs: u64::max_value(),
@@ -404,13 +320,7 @@ impl RawTransaction {
         };
         Ok(RawTransaction {
             sender,
-            sequence_number: 0,
             payload,
-            // Since write-set transactions bypass the VM, these fields aren't
-            // relevant.
-            max_gas_amount: 0,
-            gas_unit_price: 0,
-            gas_currency_code: XUS_NAME.to_owned(),
             // Write-set transactions are special and important and shouldn't
             // expire.
             expiration_timestamp_secs: u64::max_value(),
@@ -469,25 +379,17 @@ impl RawTransaction {
         format!(
             "RawTransaction {{ \n\
              \tsender: {}, \n\
-             \tsequence_number: {}, \n\
              \tpayload: {{, \n\
              \t\ttransaction: {}, \n\
              \t\targs: [ {} \n\
              \t\t]\n\
              \t}}, \n\
-             \tmax_gas_amount: {}, \n\
-             \tgas_unit_price: {}, \n\
-             \tgas_currency_code: {}, \n\
              \texpiration_timestamp_secs: {:#?}, \n\
              \tchain_id: {},
              }}",
             self.sender,
-            self.sequence_number,
             code,
             f_args,
-            self.max_gas_amount,
-            self.gas_unit_price,
-            self.gas_currency_code,
             self.expiration_timestamp_secs,
             self.chain_id,
         )
@@ -776,17 +678,9 @@ impl SignedTransaction {
 
     pub fn into_raw_transaction(self) -> RawTransaction { self.raw_txn }
 
-    pub fn sequence_number(&self) -> u64 { self.raw_txn.sequence_number }
-
     pub fn chain_id(&self) -> ChainId { self.raw_txn.chain_id }
 
     pub fn payload(&self) -> &TransactionPayload { &self.raw_txn.payload }
-
-    pub fn max_gas_amount(&self) -> u64 { self.raw_txn.max_gas_amount }
-
-    pub fn gas_unit_price(&self) -> u64 { self.raw_txn.gas_unit_price }
-
-    pub fn gas_currency_code(&self) -> &str { &self.raw_txn.gas_currency_code }
 
     pub fn expiration_timestamp_secs(&self) -> u64 {
         self.raw_txn.expiration_timestamp_secs
@@ -854,7 +748,7 @@ impl TransactionWithProof {
     ///      as version and sender.
     pub fn verify_user_txn(
         &self, ledger_info: &LedgerInfo, version: Version,
-        sender: AccountAddress, sequence_number: u64,
+        sender: AccountAddress,
     ) -> Result<()>
     {
         let signed_transaction = self.transaction.as_signed_user_txn()?;
@@ -871,13 +765,6 @@ impl TransactionWithProof {
             signed_transaction.sender(),
             sender,
         );
-        ensure!(
-            signed_transaction.sequence_number() == sequence_number,
-            "Sequence number ({}) not expected ({}).",
-            signed_transaction.sequence_number(),
-            sequence_number,
-        );
-
         let txn_hash = self.transaction.hash();
         ensure!(
             txn_hash == self.proof.transaction_info().transaction_hash,

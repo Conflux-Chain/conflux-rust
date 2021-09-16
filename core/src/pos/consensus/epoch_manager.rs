@@ -483,6 +483,7 @@ impl EpochManager {
             self.storage.clone(),
             self.config.sync_only,
             self.tx_sender.clone(),
+            self.config.chain_id,
         );
         // Only check if we should send election after entering an new epoch.
         if let Err(e) = processor
