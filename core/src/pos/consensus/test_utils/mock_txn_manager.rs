@@ -5,18 +5,22 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::pos::consensus::{
-    error::MempoolError, state_replication::TxnManager,
-    txn_manager::MempoolProxy,
+use crate::pos::{
+    consensus::{
+        error::MempoolError, state_replication::TxnManager,
+        txn_manager::MempoolProxy,
+    },
+    mempool::ConsensusRequest,
 };
 use anyhow::Result;
 use consensus_types::{
     block::{block_test_utils::random_payload, Block},
     common::Payload,
 };
-use diem_mempool::ConsensusRequest;
+use diem_crypto::HashValue;
 use diem_types::{
     transaction::TransactionStatus,
+    validator_verifier::ValidatorVerifier,
     vm_status::{KeptVMStatus, StatusCode},
 };
 use executor_types::StateComputeResult;
@@ -48,7 +52,7 @@ fn mock_transaction_status(count: usize) -> Vec<TransactionStatus> {
     let mut statuses = vec![];
     // generate count + 1 status to mock the block metadata txn in mempool proxy
     for _ in 0..=count {
-        let random_status = match rand::thread_rng().gen_range(0..1000) {
+        let random_status = match rand::thread_rng().gen_range(0, 1000) {
             0 => TransactionStatus::Discard(
                 StatusCode::UNKNOWN_VALIDATION_STATUS,
             ),
@@ -63,8 +67,10 @@ fn mock_transaction_status(count: usize) -> Vec<TransactionStatus> {
 impl TxnManager for MockTransactionManager {
     /// The returned future is fulfilled with the vector of SignedTransactions
     async fn pull_txns(
-        &self, _max_size: u64, _exclude_txns: Vec<&Payload>,
-    ) -> Result<Payload, MempoolError> {
+        &self, _max_size: u64, _exclude_txns: Vec<&Payload>, hash: HashValue,
+        validators: ValidatorVerifier,
+    ) -> Result<Payload, MempoolError>
+    {
         // generate 1k txn is too slow with coverage instrumentation
         Ok(random_payload(10))
     }
@@ -84,6 +90,7 @@ impl TxnManager for MockTransactionManager {
                     block.payload().map_or(0, |txns| txns.len()),
                 ),
                 compute_results.transaction_info_hashes().clone(),
+                None,
             );
             assert!(self
                 .mempool_proxy

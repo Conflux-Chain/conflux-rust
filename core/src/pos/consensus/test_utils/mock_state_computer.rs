@@ -18,6 +18,7 @@ use diem_types::ledger_info::LedgerInfoWithSignatures;
 use executor_types::{Error, StateComputeResult};
 use futures::channel::mpsc;
 use std::{collections::HashMap, sync::Arc};
+use termion::color::*;
 
 pub struct MockStateComputer {
     state_sync_client: mpsc::UnboundedSender<Payload>,
@@ -45,7 +46,7 @@ impl MockStateComputer {
 #[async_trait::async_trait]
 impl StateComputer for MockStateComputer {
     fn compute(
-        &self, block: &Block, _parent_block_id: HashValue,
+        &self, block: &Block, _parent_block_id: HashValue, _catch_up_mode: bool,
     ) -> Result<StateComputeResult, Error> {
         self.block_cache
             .lock()
@@ -59,6 +60,7 @@ impl StateComputer for MockStateComputer {
             None,
             vec![],
             vec![],
+            None,
         );
         Ok(result)
     }
@@ -110,7 +112,9 @@ pub struct EmptyStateComputer;
 impl StateComputer for EmptyStateComputer {
     fn compute(
         &self, _block: &Block, _parent_block_id: HashValue,
-    ) -> Result<StateComputeResult, Error> {
+        _catch_up_mode: bool,
+    ) -> Result<StateComputeResult, Error>
+    {
         Ok(StateComputeResult::new(
             *ACCUMULATOR_PLACEHOLDER_HASH,
             vec![],
@@ -120,6 +124,7 @@ impl StateComputer for EmptyStateComputer {
             None,
             vec![],
             vec![],
+            None,
         ))
     }
 
