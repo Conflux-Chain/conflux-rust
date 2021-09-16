@@ -309,11 +309,7 @@ impl RawTransactionGen {
 
         new_raw_transaction(
             sender_info.address,
-            sequence_number,
             self.payload,
-            self.max_gas_amount,
-            self.gas_unit_price,
-            self.gas_currency_code,
             self.expiration_time_secs,
         )
     }
@@ -346,15 +342,7 @@ impl RawTransaction {
                     gas_currency_code,
                     expiration_time_secs,
                 )| {
-                    new_raw_transaction(
-                        sender,
-                        sequence_number,
-                        payload,
-                        max_gas_amount,
-                        gas_unit_price,
-                        gas_currency_code,
-                        expiration_time_secs,
-                    )
+                    new_raw_transaction(sender, payload, expiration_time_secs)
                 },
             )
     }
