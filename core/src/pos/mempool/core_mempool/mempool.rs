@@ -18,13 +18,16 @@ use crate::pos::mempool::{
     logging::{LogEntry, LogSchema, TxnsLog},
 };
 use diem_config::config::NodeConfig;
-use diem_crypto::HashValue;
+use diem_crypto::{hash::CryptoHash, HashValue};
 use diem_logger::prelude::*;
 use diem_types::{
     account_address::AccountAddress,
     mempool_status::MempoolStatus,
     term_state::PosState,
-    transaction::{GovernanceRole, SignedTransaction, TransactionPayload},
+    transaction::{
+        authenticator::TransactionAuthenticator, GovernanceRole,
+        SignedTransaction, TransactionPayload,
+    },
     validator_verifier::ValidatorVerifier,
 };
 use std::{
@@ -177,10 +180,9 @@ impl Mempool {
             let mut pivot_decision_opt = None;
             for (account, hash) in pivot_decision_set.iter() {
                 if validators.get_public_key(account).is_some() {
-                    if let Some(txn) = self.transactions.get(hash) {
-                        if pivot_decision_opt.is_none() {
+                    if pivot_decision_opt.is_none() {
+                        if let Some(txn) = self.transactions.get(hash) {
                             pivot_decision_opt = Some(txn);
-                            break;
                         }
                     }
                 }
@@ -205,8 +207,36 @@ impl Mempool {
             }
         }
         if let Some(tx) = chosen_pivot_tx {
-            block_log.add(tx.sender(), tx.hash());
-            block.push(tx);
+            let pivot_decision_hash = match tx.payload() {
+                TransactionPayload::PivotDecision(decision) => decision.hash(),
+                _ => unreachable!(),
+            };
+            // aggregate signatures
+            let txn_hashes =
+                self.transactions.get_pivot_decisions(&pivot_decision_hash);
+            let mut public_keys = vec![];
+            let mut signatures = vec![];
+            for hash in &txn_hashes {
+                if let Some(txn) = self.transactions.get(hash) {
+                    match txn.authenticator() {
+                        TransactionAuthenticator::BLS {
+                            public_key,
+                            signature,
+                        } => {
+                            public_keys.push(public_key);
+                            signatures.push(signature);
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+            }
+            let new_tx = SignedTransaction::new_multisig(
+                tx.raw_txn(),
+                public_keys,
+                signatures,
+            );
+            block_log.add(new_tx.sender(), new_tx.hash());
+            block.push(new_tx);
         }
 
         diem_debug!(
