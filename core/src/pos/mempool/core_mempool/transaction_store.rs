@@ -84,6 +84,20 @@ impl TransactionStore {
         None
     }
 
+    /// Fetch pivot decisions by pivot hash.
+    pub(crate) fn get_pivot_decisions(
+        &self, hash: &HashValue,
+    ) -> Vec<HashValue> {
+        if let Some(decisions) = self.pivot_decisions.get(hash) {
+            decisions
+                .iter()
+                .map(|(_, tx_hash)| tx_hash.clone())
+                .collect::<_>()
+        } else {
+            vec![]
+        }
+    }
+
     /// Insert transaction into TransactionStore. Performs validation checks and
     /// updates indexes.
     pub(crate) fn insert(
