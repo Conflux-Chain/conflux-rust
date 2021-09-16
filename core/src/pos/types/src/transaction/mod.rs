@@ -700,7 +700,12 @@ impl SignedTransaction {
     /// Checks that the signature of given transaction. Returns
     /// `Ok(SignatureCheckedTransaction)` if the signature is valid.
     pub fn check_signature(self) -> Result<SignatureCheckedTransaction> {
-        self.authenticator.verify(&self.raw_txn)?;
+        match self.payload() {
+            TransactionPayload::PivotDecision(pivot_decision) => {
+                self.authenticator.verify(pivot_decision)?
+            }
+            _ => self.authenticator.verify(&self.raw_txn)?,
+        }
         Ok(SignatureCheckedTransaction(self))
     }
 

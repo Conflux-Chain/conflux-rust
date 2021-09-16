@@ -200,7 +200,7 @@ impl Mempool {
                     }
                     _ => unreachable!(),
                 };
-                if pivot_height > max_pivot_height {
+                if pivot_height > max_pivot_height && pivot_height > pos_state.pivot_decision().height {
                     max_pivot_height = pivot_height;
                     chosen_pivot_tx = Some(pivot_decision);
                 }
