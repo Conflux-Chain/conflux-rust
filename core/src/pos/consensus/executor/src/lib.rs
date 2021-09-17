@@ -71,6 +71,7 @@ use crate::{
     },
     vm::VMExecutor,
 };
+use diem_types::term_state::DisputeEvent;
 
 pub mod db_bootstrapper;
 mod logging;
@@ -295,6 +296,7 @@ where V: VMExecutor
         let retire_event_key = RetireEvent::event_key();
         let register_event_key = RegisterEvent::event_key();
         let update_voting_power_event_key = UpdateVotingPowerEvent::event_key();
+        let dispute_event_key = DisputeEvent::event_key();
 
         // Find the next pivot block.
         let mut pivot_decision = None;
@@ -315,6 +317,10 @@ where V: VMExecutor
                     let election_event =
                         ElectionEvent::from_bytes(event.event_data())?;
                     new_pos_state.new_node_elected(&election_event)?;
+                } else if *event.key() == dispute_event_key {
+                    let dispute_event =
+                        DisputeEvent::from_bytes(event.event_data())?;
+                    new_pos_state.forfeit_node(&dispute_event.node_id)?;
                 }
             }
         }
