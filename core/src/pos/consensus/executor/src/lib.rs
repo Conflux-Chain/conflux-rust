@@ -1229,11 +1229,6 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
             });
         }
 
-        // FIXME(lpl): Double check.
-        // if num_txns_in_li == num_persistent_txns {
-        //     return Ok(self.db_with_cache.committed_txns_and_events());
-        // }
-
         // All transactions that need to go to storage. In the above example,
         // this means all the transactions in A, B and C whose status ==
         // TransactionStatus::Keep. This must be done before calculate

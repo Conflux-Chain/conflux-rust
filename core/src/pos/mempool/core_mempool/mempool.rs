@@ -175,7 +175,6 @@ impl Mempool {
         let mut max_pivot_height = 0;
         let mut chosen_pivot_tx = None;
         // iterate all pivot decision transaction
-        // FIXME(lpl): Pull PivotDecision with all signatures.
         for pivot_decision_set in self.transactions.iter_pivot_decision() {
             let mut pivot_decision_opt = None;
             for (account, hash) in pivot_decision_set.iter() {

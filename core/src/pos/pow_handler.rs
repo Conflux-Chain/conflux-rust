@@ -20,7 +20,7 @@ use std::{
 };
 use tokio::runtime::Handle;
 
-// FIXME(lpl): Decide the value.
+// TODO(lpl): Decide the value.
 pub const POS_TERM_EPOCHS: u64 = 60;
 
 pub struct PowHandler {

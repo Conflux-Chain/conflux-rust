@@ -250,7 +250,7 @@ impl From<TreeState> for ExecutedTrees {
             tree_state.account_state_root_hash,
             tree_state.ledger_frozen_subtree_hashes,
             tree_state.num_transactions,
-            // FIXME(lpl): Ensure this is not used.
+            // TODO(lpl): Ensure this is not used.
             PosState::new_empty(),
         )
     }

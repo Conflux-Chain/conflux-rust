@@ -310,7 +310,6 @@ impl RoundManager {
             self.round_state.setup_proposal_timeout();
         }
 
-        // FIXME(lpl): Send with fixed timeout or PoW signal.
         if let Err(e) = self.broadcast_pivot_decision().await {
             diem_error!("error in broadcasting pivot decision tx: {:?}", e);
         }
@@ -344,8 +343,8 @@ impl RoundManager {
             bail!("HQC {} already pruned", parent_block);
         }
 
-        // FIXME(lpl): For now, sending default H256 will return the first
-        // pivot decision.
+        // Sending non-existent H256 (default) will return the latest pivot
+        // decision.
         let parent_decision = parent_block
             .pivot_decision()
             .map(|d| d.block_hash)
@@ -395,8 +394,6 @@ impl RoundManager {
         vrf_private_key: &ConfigKey<ConsensusVRFPrivateKey>,
     ) -> anyhow::Result<()>
     {
-        // FIXME(lpl): Check pos_state to see if this node is ready to be
-        // elected.
         diem_debug!("broadcast_election starts");
         let pos_state = self.storage.diem_db().get_latest_pos_state();
         if let Some(target_term) = pos_state.next_elect_term(&author) {

@@ -615,7 +615,6 @@ impl TermList {
     }
 }
 
-// FIXME(lpl): Check if we only need the latest version persisted.
 #[derive(Clone, Serialize, Eq, PartialEq, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct PosState {

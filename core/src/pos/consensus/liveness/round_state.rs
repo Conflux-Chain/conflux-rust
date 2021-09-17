@@ -394,7 +394,7 @@ impl RoundState {
         Some(timeout)
     }
 
-    /// FIXME(lpl): Decide a proper timeout setting.
+    /// TODO(lpl): Decide a proper timeout setting.
     /// Currently it's set to half the round timeout.
     fn setup_proposal_deadline(&self) -> Duration {
         let round_index_after_committed_round =
