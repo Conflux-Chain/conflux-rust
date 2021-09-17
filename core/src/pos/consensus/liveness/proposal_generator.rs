@@ -169,7 +169,10 @@ impl ProposalGenerator {
             // TODO(lpl): Check what to do if `parent_block !=
             // hqc.certified_block()`
             let parent_block = pending_blocks.last().expect("root pushed");
-            assert!(hqc.certified_block().id() == parent_block.id(), "generate_proposal: hqc = parent");
+            assert!(
+                hqc.certified_block().id() == parent_block.id(),
+                "generate_proposal: hqc = parent"
+            );
 
             let mut payload = self
                 .txn_manager
