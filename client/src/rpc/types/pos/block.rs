@@ -30,6 +30,8 @@ pub struct Block {
     ///
     pub transactions: BlockTransactions,
     ///
+    pub txs_is_full: bool,
+    ///
     pub signatures: Vec<Signature>,
 }
 

@@ -225,6 +225,7 @@ impl PosHandler {
                     timestamp: U64::from(b.timestamp),
                     pivot_decision: Some(U64::from(b.pivot_decision.height)),
                     transactions: BlockTransactions::Hashes(vec![]), // TODO
+                    txs_is_full: false,                              //TODO
                     signatures: vec![],
                 };
                 // get signatures info
@@ -326,6 +327,7 @@ impl PosHandler {
                     timestamp: U64::from(b.timestamp_usecs()),
                     pivot_decision: Default::default(),
                     transactions: BlockTransactions::Hashes(vec![]), // TODO
+                    txs_is_full: false,                              //TODO
                     signatures: vec![],
                 };
                 current_height += 1;
