@@ -207,7 +207,7 @@ impl ExecutorProxyTrait for ExecutorProxy {
 
         let synced_trees =
             if let Some(synced_tree_state) = storage_info.synced_tree_state {
-                // FIXME(lpl): synced_tree_state.pos_state is left unhandled.
+                // TODO(lpl): synced_tree_state.pos_state is left unhandled.
                 ExecutedTrees::from(synced_tree_state)
             } else {
                 ExecutedTrees::new_with_pos_state(

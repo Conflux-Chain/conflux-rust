@@ -475,7 +475,8 @@ pub struct ConsensusGraphInner {
     best_timer_chain_difficulty: i128,
     best_timer_chain_hash: H256,
 
-    // FIXME(lpl): This is initialized as cur_era_genesis for now.
+    // TODO(lpl): This is initialized as cur_era_genesis for now.
+    // TODO(lpl): It's always used after being updated, so this should be okay.
     /// The pivot decision of the best (the round is the largest) pos
     /// reference.
     best_pos_pivot_decision: (H256, u64),
@@ -1701,7 +1702,6 @@ impl ConsensusGraphInner {
     fn compute_force_confirm(
         &self, timer_chain_choice: usize, pos_pivot_decision: &(H256, u64),
     ) -> usize {
-        // FIXME(lpl): Check cross checkpoint case.
         if let Some(arena_index) =
             self.hash_to_arena_indices.get(&pos_pivot_decision.0)
         {
@@ -1717,6 +1717,8 @@ impl ConsensusGraphInner {
                 *arena_index
             }
         } else {
+            // If pos_pivot_decision is before checkpoint, we just think it's on
+            // the pivot chain.
             timer_chain_choice
         }
     }
@@ -3814,13 +3816,22 @@ impl ConsensusGraphInner {
     ) -> Option<(u64, H256)> {
         let r = match self.hash_to_arena_indices.get(parent_decision_hash) {
             None => {
-                // FIXME(lpl): Just return stable checkpoint as the first
-                // decision. This should be eventually handled
-                // as cross-checkpoint case.
-                Some((
-                    self.cur_era_stable_height,
-                    self.cur_era_stable_block_hash,
-                ))
+                // TODO(lpl): Use confirmed epoch with a delay in
+                // pos-finality spec.
+                let new_decision_height = (confirmed_height.saturating_sub(
+                    self.inner_conf.pos_pivot_decision_defer_epoch_count,
+                )) / POS_TERM_EPOCHS
+                    * POS_TERM_EPOCHS;
+                if new_decision_height <= self.cur_era_genesis_height {
+                    None
+                } else {
+                    let new_decision_arena_index =
+                        self.get_pivot_block_arena_index(new_decision_height);
+                    Some((
+                        self.arena[new_decision_arena_index].height,
+                        self.arena[new_decision_arena_index].hash,
+                    ))
+                }
             }
             Some(parent_decision) => {
                 let parent_decision_height =
@@ -3830,7 +3841,7 @@ impl ConsensusGraphInner {
                 if self.get_pivot_block_arena_index(parent_decision_height)
                     == *parent_decision
                 {
-                    // FIXME(lpl): Use confirmed epoch with a delay in
+                    // TODO(lpl): Use confirmed epoch with a delay in
                     // pos-finality spec.
                     let new_decision_height =
                         (confirmed_height.saturating_sub(
@@ -3932,7 +3943,7 @@ impl ConsensusGraphInner {
         }
     }
 
-    // FIXME(lpl): Copied from `check_mining_adaptive_block`.
+    // TODO(lpl): Copied from `check_mining_adaptive_block`.
     /// Return possibly new parent.
     pub fn choose_correct_parent(
         &mut self, parent_arena_index: usize, referee_indices: Vec<usize>,

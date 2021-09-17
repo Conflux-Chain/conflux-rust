@@ -114,7 +114,6 @@ impl ProposerElection for VrfProposer {
                 return false;
             }
         };
-        // FIXME(lpl): Verify VRF.
         let vrf_number = vrf_hash.to_u256();
         vrf_number <= self.proposal_threshold
     }

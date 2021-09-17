@@ -51,7 +51,7 @@ impl VMExecutor for FakeVM {
                 Transaction::BlockMetadata(_) => {
                     let mut events = state_view.pos_state().get_unlock_events();
                     diem_debug!("get_unlock_events: {}", events.len());
-                    // FIXME(lpl)
+                    // TODO(lpl): Simplify.
                     if (state_view.pos_state().current_view() + 1)
                         % ROUND_PER_TERM
                         == 0

@@ -114,7 +114,7 @@ impl TransactionStore {
         &self, version: Version, transaction: &Transaction, cs: &mut ChangeSet,
     ) -> Result<()> {
         if let Transaction::UserTransaction(txn) = transaction {
-            // FIXME(lpl): Find a proper way to keep account-related info.
+            // TODO(lpl): Find a proper way to keep account-related info.
             cs.batch.put::<TransactionByAccountSchema>(
                 &(txn.sender(), 0),
                 &version,

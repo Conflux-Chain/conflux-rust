@@ -32,7 +32,6 @@ use cfxcore::{
     consensus_parameters::*,
     light_protocol::LightNodeConfiguration,
     machine::Machine,
-    pos::pow_handler::POS_TERM_EPOCHS,
     spec::CommonParams,
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
@@ -523,9 +522,6 @@ impl Configuration {
         } else {
             self.raw_conf.enable_optimistic_execution
         };
-        // FIXME(lpl): This is needed to return a valid cross-checkpoint pivot
-        // decision for now.
-        assert_eq!(self.raw_conf.era_epoch_count % POS_TERM_EPOCHS, 0);
         let mut conf = ConsensusConfig {
             chain_id: self.chain_id_params(),
             inner_conf: ConsensusInnerConfig {
