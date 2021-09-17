@@ -29,8 +29,8 @@ pub struct Block {
     pub pivot_decision: Option<U64>,
     ///
     pub transactions: BlockTransactions,
-    ///
-    pub txs_is_full: bool,
+    /// is txs summary or detail
+    pub is_txs_detail: bool,
     ///
     pub signatures: Vec<Signature>,
 }
