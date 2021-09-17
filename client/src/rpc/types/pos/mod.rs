@@ -17,7 +17,7 @@ pub use self::{
     block_number::BlockNumber,
     committee::{CommitteeState, NodeVotingPower, RpcCommittee, RpcTermData},
     decision::Decision,
-    node_lock_status::NodeLockStatus,
+    node_lock_status::{NodeLockStatus,VotePowerState},
     status::Status,
     transaction::{RpcTransactionStatus, Transaction},
 };
