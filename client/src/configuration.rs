@@ -295,7 +295,7 @@ build_config! {
         (vrf_proposal_threshold, (U256), U256::MAX)
         // Deferred epoch count before a confirmed epoch.
         (pos_pivot_decision_defer_epoch_count, (u64), 50)
-        (pos_reference_enable_height, (u64), 0)
+        (pos_reference_enable_height, (u64), u64::MAX)
         (pos_initial_nodes_path, (String), "./pos_config/initial_nodes.json".to_string())
         (pos_private_key_path, (String), "./pos_config/pos_key".to_string())
 
