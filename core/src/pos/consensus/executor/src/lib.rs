@@ -1039,6 +1039,10 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 &parent_block_executed_trees,
             );
 
+            // FIXME(lpl): Check the error processing in `execute_block`,
+            // `process_vm_outputs`, and transaction packing. We
+            // need to ensure that there is no packing behavior that
+            // makes all new proposals invalid during execution.
             let vm_outputs = {
                 // trace_code_block!("executor::execute_block", {"block",
                 // block_id});
