@@ -9,7 +9,7 @@ use crate::{
         types::pos::{
             Account, Block, BlockNumber, BlockTransactions, CommitteeState,
             NodeLockStatus, RpcCommittee, RpcTermData, RpcTransactionStatus,
-            Signature, Status, Transaction,VotePowerState
+            Signature, Status, Transaction, VotePowerState,
         },
         RpcResult,
     },
@@ -229,7 +229,7 @@ impl PosHandler {
                 };
                 // get signatures info
                 if let Some(epoch_state) =
-                self.epoch_state_by_epoch_number(b.epoch)
+                    self.epoch_state_by_epoch_number(b.epoch)
                 {
                     let signatures = b
                         .signatures
@@ -406,7 +406,7 @@ impl PosHandler {
                     status: None,
                 };
                 if let Some(tx_info) =
-                diem_db.get_transaction_info(version).ok()
+                    diem_db.get_transaction_info(version).ok()
                 {
                     let status =
                         RpcTransactionStatus::from(tx_info.status().clone());
