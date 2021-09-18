@@ -18,9 +18,7 @@ use proptest_derive::Arbitrary;
 use cfx_types::H256;
 use diem_crypto::{HashValue, VRFProof};
 use diem_logger::prelude::*;
-use move_core_types::{
-    language_storage::TypeTag, vm_status::DiscardedVMStatus,
-};
+use move_core_types::vm_status::DiscardedVMStatus;
 use pow_types::StakingEvent;
 
 use crate::{
@@ -1019,8 +1017,6 @@ impl PosState {
             let node = self.node_map.get(&addr).expect("exists");
             let unlock_event = ContractEvent::new(
                 UnlockEvent::event_key(),
-                0,                                      /* sequence_number */
-                TypeTag::Vector(Box::new(TypeTag::U8)), /* TypeTag::ByteArray */
                 bcs::to_bytes(&UnlockEvent {
                     node_id: *addr,
                     unlocked: node.lock_status.unlocked_votes(),

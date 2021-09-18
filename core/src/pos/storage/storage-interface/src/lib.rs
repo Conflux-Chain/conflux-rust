@@ -13,10 +13,9 @@ use diem_types::{
     account_state::AccountState,
     account_state_blob::{AccountStateBlob, AccountStateWithProof},
     committed_block::CommittedBlock,
-    contract_event::{ContractEvent, EventWithProof},
+    contract_event::ContractEvent,
     epoch_change::EpochChangeProof,
     epoch_state::EpochState,
-    event::EventKey,
     ledger_info::LedgerInfoWithSignatures,
     move_resource::MoveStorage,
     proof::{
@@ -198,17 +197,6 @@ pub trait DbReader: Send + Sync {
         &self, start_version: Version, batch_size: u64,
         ledger_version: Version, fetch_events: bool,
     ) -> Result<TransactionListWithProof>;
-
-    /// Returns events by given event key
-    fn get_events(
-        &self, event_key: &EventKey, start: u64, order: Order, limit: u64,
-    ) -> Result<Vec<(u64, ContractEvent)>>;
-
-    /// Returns events by given event key
-    fn get_events_with_proofs(
-        &self, event_key: &EventKey, start: u64, order: Order, limit: u64,
-        known_version: Option<u64>,
-    ) -> Result<Vec<EventWithProof>>;
 
     /// See [`DiemDB::get_block_timestamp`].
     ///

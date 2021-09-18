@@ -16,7 +16,7 @@ use diem_crypto::hash::HashValue;
 #[cfg(any(test, feature = "fuzzing"))]
 use diem_crypto::hash::ACCUMULATOR_PLACEHOLDER_HASH;
 use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
-use move_core_types::{language_storage::TypeTag, move_resource::MoveResource};
+use move_core_types::move_resource::MoveResource;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
@@ -235,8 +235,6 @@ impl PivotBlockDecision {
     pub fn to_event(&self) -> ContractEvent {
         ContractEvent::new(
             Self::pivot_select_event_key(),
-            0,                                      /* sequence_number */
-            TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
             bcs::to_bytes(&self).unwrap(),
         )
     }

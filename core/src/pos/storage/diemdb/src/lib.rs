@@ -36,13 +36,12 @@ use diem_types::{
     account_address::AccountAddress,
     account_state_blob::{AccountStateBlob, AccountStateWithProof},
     committed_block::CommittedBlock,
-    contract_event::{ContractEvent, EventWithProof},
+    contract_event::ContractEvent,
     epoch_change::EpochChangeProof,
-    event::EventKey,
     ledger_info::LedgerInfoWithSignatures,
     proof::{
-        AccountStateProof, AccumulatorConsistencyProof, EventProof,
-        SparseMerkleProof, TransactionListProof,
+        AccountStateProof, AccumulatorConsistencyProof, SparseMerkleProof,
+        TransactionListProof,
     },
     reward_distribution_event::RewardDistributionEvent,
     term_state::PosState,
@@ -56,7 +55,7 @@ use diem_types::{
 pub use diemdb_test::test_save_blocks_impl;
 use schemadb::{ColumnFamilyName, Options, DB, DEFAULT_CF_NAME};
 use storage_interface::{
-    DBReaderForPoW, DbReader, DbWriter, Order, StartupInfo, TreeState,
+    DBReaderForPoW, DbReader, DbWriter, StartupInfo, TreeState,
 };
 
 use crate::{
@@ -447,81 +446,6 @@ impl DiemDB {
         )
     }
 
-    // ================================== Private APIs
-    // ==================================
-    fn get_events_with_proof_by_event_key(
-        &self, event_key: &EventKey, start_seq_num: u64, order: Order,
-        limit: u64, ledger_version: Version,
-    ) -> Result<Vec<EventWithProof>>
-    {
-        error_if_too_many_requested(limit, MAX_LIMIT)?;
-        let get_latest =
-            order == Order::Descending && start_seq_num == u64::max_value();
-
-        let cursor = if get_latest {
-            // Caller wants the latest, figure out the latest seq_num.
-            // In the case of no events on that path, use 0 and expect empty
-            // result below.
-            self.event_store
-                .get_latest_sequence_number(ledger_version, &event_key)?
-                .unwrap_or(0)
-        } else {
-            start_seq_num
-        };
-
-        // Convert requested range and order to a range in ascending order.
-        let (first_seq, real_limit) =
-            get_first_seq_num_and_limit(order, cursor, limit)?;
-
-        // Query the index.
-        let mut event_indices = self.event_store.lookup_events_by_key(
-            &event_key,
-            first_seq,
-            real_limit,
-            ledger_version,
-        )?;
-
-        // When descending, it's possible that user is asking for something
-        // beyond the latest sequence number, in which case we will
-        // consider it a bad request and return an empty list.
-        // For example, if the latest sequence number is 100, and the caller is
-        // asking for 110 to 90, we will get 90 to 100 from the index
-        // lookup above. Seeing that the last item is 100 instead of 110
-        // tells us 110 is out of bound.
-        if order == Order::Descending {
-            if let Some((seq_num, _, _)) = event_indices.last() {
-                if *seq_num < cursor {
-                    event_indices = Vec::new();
-                }
-            }
-        }
-
-        let mut events_with_proof = event_indices
-            .into_iter()
-            .map(|(seq, ver, idx)| {
-                let (event, event_proof) = self
-                    .event_store
-                    .get_event_with_proof_by_version_and_index(ver, idx)?;
-                ensure!(
-                    seq == event.sequence_number(),
-                    "Index broken, expected seq:{}, actual:{}",
-                    seq,
-                    event.sequence_number()
-                );
-                let txn_info_with_proof = self
-                    .ledger_store
-                    .get_transaction_info_with_proof(ver, ledger_version)?;
-                let proof = EventProof::new(txn_info_with_proof, event_proof);
-                Ok(EventWithProof::new(ver, idx, event, proof))
-            })
-            .collect::<Result<Vec<_>>>()?;
-        if order == Order::Descending {
-            events_with_proof.reverse();
-        }
-
-        Ok(events_with_proof)
-    }
-
     /// Convert a `ChangeSet` to `SealedChangeSet`.
     ///
     /// Specifically, counter increases are added to current counter values and
@@ -710,43 +634,6 @@ impl DbReader for DiemDB {
         })
     }
 
-    fn get_events(
-        &self, event_key: &EventKey, start: u64, order: Order, limit: u64,
-    ) -> Result<Vec<(u64, ContractEvent)>> {
-        gauged_api("get_events", || {
-            let events_with_proofs = self
-                .get_events_with_proofs(event_key, start, order, limit, None)?;
-            let events = events_with_proofs
-                .into_iter()
-                .map(|e| (e.transaction_version, e.event))
-                .collect();
-            Ok(events)
-        })
-    }
-
-    fn get_events_with_proofs(
-        &self, event_key: &EventKey, start: u64, order: Order, limit: u64,
-        known_version: Option<u64>,
-    ) -> Result<Vec<EventWithProof>>
-    {
-        gauged_api("get_events_with_proofs", || {
-            let version;
-            if let Some(v) = known_version {
-                version = v
-            } else {
-                version = self
-                    .ledger_store
-                    .get_latest_ledger_info()?
-                    .ledger_info()
-                    .version();
-            }
-            let events = self.get_events_with_proof_by_event_key(
-                event_key, start, order, limit, version,
-            )?;
-            Ok(events)
-        })
-    }
-
     fn get_block_timestamp(&self, version: u64) -> Result<u64> {
         gauged_api("get_block_timestamp", || {
             let ts = match self.transaction_store.get_block_metadata(version)? {
@@ -755,15 +642,6 @@ impl DbReader for DiemDB {
                 None => 0,
             };
             Ok(ts)
-        })
-    }
-
-    fn get_last_version_before_timestamp(
-        &self, timestamp: u64, ledger_version: Version,
-    ) -> Result<Version> {
-        gauged_api("get_last_version_before_timestamp", || {
-            self.event_store
-                .get_last_version_before_timestamp(timestamp, ledger_version)
         })
     }
 
@@ -1165,6 +1043,7 @@ impl DBReaderForPoW for DiemDB {
     }
 }
 
+#[test]
 // Convert requested range and order to a range in ascending order.
 fn get_first_seq_num_and_limit(
     order: Order, cursor: u64, limit: u64,

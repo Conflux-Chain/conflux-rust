@@ -25,9 +25,7 @@ use diem_crypto::{
 };
 use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
 pub use module::Module;
-use move_core_types::{
-    language_storage::TypeTag, transaction_argument::convert_txn_args,
-};
+use move_core_types::transaction_argument::convert_txn_args;
 use pow_types::StakingEvent;
 pub use script::{
     ArgumentABI, Script, ScriptABI, ScriptFunction, ScriptFunctionABI,
@@ -472,8 +470,6 @@ impl ElectionPayload {
         );
         ContractEvent::new(
             ElectionEvent::event_key(),
-            0,                                      /* sequence_number */
-            TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
             bcs::to_bytes(&event).unwrap(),
         )
     }
@@ -490,8 +486,6 @@ impl RetirePayload {
         let event = RetireEvent::new(self.node_id, self.votes);
         ContractEvent::new(
             RetireEvent::event_key(),
-            0,                                      /* sequence_number */
-            TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
             bcs::to_bytes(&event).unwrap(),
         )
     }
@@ -511,8 +505,6 @@ impl RegisterPayload {
         );
         ContractEvent::new(
             RegisterEvent::event_key(),
-            0,                                      /* sequence_number */
-            TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
             bcs::to_bytes(&event).unwrap(),
         )
     }
@@ -532,8 +524,6 @@ impl UpdateVotingPowerPayload {
         );
         ContractEvent::new(
             UpdateVotingPowerEvent::event_key(),
-            0,                                      /* sequence_number */
-            TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
             bcs::to_bytes(&event).unwrap(),
         )
     }
@@ -561,8 +551,6 @@ impl DisputePayload {
         };
         ContractEvent::new(
             DisputeEvent::event_key(),
-            0,                                      /* sequence_number */
-            TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
             bcs::to_bytes(&event).unwrap(),
         )
     }

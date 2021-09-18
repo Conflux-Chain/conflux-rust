@@ -7,16 +7,15 @@
 
 //! This module provides mock dbreader for tests.
 
-use crate::{DBReaderForPoW, DbReader, Order, StartupInfo, TreeState};
+use crate::{DBReaderForPoW, DbReader, StartupInfo, TreeState};
 use anyhow::Result;
 use diem_crypto::HashValue;
 use diem_types::{
     account_address::AccountAddress,
     account_state_blob::{AccountStateBlob, AccountStateWithProof},
     committed_block::CommittedBlock,
-    contract_event::{ContractEvent, EventWithProof},
+    contract_event::ContractEvent,
     epoch_change::EpochChangeProof,
-    event::EventKey,
     ledger_info::LedgerInfoWithSignatures,
     proof::{AccumulatorConsistencyProof, SparseMerkleProof},
     reward_distribution_event::RewardDistributionEvent,
@@ -37,22 +36,6 @@ impl DbReader for MockDbReader {
         &self, _start_version: Version, _batch_size: u64,
         _ledger_version: Version, _fetch_events: bool,
     ) -> Result<TransactionListWithProof>
-    {
-        unimplemented!()
-    }
-
-    /// Returns events by given event key
-    fn get_events(
-        &self, _event_key: &EventKey, _start: u64, _order: Order, _limit: u64,
-    ) -> Result<Vec<(u64, ContractEvent)>> {
-        unimplemented!()
-    }
-
-    /// Returns events by given event key
-    fn get_events_with_proofs(
-        &self, _event_key: &EventKey, _start: u64, _order: Order, _limit: u64,
-        _known_version: Option<u64>,
-    ) -> Result<Vec<EventWithProof>>
     {
         unimplemented!()
     }

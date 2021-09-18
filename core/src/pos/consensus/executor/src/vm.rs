@@ -18,7 +18,6 @@ use diem_types::{
     vm_status::{KeptVMStatus, StatusCode, VMStatus},
     write_set::{WriteOp, WriteSetMut},
 };
-use move_core_types::language_storage::TypeTag;
 
 /// This trait describes the VM's execution interface.
 pub trait VMExecutor: Send {
@@ -76,8 +75,6 @@ impl VMExecutor for FakeVM {
                         .unwrap();
                         let contract_event = ContractEvent::new(
                             new_epoch_event_key(),
-                            0,
-                            TypeTag::Address,
                             validator_bytes,
                         );
                         events.push(contract_event);

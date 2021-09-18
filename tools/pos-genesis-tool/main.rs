@@ -51,7 +51,6 @@ use diem_types::{
 };
 use diemdb::DiemDB;
 use executor::{db_bootstrapper::generate_waypoint, vm::FakeVM};
-use move_core_types::language_storage::TypeTag;
 use std::path::Path;
 use storage_interface::DbReaderWriter;
 
@@ -181,12 +180,8 @@ fn generate_genesis_from_public_keys(
     }
     let validator_set = ValidatorSet::new(validators);
     let validator_set_bytes = bcs::to_bytes(&validator_set).unwrap();
-    let contract_event = ContractEvent::new(
-        new_epoch_event_key(),
-        0,
-        TypeTag::Address,
-        validator_set_bytes,
-    );
+    let contract_event =
+        ContractEvent::new(new_epoch_event_key(), validator_set_bytes);
     let change_set = ChangeSet::new(WriteSet::default(), vec![contract_event]);
     let write_set_paylod = WriteSetPayload::Direct(change_set);
     let genesis_transaction = Transaction::GenesisTransaction(write_set_paylod);
