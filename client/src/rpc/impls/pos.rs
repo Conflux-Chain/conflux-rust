@@ -225,7 +225,7 @@ impl PosHandler {
                     timestamp: U64::from(b.timestamp),
                     pivot_decision: Some(U64::from(b.pivot_decision.height)),
                     transactions: BlockTransactions::Hashes(vec![]), // TODO
-                    is_txs_detail: false,                              //TODO
+                    is_txs_detail: false,                            //TODO
                     signatures: vec![],
                 };
                 // get signatures info
@@ -327,7 +327,7 @@ impl PosHandler {
                     timestamp: U64::from(b.timestamp_usecs()),
                     pivot_decision: Default::default(),
                     transactions: BlockTransactions::Hashes(vec![]), // TODO
-                    is_txs_detail: false,                              //TODO
+                    is_txs_detail: false,                            //TODO
                     signatures: vec![],
                 };
                 current_height += 1;
@@ -426,7 +426,7 @@ fn map_votes(list: &StatusList) -> Vec<VotePowerState> {
     for item in list.iter() {
         // ans.push((U64::from(item.view), U64::from(item.votes)));
         ans.push(VotePowerState {
-            start_block_number: U64::from(item.view),
+            end_block_number: U64::from(item.view),
             power: U64::from(item.votes),
         })
     }

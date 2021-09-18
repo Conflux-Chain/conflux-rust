@@ -20,6 +20,6 @@ pub struct NodeLockStatus {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VotePowerState {
-    pub start_block_number: U64,
+    pub end_block_number: U64,
     pub power: U64,
 }
