@@ -805,7 +805,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "1.2.0-alpha-5"
+version = "1.2.0-alpha-6"
 dependencies = [
  "anyhow",
  "async-oneshot",
@@ -1070,7 +1070,7 @@ dependencies = [
 
 [[package]]
 name = "client"
-version = "1.2.0-alpha-5"
+version = "1.2.0-alpha-6"
 dependencies = [
  "anyhow",
  "app_dirs",
@@ -1185,7 +1185,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "1.2.0-alpha-5"
+version = "1.2.0-alpha-6"
 dependencies = [
  "app_dirs",
  "bcs",
