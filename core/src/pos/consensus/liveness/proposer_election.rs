@@ -45,7 +45,7 @@ pub trait ProposerElection {
     fn is_random_election(&self) -> bool { false }
 
     fn receive_proposal_candidate(
-        &self, _block: Block,
+        &self, _block: &Block,
     ) -> anyhow::Result<bool> {
         unreachable!()
     }
@@ -60,6 +60,8 @@ pub trait ProposerElection {
     ) -> Option<ConsensusVRFProof> {
         unreachable!()
     }
+
+    fn set_proposal_candidate(&self, _block: Block) { unreachable!() }
 }
 
 // next continuously mutates a state and returns a u64-index

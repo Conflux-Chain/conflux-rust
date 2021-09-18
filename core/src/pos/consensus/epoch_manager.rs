@@ -748,7 +748,7 @@ impl EpochManager {
             self.start_processor(payload).await;
             diem_debug!("expect_new_epoch: processor started!");
         } else {
-            panic!("Reconfig sender dropped, unable to start new epoch.");
+            diem_error!("Reconfig sender dropped, unable to start new epoch.");
         }
     }
 
