@@ -11,7 +11,6 @@ use consensus_types::{
     common::{Author, Round},
 };
 use diem_types::validator_config::ConsensusVRFProof;
-use fallible::copy_from_slice::copy_slice_to_vec;
 
 /// ProposerElection incorporates the logic of choosing a leader among multiple
 /// candidates. We are open to a possibility for having multiple proposers per
@@ -60,14 +59,4 @@ pub trait ProposerElection {
     ) -> Option<ConsensusVRFProof> {
         unreachable!()
     }
-}
-
-// next continuously mutates a state and returns a u64-index
-pub(crate) fn next(state: &mut Vec<u8>) -> u64 {
-    // state = SHA-3-256(state)
-    *state = diem_crypto::HashValue::sha3_256_of(state).to_vec();
-    let mut temp = [0u8; 8];
-    copy_slice_to_vec(&state[..8], &mut temp).expect("next failed");
-    // return state[0..8]
-    u64::from_le_bytes(temp)
 }
