@@ -806,6 +806,9 @@ impl RoundManager {
     pub async fn process_proposal_timeout(
         &mut self, round: Round,
     ) -> anyhow::Result<()> {
+        if round != self.round_state.current_round() {
+            return Ok(());
+        }
         if let Some(proposal) = self.proposer_election.choose_proposal_to_vote()
         {
             if self.is_validator() {
@@ -893,14 +896,24 @@ impl RoundManager {
         observe_block(proposal.timestamp_usecs(), BlockStage::SYNCED);
 
         if self.proposer_election.is_random_election() {
-            self.block_store.execute_and_insert_block(
-                proposal.clone(),
-                false,
-                false,
-            )?;
-            Ok(self
+            if self
                 .proposer_election
-                .receive_proposal_candidate(proposal)?)
+                .receive_proposal_candidate(&proposal)?
+            {
+                self.block_store.execute_and_insert_block(
+                    proposal.clone(),
+                    false,
+                    false,
+                )?;
+                self.proposer_election.set_proposal_candidate(proposal);
+                Ok(true)
+            } else {
+                // This proposal will not be chosen to vote, so we do not need
+                // to relay. A proposal received for several
+                // times also enters this branch because
+                // the vrf_output is the same.
+                Ok(false)
+            }
         } else {
             let proposal_round = proposal.round();
             let vote = self

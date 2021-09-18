@@ -13,12 +13,10 @@ use consensus_types::{block::Block, block_data::BlockData};
 use diem_crypto::{VRFPrivateKey, VRFProof};
 use diem_logger::debug as diem_debug;
 use diem_types::{
-    account_address::AccountAddress,
     epoch_state::EpochState,
     validator_config::{ConsensusVRFPrivateKey, ConsensusVRFProof},
 };
 use parking_lot::Mutex;
-use std::collections::HashMap;
 
 /// The round proposer maps a round to author
 pub struct VrfProposer {
@@ -29,7 +27,7 @@ pub struct VrfProposer {
 
     current_round: Mutex<Round>,
     current_seed: Mutex<Vec<u8>>,
-    proposal_candidates: Mutex<HashMap<AccountAddress, Block>>,
+    proposal_candidates: Mutex<Option<Block>>,
 
     // The epoch state of `current_round`, used to verify proposals.
     epoch_state: EpochState,
@@ -120,35 +118,41 @@ impl ProposerElection for VrfProposer {
 
     fn is_random_election(&self) -> bool { true }
 
-    /// Return `Err` for invalid or unmatching blocks.
-    /// Return `Ok(true)` if the block is valid and received for the first time.
-    /// Return `Ok(false)` if the block was received before.
-    fn receive_proposal_candidate(&self, block: Block) -> anyhow::Result<bool> {
-        if !self.is_valid_proposal(&block) {
-            anyhow::bail!("Invalid proposal");
-        }
+    /// Return `Err` for unmatching blocks.
+    /// Return `Ok(true)` if the block has less vrf_output.
+    /// Return `Ok(false)` if the block has a higher or equal vrf_output. This
+    /// block should not be relayed in this case.
+    fn receive_proposal_candidate(
+        &self, block: &Block,
+    ) -> anyhow::Result<bool> {
+        // Proposal validity should have been checked in `process_proposal`.
         if block.round() != *self.current_round.lock() {
             anyhow::bail!("Incorrect round");
         }
-        Ok(self
-            .proposal_candidates
-            .lock()
-            .insert(block.author().unwrap(), block)
-            .is_none())
+        let old_proposal = self.proposal_candidates.lock();
+        if old_proposal.is_none()
+            || old_proposal
+                .as_ref()
+                .unwrap()
+                .vrf_proof()
+                .unwrap()
+                .to_hash()?
+                .to_u256()
+                > block.vrf_proof().unwrap().to_hash()?.to_u256()
+        {
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    fn set_proposal_candidate(&self, block: Block) {
+        *self.proposal_candidates.lock() = Some(block);
     }
 
     /// Choose a proposal from all received proposal candidates to vote for.
     fn choose_proposal_to_vote(&self) -> Option<Block> {
-        let mut chosen_proposal = None;
-        let mut min_vrf_number = U256::MAX;
-        for (_, b) in &*self.proposal_candidates.lock() {
-            let vrf_number =
-                b.vrf_proof().unwrap().to_hash().unwrap().to_u256();
-            if vrf_number < min_vrf_number {
-                chosen_proposal = Some(b.clone());
-                min_vrf_number = vrf_number
-            }
-        }
+        let chosen_proposal = self.proposal_candidates.lock().take();
         diem_debug!(
             "choose_proposal_to_vote: {:?}, data={:?}",
             chosen_proposal,
@@ -159,7 +163,7 @@ impl ProposerElection for VrfProposer {
 
     fn next_round(&self, round: Round, new_seed: Vec<u8>) {
         *self.current_round.lock() = round;
-        self.proposal_candidates.lock().clear();
+        self.proposal_candidates.lock().take();
         *self.current_seed.lock() = new_seed;
     }
 
