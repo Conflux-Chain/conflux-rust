@@ -126,7 +126,6 @@ proptest = { version = "1.0.0", optional = true }
 proptest-derive = { version = "0.3.0", optional = true }
 diem-temppath = { path = "./src/pos/common/temppath" }
 crash-handler = { path = "../core/src/pos/common/crash-handler" }
-termion = { version = "1.5.6", default-features = false }
 
 [dev-dependencies]
 criterion = "0.3"

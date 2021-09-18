@@ -18,7 +18,6 @@ use diem_types::ledger_info::LedgerInfoWithSignatures;
 use executor_types::{Error, StateComputeResult};
 use futures::channel::mpsc;
 use std::{collections::HashMap, sync::Arc};
-use termion::color::*;
 
 pub struct MockStateComputer {
     state_sync_client: mpsc::UnboundedSender<Payload>,
@@ -92,9 +91,7 @@ impl StateComputer for MockStateComputer {
         &self, commit: LedgerInfoWithSignatures,
     ) -> Result<(), StateSyncError> {
         diem_debug!(
-            "{}Fake sync{} to block id {}",
-            Fg(Blue),
-            Fg(Reset),
+            "Fake sync to block id {}",
             commit.ledger_info().consensus_block_id()
         );
         self.consensus_db
