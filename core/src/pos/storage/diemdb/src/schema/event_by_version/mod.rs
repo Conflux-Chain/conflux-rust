@@ -27,19 +27,17 @@ use std::{convert::TryFrom, mem::size_of};
 
 define_schema!(EventByVersionSchema, Key, Value, EVENT_BY_VERSION_CF_NAME);
 
-type SeqNum = u64;
-type Key = (EventKey, Version, SeqNum);
+type Key = (EventKey, Version);
 
 type Index = u64;
 type Value = Index;
 
 impl KeyCodec<EventByVersionSchema> for Key {
     fn encode_key(&self) -> Result<Vec<u8>> {
-        let (ref event_key, version, seq_num) = *self;
+        let (ref event_key, version) = *self;
 
         let mut encoded = event_key.to_vec();
         encoded.write_u64::<BigEndian>(version)?;
-        encoded.write_u64::<BigEndian>(seq_num)?;
 
         Ok(encoded)
     }
@@ -48,13 +46,10 @@ impl KeyCodec<EventByVersionSchema> for Key {
         ensure_slice_len_eq(data, size_of::<Self>())?;
 
         const EVENT_KEY_LEN: usize = size_of::<EventKey>();
-        const EVENT_KEY_AND_VER_LEN: usize = size_of::<(EventKey, Version)>();
         let event_key = EventKey::try_from(&data[..EVENT_KEY_LEN])?;
         let version = (&data[EVENT_KEY_LEN..]).read_u64::<BigEndian>()?;
-        let seq_num =
-            (&data[EVENT_KEY_AND_VER_LEN..]).read_u64::<BigEndian>()?;
 
-        Ok((event_key, version, seq_num))
+        Ok((event_key, version))
     }
 }
 

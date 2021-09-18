@@ -6,11 +6,9 @@
 // See http://www.gnu.org/licenses/
 
 pub mod constants;
-pub mod events;
 pub mod resources;
 
 pub use constants::*;
-pub use events::*;
 pub use resources::*;
 
 use move_core_types::account_address::AccountAddress;

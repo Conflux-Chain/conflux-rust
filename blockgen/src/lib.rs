@@ -362,7 +362,9 @@ impl BlockGenerator {
             .pos_verifier
             .is_enabled_at_height(best_info.best_epoch_number + 1)
         {
-            // FIXME(lpl): Check parent pos ref.
+            // parent is in consensus, so our PoS must have processed its
+            // pos_reference, meaning this latest pos reference must
+            // be valid.
             Some(self.pos_verifier.get_latest_pos_reference())
         } else {
             None

@@ -71,6 +71,7 @@ use crate::{
     },
     vm::VMExecutor,
 };
+use diem_types::term_state::DisputeEvent;
 
 pub mod db_bootstrapper;
 mod logging;
@@ -295,6 +296,7 @@ where V: VMExecutor
         let retire_event_key = RetireEvent::event_key();
         let register_event_key = RegisterEvent::event_key();
         let update_voting_power_event_key = UpdateVotingPowerEvent::event_key();
+        let dispute_event_key = DisputeEvent::event_key();
 
         // Find the next pivot block.
         let mut pivot_decision = None;
@@ -315,6 +317,10 @@ where V: VMExecutor
                     let election_event =
                         ElectionEvent::from_bytes(event.event_data())?;
                     new_pos_state.new_node_elected(&election_event)?;
+                } else if *event.key() == dispute_event_key {
+                    let dispute_event =
+                        DisputeEvent::from_bytes(event.event_data())?;
+                    new_pos_state.forfeit_node(&dispute_event.node_id)?;
                 }
             }
         }
@@ -551,7 +557,7 @@ where V: VMExecutor
             ));
         }
 
-        // FIXME(lpl): For genesis.
+        // TODO(lpl): For genesis.
         if next_epoch_state.is_some()
             && next_epoch_state.as_ref().unwrap().epoch == 1
         {
@@ -683,7 +689,7 @@ where V: VMExecutor
             cache.synced_trees().version(),
             cache.synced_trees().state_root(),
             cache.synced_trees().state_tree(),
-            // FIXME(lpl): State sync not used yet.
+            // TODO(lpl): State sync not used yet.
             PosState::new_empty(),
         );
 
@@ -1039,6 +1045,10 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 &parent_block_executed_trees,
             );
 
+            // FIXME(lpl): Check the error processing in `execute_block`,
+            // `process_vm_outputs`, and transaction packing. We
+            // need to ensure that there is no packing behavior that
+            // makes all new proposals invalid during execution.
             let vm_outputs = {
                 // trace_code_block!("executor::execute_block", {"block",
                 // block_id});
@@ -1228,11 +1238,6 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 ),
             });
         }
-
-        // FIXME(lpl): Double check.
-        // if num_txns_in_li == num_persistent_txns {
-        //     return Ok(self.db_with_cache.committed_txns_and_events());
-        // }
 
         // All transactions that need to go to storage. In the above example,
         // this means all the transactions in A, B and C whose status ==

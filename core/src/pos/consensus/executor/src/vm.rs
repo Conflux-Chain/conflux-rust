@@ -10,14 +10,14 @@ use diem_types::{
     on_chain_config::{self, new_epoch_event_key, OnChainConfig, ValidatorSet},
     term_state::ROUND_PER_TERM,
     transaction::{
-        ConflictSignature, DisputePayload, Transaction, TransactionOutput,
-        TransactionPayload, TransactionStatus, WriteSetPayload,
+        authenticator::TransactionAuthenticator, ConflictSignature,
+        DisputePayload, Transaction, TransactionOutput, TransactionPayload,
+        TransactionStatus, WriteSetPayload,
     },
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
     vm_status::{KeptVMStatus, StatusCode, VMStatus},
     write_set::{WriteOp, WriteSetMut},
 };
-use move_core_types::language_storage::TypeTag;
 
 /// This trait describes the VM's execution interface.
 pub trait VMExecutor: Send {
@@ -50,7 +50,7 @@ impl VMExecutor for FakeVM {
                 Transaction::BlockMetadata(_) => {
                     let mut events = state_view.pos_state().get_unlock_events();
                     diem_debug!("get_unlock_events: {}", events.len());
-                    // FIXME(lpl)
+                    // TODO(lpl): Simplify.
                     if (state_view.pos_state().current_view() + 1)
                         % ROUND_PER_TERM
                         == 0
@@ -75,8 +75,6 @@ impl VMExecutor for FakeVM {
                         .unwrap();
                         let contract_event = ContractEvent::new(
                             new_epoch_event_key(),
-                            0,
-                            TypeTag::Address,
                             validator_bytes,
                         );
                         events.push(contract_event);
@@ -154,6 +152,35 @@ impl VMExecutor for FakeVM {
                             vec![retire_payload.to_event()]
                         }
                         TransactionPayload::PivotDecision(pivot_decision) => {
+                            if !catch_up_mode {
+                                let authenticator = trans.authenticator();
+                                let (public_keys, signatures) = match authenticator {
+                                    TransactionAuthenticator::MultiBLS{public_keys, signatures} => {
+                                        Ok((public_keys, signatures))
+                                    },
+                                    _ => {
+                                        Err(VMStatus::Error(
+                                            StatusCode::CFX_INVALID_TX,
+                                        ))
+                                    }
+                                }?;
+                                state_view
+                                    .pos_state()
+                                    .validate_pivot_decision(
+                                        pivot_decision,
+                                        public_keys,
+                                        signatures,
+                                    )
+                                    .map_err(|e| {
+                                        diem_error!(
+                                            "pivot decision tx error: {:?}",
+                                            e
+                                        );
+                                        VMStatus::Error(
+                                            StatusCode::CFX_INVALID_TX,
+                                        )
+                                    })?;
+                            }
                             vec![pivot_decision.to_event()]
                         }
                         TransactionPayload::Register(register) => {

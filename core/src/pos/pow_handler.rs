@@ -20,8 +20,8 @@ use std::{
 };
 use tokio::runtime::Handle;
 
-// FIXME(lpl): Decide the value.
-pub const POS_TERM_EPOCHS: u64 = 50;
+// TODO(lpl): Decide the value.
+pub const POS_TERM_EPOCHS: u64 = 60;
 
 pub struct PowHandler {
     executor: Handle,
@@ -112,7 +112,7 @@ impl PowHandler {
     }
 }
 
-// FIXME(lpl): We should let the caller to decide if `pow_consensus` should be
+// TODO(lpl): We should let the caller to decide if `pow_consensus` should be
 // `None`?
 #[async_trait]
 impl PowInterface for PowHandler {

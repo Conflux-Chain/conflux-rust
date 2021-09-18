@@ -54,4 +54,5 @@ small_local_test_conf = dict(
     execute_genesis = "false",
     dev_allow_phase_change_without_peer = "true",
     check_status_genesis = "false",
+    pos_reference_enable_height = 0,
 )

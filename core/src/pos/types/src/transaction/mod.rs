@@ -20,15 +20,12 @@ use serde::{Deserialize, Serialize};
 pub use change_set::ChangeSet;
 use diem_crypto::{
     hash::{CryptoHash, EventAccumulatorHasher},
-    multi_ed25519::{MultiEd25519PublicKey, MultiEd25519Signature},
     traits::SigningKey,
     HashValue, PrivateKey, VRFProof,
 };
 use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
 pub use module::Module;
-use move_core_types::{
-    language_storage::TypeTag, transaction_argument::convert_txn_args,
-};
+use move_core_types::transaction_argument::convert_txn_args;
 use pow_types::StakingEvent;
 pub use script::{
     ArgumentABI, Script, ScriptABI, ScriptFunction, ScriptFunctionABI,
@@ -337,7 +334,12 @@ impl RawTransaction {
     pub fn sign(
         self, private_key: &ConsensusPrivateKey,
     ) -> Result<SignatureCheckedTransaction> {
-        let signature = private_key.sign(&self);
+        let signature = match self.payload {
+            TransactionPayload::PivotDecision(ref pivot_decision) => {
+                private_key.sign(pivot_decision)
+            }
+            _ => private_key.sign(&self),
+        };
         let public_key = private_key.public_key();
         Ok(SignatureCheckedTransaction(SignedTransaction::new(
             self, public_key, signature,
@@ -468,8 +470,6 @@ impl ElectionPayload {
         );
         ContractEvent::new(
             ElectionEvent::event_key(),
-            0,                                      /* sequence_number */
-            TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
             bcs::to_bytes(&event).unwrap(),
         )
     }
@@ -486,8 +486,6 @@ impl RetirePayload {
         let event = RetireEvent::new(self.node_id, self.votes);
         ContractEvent::new(
             RetireEvent::event_key(),
-            0,                                      /* sequence_number */
-            TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
             bcs::to_bytes(&event).unwrap(),
         )
     }
@@ -507,8 +505,6 @@ impl RegisterPayload {
         );
         ContractEvent::new(
             RegisterEvent::event_key(),
-            0,                                      /* sequence_number */
-            TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
             bcs::to_bytes(&event).unwrap(),
         )
     }
@@ -528,8 +524,6 @@ impl UpdateVotingPowerPayload {
         );
         ContractEvent::new(
             UpdateVotingPowerEvent::event_key(),
-            0,                                      /* sequence_number */
-            TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
             bcs::to_bytes(&event).unwrap(),
         )
     }
@@ -557,8 +551,6 @@ impl DisputePayload {
         };
         ContractEvent::new(
             DisputeEvent::event_key(),
-            0,                                      /* sequence_number */
-            TypeTag::Vector(Box::new(TypeTag::U8)), // TypeTag::ByteArray
             bcs::to_bytes(&event).unwrap(),
         )
     }
@@ -655,12 +647,12 @@ impl SignedTransaction {
     }
 
     pub fn new_multisig(
-        raw_txn: RawTransaction, public_key: MultiEd25519PublicKey,
-        signature: MultiEd25519Signature,
+        raw_txn: RawTransaction, public_keys: Vec<ConsensusPublicKey>,
+        signatures: Vec<ConsensusSignature>,
     ) -> SignedTransaction
     {
         let authenticator =
-            TransactionAuthenticator::multi_ed25519(public_key, signature);
+            TransactionAuthenticator::multi_bls(public_keys, signatures);
         SignedTransaction {
             raw_txn,
             authenticator,
@@ -670,6 +662,8 @@ impl SignedTransaction {
     pub fn authenticator(&self) -> TransactionAuthenticator {
         self.authenticator.clone()
     }
+
+    pub fn raw_txn(&self) -> RawTransaction { self.raw_txn.clone() }
 
     pub fn hash(&self) -> HashValue { self.raw_txn.hash() }
 
@@ -694,7 +688,12 @@ impl SignedTransaction {
     /// Checks that the signature of given transaction. Returns
     /// `Ok(SignatureCheckedTransaction)` if the signature is valid.
     pub fn check_signature(self) -> Result<SignatureCheckedTransaction> {
-        self.authenticator.verify(&self.raw_txn)?;
+        match self.payload() {
+            TransactionPayload::PivotDecision(pivot_decision) => {
+                self.authenticator.verify(pivot_decision)?
+            }
+            _ => self.authenticator.verify(&self.raw_txn)?,
+        }
         Ok(SignatureCheckedTransaction(self))
     }
 

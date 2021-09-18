@@ -70,8 +70,6 @@ pub enum ConsensusProposerType {
     FixedProposer,
     // Round robin rotation of proposers
     RotatingProposer,
-    // Committed history based proposer election
-    LeaderReputation(LeaderReputationConfig),
     // Pre-specified proposers for each round,
     // or default proposer if round proposer not
     // specified

@@ -62,7 +62,7 @@ pub struct ProposalGenerator {
     last_round_generated: Mutex<Round>,
     // Handle the interaction with PoW consensus.
     pow_handler: Arc<dyn PowInterface>,
-    // FIXME(lpl): Where to put them?
+    // TODO(lpl): Where to put them?
     pub private_key: ConsensusPrivateKey,
     pub public_key: ConsensusPublicKey,
     pub vrf_private_key: ConsensusVRFPrivateKey,
@@ -151,7 +151,7 @@ impl ProposalGenerator {
             // Avoid txn manager long poll it the root block has txns, so that
             // the leader can deliver the commit proof to others
             // without delay.
-            pending_blocks.push(self.block_store.root());
+            pending_blocks.insert(0, self.block_store.root());
 
             // Exclude all the pending transactions: these are all the ancestors
             // of parent (including) up to the root (including).
@@ -168,7 +168,11 @@ impl ProposalGenerator {
 
             // TODO(lpl): Check what to do if `parent_block !=
             // hqc.certified_block()`
-            let parent_block = pending_blocks.first().expect("root pushed");
+            let parent_block = pending_blocks.last().expect("root pushed");
+            assert!(
+                hqc.certified_block().id() == parent_block.id(),
+                "generate_proposal: hqc = parent"
+            );
 
             let mut payload = self
                 .txn_manager
@@ -185,8 +189,8 @@ impl ProposalGenerator {
                 payload.len()
             );
 
-            // FIXME(lpl): For now, sending default H256 will return the first
-            // pivot decision.
+            // Sending non-existent decision (default value here) will return
+            // the latest pivot decision.
             let parent_decision = parent_block
                 .block_info()
                 .pivot_decision()

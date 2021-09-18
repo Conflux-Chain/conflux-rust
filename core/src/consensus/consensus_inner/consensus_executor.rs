@@ -1075,12 +1075,6 @@ impl ConsensusExecutionHandler {
                     .update_pos_status(unlock_node_id, votes)
                     .expect("db error");
             }
-            for _dispute_node_id in self
-                .pos_verifier
-                .get_disputed_nodes(current_pos_ref, parent_pos_ref)
-            {
-                // FIXME(lpl): Implement dispute.
-            }
             if let Some((pos_epoch, reward_event)) = self
                 .pos_verifier
                 .get_reward_distribution_event(current_pos_ref, parent_pos_ref)

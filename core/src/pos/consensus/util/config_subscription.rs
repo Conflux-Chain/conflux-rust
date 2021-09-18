@@ -6,9 +6,8 @@
 // See http://www.gnu.org/licenses/
 
 use channel::diem_channel::Receiver;
-use diem_types::{
-    account_config::NewEpochEvent,
-    on_chain_config::{OnChainConfigPayload, ON_CHAIN_CONFIG_REGISTRY},
+use diem_types::on_chain_config::{
+    new_epoch_event_key, OnChainConfigPayload, ON_CHAIN_CONFIG_REGISTRY,
 };
 use subscription_service::ReconfigSubscription;
 
@@ -19,6 +18,6 @@ pub fn gen_consensus_reconfig_subscription(
     ReconfigSubscription::subscribe_all(
         "consensus",
         ON_CHAIN_CONFIG_REGISTRY.to_vec(),
-        vec![NewEpochEvent::event_key()],
+        vec![new_epoch_event_key()],
     )
 }

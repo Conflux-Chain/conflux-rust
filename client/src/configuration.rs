@@ -32,7 +32,6 @@ use cfxcore::{
     consensus_parameters::*,
     light_protocol::LightNodeConfiguration,
     machine::Machine,
-    pos::pow_handler::POS_TERM_EPOCHS,
     spec::CommonParams,
     sync::{ProtocolConfiguration, StateSyncConfiguration, SyncGraphConfig},
     sync_parameters::*,
@@ -295,7 +294,7 @@ build_config! {
         (vrf_proposal_threshold, (U256), U256::MAX)
         // Deferred epoch count before a confirmed epoch.
         (pos_pivot_decision_defer_epoch_count, (u64), 50)
-        (pos_reference_enable_height, (u64), 0)
+        (pos_reference_enable_height, (u64), u64::MAX)
         (pos_initial_nodes_path, (String), "./pos_config/initial_nodes.json".to_string())
         (pos_private_key_path, (String), "./pos_config/pos_key".to_string())
 
@@ -523,9 +522,6 @@ impl Configuration {
         } else {
             self.raw_conf.enable_optimistic_execution
         };
-        // FIXME(lpl): This is needed to return a valid cross-checkpoint pivot
-        // decision for now.
-        assert_eq!(self.raw_conf.era_epoch_count % POS_TERM_EPOCHS, 0);
         let mut conf = ConsensusConfig {
             chain_id: self.chain_id_params(),
             inner_conf: ConsensusInnerConfig {
