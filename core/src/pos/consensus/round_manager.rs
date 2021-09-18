@@ -806,6 +806,9 @@ impl RoundManager {
     pub async fn process_proposal_timeout(
         &mut self, round: Round,
     ) -> anyhow::Result<()> {
+        if round != self.round_state.current_round() {
+            return Ok(());
+        }
         if let Some(proposal) = self.proposer_election.choose_proposal_to_vote()
         {
             if self.is_validator() {
