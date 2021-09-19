@@ -497,7 +497,7 @@ impl DBManager {
         );
     }
 
-    pub fn pos_reward_by_pos_reward(
+    pub fn pos_reward_by_pos_epoch(
         &self, pos_epoch: u64,
     ) -> Option<PosRewardInfo> {
         self.load_decodable_val(
