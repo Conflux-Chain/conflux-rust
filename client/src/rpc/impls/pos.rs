@@ -11,6 +11,7 @@ use crate::{
                 Account, Block, BlockNumber, CommitteeState, EpochReward,
                 NodeLockStatus, Reward, RpcCommittee, RpcTermData,
                 RpcTransactionStatus, Signature, Status, Transaction,
+                VotePowerState,
             },
             RpcAddress,
         },
@@ -429,10 +430,14 @@ impl PosHandler {
     }
 }
 
-fn map_votes(list: &StatusList) -> Vec<(U64, U64)> {
+fn map_votes(list: &StatusList) -> Vec<VotePowerState> {
     let mut ans = Vec::with_capacity(list.len());
     for item in list.iter() {
-        ans.push((U64::from(item.view), U64::from(item.votes)));
+        // ans.push((U64::from(item.view), U64::from(item.votes)));
+        ans.push(VotePowerState {
+            end_block_number: U64::from(item.view),
+            power: U64::from(item.votes),
+        })
     }
     ans
 }
