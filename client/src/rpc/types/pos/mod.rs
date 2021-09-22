@@ -21,5 +21,7 @@ pub use self::{
     node_lock_status::{NodeLockStatus, VotePowerState},
     reward::{EpochReward, Reward},
     status::Status,
-    transaction::{RpcTransactionStatus, Transaction},
+    transaction::{
+        tx_type, RpcTransactionStatus, RpcTransactionType, Transaction,
+    },
 };

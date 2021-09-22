@@ -8,10 +8,10 @@ use crate::{
         traits::pos::Pos,
         types::{
             pos::{
-                Account, Block, BlockNumber, CommitteeState, EpochReward,
-                NodeLockStatus, Reward, RpcCommittee, RpcTermData,
-                RpcTransactionStatus, Signature, Status, Transaction,
-                VotePowerState,
+                tx_type, Account, Block, BlockNumber, CommitteeState,
+                EpochReward, NodeLockStatus, Reward, RpcCommittee, RpcTermData,
+                RpcTransactionStatus, RpcTransactionType, Signature, Status,
+                Transaction, VotePowerState,
             },
             RpcAddress,
         },
@@ -404,6 +404,7 @@ impl PosHandler {
                     number: U64::from(version),
                     payload: Some(signed_tx.payload().clone()),
                     status,
+                    tx_type: tx_type(signed_tx.payload().clone()),
                 })
             }
             CoreTransaction::GenesisTransaction(_) => None,
@@ -415,6 +416,7 @@ impl PosHandler {
                     number: U64::from(version),
                     payload: None,
                     status: None,
+                    tx_type: RpcTransactionType::BlockMetadata,
                 };
                 if let Some(tx_info) =
                     diem_db.get_transaction_info(version).ok()
