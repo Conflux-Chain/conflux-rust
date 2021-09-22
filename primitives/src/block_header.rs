@@ -52,7 +52,6 @@ pub struct BlockHeaderRlpPart {
     custom: Vec<Bytes>,
     /// Nonce of the block
     nonce: U256,
-    /// FIXME(peilun): Handle compatibility issue for hard fork.
     /// Referred PoS block ID.
     pos_reference: Option<H256>,
 }

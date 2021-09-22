@@ -4079,7 +4079,14 @@ impl ConsensusGraphInner {
                 if epoch_hash == *pivot_hash {
                     return true;
                 }
+            } else {
+                debug!(
+                    "pivot_block_processed: {:?} is not on pivot chain",
+                    pivot_hash
+                );
             }
+        } else {
+            debug!("pivot_block_processed: {:?} is not processed", pivot_hash);
         }
         false
     }
