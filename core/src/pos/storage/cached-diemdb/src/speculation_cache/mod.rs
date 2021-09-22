@@ -155,7 +155,7 @@ impl SpeculationCache {
             vec![], /* latest_reconfig_events */
         );
         if let Some(synced_tree_state) = startup_info.synced_tree_state {
-            // FIXME(lpl): synced_tree_state.pos_state is left unhandled since
+            // TODO(lpl): synced_tree_state.pos_state is left unhandled since
             // this is not used.
             cache.update_synced_trees(ExecutedTrees::from(synced_tree_state));
         }

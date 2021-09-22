@@ -80,26 +80,6 @@ impl Diemsum {
             .map(|blob_and_proof| blob_and_proof.0)
     }
 
-    pub fn scan_events_by_seq(
-        &self, key: &EventKey, from_seq: u64, to_seq: u64,
-    ) -> Result<Vec<(Version, ContractEvent)>> {
-        ensure!(
-            to_seq >= from_seq,
-            "'from' sequence {} > 'to' sequence {}",
-            from_seq,
-            to_seq
-        );
-        Ok((from_seq..to_seq)
-            .step_by(MAX_LIMIT as usize)
-            .map(|seq| {
-                self.db.get_events(key, seq, Order::Ascending, MAX_LIMIT)
-            })
-            .collect::<Result<Vec<_>>>()?
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>())
-    }
-
     pub fn get_events_by_version(
         &self, version: Version,
     ) -> Result<Vec<ContractEvent>> {

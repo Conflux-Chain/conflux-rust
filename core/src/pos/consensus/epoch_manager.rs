@@ -10,9 +10,6 @@ use super::{
     counters,
     error::{error_kind, DbError},
     liveness::{
-        leader_reputation::{
-            ActiveInactiveHeuristic, DiemDBBackend, LeaderReputation,
-        },
         proposal_generator::ProposalGenerator,
         proposer_election::ProposerElection,
         rotating_proposer_election::{choose_leader, RotatingProposer},
@@ -222,18 +219,6 @@ impl EpochManager {
                     vec![proposer],
                     self.config.contiguous_rounds,
                 ))
-            }
-            ConsensusProposerType::LeaderReputation(heuristic_config) => {
-                let backend = Box::new(DiemDBBackend::new(
-                    proposers.len(),
-                    self.storage.diem_db(),
-                ));
-                let heuristic = Box::new(ActiveInactiveHeuristic::new(
-                    self.author,
-                    heuristic_config.active_weights,
-                    heuristic_config.inactive_weights,
-                ));
-                Box::new(LeaderReputation::new(proposers, backend, heuristic))
             }
             ConsensusProposerType::RoundProposer(round_proposers) => {
                 // Hardcoded to the first proposer
@@ -748,7 +733,7 @@ impl EpochManager {
             self.start_processor(payload).await;
             diem_debug!("expect_new_epoch: processor started!");
         } else {
-            panic!("Reconfig sender dropped, unable to start new epoch.");
+            diem_error!("Reconfig sender dropped, unable to start new epoch.");
         }
     }
 

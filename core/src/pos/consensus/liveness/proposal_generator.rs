@@ -62,7 +62,7 @@ pub struct ProposalGenerator {
     last_round_generated: Mutex<Round>,
     // Handle the interaction with PoW consensus.
     pow_handler: Arc<dyn PowInterface>,
-    // FIXME(lpl): Where to put them?
+    // TODO(lpl): Where to put them?
     pub private_key: ConsensusPrivateKey,
     pub public_key: ConsensusPublicKey,
     pub vrf_private_key: ConsensusVRFPrivateKey,
@@ -189,8 +189,8 @@ impl ProposalGenerator {
                 payload.len()
             );
 
-            // FIXME(lpl): For now, sending default H256 will return the first
-            // pivot decision.
+            // Sending non-existent decision (default value here) will return
+            // the latest pivot decision.
             let parent_decision = parent_block
                 .block_info()
                 .pivot_decision()

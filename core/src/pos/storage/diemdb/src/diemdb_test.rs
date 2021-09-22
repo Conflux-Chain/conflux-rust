@@ -184,6 +184,7 @@ fn test_sync_transactions_impl(
     }
 }
 
+/*
 fn get_events_by_event_key(
     db: &DiemDB, ledger_info: &LedgerInfo, event_key: &EventKey,
     first_seq_num: u64, last_seq_num: u64, order: Order, is_latest: bool,
@@ -239,7 +240,6 @@ fn get_events_by_event_key(
         if num_results == 0 {
             break;
         }
-        assert_eq!(events.first().unwrap().sequence_number(), cursor);
 
         if order == Order::Ascending {
             if cursor + num_results > last_seq_num {
@@ -319,6 +319,7 @@ fn verify_events_by_event_key(
         .collect::<Result<Vec<_>>>()
         .unwrap();
 }
+ */
 
 fn group_events_by_event_key(
     txns_to_commit: &[TransactionToCommit],

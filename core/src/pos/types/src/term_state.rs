@@ -18,9 +18,7 @@ use proptest_derive::Arbitrary;
 use cfx_types::H256;
 use diem_crypto::{HashValue, VRFProof};
 use diem_logger::prelude::*;
-use move_core_types::{
-    language_storage::TypeTag, vm_status::DiscardedVMStatus,
-};
+use move_core_types::vm_status::DiscardedVMStatus;
 use pow_types::StakingEvent;
 
 use crate::{
@@ -231,7 +229,7 @@ pub mod lock_status {
                 .expect("Passed in votes is always no less than self.locked")
         }
 
-        #[allow(unused)]
+        #[must_use]
         pub(super) fn forfeit(&mut self) {
             if self.exempt_from_forfeit.is_some() {
                 return;
@@ -615,7 +613,6 @@ impl TermList {
     }
 }
 
-// FIXME(lpl): Check if we only need the latest version persisted.
 #[derive(Clone, Serialize, Eq, PartialEq, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct PosState {
@@ -1020,8 +1017,6 @@ impl PosState {
             let node = self.node_map.get(&addr).expect("exists");
             let unlock_event = ContractEvent::new(
                 UnlockEvent::event_key(),
-                0,                                      /* sequence_number */
-                TypeTag::Vector(Box::new(TypeTag::U8)), /* TypeTag::ByteArray */
                 bcs::to_bytes(&UnlockEvent {
                     node_id: *addr,
                     unlocked: node.lock_status.unlocked_votes(),
@@ -1173,23 +1168,28 @@ impl PosState {
             Some(node) => {
                 node.lock_status.new_unlock(self.current_view, votes)?
             }
-            None => {
-                return Err(anyhow!("Retiring node does not exist"));
-            }
+            None => bail!("Retiring node does not exist"),
         };
         self.record_update_views(addr, views);
         Ok(())
     }
 
     pub fn force_retire_node(&mut self, addr: &AccountAddress) -> Result<()> {
-        diem_trace!("retire_node: {:?}", addr);
+        diem_trace!("force_retire_node: {:?}", addr);
         let views = match self.node_map.get_mut(&addr) {
             Some(node) => node.lock_status.force_retire(self.current_view),
-            None => {
-                return Err(anyhow!("Retiring node does not exist"));
-            }
+            None => bail!("Force retiring node does not exist"),
         };
         self.record_update_views(addr, views);
+        Ok(())
+    }
+
+    pub fn forfeit_node(&mut self, addr: &AccountAddress) -> Result<()> {
+        diem_trace!("forfeit_node: {:?}", addr);
+        match self.node_map.get_mut(&addr) {
+            Some(node) => node.lock_status.forfeit(),
+            None => bail!("Forfeiting node does not exist"),
+        }
         Ok(())
     }
 }

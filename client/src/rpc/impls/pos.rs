@@ -6,16 +6,20 @@ use crate::{
     common::delegate_convert::into_jsonrpc_result,
     rpc::{
         traits::pos::Pos,
-        types::pos::{
-            Account, Block, BlockNumber, BlockTransactions, CommitteeState,
-            NodeLockStatus, RpcCommittee, RpcTermData, RpcTransactionStatus,
-            Signature, Status, Transaction, VotePowerState,
+        types::{
+            pos::{
+                Account, Block, BlockNumber, CommitteeState, EpochReward,
+                NodeLockStatus, Reward, RpcCommittee, RpcTermData,
+                RpcTransactionStatus, Signature, Status, Transaction,VotePowerState
+            },
+            RpcAddress,
         },
         RpcResult,
     },
 };
-use cfx_types::{hexstr_to_h256, H256, U64};
-use cfxcore::consensus::pos_handler::PosVerifier;
+use cfx_addr::Network;
+use cfx_types::{hexstr_to_h256, H256, U256, U64};
+use cfxcore::{consensus::pos_handler::PosVerifier, BlockDataManager};
 use consensus_types::block::Block as ConsensusBlock;
 use diem_crypto::hash::HashValue;
 use diem_types::{
@@ -26,18 +30,26 @@ use diem_types::{
     transaction::Transaction as CoreTransaction,
 };
 use itertools::Itertools;
-use jsonrpc_core::Result as JsonRpcResult;
-use std::sync::Arc;
+use jsonrpc_core::{Error, ErrorCode, Result as JsonRpcResult};
+use std::{collections::HashMap, sync::Arc};
 use storage_interface::{DBReaderForPoW, DbReader};
 
 pub struct PosHandler {
     pos_handler: Arc<PosVerifier>,
+    pow_data_manager: Arc<BlockDataManager>,
+    network_type: Network,
 }
 
 impl PosHandler {
-    pub fn new(pos_verifier: Arc<PosVerifier>) -> Self {
+    pub fn new(
+        pos_verifier: Arc<PosVerifier>,
+        pow_data_manager: Arc<BlockDataManager>, network_type: Network,
+    ) -> Self
+    {
         PosHandler {
             pos_handler: pos_verifier,
+            pow_data_manager,
+            network_type,
         }
     }
 
@@ -224,8 +236,6 @@ impl PosHandler {
                     parent_hash: hash_value_to_h256(b.parent_hash),
                     timestamp: U64::from(b.timestamp),
                     pivot_decision: Some(U64::from(b.pivot_decision.height)),
-                    transactions: BlockTransactions::Hashes(vec![]), // TODO
-                    is_txs_detail: false,                            //TODO
                     signatures: vec![],
                 };
                 // get signatures info
@@ -326,8 +336,6 @@ impl PosHandler {
                     parent_hash: hash_value_to_h256(b.parent_id()),
                     timestamp: U64::from(b.timestamp_usecs()),
                     pivot_decision: Default::default(),
-                    transactions: BlockTransactions::Hashes(vec![]), // TODO
-                    is_txs_detail: false,                            //TODO
                     signatures: vec![],
                 };
                 current_height += 1;
@@ -493,5 +501,47 @@ impl Pos for PosHandler {
                 end_epoch.as_u64(),
             ),
         )
+    }
+
+    fn pos_get_rewards_by_epoch(
+        &self, epoch: U64,
+    ) -> JsonRpcResult<Option<EpochReward>> {
+        let mut epoch_reward = None;
+        if let Some(reward) = self
+            .pow_data_manager
+            .pos_reward_by_pos_epoch(epoch.as_u64())
+        {
+            let default_value = U256::from(0);
+            let mut account_reward_map = HashMap::new();
+            let mut account_address_map = HashMap::new();
+            for r in reward.account_rewards.iter() {
+                let key = r.pos_identifier;
+                let r1 = account_reward_map.get(&key).unwrap_or(&default_value);
+                let merged_reward = r.reward + r1;
+                account_reward_map.insert(key, merged_reward);
+
+                let rpc_address =
+                    RpcAddress::try_from_h160(r.address, self.network_type)
+                        .map_err(|e| Error {
+                            code: ErrorCode::InternalError,
+                            message: e,
+                            data: None,
+                        })?;
+                account_address_map.insert(key, rpc_address);
+            }
+            let account_rewards = account_reward_map
+                .iter()
+                .map(|(k, v)| Reward {
+                    pos_address: *k,
+                    pow_address: account_address_map.get(k).unwrap().clone(),
+                    reward: *v,
+                })
+                .collect();
+            epoch_reward = Some(EpochReward {
+                pow_epoch_hash: reward.execution_epoch_hash,
+                account_rewards,
+            })
+        };
+        Ok(epoch_reward)
     }
 }

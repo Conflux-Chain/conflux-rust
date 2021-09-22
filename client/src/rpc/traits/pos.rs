@@ -3,7 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::pos::{
-    Account, Block, BlockNumber, CommitteeState, Status, Transaction,
+    Account, Block, BlockNumber, CommitteeState, EpochReward, Status,
+    Transaction,
 };
 use cfx_types::{H256, U64};
 use diem_types::{
@@ -61,4 +62,9 @@ pub trait Pos {
     fn pos_get_ledger_infos_by_epoch(
         &self, start_epoch: U64, end_epoch: U64,
     ) -> JsonRpcResult<Vec<LedgerInfoWithSignatures>>;
+
+    #[rpc(name = "pos_getRewardsByEpoch")]
+    fn pos_get_rewards_by_epoch(
+        &self, epoch: U64,
+    ) -> JsonRpcResult<Option<EpochReward>>;
 }

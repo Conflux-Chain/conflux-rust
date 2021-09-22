@@ -74,8 +74,6 @@ impl SigningKey for BLSPrivateKey {
     type SignatureMaterial = BLSSignature;
     type VerifyingKeyMaterial = BLSPublicKey;
 
-    // FIXME(lpl): Append public key or rely on a proof in ElectionTransaction
-    // to avoid attack?
     fn sign<T: CryptoHash + Serialize>(
         &self, message: &T,
     ) -> Self::SignatureMaterial {

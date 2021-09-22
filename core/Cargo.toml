@@ -90,7 +90,7 @@ unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git",
 strum = "0.20"
 strum_macros = "0.20"
 smart-default = "0.6.0"
-bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "836339081bb832450408c0fec5d6bd0015370bb0"}
+bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "218bcb421085c5a5dd49386a2cc9b634d8abb121"}
 tiny-keccak = {version = "2.0",  features = ["keccak"]}
 bcs = "0.1.2"
 async-trait = "0.1"
@@ -126,7 +126,6 @@ proptest = { version = "1.0.0", optional = true }
 proptest-derive = { version = "0.3.0", optional = true }
 diem-temppath = { path = "./src/pos/common/temppath" }
 crash-handler = { path = "../core/src/pos/common/crash-handler" }
-termion = { version = "1.5.6", default-features = false }
 
 [dev-dependencies]
 criterion = "0.3"
