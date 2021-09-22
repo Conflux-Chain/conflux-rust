@@ -803,9 +803,6 @@ impl PosState {
             }
         };
 
-        // if !matches!(node.status, NodeStatus::Accepted) {
-        //     return Some(DiscardedVMStatus::ELECTION_NON_ACCEPTED_NODE);
-        // }
         if election_tx
             .target_term
             .checked_mul(ROUND_PER_TERM)
@@ -815,16 +812,13 @@ impl PosState {
         }
 
         let target_view = election_tx.target_term * ROUND_PER_TERM;
-        // if node.status_start_view + ELECTION_AFTER_ACCEPTED_ROUND >
-        // target_view {
-        //     return Some(DiscardedVMStatus::ELECTION_TOO_SOON);
-        // }
+
         if node.lock_status.available_votes() == 0 {
             return Some(DiscardedVMStatus::ELECTION_WITHOUT_VOTES);
         }
-        if target_view > self.current_view + ELECTION_TERM_START_ROUND
-            || target_view < self.current_view + ELECTION_TERM_END_ROUND
-        {
+        // Do not check `ELECTION_TERM_END_ROUND` because we are using the
+        // committed state in this simple validation.
+        if target_view <= self.current_view + ELECTION_TERM_END_ROUND {
             return Some(DiscardedVMStatus::ELECTION_TERGET_TERM_NOT_OPEN);
         }
         None
