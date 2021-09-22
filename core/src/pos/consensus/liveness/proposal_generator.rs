@@ -222,23 +222,7 @@ impl ProposalGenerator {
             {
                 payload.pop();
             }
-            /*
-            match self.pow_handler.next_pivot_decision(parent_decision).await {
 
-                Some((height, block_hash)) => {
-                    let pivot_decision =
-                        PivotBlockDecision { height, block_hash };
-                    let raw_tx = RawTransaction::new_pivot_decision(
-                        self.author,
-                        0,
-                        pivot_decision,
-                        ChainId::default(),
-                    );
-                    let signed_tx = raw_tx
-                        .sign(&self.private_key, self.public_key.clone())?
-                        .into_inner();
-                    payload.push(signed_tx);
-             */
             match new_pivot_decision {
                 Some(block_hash) => {
                     // Included new registered or updated nodes as transactions.

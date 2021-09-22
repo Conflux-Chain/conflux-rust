@@ -229,8 +229,12 @@ fn setup_rpc_apis(
                 handler.extend_with(RpcProxy::new(trace, interceptor));
             }
             Api::Pos => {
-                let pos =
-                    PosHandler::new(common.pos_handler.clone()).to_delegate();
+                let pos = PosHandler::new(
+                    common.pos_handler.clone(),
+                    rpc.consensus.get_data_manager().clone(),
+                    *rpc.sync.network.get_network_type(),
+                )
+                .to_delegate();
                 handler.extend_with(pos);
             }
         }

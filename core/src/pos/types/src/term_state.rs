@@ -28,7 +28,7 @@ use crate::{
     contract_event::ContractEvent,
     epoch_state::EpochState,
     event::EventKey,
-    transaction::{ElectionPayload, RetirePayload},
+    transaction::ElectionPayload,
     validator_config::{
         ConsensusPublicKey, ConsensusSignature, ConsensusVRFPublicKey,
     },
@@ -200,7 +200,14 @@ pub mod lock_status {
                 return Ok(vec![]);
             }
             if self.locked < votes {
-                bail!("not enough votes to unlock");
+                // Do not return error here because PoW do not check retire
+                // events.
+                diem_warn!(
+                    "Invalid retire events: locked={} to_unlock={}",
+                    self.locked,
+                    votes
+                );
+                return Ok(vec![]);
             }
             self.locked -= votes;
             self.available_votes -= votes;
@@ -796,9 +803,6 @@ impl PosState {
             }
         };
 
-        // if !matches!(node.status, NodeStatus::Accepted) {
-        //     return Some(DiscardedVMStatus::ELECTION_NON_ACCEPTED_NODE);
-        // }
         if election_tx
             .target_term
             .checked_mul(ROUND_PER_TERM)
@@ -808,35 +812,15 @@ impl PosState {
         }
 
         let target_view = election_tx.target_term * ROUND_PER_TERM;
-        // if node.status_start_view + ELECTION_AFTER_ACCEPTED_ROUND >
-        // target_view {
-        //     return Some(DiscardedVMStatus::ELECTION_TOO_SOON);
-        // }
+
         if node.lock_status.available_votes() == 0 {
             return Some(DiscardedVMStatus::ELECTION_WITHOUT_VOTES);
         }
-        if target_view > self.current_view + ELECTION_TERM_START_ROUND
-            || target_view < self.current_view + ELECTION_TERM_END_ROUND
-        {
+        // Do not check `ELECTION_TERM_END_ROUND` because we are using the
+        // committed state in this simple validation.
+        if target_view <= self.current_view + ELECTION_TERM_END_ROUND {
             return Some(DiscardedVMStatus::ELECTION_TERGET_TERM_NOT_OPEN);
         }
-        None
-    }
-
-    pub fn validate_retire_simple(
-        &self, retire_tx: &RetirePayload,
-    ) -> Option<DiscardedVMStatus> {
-        let node = match self.node_map.get(&retire_tx.node_id) {
-            Some(node) => node,
-            None => {
-                return Some(DiscardedVMStatus::RETIRE_NON_EXISITENT_NODE);
-            }
-        };
-
-        if node.lock_status.locked < retire_tx.votes {
-            return Some(DiscardedVMStatus::RETIRE_WITHOUT_ENOUGH_VOTES);
-        }
-
         None
     }
 
@@ -903,21 +887,6 @@ impl PosState {
                 .serving_votes(target_term_offset, &node_id.addr)
         {
             bail!("Election without enough votes");
-        }
-
-        Ok(())
-    }
-
-    pub fn validate_retire(
-        &self, retire_payload: &RetirePayload,
-    ) -> Result<()> {
-        let node = match self.node_map.get(&retire_payload.node_id) {
-            Some(node) => node,
-            None => return Err(anyhow!("Retirement for non-existent node.")),
-        };
-        if node.lock_status.locked < retire_payload.votes {
-            // PoW allows retiring more than once, so do not return error here.
-            bail!("not enough votes for retire");
         }
 
         Ok(())

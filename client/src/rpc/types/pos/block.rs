@@ -28,8 +28,6 @@ pub struct Block {
     ///
     pub pivot_decision: Option<U64>,
     ///
-    pub transactions: BlockTransactions,
-    ///
     pub signatures: Vec<Signature>,
 }
 
