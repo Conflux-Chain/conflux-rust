@@ -10,7 +10,8 @@ use crate::{
             pos::{
                 Account, Block, BlockNumber, CommitteeState, EpochReward,
                 NodeLockStatus, Reward, RpcCommittee, RpcTermData,
-                RpcTransactionStatus, Signature, Status, Transaction,VotePowerState
+                RpcTransactionStatus, Signature, Status, Transaction,
+                VotePowerState,
             },
             RpcAddress,
         },
