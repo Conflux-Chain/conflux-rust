@@ -71,7 +71,7 @@ pub fn start_consensus(
     ));
     let pow_handler = Arc::new(PowHandler::new(runtime.handle().clone()));
     let executor = Box::new(Executor::<FakeVM>::new(
-        db_with_cache.clone(),
+        db_with_cache,
         pow_handler.clone(),
         consensus_db.clone() as Arc<dyn LedgerBlockRW>,
     ));
@@ -101,7 +101,6 @@ pub fn start_consensus(
         pow_handler.clone(),
         author,
         tx_sender,
-        db_with_cache,
     );
 
     runtime.spawn(epoch_mgr.start(

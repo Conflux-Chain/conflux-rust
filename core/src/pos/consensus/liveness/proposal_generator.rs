@@ -31,7 +31,6 @@ use crate::pos::consensus::{
     block_storage::BlockReader, state_replication::TxnManager,
     util::time_service::TimeService,
 };
-use cached_diemdb::CachedDiemDB;
 
 #[cfg(test)]
 #[path = "proposal_generator_test.rs"]
@@ -78,7 +77,6 @@ impl ProposalGenerator {
         private_key: ConsensusPrivateKey, public_key: ConsensusPublicKey,
         vrf_private_key: ConsensusVRFPrivateKey,
         vrf_public_key: ConsensusVRFPublicKey,
-        db_with_cache: Arc<CachedDiemDB>,
     ) -> Self
     {
         Self {
@@ -89,7 +87,6 @@ impl ProposalGenerator {
             max_block_size,
             last_round_generated: Mutex::new(0),
             pow_handler,
-            db_with_cache,
             private_key,
             public_key,
             vrf_private_key,
