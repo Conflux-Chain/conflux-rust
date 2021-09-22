@@ -28,7 +28,7 @@ use crate::{
     contract_event::ContractEvent,
     epoch_state::EpochState,
     event::EventKey,
-    transaction::{ElectionPayload, RetirePayload},
+    transaction::ElectionPayload,
     validator_config::{
         ConsensusPublicKey, ConsensusSignature, ConsensusVRFPublicKey,
     },
@@ -200,7 +200,14 @@ pub mod lock_status {
                 return Ok(vec![]);
             }
             if self.locked < votes {
-                bail!("not enough votes to unlock");
+                // Do not return error here because PoW do not check retire
+                // events.
+                diem_warn!(
+                    "Invalid retire events: locked={} to_unlock={}",
+                    self.locked,
+                    votes
+                );
+                return Ok(vec![]);
             }
             self.locked -= votes;
             self.available_votes -= votes;
@@ -823,23 +830,6 @@ impl PosState {
         None
     }
 
-    pub fn validate_retire_simple(
-        &self, retire_tx: &RetirePayload,
-    ) -> Option<DiscardedVMStatus> {
-        let node = match self.node_map.get(&retire_tx.node_id) {
-            Some(node) => node,
-            None => {
-                return Some(DiscardedVMStatus::RETIRE_NON_EXISITENT_NODE);
-            }
-        };
-
-        if node.lock_status.locked < retire_tx.votes {
-            return Some(DiscardedVMStatus::RETIRE_WITHOUT_ENOUGH_VOTES);
-        }
-
-        None
-    }
-
     pub fn validate_pivot_decision_simple(
         &self, pivot_decision_tx: &PivotBlockDecision,
     ) -> Option<DiscardedVMStatus> {
@@ -903,21 +893,6 @@ impl PosState {
                 .serving_votes(target_term_offset, &node_id.addr)
         {
             bail!("Election without enough votes");
-        }
-
-        Ok(())
-    }
-
-    pub fn validate_retire(
-        &self, retire_payload: &RetirePayload,
-    ) -> Result<()> {
-        let node = match self.node_map.get(&retire_payload.node_id) {
-            Some(node) => node,
-            None => return Err(anyhow!("Retirement for non-existent node.")),
-        };
-        if node.lock_status.locked < retire_payload.votes {
-            // PoW allows retiring more than once, so do not return error here.
-            bail!("not enough votes for retire");
         }
 
         Ok(())

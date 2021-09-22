@@ -135,20 +135,6 @@ impl VMExecutor for FakeVM {
                             vec![election_payload.to_event()]
                         }
                         TransactionPayload::Retire(retire_payload) => {
-                            if !catch_up_mode {
-                                state_view
-                                    .pos_state()
-                                    .validate_retire(retire_payload)
-                                    .map_err(|e| {
-                                        diem_error!(
-                                            "retirement tx error: {:?}",
-                                            e
-                                        );
-                                        VMStatus::Error(
-                                            StatusCode::CFX_INVALID_TX,
-                                        )
-                                    })?;
-                            }
                             vec![retire_payload.to_event()]
                         }
                         TransactionPayload::PivotDecision(pivot_decision) => {

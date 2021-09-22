@@ -31,6 +31,7 @@ use crate::pos::consensus::{
     block_storage::BlockReader, state_replication::TxnManager,
     util::time_service::TimeService,
 };
+use cached_diemdb::CachedDiemDB;
 
 #[cfg(test)]
 #[path = "proposal_generator_test.rs"]
@@ -77,6 +78,7 @@ impl ProposalGenerator {
         private_key: ConsensusPrivateKey, public_key: ConsensusPublicKey,
         vrf_private_key: ConsensusVRFPrivateKey,
         vrf_public_key: ConsensusVRFPublicKey,
+        db_with_cache: Arc<CachedDiemDB>,
     ) -> Self
     {
         Self {
@@ -87,6 +89,7 @@ impl ProposalGenerator {
             max_block_size,
             last_round_generated: Mutex::new(0),
             pow_handler,
+            db_with_cache,
             private_key,
             public_key,
             vrf_private_key,
@@ -222,23 +225,7 @@ impl ProposalGenerator {
             {
                 payload.pop();
             }
-            /*
-            match self.pow_handler.next_pivot_decision(parent_decision).await {
 
-                Some((height, block_hash)) => {
-                    let pivot_decision =
-                        PivotBlockDecision { height, block_hash };
-                    let raw_tx = RawTransaction::new_pivot_decision(
-                        self.author,
-                        0,
-                        pivot_decision,
-                        ChainId::default(),
-                    );
-                    let signed_tx = raw_tx
-                        .sign(&self.private_key, self.public_key.clone())?
-                        .into_inner();
-                    payload.push(signed_tx);
-             */
             match new_pivot_decision {
                 Some(block_hash) => {
                     // Included new registered or updated nodes as transactions.

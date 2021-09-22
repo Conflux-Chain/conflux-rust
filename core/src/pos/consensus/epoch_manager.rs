@@ -38,6 +38,7 @@ use crate::pos::{
     mempool::SubmissionStatus, protocol::network_sender::NetworkSender,
 };
 use anyhow::{bail, ensure, Context};
+use cached_diemdb::CachedDiemDB;
 use channel::diem_channel;
 use consensus_types::{
     common::{Author, Round},
@@ -117,6 +118,7 @@ pub struct EpochManager {
         SignedTransaction,
         oneshot::Sender<anyhow::Result<SubmissionStatus>>,
     )>,
+    db_with_cache: Arc<CachedDiemDB>,
 }
 
 impl EpochManager {
@@ -138,6 +140,7 @@ impl EpochManager {
             SignedTransaction,
             oneshot::Sender<anyhow::Result<SubmissionStatus>>,
         )>,
+        db_with_cache: Arc<CachedDiemDB>,
     ) -> Self
     {
         let config = node_config.consensus.clone();
@@ -161,6 +164,7 @@ impl EpochManager {
             reconfig_events,
             pow_handler,
             tx_sender,
+            db_with_cache,
         }
     }
 
@@ -434,6 +438,7 @@ impl EpochManager {
                     public_key,
                     vrf_key.private_key(),
                     vrf_key.public_key(),
+                    self.db_with_cache.clone(),
                 ))
             }
             None => None,
