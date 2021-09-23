@@ -539,6 +539,7 @@ impl Pos for PosHandler {
                     pow_address: account_address_map.get(k).unwrap().clone(),
                     reward: *v,
                 })
+                .filter(|r| r.reward > U256::from(0))
                 .collect();
             epoch_reward = Some(EpochReward {
                 pow_epoch_hash: reward.execution_epoch_hash,

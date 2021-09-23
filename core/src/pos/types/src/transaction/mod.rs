@@ -453,6 +453,7 @@ impl TransactionPayload {
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ElectionPayload {
     pub public_key: ConsensusPublicKey,
     pub vrf_public_key: ConsensusVRFPublicKey,
@@ -476,6 +477,7 @@ impl ElectionPayload {
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RetirePayload {
     pub node_id: AccountAddress,
     pub votes: u64,
@@ -492,6 +494,7 @@ impl RetirePayload {
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RegisterPayload {
     pub public_key: ConsensusPublicKey,
     pub vrf_public_key: ConsensusVRFPublicKey,
@@ -511,6 +514,7 @@ impl RegisterPayload {
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateVotingPowerPayload {
     node_address: AccountAddress,
     voting_power: u64,
@@ -530,6 +534,7 @@ impl UpdateVotingPowerPayload {
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DisputePayload {
     pub address: AccountAddress,
     pub bls_pub_key: ConsensusPublicKey,
