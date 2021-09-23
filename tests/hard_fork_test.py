@@ -24,7 +24,8 @@ INCREASE_STAKE_TOPIC = encode_hex_0x(keccak(b"IncreaseStake(bytes32,uint64)"))
 class ExampleTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 7
-        # self.conf_parameters["vrf_proposal_threshold"] = '"{}"'.format(int_to_hex(int(2 ** 256 / 2)))
+        # 1e-9 chance of an empty round with no proposer.
+        self.conf_parameters["vrf_proposal_threshold"] = '"{}"'.format(int_to_hex(int(2 ** 256 / 300 * 20)))
         self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = '120'
         # self.conf_parameters["log_level"] = '"trace"'
         self.conf_parameters["dev_allow_phase_change_without_peer"] = "false"

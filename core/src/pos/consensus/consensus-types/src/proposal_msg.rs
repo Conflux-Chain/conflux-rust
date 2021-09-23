@@ -93,7 +93,10 @@ impl ProposalMsg {
         if let Some(vrf_proof) = self.proposal.vrf_proof() {
             validator.verify_vrf(
                 self.proposal.author().unwrap(),
-                &self.proposal.block_data().vrf_round_seed(epoch_vrf_seed),
+                &self.proposal.block_data().vrf_round_seed(
+                    epoch_vrf_seed,
+                    self.proposal.vrf_nonce().expect("proof checked"),
+                ),
                 vrf_proof,
             )?;
         }

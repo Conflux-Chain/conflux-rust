@@ -51,6 +51,10 @@ impl VrfProposer {
             epoch_state,
         }
     }
+
+    pub fn get_vrf_number(&self, block: &Block) -> Option<U256> {
+        Some(block.vrf_proof()?.to_hash().ok()?.to_u256())
+    }
 }
 
 impl ProposerElection for VrfProposer {
@@ -70,32 +74,57 @@ impl ProposerElection for VrfProposer {
             *self.current_round.lock(),
             "VRF election can not generate vrf_proof for other rounds"
         );
-        // TODO(lpl): Unify seed computation.
+        let voting_power =
+            match self.epoch_state.verifier.get_voting_power(&author) {
+                None => return false,
+                Some(p) => p,
+            };
+        // TODO(lpl): Unify seed computation and avoid duplicate computation
+        // with `gen_vrf_nonce_and_proof`.
         let mut round_seed = self.current_seed.lock().clone();
         round_seed.extend_from_slice(&round.to_be_bytes());
-        let vrf_output = self
-            .vrf_private_key
-            .compute(round_seed.as_slice())
-            .unwrap()
-            .to_hash()
-            .unwrap();
-        let vrf_number = U256::from_big_endian(vrf_output.as_ref());
-        vrf_number <= self.proposal_threshold
+        for nonce in 0..=voting_power {
+            let mut nonce_round_seed = round_seed.clone();
+            nonce_round_seed.extend_from_slice(&nonce.to_be_bytes());
+            let vrf_proof = self
+                .vrf_private_key
+                .compute(nonce_round_seed.as_slice())
+                .expect("vrf compute fail");
+            let vrf_number =
+                vrf_proof.to_hash().expect("vrf to hash fail").to_u256();
+            if vrf_number <= self.proposal_threshold {
+                return true;
+            }
+        }
+        false
     }
 
     fn is_valid_proposal(&self, block: &Block) -> bool {
-        let mut round_seed = self.current_seed.lock().clone();
-        round_seed.extend_from_slice(&block.round().to_be_bytes());
+        let voting_power = match self
+            .epoch_state
+            .verifier
+            .get_voting_power(&block.author().expect("checked"))
+        {
+            None => return false,
+            Some(p) => p,
+        };
+        let nonce = block.vrf_nonce().unwrap();
+        if nonce > voting_power || *self.current_round.lock() != block.round() {
+            return false;
+        }
+        let seed = block
+            .block_data()
+            .vrf_round_seed(self.current_seed.lock().as_slice(), nonce);
         let vrf_hash = match self
             .epoch_state
             .verifier
-            .get_vrf_public_key(&block.author().expect("proposals have author"))
+            .get_vrf_public_key(&block.author().expect("checked"))
         {
             Some(Some(vrf_public_key)) => {
                 match block
                     .vrf_proof()
                     .unwrap()
-                    .verify(round_seed.as_slice(), &vrf_public_key)
+                    .verify(seed.as_slice(), &vrf_public_key)
                 {
                     Ok(vrf_hash) => vrf_hash,
                     Err(e) => {
@@ -112,8 +141,7 @@ impl ProposerElection for VrfProposer {
                 return false;
             }
         };
-        let vrf_number = vrf_hash.to_u256();
-        vrf_number <= self.proposal_threshold
+        vrf_hash.to_u256() <= self.proposal_threshold
     }
 
     fn is_random_election(&self) -> bool { true }
@@ -131,14 +159,8 @@ impl ProposerElection for VrfProposer {
         }
         let old_proposal = self.proposal_candidates.lock();
         if old_proposal.is_none()
-            || old_proposal
-                .as_ref()
-                .unwrap()
-                .vrf_proof()
-                .unwrap()
-                .to_hash()?
-                .to_u256()
-                > block.vrf_proof().unwrap().to_hash()?.to_u256()
+            || self.get_vrf_number(old_proposal.as_ref().unwrap()).unwrap()
+                > self.get_vrf_number(block).unwrap()
         {
             Ok(true)
         } else {
@@ -167,15 +189,33 @@ impl ProposerElection for VrfProposer {
         *self.current_seed.lock() = new_seed;
     }
 
-    fn gen_vrf_proof(
+    fn gen_vrf_nocne_and_proof(
         &self, block_data: &BlockData,
-    ) -> Option<ConsensusVRFProof> {
-        self.vrf_private_key
-            .compute(
-                block_data
-                    .vrf_round_seed(self.current_seed.lock().as_slice())
-                    .as_slice(),
-            )
-            .ok()
+    ) -> Option<(u64, ConsensusVRFProof)> {
+        let mut min_vrf_number = U256::MAX;
+        let mut best_vrf_nonce_and_proof = None;
+        let voting_power = self
+            .epoch_state
+            .verifier
+            .get_voting_power(&block_data.author()?)?;
+        for nonce in 0..=voting_power {
+            let vrf_proof = self
+                .vrf_private_key
+                .compute(
+                    block_data
+                        .vrf_round_seed(
+                            self.current_seed.lock().as_slice(),
+                            nonce,
+                        )
+                        .as_slice(),
+                )
+                .ok()?;
+            let vrf_number = vrf_proof.to_hash().ok()?.to_u256();
+            if vrf_number < min_vrf_number {
+                min_vrf_number = vrf_number;
+                best_vrf_nonce_and_proof = Some((nonce, vrf_proof));
+            }
+        }
+        best_vrf_nonce_and_proof
     }
 }
