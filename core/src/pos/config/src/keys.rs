@@ -45,7 +45,7 @@ impl<T: DeserializeOwned + PrivateKey + Serialize> ConfigKey<T> {
 
 impl<T: DeserializeOwned + PrivateKey + Serialize> Clone for ConfigKey<T> {
     fn clone(&self) -> Self {
-        bcs::from_bytes(&bcs::to_bytes(self).unwrap()).unwrap()
+        Self::new(bcs::from_bytes(&bcs::to_bytes(&self.key).unwrap()).unwrap())
     }
 }
 
