@@ -113,7 +113,7 @@ class ExampleTest(ConfluxTestFramework):
                 assert_ne(latest_pos_ref, new_pos_ref)
 
         client.wait_for_unstake(client.node.pow_sk)
-        assert client.get_balance(eth_utils.encode_hex(priv_to_addr(client.node.pow_sk))) > 100 * 10**18
+        assert client.get_balance(eth_utils.encode_hex(priv_to_addr(client.node.pow_sk))) > 10000 * 10**18
         # assert (self.nodes[0].getblockcount() == 6002)
 
     def latest_pos_ref(self):
