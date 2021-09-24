@@ -444,7 +444,7 @@ impl RoundManager {
         if self.proposer_election.is_random_election() {
             signed_proposal.set_vrf_nonce_and_proof(
                 self.proposer_election
-                    .gen_vrf_nocne_and_proof(signed_proposal.block_data())
+                    .gen_vrf_nonce_and_proof(signed_proposal.block_data())
                     .unwrap(),
             )
         }

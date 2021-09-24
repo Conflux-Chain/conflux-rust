@@ -189,7 +189,7 @@ impl ProposerElection for VrfProposer {
         *self.current_seed.lock() = new_seed;
     }
 
-    fn gen_vrf_nocne_and_proof(
+    fn gen_vrf_nonce_and_proof(
         &self, block_data: &BlockData,
     ) -> Option<(u64, ConsensusVRFProof)> {
         let mut min_vrf_number = U256::MAX;

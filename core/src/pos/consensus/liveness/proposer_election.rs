@@ -54,7 +54,7 @@ pub trait ProposerElection {
 
     fn next_round(&self, _round: Round, _new_seed: Vec<u8>) { unreachable!() }
 
-    fn gen_vrf_nocne_and_proof(
+    fn gen_vrf_nonce_and_proof(
         &self, _block_data: &BlockData,
     ) -> Option<(u64, ConsensusVRFProof)> {
         unreachable!()
