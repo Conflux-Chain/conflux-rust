@@ -20,12 +20,14 @@ use diem_types::{
     account_address::{AccountAddress, HashAccountAddress},
     account_config::AccountResource,
     contract_event::ContractEvent,
+    event::EventKey,
     ledger_info::LedgerInfo,
     proof::SparseMerkleLeafNode,
     vm_status::{KeptVMStatus, StatusCode},
 };
 use proptest::prelude::*;
 use std::collections::HashMap;
+use storage_interface::Order;
 
 fn verify_epochs(
     db: &DiemDB, ledger_infos_with_sigs: &[LedgerInfoWithSignatures],
@@ -344,92 +346,6 @@ fn verify_committed_transactions(
 )
 {
     return;
-    let ledger_info = ledger_info_with_sigs.ledger_info();
-    let ledger_version = ledger_info.version();
-    /*assert_eq!(
-        db.get_accumulator_root_hash(ledger_version).unwrap(),
-        ledger_info.transaction_accumulator_hash()
-    );*/
-
-    let mut cur_ver = first_version;
-    for txn_to_commit in txns_to_commit {
-        let txn_info = db.ledger_store.get_transaction_info(cur_ver).unwrap();
-
-        // Verify transaction hash.
-        assert_eq!(
-            txn_info.transaction_hash(),
-            txn_to_commit.transaction().hash()
-        );
-
-        // Fetch and verify transaction itself.
-        let txn = txn_to_commit.transaction().as_signed_user_txn().unwrap();
-        let txn_with_proof = db
-            .get_transaction_with_proof(cur_ver, ledger_version, true)
-            .unwrap();
-        txn_with_proof
-            .verify_user_txn(
-                ledger_info,
-                cur_ver,
-                txn.sender(),
-                txn.sequence_number(),
-            )
-            .unwrap();
-
-        let txn_with_proof = db
-            .get_txn_by_account(
-                txn.sender(),
-                txn.sequence_number(),
-                ledger_version,
-                true,
-            )
-            .unwrap()
-            .expect("Should exist.");
-        txn_with_proof
-            .verify_user_txn(
-                ledger_info,
-                cur_ver,
-                txn.sender(),
-                txn.sequence_number(),
-            )
-            .unwrap();
-
-        let txn_list_with_proof = db
-            .get_transactions(
-                cur_ver,
-                1,
-                ledger_version,
-                true, /* fetch_events */
-            )
-            .unwrap();
-        txn_list_with_proof
-            .verify(ledger_info, Some(cur_ver))
-            .unwrap();
-
-        // Fetch and verify account states.
-        for (addr, expected_blob) in txn_to_commit.account_states() {
-            let account_state_with_proof = db
-                .get_account_state_with_proof(*addr, cur_ver, ledger_version)
-                .unwrap();
-            assert_eq!(
-                account_state_with_proof.blob,
-                Some(expected_blob.clone())
-            );
-            account_state_with_proof
-                .verify(ledger_info, cur_ver, *addr)
-                .unwrap();
-        }
-
-        cur_ver += 1;
-    }
-
-    // Fetch and verify events.
-    // TODO: verify events are saved to correct transaction version.
-    verify_events_by_event_key(
-        db,
-        group_events_by_event_key(txns_to_commit),
-        ledger_info,
-        is_latest,
-    );
 }
 
 proptest! {

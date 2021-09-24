@@ -54,6 +54,8 @@ use diem_types::{
 #[cfg(feature = "fuzzing")]
 pub use diemdb_test::test_save_blocks_impl;
 use schemadb::{ColumnFamilyName, Options, DB, DEFAULT_CF_NAME};
+#[cfg(any(test, feature = "fuzzing"))]
+use storage_interface::Order;
 use storage_interface::{
     DBReaderForPoW, DbReader, DbWriter, StartupInfo, TreeState,
 };
@@ -1043,7 +1045,7 @@ impl DBReaderForPoW for DiemDB {
     }
 }
 
-#[test]
+#[cfg(any(test, feature = "fuzzing"))]
 // Convert requested range and order to a range in ascending order.
 fn get_first_seq_num_and_limit(
     order: Order, cursor: u64, limit: u64,

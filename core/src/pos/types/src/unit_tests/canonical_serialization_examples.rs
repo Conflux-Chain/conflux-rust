@@ -89,11 +89,7 @@ fn test_raw_transaction_with_a_program_canonical_serialization_example() {
             0xfc, 0x8b, 0xc9, 0xe3, 0x38, 0x3a, 0x24, 0xa6, 0x1e, 0x05, 0xd1,
             0x29, 0xca, 0xce, 0x9e, 0x0e, 0xfc, 0x8b, 0xc9, 0xe3, 0x38,
         ]),
-        32,
         get_common_program(),
-        10000,
-        20000,
-        XUS_NAME.to_owned(),
         86400,
         ChainId::test(),
     );
@@ -101,10 +97,10 @@ fn test_raw_transaction_with_a_program_canonical_serialization_example() {
     let expected_output = vec![
         0x3a, 0x24, 0xa6, 0x1e, 0x05, 0xd1, 0x29, 0xca, 0xce, 0x9e, 0x0e, 0xfc,
         0x8b, 0xc9, 0xe3, 0x38, 0x3a, 0x24, 0xa6, 0x1e, 0x05, 0xd1, 0x29, 0xca,
-        0xce, 0x9e, 0x0e, 0xfc, 0x8b, 0xc9, 0xe3, 0x38, 32, 0, 0, 0, 0, 0, 0,
-        0, 1, 4, 109, 111, 118, 101, 0, 1, 1, 239, 190, 173, 222, 13, 208, 254,
-        202, 16, 39, 0, 0, 0, 0, 0, 0, 32, 78, 0, 0, 0, 0, 0, 0, 3, 88, 85, 83,
-        128, 81, 1, 0, 0, 0, 0, 0, 4,
+        0xce, 0x9e, 0x0e, 0xfc, 0x8b, 0xc9, 0xe3, 0x38, 0, 0, 0, 0, 0, 0, 0, 1,
+        4, 109, 111, 118, 101, 0, 1, 1, 239, 190, 173, 222, 13, 208, 254, 202,
+        16, 39, 0, 0, 0, 0, 0, 0, 32, 78, 0, 0, 0, 0, 0, 0, 3, 88, 85, 83, 128,
+        81, 1, 0, 0, 0, 0, 0, 4,
     ];
 
     let actual_output = to_bytes(&input).unwrap();
@@ -119,7 +115,6 @@ fn test_raw_transaction_with_a_write_set_canonical_serialization_example() {
             0xaf, 0x29, 0xf2, 0xba, 0x04, 0xc3, 0x39, 0x8a, 0x59, 0x9a, 0x6f,
             0x3b, 0x9f, 0x30, 0xb6, 0x35, 0xaf, 0x29, 0xf2, 0xba, 0x04,
         ]),
-        32,
         get_common_write_set(),
         ChainId::test(),
     );

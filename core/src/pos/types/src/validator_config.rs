@@ -12,6 +12,7 @@ use crate::{
 use diem_crypto::{
     bls::{BLSPrivateKey, BLSPublicKey, BLSSignature},
     ec_vrf::{EcVrfPrivateKey, EcVrfProof, EcVrfPublicKey},
+    multi_bls::{MultiBLSPrivateKey, MultiBLSPublicKey, MultiBLSSignature},
 };
 use move_core_types::move_resource::MoveResource;
 #[cfg(any(test, feature = "fuzzing"))]
@@ -88,3 +89,6 @@ pub type ConsensusSignature = BLSSignature;
 pub type ConsensusVRFPublicKey = EcVrfPublicKey;
 pub type ConsensusVRFPrivateKey = EcVrfPrivateKey;
 pub type ConsensusVRFProof = EcVrfProof;
+pub type MultiConsensusPublicKey = MultiBLSPublicKey;
+pub type MultiConsensusPrivateKey = MultiBLSPrivateKey;
+pub type MultiConsensusSignature = MultiBLSSignature;

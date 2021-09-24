@@ -140,22 +140,19 @@ impl VMExecutor for FakeVM {
                         TransactionPayload::PivotDecision(pivot_decision) => {
                             if !catch_up_mode {
                                 let authenticator = trans.authenticator();
-                                let (public_keys, signatures) = match authenticator {
-                                    TransactionAuthenticator::MultiBLS{public_keys, signatures} => {
-                                        Ok((public_keys, signatures))
-                                    },
-                                    _ => {
-                                        Err(VMStatus::Error(
-                                            StatusCode::CFX_INVALID_TX,
-                                        ))
-                                    }
+                                let signature = match authenticator {
+                                    TransactionAuthenticator::MultiBLS {
+                                        signature,
+                                    } => Ok(signature),
+                                    _ => Err(VMStatus::Error(
+                                        StatusCode::CFX_INVALID_TX,
+                                    )),
                                 }?;
                                 state_view
                                     .pos_state()
                                     .validate_pivot_decision(
                                         pivot_decision,
-                                        public_keys,
-                                        signatures,
+                                        signature,
                                     )
                                     .map_err(|e| {
                                         diem_error!(

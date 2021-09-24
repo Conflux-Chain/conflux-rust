@@ -495,7 +495,7 @@ dependencies = [
 [[package]]
 name = "bls-signatures"
 version = "0.10.0"
-source = "git+https://github.com/Conflux-Chain/bls-signatures.git?rev=218bcb421085c5a5dd49386a2cc9b634d8abb121#218bcb421085c5a5dd49386a2cc9b634d8abb121"
+source = "git+https://github.com/Conflux-Chain/bls-signatures.git?rev=8a5a1f0a70d16156f0b326161561cc18d5c759c3#8a5a1f0a70d16156f0b326161561cc18d5c759c3"
 dependencies = [
  "fff",
  "groupy",

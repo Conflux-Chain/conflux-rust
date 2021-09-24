@@ -28,8 +28,7 @@ proptest! {
 #[test]
 fn test_event_json_serialize() {
     let event_key = EventKey::random();
-    let contract_event =
-        ContractEvent::new(event_key, 0, TypeTag::Address, vec![0u8]);
+    let contract_event = ContractEvent::new(event_key, vec![0u8]);
     let contract_json = serde_json::to_string(&contract_event)
         .expect("event serialize to json should succeed.");
     let contract_event2: ContractEvent =
