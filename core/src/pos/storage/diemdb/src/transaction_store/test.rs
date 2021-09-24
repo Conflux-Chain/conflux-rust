@@ -42,7 +42,7 @@ proptest! {
                 store
                     .lookup_transaction_by_account(
                         user_txn.sender(),
-                        user_txn.sequence_number(),
+                        user_txn.hash(),
                         ledger_version
                     )
                     .unwrap(),

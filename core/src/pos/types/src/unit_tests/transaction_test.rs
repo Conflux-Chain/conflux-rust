@@ -32,11 +32,7 @@ fn test_invalid_signature() {
     let txn: SignedTransaction = SignedTransaction::new(
         RawTransaction::new_script(
             AccountAddress::random(),
-            0,
             Script::new(vec![], vec![], vec![]),
-            0,
-            0,
-            XUS_NAME.to_owned(),
             0,
             ChainId::test(),
         ),

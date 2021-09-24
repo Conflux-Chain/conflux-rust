@@ -54,7 +54,7 @@ use crate::{
     transaction::authenticator::TransactionAuthenticator,
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
-        ConsensusVRFProof, ConsensusVRFPublicKey,
+        ConsensusVRFProof, ConsensusVRFPublicKey, MultiConsensusSignature,
     },
     vm_status::{
         DiscardedVMStatus, KeptVMStatus, StatusCode, StatusType, VMStatus,
@@ -647,12 +647,10 @@ impl SignedTransaction {
     }
 
     pub fn new_multisig(
-        raw_txn: RawTransaction, public_keys: Vec<ConsensusPublicKey>,
-        signatures: Vec<ConsensusSignature>,
-    ) -> SignedTransaction
-    {
-        let authenticator =
-            TransactionAuthenticator::multi_bls(public_keys, signatures);
+        raw_txn: RawTransaction, signatures: Vec<(ConsensusSignature, usize)>,
+    ) -> SignedTransaction {
+        let signature = MultiConsensusSignature::new(signatures).unwrap();
+        let authenticator = TransactionAuthenticator::multi_bls(signature);
         SignedTransaction {
             raw_txn,
             authenticator,

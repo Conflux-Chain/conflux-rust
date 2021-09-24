@@ -36,7 +36,7 @@ diem-crypto-derive = { path = "../crypto-derive", version = "0.1.0" }
 bcs = "0.1.2"
 cfxkey = { path = "../../../../../accounts/cfxkey" }
 cfx-types = { path = "../../../../../cfx_types" }
-bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "218bcb421085c5a5dd49386a2cc9b634d8abb121"}
+bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "8a5a1f0a70d16156f0b326161561cc18d5c759c3"}
 #bls-signatures = {path = "/Users/lipeilun/conflux/bls-signatures"}
 vrf = "0.2.2"
 lazy_static = "1.4"

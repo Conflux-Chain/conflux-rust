@@ -78,6 +78,8 @@ impl ValidatorConsensusInfo {
     }
 
     pub fn voting_power(&self) -> u64 { self.voting_power }
+
+    pub fn public_key(&self) -> &ConsensusPublicKey { &self.public_key }
 }
 
 /// Supports validation of signatures for known authors with individual voting

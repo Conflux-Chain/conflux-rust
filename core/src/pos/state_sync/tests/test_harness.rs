@@ -794,7 +794,6 @@ impl MockStorage {
         );
         Transaction::UserTransaction(get_test_signed_txn(
             sender,
-            0, // sequence number
             &GENESIS_KEYPAIR.0,
             GENESIS_KEYPAIR.1.clone(),
             Some(program),

@@ -6,11 +6,12 @@
 // See http://www.gnu.org/licenses/
 
 use crate::account_address::AccountAddress;
-use anyhow::{bail, ensure, Error, Result};
+use anyhow::{ensure, Error, Result};
 use diem_crypto::{
     bls::{BLSPublicKey, BLSSignature},
     ed25519::{Ed25519PublicKey, Ed25519Signature},
     hash::CryptoHash,
+    multi_bls::MultiBLSSignature,
     multi_ed25519::{MultiEd25519PublicKey, MultiEd25519Signature},
     traits::Signature,
     CryptoMaterialError, HashValue, ValidCryptoMaterial,
@@ -78,10 +79,7 @@ pub enum TransactionAuthenticator {
         signature: BLSSignature,
     },
     /// FIXME(lpl): Implement signature aggregation.
-    MultiBLS {
-        public_keys: Vec<BLSPublicKey>,
-        signatures: Vec<BLSSignature>,
-    }, // ... add more schemes here
+    MultiBLS { signature: MultiBLSSignature }, // ... add more schemes here
 }
 
 impl TransactionAuthenticator {
@@ -122,13 +120,8 @@ impl TransactionAuthenticator {
         }
     }
 
-    pub fn multi_bls(
-        public_keys: Vec<BLSPublicKey>, signatures: Vec<BLSSignature>,
-    ) -> Self {
-        Self::MultiBLS {
-            public_keys,
-            signatures,
-        }
+    pub fn multi_bls(signature: MultiBLSSignature) -> Self {
+        Self::MultiBLS { signature }
     }
 
     /// Return Ok if the authenticator's public key matches its signature, Err
@@ -147,19 +140,8 @@ impl TransactionAuthenticator {
                 public_key,
                 signature,
             } => signature.verify(message, public_key),
-            Self::MultiBLS {
-                public_keys,
-                signatures,
-            } => {
-                if public_keys.len() != signatures.len() {
-                    bail!("public keys and signature lengths do not match");
-                }
-                if signatures.len() == 0 {
-                    bail!("no signatures for MultiBLS signature")
-                }
-                for i in 0..public_keys.len() {
-                    signatures[i].verify(message, &public_keys[i])?;
-                }
+            Self::MultiBLS { .. } => {
+                // we will verify this case in pos state
                 Ok(())
             }
         }
