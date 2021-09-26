@@ -1069,7 +1069,7 @@ impl Configuration {
             self.raw_conf.tanzanite_transition_height;
         params.transition_numbers.cip43a = self
             .raw_conf
-            .unnamed_21autumn_transition_height
+            .unnamed_21autumn_transition_number
             .unwrap_or(default_transition_time);
         if self.is_test_or_dev_mode() {
             params.transition_numbers.cip43b = self
