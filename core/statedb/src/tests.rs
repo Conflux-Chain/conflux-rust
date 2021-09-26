@@ -4,9 +4,7 @@
 
 use super::StateDbGeneric;
 use cfx_internal_common::StateRootWithAuxInfo;
-use cfx_storage::{
-    ErrorKind, MptKeyValue, Result, StorageStateTrait,
-};
+use cfx_storage::{ErrorKind, MptKeyValue, Result, StorageStateTrait};
 use primitives::{EpochId, StorageKey, MERKLE_NULL_NODE};
 use std::{cell::RefCell, collections::HashMap};
 
@@ -182,9 +180,7 @@ fn test_basic() {
     state_db.delete(storage_key(b"22"), None).unwrap();
 
     // delete (00, v0) and (01, v0)
-    state_db
-        .delete_all(storage_key(b"0"), None)
-        .unwrap();
+    state_db.delete_all(storage_key(b"0"), None).unwrap();
 
     state_db.commit(MERKLE_NULL_NODE, None).unwrap();
     let storage = state_db.get_storage_mut();
@@ -224,9 +220,7 @@ fn test_checkpoint() {
     state_db.checkpoint();
 
     // delete (00, v0) and (01, v0)
-    state_db
-        .delete_all(storage_key(b"0"), None)
-        .unwrap();
+    state_db.delete_all(storage_key(b"0"), None).unwrap();
 
     // discard checkpoint #1
     state_db.discard_checkpoint();

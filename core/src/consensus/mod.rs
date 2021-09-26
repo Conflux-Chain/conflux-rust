@@ -1736,6 +1736,15 @@ impl ConsensusGraphTrait for ConsensusGraph {
                 &self.data_man.get_cur_consensus_era_stable_hash(),
             )
             .expect("stable exists");
+
+        if self.best_epoch_number() < stable_genesis_height {
+            // For an archive node, if its terminals are overwritten with
+            // earlier blocks during recovery, it's possible to
+            // reach here with a pivot chain before stable era
+            // checkpoint. Here we wait for it to recover the missing headers
+            // after the overwritten terminals.
+            return false;
+        }
         if let Some(target_epoch) = self.config.sync_state_starting_epoch {
             if stable_genesis_height < target_epoch {
                 return false;

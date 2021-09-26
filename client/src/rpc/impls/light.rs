@@ -146,11 +146,11 @@ impl RpcImpl {
 
             let account = account.unwrap_or(account_result_to_rpc_result(
                 "address",
-                Account::new_empty_with_balance(
+                Ok(Account::new_empty_with_balance(
                     &address.hex_address,
                     &U256::zero(), /* balance */
                     &U256::zero(), /* nonce */
-                ),
+                )),
             )?);
 
             Ok(RpcAccount::try_from(account, network)?)

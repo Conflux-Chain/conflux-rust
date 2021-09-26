@@ -3,35 +3,41 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    executive::InternalRefContext,
     state::cleanup_mode,
     trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, Spec},
 };
 use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
 use cfx_state::{state_trait::StateOpsTxTrait, SubstateTrait};
-use cfx_types::{address_util::AddressUtil, Address, U256};
+use cfx_types::{Address, U256};
 
 /// Implementation of `set_sponsor_for_gas(address,uint256)`.
 pub fn set_sponsor_for_gas(
     contract_address: Address, upper_bound: U256, params: &ActionParams,
-    spec: &Spec, state: &mut dyn StateOpsTxTrait,
-    substate: &mut dyn SubstateTrait,
+    context: &mut InternalRefContext,
     tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
 
-    if !state.exists(&contract_address)? {
+    if !context.state.exists(&contract_address)? {
         return Err(vm::Error::InternalContract(
             "contract address not exist".into(),
         ));
     }
 
-    if !contract_address.is_contract_address() {
+    if !context.is_contract_address(&contract_address)? {
         return Err(vm::Error::InternalContract(
             "not allowed to sponsor non-contract account".into(),
         ));
     }
+
+    let (spec, state, substate): (
+        &Spec,
+        &mut dyn StateOpsTxTrait,
+        &mut dyn SubstateTrait,
+    ) = (context.spec, context.state, context.substate);
 
     let sponsor_balance = state.balance(&params.address)?;
 
@@ -123,24 +129,30 @@ pub fn set_sponsor_for_gas(
 
 /// Implementation of `set_sponsor_for_collateral(address)`.
 pub fn set_sponsor_for_collateral(
-    contract_address: Address, params: &ActionParams, spec: &Spec,
-    state: &mut dyn StateOpsTxTrait, substate: &mut dyn SubstateTrait,
+    contract_address: Address, params: &ActionParams,
+    context: &mut InternalRefContext,
     tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
 
-    if !state.exists(&contract_address)? {
+    if !context.state.exists(&contract_address)? {
         return Err(vm::Error::InternalContract(
             "contract address not exist".into(),
         ));
     }
 
-    if !contract_address.is_contract_address() {
+    if !context.is_contract_address(&contract_address)? {
         return Err(vm::Error::InternalContract(
             "not allowed to sponsor non-contract account".into(),
         ));
     }
+
+    let (spec, state, substate): (
+        &Spec,
+        &mut dyn StateOpsTxTrait,
+        &mut dyn SubstateTrait,
+    ) = (context.spec, context.state, context.substate);
 
     let sponsor_balance = state.balance(&params.address)?;
 

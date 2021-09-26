@@ -11,6 +11,7 @@ use crate::{
         },
         ConsensusGraphInner,
     },
+    evm::Spec,
     executive::{
         revert_reason_decode, ExecutionError, ExecutionOutcome, Executive,
         ExecutiveGeneric, TransactOptions,
@@ -1034,7 +1035,7 @@ impl ConsensusExecutionHandler {
                 epoch_hash,
                 on_local_pivot,
                 debug_record.as_deref_mut(),
-                self.machine.spec(start_block_number).account_start_nonce,
+                self.machine.spec(start_block_number),
             );
         }
 
@@ -1396,8 +1397,7 @@ impl ConsensusExecutionHandler {
     fn process_rewards_and_fees(
         &self, state: &mut State, reward_info: &RewardExecutionInfo,
         epoch_later: &H256, on_local_pivot: bool,
-        mut debug_record: Option<&mut ComputeEpochDebugRecord>,
-        account_start_nonce: U256,
+        mut debug_record: Option<&mut ComputeEpochDebugRecord>, spec: Spec,
     )
     {
         /// (Fee, SetOfPackingBlockHash)
@@ -1664,14 +1664,16 @@ impl ConsensusExecutionHandler {
         debug!("Give rewards merged_reward={:?}", merged_rewards);
 
         for (address, reward) in merged_rewards {
-            state
-                .add_balance(
-                    &address,
-                    &reward,
-                    CleanupMode::ForceCreate,
-                    account_start_nonce,
-                )
-                .unwrap();
+            if spec.is_valid_address(&address) {
+                state
+                    .add_balance(
+                        &address,
+                        &reward,
+                        CleanupMode::ForceCreate,
+                        spec.account_start_nonce,
+                    )
+                    .unwrap();
+            }
 
             if let Some(debug_out) = &mut debug_record {
                 debug_out

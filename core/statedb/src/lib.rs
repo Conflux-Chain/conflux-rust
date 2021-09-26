@@ -454,7 +454,7 @@ mod impls {
                     {
                         // Contract initialization must set StorageLayout.
                         if (address_bytes.is_builtin_address()
-                            || address_bytes.is_contract_address())
+                            || address_bytes.maybe_contract_address())
                             && v.original_value.is_none()
                         {
                             let result = Self::load_storage_layout(
@@ -465,9 +465,9 @@ mod impls {
                                 &accessed_entries,
                             );
                             if result.is_err() {
-                                warn!(
-                                    "Contract address {:?} is created without storage_layout. \
-                                    It's probably created by a balance transfer.",
+                                info!(
+                                    "Address {:?} has no storage_layout. \
+                                    It's probably created by a balance transfer or a normal address after cip-80.",
                                     Address::from_slice(address_bytes),
                                 );
                             }
@@ -476,10 +476,10 @@ mod impls {
                         address_bytes, ..
                     } = &storage_key
                     {
+                        // The code key is only set in contract creation, so we
+                        // do not need to check it again.
                         // Contract initialization must set StorageLayout
-                        if address_bytes.is_contract_address()
-                            && v.original_value.is_none()
-                        {
+                        if v.original_value.is_none() {
                             // To assert that we have already set StorageLayout.
                             Self::load_storage_layout(
                                 &mut storage_layouts_to_rewrite,

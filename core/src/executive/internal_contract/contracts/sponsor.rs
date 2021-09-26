@@ -11,7 +11,7 @@ use crate::{
 };
 use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
 use cfx_state::state_trait::StateOpsTxTrait;
-use cfx_types::{address_util::AddressUtil, Address, U256};
+use cfx_types::{Address, U256};
 
 make_solidity_contract! {
     pub struct SponsorWhitelistControl(SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, generate_fn_table, "active_at_genesis");
@@ -66,9 +66,7 @@ impl ExecutionTrait for SetSponsorForGas {
             inputs.0,
             inputs.1,
             params,
-            context.spec,
-            context.state,
-            context.substate,
+            context,
             tracer,
             context.spec.account_start_nonce,
         )
@@ -90,9 +88,7 @@ impl ExecutionTrait for SetSponsorForCollateral {
         set_sponsor_for_collateral(
             input,
             params,
-            context.spec,
-            context.state,
-            context.substate,
+            context,
             tracer,
             context.spec.account_start_nonce,
         )
@@ -121,7 +117,7 @@ impl ExecutionTrait for AddPrivilege {
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        if !params.sender.is_contract_address() {
+        if !context.is_contract_address(&params.sender)? {
             return Err(vm::Error::InternalContract(
                 "normal account is not allowed to set commission_privilege"
                     .into(),
@@ -153,7 +149,7 @@ impl ExecutionTrait for RemovePrivilege {
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        if !params.sender.is_contract_address() {
+        if !context.is_contract_address(&params.sender)? {
             return Err(vm::Error::InternalContract(
                 "normal account is not allowed to set commission_privilege"
                     .into(),
@@ -259,7 +255,7 @@ impl ExecutionTrait for IsWhitelisted {
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<bool>
     {
-        if contract.is_contract_address() {
+        if context.is_contract_address(&contract)? {
             Ok(context.state.check_commission_privilege(&contract, &user)?)
         } else {
             Ok(false)
@@ -279,7 +275,7 @@ impl ExecutionTrait for IsAllWhitelisted {
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<bool>
     {
-        if contract.is_contract_address() {
+        if context.is_contract_address(&contract)? {
             Ok(context
                 .state
                 .check_commission_privilege(&contract, &Address::zero())?)
@@ -311,7 +307,7 @@ impl ExecutionTrait for AddPrivilegeByAdmin {
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        if contract.is_contract_address()
+        if context.is_contract_address(&contract)?
             && &params.sender == &context.state.admin(&contract)?
         {
             add_privilege(contract, addresses, params, context.state)?
@@ -342,7 +338,7 @@ impl ExecutionTrait for RemovePrivilegeByAdmin {
         _: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
-        if contract.is_contract_address()
+        if context.is_contract_address(&contract)?
             && &params.sender == &context.state.admin(&contract)?
         {
             remove_privilege(contract, addresses, params, context.state)?

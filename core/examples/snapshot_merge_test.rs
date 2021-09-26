@@ -334,7 +334,7 @@ fn prepare_state(
     for i in 0..accounts {
         let addr = Address::random();
         let account =
-            Account::new_empty_with_balance(&addr, &i.into(), &0.into())?;
+            Account::new_empty_with_balance(&addr, &i.into(), &0.into());
         new_account_map.insert(addr, account);
     }
     let r = add_accounts(

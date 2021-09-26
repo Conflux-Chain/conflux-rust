@@ -263,13 +263,17 @@ impl<StateDbStorage: StorageStateTrait> StateGenericIO<StateDbStorage> {
                     killed_addresses.push(*address);
                     info.accounts_to_notify.push(Err(*address));
                 }
+                Some(account) if account.removed_without_update() => {
+                    killed_addresses.push(*address);
+                    info.accounts_to_notify.push(Err(*address));
+                }
                 Some(account) => {
                     account.commit(
                         self,
                         address,
                         debug_record.as_deref_mut(),
                     )?;
-                    info.accounts_to_notify.push(Ok(account.as_account()?));
+                    info.accounts_to_notify.push(Ok(account.as_account()));
                 }
             }
         }
@@ -351,7 +355,7 @@ impl<StateDbStorage: StorageStateTrait> StateGenericIO<StateDbStorage> {
     }
 
     fn is_contract_with_code(&self, address: &Address) -> DbResult<bool> {
-        if !address.is_contract_address() {
+        if !address.maybe_contract_address() {
             return Ok(false);
         }
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
@@ -664,7 +668,7 @@ impl<StateDbStorage: StorageStateTrait> StateGenericIO<StateDbStorage> {
             info,
             address,
             &U256::zero(),
-        )? = OverlayAccount::from_loaded(address, Default::default());
+        )? = OverlayAccount::from_loaded(address, Account::new_empty(address));
         Ok(())
     }
 
@@ -720,21 +724,9 @@ impl<StateDbStorage: StorageStateTrait> StateGenericIO<StateDbStorage> {
     ) -> DbResult<()>
     {
         let exists = self.exists(address)?;
-        if !address.is_valid_address() {
-            // Sending to invalid addresses are not allowed. Note that this
-            // check is required because at serialization we assume
-            // only valid addresses.
-            //
-            // There are checks to forbid it at transact level.
-            //
-            // The logic here is intended for incorrect miner coin-base. In this
-            // case, the mining reward get lost.
-            debug!(
-                "add_balance: address does not already exist and is not a valid address. {:?}",
-                address
-            );
-            return Ok(());
-        }
+
+        // The caller should guarantee the validity of address.
+
         if !by.is_zero()
             || (cleanup_mode == CleanupMode::ForceCreate && !exists)
         {
@@ -878,7 +870,7 @@ impl<StateDbStorage: StorageStateTrait> StateGenericIO<StateDbStorage> {
             &mut self.cache.write(),
             info.checkpoints.get_mut(),
             address,
-            AccountEntry::new_dirty(None),
+            AccountEntry::new_dirty(Some(OverlayAccount::new_removed(address))),
         );
 
         Ok(())
@@ -1049,6 +1041,21 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             },
         })
     }
+
+    // This is a special implementation to fix the bug in function
+    // `clean_account` while not changing the genesis result.
+    pub fn genesis_special_clean_account(
+        &mut self, address: &Address,
+    ) -> DbResult<()> {
+        let mut account = Account::new_empty(address);
+        account.code_hash = H256::default();
+        *&mut *self.io.require_or_new_basic_account(
+            &mut self.info,
+            address,
+            &U256::zero(),
+        )? = OverlayAccount::from_loaded(address, account);
+        Ok(())
+    }
 }
 
 impl<StateDbStorage: StorageStateTrait> StateGenericIO<StateDbStorage> {
@@ -1074,7 +1081,7 @@ impl<StateDbStorage: StorageStateTrait> StateGenericIO<StateDbStorage> {
             )?;
         }
         if !inc.is_zero() {
-            let balance = if addr.is_contract_address() {
+            let balance = if self.is_contract_with_code(addr)? {
                 self.sponsor_balance_for_collateral(addr)?
             } else {
                 self.balance(addr)?
@@ -1123,6 +1130,17 @@ impl<StateDbStorage: StorageStateTrait> StateGenericIO<StateDbStorage> {
                 Some(STORAGE_LAYOUT_REGULAR_V0),
             ))),
         );
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub fn new_contract_with_code(
+        &mut self, info: &mut StateGenericInfo, contract: &Address,
+        balance: U256, nonce: U256,
+    ) -> DbResult<()>
+    {
+        self.new_contract(info, contract, balance, nonce)?;
+        self.init_code(info, &contract, vec![0x12, 0x34], Address::zero())?;
         Ok(())
     }
 
@@ -1433,8 +1451,10 @@ impl<StateDbStorage: StorageStateTrait> StateGenericIO<StateDbStorage> {
     /// Get the value of storage at a specific checkpoint.
     #[cfg(test)]
     pub fn checkpoint_storage_at(
-        &self, info: &StateGenericInfo, start_checkpoint_index: usize, address: &Address, key: &Vec<u8>,
-    ) -> DbResult<Option<U256>> {
+        &self, info: &StateGenericInfo, start_checkpoint_index: usize,
+        address: &Address, key: &Vec<u8>,
+    ) -> DbResult<Option<U256>>
+    {
         #[derive(Debug)]
         enum ReturnKind {
             OriginalAt,
@@ -1495,6 +1515,7 @@ impl<StateDbStorage: StorageStateTrait> StateGenericIO<StateDbStorage> {
         }
     }
 
+    #[cfg(test)]
     pub fn set_storage_layout(
         &mut self, info: &mut StateGenericInfo, address: &Address,
         layout: StorageLayout,
@@ -1611,23 +1632,19 @@ impl<StateDbStorage: StorageStateTrait> StateGenericIO<StateDbStorage> {
     ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>>
     {
         self.require_or_set(info, address, false, |address| {
-            if address.is_valid_address() {
-                // Note that it is possible to first send money to a pre-calculated contract
-                // address and then deploy contracts. So we are going to *allow* sending to a contract
-                // address and use new_basic() to create a *stub* there. Because the contract serialization
-                // is a super-set of the normal address serialization, this should just work.
-                Ok(OverlayAccount::new_basic(
-                    address,
-                    U256::zero(),
-                    account_start_nonce.into(),
-                    None,
-                ))
-            } else {
-                unreachable!(
-                    "address does not already exist and is not an user account. {:?}",
-                    address
-                )
-            }
+            // It is guaranteed that the address is valid.
+
+            // Note that it is possible to first send money to a pre-calculated
+            // contract address and then deploy contracts. So we are
+            // going to *allow* sending to a contract address and
+            // use new_basic() to create a *stub* there. Because the contract
+            // serialization is a super-set of the normal address
+            // serialization, this should just work.
+            Ok(OverlayAccount::new_basic(
+                address,
+                U256::zero(),
+                account_start_nonce.into(),
+            ))
         })
     }
 
@@ -1719,18 +1736,30 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     #[cfg(test)]
+    pub fn new_contract_with_code(
+        &mut self, contract: &Address, balance: U256, nonce: U256,
+    ) -> DbResult<()> {
+        self.io.new_contract_with_code(&mut self.info, contract, balance, nonce)
+    }
+
+    #[cfg(test)]
     pub fn add_collateral_for_storage(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
-        self.io.add_collateral_for_storage(&mut self.info, address, by)
+        self.io
+            .add_collateral_for_storage(&mut self.info, address, by)
     }
 
     #[cfg(test)]
     pub fn sub_collateral_for_storage(
-        &mut self, address: &Address, by: &U256,
-        account_start_nonce: U256,
+        &mut self, address: &Address, by: &U256, account_start_nonce: U256,
     ) -> DbResult<()> {
-        self.io.sub_collateral_for_storage(&mut self.info, address, by, account_start_nonce)
+        self.io.sub_collateral_for_storage(
+            &mut self.info,
+            address,
+            by,
+            account_start_nonce,
+        )
     }
 
     #[allow(dead_code)]
@@ -1792,10 +1821,15 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     pub fn checkpoint_storage_at(
         &self, start_checkpoint_index: usize, address: &Address, key: &Vec<u8>,
     ) -> DbResult<Option<U256>> {
-        self.io
-            .checkpoint_storage_at(&self.info, start_checkpoint_index, address, key)
+        self.io.checkpoint_storage_at(
+            &self.info,
+            start_checkpoint_index,
+            address,
+            key,
+        )
     }
 
+    #[cfg(test)]
     pub fn set_storage_layout(
         &mut self, address: &Address, layout: StorageLayout,
     ) -> DbResult<()> {

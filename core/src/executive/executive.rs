@@ -10,7 +10,6 @@ use crate::{
     executive::{
         context::LocalContext,
         executed::{ExecutionOutcome, ToRepackError},
-        internal_contract::get_reentrancy_allowance,
         vm_exec::{BuiltinExec, InternalContractExec, NoopExec},
         CollateralCheckResultToVmResult, InternalContractTrait, TxDropError,
     },
@@ -505,12 +504,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         state.checkpoint();
 
         let contract_address = self.get_recipient().clone();
-        let allow_reentrancy = get_reentrancy_allowance(
-            &contract_address,
-            state,
-            &mut self.context.substate,
-        )?;
-        callstack.push(contract_address, is_create, allow_reentrancy);
+        callstack.push(contract_address, is_create);
 
         // Pre execution: transfer value and init contract.
         let spec = self.context.spec;
@@ -944,12 +938,12 @@ impl<
         let mut storage_sponsored = false;
         match tx.action {
             Action::Call(ref address) => {
-                if !address.is_valid_address() {
+                if !spec.is_valid_address(address) {
                     return Ok(ExecutionOutcome::NotExecutedDrop(
                         TxDropError::InvalidRecipientAddress(*address),
                     ));
                 }
-                if address.is_contract_address() {
+                if self.state.is_contract_with_code(address)? {
                     code_address = *address;
                     if self
                         .state
