@@ -20,6 +20,7 @@ use cfx_parameters::{
     consensus_internal::{
         GENESIS_TOKEN_COUNT_IN_CFX, TWO_YEAR_UNLOCK_TOKEN_COUNT_IN_CFX,
     },
+    staking::POS_VOTE_PRICE,
 };
 use cfx_state::{state_trait::*, CleanupMode};
 use cfx_statedb::{Result as DbResult, StateDb};
@@ -396,22 +397,17 @@ pub fn genesis_block(
 
     if let Some(initial_nodes) = initial_nodes {
         for node in &initial_nodes.initial_nodes {
+            let stake_balance = U256::from(node.voting_power) * *POS_VOTE_PRICE;
             // TODO(lpl): Pass in signed tx so they can be retired.
             state
                 .add_balance(
                     &node.address,
-                    &(U256::from(200) * U256::from(ONE_CFX_IN_DRIP)),
+                    &(stake_balance + U256::from(ONE_CFX_IN_DRIP) * U256::from(20)),
                     CleanupMode::NoEmpty,
                     /* account_start_nonce = */ U256::zero(),
                 )
                 .unwrap();
-            state
-                .deposit(
-                    &node.address,
-                    &(U256::from(100) * U256::from(ONE_CFX_IN_DRIP)),
-                    0,
-                )
-                .unwrap();
+            state.deposit(&node.address, &stake_balance, 0).unwrap();
             let signed_tx = node.register_tx.clone().fake_sign(node.address);
             execute_genesis_transaction(
                 &signed_tx,
