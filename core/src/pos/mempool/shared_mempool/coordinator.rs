@@ -89,7 +89,7 @@ pub(crate) async fn coordinator(
                 tasks::execute_broadcast(peer, backoff, &mut smp, &mut scheduled_broadcasts, executor.clone());
             },
             (peer, event) = network_receivers.network_events.select_next_some() => {
-                diem_debug!("network_events to scheduled_broadcasts");
+                diem_trace!("network_events to scheduled_broadcasts");
                 match event {
                         NetworkEvent::PeerConnected => {
                         smp.peer_manager.add_peer(peer);
@@ -101,7 +101,7 @@ pub(crate) async fn coordinator(
                 }
             },
             (peer, msg) = network_receivers.mempool_sync_message.select_next_some() => {
-                diem_debug!("receive mempool_sync_message");
+                diem_trace!("receive mempool_sync_message");
                 handle_mempool_sync_msg(&bounded_executor, &mut smp, peer, msg).await;
             }
             complete => break,

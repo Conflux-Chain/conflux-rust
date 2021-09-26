@@ -16,7 +16,7 @@ use consensus_types::{
     quorum_cert::QuorumCert,
 };
 use diem_infallible::Mutex;
-use diem_logger::{debug as diem_debug, error as diem_error};
+use diem_logger::prelude::*;
 use diem_types::{
     transaction::{RawTransaction, TransactionPayload},
     validator_config::{
@@ -229,7 +229,7 @@ impl ProposalGenerator {
                     let staking_events = self
                         .pow_handler
                         .get_staking_events(parent_decision, block_hash)?;
-                    diem_debug!(
+                    diem_trace!(
                         "generate_proposal: staking_events={:?} parent={:?} me={:?}",
                         staking_events, parent_block.block_info().pivot_decision(), payload.last()
                     );

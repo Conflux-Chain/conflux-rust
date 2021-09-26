@@ -176,9 +176,8 @@ impl ProposerElection for VrfProposer {
     fn choose_proposal_to_vote(&self) -> Option<Block> {
         let chosen_proposal = self.proposal_candidates.lock().take();
         diem_debug!(
-            "choose_proposal_to_vote: {:?}, data={:?}",
-            chosen_proposal,
-            chosen_proposal.as_ref().map(|b| b.block_data())
+            "choose_proposal_to_vote: id={:?}",
+            chosen_proposal.as_ref().map(|b| b.id()),
         );
         chosen_proposal
     }

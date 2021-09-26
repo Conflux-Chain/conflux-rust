@@ -399,7 +399,7 @@ impl PosInterface for PosConnection {
             author = H256::from_slice(block.author().unwrap_or(Default::default()).as_ref());
         }
          */
-        debug!("pos_handler gets committed_block={:?}", committed_block);
+        trace!("pos_handler gets committed_block={:?}", committed_block);
         Some(PosBlock {
             hash: *h,
             epoch: committed_block.epoch,

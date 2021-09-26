@@ -71,7 +71,7 @@ execution:
   genesis_file_location: ./genesis_file
 logger:
   file: ./pos.log
-  level: TRACE
+  level: DEBUG
 #storage:
   #dir: ./pos_db/db
 """)
