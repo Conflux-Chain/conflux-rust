@@ -20,7 +20,7 @@ from conflux.rpc import RpcClient
 class TestTokenSupplyInfo(RpcClient):
     def test_token_supply_info(self):
         file_dir = os.path.dirname(os.path.realpath(__file__))
-        genesis_staking = 200000000000000000000
+        genesis_staking = 20000000000000000000000
         genesis_collateral = 375000000000000000
 
         # Two test accounts and genesis accounts
