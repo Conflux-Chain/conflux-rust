@@ -105,6 +105,11 @@ impl PrivateKey for BLSPrivateKey {
     type PublicKeyMaterial = BLSPublicKey;
 }
 
+impl BLSPublicKey {
+    /// return raw public key
+    pub fn raw(self) -> RawPublicKey { self.0 }
+}
+
 impl BLSSignature {
     /// return an all-zero signature (for test only)
     #[cfg(any(test, feature = "fuzzing"))]
@@ -112,6 +117,9 @@ impl BLSSignature {
         let bytes = [0u8; BLS_SIGNATURE_LENGTH];
         Self::try_from(&bytes[..]).unwrap()
     }
+
+    /// return raw signature
+    pub fn raw(self) -> RawSignature { self.0 }
 }
 
 impl Signature for BLSSignature {
@@ -150,6 +158,28 @@ impl From<&BLSPrivateKey> for BLSPublicKey {
     fn from(private_key: &BLSPrivateKey) -> Self {
         BLSPublicKey(private_key.0.public_key())
     }
+}
+
+impl From<&RawPrivateKey> for BLSPrivateKey {
+    fn from(raw_private_key: &RawPrivateKey) -> Self {
+        BLSPrivateKey(*raw_private_key)
+    }
+}
+
+impl From<RawPrivateKey> for BLSPrivateKey {
+    fn from(raw_private_key: RawPrivateKey) -> Self {
+        BLSPrivateKey(raw_private_key)
+    }
+}
+
+impl From<&RawSignature> for BLSSignature {
+    fn from(raw_signature: &RawSignature) -> Self {
+        BLSSignature(*raw_signature)
+    }
+}
+
+impl From<RawSignature> for BLSSignature {
+    fn from(raw_signature: RawSignature) -> Self { BLSSignature(raw_signature) }
 }
 
 impl TryFrom<&[u8]> for BLSPrivateKey {

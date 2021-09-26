@@ -731,7 +731,6 @@ impl Arbitrary for LedgerInfoWithSignatures {
 
 #[derive(Arbitrary, Debug)]
 pub struct ContractEventGen {
-    type_tag: TypeTag,
     payload: Vec<u8>,
     use_sent_key: bool,
 }
@@ -750,12 +749,7 @@ impl ContractEventGen {
         *event_handle.count_mut() += 1;
         let event_key = event_handle.key();
 
-        ContractEvent::new(
-            *event_key,
-            sequence_number,
-            self.type_tag,
-            self.payload,
-        )
+        ContractEvent::new(*event_key, self.payload)
     }
 }
 
@@ -836,15 +830,9 @@ impl ContractEvent {
     pub fn strategy_impl(
         event_key_strategy: impl Strategy<Value = EventKey>,
     ) -> impl Strategy<Value = Self> {
-        (
-            event_key_strategy,
-            any::<u64>(),
-            any::<TypeTag>(),
-            vec(any::<u8>(), 1..10),
+        (event_key_strategy, vec(any::<u8>(), 1..10)).prop_map(
+            |(event_key, event_data)| ContractEvent::new(event_key, event_data),
         )
-            .prop_map(|(event_key, seq_num, type_tag, event_data)| {
-                ContractEvent::new(event_key, seq_num, type_tag, event_data)
-            })
     }
 }
 

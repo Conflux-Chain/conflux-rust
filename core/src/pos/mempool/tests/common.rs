@@ -77,11 +77,7 @@ impl TestTransaction {
     ) -> SignedTransaction {
         let raw_txn = RawTransaction::new_script(
             TestTransaction::get_address(self.address),
-            self.sequence_number,
             Script::new(vec![], vec![], vec![]),
-            max_gas_amount,
-            self.gas_price,
-            XUS_NAME.to_owned(),
             exp_timestamp_secs,
             ChainId::test(),
         );

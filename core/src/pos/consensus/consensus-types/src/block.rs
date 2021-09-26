@@ -51,7 +51,7 @@ pub struct Block {
     signature: Option<ConsensusSignature>,
     /// Optional VRF proof tp prove the author is a valid proposer in this
     /// round.
-    vrf_proof: Option<ConsensusVRFProof>,
+    vrf_nonce_and_proof: Option<(u64, ConsensusVRFProof)>,
 }
 
 impl fmt::Debug for Block {
@@ -101,12 +101,22 @@ impl Block {
     }
 
     pub fn vrf_proof(&self) -> Option<&ConsensusVRFProof> {
-        self.vrf_proof.as_ref()
+        self.vrf_nonce_and_proof
+            .as_ref()
+            .map(|(_nonce, proof)| proof)
     }
 
-    pub fn set_vrf_proof(&mut self, vrf_proof: ConsensusVRFProof) {
-        debug_assert!(self.vrf_proof.is_none());
-        self.vrf_proof = Some(vrf_proof);
+    pub fn vrf_nonce(&self) -> Option<u64> {
+        self.vrf_nonce_and_proof
+            .as_ref()
+            .map(|(nonce, _proof)| *nonce)
+    }
+
+    pub fn set_vrf_nonce_and_proof(
+        &mut self, vrf_nonce_and_proof: (u64, ConsensusVRFProof),
+    ) {
+        debug_assert!(self.vrf_nonce_and_proof.is_none());
+        self.vrf_nonce_and_proof = Some(vrf_nonce_and_proof);
     }
 
     pub fn timestamp_usecs(&self) -> u64 { self.block_data.timestamp_usecs() }
@@ -155,7 +165,7 @@ impl Block {
             id: block_data.hash(),
             block_data,
             signature: None,
-            vrf_proof: None,
+            vrf_nonce_and_proof: None,
         }
     }
 
@@ -172,7 +182,7 @@ impl Block {
             id,
             block_data,
             signature,
-            vrf_proof,
+            vrf_nonce_and_proof: vrf_proof,
         }
     }
 
@@ -186,7 +196,7 @@ impl Block {
             id: block_data.hash(),
             block_data,
             signature: None,
-            vrf_proof: None,
+            vrf_nonce_and_proof: None,
         }
     }
 
@@ -219,14 +229,14 @@ impl Block {
 
     pub fn new_proposal_from_block_data_and_signature(
         block_data: BlockData, signature: ConsensusSignature,
-        vrf_proof: Option<ConsensusVRFProof>,
+        vrf_nonce_and_proof: Option<(u64, ConsensusVRFProof)>,
     ) -> Self
     {
         Block {
             id: block_data.hash(),
             block_data,
             signature: Some(signature),
-            vrf_proof,
+            vrf_nonce_and_proof,
         }
     }
 
@@ -315,20 +325,20 @@ impl<'de> Deserialize<'de> for Block {
         struct BlockWithoutId {
             block_data: BlockData,
             signature: Option<ConsensusSignature>,
-            vrf_proof: Option<ConsensusVRFProof>,
+            vrf_nonce_and_proof: Option<(u64, ConsensusVRFProof)>,
         }
 
         let BlockWithoutId {
             block_data,
             signature,
-            vrf_proof,
+            vrf_nonce_and_proof,
         } = BlockWithoutId::deserialize(deserializer)?;
 
         Ok(Block {
             id: block_data.hash(),
             block_data,
             signature,
-            vrf_proof,
+            vrf_nonce_and_proof,
         })
     }
 }

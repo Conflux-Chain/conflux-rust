@@ -235,27 +235,25 @@ impl Mempool {
             // aggregate signatures
             let txn_hashes =
                 self.transactions.get_pivot_decisions(&pivot_decision_hash);
-            let mut public_keys = vec![];
+            let senders: Vec<AccountAddress> =
+                validators.get_ordered_account_addresses_iter().collect();
             let mut signatures = vec![];
             for hash in &txn_hashes {
                 if let Some(txn) = self.transactions.get(hash) {
                     match txn.authenticator() {
-                        TransactionAuthenticator::BLS {
-                            public_key,
-                            signature,
-                        } => {
-                            public_keys.push(public_key);
-                            signatures.push(signature);
+                        TransactionAuthenticator::BLS { signature, .. } => {
+                            if let Ok(index) =
+                                senders.binary_search(&txn.sender())
+                            {
+                                signatures.push((signature, index));
+                            }
                         }
                         _ => unreachable!(),
                     }
                 }
             }
-            let new_tx = SignedTransaction::new_multisig(
-                tx.raw_txn(),
-                public_keys,
-                signatures,
-            );
+            let new_tx =
+                SignedTransaction::new_multisig(tx.raw_txn(), signatures);
             block_log.add(new_tx.sender(), new_tx.hash());
             block.push(new_tx);
         }

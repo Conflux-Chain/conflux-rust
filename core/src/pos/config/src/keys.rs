@@ -28,7 +28,8 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 /// keys to be clonable but only from configs.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ConfigKey<T: PrivateKey + Serialize> {
-    #[serde(bound(deserialize = "T: Deserialize<'de>"))]
+    // Skip private key serde to avoid printing out private key accidentally
+    #[serde(skip_serializing, bound(deserialize = "T: Deserialize<'de>"))]
     pub(crate) key: T,
 }
 
@@ -44,7 +45,7 @@ impl<T: DeserializeOwned + PrivateKey + Serialize> ConfigKey<T> {
 
 impl<T: DeserializeOwned + PrivateKey + Serialize> Clone for ConfigKey<T> {
     fn clone(&self) -> Self {
-        bcs::from_bytes(&bcs::to_bytes(self).unwrap()).unwrap()
+        Self::new(bcs::from_bytes(&bcs::to_bytes(&self.key).unwrap()).unwrap())
     }
 }
 

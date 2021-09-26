@@ -32,6 +32,7 @@ define_schema!(
     TRANSACTION_BY_ACCOUNT_CF_NAME
 );
 
+// if sequence number is 0, we store current sequence number
 type SeqNum = u64;
 type Key = (AccountAddress, SeqNum);
 

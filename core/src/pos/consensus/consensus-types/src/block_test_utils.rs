@@ -96,7 +96,7 @@ prop_compose! {
                     block.quorum_cert().clone(),
                 ),
                 signature: Some(block.signature().unwrap().clone()),
-                vrf_proof: None,
+                vrf_nonce_and_proof: None,
             }
         }
 }
@@ -275,7 +275,6 @@ pub fn random_payload(count: usize) -> Payload {
         .map(|i| {
             get_test_signed_txn(
                 address,
-                i as u64,
                 signer.private_key(),
                 signer.public_key(),
                 None,

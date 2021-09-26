@@ -47,6 +47,8 @@ pub enum CryptoMaterialError {
     PointNotOnCurveError,
     /// BitVec errors in accountable multi-sig schemes.
     BitVecError(String),
+    /// bls aggerate error
+    AggregateError,
 }
 
 /// The serialized length of the data that enables macro derived serialization
@@ -378,6 +380,10 @@ pub(crate) mod private {
     impl Sealed for crate::bls::BLSPublicKey {}
     impl Sealed for crate::bls::BLSPrivateKey {}
     impl Sealed for crate::bls::BLSSignature {}
+
+    impl Sealed for crate::multi_bls::MultiBLSPublicKey {}
+    impl Sealed for crate::multi_bls::MultiBLSPrivateKey {}
+    impl Sealed for crate::multi_bls::MultiBLSSignature {}
 
     impl Sealed for crate::ec_vrf::EcVrfPublicKey {}
     impl Sealed for crate::ec_vrf::EcVrfPrivateKey {}

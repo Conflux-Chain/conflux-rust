@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use proptest_derive::Arbitrary;
 
 use cfx_types::H256;
-use diem_crypto::{HashValue, VRFProof};
+use diem_crypto::{HashValue, Signature, VRFProof};
 use diem_logger::prelude::*;
 use move_core_types::vm_status::DiscardedVMStatus;
 use pow_types::StakingEvent;
@@ -30,7 +30,8 @@ use crate::{
     event::EventKey,
     transaction::ElectionPayload,
     validator_config::{
-        ConsensusPublicKey, ConsensusSignature, ConsensusVRFPublicKey,
+        ConsensusPublicKey, ConsensusVRFPublicKey, MultiConsensusPublicKey,
+        MultiConsensusSignature,
     },
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
 };
@@ -894,8 +895,7 @@ impl PosState {
 
     pub fn validate_pivot_decision(
         &self, pivot_decision_tx: &PivotBlockDecision,
-        _public_keys: Vec<ConsensusPublicKey>,
-        _signatures: Vec<ConsensusSignature>,
+        signature: MultiConsensusSignature,
     ) -> Result<()>
     {
         if pivot_decision_tx.height <= self.pivot_decision.height {
@@ -904,7 +904,21 @@ impl PosState {
                 pivot_decision_tx.height, self.pivot_decision.height
             )));
         }
-        // TODO(linxi): validate public_keys and signatures
+        let senders =
+            self.epoch_state.verifier.address_to_validator_info().keys();
+        let public_keys: Vec<ConsensusPublicKey> = senders
+            .map(|sender| {
+                self.epoch_state.verifier.get_public_key(sender).unwrap()
+            })
+            .collect();
+        let public_key = MultiConsensusPublicKey::new(public_keys);
+        if let Err(e) = signature.verify(pivot_decision_tx, &public_key) {
+            return Err(anyhow!(format!(
+                "Pivot Decision verification failed [{:?}]",
+                e
+            )));
+        }
+        // TODO(linxi): check voting power
         Ok(())
     }
 

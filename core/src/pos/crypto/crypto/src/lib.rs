@@ -22,6 +22,8 @@ pub mod ed25519;
 pub mod error;
 pub mod hash;
 pub mod hkdf;
+/// A multi bls signature wrapper
+pub mod multi_bls;
 pub mod multi_ed25519;
 pub mod noise;
 pub mod test_utils;
