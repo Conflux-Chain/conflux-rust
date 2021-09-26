@@ -96,7 +96,7 @@ prop_compose! {
                     block.quorum_cert().clone(),
                 ),
                 signature: Some(block.signature().unwrap().clone()),
-                vrf_proof: None,
+                vrf_nonce_and_proof: None,
             }
         }
 }
