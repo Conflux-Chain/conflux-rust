@@ -1739,7 +1739,8 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     pub fn new_contract_with_code(
         &mut self, contract: &Address, balance: U256, nonce: U256,
     ) -> DbResult<()> {
-        self.io.new_contract_with_code(&mut self.info, contract, balance, nonce)
+        self.io
+            .new_contract_with_code(&mut self.info, contract, balance, nonce)
     }
 
     #[cfg(test)]
