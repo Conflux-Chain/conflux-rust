@@ -86,6 +86,7 @@ pub fn start_pos_consensus(
     protocol_config: ProtocolConfiguration,
     own_pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     initial_nodes: Vec<(NodeID, u64)>,
+    initial_committee: Vec<(AccountAddress, u64)>,
     consensus_network_receiver: ConsensusNetworkReceivers,
     mempool_network_receiver: MemPoolNetworkReceivers,
     hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
@@ -136,6 +137,7 @@ pub fn start_pos_consensus(
         protocol_config,
         own_pos_public_key,
         initial_nodes,
+        initial_committee,
         consensus_network_receiver,
         mempool_network_receiver,
         hsb_protocol,
@@ -164,6 +166,7 @@ pub fn setup_pos_environment(
     protocol_config: ProtocolConfiguration,
     own_pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     initial_nodes: Vec<(NodeID, u64)>,
+    initial_committee: Vec<(AccountAddress, u64)>,
     consensus_network_receiver: ConsensusNetworkReceivers,
     mempool_network_receiver: MemPoolNetworkReceivers,
     hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
@@ -209,6 +212,7 @@ pub fn setup_pos_environment(
                 height: 0,
             }),
             initial_nodes,
+            initial_committee,
         )
         .expect("Db-bootstrapper should not fail.");
     } else {

@@ -150,6 +150,7 @@ pub fn initialize_data_manager(
         None,
         &Some(GenesisPosState {
             initial_nodes: vec![],
+            initial_committee: vec![],
         }),
     ));
 

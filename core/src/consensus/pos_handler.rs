@@ -164,15 +164,17 @@ impl PosHandler {
 
         let mut pos_config = NodeConfig::load(pos_config_path)
             .map_err(|e| format!("Failed to load node config: e={:?}", e))?;
-        let initial_nodes = read_initial_nodes_from_file(
+        let pos_genesis = read_initial_nodes_from_file(
             self.conf.pos_initial_nodes_path.as_str(),
-        )?
-        .initial_nodes
-        .into_iter()
-        .map(|node| {
-            (NodeID::new(node.bls_key, node.vrf_key), node.voting_power)
-        })
-        .collect();
+        )?;
+        let initial_committee = pos_genesis.initial_committee.clone();
+        let initial_nodes = pos_genesis
+            .initial_nodes
+            .into_iter()
+            .map(|node| {
+                (NodeID::new(node.bls_key, node.vrf_key), node.voting_power)
+            })
+            .collect();
         let network = self.network.lock().take().expect("pos not initialized");
         pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
             author: from_consensus_public_key(
@@ -200,6 +202,7 @@ impl PosHandler {
                 self.conf.vrf_key.public_key(),
             )),
             initial_nodes,
+            initial_committee,
             self.consensus_network_receiver
                 .lock()
                 .take()

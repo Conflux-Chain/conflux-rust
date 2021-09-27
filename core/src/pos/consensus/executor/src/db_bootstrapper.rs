@@ -16,6 +16,7 @@ use diem_logger::prelude::*;
 use diem_state_view::{StateView, StateViewId};
 use diem_types::{
     access_path::AccessPath,
+    account_address::AccountAddress,
     account_config::diem_root_address,
     block_info::{
         BlockInfo, PivotBlockDecision, GENESIS_EPOCH, GENESIS_ROUND,
@@ -43,8 +44,14 @@ pub fn generate_waypoint<V: VMExecutor>(
 
     // TODO(lpl): initial nodes are not passed.
     // genesis ledger info (including pivot decision) is not used.
-    let committer =
-        calculate_genesis::<V>(db, tree_state, genesis_txn, None, Vec::new())?;
+    let committer = calculate_genesis::<V>(
+        db,
+        tree_state,
+        genesis_txn,
+        None,
+        Vec::new(),
+        Vec::new(),
+    )?;
     Ok(committer.waypoint)
 }
 
@@ -55,6 +62,7 @@ pub fn maybe_bootstrap<V: VMExecutor>(
     db: &DbReaderWriter, genesis_txn: &Transaction, waypoint: Waypoint,
     genesis_pivot_decision: Option<PivotBlockDecision>,
     initial_nodes: Vec<(NodeID, u64)>,
+    initial_committee: Vec<(AccountAddress, u64)>,
 ) -> Result<bool>
 {
     let tree_state = db.reader.get_latest_tree_state()?;
@@ -76,6 +84,7 @@ pub fn maybe_bootstrap<V: VMExecutor>(
         genesis_txn,
         genesis_pivot_decision,
         initial_nodes,
+        initial_committee,
     )?;
     ensure!(
         waypoint == committer.waypoint(),
@@ -125,6 +134,7 @@ pub fn calculate_genesis<V: VMExecutor>(
     db: &DbReaderWriter, tree_state: TreeState, genesis_txn: &Transaction,
     genesis_pivot_decision: Option<PivotBlockDecision>,
     initial_nodes: Vec<(NodeID, u64)>,
+    initial_committee: Vec<(AccountAddress, u64)>,
 ) -> Result<GenesisCommitter<V>>
 {
     // DB bootstrapper works on either an empty transaction accumulator or an
@@ -135,6 +145,7 @@ pub fn calculate_genesis<V: VMExecutor>(
         db.clone(),
         tree_state,
         initial_nodes,
+        initial_committee,
         genesis_pivot_decision.clone(),
     ));
     let executor = Executor::<V>::new(

@@ -50,7 +50,7 @@ const FIRST_END_ELECTION_VIEW: u64 =
     TERM_LIST_LEN as u64 * ROUND_PER_TERM - ELECTION_TERM_END_ROUND;
 
 const TERM_MAX_SIZE: usize = 10000;
-const TERM_ELECTED_SIZE: usize = 50;
+pub const TERM_ELECTED_SIZE: usize = 50;
 pub const IN_QUEUE_LOCKED_VIEWS: u64 = 10080;
 pub const OUT_QUEUE_LOCKED_VIEWS: u64 = 10080;
 
@@ -408,7 +408,7 @@ impl ElectingHeap {
         (elected_map, candy_map)
     }
 
-    fn add_node(&mut self, hash: HashValue, node_id: ElectionNodeID) {
+    pub fn add_node(&mut self, hash: HashValue, node_id: ElectionNodeID) {
         let is_not_full_set = self.0.len() < TERM_MAX_SIZE;
         if self
             .0
@@ -662,15 +662,16 @@ impl Debug for PosState {
 impl PosState {
     pub fn new(
         initial_seed: Vec<u8>, initial_nodes: Vec<(NodeID, u64)>,
+        initial_committee: Vec<(AccountAddress, u64)>,
         genesis_pivot_decision: PivotBlockDecision, catch_up_mode: bool,
     ) -> Self
     {
         let mut node_map = HashMap::new();
         let mut node_list = BTreeMap::default();
-        for (node_id, voting_power) in initial_nodes {
+        for (node_id, total_voting_power) in initial_nodes {
             let mut lock_status = NodeLockStatus::default();
             // The genesis block should not have updates for lock status.
-            let _ = lock_status.new_lock(0, voting_power, true);
+            let _ = lock_status.new_lock(0, total_voting_power, true);
             node_map.insert(
                 node_id.addr.clone(),
                 NodeData {
@@ -679,9 +680,11 @@ impl PosState {
                     lock_status,
                 },
             );
+        }
+        for (addr, voting_power) in initial_committee {
             // VRF output of initial terms will not be used, because these terms
             // are not open for election.
-            node_list.insert(node_id.addr, voting_power);
+            node_list.insert(addr, voting_power);
         }
         let mut term_list = Vec::new();
         let initial_term = TermData {
@@ -1361,8 +1364,8 @@ impl UpdateVotingPowerEvent {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct NodeID {
-    public_key: ConsensusPublicKey,
-    vrf_public_key: ConsensusVRFPublicKey,
+    pub public_key: ConsensusPublicKey,
+    pub vrf_public_key: ConsensusVRFPublicKey,
 
     /// Computed based on other fields.
     pub addr: AccountAddress,
