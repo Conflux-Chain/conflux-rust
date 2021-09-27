@@ -7,6 +7,7 @@ import sys
 import time
 from eth_utils import keccak, decode_hex
 import eth_abi
+import collections
 from subprocess import check_output
 
 
@@ -28,7 +29,7 @@ rpc_url = "http://101.132.158.162:12537"
 client = RpcClient(node=get_simple_rpc_proxy(rpc_url, timeout=10))
 cmd = "./run/pos_config"
 
-voting_power_map = {}
+voting_power_map = collections.defaultdict(lambda: 0)
 pub_keys_map = {}
 last_epoch = client.epoch_number()
 print(last_epoch)
@@ -48,7 +49,7 @@ for i in range(0, last_epoch, 1000):
             print(pub_keys_map[pos_identifier])
         elif log["topics"][0] == INCREASE_STAKE_TOPIC:
             assert pos_identifier in pub_keys_map
-            voting_power_map[pos_identifier] = parse_as_int(log["data"])
+            voting_power_map[pos_identifier] += parse_as_int(log["data"])
 with open(os.path.join(cmd, "public_keys"), "w") as f:
     for pos_identifier in pub_keys_map.keys():
         f.write(",".join([pub_keys_map[pos_identifier][0][2:], pub_keys_map[pos_identifier][1][2:], str(voting_power_map[pos_identifier])]) + "\n")
