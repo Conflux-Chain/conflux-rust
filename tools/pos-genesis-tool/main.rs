@@ -229,7 +229,7 @@ where
         let mut rng = StdRng::from_seed([0u8; 32]);
         let mut genesis_nodes = Vec::new();
 
-        let voting_power = 100;
+        let voting_power = 2_000_000;
         for i in 0..num_validator {
             let pow_keypair: KeyPair = Random.generate().unwrap();
             let private_key = ConsensusPrivateKey::generate(&mut rng);
