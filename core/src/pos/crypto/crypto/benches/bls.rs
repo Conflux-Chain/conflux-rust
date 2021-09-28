@@ -3,7 +3,7 @@ extern crate criterion;
 use criterion::Criterion;
 use diem_crypto::{
     bls::*,
-    traits::{Signature, SigningKey, Uniform},
+    traits::{SigningKey, Uniform},
     ValidCryptoMaterial,
 };
 use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
