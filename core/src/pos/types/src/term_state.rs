@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use proptest_derive::Arbitrary;
 
 use cfx_types::H256;
-use diem_crypto::{HashValue, Signature, VRFProof};
+use diem_crypto::{vrf_number_with_nonce, HashValue, Signature, VRFProof};
 use diem_logger::prelude::*;
 use move_core_types::vm_status::DiscardedVMStatus;
 use pow_types::StakingEvent;
@@ -545,9 +545,7 @@ impl TermList {
         for nonce in 0..voting_power {
             // Hash after appending the nonce to get multiple identifier for
             // election.
-            let mut b = event.vrf_output.to_vec();
-            b.append(&mut nonce.to_le_bytes().to_vec());
-            let priority = HashValue::sha3_256_of(&b);
+            let priority = vrf_number_with_nonce(&event.vrf_output, nonce);
             term.node_list.add_node(
                 priority,
                 ElectionNodeID::new(event.node_id.clone(), nonce),

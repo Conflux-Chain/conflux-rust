@@ -405,7 +405,8 @@ pub fn genesis_block(
             state
                 .add_balance(
                     &node.address,
-                    &(stake_balance + U256::from(ONE_CFX_IN_DRIP) * U256::from(20)),
+                    &(stake_balance
+                        + U256::from(ONE_CFX_IN_DRIP) * U256::from(20)),
                     CleanupMode::NoEmpty,
                     /* account_start_nonce = */ U256::zero(),
                 )

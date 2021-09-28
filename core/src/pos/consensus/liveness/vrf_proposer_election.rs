@@ -10,7 +10,7 @@ use consensus_types::common::{Author, Round};
 
 use cfx_types::U256;
 use consensus_types::{block::Block, block_data::BlockData};
-use diem_crypto::{VRFPrivateKey, VRFProof};
+use diem_crypto::{vrf_number_with_nonce, VRFPrivateKey, VRFProof};
 use diem_logger::debug as diem_debug;
 use diem_types::{
     epoch_state::EpochState,
@@ -53,7 +53,13 @@ impl VrfProposer {
     }
 
     pub fn get_vrf_number(&self, block: &Block) -> Option<U256> {
-        Some(block.vrf_proof()?.to_hash().ok()?.to_u256())
+        Some(
+            vrf_number_with_nonce(
+                &block.vrf_proof()?.to_hash().ok()?,
+                block.vrf_nonce()?,
+            )
+            .to_u256(),
+        )
     }
 }
 
@@ -108,13 +114,13 @@ impl ProposerElection for VrfProposer {
             None => return false,
             Some(p) => p,
         };
-        let nonce = block.vrf_nonce().unwrap();
+        let nonce = block.vrf_nonce().expect("checked");
         if nonce > voting_power || *self.current_round.lock() != block.round() {
             return false;
         }
         let seed = block
             .block_data()
-            .vrf_round_seed(self.current_seed.lock().as_slice(), nonce);
+            .vrf_round_seed(self.current_seed.lock().as_slice());
         let vrf_hash = match self
             .epoch_state
             .verifier
@@ -141,7 +147,8 @@ impl ProposerElection for VrfProposer {
                 return false;
             }
         };
-        vrf_hash.to_u256() <= self.proposal_threshold
+        vrf_number_with_nonce(&vrf_hash, nonce).to_u256()
+            <= self.proposal_threshold
     }
 
     fn is_random_election(&self) -> bool { true }
@@ -192,30 +199,30 @@ impl ProposerElection for VrfProposer {
     fn gen_vrf_nonce_and_proof(
         &self, block_data: &BlockData,
     ) -> Option<(u64, ConsensusVRFProof)> {
-        let mut min_vrf_number = U256::MAX;
-        let mut best_vrf_nonce_and_proof = None;
+        let mut min_vrf_number = self.proposal_threshold;
+        let mut best_nonce = None;
         let voting_power = self
             .epoch_state
             .verifier
             .get_voting_power(&block_data.author()?)?;
+
+        let vrf_proof = self
+            .vrf_private_key
+            .compute(
+                block_data
+                    .vrf_round_seed(self.current_seed.lock().as_slice())
+                    .as_slice(),
+            )
+            .ok()?;
         for nonce in 0..=voting_power {
-            let vrf_proof = self
-                .vrf_private_key
-                .compute(
-                    block_data
-                        .vrf_round_seed(
-                            self.current_seed.lock().as_slice(),
-                            nonce,
-                        )
-                        .as_slice(),
-                )
-                .ok()?;
-            let vrf_number = vrf_proof.to_hash().ok()?.to_u256();
-            if vrf_number < min_vrf_number {
+            let vrf_number =
+                vrf_number_with_nonce(&vrf_proof.to_hash().unwrap(), nonce)
+                    .to_u256();
+            if vrf_number <= min_vrf_number {
                 min_vrf_number = vrf_number;
-                best_vrf_nonce_and_proof = Some((nonce, vrf_proof));
+                best_nonce = Some(nonce);
             }
         }
-        best_vrf_nonce_and_proof
+        best_nonce.map(|nonce| (nonce, vrf_proof))
     }
 }
