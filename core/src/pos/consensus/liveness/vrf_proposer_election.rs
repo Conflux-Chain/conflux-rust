@@ -10,7 +10,7 @@ use consensus_types::common::{Author, Round};
 
 use cfx_types::U256;
 use consensus_types::{block::Block, block_data::BlockData};
-use diem_crypto::{vrf_number_with_nonce, VRFPrivateKey, VRFProof};
+use diem_crypto::{vrf_number_with_nonce, HashValue, VRFPrivateKey, VRFProof};
 use diem_logger::debug as diem_debug;
 use diem_types::{
     epoch_state::EpochState,
@@ -23,7 +23,7 @@ pub struct VrfProposer {
     author: Author,
     vrf_private_key: ConsensusVRFPrivateKey,
 
-    proposal_threshold: U256,
+    proposal_threshold: HashValue,
 
     current_round: Mutex<Round>,
     current_seed: Mutex<Vec<u8>>,
@@ -36,13 +36,15 @@ pub struct VrfProposer {
 impl VrfProposer {
     pub fn new(
         author: Author, vrf_private_key: ConsensusVRFPrivateKey,
-        proposal_threshold: U256, epoch_state: EpochState,
+        proposal_threshold_u256: U256, epoch_state: EpochState,
     ) -> Self
     {
+        let mut proposal_threshold = [0 as u8; HashValue::LENGTH];
+        proposal_threshold_u256.to_big_endian(&mut proposal_threshold);
         Self {
             author,
             vrf_private_key,
-            proposal_threshold,
+            proposal_threshold: HashValue::new(proposal_threshold),
             // current_round and current_seed will not be used before
             // `next_round` is called.
             current_round: Mutex::new(0),
@@ -52,14 +54,11 @@ impl VrfProposer {
         }
     }
 
-    pub fn get_vrf_number(&self, block: &Block) -> Option<U256> {
-        Some(
-            vrf_number_with_nonce(
-                &block.vrf_proof()?.to_hash().ok()?,
-                block.vrf_nonce()?,
-            )
-            .to_u256(),
-        )
+    pub fn get_vrf_number(&self, block: &Block) -> Option<HashValue> {
+        Some(vrf_number_with_nonce(
+            &block.vrf_proof()?.to_hash().ok()?,
+            block.vrf_nonce()?,
+        ))
     }
 }
 
@@ -90,14 +89,12 @@ impl ProposerElection for VrfProposer {
         let mut round_seed = self.current_seed.lock().clone();
         round_seed.extend_from_slice(&round.to_be_bytes());
         for nonce in 0..=voting_power {
-            let mut nonce_round_seed = round_seed.clone();
-            nonce_round_seed.extend_from_slice(&nonce.to_be_bytes());
             let vrf_proof = self
                 .vrf_private_key
-                .compute(nonce_round_seed.as_slice())
+                .compute(round_seed.as_slice())
                 .expect("vrf compute fail");
             let vrf_number =
-                vrf_proof.to_hash().expect("vrf to hash fail").to_u256();
+                vrf_number_with_nonce(&vrf_proof.to_hash().unwrap(), nonce);
             if vrf_number <= self.proposal_threshold {
                 return true;
             }
@@ -147,8 +144,7 @@ impl ProposerElection for VrfProposer {
                 return false;
             }
         };
-        vrf_number_with_nonce(&vrf_hash, nonce).to_u256()
-            <= self.proposal_threshold
+        vrf_number_with_nonce(&vrf_hash, nonce) <= self.proposal_threshold
     }
 
     fn is_random_election(&self) -> bool { true }
@@ -216,8 +212,7 @@ impl ProposerElection for VrfProposer {
             .ok()?;
         for nonce in 0..=voting_power {
             let vrf_number =
-                vrf_number_with_nonce(&vrf_proof.to_hash().unwrap(), nonce)
-                    .to_u256();
+                vrf_number_with_nonce(&vrf_proof.to_hash().unwrap(), nonce);
             if vrf_number <= min_vrf_number {
                 min_vrf_number = vrf_number;
                 best_nonce = Some(nonce);

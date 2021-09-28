@@ -85,6 +85,10 @@ impl VMExecutor for FakeVM {
                 Transaction::UserTransaction(trans) => {
                     // TODO(lpl): Parallel verification.
                     let trans = trans.check_signature().map_err(|_| {
+                        diem_trace!(
+                            "invalid transactions signature: e={:?}",
+                            e
+                        );
                         VMStatus::Error(StatusCode::INVALID_SIGNATURE)
                     })?;
                     /* TODO(lpl): Handle pos epoch change.

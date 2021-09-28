@@ -1,16 +1,15 @@
 #[macro_use]
 extern crate criterion;
 use criterion::{BatchSize, Criterion};
-use diem_crypto::{ec_vrf::EcVrfPrivateKey, traits::Uniform, VRFPrivateKey};
+use diem_crypto::{
+    ec_vrf::EcVrfPrivateKey, traits::Uniform, vrf_number_with_nonce, HashValue,
+    VRFPrivateKey,
+};
 use rand::{random, rngs::ThreadRng, thread_rng};
 
 fn compute(c: &mut Criterion) {
     let mut csprng: ThreadRng = thread_rng();
     let priv_key = EcVrfPrivateKey::generate(&mut csprng);
-
-    c.bench_function("vrf proof generation with same seed", |b| {
-        b.iter(|| priv_key.compute(&[]))
-    });
 
     c.bench_function("vrf proof generation", |b| {
         b.iter_batched(
@@ -21,5 +20,21 @@ fn compute(c: &mut Criterion) {
     });
 }
 
-criterion_group!(vrf_benches, compute);
+fn hash_vrf_number(c: &mut Criterion) {
+    let vrf_output = HashValue::random();
+
+    c.bench_function("hash of empty message", |b| {
+        b.iter(|| HashValue::sha3_256_of(&[]))
+    });
+
+    c.bench_function("hash of hash", |b| {
+        b.iter(|| HashValue::sha3_256_of(vrf_output.as_ref()))
+    });
+
+    c.bench_function("vrf number hash", |b| {
+        b.iter(|| vrf_number_with_nonce(&vrf_output, 0))
+    });
+}
+
+criterion_group!(vrf_benches, compute, hash_vrf_number);
 criterion_main!(vrf_benches);

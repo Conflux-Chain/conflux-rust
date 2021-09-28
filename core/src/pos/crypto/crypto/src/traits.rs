@@ -395,7 +395,7 @@ pub(crate) mod private {
 /// This is used in both choosing leaders in a round and electing committees in
 /// a term.
 pub fn vrf_number_with_nonce(vrf_output: &HashValue, nonce: u64) -> HashValue {
-    let mut b = vrf_output.to_vec();
-    b.append(&mut nonce.to_le_bytes().to_vec());
-    HashValue::sha3_256_of(&b)
+    HashValue::sha3_256_of(
+        &[vrf_output.as_ref() as &[u8], &nonce.to_be_bytes()].concat(),
+    )
 }
