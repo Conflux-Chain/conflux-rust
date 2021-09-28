@@ -445,7 +445,7 @@ impl RoundManager {
             signed_proposal.set_vrf_nonce_and_proof(
                 self.proposer_election
                     .gen_vrf_nonce_and_proof(signed_proposal.block_data())
-                    .unwrap(),
+                    .expect("threshold checked in is_valid_proposer"),
             )
         }
         observe_block(signed_proposal.timestamp_usecs(), BlockStage::SIGNED);
