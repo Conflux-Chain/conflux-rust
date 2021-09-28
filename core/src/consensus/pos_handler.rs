@@ -227,6 +227,10 @@ impl PosHandler {
 
     fn pos(&self) -> &Box<dyn PosInterface> { self.pos.get().unwrap() }
 
+    pub fn pos_option(&self) -> Option<&Box<dyn PosInterface>> {
+        self.pos.get()
+    }
+
     pub fn is_enabled_at_height(&self, height: u64) -> bool {
         height >= self.enable_height
     }

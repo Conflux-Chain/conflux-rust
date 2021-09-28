@@ -5,6 +5,7 @@
 use crate::{
     common::delegate_convert::into_jsonrpc_result,
     rpc::{
+        error_codes::{build_rpc_server_error, codes::POS_NOT_ENABLED},
         traits::pos::Pos,
         types::{
             pos::{
@@ -15,7 +16,7 @@ use crate::{
             },
             RpcAddress,
         },
-        RpcResult,
+        RpcInterceptor, RpcResult,
     },
 };
 use cfx_addr::Network;
@@ -35,6 +36,28 @@ use jsonrpc_core::{Error, ErrorCode, Result as JsonRpcResult};
 use std::{collections::HashMap, sync::Arc};
 use storage_interface::{DBReaderForPoW, DbReader};
 
+pub struct PoSInterceptor {
+    pos_handler: Arc<PosVerifier>,
+}
+
+impl PoSInterceptor {
+    pub fn new(pos_handler: Arc<PosVerifier>) -> Self {
+        PoSInterceptor { pos_handler }
+    }
+}
+
+impl RpcInterceptor for PoSInterceptor {
+    fn before(&self, _name: &String) -> JsonRpcResult<()> {
+        match self.pos_handler.pos_option() {
+            Some(_) => Ok(()),
+            None => bail!(build_rpc_server_error(
+                POS_NOT_ENABLED,
+                "PoS chain is not enabled".into()
+            )),
+        }
+    }
+}
+
 pub struct PosHandler {
     pos_handler: Arc<PosVerifier>,
     pow_data_manager: Arc<BlockDataManager>,
@@ -43,12 +66,12 @@ pub struct PosHandler {
 
 impl PosHandler {
     pub fn new(
-        pos_verifier: Arc<PosVerifier>,
-        pow_data_manager: Arc<BlockDataManager>, network_type: Network,
+        pos_handler: Arc<PosVerifier>, pow_data_manager: Arc<BlockDataManager>,
+        network_type: Network,
     ) -> Self
     {
         PosHandler {
-            pos_handler: pos_verifier,
+            pos_handler,
             pow_data_manager,
             network_type,
         }
@@ -388,11 +411,18 @@ impl PosHandler {
         let diem_db = self.pos_handler.diem_db();
         match diem_db.get_transaction(version).ok()? {
             CoreTransaction::UserTransaction(signed_tx) => {
-                let block_hash = diem_db
-                    .get_transaction_block_meta(version)
-                    .ok()
-                    .unwrap_or(None)
-                    .map(|(_v, meta)| hash_value_to_h256(meta.id()));
+                let mut block_hash: Option<H256> = None;
+                let mut block_number: Option<U64> = None;
+                let mut timestamp: Option<U64> = None;
+                let block_meta =
+                    diem_db.get_transaction_block_meta(version).unwrap_or(None);
+                if let Some((_, bm)) = block_meta {
+                    block_hash = Some(hash_value_to_h256(bm.id()));
+                    timestamp = Some(U64::from(bm.timestamp_usec()));
+                    if let Some(block) = self.block_by_hash(block_hash?) {
+                        block_number = Some(block.height);
+                    }
+                }
                 let status = diem_db
                     .get_transaction_info(version)
                     .ok()
@@ -401,6 +431,8 @@ impl PosHandler {
                     hash: hash_value_to_h256(signed_tx.hash()),
                     from: H256::from(signed_tx.sender().to_u8()),
                     block_hash,
+                    block_number,
+                    timestamp,
                     number: U64::from(version),
                     payload: Some(signed_tx.payload().clone()),
                     status,
@@ -409,10 +441,15 @@ impl PosHandler {
             }
             CoreTransaction::GenesisTransaction(_) => None,
             CoreTransaction::BlockMetadata(block_meta) => {
+                let block_number = self
+                    .block_by_hash(hash_value_to_h256(block_meta.id()))
+                    .map(|b| U64::from(b.height));
                 let mut tx = Transaction {
                     hash: Default::default(),
                     from: Default::default(), // TODO
                     block_hash: Some(hash_value_to_h256(block_meta.id())),
+                    block_number,
+                    timestamp: Some(U64::from(block_meta.timestamp_usec())),
                     number: U64::from(version),
                     payload: None,
                     status: None,
@@ -435,7 +472,6 @@ impl PosHandler {
 fn map_votes(list: &StatusList) -> Vec<VotePowerState> {
     let mut ans = Vec::with_capacity(list.len());
     for item in list.iter() {
-        // ans.push((U64::from(item.view), U64::from(item.votes)));
         ans.push(VotePowerState {
             end_block_number: U64::from(item.view),
             power: U64::from(item.votes),
