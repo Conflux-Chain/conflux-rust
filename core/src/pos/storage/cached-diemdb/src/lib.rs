@@ -93,7 +93,7 @@ impl CachedDiemDB {
     }
 
     pub fn new_on_unbootstrapped_db(
-        db: DbReaderWriter, tree_state: TreeState,
+        db: DbReaderWriter, tree_state: TreeState, initial_seed: Vec<u8>,
         initial_nodes: Vec<(NodeID, u64)>,
         initial_committee: Vec<(AccountAddress, u64)>,
         genesis_pivot_decision: Option<PivotBlockDecision>,
@@ -136,7 +136,7 @@ impl CachedDiemDB {
                 height: 0,
             });
         let pos_state = PosState::new(
-            vec![],
+            initial_seed,
             initial_nodes,
             initial_committee,
             genesis_pivot_decision,

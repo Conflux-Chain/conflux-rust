@@ -51,6 +51,7 @@ pub fn generate_waypoint<V: VMExecutor>(
         None,
         Vec::new(),
         Vec::new(),
+        Vec::new(),
     )?;
     Ok(committer.waypoint)
 }
@@ -60,7 +61,7 @@ pub fn generate_waypoint<V: VMExecutor>(
 /// matches the waypoint. Returns Ok(true) if committed otherwise Err.
 pub fn maybe_bootstrap<V: VMExecutor>(
     db: &DbReaderWriter, genesis_txn: &Transaction, waypoint: Waypoint,
-    genesis_pivot_decision: Option<PivotBlockDecision>,
+    genesis_pivot_decision: Option<PivotBlockDecision>, initial_seed: Vec<u8>,
     initial_nodes: Vec<(NodeID, u64)>,
     initial_committee: Vec<(AccountAddress, u64)>,
 ) -> Result<bool>
@@ -83,6 +84,7 @@ pub fn maybe_bootstrap<V: VMExecutor>(
         tree_state,
         genesis_txn,
         genesis_pivot_decision,
+        initial_seed,
         initial_nodes,
         initial_committee,
     )?;
@@ -132,7 +134,7 @@ impl<V: VMExecutor> GenesisCommitter<V> {
 
 pub fn calculate_genesis<V: VMExecutor>(
     db: &DbReaderWriter, tree_state: TreeState, genesis_txn: &Transaction,
-    genesis_pivot_decision: Option<PivotBlockDecision>,
+    genesis_pivot_decision: Option<PivotBlockDecision>, initial_seed: Vec<u8>,
     initial_nodes: Vec<(NodeID, u64)>,
     initial_committee: Vec<(AccountAddress, u64)>,
 ) -> Result<GenesisCommitter<V>>
@@ -144,6 +146,7 @@ pub fn calculate_genesis<V: VMExecutor>(
     let db_with_cache = Arc::new(CachedDiemDB::new_on_unbootstrapped_db(
         db.clone(),
         tree_state,
+        initial_seed,
         initial_nodes,
         initial_committee,
         genesis_pivot_decision.clone(),

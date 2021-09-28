@@ -61,15 +61,15 @@ use storage_interface::DbReaderWriter;
 
 const USAGE: &str = r#"
 Usage:
-    tgconfig random --initial_seed <seed> [--num-validator=<nv> --num-genesis-validator=<ng> --chain-id=<id>]
-    tgconfig frompub --initial_seed <seed> <pkfile>
+    tgconfig random --initial-seed <seed> [--num-validator=<nv> --num-genesis-validator=<ng> --chain-id=<id>]
+    tgconfig frompub --initial-seed <seed> <pkfile>
 
 Options:
     -h, --help              Display this message and exit.
     --num-validator=<nv>    The number of validators.
     --num-genesis-validator=<ng>    The number of validators included in the genesis.
     --chain-id=<id>         The chain id of the PoW chain.
-    --initial_seed=<seed>   The 32-byte hex string of the initial seed hash.
+    --initial-seed=<seed>   The 32-byte hex string of the initial seed hash.
 
 Commands:
     random                  Generate random key pairs for validators.
@@ -271,7 +271,7 @@ where
         let mut rng = StdRng::from_seed([0u8; 32]);
         let mut genesis_nodes = Vec::new();
 
-        let voting_power = 100_000;
+        let voting_power = 2_000_000;
         for i in 0..num_validator {
             let pow_keypair: KeyPair = Random.generate().unwrap();
             let private_key = ConsensusPrivateKey::generate(&mut rng);
@@ -324,6 +324,7 @@ where
                         (node_id.addr, *voting_power)
                     })
                     .collect(),
+                initial_seed,
             },
         );
         generate_genesis_from_public_keys(initial_committee);
@@ -372,6 +373,7 @@ where
                         (node_id.addr, *voting_power)
                     })
                     .collect(),
+                initial_seed,
             },
         );
         generate_genesis_from_public_keys(initial_committee);

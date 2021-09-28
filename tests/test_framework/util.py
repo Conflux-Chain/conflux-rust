@@ -265,15 +265,16 @@ def wait_until(predicate,
 # Node functions
 ################
 
-def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id,  start_index=None, pkfile=None,):
+def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="0x"+"0"*32, start_index=None, pkfile=None,):
     tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/pos-genesis-tool")
     try:
         if pkfile is None:
             check_output([tg_config_gen, "random", "--num-validator={}".format(nodes),
-                    "--num-genesis-validator={}".format(genesis_nodes), "--chain-id={}".format(chain_id)], cwd=dirname)
+                    "--num-genesis-validator={}".format(genesis_nodes), "--chain-id={}".format(chain_id),
+                          "--initial-seed={}".format(initial_seed)], cwd=dirname)
         else:
             print([tg_config_gen, "frompub", pkfile], dirname)
-            check_output([tg_config_gen, "frompub", pkfile], cwd=dirname)
+            check_output([tg_config_gen, "frompub", "--initial-seed={}".format(initial_seed), pkfile], cwd=dirname)
     except CalledProcessError as e:
         print(e.output)
     waypoint_path = os.path.join(dirname, 'waypoint_config')

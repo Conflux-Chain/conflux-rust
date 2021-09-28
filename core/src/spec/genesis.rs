@@ -614,4 +614,5 @@ pub struct GenesisPosNodeInfo {
 pub struct GenesisPosState {
     pub initial_nodes: Vec<GenesisPosNodeInfo>,
     pub initial_committee: Vec<(AccountAddress, u64)>,
+    pub initial_seed: H256,
 }

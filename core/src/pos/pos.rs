@@ -26,6 +26,7 @@ use crate::{
         },
         state_sync::bootstrapper::StateSyncBootstrapper,
     },
+    spec::genesis::GenesisPosState,
     sync::ProtocolConfiguration,
 };
 use cached_diemdb::CachedDiemDB;
@@ -85,8 +86,7 @@ pub fn start_pos_consensus(
     config: &NodeConfig, network: Arc<NetworkService>,
     protocol_config: ProtocolConfiguration,
     own_pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
-    initial_nodes: Vec<(NodeID, u64)>,
-    initial_committee: Vec<(AccountAddress, u64)>,
+    pos_genesis_state: GenesisPosState,
     consensus_network_receiver: ConsensusNetworkReceivers,
     mempool_network_receiver: MemPoolNetworkReceivers,
     hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
@@ -136,8 +136,7 @@ pub fn start_pos_consensus(
         network,
         protocol_config,
         own_pos_public_key,
-        initial_nodes,
-        initial_committee,
+        pos_genesis_state,
         consensus_network_receiver,
         mempool_network_receiver,
         hsb_protocol,
@@ -165,8 +164,7 @@ pub fn setup_pos_environment(
     node_config: &NodeConfig, network: Arc<NetworkService>,
     protocol_config: ProtocolConfiguration,
     own_pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
-    initial_nodes: Vec<(NodeID, u64)>,
-    initial_committee: Vec<(AccountAddress, u64)>,
+    pos_genesis_state: GenesisPosState,
     consensus_network_receiver: ConsensusNetworkReceivers,
     mempool_network_receiver: MemPoolNetworkReceivers,
     hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
@@ -211,8 +209,15 @@ pub fn setup_pos_environment(
                 block_hash: protocol_config.pos_genesis_pivot_decision,
                 height: 0,
             }),
-            initial_nodes,
-            initial_committee,
+            pos_genesis_state.initial_seed.as_bytes().to_vec(),
+            pos_genesis_state
+                .initial_nodes
+                .into_iter()
+                .map(|node| {
+                    (NodeID::new(node.bls_key, node.vrf_key), node.voting_power)
+                })
+                .collect(),
+            pos_genesis_state.initial_committee,
         )
         .expect("Db-bootstrapper should not fail.");
     } else {
