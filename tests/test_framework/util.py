@@ -265,7 +265,7 @@ def wait_until(predicate,
 # Node functions
 ################
 
-def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="0x"+"0"*32, start_index=None, pkfile=None,):
+def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="0"*64, start_index=None, pkfile=None,):
     tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/pos-genesis-tool")
     try:
         if pkfile is None:
