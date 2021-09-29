@@ -16,7 +16,7 @@ from conflux.config import DEFAULT_PY_TEST_CHAIN_ID
 from conflux.address import hex_to_b32_address
 from conflux.filter import Filter
 from conflux.rpc import RpcClient
-from conflux.utils import int_to_hex, priv_to_addr, parse_as_int
+from conflux.utils import int_to_hex, priv_to_addr, parse_as_int, encode_hex
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 from test_framework.blocktools import encode_hex_0x
@@ -53,8 +53,11 @@ for i in range(0, last_epoch, 1000):
 with open(os.path.join(cmd, "public_keys"), "w") as f:
     for pos_identifier in pub_keys_map.keys():
         f.write(",".join([pub_keys_map[pos_identifier][0][2:], pub_keys_map[pos_identifier][1][2:], str(voting_power_map[pos_identifier])]) + "\n")
+cfx_block_hash = client.block_by_block_number(int_to_hex(475200))["hash"]
+bitcoin_block_hash = "00000000000000000005e306896781cf5169a8bdff8aed8dce19c084adf4cc0d"
+initial_seed = encode_hex(keccak(hexstr=cfx_block_hash[2:]+bitcoin_block_hash))
 tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/pos-genesis-tool")
-check_output([tg_config_gen, "frompub", "public_keys"], cwd=cmd)
+check_output([tg_config_gen, "frompub", "--initial-seed={}".format(initial_seed),"public_keys"], cwd=cmd)
 waypoint = open(os.path.join(cmd, "waypoint_config"), "r").readlines()[0]
 conf_file = open(os.path.join(cmd, "pos_config.yaml"), "w")
 conf_file.write(f"""
