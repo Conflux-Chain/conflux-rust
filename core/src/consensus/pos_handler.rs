@@ -9,7 +9,7 @@ use diem_types::{
     contract_event::ContractEvent,
     epoch_state::EpochState,
     reward_distribution_event::RewardDistributionEvent,
-    term_state::{DisputeEvent, NodeID, UnlockEvent},
+    term_state::{DisputeEvent, UnlockEvent},
     validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
 };
 use keccak_hash::keccak;
@@ -164,15 +164,9 @@ impl PosHandler {
 
         let mut pos_config = NodeConfig::load(pos_config_path)
             .map_err(|e| format!("Failed to load node config: e={:?}", e))?;
-        let initial_nodes = read_initial_nodes_from_file(
+        let pos_genesis = read_initial_nodes_from_file(
             self.conf.pos_initial_nodes_path.as_str(),
-        )?
-        .initial_nodes
-        .into_iter()
-        .map(|node| {
-            (NodeID::new(node.bls_key, node.vrf_key), node.voting_power)
-        })
-        .collect();
+        )?;
         let network = self.network.lock().take().expect("pos not initialized");
         pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
             author: from_consensus_public_key(
@@ -190,7 +184,6 @@ impl PosHandler {
             self.conf.vrf_proposal_threshold;
         pos_config.consensus.chain_id = ChainId::new(network.network_id());
 
-        debug!("PoS initial nodes={:?}", initial_nodes);
         let diem_handler = start_pos_consensus(
             &pos_config,
             network,
@@ -199,7 +192,7 @@ impl PosHandler {
                 self.conf.bls_key.public_key(),
                 self.conf.vrf_key.public_key(),
             )),
-            initial_nodes,
+            pos_genesis,
             self.consensus_network_receiver
                 .lock()
                 .take()
@@ -226,6 +219,10 @@ impl PosHandler {
     pub fn config(&self) -> &PosConfiguration { &self.conf }
 
     fn pos(&self) -> &Box<dyn PosInterface> { self.pos.get().unwrap() }
+
+    pub fn pos_option(&self) -> Option<&Box<dyn PosInterface>> {
+        self.pos.get()
+    }
 
     pub fn is_enabled_at_height(&self, height: u64) -> bool {
         height >= self.enable_height

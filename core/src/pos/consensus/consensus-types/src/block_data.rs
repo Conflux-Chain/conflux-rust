@@ -126,10 +126,9 @@ impl BlockData {
         matches!(self.block_type, BlockType::NilBlock)
     }
 
-    pub fn vrf_round_seed(&self, seed: &[u8], nonce: u64) -> Vec<u8> {
+    pub fn vrf_round_seed(&self, seed: &[u8]) -> Vec<u8> {
         let mut round_seed = seed.to_vec();
         round_seed.extend_from_slice(&self.round.to_be_bytes());
-        round_seed.extend_from_slice(&nonce.to_be_bytes());
         round_seed
     }
 

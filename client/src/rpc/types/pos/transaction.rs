@@ -14,6 +14,8 @@ pub struct Transaction {
     pub hash: H256,
     pub from: H256,
     pub block_hash: Option<H256>,
+    pub block_number: Option<U64>,
+    pub timestamp: Option<U64>,
     pub number: U64,
     pub payload: Option<TransactionPayload>,
     pub status: Option<RpcTransactionStatus>,
@@ -42,11 +44,13 @@ pub enum RpcTransactionType {
 impl Serialize for Transaction {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
-        let mut struc = serializer.serialize_struct("Transaction", 7)?;
+        let mut struc = serializer.serialize_struct("Transaction", 9)?;
         struc.serialize_field("hash", &self.hash)?;
         struc.serialize_field("from", &self.from)?;
         struc.serialize_field("number", &self.number)?;
         struc.serialize_field("blockHash", &self.block_hash)?;
+        struc.serialize_field("blockNumber", &self.block_number)?;
+        struc.serialize_field("timestamp", &self.timestamp)?;
         struc.serialize_field("status", &self.status)?;
         struc.serialize_field("type", &self.tx_type)?;
         if self.payload.is_some() {

@@ -46,6 +46,7 @@ use crate::{
     verification::{compute_receipts_root, compute_transaction_root},
     vm::{CreateContractAddress, Env},
 };
+use diem_types::account_address::AccountAddress;
 
 pub const DEV_GENESIS_PRI_KEY: &'static str =
     "46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f";
@@ -611,4 +612,6 @@ pub struct GenesisPosNodeInfo {
 #[derive(Serialize, Deserialize)]
 pub struct GenesisPosState {
     pub initial_nodes: Vec<GenesisPosNodeInfo>,
+    pub initial_committee: Vec<(AccountAddress, u64)>,
+    pub initial_seed: H256,
 }

@@ -46,6 +46,7 @@ use self::{
             CfxHandler as LightCfxHandler, DebugRpcImpl as LightDebugRpcImpl,
             RpcImpl as LightImpl, TestRpcImpl as LightTestRpcImpl,
         },
+        pos::{PoSInterceptor, PosHandler},
         pubsub::PubSubClient,
         trace::TraceHandler,
     },
@@ -60,7 +61,6 @@ use crate::{
     configuration::Configuration,
     rpc::{
         error_codes::request_rejected_too_many_request_error,
-        impls::pos::PosHandler,
         interceptor::{RpcInterceptor, RpcProxy},
         rpc_apis::{Api, ApiSet},
     },
@@ -235,7 +235,9 @@ fn setup_rpc_apis(
                     *rpc.sync.network.get_network_type(),
                 )
                 .to_delegate();
-                handler.extend_with(pos);
+                let pos_interceptor =
+                    PoSInterceptor::new(common.pos_handler.clone());
+                handler.extend_with(RpcProxy::new(pos, pos_interceptor));
             }
         }
     }
