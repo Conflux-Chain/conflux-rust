@@ -534,7 +534,7 @@ def unstake_tx_data(unstaking_value: int):
 def retire_tx_data():
     register_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/PoSRegister.json"), "r").read())
     register_contract = get_contract_instance(contract_dict=register_contract_dict)
-    return get_contract_function_data(register_contract, "retire", args=[1])
+    return get_contract_function_data(register_contract, "retire", args=[20_000])
 
 def get_contract_function_data(contract, name, args):
     func = getattr(contract.functions, name)
