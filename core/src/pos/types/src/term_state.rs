@@ -652,7 +652,7 @@ impl Debug for PosState {
     ) -> std::result::Result<(), std::fmt::Error> {
         f.debug_struct("PosState")
             .field("view", &self.current_view)
-            .field("node_map", &self.node_map)
+            .field("node_map_size", &self.node_map.len())
             .field("term_list", &self.term_list)
             .field("epoch_state", &self.epoch_state)
             .finish()
