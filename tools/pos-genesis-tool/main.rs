@@ -26,6 +26,7 @@ use rustc_hex::FromHexError;
 use serde::Deserialize;
 use tempdir::TempDir;
 
+use cfx_types::H256;
 use cfxcore::{
     consensus::pos_handler::save_initial_nodes_to_file,
     spec::genesis::{
@@ -34,12 +35,13 @@ use cfxcore::{
 };
 use cfxkey::{Error as EthkeyError, Generator, KeyPair, Random};
 use diem_crypto::{
-    key_file::save_pri_key, Uniform, ValidCryptoMaterialStringExt,
+    key_file::save_pri_key, HashValue, Uniform, ValidCryptoMaterialStringExt,
 };
 use diem_types::{
-    account_address::from_consensus_public_key,
+    account_address::AccountAddress,
     contract_event::ContractEvent,
     on_chain_config::{new_epoch_event_key, ValidatorSet},
+    term_state::{NodeID, TERM_ELECTED_SIZE, TERM_LIST_LEN},
     transaction::{ChangeSet, Transaction, WriteSetPayload},
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
@@ -51,19 +53,23 @@ use diem_types::{
 };
 use diemdb::DiemDB;
 use executor::{db_bootstrapper::generate_waypoint, vm::FakeVM};
-use std::path::Path;
+use std::{
+    collections::{BTreeMap, BinaryHeap, HashMap},
+    path::Path,
+};
 use storage_interface::DbReaderWriter;
 
 const USAGE: &str = r#"
 Usage:
-    tgconfig random [--num-validator=<nv> --num-genesis-validator=<ng> --chain-id=<id>]
-    tgconfig frompub <pkfile>
+    tgconfig random --initial-seed <seed> [--num-validator=<nv> --num-genesis-validator=<ng> --chain-id=<id>]
+    tgconfig frompub --initial-seed <seed> <pkfile>
 
 Options:
     -h, --help              Display this message and exit.
     --num-validator=<nv>    The number of validators.
     --num-genesis-validator=<ng>    The number of validators included in the genesis.
     --chain-id=<id>         The chain id of the PoW chain.
+    --initial-seed=<seed>   The 32-byte hex string of the initial seed hash.
 
 Commands:
     random                  Generate random key pairs for validators.
@@ -78,6 +84,7 @@ struct Args {
     flag_num_validator: usize,
     flag_num_genesis_validator: usize,
     flag_chain_id: u32,
+    flag_initial_seed: String,
 }
 
 #[derive(Debug)]
@@ -154,26 +161,22 @@ fn execute_genesis_transaction(genesis_txn: Transaction) -> Waypoint {
     generate_waypoint::<FakeVM>(&db, &genesis_txn).unwrap()
 }
 
-fn generate_genesis_from_public_keys(
-    public_keys: Vec<(ConsensusPublicKey, ConsensusVRFPublicKey, u64)>,
-) {
+fn generate_genesis_from_public_keys(public_keys: Vec<(NodeID, u64)>) {
     let genesis_path = PathBuf::from("./genesis_file");
     let waypoint_path = PathBuf::from("./waypoint_config");
     let mut genesis_file = File::create(&genesis_path).unwrap();
     let mut waypoint_file = File::create(&waypoint_path).unwrap();
 
     let mut validators = Vec::new();
-    for (public_key, vrf_public_key, voting_power) in public_keys {
-        let account_address =
-            from_consensus_public_key(&public_key, &vrf_public_key);
+    for (node_id, voting_power) in public_keys {
         let validator_config = ValidatorConfig::new(
-            public_key,
-            Some(vrf_public_key),
+            node_id.public_key,
+            Some(node_id.vrf_public_key),
             vec![],
             vec![],
         );
         validators.push(ValidatorInfo::new(
-            account_address,
+            node_id.addr,
             voting_power,
             validator_config,
         ));
@@ -194,6 +197,41 @@ fn generate_genesis_from_public_keys(
         .unwrap();
 }
 
+fn elect_genesis_committee(
+    initial_nodes: &Vec<GenesisPosNodeInfo>, initial_seed: &[u8],
+) -> Vec<(NodeID, u64)> {
+    let mut node_map = HashMap::new();
+    let mut electing_heap = BinaryHeap::new();
+    for node in initial_nodes {
+        let node_id = NodeID::new(node.bls_key.clone(), node.vrf_key.clone());
+        let buffer = [node_id.addr.as_ref(), initial_seed].concat();
+        for nonce in 0..node.voting_power {
+            electing_heap.push((
+                HashValue::sha3_256_of(
+                    &[&buffer as &[u8], &nonce.to_be_bytes()].concat(),
+                ),
+                node_id.addr,
+            ));
+        }
+        node_map.insert(node_id.addr, node_id);
+    }
+    let max_committee_size = TERM_LIST_LEN * TERM_ELECTED_SIZE;
+    let mut top_electing: BTreeMap<AccountAddress, u64> = BTreeMap::new();
+    let mut count = 0usize;
+    while let Some((_, node_id)) = electing_heap.pop() {
+        *top_electing.entry(node_id).or_insert(0) += 1;
+        count += 1;
+        if count >= max_committee_size {
+            break;
+        }
+    }
+    let mut elected = Vec::with_capacity(top_electing.len());
+    for (addr, voting_power) in top_electing {
+        elected.push((node_map.remove(&addr).unwrap(), voting_power));
+    }
+    elected
+}
+
 fn execute<S, I>(command: I) -> Result<String, Error>
 where
     I: IntoIterator<Item = S>,
@@ -203,6 +241,10 @@ where
         Docopt::new(USAGE).and_then(|d| d.argv(command).deserialize())?;
 
     info!("args {:?}", args);
+    let initial_seed: H256 = args
+        .flag_initial_seed
+        .parse()
+        .expect("invalid initial seed");
 
     if args.cmd_random {
         let num_validator = if args.flag_num_validator == 0 {
@@ -229,7 +271,7 @@ where
         let mut rng = StdRng::from_seed([0u8; 32]);
         let mut genesis_nodes = Vec::new();
 
-        let voting_power = 100_000;
+        let voting_power = 20_000;
         for i in 0..num_validator {
             let pow_keypair: KeyPair = Random.generate().unwrap();
             let private_key = ConsensusPrivateKey::generate(&mut rng);
@@ -269,19 +311,23 @@ where
                 register_tx,
             });
         }
+        let initial_nodes = genesis_nodes[..num_genesis_validator].to_vec();
+        let initial_committee =
+            elect_genesis_committee(&initial_nodes, initial_seed.as_bytes());
         save_initial_nodes_to_file(
             "./initial_nodes.json",
             GenesisPosState {
-                initial_nodes: genesis_nodes[..num_genesis_validator].to_vec(),
+                initial_nodes,
+                initial_committee: initial_committee
+                    .iter()
+                    .map(|(node_id, voting_power)| {
+                        (node_id.addr, *voting_power)
+                    })
+                    .collect(),
+                initial_seed,
             },
         );
-        generate_genesis_from_public_keys(
-            genesis_nodes
-                .into_iter()
-                .take(num_genesis_validator)
-                .map(|node| (node.bls_key, node.vrf_key, node.voting_power))
-                .collect(),
-        );
+        generate_genesis_from_public_keys(initial_committee);
         Ok("Ok".into())
     } else if args.cmd_frompub {
         let public_key_path = PathBuf::from(args.arg_pkfile.as_str());
@@ -315,13 +361,22 @@ where
                 register_tx: Default::default(),
             });
         }
+        let initial_committee =
+            elect_genesis_committee(&genesis_nodes, initial_seed.as_bytes());
         save_initial_nodes_to_file(
             "./initial_nodes.json",
             GenesisPosState {
                 initial_nodes: genesis_nodes,
+                initial_committee: initial_committee
+                    .iter()
+                    .map(|(node_id, voting_power)| {
+                        (node_id.addr, *voting_power)
+                    })
+                    .collect(),
+                initial_seed,
             },
         );
-        generate_genesis_from_public_keys(public_keys);
+        generate_genesis_from_public_keys(initial_committee);
         Ok("Ok".into())
     } else {
         Ok(USAGE.to_string())

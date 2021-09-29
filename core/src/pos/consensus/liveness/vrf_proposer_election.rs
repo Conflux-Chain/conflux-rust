@@ -91,10 +91,11 @@ impl ProposerElection for VrfProposer {
         let vrf_output = self
             .vrf_private_key
             .compute(round_seed.as_slice())
-            .expect("vrf compute fail").to_hash().expect("to hash error");
+            .expect("vrf compute fail")
+            .to_hash()
+            .expect("to hash error");
         for nonce in 0..=voting_power {
-            let vrf_number =
-                vrf_number_with_nonce(&vrf_output, nonce);
+            let vrf_number = vrf_number_with_nonce(&vrf_output, nonce);
             if vrf_number <= self.proposal_threshold {
                 return true;
             }
@@ -212,8 +213,7 @@ impl ProposerElection for VrfProposer {
             .ok()?;
         let vrf_output = vrf_proof.to_hash().ok()?;
         for nonce in 0..=voting_power {
-            let vrf_number =
-                vrf_number_with_nonce(&vrf_output, nonce);
+            let vrf_number = vrf_number_with_nonce(&vrf_output, nonce);
             if vrf_number <= min_vrf_number {
                 min_vrf_number = vrf_number;
                 best_nonce = Some(nonce);

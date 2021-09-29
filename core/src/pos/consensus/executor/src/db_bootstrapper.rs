@@ -16,6 +16,7 @@ use diem_logger::prelude::*;
 use diem_state_view::{StateView, StateViewId};
 use diem_types::{
     access_path::AccessPath,
+    account_address::AccountAddress,
     account_config::diem_root_address,
     block_info::{
         BlockInfo, PivotBlockDecision, GENESIS_EPOCH, GENESIS_ROUND,
@@ -43,8 +44,15 @@ pub fn generate_waypoint<V: VMExecutor>(
 
     // TODO(lpl): initial nodes are not passed.
     // genesis ledger info (including pivot decision) is not used.
-    let committer =
-        calculate_genesis::<V>(db, tree_state, genesis_txn, None, Vec::new())?;
+    let committer = calculate_genesis::<V>(
+        db,
+        tree_state,
+        genesis_txn,
+        None,
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+    )?;
     Ok(committer.waypoint)
 }
 
@@ -53,8 +61,9 @@ pub fn generate_waypoint<V: VMExecutor>(
 /// matches the waypoint. Returns Ok(true) if committed otherwise Err.
 pub fn maybe_bootstrap<V: VMExecutor>(
     db: &DbReaderWriter, genesis_txn: &Transaction, waypoint: Waypoint,
-    genesis_pivot_decision: Option<PivotBlockDecision>,
+    genesis_pivot_decision: Option<PivotBlockDecision>, initial_seed: Vec<u8>,
     initial_nodes: Vec<(NodeID, u64)>,
+    initial_committee: Vec<(AccountAddress, u64)>,
 ) -> Result<bool>
 {
     let tree_state = db.reader.get_latest_tree_state()?;
@@ -75,7 +84,9 @@ pub fn maybe_bootstrap<V: VMExecutor>(
         tree_state,
         genesis_txn,
         genesis_pivot_decision,
+        initial_seed,
         initial_nodes,
+        initial_committee,
     )?;
     ensure!(
         waypoint == committer.waypoint(),
@@ -123,8 +134,9 @@ impl<V: VMExecutor> GenesisCommitter<V> {
 
 pub fn calculate_genesis<V: VMExecutor>(
     db: &DbReaderWriter, tree_state: TreeState, genesis_txn: &Transaction,
-    genesis_pivot_decision: Option<PivotBlockDecision>,
+    genesis_pivot_decision: Option<PivotBlockDecision>, initial_seed: Vec<u8>,
     initial_nodes: Vec<(NodeID, u64)>,
+    initial_committee: Vec<(AccountAddress, u64)>,
 ) -> Result<GenesisCommitter<V>>
 {
     // DB bootstrapper works on either an empty transaction accumulator or an
@@ -134,7 +146,9 @@ pub fn calculate_genesis<V: VMExecutor>(
     let db_with_cache = Arc::new(CachedDiemDB::new_on_unbootstrapped_db(
         db.clone(),
         tree_state,
+        initial_seed,
         initial_nodes,
+        initial_committee,
         genesis_pivot_decision.clone(),
     ));
     let executor = Executor::<V>::new(

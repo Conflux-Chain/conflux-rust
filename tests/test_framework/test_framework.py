@@ -316,7 +316,7 @@ class ConfluxTestFramework:
         if genesis_nodes is None:
             genesis_nodes = num_nodes
         if is_consortium:
-            initialize_tg_config(self.options.tmpdir, num_nodes, genesis_nodes, DEFAULT_PY_TEST_CHAIN_ID, len(self.nodes))
+            initialize_tg_config(self.options.tmpdir, num_nodes, genesis_nodes, DEFAULT_PY_TEST_CHAIN_ID, start_index=len(self.nodes))
         for i in range(num_nodes):
             node_index = len(self.nodes)
             self.nodes.append(

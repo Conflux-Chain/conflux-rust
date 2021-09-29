@@ -499,7 +499,7 @@ class RpcClient:
     def filter_trace(self, filter: dict):
         return self.node.trace_filter(filter)
 
-    def wait_for_pos_register(self, priv_key=None, stake_value=20_000_000, voting_power=200_000):
+    def wait_for_pos_register(self, priv_key=None, stake_value=2_000_000, voting_power=20_000):
         if priv_key is None:
             priv_key = self.node.pow_sk
         address = eth_utils.encode_hex(priv_to_addr(priv_key))
@@ -512,7 +512,7 @@ class RpcClient:
         self.send_tx(register_tx, wait_for_receipt=True)
         return pos_identifier, priv_key
 
-    def wait_for_unstake(self, priv_key, unstake_value=20_000_000):
+    def wait_for_unstake(self, priv_key, unstake_value=2_000_000):
         unstake_tx = self.new_tx(priv_key=priv_key, data=unstake_tx_data(unstake_value), value=0, receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
         self.send_tx(unstake_tx, wait_for_receipt=True)
 
@@ -534,7 +534,7 @@ def unstake_tx_data(unstaking_value: int):
 def retire_tx_data():
     register_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/PoSRegister.json"), "r").read())
     register_contract = get_contract_instance(contract_dict=register_contract_dict)
-    return get_contract_function_data(register_contract, "retire", args=[1])
+    return get_contract_function_data(register_contract, "retire", args=[20_000])
 
 def get_contract_function_data(contract, name, args):
     func = getattr(contract.functions, name)

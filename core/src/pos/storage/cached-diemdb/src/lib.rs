@@ -10,6 +10,7 @@ use diem_crypto::HashValue;
 use diem_infallible::Mutex;
 use diem_logger::prelude::*;
 use diem_types::{
+    account_address::AccountAddress,
     block_info::PivotBlockDecision,
     contract_event::ContractEvent,
     ledger_info::LedgerInfo,
@@ -92,8 +93,9 @@ impl CachedDiemDB {
     }
 
     pub fn new_on_unbootstrapped_db(
-        db: DbReaderWriter, tree_state: TreeState,
+        db: DbReaderWriter, tree_state: TreeState, initial_seed: Vec<u8>,
         initial_nodes: Vec<(NodeID, u64)>,
+        initial_committee: Vec<(AccountAddress, u64)>,
         genesis_pivot_decision: Option<PivotBlockDecision>,
     ) -> Self
     {
@@ -133,8 +135,13 @@ impl CachedDiemDB {
                 block_hash: Default::default(),
                 height: 0,
             });
-        let pos_state =
-            PosState::new(vec![], initial_nodes, genesis_pivot_decision, true);
+        let pos_state = PosState::new(
+            initial_seed,
+            initial_nodes,
+            initial_committee,
+            genesis_pivot_decision,
+            true,
+        );
         Self {
             db,
             cache: Mutex::new(SpeculationCache::new_for_db_bootstrapping(
