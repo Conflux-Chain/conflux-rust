@@ -4090,6 +4090,39 @@ impl ConsensusGraphInner {
         }
         false
     }
+
+    /// Return if a block has been confirmed by the pivot decision by the latest
+    /// committed PoS block.
+    ///
+    /// This function needs persisted `BlockExecutionResult` to respond
+    /// correctly for blocks before the checkpoint. If the data are not
+    /// persisted, it will return `false` for blocks before the checkpoint even
+    /// though they have been confirmed.
+    pub fn is_confirmed_by_pos(&self, block_hash: &H256) -> bool {
+        let epoch_number = match self.get_block_epoch_number(block_hash) {
+            Some(epoch_number) => epoch_number,
+            None => match self
+                .data_man
+                .block_execution_result_by_hash_from_db(block_hash)
+            {
+                Some(r) => {
+                    let epoch_hash = r.0;
+                    self.data_man
+                        .block_height_by_hash(&epoch_hash)
+                        .expect("executed header exists")
+                }
+                // We cannot find the BlockExecutionResult.
+                None => return false,
+            },
+        };
+        // All epochs before the confirmed epoch are regarded PoS-confirmed.
+        epoch_number <= self.best_pos_pivot_decision.1
+    }
+
+    /// Return the latest PoS pivot decision processed in ConsensusGraph.
+    pub fn latest_epoch_confirmed_by_pos(&self) -> &(H256, u64) {
+        &self.best_pos_pivot_decision
+    }
 }
 
 impl Graph for ConsensusGraphInner {
