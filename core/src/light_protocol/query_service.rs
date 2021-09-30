@@ -852,6 +852,9 @@ impl QueryService {
             }
             EpochNumber::LatestMined => Ok(latest_verifiable),
             EpochNumber::LatestState => Ok(latest_verifiable),
+            EpochNumber::LatestFinalized => {
+                Ok(self.consensus.latest_finalized_epoch_number())
+            }
             EpochNumber::Number(n) if n <= latest_verifiable => Ok(n),
             EpochNumber::Number(n) => Err(FilterError::UnableToVerify {
                 epoch: n,
