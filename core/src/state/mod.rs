@@ -47,6 +47,9 @@ use primitives::{
 use crate::{
     executive::{pos_internal_entries, IndexStatus},
     hash::KECCAK_EMPTY,
+    spec::genesis::{
+        genesis_contract_address_four_year, genesis_contract_address_two_year,
+    },
     transaction_pool::SharedTransactionPool,
 };
 
@@ -347,15 +350,17 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
             return Ok(());
         }
 
-        let total_issued_tokens =
-            self.total_issued_tokens() - self.balance(&Address::zero())?;
+        let total_circulating_tokens = self.total_issued_tokens()
+            - self.balance(&Address::zero())?
+            - self.balance(&genesis_contract_address_four_year())?
+            - self.balance(&genesis_contract_address_two_year())?;
         let total_pos_staking_tokens =
             self.world_statistics.total_pos_staking_tokens;
 
         // The `interest_amount` exactly equals to the floor of
         // pos_amount * 4% / blocks_per_year / sqrt(pos_amount/total_issued)
         let interest_amount =
-            sqrt_u256(total_issued_tokens * total_pos_staking_tokens)
+            sqrt_u256(total_circulating_tokens * total_pos_staking_tokens)
                 / (BLOCKS_PER_YEAR * INVERSE_INTEREST_RATE);
         self.world_statistics.distributable_pos_interest += interest_amount;
 
