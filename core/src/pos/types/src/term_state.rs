@@ -1072,13 +1072,25 @@ impl PosState {
             event.node_id,
             event.start_term
         );
-        let voting_power = self
+        let author = &event.node_id.addr;
+        let available_votes = self
             .node_map
-            .get(&event.node_id.addr)
+            .get(author)
             .expect("checked in execution")
             .lock_status
             .available_votes();
-        self.term_list.new_node_elected(event, voting_power)
+        let target_term_offset =
+            (event.start_term - self.term_list.start_term()) as usize;
+        let serving_votes =
+            self.term_list.serving_votes(target_term_offset, author);
+        let voting_power = available_votes.saturating_sub(serving_votes);
+        if voting_power > 0 {
+            self.term_list.new_node_elected(event, voting_power);
+        } else {
+            diem_warn!("No votes can be elected: {:?} {:?}. available: {}, serving: {}.", event.node_id,
+            event.start_term,available_votes,serving_votes);
+        }
+        Ok(())
     }
 
     /// `get_new_committee` has been called before this to produce an
