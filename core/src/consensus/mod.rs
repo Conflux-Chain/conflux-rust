@@ -1241,6 +1241,7 @@ impl ConsensusGraph {
         }
     }
 
+    // TODO(lpl): Limit epoch range in filter.
     pub fn filter_traces(
         &self, mut filter: TraceFilter,
     ) -> Result<Vec<LocalizedTrace>, FilterError> {

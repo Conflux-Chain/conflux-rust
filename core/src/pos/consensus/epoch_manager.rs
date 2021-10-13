@@ -56,7 +56,7 @@ use diem_types::{
 };
 use futures::{
     channel::{mpsc, oneshot},
-    select, StreamExt,
+    select_biased, StreamExt,
 };
 use pow_types::PowInterface;
 use safety_rules::SafetyRulesManager;
@@ -753,14 +753,7 @@ impl EpochManager {
             }
             let result = monitor!(
                 "main_loop",
-                select! {
-                    msg = network_receivers.consensus_messages.select_next_some() => {
-                        let (peer, msg) = (msg.0, msg.1);
-                        monitor!("process_message", self.process_message(peer, msg).await.with_context(|| format!("from peer: {}", peer)))
-                    }
-                    block_retrieval = network_receivers.block_retrieval.select_next_some() => {
-                        monitor!("process_block_retrieval", self.process_block_retrieval(block_retrieval).await)
-                    }
+                select_biased! {
                     round = round_timeout_sender_rx.select_next_some() => {
                         monitor!("process_local_timeout", self.process_local_timeout(round).await)
                     }
@@ -769,6 +762,13 @@ impl EpochManager {
                     }
                     round = new_round_timeout_sender_rx.select_next_some() => {
                         monitor!("process_new_round_timeout", self.process_new_round_timeout(round).await)
+                    }
+                    msg = network_receivers.consensus_messages.select_next_some() => {
+                        let (peer, msg) = (msg.0, msg.1);
+                        monitor!("process_message", self.process_message(peer, msg).await.with_context(|| format!("from peer: {}", peer)))
+                    }
+                    block_retrieval = network_receivers.block_retrieval.select_next_some() => {
+                        monitor!("process_block_retrieval", self.process_block_retrieval(block_retrieval).await)
                     }
                 }
             );
