@@ -208,6 +208,12 @@ impl TransactionPool {
             .unwrap_or((0.into(), 0.into()))
     }
 
+    pub fn get_next_nonce(
+        &self, address: &Address, start_nonce: Option<U256>,
+    ) -> U256 {
+        self.inner.read().get_next_nonce(address, start_nonce)
+    }
+
     pub fn get_account_pending_info(
         &self, address: &Address,
     ) -> Option<(U256, U256, U256, H256)> {

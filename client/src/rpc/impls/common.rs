@@ -7,7 +7,8 @@ use crate::rpc::{
         errors::check_rpc_address_network, Block as RpcBlock,
         BlockHashOrEpochNumber, Bytes, CheckBalanceAgainstTransactionResponse,
         EpochNumber, RpcAddress, Status as RpcStatus,
-        Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
+        Transaction as RpcTransaction, TxPoolAccountInfo, TxPoolPendingInfo,
+        TxWithPoolInfo,
     },
     RpcResult,
 };
@@ -951,7 +952,7 @@ impl RpcImpl {
         self.check_address_network(address.network)?;
 
         let mut ret = TxPoolPendingInfo::default();
-        let (deferred_txs, _) = self.tx_pool.content(Some(address.into()));
+        let (_, deferred_txs) = self.tx_pool.content(Some(address.into()));
         let mut max_nonce: U256 = U256::from(0);
         let mut min_nonce: U256 = U256::max_value();
         for tx in deferred_txs.iter() {
@@ -966,6 +967,32 @@ impl RpcImpl {
         ret.min_nonce = min_nonce;
         ret.max_nonce = max_nonce;
         Ok(ret)
+    }
+
+    pub fn txpool_account_info(
+        &self, address: RpcAddress,
+    ) -> RpcResult<TxPoolAccountInfo> {
+        self.check_address_network(address.network)?;
+        let (local_nonce, local_balance) =
+            self.tx_pool.get_local_account_info(&address.hex_address);
+        let (state_nonce, state_balance) = self
+            .tx_pool
+            .get_state_account_info(&address.hex_address)
+            .unwrap_or((U256::from(0), U256::from(0)));
+        Ok(TxPoolAccountInfo {
+            local_nonce,
+            local_balance,
+            state_nonce,
+            state_balance,
+        })
+    }
+
+    pub fn txpool_next_nonce(
+        &self, address: RpcAddress, start_nonce: Option<U256>,
+    ) -> RpcResult<U256> {
+        Ok(self
+            .tx_pool
+            .get_next_nonce(&address.hex_address, start_nonce))
     }
 }
 

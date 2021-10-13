@@ -33,7 +33,7 @@ use primitives::{
 use random_crash::*;
 use rlp::Rlp;
 use rustc_hex::ToHex;
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
 use crate::{
@@ -56,8 +56,7 @@ use crate::{
             EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
             LogFilter as RpcFilter, PackedOrExecuted, Receipt as RpcReceipt,
             RewardInfo as RpcRewardInfo, SendTxRequest, Status as RpcStatus,
-            SyncGraphStates, Transaction as RpcTransaction, TxPoolPendingInfo,
-            TxWithPoolInfo,
+            SyncGraphStates, Transaction as RpcTransaction,
         },
         RpcResult,
     },
@@ -1664,13 +1663,6 @@ impl LocalRpc for LocalRpcImpl {
                 -> JsonRpcResult<bool>;
             fn net_sessions(&self, node_id: Option<NodeId>) -> JsonRpcResult<Vec<SessionDetails>>;
             fn net_throttling(&self) -> JsonRpcResult<throttling::Service>;
-            fn tx_inspect(&self, hash: H256) -> JsonRpcResult<TxWithPoolInfo>;
-            fn txpool_content(&self, address: Option<RpcAddress>) -> JsonRpcResult<
-                BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
-            fn txs_from_pool(&self, address: Option<RpcAddress>) -> JsonRpcResult<Vec<RpcTransaction>>;
-            fn txpool_inspect(&self, address: Option<RpcAddress>) -> JsonRpcResult<
-                BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
-            fn txpool_status(&self) -> JsonRpcResult<BTreeMap<String, usize>>;
             fn accounts(&self) -> JsonRpcResult<Vec<RpcAddress>>;
             fn new_account(&self, password: String) -> JsonRpcResult<RpcAddress>;
             fn unlock_account(
@@ -1679,7 +1671,6 @@ impl LocalRpc for LocalRpcImpl {
             fn lock_account(&self, address: RpcAddress) -> JsonRpcResult<bool>;
             fn sign(&self, data: Bytes, address: RpcAddress, password: Option<String>)
                 -> JsonRpcResult<H520>;
-            fn tx_inspect_pending(&self, address: RpcAddress) -> JsonRpcResult<TxPoolPendingInfo>;
 
         }
 

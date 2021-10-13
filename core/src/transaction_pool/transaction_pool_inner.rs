@@ -174,6 +174,22 @@ impl DeferredPool {
             false
         }
     }
+
+    fn last_succ_nonce(&self, addr: Address, from_nonce: U256) -> Option<U256> {
+        let bucket = self.buckets.get(&addr)?;
+        let mut next_nonce = from_nonce;
+        loop {
+            let nonce = bucket.succ_nonce(&next_nonce);
+            if nonce.is_none() {
+                break;
+            }
+            if nonce.unwrap() > next_nonce {
+                break;
+            }
+            next_nonce += 1.into();
+        }
+        Some(next_nonce)
+    }
 }
 
 #[derive(DeriveMallocSizeOf)]
@@ -669,6 +685,23 @@ impl TransactionPoolInner {
             }
         }
         ret
+    }
+
+    pub fn get_next_nonce(
+        &self, address: &Address, start_nonce: Option<U256>,
+    ) -> U256 {
+        let local_nonce = if start_nonce.is_some() {
+            start_nonce.unwrap()
+        } else {
+            let (pool_local_nonce, _) = self
+                .get_local_nonce_and_balance(address)
+                .unwrap_or((0.into(), 0.into()));
+            pool_local_nonce
+        };
+
+        self.deferred_pool
+            .last_succ_nonce(*address, local_nonce)
+            .unwrap_or(local_nonce)
     }
 
     fn recalculate_readiness_with_local_info(&mut self, addr: &Address) {

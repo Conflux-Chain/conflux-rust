@@ -25,7 +25,7 @@ use primitives::{
     Account, DepositInfo, StorageRoot, TransactionWithSignature, VoteStakeInfo,
 };
 use rlp::Encodable;
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
 use crate::{
     common::delegate_convert,
@@ -45,7 +45,7 @@ use crate::{
             LogFilter as RpcFilter, Receipt as RpcReceipt,
             RewardInfo as RpcRewardInfo, RpcAddress, SendTxRequest,
             SponsorInfo, Status as RpcStatus, SyncGraphStates, TokenSupplyInfo,
-            Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
+            Transaction as RpcTransaction,
         },
         RpcBoxFuture, RpcResult,
     },
@@ -1153,12 +1153,6 @@ impl LocalRpc for DebugRpcImpl {
             fn net_throttling(&self) -> JsonRpcResult<throttling::Service>;
             fn new_account(&self, password: String) -> JsonRpcResult<RpcAddress>;
             fn sign(&self, data: Bytes, address: RpcAddress, password: Option<String>) -> JsonRpcResult<H520>;
-            fn tx_inspect_pending(&self, address: RpcAddress) -> JsonRpcResult<TxPoolPendingInfo>;
-            fn tx_inspect(&self, hash: H256) -> JsonRpcResult<TxWithPoolInfo>;
-            fn txpool_content(&self, address: Option<RpcAddress>) -> JsonRpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
-            fn txpool_inspect(&self, address: Option<RpcAddress>) -> JsonRpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
-            fn txpool_status(&self) -> JsonRpcResult<BTreeMap<String, usize>>;
-            fn txs_from_pool(&self, address: Option<RpcAddress>) -> JsonRpcResult<Vec<RpcTransaction>>;
             fn unlock_account(&self, address: RpcAddress, password: String, duration: Option<U128>) -> JsonRpcResult<bool>;
         }
 
