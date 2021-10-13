@@ -25,7 +25,7 @@ use primitives::{
     Account, DepositInfo, StorageRoot, TransactionWithSignature, VoteStakeInfo,
 };
 use rlp::Encodable;
-use std::{net::SocketAddr, sync::Arc};
+use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
 use crate::{
     common::delegate_convert,
@@ -1144,8 +1144,12 @@ impl DebugRpcImpl {
 impl LocalRpc for DebugRpcImpl {
     delegate! {
         to self.common {
+            fn txpool_content(&self, address: Option<RpcAddress>) -> JsonRpcResult<
+                BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
+            fn txpool_inspect(&self, address: Option<RpcAddress>) -> JsonRpcResult<
+                BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
+            fn txpool_clear(&self) -> JsonRpcResult<()>;
             fn accounts(&self) -> JsonRpcResult<Vec<RpcAddress>>;
-            fn clear_tx_pool(&self) -> JsonRpcResult<()>;
             fn lock_account(&self, address: RpcAddress) -> JsonRpcResult<bool>;
             fn net_disconnect_node(&self, id: NodeId, op: Option<UpdateNodeOperation>) -> JsonRpcResult<bool>;
             fn net_node(&self, id: NodeId) -> JsonRpcResult<Option<(String, Node)>>;

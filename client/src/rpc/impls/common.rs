@@ -7,7 +7,7 @@ use crate::rpc::{
         errors::check_rpc_address_network, Block as RpcBlock,
         BlockHashOrEpochNumber, Bytes, CheckBalanceAgainstTransactionResponse,
         EpochNumber, RpcAddress, Status as RpcStatus,
-        Transaction as RpcTransaction, TxPoolAccountInfo, TxPoolPendingInfo,
+        Transaction as RpcTransaction, TxPoolPendingInfo, TxPoolStatus,
         TxWithPoolInfo,
     },
     RpcResult,
@@ -650,7 +650,7 @@ impl RpcImpl {
 
 // Debug RPC implementation
 impl RpcImpl {
-    pub fn clear_tx_pool(&self) -> JsonRpcResult<()> {
+    pub fn txpool_clear(&self) -> JsonRpcResult<()> {
         self.tx_pool.clear_tx_pool();
         Ok(())
     }
@@ -689,7 +689,9 @@ impl RpcImpl {
         Ok(THROTTLING_SERVICE.read().clone())
     }
 
-    pub fn tx_inspect(&self, hash: H256) -> JsonRpcResult<TxWithPoolInfo> {
+    pub fn txpool_tx_with_pool_info(
+        &self, hash: H256,
+    ) -> JsonRpcResult<TxWithPoolInfo> {
         let mut ret = TxWithPoolInfo::default();
         let hash: H256 = hash.into();
         if let Some(tx) = self.tx_pool.get_transaction(&hash) {
@@ -727,18 +729,11 @@ impl RpcImpl {
         Ok(ret)
     }
 
-    pub fn txs_from_pool(
-        &self, address: Option<RpcAddress>,
+    pub fn txpool_get_account_transactions(
+        &self, address: RpcAddress,
     ) -> RpcResult<Vec<RpcTransaction>> {
-        let address: Option<H160> = match address {
-            None => None,
-            Some(addr) => {
-                self.check_address_network(addr.network)?;
-                Some(addr.into())
-            }
-        };
-
-        let (ready_txs, deferred_txs) = self.tx_pool.content(address);
+        let (ready_txs, deferred_txs) =
+            self.tx_pool.content(Some(address.into()));
         let converter =
             |tx: &Arc<SignedTransaction>| -> Result<RpcTransaction, String> {
                 RpcTransaction::from_signed(
@@ -753,6 +748,21 @@ impl RpcImpl {
             .chain(deferred_txs.iter().map(converter))
             .collect::<Result<_, _>>()?;
         return Ok(result);
+    }
+
+    pub fn txpool_transaction_by_address_and_nonce(
+        &self, address: RpcAddress, nonce: U256,
+    ) -> RpcResult<Option<RpcTransaction>> {
+        let tx = self.tx_pool
+            .get_transaction_by_address2nonce(address.into(), nonce)
+            .map(|tx| {
+                RpcTransaction::from_signed(
+                    &tx,
+                    None,
+                    *self.network.get_network_type(),
+                ).unwrap()  // TODO check the unwrap()
+            });
+        Ok(tx)
     }
 
     pub fn txpool_content(
@@ -823,17 +833,16 @@ impl RpcImpl {
         Ok(ret)
     }
 
-    pub fn txpool_status(&self) -> JsonRpcResult<BTreeMap<String, usize>> {
+    pub fn txpool_status(&self) -> JsonRpcResult<TxPoolStatus> {
         let (ready_len, deferred_len, received_len, unexecuted_len) =
             self.tx_pool.stats();
 
-        let mut ret: BTreeMap<String, usize> = BTreeMap::new();
-        ret.insert("ready".into(), ready_len);
-        ret.insert("deferred".into(), deferred_len);
-        ret.insert("received".into(), received_len);
-        ret.insert("unexecuted".into(), unexecuted_len);
-
-        Ok(ret)
+        Ok(TxPoolStatus {
+            deferred: U64::from(deferred_len),
+            ready: U64::from(ready_len),
+            received: U64::from(received_len),
+            unexecuted: U64::from(unexecuted_len),
+        })
     }
 
     pub fn accounts(&self) -> RpcResult<Vec<RpcAddress>> {
@@ -946,7 +955,7 @@ impl RpcImpl {
         Ok(format!("conflux-rust-{}", crate_version!()).into())
     }
 
-    pub fn tx_inspect_pending(
+    pub fn txpool_nonce_range(
         &self, address: RpcAddress,
     ) -> RpcResult<TxPoolPendingInfo> {
         self.check_address_network(address.network)?;
@@ -969,30 +978,8 @@ impl RpcImpl {
         Ok(ret)
     }
 
-    pub fn txpool_account_info(
-        &self, address: RpcAddress,
-    ) -> RpcResult<TxPoolAccountInfo> {
-        self.check_address_network(address.network)?;
-        let (local_nonce, local_balance) =
-            self.tx_pool.get_local_account_info(&address.hex_address);
-        let (state_nonce, state_balance) = self
-            .tx_pool
-            .get_state_account_info(&address.hex_address)
-            .unwrap_or((U256::from(0), U256::from(0)));
-        Ok(TxPoolAccountInfo {
-            local_nonce,
-            local_balance,
-            state_nonce,
-            state_balance,
-        })
-    }
-
-    pub fn txpool_next_nonce(
-        &self, address: RpcAddress, start_nonce: Option<U256>,
-    ) -> RpcResult<U256> {
-        Ok(self
-            .tx_pool
-            .get_next_nonce(&address.hex_address, start_nonce))
+    pub fn txpool_next_nonce(&self, address: RpcAddress) -> RpcResult<U256> {
+        Ok(self.tx_pool.get_next_nonce(&address.hex_address))
     }
 }
 

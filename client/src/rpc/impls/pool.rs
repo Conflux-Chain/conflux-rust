@@ -8,15 +8,15 @@ use crate::{
         impls::common::RpcImpl as CommonImpl,
         traits::TransactionPool,
         types::{
-            RpcAddress, Transaction as RpcTransaction, TxPoolAccountInfo,
-            TxPoolPendingInfo, TxWithPoolInfo,
+            RpcAddress, Transaction as RpcTransaction, TxPoolPendingInfo,
+            TxPoolStatus, TxWithPoolInfo,
         },
     },
 };
 use cfx_types::{H256, U256};
 use delegate::delegate;
 use jsonrpc_core::Result as JsonRpcResult;
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 
 pub struct TransactionPoolHandler {
     common: Arc<CommonImpl>,
@@ -31,16 +31,12 @@ impl TransactionPoolHandler {
 impl TransactionPool for TransactionPoolHandler {
     delegate! {
         to self.common {
-            fn txpool_status(&self) -> JsonRpcResult<BTreeMap<String, usize>>;
-            fn txpool_account_info(&self, address: RpcAddress) -> JsonRpcResult<TxPoolAccountInfo>;
-            fn txpool_next_nonce(&self, address: RpcAddress, start_nonce: Option<U256>) -> JsonRpcResult<U256>;
-            fn txpool_content(&self, address: Option<RpcAddress>) -> JsonRpcResult<
-                BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
-            fn txpool_inspect(&self, address: Option<RpcAddress>) -> JsonRpcResult<
-                BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
-            fn tx_inspect_pending(&self, address: RpcAddress) -> JsonRpcResult<TxPoolPendingInfo>;
-            fn tx_inspect(&self, hash: H256) -> JsonRpcResult<TxWithPoolInfo>;
-            fn txs_from_pool(&self, address: Option<RpcAddress>) -> JsonRpcResult<Vec<RpcTransaction>>;
+            fn txpool_status(&self) -> JsonRpcResult<TxPoolStatus>;
+            fn txpool_next_nonce(&self, address: RpcAddress) -> JsonRpcResult<U256>;
+            fn txpool_nonce_range(&self, address: RpcAddress) -> JsonRpcResult<TxPoolPendingInfo>;
+            fn txpool_tx_with_pool_info(&self, hash: H256) -> JsonRpcResult<TxWithPoolInfo>;
+            fn txpool_get_account_transactions(&self, address: RpcAddress) -> JsonRpcResult<Vec<RpcTransaction>>;
+            fn txpool_transaction_by_address_and_nonce(&self, address: RpcAddress, nonce: U256) -> JsonRpcResult<Option<RpcTransaction>>;
         }
     }
 }

@@ -3,57 +3,39 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::{
-    RpcAddress, Transaction as RpcTransaction, TxPoolAccountInfo,
-    TxPoolPendingInfo, TxWithPoolInfo,
+    RpcAddress, Transaction as RpcTransaction, TxPoolPendingInfo, TxPoolStatus,
+    TxWithPoolInfo,
 };
 use cfx_types::{H256, U256};
 use jsonrpc_core::Result as JsonRpcResult;
 use jsonrpc_derive::rpc;
-use std::collections::BTreeMap;
 
 /// Transaction pool RPCs
 #[rpc(server)]
 pub trait TransactionPool {
     #[rpc(name = "txpool_status")]
-    fn txpool_status(&self) -> JsonRpcResult<BTreeMap<String, usize>>;
-
-    #[rpc(name = "txpool_accountInfo")]
-    fn txpool_account_info(
-        &self, address: RpcAddress,
-    ) -> JsonRpcResult<TxPoolAccountInfo>;
+    fn txpool_status(&self) -> JsonRpcResult<TxPoolStatus>;
 
     #[rpc(name = "txpool_nextNonce")]
-    fn txpool_next_nonce(
-        &self, address: RpcAddress, start_nonce: Option<U256>,
-    ) -> JsonRpcResult<U256>;
+    fn txpool_next_nonce(&self, address: RpcAddress) -> JsonRpcResult<U256>;
 
-    #[rpc(name = "txpool_inspect")]
-    fn txpool_inspect(
-        &self, address: Option<RpcAddress>,
-    ) -> JsonRpcResult<
-        BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
-    >;
+    #[rpc(name = "txpool_transactionByAddressAndNonce")]
+    fn txpool_transaction_by_address_and_nonce(
+        &self, address: RpcAddress, nonce: U256,
+    ) -> JsonRpcResult<Option<RpcTransaction>>;
 
-    #[rpc(name = "txpool_content")]
-    fn txpool_content(
-        &self, address: Option<RpcAddress>,
-    ) -> JsonRpcResult<
-        BTreeMap<
-            String,
-            BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
-        >,
-    >;
+    #[rpc(name = "txpool_accountTransactions")]
+    fn txpool_get_account_transactions(
+        &self, address: RpcAddress,
+    ) -> JsonRpcResult<Vec<RpcTransaction>>;
 
-    #[rpc(name = "tx_inspect_pending")]
-    fn tx_inspect_pending(
+    #[rpc(name = "txpool_nonceRange")]
+    fn txpool_nonce_range(
         &self, address: RpcAddress,
     ) -> JsonRpcResult<TxPoolPendingInfo>;
 
-    #[rpc(name = "tx_inspect")]
-    fn tx_inspect(&self, hash: H256) -> JsonRpcResult<TxWithPoolInfo>;
-
-    #[rpc(name = "getTransactionsFromPool")]
-    fn txs_from_pool(
-        &self, address: Option<RpcAddress>,
-    ) -> JsonRpcResult<Vec<RpcTransaction>>;
+    #[rpc(name = "txpool_txWithPoolInfo")]
+    fn txpool_tx_with_pool_info(
+        &self, hash: H256,
+    ) -> JsonRpcResult<TxWithPoolInfo>;
 }

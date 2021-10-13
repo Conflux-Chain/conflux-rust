@@ -39,9 +39,9 @@ pub struct AccountPendingTransactions {
 }
 
 #[derive(Default, Serialize)]
-pub struct TxPoolAccountInfo {
-    pub local_nonce: U256,
-    pub local_balance: U256,
-    pub state_nonce: U256,
-    pub state_balance: U256,
+pub struct TxPoolStatus {
+    pub deferred: U64,
+    pub ready: U64,
+    pub received: U64,
+    pub unexecuted: U64,
 }

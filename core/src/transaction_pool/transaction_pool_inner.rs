@@ -361,6 +361,13 @@ impl TransactionPoolInner {
         self.txs.get(tx_hash).map(|x| x.clone())
     }
 
+    pub fn get_by_address2nonce(
+        &self, address: Address, nonce: U256,
+    ) -> Option<Arc<SignedTransaction>> {
+        let bucket = self.deferred_pool.buckets.get(&address)?;
+        bucket.get_tx_by_nonce(nonce).map(|tx| tx.transaction)
+    }
+
     pub fn is_full(&self) -> bool {
         return self.total_deferred() >= self.capacity;
     }
@@ -687,21 +694,10 @@ impl TransactionPoolInner {
         ret
     }
 
-    pub fn get_next_nonce(
-        &self, address: &Address, start_nonce: Option<U256>,
-    ) -> U256 {
-        let local_nonce = if start_nonce.is_some() {
-            start_nonce.unwrap()
-        } else {
-            let (pool_local_nonce, _) = self
-                .get_local_nonce_and_balance(address)
-                .unwrap_or((0.into(), 0.into()));
-            pool_local_nonce
-        };
-
+    pub fn get_next_nonce(&self, address: &Address, state_nonce: U256) -> U256 {
         self.deferred_pool
-            .last_succ_nonce(*address, local_nonce)
-            .unwrap_or(local_nonce)
+            .last_succ_nonce(*address, state_nonce)
+            .unwrap_or(state_nonce)
     }
 
     fn recalculate_readiness_with_local_info(&mut self, addr: &Address) {

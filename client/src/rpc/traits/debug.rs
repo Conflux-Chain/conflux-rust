@@ -5,6 +5,7 @@
 use super::super::types::{
     BlockHashOrEpochNumber, Bytes as RpcBytes, ConsensusGraphStates,
     Receipt as RpcReceipt, RpcAddress, SyncGraphStates,
+    Transaction as RpcTransaction,
 };
 use crate::rpc::types::SendTxRequest;
 use cfx_types::{H256, H520, U128};
@@ -14,11 +15,30 @@ use network::{
     node_table::{Node, NodeId},
     throttling, SessionDetails, UpdateNodeOperation,
 };
+use std::collections::BTreeMap;
 
 #[rpc(server)]
 pub trait LocalRpc {
-    #[rpc(name = "clear_tx_pool")]
-    fn clear_tx_pool(&self) -> JsonRpcResult<()>;
+    #[rpc(name = "txpool_inspect")]
+    fn txpool_inspect(
+        &self, address: Option<RpcAddress>,
+    ) -> JsonRpcResult<
+        BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
+    >;
+
+    // return all txpool transactions grouped by hex address
+    #[rpc(name = "txpool_content")]
+    fn txpool_content(
+        &self, address: Option<RpcAddress>,
+    ) -> JsonRpcResult<
+        BTreeMap<
+            String,
+            BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>,
+        >,
+    >;
+
+    #[rpc(name = "txpool_clear")]
+    fn txpool_clear(&self) -> JsonRpcResult<()>;
 
     #[rpc(name = "net_throttling")]
     fn net_throttling(&self) -> JsonRpcResult<throttling::Service>;
