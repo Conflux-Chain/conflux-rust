@@ -753,14 +753,16 @@ impl RpcImpl {
     pub fn txpool_transaction_by_address_and_nonce(
         &self, address: RpcAddress, nonce: U256,
     ) -> RpcResult<Option<RpcTransaction>> {
-        let tx = self.tx_pool
+        let tx = self
+            .tx_pool
             .get_transaction_by_address2nonce(address.into(), nonce)
             .map(|tx| {
                 RpcTransaction::from_signed(
                     &tx,
                     None,
                     *self.network.get_network_type(),
-                ).unwrap()  // TODO check the unwrap()
+                )
+                .unwrap() // TODO check the unwrap()
             });
         Ok(tx)
     }
