@@ -121,7 +121,7 @@ class EthTransactionTest(ConfluxTestFramework):
             eth_tx=True,
         )
 
-        wait_until(lambda: self.nodes[1].tx_inspect(tx.hash_hex())['exist'], timeout=10)
+        wait_until(lambda: self.nodes[1].txpool_txWithPoolInfo(tx.hash_hex())['exist'], timeout=10)
         block_gen_thread.stop()
 
         client.generate_blocks(40)

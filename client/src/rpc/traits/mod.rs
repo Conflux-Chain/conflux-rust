@@ -4,6 +4,7 @@
 
 pub use cfx::Cfx;
 pub use debug::LocalRpc;
+pub use pool::TransactionPool;
 pub use pos::Pos;
 pub use pubsub::PubSub;
 pub use test::TestRpc;
@@ -11,6 +12,7 @@ pub use trace::Trace;
 
 pub mod cfx;
 pub mod debug;
+pub mod pool;
 pub mod pos;
 pub mod pubsub;
 pub mod test;

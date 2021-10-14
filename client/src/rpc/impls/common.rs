@@ -9,6 +9,17 @@ use std::{
     time::Duration,
 };
 
+use crate::rpc::{
+    types::{
+        errors::check_rpc_address_network, AccountPendingInfo,
+        AccountPendingTransactions, Block as RpcBlock, BlockHashOrEpochNumber,
+        Bytes, CheckBalanceAgainstTransactionResponse, EpochNumber, RpcAddress,
+        Status as RpcStatus, Transaction as RpcTransaction,
+        TxPoolPendingNonceRange, TxPoolStatus, TxWithPoolInfo,
+    },
+    RpcResult,
+};
+
 use bigdecimal::BigDecimal;
 use clap::crate_version;
 use jsonrpc_core::{
@@ -36,16 +47,6 @@ use network::{
 };
 use primitives::{
     transaction::TransactionType, Account, Action, SignedTransaction,
-};
-
-use crate::rpc::{
-    types::{
-        errors::check_rpc_address_network, Block as RpcBlock,
-        BlockHashOrEpochNumber, Bytes, CheckBalanceAgainstTransactionResponse,
-        EpochNumber, RpcAddress, Status as RpcStatus,
-        Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
-    },
-    RpcResult,
 };
 
 fn grouped_txs<T, F>(
@@ -691,7 +692,7 @@ impl RpcImpl {
 
 // Debug RPC implementation
 impl RpcImpl {
-    pub fn clear_tx_pool(&self) -> JsonRpcResult<()> {
+    pub fn txpool_clear(&self) -> JsonRpcResult<()> {
         self.tx_pool.clear_tx_pool();
         Ok(())
     }
@@ -730,7 +731,9 @@ impl RpcImpl {
         Ok(THROTTLING_SERVICE.read().clone())
     }
 
-    pub fn tx_inspect(&self, hash: H256) -> JsonRpcResult<TxWithPoolInfo> {
+    pub fn txpool_tx_with_pool_info(
+        &self, hash: H256,
+    ) -> JsonRpcResult<TxWithPoolInfo> {
         let mut ret = TxWithPoolInfo::default();
         let hash: H256 = hash.into();
         if let Some(tx) = self.tx_pool.get_transaction(&hash) {
@@ -768,18 +771,12 @@ impl RpcImpl {
         Ok(ret)
     }
 
-    pub fn txs_from_pool(
-        &self, address: Option<RpcAddress>,
+    pub fn txpool_get_account_transactions(
+        &self, address: RpcAddress,
     ) -> RpcResult<Vec<RpcTransaction>> {
-        let address: Option<H160> = match address {
-            None => None,
-            Some(addr) => {
-                self.check_address_network(addr.network)?;
-                Some(addr.into())
-            }
-        };
-
-        let (ready_txs, deferred_txs) = self.tx_pool.content(address);
+        self.check_address_network(address.network)?;
+        let (ready_txs, deferred_txs) =
+            self.tx_pool.content(Some(address.into()));
         let converter =
             |tx: &Arc<SignedTransaction>| -> Result<RpcTransaction, String> {
                 RpcTransaction::from_signed(
@@ -794,6 +791,23 @@ impl RpcImpl {
             .chain(deferred_txs.iter().map(converter))
             .collect::<Result<_, _>>()?;
         return Ok(result);
+    }
+
+    pub fn txpool_transaction_by_address_and_nonce(
+        &self, address: RpcAddress, nonce: U256,
+    ) -> RpcResult<Option<RpcTransaction>> {
+        let tx = self
+            .tx_pool
+            .get_transaction_by_address2nonce(address.into(), nonce)
+            .map(|tx| {
+                RpcTransaction::from_signed(
+                    &tx,
+                    None,
+                    *self.network.get_network_type(),
+                )
+                .unwrap() // TODO check the unwrap()
+            });
+        Ok(tx)
     }
 
     pub fn txpool_content(
@@ -864,17 +878,16 @@ impl RpcImpl {
         Ok(ret)
     }
 
-    pub fn txpool_status(&self) -> JsonRpcResult<BTreeMap<String, usize>> {
+    pub fn txpool_status(&self) -> JsonRpcResult<TxPoolStatus> {
         let (ready_len, deferred_len, received_len, unexecuted_len) =
             self.tx_pool.stats();
 
-        let mut ret: BTreeMap<String, usize> = BTreeMap::new();
-        ret.insert("ready".into(), ready_len);
-        ret.insert("deferred".into(), deferred_len);
-        ret.insert("received".into(), received_len);
-        ret.insert("unexecuted".into(), unexecuted_len);
-
-        Ok(ret)
+        Ok(TxPoolStatus {
+            deferred: U64::from(deferred_len),
+            ready: U64::from(ready_len),
+            received: U64::from(received_len),
+            unexecuted: U64::from(unexecuted_len),
+        })
     }
 
     pub fn accounts(&self) -> RpcResult<Vec<RpcAddress>> {
@@ -987,16 +1000,18 @@ impl RpcImpl {
         Ok(format!("conflux-rust-{}", crate_version!()).into())
     }
 
-    pub fn tx_inspect_pending(
+    pub fn txpool_pending_nonce_range(
         &self, address: RpcAddress,
-    ) -> RpcResult<TxPoolPendingInfo> {
+    ) -> RpcResult<TxPoolPendingNonceRange> {
         self.check_address_network(address.network)?;
 
-        let mut ret = TxPoolPendingInfo::default();
-        let (deferred_txs, _) = self.tx_pool.content(Some(address.into()));
+        let mut ret = TxPoolPendingNonceRange::default();
+        let (pending_txs, _, _) = self
+            .tx_pool
+            .get_account_pending_transactions(&address.hex_address, None, None);
         let mut max_nonce: U256 = U256::from(0);
         let mut min_nonce: U256 = U256::max_value();
-        for tx in deferred_txs.iter() {
+        for tx in pending_txs.iter() {
             if tx.nonce > max_nonce {
                 max_nonce = tx.nonce;
             }
@@ -1004,10 +1019,66 @@ impl RpcImpl {
                 min_nonce = tx.nonce;
             }
         }
-        ret.pending_count = deferred_txs.len();
         ret.min_nonce = min_nonce;
         ret.max_nonce = max_nonce;
         Ok(ret)
+    }
+
+    pub fn txpool_next_nonce(&self, address: RpcAddress) -> RpcResult<U256> {
+        Ok(self.tx_pool.get_next_nonce(&address.hex_address))
+    }
+
+    pub fn account_pending_info(
+        &self, address: RpcAddress,
+    ) -> RpcResult<Option<AccountPendingInfo>> {
+        info!("RPC Request: cfx_getAccountPendingInfo({:?})", address);
+        self.check_address_network(address.network)?;
+
+        match self.tx_pool.get_account_pending_info(&(address.into())) {
+            None => Ok(None),
+            Some((
+                local_nonce,
+                pending_count,
+                pending_nonce,
+                next_pending_tx,
+            )) => Ok(Some(AccountPendingInfo {
+                local_nonce: local_nonce.into(),
+                pending_count: pending_count.into(),
+                pending_nonce: pending_nonce.into(),
+                next_pending_tx: next_pending_tx.into(),
+            })),
+        }
+    }
+
+    pub fn account_pending_transactions(
+        &self, address: RpcAddress, maybe_start_nonce: Option<U256>,
+        maybe_limit: Option<U64>,
+    ) -> RpcResult<AccountPendingTransactions>
+    {
+        info!("RPC Request: cfx_getAccountPendingTransactions(addr={:?}, start_nonce={:?}, limit={:?})",
+              address, maybe_start_nonce, maybe_limit);
+        self.check_address_network(address.network)?;
+
+        let (pending_txs, tx_status, pending_count) =
+            self.tx_pool.get_account_pending_transactions(
+                &(address.into()),
+                maybe_start_nonce,
+                maybe_limit.map(|limit| limit.as_usize()),
+            );
+        Ok(AccountPendingTransactions {
+            pending_transactions: pending_txs
+                .into_iter()
+                .map(|tx| {
+                    RpcTransaction::from_signed(
+                        &tx,
+                        None,
+                        *self.network.get_network_type(),
+                    )
+                })
+                .collect::<Result<Vec<RpcTransaction>, String>>()?,
+            first_tx_status: tx_status,
+            pending_count: pending_count.into(),
+        })
     }
 }
 

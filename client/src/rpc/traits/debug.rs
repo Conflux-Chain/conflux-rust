@@ -5,7 +5,7 @@
 use super::super::types::{
     BlockHashOrEpochNumber, Bytes as RpcBytes, ConsensusGraphStates,
     Receipt as RpcReceipt, RpcAddress, SyncGraphStates,
-    Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
+    Transaction as RpcTransaction,
 };
 use crate::rpc::types::SendTxRequest;
 use cfx_types::{H256, H520, U128};
@@ -19,17 +19,6 @@ use std::collections::BTreeMap;
 
 #[rpc(server)]
 pub trait LocalRpc {
-    #[rpc(name = "txpool_status")]
-    fn txpool_status(&self) -> JsonRpcResult<BTreeMap<String, usize>>;
-
-    #[rpc(name = "tx_inspect_pending")]
-    fn tx_inspect_pending(
-        &self, address: RpcAddress,
-    ) -> JsonRpcResult<TxPoolPendingInfo>;
-
-    #[rpc(name = "tx_inspect")]
-    fn tx_inspect(&self, hash: H256) -> JsonRpcResult<TxWithPoolInfo>;
-
     #[rpc(name = "txpool_inspect")]
     fn txpool_inspect(
         &self, address: Option<RpcAddress>,
@@ -37,6 +26,7 @@ pub trait LocalRpc {
         BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>,
     >;
 
+    // return all txpool transactions grouped by hex address
     #[rpc(name = "txpool_content")]
     fn txpool_content(
         &self, address: Option<RpcAddress>,
@@ -47,13 +37,14 @@ pub trait LocalRpc {
         >,
     >;
 
-    #[rpc(name = "getTransactionsFromPool")]
-    fn txs_from_pool(
-        &self, address: Option<RpcAddress>,
+    // return account ready + deferred transactions
+    #[rpc(name = "txpool_accountTransactions")]
+    fn txpool_get_account_transactions(
+        &self, address: RpcAddress,
     ) -> JsonRpcResult<Vec<RpcTransaction>>;
 
-    #[rpc(name = "clear_tx_pool")]
-    fn clear_tx_pool(&self) -> JsonRpcResult<()>;
+    #[rpc(name = "txpool_clear")]
+    fn txpool_clear(&self) -> JsonRpcResult<()>;
 
     #[rpc(name = "net_throttling")]
     fn net_throttling(&self) -> JsonRpcResult<throttling::Service>;
