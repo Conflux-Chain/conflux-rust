@@ -732,6 +732,7 @@ impl RpcImpl {
     pub fn txpool_get_account_transactions(
         &self, address: RpcAddress,
     ) -> RpcResult<Vec<RpcTransaction>> {
+        self.check_address_network(address.network)?;
         let (ready_txs, deferred_txs) =
             self.tx_pool.content(Some(address.into()));
         let converter =
