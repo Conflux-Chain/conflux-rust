@@ -48,7 +48,6 @@ use network::{
 use primitives::{
     transaction::TransactionType, Account, Action, SignedTransaction,
 };
-;
 
 fn grouped_txs<T, F>(
     txs: Vec<Arc<SignedTransaction>>, converter: F,

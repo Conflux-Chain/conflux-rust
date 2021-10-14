@@ -46,14 +46,14 @@ use self::{
             CfxHandler as LightCfxHandler, DebugRpcImpl as LightDebugRpcImpl,
             RpcImpl as LightImpl, TestRpcImpl as LightTestRpcImpl,
         },
-        pos::{PoSInterceptor, PosHandler},
         pool::TransactionPoolHandler,
+        pos::{PoSInterceptor, PosHandler},
         pubsub::PubSubClient,
         trace::TraceHandler,
     },
     traits::{
-        cfx::Cfx, debug::LocalRpc, pos::Pos, pool::TransactionPool, pubsub::PubSub, test::TestRpc,
-        trace::Trace,
+        cfx::Cfx, debug::LocalRpc, pool::TransactionPool, pos::Pos,
+        pubsub::PubSub, test::TestRpc, trace::Trace,
     },
 };
 
