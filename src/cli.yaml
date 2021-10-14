@@ -692,7 +692,7 @@ subcommands:
                                 about: Get the detailed status of specified transaction
                                 args:
                                     - rpc-method:
-                                        default_value: tx_inspect
+                                        default_value: txpool_txWithPoolInfo
                                         hidden: true
                                     - rpc-args:
                                         multiple: true
@@ -740,7 +740,7 @@ subcommands:
                                 about: Remove all transactions
                                 args:
                                     - rpc-method:
-                                        default_value: clear_tx_pool
+                                        default_value: txpool_clear
                                         hidden: true
                     - net:
                         about: Network subcommands

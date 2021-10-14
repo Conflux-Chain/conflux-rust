@@ -174,6 +174,22 @@ impl DeferredPool {
             false
         }
     }
+
+    fn last_succ_nonce(&self, addr: Address, from_nonce: U256) -> Option<U256> {
+        let bucket = self.buckets.get(&addr)?;
+        let mut next_nonce = from_nonce;
+        loop {
+            let nonce = bucket.succ_nonce(&next_nonce);
+            if nonce.is_none() {
+                break;
+            }
+            if nonce.unwrap() > next_nonce {
+                break;
+            }
+            next_nonce += 1.into();
+        }
+        Some(next_nonce)
+    }
 }
 
 #[derive(DeriveMallocSizeOf)]
@@ -343,6 +359,13 @@ impl TransactionPoolInner {
 
     pub fn get(&self, tx_hash: &H256) -> Option<Arc<SignedTransaction>> {
         self.txs.get(tx_hash).map(|x| x.clone())
+    }
+
+    pub fn get_by_address2nonce(
+        &self, address: Address, nonce: U256,
+    ) -> Option<Arc<SignedTransaction>> {
+        let bucket = self.deferred_pool.buckets.get(&address)?;
+        bucket.get_tx_by_nonce(nonce).map(|tx| tx.transaction)
     }
 
     pub fn is_full(&self) -> bool {
@@ -669,6 +692,12 @@ impl TransactionPoolInner {
             }
         }
         ret
+    }
+
+    pub fn get_next_nonce(&self, address: &Address, state_nonce: U256) -> U256 {
+        self.deferred_pool
+            .last_succ_nonce(*address, state_nonce)
+            .unwrap_or(state_nonce)
     }
 
     fn recalculate_readiness_with_local_info(&mut self, addr: &Address) {

@@ -27,6 +27,7 @@ mod token_supply_info;
 mod trace;
 mod trace_filter;
 mod transaction;
+mod tx_pool;
 
 pub use self::{
     account::Account,
@@ -55,8 +56,9 @@ pub use self::{
         Action, LocalizedBlockTrace, LocalizedTrace, LocalizedTransactionTrace,
     },
     trace_filter::TraceFilter,
-    transaction::{
-        AccountPendingInfo, AccountPendingTransactions, PackedOrExecuted,
-        Transaction, TxPoolPendingInfo, TxWithPoolInfo,
+    transaction::{PackedOrExecuted, Transaction},
+    tx_pool::{
+        AccountPendingInfo, AccountPendingTransactions,
+        TxPoolPendingNonceRange, TxPoolStatus, TxWithPoolInfo,
     },
 };

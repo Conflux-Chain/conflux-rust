@@ -11,6 +11,7 @@ pub enum Api {
     Pubsub,
     Test,
     Trace,
+    TxPool,
     Pos,
 }
 
@@ -25,6 +26,7 @@ impl FromStr for Api {
             "pubsub" => Ok(Pubsub),
             "test" => Ok(Test),
             "trace" => Ok(Trace),
+            "txpool" => Ok(TxPool),
             "pos" => Ok(Pos),
             _ => Err("Unknown api type".into()),
         }
@@ -49,11 +51,15 @@ impl ApiSet {
                 Api::Test,
                 Api::Trace,
                 Api::Pos,
+                Api::TxPool,
             ]
             .iter()
             .cloned()
             .collect(),
-            ApiSet::Safe => [Api::Cfx, Api::Pubsub].iter().cloned().collect(),
+            ApiSet::Safe => [Api::Cfx, Api::Pubsub, Api::TxPool]
+                .iter()
+                .cloned()
+                .collect(),
         }
     }
 }
