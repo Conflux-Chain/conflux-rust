@@ -265,18 +265,14 @@ impl BlockRetriever {
         &'a mut self, qc: &'a QuorumCert, num_blocks: u64,
     ) -> anyhow::Result<Vec<Block>> {
         let block_id = qc.certified_block().id();
-        let peers: Vec<&AccountAddress> =
-            qc.ledger_info().signatures().keys().collect();
-        self.request_block(num_blocks, block_id, peers).await
+        self.request_block(num_blocks, block_id).await
     }
 
     pub async fn retrieve_block_for_ledger_info(
         &mut self, ledger_info: &LedgerInfoWithSignatures,
     ) -> anyhow::Result<Block> {
         let block_id = ledger_info.ledger_info().consensus_block_id();
-        let peers: Vec<&AccountAddress> =
-            ledger_info.signatures().keys().collect();
-        let mut blocks = self.request_block(1, block_id, peers).await?;
+        let mut blocks = self.request_block(1, block_id).await?;
         if blocks.len() == 1 {
             Ok(blocks.remove(0))
         } else {
@@ -284,11 +280,18 @@ impl BlockRetriever {
         }
     }
 
-    async fn request_block<'a>(
-        &'a mut self, num_blocks: u64, block_id: HashValue,
-        mut peers: Vec<&'a AccountAddress>,
-    ) -> anyhow::Result<Vec<Block>>
-    {
+    async fn request_block(
+        &mut self, num_blocks: u64, block_id: HashValue,
+    ) -> anyhow::Result<Vec<Block>> {
+        let mut peers: Vec<AccountAddress> = self
+            .network
+            .network_sender()
+            .protocol_handler
+            .pos_peer_mapping
+            .read()
+            .keys()
+            .map(Clone::clone)
+            .collect();
         let mut attempt = 0_u32;
         loop {
             if peers.is_empty() {
@@ -333,7 +336,7 @@ impl BlockRetriever {
     }
 
     fn pick_peer(
-        &self, attempt: u32, peers: &mut Vec<&AccountAddress>,
+        &self, attempt: u32, peers: &mut Vec<AccountAddress>,
     ) -> AccountAddress {
         assert!(!peers.is_empty(), "pick_peer on empty peer list");
 
@@ -341,7 +344,7 @@ impl BlockRetriever {
             // remove preferred_peer if its in list of peers
             // (strictly speaking it is not required to be there)
             for i in 0..peers.len() {
-                if *peers[i] == self.preferred_peer {
+                if peers[i] == self.preferred_peer {
                     peers.remove(i);
                     break;
                 }
@@ -350,7 +353,7 @@ impl BlockRetriever {
         }
 
         let peer_idx = thread_rng().gen_range(0, peers.len());
-        *peers.remove(peer_idx)
+        peers.remove(peer_idx)
     }
 }
 
