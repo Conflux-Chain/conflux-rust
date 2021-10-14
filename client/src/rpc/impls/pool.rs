@@ -8,7 +8,7 @@ use crate::{
         impls::common::RpcImpl as CommonImpl,
         traits::TransactionPool,
         types::{
-            RpcAddress, Transaction as RpcTransaction, TxPoolPendingInfo,
+            RpcAddress, Transaction as RpcTransaction, TxPoolPendingNonceRange,
             TxPoolStatus, TxWithPoolInfo,
         },
     },
@@ -33,9 +33,8 @@ impl TransactionPool for TransactionPoolHandler {
         to self.common {
             fn txpool_status(&self) -> JsonRpcResult<TxPoolStatus>;
             fn txpool_next_nonce(&self, address: RpcAddress) -> JsonRpcResult<U256>;
-            fn txpool_nonce_range(&self, address: RpcAddress) -> JsonRpcResult<TxPoolPendingInfo>;
+            fn txpool_pending_nonce_range(&self, address: RpcAddress) -> JsonRpcResult<TxPoolPendingNonceRange>;
             fn txpool_tx_with_pool_info(&self, hash: H256) -> JsonRpcResult<TxWithPoolInfo>;
-            fn txpool_get_account_transactions(&self, address: RpcAddress) -> JsonRpcResult<Vec<RpcTransaction>>;
             fn txpool_transaction_by_address_and_nonce(&self, address: RpcAddress, nonce: U256) -> JsonRpcResult<Option<RpcTransaction>>;
         }
     }

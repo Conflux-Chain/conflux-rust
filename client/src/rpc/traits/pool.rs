@@ -3,8 +3,8 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::{
-    RpcAddress, Transaction as RpcTransaction, TxPoolPendingInfo, TxPoolStatus,
-    TxWithPoolInfo,
+    RpcAddress, Transaction as RpcTransaction, TxPoolPendingNonceRange,
+    TxPoolStatus, TxWithPoolInfo,
 };
 use cfx_types::{H256, U256};
 use jsonrpc_core::Result as JsonRpcResult;
@@ -24,15 +24,10 @@ pub trait TransactionPool {
         &self, address: RpcAddress, nonce: U256,
     ) -> JsonRpcResult<Option<RpcTransaction>>;
 
-    #[rpc(name = "txpool_accountTransactions")]
-    fn txpool_get_account_transactions(
+    #[rpc(name = "txpool_pendingNonceRange")]
+    fn txpool_pending_nonce_range(
         &self, address: RpcAddress,
-    ) -> JsonRpcResult<Vec<RpcTransaction>>;
-
-    #[rpc(name = "txpool_nonceRange")]
-    fn txpool_nonce_range(
-        &self, address: RpcAddress,
-    ) -> JsonRpcResult<TxPoolPendingInfo>;
+    ) -> JsonRpcResult<TxPoolPendingNonceRange>;
 
     #[rpc(name = "txpool_txWithPoolInfo")]
     fn txpool_tx_with_pool_info(

@@ -7,7 +7,7 @@ use crate::rpc::{
         errors::check_rpc_address_network, Block as RpcBlock,
         BlockHashOrEpochNumber, Bytes, CheckBalanceAgainstTransactionResponse,
         EpochNumber, RpcAddress, Status as RpcStatus,
-        Transaction as RpcTransaction, TxPoolPendingInfo, TxPoolStatus,
+        Transaction as RpcTransaction, TxPoolPendingNonceRange, TxPoolStatus,
         TxWithPoolInfo,
     },
     RpcResult,
@@ -957,16 +957,18 @@ impl RpcImpl {
         Ok(format!("conflux-rust-{}", crate_version!()).into())
     }
 
-    pub fn txpool_nonce_range(
+    pub fn txpool_pending_nonce_range(
         &self, address: RpcAddress,
-    ) -> RpcResult<TxPoolPendingInfo> {
+    ) -> RpcResult<TxPoolPendingNonceRange> {
         self.check_address_network(address.network)?;
 
-        let mut ret = TxPoolPendingInfo::default();
-        let (_, deferred_txs) = self.tx_pool.content(Some(address.into()));
+        let mut ret = TxPoolPendingNonceRange::default();
+        let (pending_txs, _, _) = self
+            .tx_pool
+            .get_account_pending_transactions(&address.hex_address, None, None);
         let mut max_nonce: U256 = U256::from(0);
         let mut min_nonce: U256 = U256::max_value();
-        for tx in deferred_txs.iter() {
+        for tx in pending_txs.iter() {
             if tx.nonce > max_nonce {
                 max_nonce = tx.nonce;
             }
@@ -974,7 +976,6 @@ impl RpcImpl {
                 min_nonce = tx.nonce;
             }
         }
-        ret.pending_count = deferred_txs.len();
         ret.min_nonce = min_nonce;
         ret.max_nonce = max_nonce;
         Ok(ret)

@@ -37,6 +37,12 @@ pub trait LocalRpc {
         >,
     >;
 
+    // return account ready + deferred transactions
+    #[rpc(name = "txpool_accountTransactions")]
+    fn txpool_get_account_transactions(
+        &self, address: RpcAddress,
+    ) -> JsonRpcResult<Vec<RpcTransaction>>;
+
     #[rpc(name = "txpool_clear")]
     fn txpool_clear(&self) -> JsonRpcResult<()>;
 

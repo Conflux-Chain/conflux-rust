@@ -15,8 +15,7 @@ pub struct TxWithPoolInfo {
 }
 
 #[derive(Default, Serialize)]
-pub struct TxPoolPendingInfo {
-    pub pending_count: usize,
+pub struct TxPoolPendingNonceRange {
     pub min_nonce: U256,
     pub max_nonce: U256,
 }
