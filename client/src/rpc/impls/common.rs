@@ -4,11 +4,11 @@
 
 use crate::rpc::{
     types::{
-        errors::check_rpc_address_network, Block as RpcBlock,
-        BlockHashOrEpochNumber, Bytes, CheckBalanceAgainstTransactionResponse,
-        EpochNumber, RpcAddress, Status as RpcStatus,
-        Transaction as RpcTransaction, TxPoolPendingNonceRange, TxPoolStatus,
-        TxWithPoolInfo,
+        errors::check_rpc_address_network, AccountPendingInfo,
+        AccountPendingTransactions, Block as RpcBlock, BlockHashOrEpochNumber,
+        Bytes, CheckBalanceAgainstTransactionResponse, EpochNumber, RpcAddress,
+        Status as RpcStatus, Transaction as RpcTransaction,
+        TxPoolPendingNonceRange, TxPoolStatus, TxWithPoolInfo,
     },
     RpcResult,
 };
@@ -983,6 +983,59 @@ impl RpcImpl {
 
     pub fn txpool_next_nonce(&self, address: RpcAddress) -> RpcResult<U256> {
         Ok(self.tx_pool.get_next_nonce(&address.hex_address))
+    }
+
+    pub fn account_pending_info(
+        &self, address: RpcAddress,
+    ) -> RpcResult<Option<AccountPendingInfo>> {
+        info!("RPC Request: cfx_getAccountPendingInfo({:?})", address);
+        self.check_address_network(address.network)?;
+
+        match self.tx_pool.get_account_pending_info(&(address.into())) {
+            None => Ok(None),
+            Some((
+                local_nonce,
+                pending_count,
+                pending_nonce,
+                next_pending_tx,
+            )) => Ok(Some(AccountPendingInfo {
+                local_nonce: local_nonce.into(),
+                pending_count: pending_count.into(),
+                pending_nonce: pending_nonce.into(),
+                next_pending_tx: next_pending_tx.into(),
+            })),
+        }
+    }
+
+    pub fn account_pending_transactions(
+        &self, address: RpcAddress, maybe_start_nonce: Option<U256>,
+        maybe_limit: Option<U64>,
+    ) -> RpcResult<AccountPendingTransactions>
+    {
+        info!("RPC Request: cfx_getAccountPendingTransactions(addr={:?}, start_nonce={:?}, limit={:?})",
+              address, maybe_start_nonce, maybe_limit);
+        self.check_address_network(address.network)?;
+
+        let (pending_txs, tx_status, pending_count) =
+            self.tx_pool.get_account_pending_transactions(
+                &(address.into()),
+                maybe_start_nonce,
+                maybe_limit.map(|limit| limit.as_usize()),
+            );
+        Ok(AccountPendingTransactions {
+            pending_transactions: pending_txs
+                .into_iter()
+                .map(|tx| {
+                    RpcTransaction::from_signed(
+                        &tx,
+                        None,
+                        *self.network.get_network_type(),
+                    )
+                })
+                .collect::<Result<Vec<RpcTransaction>, String>>()?,
+            first_tx_status: tx_status,
+            pending_count: pending_count.into(),
+        })
     }
 }
 
