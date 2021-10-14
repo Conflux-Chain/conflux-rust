@@ -507,6 +507,10 @@ impl NoncePool {
             .and_then(|node| node.get(&nonce))
             .is_some()
     }
+
+    pub fn succ_nonce(&self, nonce: &U256) -> Option<U256> {
+        self.root.as_ref()?.succ(nonce).map(|tx| tx.nonce)
+    }
 }
 
 #[cfg(test)]

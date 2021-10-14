@@ -276,7 +276,7 @@ class RpcClient:
         return tx_hash
 
     def clear_tx_pool(self):
-        self.node.clear_tx_pool()
+        self.node.txpool_clear()
 
 
     def send_tx(self, tx: Transaction, wait_for_receipt=False, wait_for_catchup=True) -> str:
@@ -407,7 +407,7 @@ class RpcClient:
 
     def txpool_status(self) -> (int, int):
         status = self.node.txpool_status()
-        return (status["deferred"], status["ready"])
+        return (eth_utils.to_int(hexstr = status["deferred"]), eth_utils.to_int(hexstr = status["ready"]))
 
     def new_tx_for_call(self, contract_addr:str, data_hex:str, nonce:int=None, sender:str=None):
         if sender is None:

@@ -228,7 +228,7 @@ class SponsoredTxTest(ConfluxTestFramework):
         for _ in range(10):
             client.generate_block()
 
-        tx_info = self.nodes[0].tx_inspect(transaction.hash_hex())
+        tx_info = self.nodes[0].txpool_txWithPoolInfo(transaction.hash_hex())
         assert_equal(int(tx_info['local_nonce'], 16), 2)
         assert_equal(tx_info['local_balance_enough'], False)
         assert_equal(tx_info['packed'], False)
@@ -244,7 +244,7 @@ class SponsoredTxTest(ConfluxTestFramework):
         assert_equal(client.get_balance(addr1), 10 ** 6 + 1025 * 10 ** 18 // 1024)
         for _ in range(10):
             client.generate_block()
-        tx_info = self.nodes[0].tx_inspect(transaction.hash_hex())
+        tx_info = self.nodes[0].txpool_txWithPoolInfo(transaction.hash_hex())
         # Now addr1 pays for storage collateral by itself.
         assert_equal(self.wait_for_tx([transaction], True)[0]['storageCoveredBySponsor'], False)
         assert_equal(int(tx_info['local_nonce'], 16), 3)
