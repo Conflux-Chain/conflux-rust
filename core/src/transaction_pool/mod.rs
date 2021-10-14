@@ -197,6 +197,12 @@ impl TransactionPool {
         self.inner.read().get(tx_hash)
     }
 
+    pub fn get_transaction_by_address2nonce(
+        &self, address: Address, nonce: U256,
+    ) -> Option<Arc<SignedTransaction>> {
+        self.inner.read().get_by_address2nonce(address, nonce)
+    }
+
     pub fn check_tx_packed_in_deferred_pool(&self, tx_hash: &H256) -> bool {
         self.inner.read().check_tx_packed_in_deferred_pool(tx_hash)
     }
@@ -206,6 +212,13 @@ impl TransactionPool {
             .read()
             .get_local_nonce_and_balance(address)
             .unwrap_or((0.into(), 0.into()))
+    }
+
+    pub fn get_next_nonce(&self, address: &Address) -> U256 {
+        let (state_nonce, _) = self
+            .get_state_account_info(address)
+            .unwrap_or((0.into(), 0.into()));
+        self.inner.read().get_next_nonce(address, state_nonce)
     }
 
     pub fn get_account_pending_info(

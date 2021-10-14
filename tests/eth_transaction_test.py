@@ -119,7 +119,7 @@ class EthTransactionTest(ConfluxTestFramework):
             eth_tx=True,
         )
         assert_equal(tx["epoch_height"], 0xffff_ffff_ffff_ffff)
-        wait_until(lambda: self.nodes[1].tx_inspect(tx.hash_hex())['exist'], timeout=5)
+        wait_until(lambda: self.nodes[1].txpool_txWithPoolInfo(tx.hash_hex())['exist'], timeout=5)
         block_gen_thread = BlockGenThread(self.nodes, self.log)
         block_gen_thread.start()
 
@@ -194,7 +194,7 @@ class EthTransactionTest(ConfluxTestFramework):
             eth_tx=True,
         )
 
-        wait_until(lambda: self.nodes[1].tx_inspect(tx.hash_hex())['exist'], timeout=5)
+        wait_until(lambda: self.nodes[1].txpool_txWithPoolInfo(tx.hash_hex())['exist'], timeout=5)
         block_gen_thread = BlockGenThread(self.nodes, self.log)
         block_gen_thread.start()
 

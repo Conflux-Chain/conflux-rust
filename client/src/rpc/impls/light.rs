@@ -45,7 +45,7 @@ use crate::{
             LogFilter as RpcFilter, Receipt as RpcReceipt,
             RewardInfo as RpcRewardInfo, RpcAddress, SendTxRequest,
             SponsorInfo, Status as RpcStatus, SyncGraphStates, TokenSupplyInfo,
-            Transaction as RpcTransaction, TxPoolPendingInfo, TxWithPoolInfo,
+            Transaction as RpcTransaction,
         },
         RpcBoxFuture, RpcResult,
     },
@@ -1039,6 +1039,7 @@ impl Cfx for CfxHandler {
             fn get_client_version(&self) -> JsonRpcResult<String>;
             fn get_status(&self) -> JsonRpcResult<RpcStatus>;
             fn skipped_blocks_by_epoch(&self, num: EpochNumber) -> JsonRpcResult<Vec<H256>>;
+            fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<Option<AccountPendingInfo>>;
         }
 
         to self.rpc_impl {
@@ -1067,7 +1068,6 @@ impl Cfx for CfxHandler {
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
             fn vote_list(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<Vec<VoteStakeInfo>>;
-            fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<Option<AccountPendingInfo>>;
         }
     }
 
@@ -1144,8 +1144,13 @@ impl DebugRpcImpl {
 impl LocalRpc for DebugRpcImpl {
     delegate! {
         to self.common {
+            fn txpool_content(&self, address: Option<RpcAddress>) -> JsonRpcResult<
+                BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
+            fn txpool_inspect(&self, address: Option<RpcAddress>) -> JsonRpcResult<
+                BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
+            fn txpool_get_account_transactions(&self, address: RpcAddress) -> JsonRpcResult<Vec<RpcTransaction>>;
+            fn txpool_clear(&self) -> JsonRpcResult<()>;
             fn accounts(&self) -> JsonRpcResult<Vec<RpcAddress>>;
-            fn clear_tx_pool(&self) -> JsonRpcResult<()>;
             fn lock_account(&self, address: RpcAddress) -> JsonRpcResult<bool>;
             fn net_disconnect_node(&self, id: NodeId, op: Option<UpdateNodeOperation>) -> JsonRpcResult<bool>;
             fn net_node(&self, id: NodeId) -> JsonRpcResult<Option<(String, Node)>>;
@@ -1153,12 +1158,6 @@ impl LocalRpc for DebugRpcImpl {
             fn net_throttling(&self) -> JsonRpcResult<throttling::Service>;
             fn new_account(&self, password: String) -> JsonRpcResult<RpcAddress>;
             fn sign(&self, data: Bytes, address: RpcAddress, password: Option<String>) -> JsonRpcResult<H520>;
-            fn tx_inspect_pending(&self, address: RpcAddress) -> JsonRpcResult<TxPoolPendingInfo>;
-            fn tx_inspect(&self, hash: H256) -> JsonRpcResult<TxWithPoolInfo>;
-            fn txpool_content(&self, address: Option<RpcAddress>) -> JsonRpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
-            fn txpool_inspect(&self, address: Option<RpcAddress>) -> JsonRpcResult<BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
-            fn txpool_status(&self) -> JsonRpcResult<BTreeMap<String, usize>>;
-            fn txs_from_pool(&self, address: Option<RpcAddress>) -> JsonRpcResult<Vec<RpcTransaction>>;
             fn unlock_account(&self, address: RpcAddress, password: String, duration: Option<U128>) -> JsonRpcResult<bool>;
         }
 
