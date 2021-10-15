@@ -231,21 +231,38 @@ pub fn initialize_common_modules(
     // TODO(lpl): Keep it properly and allow not running pos.
     let (self_pos_private_key, self_vrf_private_key) = {
         let key_path = Path::new(&conf.raw_conf.pos_private_key_path);
+        let default_passwd = if conf.is_test_or_dev_mode() {
+            Some(vec![])
+        } else {
+            conf.raw_conf
+                .dev_pos_private_key_encryption_password
+                .clone()
+                .map(|s| s.into_bytes())
+        };
         if key_path.exists() {
-            let passwd = if conf.is_test_or_dev_mode() {
-                vec![]
-            } else {
-                rpassword::read_password_from_tty(Some("PoS key detected, please input your encryption password.\nPassword:")).map_err(|e| format!("{:?}", e))?.into_bytes()
+            let passwd = match default_passwd {
+                Some(p) => p,
+                None => rpassword::read_password_from_tty(Some("PoS key detected, please input your encryption password.\nPassword:")).map_err(|e| format!("{:?}", e))?.into_bytes()
             };
             let (sk, vrf_sk): (ConsensusPrivateKey, ConsensusVRFPrivateKey) =
                 load_pri_key(key_path, &passwd).unwrap();
             (ConfigKey::new(sk), ConfigKey::new(vrf_sk))
         } else {
             create_dir_all(key_path.parent().unwrap()).unwrap();
-            let passwd = if conf.is_test_or_dev_mode() {
-                vec![]
-            } else {
-                rpassword::read_password_from_tty(Some("PoS key is not detected and will be generated instead, please input your encryption password. This password is needed when you restart the node\nPassword:")).map_err(|e| format!("{:?}", e))?.into_bytes()
+            let passwd = match default_passwd {
+                Some(p) => p,
+                None => {
+                    let p = rpassword::read_password_from_tty(Some("PoS key is not detected and will be generated instead, please input your encryption password. This password is needed when you restart the node\nPassword:")).map_err(|e| format!("{:?}", e))?.into_bytes();
+                    let p2 = rpassword::read_password_from_tty(Some(
+                        "Repeat Password:",
+                    ))
+                    .map_err(|e| format!("{:?}", e))?
+                    .into_bytes();
+                    if p != p2 {
+                        bail!("Passwords do not match!");
+                    }
+                    p
+                }
             };
             let mut rng = StdRng::from_rng(OsRng).unwrap();
             let private_key = ConsensusPrivateKey::generate(&mut rng);
