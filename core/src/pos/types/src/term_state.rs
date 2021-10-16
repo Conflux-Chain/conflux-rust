@@ -57,7 +57,9 @@ pub const OUT_QUEUE_LOCKED_VIEWS: u64 = 10080;
 pub use incentives::*;
 
 mod incentives {
-    use super::{ROUND_PER_TERM, TERM_ELECTED_SIZE, TERM_MAX_SIZE};
+    use super::{
+        ROUND_PER_TERM, TERM_ELECTED_SIZE, TERM_LIST_LEN, TERM_MAX_SIZE,
+    };
 
     const BONUS_VOTE_MAX_SIZE: u64 = 100;
 
@@ -72,7 +74,8 @@ mod incentives {
         MAX_TERM_POINTS * ELECTION_PERCENTAGE / 100 / (TERM_MAX_SIZE as u64);
     pub const COMMITTEE_POINTS: u64 = MAX_TERM_POINTS * COMMITTEE_PERCENTAGE
         / 100
-        / (TERM_ELECTED_SIZE as u64);
+        / (TERM_ELECTED_SIZE as u64)
+        / (TERM_LIST_LEN as u64);
     pub const LEADER_POINTS: u64 =
         MAX_TERM_POINTS * LEADER_PERCENTAGE / 100 / ROUND_PER_TERM;
     pub const BONUS_VOTE_POINTS: u64 = MAX_TERM_POINTS * BONUS_VOTE_PERCENTAGE

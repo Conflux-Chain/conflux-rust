@@ -18,6 +18,8 @@ pub struct VoteCount {
     pub leader_count: u32,
     // The total number of votes that the node includes as a leader.
     pub included_vote_count: u64,
+    // Total vote
+    pub total_votes: u64,
     // The total number of votes that the node signs in the committed QCs
     // within the term.
     pub vote_count: u64,
@@ -25,9 +27,12 @@ pub struct VoteCount {
 
 impl VoteCount {
     pub fn reward_points(&self) -> u64 {
+        if self.vote_count == 0 {
+            return 0;
+        }
         self.leader_count as u64 * LEADER_POINTS
             + self.included_vote_count as u64 * BONUS_VOTE_POINTS
-            + (self.vote_count > 0) as u64 * COMMITTEE_POINTS
+            + self.total_votes * COMMITTEE_POINTS
     }
 }
 
