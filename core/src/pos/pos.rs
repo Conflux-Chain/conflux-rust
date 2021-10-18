@@ -11,7 +11,7 @@ use crate::{
             consensus_provider::start_consensus,
             gen_consensus_reconfig_subscription,
             network::NetworkReceivers as ConsensusNetworkReceivers,
-            ConsensusDB,
+            ConsensusDB, TestCommand,
         },
         mempool as diem_mempool,
         mempool::{
@@ -89,6 +89,7 @@ pub fn start_pos_consensus(
     pos_genesis_state: GenesisPosState,
     consensus_network_receiver: ConsensusNetworkReceivers,
     mempool_network_receiver: MemPoolNetworkReceivers,
+    test_command_receiver: channel::Receiver<TestCommand>,
     hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
 ) -> DiemHandle
 {
@@ -139,6 +140,7 @@ pub fn start_pos_consensus(
         pos_genesis_state,
         consensus_network_receiver,
         mempool_network_receiver,
+        test_command_receiver,
         hsb_protocol,
     )
 }
@@ -167,6 +169,7 @@ pub fn setup_pos_environment(
     pos_genesis_state: GenesisPosState,
     consensus_network_receiver: ConsensusNetworkReceivers,
     mempool_network_receiver: MemPoolNetworkReceivers,
+    test_command_receiver: channel::Receiver<TestCommand>,
     hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
 ) -> DiemHandle
 {
@@ -322,6 +325,7 @@ pub fn setup_pos_environment(
                 },
             ),
             mp_client_sender.clone(),
+            test_command_receiver,
         );
     debug!("Consensus started in {} ms", instant.elapsed().as_millis());
 

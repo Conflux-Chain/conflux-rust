@@ -1088,6 +1088,7 @@ dependencies = [
  "cfxcore-accounts",
  "cfxkey",
  "cfxstore",
+ "channel",
  "clap",
  "consensus-types",
  "crash-handler",

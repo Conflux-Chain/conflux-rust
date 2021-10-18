@@ -27,9 +27,7 @@ use consensus_types::{
     vote_msg::VoteMsg,
 };
 use diem_config::keys::ConfigKey;
-use diem_crypto::{
-    hash::CryptoHash, HashValue, SigningKey, VRFPrivateKey,
-};
+use diem_crypto::{hash::CryptoHash, HashValue, SigningKey, VRFPrivateKey};
 use diem_infallible::checked;
 use diem_logger::prelude::*;
 use diem_types::{
@@ -1276,6 +1274,9 @@ impl RoundManager {
 
 /// The functions used in tests to construct attack cases
 impl RoundManager {
+    /// Force the node to vote for a proposal without changing its consensus
+    /// state. The node will still vote for the correct proposal
+    /// independently if that's not disabled.
     pub async fn force_sign_proposal(
         &mut self, block_id: HashValue, author: Author,
         private_key: &ConsensusPrivateKey,
