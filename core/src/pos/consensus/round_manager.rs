@@ -1105,6 +1105,7 @@ impl RoundManager {
                                 == vote2.vote_data().proposed().round(),
                             "incorrect round"
                         );
+                        diem_warn!("Find Equivocate Vote!!! author={}, vote1={:?}, vote2={:?}", vote.author(), vote1, vote2);
                         let dispute_payload = DisputePayload {
                             address: vote1.author(),
                             bls_pub_key: self

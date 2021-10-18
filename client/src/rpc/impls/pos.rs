@@ -316,6 +316,8 @@ impl PosHandler {
 
     fn consensus_blocks(&self) -> Option<Vec<Block>> {
         let blocks = self.pos_handler.consensus_db().get_blocks().ok()?;
+        let block_ids = blocks.values().map(|b| b.id()).collect::<Vec<_>>();
+        debug!("consensus_blocks: block_ids={:?}", block_ids);
         if blocks.len() == 0 {
             return Some(vec![]);
         }

@@ -1585,6 +1585,7 @@ impl TestRpc for TestRpcImpl {
             ) -> JsonRpcResult<()>;
             fn pos_retire_self(&self) -> JsonRpcResult<()>;
             fn pos_start(&self) -> JsonRpcResult<()>;
+            fn pos_force_vote_proposal(&self, block_id: H256) -> JsonRpcResult<()>;
         }
 
         to self.rpc_impl {
