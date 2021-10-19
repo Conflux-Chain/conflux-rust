@@ -120,8 +120,6 @@ impl ConsensusDB {
     pub fn save_blocks_and_quorum_certificates(
         &self, block_data: Vec<Block>, qc_data: Vec<QuorumCert>,
     ) -> Result<(), DbError> {
-        let block_ids = block_data.iter().map(|b| b.id()).collect::<Vec<_>>();
-        diem_debug!("save_blocks_and_quorum_certificates: {:?}", block_ids);
         if block_data.is_empty() && qc_data.is_empty() {
             return Err(anyhow::anyhow!(
                 "Consensus block and qc data is empty!"
@@ -142,7 +140,6 @@ impl ConsensusDB {
     pub fn delete_blocks_and_quorum_certificates(
         &self, block_ids: Vec<HashValue>,
     ) -> Result<(), DbError> {
-        diem_debug!("delete_blocks_and_quorum_certificates: {:?}", block_ids);
         if block_ids.is_empty() {
             return Err(anyhow::anyhow!("Consensus block ids is empty!").into());
         }
