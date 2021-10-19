@@ -25,9 +25,6 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
         while len(latest_round_blocks) <= 1:
             latest_round_blocks.clear()
             for b in client.pos_get_consensus_blocks():
-                print(b["hash"], b["signatures"])
-                if len(b["signatures"]) == 0:
-                    self.log.info(str(b))
                 round = int(b["round"], 0)
                 if round == expected_round:
                     latest_round_blocks.add(b["hash"])
@@ -36,10 +33,19 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
             self.nodes[self.num_nodes - 1].pos_force_vote_proposal(b)
             # wait for the vote to be processed.
             time.sleep(0.2)
-        time.sleep(60)
+        client.generate_empty_blocks(300)
         client.pos_retire_self()
 
-        time.sleep(120)
+        for i in range(60):
+            print(i)
+            # Retire node 3 after 5 min.
+            # Generate enough PoW block for PoS to progress
+            client.generate_empty_blocks(60)
+            # Leave some time for PoS to reach consensus
+            time.sleep(9)
+            b = client.generate_empty_blocks(1)[0]
+            print(client.block_by_hash(b)["posReference"])
+
         print("balance before unstake", client.get_balance(eth_utils.encode_hex(priv_to_addr(client.node.pow_sk))))
         client.wait_for_unstake()
         print("balance after unstake", client.get_balance(eth_utils.encode_hex(priv_to_addr(client.node.pow_sk))))
