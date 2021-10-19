@@ -542,6 +542,15 @@ impl TermList {
         }
         let term = self.electing_term_mut();
 
+        if term.node_list.has_elected(&event.node_id.addr) {
+            diem_warn!(
+                "The author {} has participated election for term {}",
+                event.node_id.addr,
+                event.start_term
+            );
+            return Ok(());
+        }
+
         for nonce in 0..voting_power {
             // Hash after appending the nonce to get multiple identifier for
             // election.
@@ -872,15 +881,21 @@ impl PosState {
         let target_term_offset =
             (election_tx.target_term - self.term_list.start_term()) as usize;
         assert_eq!(target_term_offset, self.term_list.electing_index);
+
+        let target_term = &self.term_list.electing_term();
         if election_tx
             .vrf_proof
             .verify(
-                &self.term_list.term_list[target_term_offset as usize].seed,
+                &target_term.seed,
                 node.vrf_public_key.as_ref().unwrap(),
             )
             .is_err()
         {
             bail!("Invalid VRF proof for election")
+        }
+
+        if target_term.node_list.has_elected(&node_id.addr) {
+            bail!("The sender has elected for this term")
         }
 
         if node.lock_status.available_votes()
