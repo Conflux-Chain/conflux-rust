@@ -1186,9 +1186,20 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
             }
 
             // Force retire the nodes that have not voted in this term.
-            for (node, vote_count) in &elected {
+            for (node, vote_count) in elected.iter_mut() {
                 if vote_count.vote_count == 0 {
                     pos_state_to_commit.force_retire_node(&node)?;
+                } else {
+                    vote_count.total_votes = pos_state_to_commit
+                        .epoch_state()
+                        .verifier
+                        .get_voting_power(node)
+                        .unwrap_or(0);
+                    if vote_count.total_votes == 0 {
+                        diem_warn!("Node {:?} has voted for epoch {} without voting power.",
+                            node,
+                            pos_state_to_commit.epoch_state().epoch);
+                    }
                 }
             }
 
