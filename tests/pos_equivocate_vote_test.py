@@ -17,23 +17,25 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
         self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = '120'
 
     def run_test(self):
-        time.sleep(10)
         client = RpcClient(self.nodes[self.num_nodes - 1])
-        max_round = 0
+        wait_until(lambda: client.pos_status()["latestVoted"] is not None)
+        print(client.pos_status())
+        expected_round = int(client.pos_status()["latestVoted"], 0) + 1
         latest_round_blocks = set()
         while len(latest_round_blocks) <= 1:
             latest_round_blocks.clear()
             for b in client.pos_get_consensus_blocks():
+                print(b["hash"], b["signatures"])
                 if len(b["signatures"]) == 0:
-                    print(b)
+                    self.log.info(str(b))
                 round = int(b["round"], 0)
-                if round > max_round:
-                    max_round = round
-                    latest_round_blocks.clear()
-                if round == max_round:
+                if round == expected_round:
                     latest_round_blocks.add(b["hash"])
         for b in latest_round_blocks:
+            self.log.info("force_vote %s", b)
             self.nodes[self.num_nodes - 1].pos_force_vote_proposal(b)
+            # wait for the vote to be processed.
+            time.sleep(0.2)
         time.sleep(60)
         client.pos_retire_self()
 
@@ -41,7 +43,6 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
         print("balance before unstake", client.get_balance(eth_utils.encode_hex(priv_to_addr(client.node.pow_sk))))
         client.wait_for_unstake()
         print("balance after unstake", client.get_balance(eth_utils.encode_hex(priv_to_addr(client.node.pow_sk))))
-        exit()
         # assert (self.nodes[0].getblockcount() == 6002)
 
 if __name__ == '__main__':

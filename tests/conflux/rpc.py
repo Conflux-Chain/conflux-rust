@@ -525,6 +525,9 @@ class RpcClient:
     def pos_get_consensus_blocks(self):
         return self.node.pos_getConsensusBlocks()
 
+    def pos_status(self):
+        return self.node.pos_getStatus()
+
 
 def stake_tx_data(staking_value: int):
     staking_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/Staking.json"), "r").read())

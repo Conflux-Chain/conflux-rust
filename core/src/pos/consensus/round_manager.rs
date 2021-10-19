@@ -1278,7 +1278,7 @@ impl RoundManager {
     /// Force the node to vote for a proposal without changing its consensus
     /// state. The node will still vote for the correct proposal
     /// independently if that's not disabled.
-    pub async fn force_sign_proposal(
+    pub async fn force_vote_proposal(
         &mut self, block_id: HashValue, author: Author,
         private_key: &ConsensusPrivateKey,
     ) -> Result<()>
@@ -1301,6 +1301,7 @@ impl RoundManager {
         let vote =
             Vote::new_with_signature(vote_data, author, ledger_info, signature);
         let vote_msg = VoteMsg::new(vote, self.block_store.sync_info());
+        diem_debug!("force_vote_proposal: broadcast {:?}", vote_msg);
         self.network
             .broadcast(ConsensusMsg::VoteMsg(Box::new(vote_msg)), vec![])
             .await;

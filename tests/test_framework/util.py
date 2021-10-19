@@ -311,7 +311,7 @@ def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="
                     'type': "local",
                 }
             },
-            'round_initial_timeout_ms': 4000,
+            'round_initial_timeout_ms': 1000,
         }
         validator_config['logger'] = {
             'level': "TRACE",

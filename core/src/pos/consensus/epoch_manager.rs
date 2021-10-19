@@ -810,14 +810,15 @@ impl EpochManager {
     ) -> anyhow::Result<()> {
         match command {
             TestCommand::ForceVoteProposal(block_id) => {
-                self.force_sign_proposal(block_id).await
+                self.force_vote_proposal(block_id).await
             }
         }
     }
 
-    async fn force_sign_proposal(
+    async fn force_vote_proposal(
         &mut self, block_id: HashValue,
     ) -> anyhow::Result<()> {
+        diem_debug!("force_vote_proposal: {:?}", block_id);
         let bls_key = self
             .config
             .safety_rules
@@ -831,7 +832,7 @@ impl EpochManager {
         let author = self.author;
         match self.processor_mut() {
             RoundProcessor::Normal(p) => {
-                p.force_sign_proposal(block_id, author, &bls_key).await
+                p.force_vote_proposal(block_id, author, &bls_key).await
             }
             _ => anyhow::bail!("RoundManager not started yet"),
         }
