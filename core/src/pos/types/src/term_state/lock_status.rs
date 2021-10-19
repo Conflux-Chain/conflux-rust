@@ -124,15 +124,19 @@ pub struct NodeLockStatus {
 }
 
 impl NodeLockStatus {
-    pub fn unlocked(&self) -> u64 {
-        if let Some(votes) = self.exempt_from_forfeit {
-            votes
+    pub fn available_votes(&self) -> u64 {
+        if self.exempt_from_forfeit.is_some() {
+            0
         } else {
-            self.unlocked
+            self.available_votes
         }
     }
 
-    pub fn forfeited(&self) -> u64 { self.unlocked - self.unlocked() }
+    pub fn unlocked_votes(&self) -> u64 {
+        self.exempt_from_forfeit.unwrap_or(self.unlocked)
+    }
+
+    pub fn forfeited(&self) -> u64 { self.unlocked - self.unlocked_votes() }
 
     pub fn force_retired(&self) -> bool { self.force_retired.is_some() }
 
@@ -202,17 +206,7 @@ impl NodeLockStatus {
             return;
         }
 
-        if self.available_votes < to_unlock_votes {
-            // Do not return error here because PoW do not check retire
-            // events.
-            diem_warn!(
-                "Invalid retire events: locked={} to_unlock={}",
-                self.locked,
-                to_unlock_votes
-            );
-            return;
-        }
-
+        let before_available_votes = self.available_votes;
         let mut rest_votes = to_unlock_votes;
 
         // First, we try to unlock votes from self.locked
@@ -228,10 +222,19 @@ impl NodeLockStatus {
 
         // Then, we try to unlock votes from in_queue, ordered by timestamp.
         while rest_votes > 0 {
-            let item = self
-                .in_queue
-                .extract(rest_votes)
-                .expect("We have checked that the available_votes >= votes");
+            let maybe_item = self.in_queue.extract(rest_votes);
+
+            if maybe_item.is_none() {
+                diem_warn!(
+                    "Not enough votes to unlock, before available votes {}, to unlock votes {}, rest votes {}",
+                    before_available_votes,
+                    to_unlock_votes,
+                    rest_votes
+                );
+                break;
+            }
+
+            let item = maybe_item.unwrap();
 
             rest_votes -= item.votes;
             self.available_votes -= item.votes;
@@ -245,32 +248,18 @@ impl NodeLockStatus {
         &mut self, view: View, callback_views: &mut Vec<View>,
     ) {
         if self
-            .force_retired
-            .map_or(true, |existing_view| existing_view < view)
+            .force_retired.is_none()
         {
             self.force_retired = Some(view);
             self.new_unlock(view, self.available_votes, callback_views);
         }
     }
 
-    #[must_use]
     pub(super) fn forfeit(&mut self) {
         if self.exempt_from_forfeit.is_some() {
             return;
         }
         self.exempt_from_forfeit = Some(self.unlocked)
-    }
-
-    pub fn available_votes(&self) -> u64 {
-        if self.exempt_from_forfeit.is_some() {
-            0
-        } else {
-            self.available_votes
-        }
-    }
-
-    pub fn unlocked_votes(&self) -> u64 {
-        self.exempt_from_forfeit.unwrap_or(self.unlocked)
     }
 }
 
@@ -334,7 +323,7 @@ pub mod tests {
                         }
                     }
                     Operation::AssertUnlocked(votes) => {
-                        if lock_status.unlocked() != votes {
+                        if lock_status.unlocked_votes() != votes {
                             panic!("View {}\n {:?}", view, lock_status);
                         }
                     }
