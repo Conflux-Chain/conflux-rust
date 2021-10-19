@@ -177,7 +177,7 @@ impl VMExecutor for FakeVM {
                             vec![update.to_event()]
                         }
                         TransactionPayload::Dispute(dispute) => {
-                            if Self::verify_dispute(dispute) {
+                            if !Self::verify_dispute(dispute) {
                                 return Err(VMStatus::Error(
                                     StatusCode::CFX_INVALID_TX,
                                 ));
@@ -251,7 +251,7 @@ impl FakeVM {
     /// Return true if the dispute is valid.
     /// Return false if the encoding is invalid or the provided signatures are
     /// not from the same round.
-    fn verify_dispute(dispute: &DisputePayload) -> bool {
+    pub fn verify_dispute(dispute: &DisputePayload) -> bool {
         let computed_address = from_consensus_public_key(
             &dispute.bls_pub_key,
             &dispute.vrf_pub_key,
@@ -338,6 +338,7 @@ impl FakeVM {
                 if vote1.verify(&temp_verifier).is_err()
                     || vote2.verify(&temp_verifier).is_err()
                 {
+                    diem_trace!("dispute vote verification error: vote1_r={:?} vote2_r={:?}", vote1.verify(&temp_verifier), vote2.verify(&temp_verifier));
                     return false;
                 }
             }

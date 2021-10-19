@@ -512,13 +512,21 @@ class RpcClient:
         self.send_tx(register_tx, wait_for_receipt=True)
         return pos_identifier, priv_key
 
-    def wait_for_unstake(self, priv_key, unstake_value=2_000_000):
+    def wait_for_unstake(self, priv_key=None, unstake_value=2_000_000):
+        if priv_key is None:
+            priv_key = self.node.pow_sk
         unstake_tx = self.new_tx(priv_key=priv_key, data=unstake_tx_data(unstake_value), value=0, receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
         self.send_tx(unstake_tx, wait_for_receipt=True)
 
     def pos_retire_self(self):
         retire_tx = self.new_tx(priv_key=self.node.pow_sk, data=retire_tx_data(), value=0, receiver="0x0888000000000000000000000000000000000005", gas=CONTRACT_DEFAULT_GAS)
         self.send_tx(retire_tx, wait_for_receipt=True)
+
+    def pos_get_consensus_blocks(self):
+        return self.node.pos_getConsensusBlocks()
+
+    def pos_status(self):
+        return self.node.pos_getStatus()
 
 
 def stake_tx_data(staking_value: int):

@@ -103,8 +103,8 @@ impl SafetyRules {
     }
 
     /// Check if the executed result extends the parent result.
-    fn extension_check(
-        &self, vote_proposal: &VoteProposal,
+    pub fn extension_check(
+        vote_proposal: &VoteProposal,
     ) -> Result<VoteData, Error> {
         let proposed_block = vote_proposal.block();
         let new_tree = vote_proposal
@@ -135,7 +135,7 @@ impl SafetyRules {
     /// 2) round(B0) + 1 = round(B1), and
     /// 3) round(B1) + 1 = round(B2).
     pub fn construct_ledger_info(
-        &self, proposed_block: &Block, consensus_data_hash: HashValue,
+        proposed_block: &Block, consensus_data_hash: HashValue,
     ) -> Result<LedgerInfo, Error> {
         let block2 = proposed_block.round();
         let block1 = proposed_block.quorum_cert().certified_block().round();
@@ -417,10 +417,10 @@ impl SafetyRules {
         )?;
 
         // Construct and sign vote
-        let vote_data = self.extension_check(vote_proposal)?;
+        let vote_data = Self::extension_check(vote_proposal)?;
         let author = self.signer()?.author();
         let ledger_info =
-            self.construct_ledger_info(proposed_block, vote_data.hash())?;
+            Self::construct_ledger_info(proposed_block, vote_data.hash())?;
         let signature = self.sign(&ledger_info)?;
         let vote =
             Vote::new_with_signature(vote_data, author, ledger_info, signature);

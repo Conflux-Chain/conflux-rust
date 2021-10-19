@@ -35,7 +35,7 @@ use super::{
     state_computer::ExecutionProxy, txn_manager::MempoolProxy,
     util::time_service::ClockTimeService,
 };
-use crate::pos::consensus::ConsensusDB;
+use crate::pos::consensus::{ConsensusDB, TestCommand};
 
 /// Helper function to start consensus based on configuration and return the
 /// runtime
@@ -51,6 +51,7 @@ pub fn start_consensus(
         SignedTransaction,
         oneshot::Sender<anyhow::Result<SubmissionStatus>>,
     )>,
+    test_command_receiver: channel::Receiver<TestCommand>,
 ) -> (Runtime, Arc<PowHandler>, Arc<AtomicBool>, Arc<ConsensusDB>)
 {
     let stopped = Arc::new(AtomicBool::new(false));
@@ -108,6 +109,7 @@ pub fn start_consensus(
         proposal_timeout_receiver,
         new_round_timeout_receiver,
         network_receiver,
+        test_command_receiver,
         stopped.clone(),
     ));
 

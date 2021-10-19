@@ -1070,7 +1070,7 @@ impl ConsensusExecutionHandler {
                 .pos_verifier
                 .get_unlock_nodes(current_pos_ref, parent_pos_ref)
             {
-                debug!("unlock node: {:?}", unlock_node_id);
+                debug!("unlock node: {:?} {}", unlock_node_id, votes);
                 state
                     .update_pos_status(unlock_node_id, votes)
                     .expect("db error");

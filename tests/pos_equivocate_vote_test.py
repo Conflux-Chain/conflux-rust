@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+"""An example functional test
+"""
+import eth_utils
+import time
+
+from conflux.rpc import RpcClient
+from conflux.utils import int_to_hex, priv_to_addr
+from test_framework.test_framework import DefaultConfluxTestFramework
+from test_framework.util import *
+
+
+class PosEquivocateVoteTest(DefaultConfluxTestFramework):
+    def set_test_params(self):
+        self.num_nodes = 4
+        self.conf_parameters["vrf_proposal_threshold"] = '"{}"'.format(int_to_hex(int(2 ** 256 - 1)))
+        self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = '120'
+
+    def run_test(self):
+        client = RpcClient(self.nodes[self.num_nodes - 1])
+        wait_until(lambda: client.pos_status()["latestVoted"] is not None)
+        print(client.pos_status())
+        expected_round = int(client.pos_status()["latestVoted"], 0) + 1
+        latest_round_blocks = set()
+        while len(latest_round_blocks) <= 1:
+            latest_round_blocks.clear()
+            for b in client.pos_get_consensus_blocks():
+                round = int(b["round"], 0)
+                if round == expected_round:
+                    latest_round_blocks.add(b["hash"])
+        for b in latest_round_blocks:
+            self.log.info("force_vote %s", b)
+            self.nodes[self.num_nodes - 1].pos_force_vote_proposal(b)
+            # wait for the vote to be processed.
+            time.sleep(0.2)
+        client.generate_empty_blocks(300)
+        client.pos_retire_self()
+
+        for i in range(60):
+            print(i)
+            # Retire node 3 after 5 min.
+            # Generate enough PoW block for PoS to progress
+            client.generate_empty_blocks(60)
+            # Leave some time for PoS to reach consensus
+            time.sleep(9)
+            b = client.generate_empty_blocks(1)[0]
+            print(client.block_by_hash(b)["posReference"])
+
+        print("balance before unstake", client.get_balance(eth_utils.encode_hex(priv_to_addr(client.node.pow_sk))))
+        client.wait_for_unstake()
+        print("balance after unstake", client.get_balance(eth_utils.encode_hex(priv_to_addr(client.node.pow_sk))))
+        # assert (self.nodes[0].getblockcount() == 6002)
+
+if __name__ == '__main__':
+    PosEquivocateVoteTest().main()
