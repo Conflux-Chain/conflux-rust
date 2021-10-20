@@ -11,10 +11,10 @@ pub struct NodeLockStatus {
     // Equals to the summation of in_queue + locked
     pub available_votes: U64,
 
-    pub force_retired: bool,
+    pub force_retired: Option<U64>,
     // If the staking is forfeited, the unlocked votes before forfeiting is
     // exempted.
-    pub exempt_from_forfeit: Option<U64>,
+    pub forfeited: U64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

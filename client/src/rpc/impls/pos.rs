@@ -130,10 +130,10 @@ impl PosHandler {
                         available_votes: U64::from(
                             lock_status.available_votes(),
                         ),
-                        force_retired: lock_status.force_retired(),
-                        exempt_from_forfeit: lock_status
-                            .exempt_from_forfeit()
-                            .map(U64::from),
+                        force_retired: lock_status
+                            .force_retired()
+                            .map(|x| U64::from(x)),
+                        forfeited: U64::from(lock_status.forfeited()),
                     },
                 });
             };
