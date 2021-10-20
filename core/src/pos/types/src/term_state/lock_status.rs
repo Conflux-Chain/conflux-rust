@@ -247,9 +247,7 @@ impl NodeLockStatus {
     pub(super) fn force_retire(
         &mut self, view: View, callback_views: &mut Vec<View>,
     ) {
-        if self
-            .force_retired.is_none()
-        {
+        if self.force_retired.is_none() {
             self.force_retired = Some(view);
             self.new_unlock(view, self.available_votes, callback_views);
         }
