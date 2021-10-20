@@ -1,6 +1,6 @@
 use cfx_types::U64;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct NodeLockStatus {
     pub in_queue: Vec<VotePowerState>,
@@ -12,12 +12,11 @@ pub struct NodeLockStatus {
     pub available_votes: U64,
 
     pub force_retired: Option<U64>,
-    // If the staking is forfeited, the unlocked votes before forfeiting is
-    // exempted.
+    // If the staking is forfeited, the forfeited value will never be unlocked.
     pub forfeited: U64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct VotePowerState {
     pub end_block_number: U64,
