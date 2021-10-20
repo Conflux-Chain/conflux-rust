@@ -75,9 +75,8 @@ lazy_static! {
 
 pub fn default(_dev_or_test_mode: bool) -> HashMap<Address, U256> {
     let mut accounts: HashMap<Address, U256> = HashMap::new();
-    // FIXME: Decide the genesis initialization for mainnet.
-    let balance = U256::from_dec_str("5000000000000000000000000000000000")
-        .expect("Not overflow"); // 5*10^33
+    let balance = U256::from_dec_str("50000000000000000000000000")
+        .expect("Not overflow"); // 5*10^25 for pos testnet.
     accounts.insert(DEV_GENESIS_KEY_PAIR.address(), balance);
     accounts.insert(DEV_GENESIS_KEY_PAIR_2.address(), balance);
     accounts
