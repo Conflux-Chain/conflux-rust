@@ -2,9 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::Transaction;
 use cfx_types::{H256, U64};
-use serde::{Serialize, Serializer};
+use serde::Serialize;
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -40,25 +39,4 @@ pub struct Signature {
     // pub signature: String,
     ///
     pub votes: U64,
-}
-
-#[derive(Debug, Clone)]
-pub enum BlockTransactions {
-    /// Only hashes
-    Hashes(Vec<H256>),
-    /// Full transactions
-    Full(Vec<Transaction>),
-}
-
-impl Serialize for BlockTransactions {
-    fn serialize<S: Serializer>(
-        &self, serializer: S,
-    ) -> Result<S::Ok, S::Error> {
-        match *self {
-            BlockTransactions::Hashes(ref hashes) => {
-                hashes.serialize(serializer)
-            }
-            BlockTransactions::Full(ref txs) => txs.serialize(serializer),
-        }
-    }
 }

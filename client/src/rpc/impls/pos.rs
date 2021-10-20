@@ -303,8 +303,15 @@ impl PosHandler {
                 let hash = self.pos_handler.get_latest_pos_reference();
                 self.block_by_hash(hash)
             }
+            BlockNumber::Earliest => {
+                let hash = self
+                    .pos_handler
+                    .diem_db()
+                    .get_committed_block_hash_by_view(1)
+                    .ok()?;
+                self.block_by_hash(hash_value_to_h256(hash))
+            }
             BlockNumber::LatestVoted => self.latest_voted(),
-            BlockNumber::Earliest => None,
         }
     }
 
@@ -441,7 +448,7 @@ impl PosHandler {
                     block_number,
                     timestamp,
                     number: U64::from(version),
-                    payload: Some(signed_tx.payload().clone()),
+                    payload: Some(signed_tx.payload().clone().into()),
                     status,
                     tx_type: tx_type(signed_tx.payload().clone()),
                 })
