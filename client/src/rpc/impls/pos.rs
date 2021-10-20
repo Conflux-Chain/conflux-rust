@@ -97,11 +97,7 @@ impl PosHandler {
         let decision = state.pivot_decision();
         let epoch_state = state.epoch_state();
         let block_number = state.current_view();
-        let latest_voted = self
-            .consensus_blocks()
-            .unwrap_or(vec![])
-            .last()
-            .map(|b| U64::from(b.height));
+        let latest_voted = self.latest_voted().map(|b| U64::from(b.height));
         Status {
             epoch: U64::from(epoch_state.epoch),
             latest_committed: U64::from(block_number),
@@ -130,7 +126,7 @@ impl PosHandler {
                         in_queue: map_votes(&lock_status.in_queue),
                         locked: U64::from(lock_status.locked),
                         out_queue: map_votes(&lock_status.out_queue),
-                        unlocked: U64::from(lock_status.unlocked()),
+                        unlocked: U64::from(lock_status.unlocked_votes()),
                         available_votes: U64::from(
                             lock_status.available_votes(),
                         ),
@@ -307,9 +303,6 @@ impl PosHandler {
                 let hash = self.pos_handler.get_latest_pos_reference();
                 self.block_by_hash(hash)
             }
-            BlockNumber::LatestVoted => {
-                self.consensus_blocks()?.last().map(|b| (*b).clone())
-            }
             BlockNumber::Earliest => {
                 let hash = self
                     .pos_handler
@@ -318,11 +311,14 @@ impl PosHandler {
                     .ok()?;
                 self.block_by_hash(hash_value_to_h256(hash))
             }
+            BlockNumber::LatestVoted => self.latest_voted(),
         }
     }
 
     fn consensus_blocks(&self) -> Option<Vec<Block>> {
         let blocks = self.pos_handler.consensus_db().get_blocks().ok()?;
+        let block_ids = blocks.values().map(|b| b.id()).collect::<Vec<_>>();
+        debug!("consensus_blocks: block_ids={:?}", block_ids);
         if blocks.len() == 0 {
             return Some(vec![]);
         }
@@ -397,9 +393,20 @@ impl PosHandler {
                 }
                 rpc_block
             })
-            .filter(|b| b.pivot_decision.is_some())
             .collect::<Vec<_>>();
         Some(rpc_blocks)
+    }
+
+    fn latest_voted(&self) -> Option<Block> {
+        self.consensus_blocks()
+            .map(|blocks| {
+                blocks
+                    .iter()
+                    .filter(|b| b.pivot_decision.is_some())
+                    .last()
+                    .cloned()
+            })
+            .flatten()
     }
 
     fn consensus_block_by_number(&self, number: U64) -> Option<Block> {

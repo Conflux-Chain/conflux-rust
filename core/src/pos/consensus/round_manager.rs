@@ -27,7 +27,7 @@ use consensus_types::{
     vote_msg::VoteMsg,
 };
 use diem_config::keys::ConfigKey;
-use diem_crypto::VRFPrivateKey;
+use diem_crypto::{hash::CryptoHash, HashValue, SigningKey, VRFPrivateKey};
 use diem_infallible::checked;
 use diem_logger::prelude::*;
 use diem_types::{
@@ -45,7 +45,7 @@ use diem_types::{
 };
 #[cfg(test)]
 use safety_rules::ConsensusState;
-use safety_rules::TSafetyRules;
+use safety_rules::{SafetyRules, TSafetyRules};
 
 use crate::pos::{
     mempool::SubmissionStatus,
@@ -1105,6 +1105,7 @@ impl RoundManager {
                                 == vote2.vote_data().proposed().round(),
                             "incorrect round"
                         );
+                        diem_warn!("Find Equivocate Vote!!! author={}, vote1={:?}, vote2={:?}", vote.author(), vote1, vote2);
                         let dispute_payload = DisputePayload {
                             address: vote1.author(),
                             bls_pub_key: self
@@ -1269,5 +1270,41 @@ impl RoundManager {
         let r = self.proposal_generator.is_some();
         diem_debug!("Check validator: r={}", r);
         r
+    }
+}
+
+/// The functions used in tests to construct attack cases
+impl RoundManager {
+    /// Force the node to vote for a proposal without changing its consensus
+    /// state. The node will still vote for the correct proposal
+    /// independently if that's not disabled.
+    pub async fn force_vote_proposal(
+        &mut self, block_id: HashValue, author: Author,
+        private_key: &ConsensusPrivateKey,
+    ) -> Result<()>
+    {
+        let proposal = self
+            .block_store
+            .get_block(block_id)
+            .ok_or(anyhow::anyhow!("force sign block not received"))?;
+        let vote_proposal = proposal.maybe_signed_vote_proposal().vote_proposal;
+        let vote_data =
+            SafetyRules::extension_check(&vote_proposal).map_err(|e| {
+                anyhow::anyhow!("extension_check error: err={:?}", e)
+            })?;
+        let ledger_info = SafetyRules::construct_ledger_info(
+            vote_proposal.block(),
+            vote_data.hash(),
+        )
+        .map_err(|e| anyhow::anyhow!("extension_check error: err={:?}", e))?;
+        let signature = private_key.sign(&ledger_info);
+        let vote =
+            Vote::new_with_signature(vote_data, author, ledger_info, signature);
+        let vote_msg = VoteMsg::new(vote, self.block_store.sync_info());
+        diem_debug!("force_vote_proposal: broadcast {:?}", vote_msg);
+        self.network
+            .broadcast(ConsensusMsg::VoteMsg(Box::new(vote_msg)), vec![])
+            .await;
+        Ok(())
     }
 }

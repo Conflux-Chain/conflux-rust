@@ -10,12 +10,14 @@ use diem_crypto_derive::{
 use lazy_static::lazy_static;
 use openssl::{ec, nid::Nid};
 use parking_lot::Mutex;
-use std::convert::TryFrom;
+use std::{
+    convert::TryFrom,
+    fmt::{self, Formatter},
+};
 use vrf::{
     openssl::{CipherSuite, ECVRF},
     VRF,
 };
-use std::fmt::{self, Formatter};
 
 // TODO(lpl): Choose a curve;
 lazy_static! {

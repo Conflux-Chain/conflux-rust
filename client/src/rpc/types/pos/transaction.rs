@@ -4,12 +4,11 @@
 
 use cfx_types::{H256, U64};
 use diem_types::{
-    transaction::{TransactionPayload, TransactionStatus},
+    transaction::{ConflictSignature, TransactionPayload, TransactionStatus},
     vm_status::KeptVMStatus,
 };
-use serde::{ser::SerializeStruct, Serialize, Serializer};
-use diem_types::transaction::ConflictSignature;
 use rustc_hex::ToHex;
+use serde::{ser::SerializeStruct, Serialize, Serializer};
 
 #[derive(Debug, Clone)]
 pub struct Transaction {
@@ -101,14 +100,14 @@ impl From<TransactionPayload> for RpcTransactionPayload {
             TransactionPayload::Dispute(d) => {
                 let conflicting_votes = match d.conflicting_votes {
                     ConflictSignature::Proposal((first, second)) => {
-                        ConflictingVotes{
+                        ConflictingVotes {
                             conflict_vote_type: "proposal".into(),
                             first: format!("0x{}", first.to_hex::<String>()),
                             second: format!("0x{}", second.to_hex::<String>()),
                         }
                     }
                     ConflictSignature::Vote((first, second)) => {
-                        ConflictingVotes{
+                        ConflictingVotes {
                             conflict_vote_type: "vote".into(),
                             first: format!("0x{}", first.to_hex::<String>()),
                             second: format!("0x{}", second.to_hex::<String>()),

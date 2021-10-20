@@ -688,6 +688,19 @@ impl RpcImpl {
             .initialize(self.consensus.clone().to_arc_consensus())?;
         Ok(())
     }
+
+    pub fn pos_force_vote_proposal(&self, block_id: H256) -> RpcResult<()> {
+        if !self.network.is_test_mode() {
+            // Reject force vote if test RPCs are enabled in a mainnet node,
+            // because this may cause staked CFXs locked
+            // permanently.
+            bail!(RpcError::internal_error())
+        }
+        self.pos_handler.force_vote_proposal(block_id).map_err(|e| {
+            warn!("force_vote_proposal: err={:?}", e);
+            RpcError::internal_error().into()
+        })
+    }
 }
 
 // Debug RPC implementation

@@ -297,6 +297,7 @@ build_config! {
         (pos_reference_enable_height, (u64), u64::MAX)
         (pos_initial_nodes_path, (String), "./pos_config/initial_nodes.json".to_string())
         (pos_private_key_path, (String), "./pos_config/pos_key".to_string())
+        (dev_pos_private_key_encryption_password, (Option<String>), None)
 
         // Light node section
         (ln_epoch_request_batch_size, (Option<usize>), None)

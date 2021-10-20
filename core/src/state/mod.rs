@@ -340,8 +340,8 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     ) -> DbResult<()> {
         assert!(self.world_statistics_checkpoints.get_mut().is_empty());
 
-        if self.world_statistics.last_distribute_block + BLOCKS_PER_SECOND * 60
-            > current_block_number
+        if current_block_number
+            > self.world_statistics.last_distribute_block + BLOCKS_PER_HOUR
         {
             return Ok(());
         }
