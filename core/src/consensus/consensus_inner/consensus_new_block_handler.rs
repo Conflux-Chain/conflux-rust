@@ -2014,7 +2014,7 @@ impl ConsensusNewBlockHandler {
                         .upper_bound += 1;
                 }
             }
-            debug!(
+            info!(
                 "construct_pivot_state: index {} height {} compute_epoch {} has_storage {}.",
                 pivot_index, height, compute_epoch, has_storage,
             );
