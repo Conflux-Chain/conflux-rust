@@ -6,7 +6,7 @@ use crate::rpc::types::pos::NodeLockStatus;
 use cfx_types::{H256, U64};
 use serde_derive::Serialize;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
     ///
@@ -15,22 +15,4 @@ pub struct Account {
     pub block_number: U64,
     ///
     pub status: NodeLockStatus,
-}
-
-impl Default for Account {
-    fn default() -> Account {
-        Account {
-            address: Default::default(),
-            block_number: Default::default(),
-            status: NodeLockStatus {
-                in_queue: Default::default(),
-                locked: Default::default(),
-                out_queue: Default::default(),
-                unlocked: Default::default(),
-                available_votes: Default::default(),
-                force_retired: false,
-                exempt_from_forfeit: None,
-            },
-        }
-    }
 }
