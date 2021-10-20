@@ -15,6 +15,7 @@ use vrf::{
     openssl::{CipherSuite, ECVRF},
     VRF,
 };
+use std::fmt::{self, Formatter};
 
 // TODO(lpl): Choose a curve;
 lazy_static! {
@@ -91,6 +92,12 @@ impl PublicKey for EcVrfPublicKey {
     type PrivateKeyMaterial = EcVrfPrivateKey;
 }
 
+impl fmt::Display for EcVrfPublicKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_encoded_string().map_err(|_| fmt::Error)?)
+    }
+}
+
 impl From<Vec<u8>> for EcVrfPublicKey {
     fn from(raw: Vec<u8>) -> Self { EcVrfPublicKey(raw) }
 }
@@ -156,6 +163,12 @@ impl std::hash::Hash for EcVrfProof {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let encoded_pubkey = ValidCryptoMaterial::to_bytes(self);
         state.write(&encoded_pubkey);
+    }
+}
+
+impl fmt::Display for EcVrfProof {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_encoded_string().map_err(|_| fmt::Error)?)
     }
 }
 
