@@ -1931,6 +1931,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
+ "static_assertions",
  "thiserror",
  "tiny-keccak 2.0.2",
 ]

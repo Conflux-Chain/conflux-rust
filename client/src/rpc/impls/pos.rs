@@ -126,7 +126,7 @@ impl PosHandler {
                         in_queue: map_votes(&lock_status.in_queue),
                         locked: U64::from(lock_status.locked),
                         out_queue: map_votes(&lock_status.out_queue),
-                        unlocked: U64::from(lock_status.unlocked()),
+                        unlocked: U64::from(lock_status.unlocked_votes()),
                         available_votes: U64::from(
                             lock_status.available_votes(),
                         ),
