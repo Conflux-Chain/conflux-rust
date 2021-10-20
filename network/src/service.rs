@@ -187,6 +187,8 @@ impl NetworkService {
 
     pub fn network_id(&self) -> u64 { self.config.id }
 
+    pub fn is_test_mode(&self) -> bool { self.config.test_mode }
+
     pub fn start_network_poll(&self) -> Result<(), Error> {
         let handler = self.inner.as_ref().unwrap().clone();
         let main_event_loop_channel =

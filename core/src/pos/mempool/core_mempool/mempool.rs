@@ -30,6 +30,7 @@ use diem_types::{
     },
     validator_verifier::ValidatorVerifier,
 };
+use executor::vm::FakeVM;
 use std::{
     collections::HashSet,
     time::{Duration, SystemTime},
@@ -161,6 +162,12 @@ impl Mempool {
                 TransactionPayload::PivotDecision(_) => {
                     seen.insert((txn.get_sender(), txn.get_hash()));
                     continue;
+                }
+                TransactionPayload::Dispute(dispute_payload) => {
+                    // TODO(lpl): Only dispute a node once.
+                    FakeVM::verify_dispute(dispute_payload)
+                        .then(|| ())
+                        .ok_or(anyhow::anyhow!("invalid dispute"))
                 }
                 _ => {
                     continue;

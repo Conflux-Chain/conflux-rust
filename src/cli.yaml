@@ -173,6 +173,11 @@ args:
         long: account-provider-refresh-time-ms
         value_name: MS
         takes_value: true
+    - dev-pos-private-key-encryption-password:
+        help: Sets the encryption password for the pos private key file. It's used to encrypt a new generated key or to decrypt an existing key file.
+        long: dev-pos-private-key-encryption-password
+        value_name: PASSWD
+        takes_value: true
     - light:
         long: light
     - archive:

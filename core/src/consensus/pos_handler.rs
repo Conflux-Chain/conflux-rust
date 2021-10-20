@@ -23,7 +23,7 @@ use crate::{
                 NetworkReceivers as ConsensusNetworkReceivers,
                 NetworkTask as ConsensusNetworkTask,
             },
-            ConsensusDB,
+            ConsensusDB, TestCommand,
         },
         mempool::network::{
             NetworkReceivers as MemPoolNetworkReceivers,
@@ -103,6 +103,7 @@ pub struct PosHandler {
     diem_handler: Mutex<Option<DiemHandle>>,
     consensus_network_receiver: Mutex<Option<ConsensusNetworkReceivers>>,
     mempool_network_receiver: Mutex<Option<MemPoolNetworkReceivers>>,
+    test_command_sender: Mutex<Option<channel::Sender<TestCommand>>>,
     enable_height: u64,
     hsb_protocol_handler: Option<Arc<HotStuffSynchronizationProtocol>>,
     pub conf: PosConfiguration,
@@ -120,6 +121,7 @@ impl PosHandler {
             diem_handler: Mutex::new(None),
             consensus_network_receiver: Mutex::new(None),
             mempool_network_receiver: Mutex::new(None),
+            test_command_sender: Mutex::new(None),
             enable_height,
             hsb_protocol_handler: None,
             conf,
@@ -168,6 +170,9 @@ impl PosHandler {
             self.conf.pos_initial_nodes_path.as_str(),
         )?;
         let network = self.network.lock().take().expect("pos not initialized");
+        let (test_command_sender, test_command_receiver) =
+            channel::new_test(1024);
+
         pos_config.consensus.safety_rules.test = Some(SafetyRulesTestConfig {
             author: from_consensus_public_key(
                 &self.conf.bls_key.public_key(),
@@ -201,6 +206,7 @@ impl PosHandler {
                 .lock()
                 .take()
                 .expect("not initialized"),
+            test_command_receiver,
             self.hsb_protocol_handler.clone().expect("set in new"),
         );
         debug!("PoS initialized");
@@ -212,6 +218,7 @@ impl PosHandler {
         if self.pos.set(Box::new(pos_connection)).is_err() {
             bail!("PoS initialized twice!");
         }
+        *self.test_command_sender.lock() = Some(test_command_sender);
         *self.diem_handler.lock() = Some(diem_handler);
         Ok(())
     }
@@ -344,6 +351,20 @@ impl PosHandler {
         self.diem_handler.lock().take();
         self.consensus_network_receiver.lock().take();
         self.mempool_network_receiver.lock().take();
+    }
+}
+
+/// The functions used in tests to construct attack cases
+impl PosHandler {
+    pub fn force_vote_proposal(&self, block_id: H256) -> anyhow::Result<()> {
+        self.test_command_sender
+            .lock()
+            .as_mut()
+            .ok_or(anyhow::anyhow!("Pos not initialized!"))?
+            .try_send(TestCommand::ForceVoteProposal(h256_to_diem_hash(
+                &block_id,
+            )))
+            .map_err(|e| anyhow::anyhow!("try_send: err={:?}", e))
     }
 }
 

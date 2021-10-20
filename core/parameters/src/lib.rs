@@ -205,6 +205,8 @@ pub mod staking {
     /// This is the number of blocks per second.
     pub const BLOCKS_PER_SECOND: u64 =
         1000000 / TARGET_AVERAGE_BLOCK_GENERATION_PERIOD;
+    /// This is the number of blocks per hour.
+    pub const BLOCKS_PER_HOUR: u64 = BLOCKS_PER_SECOND * 60 * 60;
     /// This is the number of blocks per day.
     pub const BLOCKS_PER_DAY: u64 = BLOCKS_PER_SECOND * 60 * 60 * 24;
     /// This is the number of blocks per year.

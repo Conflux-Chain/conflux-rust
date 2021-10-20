@@ -127,4 +127,7 @@ pub trait TestRpc {
 
     #[rpc(name = "pos_start")]
     fn pos_start(&self) -> RpcResult<()>;
+
+    #[rpc(name = "pos_force_vote_proposal")]
+    fn pos_force_vote_proposal(&self, block_id: H256) -> RpcResult<()>;
 }

@@ -14,7 +14,7 @@ mod transaction;
 
 pub use self::{
     account::Account,
-    block::{Block, BlockTransactions, Signature},
+    block::{Block, Signature},
     block_number::BlockNumber,
     committee::{CommitteeState, NodeVotingPower, RpcCommittee, RpcTermData},
     decision::Decision,

@@ -516,8 +516,8 @@ impl RegisterPayload {
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateVotingPowerPayload {
-    node_address: AccountAddress,
-    voting_power: u64,
+    pub node_address: AccountAddress,
+    pub voting_power: u64,
 }
 
 impl UpdateVotingPowerPayload {

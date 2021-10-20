@@ -34,8 +34,9 @@ use super::{
     util::time_service::TimeService,
 };
 use crate::pos::{
-    consensus::liveness::vrf_proposer_election::VrfProposer,
-    mempool::SubmissionStatus, protocol::network_sender::NetworkSender,
+    consensus::{liveness::vrf_proposer_election::VrfProposer, TestCommand},
+    mempool::SubmissionStatus,
+    protocol::network_sender::NetworkSender,
 };
 use anyhow::{bail, ensure, Context};
 use channel::diem_channel;
@@ -44,6 +45,7 @@ use consensus_types::{
     epoch_retrieval::EpochRetrievalRequest,
 };
 use diem_config::config::{ConsensusConfig, ConsensusProposerType, NodeConfig};
+use diem_crypto::HashValue;
 use diem_infallible::duration_since_epoch;
 use diem_logger::prelude::*;
 use diem_metrics::monitor;
@@ -56,7 +58,7 @@ use diem_types::{
 };
 use futures::{
     channel::{mpsc, oneshot},
-    select, StreamExt,
+    select_biased, StreamExt,
 };
 use pow_types::PowInterface;
 use safety_rules::SafetyRulesManager;
@@ -741,7 +743,9 @@ impl EpochManager {
         mut self, mut round_timeout_sender_rx: channel::Receiver<Round>,
         mut proposal_timeout_sender_rx: channel::Receiver<Round>,
         mut new_round_timeout_sender_rx: channel::Receiver<Round>,
-        mut network_receivers: NetworkReceivers, stopped: Arc<AtomicBool>,
+        mut network_receivers: NetworkReceivers,
+        mut test_command_receiver: channel::Receiver<TestCommand>,
+        stopped: Arc<AtomicBool>,
     )
     {
         // initial start of the processor
@@ -753,13 +757,9 @@ impl EpochManager {
             }
             let result = monitor!(
                 "main_loop",
-                select! {
-                    msg = network_receivers.consensus_messages.select_next_some() => {
-                        let (peer, msg) = (msg.0, msg.1);
-                        monitor!("process_message", self.process_message(peer, msg).await.with_context(|| format!("from peer: {}", peer)))
-                    }
-                    block_retrieval = network_receivers.block_retrieval.select_next_some() => {
-                        monitor!("process_block_retrieval", self.process_block_retrieval(block_retrieval).await)
+                select_biased! {
+                    command = test_command_receiver.select_next_some() => {
+                        self.process_test_command(command).await
                     }
                     round = round_timeout_sender_rx.select_next_some() => {
                         monitor!("process_local_timeout", self.process_local_timeout(round).await)
@@ -769,6 +769,13 @@ impl EpochManager {
                     }
                     round = new_round_timeout_sender_rx.select_next_some() => {
                         monitor!("process_new_round_timeout", self.process_new_round_timeout(round).await)
+                    }
+                    msg = network_receivers.consensus_messages.select_next_some() => {
+                        let (peer, msg) = (msg.0, msg.1);
+                        monitor!("process_message", self.process_message(peer, msg).await.with_context(|| format!("from peer: {}", peer)))
+                    }
+                    block_retrieval = network_receivers.block_retrieval.select_next_some() => {
+                        monitor!("process_block_retrieval", self.process_block_retrieval(block_retrieval).await)
                     }
                 }
             );
@@ -792,6 +799,42 @@ impl EpochManager {
             counters::OP_COUNTERS
                 .gauge("time_since_epoch_ms")
                 .set(duration_since_epoch().as_millis() as i64);
+        }
+    }
+}
+
+/// The functions used in tests to construct attack cases
+impl EpochManager {
+    async fn process_test_command(
+        &mut self, command: TestCommand,
+    ) -> anyhow::Result<()> {
+        match command {
+            TestCommand::ForceVoteProposal(block_id) => {
+                self.force_vote_proposal(block_id).await
+            }
+        }
+    }
+
+    async fn force_vote_proposal(
+        &mut self, block_id: HashValue,
+    ) -> anyhow::Result<()> {
+        diem_debug!("force_vote_proposal: {:?}", block_id);
+        let bls_key = self
+            .config
+            .safety_rules
+            .test
+            .as_ref()
+            .expect("test config set")
+            .consensus_key
+            .as_ref()
+            .expect("private key set in pos")
+            .private_key();
+        let author = self.author;
+        match self.processor_mut() {
+            RoundProcessor::Normal(p) => {
+                p.force_vote_proposal(block_id, author, &bls_key).await
+            }
+            _ => anyhow::bail!("RoundManager not started yet"),
         }
     }
 }

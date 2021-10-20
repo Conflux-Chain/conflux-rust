@@ -7,6 +7,9 @@
 
 #![forbid(unsafe_code)]
 
+#[macro_use]
+extern crate static_assertions;
+
 pub use account_address::AccountAddress as PeerId;
 
 pub mod access_path;
