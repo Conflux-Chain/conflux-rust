@@ -720,10 +720,7 @@ impl PosState {
         let target_term = &self.term_list.electing_term();
         if election_tx
             .vrf_proof
-            .verify(
-                &target_term.seed,
-                node.vrf_public_key.as_ref().unwrap(),
-            )
+            .verify(&target_term.seed, node.vrf_public_key.as_ref().unwrap())
             .is_err()
         {
             bail!("Invalid VRF proof for election")
@@ -937,7 +934,7 @@ impl PosState {
             self.term_list.serving_votes(target_term_offset, author);
         let voting_power = available_votes.saturating_sub(serving_votes);
         if voting_power > 0 {
-            self.term_list.new_node_elected(event, voting_power);
+            self.term_list.new_node_elected(event, voting_power)?;
         } else {
             diem_warn!("No votes can be elected: {:?} {:?}. available: {}, serving: {}.", event.node_id,
             event.start_term,available_votes,serving_votes);
