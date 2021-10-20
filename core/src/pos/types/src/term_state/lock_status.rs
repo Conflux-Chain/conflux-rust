@@ -39,9 +39,12 @@ impl Default for StatusList {
 }
 
 impl StatusList {
+    /// Push a given `StatusItem` into list and record it into `update_views`.
     fn push(
         &mut self, exit_view: View, votes: u64, update_views: &mut Vec<View>,
     ) {
+        // If the pushed item breaks the ascending order of list, set
+        // `self.sorted` to false.
         if self
             .inner
             .back()
@@ -56,7 +59,9 @@ impl StatusList {
         update_views.push(exit_view);
     }
 
-    fn extract(&mut self, required_votes: u64) -> Option<StatusItem> {
+    /// Pull the first item from list. If `votes` of the first item exceed
+    /// `required_votes`, the rest votes will be put back.
+    fn pull(&mut self, required_votes: u64) -> Option<StatusItem> {
         self.sort();
         if let Some(item) = self.inner.pop_front() {
             if item.votes <= required_votes {
@@ -77,6 +82,7 @@ impl StatusList {
         }
     }
 
+    /// Pop the first item if its view is no larger than given `view`.
     fn pop_by_view(&mut self, view: View) -> Option<StatusItem> {
         self.sort();
         if let Some(item) = self.inner.pop_front() {
@@ -116,7 +122,7 @@ pub struct NodeLockStatus {
     // Equals to the summation of in_queue + locked
     available_votes: u64,
 
-    // Record the last view that unlock force retired tokens.
+    // Record the view being forced retire.
     force_retired: Option<View>,
     // If the staking is forfeited, the unlocked votes before forfeiting is
     // exempted.
@@ -138,7 +144,7 @@ impl NodeLockStatus {
 
     pub fn forfeited(&self) -> u64 { self.unlocked - self.unlocked_votes() }
 
-    pub fn force_retired(&self) -> bool { self.force_retired.is_some() }
+    pub fn force_retired(&self) -> Option<u64> { self.force_retired }
 
     pub fn exempt_from_forfeit(&self) -> Option<u64> {
         self.exempt_from_forfeit
@@ -186,6 +192,8 @@ impl NodeLockStatus {
             return;
         }
 
+        // If force retired is not none, new locked tokens will be forced
+        // retire.
         if self.force_retired.is_some() {
             let exit_view =
                 view + IN_QUEUE_LOCKED_VIEWS + OUT_QUEUE_LOCKED_VIEWS;
@@ -220,13 +228,13 @@ impl NodeLockStatus {
             self.out_queue.push(exit_view, votes, update_views);
         }
 
-        // Then, we try to unlock votes from in_queue, ordered by timestamp.
+        // Then, we try to unlock votes from `in_queue`, ordered by timestamp.
         while rest_votes > 0 {
-            let maybe_item = self.in_queue.extract(rest_votes);
+            let maybe_item = self.in_queue.pull(rest_votes);
 
             if maybe_item.is_none() {
                 diem_warn!(
-                    "Not enough votes to unlock, before available votes {}, to unlock votes {}, rest votes {}",
+                    "Not enough votes to unlock: before available votes {}, to unlock votes {}, rest votes {}.",
                     before_available_votes,
                     to_unlock_votes,
                     rest_votes
@@ -249,6 +257,7 @@ impl NodeLockStatus {
     ) {
         if self.force_retired.is_none() {
             self.force_retired = Some(view);
+            callback_views.push(view + FORCE_RETIRED_LOCKED_VIEWS);
             self.new_unlock(view, self.available_votes, callback_views);
         }
     }
@@ -415,9 +424,22 @@ pub mod tests {
         run_tasks(tasks);
     }
 
+    fn resolve_retired() {
+        let tasks = vec![
+            (NewLock(6), 2),
+            (AssertAvailable(6), 3),
+            (ForceRetire, 10),
+            (NewLock(8), 10090),
+            (AssertAvailable(8), 10091),
+        ];
+
+        run_tasks(tasks);
+    }
+
     pub fn run_all() {
         basic();
         increase_during_exit();
         force_retire();
+        resolve_retired();
     }
 }
