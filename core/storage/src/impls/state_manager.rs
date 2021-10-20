@@ -201,7 +201,7 @@ impl StateManager {
             .get_root_node_ref_by_epoch(&state_index.epoch_id)?
         {
             None => {
-                warn!(
+                debug!(
                     "get_state_trees, \
                     delta_root not found for epoch {:?}. mpt_id {}, StateIndex: {:?}.",
                     state_index.epoch_id, delta_mpt.get_mpt_id(), state_index,
