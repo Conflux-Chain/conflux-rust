@@ -20,7 +20,7 @@ interface PoSRegister {
 
     /**
      * @dev Retire specified number votes for msg.sender
-     * @oaran votePower - count of votes to retire
+     * @param votePower - count of votes to retire
      */
     function retire(uint64 votePower) external;
 
