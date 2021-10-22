@@ -126,7 +126,7 @@ impl PeerManager {
         peer: NodeId, //metadata: ConnectionMetadata,
     ) -> bool
     {
-        debug!("PeerManager::add_peer [{:?}]", peer);
+        diem_debug!("PeerManager::add_peer [{:?}]", peer);
         let mut peer_states = self.peer_states.lock();
         let is_new_peer = !peer_states.contains_key(&peer);
         //if self.is_upstream_peer(&peer, Some(&metadata)) {
@@ -154,7 +154,7 @@ impl PeerManager {
 
     /// Disables a peer if it can be restarted, otherwise removes it
     pub fn disable_peer(&self, peer: NodeId) {
-        debug!("PeerManager::disable_peer [{:?}]", peer);
+        diem_debug!("PeerManager::disable_peer [{:?}]", peer);
         self.peer_states.lock().remove(&peer);
         self.update_prioritized_peers();
     }
@@ -175,13 +175,12 @@ impl PeerManager {
     pub fn execute_broadcast(
         &self, peer: NodeId, scheduled_backoff: bool, smp: &mut SharedMempool,
     ) {
-        diem_trace!("start execute_broadcast");
-        debug!("execute_broadcast for peer[{:?}]", peer);
+        diem_trace!("start execute_broadcast for peer {:?}", peer);
         let mut peer_states = self.peer_states.lock();
         let state = if let Some(state) = peer_states.get_mut(&peer) {
             state
         } else {
-            diem_info!("no state");
+            diem_info!("no state of peer {:?}", peer);
             // If we don't have any info about the node, we shouldn't broadcast
             // to it
             return;
