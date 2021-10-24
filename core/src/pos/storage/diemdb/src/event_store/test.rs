@@ -211,10 +211,6 @@ fn test_index_get_impl(event_batches: Vec<Vec<ContractEvent>>) {
                 let mut events_and_versions = events_by_event_key
                     .entry(*e.key())
                     .or_insert_with(Vec::new);
-                assert_eq!(
-                    events_and_versions.len() as u64,
-                    e.sequence_number()
-                );
                 events_and_versions.push((e, ver as Version));
             })
         });
