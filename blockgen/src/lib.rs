@@ -292,6 +292,7 @@ impl BlockGenerator {
     pub fn assemble_new_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
         difficulty: u64, adaptive: bool, block_gas_limit: u64,
+        pos_reference: Option<PosBlockId>,
     ) -> Result<Block, String>
     {
         let consensus_graph = self.consensus_graph();
@@ -321,7 +322,7 @@ impl BlockGenerator {
             transactions,
             difficulty,
             Some(adaptive),
-            self.get_pos_reference(&parent_hash),
+            pos_reference.or_else(|| self.get_pos_reference(&parent_hash)),
         ))
     }
 
@@ -475,7 +476,7 @@ impl BlockGenerator {
     // This function is used in test only to simulate attacker behavior.
     pub fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
-        difficulty: u64, adaptive: bool,
+        difficulty: u64, adaptive: bool, pos_reference: Option<H256>,
     ) -> Result<H256, String>
     {
         let block = self.assemble_new_fixed_block(
@@ -485,6 +486,7 @@ impl BlockGenerator {
             difficulty,
             adaptive,
             GENESIS_GAS_LIMIT,
+            pos_reference,
         )?;
         Ok(self.generate_block_impl(block))
     }
