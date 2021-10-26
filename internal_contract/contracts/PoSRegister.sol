@@ -28,7 +28,7 @@ interface PoSRegister {
      * @dev Query PoS account's lock info. Include "totalStakedVotes" and "totalUnlockedVotes"
      * @param identifier - PoS address
      */
-    function getVotes(bytes32 identifier) external view returns (uint, uint);
+    function getVotes(bytes32 identifier) external view returns (uint256, uint256);
 
     /**
      * @dev Query the PoW address binding with specified PoS address

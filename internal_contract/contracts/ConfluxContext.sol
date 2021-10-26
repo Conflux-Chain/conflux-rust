@@ -6,5 +6,5 @@ contract ConfluxContext {
      * @dev get the current epoch number
      * @return the current epoch number
      */
-    function epochNumber() public view returns (uint) {}
+    function epochNumber() public view returns (uint256) {}
 }
