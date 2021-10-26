@@ -224,4 +224,11 @@ impl LedgerBlockRW for ConsensusDB {
         }
         Ok(self.commit(batch)?)
     }
+
+    /// Get qc for not committed blocks.
+    fn get_qc_for_block(
+        &self, block_id: &HashValue,
+    ) -> Result<Option<QuorumCert>> {
+        Ok(self.db.get::<QCSchema>(block_id)?)
+    }
 }

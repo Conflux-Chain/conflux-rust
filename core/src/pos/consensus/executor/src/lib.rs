@@ -1287,7 +1287,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 // The signatures of each block is in the qc of the next block.
                 if i != 0 {
                     signatures_vec.push((
-                        Some(ledger_block.quorum_cert().certified_block().id()),
+                        ledger_block.quorum_cert().certified_block().id(),
                         ledger_block
                             .quorum_cert()
                             .ledger_info()
@@ -1296,12 +1296,19 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     ));
                 }
             }
-            signatures_vec
-                .push((None, ledger_info_with_sigs.signatures().clone()));
+            let last_block = blocks.last().expect("not empty").id();
+            if let Some(qc) = self.consensus_db.get_qc_for_block(&last_block)? {
+                signatures_vec
+                    .push((last_block, qc.ledger_info().signatures().clone()));
+            } else {
+                // If we are catching up, all QCs come from retrieved blocks, so
+                // we cannot get the QC that votes for the last
+                // block in an epoch as the QC is within another
+                // unknown child block.
+                assert!(ledger_info_with_sigs.ledger_info().ends_epoch());
+            }
             for (i, signatures) in signatures_vec.into_iter().enumerate() {
-                if let Some(id) = &signatures.0 {
-                    assert_eq!(*id, committed_blocks[i].hash);
-                }
+                assert_eq!(signatures.0, committed_blocks[i].hash);
                 committed_blocks[i].signatures = signatures.1;
             }
         } else {
