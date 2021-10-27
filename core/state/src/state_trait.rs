@@ -44,7 +44,9 @@ pub trait StateTrait: CheckpointTrait {
 
 pub trait StateOpsTrait {
     /// Calculate the secondary reward for the next block number.
-    fn bump_block_number_accumulate_interest(&mut self) -> U256;
+    fn bump_block_number_accumulate_interest(&mut self);
+
+    fn secondary_reward(&self) -> U256;
 
     /// Maintain `total_issued_tokens`.s
     fn add_total_issued(&mut self, v: U256);

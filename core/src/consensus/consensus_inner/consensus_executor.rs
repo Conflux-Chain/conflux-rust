@@ -1184,11 +1184,15 @@ impl ConsensusExecutionHandler {
         drop(prefetch_join_handles);
 
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
+
         let mut epoch_receipts = Vec::with_capacity(epoch_blocks.len());
         let mut to_pending = Vec::new();
         let mut block_number = start_block_number;
         let mut last_block_hash =
             pivot_block.block_header.parent_hash().clone();
+        let last_block_header =
+            &self.data_man.block_header_by_hash(&last_block_hash);
+
         for block in epoch_blocks.iter() {
             let mut tx_exec_error_messages =
                 Vec::with_capacity(block.transactions.len());
@@ -1198,10 +1202,17 @@ impl ConsensusExecutionHandler {
                 block.hash(),
                 block.transactions.len()
             );
-            let pos_view_number = pivot_block
-                .block_header
-                .pos_reference()
-                .and_then(|ref id| self.pos_verifier.get_pos_view(id));
+
+            let pos_id = last_block_header
+                .as_ref()
+                .and_then(|header| header.pos_reference().as_ref());
+            let pos_view_number =
+                pos_id.and_then(|id| self.pos_verifier.get_pos_view(id));
+            let pivot_decision_epoch = pos_id
+                .and_then(|id| self.pos_verifier.get_pivot_decision(id))
+                .and_then(|hash| self.data_man.block_header_by_hash(&hash))
+                .map(|header| header.height());
+
             let mut env = Env {
                 number: block_number,
                 author: block.block_header.author().clone(),
@@ -1212,13 +1223,16 @@ impl ConsensusExecutionHandler {
                 gas_limit: U256::from(block.block_header.gas_limit()),
                 epoch_height: pivot_block.block_header.height(),
                 pos_view: pos_view_number,
+                finalized_epoch: pivot_decision_epoch,
                 transaction_epoch_bound: self
                     .verification_config
                     .transaction_epoch_bound,
             };
             let spec = self.machine.spec(env.number);
-            let secondary_reward =
+            if !spec.cip43_contract {
                 state.bump_block_number_accumulate_interest();
+            }
+            let secondary_reward = state.secondary_reward();
             state.inc_distributable_pos_interest(env.number)?;
             initialize_internal_contract_accounts(
                 state,
@@ -1768,9 +1782,15 @@ impl ConsensusExecutionHandler {
         }
         let best_block_header = best_block_header.unwrap();
         let block_height = best_block_header.height() + 1;
-        let pos_view = best_block_header
-            .pos_reference()
-            .and_then(|ref id| self.pos_verifier.get_pos_view(id));
+
+        let pos_id = best_block_header.pos_reference().as_ref();
+        let pos_view_number =
+            pos_id.and_then(|id| self.pos_verifier.get_pos_view(id));
+        let pivot_decision_epoch = pos_id
+            .and_then(|id| self.pos_verifier.get_pivot_decision(id))
+            .and_then(|hash| self.data_man.block_header_by_hash(&hash))
+            .map(|header| header.height());
+
         let start_block_number = match self.data_man.get_epoch_execution_context(epoch_id) {
             Some(v) => v.start_block_number + epoch_size as u64,
             None => bail!("cannot obtain the execution context. Database is potentially corrupted!"),
@@ -1827,7 +1847,8 @@ impl ConsensusExecutionHandler {
             last_hash: epoch_id.clone(),
             gas_limit: tx.gas.clone(),
             epoch_height: block_height,
-            pos_view,
+            pos_view: pos_view_number,
+            finalized_epoch: pivot_decision_epoch,
             transaction_epoch_bound: self
                 .verification_config
                 .transaction_epoch_bound,
