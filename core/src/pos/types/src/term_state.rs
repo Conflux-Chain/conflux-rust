@@ -245,13 +245,13 @@ impl ElectingHeap {
 
     pub fn add_node(&mut self, hash: HashValue, node_id: ElectionNodeID) {
         let is_not_full_set = self.0.len() < TERM_MAX_SIZE;
+        self.1.insert(node_id.node_id.addr.clone());
         if self
             .0
             .peek()
             .map_or(true, |(max_value, _)| is_not_full_set || hash < *max_value)
         {
             self.0.push((hash, node_id.clone()));
-            self.1.insert(node_id.node_id.addr.clone());
             if self.0.len() > TERM_MAX_SIZE {
                 self.0.pop();
             }
