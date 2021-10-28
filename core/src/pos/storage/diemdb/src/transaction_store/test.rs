@@ -35,19 +35,19 @@ proptest! {
         let ledger_version = txns.len() as Version - 1;
         for (ver, txn) in txns.iter().enumerate() {
             prop_assert_eq!(store.get_transaction(ver as Version).unwrap(), txn.clone());
-            let user_txn = txn
-                .as_signed_user_txn()
-                .expect("All should be user transactions here.");
-            prop_assert_eq!(
-                store
-                    .lookup_transaction_by_account(
-                        user_txn.sender(),
-                        user_txn.hash(),
-                        ledger_version
-                    )
-                    .unwrap(),
-                Some(ver as Version)
-            );
+            // let user_txn = txn
+            //     .as_signed_user_txn()
+            //     .expect("All should be user transactions here.");
+            // prop_assert_eq!(
+            //     store
+            //         .lookup_transaction_by_account(
+            //             user_txn.sender(),
+            //             user_txn.hash(),
+            //             ledger_version
+            //         )
+            //         .unwrap(),
+            //     Some(ver as Version)
+            // );
         }
 
         prop_assert!(store.get_transaction(ledger_version + 1).is_err());

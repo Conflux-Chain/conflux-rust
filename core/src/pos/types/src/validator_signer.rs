@@ -22,7 +22,7 @@ use std::convert::TryFrom;
 /// ValidatorSigner associates an author with public and private keys with
 /// helpers for signing and validating. This struct can be used for all signing
 /// operations including block and network signing, respectively.
-#[cfg_attr(any(test, feature = "fuzzing"), derive(Clone))]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(Clone, Debug))]
 pub struct ValidatorSigner {
     author: AccountAddress,
     private_key: ConsensusPrivateKey,
