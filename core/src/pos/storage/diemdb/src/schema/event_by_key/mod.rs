@@ -27,6 +27,8 @@ use std::{convert::TryFrom, mem::size_of};
 
 define_schema!(EventByKeySchema, Key, Value, EVENT_BY_KEY_CF_NAME);
 
+// FIXME(lpl): This only keeps the latest events. It needs redesign or can be
+// removed.
 type Key = EventKey;
 
 type Index = u64;

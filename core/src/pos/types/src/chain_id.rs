@@ -60,8 +60,6 @@ impl NamedChain {
     }
 }
 
-/// Note: u7 in a u8 is uleb-compatible, and any usage of this should be aware
-/// that this field maybe updated to be uleb64 in the future
 #[derive(Clone, Copy, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct ChainId(u64);
 
@@ -167,8 +165,8 @@ mod test {
     fn test_chain_id_from_str() {
         assert!(ChainId::from_str("").is_err());
         assert!(ChainId::from_str("0").is_err());
-        assert!(ChainId::from_str("256").is_err());
-        assert!(ChainId::from_str("255255").is_err());
+        // 2^64 overflows.
+        assert!(ChainId::from_str("18446744073709551616").is_err());
         assert_eq!(ChainId::from_str("TESTING").unwrap(), ChainId::test());
         assert_eq!(ChainId::from_str("255").unwrap(), ChainId::new(255));
     }

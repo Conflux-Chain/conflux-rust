@@ -1196,9 +1196,8 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 if vote_count.vote_count == 0 {
                     pos_state_to_commit.force_retire_node(&node)?;
                 } else {
-                    vote_count.total_votes = verifier
-                        .get_voting_power(node)
-                        .unwrap_or(0);
+                    vote_count.total_votes =
+                        verifier.get_voting_power(node).unwrap_or(0);
                     if vote_count.total_votes == 0 {
                         diem_warn!("Node {:?} has voted for epoch {} without voting power.",
                             node,
