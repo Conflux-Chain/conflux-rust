@@ -82,63 +82,6 @@ fn test_program_canonical_serialization_example() {
 }
 
 #[test]
-fn test_raw_transaction_with_a_program_canonical_serialization_example() {
-    let input = RawTransaction::new_script(
-        AccountAddress::new([
-            0x3a, 0x24, 0xa6, 0x1e, 0x05, 0xd1, 0x29, 0xca, 0xce, 0x9e, 0x0e,
-            0xfc, 0x8b, 0xc9, 0xe3, 0x38, 0x3a, 0x24, 0xa6, 0x1e, 0x05, 0xd1,
-            0x29, 0xca, 0xce, 0x9e, 0x0e, 0xfc, 0x8b, 0xc9, 0xe3, 0x38,
-        ]),
-        get_common_program(),
-        86400,
-        ChainId::test(),
-    );
-
-    let expected_output = vec![
-        0x3a, 0x24, 0xa6, 0x1e, 0x05, 0xd1, 0x29, 0xca, 0xce, 0x9e, 0x0e, 0xfc,
-        0x8b, 0xc9, 0xe3, 0x38, 0x3a, 0x24, 0xa6, 0x1e, 0x05, 0xd1, 0x29, 0xca,
-        0xce, 0x9e, 0x0e, 0xfc, 0x8b, 0xc9, 0xe3, 0x38, 0, 0, 0, 0, 0, 0, 0, 1,
-        4, 109, 111, 118, 101, 0, 1, 1, 239, 190, 173, 222, 13, 208, 254, 202,
-        16, 39, 0, 0, 0, 0, 0, 0, 32, 78, 0, 0, 0, 0, 0, 0, 3, 88, 85, 83, 128,
-        81, 1, 0, 0, 0, 0, 0, 4,
-    ];
-
-    let actual_output = to_bytes(&input).unwrap();
-    assert_eq!(expected_output, actual_output);
-}
-
-#[test]
-fn test_raw_transaction_with_a_write_set_canonical_serialization_example() {
-    let input = RawTransaction::new_write_set(
-        AccountAddress::new([
-            0xc3, 0x39, 0x8a, 0x59, 0x9a, 0x6f, 0x3b, 0x9f, 0x30, 0xb6, 0x35,
-            0xaf, 0x29, 0xf2, 0xba, 0x04, 0xc3, 0x39, 0x8a, 0x59, 0x9a, 0x6f,
-            0x3b, 0x9f, 0x30, 0xb6, 0x35, 0xaf, 0x29, 0xf2, 0xba, 0x04,
-        ]),
-        get_common_write_set(),
-        ChainId::test(),
-    );
-
-    let expected_output = vec![
-        195, 57, 138, 89, 154, 111, 59, 159, 48, 182, 53, 175, 41, 242, 186, 4,
-        195, 57, 138, 89, 154, 111, 59, 159, 48, 182, 53, 175, 41, 242, 186, 4,
-        32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 167, 29, 118, 250, 162, 210, 213,
-        195, 34, 78, 195, 212, 29, 235, 41, 57, 167, 29, 118, 250, 162, 210,
-        213, 195, 34, 78, 195, 212, 29, 235, 41, 57, 33, 1, 33, 125, 166, 198,
-        179, 225, 159, 24, 37, 207, 178, 103, 109, 174, 204, 227, 191, 61, 224,
-        60, 242, 102, 71, 199, 141, 240, 11, 55, 27, 37, 204, 151, 0, 196, 198,
-        63, 128, 199, 75, 17, 38, 62, 66, 30, 191, 132, 134, 164, 227, 196,
-        198, 63, 128, 199, 75, 17, 38, 62, 66, 30, 191, 132, 134, 164, 227, 9,
-        1, 33, 125, 166, 198, 179, 225, 159, 24, 1, 4, 202, 254, 208, 13, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 88, 85, 83, 255, 255,
-        255, 255, 255, 255, 255, 255, 4,
-    ];
-
-    let actual_output = to_bytes(&input).unwrap();
-    assert_eq!(expected_output, actual_output);
-}
-
-#[test]
 fn test_transaction_argument_address_canonical_serialization_example() {
     let input = TransactionArgument::Address(AccountAddress::new([
         0x2c, 0x25, 0x99, 0x17, 0x85, 0x34, 0x3b, 0x23, 0xae, 0x07, 0x3a, 0x50,
