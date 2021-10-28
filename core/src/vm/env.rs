@@ -47,8 +47,10 @@ pub struct Env {
     pub accumulated_gas_used: U256,
     /// The epoch height.
     pub epoch_height: u64,
-    /// Is PoS enabled,
+    /// PoS view number.
     pub pos_view: Option<u64>,
+    /// Finalized epoch number by PoS view.
+    pub finalized_epoch: Option<u64>,
     /// The transaction_epoch_bound used to verify if a transaction has
     /// expired.
     pub transaction_epoch_bound: u64,

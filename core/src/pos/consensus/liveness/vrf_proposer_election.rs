@@ -87,7 +87,8 @@ impl ProposerElection for VrfProposer {
         // TODO(lpl): Unify seed computation and avoid duplicate computation
         // with `gen_vrf_nonce_and_proof`.
         let mut round_seed = self.current_seed.lock().clone();
-        round_seed.extend_from_slice(&round.to_be_bytes());
+        let leader_round = (round + 1) / 3;
+        round_seed.extend_from_slice(&leader_round.to_be_bytes());
         let vrf_output = self
             .vrf_private_key
             .compute(round_seed.as_slice())

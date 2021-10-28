@@ -263,10 +263,12 @@ impl LedgerStore {
                 Some(self.get_tree_state(latest_version + 1, latest_txn_info)?),
             )
         };
+        diem_trace!("get_pos_state: start");
         let pos_state = self.get_pos_state(
             &latest_ledger_info.ledger_info().consensus_block_id(),
         )?;
 
+        diem_trace!("get_startup_info: ends");
         Ok(Some(StartupInfo::new(
             latest_ledger_info,
             latest_epoch_state_if_not_in_li,

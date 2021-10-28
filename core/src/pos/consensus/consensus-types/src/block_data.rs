@@ -128,7 +128,10 @@ impl BlockData {
 
     pub fn vrf_round_seed(&self, seed: &[u8]) -> Vec<u8> {
         let mut round_seed = seed.to_vec();
-        round_seed.extend_from_slice(&self.round.to_be_bytes());
+        // Make 3 continuous rounds have the same leader.
+        // Round 0 has no leader, so we use "round+1" here.
+        let leader_round = (self.round + 1) / 3;
+        round_seed.extend_from_slice(&leader_round.to_be_bytes());
         round_seed
     }
 

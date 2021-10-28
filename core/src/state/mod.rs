@@ -302,14 +302,17 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     for StateGeneric<StateDbStorage>
 {
     /// Calculate the secondary reward for the next block number.
-    fn bump_block_number_accumulate_interest(&mut self) -> U256 {
+    fn bump_block_number_accumulate_interest(&mut self) {
         assert!(self.world_statistics_checkpoints.get_mut().is_empty());
-        // Stop issuing interest for staking.
-        // self.world_statistics.accumulate_interest_rate =
-        //     self.world_statistics.accumulate_interest_rate
-        //         * (*INTEREST_RATE_PER_BLOCK_SCALE +
-        //           self.world_statistics.interest_rate_per_block)
-        //         / *INTEREST_RATE_PER_BLOCK_SCALE;
+        self.world_statistics.accumulate_interest_rate =
+            self.world_statistics.accumulate_interest_rate
+                * (*INTEREST_RATE_PER_BLOCK_SCALE
+                    + self.world_statistics.interest_rate_per_block)
+                / *INTEREST_RATE_PER_BLOCK_SCALE;
+    }
+
+    fn secondary_reward(&self) -> U256 {
+        assert!(self.world_statistics_checkpoints.read().is_empty());
         let secondary_reward = self.world_statistics.total_storage_tokens
             * self.world_statistics.interest_rate_per_block
             / *INTEREST_RATE_PER_BLOCK_SCALE;
