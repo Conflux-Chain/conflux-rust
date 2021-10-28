@@ -809,12 +809,12 @@ impl RpcImpl {
 
     fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
-        adaptive: bool, difficulty: Option<u64>,
+        adaptive: bool, difficulty: Option<u64>, pos_reference: Option<H256>,
     ) -> RpcResult<H256>
     {
         info!(
-            "RPC Request: generate_fixed_block({:?}, {:?}, {:?}, {:?})",
-            parent_hash, referee, num_txs, difficulty
+            "RPC Request: generate_fixed_block({:?}, {:?}, {:?}, {:?}, {:?})",
+            parent_hash, referee, num_txs, difficulty, pos_reference,
         );
         Ok(self.block_gen.generate_fixed_block(
             parent_hash,
@@ -822,6 +822,7 @@ impl RpcImpl {
             num_txs,
             difficulty.unwrap_or(0),
             adaptive,
+            pos_reference,
         )?)
     }
 
@@ -1601,7 +1602,7 @@ impl TestRpc for TestRpcImpl {
             fn get_pivot_chain_and_weight(&self, height_range: Option<(u64, u64)>) -> JsonRpcResult<Vec<(H256, U256)>>;
             fn get_executed_info(&self, block_hash: H256) -> JsonRpcResult<(H256, H256)> ;
             fn generate_fixed_block(
-                &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>)
+                &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>, pos_reference: Option<H256>)
                 -> JsonRpcResult<H256>;
             fn generate_one_block_with_direct_txgen(
                 &self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize, num_txs_erc20: usize)
