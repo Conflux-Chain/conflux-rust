@@ -1156,7 +1156,13 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     .unwrap();
                 diem_trace!("count vote for block {:?}", block);
                 if block.quorum_cert().ledger_info().signatures().len() == 0 {
-                    // parent is round-0 virtual block and has not voters.
+                    // parent is round-0 virtual block and has not voters, so we
+                    // just add `leader_count` and break the loop.
+                    if let Some(author) = block.author() {
+                        let leader_status =
+                            elected.get_mut(&author).expect("in epoch state");
+                        leader_status.leader_count += 1;
+                    }
                     break;
                 }
                 if let Some(author) = block.author() {
