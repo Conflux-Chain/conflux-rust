@@ -148,7 +148,7 @@ impl BackupHandler {
     /// Gets the epoch, commited version, and synced version of the DB.
     pub fn get_db_state(&self) -> Result<Option<DbState>> {
         self.ledger_store
-            .get_startup_info()?
+            .get_startup_info(false)?
             .map(|s| {
                 Ok(DbState {
                     epoch: s.get_epoch_state().epoch,
