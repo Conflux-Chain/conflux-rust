@@ -342,7 +342,7 @@ impl PersistentLivenessStorage for StorageWriteProxy {
     fn recover_from_ledger(&self) -> LedgerRecoveryData {
         let startup_info = self
             .diem_db
-            .get_startup_info()
+            .get_startup_info(true)
             .expect("unable to read ledger info from storage")
             .expect("startup info is None");
 
@@ -387,7 +387,7 @@ impl PersistentLivenessStorage for StorageWriteProxy {
         // find the block corresponding to storage latest ledger info
         let startup_info = self
             .diem_db
-            .get_startup_info()
+            .get_startup_info(true)
             .expect("unable to read ledger info from storage")
             .expect("startup info is None");
         diem_debug!("startup_info={:?}", startup_info);

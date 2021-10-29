@@ -228,7 +228,9 @@ impl LedgerStore {
         Accumulator::get_frozen_subtree_hashes(self, num_transactions)
     }
 
-    pub fn get_startup_info(&self) -> Result<Option<StartupInfo>> {
+    pub fn get_startup_info(
+        &self, need_pos_state: bool,
+    ) -> Result<Option<StartupInfo>> {
         // Get the latest ledger info. Return None if not bootstrapped.
         let latest_ledger_info = match self.get_latest_ledger_info_option() {
             Some(x) => x,
@@ -264,9 +266,13 @@ impl LedgerStore {
             )
         };
         diem_trace!("get_pos_state: start");
-        let pos_state = self.get_pos_state(
-            &latest_ledger_info.ledger_info().consensus_block_id(),
-        )?;
+        let pos_state = if need_pos_state {
+            self.get_pos_state(
+                &latest_ledger_info.ledger_info().consensus_block_id(),
+            )?
+        } else {
+            PosState::new_empty()
+        };
 
         diem_trace!("get_startup_info: ends");
         Ok(Some(StartupInfo::new(

@@ -667,8 +667,12 @@ impl DbReader for DiemDB {
         })
     }
 
-    fn get_startup_info(&self) -> Result<Option<StartupInfo>> {
-        gauged_api("get_startup_info", || self.ledger_store.get_startup_info())
+    fn get_startup_info(
+        &self, need_pos_state: bool,
+    ) -> Result<Option<StartupInfo>> {
+        gauged_api("get_startup_info", || {
+            self.ledger_store.get_startup_info(need_pos_state)
+        })
     }
 
     /// Returns a transaction that is the `seq_num`-th one associated with the

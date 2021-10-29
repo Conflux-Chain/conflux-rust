@@ -78,7 +78,7 @@ impl ExecutorProxy {
     {
         // TODO(lpl): Double check the `None` case here.
         let on_chain_configs = if let Ok(Some(startup_info)) =
-            storage.get_startup_info()
+            storage.get_startup_info(false)
         {
             let epoch_state = startup_info.latest_epoch_state.or(startup_info
                 .latest_ledger_info
@@ -194,7 +194,7 @@ impl ExecutorProxy {
 impl ExecutorProxyTrait for ExecutorProxy {
     fn get_local_storage_state(&self) -> Result<SyncState, Error> {
         let storage_info =
-            self.storage.get_startup_info().map_err(|error| {
+            self.storage.get_startup_info(false).map_err(|error| {
                 Error::UnexpectedError(format!(
                     "Failed to get startup info from storage: {}",
                     error
