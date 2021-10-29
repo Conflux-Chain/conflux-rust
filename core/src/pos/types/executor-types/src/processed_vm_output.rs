@@ -180,4 +180,8 @@ impl ProcessedVMOutput {
     pub fn replace_pos_state(&mut self, new_pos_state: PosState) {
         self.executed_trees.pos_state = new_pos_state;
     }
+
+    pub fn set_pos_state_skipped(&mut self) {
+        self.executed_trees.set_pos_state_skipped(true);
+    }
 }

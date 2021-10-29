@@ -329,6 +329,10 @@ impl ExecutedTrees {
             PosState::new_empty(),
         )
     }
+
+    pub fn set_pos_state_skipped(&mut self, skipped: bool) {
+        self.pos_state.set_skipped(skipped)
+    }
 }
 
 pub struct ProofReader {

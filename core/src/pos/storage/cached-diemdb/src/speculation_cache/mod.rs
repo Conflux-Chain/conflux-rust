@@ -192,7 +192,7 @@ impl SpeculationCache {
     pub fn synced_trees(&self) -> &ExecutedTrees { &self.synced_trees }
 
     pub fn update_block_tree_root(
-        &mut self, committed_trees: ExecutedTrees,
+        &mut self, mut committed_trees: ExecutedTrees,
         committed_ledger_info: &LedgerInfo, committed_txns: Vec<Transaction>,
         reconfig_events: Vec<ContractEvent>,
     )
@@ -210,6 +210,7 @@ impl SpeculationCache {
                     .original_reconfiguration_block_id(committed_ledger_info.consensus_block_id()),
                 "Updated with a new root block as a virtual block of reconfiguration block"
             );
+            committed_trees.set_pos_state_skipped(false);
             id
         } else {
             let id = committed_ledger_info.consensus_block_id();
