@@ -385,10 +385,15 @@ impl<NodeRefT: NodeRefTrait> CompactedChildrenTable<NodeRefT> {
     }
 
     pub fn to_ref(&self) -> ChildrenTableRef<NodeRefT> {
+        debug_assert!(!self.table_ptr.is_null() || self.children_count == 0);
         ChildrenTableRef {
             table: unsafe {
                 slice::from_raw_parts(
-                    self.table_ptr,
+                    if self.table_ptr.is_null() {
+                        NonNull::dangling().as_ptr()
+                    } else {
+                        self.table_ptr
+                    },
                     self.children_count.into(),
                 )
             },
@@ -862,6 +867,6 @@ use std::{
     fmt::*,
     marker::PhantomData,
     mem::{self, MaybeUninit},
-    ptr::null_mut,
+    ptr::{null_mut, NonNull},
     slice,
 };

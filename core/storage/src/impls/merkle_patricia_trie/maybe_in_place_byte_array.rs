@@ -2,7 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::{marker::PhantomData, ptr::null_mut, slice};
+use std::{
+    marker::PhantomData,
+    ptr::{null_mut, NonNull},
+    slice,
+};
 
 /// Use FieldsOffsetMaybeInPlaceByteArrayMemoryManager and macro
 /// make_parallel_field_maybe_in_place_byte_array_memory_manager to manage
@@ -129,11 +133,27 @@ impl MaybeInPlaceByteArray {
     }
 
     unsafe fn ptr_slice(&self, size: usize) -> &[u8] {
-        slice::from_raw_parts(self.ptr, size)
+        debug_assert!(!self.ptr.is_null() || size == 0);
+        slice::from_raw_parts(
+            if self.ptr.is_null() {
+                NonNull::dangling().as_ptr()
+            } else {
+                self.ptr
+            },
+            size,
+        )
     }
 
     unsafe fn ptr_slice_mut(&mut self, size: usize) -> &mut [u8] {
-        slice::from_raw_parts_mut(self.ptr, size)
+        debug_assert!(!self.ptr.is_null() || size == 0);
+        slice::from_raw_parts_mut(
+            if self.ptr.is_null() {
+                NonNull::dangling().as_ptr()
+            } else {
+                self.ptr
+            },
+            size,
+        )
     }
 
     pub fn get_slice_mut(&mut self, size: usize) -> &mut [u8] {
