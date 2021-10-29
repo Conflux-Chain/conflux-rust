@@ -126,62 +126,64 @@ impl EventStore {
         Ok((event, proof))
     }
 
-    fn get_event_by_key(
-        &self, event_key: &EventKey, seq_num: u64, ledger_version: Version,
-    ) -> Result<ContractEvent> {
-        let (version, index) =
-            self.lookup_event_by_key(event_key, seq_num, ledger_version)?;
-        self.get_event_by_version_and_index(version, index)
-    }
+    // fn get_event_by_key(
+    //     &self, event_key: &EventKey, seq_num: u64, ledger_version: Version,
+    // ) -> Result<ContractEvent> {
+    //     let (version, index) =
+    //         self.lookup_event_by_key(event_key, seq_num, ledger_version)?;
+    //     self.get_event_by_version_and_index(version, index)
+    // }
 
-    /// Given `event_key` and `start_seq_num`, returns events identified by
-    /// transaction version and index among all events emitted by the same
-    /// transaction. Result won't contain records with a transaction version
-    /// > `ledger_version` and is in ascending order.
-    pub fn lookup_events_by_key(
-        &self, event_key: &EventKey, start_seq_num: u64, limit: u64,
-        ledger_version: u64,
-    ) -> Result<
-        Vec<(
-            Version, // transaction version it belongs to
-            u64,     // index among events for the same transaction
-        )>,
-    >
-    {
-        let mut iter =
-            self.db.iter::<EventByKeySchema>(ReadOptions::default())?;
-        iter.seek(event_key)?;
+    // /// Given `event_key` and `start_seq_num`, returns events identified by
+    // /// transaction version and index among all events emitted by the same
+    // /// transaction. Result won't contain records with a transaction version
+    // /// > `ledger_version` and is in ascending order.
+    // pub fn lookup_events_by_key(
+    //     &self, event_key: &EventKey, start_seq_num: u64, limit: u64,
+    //     ledger_version: u64,
+    // ) -> Result<
+    //     Vec<(
+    //         Version, // transaction version it belongs to
+    //         u64,     // index among events for the same transaction
+    //     )>,
+    // >
+    // {
+    //     let mut iter =
+    //         self.db.iter::<EventByKeySchema>(ReadOptions::default())?;
+    //     iter.seek(event_key)?;
+    //
+    //     let mut result = Vec::new();
+    //     let mut cur_seq = 0;
+    //     for res in iter.take(limit as usize) {
+    //         let (path, (ver, idx)) = res?;
+    //         if path != *event_key || ver > ledger_version {
+    //             break;
+    //         }
+    //         if cur_seq >= start_seq_num {
+    //             result.push((ver, idx));
+    //         }
+    //         cur_seq += 1;
+    //     }
+    //
+    //     Ok(result)
+    // }
 
-        let mut result = Vec::new();
-        let mut cur_seq = start_seq_num;
-        for res in iter.take(limit as usize) {
-            let (path, (ver, idx)) = res?;
-            if path != *event_key || ver > ledger_version {
-                break;
-            }
-            result.push((ver, idx));
-            cur_seq += 1;
-        }
-
-        Ok(result)
-    }
-
-    fn lookup_event_by_key(
-        &self, event_key: &EventKey, seq_num: u64, ledger_version: Version,
-    ) -> Result<(Version, u64)> {
-        let indices =
-            self.lookup_events_by_key(event_key, seq_num, 1, ledger_version)?;
-        if indices.is_empty() {
-            return Err(DiemDbError::NotFound(format!(
-                "Event {} of seq num {}.",
-                event_key, seq_num
-            ))
-            .into());
-        }
-        let (version, index) = indices[0];
-
-        Ok((version, index))
-    }
+    // fn lookup_event_by_key(
+    //     &self, event_key: &EventKey, seq_num: u64, ledger_version: Version,
+    // ) -> Result<(Version, u64)> {
+    //     let indices =
+    //         self.lookup_events_by_key(event_key, seq_num, 1,
+    // ledger_version)?;     if indices.is_empty() {
+    //         return Err(DiemDbError::NotFound(format!(
+    //             "Event {} of seq num {}.",
+    //             event_key, seq_num
+    //         ))
+    //         .into());
+    //     }
+    //     let (version, index) = indices[0];
+    //
+    //     Ok((version, index))
+    // }
 
     /// Save contract events yielded by the transaction at `version` and return
     /// root hash of the event accumulator formed by these events.

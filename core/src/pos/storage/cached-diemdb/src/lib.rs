@@ -33,7 +33,7 @@ impl CachedDiemDB {
     pub fn new(db: DbReaderWriter) -> Self {
         let startup_info = db
             .reader
-            .get_startup_info()
+            .get_startup_info(true)
             .expect("Shouldn't fail")
             .expect("DB not bootstrapped.");
 
@@ -85,7 +85,7 @@ impl CachedDiemDB {
         let startup_info = self
             .db
             .reader
-            .get_startup_info()?
+            .get_startup_info(true)?
             .ok_or_else(|| format_err!("DB not bootstrapped."))?;
         *(self.cache.lock()) =
             SpeculationCache::new_with_startup_info(startup_info);
@@ -140,7 +140,6 @@ impl CachedDiemDB {
             initial_nodes,
             initial_committee,
             genesis_pivot_decision,
-            true,
         );
         Self {
             db,

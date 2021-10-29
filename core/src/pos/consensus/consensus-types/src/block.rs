@@ -175,7 +175,7 @@ impl Block {
     pub fn new_for_testing(
         id: HashValue, block_data: BlockData,
         signature: Option<ConsensusSignature>,
-        vrf_proof: Option<ConsensusVRFProof>,
+        vrf_proof: Option<(u64, ConsensusVRFProof)>,
     ) -> Self
     {
         Block {

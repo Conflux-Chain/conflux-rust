@@ -55,7 +55,9 @@ impl DbReader for MockDbReader {
         unimplemented!()
     }
 
-    fn get_startup_info(&self) -> Result<Option<StartupInfo>> {
+    fn get_startup_info(
+        &self, _need_pos_state: bool,
+    ) -> Result<Option<StartupInfo>> {
         unimplemented!()
     }
 

@@ -36,14 +36,14 @@ impl Diemsum {
     pub fn get_startup_info(&self) -> Result<StartupInfo> {
         self.db
             .ledger_store
-            .get_startup_info()?
+            .get_startup_info(false)?
             .ok_or_else(|| format_err!("DB is empty"))
     }
 
     pub fn get_committed_version(&self) -> Result<Version> {
         Ok(self
             .db
-            .get_startup_info()?
+            .get_startup_info(false)?
             .ok_or_else(|| format_err!("No committed ledger info found."))?
             .latest_ledger_info
             .ledger_info()

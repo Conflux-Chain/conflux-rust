@@ -302,7 +302,6 @@ where V: VMExecutor
         let mut pivot_decision = None;
         let mut new_pos_state = parent_trees.pos_state().clone();
         let parent_pivot_decision = new_pos_state.pivot_decision().clone();
-        new_pos_state.set_catch_up_mode(catch_up_mode);
         for vm_output in vm_outputs.clone().into_iter() {
             for event in vm_output.events() {
                 // check for pivot block selection.
@@ -1010,7 +1009,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 "reconfig_descendant_block_received"
             );
 
-            let output = ProcessedVMOutput::new(
+            let mut output = ProcessedVMOutput::new(
                 vec![],
                 parent_output.executed_trees().clone(),
                 parent_output.epoch_state().clone(),
@@ -1018,6 +1017,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 // same as the parent.
                 parent_output.pivot_block().clone(),
             );
+            output.set_pos_state_skipped();
 
             let parent_accu = parent_output.executed_trees().txn_accumulator();
             let state_compute_result = output.compute_result(
@@ -1266,14 +1266,14 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
         let mut committed_blocks = Vec::new();
         if ledger_info_with_sigs.ledger_info().epoch() != 0 {
             let mut signatures_vec = Vec::new();
-            let first_view =
-                pos_state_to_commit.current_view() - blocks.len() as u64 + 1;
             for (i, b) in blocks.iter().enumerate() {
                 let ledger_block = self
                     .consensus_db
                     .get_ledger_block(&b.id())
                     .unwrap()
                     .unwrap();
+                let view =
+                    b.output().executed_trees().pos_state().current_view();
                 committed_blocks.push(CommittedBlock {
                     hash: b.id(),
                     epoch: ledger_block.epoch(),
@@ -1285,7 +1285,12 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     timestamp: ledger_block.timestamp_usecs(),
                     // Set the signatures after the loop.
                     signatures: Default::default(),
-                    view: first_view + i as u64,
+                    view,
+                    is_skipped: b
+                        .output()
+                        .executed_trees()
+                        .pos_state()
+                        .skipped(),
                 });
                 // The signatures of each block is in the qc of the next block.
                 if i != 0 {
@@ -1332,6 +1337,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     .timestamp_usecs(),
                 signatures: ledger_info_with_sigs.signatures().clone(),
                 view: 1,
+                is_skipped: false,
             });
         }
         for (txn, txn_data) in blocks.iter().flat_map(|block| {
