@@ -487,7 +487,11 @@ pub struct PosState {
     node_map_hint: HashMap<View, HashSet<AccountAddress>>,
     unlock_event_hint: HashSet<AccountAddress>,
 
-    catch_up_mode: bool,
+    /// If `skipped` is `true`, this PosState belongs to a block following a
+    /// reconfiguration block, so this block is not executed and the
+    /// PosState is the same as its parent. These skipped blocks have the
+    /// same view as their parents and should not be saved as `CommittedBlock`.
+    skipped: bool,
 }
 
 impl Debug for PosState {
@@ -507,7 +511,7 @@ impl PosState {
     pub fn new(
         initial_seed: Vec<u8>, initial_nodes: Vec<(NodeID, u64)>,
         initial_committee: Vec<(AccountAddress, u64)>,
-        genesis_pivot_decision: PivotBlockDecision, catch_up_mode: bool,
+        genesis_pivot_decision: PivotBlockDecision,
     ) -> Self
     {
         let mut node_map = HashMap::new();
@@ -562,7 +566,7 @@ impl PosState {
             pivot_decision: genesis_pivot_decision,
             node_map_hint: Default::default(),
             unlock_event_hint: Default::default(),
-            catch_up_mode,
+            skipped: false,
         };
         let (verifier, vrf_seed) = pos_state.get_committee_at(0).unwrap();
         pos_state.epoch_state = EpochState {
@@ -591,13 +595,11 @@ impl PosState {
                 block_hash: Default::default(),
                 height: 0,
             },
-            catch_up_mode: false,
+            skipped: false,
         }
     }
 
-    pub fn set_catch_up_mode(&mut self, catch_up_mode: bool) {
-        self.catch_up_mode = catch_up_mode;
-    }
+    pub fn set_skipped(&mut self, skipped: bool) { self.skipped = skipped; }
 
     pub fn set_pivot_decision(&mut self, pivot_decision: PivotBlockDecision) {
         self.pivot_decision = pivot_decision;
@@ -862,7 +864,7 @@ impl PosState {
 
     pub fn current_view(&self) -> u64 { self.current_view }
 
-    pub fn catch_up_mode(&self) -> bool { self.catch_up_mode }
+    pub fn skipped(&self) -> bool { self.skipped }
 
     pub fn next_evicted_term(&mut self) -> BTreeMap<H256, u64> {
         let candy_rewards = std::mem::take(&mut self.term_list.candy_rewards);

@@ -140,7 +140,6 @@ impl CachedDiemDB {
             initial_nodes,
             initial_committee,
             genesis_pivot_decision,
-            true,
         );
         Self {
             db,

@@ -514,9 +514,13 @@ impl LedgerStore {
     pub fn put_committed_block(
         &self, block: &CommittedBlock, cs: &mut ChangeSet,
     ) -> Result<()> {
+        diem_trace!("put_committed_block {:?}", block);
         cs.batch.put::<CommittedBlockSchema>(&block.hash, block)?;
-        cs.batch
-            .put::<CommittedBlockByViewSchema>(&block.view, &block.hash)
+        if !block.is_skipped {
+            cs.batch
+                .put::<CommittedBlockByViewSchema>(&block.view, &block.hash)?;
+        }
+        Ok(())
     }
 
     pub fn get_committed_block_by_hash(

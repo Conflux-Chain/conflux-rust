@@ -529,6 +529,14 @@ class RpcClient:
     def pos_status(self):
         return self.node.pos_getStatus()
 
+    def pos_get_block(self, block):
+        if isinstance(block, str) and len(block) == 34:
+            return self.node.pos_getBlockByHash(block)
+        else:
+            if isinstance(block, int):
+                block = int_to_hex(block)
+            return self.node.pos_getBlockByNumber(block)
+
 
 def stake_tx_data(staking_value: int):
     staking_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/Staking.json"), "r").read())

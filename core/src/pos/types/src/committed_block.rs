@@ -22,4 +22,5 @@ pub struct CommittedBlock {
     pub timestamp: u64,
     pub signatures: BTreeMap<AccountAddress, ConsensusSignature>,
     pub view: u64,
+    pub is_skipped: bool,
 }
