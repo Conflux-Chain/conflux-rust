@@ -500,9 +500,11 @@ class RpcClient:
     def filter_trace(self, filter: dict):
         return self.node.trace_filter(filter)
 
-    def wait_for_pos_register(self, priv_key=None, stake_value=2_000_000, voting_power=20_000):
+    def wait_for_pos_register(self, priv_key=None, stake_value=2_000_000, voting_power=None):
         if priv_key is None:
             priv_key = self.node.pow_sk
+        if voting_power is None:
+            voting_power = stake_value // default_config["POS_VOTE_COUNT"]
         address = eth_utils.encode_hex(priv_to_addr(priv_key))
         initial_tx = self.new_tx(receiver=address, value=(stake_value + 20) * 10 ** 18)
         self.send_tx(initial_tx, wait_for_receipt=True)
