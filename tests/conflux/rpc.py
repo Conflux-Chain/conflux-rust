@@ -537,6 +537,15 @@ class RpcClient:
                 block = int_to_hex(block)
             return self.node.pos_getBlockByNumber(block)
 
+    def pos_proposal_timeout(self):
+        return self.node.pos_trigger_timeout("proposal")
+
+    def pos_local_timeout(self):
+        return self.node.pos_trigger_timeout("local")
+
+    def pos_new_round_timeout(self):
+        return self.node.pos_trigger_timeout("new_round")
+
 
 def stake_tx_data(staking_value: int):
     staking_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/Staking.json"), "r").read())

@@ -32,4 +32,10 @@ pub enum TestCommand {
         /// will not be appended automatically.
         payload: Vec<TransactionPayload>,
     },
+    /// Trigger propose_timeout
+    ProposalTimeOut,
+    /// Trigger local_timeout
+    LocalTimeout,
+    /// Trigger new_round_timeout
+    NewRoundTimeout,
 }

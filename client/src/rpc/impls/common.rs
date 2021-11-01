@@ -723,6 +723,19 @@ impl RpcImpl {
                 RpcError::internal_error().into()
             })
     }
+
+    pub fn pos_trigger_timeout(&self, timeout_type: String) -> RpcResult<()> {
+        if !self.network.is_test_mode() {
+            // Reject force vote if test RPCs are enabled in a mainnet node,
+            // because this may cause staked CFXs locked
+            // permanently.
+            bail!(RpcError::internal_error())
+        }
+        self.pos_handler.trigger_timeout(timeout_type).map_err(|e| {
+            warn!("pos_trigger_timeout: err={:?}", e);
+            RpcError::internal_error().into()
+        })
+    }
 }
 
 // Debug RPC implementation

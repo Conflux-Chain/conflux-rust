@@ -384,6 +384,21 @@ impl PosHandler {
             })
             .map_err(|e| anyhow::anyhow!("try_send: err={:?}", e))
     }
+
+    pub fn trigger_timeout(&self, timeout_type: String) -> anyhow::Result<()> {
+        let command = match timeout_type.as_str() {
+            "local" => TestCommand::LocalTimeout,
+            "proposal" => TestCommand::ProposalTimeOut,
+            "new_round" => TestCommand::NewRoundTimeout,
+            _ => anyhow::bail!("Unknown timeout type"),
+        };
+        self.test_command_sender
+            .lock()
+            .as_mut()
+            .ok_or(anyhow::anyhow!("Pos not initialized!"))?
+            .try_send(command)
+            .map_err(|e| anyhow::anyhow!("try_send: err={:?}", e))
+    }
 }
 
 pub struct PosConnection {

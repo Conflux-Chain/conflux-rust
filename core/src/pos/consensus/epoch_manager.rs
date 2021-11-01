@@ -817,6 +817,33 @@ impl EpochManager {
                 parent_id,
                 payload,
             } => self.force_propose(round, parent_id, payload).await,
+            TestCommand::ProposalTimeOut => {
+                let round = match self.processor_mut() {
+                    RoundProcessor::Normal(p) => {
+                        p.round_state().current_round()
+                    }
+                    _ => anyhow::bail!("RoundManager not started yet"),
+                };
+                self.process_proposal_timeout(round).await
+            }
+            TestCommand::LocalTimeout => {
+                let round = match self.processor_mut() {
+                    RoundProcessor::Normal(p) => {
+                        p.round_state().current_round()
+                    }
+                    _ => anyhow::bail!("RoundManager not started yet"),
+                };
+                self.process_local_timeout(round).await
+            }
+            TestCommand::NewRoundTimeout => {
+                let round = match self.processor_mut() {
+                    RoundProcessor::Normal(p) => {
+                        p.round_state().current_round()
+                    }
+                    _ => anyhow::bail!("RoundManager not started yet"),
+                };
+                self.process_new_round_timeout(round).await
+            }
         }
     }
 
