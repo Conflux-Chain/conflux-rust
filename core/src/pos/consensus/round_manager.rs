@@ -38,7 +38,7 @@ use diem_types::{
     ledger_info::LedgerInfoWithSignatures,
     transaction::{
         ConflictSignature, DisputePayload, ElectionPayload, RawTransaction,
-        SignedTransaction,
+        SignedTransaction, TransactionPayload,
     },
     validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
     validator_verifier::ValidatorVerifier,
@@ -1308,7 +1308,51 @@ impl RoundManager {
         Ok(())
     }
 
-    pub fn force_propose(&self, pivot_decision: PivotBlockDecision) -> Result<()> {
-
+    /// Force the node to propose a block without changing its consensus
+    /// state. The node will still propose a valid block independently if that's
+    /// not disabled.
+    pub async fn force_propose(
+        &mut self, round: Round, parent_block_id: HashValue,
+        payload: Vec<TransactionPayload>, private_key: &ConsensusPrivateKey,
+    ) -> Result<()>
+    {
+        let parent_qc = self
+            .block_store
+            .get_quorum_cert_for_block(parent_block_id)
+            .ok_or(anyhow::anyhow!(
+                "no QC for parent: {:?}",
+                parent_block_id
+            ))?;
+        let block_data = self
+            .proposal_generator
+            .as_ref()
+            .ok_or(anyhow::anyhow!("proposal generator is None"))?
+            .force_propose(round, parent_qc, payload)?;
+        let signature = private_key.sign(&block_data);
+        let mut signed_proposal =
+            Block::new_proposal_from_block_data_and_signature(
+                block_data, signature, None,
+            );
+        // TODO: This vrf_output is incorrect if we want to propose a block in
+        // another epoch.
+        signed_proposal.set_vrf_nonce_and_proof(
+            self.proposer_election
+                .gen_vrf_nonce_and_proof(signed_proposal.block_data())
+                .ok_or(anyhow::anyhow!(
+                    "The proposer should not propose in this round"
+                ))?,
+        );
+        // TODO: The sync_info here may not be consistent with
+        // `signed_proposal`.
+        let proposal_msg =
+            ProposalMsg::new(signed_proposal, self.block_store.sync_info());
+        diem_debug!("force_propose: broadcast {:?}", proposal_msg);
+        self.network
+            .broadcast(
+                ConsensusMsg::ProposalMsg(Box::new(proposal_msg)),
+                vec![],
+            )
+            .await;
+        Ok(())
     }
 }

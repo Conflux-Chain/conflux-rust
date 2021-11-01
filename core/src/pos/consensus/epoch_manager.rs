@@ -54,7 +54,7 @@ use diem_types::{
     epoch_change::EpochChangeProof,
     epoch_state::EpochState,
     on_chain_config::{OnChainConfigPayload, ValidatorSet},
-    transaction::SignedTransaction,
+    transaction::{SignedTransaction, TransactionPayload},
 };
 use futures::{
     channel::{mpsc, oneshot},
@@ -812,6 +812,11 @@ impl EpochManager {
             TestCommand::ForceVoteProposal(block_id) => {
                 self.force_vote_proposal(block_id).await
             }
+            TestCommand::ForcePropose {
+                round,
+                parent_id,
+                payload,
+            } => self.force_propose(round, parent_id, payload).await,
         }
     }
 
@@ -833,6 +838,30 @@ impl EpochManager {
         match self.processor_mut() {
             RoundProcessor::Normal(p) => {
                 p.force_vote_proposal(block_id, author, &bls_key).await
+            }
+            _ => anyhow::bail!("RoundManager not started yet"),
+        }
+    }
+
+    async fn force_propose(
+        &mut self, round: Round, parent_block_id: HashValue,
+        payload: Vec<TransactionPayload>,
+    ) -> anyhow::Result<()>
+    {
+        let bls_key = self
+            .config
+            .safety_rules
+            .test
+            .as_ref()
+            .expect("test config set")
+            .consensus_key
+            .as_ref()
+            .expect("private key set in pos")
+            .private_key();
+        match self.processor_mut() {
+            RoundProcessor::Normal(p) => {
+                p.force_propose(round, parent_block_id, payload, &bls_key)
+                    .await
             }
             _ => anyhow::bail!("RoundManager not started yet"),
         }

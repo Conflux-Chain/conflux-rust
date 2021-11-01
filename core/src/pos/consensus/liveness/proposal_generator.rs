@@ -15,11 +15,10 @@ use consensus_types::{
     common::{Author, Round},
     quorum_cert::QuorumCert,
 };
-use consensus_types::common::Payload;
 use diem_infallible::Mutex;
 use diem_logger::{debug as diem_debug, error as diem_error};
 use diem_types::{
-    transaction::{RawTransaction, TransactionPayload},
+    transaction::{RawTransaction, SignedTransaction, TransactionPayload},
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
         ConsensusVRFPublicKey,
@@ -293,9 +292,30 @@ impl ProposalGenerator {
 
 /// The functions used in tests to construct attack cases
 impl ProposalGenerator {
-    pub fn force_propose(&self, payload: Vec<TransactionPayload>) {
-        let payload = payload.into_iter().map(|p| {
-            let raw_tx = RawTransaction::new(self.author, p, -, )
-        })
+    pub fn force_propose(
+        &self, round: Round, parent_qc: Arc<QuorumCert>,
+        payload: Vec<TransactionPayload>,
+    ) -> anyhow::Result<BlockData>
+    {
+        let payload = payload
+            .into_iter()
+            .map(|p| {
+                let raw_tx = RawTransaction::new(
+                    self.author,
+                    p,
+                    u64::MAX,
+                    Default::default(),
+                );
+                raw_tx.sign(&self.private_key).map(|tx| tx.into_inner())
+            })
+            .collect::<anyhow::Result<Vec<SignedTransaction>>>()?;
+
+        Ok(BlockData::new_proposal(
+            payload,
+            self.author,
+            round,
+            self.time_service.get_current_timestamp().as_micros() as u64,
+            parent_qc.as_ref().clone(),
+        ))
     }
 }

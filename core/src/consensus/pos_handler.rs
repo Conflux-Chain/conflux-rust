@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use once_cell::sync::OnceCell;
 
-use cfx_types::{H256, U256};
+use cfx_types::{H256, U256, U64};
 use diem_config::{config::NodeConfig, keys::ConfigKey};
 use diem_crypto::HashValue;
 use diem_types::{
@@ -39,6 +39,7 @@ use crate::{
 use diem_config::config::SafetyRulesTestConfig;
 use diem_types::{
     account_address::from_consensus_public_key, chain_id::ChainId,
+    transaction::TransactionPayload,
 };
 use diemdb::DiemDB;
 use network::NetworkService;
@@ -364,6 +365,23 @@ impl PosHandler {
             .try_send(TestCommand::ForceVoteProposal(h256_to_diem_hash(
                 &block_id,
             )))
+            .map_err(|e| anyhow::anyhow!("try_send: err={:?}", e))
+    }
+
+    pub fn force_propose(
+        &self, round: U64, parent_block_id: H256,
+        payload: Vec<TransactionPayload>,
+    ) -> anyhow::Result<()>
+    {
+        self.test_command_sender
+            .lock()
+            .as_mut()
+            .ok_or(anyhow::anyhow!("Pos not initialized!"))?
+            .try_send(TestCommand::ForcePropose {
+                round: round.as_u64(),
+                parent_id: h256_to_diem_hash(&parent_block_id),
+                payload,
+            })
             .map_err(|e| anyhow::anyhow!("try_send: err={:?}", e))
     }
 }

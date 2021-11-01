@@ -39,7 +39,10 @@ use cfxcore::{
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
-use diem_types::account_address::{from_consensus_public_key, AccountAddress};
+use diem_types::{
+    account_address::{from_consensus_public_key, AccountAddress},
+    transaction::TransactionPayload,
+};
 use network::{
     node_table::{Node, NodeEndpoint, NodeEntry, NodeId},
     throttling::{self, THROTTLING_SERVICE},
@@ -700,6 +703,25 @@ impl RpcImpl {
             warn!("force_vote_proposal: err={:?}", e);
             RpcError::internal_error().into()
         })
+    }
+
+    pub fn pos_force_propose(
+        &self, round: U64, parent_block_id: H256,
+        payload: Vec<TransactionPayload>,
+    ) -> RpcResult<()>
+    {
+        if !self.network.is_test_mode() {
+            // Reject force vote if test RPCs are enabled in a mainnet node,
+            // because this may cause staked CFXs locked
+            // permanently.
+            bail!(RpcError::internal_error())
+        }
+        self.pos_handler
+            .force_propose(round, parent_block_id, payload)
+            .map_err(|e| {
+                warn!("pos_force_propose: err={:?}", e);
+                RpcError::internal_error().into()
+            })
     }
 }
 

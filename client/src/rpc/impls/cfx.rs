@@ -20,6 +20,7 @@ use cfxcore::{
 };
 use cfxcore_accounts::AccountProvider;
 use delegate::delegate;
+use diem_types::transaction::TransactionPayload;
 use jsonrpc_core::{BoxFuture, Error as JsonRpcError, Result as JsonRpcResult};
 use network::{
     node_table::{Node, NodeId},
@@ -1587,6 +1588,7 @@ impl TestRpc for TestRpcImpl {
             fn pos_retire_self(&self) -> JsonRpcResult<()>;
             fn pos_start(&self) -> JsonRpcResult<()>;
             fn pos_force_vote_proposal(&self, block_id: H256) -> JsonRpcResult<()>;
+            fn pos_force_propose(&self, round: U64, parent_block_id: H256, payload: Vec<TransactionPayload>) -> JsonRpcResult<()>;
         }
 
         to self.rpc_impl {
