@@ -1307,4 +1307,8 @@ impl RoundManager {
             .await;
         Ok(())
     }
+
+    pub fn force_propose(&self, pivot_decision: PivotBlockDecision) -> Result<()> {
+
+    }
 }

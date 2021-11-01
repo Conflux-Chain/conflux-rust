@@ -15,6 +15,7 @@ use consensus_types::{
     common::{Author, Round},
     quorum_cert::QuorumCert,
 };
+use consensus_types::common::Payload;
 use diem_infallible::Mutex;
 use diem_logger::{debug as diem_debug, error as diem_error};
 use diem_types::{
@@ -287,5 +288,14 @@ impl ProposalGenerator {
         );
 
         Ok(hqc)
+    }
+}
+
+/// The functions used in tests to construct attack cases
+impl ProposalGenerator {
+    pub fn force_propose(&self, payload: Vec<TransactionPayload>) {
+        let payload = payload.into_iter().map(|p| {
+            let raw_tx = RawTransaction::new(self.author, p, -, )
+        })
     }
 }
