@@ -165,9 +165,11 @@ impl Mempool {
                 }
                 TransactionPayload::Dispute(dispute_payload) => {
                     // TODO(lpl): Only dispute a node once.
-                    FakeVM::verify_dispute(dispute_payload)
-                        .then(|| ())
-                        .ok_or(anyhow::anyhow!("invalid dispute"))
+                    pos_state.validate_dispute(dispute_payload).and(
+                        FakeVM::verify_dispute(dispute_payload)
+                            .then(|| ())
+                            .ok_or(anyhow::anyhow!("invalid dispute")),
+                    )
                 }
                 _ => {
                     continue;

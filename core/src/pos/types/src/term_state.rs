@@ -91,6 +91,7 @@ mod incentives {
         / BONUS_VOTE_MAX_SIZE;
 }
 
+use crate::transaction::DisputePayload;
 use lock_status::NodeLockStatus;
 use std::collections::HashSet;
 
@@ -770,6 +771,16 @@ impl PosState {
         }
         // TODO(linxi): check voting power
         Ok(())
+    }
+
+    pub fn validate_dispute(
+        &self, dispute_payload: &DisputePayload,
+    ) -> Result<()> {
+        if self.node_map.contains_key(&dispute_payload.address) {
+            Ok(())
+        } else {
+            bail!("Unknown dispute node: {:?}", dispute_payload.address);
+        }
     }
 
     /// Return `(validator_set, term_seed)`.
