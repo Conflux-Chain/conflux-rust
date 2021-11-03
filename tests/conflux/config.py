@@ -18,6 +18,7 @@ default_config = dict(
     GENESIS_GAS_LIMIT=30_000_000,
     MAX_BLOCK_SIZE_IN_BYTES=200 * 1024,
     POS_GENESIS_BLOCK=b'\x00' * 32,
+    POS_VOTE_COUNT=1000,
 )
 
 default_conflux_conf = dict(

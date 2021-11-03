@@ -177,6 +177,13 @@ impl VMExecutor for FakeVM {
                             vec![update.to_event()]
                         }
                         TransactionPayload::Dispute(dispute) => {
+                            state_view
+                                .pos_state()
+                                .validate_dispute(dispute)
+                                .map_err(|e| {
+                                    diem_error!("dispute tx error: {:?}", e);
+                                    VMStatus::Error(StatusCode::CFX_INVALID_TX)
+                                })?;
                             if !Self::verify_dispute(dispute) {
                                 return Err(VMStatus::Error(
                                     StatusCode::CFX_INVALID_TX,

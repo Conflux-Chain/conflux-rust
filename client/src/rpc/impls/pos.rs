@@ -366,13 +366,34 @@ impl PosHandler {
                     signatures: vec![],
                 };
                 current_height += 1;
-                if let Some(qc) = qcs.get(&b.id()) {
-                    rpc_block.next_tx_number =
-                        U64::from(qc.commit_info().version());
-                    rpc_block.pivot_decision = qc
-                        .commit_info()
-                        .pivot_decision()
+                // Executed blocks are committed and pruned before ConsensusDB.
+                // If we get a block from ConsensusDB and it's pruned before we
+                // get the executed block here, its version and
+                // pivot decision would be missing.
+                // If this consensus block is not on a fork, its CommittedBlock
+                // should be accessible in this case.
+                if let Ok(executed_block) =
+                    self.pos_handler.cached_db().get_block(&b.id())
+                {
+                    let executed = executed_block.lock();
+                    if let Some(version) = executed.output().version() {
+                        rpc_block.next_tx_number = U64::from(version);
+                    }
+                    rpc_block.pivot_decision = executed
+                        .output()
+                        .pivot_block()
+                        .as_ref()
                         .map(|p| U64::from(p.height));
+                } else if let Ok(committed_block) = self
+                    .pos_handler
+                    .diem_db()
+                    .get_committed_block_by_hash(&b.id())
+                {
+                    rpc_block.next_tx_number = committed_block.version.into();
+                    rpc_block.pivot_decision =
+                        Some(committed_block.pivot_decision.height.into());
+                }
+                if let Some(qc) = qcs.get(&b.id()) {
                     let signatures = qc
                         .ledger_info()
                         .signatures()

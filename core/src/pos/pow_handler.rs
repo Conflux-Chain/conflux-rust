@@ -84,11 +84,17 @@ impl PowHandler {
         let start_epoch = pow_consensus
             .data_man
             .block_height_by_hash(&parent_decision)
-            .ok_or(anyhow!("parent decision block missing"))?;
+            .ok_or(anyhow!(
+                "parent decision block missing, hash={:?}",
+                parent_decision
+            ))?;
         let end_epoch = pow_consensus
             .data_man
             .block_height_by_hash(&me_decision)
-            .ok_or(anyhow!("new decision block missing"))?;
+            .ok_or(anyhow!(
+                "new decision block missing, hash={:?}",
+                me_decision
+            ))?;
         // start_epoch has been processed by parent.
         let from_epoch = (start_epoch + 1).into();
         let to_epoch = end_epoch.into();

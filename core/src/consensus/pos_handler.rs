@@ -36,6 +36,7 @@ use crate::{
     sync::ProtocolConfiguration,
     ConsensusGraph,
 };
+use cached_diemdb::CachedDiemDB;
 use diem_config::config::SafetyRulesTestConfig;
 use diem_types::{
     account_address::from_consensus_public_key, chain_id::ChainId,
@@ -81,6 +82,8 @@ pub trait PosInterface: Send + Sync {
     fn diem_db(&self) -> &Arc<DiemDB>;
 
     fn consensus_db(&self) -> &Arc<ConsensusDB>;
+
+    fn cached_db(&self) -> &Arc<CachedDiemDB>;
 }
 
 #[allow(unused)]
@@ -213,6 +216,7 @@ impl PosHandler {
         let pos_connection = PosConnection::new(
             diem_handler.diem_db.clone(),
             diem_handler.consensus_db.clone(),
+            diem_handler.cached_db.clone(),
         );
         diem_handler.pow_handler.initialize(consensus);
         if self.pos.set(Box::new(pos_connection)).is_err() {
@@ -346,6 +350,8 @@ impl PosHandler {
         self.pos().consensus_db()
     }
 
+    pub fn cached_db(&self) -> &Arc<CachedDiemDB> { self.pos().cached_db() }
+
     pub fn stop(&self) {
         self.network.lock().take();
         self.diem_handler.lock().take();
@@ -371,15 +377,19 @@ impl PosHandler {
 pub struct PosConnection {
     pos_storage: Arc<DiemDB>,
     consensus_db: Arc<ConsensusDB>,
+    pos_cache_db: Arc<CachedDiemDB>,
 }
 
 impl PosConnection {
     pub fn new(
         pos_storage: Arc<DiemDB>, consensus_db: Arc<ConsensusDB>,
-    ) -> Self {
+        pos_cache_db: Arc<CachedDiemDB>,
+    ) -> Self
+    {
         Self {
             pos_storage,
             consensus_db,
+            pos_cache_db,
         }
     }
 }
@@ -490,6 +500,8 @@ impl PosInterface for PosConnection {
     fn diem_db(&self) -> &Arc<DiemDB> { &self.pos_storage }
 
     fn consensus_db(&self) -> &Arc<ConsensusDB> { &self.consensus_db }
+
+    fn cached_db(&self) -> &Arc<CachedDiemDB> { &self.pos_cache_db }
 }
 
 pub struct PosConfiguration {
