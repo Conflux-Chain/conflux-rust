@@ -776,8 +776,15 @@ impl PosState {
     pub fn validate_dispute(
         &self, dispute_payload: &DisputePayload,
     ) -> Result<()> {
-        if self.node_map.contains_key(&dispute_payload.address) {
-            Ok(())
+        if let Some(node_status) = self.node_map.get(&dispute_payload.address) {
+            if node_status.lock_status.exempt_from_forfeit().is_none() {
+                Ok(())
+            } else {
+                bail!(
+                    "Dispute a forfeited node: {:?}",
+                    dispute_payload.address
+                );
+            }
         } else {
             bail!("Unknown dispute node: {:?}", dispute_payload.address);
         }
