@@ -71,6 +71,7 @@ pub struct DiemHandle {
     // pow handler
     pub pow_handler: Arc<PowHandler>,
     pub diem_db: Arc<DiemDB>,
+    pub cached_db: Arc<CachedDiemDB>,
     pub consensus_db: Arc<ConsensusDB>,
     pub tx_sender: mpsc::Sender<(
         SignedTransaction,
@@ -316,7 +317,7 @@ pub fn setup_pos_environment(
             consensus_to_mempool_sender,
             state_sync_client,
             diem_db.clone(),
-            db_with_cache,
+            db_with_cache.clone(),
             consensus_reconfig_events,
             own_pos_public_key.map_or_else(
                 || AccountAddress::random(),
@@ -336,6 +337,7 @@ pub fn setup_pos_environment(
         _state_sync_bootstrapper: state_sync_bootstrapper,
         _mempool: mempool,
         diem_db,
+        cached_db: db_with_cache,
         consensus_db,
         tx_sender: mp_client_sender,
     }
