@@ -98,11 +98,16 @@ impl PosHandler {
         let epoch_state = state.epoch_state();
         let block_number = state.current_view();
         let latest_voted = self.latest_voted().map(|b| U64::from(b.height));
+        let latest_tx_number = self
+            .block_by_number(BlockNumber::Num(U64::from(block_number)))
+            .map(|b| b.next_tx_number - 1)
+            .unwrap_or(U64::default());
         Status {
             epoch: U64::from(epoch_state.epoch),
             latest_committed: U64::from(block_number),
             pivot_decision: U64::from(decision.height),
             latest_voted,
+            latest_tx_number,
         }
     }
 
