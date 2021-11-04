@@ -7,7 +7,9 @@
 
 use consensus_types::common::Round;
 use diem_crypto::HashValue;
-use diem_types::transaction::TransactionPayload;
+use diem_types::{
+    block_info::PivotBlockDecision, transaction::TransactionPayload,
+};
 
 pub mod config_subscription;
 #[cfg(any(test, feature = "fuzzing"))]
@@ -38,4 +40,8 @@ pub enum TestCommand {
     LocalTimeout,
     /// Trigger new_round_timeout
     NewRoundTimeout,
+    /// Sign and broadcast a pivot decision transaction
+    BroadcastPivotDecision(PivotBlockDecision),
+    /// Sign and broadcast an election transaction with a target term
+    BroadcastElection(u64),
 }

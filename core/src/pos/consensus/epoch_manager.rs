@@ -51,6 +51,7 @@ use diem_logger::prelude::*;
 use diem_metrics::monitor;
 use diem_types::{
     account_address::AccountAddress,
+    block_info::PivotBlockDecision,
     epoch_change::EpochChangeProof,
     epoch_state::EpochState,
     on_chain_config::{OnChainConfigPayload, ValidatorSet},
@@ -844,6 +845,10 @@ impl EpochManager {
                 };
                 self.process_new_round_timeout(round).await
             }
+            TestCommand::BroadcastPivotDecision(decision) => {
+                self.force_sign_pivot_decision(decision).await
+            }
+            TestCommand::BroadcastElection(_) => todo!(),
         }
     }
 
@@ -889,6 +894,17 @@ impl EpochManager {
             RoundProcessor::Normal(p) => {
                 p.force_propose(round, parent_block_id, payload, &bls_key)
                     .await
+            }
+            _ => anyhow::bail!("RoundManager not started yet"),
+        }
+    }
+
+    async fn force_sign_pivot_decision(
+        &mut self, pivot_decision: PivotBlockDecision,
+    ) -> anyhow::Result<()> {
+        match self.processor_mut() {
+            RoundProcessor::Normal(p) => {
+                p.force_sign_pivot_decision(pivot_decision).await
             }
             _ => anyhow::bail!("RoundManager not started yet"),
         }

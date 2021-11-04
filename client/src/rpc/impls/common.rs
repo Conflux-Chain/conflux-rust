@@ -41,6 +41,7 @@ use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
 use diem_types::{
     account_address::{from_consensus_public_key, AccountAddress},
+    block_info::PivotBlockDecision,
     transaction::TransactionPayload,
 };
 use network::{
@@ -735,6 +736,26 @@ impl RpcImpl {
             warn!("pos_trigger_timeout: err={:?}", e);
             RpcError::internal_error().into()
         })
+    }
+
+    pub fn pos_force_sign_pivot_decision(
+        &self, block_hash: H256, height: u64,
+    ) -> RpcResult<()> {
+        if !self.network.is_test_mode() {
+            // Reject force vote if test RPCs are enabled in a mainnet node,
+            // because this may cause staked CFXs locked
+            // permanently.
+            bail!(RpcError::internal_error())
+        }
+        self.pos_handler
+            .force_sign_pivot_decision(PivotBlockDecision {
+                block_hash,
+                height,
+            })
+            .map_err(|e| {
+                warn!("pos_trigger_timeout: err={:?}", e);
+                RpcError::internal_error().into()
+            })
     }
 }
 

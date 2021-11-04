@@ -546,6 +546,9 @@ class RpcClient:
     def pos_new_round_timeout(self):
         return self.node.pos_trigger_timeout("new_round")
 
+    def pos_force_sign_pivot_decision(self, block_hash, height):
+        return self.node.pos_force_sign_pivot_decision(block_hash, height)
+
 
 def stake_tx_data(staking_value: int):
     staking_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/Staking.json"), "r").read())

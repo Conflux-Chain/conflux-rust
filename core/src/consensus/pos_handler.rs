@@ -38,8 +38,8 @@ use crate::{
 };
 use diem_config::config::SafetyRulesTestConfig;
 use diem_types::{
-    account_address::from_consensus_public_key, chain_id::ChainId,
-    transaction::TransactionPayload,
+    account_address::from_consensus_public_key, block_info::PivotBlockDecision,
+    chain_id::ChainId, transaction::TransactionPayload,
 };
 use diemdb::DiemDB;
 use network::NetworkService;
@@ -397,6 +397,17 @@ impl PosHandler {
             .as_mut()
             .ok_or(anyhow::anyhow!("Pos not initialized!"))?
             .try_send(command)
+            .map_err(|e| anyhow::anyhow!("try_send: err={:?}", e))
+    }
+
+    pub fn force_sign_pivot_decision(
+        &self, pivot_decision: PivotBlockDecision,
+    ) -> anyhow::Result<()> {
+        self.test_command_sender
+            .lock()
+            .as_mut()
+            .ok_or(anyhow::anyhow!("Pos not initialized!"))?
+            .try_send(TestCommand::BroadcastPivotDecision(pivot_decision))
             .map_err(|e| anyhow::anyhow!("try_send: err={:?}", e))
     }
 }

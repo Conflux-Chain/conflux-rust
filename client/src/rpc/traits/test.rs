@@ -141,4 +141,9 @@ pub trait TestRpc {
 
     #[rpc(name = "pos_trigger_timeout")]
     fn pos_trigger_timeout(&self, timeout_type: String) -> RpcResult<()>;
+
+    #[rpc(name = "pos_force_sign_pivot_decision")]
+    fn pos_force_sign_pivot_decision(
+        &self, block_hash: H256, height: u64,
+    ) -> RpcResult<()>;
 }

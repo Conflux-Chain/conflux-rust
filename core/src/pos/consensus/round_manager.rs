@@ -1355,4 +1355,28 @@ impl RoundManager {
             .await;
         Ok(())
     }
+
+    pub async fn force_sign_pivot_decision(
+        &mut self, pivot_decision: PivotBlockDecision,
+    ) -> anyhow::Result<()> {
+        let proposal_generator = self.proposal_generator.as_ref().ok_or(
+            anyhow::anyhow!("Non-validator cannot sign pivot decision"),
+        )?;
+        diem_info!("force_sign_pivot_decision: {:?}", pivot_decision);
+        // It's allowed for a node to sign conflict pivot decision,
+        // so we do not need to persist this signing event.
+        let raw_tx = RawTransaction::new_pivot_decision(
+            proposal_generator.author(),
+            pivot_decision,
+            self.chain_id,
+        );
+        let signed_tx =
+            raw_tx.sign(&proposal_generator.private_key)?.into_inner();
+        let (tx, rx) = oneshot::channel();
+        self.tx_sender.send((signed_tx, tx)).await?;
+        // TODO(lpl): Check if we want to wait here.
+        rx.await??;
+        diem_debug!("force_sign_pivot_decision sends");
+        Ok(())
+    }
 }
