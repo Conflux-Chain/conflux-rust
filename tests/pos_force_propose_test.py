@@ -23,9 +23,21 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
         clients = []
         for node in self.nodes:
             clients.append(RpcClient(node))
+
+        # Initialize pos_consensus_blocks
+        for _ in range(3):
+            for client in clients:
+                client.pos_local_timeout()
+            time.sleep(0.5)
+            for client in clients:
+                client.pos_new_round_timeout()
+            time.sleep(0.5)
+        wait_until(lambda: clients[0].pos_status() is not None)
+        wait_until(lambda: clients[0].pos_status()["latestCommitted"] is not None)
+
         chain_len = 1000
         chain1 = clients[0].generate_empty_blocks(chain_len)
-        pivot_decision_height = (chain_len - self.conf_parameters["pos_pivot_decision_defer_epoch_count"]) // 60 * 60
+        pivot_decision_height = (chain_len - int(self.conf_parameters["pos_pivot_decision_defer_epoch_count"])) // 60 * 60
         pivot_decision1 = chain1[pivot_decision_height]
         sync_blocks(self.nodes)
         for client in clients:
@@ -44,12 +56,14 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
         # Make node 0 to propose a block
         clients[0].pos_proposal_timeout()
         pos_blocks = clients[0].pos_get_consensus_blocks()
+        print(pos_blocks)
         proposal = None
         for b in pos_blocks:
-            if b["height"] == 2:
+            print(b["height"], b["round"])
+            if b["height"] == 4:
                 assert proposal is None
                 proposal = b
-        future_decision = b["pivot_decision"]
+        future_decision = proposal["pivotDecision"]
         two_decisions = set([pivot_decision1, pivot_decision2])
         two_decisions.remove(future_decision)
         assert_equal(len(two_decisions), 1)
@@ -68,7 +82,7 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
             time.sleep(0.5)
             for client in clients:
                 client.pos_new_round_timeout()
-        wait_until(lambda: clients[0].pos_status()["lastCommitted"] == "0x2")
+        wait_until(lambda: int(clients[0].pos_status()["pivotDecision"], 0) > 0)
         # Make new pos block referred and processed
         clients[0].generate_block_with_parent(parent)
         assert_equal(clients[0].block_by_epoch(int_to_hex(pivot_decision_height))["hash"], future_decision)
