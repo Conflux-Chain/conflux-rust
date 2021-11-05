@@ -297,7 +297,7 @@ impl StateObjectCache {
                         address,
                         &U256::zero(),
                         account_start_nonce,
-                    )?))
+                    )))
                 } else {
                     unreachable!(
                         "address does not already exist and is not a valid address. {:?}",

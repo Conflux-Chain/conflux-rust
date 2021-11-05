@@ -8,6 +8,7 @@ use cfx_types::{H256, U64};
 use jsonrpc_core::Error as RpcError;
 use primitives::filter::{LogFilter as PrimitiveFilter, LogFilterParams};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 const FILTER_BLOCK_HASH_LIMIT: usize = 128;
 
@@ -145,8 +146,16 @@ impl LogFilter {
         ) {
             // block hash filter
             (None, None, None, None, Some(_)) => {
+                let hashes = {
+                    let mut hash_set = HashSet::new();
+                    block_hashes
+                        .unwrap()
+                        .into_iter()
+                        .filter(|&p| hash_set.insert(p))
+                        .collect::<Vec<_>>()
+                };
                 Ok(PrimitiveFilter::BlockHashLogFilter {
-                    block_hashes: block_hashes.unwrap(),
+                    block_hashes: hashes,
                     params,
                 })
             }

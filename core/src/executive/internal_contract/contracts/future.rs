@@ -9,3 +9,6 @@ use cfx_types::Address;
 make_solidity_contract! {
     pub(super) struct PoS(POS_REGISTER_CONTRACT_ADDRESS, "placeholder");
 }
+make_solidity_contract! {
+    pub(super) struct AntiReentrancyConfig(ANTI_REENTRANCY_CONTRACT_ADDRESS, "placeholder");
+}

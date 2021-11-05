@@ -11,6 +11,7 @@ pub enum Api {
     Pubsub,
     Test,
     Trace,
+    TxPool,
 }
 
 impl FromStr for Api {
@@ -24,6 +25,7 @@ impl FromStr for Api {
             "pubsub" => Ok(Pubsub),
             "test" => Ok(Test),
             "trace" => Ok(Trace),
+            "txpool" => Ok(TxPool),
             _ => Err("Unknown api type".into()),
         }
     }
@@ -40,13 +42,21 @@ impl ApiSet {
     pub fn list_apis(&self) -> HashSet<Api> {
         match *self {
             ApiSet::List(ref apis) => apis.clone(),
-            ApiSet::All => {
-                [Api::Cfx, Api::Debug, Api::Pubsub, Api::Test, Api::Trace]
-                    .iter()
-                    .cloned()
-                    .collect()
-            }
-            ApiSet::Safe => [Api::Cfx, Api::Pubsub].iter().cloned().collect(),
+            ApiSet::All => [
+                Api::Cfx,
+                Api::Debug,
+                Api::Pubsub,
+                Api::Test,
+                Api::Trace,
+                Api::TxPool,
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+            ApiSet::Safe => [Api::Cfx, Api::Pubsub, Api::TxPool]
+                .iter()
+                .cloned()
+                .collect(),
         }
     }
 }
