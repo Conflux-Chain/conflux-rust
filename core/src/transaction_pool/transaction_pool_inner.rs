@@ -388,7 +388,7 @@ impl TransactionPoolInner {
     /// We will pick a sender who has maximum number of transactions which are
     /// garbage collectable. And if there is a tie, the one who has minimum
     /// timestamp will be picked.
-    fn collect_garbage(&mut self) {
+    pub fn collect_garbage(&mut self) {
         let count_before_gc = self.total_deferred();
         while self.is_full() && !self.garbage_collector.is_empty() {
             let victim = self.garbage_collector.top().unwrap().clone();
