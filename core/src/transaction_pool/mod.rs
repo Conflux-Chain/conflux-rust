@@ -346,7 +346,9 @@ impl TransactionPool {
                         continue;
                     }
                     passed_transactions.push(tx.clone());
-                    if !to_prop.contains_key(&tx.hash) {
+                    if !to_prop.contains_key(&tx.hash)
+                        && to_prop.len() < inner.capacity()
+                    {
                         to_prop.insert(tx.hash, tx);
                     }
                 }
