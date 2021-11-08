@@ -258,6 +258,9 @@ pub trait Cfx {
         &self, epoch_number: Option<EpochNumber>,
     ) -> JsonRpcResult<TokenSupplyInfo>;
 
+    #[rpc(name = "cfx_openedMethodGroups")]
+    fn opened_method_groups(&self) -> JsonRpcResult<Vec<String>>;
+
     //        /// Returns transaction at given block hash and index.
     //        #[rpc(name = "cfx_getTransactionByBlockHashAndIndex")]
     //        fn transaction_by_block_hash_and_index(&self, H256, Index) ->
