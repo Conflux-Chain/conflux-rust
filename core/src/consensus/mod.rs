@@ -42,11 +42,7 @@ use cfx_internal_common::ChainIdParams;
 use cfx_parameters::{
     consensus::*,
     consensus_internal::REWARD_EPOCH_COUNT,
-    rpc::{
-        GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
-        TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW,
-        TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM,
-    },
+    rpc::{GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_TRANSACTION_SAMPLE_SIZE},
 };
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::StateDb;
