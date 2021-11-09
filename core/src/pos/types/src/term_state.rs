@@ -91,6 +91,7 @@ mod incentives {
         / BONUS_VOTE_MAX_SIZE;
 }
 
+use crate::transaction::DisputePayload;
 use lock_status::NodeLockStatus;
 use std::collections::HashSet;
 
@@ -770,6 +771,23 @@ impl PosState {
         }
         // TODO(linxi): check voting power
         Ok(())
+    }
+
+    pub fn validate_dispute(
+        &self, dispute_payload: &DisputePayload,
+    ) -> Result<()> {
+        if let Some(node_status) = self.node_map.get(&dispute_payload.address) {
+            if node_status.lock_status.exempt_from_forfeit().is_none() {
+                Ok(())
+            } else {
+                bail!(
+                    "Dispute a forfeited node: {:?}",
+                    dispute_payload.address
+                );
+            }
+        } else {
+            bail!("Unknown dispute node: {:?}", dispute_payload.address);
+        }
     }
 
     /// Return `(validator_set, term_seed)`.

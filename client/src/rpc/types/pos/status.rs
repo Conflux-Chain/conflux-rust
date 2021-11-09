@@ -16,6 +16,8 @@ pub struct Status {
     pub pivot_decision: U64,
     ///
     pub latest_voted: Option<U64>,
+    ///
+    pub latest_tx_number: U64,
 }
 
 impl Default for Status {
@@ -25,6 +27,7 @@ impl Default for Status {
             latest_committed: U64::default(),
             pivot_decision: U64::default(),
             latest_voted: None,
+            latest_tx_number: U64::default(),
         }
     }
 }
