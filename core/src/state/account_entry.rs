@@ -761,6 +761,8 @@ impl OverlayAccount {
             Arc::make_mut(&mut self.storage_owner_lv1_write_cache)
                 .drain()
                 .collect();
+        let storage_owner_lv2_write_cache =
+            Arc::make_mut(self.storage_owner_lv2_write_cache.get_mut());
         for (k, current_owner_opt) in storage_owner_lv1_write_cache {
             // Get the owner of `k` before execution. If it is `None`, it means
             // the value of the key is zero before execution. Otherwise, the
@@ -783,8 +785,7 @@ impl OverlayAccount {
                 }
             }
             // Commit ownership change to `storage_owner_lv2_write_cache`.
-            Arc::make_mut(self.storage_owner_lv2_write_cache.get_mut())
-                .insert(k, current_owner_opt);
+            storage_owner_lv2_write_cache.insert(k, current_owner_opt);
         }
         assert!(self.storage_owner_lv1_write_cache.is_empty());
         Ok(())
@@ -795,6 +796,17 @@ impl OverlayAccount {
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()>
     {
+        // When committing an overlay account, the execution of an epoch has
+        // finished. In this case, all the checkpoints except the bottom one
+        // must be removed. (Each checkpoint is a mapping from addresses to
+        // overlay accounts.)
+        assert_eq!(Arc::strong_count(&self.storage_owner_lv1_write_cache), 1);
+        assert_eq!(
+            Arc::strong_count(&self.storage_owner_lv2_write_cache.read()),
+            1
+        );
+        assert_eq!(Arc::strong_count(&self.storage_value_write_cache), 1);
+
         if self.reset_storage() {
             state.recycle_storage(
                 vec![self.address],
@@ -803,10 +815,9 @@ impl OverlayAccount {
         }
 
         assert!(self.storage_owner_lv1_write_cache.is_empty());
-        let storage_owner_lv2_write_cache =
-            self.storage_owner_lv2_write_cache.get_mut();
 
-        assert_eq!(Arc::strong_count(&self.storage_value_write_cache), 1);
+        let storage_owner_lv2_write_cache =
+            &**self.storage_owner_lv2_write_cache.read();
         for (k, v) in Arc::make_mut(&mut self.storage_value_write_cache).drain()
         {
             let address_key =
