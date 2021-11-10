@@ -5,11 +5,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use consensus_types::common::Round;
+use consensus_types::{block::Block, common::Round};
 use diem_crypto::HashValue;
 use diem_types::{
     block_info::PivotBlockDecision, transaction::TransactionPayload,
 };
+use std::sync::mpsc;
 
 pub mod config_subscription;
 #[cfg(any(test, feature = "fuzzing"))]
@@ -44,4 +45,8 @@ pub enum TestCommand {
     BroadcastPivotDecision(PivotBlockDecision),
     /// Sign and broadcast an election transaction with a target term
     BroadcastElection(u64),
+
+    /// Read-only command
+    /// Get the chosen to-vote proposal
+    GetChosenProposal(mpsc::SyncSender<Option<Block>>),
 }

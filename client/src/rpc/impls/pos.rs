@@ -520,7 +520,7 @@ fn map_votes(list: &StatusList) -> Vec<VotePowerState> {
     ans
 }
 
-fn hash_value_to_h256(h: HashValue) -> H256 {
+pub fn hash_value_to_h256(h: HashValue) -> H256 {
     hexstr_to_h256(h.to_hex().as_str())
 }
 

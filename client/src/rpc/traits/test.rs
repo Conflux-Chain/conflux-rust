@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::types::{BlameInfo, Block, Bytes};
+use crate::rpc::types::pos::Block as PosBlock;
 use cfx_types::{H256, U256, U64};
 use cfxcore::PeerInfo;
 use diem_types::{
@@ -146,4 +147,7 @@ pub trait TestRpc {
     fn pos_force_sign_pivot_decision(
         &self, block_hash: H256, height: u64,
     ) -> RpcResult<()>;
+
+    #[rpc(name = "pos_get_chosen_proposal")]
+    fn pos_get_chosen_proposal(&self) -> RpcResult<Option<PosBlock>>;
 }

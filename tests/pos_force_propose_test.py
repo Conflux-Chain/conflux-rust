@@ -38,7 +38,7 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
         chain_len = 1000
         chain1 = clients[0].generate_empty_blocks(chain_len)
         pivot_decision_height = (chain_len - int(self.conf_parameters["pos_pivot_decision_defer_epoch_count"])) // 60 * 60
-        pivot_decision1 = chain1[pivot_decision_height]
+        pivot_decision1 = chain1[pivot_decision_height - 1]
         sync_blocks(self.nodes)
         for client in clients:
             client.pos_force_sign_pivot_decision(pivot_decision1, pivot_decision_height)
@@ -48,7 +48,7 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
             fork_parent = clients[0].generate_block_with_parent(fork_parent)
             chain2.append(fork_parent)
         sync_blocks(self.nodes)
-        pivot_decision2 = chain2[pivot_decision_height]
+        pivot_decision2 = chain2[pivot_decision_height - 1]
         for client in clients:
             client.pos_force_sign_pivot_decision(pivot_decision2, pivot_decision_height)
         # Wait for pivot decision to be received
@@ -57,17 +57,12 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
         for client in clients:
             client.pos_local_timeout()
         time.sleep(0.5)
-        clients[0].pos_proposal_timeout()
-        pos_blocks = clients[0].pos_get_consensus_blocks()
-        print(pos_blocks)
-        proposal = None
-        for b in pos_blocks:
-            print(b["height"], b["round"])
-            if b["height"] == "0x6":
-                assert proposal is None
-                proposal = b
-        future_decision = proposal["pivotDecision"]
+        clients[0].pos_new_round_timeout()
+        time.sleep(0.5)
+        print(clients[0].pos_get_chosen_proposal())
+        future_decision = clients[0].pos_get_chosen_proposal()["pivotDecision"]["blockHash"]
         two_decisions = set([pivot_decision1, pivot_decision2])
+        print(two_decisions, future_decision)
         two_decisions.remove(future_decision)
         assert_equal(len(two_decisions), 1)
         wrong_decision = two_decisions.pop()
@@ -85,9 +80,9 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
             time.sleep(0.5)
             for client in clients:
                 client.pos_new_round_timeout()
-        wait_until(lambda: int(clients[0].pos_status()["pivotDecision"], 0) > 0)
+        wait_until(lambda: int(clients[0].pos_status()["pivotDecision"]["height"], 0) > 0)
         # Make new pos block referred and processed
-        clients[0].generate_block_with_parent(parent)
+        clients[0].generate_empty_blocks(1)
         assert_equal(clients[0].block_by_epoch(int_to_hex(pivot_decision_height))["hash"], future_decision)
 
 

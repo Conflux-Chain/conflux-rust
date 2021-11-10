@@ -551,6 +551,9 @@ class RpcClient:
     def pos_force_sign_pivot_decision(self, block_hash, height):
         return self.node.pos_force_sign_pivot_decision(block_hash, height)
 
+    def pos_get_chosen_proposal(self):
+        return self.node.pos_get_chosen_proposal()
+
 
 def stake_tx_data(staking_value: int):
     staking_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/Staking.json"), "r").read())

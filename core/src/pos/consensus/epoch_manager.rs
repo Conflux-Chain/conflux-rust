@@ -38,7 +38,7 @@ use crate::pos::{
     mempool::SubmissionStatus,
     protocol::network_sender::NetworkSender,
 };
-use anyhow::{bail, ensure, Context};
+use anyhow::{anyhow, bail, ensure, Context};
 use channel::diem_channel;
 use consensus_types::{
     common::{Author, Round},
@@ -849,6 +849,13 @@ impl EpochManager {
                 self.force_sign_pivot_decision(decision).await
             }
             TestCommand::BroadcastElection(_) => todo!(),
+            TestCommand::GetChosenProposal(tx) => match self.processor_mut() {
+                RoundProcessor::Normal(p) => {
+                    let chosen = p.get_chosen_proposal()?;
+                    tx.send(chosen).map_err(|e| anyhow!("send: err={:?}", e))
+                }
+                _ => anyhow::bail!("RoundManager not started yet"),
+            },
         }
     }
 

@@ -1379,4 +1379,14 @@ impl RoundManager {
         diem_debug!("force_sign_pivot_decision sends");
         Ok(())
     }
+
+    pub fn get_chosen_proposal(&self) -> anyhow::Result<Option<Block>> {
+        // This takes out the candidate, so we need to insert it back if it's
+        // Some.
+        let chosen = self.proposer_election.choose_proposal_to_vote();
+        if let Some(chosen) = chosen.clone() {
+            self.proposer_election.set_proposal_candidate(chosen);
+        }
+        Ok(chosen)
+    }
 }

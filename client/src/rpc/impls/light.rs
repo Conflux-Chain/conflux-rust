@@ -38,7 +38,7 @@ use crate::{
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
-            Account as RpcAccount, AccountPendingInfo,
+            pos::Block as PosBlock, Account as RpcAccount, AccountPendingInfo,
             AccountPendingTransactions, BlameInfo, Block as RpcBlock,
             BlockHashOrEpochNumber, Bytes, CallRequest,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
@@ -1148,6 +1148,7 @@ impl TestRpc for TestRpcImpl {
             fn pos_force_propose(&self, round: U64, parent_block_id: H256, payload: Vec<TransactionPayload>) -> JsonRpcResult<()>;
             fn pos_trigger_timeout(&self, timeout_type: String) -> JsonRpcResult<()>;
             fn pos_force_sign_pivot_decision(&self, block_hash: H256, height: u64) -> JsonRpcResult<()>;
+            fn pos_get_chosen_proposal(&self) -> JsonRpcResult<Option<PosBlock>>;
         }
     }
 

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{mpsc, Arc};
 
 use once_cell::sync::OnceCell;
 
@@ -37,6 +37,7 @@ use crate::{
     ConsensusGraph,
 };
 use cached_diemdb::CachedDiemDB;
+use consensus_types::block::Block;
 use diem_config::config::SafetyRulesTestConfig;
 use diem_types::{
     account_address::from_consensus_public_key, block_info::PivotBlockDecision,
@@ -415,6 +416,17 @@ impl PosHandler {
             .ok_or(anyhow::anyhow!("Pos not initialized!"))?
             .try_send(TestCommand::BroadcastPivotDecision(pivot_decision))
             .map_err(|e| anyhow::anyhow!("try_send: err={:?}", e))
+    }
+
+    pub fn get_chosen_proposal(&self) -> anyhow::Result<Option<Block>> {
+        let (tx, rx) = mpsc::sync_channel(1);
+        self.test_command_sender
+            .lock()
+            .as_mut()
+            .ok_or(anyhow::anyhow!("Pos not initialized!"))?
+            .try_send(TestCommand::GetChosenProposal(tx))
+            .map_err(|e| anyhow::anyhow!("try_send: err={:?}", e))?;
+        rx.recv().map_err(|e| anyhow::anyhow!("recv: err={:?}", e))
     }
 }
 
