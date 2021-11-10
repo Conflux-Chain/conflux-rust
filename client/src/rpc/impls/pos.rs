@@ -9,7 +9,7 @@ use crate::{
         traits::pos::Pos,
         types::{
             pos::{
-                tx_type, Account, Block, BlockNumber, CommitteeState,
+                tx_type, Account, Block, BlockNumber, CommitteeState, Decision,
                 EpochReward, NodeLockStatus, Reward, RpcCommittee, RpcTermData,
                 RpcTransactionStatus, RpcTransactionType, Signature, Status,
                 Transaction, VotePowerState,
@@ -105,7 +105,7 @@ impl PosHandler {
         Status {
             epoch: U64::from(epoch_state.epoch),
             latest_committed: U64::from(block_number),
-            pivot_decision: U64::from(decision.height),
+            pivot_decision: Decision::from(decision),
             latest_voted,
             latest_tx_number,
         }
@@ -260,7 +260,7 @@ impl PosHandler {
                     miner: b.miner.map(|m| H256::from(m.to_u8())),
                     parent_hash: hash_value_to_h256(b.parent_hash),
                     timestamp: U64::from(b.timestamp),
-                    pivot_decision: Some(U64::from(b.pivot_decision.height)),
+                    pivot_decision: Some(Decision::from(&b.pivot_decision)),
                     signatures: vec![],
                 };
                 // get signatures info
@@ -388,7 +388,7 @@ impl PosHandler {
                         .output()
                         .pivot_block()
                         .as_ref()
-                        .map(|p| U64::from(p.height));
+                        .map(|p| Decision::from(p));
                 } else if let Ok(committed_block) = self
                     .pos_handler
                     .diem_db()
@@ -396,7 +396,7 @@ impl PosHandler {
                 {
                     rpc_block.next_tx_number = committed_block.version.into();
                     rpc_block.pivot_decision =
-                        Some(committed_block.pivot_decision.height.into());
+                        Some(Decision::from(&committed_block.pivot_decision));
                 }
                 if let Some(qc) = qcs.get(&b.id()) {
                     let signatures = qc

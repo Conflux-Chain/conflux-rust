@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use super::Decision;
 use cfx_types::{H256, U64};
 use serde::Serialize;
 
@@ -25,7 +26,7 @@ pub struct Block {
     ///
     pub timestamp: U64,
     ///
-    pub pivot_decision: Option<U64>,
+    pub pivot_decision: Option<Decision>,
     ///
     pub signatures: Vec<Signature>,
 }
