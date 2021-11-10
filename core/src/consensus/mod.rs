@@ -409,7 +409,7 @@ impl ConsensusGraph {
                 total_block_gas_limit +=
                     block.block_header.gas_limit().as_u64();
                 for tx in block.transactions.iter() {
-                    // add the tx.gas to total_tx_gas_limit event it is packed
+                    // add the tx.gas to total_tx_gas_limit even it is packed
                     // multiple times because these tx all
                     // will occupy block's gas space
                     total_tx_gas_limit += tx.transaction.gas.as_u64();
