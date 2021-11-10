@@ -25,7 +25,7 @@ pub struct Block {
     ///
     pub timestamp: U64,
     ///
-    pub pivot_decision: Option<U64>,
+    pub pivot_decision: Option<H256>,
     ///
     pub signatures: Vec<Signature>,
 }

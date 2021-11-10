@@ -260,7 +260,7 @@ impl PosHandler {
                     miner: b.miner.map(|m| H256::from(m.to_u8())),
                     parent_hash: hash_value_to_h256(b.parent_hash),
                     timestamp: U64::from(b.timestamp),
-                    pivot_decision: Some(U64::from(b.pivot_decision.height)),
+                    pivot_decision: Some(b.pivot_decision.block_hash),
                     signatures: vec![],
                 };
                 // get signatures info
@@ -340,13 +340,6 @@ impl PosHandler {
             })
             .map(|(_, b)| b)
             .collect();
-        // find first block's height
-        let committed_block = self
-            .pos_handler
-            .diem_db()
-            .get_committed_block_by_hash(&blocks[0].id())
-            .ok()?;
-        let mut current_height = committed_block.view;
         let latest_epoch_state = self
             .pos_handler
             .diem_db()
@@ -360,7 +353,6 @@ impl PosHandler {
             .map(|b| {
                 let mut rpc_block = Block {
                     hash: hash_value_to_h256(b.id()),
-                    height: U64::from(current_height),
                     epoch: U64::from(b.epoch()),
                     round: U64::from(b.round()),
                     next_tx_number: Default::default(),
@@ -368,9 +360,9 @@ impl PosHandler {
                     parent_hash: hash_value_to_h256(b.parent_id()),
                     timestamp: U64::from(b.timestamp_usecs()),
                     pivot_decision: Default::default(),
+                    height: Default::default(),
                     signatures: vec![],
                 };
-                current_height += 1;
                 // Executed blocks are committed and pruned before ConsensusDB.
                 // If we get a block from ConsensusDB and it's pruned before we
                 // get the executed block here, its version and
@@ -388,7 +380,14 @@ impl PosHandler {
                         .output()
                         .pivot_block()
                         .as_ref()
-                        .map(|p| U64::from(p.height));
+                        .map(|p|p.block_hash);
+                    rpc_block.height = U64::from(
+                        executed
+                            .output()
+                            .executed_trees()
+                            .pos_state()
+                            .current_view(),
+                    );
                 } else if let Ok(committed_block) = self
                     .pos_handler
                     .diem_db()
@@ -396,7 +395,8 @@ impl PosHandler {
                 {
                     rpc_block.next_tx_number = committed_block.version.into();
                     rpc_block.pivot_decision =
-                        Some(committed_block.pivot_decision.height.into());
+                        Some(committed_block.pivot_decision.block_hash);
+                    rpc_block.height = U64::from(committed_block.view);
                 }
                 if let Some(qc) = qcs.get(&b.id()) {
                     let signatures = qc

@@ -54,13 +54,16 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
         # Wait for pivot decision to be received
         time.sleep(2)
         # Make node 0 to propose a block
+        for client in clients:
+            client.pos_local_timeout()
+        time.sleep(0.5)
         clients[0].pos_proposal_timeout()
         pos_blocks = clients[0].pos_get_consensus_blocks()
         print(pos_blocks)
         proposal = None
         for b in pos_blocks:
             print(b["height"], b["round"])
-            if b["height"] == 4:
+            if b["height"] == "0x6":
                 assert proposal is None
                 proposal = b
         future_decision = proposal["pivotDecision"]

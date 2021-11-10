@@ -128,6 +128,7 @@ impl TransactionStore {
             if let Some(account_decision) =
                 self.pivot_decisions.get_mut(&pivot_decision_hash)
             {
+                diem_debug!("txpool::insert pivot {:?}", hash);
                 account_decision.insert((address, hash));
             }
             self.transactions.insert(hash, txn, true);
