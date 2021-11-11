@@ -38,7 +38,7 @@ use crate::pos::{
     mempool::SubmissionStatus,
     protocol::network_sender::NetworkSender,
 };
-use anyhow::{bail, ensure, Context};
+use anyhow::{anyhow, bail, ensure, Context};
 use channel::diem_channel;
 use consensus_types::{
     common::{Author, Round},
@@ -51,10 +51,11 @@ use diem_logger::prelude::*;
 use diem_metrics::monitor;
 use diem_types::{
     account_address::AccountAddress,
+    block_info::PivotBlockDecision,
     epoch_change::EpochChangeProof,
     epoch_state::EpochState,
     on_chain_config::{OnChainConfigPayload, ValidatorSet},
-    transaction::SignedTransaction,
+    transaction::{SignedTransaction, TransactionPayload},
 };
 use futures::{
     channel::{mpsc, oneshot},
@@ -812,6 +813,49 @@ impl EpochManager {
             TestCommand::ForceVoteProposal(block_id) => {
                 self.force_vote_proposal(block_id).await
             }
+            TestCommand::ForcePropose {
+                round,
+                parent_id,
+                payload,
+            } => self.force_propose(round, parent_id, payload).await,
+            TestCommand::ProposalTimeOut => {
+                let round = match self.processor_mut() {
+                    RoundProcessor::Normal(p) => {
+                        p.round_state().current_round()
+                    }
+                    _ => anyhow::bail!("RoundManager not started yet"),
+                };
+                self.process_proposal_timeout(round).await
+            }
+            TestCommand::LocalTimeout => {
+                let round = match self.processor_mut() {
+                    RoundProcessor::Normal(p) => {
+                        p.round_state().current_round()
+                    }
+                    _ => anyhow::bail!("RoundManager not started yet"),
+                };
+                self.process_local_timeout(round).await
+            }
+            TestCommand::NewRoundTimeout => {
+                let round = match self.processor_mut() {
+                    RoundProcessor::Normal(p) => {
+                        p.round_state().current_round()
+                    }
+                    _ => anyhow::bail!("RoundManager not started yet"),
+                };
+                self.process_new_round_timeout(round).await
+            }
+            TestCommand::BroadcastPivotDecision(decision) => {
+                self.force_sign_pivot_decision(decision).await
+            }
+            TestCommand::BroadcastElection(_) => todo!(),
+            TestCommand::GetChosenProposal(tx) => match self.processor_mut() {
+                RoundProcessor::Normal(p) => {
+                    let chosen = p.get_chosen_proposal()?;
+                    tx.send(chosen).map_err(|e| anyhow!("send: err={:?}", e))
+                }
+                _ => anyhow::bail!("RoundManager not started yet"),
+            },
         }
     }
 
@@ -833,6 +877,41 @@ impl EpochManager {
         match self.processor_mut() {
             RoundProcessor::Normal(p) => {
                 p.force_vote_proposal(block_id, author, &bls_key).await
+            }
+            _ => anyhow::bail!("RoundManager not started yet"),
+        }
+    }
+
+    async fn force_propose(
+        &mut self, round: Round, parent_block_id: HashValue,
+        payload: Vec<TransactionPayload>,
+    ) -> anyhow::Result<()>
+    {
+        let bls_key = self
+            .config
+            .safety_rules
+            .test
+            .as_ref()
+            .expect("test config set")
+            .consensus_key
+            .as_ref()
+            .expect("private key set in pos")
+            .private_key();
+        match self.processor_mut() {
+            RoundProcessor::Normal(p) => {
+                p.force_propose(round, parent_block_id, payload, &bls_key)
+                    .await
+            }
+            _ => anyhow::bail!("RoundManager not started yet"),
+        }
+    }
+
+    async fn force_sign_pivot_decision(
+        &mut self, pivot_decision: PivotBlockDecision,
+    ) -> anyhow::Result<()> {
+        match self.processor_mut() {
+            RoundProcessor::Normal(p) => {
+                p.force_sign_pivot_decision(pivot_decision).await
             }
             _ => anyhow::bail!("RoundManager not started yet"),
         }

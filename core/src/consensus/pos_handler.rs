@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use std::sync::{mpsc, Arc};
 
 use once_cell::sync::OnceCell;
 
-use cfx_types::{H256, U256};
+use cfx_types::{H256, U256, U64};
 use diem_config::{config::NodeConfig, keys::ConfigKey};
 use diem_crypto::HashValue;
 use diem_types::{
@@ -37,9 +37,11 @@ use crate::{
     ConsensusGraph,
 };
 use cached_diemdb::CachedDiemDB;
+use consensus_types::block::Block;
 use diem_config::config::SafetyRulesTestConfig;
 use diem_types::{
-    account_address::from_consensus_public_key, chain_id::ChainId,
+    account_address::from_consensus_public_key, block_info::PivotBlockDecision,
+    chain_id::ChainId, transaction::TransactionPayload,
 };
 use diemdb::DiemDB;
 use network::NetworkService;
@@ -371,6 +373,60 @@ impl PosHandler {
                 &block_id,
             )))
             .map_err(|e| anyhow::anyhow!("try_send: err={:?}", e))
+    }
+
+    pub fn force_propose(
+        &self, round: U64, parent_block_id: H256,
+        payload: Vec<TransactionPayload>,
+    ) -> anyhow::Result<()>
+    {
+        self.test_command_sender
+            .lock()
+            .as_mut()
+            .ok_or(anyhow::anyhow!("Pos not initialized!"))?
+            .try_send(TestCommand::ForcePropose {
+                round: round.as_u64(),
+                parent_id: h256_to_diem_hash(&parent_block_id),
+                payload,
+            })
+            .map_err(|e| anyhow::anyhow!("try_send: err={:?}", e))
+    }
+
+    pub fn trigger_timeout(&self, timeout_type: String) -> anyhow::Result<()> {
+        let command = match timeout_type.as_str() {
+            "local" => TestCommand::LocalTimeout,
+            "proposal" => TestCommand::ProposalTimeOut,
+            "new_round" => TestCommand::NewRoundTimeout,
+            _ => anyhow::bail!("Unknown timeout type"),
+        };
+        self.test_command_sender
+            .lock()
+            .as_mut()
+            .ok_or(anyhow::anyhow!("Pos not initialized!"))?
+            .try_send(command)
+            .map_err(|e| anyhow::anyhow!("try_send: err={:?}", e))
+    }
+
+    pub fn force_sign_pivot_decision(
+        &self, pivot_decision: PivotBlockDecision,
+    ) -> anyhow::Result<()> {
+        self.test_command_sender
+            .lock()
+            .as_mut()
+            .ok_or(anyhow::anyhow!("Pos not initialized!"))?
+            .try_send(TestCommand::BroadcastPivotDecision(pivot_decision))
+            .map_err(|e| anyhow::anyhow!("try_send: err={:?}", e))
+    }
+
+    pub fn get_chosen_proposal(&self) -> anyhow::Result<Option<Block>> {
+        let (tx, rx) = mpsc::sync_channel(1);
+        self.test_command_sender
+            .lock()
+            .as_mut()
+            .ok_or(anyhow::anyhow!("Pos not initialized!"))?
+            .try_send(TestCommand::GetChosenProposal(tx))
+            .map_err(|e| anyhow::anyhow!("try_send: err={:?}", e))?;
+        rx.recv().map_err(|e| anyhow::anyhow!("recv: err={:?}", e))
     }
 }
 

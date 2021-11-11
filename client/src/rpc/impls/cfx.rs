@@ -20,6 +20,7 @@ use cfxcore::{
 };
 use cfxcore_accounts::AccountProvider;
 use delegate::delegate;
+use diem_types::transaction::TransactionPayload;
 use jsonrpc_core::{BoxFuture, Error as JsonRpcError, Result as JsonRpcResult};
 use network::{
     node_table::{Node, NodeId},
@@ -50,9 +51,9 @@ use crate::{
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
-            sign_call, Account as RpcAccount, AccountPendingInfo,
-            AccountPendingTransactions, BlameInfo, Block as RpcBlock,
-            BlockHashOrEpochNumber, Bytes, CallRequest,
+            pos::Block as PosBlock, sign_call, Account as RpcAccount,
+            AccountPendingInfo, AccountPendingTransactions, BlameInfo,
+            Block as RpcBlock, BlockHashOrEpochNumber, Bytes, CallRequest,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
             EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
             LogFilter as RpcFilter, PackedOrExecuted, Receipt as RpcReceipt,
@@ -1587,6 +1588,10 @@ impl TestRpc for TestRpcImpl {
             fn pos_retire_self(&self) -> JsonRpcResult<()>;
             fn pos_start(&self) -> JsonRpcResult<()>;
             fn pos_force_vote_proposal(&self, block_id: H256) -> JsonRpcResult<()>;
+            fn pos_force_propose(&self, round: U64, parent_block_id: H256, payload: Vec<TransactionPayload>) -> JsonRpcResult<()>;
+            fn pos_trigger_timeout(&self, timeout_type: String) -> JsonRpcResult<()>;
+            fn pos_force_sign_pivot_decision(&self, block_hash: H256, height: u64) -> JsonRpcResult<()>;
+            fn pos_get_chosen_proposal(&self) -> JsonRpcResult<Option<PosBlock>>;
         }
 
         to self.rpc_impl {

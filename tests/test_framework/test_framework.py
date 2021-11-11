@@ -81,6 +81,7 @@ class ConfluxTestFramework:
         self.supports_cli = False
         self.bind_to_localhost_only = True
         self.conf_parameters = {}
+        self.pos_parameters = {}
         # The key is file name, and the value is a string as file content.
         self.extra_conf_files = {}
         self.set_test_params()
@@ -316,7 +317,7 @@ class ConfluxTestFramework:
         if genesis_nodes is None:
             genesis_nodes = num_nodes
         if is_consortium:
-            initialize_tg_config(self.options.tmpdir, num_nodes, genesis_nodes, DEFAULT_PY_TEST_CHAIN_ID, start_index=len(self.nodes))
+            initialize_tg_config(self.options.tmpdir, num_nodes, genesis_nodes, DEFAULT_PY_TEST_CHAIN_ID, start_index=len(self.nodes), pos_round_time_ms=self.pos_parameters["round_time_ms"])
         for i in range(num_nodes):
             node_index = len(self.nodes)
             self.nodes.append(

@@ -1260,6 +1260,7 @@ dependencies = [
  "executor-types",
  "mirai-annotations",
  "proptest",
+ "rustc-hex",
  "serde",
  "short-hex-str",
 ]

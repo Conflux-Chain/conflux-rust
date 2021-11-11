@@ -340,13 +340,6 @@ impl PosHandler {
             })
             .map(|(_, b)| b)
             .collect();
-        // find first block's height
-        let committed_block = self
-            .pos_handler
-            .diem_db()
-            .get_committed_block_by_hash(&blocks[0].id())
-            .ok()?;
-        let mut current_height = committed_block.view;
         let latest_epoch_state = self
             .pos_handler
             .diem_db()
@@ -360,7 +353,6 @@ impl PosHandler {
             .map(|b| {
                 let mut rpc_block = Block {
                     hash: hash_value_to_h256(b.id()),
-                    height: U64::from(current_height),
                     epoch: U64::from(b.epoch()),
                     round: U64::from(b.round()),
                     next_tx_number: Default::default(),
@@ -368,9 +360,9 @@ impl PosHandler {
                     parent_hash: hash_value_to_h256(b.parent_id()),
                     timestamp: U64::from(b.timestamp_usecs()),
                     pivot_decision: Default::default(),
+                    height: Default::default(),
                     signatures: vec![],
                 };
-                current_height += 1;
                 // Executed blocks are committed and pruned before ConsensusDB.
                 // If we get a block from ConsensusDB and it's pruned before we
                 // get the executed block here, its version and
@@ -389,6 +381,13 @@ impl PosHandler {
                         .pivot_block()
                         .as_ref()
                         .map(|p| Decision::from(p));
+                    rpc_block.height = U64::from(
+                        executed
+                            .output()
+                            .executed_trees()
+                            .pos_state()
+                            .current_view(),
+                    );
                 } else if let Ok(committed_block) = self
                     .pos_handler
                     .diem_db()
@@ -397,6 +396,7 @@ impl PosHandler {
                     rpc_block.next_tx_number = committed_block.version.into();
                     rpc_block.pivot_decision =
                         Some(Decision::from(&committed_block.pivot_decision));
+                    rpc_block.height = U64::from(committed_block.view);
                 }
                 if let Some(qc) = qcs.get(&b.id()) {
                     let signatures = qc
@@ -520,7 +520,7 @@ fn map_votes(list: &StatusList) -> Vec<VotePowerState> {
     ans
 }
 
-fn hash_value_to_h256(h: HashValue) -> H256 {
+pub fn hash_value_to_h256(h: HashValue) -> H256 {
     hexstr_to_h256(h.to_hex().as_str())
 }
 
