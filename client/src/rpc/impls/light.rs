@@ -58,7 +58,6 @@ use cfxcore::{
 use diem_types::account_address::AccountAddress;
 
 // macro for reducing boilerplate for unsupported methods
-#[macro_use]
 macro_rules! not_supported {
     () => {};
     ( fn $fn:ident ( &self $(, $name:ident : $type:ty)* ) $( -> BoxFuture<$ret:ty> )? ; $($tail:tt)* ) => {

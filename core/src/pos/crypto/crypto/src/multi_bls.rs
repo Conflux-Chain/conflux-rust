@@ -435,9 +435,9 @@ impl Signature for MultiBLSSignature {
                 raw_public_keys.push(public_key.public_keys()[i].clone().raw())
             }
         }
-        match bls_signatures::verify_same(
+        match bls_signatures::verify_same_message(
             &self.signature,
-            &bls_hash(message),
+            message,
             &raw_public_keys,
         ) {
             true => Ok(()),

@@ -10,7 +10,7 @@ use crate::{
 };
 use anyhow::{anyhow, Result};
 use bls_signatures::{
-    hash as bls_hash, PrivateKey as RawPrivateKey, PublicKey as RawPublicKey,
+    PrivateKey as RawPrivateKey, PublicKey as RawPublicKey,
     Serialize as BLSSerialize, Signature as RawSignature,
 };
 use diem_crypto_derive::{
@@ -139,9 +139,9 @@ impl Signature for BLSSignature {
         &self, message: &[u8], public_key: &Self::VerifyingKeyMaterial,
     ) -> Result<()> {
         precondition!(has_tag!(public_key, ValidatedPublicKeyTag));
-        match bls_signatures::verify(
+        match bls_signatures::verify_messages(
             &self.0,
-            std::slice::from_ref(&bls_hash(message)),
+            std::slice::from_ref(&message),
             std::slice::from_ref(&public_key.0),
         ) {
             true => Ok(()),

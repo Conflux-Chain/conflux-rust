@@ -93,9 +93,9 @@ pub fn contract_address(
         CreateContractAddress::FromSenderSaltAndCodeHash(salt) => {
             let mut buffer = [0u8; 1 + 20 + 32 + 32];
             buffer[0] = 0xff;
-            &mut buffer[1..(1 + 20)].copy_from_slice(&sender[..]);
-            &mut buffer[(1 + 20)..(1 + 20 + 32)].copy_from_slice(&salt[..]);
-            &mut buffer[(1 + 20 + 32)..].copy_from_slice(&code_hash[..]);
+            buffer[1..(1 + 20)].copy_from_slice(&sender[..]);
+            buffer[(1 + 20)..(1 + 20 + 32)].copy_from_slice(&salt[..]);
+            buffer[(1 + 20 + 32)..].copy_from_slice(&code_hash[..]);
             // In Conflux, we use the first bit to indicate the type of the
             // address. For contract address, the bits will be set to 0x8.
             let mut h = Address::from(keccak(&buffer[..]));
