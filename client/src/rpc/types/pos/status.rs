@@ -2,7 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::U64;
+use super::Decision;
+use cfx_types::{H256, U64};
 use serde_derive::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -13,9 +14,11 @@ pub struct Status {
     ///
     pub epoch: U64,
     ///
-    pub pivot_decision: U64,
+    pub pivot_decision: Decision,
     ///
     pub latest_voted: Option<U64>,
+    ///
+    pub latest_tx_number: U64,
 }
 
 impl Default for Status {
@@ -23,8 +26,12 @@ impl Default for Status {
         Status {
             epoch: U64::default(),
             latest_committed: U64::default(),
-            pivot_decision: U64::default(),
+            pivot_decision: Decision {
+                height: U64::default(),
+                block_hash: H256::default(),
+            },
             latest_voted: None,
+            latest_tx_number: U64::default(),
         }
     }
 }

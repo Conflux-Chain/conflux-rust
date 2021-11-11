@@ -38,7 +38,7 @@ use diem_types::{
     ledger_info::LedgerInfoWithSignatures,
     transaction::{
         ConflictSignature, DisputePayload, ElectionPayload, RawTransaction,
-        SignedTransaction,
+        SignedTransaction, TransactionPayload,
     },
     validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
     validator_verifier::ValidatorVerifier,
@@ -1306,5 +1306,87 @@ impl RoundManager {
             .broadcast(ConsensusMsg::VoteMsg(Box::new(vote_msg)), vec![])
             .await;
         Ok(())
+    }
+
+    /// Force the node to propose a block without changing its consensus
+    /// state. The node will still propose a valid block independently if that's
+    /// not disabled.
+    pub async fn force_propose(
+        &mut self, round: Round, parent_block_id: HashValue,
+        payload: Vec<TransactionPayload>, private_key: &ConsensusPrivateKey,
+    ) -> Result<()>
+    {
+        let parent_qc = self
+            .block_store
+            .get_quorum_cert_for_block(parent_block_id)
+            .ok_or(anyhow::anyhow!(
+                "no QC for parent: {:?}",
+                parent_block_id
+            ))?;
+        let block_data = self
+            .proposal_generator
+            .as_ref()
+            .ok_or(anyhow::anyhow!("proposal generator is None"))?
+            .force_propose(round, parent_qc, payload)?;
+        let signature = private_key.sign(&block_data);
+        let mut signed_proposal =
+            Block::new_proposal_from_block_data_and_signature(
+                block_data, signature, None,
+            );
+        // TODO: This vrf_output is incorrect if we want to propose a block in
+        // another epoch.
+        signed_proposal.set_vrf_nonce_and_proof(
+            self.proposer_election
+                .gen_vrf_nonce_and_proof(signed_proposal.block_data())
+                .ok_or(anyhow::anyhow!(
+                    "The proposer should not propose in this round"
+                ))?,
+        );
+        // TODO: The sync_info here may not be consistent with
+        // `signed_proposal`.
+        let proposal_msg =
+            ProposalMsg::new(signed_proposal, self.block_store.sync_info());
+        diem_debug!("force_propose: broadcast {:?}", proposal_msg);
+        self.network
+            .broadcast(
+                ConsensusMsg::ProposalMsg(Box::new(proposal_msg)),
+                vec![],
+            )
+            .await;
+        Ok(())
+    }
+
+    pub async fn force_sign_pivot_decision(
+        &mut self, pivot_decision: PivotBlockDecision,
+    ) -> anyhow::Result<()> {
+        let proposal_generator = self.proposal_generator.as_ref().ok_or(
+            anyhow::anyhow!("Non-validator cannot sign pivot decision"),
+        )?;
+        diem_info!("force_sign_pivot_decision: {:?}", pivot_decision);
+        // It's allowed for a node to sign conflict pivot decision,
+        // so we do not need to persist this signing event.
+        let raw_tx = RawTransaction::new_pivot_decision(
+            proposal_generator.author(),
+            pivot_decision,
+            self.chain_id,
+        );
+        let signed_tx =
+            raw_tx.sign(&proposal_generator.private_key)?.into_inner();
+        let (tx, rx) = oneshot::channel();
+        self.tx_sender.send((signed_tx, tx)).await?;
+        // TODO(lpl): Check if we want to wait here.
+        rx.await??;
+        diem_debug!("force_sign_pivot_decision sends");
+        Ok(())
+    }
+
+    pub fn get_chosen_proposal(&self) -> anyhow::Result<Option<Block>> {
+        // This takes out the candidate, so we need to insert it back if it's
+        // Some.
+        let chosen = self.proposer_election.choose_proposal_to_vote();
+        if let Some(chosen) = chosen.clone() {
+            self.proposer_election.set_proposal_candidate(chosen);
+        }
+        Ok(chosen)
     }
 }

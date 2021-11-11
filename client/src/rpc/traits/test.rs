@@ -3,9 +3,12 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::types::{BlameInfo, Block, Bytes};
+use crate::rpc::types::pos::Block as PosBlock;
 use cfx_types::{H256, U256, U64};
 use cfxcore::PeerInfo;
-use diem_types::account_address::AccountAddress;
+use diem_types::{
+    account_address::AccountAddress, transaction::TransactionPayload,
+};
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_derive::rpc;
 use network::node_table::NodeId;
@@ -130,4 +133,21 @@ pub trait TestRpc {
 
     #[rpc(name = "pos_force_vote_proposal")]
     fn pos_force_vote_proposal(&self, block_id: H256) -> RpcResult<()>;
+
+    #[rpc(name = "pos_force_propose")]
+    fn pos_force_propose(
+        &self, round: U64, parent_block_id: H256,
+        payload: Vec<TransactionPayload>,
+    ) -> RpcResult<()>;
+
+    #[rpc(name = "pos_trigger_timeout")]
+    fn pos_trigger_timeout(&self, timeout_type: String) -> RpcResult<()>;
+
+    #[rpc(name = "pos_force_sign_pivot_decision")]
+    fn pos_force_sign_pivot_decision(
+        &self, block_hash: H256, height: u64,
+    ) -> RpcResult<()>;
+
+    #[rpc(name = "pos_get_chosen_proposal")]
+    fn pos_get_chosen_proposal(&self) -> RpcResult<Option<PosBlock>>;
 }

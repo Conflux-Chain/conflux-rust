@@ -4,7 +4,7 @@ use criterion::Criterion;
 use diem_crypto::{
     bls::*,
     traits::{SigningKey, Uniform},
-    ValidCryptoMaterial,
+    PrivateKey, Signature, ValidCryptoMaterial,
 };
 use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
 use rand::{rngs::ThreadRng, thread_rng};
@@ -26,5 +26,17 @@ fn decode(c: &mut Criterion) {
     });
 }
 
-criterion_group!(bls_benches, decode);
+fn verify(c: &mut Criterion) {
+    let mut csprng: ThreadRng = thread_rng();
+    let priv_key = BLSPrivateKey::generate(&mut csprng);
+    let pub_key = priv_key.public_key();
+    let msg = TestDiemCrypto("".to_string());
+    let sig: BLSSignature = priv_key.sign(&msg);
+
+    c.bench_function("bls signature verifying", move |b| {
+        b.iter(|| sig.verify(&msg, &pub_key))
+    });
+}
+
+criterion_group!(bls_benches, verify, decode);
 criterion_main!(bls_benches);

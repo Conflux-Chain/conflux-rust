@@ -15,6 +15,7 @@ use cfxcore::{
 };
 use cfxcore_accounts::AccountProvider;
 use delegate::delegate;
+use diem_types::transaction::TransactionPayload;
 use futures::future::{self, FutureExt, TryFutureExt};
 use jsonrpc_core::{BoxFuture, Error as RpcError, Result as JsonRpcResult};
 use network::{
@@ -37,7 +38,7 @@ use crate::{
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
-            Account as RpcAccount, AccountPendingInfo,
+            pos::Block as PosBlock, Account as RpcAccount, AccountPendingInfo,
             AccountPendingTransactions, BlameInfo, Block as RpcBlock,
             BlockHashOrEpochNumber, Bytes, CallRequest,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
@@ -57,7 +58,6 @@ use cfxcore::{
 use diem_types::account_address::AccountAddress;
 
 // macro for reducing boilerplate for unsupported methods
-#[macro_use]
 macro_rules! not_supported {
     () => {};
     ( fn $fn:ident ( &self $(, $name:ident : $type:ty)* ) $( -> BoxFuture<$ret:ty> )? ; $($tail:tt)* ) => {
@@ -1144,6 +1144,10 @@ impl TestRpc for TestRpcImpl {
             fn pos_retire_self(&self) -> JsonRpcResult<()>;
             fn pos_start(&self) -> JsonRpcResult<()>;
             fn pos_force_vote_proposal(&self, block_id: H256) -> JsonRpcResult<()>;
+            fn pos_force_propose(&self, round: U64, parent_block_id: H256, payload: Vec<TransactionPayload>) -> JsonRpcResult<()>;
+            fn pos_trigger_timeout(&self, timeout_type: String) -> JsonRpcResult<()>;
+            fn pos_force_sign_pivot_decision(&self, block_hash: H256, height: u64) -> JsonRpcResult<()>;
+            fn pos_get_chosen_proposal(&self) -> JsonRpcResult<Option<PosBlock>>;
         }
     }
 

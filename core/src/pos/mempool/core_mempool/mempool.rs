@@ -186,6 +186,7 @@ impl Mempool {
         // iterate all pivot decision transaction
         for pivot_decision_set in self.transactions.iter_pivot_decision() {
             let mut pivot_decision_opt = None;
+            diem_debug!("get_block: 0 {:?}", pivot_decision_set.len());
             for (account, hash) in pivot_decision_set.iter() {
                 if validators.get_public_key(account).is_some() {
                     if pivot_decision_opt.is_none() {
@@ -195,6 +196,7 @@ impl Mempool {
                     }
                 }
             }
+            diem_debug!("get_block: 1 {:?}", pivot_decision_opt);
             if validators
                 .check_voting_power(
                     pivot_decision_set.iter().map(|(addr, _)| addr),
@@ -235,6 +237,7 @@ impl Mempool {
                     chosen_pivot_tx = Some(pivot_decision);
                 }
             }
+            diem_debug!("get_block: 2 {:?}", chosen_pivot_tx);
         }
         if let Some(tx) = chosen_pivot_tx {
             let pivot_decision_hash = match tx.payload() {

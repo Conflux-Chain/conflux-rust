@@ -10,7 +10,7 @@ contract ConfluxContext {
     /**
      * @dev get the height of the referred PoS block in the last epoch
 `    * @return the current PoS block height
-     */`
+     */
     function posHeight() public view returns (uint256) {}
     /**
      * @dev get the epoch number of the finalized pivot block.

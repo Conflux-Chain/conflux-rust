@@ -387,7 +387,9 @@ impl ConsensusGraph {
                         .pos_verifier
                         .get_pivot_decision(pos_ref)
                         .expect("pos ref committed");
-                    if inner.pivot_block_processed(&pivot_decision) {
+                    if inner.hash_to_arena_indices.contains_key(&pivot_decision)
+                        || inner.pivot_block_processed(&pivot_decision)
+                    {
                         // If this pos ref is processed in catching-up, its
                         // pivot decision may have not been processed
                         break;
