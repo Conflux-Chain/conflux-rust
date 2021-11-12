@@ -417,6 +417,10 @@ pub trait DbWriter: Send + Sync {
         &self, txns_to_commit: &[TransactionToCommit], first_version: Version,
         ledger_info_with_sigs: Option<&LedgerInfoWithSignatures>,
         pos_state: Option<PosState>, committed_blocks: Vec<CommittedBlock>,
+        ledger_infos_with_voted_block: Vec<(
+            HashValue,
+            LedgerInfoWithSignatures,
+        )>,
     ) -> Result<()>;
 
     fn save_reward_event(
@@ -531,4 +535,8 @@ pub trait DBReaderForPoW: Send + Sync + DbReader {
     ) -> Result<CommittedBlock>;
 
     fn get_committed_block_hash_by_view(&self, view: u64) -> Result<HashValue>;
+
+    fn get_ledger_info_by_voted_block(
+        &self, block_id: &HashValue,
+    ) -> Result<LedgerInfoWithSignatures>;
 }

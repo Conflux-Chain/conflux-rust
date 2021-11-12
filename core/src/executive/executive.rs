@@ -80,9 +80,9 @@ pub fn contract_address(
             // This is required to enable us to clean up unused user account in
             // future.
             buffer[0] = 0x0;
-            &mut buffer[1..(1 + 20)].copy_from_slice(&sender[..]);
+            buffer[1..(1 + 20)].copy_from_slice(&sender[..]);
             nonce.to_little_endian(&mut buffer[(1 + 20)..(1 + 20 + 32)]);
-            &mut buffer[(1 + 20 + 32)..].copy_from_slice(&code_hash[..]);
+            buffer[(1 + 20 + 32)..].copy_from_slice(&code_hash[..]);
             // In Conflux, we use the first four bits to indicate the type of
             // the address. For contract address, the bits will be
             // set to 0x8.

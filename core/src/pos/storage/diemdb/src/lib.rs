@@ -257,6 +257,7 @@ impl DiemDB {
             REWARD_EVENT_CF_NAME,
             COMMITTED_BLOCK_CF_NAME,
             COMMITTED_BLOCK_BY_VIEW_CF_NAME,
+            LEDGER_INFO_BY_VOTED_BLOCK_CF_NAME,
         ]
     }
 
@@ -888,6 +889,10 @@ impl DbWriter for DiemDB {
         &self, txns_to_commit: &[TransactionToCommit], first_version: Version,
         ledger_info_with_sigs: Option<&LedgerInfoWithSignatures>,
         pos_state: Option<PosState>, committed_blocks: Vec<CommittedBlock>,
+        ledger_infos_with_voted_block: Vec<(
+            HashValue,
+            LedgerInfoWithSignatures,
+        )>,
     ) -> Result<()>
     {
         gauged_api("save_transactions", || {
@@ -922,6 +927,14 @@ impl DbWriter for DiemDB {
 
             for b in committed_blocks {
                 self.ledger_store.put_committed_block(&b, &mut cs)?;
+            }
+
+            for (voted_block, ledger_info) in ledger_infos_with_voted_block {
+                self.ledger_store.put_ledger_info_by_voted_block(
+                    &voted_block,
+                    &ledger_info,
+                    &mut cs,
+                )?;
             }
 
             // If expected ledger info is provided, verify result root hash and
@@ -1046,6 +1059,12 @@ impl DBReaderForPoW for DiemDB {
 
     fn get_committed_block_hash_by_view(&self, view: u64) -> Result<HashValue> {
         self.ledger_store.get_committed_block_hash_by_view(view)
+    }
+
+    fn get_ledger_info_by_voted_block(
+        &self, block_id: &HashValue,
+    ) -> Result<LedgerInfoWithSignatures> {
+        self.ledger_store.get_ledger_info_by_voted_block(block_id)
     }
 }
 

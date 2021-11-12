@@ -157,4 +157,10 @@ impl DBReaderForPoW for MockDbReader {
     ) -> Result<HashValue> {
         todo!()
     }
+
+    fn get_ledger_info_by_voted_block(
+        &self, _block_id: &HashValue,
+    ) -> Result<LedgerInfoWithSignatures> {
+        todo!()
+    }
 }
