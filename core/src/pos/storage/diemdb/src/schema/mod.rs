@@ -26,6 +26,7 @@ pub(crate) mod jellyfish_merkle_node;
 pub(crate) mod ledger_counters;
 pub(crate) mod ledger_info;
 pub(crate) mod ledger_info_by_block;
+pub(crate) mod ledger_info_by_voted_block;
 pub(crate) mod pos_state;
 pub(crate) mod reward_event;
 pub(crate) mod stale_node_index;
@@ -56,6 +57,8 @@ pub const REWARD_EVENT_CF_NAME: ColumnFamilyName = "reward_event";
 pub const COMMITTED_BLOCK_CF_NAME: ColumnFamilyName = "committed_block";
 pub const COMMITTED_BLOCK_BY_VIEW_CF_NAME: ColumnFamilyName =
     "committed_block_by_view";
+pub const LEDGER_INFO_BY_VOTED_BLOCK_CF_NAME: ColumnFamilyName =
+    "ledger_info_by_voted_block";
 
 fn ensure_slice_len_eq(data: &[u8], len: usize) -> Result<()> {
     ensure!(

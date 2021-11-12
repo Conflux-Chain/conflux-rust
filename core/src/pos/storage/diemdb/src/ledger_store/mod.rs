@@ -44,6 +44,7 @@ use crate::{
         committed_block_by_view::CommittedBlockByViewSchema,
         epoch_by_version::EpochByVersionSchema, ledger_info::LedgerInfoSchema,
         ledger_info_by_block::LedgerInfoByBlockSchema,
+        ledger_info_by_voted_block::LedgerInfoByVotedBlockSchema,
         pos_state::PosStateSchema, reward_event::RewardEventSchema,
         transaction_accumulator::TransactionAccumulatorSchema,
         transaction_info::TransactionInfoSchema,
@@ -538,6 +539,30 @@ impl LedgerStore {
                 DiemDbError::NotFound(format!(
                     "committed block of id {}",
                     block_hash
+                ))
+                .into()
+            })
+    }
+
+    pub fn put_ledger_info_by_voted_block(
+        &self, voted_block_id: &HashValue,
+        ledger_info: &LedgerInfoWithSignatures, cs: &mut ChangeSet,
+    ) -> Result<()>
+    {
+        cs.batch
+            .put::<LedgerInfoByVotedBlockSchema>(voted_block_id, ledger_info)?;
+        Ok(())
+    }
+
+    pub fn get_ledger_info_by_voted_block(
+        &self, voted_block_id: &HashValue,
+    ) -> Result<LedgerInfoWithSignatures> {
+        self.db
+            .get::<LedgerInfoByVotedBlockSchema>(&voted_block_id)?
+            .ok_or_else(|| {
+                DiemDbError::NotFound(format!(
+                    "ledger_info_by_voted_block of id {}",
+                    voted_block_id
                 ))
                 .into()
             })
