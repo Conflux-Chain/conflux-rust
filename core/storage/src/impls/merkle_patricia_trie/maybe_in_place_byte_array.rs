@@ -127,7 +127,13 @@ impl<
 impl MaybeInPlaceByteArray {
     /// Take ptr out and clear ptr.
     pub unsafe fn ptr_into_vec(&mut self, size: usize) -> Vec<u8> {
-        let vec = Vec::from_raw_parts(self.ptr, size, size);
+        debug_assert!(!self.ptr.is_null() || size == 0);
+        let ptr = if self.ptr.is_null() {
+            NonNull::dangling().as_ptr()
+        } else {
+            self.ptr
+        };
+        let vec = Vec::from_raw_parts(ptr, size, size);
         self.ptr = null_mut();
         vec
     }

@@ -352,6 +352,7 @@ impl<NodeRefT: NodeRefTrait> Drop for CompactedChildrenTable<NodeRefT> {
 impl<NodeRefT: NodeRefTrait> CompactedChildrenTable<NodeRefT> {
     unsafe fn into_managed_slice(&self) -> Option<Vec<NodeRefT>> {
         if self.children_count != 0 {
+            assert_ne!(self.table_ptr, null_mut());
             Some(Vec::from_raw_parts(
                 self.table_ptr,
                 self.children_count.into(),
