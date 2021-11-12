@@ -26,7 +26,7 @@ class PosForkAttackTest(DefaultConfluxTestFramework):
         client = RpcClient(self.nodes[0])
         blocks = client.generate_empty_blocks(CHAIN_LEN)
         wait_until(lambda: client.pos_status()["latestVoted"] is not None)
-        wait_until(lambda: int(client.pos_status()["pivotDecision"], 0) >= CHAIN_LEN // 2)
+        wait_until(lambda: int(client.pos_status()["pivotDecision"]["height"], 0) >= CHAIN_LEN // 2)
         # generate a block to refer new pos blocks.
         client.generate_empty_blocks(1)
         fork_pivot_block = client.block_by_epoch(int_to_hex(CHAIN_LEN // 2 + 1))

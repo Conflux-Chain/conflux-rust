@@ -100,7 +100,7 @@ impl PosHandler {
         let latest_voted = self.latest_voted().map(|b| U64::from(b.height));
         let latest_tx_number = self
             .block_by_number(BlockNumber::Num(U64::from(block_number)))
-            .map(|b| b.next_tx_number - 1)
+            .and_then(|b| b.next_tx_number.checked_sub(1.into()))
             .unwrap_or(U64::default());
         Status {
             epoch: U64::from(epoch_state.epoch),
