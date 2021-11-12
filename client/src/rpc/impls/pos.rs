@@ -100,7 +100,7 @@ impl PosHandler {
         let latest_voted = self.latest_voted().map(|b| U64::from(b.height));
         let latest_tx_number = self
             .block_by_number(BlockNumber::Num(U64::from(block_number)))
-            .map(|b| b.next_tx_number - 1)
+            .and_then(|b| b.next_tx_number.checked_sub(1.into()))
             .unwrap_or(U64::default());
         Status {
             epoch: U64::from(epoch_state.epoch),
@@ -267,22 +267,27 @@ impl PosHandler {
                 if let Some(epoch_state) =
                     self.epoch_state_by_epoch_number(b.epoch)
                 {
-                    let signatures = b
-                        .signatures
-                        .iter()
-                        .map(|(a, _s)| {
-                            let voting_power = epoch_state
-                                .verifier
-                                .get_voting_power(a)
-                                .unwrap_or(0);
-                            Signature {
-                                account: H256::from(a.to_u8()),
-                                // signature: s.to_string(),
-                                votes: U64::from(voting_power),
-                            }
-                        })
-                        .collect();
-                    block.signatures = signatures;
+                    if let Ok(ledger_info) = self
+                        .pos_handler
+                        .diem_db()
+                        .get_ledger_info_by_voted_block(&b.hash)
+                    {
+                        block.signatures = ledger_info
+                            .signatures()
+                            .iter()
+                            .map(|(a, _s)| {
+                                let voting_power = epoch_state
+                                    .verifier
+                                    .get_voting_power(a)
+                                    .unwrap_or(0);
+                                Signature {
+                                    account: H256::from(a.to_u8()),
+                                    // signature: s.to_string(),
+                                    votes: U64::from(voting_power),
+                                }
+                            })
+                            .collect();
+                    }
                 };
                 Some(block)
             }

@@ -81,7 +81,7 @@ class ConfluxTestFramework:
         self.supports_cli = False
         self.bind_to_localhost_only = True
         self.conf_parameters = {}
-        self.pos_parameters = {}
+        self.pos_parameters = {"round_time_ms": 1000}
         # The key is file name, and the value is a string as file content.
         self.extra_conf_files = {}
         self.set_test_params()

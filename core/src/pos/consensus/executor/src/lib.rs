@@ -883,6 +883,7 @@ impl<V: VMExecutor> ChunkExecutor for Executor<V> {
             ledger_info_to_commit.as_ref(),
             None,
             vec![],
+            vec![],
         )?;
 
         // 5. Cache maintenance.
@@ -953,6 +954,7 @@ impl<V: VMExecutor> TransactionReplayer for Executor<V> {
                 first_version,
                 None,
                 None,
+                vec![],
                 vec![],
             )?;
 
@@ -1264,8 +1266,8 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
             .collect::<Result<Vec<_>, Error>>()?;
         let blocks = arc_blocks.iter().map(|b| b.lock()).collect::<Vec<_>>();
         let mut committed_blocks = Vec::new();
+        let mut signatures_vec = Vec::new();
         if ledger_info_with_sigs.ledger_info().epoch() != 0 {
-            let mut signatures_vec = Vec::new();
             for (i, b) in blocks.iter().enumerate() {
                 let ledger_block = self
                     .consensus_db
@@ -1283,8 +1285,6 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                     pivot_decision: b.output().pivot_block().clone().unwrap(),
                     version: b.output().version().unwrap(),
                     timestamp: ledger_block.timestamp_usecs(),
-                    // Set the signatures after the loop.
-                    signatures: Default::default(),
                     view,
                     is_skipped: b
                         .output()
@@ -1296,28 +1296,19 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 if i != 0 {
                     signatures_vec.push((
                         ledger_block.quorum_cert().certified_block().id(),
-                        ledger_block
-                            .quorum_cert()
-                            .ledger_info()
-                            .signatures()
-                            .clone(),
+                        ledger_block.quorum_cert().ledger_info().clone(),
                     ));
                 }
             }
             let last_block = blocks.last().expect("not empty").id();
             if let Some(qc) = self.consensus_db.get_qc_for_block(&last_block)? {
-                signatures_vec
-                    .push((last_block, qc.ledger_info().signatures().clone()));
+                signatures_vec.push((last_block, qc.ledger_info().clone()));
             } else {
                 // If we are catching up, all QCs come from retrieved blocks, so
                 // we cannot get the QC that votes for the last
                 // block in an epoch as the QC is within another
                 // unknown child block.
                 assert!(ledger_info_with_sigs.ledger_info().ends_epoch());
-            }
-            for (i, signatures) in signatures_vec.into_iter().enumerate() {
-                assert_eq!(signatures.0, committed_blocks[i].hash);
-                committed_blocks[i].signatures = signatures.1;
             }
         } else {
             committed_blocks.push(CommittedBlock {
@@ -1335,7 +1326,6 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 timestamp: ledger_info_with_sigs
                     .ledger_info()
                     .timestamp_usecs(),
-                signatures: ledger_info_with_sigs.signatures().clone(),
                 view: 1,
                 is_skipped: false,
             });
@@ -1425,6 +1415,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 Some(&ledger_info_with_sigs),
                 Some(pos_state_to_commit),
                 committed_blocks,
+                signatures_vec,
             )?;
         }
 
