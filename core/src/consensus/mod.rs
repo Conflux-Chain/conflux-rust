@@ -42,11 +42,7 @@ use cfx_internal_common::ChainIdParams;
 use cfx_parameters::{
     consensus::*,
     consensus_internal::REWARD_EPOCH_COUNT,
-    rpc::{
-        GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
-        TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW,
-        TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM,
-    },
+    rpc::{GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_TRANSACTION_SAMPLE_SIZE},
 };
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::StateDb;
@@ -388,9 +384,9 @@ impl ConsensusGraph {
         let inner = self.inner.read();
         let mut last_epoch_number = inner.best_epoch_number();
         let mut number_of_blocks_to_sample = GAS_PRICE_BLOCK_SAMPLE_SIZE;
-        let mut tx_hashes = HashSet::new();
         let mut prices = Vec::new();
-        let mut total_transaction_count_in_processed_blocks = 0;
+        let mut total_block_gas_limit: u64 = 0;
+        let mut total_tx_gas_limit: u64 = 0;
 
         loop {
             if number_of_blocks_to_sample == 0 || last_epoch_number == 0 {
@@ -410,45 +406,41 @@ impl ConsensusGraph {
                     .data_man
                     .block_by_hash(&hash, false /* update_cache */)
                     .unwrap();
-                total_transaction_count_in_processed_blocks +=
-                    block.transactions.len();
+                total_block_gas_limit +=
+                    block.block_header.gas_limit().as_u64();
                 for tx in block.transactions.iter() {
-                    if tx_hashes.insert(tx.hash()) {
-                        prices.push(tx.gas_price().clone());
-                        if prices.len() == GAS_PRICE_TRANSACTION_SAMPLE_SIZE {
-                            break;
-                        }
+                    // add the tx.gas to total_tx_gas_limit even it is packed
+                    // multiple times because these tx all
+                    // will occupy block's gas space
+                    total_tx_gas_limit += tx.transaction.gas.as_u64();
+                    prices.push(tx.gas_price().clone());
+                    if prices.len() == GAS_PRICE_TRANSACTION_SAMPLE_SIZE {
+                        break;
                     }
                 }
                 number_of_blocks_to_sample -= 1;
-                if number_of_blocks_to_sample == 0 {
+                if number_of_blocks_to_sample == 0
+                    || prices.len() == GAS_PRICE_TRANSACTION_SAMPLE_SIZE
+                {
                     break;
                 }
             }
         }
 
-        let processed_block_count =
-            GAS_PRICE_BLOCK_SAMPLE_SIZE - number_of_blocks_to_sample;
-        let average_transaction_count_per_block = if processed_block_count != 0
-        {
-            total_transaction_count_in_processed_blocks / processed_block_count
-        } else {
-            0
-        };
-
         prices.sort();
-        if prices.is_empty() {
+        if prices.is_empty() || total_tx_gas_limit == 0 {
             Some(U256::from(1))
         } else {
-            if average_transaction_count_per_block
-                < TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW
-            {
+            let average_gas_limit_multiple =
+                total_block_gas_limit / total_tx_gas_limit;
+            if average_gas_limit_multiple > 5 {
+                // used less than 20%
                 Some(U256::from(1))
-            } else if average_transaction_count_per_block
-                < TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM
-            {
+            } else if average_gas_limit_multiple >= 2 {
+                // used less than 50%
                 Some(prices[prices.len() / 8])
             } else {
+                // used more than 50%
                 Some(prices[prices.len() / 2])
             }
         }
