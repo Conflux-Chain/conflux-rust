@@ -48,14 +48,22 @@ pub struct OverlayAccount {
     // ownership
 
     // This is a read cache for storage values of the current account in db.
-    storage_value_read_cache: RwLock<HashMap<Vec<u8>, U256>>,
+    // The underlying db will not change while computing transactions in an
+    // epoch. So all the contents in the read cache is always available.
+    storage_value_read_cache: Arc<RwLock<HashMap<Vec<u8>, U256>>>,
     // This is a write cache for changing storage value in db. It will be
     // written to db when committing overlay account.
-    storage_value_write_cache: HashMap<Vec<u8>, U256>,
+    storage_value_write_cache: Arc<HashMap<Vec<u8>, U256>>,
 
     // This is a level 2 cache for storage ownership change of the current
     // account. It will be written to db when committing overlay account.
-    storage_owner_lv2_write_cache: RwLock<HashMap<Vec<u8>, Option<Address>>>,
+    //
+    // This cache contains intermediate result during transaction execution, it
+    // should never be shared among multiple threads. But we also need RwLock
+    // here because current implementation requires OverlayAccount: Send +
+    // Sync.
+    storage_owner_lv2_write_cache:
+        RwLock<Arc<HashMap<Vec<u8>, Option<Address>>>>,
     // This is a level 1 cache for storage ownership change of the current
     // account. It will be updated when executing EVM or calling
     // `set_storage` function. It will be merged to level 2 cache at the
@@ -64,7 +72,7 @@ pub struct OverlayAccount {
     // This maintains the current owner of a
     // specific key. If the owner is `None`, the value of current key is
     // zero.
-    storage_owner_lv1_write_cache: HashMap<Vec<u8>, Option<Address>>,
+    storage_owner_lv1_write_cache: Arc<HashMap<Vec<u8>, Option<Address>>>,
 
     // Storage layout change.
     storage_layout_change: Option<StorageLayout>,
@@ -117,9 +125,9 @@ impl OverlayAccount {
             admin: account.admin,
             sponsor_info: account.sponsor_info,
             storage_value_read_cache: Default::default(),
-            storage_value_write_cache: HashMap::new(),
+            storage_value_write_cache: Default::default(),
             storage_owner_lv2_write_cache: Default::default(),
-            storage_owner_lv1_write_cache: HashMap::new(),
+            storage_owner_lv1_write_cache: Default::default(),
             storage_layout_change: None,
             staking_balance: account.staking_balance,
             collateral_for_storage: account.collateral_for_storage,
@@ -145,9 +153,9 @@ impl OverlayAccount {
             admin: Address::zero(),
             sponsor_info: Default::default(),
             storage_value_read_cache: Default::default(),
-            storage_value_write_cache: HashMap::new(),
+            storage_value_write_cache: Default::default(),
             storage_owner_lv2_write_cache: Default::default(),
-            storage_owner_lv1_write_cache: HashMap::new(),
+            storage_owner_lv1_write_cache: Default::default(),
             storage_layout_change: None,
             staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
@@ -171,9 +179,9 @@ impl OverlayAccount {
             admin: Address::zero(),
             sponsor_info: Default::default(),
             storage_value_read_cache: Default::default(),
-            storage_value_write_cache: HashMap::new(),
+            storage_value_write_cache: Default::default(),
             storage_owner_lv2_write_cache: Default::default(),
-            storage_owner_lv1_write_cache: HashMap::new(),
+            storage_owner_lv1_write_cache: Default::default(),
             storage_layout_change: None,
             staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
@@ -218,9 +226,9 @@ impl OverlayAccount {
             admin: admin.clone(),
             sponsor_info: Default::default(),
             storage_value_read_cache: Default::default(),
-            storage_value_write_cache: HashMap::new(),
+            storage_value_write_cache: Default::default(),
             storage_owner_lv2_write_cache: Default::default(),
-            storage_owner_lv1_write_cache: HashMap::new(),
+            storage_owner_lv1_write_cache: Default::default(),
             storage_layout_change: storage_layout,
             staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
@@ -560,9 +568,9 @@ impl OverlayAccount {
             admin: self.admin,
             sponsor_info: self.sponsor_info.clone(),
             storage_value_read_cache: Default::default(),
-            storage_value_write_cache: HashMap::new(),
+            storage_value_write_cache: Default::default(),
             storage_owner_lv2_write_cache: Default::default(),
-            storage_owner_lv1_write_cache: HashMap::new(),
+            storage_owner_lv1_write_cache: Default::default(),
             storage_layout_change: None,
             staking_balance: self.staking_balance,
             collateral_for_storage: self.collateral_for_storage,
@@ -581,7 +589,7 @@ impl OverlayAccount {
         account.storage_value_write_cache =
             self.storage_value_write_cache.clone();
         account.storage_value_read_cache =
-            RwLock::new(self.storage_value_read_cache.read().clone());
+            self.storage_value_read_cache.clone();
         account.storage_owner_lv2_write_cache =
             RwLock::new(self.storage_owner_lv2_write_cache.read().clone());
         account.storage_owner_lv1_write_cache =
@@ -591,11 +599,14 @@ impl OverlayAccount {
     }
 
     pub fn set_storage(&mut self, key: Vec<u8>, value: U256, owner: Address) {
-        self.storage_value_write_cache.insert(key.clone(), value);
+        Arc::make_mut(&mut self.storage_value_write_cache)
+            .insert(key.clone(), value);
+        let lv1_write_cache =
+            Arc::make_mut(&mut self.storage_owner_lv1_write_cache);
         if value.is_zero() {
-            self.storage_owner_lv1_write_cache.insert(key, None);
+            lv1_write_cache.insert(key, None);
         } else {
-            self.storage_owner_lv1_write_cache.insert(key, Some(owner));
+            lv1_write_cache.insert(key, Some(owner));
         }
     }
 
@@ -634,7 +645,7 @@ impl OverlayAccount {
         } else {
             Self::get_and_cache_storage(
                 &mut self.storage_value_read_cache.write(),
-                &mut self.storage_owner_lv2_write_cache.write(),
+                Arc::make_mut(&mut *self.storage_owner_lv2_write_cache.write()),
                 db,
                 &self.address,
                 key,
@@ -652,7 +663,8 @@ impl OverlayAccount {
             // must be in owner_lv2_write cache. Safety: since
             // current value is non-zero, this key must appears in
             // lv2_write_cache because `storage_at` loaded it.
-            self.storage_value_write_cache.insert(key.to_vec(), value);
+            Arc::make_mut(&mut self.storage_value_write_cache)
+                .insert(key.to_vec(), value);
         } else {
             warn!("Change storage value outside transaction fails: current value is zero, tx {:?}, key {:?}", self.address, key);
         }
@@ -737,6 +749,8 @@ impl OverlayAccount {
         }
         let storage_owner_lv2_write_cache =
             &mut *self.storage_owner_lv2_write_cache.write();
+        let storage_owner_lv2_write_cache =
+            Arc::make_mut(storage_owner_lv2_write_cache);
         Self::get_and_cache_storage(
             &mut self.storage_value_read_cache.write(),
             storage_owner_lv2_write_cache,
@@ -765,7 +779,9 @@ impl OverlayAccount {
             return Ok(());
         }
         let storage_owner_lv1_write_cache: Vec<_> =
-            self.storage_owner_lv1_write_cache.drain().collect();
+            Arc::make_mut(&mut self.storage_owner_lv1_write_cache)
+                .drain()
+                .collect();
         for (k, current_owner_opt) in storage_owner_lv1_write_cache {
             // Get the owner of `k` before execution. If it is `None`, it means
             // the value of the key is zero before execution. Otherwise, the
@@ -788,8 +804,7 @@ impl OverlayAccount {
                 }
             }
             // Commit ownership change to `storage_owner_lv2_write_cache`.
-            self.storage_owner_lv2_write_cache
-                .get_mut()
+            Arc::make_mut(self.storage_owner_lv2_write_cache.get_mut())
                 .insert(k, current_owner_opt);
         }
         assert!(self.storage_owner_lv1_write_cache.is_empty());
@@ -801,6 +816,17 @@ impl OverlayAccount {
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()>
     {
+        // When committing an overlay account, the execution of an epoch has
+        // finished. In this case, all the checkpoints except the bottom one
+        // must be removed. (Each checkpoint is a mapping from addresses to
+        // overlay accounts.)
+        assert_eq!(Arc::strong_count(&self.storage_owner_lv1_write_cache), 1);
+        assert_eq!(
+            Arc::strong_count(&self.storage_owner_lv2_write_cache.read()),
+            1
+        );
+        assert_eq!(Arc::strong_count(&self.storage_value_write_cache), 1);
+
         if self.reset_storage() {
             state.recycle_storage(
                 vec![self.address],
@@ -809,9 +835,11 @@ impl OverlayAccount {
         }
 
         assert!(self.storage_owner_lv1_write_cache.is_empty());
+
         let storage_owner_lv2_write_cache =
-            self.storage_owner_lv2_write_cache.get_mut();
-        for (k, v) in self.storage_value_write_cache.drain() {
+            &**self.storage_owner_lv2_write_cache.read();
+        for (k, v) in Arc::make_mut(&mut self.storage_value_write_cache).drain()
+        {
             let address_key =
                 StorageKey::new_storage_key(&self.address, k.as_ref());
             match v.is_zero() {

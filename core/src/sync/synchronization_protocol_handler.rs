@@ -1077,9 +1077,14 @@ impl SynchronizationProtocolHandler {
                 need_to_relay.push(hash);
             }
         }
-        let chosen_peer = PeerFilter::new(msgid::GET_BLOCKS)
-            .exclude(task.failed_peer)
-            .select(&self.syn);
+        let mut filter =
+            PeerFilter::new(msgid::GET_BLOCKS).exclude(task.failed_peer);
+        if let Some(preferred_note_type) =
+            self.preferred_peer_node_type_for_get_block()
+        {
+            filter = filter.with_preferred_node_type(preferred_note_type);
+        }
+        let chosen_peer = filter.select(&self.syn);
         self.blocks_received(
             io,
             task.requested,

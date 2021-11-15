@@ -918,6 +918,7 @@ impl Configuration {
             dev_pack_tx_immediately: self.is_dev_mode()
                 && self.raw_conf.dev_block_interval_ms.is_none(),
             max_payload_bytes: self.raw_conf.jsonrpc_ws_max_payload_bytes,
+            public_rpc_apis: self.raw_conf.public_rpc_apis.clone(),
         }
     }
 
