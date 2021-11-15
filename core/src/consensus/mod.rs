@@ -840,7 +840,7 @@ impl ConsensusGraph {
 
     fn filter_logs_by_epochs(
         &self, from_epoch: EpochNumber, to_epoch: EpochNumber,
-        filter: LogFilter,
+        filter: LogFilter, blocks_to_skip: HashSet<H256>,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError>
     {
         let bloom_possibilities = filter.bloom_possibilities();
@@ -873,6 +873,10 @@ impl ConsensusGraph {
                 Err(e) => Either::Right(std::iter::once(Err(e))),
             })
             // take as many as we need
+            .skip_while(|res| match res {
+                Ok(log) => blocks_to_skip.contains(&log.block_hash),
+                Err(_) => false,
+            })
             .skip(offset)
             .take(limit)
             // short-circuit on error
@@ -1052,55 +1056,31 @@ impl ConsensusGraph {
         };
 
         // filter logs based on epochs
+        // out-of-range blocks from the _end_ of the range
+        // are handled by `filter_logs_by_epochs`
+        let skip_from_end = to_epoch_hashes
+            .into_iter()
+            .skip_while(|h| *h != to_hash)
+            .skip(1)
+            .collect();
+
         let epoch_range_logs = self.filter_logs_by_epochs(
             EpochNumber::Number(from_epoch),
             EpochNumber::Number(to_epoch),
             filter,
+            skip_from_end,
         )?;
 
-        // helper for finding relative position of `a` and `b` in `vec`
-        let rel_pos = |vec: &Vec<H256>, a: H256, b: H256| {
-            let position_a = vec.iter().position(|&h| a == h);
-            let position_b = vec.iter().position(|&h| b == h);
+        // remove out-of-range blocks from the _start_ of the range
+        let skip_from_start: HashSet<_> = from_epoch_hashes
+            .into_iter()
+            .take_while(|h| *h != from_hash)
+            .collect();
 
-            match (position_a, position_b) {
-                (Some(pa), Some(pb)) if pa < pb => "before",
-                (Some(pa), Some(pb)) if pa == pb => "equal",
-                (Some(pa), Some(pb)) if pa > pb => "after",
-                _ => "undefined",
-            }
-        };
-
-        // remove out-of-range blocks
-        let first = epoch_range_logs.iter().position(|l| {
-            l.epoch_number > from_epoch
-                || matches!(
-                    rel_pos(&from_epoch_hashes, l.block_hash, from_hash),
-                    "after" | "equal"
-                )
-        });
-
-        let last = epoch_range_logs
-            .iter()
-            .rev()
-            .position(|l| {
-                l.epoch_number < to_epoch
-                    || matches!(
-                        rel_pos(&to_epoch_hashes, l.block_hash, to_hash),
-                        "before" | "equal"
-                    )
-            })
-            .map(|i| epoch_range_logs.len() - i);
-
-        match (first, last) {
-            (Some(f), Some(l)) => Ok(epoch_range_logs[f..l].to_vec()),
-
-            // (None, _) means: all logs returned are in `from_epoch`,
-            // all from blocks with blocks numbers < `from_block`.
-            // (_, None) means: all logs returned are in `to_epoch`,
-            // all from blocks with blocks numbers > `to_block`.
-            _ => Ok(vec![]),
-        }
+        Ok(epoch_range_logs
+            .into_iter()
+            .skip_while(|log| skip_from_start.contains(&log.block_hash))
+            .collect())
     }
 
     pub fn logs(
@@ -1116,6 +1096,7 @@ impl ConsensusGraph {
                 from_epoch.clone(),
                 to_epoch.clone(),
                 filter,
+                Default::default(),
             ),
 
             // filter by block hashes
