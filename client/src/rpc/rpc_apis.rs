@@ -46,6 +46,7 @@ impl Display for Api {
             Api::Test => write!(f, "test"),
             Api::Trace => write!(f, "trace"),
             Api::TxPool => write!(f, "txpool"),
+            Api::Pos => write!(f, "pos"),
         }
     }
 }

@@ -663,7 +663,8 @@ impl OverlayAccount {
             // must be in owner_lv2_write cache. Safety: since
             // current value is non-zero, this key must appears in
             // lv2_write_cache because `storage_at` loaded it.
-            self.storage_value_write_cache.insert(key.to_vec(), value);
+            Arc::make_mut(&mut self.storage_value_write_cache)
+                .insert(key.to_vec(), value);
         } else {
             warn!("Change storage value outside transaction fails: current value is zero, tx {:?}, key {:?}", self.address, key);
         }
