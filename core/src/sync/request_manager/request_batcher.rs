@@ -74,7 +74,7 @@ impl RequestBatcher {
     /// Batch inserted requests according to their request types.
     /// Requests with close delays are batched together.
     pub fn get_batched_requests(
-        mut self, is_full_node: bool,
+        mut self, prefer_archive_node_for_blocks: bool,
     ) -> impl Iterator<Item = (Duration, Box<dyn Request>)> {
         let mut requests = Vec::new();
         for (delay, hashes) in
@@ -88,10 +88,10 @@ impl RequestBatcher {
                 }) as Box<dyn Request>,
             ));
         }
-        let preferred_node_type = if is_full_node {
-            None
-        } else {
+        let preferred_node_type = if prefer_archive_node_for_blocks {
             Some(NodeType::Archive)
+        } else {
+            None
         };
         for (delay, hashes) in
             self.blocks.batch_iter(DEFAULT_REQUEST_BLOCK_BATCH_SIZE)
