@@ -117,17 +117,17 @@ impl DeferredPool {
     }
 
     fn get_lowest_nonce(&self, addr: &Address) -> Option<&U256> {
-        self.buckets.get(addr).and_then(|bucket| {
-            bucket.get_lowest_nonce_and_gas_price().map(|r| r.0)
-        })
-    }
-
-    fn get_lowest_nonce_and_gas_price(
-        &self, addr: &Address,
-    ) -> Option<(&U256, &U256)> {
         self.buckets
             .get(addr)
-            .and_then(|bucket| bucket.get_lowest_nonce_and_gas_price())
+            .and_then(|bucket| bucket.get_lowest_nonce_tx().map(|r| &r.nonce))
+    }
+
+    fn get_lowest_nonce_tx(
+        &self, addr: &Address,
+    ) -> Option<&SignedTransaction> {
+        self.buckets
+            .get(addr)
+            .and_then(|bucket| bucket.get_lowest_nonce_tx())
     }
 
     fn recalculate_readiness_with_local_info(
@@ -421,17 +421,12 @@ impl TransactionPoolInner {
                 .get_local_nonce_and_balance(&addr)
                 .unwrap_or((0.into(), 0.into()));
 
-            let (lowest_nonce, gas_price) = self
-                .deferred_pool
-                .get_lowest_nonce_and_gas_price(&addr)
-                .unwrap();
-            if *gas_price > new_tx.gas_price {
-                break;
-            }
+            let to_remove_tx =
+                self.deferred_pool.get_lowest_nonce_tx(&addr).unwrap();
 
             // We have to garbage collect an unexecuted transaction.
             // TODO: Implement more heuristic strategies
-            if *lowest_nonce >= ready_nonce {
+            if to_remove_tx.nonce >= ready_nonce {
                 assert_eq!(victim.count, 0);
                 GC_UNEXECUTED_COUNTER.inc(1);
                 warn!("an unexecuted tx is garbage-collected.");
@@ -439,9 +434,23 @@ impl TransactionPoolInner {
 
             if !self
                 .deferred_pool
-                .check_tx_packed(addr.clone(), *lowest_nonce)
+                .check_tx_packed(addr.clone(), to_remove_tx.nonce)
             {
                 self.unpacked_transaction_count -= 1;
+            }
+
+            // maintain ready account pool
+            if let Some(ready_tx) = self.ready_account_pool.get(&addr) {
+                if ready_tx.hash() == to_remove_tx.hash() {
+                    if to_remove_tx.gas_price > new_tx.gas_price {
+                        debug!("txpool gc: old tx has higher price: new_tx={:?}, old_tx={:?}",
+                            new_tx.hash(), to_remove_tx.hash);
+                        break;
+                    }
+                    warn!("a ready tx is garbage-collected");
+                    GC_READY_COUNTER.inc(1);
+                    self.ready_account_pool.remove(&addr);
+                }
             }
 
             let removed_tx = self
@@ -450,15 +459,6 @@ impl TransactionPoolInner {
                 .unwrap()
                 .get_arc_tx()
                 .clone();
-
-            // maintain ready account pool
-            if let Some(ready_tx) = self.ready_account_pool.get(&addr) {
-                if ready_tx.hash() == removed_tx.hash() {
-                    warn!("a ready tx is garbage-collected");
-                    GC_READY_COUNTER.inc(1);
-                    self.ready_account_pool.remove(&addr);
-                }
-            }
 
             // maintain ready info
             if !self.deferred_pool.contain_address(&addr) {

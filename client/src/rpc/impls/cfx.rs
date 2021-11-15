@@ -33,7 +33,9 @@ use primitives::{
 use random_crash::*;
 use rlp::Rlp;
 use rustc_hex::ToHex;
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
+use std::{
+    collections::BTreeMap, net::SocketAddr, sync::Arc, thread, time::Duration,
+};
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
 use crate::{
@@ -391,13 +393,23 @@ impl RpcImpl {
         if r.is_ok() && self.config.dev_pack_tx_immediately {
             // Try to pack and execute this new tx.
             for _ in 0..DEFERRED_STATE_EPOCH_COUNT {
-                self.generate_one_block(
+                let generated = self.generate_one_block(
                     1, /* num_txs */
                     self.sync
                         .get_synchronization_graph()
                         .verification_config
                         .max_block_size_in_bytes,
                 )?;
+                loop {
+                    // Wait for the new block to be fully processed, so all
+                    // generated blocks form a chain for
+                    // `tx` to be executed.
+                    if self.consensus.best_block_hash() == generated {
+                        break;
+                    } else {
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                }
             }
         }
         r
