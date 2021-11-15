@@ -97,7 +97,6 @@
 //! [`Slab::with_capacity`]: struct.Slab.html#with_capacity
 
 #![deny(warnings, missing_debug_implementations)]
-#![doc(html_root_url = "https://docs.rs/slab/0.4.1")]
 
 use super::super::{
     super::utils::{UnsafeCellExtension, WrappedCreateFrom},
@@ -340,7 +339,7 @@ pub struct VacantEntry<'a, T: 'a, E: 'a + EntryTrait<EntryType = T>> {
 impl<'a, T: 'a, E: 'a + EntryTrait<EntryType = T>> Drop
     for VacantEntry<'a, T, E>
 {
-    fn drop(&mut self) { assert_eq!(self.inserted, true) }
+    fn drop(&mut self) { assert!(self.inserted) }
 }
 
 /// A mutable iterator over the values stored in the `Slab`
@@ -984,7 +983,7 @@ impl<'a, T, E: EntryTrait<EntryType = T>> Iterator for IterMut<'a, T, E> {
     type Item = (usize, &'a mut T);
 
     fn next(&mut self) -> Option<(usize, &'a mut T)> {
-        while let Some(entry) = self.entries.next() {
+        for entry in &mut self.entries {
             let curr = self.curr;
             self.curr += 1;
 
