@@ -1533,9 +1533,11 @@ impl SynchronizationProtocolHandler {
 
     pub fn remove_expired_flying_request(&self, io: &dyn NetworkContext) {
         self.request_manager.resend_timeout_requests(io);
-        let cancelled_requests = self
-            .request_manager
-            .resend_waiting_requests(io, !self.catch_up_mode());
+        let cancelled_requests = self.request_manager.resend_waiting_requests(
+            io,
+            !self.catch_up_mode(),
+            self.need_block_from_archive_node(),
+        );
         self.handle_cancelled_requests(cancelled_requests);
     }
 
