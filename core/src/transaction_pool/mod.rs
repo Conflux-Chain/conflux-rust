@@ -313,18 +313,6 @@ impl TransactionPool {
             }
         }
 
-        // ensure the pool has enough quota to insert new transactions.
-        let quota = self
-            .inner
-            .write_with_metric(&INSERT_TXS_QUOTA_LOCK)
-            .remaining_quota();
-        if quota < transactions.len() {
-            for tx in transactions.split_off(quota) {
-                trace!("failed to insert tx into pool (quota not enough), hash = {:?}", tx.hash);
-                failure.insert(tx.hash, "txpool is full".into());
-            }
-        }
-
         if transactions.is_empty() {
             INSERT_TXS_SUCCESS_TPS.mark(passed_transactions.len());
             INSERT_TXS_FAILURE_TPS.mark(failure.len());
@@ -358,7 +346,9 @@ impl TransactionPool {
                         continue;
                     }
                     passed_transactions.push(tx.clone());
-                    if !to_prop.contains_key(&tx.hash) {
+                    if !to_prop.contains_key(&tx.hash)
+                        && to_prop.len() < inner.capacity()
+                    {
                         to_prop.insert(tx.hash, tx);
                     }
                 }

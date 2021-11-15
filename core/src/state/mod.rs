@@ -264,10 +264,7 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
         for (address, entry) in sorted_dirty_accounts.iter_mut() {
             entry.state = AccountState::Committed;
             match &mut entry.account {
-                None => {
-                    killed_addresses.push(*address);
-                    self.accounts_to_notify.push(Err(*address));
-                }
+                None => {}
                 Some(account) if account.removed_without_update() => {
                     killed_addresses.push(*address);
                     self.accounts_to_notify.push(Err(*address));

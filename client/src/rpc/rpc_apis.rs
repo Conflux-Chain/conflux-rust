@@ -2,7 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::{collections::HashSet, str::FromStr};
+use std::{
+    collections::HashSet,
+    fmt::{Display, Formatter},
+    str::FromStr,
+};
 
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum Api {
@@ -29,6 +33,20 @@ impl FromStr for Api {
             "txpool" => Ok(TxPool),
             "pos" => Ok(Pos),
             _ => Err("Unknown api type".into()),
+        }
+    }
+}
+
+impl Display for Api {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Api::Cfx => write!(f, "cfx"),
+            Api::Debug => write!(f, "debug"),
+            Api::Pubsub => write!(f, "pubsub"),
+            Api::Test => write!(f, "test"),
+            Api::Trace => write!(f, "trace"),
+            Api::TxPool => write!(f, "txpool"),
+            Api::Pos => write!(f, "pos"),
         }
     }
 }
@@ -62,6 +80,10 @@ impl ApiSet {
                 .collect(),
         }
     }
+}
+
+impl Default for ApiSet {
+    fn default() -> Self { ApiSet::Safe }
 }
 
 impl FromStr for ApiSet {
