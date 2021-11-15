@@ -248,7 +248,7 @@ pub struct SponsorInfo {
     pub sponsor_balance_for_collateral: U256,
 }
 
-#[derive(Clone, Default, Debug, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub struct Account {
     /// This field is not part of Account data, but kept for convenience. It
     /// should be rarely used except for debugging.
@@ -305,27 +305,18 @@ pub struct ContractAccount {
 impl Account {
     pub fn address(&self) -> &Address { &self.address_local_info }
 
-    pub fn set_address(
-        &mut self, address: Address,
-    ) -> Result<(), AccountError> {
-        Self::check_address_space(&address)?;
+    pub fn set_address(&mut self, address: Address) {
         self.address_local_info = address;
-        Ok(())
     }
 
-    pub fn check_address_space(address: &Address) -> Result<(), AccountError> {
-        if address.is_valid_address() {
-            Ok(())
-        } else {
-            Err(AccountError::ReservedAddressSpace(*address))
-        }
+    pub fn new_empty(address: &Address) -> Account {
+        Self::new_empty_with_balance(address, &U256::from(0), &U256::from(0))
     }
 
     pub fn new_empty_with_balance(
         address: &Address, balance: &U256, nonce: &U256,
-    ) -> Result<Account, AccountError> {
-        Self::check_address_space(address)?;
-        Ok(Self {
+    ) -> Account {
+        Self {
             address_local_info: *address,
             balance: *balance,
             nonce: *nonce,
@@ -335,7 +326,7 @@ impl Account {
             accumulated_interest_return: 0.into(),
             admin: Address::zero(),
             sponsor_info: Default::default(),
-        })
+        }
     }
 
     fn from_basic_account(address: Address, a: BasicAccount) -> Self {
@@ -352,26 +343,17 @@ impl Account {
         }
     }
 
-    pub fn from_contract_account(
-        address: Address, a: ContractAccount,
-    ) -> Result<Self, AccountError> {
-        if address.is_contract_address() {
-            Ok(Self {
-                address_local_info: address,
-                balance: a.balance,
-                nonce: a.nonce,
-                code_hash: a.code_hash,
-                staking_balance: a.staking_balance,
-                collateral_for_storage: a.collateral_for_storage,
-                accumulated_interest_return: a.accumulated_interest_return,
-                admin: a.admin,
-                sponsor_info: a.sponsor_info,
-            })
-        } else {
-            Err(AccountError::AddressSpaceMismatch(
-                address,
-                AddressSpace::Contract,
-            ))
+    pub fn from_contract_account(address: Address, a: ContractAccount) -> Self {
+        Self {
+            address_local_info: address,
+            balance: a.balance,
+            nonce: a.nonce,
+            code_hash: a.code_hash,
+            staking_balance: a.staking_balance,
+            collateral_for_storage: a.collateral_for_storage,
+            accumulated_interest_return: a.accumulated_interest_return,
+            admin: a.admin,
+            sponsor_info: a.sponsor_info,
         }
     }
 
@@ -401,30 +383,39 @@ impl Account {
     pub fn new_from_rlp(
         address: Address, rlp: &Rlp,
     ) -> Result<Self, AccountError> {
-        if address.is_contract_address() {
-            Self::from_contract_account(address, ContractAccount::decode(rlp)?)
-        } else if address.is_valid_address() {
-            Ok(Self::from_basic_account(
+        let account = match rlp.item_count()? {
+            8 => Self::from_contract_account(
                 address,
-                BasicAccount::decode(rlp)?,
-            ))
-        } else {
-            Err(AccountError::ReservedAddressSpace(address))
-        }
+                ContractAccount::decode(rlp)?,
+            ),
+            5 => Self::from_basic_account(address, BasicAccount::decode(rlp)?),
+            _ => {
+                return Err(AccountError::InvalidRlp(
+                    DecoderError::RlpIncorrectListLen,
+                ));
+            }
+        };
+        Ok(account)
     }
 }
 
 impl Encodable for Account {
     fn rlp_append(&self, stream: &mut RlpStream) {
-        if self.address_local_info.is_contract_address() {
+        // After CIP-80, an address started by 0x8 is still stored as
+        // contract format in underlying db, even if it may be a normal address.
+        // In order to achieve backward compatible.
+        //
+        // It is impossible to have an all-zero hash value. But some previous
+        // bug make one of the genesis accounts has all zero genesis hash.
+        if self.code_hash != KECCAK_EMPTY && !self.code_hash.is_zero()
+            || self.address_local_info.is_contract_address()
+        {
             // A contract address can hold balance before its initialization
             // as a recipient of a simple transaction.
             // So we always determine how to serialize by the address type bits.
             stream.append_internal(&self.to_contract_account());
-        } else if self.address_local_info.is_valid_address() {
-            stream.append_internal(&self.to_basic_account());
         } else {
-            unreachable!("other types of address are not supported yet.");
+            stream.append_internal(&self.to_basic_account());
         }
     }
 }
@@ -456,4 +447,79 @@ impl fmt::Display for AccountError {
 
 impl std::error::Error for AccountError {
     fn description(&self) -> &str { "Account error" }
+}
+
+#[cfg(test)]
+fn test_random_account(
+    type_bit: Option<u8>, non_empty_hash: bool, contract_type: bool,
+) {
+    let mut address = Address::random();
+    address.set_address_type_bits(type_bit.unwrap_or(0x40));
+
+    let admin = Address::random();
+    let sponsor_info = SponsorInfo {
+        sponsor_for_gas: Address::random(),
+        sponsor_for_collateral: Address::random(),
+        sponsor_balance_for_gas: U256::from(123),
+        sponsor_balance_for_collateral: U256::from(124),
+        sponsor_gas_bound: U256::from(2),
+    };
+
+    let code_hash = if non_empty_hash {
+        H256::random()
+    } else {
+        KECCAK_EMPTY
+    };
+
+    let account = if contract_type {
+        Account::from_contract_account(
+            address,
+            ContractAccount {
+                balance: 1000.into(),
+                nonce: 123.into(),
+                code_hash,
+                staking_balance: 10000000.into(),
+                collateral_for_storage: 23.into(),
+                accumulated_interest_return: 456.into(),
+                admin,
+                sponsor_info,
+            },
+        )
+    } else {
+        Account::from_basic_account(
+            address,
+            BasicAccount {
+                balance: 1000.into(),
+                nonce: 123.into(),
+                staking_balance: 10000000.into(),
+                collateral_for_storage: 23.into(),
+                accumulated_interest_return: 456.into(),
+            },
+        )
+    };
+    assert_eq!(
+        account,
+        Account::new_from_rlp(
+            account.address_local_info,
+            &Rlp::new(&account.rlp_bytes())
+        )
+        .unwrap()
+    );
+}
+
+#[test]
+fn test_account_serde() {
+    // Original normal address
+    test_random_account(Some(0x10), false, false);
+    // Original contract address
+    test_random_account(Some(0x80), true, true);
+    // Uninitialized contract address && new normal address
+    test_random_account(Some(0x80), false, true);
+
+    // New normal address
+    test_random_account(None, false, false);
+    test_random_account(Some(0x80), false, false);
+
+    test_random_account(None, true, true);
+    test_random_account(Some(0x80), true, true);
 }

@@ -2,7 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::{collections::HashSet, str::FromStr};
+use std::{
+    collections::HashSet,
+    fmt::{Display, Formatter},
+    str::FromStr,
+};
 
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum Api {
@@ -11,6 +15,7 @@ pub enum Api {
     Pubsub,
     Test,
     Trace,
+    TxPool,
 }
 
 impl FromStr for Api {
@@ -24,7 +29,21 @@ impl FromStr for Api {
             "pubsub" => Ok(Pubsub),
             "test" => Ok(Test),
             "trace" => Ok(Trace),
+            "txpool" => Ok(TxPool),
             _ => Err("Unknown api type".into()),
+        }
+    }
+}
+
+impl Display for Api {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Api::Cfx => write!(f, "cfx"),
+            Api::Debug => write!(f, "debug"),
+            Api::Pubsub => write!(f, "pubsub"),
+            Api::Test => write!(f, "test"),
+            Api::Trace => write!(f, "trace"),
+            Api::TxPool => write!(f, "txpool"),
         }
     }
 }
@@ -40,15 +59,27 @@ impl ApiSet {
     pub fn list_apis(&self) -> HashSet<Api> {
         match *self {
             ApiSet::List(ref apis) => apis.clone(),
-            ApiSet::All => {
-                [Api::Cfx, Api::Debug, Api::Pubsub, Api::Test, Api::Trace]
-                    .iter()
-                    .cloned()
-                    .collect()
-            }
-            ApiSet::Safe => [Api::Cfx, Api::Pubsub].iter().cloned().collect(),
+            ApiSet::All => [
+                Api::Cfx,
+                Api::Debug,
+                Api::Pubsub,
+                Api::Test,
+                Api::Trace,
+                Api::TxPool,
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+            ApiSet::Safe => [Api::Cfx, Api::Pubsub, Api::TxPool]
+                .iter()
+                .cloned()
+                .collect(),
         }
     }
+}
+
+impl Default for ApiSet {
+    fn default() -> Self { ApiSet::Safe }
 }
 
 impl FromStr for ApiSet {

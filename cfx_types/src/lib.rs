@@ -53,19 +53,26 @@ pub mod address_util {
 
         #[cfg(feature = "storage_benchmark_no_account_space_check")]
         #[inline]
-        fn is_valid_address(&self) -> bool { true }
+        fn is_genesis_valid_address(&self) -> bool { true }
 
         #[cfg(not(feature = "storage_benchmark_no_account_space_check"))]
         #[inline]
-        fn is_valid_address(&self) -> bool {
+        fn is_genesis_valid_address(&self) -> bool {
             self.is_contract_address()
                 || self.is_user_account_address()
                 || self.is_builtin_address()
                 || self.is_null_address()
         }
 
+        fn is_cip80_valid_address(&self) -> bool { true }
+
         #[inline]
         fn is_contract_address(&self) -> bool {
+            self.address_type_bits() == TYPE_BITS_CONTRACT
+        }
+
+        #[inline]
+        fn maybe_contract_address(&self) -> bool {
             self.address_type_bits() == TYPE_BITS_CONTRACT
         }
 

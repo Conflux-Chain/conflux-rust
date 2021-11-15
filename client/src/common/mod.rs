@@ -457,7 +457,7 @@ pub fn initialize_not_light_node_modules(
                 .expect("Mining thread spawn error");
         }
     } else if let Some(author) = maybe_author {
-        if !author.is_valid_address() || author.is_builtin_address() {
+        if !author.is_genesis_valid_address() || author.is_builtin_address() {
             panic!("mining-author must be user address or contract address, otherwise you will not get mining rewards!!!");
         }
         if blockgen.pow_config.enable_mining() {

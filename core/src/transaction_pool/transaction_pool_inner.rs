@@ -117,9 +117,17 @@ impl DeferredPool {
     }
 
     fn get_lowest_nonce(&self, addr: &Address) -> Option<&U256> {
+        self.buckets.get(addr).and_then(|bucket| {
+            bucket.get_lowest_nonce_and_gas_price().map(|r| r.0)
+        })
+    }
+
+    fn get_lowest_nonce_and_gas_price(
+        &self, addr: &Address,
+    ) -> Option<(&U256, &U256)> {
         self.buckets
             .get(addr)
-            .and_then(|bucket| bucket.get_lowest_nonce())
+            .and_then(|bucket| bucket.get_lowest_nonce_and_gas_price())
     }
 
     fn recalculate_readiness_with_local_info(
@@ -173,6 +181,22 @@ impl DeferredPool {
         } else {
             false
         }
+    }
+
+    fn last_succ_nonce(&self, addr: Address, from_nonce: U256) -> Option<U256> {
+        let bucket = self.buckets.get(&addr)?;
+        let mut next_nonce = from_nonce;
+        loop {
+            let nonce = bucket.succ_nonce(&next_nonce);
+            if nonce.is_none() {
+                break;
+            }
+            if nonce.unwrap() > next_nonce {
+                break;
+            }
+            next_nonce += 1.into();
+        }
+        Some(next_nonce)
     }
 }
 
@@ -345,6 +369,13 @@ impl TransactionPoolInner {
         self.txs.get(tx_hash).map(|x| x.clone())
     }
 
+    pub fn get_by_address2nonce(
+        &self, address: Address, nonce: U256,
+    ) -> Option<Arc<SignedTransaction>> {
+        let bucket = self.deferred_pool.buckets.get(&address)?;
+        bucket.get_tx_by_nonce(nonce).map(|tx| tx.transaction)
+    }
+
     pub fn is_full(&self) -> bool {
         return self.total_deferred() >= self.capacity;
     }
@@ -365,7 +396,7 @@ impl TransactionPoolInner {
     /// We will pick a sender who has maximum number of transactions which are
     /// garbage collectable. And if there is a tie, the one who has minimum
     /// timestamp will be picked.
-    fn collect_garbage(&mut self) {
+    pub fn collect_garbage(&mut self, new_tx: &SignedTransaction) {
         let count_before_gc = self.total_deferred();
         while self.is_full() && !self.garbage_collector.is_empty() {
             let victim = self.garbage_collector.top().unwrap().clone();
@@ -390,12 +421,17 @@ impl TransactionPoolInner {
                 .get_local_nonce_and_balance(&addr)
                 .unwrap_or((0.into(), 0.into()));
 
-            let lowest_nonce =
-                *self.deferred_pool.get_lowest_nonce(&addr).unwrap();
+            let (lowest_nonce, gas_price) = self
+                .deferred_pool
+                .get_lowest_nonce_and_gas_price(&addr)
+                .unwrap();
+            if *gas_price > new_tx.gas_price {
+                break;
+            }
 
             // We have to garbage collect an unexecuted transaction.
             // TODO: Implement more heuristic strategies
-            if lowest_nonce >= ready_nonce {
+            if *lowest_nonce >= ready_nonce {
                 assert_eq!(victim.count, 0);
                 GC_UNEXECUTED_COUNTER.inc(1);
                 warn!("an unexecuted tx is garbage-collected.");
@@ -403,7 +439,7 @@ impl TransactionPoolInner {
 
             if !self
                 .deferred_pool
-                .check_tx_packed(addr.clone(), lowest_nonce)
+                .check_tx_packed(addr.clone(), *lowest_nonce)
             {
                 self.unpacked_transaction_count -= 1;
             }
@@ -452,10 +488,12 @@ impl TransactionPoolInner {
 
     /// Collect garbage and return the remaining quota of the pool to insert new
     /// transactions.
-    pub fn remaining_quota(&mut self) -> usize {
+    pub fn remaining_quota(&self) -> usize {
         let len = self.total_deferred();
         self.capacity - len + self.garbage_collector.gc_size()
     }
+
+    pub fn capacity(&self) -> usize { self.capacity }
 
     // the new inserting will fail if tx_pool is full (even if `force` is true)
     fn insert_transaction_without_readiness_check(
@@ -471,7 +509,7 @@ impl TransactionPoolInner {
             &transaction.sender(),
             &transaction.nonce(),
         ) {
-            self.collect_garbage();
+            self.collect_garbage(transaction.as_ref());
             if self.is_full() {
                 return InsertResult::Failed("Transaction Pool is full".into());
             }
@@ -669,6 +707,12 @@ impl TransactionPoolInner {
             }
         }
         ret
+    }
+
+    pub fn get_next_nonce(&self, address: &Address, state_nonce: U256) -> U256 {
+        self.deferred_pool
+            .last_succ_nonce(*address, state_nonce)
+            .unwrap_or(state_nonce)
     }
 
     fn recalculate_readiness_with_local_info(&mut self, addr: &Address) {
@@ -877,7 +921,7 @@ impl TransactionPoolInner {
         // Compute sponsored_gas for `transaction`
         if let Action::Call(callee) = &transaction.action {
             // FIXME: This is a quick fix for performance issue.
-            if callee.is_contract_address() {
+            if callee.maybe_contract_address() {
                 if let Some(sponsor_info) =
                     account_cache.get_sponsor_info(callee).map_err(|e| {
                         format!(

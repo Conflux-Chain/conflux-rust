@@ -85,12 +85,13 @@ pub struct TransitionsBlockNumber {
     /// CIP64: Get current epoch number through internal contract
     pub cip64: BlockNumber,
     /// CIP71: Configurable anti-reentrancy
-    pub cip71a: BlockNumber,
-    pub cip71b: BlockNumber,
+    pub cip71: BlockNumber,
     /// CIP72: Accept Ethereum transaction signature
     pub cip72b: BlockNumber,
     /// CIP78: Correct `is_sponsored` fields in receipt
     pub cip78: BlockNumber,
+    /// CIP80: Ethereum compatible signature recover
+    pub cip80: BlockNumber,
 }
 
 #[derive(Default, Debug, Clone)]

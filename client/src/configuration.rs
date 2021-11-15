@@ -278,7 +278,7 @@ build_config! {
         (get_logs_epoch_batch_size, (usize), 32)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (persist_tx_index, (bool), false)
-        (persist_block_number_index, (bool), false)
+        (persist_block_number_index, (bool), true)
         (print_memory_usage_period_s, (Option<u64>), None)
         (target_block_gas_limit, (u64), DEFAULT_TARGET_BLOCK_GAS_LIMIT)
         (executive_trace, (bool), false)
@@ -901,6 +901,7 @@ impl Configuration {
             dev_pack_tx_immediately: self.is_dev_mode()
                 && self.raw_conf.dev_block_interval_ms.is_none(),
             max_payload_bytes: self.raw_conf.jsonrpc_ws_max_payload_bytes,
+            public_rpc_apis: self.raw_conf.public_rpc_apis.clone(),
         }
     }
 
@@ -1060,19 +1061,19 @@ impl Configuration {
             .raw_conf
             .unnamed_21autumn_transition_number
             .unwrap_or(default_transition_time);
-        params.transition_numbers.cip71a = self
+        params.transition_numbers.cip71 = self
             .raw_conf
             .unnamed_21autumn_transition_number
-            .unwrap_or(default_transition_time);
-        params.transition_numbers.cip71b = self
-            .raw_conf
-            .unnamed_21autumn_cip71_deferred_transition
             .unwrap_or(default_transition_time);
         params.transition_numbers.cip72b = self
             .raw_conf
             .unnamed_21autumn_transition_number
             .unwrap_or(default_transition_time);
         params.transition_numbers.cip78 = self
+            .raw_conf
+            .unnamed_21autumn_transition_number
+            .unwrap_or(default_transition_time);
+        params.transition_numbers.cip80 = self
             .raw_conf
             .unnamed_21autumn_transition_number
             .unwrap_or(default_transition_time);

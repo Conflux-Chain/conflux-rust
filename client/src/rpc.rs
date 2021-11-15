@@ -46,11 +46,13 @@ use self::{
             CfxHandler as LightCfxHandler, DebugRpcImpl as LightDebugRpcImpl,
             RpcImpl as LightImpl, TestRpcImpl as LightTestRpcImpl,
         },
+        pool::TransactionPoolHandler,
         pubsub::PubSubClient,
         trace::TraceHandler,
     },
     traits::{
-        cfx::Cfx, debug::LocalRpc, pubsub::PubSub, test::TestRpc, trace::Trace,
+        cfx::Cfx, debug::LocalRpc, pool::TransactionPool, pubsub::PubSub,
+        test::TestRpc, trace::Trace,
     },
 };
 
@@ -226,6 +228,11 @@ fn setup_rpc_apis(
                 );
                 handler.extend_with(RpcProxy::new(trace, interceptor));
             }
+            Api::TxPool => {
+                let txpool =
+                    TransactionPoolHandler::new(common.clone()).to_delegate();
+                handler.extend_with(txpool);
+            }
         }
     }
     handler
@@ -296,6 +303,9 @@ fn setup_rpc_apis_light(
             }
             Api::Trace => {
                 warn!("Light nodes do not support trace RPC");
+            }
+            Api::TxPool => {
+                warn!("Light nodes do not support txpool RPC");
             }
         }
     }

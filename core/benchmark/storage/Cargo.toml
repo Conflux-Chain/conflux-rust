@@ -44,6 +44,9 @@ serde_json = "1.0"
 # This also don't work because cargo scans the whole git and aborted due to lack of Cargo.toml in one dir.
 #ethkey = { package = "ethkey", git = "https://github.com/Conflux-Chain/conflux-rust", commit = "026304" }
 
+[patch.'https://github.com/paritytech/bn']
+bn = {git = 'https://github.com/Conflux-Chain/bn.git', default-features = false, rev="635c4cdd560bc0c8b262e6bf809dc709da8bcd7e", version = "=0.4.4"}
+
 [patch.crates-io]
 parity-snappy = { path = "parity-snappy/rust-snappy" }
 bzip2-sys = { git = "https://github.com/alexcrichton/bzip2-rs.git", commit = "a8ee5cb4" }
