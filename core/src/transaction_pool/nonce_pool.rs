@@ -385,10 +385,11 @@ impl NoncePool {
             .and_then(|node| node.get(&nonce).map(|x| x.clone()))
     }
 
-    pub fn get_lowest_nonce(&self) -> Option<&U256> {
-        self.root
-            .as_ref()
-            .and_then(|node| node.leftmost().map(|x| &x.transaction.nonce))
+    pub fn get_lowest_nonce_and_gas_price(&self) -> Option<(&U256, &U256)> {
+        self.root.as_ref().and_then(|node| {
+            node.leftmost()
+                .map(|x| (&x.transaction.nonce, &x.transaction.gas_price))
+        })
     }
 
     pub fn remove(&mut self, nonce: &U256) -> Option<TxWithReadyInfo> {
@@ -396,7 +397,8 @@ impl NoncePool {
     }
 
     pub fn remove_lowest_nonce(&mut self) -> Option<TxWithReadyInfo> {
-        let lowest_nonce = self.get_lowest_nonce().map(|x| x.clone());
+        let lowest_nonce =
+            self.get_lowest_nonce_and_gas_price().map(|x| x.0.clone());
         lowest_nonce.and_then(|nonce| self.remove(&nonce))
     }
 
@@ -754,7 +756,10 @@ mod nonce_pool_test {
         }
         for i in 0..10 {
             assert_eq!(nonce_pool.count_from(&U256::from(i)), 10 - i);
-            assert_eq!(*nonce_pool.get_lowest_nonce().unwrap(), U256::from(i));
+            assert_eq!(
+                *nonce_pool.get_lowest_nonce_and_gas_price().unwrap().0,
+                U256::from(i)
+            );
             assert_eq!(nonce_pool.remove_lowest_nonce(), Some(tx2[i].clone()));
             assert_eq!(nonce_pool.remove(&U256::from(i)), None);
             assert_eq!(nonce_pool.check_nonce_exists(&U256::from(i)), false);
