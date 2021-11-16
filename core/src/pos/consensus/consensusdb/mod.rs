@@ -9,18 +9,16 @@
 mod consensusdb_test;
 mod schema;
 
-use crate::{
-    pos::consensus::{
-        consensusdb::schema::{
-            block::BlockSchema,
-            ledger_block::LedgerBlockSchema,
-            quorum_certificate::QCSchema,
-            single_entry::{SingleEntryKey, SingleEntrySchema},
-            staking_event::StakingEventsSchema,
-            STAKING_EVENTS_CF_NAME,
-        },
-        error::DbError,
+use crate::pos::consensus::{
+    consensusdb::schema::{
+        block::BlockSchema,
+        ledger_block::LedgerBlockSchema,
+        quorum_certificate::QCSchema,
+        single_entry::{SingleEntryKey, SingleEntrySchema},
+        staking_event::StakingEventsSchema,
+        STAKING_EVENTS_CF_NAME,
     },
+    error::DbError,
 };
 use anyhow::{anyhow, Result};
 use cfx_types::H256;
