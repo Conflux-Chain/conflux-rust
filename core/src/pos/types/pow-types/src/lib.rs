@@ -5,6 +5,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use cfx_types::H256;
+use serde::{Deserialize, Serialize};
 
 #[async_trait]
 pub trait PowInterface: Send + Sync {
@@ -24,7 +25,7 @@ pub trait PowInterface: Send + Sync {
     async fn wait_for_initialization(&self, last_decision: H256);
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum StakingEvent {
     /// (address, bls_public_key, vrf_public_key)
     Register(H256, Vec<u8>, Vec<u8>),
