@@ -404,7 +404,7 @@ impl RpcImpl {
     }
 
     fn storage_at(
-        &self, address: RpcAddress, position: H256,
+        &self, address: RpcAddress, position: U256,
         epoch_num: Option<EpochNumber>,
     ) -> RpcResult<Option<H256>>
     {
@@ -419,6 +419,8 @@ impl RpcImpl {
         let state_db = self
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
+
+        let position: H256 = H256::from_uint(&position);
 
         let key = StorageKey::new_storage_key(
             &address.hex_address,
@@ -1532,7 +1534,7 @@ impl Cfx for CfxHandler {
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
             fn send_raw_transaction(&self, raw: Bytes) -> JsonRpcResult<H256>;
-            fn storage_at(&self, addr: RpcAddress, pos: H256, epoch_number: Option<EpochNumber>)
+            fn storage_at(&self, addr: RpcAddress, pos: U256, epoch_number: Option<EpochNumber>)
                 -> BoxFuture<Option<H256>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
