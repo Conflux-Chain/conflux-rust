@@ -390,6 +390,8 @@ impl ConsensusGraph {
                         // pivot decision may have not been processed
                         break;
                     } else {
+                        // Wait without holding consensus inner lock.
+                        drop(inner);
                         warn!("Wait for PoW to catch up with PoS");
                         sleep(Duration::from_secs(1));
                     }
