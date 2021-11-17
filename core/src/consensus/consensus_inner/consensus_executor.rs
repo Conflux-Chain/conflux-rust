@@ -1357,11 +1357,13 @@ impl ConsensusExecutionHandler {
                             block_traces.push(executed.trace.into());
                         }
 
-                        for log in &transaction_logs {
-                            if let Some(staking_event) =
-                                decode_register_info(log)
-                            {
-                                epoch_staking_events.push(staking_event);
+                        if self.pos_verifier.pos_option().is_some() {
+                            for log in &transaction_logs {
+                                if let Some(staking_event) =
+                                    decode_register_info(log)
+                                {
+                                    epoch_staking_events.push(staking_event);
+                                }
                             }
                         }
                     }
@@ -1419,18 +1421,20 @@ impl ConsensusExecutionHandler {
 
             epoch_receipts.push(block_receipts);
         }
-        self.pos_verifier
-            .consensus_db()
-            .put_staking_events(
-                pivot_block.block_header.height(),
-                pivot_block.hash(),
-                epoch_staking_events,
-            )
-            .map_err(|e| {
-                cfx_statedb::Error::from(DbErrorKind::PosDatabaseError(
-                    format!("{:?}", e),
-                ))
-            })?;
+        if self.pos_verifier.pos_option().is_some() {
+            self.pos_verifier
+                .consensus_db()
+                .put_staking_events(
+                    pivot_block.block_header.height(),
+                    pivot_block.hash(),
+                    epoch_staking_events,
+                )
+                .map_err(|e| {
+                    cfx_statedb::Error::from(DbErrorKind::PosDatabaseError(
+                        format!("{:?}", e),
+                    ))
+                })?;
+        }
 
         if on_local_pivot {
             self.tx_pool.recycle_transactions(to_pending);

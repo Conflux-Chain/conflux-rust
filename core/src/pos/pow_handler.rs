@@ -204,7 +204,14 @@ impl PowInterface for PowHandler {
                     block_hash: me_decision,
                 },
             )
-            .map_err(|e| e.into())
+            .or_else(|e| {
+                debug!("get_staking_events from pow: err={:?}", e);
+                Self::get_staking_events_impl(
+                    pow_consensus,
+                    parent_decision,
+                    me_decision,
+                )
+            })
     }
 
     async fn wait_for_initialization(&self, last_decision: H256) {
