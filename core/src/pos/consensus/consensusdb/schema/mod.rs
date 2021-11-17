@@ -19,7 +19,7 @@ pub(super) const BLOCK_CF_NAME: ColumnFamilyName = "block";
 pub(super) const QC_CF_NAME: ColumnFamilyName = "quorum_certificate";
 pub(super) const SINGLE_ENTRY_CF_NAME: ColumnFamilyName = "single_entry";
 pub(super) const LEDGER_BLOCK_CF_NAME: ColumnFamilyName = "ledger_block";
-pub(super) const STAKING_EVENTS_CF_NAME: ColumnFamilyName = "ledger_block";
+pub(super) const STAKING_EVENTS_CF_NAME: ColumnFamilyName = "staking_event";
 
 fn ensure_slice_len_eq(data: &[u8], len: usize) -> Result<()> {
     ensure!(
