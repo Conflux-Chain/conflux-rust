@@ -755,7 +755,7 @@ mod nonce_pool_test {
         for i in 0..10 {
             assert_eq!(nonce_pool.count_from(&U256::from(i)), 10 - i);
             assert_eq!(
-                *nonce_pool.get_lowest_nonce_tx().unwrap().nonce,
+                nonce_pool.get_lowest_nonce_tx().unwrap().nonce,
                 U256::from(i)
             );
             assert_eq!(nonce_pool.remove_lowest_nonce(), Some(tx2[i].clone()));
