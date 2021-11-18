@@ -110,7 +110,7 @@ const MAX_LIMIT: u64 = 1000;
 // TODO: Either implement an iteration API to allow a very old client to loop
 // through a long history or guarantee that there is always a recent enough
 // waypoint and client knows to boot from there.
-const MAX_NUM_EPOCH_ENDING_LEDGER_INFO: usize = 100;
+const MAX_NUM_EPOCH_ENDING_LEDGER_INFO: usize = 10000000;
 
 static ROCKSDB_PROPERTY_MAP: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
     [
