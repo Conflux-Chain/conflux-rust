@@ -87,9 +87,12 @@ path = "tools/pos-genesis-tool/main.rs"
 [workspace]
 
 [features]
-default = ["jemalloc-global"]
+default = ["jemalloc-global", "bls-blst"]
 deadlock-detection = ["parking_lot/deadlock_detection"]
 jemalloc-global = ["jemallocator", "malloc_size_of/jemalloc-global"]
+bls-blst = ["cfxcore/bls-blst", "diem-crypto/bls-blst"]
+bls-pairing = ["cfxcore/bls-pairing", "diem-crypto/bls-pairing"]
+
 
 [patch.crates-io]
 sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = "1de8e5998f7c2d919336660b8ef4e8f52ac43844" }

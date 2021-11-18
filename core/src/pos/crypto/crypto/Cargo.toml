@@ -36,7 +36,7 @@ diem-crypto-derive = { path = "../crypto-derive", version = "0.1.0" }
 bcs = "0.1.2"
 cfxkey = { path = "../../../../../accounts/cfxkey" }
 cfx-types = { path = "../../../../../cfx_types" }
-bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "3fba9589b0413a10db9c88b46de61956673d7cf8", default-features = false, features = ["blst", "multicore"]}
+bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "3fba9589b0413a10db9c88b46de61956673d7cf8", default-features = false, features = ["multicore"]}
 #bls-signatures = {path = "/Users/lipeilun/conflux/bls-signatures",default-features = false, features = ["blst", "multicore"]}
 #bls-signatures = {path = "/Users/lipeilun/conflux/bls-signatures"}
 vrf = "0.2.2"
@@ -66,6 +66,8 @@ fuzzing = ["proptest", "proptest-derive", "cloneable-private-keys"]
 fiat = ["curve25519-dalek/fiat_u64_backend", "ed25519-dalek/fiat_u64_backend", "x25519-dalek/fiat_u64_backend"]
 u64 = ["curve25519-dalek/u64_backend", "ed25519-dalek/u64_backend", "x25519-dalek/u64_backend"]
 u32 = ["curve25519-dalek/u32_backend", "ed25519-dalek/u32_backend", "x25519-dalek/u32_backend"]
+bls-blst = ["bls-signatures/blst"]
+bls-pairing = ["bls-signatures/pairing"]
 
 [[bench]]
 name = "noise"
