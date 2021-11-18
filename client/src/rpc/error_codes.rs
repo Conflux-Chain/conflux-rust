@@ -188,7 +188,7 @@ pub fn request_rejected_in_catch_up_mode(details: Option<String>) -> Error {
 pub fn pivot_assumption_failed(expected: H256, got: H256) -> Error {
     Error {
         code: ErrorCode::ServerError(codes::CONFLUX_PIVOT_CHAIN_UNSTABLE),
-        message: "Pivot assumption failed".into(),
+        message: "pivot chain assumption failed".into(),
         data: Some(Value::String(format!(
             "pivot assumption: {:?}, actual pivot hash: {:?}",
             expected, got

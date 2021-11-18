@@ -97,7 +97,7 @@ pub trait Cfx {
     /// Returns storage entries from a given contract.
     #[rpc(name = "cfx_getStorageAt")]
     fn storage_at(
-        &self, addr: RpcAddress, pos: H256, epoch_number: Option<EpochNumber>,
+        &self, addr: RpcAddress, pos: U256, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<Option<H256>>;
 
     #[rpc(name = "cfx_getStorageRoot")]
