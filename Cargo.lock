@@ -482,17 +482,33 @@ name = "bls-signatures"
 version = "0.11.1"
 source = "git+https://github.com/Conflux-Chain/bls-signatures.git?rev=3fba9589b0413a10db9c88b46de61956673d7cf8#3fba9589b0413a10db9c88b46de61956673d7cf8"
 dependencies = [
+ "bls12_381",
  "blst",
  "blstrs",
  "cfg-if 0.1.10",
  "ff",
  "group",
+ "hkdf 0.11.0",
  "pairing",
  "rand_core 0.6.3",
  "rayon",
  "sha2",
  "subtle",
  "thiserror",
+]
+
+[[package]]
+name = "bls12_381"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d28daeeded7949f1c7c72693377c98473b00be0aa0023760a84a300e4e7c74b"
+dependencies = [
+ "digest 0.9.0",
+ "ff",
+ "group",
+ "pairing",
+ "rand_core 0.6.3",
+ "subtle",
 ]
 
 [[package]]
@@ -1686,7 +1702,7 @@ dependencies = [
  "digest 0.9.0",
  "ed25519-dalek-fiat",
  "hex 0.4.3",
- "hkdf",
+ "hkdf 0.10.0",
  "lazy_static",
  "mirai-annotations",
  "once_cell",
@@ -2833,6 +2849,16 @@ checksum = "51ab2f639c231793c5f6114bdb9bbe50a7dbbfcd7c7c6bd8475dec2d991e964f"
 dependencies = [
  "digest 0.9.0",
  "hmac 0.10.1",
+]
+
+[[package]]
+name = "hkdf"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01706d578d5c281058480e673ae4086a9f4710d8df1ad80a5b03e39ece5f886b"
+dependencies = [
+ "digest 0.9.0",
+ "hmac 0.11.0",
 ]
 
 [[package]]

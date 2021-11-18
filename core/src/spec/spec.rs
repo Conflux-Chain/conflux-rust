@@ -14,35 +14,6 @@ use cfx_types::{U256, U512};
 use primitives::{block::BlockHeight, BlockNumber};
 use std::collections::BTreeMap;
 
-struct Spec {
-    /*
- * /// User friendly spec name
- * pub name: String,
- * /// Common parameters for different chain.
- * pub params: CommonParams,
- * /// The genesis block's parent hash field.
- * pub parent_hash: H256,
- * /// The genesis block's author field.
- * pub author: Address,
- * /// The genesis block's difficulty field.
- * pub difficulty: U256,
- * /// The genesis block's gas limit field.
- * pub gas_limit: U256,
- * /// The genesis block's gas used field.
- * pub gas_used: U256,
- * /// The genesis block's timestamp field.
- * pub timestamp: u64,
- * /// Transactions root of the genesis block. Should be
- * KECCAK_NULL_RLP. pub transactions_root: H256,
- * /// Receipts root of the genesis block. Should be KECCAK_NULL_RLP.
- * pub receipts_root: H256,
- * /// The genesis block's extra data field.
- * pub custom: Bytes, */}
-
-impl Default for Spec {
-    fn default() -> Self { unimplemented!() }
-}
-
 #[derive(Debug)]
 pub struct CommonParams {
     /// Account start nonce.

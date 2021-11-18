@@ -35,7 +35,9 @@ use primitives::{
 use random_crash::*;
 use rlp::Rlp;
 use rustc_hex::ToHex;
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
+use std::{
+    collections::BTreeMap, net::SocketAddr, sync::Arc, thread, time::Duration,
+};
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
 use crate::{
@@ -412,20 +414,30 @@ impl RpcImpl {
         if r.is_ok() && self.config.dev_pack_tx_immediately {
             // Try to pack and execute this new tx.
             for _ in 0..DEFERRED_STATE_EPOCH_COUNT {
-                self.generate_one_block(
+                let generated = self.generate_one_block(
                     1, /* num_txs */
                     self.sync
                         .get_synchronization_graph()
                         .verification_config
                         .max_block_size_in_bytes,
                 )?;
+                loop {
+                    // Wait for the new block to be fully processed, so all
+                    // generated blocks form a chain for
+                    // `tx` to be executed.
+                    if self.consensus.best_block_hash() == generated {
+                        break;
+                    } else {
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                }
             }
         }
         r
     }
 
     fn storage_at(
-        &self, address: RpcAddress, position: H256,
+        &self, address: RpcAddress, position: U256,
         epoch_num: Option<EpochNumber>,
     ) -> RpcResult<Option<H256>>
     {
@@ -440,6 +452,8 @@ impl RpcImpl {
         let state_db = self
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
+
+        let position: H256 = H256::from_uint(&position);
 
         let key = StorageKey::new_storage_key(
             &address.hex_address,
@@ -1555,7 +1569,7 @@ impl Cfx for CfxHandler {
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
             fn send_raw_transaction(&self, raw: Bytes) -> JsonRpcResult<H256>;
-            fn storage_at(&self, addr: RpcAddress, pos: H256, epoch_number: Option<EpochNumber>)
+            fn storage_at(&self, addr: RpcAddress, pos: U256, epoch_number: Option<EpochNumber>)
                 -> BoxFuture<Option<H256>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;

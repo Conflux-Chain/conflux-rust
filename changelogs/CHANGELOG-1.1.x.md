@@ -1,3 +1,9 @@
+# 1.1.7
+
+## RPC
+
+- Change RPC `cfx_getStorageAt`'s second parameter type from `H256` to `U256` to ease use
+
 # 1.1.6
 
 ## Improvements
