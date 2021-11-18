@@ -35,12 +35,9 @@ pub struct ExecutionStatePrefetcher {
 
 struct PrefetcherThreadWorker {
     task_queue_sender: Mutex<
-        mpsc::Sender<(
-            EpochId,
-            u64,
-            &'static State,
-            &'static [&'static Address],
-        )>,
+        mpsc::Sender<
+            Option<(EpochId, u64, &'static State, &'static [&'static Address])>,
+        >,
     >,
     /// All threads should be processing the same task.
     /// Abort the current task when the cancel task id matches.
@@ -50,12 +47,9 @@ struct PrefetcherThreadWorker {
 
 impl PrefetcherThreadWorker {
     fn new(
-        task_queue_sender: mpsc::Sender<(
-            EpochId,
-            u64,
-            &'static State,
-            &'static [&'static Address],
-        )>,
+        task_queue_sender: mpsc::Sender<
+            Option<(EpochId, u64, &'static State, &'static [&'static Address])>,
+        >,
     ) -> Self
     {
         Self {
@@ -81,16 +75,13 @@ impl PrefetcherThreadWorker {
     {
         self.task_queue_sender
             .lock()
-            .send((task_epoch_id, task_id, state, addresses))
+            .send(Some((task_epoch_id, task_id, state, addresses)))
             .ok();
     }
 
-    /// Unsafe because we only want the Prefetcher to stop the thread.
-    unsafe fn stop(&self) {
-        self.task_queue_sender
-            .lock()
-            .send((Default::default(), 0, &*null(), &[]))
-            .ok();
+    fn stop(&self) {
+        // ignore error
+        let _ = self.task_queue_sender.lock().send(None);
     }
 
     fn prefetch_accounts(
@@ -115,33 +106,32 @@ impl PrefetcherThreadWorker {
 
     fn run(
         &self,
-        task_queue: mpsc::Receiver<(
-            EpochId,
-            u64,
-            &'static State,
-            &'static [&'static Address],
-        )>,
+        task_queue: mpsc::Receiver<
+            Option<(EpochId, u64, &'static State, &'static [&'static Address])>,
+        >,
         task_finish_signal: mpsc::Sender<()>,
     )
     {
-        while let Ok((task_epoch_id, task_id, state, accounts)) =
-            task_queue.recv()
-        {
-            if task_id == 0 {
-                // Stopped by the Prefetcher.
-                return;
-            } else {
-                *self.current_task_id.write() = (task_epoch_id, task_id);
+        while let Ok(task) = task_queue.recv() {
+            match task {
+                None => {
+                    // Stopped by the Prefetcher.
+                    return;
+                }
+                Some((task_epoch_id, task_id, state, accounts)) => {
+                    *self.current_task_id.write() = (task_epoch_id, task_id);
 
-                // prefetch accounts, ignore db errors for now
-                let _ = self.prefetch_accounts(task_id, state, accounts);
+                    // prefetch accounts, ignore db errors for now
+                    let _ = self.prefetch_accounts(task_id, state, accounts);
 
-                task_finish_signal.send(()).expect(
-                    // Should not return error.
-                    &concat!(file!(), ":", line!(), ":", column!()),
-                );
+                    task_finish_signal.send(()).expect(
+                        // Should not return error.
+                        &concat!(file!(), ":", line!(), ":", column!()),
+                    );
+                }
             }
         }
+
         error!("State prefetch worker stopped due to exception.");
     }
 }
@@ -298,9 +288,7 @@ impl Drop for ExecutionStatePrefetcher {
 
         // Let workers stop after the current task.
         for worker in &self.workers {
-            unsafe {
-                worker.stop();
-            }
+            worker.stop();
         }
         // Cancel the current task.
         if let Some(key) = &*self.task_sender.lock().current_task() {
@@ -364,7 +352,6 @@ use parking_lot::{Mutex, RwLock};
 use primitives::EpochId;
 use std::{
     io,
-    ptr::null,
     sync::{
         atomic::{AtomicU64, Ordering},
         mpsc::{self, SendError},
