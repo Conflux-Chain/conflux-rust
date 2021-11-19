@@ -4594,6 +4594,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "cfx-types",
+ "serde",
 ]
 
 [[package]]

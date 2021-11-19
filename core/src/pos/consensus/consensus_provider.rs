@@ -70,7 +70,10 @@ pub fn start_consensus(
         node_config.consensus.mempool_txn_pull_timeout_ms,
         node_config.consensus.mempool_executed_txn_timeout_ms,
     ));
-    let pow_handler = Arc::new(PowHandler::new(runtime.handle().clone()));
+    let pow_handler = Arc::new(PowHandler::new(
+        runtime.handle().clone(),
+        consensus_db.clone(),
+    ));
     let executor = Box::new(Executor::<FakeVM>::new(
         db_with_cache,
         pow_handler.clone(),

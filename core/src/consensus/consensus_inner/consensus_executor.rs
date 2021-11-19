@@ -14,6 +14,7 @@ use crate::{
     },
     evm::Spec,
     executive::{
+        internal_contract::impls::pos::decode_register_info,
         revert_reason_decode, ExecutionError, ExecutionOutcome, Executive,
         TransactOptions,
     },
@@ -39,7 +40,7 @@ use cfx_internal_common::{
 };
 use cfx_parameters::consensus::*;
 use cfx_state::{state_trait::*, CleanupMode};
-use cfx_statedb::{Result as DbResult, StateDb};
+use cfx_statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb};
 use cfx_storage::{
     defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
     StorageManagerTrait,
@@ -1186,6 +1187,7 @@ impl ConsensusExecutionHandler {
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
 
         let mut epoch_receipts = Vec::with_capacity(epoch_blocks.len());
+        let mut epoch_staking_events = Vec::new();
         let mut to_pending = Vec::new();
         let mut block_number = start_block_number;
         let mut last_block_hash =
@@ -1354,6 +1356,16 @@ impl ConsensusExecutionHandler {
                         if self.config.executive_trace {
                             block_traces.push(executed.trace.into());
                         }
+
+                        if self.pos_verifier.pos_option().is_some() {
+                            for log in &transaction_logs {
+                                if let Some(staking_event) =
+                                    decode_register_info(log)
+                                {
+                                    epoch_staking_events.push(staking_event);
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -1408,6 +1420,20 @@ impl ConsensusExecutionHandler {
             );
 
             epoch_receipts.push(block_receipts);
+        }
+        if self.pos_verifier.pos_option().is_some() {
+            self.pos_verifier
+                .consensus_db()
+                .put_staking_events(
+                    pivot_block.block_header.height(),
+                    pivot_block.hash(),
+                    epoch_staking_events,
+                )
+                .map_err(|e| {
+                    cfx_statedb::Error::from(DbErrorKind::PosDatabaseError(
+                        format!("{:?}", e),
+                    ))
+                })?;
         }
 
         if on_local_pivot {

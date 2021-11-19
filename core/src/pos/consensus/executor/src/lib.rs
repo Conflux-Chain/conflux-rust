@@ -351,6 +351,8 @@ where V: VMExecutor
                         pivot_decision
                     );
                     let staking_events = self.pow_handler.get_staking_events(
+                        parent_pivot_decision.height,
+                        pivot_decision.height,
                         parent_pivot_decision.block_hash,
                         pivot_decision.block_hash,
                     )?;

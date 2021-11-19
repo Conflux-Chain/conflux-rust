@@ -4,12 +4,13 @@
 
 use crate::{
     executive::internal_contract::impls::pos::decode_register_info,
-    ConsensusGraph,
+    pos::consensus::ConsensusDB, ConsensusGraph,
 };
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
 use cfx_types::H256;
+use diem_types::block_info::PivotBlockDecision;
 use futures::channel::oneshot;
 use parking_lot::RwLock;
 use pow_types::{PowInterface, StakingEvent};
@@ -26,13 +27,15 @@ pub const POS_TERM_EPOCHS: u64 = 60;
 pub struct PowHandler {
     executor: Handle,
     pow_consensus: RwLock<Option<Weak<ConsensusGraph>>>,
+    pos_consensus_db: Arc<ConsensusDB>,
 }
 
 impl PowHandler {
-    pub fn new(executor: Handle) -> Self {
+    pub fn new(executor: Handle, pos_consensus_db: Arc<ConsensusDB>) -> Self {
         Self {
             executor,
             pow_consensus: RwLock::new(None),
+            pos_consensus_db,
         }
     }
 
@@ -166,8 +169,10 @@ impl PowInterface for PowHandler {
     /// will not vote for new pivot decisions if the PoW block has not been
     /// processed.
     fn get_staking_events(
-        &self, parent_decision: H256, me_decision: H256,
-    ) -> Result<Vec<StakingEvent>> {
+        &self, parent_height: u64, me_height: u64, parent_decision: H256,
+        me_decision: H256,
+    ) -> Result<Vec<StakingEvent>>
+    {
         let pow_consensus =
             self.pow_consensus.read().clone().and_then(|c| c.upgrade());
         if pow_consensus.is_none() {
@@ -188,11 +193,25 @@ impl PowInterface for PowHandler {
             // not be packed again.
             return Ok(vec![]);
         }
-        Self::get_staking_events_impl(
-            pow_consensus,
-            parent_decision,
-            me_decision,
-        )
+        self.pos_consensus_db
+            .get_staking_events(
+                PivotBlockDecision {
+                    height: parent_height,
+                    block_hash: parent_decision,
+                },
+                PivotBlockDecision {
+                    height: me_height,
+                    block_hash: me_decision,
+                },
+            )
+            .or_else(|e| {
+                debug!("get_staking_events from pow: err={:?}", e);
+                Self::get_staking_events_impl(
+                    pow_consensus,
+                    parent_decision,
+                    me_decision,
+                )
+            })
     }
 
     async fn wait_for_initialization(&self, last_decision: H256) {

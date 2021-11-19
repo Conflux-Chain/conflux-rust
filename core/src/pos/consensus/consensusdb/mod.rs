@@ -15,15 +15,20 @@ use crate::pos::consensus::{
         ledger_block::LedgerBlockSchema,
         quorum_certificate::QCSchema,
         single_entry::{SingleEntryKey, SingleEntrySchema},
+        staking_event::StakingEventsSchema,
+        STAKING_EVENTS_CF_NAME,
     },
     error::DbError,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use cfx_types::H256;
 use consensus_types::{
     block::Block, db::LedgerBlockRW, quorum_cert::QuorumCert,
 };
 use diem_crypto::HashValue;
 use diem_logger::prelude::*;
+use diem_types::block_info::PivotBlockDecision;
+use pow_types::StakingEvent;
 use schema::{
     BLOCK_CF_NAME, LEDGER_BLOCK_CF_NAME, QC_CF_NAME, SINGLE_ENTRY_CF_NAME,
 };
@@ -44,6 +49,7 @@ impl ConsensusDB {
             QC_CF_NAME,
             SINGLE_ENTRY_CF_NAME,
             LEDGER_BLOCK_CF_NAME,
+            STAKING_EVENTS_CF_NAME,
         ];
 
         let path = db_root_path.as_ref().join("consensusdb");
@@ -207,6 +213,73 @@ impl ConsensusDB {
         let mut iter = self.db.iter::<QCSchema>(ReadOptions::default())?;
         iter.seek_to_first();
         Ok(iter.collect::<Result<HashMap<HashValue, QuorumCert>>>()?)
+    }
+
+    /// Save pow staking events.
+    pub fn put_staking_events(
+        &self, pow_epoch_number: u64, pow_epoch_hash: H256,
+        events: Vec<StakingEvent>,
+    ) -> Result<(), DbError>
+    {
+        let mut batch = SchemaBatch::new();
+        batch.put::<StakingEventsSchema>(
+            &pow_epoch_number,
+            &(events, pow_epoch_hash),
+        )?;
+        self.commit(batch)
+    }
+
+    /// Save staking events between two pivot decisions.
+    pub fn get_staking_events(
+        &self, parent_decision: PivotBlockDecision,
+        me_decision: PivotBlockDecision,
+    ) -> Result<Vec<StakingEvent>, DbError>
+    {
+        if parent_decision == me_decision {
+            return Ok(vec![]);
+        }
+        if me_decision.height <= parent_decision.height {
+            return Err(anyhow!("only forward querying allowed").into());
+        }
+        let mut read_opt = ReadOptions::default();
+        read_opt.set_iterate_lower_bound(
+            parent_decision.height.to_be_bytes().to_vec(),
+        );
+        read_opt
+            .set_iterate_upper_bound(me_decision.height.to_be_bytes().to_vec());
+        let mut staking_events = Vec::with_capacity(
+            (me_decision.height - parent_decision.height + 1) as usize,
+        );
+        let iter = self.db.iter::<StakingEventsSchema>(read_opt)?;
+        let mut expected_epoch_number = parent_decision.height;
+        for element in iter {
+            let (pow_epoch_number, (mut events, pow_epoch_hash)) = element?;
+            if pow_epoch_number != expected_epoch_number {
+                return Err(anyhow!(
+                    "skipped staking events, expected={}, get={}",
+                    expected_epoch_number,
+                    pow_epoch_number
+                )
+                .into());
+            }
+            if pow_epoch_number == parent_decision.height
+                && pow_epoch_hash != parent_decision.block_hash
+            {
+                return Err(anyhow!("inconsistent parent epoch hash, height={} expected={:?}, get={:?}", pow_epoch_number, parent_decision.block_hash, pow_epoch_hash).into());
+            }
+            if pow_epoch_number == me_decision.height
+                && pow_epoch_hash != me_decision.block_hash
+            {
+                return Err(anyhow!("inconsistent me epoch hash, height={} expected={:?}, get={:?}", pow_epoch_number, me_decision.block_hash, pow_epoch_hash).into());
+            }
+            if pow_epoch_number != parent_decision.height {
+                // Skip the events in parent_decision since they are in the
+                // previous pos block.
+                staking_events.append(&mut events);
+            }
+            expected_epoch_number += 1;
+        }
+        Ok(staking_events)
     }
 }
 

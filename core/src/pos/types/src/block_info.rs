@@ -199,6 +199,7 @@ impl Display for BlockInfo {
 #[derive(
     Clone,
     Debug,
+    Default,
     Hash,
     Eq,
     PartialEq,

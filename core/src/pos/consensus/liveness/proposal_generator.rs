@@ -194,7 +194,7 @@ impl ProposalGenerator {
             let parent_decision = parent_block
                 .block_info()
                 .pivot_decision()
-                .map(|d| d.block_hash)
+                .cloned()
                 .unwrap_or_default();
             let new_pivot_decision =
                 payload.iter().find_map(|tx| match tx.payload() {
@@ -208,7 +208,7 @@ impl ProposalGenerator {
                         {
                             None
                         } else {
-                            Some(decision.block_hash)
+                            Some(decision.clone())
                         }
                     }
                     _ => None,
@@ -224,11 +224,14 @@ impl ProposalGenerator {
             }
 
             match new_pivot_decision {
-                Some(block_hash) => {
+                Some(me_decision) => {
                     // Included new registered or updated nodes as transactions.
-                    let staking_events = self
-                        .pow_handler
-                        .get_staking_events(parent_decision, block_hash)?;
+                    let staking_events = self.pow_handler.get_staking_events(
+                        parent_decision.height,
+                        me_decision.height,
+                        parent_decision.block_hash,
+                        me_decision.block_hash,
+                    )?;
                     diem_trace!(
                         "generate_proposal: staking_events={:?} parent={:?} me={:?}",
                         staking_events, parent_block.block_info().pivot_decision(), payload.last()

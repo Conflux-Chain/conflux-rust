@@ -5,6 +5,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use cfx_types::H256;
+use serde::{Deserialize, Serialize};
 
 #[async_trait]
 pub trait PowInterface: Send + Sync {
@@ -18,13 +19,14 @@ pub trait PowInterface: Send + Sync {
     ) -> bool;
 
     fn get_staking_events(
-        &self, parent_decision: H256, me_decision: H256,
+        &self, parent_height: u64, me_height: u64, parent_decision: H256,
+        me_decision: H256,
     ) -> Result<Vec<StakingEvent>>;
 
     async fn wait_for_initialization(&self, last_decision: H256);
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum StakingEvent {
     /// (address, bls_public_key, vrf_public_key)
     Register(H256, Vec<u8>, Vec<u8>),
@@ -53,8 +55,10 @@ impl PowInterface for FakePowHandler {
     }
 
     fn get_staking_events(
-        &self, _parent_decision: H256, _me_decision: H256,
-    ) -> Result<Vec<StakingEvent>> {
+        &self, _parent_height: u64, _me_height: u64, _parent_decision: H256,
+        _me_decision: H256,
+    ) -> Result<Vec<StakingEvent>>
+    {
         todo!()
     }
 
