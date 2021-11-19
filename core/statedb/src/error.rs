@@ -22,5 +22,10 @@ error_chain! {
             description("incomplete database")
             display("incomplete database: address={:?}", address)
         }
+
+        PosDatabaseError(err: String) {
+            description("PoS database error")
+            display("PoS database error, err={:?}", err)
+        }
     }
 }
