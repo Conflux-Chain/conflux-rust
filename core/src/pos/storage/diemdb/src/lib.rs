@@ -110,7 +110,7 @@ const MAX_LIMIT: u64 = 1000;
 // TODO: Either implement an iteration API to allow a very old client to loop
 // through a long history or guarantee that there is always a recent enough
 // waypoint and client knows to boot from there.
-const MAX_NUM_EPOCH_ENDING_LEDGER_INFO: usize = 10000000;
+const MAX_NUM_EPOCH_ENDING_LEDGER_INFO: usize = 100;
 
 static ROCKSDB_PROPERTY_MAP: Lazy<HashMap<&str, &str>> = Lazy::new(|| {
     [
@@ -343,13 +343,9 @@ impl DiemDB {
     /// `MAX_NUM_EPOCH_ENDING_LEDGER_INFO` results are returned and a flag
     /// (when true) will be used to indicate the fact that there is more.
     fn get_epoch_ending_ledger_infos(
-        &self, start_epoch: u64, end_epoch: u64,
+        &self, start_epoch: u64, end_epoch: u64, limit: usize,
     ) -> Result<(Vec<LedgerInfoWithSignatures>, bool)> {
-        self.get_epoch_ending_ledger_infos_impl(
-            start_epoch,
-            end_epoch,
-            MAX_NUM_EPOCH_ENDING_LEDGER_INFO,
-        )
+        self.get_epoch_ending_ledger_infos_impl(start_epoch, end_epoch, limit)
     }
 
     fn get_epoch_ending_ledger_infos_impl(
@@ -576,6 +572,7 @@ impl DbReader for DiemDB {
                     &self,
                     start_epoch,
                     end_epoch,
+                    MAX_NUM_EPOCH_ENDING_LEDGER_INFO,
                 )?;
             Ok(EpochChangeProof::new(ledger_info_with_sigs, more))
         })
@@ -722,6 +719,9 @@ impl DbReader for DiemDB {
                         .get_epoch_ending_ledger_infos(
                             known_epoch,
                             ledger_info.next_block_epoch(),
+                            // This is only used for local initialization, so
+                            // it's ok to use MAX.
+                            usize::MAX,
                         )?;
                     EpochChangeProof::new(ledger_infos_with_sigs, more)
                 } else {
