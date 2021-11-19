@@ -235,6 +235,11 @@ impl ConsensusDB {
         me_decision: PivotBlockDecision,
     ) -> Result<Vec<StakingEvent>, DbError>
     {
+        diem_debug!(
+            "consensusdb::get_staking_events: parent={:?} me={:?}",
+            parent_decision,
+            me_decision
+        );
         if parent_decision == me_decision {
             return Ok(vec![]);
         }
@@ -279,6 +284,10 @@ impl ConsensusDB {
             }
             expected_epoch_number += 1;
         }
+        diem_debug!(
+            "consensusdb::get_staking_events returns len={} ",
+            staking_events.len()
+        );
         Ok(staking_events)
     }
 }

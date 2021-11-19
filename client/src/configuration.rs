@@ -609,6 +609,7 @@ impl Configuration {
             self.raw_conf.stratum_port,
             stratum_secret,
             self.raw_conf.pow_problem_window_size,
+            self.common_params().transition_heights.cip81,
         )
     }
 
@@ -1115,6 +1116,10 @@ impl Configuration {
             .unnamed_21autumn_transition_height
             .unwrap_or(default_transition_time);
         params.transition_heights.cip72a = self
+            .raw_conf
+            .unnamed_21autumn_transition_height
+            .unwrap_or(default_transition_time);
+        params.transition_heights.cip81 = self
             .raw_conf
             .unnamed_21autumn_transition_height
             .unwrap_or(default_transition_time);
