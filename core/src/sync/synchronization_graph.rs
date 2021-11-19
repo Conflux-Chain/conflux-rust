@@ -691,7 +691,9 @@ impl SynchronizationGraphInner {
                 self.pow_config.initial_difficulty.into();
 
             if parent_height
-                < self.pow_config.difficulty_adjustment_epoch_period
+                < self
+                    .pow_config
+                    .difficulty_adjustment_epoch_period(parent_height)
             {
                 if my_diff != initial_difficulty {
                     difficulty_invalid = true;
@@ -700,8 +702,12 @@ impl SynchronizationGraphInner {
                 }
             } else {
                 let last_period_upper = (parent_height
-                    / self.pow_config.difficulty_adjustment_epoch_period)
-                    * self.pow_config.difficulty_adjustment_epoch_period;
+                    / self
+                        .pow_config
+                        .difficulty_adjustment_epoch_period(parent_height))
+                    * self
+                        .pow_config
+                        .difficulty_adjustment_epoch_period(parent_height);
                 if last_period_upper != parent_height {
                     // parent_epoch should not trigger difficulty adjustment
                     if my_diff != parent_difficulty {

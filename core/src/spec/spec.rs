@@ -74,6 +74,8 @@ pub struct TransitionsEpochHeight {
     pub cip76: BlockHeight,
     /// CIP72: Accept Ethereum transaction signature
     pub cip72a: BlockHeight,
+    /// CIP81: Difficulty adjustment.
+    pub cip81: BlockHeight,
 }
 
 impl Default for CommonParams {
