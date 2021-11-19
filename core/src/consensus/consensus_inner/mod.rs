@@ -1970,13 +1970,21 @@ impl ConsensusGraphInner {
         let parent_arena_index =
             *self.hash_to_arena_indices.get(parent_hash).unwrap();
         let parent_epoch = self.arena[parent_arena_index].height;
-        if parent_epoch < self.pow_config.difficulty_adjustment_epoch_period {
+        if parent_epoch
+            < self
+                .pow_config
+                .difficulty_adjustment_epoch_period(parent_epoch)
+        {
             // Use initial difficulty for early epochs
             self.pow_config.initial_difficulty.into()
         } else {
             let last_period_upper = (parent_epoch
-                / self.pow_config.difficulty_adjustment_epoch_period)
-                * self.pow_config.difficulty_adjustment_epoch_period;
+                / self
+                    .pow_config
+                    .difficulty_adjustment_epoch_period(parent_epoch))
+                * self
+                    .pow_config
+                    .difficulty_adjustment_epoch_period(parent_epoch);
             if last_period_upper != parent_epoch {
                 self.arena[parent_arena_index].difficulty
             } else {
@@ -2011,8 +2019,9 @@ impl ConsensusGraphInner {
             // state root and do not update the pivot chain.
             self.current_difficulty = self.pow_config.initial_difficulty.into();
         } else if epoch
-            == (epoch / self.pow_config.difficulty_adjustment_epoch_period)
-                * self.pow_config.difficulty_adjustment_epoch_period
+            == (epoch
+                / self.pow_config.difficulty_adjustment_epoch_period(epoch))
+                * self.pow_config.difficulty_adjustment_epoch_period(epoch)
         {
             self.current_difficulty = target_difficulty(
                 &self.data_man,
