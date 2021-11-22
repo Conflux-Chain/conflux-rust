@@ -1247,11 +1247,13 @@ impl RoundManager {
 
     /// Inspect the current consensus state.
     #[cfg(test)]
+    #[allow(unused)]
     pub fn consensus_state(&mut self) -> ConsensusState {
         self.safety_rules.consensus_state().unwrap()
     }
 
     #[cfg(test)]
+    #[allow(unused)]
     pub fn set_safety_rules(&mut self, safety_rules: MetricsSafetyRules) {
         self.safety_rules = safety_rules
     }

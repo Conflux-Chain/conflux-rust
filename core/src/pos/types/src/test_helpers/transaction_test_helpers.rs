@@ -16,9 +16,6 @@ use crate::{
 };
 use diem_crypto::{bls::*, traits::*};
 
-const MAX_GAS_AMOUNT: u64 = 1_000_000;
-const TEST_GAS_PRICE: u64 = 0;
-
 static EMPTY_SCRIPT: &[u8] = include_bytes!("empty_script.mv");
 
 // Create an expiration time 'seconds' after now

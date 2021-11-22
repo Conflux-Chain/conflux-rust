@@ -72,6 +72,7 @@ impl TimeService for SimulatedTimeService {
     }
 }
 
+#[allow(unused)]
 impl SimulatedTimeService {
     /// Creates new SimulatedTimeService in disabled state (time not running)
     pub fn new() -> SimulatedTimeService {

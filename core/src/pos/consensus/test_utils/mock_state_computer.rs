@@ -27,6 +27,7 @@ pub struct MockStateComputer {
 }
 
 impl MockStateComputer {
+    #[allow(unused)]
     pub fn new(
         state_sync_client: mpsc::UnboundedSender<Payload>,
         commit_callback: mpsc::UnboundedSender<LedgerInfoWithSignatures>,

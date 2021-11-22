@@ -5,6 +5,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+#![allow(unused)]
 use crate::pos::consensus::block_storage::{BlockReader, BlockStore};
 use consensus_types::{
     block::{block_test_utils::certificate_for_genesis, Block},

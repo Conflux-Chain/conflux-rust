@@ -11,10 +11,8 @@
 use crate::{
     access_path::AccessPath,
     account_address::AccountAddress,
-    account_config::XUS_NAME,
-    chain_id::ChainId,
     transaction::{
-        ChangeSet, RawTransaction, Script, TransactionArgument,
+        ChangeSet, Script, TransactionArgument,
         TransactionPayload, WriteSetPayload,
     },
     write_set::{WriteOp, WriteSet, WriteSetMut},
