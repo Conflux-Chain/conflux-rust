@@ -11,7 +11,9 @@ use crate::{
     Error,
 };
 use consensus_types::{common::Author, safety_data::SafetyData};
-use diem_crypto::hash::CryptoHash;
+use diem_crypto::{
+    hash::CryptoHash, PrivateKey, SigningKey, ValidCryptoMaterial,
+};
 use diem_global_constants::{
     CONSENSUS_KEY, EXECUTION_KEY, OWNER_ACCOUNT, SAFETY_DATA, WAYPOINT,
 };
@@ -24,6 +26,7 @@ use diem_types::{
     waypoint::Waypoint,
 };
 use serde::Serialize;
+use std::convert::TryFrom;
 
 /// SafetyRules needs an abstract storage interface to act as a common utility
 /// for storing persistent data to local disk, cloud, secrets managers, or even
@@ -39,6 +42,7 @@ pub struct PersistentSafetyStorage {
     enable_cached_safety_data: bool,
     cached_safety_data: Option<SafetyData>,
     internal_store: Storage,
+    private_key: ConsensusPrivateKey,
 }
 
 impl PersistentSafetyStorage {
@@ -46,8 +50,7 @@ impl PersistentSafetyStorage {
     /// that has no SafetyRules values set.
     pub fn initialize(
         mut internal_store: Storage, author: Author,
-        consensus_private_key: ConsensusPrivateKey,
-        execution_private_key: ConsensusPrivateKey, waypoint: Waypoint,
+        private_key: ConsensusPrivateKey, waypoint: Waypoint,
         enable_cached_safety_data: bool,
     ) -> Self
     {
@@ -56,8 +59,6 @@ impl PersistentSafetyStorage {
             &mut internal_store,
             safety_data.clone(),
             author,
-            consensus_private_key,
-            execution_private_key,
             waypoint,
         )
         .expect("Unable to initialize backend storage");
@@ -65,17 +66,16 @@ impl PersistentSafetyStorage {
             enable_cached_safety_data,
             cached_safety_data: Some(safety_data),
             internal_store,
+            private_key,
         }
     }
 
     fn initialize_(
         internal_store: &mut Storage, safety_data: SafetyData, author: Author,
-        consensus_private_key: ConsensusPrivateKey,
-        execution_private_key: ConsensusPrivateKey, waypoint: Waypoint,
+        waypoint: Waypoint,
     ) -> Result<(), Error>
     {
-        let result = internal_store
-            .import_private_key(CONSENSUS_KEY, consensus_private_key);
+        let result = internal_store.set(SAFETY_DATA, safety_data);
         // Attempting to re-initialize existing storage. This can happen in
         // environments like cluster test. Rather than be rigid here,
         // leave it up to the developer to detect inconsistencies or why
@@ -87,24 +87,9 @@ impl PersistentSafetyStorage {
             return Ok(());
         }
 
-        internal_store
-            .import_private_key(EXECUTION_KEY, execution_private_key)?;
-        internal_store.set(SAFETY_DATA, safety_data)?;
         internal_store.set(OWNER_ACCOUNT, author)?;
         internal_store.set(WAYPOINT, waypoint)?;
         Ok(())
-    }
-
-    /// Use this to instantiate a PersistentStorage with an existing data store.
-    /// This is intended for constructed environments.
-    pub fn new(
-        internal_store: Storage, enable_cached_safety_data: bool,
-    ) -> Self {
-        Self {
-            enable_cached_safety_data,
-            cached_safety_data: None,
-            internal_store,
-        }
     }
 
     pub fn author(&self) -> Result<Author, Error> {
@@ -116,27 +101,29 @@ impl PersistentSafetyStorage {
         &self, version: ConsensusPublicKey,
     ) -> Result<ConsensusPrivateKey, Error> {
         let _timer = counters::start_timer("get", CONSENSUS_KEY);
-        Ok(self
-            .internal_store
-            .export_private_key_for_version(CONSENSUS_KEY, version)?)
-    }
-
-    pub fn execution_public_key(&self) -> Result<ConsensusPublicKey, Error> {
-        let _timer = counters::start_timer("get", EXECUTION_KEY);
-        Ok(self
-            .internal_store
-            .get_public_key(EXECUTION_KEY)
-            .map(|r| r.public_key)?)
+        if self.private_key.public_key() == version {
+            let serialized: &[u8] = &(self.private_key.to_bytes());
+            let cloned = ConsensusPrivateKey::try_from(serialized).unwrap();
+            Ok(cloned)
+        } else {
+            Ok(self
+                .internal_store
+                .export_private_key_for_version(CONSENSUS_KEY, version)?)
+        }
     }
 
     pub fn sign<T: Serialize + CryptoHash>(
         &self, key_name: String, key_version: ConsensusPublicKey, message: &T,
     ) -> Result<ConsensusSignature, Error> {
-        Ok(self.internal_store.sign_using_version(
-            &key_name,
-            key_version,
-            message,
-        )?)
+        if key_name == CONSENSUS_KEY || key_name == EXECUTION_KEY {
+            Ok(self.private_key.sign(message))
+        } else {
+            Ok(self.internal_store.sign_using_version(
+                &key_name,
+                key_version,
+                message,
+            )?)
+        }
     }
 
     pub fn safety_data(&mut self) -> Result<SafetyData, Error> {
