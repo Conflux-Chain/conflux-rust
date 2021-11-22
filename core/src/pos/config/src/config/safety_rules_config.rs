@@ -44,7 +44,7 @@ pub struct SafetyRulesConfig {
 impl Default for SafetyRulesConfig {
     fn default() -> Self {
         Self {
-            backend: SecureBackend::InMemoryStorage,
+            backend: SecureBackend::OnDiskStorage(Default::default()),
             logger: LoggerConfig::default(),
             service: SafetyRulesService::Thread,
             test: None,
