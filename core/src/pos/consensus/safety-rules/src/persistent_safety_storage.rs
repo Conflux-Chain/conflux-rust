@@ -54,14 +54,15 @@ impl PersistentSafetyStorage {
         enable_cached_safety_data: bool,
     ) -> Self
     {
-        let safety_data = SafetyData::new(1, 0, 0, None);
-        Self::initialize_(
+        let geneisis_safety_data = SafetyData::new(1, 0, 0, None);
+        let safety_data = Self::initialize_(
             &mut internal_store,
-            safety_data.clone(),
+            geneisis_safety_data,
             author,
             waypoint,
         )
         .expect("Unable to initialize backend storage");
+
         Self {
             enable_cached_safety_data,
             cached_safety_data: Some(safety_data),
@@ -73,7 +74,7 @@ impl PersistentSafetyStorage {
     fn initialize_(
         internal_store: &mut Storage, safety_data: SafetyData, author: Author,
         waypoint: Waypoint,
-    ) -> Result<(), Error>
+    ) -> Result<SafetyData, Error>
     {
         // Attempting to re-initialize existing storage. This can happen in
         // environments like cluster test. Rather than be rigid here,
@@ -83,15 +84,15 @@ impl PersistentSafetyStorage {
         // partially configured storage.
         // NOTE: If the key exists, `OnDiskStorage` does not return error
         // when we `set` the value, so we need to `get` first here.
-        if internal_store.get::<SafetyData>(SAFETY_DATA).is_ok() {
+        if let Ok(safety_data) = internal_store.get::<SafetyData>(SAFETY_DATA) {
             diem_warn!("Attempted to re-initialize existing storage");
-            return Ok(());
+            return Ok(safety_data.value);
         }
 
-        internal_store.set(SAFETY_DATA, safety_data)?;
+        internal_store.set(SAFETY_DATA, safety_data.clone())?;
         internal_store.set(OWNER_ACCOUNT, author)?;
         internal_store.set(WAYPOINT, waypoint)?;
-        Ok(())
+        Ok(safety_data)
     }
 
     pub fn author(&self) -> Result<Author, Error> {
