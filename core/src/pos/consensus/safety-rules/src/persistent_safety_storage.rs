@@ -75,18 +75,20 @@ impl PersistentSafetyStorage {
         waypoint: Waypoint,
     ) -> Result<(), Error>
     {
-        let result = internal_store.set(SAFETY_DATA, safety_data);
         // Attempting to re-initialize existing storage. This can happen in
         // environments like cluster test. Rather than be rigid here,
         // leave it up to the developer to detect inconsistencies or why
         // they did not reset storage between rounds. Do not repeat the
         // checks again below, because it is just too strange to have a
         // partially configured storage.
-        if let Err(diem_secure_storage::Error::KeyAlreadyExists(_)) = result {
+        // NOTE: If the key exists, `OnDiskStorage` does not return error
+        // when we `set` the value, so we need to `get` first here.
+        if internal_store.get::<SafetyData>(SAFETY_DATA).is_ok() {
             diem_warn!("Attempted to re-initialize existing storage");
             return Ok(());
         }
 
+        internal_store.set(SAFETY_DATA, safety_data)?;
         internal_store.set(OWNER_ACCOUNT, author)?;
         internal_store.set(WAYPOINT, waypoint)?;
         Ok(())
