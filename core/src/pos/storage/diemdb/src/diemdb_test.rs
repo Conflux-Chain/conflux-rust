@@ -343,11 +343,12 @@ fn group_events_by_event_key(
 }
 
 fn verify_committed_transactions(
-    db: &DiemDB, txns_to_commit: &[TransactionToCommit],
-    first_version: Version, ledger_info_with_sigs: &LedgerInfoWithSignatures,
-    is_latest: bool,
+    _db: &DiemDB, _txns_to_commit: &[TransactionToCommit],
+    _first_version: Version, _ledger_info_with_sigs: &LedgerInfoWithSignatures,
+    _is_latest: bool,
 )
 {
+    // TODO(lpl): Verify this.
     return;
 }
 

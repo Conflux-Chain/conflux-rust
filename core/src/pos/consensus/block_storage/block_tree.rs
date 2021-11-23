@@ -378,6 +378,7 @@ impl BlockTree {
 }
 
 #[cfg(any(test, feature = "fuzzing"))]
+#[allow(unused)]
 impl BlockTree {
     /// Returns the number of blocks in the tree
     pub(super) fn len(&self) -> usize {

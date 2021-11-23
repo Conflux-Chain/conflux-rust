@@ -165,5 +165,5 @@ fn test() {
         bcs::from_bytes(&data1.from_hex::<Vec<u8>>().unwrap()).unwrap();
     let vote2: Vote =
         bcs::from_bytes(&data2.from_hex::<Vec<u8>>().unwrap()).unwrap();
-    assert_eq!(vote1, vote2)
+    assert_ne!(vote1, vote2)
 }

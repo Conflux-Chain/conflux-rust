@@ -42,6 +42,7 @@ pub struct MockSharedStorage {
     pub validator_set: ValidatorSet,
 }
 
+#[allow(unused)]
 impl MockSharedStorage {
     pub fn new(validator_set: ValidatorSet) -> Self {
         MockSharedStorage {

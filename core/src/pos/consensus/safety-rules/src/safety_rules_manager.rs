@@ -36,11 +36,6 @@ pub fn storage(config: &SafetyRulesConfig) -> PersistentSafetyStorage {
             .as_ref()
             .expect("Missing consensus key in test config")
             .private_key();
-        let execution_private_key = test_config
-            .execution_key
-            .as_ref()
-            .expect("Missing execution key in test config")
-            .private_key();
         let waypoint = test_config.waypoint.expect("No waypoint in config");
         diem_debug!(
             "safety_rules_manager: backed={:?}, waypoint={:?}",
@@ -52,15 +47,11 @@ pub fn storage(config: &SafetyRulesConfig) -> PersistentSafetyStorage {
             internal_storage,
             author,
             consensus_private_key,
-            execution_private_key,
             waypoint,
             config.enable_cached_safety_data,
         )
     } else {
-        PersistentSafetyStorage::new(
-            internal_storage,
-            config.enable_cached_safety_data,
-        )
+        panic!("Remote consensus key storage not supported!")
     }
 }
 

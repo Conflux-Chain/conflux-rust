@@ -150,7 +150,7 @@ mod tests {
         let cache = LruCache::<u64, PendingItem<u64, u64>>::with_capacity(1);
         let verified = Arc::new(RwLock::new(cache));
 
-        let mut runtime = Runtime::new().expect("Unable to create a runtime");
+        let runtime = Runtime::new().expect("Unable to create a runtime");
 
         // set error
         verified
@@ -222,7 +222,7 @@ mod tests {
                 .set(VALUE);
         };
 
-        let mut runtime = Runtime::new().expect("Unable to create a runtime");
+        let runtime = Runtime::new().expect("Unable to create a runtime");
         let (res1, (res2, res3), _) = runtime.block_on(join3(fut1, fut2, fut3));
 
         assert_eq!(res1, Ok(VALUE));

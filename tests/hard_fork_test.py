@@ -56,7 +56,7 @@ class ExampleTest(ConfluxTestFramework):
         client = RpcClient(self.nodes[self.num_nodes - 1])
         client.generate_empty_blocks(300)
         sync_blocks(self.nodes)
-        for node in self.nodes:
+        for node in self.nodes[:-1]:
             client = RpcClient(node)
             pos_identifier, _ = client.wait_for_pos_register()
             sync_blocks(self.nodes)
@@ -88,6 +88,11 @@ class ExampleTest(ConfluxTestFramework):
         # generate blocks until pos start
         self.nodes[0].generate_empty_blocks(400)
         sync_blocks(self.nodes)
+        pos_identifier, _ = client.wait_for_pos_register()
+        for _ in range(3):
+            client.generate_empty_blocks(400)
+            time.sleep(2)
+        assert_equal(int(client.pos_get_account(pos_identifier)["status"]["availableVotes"], 0), 2000)
 
         latest_pos_ref = self.latest_pos_ref()
         for i in range(150):

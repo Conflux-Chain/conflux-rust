@@ -488,6 +488,7 @@ impl BlockReader for BlockStore {
 }
 
 #[cfg(any(test, feature = "fuzzing"))]
+#[allow(unused)]
 impl BlockStore {
     /// Returns the number of blocks in the tree
     pub(crate) fn len(&self) -> usize { self.inner.read().len() }

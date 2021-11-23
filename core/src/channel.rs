@@ -266,7 +266,7 @@ mod tests {
             sent
         };
 
-        let mut runtime = Runtime::new().expect("Unable to create a runtime");
+        let runtime = Runtime::new().expect("Unable to create a runtime");
         let (res1, res2, res3) = runtime.block_on(join3(fut1, fut2, fut3));
 
         assert_eq!(res1, res3);
@@ -314,7 +314,7 @@ mod tests {
             }
         };
 
-        let mut runtime = Runtime::new().expect("Unable to create a runtime");
+        let runtime = Runtime::new().expect("Unable to create a runtime");
         let (res, (), ()) = runtime.block_on(join3(fut_a, fut_b, fut_c));
         assert_eq!(res, Ok(()))
     }

@@ -10,7 +10,7 @@ use crate::{
     account_address::{self, AccountAddress},
     account_config::{
         AccountResource, BalanceResource, KeyRotationCapabilityResource,
-        WithdrawCapabilityResource, XUS_NAME,
+        WithdrawCapabilityResource,
     },
     account_state_blob::AccountStateBlob,
     block_info::{BlockInfo, Round},
@@ -304,7 +304,6 @@ impl RawTransactionGen {
     ) -> RawTransaction {
         let mut sender_info = universe.get_account_info_mut(sender_index);
 
-        let sequence_number = sender_info.sequence_number;
         sender_info.sequence_number += 1;
 
         new_raw_transaction(
@@ -319,27 +318,18 @@ impl RawTransaction {
     fn strategy_impl(
         address_strategy: impl Strategy<Value = AccountAddress>,
         payload_strategy: impl Strategy<Value = TransactionPayload>,
-        gas_currency_code_strategy: impl Strategy<Value = String>,
     ) -> impl Strategy<Value = Self>
     {
         // XXX what other constraints do these need to obey?
         (
             address_strategy,
-            any::<u64>(),
             payload_strategy,
-            any::<u64>(),
-            any::<u64>(),
-            gas_currency_code_strategy,
             any::<u64>(),
         )
             .prop_map(
                 |(
                     sender,
-                    sequence_number,
                     payload,
-                    max_gas_amount,
-                    gas_unit_price,
-                    gas_currency_code,
                     expiration_time_secs,
                 )| {
                     new_raw_transaction(sender, payload, expiration_time_secs)
@@ -425,69 +415,12 @@ impl Arbitrary for RawTransaction {
         Self::strategy_impl(
             any::<AccountAddress>(),
             any::<TransactionPayload>(),
-            any::<String>(),
         )
         .boxed()
     }
 }
 
 impl SignatureCheckedTransaction {
-    // This isn't an Arbitrary impl because this doesn't generate *any* possible
-    // SignedTransaction, just one kind of them.
-    pub fn script_strategy(
-        keypair_strategy: impl Strategy<
-            Value = KeyPair<ConsensusPrivateKey, ConsensusPublicKey>,
-        >,
-        vrf_keypair_strategy: impl Strategy<
-            Value = KeyPair<ConsensusVRFPrivateKey, ConsensusVRFPublicKey>,
-        >,
-        gas_currency_code_strategy: impl Strategy<Value = String>,
-    ) -> impl Strategy<Value = Self>
-    {
-        Self::strategy_impl(
-            keypair_strategy,
-            vrf_keypair_strategy,
-            TransactionPayload::script_strategy(),
-            gas_currency_code_strategy,
-        )
-    }
-
-    pub fn module_strategy(
-        keypair_strategy: impl Strategy<
-            Value = KeyPair<ConsensusPrivateKey, ConsensusPublicKey>,
-        >,
-        vrf_keypair_strategy: impl Strategy<
-            Value = KeyPair<ConsensusVRFPrivateKey, ConsensusVRFPublicKey>,
-        >,
-        gas_currency_code_strategy: impl Strategy<Value = String>,
-    ) -> impl Strategy<Value = Self>
-    {
-        Self::strategy_impl(
-            keypair_strategy,
-            vrf_keypair_strategy,
-            TransactionPayload::module_strategy(),
-            gas_currency_code_strategy,
-        )
-    }
-
-    pub fn write_set_strategy(
-        keypair_strategy: impl Strategy<
-            Value = KeyPair<ConsensusPrivateKey, ConsensusPublicKey>,
-        >,
-        vrf_keypair_strategy: impl Strategy<
-            Value = KeyPair<ConsensusVRFPrivateKey, ConsensusVRFPublicKey>,
-        >,
-        gas_currency_code_strategy: impl Strategy<Value = String>,
-    ) -> impl Strategy<Value = Self>
-    {
-        Self::strategy_impl(
-            keypair_strategy,
-            vrf_keypair_strategy,
-            TransactionPayload::write_set_strategy(),
-            gas_currency_code_strategy,
-        )
-    }
-
     pub fn genesis_strategy(
         keypair_strategy: impl Strategy<
             Value = KeyPair<ConsensusPrivateKey, ConsensusPublicKey>,
@@ -495,14 +428,12 @@ impl SignatureCheckedTransaction {
         vrf_keypair_strategy: impl Strategy<
             Value = KeyPair<ConsensusVRFPrivateKey, ConsensusVRFPublicKey>,
         >,
-        gas_currency_code_strategy: impl Strategy<Value = String>,
     ) -> impl Strategy<Value = Self>
     {
         Self::strategy_impl(
             keypair_strategy,
             vrf_keypair_strategy,
             TransactionPayload::genesis_strategy(),
-            gas_currency_code_strategy,
         )
     }
 
@@ -514,17 +445,15 @@ impl SignatureCheckedTransaction {
             Value = KeyPair<ConsensusVRFPrivateKey, ConsensusVRFPublicKey>,
         >,
         payload_strategy: impl Strategy<Value = TransactionPayload>,
-        gas_currency_code_strategy: impl Strategy<Value = String>,
     ) -> impl Strategy<Value = Self>
     {
         (
             keypair_strategy,
             vrf_keypair_strategy,
             payload_strategy,
-            gas_currency_code_strategy,
         )
             .prop_flat_map(
-                |(keypair, vrf_keypair, payload, gas_currency_code)| {
+                |(keypair, vrf_keypair, payload)| {
                     let address = account_address::from_consensus_public_key(
                         &keypair.public_key,
                         &vrf_keypair.public_key,
@@ -534,7 +463,6 @@ impl SignatureCheckedTransaction {
                         RawTransaction::strategy_impl(
                             Just(address),
                             Just(payload),
-                            Just(gas_currency_code),
                         ),
                     )
                 },
@@ -577,7 +505,6 @@ impl Arbitrary for SignatureCheckedTransaction {
             bls::keypair_strategy(),
             ec_vrf::keypair_strategy(),
             any::<TransactionPayload>(),
-            any::<String>(),
         )
         .boxed()
     }
@@ -745,7 +672,6 @@ impl ContractEventGen {
         } else {
             &mut account_info.received_event_handle
         };
-        let sequence_number = event_handle.count();
         *event_handle.count_mut() += 1;
         let event_key = event_handle.key();
 

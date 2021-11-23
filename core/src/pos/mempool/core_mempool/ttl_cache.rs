@@ -89,7 +89,4 @@ where K: std::cmp::Eq + std::hash::Hash + std::clone::Clone
         self.ttl_index.clear();
         self.ttl_index.append(&mut active);
     }
-
-    #[cfg(test)]
-    pub fn size(&self) -> usize { self.data.len() }
 }

@@ -1358,6 +1358,7 @@ impl ConsensusExecutionHandler {
                         }
 
                         if self.pos_verifier.pos_option().is_some() {
+                            debug!("Check {} events", transaction_logs.len());
                             for log in &transaction_logs {
                                 if let Some(staking_event) =
                                     decode_register_info(log)
@@ -1422,6 +1423,12 @@ impl ConsensusExecutionHandler {
             epoch_receipts.push(block_receipts);
         }
         if self.pos_verifier.pos_option().is_some() {
+            debug!(
+                "put_staking_events: {:?} height={} len={}",
+                pivot_block.hash(),
+                pivot_block.block_header.height(),
+                epoch_staking_events.len()
+            );
             self.pos_verifier
                 .consensus_db()
                 .put_staking_events(
