@@ -247,15 +247,19 @@ impl ConsensusDB {
             return Err(anyhow!("only forward querying allowed").into());
         }
         let mut read_opt = ReadOptions::default();
+        // lower bound is inclusive
         read_opt.set_iterate_lower_bound(
             parent_decision.height.to_be_bytes().to_vec(),
         );
-        read_opt
-            .set_iterate_upper_bound(me_decision.height.to_be_bytes().to_vec());
+        // upper bound is exclusive
+        read_opt.set_iterate_upper_bound(
+            (me_decision.height + 1).to_be_bytes().to_vec(),
+        );
         let mut staking_events = Vec::with_capacity(
             (me_decision.height - parent_decision.height + 1) as usize,
         );
-        let iter = self.db.iter::<StakingEventsSchema>(read_opt)?;
+        let mut iter = self.db.iter::<StakingEventsSchema>(read_opt)?;
+        iter.seek_to_first();
         let mut expected_epoch_number = parent_decision.height;
         for element in iter {
             let (pow_epoch_number, (mut events, pow_epoch_hash)) = element?;
@@ -283,6 +287,14 @@ impl ConsensusDB {
                 staking_events.append(&mut events);
             }
             expected_epoch_number += 1;
+        }
+        if expected_epoch_number != me_decision.height + 1 {
+            return Err(anyhow!(
+                "incomplete staking events, reach height={} me_decision={:?}",
+                expected_epoch_number,
+                me_decision
+            )
+            .into());
         }
         diem_debug!(
             "consensusdb::get_staking_events returns len={} ",
