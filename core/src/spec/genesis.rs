@@ -443,7 +443,7 @@ pub fn genesis_block(
                 &genesis_transactions,
             ))
             // pos testnet version
-            .with_timestamp(12)
+            .with_timestamp(13)
             .build(),
         genesis_transactions,
     );
