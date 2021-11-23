@@ -543,7 +543,7 @@ node_table_promotion_timeout_s = 9600
 chain_id = 8888
 unnamed_21autumn_transition_number=100
 unnamed_21autumn_cip43_init_end=3000
-unnamed_21autumn_transition_height=1000
-pos_reference_enable_height=5000
+unnamed_21autumn_transition_height=5000
+pos_reference_enable_height=6000
 # Set to 2 ** 256 / 300 * 20. The probability that a round has no proposer is about 1e-9.
 vrf_proposal_threshold = "0x1111111111111100000000000000000000000000000000000000000000000000"
