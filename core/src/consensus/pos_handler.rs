@@ -171,6 +171,7 @@ impl PosHandler {
 
         let mut pos_config = NodeConfig::load(pos_config_path)
             .map_err(|e| format!("Failed to load node config: e={:?}", e))?;
+        pos_config.set_data_dir(pos_config.data_dir().to_path_buf());
         let pos_genesis = read_initial_nodes_from_file(
             self.conf.pos_initial_nodes_path.as_str(),
         )?;
