@@ -89,9 +89,9 @@ class ExampleTest(ConfluxTestFramework):
         self.nodes[0].generate_empty_blocks(400)
         sync_blocks(self.nodes)
         pos_identifier, _ = client.wait_for_pos_register()
-        for _ in range(10):
+        for _ in range(3):
             client.generate_empty_blocks(400)
-            time.sleep(1)
+            time.sleep(2)
         assert_equal(int(client.pos_get_account(pos_identifier)["status"]["availableVotes"], 0), 2000)
 
         latest_pos_ref = self.latest_pos_ref()
