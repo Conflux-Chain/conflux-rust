@@ -554,6 +554,12 @@ class RpcClient:
     def pos_get_chosen_proposal(self):
         return self.node.pos_get_chosen_proposal()
 
+    def pos_get_account(self, account_address, view=None):
+        if view is None:
+            return self.node.pos_getAccount(account_address)
+        else:
+            return self.node.pos_getAccount(account_address, view)
+
 
 def stake_tx_data(staking_value: int):
     staking_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/Staking.json"), "r").read())
