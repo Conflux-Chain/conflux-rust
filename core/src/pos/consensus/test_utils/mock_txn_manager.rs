@@ -35,6 +35,7 @@ pub struct MockTransactionManager {
 }
 
 impl MockTransactionManager {
+    #[allow(unused)]
     pub fn new(
         consensus_to_mempool_sender: Option<mpsc::Sender<ConsensusRequest>>,
     ) -> Self {
@@ -67,8 +68,8 @@ fn mock_transaction_status(count: usize) -> Vec<TransactionStatus> {
 impl TxnManager for MockTransactionManager {
     /// The returned future is fulfilled with the vector of SignedTransactions
     async fn pull_txns(
-        &self, _max_size: u64, _exclude_txns: Vec<&Payload>, hash: HashValue,
-        validators: ValidatorVerifier,
+        &self, _max_size: u64, _exclude_txns: Vec<&Payload>, _hash: HashValue,
+        _validators: ValidatorVerifier,
     ) -> Result<Payload, MempoolError>
     {
         // generate 1k txn is too slow with coverage instrumentation

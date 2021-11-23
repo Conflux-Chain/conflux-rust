@@ -206,6 +206,7 @@ fn set_up(
     db
 }
 
+#[allow(unused)]
 fn put_transaction_infos(db: &DiemDB, txn_infos: &[TransactionInfo]) {
     let mut cs = ChangeSet::new();
     db.ledger_store

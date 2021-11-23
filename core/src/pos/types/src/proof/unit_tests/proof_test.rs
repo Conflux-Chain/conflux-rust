@@ -5,31 +5,22 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    account_config::XUS_NAME,
-    account_state_blob::AccountStateBlob,
-    block_info::BlockInfo,
-    chain_id::ChainId,
-    ledger_info::LedgerInfo,
-    proof::{
-        definition::MAX_ACCUMULATOR_PROOF_DEPTH, AccountStateProof,
-        AccumulatorExtensionProof, EventAccumulatorInternalNode,
-        EventAccumulatorProof, EventProof, SparseMerkleInternalNode,
-        SparseMerkleLeafNode, TestAccumulatorInternalNode,
-        TestAccumulatorProof, TransactionAccumulatorInternalNode,
-        TransactionAccumulatorProof, TransactionInfoWithProof,
-    },
-    transaction::{RawTransaction, Script, Transaction, TransactionInfo},
-    vm_status::KeptVMStatus,
-};
 use diem_crypto::{
-    bls::BLSPrivateKey,
-    ec_vrf::EcVrfPrivateKey,
     hash::{
-        CryptoHash, TestOnlyHash, TestOnlyHasher, ACCUMULATOR_PLACEHOLDER_HASH,
-        GENESIS_BLOCK_ID, SPARSE_MERKLE_PLACEHOLDER_HASH,
+        ACCUMULATOR_PLACEHOLDER_HASH, CryptoHash, SPARSE_MERKLE_PLACEHOLDER_HASH,
+        TestOnlyHash,
     },
-    HashValue, PrivateKey, Uniform,
+    HashValue,
+};
+
+use crate::{
+    account_state_blob::AccountStateBlob,
+    proof::{
+        definition::MAX_ACCUMULATOR_PROOF_DEPTH,
+        SparseMerkleInternalNode,
+        SparseMerkleLeafNode, TestAccumulatorInternalNode,
+        TestAccumulatorProof,
+    },
 };
 
 type SparseMerkleProof = crate::proof::SparseMerkleProof<AccountStateBlob>;

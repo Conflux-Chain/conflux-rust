@@ -272,7 +272,7 @@ pub fn random_payload(count: usize) -> Payload {
     let address = AccountAddress::random();
     let signer = ValidatorSigner::random(None);
     (0..count)
-        .map(|i| {
+        .map(|_| {
             get_test_signed_txn(
                 address,
                 signer.private_key(),

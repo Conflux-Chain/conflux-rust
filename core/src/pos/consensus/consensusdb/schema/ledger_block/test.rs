@@ -5,12 +5,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+/*
+TODO(test):
 use super::*;
 use diem_types::ledger_info::LedgerInfoWithSignatures;
 use proptest::prelude::*;
 use schemadb::schema::assert_encode_decode;
 
-/*
 proptest! {
     #[test]
     fn test_encode_decode(

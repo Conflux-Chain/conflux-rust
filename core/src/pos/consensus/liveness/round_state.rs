@@ -96,6 +96,7 @@ pub struct ExponentialTimeInterval {
 
 impl ExponentialTimeInterval {
     #[cfg(any(test, feature = "fuzzing"))]
+    #[allow(unused)]
     pub fn fixed(duration: Duration) -> Self { Self::new(duration, 1.0, 0) }
 
     pub fn new(

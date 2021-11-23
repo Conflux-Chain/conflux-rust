@@ -7,7 +7,6 @@
 
 use crate::{
     account_address::AccountAddress,
-    account_config::XUS_NAME,
     chain_id::ChainId,
     transaction::{
         metadata, GovernanceRole, RawTransaction, Script, SignedTransaction,
@@ -17,11 +16,10 @@ use crate::{
 };
 use bcs::test_helpers::assert_canonical_encode_decode;
 use diem_crypto::{
-    bls::{self, BLSPrivateKey, BLSSignature},
+    bls::{self, BLSPrivateKey},
     PrivateKey, SigningKey, Uniform,
 };
 use proptest::prelude::*;
-use std::convert::TryFrom;
 
 #[test]
 fn test_invalid_signature() {
