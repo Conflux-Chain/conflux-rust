@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
-"""An example functional test
-"""
+
+# allow imports from parent directory
+# source: https://stackoverflow.com/a/11158224
+import os, sys
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+
 import eth_utils
 import time
 
@@ -15,6 +19,7 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
         self.num_nodes = 4
         self.conf_parameters["vrf_proposal_threshold"] = '"{}"'.format(int_to_hex(int(2 ** 256 - 1)))
         self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = '120'
+        self.conf_parameters["pos_round_per_term"] = '10'
 
     def run_test(self):
         client = RpcClient(self.nodes[self.num_nodes - 1])

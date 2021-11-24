@@ -34,6 +34,7 @@ use cfxcore::{
     },
 };
 use cfxkey::{Error as EthkeyError, Generator, KeyPair, Random};
+use client::rpc::rpc_apis::Api::Debug;
 use diem_crypto::{
     key_file::save_pri_key, HashValue, Uniform, ValidCryptoMaterialStringExt,
 };
@@ -41,7 +42,10 @@ use diem_types::{
     account_address::AccountAddress,
     contract_event::ContractEvent,
     on_chain_config::{new_epoch_event_key, ValidatorSet},
-    term_state::{NodeID, TERM_ELECTED_SIZE, TERM_LIST_LEN},
+    term_state::{
+        pos_state_config::{PosStateConfigTrait, POS_STATE_CONFIG},
+        NodeID, TERM_ELECTED_SIZE, TERM_LIST_LEN,
+    },
     transaction::{ChangeSet, Transaction, WriteSetPayload},
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
@@ -136,6 +140,7 @@ impl fmt::Display for Error {
 
 fn main() {
     env_logger::try_init().expect("Logger initialized only once.");
+    POS_STATE_CONFIG.set(Default::default());
 
     match execute(env::args()) {
         Ok(ok) => println!("{}", ok),
@@ -215,7 +220,8 @@ fn elect_genesis_committee(
         }
         node_map.insert(node_id.addr, node_id);
     }
-    let max_committee_size = TERM_LIST_LEN * TERM_ELECTED_SIZE;
+    let max_committee_size =
+        TERM_LIST_LEN * POS_STATE_CONFIG.term_elected_size();
     let mut top_electing: BTreeMap<AccountAddress, u64> = BTreeMap::new();
     let mut count = 0usize;
     while let Some((_, node_id)) = electing_heap.pop() {

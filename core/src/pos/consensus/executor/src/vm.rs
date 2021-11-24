@@ -8,7 +8,7 @@ use diem_types::{
     contract_event::ContractEvent,
     epoch_state::EpochState,
     on_chain_config::{self, new_epoch_event_key, OnChainConfig, ValidatorSet},
-    term_state::{PosStateConfigTrait, POS_STATE_CONFIG},
+    term_state::pos_state_config::{PosStateConfigTrait, POS_STATE_CONFIG},
     transaction::{
         authenticator::TransactionAuthenticator, ConflictSignature,
         DisputePayload, Transaction, TransactionOutput, TransactionPayload,

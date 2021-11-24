@@ -39,8 +39,8 @@ use cfxcore::{
     NodeType,
 };
 use diem_types::term_state::{
-    PosStateConfig, IN_QUEUE_LOCKED_VIEWS, OUT_QUEUE_LOCKED_VIEWS,
-    ROUND_PER_TERM, TERM_ELECTED_SIZE, TERM_MAX_SIZE,
+    pos_state_config::PosStateConfig, IN_QUEUE_LOCKED_VIEWS,
+    OUT_QUEUE_LOCKED_VIEWS, ROUND_PER_TERM, TERM_ELECTED_SIZE, TERM_MAX_SIZE,
 };
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;

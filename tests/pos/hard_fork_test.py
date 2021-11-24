@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
-"""An example functional test
-"""
+
+# allow imports from parent directory
+# source: https://stackoverflow.com/a/11158224
+import os, sys
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+
 import eth_utils
 import os
 import time
@@ -34,6 +38,10 @@ class ExampleTest(ConfluxTestFramework):
         self.conf_parameters["unnamed_21autumn_cip43_init_end"] = 500
         self.conf_parameters["pos_reference_enable_height"] = 1000
         self.conf_parameters["era_epoch_count"] = 200
+        self.conf_parameters["pos_round_per_term"] = 10
+        self.conf_parameters["pos_term_max_size"] = 100
+        self.conf_parameters["pos_in_queue_locked_views"] = 60
+        self.conf_parameters["pos_out_queue_locked_views"] = 60
         self.rpc_timewait = 6000
 
     def setup_nodes(self):

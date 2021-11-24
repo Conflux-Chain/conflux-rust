@@ -12,7 +12,7 @@ use diem_logger::prelude::*;
 
 use crate::{
     block_info::View,
-    term_state::{PosStateConfigTrait, POS_STATE_CONFIG},
+    term_state::pos_state_config::{PosStateConfigTrait, POS_STATE_CONFIG},
 };
 
 #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]

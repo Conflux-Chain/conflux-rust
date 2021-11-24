@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
-"""An example functional test
-"""
+
+# allow imports from parent directory
+# source: https://stackoverflow.com/a/11158224
+import os, sys
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+
 import eth_utils
 import time
 from eth_utils import encode_hex
@@ -18,6 +22,7 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
         self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = '120'
         # No auto timeout.
         self.pos_parameters["round_time_ms"] = 1000000000
+        self.conf_parameters["pos_round_per_term"] = '10'
 
     def run_test(self):
         clients = []

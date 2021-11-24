@@ -43,7 +43,7 @@ use diem_types::{
     account_address::from_consensus_public_key,
     block_info::PivotBlockDecision,
     chain_id::ChainId,
-    term_state::{PosStateConfig, POS_STATE_CONFIG},
+    term_state::pos_state_config::{PosStateConfig, POS_STATE_CONFIG},
     transaction::TransactionPayload,
 };
 use diemdb::DiemDB;

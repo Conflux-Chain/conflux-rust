@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
-"""An example functional test
-"""
+
+# allow imports from parent directory
+# source: https://stackoverflow.com/a/11158224
+import os, sys
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+
 import eth_utils
 import time
 
@@ -21,6 +25,7 @@ class PosForkAttackTest(DefaultConfluxTestFramework):
         self.conf_parameters["adaptive_weight_beta"] = "1"
         self.conf_parameters["timer_chain_block_difficulty_ratio"] = "3"
         self.conf_parameters["timer_chain_beta"] = "20"
+        self.conf_parameters["pos_round_per_term"] = '10'
 
     def run_test(self):
         client = RpcClient(self.nodes[0])
