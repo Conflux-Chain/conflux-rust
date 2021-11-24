@@ -89,23 +89,22 @@ class ExampleTest(ConfluxTestFramework):
         self.nodes[0].generate_empty_blocks(400)
         sync_blocks(self.nodes)
         pos_identifier, _ = client.wait_for_pos_register()
-        for _ in range(3):
-            client.generate_empty_blocks(400)
-            time.sleep(2)
-        assert_equal(int(client.pos_get_account(pos_identifier)["status"]["availableVotes"], 0), 2000)
+        client.generate_empty_blocks(400)
+        sync_blocks(self.nodes)
+        time.sleep(2)
 
         latest_pos_ref = self.latest_pos_ref()
-        for i in range(150):
+        for i in range(40):
             print(i)
             if i == 10:
                 self.stop_node(5, clean=True)
                 self.start_node(5, phase_to_wait=None)
                 self.nodes[5].wait_for_recovery(["NormalSyncPhase"], 30)
-            if i == 20:
+            if i == 12:
                 self.maybe_restart_node(5, 1, 0)
-            if i == 50:
+            if i == 15:
                 client.pos_retire_self()
-            if i == 100:
+            if i == 30:
                 self.maybe_restart_node(5, 1, 1)
             # Retire node 3 after 5 min.
             # Generate enough PoW block for PoS to progress
@@ -119,6 +118,8 @@ class ExampleTest(ConfluxTestFramework):
 
         client.wait_for_unstake(client.node.pow_sk)
         assert client.get_balance(eth_utils.encode_hex(priv_to_addr(client.node.pow_sk))) > 10000 * 10**18
+        # node 6 is registered after pos starts.
+        assert_equal(int(client.pos_get_account(pos_identifier)["status"]["availableVotes"], 0), 2000)
         # assert (self.nodes[0].getblockcount() == 6002)
 
     def latest_pos_ref(self):

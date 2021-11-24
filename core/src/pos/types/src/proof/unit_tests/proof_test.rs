@@ -7,8 +7,8 @@
 
 use diem_crypto::{
     hash::{
-        ACCUMULATOR_PLACEHOLDER_HASH, CryptoHash, SPARSE_MERKLE_PLACEHOLDER_HASH,
-        TestOnlyHash,
+        CryptoHash, TestOnlyHash, ACCUMULATOR_PLACEHOLDER_HASH,
+        SPARSE_MERKLE_PLACEHOLDER_HASH,
     },
     HashValue,
 };
@@ -16,8 +16,7 @@ use diem_crypto::{
 use crate::{
     account_state_blob::AccountStateBlob,
     proof::{
-        definition::MAX_ACCUMULATOR_PROOF_DEPTH,
-        SparseMerkleInternalNode,
+        definition::MAX_ACCUMULATOR_PROOF_DEPTH, SparseMerkleInternalNode,
         SparseMerkleLeafNode, TestAccumulatorInternalNode,
         TestAccumulatorProof,
     },

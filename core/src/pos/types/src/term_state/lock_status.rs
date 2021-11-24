@@ -10,10 +10,10 @@ use proptest_derive::Arbitrary;
 
 use diem_logger::prelude::*;
 
-use super::{
-    FORCE_RETIRED_LOCKED_VIEWS, IN_QUEUE_LOCKED_VIEWS, OUT_QUEUE_LOCKED_VIEWS,
+use crate::{
+    block_info::View,
+    term_state::{PosStateConfigTrait, POS_STATE_CONFIG},
 };
-use crate::block_info::View;
 
 #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
@@ -165,7 +165,7 @@ impl NodeLockStatus {
         }
 
         if self.force_retired.map_or(false, |retire_view| {
-            view >= retire_view + FORCE_RETIRED_LOCKED_VIEWS
+            view >= retire_view + POS_STATE_CONFIG.force_retired_locked_views()
         }) {
             self.force_retired = None;
         }
@@ -195,12 +195,13 @@ impl NodeLockStatus {
         // If force retired is not none, new locked tokens will be forced
         // retire.
         if self.force_retired.is_some() {
-            let exit_view =
-                view + IN_QUEUE_LOCKED_VIEWS + OUT_QUEUE_LOCKED_VIEWS;
+            let exit_view = view
+                + POS_STATE_CONFIG.in_queue_locked_views()
+                + POS_STATE_CONFIG.out_queue_locked_views();
             self.out_queue.push(exit_view, votes, update_views);
         } else {
             self.available_votes += votes;
-            let exit_view = view + IN_QUEUE_LOCKED_VIEWS;
+            let exit_view = view + POS_STATE_CONFIG.in_queue_locked_views();
             self.in_queue.push(exit_view, votes, update_views);
         }
     }
@@ -224,7 +225,7 @@ impl NodeLockStatus {
             self.locked -= votes;
             self.available_votes -= votes;
 
-            let exit_view = view + OUT_QUEUE_LOCKED_VIEWS;
+            let exit_view = view + POS_STATE_CONFIG.out_queue_locked_views();
             self.out_queue.push(exit_view, votes, update_views);
         }
 
@@ -247,7 +248,8 @@ impl NodeLockStatus {
             rest_votes -= item.votes;
             self.available_votes -= item.votes;
 
-            let exit_view = item.view + OUT_QUEUE_LOCKED_VIEWS;
+            let exit_view =
+                item.view + POS_STATE_CONFIG.out_queue_locked_views();
             self.out_queue.push(exit_view, item.votes, update_views);
         }
     }
@@ -257,7 +259,8 @@ impl NodeLockStatus {
     ) {
         if self.force_retired.is_none() {
             self.force_retired = Some(view);
-            callback_views.push(view + FORCE_RETIRED_LOCKED_VIEWS);
+            callback_views
+                .push(view + POS_STATE_CONFIG.force_retired_locked_views());
             self.new_unlock(view, self.available_votes, callback_views);
         }
     }

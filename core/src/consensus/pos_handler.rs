@@ -40,8 +40,11 @@ use cached_diemdb::CachedDiemDB;
 use consensus_types::block::Block;
 use diem_config::config::SafetyRulesTestConfig;
 use diem_types::{
-    account_address::from_consensus_public_key, block_info::PivotBlockDecision,
-    chain_id::ChainId, transaction::TransactionPayload,
+    account_address::from_consensus_public_key,
+    block_info::PivotBlockDecision,
+    chain_id::ChainId,
+    term_state::{PosStateConfig, POS_STATE_CONFIG},
+    transaction::TransactionPayload,
 };
 use diemdb::DiemDB;
 use network::NetworkService;
@@ -169,6 +172,11 @@ impl PosHandler {
             None => bail!("No pos config!"),
         };
 
+        POS_STATE_CONFIG
+            .set(self.conf.pos_state_config.clone())
+            .map_err(|e| {
+                format!("Failed to set pos state config: e={:?}", e)
+            })?;
         let mut pos_config = NodeConfig::load(pos_config_path)
             .map_err(|e| format!("Failed to load node config: e={:?}", e))?;
         pos_config.set_data_dir(pos_config.data_dir().to_path_buf());
@@ -568,6 +576,7 @@ pub struct PosConfiguration {
     pub protocol_conf: ProtocolConfiguration,
     pub pos_initial_nodes_path: String,
     pub vrf_proposal_threshold: U256,
+    pub pos_state_config: PosStateConfig,
 }
 
 fn diem_hash_to_h256(h: &HashValue) -> PosBlockId { H256::from(h.as_ref()) }

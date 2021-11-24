@@ -399,6 +399,7 @@ pub fn initialize_common_modules(
                 .pos_initial_nodes_path
                 .clone(),
             vrf_proposal_threshold: conf.raw_conf.vrf_proposal_threshold,
+            pos_state_config: conf.pos_state_config(),
         },
         conf.raw_conf.pos_reference_enable_height,
     ));
