@@ -598,6 +598,7 @@ impl Configuration {
             self.raw_conf.stratum_port,
             stratum_secret,
             self.raw_conf.pow_problem_window_size,
+            self.common_params().transition_heights.cip81,
         )
     }
 
@@ -901,6 +902,7 @@ impl Configuration {
             dev_pack_tx_immediately: self.is_dev_mode()
                 && self.raw_conf.dev_block_interval_ms.is_none(),
             max_payload_bytes: self.raw_conf.jsonrpc_ws_max_payload_bytes,
+            public_rpc_apis: self.raw_conf.public_rpc_apis.clone(),
         }
     }
 
@@ -1082,6 +1084,10 @@ impl Configuration {
             .unnamed_21autumn_transition_height
             .unwrap_or(default_transition_time);
         params.transition_heights.cip72a = self
+            .raw_conf
+            .unnamed_21autumn_transition_height
+            .unwrap_or(default_transition_time);
+        params.transition_heights.cip81 = self
             .raw_conf
             .unnamed_21autumn_transition_height
             .unwrap_or(default_transition_time);

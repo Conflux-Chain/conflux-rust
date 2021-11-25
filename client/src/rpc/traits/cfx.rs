@@ -97,7 +97,7 @@ pub trait Cfx {
     /// Returns storage entries from a given contract.
     #[rpc(name = "cfx_getStorageAt")]
     fn storage_at(
-        &self, addr: RpcAddress, pos: H256, epoch_number: Option<EpochNumber>,
+        &self, addr: RpcAddress, pos: U256, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<Option<H256>>;
 
     #[rpc(name = "cfx_getStorageRoot")]
@@ -257,6 +257,9 @@ pub trait Cfx {
     fn get_supply_info(
         &self, epoch_number: Option<EpochNumber>,
     ) -> JsonRpcResult<TokenSupplyInfo>;
+
+    #[rpc(name = "cfx_openedMethodGroups")]
+    fn opened_method_groups(&self) -> JsonRpcResult<Vec<String>>;
 
     //        /// Returns transaction at given block hash and index.
     //        #[rpc(name = "cfx_getTransactionByBlockHashAndIndex")]

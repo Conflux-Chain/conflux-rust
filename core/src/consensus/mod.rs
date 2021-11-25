@@ -42,11 +42,7 @@ use cfx_internal_common::ChainIdParams;
 use cfx_parameters::{
     consensus::*,
     consensus_internal::REWARD_EPOCH_COUNT,
-    rpc::{
-        GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
-        TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW,
-        TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM,
-    },
+    rpc::{GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_TRANSACTION_SAMPLE_SIZE},
 };
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::StateDb;
@@ -388,9 +384,9 @@ impl ConsensusGraph {
         let inner = self.inner.read();
         let mut last_epoch_number = inner.best_epoch_number();
         let mut number_of_blocks_to_sample = GAS_PRICE_BLOCK_SAMPLE_SIZE;
-        let mut tx_hashes = HashSet::new();
         let mut prices = Vec::new();
-        let mut total_transaction_count_in_processed_blocks = 0;
+        let mut total_block_gas_limit: u64 = 0;
+        let mut total_tx_gas_limit: u64 = 0;
 
         loop {
             if number_of_blocks_to_sample == 0 || last_epoch_number == 0 {
@@ -410,45 +406,41 @@ impl ConsensusGraph {
                     .data_man
                     .block_by_hash(&hash, false /* update_cache */)
                     .unwrap();
-                total_transaction_count_in_processed_blocks +=
-                    block.transactions.len();
+                total_block_gas_limit +=
+                    block.block_header.gas_limit().as_u64();
                 for tx in block.transactions.iter() {
-                    if tx_hashes.insert(tx.hash()) {
-                        prices.push(tx.gas_price().clone());
-                        if prices.len() == GAS_PRICE_TRANSACTION_SAMPLE_SIZE {
-                            break;
-                        }
+                    // add the tx.gas to total_tx_gas_limit even it is packed
+                    // multiple times because these tx all
+                    // will occupy block's gas space
+                    total_tx_gas_limit += tx.transaction.gas.as_u64();
+                    prices.push(tx.gas_price().clone());
+                    if prices.len() == GAS_PRICE_TRANSACTION_SAMPLE_SIZE {
+                        break;
                     }
                 }
                 number_of_blocks_to_sample -= 1;
-                if number_of_blocks_to_sample == 0 {
+                if number_of_blocks_to_sample == 0
+                    || prices.len() == GAS_PRICE_TRANSACTION_SAMPLE_SIZE
+                {
                     break;
                 }
             }
         }
 
-        let processed_block_count =
-            GAS_PRICE_BLOCK_SAMPLE_SIZE - number_of_blocks_to_sample;
-        let average_transaction_count_per_block = if processed_block_count != 0
-        {
-            total_transaction_count_in_processed_blocks / processed_block_count
-        } else {
-            0
-        };
-
         prices.sort();
-        if prices.is_empty() {
+        if prices.is_empty() || total_tx_gas_limit == 0 {
             Some(U256::from(1))
         } else {
-            if average_transaction_count_per_block
-                < TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW
-            {
+            let average_gas_limit_multiple =
+                total_block_gas_limit / total_tx_gas_limit;
+            if average_gas_limit_multiple > 5 {
+                // used less than 20%
                 Some(U256::from(1))
-            } else if average_transaction_count_per_block
-                < TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM
-            {
+            } else if average_gas_limit_multiple >= 2 {
+                // used less than 50%
                 Some(prices[prices.len() / 8])
             } else {
+                // used more than 50%
                 Some(prices[prices.len() / 2])
             }
         }
@@ -848,7 +840,7 @@ impl ConsensusGraph {
 
     fn filter_logs_by_epochs(
         &self, from_epoch: EpochNumber, to_epoch: EpochNumber,
-        filter: LogFilter,
+        filter: LogFilter, blocks_to_skip: HashSet<H256>,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError>
     {
         let bloom_possibilities = filter.bloom_possibilities();
@@ -881,6 +873,10 @@ impl ConsensusGraph {
                 Err(e) => Either::Right(std::iter::once(Err(e))),
             })
             // take as many as we need
+            .skip_while(|res| match res {
+                Ok(log) => blocks_to_skip.contains(&log.block_hash),
+                Err(_) => false,
+            })
             .skip(offset)
             .take(limit)
             // short-circuit on error
@@ -1060,55 +1056,31 @@ impl ConsensusGraph {
         };
 
         // filter logs based on epochs
+        // out-of-range blocks from the _end_ of the range
+        // are handled by `filter_logs_by_epochs`
+        let skip_from_end = to_epoch_hashes
+            .into_iter()
+            .skip_while(|h| *h != to_hash)
+            .skip(1)
+            .collect();
+
         let epoch_range_logs = self.filter_logs_by_epochs(
             EpochNumber::Number(from_epoch),
             EpochNumber::Number(to_epoch),
             filter,
+            skip_from_end,
         )?;
 
-        // helper for finding relative position of `a` and `b` in `vec`
-        let rel_pos = |vec: &Vec<H256>, a: H256, b: H256| {
-            let position_a = vec.iter().position(|&h| a == h);
-            let position_b = vec.iter().position(|&h| b == h);
+        // remove out-of-range blocks from the _start_ of the range
+        let skip_from_start: HashSet<_> = from_epoch_hashes
+            .into_iter()
+            .take_while(|h| *h != from_hash)
+            .collect();
 
-            match (position_a, position_b) {
-                (Some(pa), Some(pb)) if pa < pb => "before",
-                (Some(pa), Some(pb)) if pa == pb => "equal",
-                (Some(pa), Some(pb)) if pa > pb => "after",
-                _ => "undefined",
-            }
-        };
-
-        // remove out-of-range blocks
-        let first = epoch_range_logs.iter().position(|l| {
-            l.epoch_number > from_epoch
-                || matches!(
-                    rel_pos(&from_epoch_hashes, l.block_hash, from_hash),
-                    "after" | "equal"
-                )
-        });
-
-        let last = epoch_range_logs
-            .iter()
-            .rev()
-            .position(|l| {
-                l.epoch_number < to_epoch
-                    || matches!(
-                        rel_pos(&to_epoch_hashes, l.block_hash, to_hash),
-                        "before" | "equal"
-                    )
-            })
-            .map(|i| epoch_range_logs.len() - i);
-
-        match (first, last) {
-            (Some(f), Some(l)) => Ok(epoch_range_logs[f..l].to_vec()),
-
-            // (None, _) means: all logs returned are in `from_epoch`,
-            // all from blocks with blocks numbers < `from_block`.
-            // (_, None) means: all logs returned are in `to_epoch`,
-            // all from blocks with blocks numbers > `to_block`.
-            _ => Ok(vec![]),
-        }
+        Ok(epoch_range_logs
+            .into_iter()
+            .skip_while(|log| skip_from_start.contains(&log.block_hash))
+            .collect())
     }
 
     pub fn logs(
@@ -1124,6 +1096,7 @@ impl ConsensusGraph {
                 from_epoch.clone(),
                 to_epoch.clone(),
                 filter,
+                Default::default(),
             ),
 
             // filter by block hashes

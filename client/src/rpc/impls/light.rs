@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::errors::check_rpc_address_network;
-use cfx_types::{H160, H256, H520, U128, U256, U64};
+use cfx_types::{BigEndianHash, H160, H256, H520, U128, U256, U64};
 use cfxcore::{
     block_data_manager::BlockDataManager,
     consensus_parameters::ONE_GDRIP_IN_DRIP,
@@ -56,7 +56,6 @@ use cfxcore::{
 };
 
 // macro for reducing boilerplate for unsupported methods
-#[macro_use]
 macro_rules! not_supported {
     () => {};
     ( fn $fn:ident ( &self $(, $name:ident : $type:ty)* ) $( -> BoxFuture<$ret:ty> )? ; $($tail:tt)* ) => {
@@ -567,11 +566,11 @@ impl RpcImpl {
     }
 
     fn storage_at(
-        &self, address: RpcAddress, position: H256,
+        &self, address: RpcAddress, position: U256,
         epoch_num: Option<EpochNumber>,
     ) -> RpcBoxFuture<Option<H256>>
     {
-        let position: H256 = position.into();
+        let position: H256 = H256::from_uint(&position);
         let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
 
         info!(
@@ -1063,7 +1062,7 @@ impl Cfx for CfxHandler {
             fn send_raw_transaction(&self, raw: Bytes) -> JsonRpcResult<H256>;
             fn sponsor_info(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<SponsorInfo>;
             fn staking_balance(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<U256>;
-            fn storage_at(&self, addr: RpcAddress, pos: H256, epoch_number: Option<EpochNumber>) -> BoxFuture<Option<H256>>;
+            fn storage_at(&self, addr: RpcAddress, pos: U256, epoch_number: Option<EpochNumber>) -> BoxFuture<Option<H256>>;
             fn storage_root(&self, address: RpcAddress, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
@@ -1079,6 +1078,7 @@ impl Cfx for CfxHandler {
         fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> JsonRpcResult<EstimateGasAndCollateralResponse>;
         fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
         fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
+        fn opened_method_groups(&self) -> JsonRpcResult<Vec<String>>;
     }
 }
 

@@ -32,9 +32,9 @@ lazy_static! {
 }
 
 const FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET: u32 = 2000;
-// By default, the capacity of tx pool is 500K, so the maximum TPS is
-// 500K / 100 = 5K
-const TIME_WINDOW: u64 = 100;
+/// The max number of senders we compare gas price with a new inserted
+/// transaction.
+const GC_CHECK_COUNT: usize = 5;
 
 lazy_static! {
     static ref TX_POOL_RECALCULATE: Arc<dyn Meter> =
@@ -399,23 +399,69 @@ impl TransactionPoolInner {
     pub fn collect_garbage(&mut self, new_tx: &SignedTransaction) {
         let count_before_gc = self.total_deferred();
         while self.is_full() && !self.garbage_collector.is_empty() {
-            let victim = self.garbage_collector.top().unwrap().clone();
             let current_timestamp = self.get_current_timestamp();
+            let victim = {
+                let mut cnt = GC_CHECK_COUNT;
+                let mut poped_nodes = Vec::new();
+                let mut victim = None;
+                let mut min_gas_price = new_tx.gas_price;
+                while !self.garbage_collector.is_empty() && cnt != 0 {
+                    let node = self.garbage_collector.pop().unwrap();
+                    // Accounts which are not in `deferred_pool` may be inserted
+                    // into `garbage_collector`, we can just
+                    // ignore them.
+                    if !self.deferred_pool.contain_address(&node.sender) {
+                        continue;
+                    }
+                    poped_nodes.push(node.clone());
+
+                    // This node has executed transactions to GC. No need to
+                    // check more.
+                    if node.count > 0 {
+                        victim = Some(node);
+                        break;
+                    }
+
+                    // We do not GC a transaction from the same sender.
+                    if node.sender == new_tx.sender {
+                        continue;
+                    }
+
+                    // If all accounts are ready, we choose the one whose first
+                    // tx has the minimal gas price.
+                    let to_remove_tx = self
+                        .deferred_pool
+                        .get_lowest_nonce_tx(&node.sender)
+                        .unwrap();
+                    if to_remove_tx.gas_price < min_gas_price {
+                        min_gas_price = to_remove_tx.gas_price;
+                        victim = Some(node);
+                    }
+                    cnt -= 1;
+                }
+                // Insert back other nodes to keep `garbage_collector`
+                // unchanged.
+                for node in poped_nodes {
+                    if victim.is_some()
+                        && node.sender == victim.as_ref().unwrap().sender
+                    {
+                        // skip victim
+                        continue;
+                    }
+                    self.garbage_collector.insert(
+                        &node.sender,
+                        node.count,
+                        node.timestamp,
+                    );
+                }
+                match victim {
+                    Some(victim) => victim,
+                    None => return,
+                }
+            };
             let addr = victim.sender;
 
             // All transactions are not garbage collectable.
-            if victim.count == 0
-                && victim.timestamp + TIME_WINDOW >= current_timestamp
-            {
-                break;
-            }
-
-            // Accounts which are not in `deferred_pool` may be inserted into
-            // `garbage_collector`, we can just ignore them.
-            if !self.deferred_pool.contain_address(&addr) {
-                self.garbage_collector.pop();
-                continue;
-            }
 
             let (ready_nonce, _) = self
                 .get_local_nonce_and_balance(&addr)
@@ -435,11 +481,6 @@ impl TransactionPoolInner {
             // maintain ready account pool
             if let Some(ready_tx) = self.ready_account_pool.get(&addr) {
                 if ready_tx.hash() == to_remove_tx.hash() {
-                    if to_remove_tx.gas_price > new_tx.gas_price {
-                        debug!("txpool gc: old tx has higher price: new_tx={:?}, old_tx={:?}",
-                            new_tx.hash(), to_remove_tx.hash);
-                        break;
-                    }
                     warn!("a ready tx is garbage-collected");
                     GC_READY_COUNTER.inc(1);
                     self.ready_account_pool.remove(&addr);
@@ -469,9 +510,8 @@ impl TransactionPoolInner {
             // maintain ready info
             if !self.deferred_pool.contain_address(&addr) {
                 self.ready_nonces_and_balances.remove(&addr);
-                // The picked sender has no transactions now, we pop it from
-                // `garbage_collector`.
-                self.garbage_collector.pop();
+            // The picked sender has no transactions now, and has been popped
+            // from `garbage_collector`.
             } else {
                 if victim.count > 0 {
                     self.garbage_collector.insert(
