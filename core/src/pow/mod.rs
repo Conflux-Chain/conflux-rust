@@ -377,7 +377,11 @@ where
     // d_{t+1}=0.8*d_t+0.2*d'
     // where d_t is the difficulty of the current period, and d' is the
     // expected difficulty to reach the ideal block_generation_period.
-    let mut target_diff = cur_difficulty / 5 * 4 + expected_diff / 5;
+    let mut target_diff = if epoch < pow_config.cip81_height {
+        expected_diff
+    } else {
+        cur_difficulty / 5 * 4 + expected_diff / 5
+    };
 
     let (lower, upper) = pow_config.get_adjustment_bound(cur_difficulty);
     if target_diff > upper {
