@@ -34,7 +34,6 @@ use cfxcore::{
     },
 };
 use cfxkey::{Error as EthkeyError, Generator, KeyPair, Random};
-use client::rpc::rpc_apis::Api::Debug;
 use diem_crypto::{
     key_file::save_pri_key, HashValue, Uniform, ValidCryptoMaterialStringExt,
 };
@@ -44,7 +43,7 @@ use diem_types::{
     on_chain_config::{new_epoch_event_key, ValidatorSet},
     term_state::{
         pos_state_config::{PosStateConfigTrait, POS_STATE_CONFIG},
-        NodeID, TERM_ELECTED_SIZE, TERM_LIST_LEN,
+        NodeID, TERM_LIST_LEN,
     },
     transaction::{ChangeSet, Transaction, WriteSetPayload},
     validator_config::{
@@ -140,7 +139,7 @@ impl fmt::Display for Error {
 
 fn main() {
     env_logger::try_init().expect("Logger initialized only once.");
-    POS_STATE_CONFIG.set(Default::default());
+    POS_STATE_CONFIG.set(Default::default()).unwrap();
 
     match execute(env::args()) {
         Ok(ok) => println!("{}", ok),
