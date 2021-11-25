@@ -102,7 +102,7 @@ class ExampleTest(ConfluxTestFramework):
         time.sleep(2)
 
         latest_pos_ref = self.latest_pos_ref()
-        for i in range(40):
+        for i in range(50):
             print(i)
             if i == 10:
                 self.stop_node(5, clean=True)
@@ -111,6 +111,7 @@ class ExampleTest(ConfluxTestFramework):
             if i == 12:
                 self.maybe_restart_node(5, 1, 0)
             if i == 15:
+                assert_equal(int(client.pos_get_account(pos_identifier)["status"]["availableVotes"], 0), 2000)
                 client.pos_retire_self()
             if i == 30:
                 self.maybe_restart_node(5, 1, 1)
@@ -126,9 +127,7 @@ class ExampleTest(ConfluxTestFramework):
 
         client.wait_for_unstake(client.node.pow_sk)
         assert client.get_balance(eth_utils.encode_hex(priv_to_addr(client.node.pow_sk))) > 10000 * 10**18
-        # node 6 is registered after pos starts.
-        assert_equal(int(client.pos_get_account(pos_identifier)["status"]["availableVotes"], 0), 2000)
-        # assert (self.nodes[0].getblockcount() == 6002)
+        assert_equal(int(client.pos_get_account(pos_identifier)["status"]["availableVotes"], 0), 0)
 
     def latest_pos_ref(self):
         best_hash = self.nodes[0].best_block_hash()
