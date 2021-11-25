@@ -64,6 +64,7 @@ impl GarbageCollector {
         }
     }
 
+    #[allow(unused)]
     pub fn top(&self) -> Option<&GarbageCollectorNode> { self.data.get(0) }
 
     pub fn pop(&mut self) -> Option<GarbageCollectorNode> {
