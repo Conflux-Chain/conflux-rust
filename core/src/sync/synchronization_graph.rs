@@ -1792,65 +1792,72 @@ impl SynchronizationGraph {
     /// Return `true` if we do not need to reconstruct consensus, or all blocks
     /// in the new consensus graph already have bodies.
     pub fn complete_filling_block_bodies(&self) -> bool {
-        let mut inner = &mut *self.inner.write();
+        {
+            let mut inner = &mut *self.inner.write();
 
-        // Iterating over `hash_to_arena_indices` might be more efficient than
-        // iterating over `arena`.
-        let to_remove = {
-            let arena = &mut inner.arena;
-            inner
-                .hash_to_arena_indices
-                .iter()
-                .filter_map(|(_, index)| {
-                    let graph_node = &mut arena[*index];
-                    if graph_node.graph_status == BLOCK_HEADER_GRAPH_READY {
-                        graph_node.block_ready = true;
-                        graph_node.graph_status = BLOCK_GRAPH_READY;
-                    }
-                    if graph_node.graph_status != BLOCK_GRAPH_READY {
-                        Some(*index)
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        };
-        inner.remove_blocks(&to_remove);
+            // Iterating over `hash_to_arena_indices` might be more efficient
+            // than iterating over `arena`.
+            let to_remove = {
+                let arena = &mut inner.arena;
+                inner
+                    .hash_to_arena_indices
+                    .iter()
+                    .filter_map(|(_, index)| {
+                        let graph_node = &mut arena[*index];
+                        if graph_node.graph_status == BLOCK_HEADER_GRAPH_READY {
+                            graph_node.block_ready = true;
+                            graph_node.graph_status = BLOCK_GRAPH_READY;
+                        }
+                        if graph_node.graph_status != BLOCK_GRAPH_READY {
+                            Some(*index)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            };
+            inner.remove_blocks(&to_remove);
 
-        // Check if we skip some block bodies. It's either because they are
-        // never retrieved after a long time, or they have invalid
-        // bodies.
-        let skipped_body_blocks = self.consensus.get_blocks_needing_bodies();
-        if !skipped_body_blocks.is_empty() {
-            warn!("Has invalid blocks after downloading block bodies!");
-            // Some headers should not enter consensus, so we just reconstruct
-            // the consensus graph with the current sync graph.
-            self.consensus.reset();
-
-            let all_block_indices: HashSet<_> = inner
-                .hash_to_arena_indices
-                .iter()
-                .map(|(_, i)| *i)
-                .collect();
-            // Send blocks in topological order.
-            let sorted_blocks = inner.topological_sort(all_block_indices);
-            for i in sorted_blocks {
-                self.consensus
-                    .on_new_block(&inner.arena[i].block_header.hash());
-            }
-            let new_to_fill_blocks: HashSet<_> =
+            // Check if we skip some block bodies. It's either because they are
+            // never retrieved after a long time, or they have invalid
+            // bodies.
+            let skipped_body_blocks =
                 self.consensus.get_blocks_needing_bodies();
-            if !new_to_fill_blocks.is_empty() {
-                // This should not happen if stable checkpoint is not reverted
-                // because we have downloaded all blocks in its
-                // subtree.
-                warn!("{} new block bodies to get", new_to_fill_blocks.len());
-                inner.block_to_fill_set = new_to_fill_blocks;
-                return false;
+            if !skipped_body_blocks.is_empty() {
+                warn!("Has invalid blocks after downloading block bodies!");
+                // Some headers should not enter consensus, so we just
+                // reconstruct the consensus graph with the
+                // current sync graph.
+                self.consensus.reset();
+
+                let all_block_indices: HashSet<_> = inner
+                    .hash_to_arena_indices
+                    .iter()
+                    .map(|(_, i)| *i)
+                    .collect();
+                // Send blocks in topological order.
+                let sorted_blocks = inner.topological_sort(all_block_indices);
+                for i in sorted_blocks {
+                    self.consensus
+                        .on_new_block(&inner.arena[i].block_header.hash());
+                }
+                let new_to_fill_blocks: HashSet<_> =
+                    self.consensus.get_blocks_needing_bodies();
+                if !new_to_fill_blocks.is_empty() {
+                    // This should not happen if stable checkpoint is not
+                    // reverted because we have downloaded
+                    // all blocks in its subtree.
+                    warn!(
+                        "{} new block bodies to get",
+                        new_to_fill_blocks.len()
+                    );
+                    inner.block_to_fill_set = new_to_fill_blocks;
+                    return false;
+                }
             }
         }
-        inner.locked_for_catchup = false;
         self.consensus.construct_pivot_state();
+        self.inner.write().locked_for_catchup = false;
         true
     }
 }
