@@ -522,7 +522,7 @@ class RpcClient:
         self.send_tx(unstake_tx, wait_for_receipt=True)
 
     def pos_retire_self(self):
-        retire_tx = self.new_tx(priv_key=self.node.pow_sk, data=retire_tx_data(), value=0, receiver="0x0888000000000000000000000000000000000005", gas=CONTRACT_DEFAULT_GAS)
+        retire_tx = self.new_tx(priv_key=self.node.pow_sk, data=retire_tx_data(), value=0, receiver="0x0888000000000000000000000000000000000005", gas=6_000_000)
         self.send_tx(retire_tx, wait_for_receipt=True)
 
     def pos_get_consensus_blocks(self):

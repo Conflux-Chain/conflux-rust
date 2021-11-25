@@ -46,7 +46,7 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
         pivot_decision1 = chain1[pivot_decision_height - 1]
         sync_blocks(self.nodes)
         for client in clients:
-            client.pos_force_sign_pivot_decision(pivot_decision1, pivot_decision_height)
+            client.pos_force_sign_pivot_decision(pivot_decision1, int_to_hex(pivot_decision_height))
         chain2 = []
         fork_parent = encode_hex(self.nodes[0].p2p.genesis)
         for _ in range(chain_len):
@@ -55,7 +55,7 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
         sync_blocks(self.nodes)
         pivot_decision2 = chain2[pivot_decision_height - 1]
         for client in clients:
-            client.pos_force_sign_pivot_decision(pivot_decision2, pivot_decision_height)
+            client.pos_force_sign_pivot_decision(pivot_decision2, int_to_hex(pivot_decision_height))
         # Wait for pivot decision to be received
         time.sleep(2)
         # Make node 0 to propose a block
