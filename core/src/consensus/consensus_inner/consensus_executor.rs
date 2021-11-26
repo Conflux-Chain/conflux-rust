@@ -933,6 +933,7 @@ impl ConsensusExecutionHandler {
                 on_local_pivot,
                 self.config.executive_trace,
                 reward_execution_info,
+                self.pos_verifier.as_ref(),
             )
         {
             let pivot_block_header = self
