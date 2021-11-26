@@ -242,6 +242,12 @@ impl RequestManager {
             Some(next_delay),
         ) {
             debug!("request_with_delay: send_request fails, peer={:?}, request={:?}", peer, e);
+            // These requests are not actually sent,
+            // and they will not be inserted into requests_queue,
+            // so remove them from net_inflight_blocks.
+            if let Some(hashes) = try_get_block_hashes(&e) {
+                self.remove_net_inflight_blocks(hashes.iter())
+            }
             self.waiting_requests.lock().push(TimedWaitingRequest::new(
                 Instant::now() + cur_delay,
                 WaitingRequest(e, next_delay),

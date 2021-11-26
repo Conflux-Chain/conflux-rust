@@ -21,7 +21,7 @@ use crate::{
     pos::pow_handler::POS_TERM_EPOCHS,
     pow::{target_difficulty, PowComputer, ProofOfWorkConfig},
     state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
-    verification::{compute_epoch_receipt_proof, VerificationConfig},
+    verification::VerificationConfig,
 };
 use cfx_internal_common::{
     consensus_api::StateMaintenanceTrait, EpochExecutionCommitment,
