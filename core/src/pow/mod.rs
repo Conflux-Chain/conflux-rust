@@ -97,7 +97,7 @@ pub struct ProofOfWorkConfig {
     pub stratum_port: u16,
     pub stratum_secret: Option<H256>,
     pub pow_problem_window_size: usize,
-    pub cip81_height: u64,
+    pub cip86_height: u64,
 }
 
 impl ProofOfWorkConfig {
@@ -105,7 +105,7 @@ impl ProofOfWorkConfig {
         test_mode: bool, use_octopus_in_test_mode: bool, mining_type: &str,
         initial_difficulty: Option<u64>, stratum_listen_addr: String,
         stratum_port: u16, stratum_secret: Option<H256>,
-        pow_problem_window_size: usize, cip81_height: u64,
+        pow_problem_window_size: usize, cip86_height: u64,
     ) -> Self
     {
         if test_mode {
@@ -119,7 +119,7 @@ impl ProofOfWorkConfig {
                 stratum_port,
                 stratum_secret,
                 pow_problem_window_size,
-                cip81_height,
+                cip86_height,
             }
         } else {
             ProofOfWorkConfig {
@@ -132,7 +132,7 @@ impl ProofOfWorkConfig {
                 stratum_port,
                 stratum_secret,
                 pow_problem_window_size,
-                cip81_height,
+                cip86_height,
             }
         }
     }
@@ -141,7 +141,7 @@ impl ProofOfWorkConfig {
         if self.test_mode {
             20
         } else {
-            if cur_height > self.cip81_height {
+            if cur_height > self.cip86_height {
                 DIFFICULTY_ADJUSTMENT_EPOCH_PERIOD_CIP
             } else {
                 DIFFICULTY_ADJUSTMENT_EPOCH_PERIOD
@@ -377,7 +377,7 @@ where
     // d_{t+1}=0.8*d_t+0.2*d'
     // where d_t is the difficulty of the current period, and d' is the
     // expected difficulty to reach the ideal block_generation_period.
-    let mut target_diff = if epoch < pow_config.cip81_height {
+    let mut target_diff = if epoch < pow_config.cip86_height {
         expected_diff
     } else {
         cur_difficulty / 5 * 4 + expected_diff / 5
