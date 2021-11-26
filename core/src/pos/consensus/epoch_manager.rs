@@ -562,6 +562,11 @@ impl EpochManager {
         let maybe_unverified_event =
             self.process_epoch(peer_id, consensus_msg).await?;
 
+        // This msg is duplicate or unuseful, so we do not need to verify it.
+        if !self.filter_unverified_event(&maybe_unverified_event) {
+            return Ok(());
+        }
+
         if let Some(unverified_event) = maybe_unverified_event {
             // same epoch -> run well-formedness + signature check
             let verified_event = unverified_event
@@ -678,6 +683,26 @@ impl EpochManager {
                     p.process_sync_info_msg(*sync_info, peer_id).await
                 ),
             },
+        }
+    }
+
+    fn filter_unverified_event(
+        &mut self, maybe_event: &Option<UnverifiedEvent>,
+    ) -> bool {
+        let event = match maybe_event {
+            Some(event) => event,
+            None => return false,
+        };
+        let processor = match self.processor_mut() {
+            RoundProcessor::Recovery(_) => return true,
+            RoundProcessor::Normal(p) => p,
+        };
+        match event {
+            UnverifiedEvent::ProposalMsg(p) => {
+                processor.filter_proposal(p.as_ref())
+            }
+            UnverifiedEvent::VoteMsg(v) => processor.filter_vote(v.as_ref()),
+            _ => true,
         }
     }
 
