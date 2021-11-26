@@ -725,19 +725,12 @@ impl RoundManager {
             return Ok(());
         }
 
-        if self.sync_only {
-            self.network
-                .broadcast(
-                    ConsensusMsg::SyncInfo(Box::new(
-                        self.block_store.sync_info(),
-                    )),
-                    vec![],
-                )
-                .await;
-            bail!(
-                "[RoundManager] sync_only flag is set, broadcasting SyncInfo"
-            );
-        }
+        self.network
+            .broadcast(
+                ConsensusMsg::SyncInfo(Box::new(self.block_store.sync_info())),
+                vec![],
+            )
+            .await;
 
         match self
             .round_state
