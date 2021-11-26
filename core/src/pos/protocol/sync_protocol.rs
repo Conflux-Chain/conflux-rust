@@ -609,7 +609,7 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
             );
         }
 
-        info!(
+        debug!(
             "hsb on_peer_connected: peer {:?}, peer_hash {:?}, peer count {}",
             node_id,
             peer_hash,
@@ -640,7 +640,7 @@ impl NetworkProtocolHandler for HotStuffSynchronizationProtocol {
         }
 
         self.request_manager.on_peer_disconnected(io, peer);
-        info!(
+        debug!(
             "hsb on_peer_disconnected: peer={}, peer count {}",
             peer,
             self.peers.len()
