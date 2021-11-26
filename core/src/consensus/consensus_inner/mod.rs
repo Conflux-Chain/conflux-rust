@@ -2136,22 +2136,11 @@ impl ConsensusGraphInner {
     pub fn get_pivot_hash_from_epoch_number(
         &self, epoch_number: u64,
     ) -> Result<EpochId, String> {
-        let height = epoch_number;
-        if height >= self.cur_era_genesis_height {
-            let pivot_index = (height - self.cur_era_genesis_height) as usize;
-            if pivot_index >= self.pivot_chain.len() {
-                Err("Epoch number larger than the current pivot chain tip"
-                    .into())
-            } else {
-                Ok(self.arena[self.get_pivot_block_arena_index(height)].hash)
-            }
-        } else {
-            self.data_man.executed_epoch_set_hashes_from_db(epoch_number).ok_or(
+        self.data_man.executed_epoch_set_hashes_from_db(epoch_number).ok_or(
                 format!("get_hash_from_epoch_number: Epoch hash set not in db, epoch_number={}", epoch_number).into()
             ).and_then(|epoch_hashes|
                 epoch_hashes.last().map(Clone::clone).ok_or("Epoch set is empty".into())
             )
-        }
     }
 
     /// This function differs from `get_pivot_hash_from_epoch_number` in that it

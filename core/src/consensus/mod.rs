@@ -467,9 +467,6 @@ impl ConsensusGraph {
             EpochNumber::LatestState => self.best_executed_state_epoch_number(),
             EpochNumber::Number(num) => {
                 let epoch_num = num;
-                if epoch_num > self.inner.read_recursive().best_epoch_number() {
-                    return Err("Invalid params: expected a numbers with less than largest epoch number.".to_owned());
-                }
                 epoch_num
             }
         })
