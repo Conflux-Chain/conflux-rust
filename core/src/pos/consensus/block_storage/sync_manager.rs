@@ -90,6 +90,20 @@ impl BlockStore {
                     .await;
             }
         }
+        // Wait for PoW to process fetched PoS references.
+        // We wait after commit `qc`, so PoW can process its pivot decision
+        // correctly.
+        self.pow_handler
+            .wait_for_initialization(
+                self.get_block(qc.certified_block().id())
+                    .unwrap()
+                    .compute_result()
+                    .pivot_decision()
+                    .clone()
+                    .unwrap()
+                    .block_hash,
+            )
+            .await;
         Ok(())
     }
 
@@ -169,19 +183,6 @@ impl BlockStore {
                     );
                 }
             }
-
-            // Wait for PoW to process fetched PoS references.
-            self.pow_handler
-                .wait_for_initialization(
-                    self.get_block(qc.certified_block().id())
-                        .unwrap()
-                        .compute_result()
-                        .pivot_decision()
-                        .clone()
-                        .unwrap()
-                        .block_hash,
-                )
-                .await;
         }
 
         self.insert_single_quorum_cert(qc)
