@@ -1267,14 +1267,16 @@ impl RoundManager {
         r
     }
 
+    /// Return true for blocks that we need to process
     pub fn filter_proposal(&self, p: &ProposalMsg) -> bool {
         self.proposer_election
             .receive_proposal_candidate(p.proposal())
             .unwrap_or(false)
     }
 
+    /// Return true for votes that we need to process
     pub fn filter_vote(&self, v: &VoteMsg) -> bool {
-        self.round_state.vote_received(v.vote())
+        !self.round_state.vote_received(v.vote())
     }
 }
 
