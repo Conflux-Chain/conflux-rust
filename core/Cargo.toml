@@ -81,7 +81,7 @@ strfmt = "0.1"
 tempdir = "0.3"
 threadpool = "1.0"
 throttling = { path = "../util/throttling" }
-toml = "0.4"
+toml = "0.5.8"
 tokio02 = { version = "0.2", package="tokio", features = ["full"] }
 tokio = { version = "1.6", features = ["full"] }
 tokio-timer = "0.2.13"

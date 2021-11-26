@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
-"""An example functional test
-"""
+
+# allow imports from parent directory
+# source: https://stackoverflow.com/a/11158224
+import os, sys
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+
 import eth_utils
 import time
 from eth_utils import encode_hex
@@ -18,6 +22,7 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
         self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = '120'
         # No auto timeout.
         self.pos_parameters["round_time_ms"] = 1000000000
+        self.conf_parameters["pos_round_per_term"] = '10'
 
     def run_test(self):
         clients = []
@@ -41,7 +46,7 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
         pivot_decision1 = chain1[pivot_decision_height - 1]
         sync_blocks(self.nodes)
         for client in clients:
-            client.pos_force_sign_pivot_decision(pivot_decision1, pivot_decision_height)
+            client.pos_force_sign_pivot_decision(pivot_decision1, int_to_hex(pivot_decision_height))
         chain2 = []
         fork_parent = encode_hex(self.nodes[0].p2p.genesis)
         for _ in range(chain_len):
@@ -50,7 +55,7 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
         sync_blocks(self.nodes)
         pivot_decision2 = chain2[pivot_decision_height - 1]
         for client in clients:
-            client.pos_force_sign_pivot_decision(pivot_decision2, pivot_decision_height)
+            client.pos_force_sign_pivot_decision(pivot_decision2, int_to_hex(pivot_decision_height))
         # Wait for pivot decision to be received
         time.sleep(2)
         # Make node 0 to propose a block

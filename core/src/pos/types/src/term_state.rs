@@ -2,25 +2,25 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub mod lock_status;
-
 use std::{
     cmp::Ordering,
-    collections::{BTreeMap, BinaryHeap, HashMap, VecDeque},
+    collections::{BTreeMap, BinaryHeap, HashMap, HashSet, VecDeque},
     convert::TryFrom,
     fmt::{Debug, Formatter},
 };
 
 use anyhow::{anyhow, bail, ensure, Result};
-use serde::{Deserialize, Serialize};
-
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
+use serde::{Deserialize, Serialize};
 
 use cfx_types::H256;
 use diem_crypto::{vrf_number_with_nonce, HashValue, Signature, VRFProof};
 use diem_logger::prelude::*;
+pub use incentives::*;
+use lock_status::NodeLockStatus;
 use move_core_types::vm_status::DiscardedVMStatus;
+use pos_state_config::{PosStateConfigTrait, POS_STATE_CONFIG};
 use pow_types::StakingEvent;
 
 use crate::{
@@ -30,7 +30,7 @@ use crate::{
     contract_event::ContractEvent,
     epoch_state::EpochState,
     event::EventKey,
-    transaction::ElectionPayload,
+    transaction::{DisputePayload, ElectionPayload},
     validator_config::{
         ConsensusPublicKey, ConsensusVRFPublicKey, MultiConsensusPublicKey,
         MultiConsensusSignature,
@@ -38,30 +38,17 @@ use crate::{
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
 };
 
+pub mod lock_status;
+pub mod pos_state_config;
+
 pub const TERM_LIST_LEN: usize = 6;
 pub const ROUND_PER_TERM: Round = 60;
-/// A term `n` is open for election in the view range
-/// `(n * ROUND_PER_TERM - ELECTION_TERM_START_ROUND, n * ROUND_PER_TERM -
-/// ELECTION_TERM_END_ROUND]`
-const ELECTION_TERM_START_ROUND: Round = 90;
-const ELECTION_TERM_END_ROUND: Round = 30;
-// The view to start election in the whole PoS consensus protocol.
-const FIRST_START_ELECTION_VIEW: u64 =
-    TERM_LIST_LEN as u64 * ROUND_PER_TERM - ELECTION_TERM_START_ROUND;
-const FIRST_END_ELECTION_VIEW: u64 =
-    TERM_LIST_LEN as u64 * ROUND_PER_TERM - ELECTION_TERM_END_ROUND;
-
-const TERM_MAX_SIZE: usize = 10000;
-pub const TERM_ELECTED_SIZE: usize = 50;
 pub const IN_QUEUE_LOCKED_VIEWS: u64 = 10080;
 pub const OUT_QUEUE_LOCKED_VIEWS: u64 = 10080;
-pub const FORCE_RETIRED_LOCKED_VIEWS: u64 = OUT_QUEUE_LOCKED_VIEWS;
+// The view to start election in the whole PoS consensus protocol.
 
-const_assert!(IN_QUEUE_LOCKED_VIEWS > 0);
-const_assert!(OUT_QUEUE_LOCKED_VIEWS > 0);
-const_assert!(FORCE_RETIRED_LOCKED_VIEWS > 0);
-
-pub use incentives::*;
+pub const TERM_MAX_SIZE: usize = 10000;
+pub const TERM_ELECTED_SIZE: usize = 50;
 
 mod incentives {
     use super::{
@@ -90,10 +77,6 @@ mod incentives {
         / ROUND_PER_TERM
         / BONUS_VOTE_MAX_SIZE;
 }
-
-use crate::transaction::DisputePayload;
-use lock_status::NodeLockStatus;
-use std::collections::HashSet;
 
 #[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize, Debug)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
@@ -220,7 +203,7 @@ impl ElectingHeap {
         while let Some((_, node_id)) = clone.0.pop() {
             *top_electing.entry(node_id.node_id.addr).or_insert(0) += 1;
             count += 1;
-            if count >= TERM_ELECTED_SIZE {
+            if count >= POS_STATE_CONFIG.term_elected_size() {
                 break;
             }
         }
@@ -233,7 +216,7 @@ impl ElectingHeap {
         while let Some((_, node_id)) = self.0.pop() {
             *elected_map.0.entry(node_id.node_id.addr).or_insert(0) += 1;
             count += 1;
-            if count >= TERM_ELECTED_SIZE {
+            if count >= POS_STATE_CONFIG.term_elected_size() {
                 break;
             }
         }
@@ -245,7 +228,7 @@ impl ElectingHeap {
     }
 
     pub fn add_node(&mut self, hash: HashValue, node_id: ElectionNodeID) {
-        let is_not_full_set = self.0.len() < TERM_MAX_SIZE;
+        let is_not_full_set = self.0.len() < POS_STATE_CONFIG.term_max_size();
         self.1.insert(node_id.node_id.addr.clone());
         if self
             .0
@@ -253,7 +236,7 @@ impl ElectingHeap {
             .map_or(true, |(max_value, _)| is_not_full_set || hash < *max_value)
         {
             self.0.push((hash, node_id.clone()));
-            if self.0.len() > TERM_MAX_SIZE {
+            if self.0.len() > POS_STATE_CONFIG.term_max_size() {
                 self.0.pop();
             }
         }
@@ -301,7 +284,7 @@ impl Eq for ElectingHeap {}
 impl TermData {
     fn next_term(&self, node_list: NodeList, seed: Vec<u8>) -> Self {
         TermData {
-            start_view: self.start_view + ROUND_PER_TERM,
+            start_view: self.start_view + POS_STATE_CONFIG.round_per_term(),
             seed,
             node_list,
         }
@@ -416,7 +399,7 @@ impl TermList {
         // This double-check should always pass.
         debug_assert!(
             self.term_list[TERM_LIST_LEN].start_view
-                == new_term.saturating_mul(ROUND_PER_TERM)
+                == new_term.saturating_mul(POS_STATE_CONFIG.round_per_term())
         );
         self.term_list.remove(0);
         let new_term = self
@@ -654,20 +637,23 @@ impl PosState {
 
         if election_tx
             .target_term
-            .checked_mul(ROUND_PER_TERM)
+            .checked_mul(POS_STATE_CONFIG.round_per_term())
             .is_none()
         {
             return Some(DiscardedVMStatus::ELECTION_TERGET_TERM_NOT_OPEN);
         }
 
-        let target_view = election_tx.target_term * ROUND_PER_TERM;
+        let target_view =
+            election_tx.target_term * POS_STATE_CONFIG.round_per_term();
 
         if node.lock_status.available_votes() == 0 {
             return Some(DiscardedVMStatus::ELECTION_WITHOUT_VOTES);
         }
         // Do not check `ELECTION_TERM_END_ROUND` because we are using the
         // committed state in this simple validation.
-        if target_view <= self.current_view + ELECTION_TERM_END_ROUND {
+        if target_view
+            <= self.current_view + POS_STATE_CONFIG.election_term_end_round()
+        {
             return Some(DiscardedVMStatus::ELECTION_TERGET_TERM_NOT_OPEN);
         }
         None
@@ -705,9 +691,13 @@ impl PosState {
         if node.lock_status.available_votes() == 0 {
             bail!("Election without any votes");
         }
-        let target_view = election_tx.target_term * ROUND_PER_TERM;
-        if target_view > self.current_view + ELECTION_TERM_START_ROUND
-            || target_view <= self.current_view + ELECTION_TERM_END_ROUND
+        let target_view =
+            election_tx.target_term * POS_STATE_CONFIG.round_per_term();
+        if target_view
+            > self.current_view + POS_STATE_CONFIG.election_term_start_round()
+            || target_view
+                <= self.current_view
+                    + POS_STATE_CONFIG.election_term_end_round()
         {
             bail!(
                 "Target term is not open for election: target={} current={}",
@@ -838,7 +828,9 @@ impl PosState {
     /// Return `Some(target_term)` if `author` should send its election
     /// transaction.
     pub fn next_elect_term(&self, author: &AccountAddress) -> Option<u64> {
-        if self.current_view < FIRST_START_ELECTION_VIEW as u64 {
+        if self.current_view
+            < POS_STATE_CONFIG.first_start_election_view() as u64
+        {
             return None;
         }
 
@@ -996,8 +988,9 @@ impl PosState {
                 verifier,
                 vrf_seed: term_seed.clone(),
             })
-        } else if self.current_view % ROUND_PER_TERM == 0 {
-            let new_term = self.current_view / ROUND_PER_TERM;
+        } else if self.current_view % POS_STATE_CONFIG.round_per_term() == 0 {
+            let new_term =
+                self.current_view / POS_STATE_CONFIG.round_per_term();
             let (verifier, term_seed) = self.get_committee_at(new_term)?;
             // generate new epoch for new term.
             self.term_list.new_term(
@@ -1011,8 +1004,10 @@ impl PosState {
                 verifier,
                 vrf_seed: term_seed.clone(),
             })
-        } else if self.current_view >= FIRST_END_ELECTION_VIEW
-            && self.current_view % ROUND_PER_TERM == ROUND_PER_TERM / 2
+        } else if self.current_view
+            >= POS_STATE_CONFIG.first_end_election_view()
+            && self.current_view % POS_STATE_CONFIG.round_per_term()
+                == POS_STATE_CONFIG.round_per_term() / 2
         {
             self.term_list.finalize_election();
             None

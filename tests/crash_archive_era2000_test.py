@@ -24,6 +24,7 @@ class CrashArchiveNodeTest(ConfluxTestFramework):
         self.conf_parameters["dev_snapshot_epoch_count"] = "20000"
         self.conf_parameters["anticone_penalty_ratio"] = "8"
         self.conf_parameters["dev_allow_phase_change_without_peer"] = "false"
+        self.conf_parameters["heartbeat_period_interval_ms"] = "2000"
 
     def setup_nodes(self):
         self.add_nodes(self.num_nodes)
@@ -44,7 +45,7 @@ class CrashArchiveNodeTest(ConfluxTestFramework):
         self.stop_node(0)
         self.start_node(0, phase_to_wait=None)
         self.stop_node(0)
-        self.start_node(0)
+        self.start_node(0, wait_time=60)
         self.log.info("Pass 1")
 
 

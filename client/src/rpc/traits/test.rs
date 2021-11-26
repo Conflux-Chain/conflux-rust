@@ -145,7 +145,7 @@ pub trait TestRpc {
 
     #[rpc(name = "pos_force_sign_pivot_decision")]
     fn pos_force_sign_pivot_decision(
-        &self, block_hash: H256, height: u64,
+        &self, block_hash: H256, height: U64,
     ) -> RpcResult<()>;
 
     #[rpc(name = "pos_get_chosen_proposal")]

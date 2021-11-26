@@ -38,6 +38,10 @@ use cfxcore::{
     transaction_pool::TxPoolConfig,
     NodeType,
 };
+use diem_types::term_state::{
+    pos_state_config::PosStateConfig, IN_QUEUE_LOCKED_VIEWS,
+    OUT_QUEUE_LOCKED_VIEWS, ROUND_PER_TERM, TERM_ELECTED_SIZE, TERM_MAX_SIZE,
+};
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
 use txgen::TransactionGeneratorConfig;
@@ -297,6 +301,11 @@ build_config! {
         (pos_reference_enable_height, (u64), u64::MAX)
         (pos_initial_nodes_path, (String), "./pos_config/initial_nodes.json".to_string())
         (pos_private_key_path, (String), "./pos_config/pos_key".to_string())
+        (pos_round_per_term, (u64), ROUND_PER_TERM)
+        (pos_term_max_size, (usize), TERM_MAX_SIZE)
+        (pos_term_elected_size, (usize), TERM_ELECTED_SIZE)
+        (pos_in_queue_locked_views, (u64), IN_QUEUE_LOCKED_VIEWS)
+        (pos_out_queue_locked_views, (u64), OUT_QUEUE_LOCKED_VIEWS)
         (dev_pos_private_key_encryption_password, (Option<String>), None)
 
         // Light node section
@@ -1137,6 +1146,16 @@ impl Configuration {
 
     pub fn node_type(&self) -> NodeType {
         self.raw_conf.node_type.unwrap_or(NodeType::Full)
+    }
+
+    pub fn pos_state_config(&self) -> PosStateConfig {
+        PosStateConfig::new(
+            self.raw_conf.pos_round_per_term,
+            self.raw_conf.pos_term_max_size,
+            self.raw_conf.pos_term_elected_size,
+            self.raw_conf.pos_in_queue_locked_views,
+            self.raw_conf.pos_out_queue_locked_views,
+        )
     }
 }
 

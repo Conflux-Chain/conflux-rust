@@ -190,6 +190,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
             protocol_conf: Default::default(),
             pos_initial_nodes_path: "".to_string(),
             vrf_proposal_threshold: Default::default(),
+            pos_state_config: Default::default(),
         },
         u64::MAX,
     ));
