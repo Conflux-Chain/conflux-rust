@@ -321,20 +321,11 @@ impl RawTransaction {
     ) -> impl Strategy<Value = Self>
     {
         // XXX what other constraints do these need to obey?
-        (
-            address_strategy,
-            payload_strategy,
-            any::<u64>(),
+        (address_strategy, payload_strategy, any::<u64>()).prop_map(
+            |(sender, payload, expiration_time_secs)| {
+                new_raw_transaction(sender, payload, expiration_time_secs)
+            },
         )
-            .prop_map(
-                |(
-                    sender,
-                    payload,
-                    expiration_time_secs,
-                )| {
-                    new_raw_transaction(sender, payload, expiration_time_secs)
-                },
-            )
     }
 }
 
@@ -447,26 +438,17 @@ impl SignatureCheckedTransaction {
         payload_strategy: impl Strategy<Value = TransactionPayload>,
     ) -> impl Strategy<Value = Self>
     {
-        (
-            keypair_strategy,
-            vrf_keypair_strategy,
-            payload_strategy,
-        )
-            .prop_flat_map(
-                |(keypair, vrf_keypair, payload)| {
-                    let address = account_address::from_consensus_public_key(
-                        &keypair.public_key,
-                        &vrf_keypair.public_key,
-                    );
-                    (
-                        Just(keypair),
-                        RawTransaction::strategy_impl(
-                            Just(address),
-                            Just(payload),
-                        ),
-                    )
-                },
-            )
+        (keypair_strategy, vrf_keypair_strategy, payload_strategy)
+            .prop_flat_map(|(keypair, vrf_keypair, payload)| {
+                let address = account_address::from_consensus_public_key(
+                    &keypair.public_key,
+                    &vrf_keypair.public_key,
+                );
+                (
+                    Just(keypair),
+                    RawTransaction::strategy_impl(Just(address), Just(payload)),
+                )
+            })
             .prop_flat_map(|(keypair, raw_txn)| {
                 prop_oneof![Just(
                     raw_txn

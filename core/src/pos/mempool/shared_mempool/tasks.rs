@@ -225,6 +225,14 @@ pub(crate) async fn process_incoming_transactions(
     let vm_validation_timer = counters::PROCESS_TXN_BREAKDOWN_LATENCY
         .with_label_values(&[counters::VM_VALIDATION_LABEL])
         .start_timer();
+    // Filter out already received transactions, so we do not need to process them.
+    let transactions: Vec<SignedTransaction> = {
+        let mempool = smp.mempool.lock();
+        transactions
+            .into_iter()
+            .filter(|tx| mempool.transactions.get(&tx.hash()).is_none())
+            .collect()
+    };
     let validation_results = transactions
         .par_iter()
         .map(|t| {

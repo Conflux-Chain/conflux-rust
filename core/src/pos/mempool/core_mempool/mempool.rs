@@ -38,7 +38,7 @@ use std::{
 
 pub struct Mempool {
     // Stores the metadata of all transactions in mempool (of all states).
-    transactions: TransactionStore,
+    pub transactions: TransactionStore,
 
     // For each transaction, an entry with a timestamp is added when the
     // transaction enters mempool. This is used to measure e2e latency of
