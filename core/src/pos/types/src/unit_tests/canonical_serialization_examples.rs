@@ -12,8 +12,8 @@ use crate::{
     access_path::AccessPath,
     account_address::AccountAddress,
     transaction::{
-        ChangeSet, Script, TransactionArgument,
-        TransactionPayload, WriteSetPayload,
+        ChangeSet, Script, TransactionArgument, TransactionPayload,
+        WriteSetPayload,
     },
     write_set::{WriteOp, WriteSet, WriteSetMut},
 };
