@@ -1273,6 +1273,16 @@ impl RoundManager {
         diem_debug!("Check validator: r={}", r);
         r
     }
+
+    pub fn filter_proposal(&self, p: &ProposalMsg) -> bool {
+        self.proposer_election
+            .receive_proposal_candidate(p.proposal())
+            .unwrap_or(false)
+    }
+
+    pub fn filter_vote(&self, v: &VoteMsg) -> bool {
+        self.round_state.vote_received(v.vote())
+    }
 }
 
 /// The functions used in tests to construct attack cases
