@@ -40,6 +40,8 @@ use crate::{
     block_data_manager::{
         db_manager::DBManager, tx_data_manager::TransactionDataManager,
     },
+    consensus::pos_handler::PosVerifier,
+    executive::internal_contract::impls::pos::decode_register_info,
     trace::trace::{BlockExecTraces, TransactionExecTraces},
 };
 pub use block_data_types::*;
@@ -47,6 +49,7 @@ use cfx_internal_common::{
     EpochExecutionCommitment, StateAvailabilityBoundary, StateRootWithAuxInfo,
 };
 use db_gc_manager::GCProgress;
+use diem_types::block_info::PivotBlockDecision;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use primitives::pos::PosBlockId;
 use std::{hash::Hash, path::Path, time::Duration};
@@ -1218,6 +1221,7 @@ impl BlockDataManager {
         &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
         on_local_pivot: bool, update_trace: bool,
         reward_execution_info: &Option<RewardExecutionInfo>,
+        pos_verifier: &PosVerifier,
     ) -> bool
     {
         if !self.epoch_executed(epoch_hash) {
@@ -1227,6 +1231,7 @@ impl BlockDataManager {
         if on_local_pivot {
             // Check if all blocks receipts and traces are from this epoch
             let mut epoch_receipts = Vec::new();
+            let mut epoch_staking_events = Vec::new();
             for h in epoch_block_hashes {
                 if let Some(r) = self.block_execution_result_by_hash_with_epoch(
                     h, epoch_hash, true, /* update_pivot_assumption */
@@ -1271,7 +1276,17 @@ impl BlockDataManager {
                                     block_hash: *block_hash,
                                     index: tx_idx,
                                 },
-                            )
+                            );
+                            for log in &epoch_receipts[block_idx]
+                                .receipts
+                                .get(tx_idx)
+                                .unwrap()
+                                .logs
+                            {
+                                if let Some(event) = decode_register_info(log) {
+                                    epoch_staking_events.push(event);
+                                }
+                            }
                         }
                         _ => {}
                     }
@@ -1286,6 +1301,38 @@ impl BlockDataManager {
                         )
                         .is_none()
                     {
+                        return false;
+                    }
+                }
+            }
+            let me_height = self.block_height_by_hash(epoch_hash).unwrap();
+            if pos_verifier.pos_option().is_some() && me_height != 0 {
+                let parent_hash = *self
+                    .block_header_by_hash(epoch_hash)
+                    .unwrap()
+                    .parent_hash();
+                if let Err(e) = pos_verifier.consensus_db().get_staking_events(
+                    PivotBlockDecision {
+                        height: me_height - 1,
+                        block_hash: parent_hash,
+                    },
+                    PivotBlockDecision {
+                        height: me_height,
+                        block_hash: *epoch_hash,
+                    },
+                ) {
+                    debug!(
+                        "staking events update: height={}, new={}, err={:?}",
+                        me_height, epoch_hash, e
+                    );
+                    if let Err(e) =
+                        pos_verifier.consensus_db().put_staking_events(
+                            me_height,
+                            *epoch_hash,
+                            epoch_staking_events,
+                        )
+                    {
+                        error!("epoch_executed err={:?}", e);
                         return false;
                     }
                 }

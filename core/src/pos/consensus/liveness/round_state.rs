@@ -441,4 +441,8 @@ impl RoundState {
         } as usize;
         round_index_after_committed_round
     }
+
+    pub fn vote_received(&self, vote: &Vote) -> bool {
+        self.pending_votes.vote_received(vote)
+    }
 }

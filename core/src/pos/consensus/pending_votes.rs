@@ -262,6 +262,26 @@ impl PendingVotes {
         // TODO(lpl): Use another result
         VoteReceptionResult::DuplicateVote
     }
+
+    pub fn vote_received(&self, vote: &Vote) -> bool {
+        let li_digest = vote.ledger_info().hash();
+
+        if let Some(previously_seen_vote) =
+            self.author_to_vote.get(&vote.author())
+        {
+            // is it the same vote?
+            if li_digest == previously_seen_vote.ledger_info().hash() {
+                // we've already seen an equivalent vote before
+                let new_timeout_vote =
+                    vote.is_timeout() && !previously_seen_vote.is_timeout();
+                if !new_timeout_vote {
+                    // it's not a new timeout vote
+                    return true;
+                }
+            }
+        }
+        false
+    }
 }
 
 //
