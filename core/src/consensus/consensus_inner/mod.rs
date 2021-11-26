@@ -21,7 +21,7 @@ use crate::{
     pos::pow_handler::POS_TERM_EPOCHS,
     pow::{target_difficulty, PowComputer, ProofOfWorkConfig},
     state_exposer::{ConsensusGraphBlockExecutionState, STATE_EXPOSER},
-    verification::VerificationConfig,
+    verification::{compute_epoch_receipt_proof, VerificationConfig},
 };
 use cfx_internal_common::{
     consensus_api::StateMaintenanceTrait, EpochExecutionCommitment,
@@ -4087,12 +4087,14 @@ impl ConsensusGraphInner {
             {
                 if epoch_hash == *pivot_hash {
                     return true;
+                } else {
+                    debug!(
+                        "pivot_block_processed: {:?} is not on pivot chain",
+                        pivot_hash
+                    );
                 }
             } else {
-                debug!(
-                    "pivot_block_processed: {:?} is not on pivot chain",
-                    pivot_hash
-                );
+                debug!("pivot_block_processed: epoch not processed height={:?} pivot={:?}", height, pivot_hash);
             }
         } else {
             debug!("pivot_block_processed: {:?} is not processed", pivot_hash);
