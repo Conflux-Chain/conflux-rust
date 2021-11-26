@@ -686,6 +686,7 @@ impl EpochManager {
         }
     }
 
+    /// Return true for events that we need to process.
     fn filter_unverified_event(
         &mut self, maybe_event: &Option<UnverifiedEvent>,
     ) -> bool {
