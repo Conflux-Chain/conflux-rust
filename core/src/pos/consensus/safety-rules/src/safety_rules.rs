@@ -58,21 +58,21 @@ impl SafetyRules {
     /// storage and the consensus private keys
     pub fn new(
         persistent_storage: PersistentSafetyStorage,
-        verify_vote_proposal_signature: bool, export_consensus_key: bool,
+        _verify_vote_proposal_signature: bool, export_consensus_key: bool,
         vrf_private_key: Option<ConsensusVRFPrivateKey>,
     ) -> Self
     {
-        let execution_public_key = if verify_vote_proposal_signature {
-            None
+        let execution_public_key = None;
         /*
+            if verify_vote_proposal_signature {
+            None
         Some(
             persistent_storage
                 .execution_public_key()
                 .expect("Unable to retrieve execution public key"),
-        )*/
         } else {
             None
-        };
+        )*/
         Self {
             persistent_storage,
             execution_public_key,

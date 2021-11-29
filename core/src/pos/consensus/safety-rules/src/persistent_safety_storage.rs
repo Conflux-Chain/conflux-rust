@@ -190,9 +190,7 @@ impl PersistentSafetyStorage {
 mod tests {
     use super::*;
     use diem_secure_storage::InMemoryStorage;
-    use diem_types::{
-        validator_signer::ValidatorSigner,
-    };
+    use diem_types::validator_signer::ValidatorSigner;
 
     #[test]
     fn test() {

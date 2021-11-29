@@ -349,19 +349,17 @@ impl RoundManager {
             .pivot_decision()
             .map(|d| d.block_hash)
             .unwrap_or_default();
-        let pivot_decision = loop {
-            match self
-                .block_store
-                .pow_handler
-                .next_pivot_decision(parent_decision)
-                .await
-            {
-                Some(res) => break res,
-                None => {
-                    // No new pivot decision.
-                    diem_debug!("No new pivot decision");
-                    return Ok(());
-                }
+        let pivot_decision = match self
+            .block_store
+            .pow_handler
+            .next_pivot_decision(parent_decision)
+            .await
+        {
+            Some(res) => res,
+            None => {
+                // No new pivot decision.
+                diem_debug!("No new pivot decision");
+                return Ok(());
             }
         };
 

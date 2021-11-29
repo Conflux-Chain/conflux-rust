@@ -41,11 +41,11 @@ lazy_static! {
 pub struct EcVrfPrivateKey(Vec<u8>);
 
 /// Elliptic Curve VRF public key
-#[derive(DeserializeKey, Clone, SerializeKey, Debug, PartialEq)]
+#[derive(DeserializeKey, Clone, SerializeKey, Debug)]
 pub struct EcVrfPublicKey(Vec<u8>);
 
 /// Elliptic Curve VRF proof
-#[derive(DeserializeKey, Clone, SerializeKey, Debug, PartialEq)]
+#[derive(DeserializeKey, Clone, SerializeKey, Debug)]
 pub struct EcVrfProof(Vec<u8>);
 
 impl VRFPrivateKey for EcVrfPrivateKey {
@@ -161,10 +161,22 @@ impl std::hash::Hash for EcVrfPublicKey {
     }
 }
 
+impl PartialEq for EcVrfPublicKey {
+    fn eq(&self, other: &EcVrfPublicKey) -> bool {
+        self.to_bytes() == other.to_bytes()
+    }
+}
+
 impl std::hash::Hash for EcVrfProof {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let encoded_pubkey = ValidCryptoMaterial::to_bytes(self);
         state.write(&encoded_pubkey);
+    }
+}
+
+impl PartialEq for EcVrfProof {
+    fn eq(&self, other: &EcVrfProof) -> bool {
+        self.to_bytes() == other.to_bytes()
     }
 }
 

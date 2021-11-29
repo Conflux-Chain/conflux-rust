@@ -51,12 +51,12 @@ impl Clone for BLSPrivateKey {
 }
 
 /// BLS signature public key
-#[derive(DeserializeKey, Clone, SerializeKey, PartialEq)]
+#[derive(DeserializeKey, Clone, SerializeKey)]
 pub struct BLSPublicKey(RawPublicKey);
 
 // TODO(lpl): Signature aggregation.
 /// BLS signature wrapper
-#[derive(DeserializeKey, Clone, SerializeKey, PartialEq)]
+#[derive(DeserializeKey, Clone, SerializeKey)]
 pub struct BLSSignature(RawSignature);
 
 impl BLSPrivateKey {
@@ -242,10 +242,22 @@ impl std::hash::Hash for BLSPublicKey {
     }
 }
 
+impl PartialEq for BLSPublicKey {
+    fn eq(&self, other: &BLSPublicKey) -> bool {
+        self.to_bytes() == other.to_bytes()
+    }
+}
+
 impl std::hash::Hash for BLSSignature {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let encoded_pubkey = ValidCryptoMaterial::to_bytes(self);
         state.write(&encoded_pubkey);
+    }
+}
+
+impl PartialEq for BLSSignature {
+    fn eq(&self, other: &BLSSignature) -> bool {
+        self.to_bytes() == other.to_bytes()
     }
 }
 
