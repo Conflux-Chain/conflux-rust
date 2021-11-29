@@ -1219,7 +1219,7 @@ impl ConsensusGraphInner {
             }
             for referee in &self.arena[index].referees {
                 if anticone.contains(*referee as u32)
-                    || self.arena[idx_parent].era_block == NULL
+                    || self.arena[*referee].era_block == NULL
                 {
                     queue.push_back(*referee);
                 }
@@ -3995,7 +3995,7 @@ impl ConsensusGraphInner {
             }
             for referee in &self.arena[index].referees {
                 if anticone.contains(*referee as u32)
-                    || self.arena[idx_parent].era_block == NULL
+                    || self.arena[*referee].era_block == NULL
                 {
                     queue.push_back(*referee);
                 }
