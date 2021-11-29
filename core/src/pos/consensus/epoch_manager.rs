@@ -851,6 +851,7 @@ impl EpochManager {
                     }
                     _ => anyhow::bail!("RoundManager not started yet"),
                 };
+                diem_debug!("TestCommand::ProposalTimeOut, round={}", round);
                 self.process_proposal_timeout(round).await
             }
             TestCommand::LocalTimeout => {
@@ -860,6 +861,7 @@ impl EpochManager {
                     }
                     _ => anyhow::bail!("RoundManager not started yet"),
                 };
+                diem_debug!("TestCommand::LocalTimeout, round={}", round);
                 self.process_local_timeout(round).await
             }
             TestCommand::NewRoundTimeout => {
@@ -869,6 +871,7 @@ impl EpochManager {
                     }
                     _ => anyhow::bail!("RoundManager not started yet"),
                 };
+                diem_debug!("TestCommand::NewRoundTimeout, round={}", round);
                 self.process_new_round_timeout(round).await
             }
             TestCommand::BroadcastPivotDecision(decision) => {

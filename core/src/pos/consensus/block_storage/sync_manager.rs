@@ -89,21 +89,23 @@ impl BlockStore {
                     )
                     .await;
             }
+            // Wait for PoW to process fetched PoS references.
+            // We wait after commit `qc`, so PoW can process its pivot decision
+            // correctly.
+            // This is not needed for correctness/liveness, but we still add the
+            // waiting here to make the syncing more predictable and
+            // avoid unnecessarily message processing.
+            self.pow_handler
+                .wait_for_initialization(
+                    finality_proof
+                        .ledger_info()
+                        .pivot_decision()
+                        .clone()
+                        .unwrap()
+                        .block_hash,
+                )
+                .await;
         }
-        // Wait for PoW to process fetched PoS references.
-        // We wait after commit `qc`, so PoW can process its pivot decision
-        // correctly.
-        self.pow_handler
-            .wait_for_initialization(
-                self.get_block(qc.certified_block().id())
-                    .unwrap()
-                    .compute_result()
-                    .pivot_decision()
-                    .clone()
-                    .unwrap()
-                    .block_hash,
-            )
-            .await;
         Ok(())
     }
 

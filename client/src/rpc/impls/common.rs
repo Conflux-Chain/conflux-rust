@@ -734,6 +734,7 @@ impl RpcImpl {
             // permanently.
             bail!(RpcError::internal_error())
         }
+        debug!("pos_trigger_timeout: type={}", timeout_type);
         self.pos_handler.trigger_timeout(timeout_type).map_err(|e| {
             warn!("pos_trigger_timeout: err={:?}", e);
             RpcError::internal_error().into()

@@ -721,6 +721,7 @@ impl RoundManager {
     pub async fn process_local_timeout(
         &mut self, round: Round,
     ) -> anyhow::Result<()> {
+        diem_debug!("process_local_timeout: round={}", round);
         if !self.round_state.process_local_timeout(round) {
             return Ok(());
         }
@@ -799,6 +800,7 @@ impl RoundManager {
     pub async fn process_proposal_timeout(
         &mut self, round: Round,
     ) -> anyhow::Result<()> {
+        diem_debug!("process_proposal_timeout: round={}", round);
         if round != self.round_state.current_round() {
             return Ok(());
         }
