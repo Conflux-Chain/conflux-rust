@@ -54,7 +54,6 @@ fn safety_rules(
             storage,
             signer.author(),
             signer.private_key().clone(),
-            BLSPrivateKey::generate_for_testing(),
             waypoint,
             true,
         );

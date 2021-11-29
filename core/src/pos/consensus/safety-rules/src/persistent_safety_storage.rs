@@ -189,10 +189,8 @@ impl PersistentSafetyStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use diem_crypto::Uniform;
     use diem_secure_storage::InMemoryStorage;
     use diem_types::{
-        validator_config::ConsensusPrivateKey,
         validator_signer::ValidatorSigner,
     };
 
@@ -205,7 +203,6 @@ mod tests {
             storage,
             Author::random(),
             consensus_private_key,
-            ConsensusPrivateKey::generate_for_testing(),
             Waypoint::default(),
             true,
         );
