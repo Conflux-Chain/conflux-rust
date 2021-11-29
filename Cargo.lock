@@ -294,9 +294,9 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
 name = "base64ct"
-version = "1.2.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "392c772b012d685a640cdad68a5a21f4a45e696f85a2c2c907aab2fe49a91e19"
+checksum = "e6b4d9b1225d28d360ec6a231d65af1fd99a2a095154c8040689617290569c5c"
 
 [[package]]
 name = "bcs"
@@ -1226,6 +1226,7 @@ name = "conflux"
 version = "1.1.4"
 dependencies = [
  "app_dirs",
+ "base64ct",
  "bcs",
  "blockgen",
  "cfx-types",
