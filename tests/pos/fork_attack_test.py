@@ -26,36 +26,56 @@ class PosForkAttackTest(DefaultConfluxTestFramework):
         self.conf_parameters["timer_chain_block_difficulty_ratio"] = "3"
         self.conf_parameters["timer_chain_beta"] = "20"
         self.conf_parameters["pos_round_per_term"] = '10'
+        self.pos_parameters["round_time_ms"] = 1000000000
 
     def run_test(self):
-        client = RpcClient(self.nodes[0])
-        client2 = RpcClient(self.nodes[1])
-        blocks = client.generate_empty_blocks(CHAIN_LEN)
+        clients = []
+        for node in self.nodes:
+            clients.append(RpcClient(node))
+
+        blocks = clients[0].generate_empty_blocks(CHAIN_LEN)
         sync_blocks(self.nodes)
-        last_block = client.block_by_epoch(int_to_hex(CHAIN_LEN // 60 * 60))
-        client.pos_force_sign_pivot_decision(last_block["hash"], last_block["height"])
-        client2.pos_force_sign_pivot_decision(last_block["hash"], last_block["height"])
-        wait_until(lambda: client.pos_status()["latestVoted"] is not None)
-        wait_until(lambda: int(client.pos_status()["pivotDecision"]["height"], 0) >= CHAIN_LEN // 2)
-        # generate a block to refer new pos blocks.
-        client.generate_empty_blocks(1)
-        fork_pivot_block = client.block_by_epoch(int_to_hex(CHAIN_LEN // 2 + 1))
+        last_block = clients[0].block_by_epoch(int_to_hex(CHAIN_LEN // 60 * 60))
+        clients[0].pos_force_sign_pivot_decision(last_block["hash"], last_block["height"])
+        clients[1].pos_force_sign_pivot_decision(last_block["hash"], last_block["height"])
+
+        # generate pos blocks to confirm the pivot decision
+        for client in clients:
+            client.pos_local_timeout()
+        time.sleep(0.5)
+        for client in clients:
+            client.pos_new_round_timeout()
+        time.sleep(0.5)
+        for _ in range(3):
+            for client in clients:
+                client.pos_proposal_timeout()
+            time.sleep(0.5)
+            for client in clients:
+                client.pos_new_round_timeout()
+            time.sleep(0.5)
+            
+        assert clients[0].pos_status()["latestVoted"] is not None
+        assert int(clients[0].pos_status()["pivotDecision"]["height"], 0) >= CHAIN_LEN // 2
+        fork_pivot_block = clients[0].block_by_epoch(int_to_hex(CHAIN_LEN // 2 + 1))
         assert_equal(fork_pivot_block["hash"], blocks[CHAIN_LEN // 2])
         assert_equal(fork_pivot_block["posReference"], "0x"+"0"*64)
+
+        # generate a block to refer new pos blocks.
+        clients[0].generate_empty_blocks(1)
 
         # Generate blocks with the latest pos_reference. They will be partially invalid.
         fork_parent = blocks[CHAIN_LEN // 2 - 1]
         for _ in range(2 * CHAIN_LEN):
-            fork_parent = client.generate_block_with_parent(fork_parent)
+            fork_parent = clients[0].generate_block_with_parent(fork_parent)
         # generate blocks to activate these partially invalid blocks.
-        client.generate_empty_blocks(100)
-        assert_equal(client.block_by_epoch(int_to_hex(CHAIN_LEN // 2 + 1))["hash"], blocks[CHAIN_LEN // 2])
+        clients[0].generate_empty_blocks(100)
+        assert_equal(clients[0].block_by_epoch(int_to_hex(CHAIN_LEN // 2 + 1))["hash"], blocks[CHAIN_LEN // 2])
 
         # Generate blocks with old pos_reference. They are valid but in a fork before the latest pivot decision.
         fork_parent = blocks[CHAIN_LEN // 2 - 1]
         for _ in range(2 * CHAIN_LEN):
-            fork_parent = client.generate_block_with_parent(fork_parent, pos_reference="0x"+"0"*64)
-        assert_equal(client.block_by_epoch(int_to_hex(CHAIN_LEN // 2 + 1))["hash"], blocks[CHAIN_LEN // 2])
+            fork_parent = clients[0].generate_block_with_parent(fork_parent, pos_reference="0x"+"0"*64)
+        assert_equal(clients[0].block_by_epoch(int_to_hex(CHAIN_LEN // 2 + 1))["hash"], blocks[CHAIN_LEN // 2])
         
 
 if __name__ == '__main__':

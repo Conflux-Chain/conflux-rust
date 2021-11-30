@@ -1,4 +1,4 @@
-use std::sync::{mpsc, Arc};
+use std::sync::{mpsc, Arc, Weak};
 
 use once_cell::sync::OnceCell;
 
@@ -363,11 +363,15 @@ impl PosHandler {
 
     pub fn cached_db(&self) -> &Arc<CachedDiemDB> { self.pos().cached_db() }
 
-    pub fn stop(&self) {
+    pub fn stop(&self) -> Option<(Weak<DiemDB>, Weak<ConsensusDB>)> {
         self.network.lock().take();
-        self.diem_handler.lock().take();
         self.consensus_network_receiver.lock().take();
         self.mempool_network_receiver.lock().take();
+        self.diem_handler.lock().take().map(|diem_handler| {
+            let diem_db = diem_handler.diem_db.clone();
+            let consensus_db = diem_handler.consensus_db.clone();
+            (Arc::downgrade(&diem_db), Arc::downgrade(&consensus_db))
+        })
     }
 }
 
