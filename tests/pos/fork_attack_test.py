@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
-"""An example functional test
-"""
+
+# allow imports from parent directory
+# source: https://stackoverflow.com/a/11158224
+import os, sys
+sys.path.insert(1, os.path.join(sys.path[0], '..'))
+
 import eth_utils
 import time
 
@@ -21,10 +25,16 @@ class PosForkAttackTest(DefaultConfluxTestFramework):
         self.conf_parameters["adaptive_weight_beta"] = "1"
         self.conf_parameters["timer_chain_block_difficulty_ratio"] = "3"
         self.conf_parameters["timer_chain_beta"] = "20"
+        self.conf_parameters["pos_round_per_term"] = '10'
 
     def run_test(self):
         client = RpcClient(self.nodes[0])
+        client2 = RpcClient(self.nodes[1])
         blocks = client.generate_empty_blocks(CHAIN_LEN)
+        sync_blocks(self.nodes)
+        last_block = client.block_by_epoch(int_to_hex(CHAIN_LEN // 60 * 60))
+        client.pos_force_sign_pivot_decision(last_block["hash"], last_block["height"])
+        client2.pos_force_sign_pivot_decision(last_block["hash"], last_block["height"])
         wait_until(lambda: client.pos_status()["latestVoted"] is not None)
         wait_until(lambda: int(client.pos_status()["pivotDecision"]["height"], 0) >= CHAIN_LEN // 2)
         # generate a block to refer new pos blocks.

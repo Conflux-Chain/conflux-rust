@@ -8,7 +8,7 @@ use diem_types::{
     contract_event::ContractEvent,
     epoch_state::EpochState,
     on_chain_config::{self, new_epoch_event_key, OnChainConfig, ValidatorSet},
-    term_state::ROUND_PER_TERM,
+    term_state::pos_state_config::{PosStateConfigTrait, POS_STATE_CONFIG},
     transaction::{
         authenticator::TransactionAuthenticator, ConflictSignature,
         DisputePayload, Transaction, TransactionOutput, TransactionPayload,
@@ -52,11 +52,11 @@ impl VMExecutor for FakeVM {
                     diem_debug!("get_unlock_events: {}", events.len());
                     // TODO(lpl): Simplify.
                     if (state_view.pos_state().current_view() + 1)
-                        % ROUND_PER_TERM
+                        % POS_STATE_CONFIG.round_per_term()
                         == 0
                     {
                         let term = (state_view.pos_state().current_view() + 1)
-                            / ROUND_PER_TERM;
+                            / POS_STATE_CONFIG.round_per_term();
                         let (validator_verifier, vrf_seed) = state_view
                             .pos_state()
                             .get_committee_at(term)
@@ -65,7 +65,7 @@ impl VMExecutor for FakeVM {
                                 VMStatus::Error(StatusCode::CFX_INVALID_TX)
                             })?;
                         let epoch = (state_view.pos_state().current_view() + 1)
-                            / ROUND_PER_TERM
+                            / POS_STATE_CONFIG.round_per_term()
                             + 1;
                         let validator_bytes = bcs::to_bytes(&EpochState {
                             epoch,

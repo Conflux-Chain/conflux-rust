@@ -522,7 +522,7 @@ class RpcClient:
         self.send_tx(unstake_tx, wait_for_receipt=True)
 
     def pos_retire_self(self):
-        retire_tx = self.new_tx(priv_key=self.node.pow_sk, data=retire_tx_data(), value=0, receiver="0x0888000000000000000000000000000000000005", gas=CONTRACT_DEFAULT_GAS)
+        retire_tx = self.new_tx(priv_key=self.node.pow_sk, data=retire_tx_data(), value=0, receiver="0x0888000000000000000000000000000000000005", gas=6_000_000)
         self.send_tx(retire_tx, wait_for_receipt=True)
 
     def pos_get_consensus_blocks(self):
@@ -574,7 +574,7 @@ def unstake_tx_data(unstaking_value: int):
 def retire_tx_data():
     register_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/PoSRegister.json"), "r").read())
     register_contract = get_contract_instance(contract_dict=register_contract_dict)
-    return get_contract_function_data(register_contract, "retire", args=[20_000])
+    return get_contract_function_data(register_contract, "retire", args=[2_000])
 
 def get_contract_function_data(contract, name, args):
     func = getattr(contract.functions, name)

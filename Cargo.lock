@@ -294,9 +294,9 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
 name = "base64ct"
-version = "1.2.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "392c772b012d685a640cdad68a5a21f4a45e696f85a2c2c907aab2fe49a91e19"
+checksum = "e6b4d9b1225d28d360ec6a231d65af1fd99a2a095154c8040689617290569c5c"
 
 [[package]]
 name = "bcs"
@@ -473,7 +473,7 @@ dependencies = [
  "rand 0.7.3",
  "rlp",
  "secret-store",
- "toml 0.4.10",
+ "toml",
  "txgen",
 ]
 
@@ -728,7 +728,7 @@ dependencies = [
  "rlp_derive",
  "serde",
  "serde_derive",
- "toml 0.4.10",
+ "toml",
 ]
 
 [[package]]
@@ -964,7 +964,7 @@ dependencies = [
  "tokio 1.13.0",
  "tokio-stream",
  "tokio-timer",
- "toml 0.4.10",
+ "toml",
  "unexpected",
 ]
 
@@ -1198,7 +1198,7 @@ dependencies = [
  "tokio 1.13.0",
  "tokio-stream",
  "tokio-timer",
- "toml 0.4.10",
+ "toml",
  "transient-hashmap",
  "txgen",
 ]
@@ -1226,6 +1226,7 @@ name = "conflux"
 version = "1.2.0-beta-12-fix"
 dependencies = [
  "app_dirs",
+ "base64ct",
  "bcs",
  "blockgen",
  "cfx-types",
@@ -1281,7 +1282,7 @@ dependencies = [
  "tempdir",
  "textwrap 0.9.0",
  "threadpool",
- "toml 0.4.10",
+ "toml",
  "txgen",
 ]
 
@@ -1347,7 +1348,7 @@ dependencies = [
  "backtrace",
  "diem-logger",
  "serde",
- "toml 0.5.8",
+ "toml",
 ]
 
 [[package]]
@@ -4710,7 +4711,7 @@ version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d6ea3c4595b96363c13943497db34af4460fb474a95c43f4446ad341b8c9785"
 dependencies = [
- "toml 0.5.8",
+ "toml",
 ]
 
 [[package]]
@@ -5989,7 +5990,7 @@ dependencies = [
  "malloc_size_of",
  "malloc_size_of_derive",
  "parking_lot 0.11.2",
- "toml 0.4.10",
+ "toml",
 ]
 
 [[package]]
@@ -6363,15 +6364,6 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.4.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "758664fc71a3a69038656bee8b6be6477d2a6c315a6b81f7081f591bffa4111f"
-dependencies = [
- "serde",
-]
-
-[[package]]
-name = "toml"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a31142970826733df8241ef35dc040ef98c679ab14d7c3e54d827099b3acecaa"
@@ -6434,7 +6426,7 @@ dependencies = [
  "serde",
  "serde_json",
  "termcolor",
- "toml 0.5.8",
+ "toml",
 ]
 
 [[package]]
@@ -6459,7 +6451,7 @@ dependencies = [
  "rlp",
  "rustc-hex",
  "secret-store",
- "toml 0.4.10",
+ "toml",
 ]
 
 [[package]]

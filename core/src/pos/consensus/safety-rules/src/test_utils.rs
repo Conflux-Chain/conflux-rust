@@ -22,7 +22,6 @@ use diem_crypto::{
     bls::BLSPrivateKey,
     hash::{CryptoHash, TransactionAccumulatorHasher},
     traits::SigningKey,
-    Uniform,
 };
 use diem_infallible::duration_since_epoch;
 use diem_secure_storage::{InMemoryStorage, Storage};
@@ -245,7 +244,6 @@ pub fn test_storage(signer: &ValidatorSigner) -> PersistentSafetyStorage {
         storage,
         signer.author(),
         signer.private_key().clone(),
-        BLSPrivateKey::generate_for_testing(),
         waypoint,
         true,
     )
