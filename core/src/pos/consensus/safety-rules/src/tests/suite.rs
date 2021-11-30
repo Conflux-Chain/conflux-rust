@@ -80,7 +80,8 @@ pub fn run_test_suite(safety_rules: &Callback) {
     test_sign_proposal_with_invalid_qc(safety_rules);
     test_sign_proposal_with_early_preferred_round(safety_rules);
     test_uninitialized_signer(safety_rules);
-    test_reconcile_key(safety_rules);
+    // TODO(lpl): Enable key rotation.
+    // test_reconcile_key(safety_rules);
     test_validator_not_in_set(safety_rules);
     test_key_not_in_store(safety_rules);
 }
@@ -848,6 +849,7 @@ fn test_validator_not_in_set(safety_rules: &Callback) {
     assert_eq!(state.in_validator_set(), false);
 }
 
+#[allow(unused)]
 fn test_reconcile_key(_safety_rules: &Callback) {
     // Test to verify desired consensus key can be retrieved according to
     // validator set. It does so by updating the safey rule to a desired

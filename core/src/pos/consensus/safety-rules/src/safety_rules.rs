@@ -28,6 +28,7 @@ use consensus_types::{
 use diem_crypto::{
     hash::{CryptoHash, HashValue},
     traits::Signature,
+    PrivateKey,
 };
 use diem_logger::prelude::*;
 use diem_types::{
@@ -58,21 +59,21 @@ impl SafetyRules {
     /// storage and the consensus private keys
     pub fn new(
         persistent_storage: PersistentSafetyStorage,
-        verify_vote_proposal_signature: bool, export_consensus_key: bool,
+        _verify_vote_proposal_signature: bool, export_consensus_key: bool,
         vrf_private_key: Option<ConsensusVRFPrivateKey>,
     ) -> Self
     {
-        let execution_public_key = if verify_vote_proposal_signature {
-            None
+        let execution_public_key = None;
         /*
+            if verify_vote_proposal_signature {
+            None
         Some(
             persistent_storage
                 .execution_public_key()
                 .expect("Unable to retrieve execution public key"),
-        )*/
         } else {
             None
-        };
+        )*/
         Self {
             persistent_storage,
             execution_public_key,
@@ -330,16 +331,21 @@ impl SafetyRules {
                     // Try to export the consensus key directly from storage.
                     match self
                         .persistent_storage
-                        .consensus_key_for_version(expected_key)
+                        .consensus_key_for_version(expected_key.clone())
                     {
                         Ok(consensus_key) => {
-                            self.validator_signer =
-                                Some(ConfigurableValidatorSigner::new_signer(
-                                    author,
-                                    consensus_key,
-                                    self.vrf_private_key.clone(),
-                                ));
-                            Ok(())
+                            if consensus_key.public_key() != expected_key {
+                                Err(Error::ValidatorKeyNotFound("exported key does not match the expected key".into()))
+                            } else {
+                                self.validator_signer = Some(
+                                    ConfigurableValidatorSigner::new_signer(
+                                        author,
+                                        consensus_key,
+                                        self.vrf_private_key.clone(),
+                                    ),
+                                );
+                                Ok(())
+                            }
                         }
                         Err(Error::SecureStorageMissingDataError(error)) => {
                             Err(Error::ValidatorKeyNotFound(error))
@@ -353,11 +359,15 @@ impl SafetyRules {
                     self.validator_signer =
                         Some(ConfigurableValidatorSigner::new_handle(
                             author,
-                            expected_key,
+                            expected_key.clone(),
                         ));
-                    self.sign(&Timeout::new(0, 0)).map(|_signature| ()).map_err(
-                        |error| Error::ValidatorKeyNotFound(error.to_string()),
-                    )
+                    self.sign(&Timeout::new(0, 0)).and_then(|signature| {
+                        signature
+                            .verify(&Timeout::new(0, 0), &expected_key)
+                            .map_err(|error| {
+                                Error::ValidatorKeyNotFound(error.to_string())
+                            })
+                    })
                 }
             }
         };
