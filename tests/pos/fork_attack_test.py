@@ -42,18 +42,18 @@ class PosForkAttackTest(DefaultConfluxTestFramework):
         # generate pos blocks to confirm the pivot decision
         for client in clients:
             client.pos_local_timeout()
-        time.sleep(0.5)
+        time.sleep(1)
         for client in clients:
             client.pos_new_round_timeout()
-        time.sleep(0.5)
+        time.sleep(1)
         for _ in range(3):
             for client in clients:
                 client.pos_proposal_timeout()
-            time.sleep(0.5)
+            time.sleep(1)
             for client in clients:
                 client.pos_new_round_timeout()
-            time.sleep(0.5)
-            
+            time.sleep(1)
+
         assert clients[0].pos_status()["latestVoted"] is not None
         assert int(clients[0].pos_status()["pivotDecision"]["height"], 0) >= CHAIN_LEN // 2
         fork_pivot_block = clients[0].block_by_epoch(int_to_hex(CHAIN_LEN // 2 + 1))
