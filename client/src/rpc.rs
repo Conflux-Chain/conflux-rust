@@ -47,12 +47,13 @@ use self::{
             RpcImpl as LightImpl, TestRpcImpl as LightTestRpcImpl,
         },
         pool::TransactionPoolHandler,
+        pos::{PoSInterceptor, PosHandler},
         pubsub::PubSubClient,
         trace::TraceHandler,
     },
     traits::{
-        cfx::Cfx, debug::LocalRpc, pool::TransactionPool, pubsub::PubSub,
-        test::TestRpc, trace::Trace,
+        cfx::Cfx, debug::LocalRpc, pool::TransactionPool, pos::Pos,
+        pubsub::PubSub, test::TestRpc, trace::Trace,
     },
 };
 
@@ -233,6 +234,17 @@ fn setup_rpc_apis(
                     TransactionPoolHandler::new(common.clone()).to_delegate();
                 handler.extend_with(txpool);
             }
+            Api::Pos => {
+                let pos = PosHandler::new(
+                    common.pos_handler.clone(),
+                    rpc.consensus.get_data_manager().clone(),
+                    *rpc.sync.network.get_network_type(),
+                )
+                .to_delegate();
+                let pos_interceptor =
+                    PoSInterceptor::new(common.pos_handler.clone());
+                handler.extend_with(RpcProxy::new(pos, pos_interceptor));
+            }
         }
     }
     handler
@@ -306,6 +318,9 @@ fn setup_rpc_apis_light(
             }
             Api::TxPool => {
                 warn!("Light nodes do not support txpool RPC");
+            }
+            Api::Pos => {
+                warn!("Light nodes do not support PoS RPC");
             }
         }
     }

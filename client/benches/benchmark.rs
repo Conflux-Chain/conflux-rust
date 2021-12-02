@@ -57,6 +57,8 @@ fn txexe_benchmark(c: &mut Criterion) {
         gas_limit: tx.gas.clone(),
         last_hash: H256::zero(),
         epoch_height: 0,
+        pos_view: None,
+        finalized_epoch: None,
         transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
     };
     let mut group = c.benchmark_group("Execute 1 transaction");

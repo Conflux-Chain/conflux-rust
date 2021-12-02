@@ -2,7 +2,39 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::DisconnectReason;
+use std::{
+    cmp::{min, Ordering},
+    collections::{BinaryHeap, HashMap, HashSet, VecDeque},
+    fmt::Formatter,
+    fs,
+    io::{self, Read, Write},
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::{atomic::Ordering as AtomicOrdering, Arc},
+    time::{Duration, Instant},
+};
+
+use keccak_hash::keccak;
+use mio::{tcp::*, udp::*, *};
+use parity_path::restrict_permissions_owner;
+use parking_lot::{Mutex, RwLock};
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+
+use cfx_addr::Network;
+use cfx_bytes::Bytes;
+use diem_crypto::ValidCryptoMaterialStringExt;
+use diem_types::{
+    account_address::from_consensus_public_key,
+    validator_config::{
+        ConsensusPrivateKey, ConsensusPublicKey, ConsensusVRFPrivateKey,
+        ConsensusVRFPublicKey,
+    },
+};
+use keylib::{sign, Generator, KeyPair, Random, Secret};
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use priority_send_queue::SendQueuePriority;
+
 use crate::{
     discovery::Discovery,
     handshake::BYPASS_CRYPTOGRAPHY,
@@ -18,28 +50,8 @@ use crate::{
     NetworkProtocolHandler, PeerInfo, ProtocolId, ProtocolInfo,
     UpdateNodeOperation, NODE_TAG_ARCHIVE, NODE_TAG_NODE_TYPE,
 };
-use cfx_addr::Network;
-use cfx_bytes::Bytes;
-use keccak_hash::keccak;
-use keylib::{sign, Generator, KeyPair, Random, Secret};
-use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
-use mio::{tcp::*, udp::*, *};
-use parity_path::restrict_permissions_owner;
-use parking_lot::{Mutex, RwLock};
-use priority_send_queue::SendQueuePriority;
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use std::{
-    cmp::{min, Ordering},
-    collections::{BinaryHeap, HashMap, HashSet, VecDeque},
-    fmt::Formatter,
-    fs,
-    io::{self, Read, Write},
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4},
-    path::{Path, PathBuf},
-    str::FromStr,
-    sync::{atomic::Ordering as AtomicOrdering, Arc},
-    time::{Duration, Instant},
-};
+
+use super::DisconnectReason;
 
 const MAX_SESSIONS: usize = 2048;
 
@@ -175,28 +187,7 @@ impl NetworkService {
 
     pub fn network_id(&self) -> u64 { self.config.id }
 
-    pub fn start_io_service(&mut self) -> Result<(), Error> {
-        let raw_io_service =
-            IoService::<NetworkIoMessage>::start(self.network_poll.clone())?;
-        self.io_service = Some(raw_io_service);
-
-        if self.inner.is_none() {
-            if self.config.test_mode {
-                BYPASS_CRYPTOGRAPHY.store(true, AtomicOrdering::Relaxed);
-            }
-
-            let inner = Arc::new(match self.config.test_mode {
-                true => NetworkServiceInner::new_with_latency(&self.config)?,
-                false => NetworkServiceInner::new(&self.config)?,
-            });
-            self.io_service
-                .as_ref()
-                .unwrap()
-                .register_handler(inner.clone())?;
-            self.inner = Some(inner);
-        }
-        Ok(())
-    }
+    pub fn is_test_mode(&self) -> bool { self.config.test_mode }
 
     pub fn start_network_poll(&self) -> Result<(), Error> {
         let handler = self.inner.as_ref().unwrap().clone();
@@ -216,7 +207,9 @@ impl NetworkService {
     }
 
     /// Create and start the event loop inside the NetworkService
-    pub fn start(&mut self) -> Result<(), Error> {
+    pub fn initialize(
+        &mut self, pos_pub_keys: (ConsensusPublicKey, ConsensusVRFPublicKey),
+    ) -> Result<(), Error> {
         let raw_io_service =
             IoService::<NetworkIoMessage>::start(self.network_poll.clone())?;
         self.io_service = Some(raw_io_service);
@@ -227,8 +220,11 @@ impl NetworkService {
             }
 
             let inner = Arc::new(match self.config.test_mode {
-                true => NetworkServiceInner::new_with_latency(&self.config)?,
-                false => NetworkServiceInner::new(&self.config)?,
+                true => NetworkServiceInner::new_with_latency(
+                    &self.config,
+                    pos_pub_keys,
+                )?,
+                false => NetworkServiceInner::new(&self.config, pos_pub_keys)?,
             });
             self.io_service
                 .as_ref()
@@ -236,7 +232,10 @@ impl NetworkService {
                 .register_handler(inner.clone())?;
             self.inner = Some(inner);
         }
+        Ok(())
+    }
 
+    pub fn start(&self) {
         let handler = self.inner.as_ref().unwrap().clone();
         let main_event_loop_channel =
             self.io_service.as_ref().unwrap().channel();
@@ -250,7 +249,6 @@ impl NetworkService {
                 MAX_SESSIONS,
                 STOP_NET_POLL,
             );
-        Ok(())
     }
 
     /// Add a P2P peer to the client as a trusted node
@@ -283,13 +281,17 @@ impl NetworkService {
         protocol: ProtocolId, version: ProtocolVersion,
     ) -> Result<(), Error>
     {
+        let (tx, rx) = std::sync::mpsc::sync_channel(0);
         self.io_service.as_ref().unwrap().send_message(
             NetworkIoMessage::AddHandler {
                 handler,
                 protocol,
                 version,
+                callback: tx,
             },
         )?;
+        // Only error if channel closed.
+        rx.recv().expect("protocol register error");
         Ok(())
     }
 
@@ -337,6 +339,14 @@ impl NetworkService {
             Ok(inner.metadata.keys.clone())
         } else {
             Err("Network service not started yet!".into())
+        }
+    }
+
+    pub fn pos_public_key(&self) -> Option<ConsensusPublicKey> {
+        if let Some(ref inner) = self.inner {
+            inner.sessions.self_pos_public_key.clone().map(|k| k.0)
+        } else {
+            None
         }
     }
 
@@ -508,7 +518,9 @@ impl DelayedQueue {
 impl NetworkServiceInner {
     pub fn new(
         config: &NetworkConfiguration,
-    ) -> Result<NetworkServiceInner, Error> {
+        pos_pub_keys: (ConsensusPublicKey, ConsensusVRFPublicKey),
+    ) -> Result<NetworkServiceInner, Error>
+    {
         let mut listen_address = match config.listen_address {
             None => SocketAddr::V4(SocketAddrV4::new(
                 Ipv4Addr::new(0, 0, 0, 0),
@@ -540,6 +552,7 @@ impl NetworkServiceInner {
                     },
                 )
         };
+        info!("Self pos public key: {:?}", pos_pub_keys);
 
         info!("Self node id: {:?}", *keys.public());
 
@@ -625,6 +638,7 @@ impl NetworkServiceInner {
                 MAX_SESSIONS,
                 config.max_incoming_peers,
                 &config.session_ip_limit_config,
+                Some(pos_pub_keys),
             ),
             handlers: RwLock::new(HashMap::new()),
             timers: RwLock::new(HashMap::new()),
@@ -655,8 +669,10 @@ impl NetworkServiceInner {
 
     pub fn new_with_latency(
         config: &NetworkConfiguration,
-    ) -> Result<NetworkServiceInner, Error> {
-        let r = NetworkServiceInner::new(config);
+        pos_pub_keys: (ConsensusPublicKey, ConsensusVRFPublicKey),
+    ) -> Result<NetworkServiceInner, Error>
+    {
+        let r = NetworkServiceInner::new(config, pos_pub_keys);
         if r.is_err() {
             return r;
         }
@@ -1054,6 +1070,7 @@ impl NetworkServiceInner {
             // We check dropped_nodes first to make sure we stop processing
             // communications from any dropped peers
             let mut session_node_id = session.read().id().map(|id| *id);
+            let mut pos_public_key_opt = None;
             if let Some(node_id) = session_node_id {
                 let to_drop = self.dropped_nodes.read().contains(&node_id);
                 self.drop_peers(io);
@@ -1073,11 +1090,18 @@ impl NetworkServiceInner {
                                 session_data.token_to_disconnect;
                         }
                         match session_data.session_data {
-                            SessionData::Ready => {
+                            SessionData::Ready { pos_public_key } => {
+                                debug!(
+                                    "receive Ready with pos_public_key={:?} account={:?}",
+                                    pos_public_key,
+                                    pos_public_key.as_ref().map(|k| from_consensus_public_key(&k.0, &k.1)),
+                                );
                                 handshake_done = true;
                                 session_node_id = Some(*sess.id().unwrap());
+                                pos_public_key_opt = pos_public_key;
                             }
                             SessionData::Message { data, protocol } => {
+                                drop(sess);
                                 match self.handlers.read().get(&protocol) {
                                     None => warn!(
                                         "No handler found for protocol: {:?}",
@@ -1092,8 +1116,8 @@ impl NetworkServiceInner {
                             SessionData::Continue => {}
                         }
                     }
-                    Err(Error(kind, _)) => {
-                        debug!("Failed to read session data, error kind = {:?}, session = {:?}", kind, *sess);
+                    Err(e) => {
+                        debug!("Failed to read session data, error = {:?}, session = {:?}", e, *sess);
                         kill = true;
                         break;
                     }
@@ -1147,6 +1171,7 @@ impl NetworkServiceInner {
                                     &network_context,
                                     session_node_id.as_ref().unwrap(),
                                     protocol.version,
+                                    pos_public_key_opt.clone(),
                                 );
                         }
                     }
@@ -1247,7 +1272,7 @@ impl NetworkServiceInner {
                 deregister = remote || sess.done();
                 failure_id = sess.id().cloned();
                 debug!(
-                    "kill connection, deregister = {}, reason = {:?}, session = {:?}, op = {:?}",
+                    "kill connection by token, deregister = {}, reason = {:?}, session = {:?}, op = {:?}",
                     deregister, reason, *sess, op
                 );
             }
@@ -1650,6 +1675,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 handler,
                 protocol,
                 version,
+                callback,
             } => {
                 let h = handler.clone();
                 let network_context =
@@ -1658,27 +1684,30 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                     .protocol_handler()
                     .initialize(&network_context);
                 self.handlers.write().insert(*protocol, handler.clone());
-                let protocols = &mut *self.metadata.protocols.write();
-                for protocol_info in protocols.iter() {
-                    assert_ne!(
-                        protocol, &protocol_info.protocol,
-                        "Do not register same protocol twice"
+                {
+                    let protocols = &mut *self.metadata.protocols.write();
+                    for protocol_info in protocols.iter() {
+                        assert_ne!(
+                            protocol, &protocol_info.protocol,
+                            "Do not register same protocol twice"
+                        );
+                    }
+                    protocols.push(ProtocolInfo {
+                        protocol: *protocol,
+                        version: *version,
+                    });
+                    self.metadata.minimum_peer_protocol_version.write().push(
+                        ProtocolInfo {
+                            protocol: *protocol,
+                            version: handler.minimum_supported_version(),
+                        },
                     );
                 }
-                protocols.push(ProtocolInfo {
-                    protocol: *protocol,
-                    version: *version,
-                });
-                self.metadata.minimum_peer_protocol_version.write().push(
-                    ProtocolInfo {
-                        protocol: *protocol,
-                        version: handler.minimum_supported_version(),
-                    },
-                );
                 info!(
                     "Protocol {:?} version {:?} registered.",
                     protocol, version
                 );
+                callback.send(()).expect("protocol register error");
             }
             NetworkIoMessage::AddTimer {
                 ref protocol,
@@ -1726,6 +1755,7 @@ impl IoHandler<NetworkIoMessage> for NetworkServiceInner {
                 ref node_id,
                 ref data,
             } => {
+                debug!("Receive ProtocolMsg {:?}", protocol);
                 if let Some(handler) =
                     self.handlers.read().get(protocol).cloned()
                 {
@@ -2094,6 +2124,49 @@ fn load_key(path: &Path) -> Option<Secret> {
             None
         }
     }
+}
+
+pub fn load_pos_private_key(
+    path: &Path,
+) -> Option<(ConsensusPrivateKey, Option<ConsensusVRFPrivateKey>)> {
+    let mut path_buf = PathBuf::from(path);
+    path_buf.push("pos_key");
+    let mut file = match fs::File::open(path_buf.as_path()) {
+        Ok(file) => file,
+        Err(e) => {
+            debug!("failed to open key file: {:?}", e);
+            return None;
+        }
+    };
+    let mut buf = String::new();
+    match file.read_to_string(&mut buf) {
+        Ok(_) => {}
+        Err(e) => {
+            warn!("Error reading key file: {:?}", e);
+            return None;
+        }
+    }
+    let key_str: Vec<_> = buf.split(",").collect();
+    let private_key =
+        match ConsensusPrivateKey::from_encoded_string(&key_str[0]) {
+            Ok(key) => Some(key),
+            Err(e) => {
+                warn!("Error parsing key file: {:?}", e);
+                None
+            }
+        }?;
+    if key_str.len() <= 1 {
+        return Some((private_key, None));
+    }
+    let vrf_private_key =
+        match ConsensusVRFPrivateKey::from_encoded_string(&key_str[1]) {
+            Ok(key) => Some(key),
+            Err(e) => {
+                warn!("Error parsing key file: {:?}", e);
+                None
+            }
+        }?;
+    Some((private_key, Some(vrf_private_key)))
 }
 
 impl std::fmt::Display for ProtocolVersion {

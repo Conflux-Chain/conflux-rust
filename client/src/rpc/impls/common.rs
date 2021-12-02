@@ -2,7 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use std::{
+    collections::{BTreeMap, HashSet},
+    net::SocketAddr,
+    sync::Arc,
+    time::Duration,
+};
+
 use crate::rpc::{
+    impls::pos::hash_value_to_h256,
     types::{
         errors::check_rpc_address_network, AccountPendingInfo,
         AccountPendingTransactions, Block as RpcBlock, BlockHashOrEpochNumber,
@@ -12,36 +20,39 @@ use crate::rpc::{
     },
     RpcResult,
 };
+
 use bigdecimal::BigDecimal;
-use cfx_addr::Network;
-use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-use cfx_types::{Address, H160, H256, H520, U128, U256, U512, U64};
-use cfxcore::{
-    rpc_errors::invalid_params_check, BlockDataManager, ConsensusGraph,
-    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
-};
-use cfxcore_accounts::AccountProvider;
-use cfxkey::Password;
 use clap::crate_version;
 use jsonrpc_core::{
     Error as RpcError, Result as JsonRpcResult, Value as RpcValue,
 };
 use keccak_hash::keccak;
+use num_bigint::{BigInt, ToBigInt};
+use parking_lot::{Condvar, Mutex};
+
+use crate::rpc::types::pos::{Block as RpcPosBlock, Decision};
+use cfx_addr::Network;
+use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+use cfx_types::{Address, H160, H256, H520, U128, U256, U512, U64};
+use cfxcore::{
+    consensus::pos_handler::PosVerifier, rpc_errors::invalid_params_check,
+    spec::genesis::register_transaction, BlockDataManager, ConsensusGraph,
+    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
+};
+use cfxcore_accounts::AccountProvider;
+use cfxkey::Password;
+use diem_types::{
+    account_address::{from_consensus_public_key, AccountAddress},
+    block_info::PivotBlockDecision,
+    transaction::TransactionPayload,
+};
 use network::{
     node_table::{Node, NodeEndpoint, NodeEntry, NodeId},
     throttling::{self, THROTTLING_SERVICE},
     NetworkService, SessionDetails, UpdateNodeOperation,
 };
-use num_bigint::{BigInt, ToBigInt};
-use parking_lot::{Condvar, Mutex};
 use primitives::{
     transaction::TransactionType, Account, Action, SignedTransaction,
-};
-use std::{
-    collections::{BTreeMap, HashSet},
-    net::SocketAddr,
-    sync::Arc,
-    time::Duration,
 };
 
 fn grouped_txs<T, F>(
@@ -139,13 +150,14 @@ pub struct RpcImpl {
     network: Arc<NetworkService>,
     tx_pool: SharedTransactionPool,
     accounts: Arc<AccountProvider>,
+    pub pos_handler: Arc<PosVerifier>,
 }
 
 impl RpcImpl {
     pub fn new(
         exit: Arc<(Mutex<bool>, Condvar)>, consensus: SharedConsensusGraph,
         network: Arc<NetworkService>, tx_pool: SharedTransactionPool,
-        accounts: Arc<AccountProvider>,
+        accounts: Arc<AccountProvider>, pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         let data_man = consensus.get_data_manager().clone();
@@ -157,6 +169,7 @@ impl RpcImpl {
             network,
             tx_pool,
             accounts,
+            pos_handler: pos_verifier,
         }
     }
 
@@ -623,6 +636,10 @@ impl RpcImpl {
             .get_height_from_epoch_number(EpochNumber::LatestState.into())?
             .into();
 
+        let latest_finalized = consensus_graph
+            .get_height_from_epoch_number(EpochNumber::LatestFinalized.into())?
+            .into();
+
         Ok(RpcStatus {
             best_hash: best_info.best_block_hash.into(),
             block_number: block_number.into(),
@@ -630,6 +647,7 @@ impl RpcImpl {
             epoch_number: best_info.best_epoch_number.into(),
             latest_checkpoint,
             latest_confirmed,
+            latest_finalized,
             latest_state,
             network_id: self.network.network_id().into(),
             pending_tx_number: tx_count.into(),
@@ -645,6 +663,144 @@ impl RpcImpl {
         self.exit.1.notify_all();
 
         Ok(())
+    }
+
+    pub fn pos_register(
+        &self, voting_power: U64,
+    ) -> JsonRpcResult<(Bytes, AccountAddress)> {
+        let tx = register_transaction(
+            self.pos_handler.config().bls_key.private_key(),
+            self.pos_handler.config().vrf_key.public_key(),
+            voting_power.as_u64(),
+            0,
+        );
+        let identifier = from_consensus_public_key(
+            &self.pos_handler.config().bls_key.public_key(),
+            &self.pos_handler.config().vrf_key.public_key(),
+        );
+        Ok((tx.data.into(), identifier))
+    }
+
+    pub fn pos_update_voting_power(
+        &self, _pos_account: AccountAddress, _increased_voting_power: U64,
+    ) -> JsonRpcResult<()> {
+        unimplemented!()
+    }
+
+    pub fn pos_retire_self(&self) -> JsonRpcResult<()> { unimplemented!() }
+
+    pub fn pos_start(&self) -> RpcResult<()> {
+        self.pos_handler
+            .initialize(self.consensus.clone().to_arc_consensus())?;
+        Ok(())
+    }
+
+    pub fn pos_force_vote_proposal(&self, block_id: H256) -> RpcResult<()> {
+        if !self.network.is_test_mode() {
+            // Reject force vote if test RPCs are enabled in a mainnet node,
+            // because this may cause staked CFXs locked
+            // permanently.
+            bail!(RpcError::internal_error())
+        }
+        self.pos_handler.force_vote_proposal(block_id).map_err(|e| {
+            warn!("force_vote_proposal: err={:?}", e);
+            RpcError::internal_error().into()
+        })
+    }
+
+    pub fn pos_force_propose(
+        &self, round: U64, parent_block_id: H256,
+        payload: Vec<TransactionPayload>,
+    ) -> RpcResult<()>
+    {
+        if !self.network.is_test_mode() {
+            // Reject force vote if test RPCs are enabled in a mainnet node,
+            // because this may cause staked CFXs locked
+            // permanently.
+            bail!(RpcError::internal_error())
+        }
+        self.pos_handler
+            .force_propose(round, parent_block_id, payload)
+            .map_err(|e| {
+                warn!("pos_force_propose: err={:?}", e);
+                RpcError::internal_error().into()
+            })
+    }
+
+    pub fn pos_trigger_timeout(&self, timeout_type: String) -> RpcResult<()> {
+        if !self.network.is_test_mode() {
+            // Reject force vote if test RPCs are enabled in a mainnet node,
+            // because this may cause staked CFXs locked
+            // permanently.
+            bail!(RpcError::internal_error())
+        }
+        debug!("pos_trigger_timeout: type={}", timeout_type);
+        self.pos_handler.trigger_timeout(timeout_type).map_err(|e| {
+            warn!("pos_trigger_timeout: err={:?}", e);
+            RpcError::internal_error().into()
+        })
+    }
+
+    pub fn pos_force_sign_pivot_decision(
+        &self, block_hash: H256, height: U64,
+    ) -> RpcResult<()> {
+        if !self.network.is_test_mode() {
+            // Reject force vote if test RPCs are enabled in a mainnet node,
+            // because this may cause staked CFXs locked
+            // permanently.
+            bail!(RpcError::internal_error())
+        }
+        self.pos_handler
+            .force_sign_pivot_decision(PivotBlockDecision {
+                block_hash,
+                height: height.as_u64(),
+            })
+            .map_err(|e| {
+                warn!("pos_trigger_timeout: err={:?}", e);
+                RpcError::internal_error().into()
+            })
+    }
+
+    pub fn pos_get_chosen_proposal(&self) -> RpcResult<Option<RpcPosBlock>> {
+        let maybe_block = self
+            .pos_handler
+            .get_chosen_proposal()
+            .map_err(|e| {
+                warn!("pos_get_chosen_proposal: err={:?}", e);
+                RpcError::internal_error()
+            })?
+            .and_then(|b| {
+                let block_hash = b.id();
+                self.pos_handler
+                    .cached_db()
+                    .get_block(&block_hash)
+                    .ok()
+                    .map(|executed_block| {
+                        let executed_block = executed_block.lock();
+                        RpcPosBlock {
+                            hash: hash_value_to_h256(b.id()),
+                            epoch: U64::from(b.epoch()),
+                            round: U64::from(b.round()),
+                            next_tx_number: Default::default(),
+                            miner: b.author().map(|a| H256::from(a.to_u8())),
+                            parent_hash: hash_value_to_h256(b.parent_id()),
+                            timestamp: U64::from(b.timestamp_usecs()),
+                            pivot_decision: executed_block
+                                .output()
+                                .pivot_block()
+                                .as_ref()
+                                .map(|d| Decision::from(d)),
+                            height: executed_block
+                                .output()
+                                .executed_trees()
+                                .pos_state()
+                                .current_view()
+                                .into(),
+                            signatures: vec![],
+                        }
+                    })
+            });
+        Ok(maybe_block)
     }
 }
 

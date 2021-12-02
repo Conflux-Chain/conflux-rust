@@ -42,6 +42,9 @@ class LightSyncTest(ConfluxTestFramework):
         self.conf_parameters["timer_chain_block_difficulty_ratio"] = "3"
         self.conf_parameters["block_cache_gc_period_ms"] = "10"
 
+        # pos parameters
+        self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = "0"
+
     def setup_network(self):
         self.add_nodes(self.num_nodes)
 
@@ -136,7 +139,10 @@ class LightSyncTest(ConfluxTestFramework):
         num_events = 0
         num_blamed = 0
 
-        for _ in range(0, NORMAL_CHAIN_LENGTH):
+        for i in range(0, NORMAL_CHAIN_LENGTH):
+            if i % (2 * ERA_EPOCH_COUNT) == 0:
+                # Leave some time for PoS to progress, so we can avoid cross-checkpoint reference.
+                time.sleep(1)
             rnd = random.random()
 
             # ~20% of all block have events

@@ -206,10 +206,14 @@ pub mod staking {
     /// This is the number of blocks per second.
     pub const BLOCKS_PER_SECOND: u64 =
         1000000 / TARGET_AVERAGE_BLOCK_GENERATION_PERIOD;
+    /// This is the number of blocks per hour.
+    pub const BLOCKS_PER_HOUR: u64 = BLOCKS_PER_SECOND * 60 * 60;
     /// This is the number of blocks per day.
     pub const BLOCKS_PER_DAY: u64 = BLOCKS_PER_SECOND * 60 * 60 * 24;
     /// This is the number of blocks per year.
     pub const BLOCKS_PER_YEAR: u64 = BLOCKS_PER_DAY * 365;
+    /// The inverse of interest rate
+    pub const INVERSE_INTEREST_RATE: u64 = 25;
 
     /// This is the storage collateral units for each KiB of code, amount in
     /// COLLATERAL_UNITs. Code collateral is calculated by each whole KiB
@@ -249,6 +253,8 @@ pub mod staking {
         /// SERVICE_CHARGE_RATE_SCALE = 0.05%`
         pub static ref SERVICE_CHARGE_RATE: U256 = U256::from(5);
         pub static ref SERVICE_CHARGE_RATE_SCALE: U256 = U256::from(10000);
+        /// This controls the tokens required for one PoS vote
+        pub static ref POS_VOTE_PRICE: U256 = U256::from(1000)*ONE_CFX_IN_DRIP;
     }
 
     pub fn code_collateral_units(len: usize) -> u64 {

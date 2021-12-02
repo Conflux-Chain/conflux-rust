@@ -3,12 +3,14 @@ import datetime
 import time
 import os
 import types
+import shutil
+from eth_utils import decode_hex
 
 from conflux.messages import GetBlockHeaders, GET_BLOCK_HEADERS_RESPONSE
 from test_framework.mininode import start_p2p_connection
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import assert_equal, connect_nodes, get_peer_addr, wait_until, WaitHandler, \
-    initialize_datadir, PortMin
+    initialize_datadir, PortMin, get_datadir_path
 
 
 class RpcTest(ConfluxTestFramework):
@@ -63,6 +65,10 @@ class RpcTest(ConfluxTestFramework):
         # TODO Clean old nodes
         # Setup a clean node to run each test
         self.stop_nodes()
+        for i in range(len(self.nodes)):
+            datadir = get_datadir_path(self.options.tmpdir, i)
+            shutil.rmtree(datadir)
+        self.nodes = []
         self.add_nodes(1)
         node_index = len(self.nodes) - 1
         initialize_datadir(self.options.tmpdir, node_index, PortMin.n, self.conf_parameters)
@@ -116,13 +122,14 @@ class RpcTest(ConfluxTestFramework):
             assert msec >= node.latency_ms - 100
 
         self.log.info("Test addlatency")
+        block_hash = decode_hex(self.nodes[0].generate_empty_blocks(1)[0])
         default_node = start_p2p_connection([self.nodes[0]])[0]
         latency_ms = 1000
         self.nodes[0].addlatency(default_node.key, latency_ms)
         default_node.start_time = datetime.datetime.now()
         default_node.latency_ms = latency_ms
         handler = WaitHandler(default_node, GET_BLOCK_HEADERS_RESPONSE, on_block_headers)
-        self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hashes=[default_node.genesis.block_header.hash]))
+        self.nodes[0].p2p.send_protocol_msg(GetBlockHeaders(hashes=[block_hash]))
         handler.wait()
 
     def _test_getstatus(self):

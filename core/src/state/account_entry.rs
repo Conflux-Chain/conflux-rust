@@ -507,6 +507,10 @@ impl OverlayAccount {
         self.collateral_for_storage -= *by;
     }
 
+    pub fn record_interest_receive(&mut self, interest: &U256) {
+        self.accumulated_interest_return += *interest;
+    }
+
     pub fn cache_code<StateDbStorage: StorageStateTrait>(
         &mut self, db: &StateDbGeneric<StateDbStorage>,
     ) -> DbResult<bool> {
@@ -648,6 +652,23 @@ impl OverlayAccount {
                 true, /* cache_ownership */
             )
         }
+    }
+
+    pub fn change_storage_value<StateDbStorage: StorageStateTrait>(
+        &mut self, db: &StateDbGeneric<StateDbStorage>, key: &[u8], value: U256,
+    ) -> DbResult<()> {
+        let current_value = self.storage_at(db, key)?;
+        if !current_value.is_zero() {
+            // Constraint requirement: if a key appears in value_write_cache, it
+            // must be in owner_lv2_write cache. Safety: since
+            // current value is non-zero, this key must appears in
+            // lv2_write_cache because `storage_at` loaded it.
+            Arc::make_mut(&mut self.storage_value_write_cache)
+                .insert(key.to_vec(), value);
+        } else {
+            warn!("Change storage value outside transaction fails: current value is zero, tx {:?}, key {:?}", self.address, key);
+        }
+        Ok(())
     }
 
     fn get_and_cache_storage<StateDbStorage: StorageStateTrait>(

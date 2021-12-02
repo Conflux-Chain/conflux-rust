@@ -1,0 +1,13 @@
+[package]
+name = "pow-types"
+version = "0.1.0"
+authors = ["Peilun Li <peilun.li@conflux-chain.org>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cfx-types = {path = "../../../../../cfx_types"}
+async-trait = "0.1"
+anyhow = "1.0.38"
+serde = "1.0"

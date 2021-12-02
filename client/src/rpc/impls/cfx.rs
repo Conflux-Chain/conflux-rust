@@ -4,7 +4,8 @@
 
 use crate::rpc::types::{
     call_request::rpc_call_request_network, errors::check_rpc_address_network,
-    RpcAddress, SponsorInfo, TokenSupplyInfo, MAX_GAS_CALL_REQUEST,
+    PoSEconomics, RpcAddress, SponsorInfo, TokenSupplyInfo,
+    MAX_GAS_CALL_REQUEST,
 };
 use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
@@ -19,6 +20,7 @@ use cfxcore::{
 };
 use cfxcore_accounts::AccountProvider;
 use delegate::delegate;
+use diem_types::transaction::TransactionPayload;
 use jsonrpc_core::{BoxFuture, Error as JsonRpcError, Result as JsonRpcResult};
 use network::{
     node_table::{Node, NodeId},
@@ -51,9 +53,9 @@ use crate::{
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
-            sign_call, Account as RpcAccount, AccountPendingInfo,
-            AccountPendingTransactions, BlameInfo, Block as RpcBlock,
-            BlockHashOrEpochNumber, Bytes, CallRequest,
+            pos::Block as PosBlock, sign_call, Account as RpcAccount,
+            AccountPendingInfo, AccountPendingTransactions, BlameInfo,
+            Block as RpcBlock, BlockHashOrEpochNumber, Bytes, CallRequest,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
             EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
             LogFilter as RpcFilter, PackedOrExecuted, Receipt as RpcReceipt,
@@ -74,6 +76,7 @@ use cfxcore::{
     },
     trace::ErrorUnwind,
 };
+use diem_types::account_address::AccountAddress;
 use lazy_static::lazy_static;
 use metrics::{register_timer_with_group, ScopeTimer, Timer};
 use serde::Serialize;
@@ -372,6 +375,24 @@ impl RpcImpl {
             .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
 
         Ok(state_db.get_accumulate_interest_rate()?.into())
+    }
+
+    /// Returns accumulate interest rate of the given epoch
+    fn pos_economics(
+        &self, epoch_num: Option<EpochNumber>,
+    ) -> RpcResult<PoSEconomics> {
+        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
+
+        Ok(PoSEconomics {
+            total_pos_staking_tokens: state_db
+                .get_total_pos_staking_tokens()?,
+            distributable_pos_interest: state_db
+                .get_distributable_pos_interest()?,
+            last_distribute_block: state_db.get_last_distribute_block()?,
+        })
     }
 
     fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256> {
@@ -803,12 +824,12 @@ impl RpcImpl {
 
     fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
-        adaptive: bool, difficulty: Option<u64>,
+        adaptive: bool, difficulty: Option<u64>, pos_reference: Option<H256>,
     ) -> RpcResult<H256>
     {
         info!(
-            "RPC Request: generate_fixed_block({:?}, {:?}, {:?}, {:?})",
-            parent_hash, referee, num_txs, difficulty
+            "RPC Request: generate_fixed_block({:?}, {:?}, {:?}, {:?}, {:?})",
+            parent_hash, referee, num_txs, difficulty, pos_reference,
         );
         Ok(self.block_gen.generate_fixed_block(
             parent_hash,
@@ -816,6 +837,7 @@ impl RpcImpl {
             num_txs,
             difficulty.unwrap_or(0),
             adaptive,
+            pos_reference,
         )?)
     }
 
@@ -1524,6 +1546,7 @@ impl Cfx for CfxHandler {
             fn account(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
+            fn pos_economics(&self, num: Option<EpochNumber>) -> BoxFuture<PoSEconomics>;
             fn admin(&self, address: RpcAddress, num: Option<EpochNumber>)
                 -> BoxFuture<Option<RpcAddress>>;
             fn sponsor_info(&self, address: RpcAddress, num: Option<EpochNumber>)
@@ -1583,6 +1606,17 @@ impl TestRpc for TestRpcImpl {
             fn say_hello(&self) -> JsonRpcResult<String>;
             fn stop(&self) -> JsonRpcResult<()>;
             fn save_node_db(&self) -> JsonRpcResult<()>;
+            fn pos_register(&self, voting_power: U64) -> JsonRpcResult<(Bytes, AccountAddress)>;
+            fn pos_update_voting_power(
+                &self, pos_account: AccountAddress, increased_voting_power: U64,
+            ) -> JsonRpcResult<()>;
+            fn pos_retire_self(&self) -> JsonRpcResult<()>;
+            fn pos_start(&self) -> JsonRpcResult<()>;
+            fn pos_force_vote_proposal(&self, block_id: H256) -> JsonRpcResult<()>;
+            fn pos_force_propose(&self, round: U64, parent_block_id: H256, payload: Vec<TransactionPayload>) -> JsonRpcResult<()>;
+            fn pos_trigger_timeout(&self, timeout_type: String) -> JsonRpcResult<()>;
+            fn pos_force_sign_pivot_decision(&self, block_hash: H256, height: U64) -> JsonRpcResult<()>;
+            fn pos_get_chosen_proposal(&self) -> JsonRpcResult<Option<PosBlock>>;
         }
 
         to self.rpc_impl {
@@ -1598,7 +1632,7 @@ impl TestRpc for TestRpcImpl {
             fn get_pivot_chain_and_weight(&self, height_range: Option<(u64, u64)>) -> JsonRpcResult<Vec<(H256, U256)>>;
             fn get_executed_info(&self, block_hash: H256) -> JsonRpcResult<(H256, H256)> ;
             fn generate_fixed_block(
-                &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>)
+                &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>, pos_reference: Option<H256>)
                 -> JsonRpcResult<H256>;
             fn generate_one_block_with_direct_txgen(
                 &self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize, num_txs_erc20: usize)

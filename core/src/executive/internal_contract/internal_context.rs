@@ -23,7 +23,7 @@ pub struct InternalRefContext<'a> {
 // here temporarily.
 impl<'a> InternalRefContext<'a> {
     pub fn log(
-        &mut self, param: &ActionParams, spec: &Spec, topics: Vec<H256>,
+        &mut self, params: &ActionParams, spec: &Spec, topics: Vec<H256>,
         data: Vec<u8>,
     ) -> vm::Result<()>
     {
@@ -33,7 +33,7 @@ impl<'a> InternalRefContext<'a> {
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
-        let address = param.address;
+        let address = params.address;
         self.substate.logs_mut().push(LogEntry {
             address,
             topics,
@@ -44,24 +44,24 @@ impl<'a> InternalRefContext<'a> {
     }
 
     pub fn set_storage(
-        &mut self, param: &ActionParams, key: Vec<u8>, value: U256,
+        &mut self, params: &ActionParams, key: Vec<u8>, value: U256,
     ) -> vm::Result<()> {
         self.substate
             .set_storage(
                 self.state,
-                &param.address,
+                &params.address,
                 key,
                 value,
-                param.storage_owner,
+                params.storage_owner,
             )
             .map_err(|e| e.into())
     }
 
     pub fn storage_at(
-        &mut self, param: &ActionParams, key: &[u8],
+        &mut self, params: &ActionParams, key: &[u8],
     ) -> vm::Result<U256> {
         self.substate
-            .storage_at(self.state, &param.address, key)
+            .storage_at(self.state, &params.address, key)
             .map_err(|e| e.into())
     }
 

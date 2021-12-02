@@ -12,12 +12,15 @@ use crate::{
     SessionMetadata, UpdateNodeOperation, PROTOCOL_ID_SIZE,
 };
 use bytes::Bytes;
+use diem_crypto::{bls::BLS_PUBLIC_KEY_LENGTH, ValidCryptoMaterial};
+use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 use io::*;
 use mio::{tcp::*, *};
 use priority_send_queue::SendQueuePriority;
 use rlp::{Rlp, RlpStream};
 use serde_derive::Serialize;
 use std::{
+    convert::TryFrom,
     fmt,
     net::SocketAddr,
     str,
@@ -51,6 +54,7 @@ pub struct Session {
     // statistics for read/write
     last_read: Instant,
     last_write: (Instant, WriteStatus),
+    pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
 }
 
 /// Session state.
@@ -68,7 +72,9 @@ pub enum SessionData {
     /// No packet read from socket.
     None,
     /// Session is ready to send or receive protocol packets.
-    Ready,
+    Ready {
+        pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
+    },
     /// A protocol packet has been received, and delegate to the corresponding
     /// protocol handler to handle the packet.
     Message { data: Vec<u8>, protocol: ProtocolId },
@@ -100,6 +106,7 @@ impl Session {
         io: &IoContext<Message>, socket: TcpStream, address: SocketAddr,
         id: Option<&NodeId>, peer_header_version: u8, token: StreamToken,
         host: &NetworkServiceInner,
+        pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     ) -> Result<Session, Error>
     {
         let originated = id.is_some();
@@ -121,6 +128,7 @@ impl Session {
             expired: None,
             last_read: Instant::now(),
             last_write: (Instant::now(), WriteStatus::Complete),
+            pos_public_key,
         })
     }
 
@@ -287,6 +295,7 @@ impl Session {
 
         match packet.id {
             PACKET_HELLO => {
+                debug!("Read HELLO in session {:?}", self);
                 self.metadata.peer_header_version = packet.header_version;
                 // For ingress session, update the node id in `SessionManager`
                 let token_to_disconnect = self.update_ingress_node_id(host)?;
@@ -301,9 +310,9 @@ impl Session {
 
                 // Handle Hello packet to exchange protocols
                 let rlp = Rlp::new(&packet.data);
-                self.read_hello(&rlp, host)?;
+                let pos_public_key = self.read_hello(&rlp, host)?;
                 Ok(SessionDataWithDisconnectInfo {
-                    session_data: SessionData::Ready,
+                    session_data: SessionData::Ready { pos_public_key },
                     token_to_disconnect,
                 })
             }
@@ -369,7 +378,8 @@ impl Session {
     /// node database, which is used to establish outgoing connections.
     fn read_hello(
         &mut self, rlp: &Rlp, host: &NetworkServiceInner,
-    ) -> Result<(), Error> {
+    ) -> Result<Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>, Error>
+    {
         let remote_network_id: u64 = rlp.val_at(0)?;
         if remote_network_id != host.metadata.network_id {
             debug!(
@@ -447,8 +457,40 @@ impl Session {
         }
 
         self.had_hello = Some(Instant::now());
+        match rlp.item_count()? {
+            3 => Ok(None),
+            4 => {
+                // FIXME(lpl): Verify keys.
+                let pos_public_key_bytes: Vec<u8> = rlp.val_at(3)?;
+                trace!("pos_public_key_bytes: {:?}", pos_public_key_bytes);
+                if pos_public_key_bytes.len() < BLS_PUBLIC_KEY_LENGTH {
+                    bail!("pos public key bytes is too short!");
+                }
+                let bls_pub_key = ConsensusPublicKey::try_from(
+                    &pos_public_key_bytes[..BLS_PUBLIC_KEY_LENGTH],
+                )
+                .map_err(|e| {
+                    Error::from_kind(
+                        ErrorKind::Decoder(format!("{:?}", e)).into(),
+                    )
+                })?;
+                let vrf_pub_key = ConsensusVRFPublicKey::try_from(
+                    &pos_public_key_bytes[BLS_PUBLIC_KEY_LENGTH..],
+                )
+                .map_err(|e| {
+                    Error::from_kind(
+                        ErrorKind::Decoder(format!("{:?}", e)).into(),
+                    )
+                })?;
 
-        Ok(())
+                Ok(Some((bls_pub_key, vrf_pub_key)))
+            }
+            length => Err(ErrorKind::Decoder(format!(
+                "Hello has incorrect rlp length: {:?}",
+                length
+            ))
+            .into()),
+        }
     }
 
     /// Assemble a packet with specified protocol id, packet id and data.
@@ -559,10 +601,16 @@ impl Session {
         &mut self, io: &IoContext<Message>, host: &NetworkServiceInner,
     ) -> Result<(), Error> {
         debug!("Sending Hello, session = {:?}", self);
-        let mut rlp = RlpStream::new_list(3);
+        let mut rlp = RlpStream::new_list(4);
         rlp.append(&host.metadata.network_id);
         rlp.append_list(&*host.metadata.protocols.read());
         host.metadata.public_endpoint.to_rlp_list(&mut rlp);
+        let mut key_bytes =
+            self.pos_public_key.as_ref().unwrap().0.to_bytes().to_vec();
+        key_bytes.append(
+            &mut self.pos_public_key.as_ref().unwrap().1.to_bytes().to_vec(),
+        );
+        rlp.append(&key_bytes);
         self.send_packet(
             io,
             None,
