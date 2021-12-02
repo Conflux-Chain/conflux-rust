@@ -57,25 +57,24 @@ class PosForkAttackTest(DefaultConfluxTestFramework):
         assert clients[0].pos_status()["latestVoted"] is not None
         assert int(clients[0].pos_status()["pivotDecision"]["height"], 0) >= CHAIN_LEN // 2
         fork_pivot_block = clients[0].block_by_epoch(int_to_hex(CHAIN_LEN // 2 + 1))
-        assert_equal(fork_pivot_block["hash"], blocks[CHAIN_LEN // 2])
         assert_equal(fork_pivot_block["posReference"], "0x"+"0"*64)
 
         # generate a block to refer new pos blocks.
         clients[0].generate_empty_blocks(1)
 
         # Generate blocks with the latest pos_reference. They will be partially invalid.
-        fork_parent = blocks[CHAIN_LEN // 2 - 1]
+        fork_parent = fork_pivot_block["parentHash"]
         for _ in range(2 * CHAIN_LEN):
             fork_parent = clients[0].generate_block_with_parent(fork_parent)
         # generate blocks to activate these partially invalid blocks.
         clients[0].generate_empty_blocks(100)
-        assert_equal(clients[0].block_by_epoch(int_to_hex(CHAIN_LEN // 2 + 1))["hash"], blocks[CHAIN_LEN // 2])
+        assert_equal(clients[0].block_by_epoch(int_to_hex(CHAIN_LEN // 2 + 1))["hash"], fork_pivot_block["hash"])
 
         # Generate blocks with old pos_reference. They are valid but in a fork before the latest pivot decision.
         fork_parent = blocks[CHAIN_LEN // 2 - 1]
         for _ in range(2 * CHAIN_LEN):
             fork_parent = clients[0].generate_block_with_parent(fork_parent, pos_reference="0x"+"0"*64)
-        assert_equal(clients[0].block_by_epoch(int_to_hex(CHAIN_LEN // 2 + 1))["hash"], blocks[CHAIN_LEN // 2])
+        assert_equal(clients[0].block_by_epoch(int_to_hex(CHAIN_LEN // 2 + 1))["hash"], fork_pivot_block["hash"])
         
 
 if __name__ == '__main__':
