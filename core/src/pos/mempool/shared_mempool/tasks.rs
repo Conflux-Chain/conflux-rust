@@ -165,10 +165,11 @@ fn gen_ack_response(
         }
     }
 
-    diem_info!("gen_ack_response");
-    debug!(
+    diem_debug!(
         "request[{:?}] from peer[{:?}] retry[{:?}]",
-        request_id, peer, retry
+        request_id,
+        peer,
+        retry
     );
 
     update_ack_counter(&peer, counters::SENT_LABEL, retry, backoff);
@@ -253,7 +254,6 @@ pub(crate) async fn process_incoming_transactions(
                         let ranking_score = validation_result.score();
                         let governance_role =
                             validation_result.governance_role();
-                        diem_debug!("process_incoming_transaction: add_txn");
                         let mempool_status = mempool.add_txn(
                             transaction.clone(),
                             ranking_score,
