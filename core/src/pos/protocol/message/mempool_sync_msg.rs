@@ -14,7 +14,6 @@ use std::mem::discriminant;
 
 impl Handleable for MempoolSyncMsg {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        diem_debug!("on_mempool_sync_msg, msg={}", self);
         ctx.manager
             .mempool_network_task
             .mempool_sync_message_tx
