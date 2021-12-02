@@ -10,11 +10,12 @@ use crate::{
     sync::Error,
 };
 use consensus_types::vote_msg::VoteMsg;
+use diem_logger::prelude::diem_debug;
 use std::mem::discriminant;
 
 impl Handleable for VoteMsg {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        debug!("on_vote, msg={:?}", &self);
+        diem_debug!("on_vote, msg={:?}", &self);
 
         let peer_address = ctx.get_peer_account_address()?;
 
