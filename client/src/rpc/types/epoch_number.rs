@@ -22,6 +22,8 @@ pub enum EpochNumber {
     Earliest,
     /// The latest checkpoint (cur_era_genesis)
     LatestCheckpoint,
+    ///
+    LatestFinalized,
     /// The latest confirmed (with the estimation of the confirmation meter)
     LatestConfirmed,
     /// Latest block with state.
@@ -51,6 +53,9 @@ impl Serialize for EpochNumber {
             EpochNumber::LatestMined => {
                 serializer.serialize_str("latest_mined")
             }
+            EpochNumber::LatestFinalized => {
+                serializer.serialize_str("latest_finalized")
+            }
             EpochNumber::LatestState => {
                 serializer.serialize_str("latest_state")
             }
@@ -71,6 +76,9 @@ impl EpochNumber {
             EpochNumber::Earliest => PrimitiveEpochNumber::Earliest,
             EpochNumber::LatestMined => PrimitiveEpochNumber::LatestMined,
             EpochNumber::LatestState => PrimitiveEpochNumber::LatestState,
+            EpochNumber::LatestFinalized => {
+                PrimitiveEpochNumber::LatestFinalized
+            }
             EpochNumber::Num(num) => PrimitiveEpochNumber::Number(num.as_u64()),
             EpochNumber::LatestCheckpoint => {
                 PrimitiveEpochNumber::LatestCheckpoint
@@ -89,6 +97,7 @@ impl FromStr for EpochNumber {
         match s {
             "latest_mined" => Ok(EpochNumber::LatestMined),
             "latest_state" => Ok(EpochNumber::LatestState),
+            "latest_finalized" => Ok(EpochNumber::LatestFinalized),
             "latest_confirmed" => Ok(EpochNumber::LatestConfirmed),
             "earliest" => Ok(EpochNumber::Earliest),
             "latest_checkpoint" => Ok(EpochNumber::LatestCheckpoint),
@@ -117,7 +126,7 @@ impl<'a> Visitor<'a> for EpochNumberVisitor {
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(
             formatter,
-            "an epoch number or 'latest_mined', 'latest_state', 'latest_checkpoint', 'latest_confirmed' or 'earliest'"
+            "an epoch number or 'latest_mined', 'latest_state', 'latest_checkpoint', 'latest_finalized', 'latest_confirmed' or 'earliest'"
         )
     }
 
@@ -188,7 +197,7 @@ impl<'a> Visitor<'a> for BlockHashOrEpochNumberVisitor {
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(
             formatter,
-            "an epoch number or 'latest_mined', 'latest_state', 'latest_checkpoint',\
+            "an epoch number or 'latest_mined', 'latest_state', 'latest_checkpoint', 'latest_finalized', \
              'latest_confirmed', or 'earliest', or 'hash:<BLOCK_HASH>'"
         )
     }

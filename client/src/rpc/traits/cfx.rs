@@ -6,8 +6,8 @@ use super::super::types::{
     Account as RpcAccount, AccountPendingInfo, Block, Bytes, CallRequest,
     CheckBalanceAgainstTransactionResponse, EpochNumber,
     EstimateGasAndCollateralResponse, Log as RpcLog, LogFilter as RpcFilter,
-    Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, SponsorInfo,
-    Status as RpcStatus, TokenSupplyInfo, Transaction,
+    PoSEconomics, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
+    SponsorInfo, Status as RpcStatus, TokenSupplyInfo, Transaction,
 };
 use crate::rpc::types::{
     AccountPendingTransactions, BlockHashOrEpochNumber, RpcAddress,
@@ -97,7 +97,7 @@ pub trait Cfx {
     /// Returns storage entries from a given contract.
     #[rpc(name = "cfx_getStorageAt")]
     fn storage_at(
-        &self, addr: RpcAddress, pos: H256, epoch_number: Option<EpochNumber>,
+        &self, addr: RpcAddress, pos: U256, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<Option<H256>>;
 
     #[rpc(name = "cfx_getStorageRoot")]
@@ -233,6 +233,12 @@ pub trait Cfx {
     fn accumulate_interest_rate(
         &self, epoch_number: Option<EpochNumber>,
     ) -> BoxFuture<U256>;
+
+    /// Returns accumulate interest rate of the given epoch
+    #[rpc(name = "cfx_getPoSEconomics")]
+    fn pos_economics(
+        &self, epoch_number: Option<EpochNumber>,
+    ) -> BoxFuture<PoSEconomics>;
 
     #[rpc(name = "cfx_getConfirmationRiskByHash")]
     fn confirmation_risk_by_hash(

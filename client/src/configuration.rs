@@ -2,10 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::{
-    impls::RpcImplConfiguration, rpc_apis::ApiSet, HttpConfiguration,
-    TcpConfiguration, WsConfiguration,
-};
+use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
+
+use lazy_static::*;
+use parking_lot::RwLock;
+use rand::Rng;
+
 use cfx_addr::{cfx_addr_decode, Network};
 use cfx_internal_common::{ChainIdParams, ChainIdParamsInner};
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
@@ -24,7 +26,7 @@ use cfxcore::{
     },
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
-        ConsensusConfig, ConsensusInnerConfig,
+        pos_handler::PosVerifier, ConsensusConfig, ConsensusInnerConfig,
     },
     consensus_internal_parameters::*,
     consensus_parameters::*,
@@ -36,13 +38,18 @@ use cfxcore::{
     transaction_pool::TxPoolConfig,
     NodeType,
 };
-use lazy_static::*;
+use diem_types::term_state::{
+    pos_state_config::PosStateConfig, IN_QUEUE_LOCKED_VIEWS,
+    OUT_QUEUE_LOCKED_VIEWS, ROUND_PER_TERM, TERM_ELECTED_SIZE, TERM_MAX_SIZE,
+};
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
-use parking_lot::RwLock;
-use rand::Rng;
-use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
 use txgen::TransactionGeneratorConfig;
+
+use crate::rpc::{
+    impls::RpcImplConfiguration, rpc_apis::ApiSet, HttpConfiguration,
+    TcpConfiguration, WsConfiguration,
+};
 
 lazy_static! {
     pub static ref CHAIN_ID: RwLock<Option<ChainIdParams>> = Default::default();
@@ -136,7 +143,7 @@ build_config! {
         (tanzanite_transition_height, (u64), TANZANITE_HEIGHT)
         (unnamed_21autumn_transition_number, (Option<u64>), None)
         (unnamed_21autumn_transition_height, (Option<u64>), None)
-        (unnamed_21autumn_cip71_deferred_transition, (Option<u64>), None)
+        (unnamed_21autumn_cip43_init_end, (Option<u64>), None)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
@@ -282,11 +289,24 @@ build_config! {
         (print_memory_usage_period_s, (Option<u64>), None)
         (target_block_gas_limit, (u64), DEFAULT_TARGET_BLOCK_GAS_LIMIT)
         (executive_trace, (bool), false)
+        (check_status_genesis, (bool), true)
 
         // TreeGraph Section.
-        (candidate_pivot_waiting_timeout_ms, (u64), 10_000)
         (is_consortium, (bool), false)
-        (tg_config_path, (Option<String>), Some("./tg_config/tg_config.toml".to_string()))
+        (pos_config_path, (Option<String>), Some("./pos_config/pos_config.yaml".to_string()))
+        (pos_genesis_pivot_decision, (Option<H256>), None)
+        (vrf_proposal_threshold, (U256), U256::MAX)
+        // Deferred epoch count before a confirmed epoch.
+        (pos_pivot_decision_defer_epoch_count, (u64), 50)
+        (pos_reference_enable_height, (u64), u64::MAX)
+        (pos_initial_nodes_path, (String), "./pos_config/initial_nodes.json".to_string())
+        (pos_private_key_path, (String), "./pos_config/pos_key".to_string())
+        (pos_round_per_term, (u64), ROUND_PER_TERM)
+        (pos_term_max_size, (usize), TERM_MAX_SIZE)
+        (pos_term_elected_size, (usize), TERM_ELECTED_SIZE)
+        (pos_in_queue_locked_views, (u64), IN_QUEUE_LOCKED_VIEWS)
+        (pos_out_queue_locked_views, (u64), OUT_QUEUE_LOCKED_VIEWS)
+        (dev_pos_private_key_encryption_password, (Option<String>), None)
 
         // Light node section
         (ln_epoch_request_batch_size, (Option<usize>), None)
@@ -526,7 +546,7 @@ impl Configuration {
                 era_epoch_count: self.raw_conf.era_epoch_count,
                 enable_optimistic_execution,
                 enable_state_expose: self.raw_conf.enable_state_expose,
-
+                pos_pivot_decision_defer_epoch_count: self.raw_conf.pos_pivot_decision_defer_epoch_count,
                 debug_dump_dir_invalid_state_root: if self
                     .raw_conf
                     .debug_invalid_state_root
@@ -598,11 +618,12 @@ impl Configuration {
             self.raw_conf.stratum_port,
             stratum_secret,
             self.raw_conf.pow_problem_window_size,
+            self.common_params().transition_heights.cip81,
         )
     }
 
     pub fn verification_config(
-        &self, machine: Arc<Machine>,
+        &self, machine: Arc<Machine>, pos_verifier: Arc<PosVerifier>,
     ) -> VerificationConfig {
         VerificationConfig::new(
             self.is_test_mode(),
@@ -610,6 +631,7 @@ impl Configuration {
             self.raw_conf.max_block_size_in_bytes,
             self.raw_conf.transaction_epoch_bound,
             machine,
+            pos_verifier,
         )
     }
 
@@ -760,6 +782,11 @@ impl Configuration {
             } else {
                 self.raw_conf.dev_allow_phase_change_without_peer
             },
+            pos_genesis_pivot_decision: self
+                .raw_conf
+                .pos_genesis_pivot_decision
+                .expect("set to genesis if none"),
+            check_status_genesis: self.raw_conf.check_status_genesis,
         }
     }
 
@@ -1052,6 +1079,21 @@ impl Configuration {
 
         params.transition_heights.cip40 =
             self.raw_conf.tanzanite_transition_height;
+        params.transition_numbers.cip43a = self
+            .raw_conf
+            .unnamed_21autumn_transition_number
+            .unwrap_or(default_transition_time);
+        if self.is_test_or_dev_mode() {
+            params.transition_numbers.cip43b = self
+                .raw_conf
+                .unnamed_21autumn_cip43_init_end
+                .unwrap_or(u64::MAX);
+        } else {
+            params.transition_numbers.cip43b = self
+                .raw_conf
+                .unnamed_21autumn_cip43_init_end
+                .unwrap_or(params.transition_numbers.cip43a);
+        }
         params.transition_numbers.cip62 = if self.is_test_or_dev_mode() {
             0u64
         } else {
@@ -1086,6 +1128,10 @@ impl Configuration {
             .raw_conf
             .unnamed_21autumn_transition_height
             .unwrap_or(default_transition_time);
+        params.transition_heights.cip81 = self
+            .raw_conf
+            .unnamed_21autumn_transition_height
+            .unwrap_or(default_transition_time);
 
         let mut base_block_rewards = BTreeMap::new();
         base_block_rewards.insert(0, INITIAL_BASE_MINING_REWARD_IN_UCFX.into());
@@ -1100,6 +1146,16 @@ impl Configuration {
 
     pub fn node_type(&self) -> NodeType {
         self.raw_conf.node_type.unwrap_or(NodeType::Full)
+    }
+
+    pub fn pos_state_config(&self) -> PosStateConfig {
+        PosStateConfig::new(
+            self.raw_conf.pos_round_per_term,
+            self.raw_conf.pos_term_max_size,
+            self.raw_conf.pos_term_elected_size,
+            self.raw_conf.pos_in_queue_locked_views,
+            self.raw_conf.pos_out_queue_locked_views,
+        )
     }
 }
 
@@ -1164,8 +1220,9 @@ pub fn parse_config_address_string(
 
 #[cfg(test)]
 mod tests {
-    use crate::configuration::parse_config_address_string;
     use cfx_addr::Network;
+
+    use crate::configuration::parse_config_address_string;
 
     #[test]
     fn test_config_address_string() {

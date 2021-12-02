@@ -20,12 +20,14 @@ from conflux.rpc import RpcClient
 class TestTokenSupplyInfo(RpcClient):
     def test_token_supply_info(self):
         file_dir = os.path.dirname(os.path.realpath(__file__))
+        genesis_staking = 4000000000000000000000000
+        genesis_collateral = 375000000000000000
 
         # Two test accounts and genesis accounts
         info = self.get_supply_info()
         assert_equal(int(info["totalIssued"], 16), 10000005000000000000000000000000000)
-        assert_equal(int(info["totalStaking"], 16), 0)
-        assert_equal(int(info["totalCollateral"], 16), 0)
+        assert_equal(int(info["totalStaking"], 16), genesis_staking)
+        assert_equal(int(info["totalCollateral"], 16), genesis_collateral)
 
         REQUEST_BASE = {
             'gas': 3_000_000,
@@ -46,8 +48,8 @@ class TestTokenSupplyInfo(RpcClient):
         # Stake 10**18 drip, and generating 5 blocks does not affect rewards
         info = self.get_supply_info()
         assert_equal(int(info["totalIssued"], 16), 10000005000000000000000000000000000)
-        assert_equal(int(info["totalStaking"], 16), 10**18)
-        assert_equal(int(info["totalCollateral"], 16), 0)
+        assert_equal(int(info["totalStaking"], 16), 10**18 + genesis_staking)
+        assert_equal(int(info["totalCollateral"], 16), genesis_collateral)
 
         file_dir = os.path.dirname(os.path.realpath(__file__))
         tx_conf["nonce"] = 1
@@ -63,13 +65,13 @@ class TestTokenSupplyInfo(RpcClient):
         # Collateral for pay_contract
         info = self.get_supply_info()
         assert_equal(int(info["totalIssued"], 16), 10000005000000000000000000000000000)
-        assert_equal(int(info["totalStaking"], 16), 10**18)
-        assert_equal(int(info["totalCollateral"], 16), 512 * 976562500000000)
+        assert_equal(int(info["totalStaking"], 16), 10**18 + genesis_staking)
+        assert_equal(int(info["totalCollateral"], 16), 512 * 976562500000000 + genesis_collateral)
 
         # 17 blocks [12 (REWARD_EPOCH_COUNT) + 5 (DEFERRED_STATE_COUNT)] will trigger the first reward computation.
         h = self.epoch_number()
         self.generate_blocks(17 - h)
         info = self.get_supply_info()
-        assert_equal(int(info["totalIssued"], 16), 10000005000000007000000000000000000)
-        assert_equal(int(info["totalStaking"], 16), 10**18)
-        assert_equal(int(info["totalCollateral"], 16), 512 * 976562500000000)
+        assert_equal(int(info["totalIssued"], 16), 10000005000000007000000000237823439)
+        assert_equal(int(info["totalStaking"], 16), 10**18 + genesis_staking)
+        assert_equal(int(info["totalCollateral"], 16), 512 * 976562500000000 + genesis_collateral)

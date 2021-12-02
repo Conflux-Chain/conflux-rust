@@ -139,7 +139,7 @@ mod tests {
     use lru_time_cache::LruCache;
     use parking_lot::RwLock;
     use std::{sync::Arc, time::Duration};
-    use tokio::{runtime::Runtime, time::delay_for};
+    use tokio::{runtime::Runtime, time::sleep};
 
     #[test]
     fn test_set() {
@@ -150,7 +150,7 @@ mod tests {
         let cache = LruCache::<u64, PendingItem<u64, u64>>::with_capacity(1);
         let verified = Arc::new(RwLock::new(cache));
 
-        let mut runtime = Runtime::new().expect("Unable to create a runtime");
+        let runtime = Runtime::new().expect("Unable to create a runtime");
 
         // set error
         verified
@@ -206,14 +206,14 @@ mod tests {
         // request item, wait, then request again
         let fut2 = async move {
             let res2 = item2.await;
-            delay_for(Duration::from_millis(2 * DELAY)).await;
+            sleep(Duration::from_millis(2 * DELAY)).await;
             let res3 = item3.await;
             (res2, res3)
         };
 
         // wait, then provide item
         let fut3 = async move {
-            delay_for(Duration::from_millis(DELAY)).await;
+            sleep(Duration::from_millis(DELAY)).await;
 
             verified
                 .write()
@@ -222,7 +222,7 @@ mod tests {
                 .set(VALUE);
         };
 
-        let mut runtime = Runtime::new().expect("Unable to create a runtime");
+        let runtime = Runtime::new().expect("Unable to create a runtime");
         let (res1, (res2, res3), _) = runtime.block_on(join3(fut1, fut2, fut3));
 
         assert_eq!(res1, Ok(VALUE));

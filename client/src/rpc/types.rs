@@ -14,6 +14,8 @@ pub mod errors;
 mod filter;
 mod index;
 mod log;
+pub mod pos;
+mod pos_economics;
 mod provenance;
 pub mod pubsub;
 mod receipt;
@@ -42,6 +44,7 @@ pub use self::{
     filter::LogFilter,
     index::Index,
     log::Log,
+    pos_economics::PoSEconomics,
     provenance::Origin,
     receipt::Receipt,
     reward_info::RewardInfo,

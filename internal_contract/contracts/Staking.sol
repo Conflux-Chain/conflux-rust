@@ -6,7 +6,7 @@ contract Staking {
      * @dev get user's staking balance
      * @param user The address of specific user
      */
-    function getStakingBalance(address user) public view returns (uint) {}
+    function getStakingBalance(address user) public view returns (uint256) {}
 
     /**
      * @dev get user's locked staking balance at given blockNumber
@@ -17,7 +17,7 @@ contract Staking {
     // Note: if the blockNumber is less than the current block number, function
     // will return current locked staking balance.
     // ------------------------------------------------------------------------
-    function getLockedStakingBalance(address user, uint blockNumber) public view returns (uint) {}
+    function getLockedStakingBalance(address user, uint256 blockNumber) public view returns (uint256) {}
 
 
     /**
@@ -29,11 +29,11 @@ contract Staking {
     // Note: if the blockNumber is less than the current block number, function
     // will return current vote power.
     // ------------------------------------------------------------------------
-    function getVotePower(address user, uint blockNumber) public view returns (uint) {}
+    function getVotePower(address user, uint256 blockNumber) public view returns (uint256) {}
 
-    function deposit(uint amount) external {}
+    function deposit(uint256 amount) external {}
 
-    function withdraw(uint amount) external {}
+    function withdraw(uint256 amount) external {}
 
-    function voteLock(uint amount, uint unlockBlockNumber) external {}
+    function voteLock(uint256 amount, uint256 unlockBlockNumber) external {}
 }

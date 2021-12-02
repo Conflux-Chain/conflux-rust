@@ -51,7 +51,7 @@ pub struct LightClient {}
 impl LightClient {
     // Start all key components of Conflux and pass out their handles
     pub fn start(
-        conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
+        mut conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     ) -> Result<
         Box<ClientComponents<BlockGenerator, LightClientExtraComponents>>,
         String,
@@ -62,6 +62,7 @@ impl LightClient {
             _genesis_accounts,
             data_man,
             pow,
+            pos_verifier,
             txpool,
             consensus,
             sync_graph,
@@ -71,17 +72,23 @@ impl LightClient {
             notifications,
             pubsub,
             runtime,
-        ) = initialize_common_modules(&conf, exit.clone(), NodeType::Light)?;
+        ) = initialize_common_modules(
+            &mut conf,
+            exit.clone(),
+            NodeType::Light,
+        )?;
 
         let light = Arc::new(LightQueryService::new(
             consensus.clone(),
-            sync_graph,
+            sync_graph.clone(),
             network.clone(),
             conf.raw_conf.throttling_conf.clone(),
             notifications,
             conf.light_node_config(),
         ));
         light.register().unwrap();
+
+        sync_graph.recover_graph_from_db();
 
         let rpc_impl = Arc::new(RpcImpl::new(
             conf.rpc_impl_config(),
@@ -155,9 +162,12 @@ impl LightClient {
             ),
         )?;
 
+        network.start();
+
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
             blockgen: None,
+            pos_handler: Some(pos_verifier),
             other_components: LightClientExtraComponents {
                 consensus,
                 debug_rpc_http_server,

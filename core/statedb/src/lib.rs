@@ -20,8 +20,11 @@ pub use self::{
         StateDbGetOriginalMethods,
     },
     statedb_ext::{
-        StateDbExt, ACCUMULATE_INTEREST_RATE_KEY, INTEREST_RATE_KEY,
-        TOTAL_BANK_TOKENS_KEY, TOTAL_STORAGE_TOKENS_KEY, TOTAL_TOKENS_KEY,
+        StateDbExt, ACCUMULATE_INTEREST_RATE_KEY,
+        DISTRIBUTABLE_POS_INTEREST_KEY, INTEREST_RATE_KEY,
+        LAST_DISTRIBUTE_BLOCK_KEY, TOTAL_BANK_TOKENS_KEY,
+        TOTAL_POS_STAKING_TOKENS_KEY, TOTAL_STORAGE_TOKENS_KEY,
+        TOTAL_TOKENS_KEY,
     },
 };
 pub type StateDb = StateDbGeneric<StorageState>;

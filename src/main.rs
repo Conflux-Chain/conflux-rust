@@ -173,6 +173,7 @@ Current Version: {}
         }
         NodeType::Unknown => return Err("Unknown node type".into()),
     };
+    info!("Conflux client started");
     client_methods::run(client_handle, exit);
 
     Ok(())

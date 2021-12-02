@@ -242,6 +242,12 @@ impl RequestManager {
             Some(next_delay),
         ) {
             debug!("request_with_delay: send_request fails, peer={:?}, request={:?}", peer, e);
+            // These requests are not actually sent,
+            // and they will not be inserted into requests_queue,
+            // so remove them from net_inflight_blocks.
+            if let Some(hashes) = try_get_block_hashes(&e) {
+                self.remove_net_inflight_blocks(hashes.iter())
+            }
             self.waiting_requests.lock().push(TimedWaitingRequest::new(
                 Instant::now() + cur_delay,
                 WaitingRequest(e, next_delay),
@@ -874,7 +880,9 @@ impl RequestManager {
     /// Return the cancelled requests that have timeout too many times.
     pub fn resend_waiting_requests(
         &self, io: &dyn NetworkContext, remove_timeout_requests: bool,
-    ) -> Vec<Box<dyn Request>> {
+        prefer_archive_node_for_blocks: bool,
+    ) -> Vec<Box<dyn Request>>
+    {
         debug!("resend_waiting_requests: start");
         let mut waiting_requests = self.waiting_requests.lock();
         let now = Instant::now();
@@ -919,12 +927,15 @@ impl RequestManager {
             batcher.insert(delay, request);
         }
 
-        let is_full_node = self.syn.is_full_node();
-        for (next_delay, request) in batcher.get_batched_requests(is_full_node)
+        for (next_delay, request) in
+            batcher.get_batched_requests(prefer_archive_node_for_blocks)
         {
             let mut filter = PeerFilter::new(request.msg_id());
             if let Some(cap) = request.required_capability() {
                 filter = filter.with_cap(cap);
+            }
+            if let Some(preferred_node_type) = request.preferred_node_type() {
+                filter = filter.with_preferred_node_type(preferred_node_type);
             }
             let chosen_peer = match filter.select(&self.syn) {
                 Some(p) => p,

@@ -93,8 +93,8 @@ impl<'a> MptMerger<'a> {
                     while let Some((key, value)) = set_keys_iter.next()? {
                         self.rw_cursor.insert(&key, value)?;
                     }
-                    break;
                 }
+                break;
             };
 
             if key_value_to_set.is_none() {

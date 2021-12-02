@@ -24,11 +24,12 @@ use crate::{
         SYNCHRONIZATION_PROTOCOL_OLD_VERSIONS_TO_SUPPORT,
         SYNCHRONIZATION_PROTOCOL_VERSION, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
-    NodeType,
+    ConsensusGraph, NodeType,
 };
 use cfx_internal_common::ChainIdParamsDeprecated;
 use cfx_parameters::{block::MAX_BLOCK_SIZE_IN_BYTES, sync::*};
 use cfx_types::H256;
+use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 use io::TimerToken;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -377,7 +378,7 @@ pub struct SynchronizationProtocolHandler {
     light_provider: Arc<LightProvider>,
 }
 
-#[derive(Clone, DeriveMallocSizeOf)]
+#[derive(Clone, Default, DeriveMallocSizeOf)]
 pub struct ProtocolConfiguration {
     pub is_consortium: bool,
     pub send_tx_period: Duration,
@@ -413,6 +414,8 @@ pub struct ProtocolConfiguration {
     pub max_unprocessed_block_size: usize,
     pub max_chunk_number_in_manifest: usize,
     pub allow_phase_change_without_peer: bool,
+    pub pos_genesis_pivot_decision: H256,
+    pub check_status_genesis: bool,
 }
 
 impl SynchronizationProtocolHandler {
@@ -421,7 +424,7 @@ impl SynchronizationProtocolHandler {
         state_sync_config: StateSyncConfiguration,
         initial_sync_phase: SyncPhaseType,
         sync_graph: SharedSynchronizationGraph,
-        light_provider: Arc<LightProvider>,
+        light_provider: Arc<LightProvider>, consensus: Arc<ConsensusGraph>,
     ) -> Self
     {
         let sync_state = Arc::new(SynchronizationState::new(
@@ -453,6 +456,7 @@ impl SynchronizationProtocolHandler {
                 sync_state.clone(),
                 sync_graph.clone(),
                 state_sync.clone(),
+                consensus,
             ),
             phase_manager_lock: Mutex::new(0),
             recover_public_queue,
@@ -663,7 +667,7 @@ impl SynchronizationProtocolHandler {
                     op = Some(UpdateNodeOperation::Remove)
                 }
                 network::ErrorKind::BadAddr => disconnect = false,
-                network::ErrorKind::Decoder => {
+                network::ErrorKind::Decoder(_) => {
                     op = Some(UpdateNodeOperation::Remove)
                 }
                 network::ErrorKind::Expired => disconnect = false,
@@ -1073,9 +1077,14 @@ impl SynchronizationProtocolHandler {
                 need_to_relay.push(hash);
             }
         }
-        let chosen_peer = PeerFilter::new(msgid::GET_BLOCKS)
-            .exclude(task.failed_peer)
-            .select(&self.syn);
+        let mut filter =
+            PeerFilter::new(msgid::GET_BLOCKS).exclude(task.failed_peer);
+        if let Some(preferred_note_type) =
+            self.preferred_peer_node_type_for_get_block()
+        {
+            filter = filter.with_preferred_node_type(preferred_note_type);
+        }
+        let chosen_peer = filter.select(&self.syn);
         self.blocks_received(
             io,
             task.requested,
@@ -1524,9 +1533,11 @@ impl SynchronizationProtocolHandler {
 
     pub fn remove_expired_flying_request(&self, io: &dyn NetworkContext) {
         self.request_manager.resend_timeout_requests(io);
-        let cancelled_requests = self
-            .request_manager
-            .resend_waiting_requests(io, !self.catch_up_mode());
+        let cancelled_requests = self.request_manager.resend_waiting_requests(
+            io,
+            !self.catch_up_mode(),
+            self.need_block_from_archive_node(),
+        );
         self.handle_cancelled_requests(cancelled_requests);
     }
 
@@ -1830,18 +1841,19 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
     }
 
     fn on_peer_connected(
-        &self, io: &dyn NetworkContext, peer: &NodeId,
+        &self, io: &dyn NetworkContext, node_id: &NodeId,
         peer_protocol_version: ProtocolVersion,
+        _pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     )
     {
         debug!(
             "Peer connected: peer={:?}, version={}",
-            peer, peer_protocol_version
+            node_id, peer_protocol_version
         );
-        if let Err(e) = self.send_status(io, peer, peer_protocol_version) {
+        if let Err(e) = self.send_status(io, node_id, peer_protocol_version) {
             debug!("Error sending status message: {:?}", e);
             io.disconnect_peer(
-                peer,
+                node_id,
                 Some(UpdateNodeOperation::Failure),
                 "send status failed", /* reason */
             );
@@ -1849,7 +1861,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             self.syn
                 .handshaking_peers
                 .write()
-                .insert(*peer, (peer_protocol_version, Instant::now()));
+                .insert(*node_id, (peer_protocol_version, Instant::now()));
         }
     }
 
@@ -1869,6 +1881,9 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             CHECK_FUTURE_BLOCK_TIMER => {
                 self.check_future_blocks(io);
+                self.graph.check_not_ready_frontier(
+                    self.insert_header_to_consensus(),
+                );
             }
             CHECK_REQUEST_TIMER => {
                 self.remove_expired_flying_request(io);

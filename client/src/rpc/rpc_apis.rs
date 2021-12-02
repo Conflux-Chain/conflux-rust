@@ -16,6 +16,7 @@ pub enum Api {
     Test,
     Trace,
     TxPool,
+    Pos,
 }
 
 impl FromStr for Api {
@@ -30,6 +31,7 @@ impl FromStr for Api {
             "test" => Ok(Test),
             "trace" => Ok(Trace),
             "txpool" => Ok(TxPool),
+            "pos" => Ok(Pos),
             _ => Err("Unknown api type".into()),
         }
     }
@@ -44,6 +46,7 @@ impl Display for Api {
             Api::Test => write!(f, "test"),
             Api::Trace => write!(f, "trace"),
             Api::TxPool => write!(f, "txpool"),
+            Api::Pos => write!(f, "pos"),
         }
     }
 }
@@ -65,6 +68,7 @@ impl ApiSet {
                 Api::Pubsub,
                 Api::Test,
                 Api::Trace,
+                Api::Pos,
                 Api::TxPool,
             ]
             .iter()

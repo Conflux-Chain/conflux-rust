@@ -20,8 +20,9 @@ class ExpireBlockTest(ConfluxTestFramework):
 
     def setup_network(self):
         self.setup_nodes()
-        self.nodes[0].add_p2p_connection(P2PInterface())
-        self.nodes[1].add_p2p_connection(P2PInterface())
+        genesis = self.nodes[0].cfx_getBlockByEpochNumber("0x0", False)["hash"]
+        self.nodes[0].add_p2p_connection(P2PInterface(genesis))
+        self.nodes[1].add_p2p_connection(P2PInterface(genesis))
         network_thread_start()
         self.nodes[0].p2p.wait_for_status()
         self.nodes[1].p2p.wait_for_status()
@@ -52,9 +53,11 @@ class ExpireBlockTest(ConfluxTestFramework):
         node = self.nodes[0]
 
         blocks = [node.p2p.genesis]
+        parent = node.p2p.genesis
         for i in range(10):
-            new_block = create_block(blocks[-1].hash, i + 1)
+            new_block = create_block(parent, i + 1)
             blocks.append(new_block)
+            parent = new_block.hash
         for i in range(1, 6):
             self.send_msg(node, NewBlock(block=blocks[i]))
             wait_until(lambda: node.best_block_hash() == blocks[i].hash_hex())

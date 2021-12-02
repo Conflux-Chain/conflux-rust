@@ -76,6 +76,7 @@ def run():
             "full_node_tests",
             "light",
             "network_tests",
+            "pos",
             "pubsub",
             ]
     slow_tests = {"full_node_tests/p2p_era_test.py"}

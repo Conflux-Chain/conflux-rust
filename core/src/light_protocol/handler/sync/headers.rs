@@ -92,7 +92,7 @@ pub struct Headers {
     duplicate_count: AtomicU64,
 
     // shared synchronization graph
-    graph: Arc<SynchronizationGraph>,
+    pub graph: Arc<SynchronizationGraph>,
 
     // number of headers inserted into the sync graph
     pub inserted_count: AtomicU64,

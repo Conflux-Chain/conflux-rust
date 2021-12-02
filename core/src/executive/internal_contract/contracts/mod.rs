@@ -5,6 +5,8 @@
 mod admin;
 mod context;
 mod future;
+#[allow(unused)]
+mod pos;
 mod sponsor;
 mod staking;
 
@@ -21,8 +23,6 @@ mod macros {
     pub use cfx_types::H256;
     pub use keccak_hash::keccak;
 
-    pub(super) use super::SolFnTable;
-
     pub use super::super::{
         activate_at::{BlockNumber, IsActive},
         function::{
@@ -35,9 +35,10 @@ mod macros {
     pub use crate::spec::CommonParams;
 }
 
+pub(super) use self::pos::{IncreaseStakeEvent, RegisterEvent, RetireEvent};
 pub use self::{
-    admin::AdminControl, context::Context, sponsor::SponsorWhitelistControl,
-    staking::Staking,
+    admin::AdminControl, context::Context, pos::PoSRegister,
+    sponsor::SponsorWhitelistControl, staking::Staking,
 };
 
 use super::{
@@ -193,6 +194,6 @@ pub fn all_internal_contracts() -> Vec<Box<dyn InternalContractTrait>> {
         Box::new(SponsorWhitelistControl::instance()),
         Box::new(future::AntiReentrancyConfig::instance()),
         Box::new(Context::instance()),
-        Box::new(future::PoS::instance()),
+        Box::new(PoSRegister::instance()),
     ]
 }

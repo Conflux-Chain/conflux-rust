@@ -71,7 +71,7 @@ class Subscription:
         except asyncio.TimeoutError:
             raise TimeoutError(f"Received nothing on pub-sub {self.pubsub.url}/{self.id} (node: {self.pubsub.nid}) for {timeout} seconds.")
 
-    async def iter(self, timeout=0.5):
+    async def iter(self, timeout=2):
         while True:
             try:
                 yield await self.next(timeout=timeout)

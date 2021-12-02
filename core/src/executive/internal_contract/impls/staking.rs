@@ -49,6 +49,12 @@ pub fn withdraw(
         Err(vm::Error::InternalContract(
             "not enough withdrawable staking balance to withdraw".into(),
         ))
+    } else if state.staking_balance(&params.sender)? - amount
+        < state.pos_locked_staking(&params.sender)?
+    {
+        Err(vm::Error::InternalContract(
+            "not enough unlocked staking balance to withdraw".into(),
+        ))
     } else {
         tracer.prepare_internal_transfer_action(
             *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,

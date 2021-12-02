@@ -134,6 +134,7 @@ impl LogFilter {
             topics,
             offset,
             limit,
+            trusted: false,
         };
 
         // choose filter type based on fields
@@ -382,6 +383,7 @@ mod tests {
                 ],
                 offset: Some(1),
                 limit: Some(2),
+                trusted: false,
             },
         };
 
@@ -429,6 +431,7 @@ mod tests {
                 ],
                 offset: Some(1),
                 limit: Some(2),
+                trusted: false,
             },
         };
 
@@ -484,6 +487,7 @@ mod tests {
                 ],
                 offset: Some(1),
                 limit: Some(2),
+                trusted: false,
             },
         };
 

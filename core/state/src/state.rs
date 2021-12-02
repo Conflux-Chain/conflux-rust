@@ -103,6 +103,22 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         .unwrap();
     }
 
+    fn add_total_pos_staking(&mut self, _v: U256) { unimplemented!() }
+
+    fn inc_distributable_pos_interest(
+        &mut self, _current_block_number: u64,
+    ) -> Result<()> {
+        unimplemented!()
+    }
+
+    fn distribute_pos_interest<'a>(
+        &mut self, _pos_points: Box<dyn Iterator<Item = (&'a H256, u64)> + 'a>,
+        _account_start_nonce: U256, _current_block_number: u64,
+    ) -> Result<Vec<(Address, H256, U256)>>
+    {
+        unimplemented!()
+    }
+
     fn new_contract_with_admin(
         &mut self, _contract: &Address, _admin: &Address, _balance: U256,
         _nonce: U256, _storage_layout: Option<StorageLayout>,
@@ -490,6 +506,14 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         unimplemented!()
     }
 
+    fn add_pos_interest(
+        &mut self, _address: &Address, _by: &U256, _cleanup_mode: CleanupMode,
+        _account_start_nonce: U256,
+    ) -> Result<()>
+    {
+        unimplemented!()
+    }
+
     fn transfer_balance(
         &mut self, _from: &Address, _to: &Address, _by: &U256,
         _cleanup_mode: CleanupMode, _account_start_nonce: U256,
@@ -570,6 +594,12 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
             .unwrap_or(U256::zero());
     }
 
+    fn total_pos_staking_tokens(&self) -> U256 { unimplemented!() }
+
+    fn distributable_pos_interest(&self) -> U256 { unimplemented!() }
+
+    fn last_distribute_block(&self) -> u64 { unimplemented!() }
+
     fn remove_contract(&mut self, _address: &Address) -> Result<()> {
         unimplemented!()
     }
@@ -611,6 +641,16 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
                     Ok(())
                 },
             )
+    }
+
+    fn update_pos_status(
+        &mut self, _identifier: H256, _number: u64,
+    ) -> Result<()> {
+        unimplemented!()
+    }
+
+    fn pos_locked_staking(&self, _address: &Address) -> Result<U256> {
+        unimplemented!()
     }
 }
 
