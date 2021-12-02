@@ -180,7 +180,7 @@ impl PeerManager {
         let state = if let Some(state) = peer_states.get_mut(&peer) {
             state
         } else {
-            diem_info!("no state of peer {:?}", peer);
+            diem_trace!("no state of peer {:?}", peer);
             // If we don't have any info about the node, we shouldn't broadcast
             // to it
             return;
@@ -308,7 +308,6 @@ impl PeerManager {
             )
             //.peer(&peer)
             .error(&e.into()));
-            diem_info!("send error");
             return;
         }
         // Update peer sync state with info from above broadcast.

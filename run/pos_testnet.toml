@@ -224,7 +224,7 @@ jsonrpc_local_http_port=12539
 
 # Maximum number of incoming connections.
 #
-# max_incoming_peers = 64
+# max_incoming_peers = 48
 
 # Maximum number of outgoing connections.
 #

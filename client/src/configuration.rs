@@ -198,7 +198,7 @@ build_config! {
         (max_chunk_number_in_manifest, (usize), 500)
         (max_downloading_chunks, (usize), 8)
         (max_handshakes, (usize), 64)
-        (max_incoming_peers, (usize), 64)
+        (max_incoming_peers, (usize), 48)
         (max_inflight_request_count, (u64), 64)
         (max_outgoing_peers, (usize), 8)
         (max_outgoing_peers_archive, (Option<usize>), None)
@@ -618,7 +618,7 @@ impl Configuration {
             self.raw_conf.stratum_port,
             stratum_secret,
             self.raw_conf.pow_problem_window_size,
-            self.common_params().transition_heights.cip81,
+            self.common_params().transition_heights.cip86,
         )
     }
 
@@ -1128,7 +1128,7 @@ impl Configuration {
             .raw_conf
             .unnamed_21autumn_transition_height
             .unwrap_or(default_transition_time);
-        params.transition_heights.cip81 = self
+        params.transition_heights.cip86 = self
             .raw_conf
             .unnamed_21autumn_transition_height
             .unwrap_or(default_transition_time);

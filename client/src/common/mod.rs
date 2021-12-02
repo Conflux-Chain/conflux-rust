@@ -134,8 +134,6 @@ pub mod client_methods {
     use ctrlc::CtrlC;
     use parking_lot::{Condvar, Mutex};
 
-    use cfxcore::block_data_manager::BlockDataManager;
-
     use super::ClientTrait;
 
     pub fn run(
@@ -166,22 +164,32 @@ pub mod client_methods {
             blockgen.stop();
             drop(blockgen);
         }
-        if let Some(pos_handler) = maybe_pos_handler {
-            pos_handler.stop();
+        let maybe_pos_db = if let Some(pos_handler) = maybe_pos_handler {
+            let maybe_pos_db = pos_handler.stop();
             drop(pos_handler);
-        }
+            maybe_pos_db
+        } else {
+            None
+        };
 
         // Make sure ledger_db is properly dropped, so rocksdb can be closed
         // cleanly
-        check_graceful_shutdown(ledger_db)
+        let mut graceful = true;
+        graceful &= check_graceful_shutdown(ledger_db);
+        debug!("ledger_db drop: graceful = {}", graceful);
+        if let Some((diem_db, consensus_db)) = maybe_pos_db {
+            graceful &= check_graceful_shutdown(diem_db);
+            debug!("diem_db drop: graceful = {}", graceful);
+            graceful &= check_graceful_shutdown(consensus_db);
+            debug!("consensus_db drop: graceful = {}", graceful);
+        }
+        graceful
     }
 
     /// Most Conflux components references block data manager.
     /// When block data manager is freed, all background threads must have
     /// already stopped.
-    fn check_graceful_shutdown(
-        blockdata_manager_weak_ptr: Weak<BlockDataManager>,
-    ) -> bool {
+    fn check_graceful_shutdown<T>(blockdata_manager_weak_ptr: Weak<T>) -> bool {
         let sleep_duration = Duration::from_secs(1);
         let warn_timeout = Duration::from_secs(5);
         let max_timeout = Duration::from_secs(1200);
