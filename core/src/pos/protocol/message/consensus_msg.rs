@@ -9,11 +9,12 @@ use crate::{
     },
     sync::Error,
 };
+use diem_logger::prelude::diem_debug;
 use std::mem::discriminant;
 
 impl Handleable for ConsensusMsg {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        debug!("on_consensus_msg, msg={:?}", &self);
+        diem_debug!("on_consensus_msg, msg={:?}", &self);
         let peer_address = ctx.get_peer_account_address()?;
         let author = match &self {
             ConsensusMsg::ProposalMsg(p) => p.proposer(),

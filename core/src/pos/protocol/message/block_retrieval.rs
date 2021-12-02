@@ -3,17 +3,22 @@
 // See https://www.apache.org/licenses/LICENSE-2.0
 
 use crate::{
-    message::RequestId,
+    message::{Message, RequestId},
     pos::{
         consensus::network::IncomingBlockRetrievalRequest,
         protocol::{
+            message::block_retrieval_response::BlockRetrievalRpcResponse,
             request_manager::{AsAny, Request},
             sync_protocol::{Context, Handleable, RpcResponse},
         },
     },
     sync::{Error, ProtocolConfiguration},
 };
-use consensus_types::block_retrieval::BlockRetrievalRequest;
+use channel::diem_channel::ElementStatus;
+use consensus_types::block_retrieval::{
+    BlockRetrievalRequest, BlockRetrievalResponse, BlockRetrievalStatus,
+};
+use diem_logger::prelude::diem_debug;
 use futures::channel::oneshot;
 use serde::{Deserialize, Serialize};
 use std::{any::Any, time::Duration};
@@ -64,7 +69,7 @@ impl Handleable for BlockRetrievalRpcRequest {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         let peer_address = ctx.get_peer_account_address()?;
         let req = self.request;
-        debug!(
+        diem_debug!(
             "Received block retrieval request [block id: {}, request_id: {}]",
             req.block_id(),
             self.request_id
@@ -74,10 +79,29 @@ impl Handleable for BlockRetrievalRpcRequest {
             peer_id: ctx.peer,
             request_id: self.request_id,
         };
+        // We only keep one pending retrieval with a LIFO style, so if an old
+        // request is dropped, we respond with an empty response so the
+        // sender does not need to wait for timeout.
+        let (status_tx, mut status_rx) = oneshot::channel();
         ctx.manager
             .consensus_network_task
             .block_retrieval_tx
-            .push(peer_address, req_with_callback)?;
+            .push_with_feedback(
+                peer_address,
+                req_with_callback,
+                Some(status_tx),
+            )?;
+        if let Ok(Some(ElementStatus::Dropped(request))) = status_rx.try_recv()
+        {
+            let response = BlockRetrievalRpcResponse {
+                request_id: request.request_id,
+                response: BlockRetrievalResponse::new(
+                    BlockRetrievalStatus::IdNotFound,
+                    vec![],
+                ),
+            };
+            response.send(ctx.io, &ctx.peer)?;
+        }
         Ok(())
     }
 }
