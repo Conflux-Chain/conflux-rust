@@ -20,9 +20,14 @@ fn decode(c: &mut Criterion) {
     let msg = TestDiemCrypto("".to_string());
     let sig: BLSSignature = priv_key.sign(&msg);
     let sig_bytes = sig.to_bytes();
+    let pub_key = priv_key.public_key();
+    let pub_key_bytes = pub_key.to_bytes();
 
-    c.bench_function("bls signature decoding", move |b| {
+    c.bench_function("bls signature decode", move |b| {
         b.iter(|| BLSSignature::try_from(sig_bytes.as_slice()).unwrap())
+    });
+    c.bench_function("bls pubkey decode", move |b| {
+        b.iter(|| BLSPublicKey::try_from(pub_key_bytes.as_slice()).unwrap())
     });
 }
 

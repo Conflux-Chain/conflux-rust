@@ -10,8 +10,9 @@ use crate::{
 };
 use anyhow::{anyhow, Result};
 use bls_signatures::{
-    PrivateKey as RawPrivateKey, PublicKey as RawPublicKey,
-    Serialize as BLSSerialize, Signature as RawSignature,
+    DeserializeUnchecked, PrivateKey as RawPrivateKey,
+    PublicKey as RawPublicKey, Serialize as BLSSerialize,
+    Signature as RawSignature,
 };
 use diem_crypto_derive::{
     DeserializeKey, SerializeKey, SilentDebug, SilentDisplay,
@@ -205,7 +206,7 @@ impl TryFrom<&[u8]> for BLSPublicKey {
     fn try_from(
         bytes: &[u8],
     ) -> std::result::Result<BLSPublicKey, CryptoMaterialError> {
-        match RawPublicKey::from_bytes(bytes) {
+        match RawPublicKey::from_bytes_unchecked(bytes) {
             Ok(sig) => Ok(Self(sig)),
             Err(e) => {
                 diem_debug!(
@@ -228,7 +229,7 @@ impl TryFrom<&[u8]> for BLSSignature {
         bytes: &[u8],
     ) -> std::result::Result<BLSSignature, CryptoMaterialError> {
         // TODO(lpl): Check malleability?
-        match RawSignature::from_bytes(bytes) {
+        match RawSignature::from_bytes_unchecked(bytes) {
             Ok(sig) => Ok(Self(sig)),
             Err(_) => Err(CryptoMaterialError::DeserializationError),
         }

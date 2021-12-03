@@ -199,7 +199,7 @@ build_config! {
         (max_chunk_number_in_manifest, (usize), 500)
         (max_downloading_chunks, (usize), 8)
         (max_handshakes, (usize), 64)
-        (max_incoming_peers, (usize), 64)
+        (max_incoming_peers, (usize), 48)
         (max_inflight_request_count, (u64), 64)
         (max_outgoing_peers, (usize), 8)
         (max_outgoing_peers_archive, (Option<usize>), None)
