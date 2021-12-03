@@ -9,7 +9,6 @@ use crate::{
     },
     sync::Error,
 };
-use diem_logger::prelude::diem_debug;
 use std::mem::discriminant;
 
 impl Handleable for MempoolSyncMsg {
