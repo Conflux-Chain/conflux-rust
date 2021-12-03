@@ -66,7 +66,7 @@ fn to_blocks_to_commit(
                     &[txn_info],
                     &mut cs,
                 )?;
-                db.db.write_schemas(cs.batch)?;
+                db.db.write_schemas(cs.batch, false)?;
 
                 cur_ver += 1;
                 cur_txn_accu_hash = txn_accu_hash;

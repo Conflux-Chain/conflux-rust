@@ -72,7 +72,7 @@ impl RestoreHandler {
             .iter()
             .map(|li| self.ledger_store.put_ledger_info(li, &mut cs))
             .collect::<Result<Vec<_>>>()?;
-        self.db.write_schemas(cs.batch)?;
+        self.db.write_schemas(cs.batch, false)?;
 
         if let Some(li) = self.ledger_store.get_latest_ledger_info_option() {
             if li.ledger_info().epoch()
@@ -119,7 +119,7 @@ impl RestoreHandler {
                 Ok(())
             })
             .collect::<Result<Vec<_>>>()?;
-        self.db.write_schemas(cs.batch)
+        self.db.write_schemas(cs.batch, false)
     }
 
     pub fn save_transactions(
@@ -146,7 +146,7 @@ impl RestoreHandler {
             &mut cs,
         )?;
 
-        self.db.write_schemas(cs.batch)
+        self.db.write_schemas(cs.batch, false)
     }
 
     pub fn get_tree_state(
