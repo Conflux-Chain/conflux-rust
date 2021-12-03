@@ -144,9 +144,11 @@ impl NodeMerkleProof {
     }
 }
 
-use super::merkle_patricia_trie::TrieProof;
+use super::{
+    merkle_patricia_trie::TrieProof,
+    primitives::{MptValue, StateRoot, StorageRoot},
+};
 use primitives::{
-    CheckInput, DeltaMptKeyPadding, MptValue, StateRoot, StorageKey,
-    StorageRoot, MERKLE_NULL_NODE,
+    CheckInput, DeltaMptKeyPadding, StorageKey, MERKLE_NULL_NODE,
 };
 use rlp_derive::{RlpDecodable, RlpEncodable};

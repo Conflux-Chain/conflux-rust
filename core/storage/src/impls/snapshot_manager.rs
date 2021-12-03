@@ -31,9 +31,7 @@ pub trait GetSnapshotDbManager {
     fn get_snapshot_db_manager(&self) -> &Self::SnapshotDbManager;
 }
 
-use super::{
-    impls::errors::*,
-    storage_db::{snapshot_db::*, snapshot_db_manager::*},
-};
+use super::errors::*;
+use crate::storage_db::{snapshot_db::*, snapshot_db_manager::*};
 use primitives::EpochId;
 use std::sync::Arc;

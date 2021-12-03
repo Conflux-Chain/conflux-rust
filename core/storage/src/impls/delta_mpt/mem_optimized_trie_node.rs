@@ -637,6 +637,7 @@ use super::{
         super::utils::WrappedCreateFrom,
         errors::*,
         merkle_patricia_trie::{maybe_in_place_byte_array::*, walk::*},
+        primitives::MptValue,
     },
     cache::algorithm::CacheAlgoDataTrait,
     node_ref::*,
@@ -644,7 +645,7 @@ use super::{
     *,
 };
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
-use primitives::{MerkleHash, MptValue};
+use primitives::MerkleHash;
 use rlp::*;
 use std::{
     fmt::{Debug, Formatter},

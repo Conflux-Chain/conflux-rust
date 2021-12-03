@@ -1569,11 +1569,12 @@ use crate::{
             walk::*,
             CompressedPathRaw, CompressedPathRef,
         },
+        primitives::MptValue,
     },
     storage_db::snapshot_mpt::*,
     utils::access_mode,
 };
-use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
+use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use std::{
     cell::Cell,
     hint::unreachable_unchecked,

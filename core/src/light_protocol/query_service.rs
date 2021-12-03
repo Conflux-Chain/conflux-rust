@@ -31,6 +31,7 @@ use cfx_parameters::{
     },
 };
 use cfx_statedb::{ACCUMULATE_INTEREST_RATE_KEY, INTEREST_RATE_KEY};
+use cfx_storage::StorageRoot;
 use cfx_types::{
     address_util::AddressUtil, BigEndianHash, Bloom, H160, H256,
     KECCAK_EMPTY_BLOOM, U256,
@@ -44,7 +45,7 @@ use primitives::{
     filter::{FilterError, LogFilter},
     log_entry::{LocalizedLogEntry, LogEntry},
     Account, Block, BlockReceipts, CodeInfo, DepositList, EpochNumber, Receipt,
-    SignedTransaction, StorageKey, StorageRoot, StorageValue, TransactionIndex,
+    SignedTransaction, StorageKey, StorageValue, TransactionIndex,
     VoteStakeList,
 };
 use rlp::Rlp;

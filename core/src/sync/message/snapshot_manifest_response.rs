@@ -11,9 +11,10 @@ use crate::{
         Error, ErrorKind, SYNC_PROTO_V1, SYNC_PROTO_V3,
     },
 };
+use cfx_storage_primitives::StateRoot;
 use cfx_types::H256;
 use network::service::ProtocolVersion;
-use primitives::{MerkleHash, StateRoot};
+use primitives::MerkleHash;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 #[derive(RlpDecodable, RlpEncodable, Default)]

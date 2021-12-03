@@ -1522,6 +1522,7 @@ use crate::{
             node_ref_map::DeltaMptId,
         },
         errors::*,
+        snapshot_manager::SnapshotManagerTrait,
         state_manager::{DeltaDbManager, SnapshotDb, SnapshotDbManager},
         storage_db::{
             kvdb_sqlite::{
@@ -1532,7 +1533,6 @@ use crate::{
         },
         storage_manager::snapshot_manager::SnapshotManager,
     },
-    snapshot_manager::SnapshotManagerTrait,
     storage_db::{
         DeltaDbManagerTrait, KeyValueDbIterableTrait, SnapshotDbManagerTrait,
         SnapshotInfo, SnapshotKeptToProvideSyncStatus,

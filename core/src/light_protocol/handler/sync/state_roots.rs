@@ -21,11 +21,11 @@ use cfx_parameters::light::{
     CACHE_TIMEOUT, MAX_STATE_ROOTS_IN_FLIGHT, STATE_ROOT_REQUEST_BATCH_SIZE,
     STATE_ROOT_REQUEST_TIMEOUT,
 };
+use cfx_storage_primitives::StateRoot;
 use futures::future::FutureExt;
 use lru_time_cache::LruCache;
 use network::{node_table::NodeId, NetworkContext};
 use parking_lot::RwLock;
-use primitives::StateRoot;
 use std::{future::Future, sync::Arc};
 
 #[derive(Debug)]

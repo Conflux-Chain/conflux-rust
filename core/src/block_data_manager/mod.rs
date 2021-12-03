@@ -44,8 +44,9 @@ use crate::{
 };
 pub use block_data_types::*;
 use cfx_internal_common::{
-    EpochExecutionCommitment, StateAvailabilityBoundary, StateRootWithAuxInfo,
+    EpochExecutionCommitment, StateAvailabilityBoundary,
 };
+use cfx_storage::StateRootWithAuxInfo;
 use db_gc_manager::GCProgress;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use std::{hash::Hash, path::Path, time::Duration};

@@ -44,9 +44,7 @@ pub use crate::{
     receipt::{BlockReceipts, Receipt},
     state_root::*,
     static_bool::StaticBool,
-    storage::{
-        MptValue, NodeMerkleTriplet, StorageLayout, StorageRoot, StorageValue,
-    },
+    storage::{StorageLayout, StorageValue},
     storage_key::*,
     transaction::{
         Action, SignedTransaction, Transaction, TransactionWithSignature,

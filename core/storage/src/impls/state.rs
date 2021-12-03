@@ -901,19 +901,19 @@ use crate::{
             KVInserter, MptKeyValue, TrieProof, VanillaChildrenTable,
         },
         node_merkle_proof::NodeMerkleProof,
+        primitives::{MptValue, NodeMerkleTriplet, StateRoot},
         state_manager::*,
         state_proof::StateProof,
+        state_root_aux::{StateRootAuxInfo, StateRootWithAuxInfo},
     },
     state::*,
     storage_db::*,
     utils::{access_mode, to_key_prefix_iter_upper_bound},
 };
-use cfx_internal_common::{StateRootAuxInfo, StateRootWithAuxInfo};
 use fallible_iterator::FallibleIterator;
 use primitives::{
-    DeltaMptKeyPadding, EpochId, MerkleHash, MptValue, NodeMerkleTriplet,
-    SkipInputCheck, StateRoot, StaticBool, StorageKey, MERKLE_NULL_NODE,
-    NULL_EPOCH,
+    DeltaMptKeyPadding, EpochId, MerkleHash, SkipInputCheck, StaticBool,
+    StorageKey, MERKLE_NULL_NODE, NULL_EPOCH,
 };
 use rustc_hex::ToHex;
 use std::{

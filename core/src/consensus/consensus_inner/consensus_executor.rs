@@ -33,15 +33,13 @@ use crate::{
     vm::{Env, Error as VmErr},
     SharedTransactionPool,
 };
-use cfx_internal_common::{
-    debug::*, EpochExecutionCommitment, StateRootWithAuxInfo,
-};
+use cfx_internal_common::{debug::*, EpochExecutionCommitment};
 use cfx_parameters::consensus::*;
 use cfx_state::{state_trait::*, CleanupMode};
 use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{
-    defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
-    StorageManagerTrait,
+    StateIndex, StateRootWithAuxInfo, StorageManagerTrait,
+    DEFAULT_EXECUTION_PREFETCH_THREADS,
 };
 use cfx_types::{
     address_util::AddressUtil, BigEndianHash, H160, H256, KECCAK_EMPTY_BLOOM,

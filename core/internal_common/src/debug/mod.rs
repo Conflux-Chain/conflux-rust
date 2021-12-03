@@ -96,7 +96,7 @@ impl Default for ComputeEpochDebugRecord {
     }
 }
 
-use crate::StateRootWithAuxInfo;
+use cfx_storage_primitives::StateRootWithAuxInfo;
 use cfx_types::{Address, H256, U256};
 use primitives::SignedTransaction;
 use serde_derive::{Deserialize, Serialize};

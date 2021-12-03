@@ -396,11 +396,12 @@ use crate::{
             CompressedPathRaw, CompressedPathTrait, TrieNodeTrait,
             VanillaChildrenTable, VanillaTrieNode, CHILDREN_COUNT,
         },
+        primitives::MptValue,
     },
     utils::access_mode,
 };
 use cfx_types::H256;
-use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
+use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;
 use std::{
     collections::{hash_map::RandomState, HashMap},

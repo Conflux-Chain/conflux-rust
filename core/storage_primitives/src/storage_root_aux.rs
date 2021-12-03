@@ -113,9 +113,27 @@ impl Decodable for StateRootWithAuxInfo {
     }
 }
 
-use primitives::{
-    DeltaMptKeyPadding, EpochId, MerkleHash, StateRoot,
-    GENESIS_DELTA_MPT_KEY_PADDING, NULL_EPOCH,
+use super::key_value::StateRoot;
+use cfx_primitives::{
+    DeltaMptKeyPadding, EpochId, MerkleHash, GENESIS_DELTA_MPT_KEY_PADDING,
+    NULL_EPOCH,
 };
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use serde_derive::{Deserialize, Serialize};
+
+/// Only used by storage benchmark due to incompatibility of rlp crate version.
+pub trait StateRootWithAuxInfoToFromRlpBytes {
+    fn to_rlp_bytes(&self) -> Vec<u8>;
+    fn from_rlp_bytes(
+        bytes: &[u8],
+    ) -> Result<StateRootWithAuxInfo, DecoderError>;
+}
+
+/// Only used by storage benchmark due to incompatibility of rlp crate version.
+impl StateRootWithAuxInfoToFromRlpBytes for StateRootWithAuxInfo {
+    fn to_rlp_bytes(&self) -> Vec<u8> { self.rlp_bytes() }
+
+    fn from_rlp_bytes(bytes: &[u8]) -> Result<Self, DecoderError> {
+        Ok(Self::decode(&Rlp::new(bytes))?)
+    }
+}

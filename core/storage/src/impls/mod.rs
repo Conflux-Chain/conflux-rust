@@ -1,3 +1,4 @@
+#![allow(unused)]
 // Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
@@ -7,12 +8,16 @@ pub(super) mod merkle_patricia_trie;
 pub(super) mod delta_mpt;
 pub(super) mod errors;
 pub(super) mod node_merkle_proof;
+pub(super) mod primitives;
 pub(super) mod proof_merger;
 pub(super) mod recording_storage;
+pub(super) mod snapshot_manager;
 pub(super) mod snapshot_sync;
 pub(super) mod state;
+pub(super) mod state_index;
 pub(super) mod state_manager;
 pub(super) mod state_proof;
+pub(super) mod state_root_aux;
 pub(super) mod storage_db;
 pub(super) mod storage_manager;
 

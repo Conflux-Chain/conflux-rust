@@ -6,18 +6,17 @@ use crate::{
     consensus::SharedConsensusGraph,
     light_protocol::{message::WitnessInfoWithHeight, Error, ErrorKind},
 };
-use cfx_internal_common::StateRootWithAuxInfo;
 use cfx_parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
 use cfx_statedb::{StateDb, StateDbGetOriginalMethods};
 use cfx_storage::{
     state::{State, StateTrait},
     state_manager::StateManagerTrait,
-    StateProof, StorageRootProof,
+    StateProof, StateRootWithAuxInfo, StorageRoot, StorageRootProof,
 };
 use cfx_types::{Address, Bloom, H256};
 use primitives::{
     Block, BlockHeader, BlockHeaderBuilder, BlockReceipts, CheckInput,
-    EpochNumber, StorageKey, StorageRoot,
+    EpochNumber, StorageKey,
 };
 
 pub struct LedgerInfo {

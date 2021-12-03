@@ -684,6 +684,7 @@ version = "1.0.0"
 dependencies = [
  "cfx-bytes",
  "cfx-parameters",
+ "cfx-storage-primitives",
  "cfx-types",
  "derivative",
  "lazy_static",
@@ -729,6 +730,7 @@ dependencies = [
  "cfx-internal-common",
  "cfx-parameters",
  "cfx-storage",
+ "cfx-storage-primitives",
  "cfx-types",
  "error-chain",
  "hashbrown 0.7.2",
@@ -745,6 +747,7 @@ dependencies = [
  "cfg-if 0.1.10",
  "cfx-bytes",
  "cfx-internal-common",
+ "cfx-storage-primitives",
  "cfx-types",
  "delegate 0.5.2",
  "derivative",
@@ -777,6 +780,23 @@ dependencies = [
  "sqlite3-sys",
  "strfmt",
  "tokio 0.2.25",
+]
+
+[[package]]
+name = "cfx-storage-primitives"
+version = "0.1.0"
+dependencies = [
+ "cfg-if 0.1.10",
+ "cfx-bytes",
+ "cfx-types",
+ "keccak-hash",
+ "primitives",
+ "rlp",
+ "rlp_derive",
+ "rustc-hex",
+ "serde",
+ "serde_derive",
+ "serde_json",
 ]
 
 [[package]]
@@ -824,6 +844,7 @@ dependencies = [
  "cfx-state",
  "cfx-statedb",
  "cfx-storage",
+ "cfx-storage-primitives",
  "cfx-types",
  "cfx-utils",
  "cfxkey",
@@ -1021,6 +1042,7 @@ dependencies = [
  "cfx-state",
  "cfx-statedb",
  "cfx-storage",
+ "cfx-storage-primitives",
  "cfx-types",
  "cfxcore",
  "cfxcore-accounts",

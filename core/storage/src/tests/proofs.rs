@@ -656,9 +656,10 @@ use crate::{
     },
     RecordingStorage,
 };
-use cfx_types::H256;
-use primitives::{
-    DeltaMptKeyPadding, MptValue, NodeMerkleTriplet, StateRoot, StorageKey,
+use cfx_storage_primitives::key_value::{
+    MptValue, NodeMerkleTriplet, StateRoot,
 };
+use cfx_types::H256;
+use primitives::{DeltaMptKeyPadding, StorageKey};
 use rand::{seq::SliceRandom, Rng};
 use rand_chacha::ChaChaRng;

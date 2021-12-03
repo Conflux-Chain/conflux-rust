@@ -8,11 +8,10 @@ use rlp_derive::{RlpDecodable, RlpEncodable};
 use super::NodeType;
 use crate::message::RequestId;
 use cfx_internal_common::ChainIdParamsDeprecated;
-use cfx_storage::{NodeMerkleProof, StateProof, TrieProof};
-use primitives::{
-    BlockHeader, BlockReceipts, Receipt, SignedTransaction, StateRoot,
-    StorageRoot,
+use cfx_storage::{
+    NodeMerkleProof, StateProof, StateRoot, StorageRoot, TrieProof,
 };
+use primitives::{BlockHeader, BlockReceipts, Receipt, SignedTransaction};
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct StatusPingDeprecatedV1 {

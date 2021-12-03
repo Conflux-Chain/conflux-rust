@@ -24,12 +24,13 @@ use cfx_parameters::light::{
     CACHE_TIMEOUT, MAX_STORAGE_ROOTS_IN_FLIGHT,
     STORAGE_ROOT_REQUEST_BATCH_SIZE, STORAGE_ROOT_REQUEST_TIMEOUT,
 };
+use cfx_storage::StorageRoot;
 use cfx_types::H160;
 use futures::future::FutureExt;
 use lru_time_cache::LruCache;
 use network::{node_table::NodeId, NetworkContext};
 use parking_lot::RwLock;
-use primitives::{StorageKey, StorageRoot};
+use primitives::StorageKey;
 use std::{future::Future, sync::Arc};
 
 #[derive(Debug)]

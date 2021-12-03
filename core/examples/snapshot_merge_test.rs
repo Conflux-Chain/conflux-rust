@@ -2,15 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_internal_common::state_root_with_aux_info::{
-    StateRootAuxInfo, StateRootWithAuxInfo,
-};
 use cfx_statedb::{StateDb, StateDbExt};
 use cfx_storage::{
     state::StateTrait,
     state_manager::{StateManager, StateManagerTrait},
     storage_db::{KeyValueDbTraitRead, SnapshotDbManagerTrait, SnapshotInfo},
     DeltaMptIterator, Error as StorageError, StateIndex, StorageConfiguration,
+};
+use cfx_storage_primitives::{
+    StateRoot, StateRootAuxInfo, StateRootWithAuxInfo,
 };
 use cfx_types::{Address, H256};
 use cfxcore::sync::Error;
@@ -21,7 +21,7 @@ use log4rs::{
     config::{Appender, Config, Root},
 };
 use primitives::{
-    Account, MerkleHash, StateRoot, StorageKey, MERKLE_NULL_NODE, NULL_EPOCH,
+    Account, MerkleHash, StorageKey, MERKLE_NULL_NODE, NULL_EPOCH,
 };
 use std::{
     cmp::min, collections::HashMap, fmt::Debug, fs::remove_dir_all,

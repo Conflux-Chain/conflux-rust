@@ -622,22 +622,17 @@ mod impls {
     }
 
     use super::*;
-    use cfx_internal_common::{
-        debug::{ComputeEpochDebugRecord, StateOp},
-        StateRootWithAuxInfo,
-    };
+    use cfx_internal_common::debug::{ComputeEpochDebugRecord, StateOp};
     use cfx_storage::{
         state::{NoProof, WithProof},
         utils::{access_mode, to_key_prefix_iter_upper_bound},
-        MptKeyValue, StateProof, StorageRootProof, StorageStateTrait,
-        StorageStateTraitExt,
+        MptKeyValue, StateProof, StateRootWithAuxInfo, StorageRoot,
+        StorageRootProof, StorageStateTrait, StorageStateTraitExt,
     };
     use cfx_types::{address_util::AddressUtil, Address};
     use hashbrown::HashMap;
     use parking_lot::RwLock;
-    use primitives::{
-        EpochId, SkipInputCheck, StorageKey, StorageLayout, StorageRoot,
-    };
+    use primitives::{EpochId, SkipInputCheck, StorageKey, StorageLayout};
     use std::{
         collections::{btree_map::Entry::Occupied, BTreeMap},
         ops::Bound::{Excluded, Included, Unbounded},

@@ -618,14 +618,14 @@ impl StateManagerTrait for StateManager {
 use crate::{
     impls::{
         delta_mpt::*,
-        errors::*,
+        state::State,
+        state_index::StateIndex,
         storage_db::{
             delta_db_manager_rocksdb::DeltaDbManagerRocksdb,
             snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
         },
         storage_manager::storage_manager::StorageManager,
     },
-    state::*,
     state_manager::*,
     storage_db::*,
     utils::guarded_value::GuardedValue,

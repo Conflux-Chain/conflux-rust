@@ -14,10 +14,8 @@ pub mod consensus_api;
 pub mod debug;
 pub mod epoch_execution_commitment;
 pub mod state_availability_boundary;
-pub mod state_root_with_aux_info;
 
 pub use block_data_db_encoding::*;
 pub use chain_id::*;
 pub use epoch_execution_commitment::EpochExecutionCommitment;
 pub use state_availability_boundary::StateAvailabilityBoundary;
-pub use state_root_with_aux_info::*;

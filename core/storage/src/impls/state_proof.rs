@@ -136,9 +136,11 @@ impl StateProof {
     }
 }
 
-use crate::impls::merkle_patricia_trie::TrieProof;
+use super::{
+    merkle_patricia_trie::TrieProof,
+    primitives::{MptValue, StateRoot},
+};
 use primitives::{
-    CheckInput, DeltaMptKeyPadding, MptValue, StateRoot, StorageKey,
-    MERKLE_NULL_NODE,
+    CheckInput, DeltaMptKeyPadding, StorageKey, MERKLE_NULL_NODE,
 };
 use rlp_derive::{RlpDecodable, RlpEncodable};

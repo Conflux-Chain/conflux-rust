@@ -19,13 +19,15 @@ extern crate log;
 #[macro_use]
 pub mod utils;
 
-pub(self) mod snapshot_manager;
 pub mod state;
 pub mod state_manager;
 #[macro_use]
 pub mod storage_db;
 
+#[cfg(any(test, feature = "testonly_code"))]
 pub mod tests;
+#[cfg(not(any(test, feature = "testonly_code")))]
+mod tests;
 
 mod impls;
 
@@ -156,25 +158,31 @@ impl StorageConfiguration {
     }
 }
 
+use self::impls::{
+    delta_mpt::*, proof_merger::StateProofMerger,
+    storage_db::sqlite::SqliteConnection,
+};
+
+pub use self::impls::{
+    defaults::{self, DEFAULT_EXECUTION_PREFETCH_THREADS},
+    snapshot_sync::{FullSyncVerifier, MptSlicer},
+    storage_db::{
+        kvdb_rocksdb::KvdbRocksdb,
+        kvdb_sqlite::{KvdbSqlite, KvdbSqliteStatements},
+        snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
+    },
+};
+
 pub use self::{
     impls::{
-        defaults,
-        delta_mpt::*,
         errors::{Error, ErrorKind, Result},
         merkle_patricia_trie::{
             simple_mpt::*, KVInserter, MptKeyValue, TrieProof,
         },
         node_merkle_proof::{NodeMerkleProof, StorageRootProof},
-        proof_merger::StateProofMerger,
-        recording_storage::RecordingStorage,
-        snapshot_sync::{FullSyncVerifier, MptSlicer},
+        primitives::{StateRoot, StorageRoot},
         state_proof::StateProof,
-        storage_db::{
-            kvdb_rocksdb::KvdbRocksdb,
-            kvdb_sqlite::{KvdbSqlite, KvdbSqliteStatements},
-            snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
-            sqlite::SqliteConnection,
-        },
+        state_root_aux::{StateRootAuxInfo, StateRootWithAuxInfo},
     },
     state::{
         State as StorageState, StateTrait as StorageStateTrait,
@@ -188,6 +196,8 @@ pub use self::{
 };
 
 #[cfg(any(test, feature = "testonly_code"))]
+pub use self::delta_mpt_iterator::DeltaMptIterator;
+#[cfg(any(test, feature = "testonly_code"))]
 pub use self::tests::new_state_manager_for_unit_test as new_storage_manager_for_testing;
-use cfx_internal_common::StateRootWithAuxInfo;
+
 use std::path::{Path, PathBuf};

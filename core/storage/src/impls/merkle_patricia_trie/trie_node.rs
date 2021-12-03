@@ -272,12 +272,12 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
 }
 
 use super::{
-    super::super::utils::WrappedCreateFrom,
+    super::{super::utils::WrappedCreateFrom, primitives::MptValue},
     children_table::*,
     compressed_path::*,
     merkle::{compute_merkle, compute_node_merkle, MaybeMerkleTableRef},
     walk::*,
 };
-use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
+use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;
 use std::vec::Vec;

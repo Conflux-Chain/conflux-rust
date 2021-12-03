@@ -9,7 +9,16 @@
 ///
 /// A writable state is copy-on-write reference to the base state in the
 /// state manager. State is supposed to be owned by single user.
-pub use super::impls::state::State;
+use crate::impls as state_impls;
+
+use super::{utils::access_mode, MptKeyValue, StateRootWithAuxInfo};
+use primitives::{EpochId, StaticBool, StorageKey};
+use state_impls::{
+    errors::*, node_merkle_proof::NodeMerkleProof,
+    primitives::NodeMerkleTriplet, state_proof::StateProof,
+};
+
+pub use state_impls::state::State;
 
 pub type WithProof = primitives::static_bool::Yes;
 pub type NoProof = primitives::static_bool::No;
@@ -51,12 +60,3 @@ pub trait StateTraitExt {
         &self, access_key: StorageKey,
     ) -> Result<(NodeMerkleTriplet, NodeMerkleProof)>;
 }
-
-use super::{
-    impls::{
-        errors::*, node_merkle_proof::NodeMerkleProof, state_proof::StateProof,
-    },
-    utils::access_mode,
-    MptKeyValue, StateRootWithAuxInfo,
-};
-use primitives::{EpochId, NodeMerkleTriplet, StaticBool, StorageKey};

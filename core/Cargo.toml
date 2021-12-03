@@ -18,6 +18,7 @@ cfx-parameters = { path = "parameters" }
 cfx-statedb = { path = "statedb" }
 cfx-state = { path = "state" }
 cfx-storage = { path = "storage", optional = true }
+cfx-storage-primitives = { path = "storage_primitives", optional = true }
 cfx-types = { path = "../cfx_types" }
 cfx-utils = { path = "../cfx_utils" }
 clap = "2"
@@ -99,7 +100,7 @@ version = "0.5"
 default-features = false
 
 [features]
-default = ["cfx-storage"]
+default = ["cfx-storage","cfx-storage-primitives"]
 # Unfortunately cfg test attributes doesn't work across crates,
 # we have to define a feature for test code.
 # https://users.rust-lang.org/t/cfg-test-doesnt-propagate-to-external-crates/13046

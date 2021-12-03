@@ -839,6 +839,7 @@ use super::{
             walk::{KeyPart, TrieNodeWalkTrait, WalkStop},
             *,
         },
+        primitives::MptValue,
     },
     cow_node_ref::CowNodeRef,
     delta_mpt_open_db_manager::ArcDeltaDbWrapper,
@@ -849,5 +850,5 @@ use super::{
     ChildrenTableDeltaMpt, DeltaMpt, *,
 };
 use parking_lot::MutexGuard;
-use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
+use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use std::{hint::unreachable_unchecked, marker::PhantomData};

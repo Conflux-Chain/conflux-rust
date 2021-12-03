@@ -3,10 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use super::StateDbGeneric;
-use cfx_internal_common::StateRootWithAuxInfo;
 use cfx_storage::{
     utils::access_mode, ErrorKind, MptKeyValue, Result, StorageStateTrait,
 };
+use cfx_storage_primitives::StateRootWithAuxInfo;
 use primitives::{EpochId, StorageKey, MERKLE_NULL_NODE};
 use std::{cell::RefCell, collections::HashMap};
 

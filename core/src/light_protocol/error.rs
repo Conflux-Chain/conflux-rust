@@ -8,11 +8,12 @@ use crate::{
     NodeType,
 };
 use cfx_internal_common::ChainIdParamsInner;
+use cfx_storage_primitives::StateRoot;
 use cfx_types::{H160, H256};
 use error_chain::ChainedError;
 use network::{node_table::NodeId, NetworkContext, UpdateNodeOperation};
 use parking_lot::Mutex;
-use primitives::{account::AccountError, filter::FilterError, StateRoot};
+use primitives::{account::AccountError, filter::FilterError};
 use rlp::DecoderError;
 use std::sync::Arc;
 

@@ -10,6 +10,7 @@ edition = "2018"
 cfx-bytes = { path = "../../cfx_bytes" }
 cfx-types = { path = "../../cfx_types" }
 cfx-parameters = { path = "../parameters" }
+cfx-storage-primitives = {path = "../storage_primitives"}
 derivative = "2.0.2"
 lazy_static = "1.4"
 log = "0.4"

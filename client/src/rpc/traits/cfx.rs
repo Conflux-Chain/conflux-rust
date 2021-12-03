@@ -12,10 +12,11 @@ use super::super::types::{
 use crate::rpc::types::{
     AccountPendingTransactions, BlockHashOrEpochNumber, RpcAddress,
 };
+use cfx_storage::StorageRoot;
 use cfx_types::{H256, U256, U64};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
 use jsonrpc_derive::rpc;
-use primitives::{DepositInfo, StorageRoot, VoteStakeInfo};
+use primitives::{DepositInfo, VoteStakeInfo};
 
 /// Cfx rpc interface.
 #[rpc(server)]

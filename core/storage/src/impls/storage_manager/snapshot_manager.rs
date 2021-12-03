@@ -39,10 +39,7 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait> SnapshotManagerTrait
 }
 
 use super::super::{
-    super::{
-        snapshot_manager::*,
-        storage_db::snapshot_db_manager::SnapshotDbManagerTrait,
-    },
-    errors::*,
+    super::storage_db::snapshot_db_manager::SnapshotDbManagerTrait, errors::*,
+    snapshot_manager::*,
 };
 use primitives::EpochId;

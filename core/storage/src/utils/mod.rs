@@ -95,22 +95,4 @@ impl<T: Sized> UnsafeCellExtension<T> for UnsafeCell<T> {
     unsafe fn get_as_mut(&self) -> &mut T { &mut *self.get() }
 }
 
-/// Only used by storage benchmark due to incompatibility of rlp crate version.
-pub trait StateRootWithAuxInfoToFromRlpBytes {
-    fn to_rlp_bytes(&self) -> Vec<u8>;
-    fn from_rlp_bytes(bytes: &[u8]) -> Result<StateRootWithAuxInfo>;
-}
-
-/// Only used by storage benchmark due to incompatibility of rlp crate version.
-impl StateRootWithAuxInfoToFromRlpBytes for StateRootWithAuxInfo {
-    fn to_rlp_bytes(&self) -> Vec<u8> { self.rlp_bytes() }
-
-    fn from_rlp_bytes(bytes: &[u8]) -> Result<Self> {
-        Ok(Self::decode(&Rlp::new(bytes))?)
-    }
-}
-
-use crate::Result;
-use cfx_internal_common::StateRootWithAuxInfo;
-use rlp::{Decodable, Encodable, Rlp};
 use std::cell::UnsafeCell;

@@ -917,6 +917,7 @@ use super::{
         },
         errors::*,
         merkle_patricia_trie::{merkle::*, *},
+        primitives::MptValue,
         state::ChildrenMerkleMap,
     },
     node_memory_manager::*,
@@ -924,7 +925,7 @@ use super::{
     AtomicCommitTransaction, DeltaMpt, *,
 };
 use parking_lot::MutexGuard;
-use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
+use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;
 use std::{
     borrow::BorrowMut, cell::Cell, hint::unreachable_unchecked, ops::Deref,

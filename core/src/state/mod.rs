@@ -10,13 +10,12 @@ pub use self::{
 use self::account_entry::{AccountEntry, AccountState};
 use crate::{hash::KECCAK_EMPTY, transaction_pool::SharedTransactionPool};
 use cfx_bytes::Bytes;
-use cfx_internal_common::{
-    debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
-};
+use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::{
     internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
     staking::*,
 };
+
 use cfx_state::{
     maybe_address,
     state_trait::{CheckpointTrait, StateOpsTrait},
@@ -27,6 +26,7 @@ use cfx_statedb::{
     StateDbGeneric as StateDb,
 };
 use cfx_storage::{utils::access_mode, StorageState, StorageStateTrait};
+use cfx_storage_primitives::StateRootWithAuxInfo;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use parking_lot::{
     MappedRwLockWriteGuard, RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard,
