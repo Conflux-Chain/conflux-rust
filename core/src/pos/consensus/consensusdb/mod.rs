@@ -108,7 +108,7 @@ impl ConsensusDB {
             &SingleEntryKey::HighestTimeoutCertificate,
             &highest_timeout_certificate,
         )?;
-        self.commit(batch)?;
+        self.commit(batch, false)?;
         Ok(())
     }
 
@@ -119,7 +119,7 @@ impl ConsensusDB {
             &SingleEntryKey::LastVoteMsg,
             &last_vote,
         )?;
-        self.commit(batch)
+        self.commit(batch, false)
     }
 
     /// save_blocks_and_quorum_certificates
@@ -139,7 +139,7 @@ impl ConsensusDB {
         qc_data.iter().try_for_each(|qc| {
             batch.put::<QCSchema>(&qc.certified_block().id(), qc)
         })?;
-        self.commit(batch)
+        self.commit(batch, false)
     }
 
     /// delete_blocks_and_quorum_certificates
@@ -154,14 +154,16 @@ impl ConsensusDB {
             batch.delete::<BlockSchema>(hash)?;
             batch.delete::<QCSchema>(hash)
         })?;
-        self.commit(batch)
+        self.commit(batch, false)
     }
 
     /// Write the whole schema batch including all data necessary to mutate the
     /// ledger state of some transaction by leveraging rocksdb atomicity
     /// support.
-    fn commit(&self, batch: SchemaBatch) -> Result<(), DbError> {
-        self.db.write_schemas(batch)?;
+    fn commit(
+        &self, batch: SchemaBatch, fast_write: bool,
+    ) -> Result<(), DbError> {
+        self.db.write_schemas(batch, fast_write)?;
         Ok(())
     }
 
@@ -181,7 +183,7 @@ impl ConsensusDB {
         batch.delete::<SingleEntrySchema>(
             &SingleEntryKey::HighestTimeoutCertificate,
         )?;
-        self.commit(batch)
+        self.commit(batch, false)
     }
 
     /// Get serialized latest vote (if available)
@@ -195,7 +197,7 @@ impl ConsensusDB {
     pub fn delete_last_vote_msg(&self) -> Result<(), DbError> {
         let mut batch = SchemaBatch::new();
         batch.delete::<SingleEntrySchema>(&SingleEntryKey::LastVoteMsg)?;
-        self.commit(batch)?;
+        self.commit(batch, false)?;
         Ok(())
     }
 
@@ -226,7 +228,7 @@ impl ConsensusDB {
             &pow_epoch_number,
             &(events, pow_epoch_hash),
         )?;
-        self.commit(batch)
+        self.commit(batch, true)
     }
 
     /// Save staking events between two pivot decisions.
@@ -316,7 +318,7 @@ impl LedgerBlockRW for ConsensusDB {
         for block in blocks {
             batch.put::<LedgerBlockSchema>(&block.id(), &block)?;
         }
-        Ok(self.commit(batch)?)
+        Ok(self.commit(batch, true)?)
     }
 
     /// Get qc for not committed blocks.

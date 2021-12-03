@@ -47,7 +47,7 @@ fn save(
     let root_hash = store
         .put_transaction_infos(first_version, &txn_infos, &mut cs)
         .unwrap();
-    store.db.write_schemas(cs.batch).unwrap();
+    store.db.write_schemas(cs.batch, true).unwrap();
     root_hash
 }
 

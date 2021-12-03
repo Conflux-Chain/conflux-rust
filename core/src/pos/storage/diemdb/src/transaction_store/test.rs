@@ -127,7 +127,7 @@ proptest! {
                 .put_transaction(ver as Version, &txn, &mut cs)
                 .unwrap();
         }
-        store.db.write_schemas(cs.batch).unwrap();
+        store.db.write_schemas(cs.batch, true).unwrap();
 
         let mut timestamp = 0;
         let mut block_meta_ver = 0;
@@ -179,7 +179,7 @@ fn init_store(
             .put_transaction(ver as Version, &txn, &mut cs)
             .unwrap();
     }
-    store.db.write_schemas(cs.batch).unwrap();
+    store.db.write_schemas(cs.batch, true).unwrap();
 
     txns
 }

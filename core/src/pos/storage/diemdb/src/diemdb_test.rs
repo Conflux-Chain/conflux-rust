@@ -455,5 +455,5 @@ fn put_transaction_info(
     db.ledger_store
         .put_transaction_infos(version, &[txn_info.clone()], &mut cs)
         .unwrap();
-    db.db.write_schemas(cs.batch).unwrap();
+    db.db.write_schemas(cs.batch, true).unwrap();
 }

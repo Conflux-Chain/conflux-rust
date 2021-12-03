@@ -46,7 +46,7 @@ fn put_account_state_set(
         expected_stale_leaves
     );
 
-    store.db.write_schemas(cs.batch).unwrap();
+    store.db.write_schemas(cs.batch, true).unwrap();
     root
 }
 
@@ -380,6 +380,6 @@ fn init_store(
                 &mut cs,
             )
             .unwrap();
-        store.db.write_schemas(cs.batch).unwrap();
+        store.db.write_schemas(cs.batch, true).unwrap();
     }
 }
