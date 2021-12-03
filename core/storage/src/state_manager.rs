@@ -2,11 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::impls as state_impls;
-
-pub use state_impls::{
-    errors::*, state::State, state_index::StateIndex,
-    state_manager::StateManager,
+use crate::impls::errors::*;
+pub use crate::impls::{
+    config::storage_manager::StorageConfiguration, state::State,
+    state_index::StateIndex, state_manager::StateManager,
 };
 
 use std::sync::Arc;

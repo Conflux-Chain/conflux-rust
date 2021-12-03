@@ -232,7 +232,7 @@ use super::{CleanupMode, CollateralCheckResult};
 use crate::substate_trait::SubstateTrait;
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_statedb::Result as DbResult;
-use cfx_storage::StateRootWithAuxInfo;
+use cfx_storage_primitives::StateRootWithAuxInfo;
 use cfx_types::{Address, H256, U256};
 use primitives::{EpochId, SponsorInfo, StorageLayout};
 use std::sync::Arc;

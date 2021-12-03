@@ -1569,11 +1569,11 @@ use crate::{
             walk::*,
             CompressedPathRaw, CompressedPathRef,
         },
-        primitives::MptValue,
     },
     storage_db::snapshot_mpt::*,
     utils::access_mode,
 };
+use cfx_storage_primitives::delta_mpt::MptValue;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use std::{
     cell::Cell,

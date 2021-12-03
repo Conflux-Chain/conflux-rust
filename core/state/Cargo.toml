@@ -10,6 +10,7 @@ edition = "2018"
 cfx-internal-common = { path = "../internal_common" }
 cfx-parameters = { path = "../parameters" }
 cfx-storage = { path = "../storage" }
+cfx-storage-primitives = { path = "../storage_primitives" }
 cfx-statedb = { path = "../statedb" }
 cfx-types = { path = "../../cfx_types" }
 parking_lot = "0.11"

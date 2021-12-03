@@ -503,7 +503,7 @@ impl StateTraitExt for State {
 
     fn get_node_merkle_all_versions<WithProof: StaticBool>(
         &self, access_key: StorageKey,
-    ) -> Result<(NodeMerkleTriplet, NodeMerkleProof)> {
+    ) -> Result<(StorageRoot, NodeMerkleProof)> {
         self.check_freshly_synced_snapshot("proof")?;
         let mut proof = NodeMerkleProof::default();
 
@@ -626,7 +626,7 @@ impl StateTraitExt for State {
         cursor.finish()?;
         proof.with_snapshot(maybe_proof);
 
-        let triplet = NodeMerkleTriplet {
+        let triplet = StorageRoot {
             delta,
             intermediate,
             snapshot,
@@ -901,14 +901,16 @@ use crate::{
             KVInserter, MptKeyValue, TrieProof, VanillaChildrenTable,
         },
         node_merkle_proof::NodeMerkleProof,
-        primitives::{MptValue, NodeMerkleTriplet, StateRoot},
         state_manager::*,
         state_proof::StateProof,
-        state_root_aux::{StateRootAuxInfo, StateRootWithAuxInfo},
     },
     state::*,
     storage_db::*,
     utils::{access_mode, to_key_prefix_iter_upper_bound},
+    NoProof, WithProof,
+};
+use cfx_storage_primitives::delta_mpt::{
+    MptValue, StateRoot, StateRootAuxInfo, StateRootWithAuxInfo, StorageRoot,
 };
 use fallible_iterator::FallibleIterator;
 use primitives::{

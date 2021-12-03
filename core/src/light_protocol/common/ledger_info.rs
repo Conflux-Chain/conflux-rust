@@ -9,10 +9,10 @@ use crate::{
 use cfx_parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
 use cfx_statedb::{StateDb, StateDbGetOriginalMethods};
 use cfx_storage::{
-    state::{State, StateTrait},
-    state_manager::StateManagerTrait,
-    StateProof, StateRootWithAuxInfo, StorageRoot, StorageRootProof,
+    StateProof, StorageManagerTrait, StorageRootProof, StorageState as State,
+    StorageStateTrait as StateTrait,
 };
+use cfx_storage_primitives::{StateRootWithAuxInfo, StorageRoot};
 use cfx_types::{Address, Bloom, H256};
 use primitives::{
     Block, BlockHeader, BlockHeaderBuilder, BlockReceipts, CheckInput,

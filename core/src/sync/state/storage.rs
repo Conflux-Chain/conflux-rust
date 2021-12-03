@@ -1,15 +1,13 @@
+#![cfg_attr(feature = "storage_dev", allow(unused))]
 // Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-
 use crate::sync::{Error, ErrorKind};
+#[cfg(not(feature = "storage_dev"))]
 use cfx_storage::{
-    storage_db::{
-        key_value_db::KeyValueDbIterableTrait, snapshot_db::SnapshotDbTrait,
-        OpenSnapshotMptTrait,
-    },
-    MptSlicer, StorageManager, TrieProof,
+    KeyValueDbIterableTrait, MptSlicer, OpenSnapshotMptTrait, SnapshotDbTrait,
 };
+use cfx_storage::{StorageManager, TrieProof};
 use cfx_types::H256;
 use fallible_iterator::FallibleIterator;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -249,64 +247,77 @@ impl RangedManifest {
             snapshot_epoch_id, start_key
         );
 
-        let snapshot_db_manager =
-            storage_manager.get_storage_manager().get_snapshot_manager();
+        #[cfg(feature = "storage_dev")]
+        {
+            return Err(Error::from_kind(ErrorKind::NotSupported(
+                "Not using delta_mpt as underlying storage".to_string(),
+            )));
+        }
 
-        let snapshot_db = match snapshot_db_manager.get_snapshot_by_epoch_id(
-            snapshot_epoch_id,
-            /* try_open = */ true,
-        )? {
-            Some(db) => db,
-            None => {
-                debug!(
-                    "failed to load manifest, cannot find snapshot {:?}",
-                    snapshot_epoch_id
-                );
-                return Ok(None);
-            }
-        };
-        let mut snapshot_mpt = snapshot_db.open_snapshot_mpt_shared()?;
-        let merkle_root = snapshot_mpt.merkle_root;
-        let mut slicer = match start_key {
-            Some(ref key) => MptSlicer::new_from_key(&mut snapshot_mpt, key)?,
-            None => MptSlicer::new(&mut snapshot_mpt)?,
-        };
+        #[cfg(not(feature = "storage_dev"))]
+        {
+            let snapshot_db_manager =
+                storage_manager.get_storage_manager().get_snapshot_manager();
 
-        let mut manifest = RangedManifest::default();
-        let mut has_next = true;
-
-        for i in 0..max_chunks {
-            trace!("cut chunks for manifest, loop = {}", i);
-            slicer.advance(chunk_size)?;
-            match slicer.get_range_end_key() {
+            let snapshot_db = match snapshot_db_manager
+                .get_snapshot_by_epoch_id(
+                    snapshot_epoch_id,
+                    /* try_open = */ true,
+                )? {
+                Some(db) => db,
                 None => {
-                    has_next = false;
-                    break;
+                    debug!(
+                        "failed to load manifest, cannot find snapshot {:?}",
+                        snapshot_epoch_id
+                    );
+                    return Ok(None);
                 }
-                Some(key) => {
-                    manifest.chunk_boundaries.push(key.to_vec());
-                    manifest.chunk_boundary_proofs.push(slicer.to_proof());
+            };
+            let mut snapshot_mpt = snapshot_db.open_snapshot_mpt_shared()?;
+            let merkle_root = snapshot_mpt.merkle_root;
+            let mut slicer = match start_key {
+                Some(ref key) => {
+                    MptSlicer::new_from_key(&mut snapshot_mpt, key)?
+                }
+                None => MptSlicer::new(&mut snapshot_mpt)?,
+            };
+
+            let mut manifest = RangedManifest::default();
+            let mut has_next = true;
+
+            for i in 0..max_chunks {
+                trace!("cut chunks for manifest, loop = {}", i);
+                slicer.advance(chunk_size)?;
+                match slicer.get_range_end_key() {
+                    None => {
+                        has_next = false;
+                        break;
+                    }
+                    Some(key) => {
+                        manifest.chunk_boundaries.push(key.to_vec());
+                        manifest.chunk_boundary_proofs.push(slicer.to_proof());
+                    }
                 }
             }
-        }
 
-        if has_next {
-            manifest.next = Some(
-                manifest
-                    .chunk_boundaries
-                    .last()
-                    .expect("boundaries not empty if has next")
-                    .clone(),
+            if has_next {
+                manifest.next = Some(
+                    manifest
+                        .chunk_boundaries
+                        .last()
+                        .expect("boundaries not empty if has next")
+                        .clone(),
+                );
+            }
+
+            debug!(
+                "succeed to load manifest, chunks = {}, next_chunk_key = {:?}",
+                manifest.chunk_boundaries.len(),
+                manifest.next
             );
+
+            Ok(Some((manifest, merkle_root)))
         }
-
-        debug!(
-            "succeed to load manifest, chunks = {}, next_chunk_key = {:?}",
-            manifest.chunk_boundaries.len(),
-            manifest.next
-        );
-
-        Ok(Some((manifest, merkle_root)))
     }
 }
 
@@ -373,44 +384,55 @@ impl Chunk {
             snapshot_epoch_id, chunk_key
         );
 
-        let snapshot_db_manager =
-            storage_manager.get_storage_manager().get_snapshot_manager();
-
-        let snapshot_db = match snapshot_db_manager.get_snapshot_by_epoch_id(
-            snapshot_epoch_id,
-            /* try_open = */ true,
-        )? {
-            Some(db) => db,
-            None => {
-                debug!("failed to load chunk, cannot find snapshot by checkpoint {:?}",
-                       snapshot_epoch_id);
-                return Ok(None);
-            }
-        };
-
-        let mut kv_iterator = snapshot_db.snapshot_kv_iterator()?.take();
-        let lower_bound_incl =
-            chunk_key.lower_bound_incl.clone().unwrap_or_default();
-        let upper_bound_excl =
-            chunk_key.upper_bound_excl.as_ref().map(|k| k.as_slice());
-        let mut kvs = kv_iterator
-            .iter_range(lower_bound_incl.as_slice(), upper_bound_excl)?
-            .take();
-
-        let mut keys = Vec::new();
-        let mut values = Vec::new();
-        while let Some((key, value)) = kvs.next()? {
-            keys.push(key);
-            values.push(value.into());
+        #[cfg(feature = "storage_dev")]
+        {
+            return Err(Error::from_kind(ErrorKind::NotSupported(
+                "Not using delta_mpt as underlying storage".to_string(),
+            )));
         }
 
-        debug!(
-            "complete to load chunk, items = {}, chunk_key = {:?}",
-            keys.len(),
-            chunk_key
-        );
+        #[cfg(not(feature = "storage_dev"))]
+        {
+            let snapshot_db_manager =
+                storage_manager.get_storage_manager().get_snapshot_manager();
 
-        Ok(Some(Chunk { keys, values }))
+            let snapshot_db = match snapshot_db_manager
+                .get_snapshot_by_epoch_id(
+                    snapshot_epoch_id,
+                    /* try_open = */ true,
+                )? {
+                Some(db) => db,
+                None => {
+                    debug!("failed to load chunk, cannot find snapshot by checkpoint {:?}",
+                       snapshot_epoch_id);
+                    return Ok(None);
+                }
+            };
+
+            let mut kv_iterator = snapshot_db.snapshot_kv_iterator()?.take();
+            let lower_bound_incl =
+                chunk_key.lower_bound_incl.clone().unwrap_or_default();
+            let upper_bound_excl =
+                chunk_key.upper_bound_excl.as_ref().map(|k| k.as_slice());
+            let mut kvs = kv_iterator
+                .iter_range(lower_bound_incl.as_slice(), upper_bound_excl)?
+                .take();
+
+            let mut keys = Vec::new();
+            let mut values = Vec::new();
+            while let Some((key, value)) = kvs.next()? {
+                keys.push(key);
+                values.push(value.into());
+            }
+
+            debug!(
+                "complete to load chunk, items = {}, chunk_key = {:?}",
+                keys.len(),
+                chunk_key
+            );
+
+            Ok(Some(Chunk { keys, values }))
+        }
     }
 }
 

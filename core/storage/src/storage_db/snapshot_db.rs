@@ -26,6 +26,7 @@ impl Decodable for SnapshotKeptToProvideSyncStatus {
     }
 }
 
+#[cfg(not(feature = "storage_dev"))]
 #[derive(
     Clone, Default, Derivative, DeriveMallocSizeOf, RlpEncodable, RlpDecodable,
 )]
@@ -47,6 +48,29 @@ pub struct SnapshotInfo {
     pub pivot_chain_parts: Vec<EpochId>,
 }
 
+#[cfg(feature = "storage_dev")]
+#[derive(
+    Clone, Default, Derivative, DeriveMallocSizeOf, RlpEncodable, RlpDecodable,
+)]
+#[derivative(Debug)]
+pub struct SnapshotInfo {
+    /// This field is true when the snapshot info is kept but the snapshot
+    /// itself is removed, or when
+    pub(crate) snapshot_info_kept_to_provide_sync:
+        SnapshotKeptToProvideSyncStatus,
+    // FIXME: update serve_one_step_sync at maintenance.
+    pub(crate) serve_one_step_sync: bool,
+
+    pub merkle_root: MerkleHash,
+    pub(crate) parent_snapshot_height: u64,
+    pub height: u64,
+    pub(crate) parent_snapshot_epoch_id: EpochId,
+    // the last element of pivot_chain_parts is the epoch id of the snapshot
+    // itself.
+    #[derivative(Debug = "ignore")]
+    pub(crate) pivot_chain_parts: Vec<EpochId>,
+}
+
 impl SnapshotInfo {
     pub fn genesis_snapshot_info() -> Self {
         Self {
@@ -62,6 +86,11 @@ impl SnapshotInfo {
 
     pub fn get_snapshot_epoch_id(&self) -> &EpochId {
         self.pivot_chain_parts.last().unwrap()
+    }
+
+    pub fn snapshot_info_kept_to_provide_sync_is_info_only(&self) -> bool {
+        self.snapshot_info_kept_to_provide_sync
+            == SnapshotKeptToProvideSyncStatus::InfoOnly
     }
 
     pub fn get_epoch_id_at_height(&self, height: u64) -> Option<&EpochId> {

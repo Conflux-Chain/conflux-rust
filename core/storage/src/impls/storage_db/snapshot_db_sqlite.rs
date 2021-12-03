@@ -604,7 +604,7 @@ use crate::{
     impls::{
         delta_mpt::DeltaMptIterator,
         errors::*,
-        merkle_patricia_trie::{MptKeyValue, MptMerger},
+        merkle_patricia_trie::{KVInserter, MptKeyValue, MptMerger},
         storage_db::{
             kvdb_sqlite::KvdbSqliteStatements,
             kvdb_sqlite_sharded::{
@@ -614,9 +614,11 @@ use crate::{
                 KvdbSqliteShardedIteratorTag,
                 KvdbSqliteShardedRefDestructureTrait,
             },
-            snapshot_db_manager_sqlite::AlreadyOpenSnapshots,
+            snapshot_db_manager_sqlite::{
+                AlreadyOpenSnapshots, SnapshotDbManagerSqlite,
+            },
             snapshot_mpt::{SnapshotMpt, SnapshotMptLoadNode},
-            sqlite::SQLITE_NO_PARAM,
+            sqlite::{SqliteConnection, SQLITE_NO_PARAM},
         },
     },
     storage_db::{
@@ -627,7 +629,6 @@ use crate::{
         SnapshotMptTraitReadAndIterate, SnapshotMptTraitRw,
     },
     utils::wrap::Wrap,
-    KVInserter, SnapshotDbManagerSqlite, SqliteConnection,
 };
 use fallible_iterator::FallibleIterator;
 use primitives::{MerkleHash, StorageKey};

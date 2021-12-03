@@ -17,7 +17,7 @@ use cfx_internal_common::{
     DatabaseDecodable, DatabaseEncodable, EpochExecutionCommitment,
 };
 use cfx_storage::{
-    storage_db::KeyValueDbTrait, KvdbRocksdb, KvdbSqlite, KvdbSqliteStatements,
+    KeyValueDbTrait, KvdbRocksdb, KvdbSqlite, KvdbSqliteStatements,
 };
 use cfx_types::H256;
 use db::SystemDB;

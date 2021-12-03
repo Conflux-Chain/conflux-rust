@@ -396,10 +396,10 @@ use crate::{
             CompressedPathRaw, CompressedPathTrait, TrieNodeTrait,
             VanillaChildrenTable, VanillaTrieNode, CHILDREN_COUNT,
         },
-        primitives::MptValue,
     },
     utils::access_mode,
 };
+use cfx_storage_primitives::delta_mpt::MptValue;
 use cfx_types::H256;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;

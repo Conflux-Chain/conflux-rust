@@ -250,15 +250,12 @@ pub fn print_mpt_key(key: &[u8]) {
     println!(")");
 }
 
+use crate::impls::{
+    errors::*,
+    merkle_patricia_trie::{CompressedPathRaw, KVInserter, MptKeyValue},
+};
 #[cfg(any(test, feature = "testonly_code"))]
 use crate::{impls::state_manager::StateManager, StorageConfiguration};
-use crate::{
-    impls::{
-        errors::*,
-        merkle_patricia_trie::{CompressedPathRaw, MptKeyValue},
-    },
-    KVInserter,
-};
 use fallible_iterator::FallibleIterator;
 use kvdb::{DBTransaction, DBValue, KeyValueDB};
 use parity_util_mem::{MallocSizeOf, MallocSizeOfOps};

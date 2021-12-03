@@ -10,8 +10,8 @@ use crate::{
     pow::{PowComputer, TargetDifficultyManager},
 };
 use cfx_storage::{
-    state_manager::StateIndex, utils::guarded_value::*, StorageManager,
-    StorageManagerTrait, StorageStateTrait,
+    utils::guarded_value::*, StateIndex, StorageManager, StorageManagerTrait,
+    StorageStateTrait,
 };
 use cfx_types::{Bloom, H256};
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
@@ -46,7 +46,7 @@ pub use block_data_types::*;
 use cfx_internal_common::{
     EpochExecutionCommitment, StateAvailabilityBoundary,
 };
-use cfx_storage::StateRootWithAuxInfo;
+use cfx_storage_primitives::StateRootWithAuxInfo;
 use db_gc_manager::GCProgress;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use std::{hash::Hash, path::Path, time::Duration};
@@ -1530,7 +1530,12 @@ impl BlockDataManager {
         let maybe_commitment =
             self.get_epoch_execution_commitment(block_hash).take();
         if let Some(commitment) = maybe_commitment {
-            Some(commitment.state_root_with_aux_info.aux_info.state_root_hash)
+            Some(
+                commitment
+                    .state_root_with_aux_info
+                    .aux_info
+                    .state_root_hash(),
+            )
         } else {
             None
         }

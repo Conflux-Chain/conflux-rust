@@ -33,6 +33,22 @@ impl NodeMerkleProof {
         self
     }
 
+    pub fn is_valid_with_prev_root(
+        &self, key: &Vec<u8>, storage_root: &StorageRoot,
+        state_root: StateRoot, maybe_prev_root: &Option<StateRoot>,
+    ) -> bool
+    {
+        let maybe_intermediate_padding = maybe_prev_root.as_ref().map(|root| {
+            StorageKey::delta_mpt_padding(
+                &root.snapshot_root,
+                &root.intermediate_delta_root,
+            )
+        });
+        self.is_valid(key, storage_root, state_root, maybe_intermediate_padding)
+    }
+
+    // construct padding
+
     pub fn is_valid(
         &self, key: &Vec<u8>, storage_root: &StorageRoot,
         state_root: StateRoot,
@@ -144,10 +160,8 @@ impl NodeMerkleProof {
     }
 }
 
-use super::{
-    merkle_patricia_trie::TrieProof,
-    primitives::{MptValue, StateRoot, StorageRoot},
-};
+use super::merkle_patricia_trie::TrieProof;
+use cfx_storage_primitives::delta_mpt::{MptValue, StateRoot, StorageRoot};
 use primitives::{
     CheckInput, DeltaMptKeyPadding, StorageKey, MERKLE_NULL_NODE,
 };

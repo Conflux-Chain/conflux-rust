@@ -28,7 +28,6 @@ use futures::future::FutureExt;
 use lru_time_cache::LruCache;
 use network::{node_table::NodeId, NetworkContext};
 use parking_lot::RwLock;
-use primitives::StorageKey;
 use std::{future::Future, sync::Arc};
 
 pub type StateEntry = Option<Vec<u8>>;
@@ -245,20 +244,12 @@ impl StateEntries {
                 reason: "Validation of previous state root failed",
             })?;
 
-        // construct padding
-        let maybe_intermediate_padding = maybe_prev_root.map(|root| {
-            StorageKey::delta_mpt_padding(
-                &root.snapshot_root,
-                &root.intermediate_delta_root,
-            )
-        });
-
         // validate state entry
-        if !proof.state_proof.is_valid_kv(
+        if !proof.state_proof.is_valid_kv_with_prev_root(
             key,
             value.as_ref().map(|v| &**v),
             state_root,
-            maybe_intermediate_padding,
+            &maybe_prev_root,
         ) {
             bail!(ErrorKind::InvalidStateProof {
                 epoch,

@@ -3,10 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 use crate::sync::state::storage::{Chunk, ChunkKey};
+use cfx_storage::SnapshotDbManagerTrait;
+
 use cfx_storage::{
-    state_manager::StateManager,
-    storage_db::{SnapshotDbManagerTrait, SnapshotInfo},
-    FullSyncVerifier, Result as StorageResult, SnapshotDbManagerSqlite,
+    FullSyncVerifier, Result as StorageResult, SnapshotDbManager, SnapshotInfo,
+    StorageManager,
 };
 use primitives::{EpochId, MerkleHash};
 use std::sync::Arc;
@@ -17,7 +18,7 @@ pub struct Restorer {
 
     /// The verifier for chunks.
     /// Initialized after receiving a valid manifest.
-    verifier: Option<FullSyncVerifier<SnapshotDbManagerSqlite>>,
+    verifier: Option<FullSyncVerifier<SnapshotDbManager>>,
 }
 
 impl Restorer {
@@ -32,7 +33,7 @@ impl Restorer {
     }
 
     pub fn initialize_verifier(
-        &mut self, verifier: FullSyncVerifier<SnapshotDbManagerSqlite>,
+        &mut self, verifier: FullSyncVerifier<SnapshotDbManager>,
     ) {
         self.verifier = Some(verifier);
     }
@@ -61,7 +62,7 @@ impl Restorer {
 
     /// Start to restore chunks asynchronously.
     pub fn finalize_restoration(
-        &mut self, state_manager: Arc<StateManager>,
+        &mut self, state_manager: Arc<StorageManager>,
         snapshot_info: SnapshotInfo,
     ) -> StorageResult<()>
     {

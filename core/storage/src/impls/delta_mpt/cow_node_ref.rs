@@ -917,16 +917,17 @@ use super::{
         },
         errors::*,
         merkle_patricia_trie::{merkle::*, *},
-        primitives::MptValue,
         state::ChildrenMerkleMap,
     },
     node_memory_manager::*,
     owned_node_set::OwnedNodeSet,
     AtomicCommitTransaction, DeltaMpt, *,
 };
+use cfx_storage_primitives::delta_mpt::MptValue;
 use parking_lot::MutexGuard;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;
+
 use std::{
     borrow::BorrowMut, cell::Cell, hint::unreachable_unchecked, ops::Deref,
     sync::atomic::Ordering,

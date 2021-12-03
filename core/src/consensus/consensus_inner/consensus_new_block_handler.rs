@@ -19,10 +19,7 @@ use crate::{
     NodeType, Notifications, SharedTransactionPool,
 };
 use cfx_parameters::{consensus::*, consensus_internal::*};
-use cfx_storage::{
-    state_manager::StateManagerTrait,
-    storage_db::SnapshotKeptToProvideSyncStatus, StateIndex,
-};
+use cfx_storage::{StateIndex, StorageManagerTrait};
 use cfx_types::H256;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use parking_lot::Mutex;
@@ -1929,7 +1926,7 @@ impl ConsensusNewBlockHandler {
                         let next_snapshot_epoch = &commitment
                             .state_root_with_aux_info
                             .aux_info
-                            .intermediate_epoch_id;
+                            .next_snapshot_epoch();
                         if inner
                             .data_man
                             .storage_manager
@@ -1937,8 +1934,7 @@ impl ConsensusNewBlockHandler {
                             .get_snapshot_info_at_epoch(next_snapshot_epoch)
                             // returns true when the snapshot is not available.
                             .map_or(true, |info| {
-                                info.snapshot_info_kept_to_provide_sync
-                                    == SnapshotKeptToProvideSyncStatus::InfoOnly
+                                info.snapshot_info_kept_to_provide_sync_is_info_only()
                             })
                         {
                             // The upcoming snapshot is not ready because at the

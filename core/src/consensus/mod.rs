@@ -46,7 +46,7 @@ use cfx_parameters::{
 };
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::StateDb;
-use cfx_storage::state_manager::StateManagerTrait;
+use cfx_storage::StorageManagerTrait;
 use cfx_types::{Bloom, H160, H256, U256};
 use either::Either;
 use itertools::Itertools;
@@ -542,7 +542,7 @@ impl ConsensusGraph {
                     execution_commitment
                         .state_root_with_aux_info
                         .aux_info
-                        .state_root_hash,
+                        .state_root_hash(),
                 )
             }
             Err(msg) => {

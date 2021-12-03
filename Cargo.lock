@@ -716,6 +716,7 @@ dependencies = [
  "cfx-parameters",
  "cfx-statedb",
  "cfx-storage",
+ "cfx-storage-primitives",
  "cfx-types",
  "keccak-hash",
  "parking_lot 0.11.1",

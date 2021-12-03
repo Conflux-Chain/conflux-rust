@@ -617,7 +617,9 @@ impl StateManagerTrait for StateManager {
 
 use crate::{
     impls::{
+        config::storage_manager::StorageConfiguration,
         delta_mpt::*,
+        errors::*,
         state::State,
         state_index::StateIndex,
         storage_db::{
@@ -629,7 +631,6 @@ use crate::{
     state_manager::*,
     storage_db::*,
     utils::guarded_value::GuardedValue,
-    StorageConfiguration,
 };
 use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
 use primitives::{

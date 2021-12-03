@@ -10,34 +10,48 @@
 // TODO: at intermediate_epoch_id with delta_proof.
 #[derive(Clone, Debug, Default, PartialEq, RlpEncodable, RlpDecodable)]
 pub struct StateProof {
-    pub delta_proof: Option<TrieProof>,
-    pub intermediate_proof: Option<TrieProof>,
-    pub snapshot_proof: Option<TrieProof>,
+    pub(crate) delta_proof: Option<TrieProof>,
+    pub(crate) intermediate_proof: Option<TrieProof>,
+    pub(crate) snapshot_proof: Option<TrieProof>,
 }
 
 impl StateProof {
-    pub fn with_delta(
+    pub(crate) fn with_delta(
         &mut self, maybe_delta_proof: Option<TrieProof>,
     ) -> &mut Self {
         self.delta_proof = maybe_delta_proof;
         self
     }
 
-    pub fn with_intermediate(
+    pub(crate) fn with_intermediate(
         &mut self, maybe_intermediate_proof: Option<TrieProof>,
     ) -> &mut Self {
         self.intermediate_proof = maybe_intermediate_proof;
         self
     }
 
-    pub fn with_snapshot(
+    pub(crate) fn with_snapshot(
         &mut self, maybe_snapshot_proof: Option<TrieProof>,
     ) -> &mut Self {
         self.snapshot_proof = maybe_snapshot_proof;
         self
     }
 
-    pub fn is_valid_kv(
+    pub fn is_valid_kv_with_prev_root(
+        &self, key: &Vec<u8>, value: Option<&[u8]>, root: StateRoot,
+        maybe_prev_root: &Option<StateRoot>,
+    ) -> bool
+    {
+        let maybe_intermediate_padding = maybe_prev_root.as_ref().map(|root| {
+            StorageKey::delta_mpt_padding(
+                &root.snapshot_root,
+                &root.intermediate_delta_root,
+            )
+        });
+        self.is_valid_kv(key, value, root, maybe_intermediate_padding)
+    }
+
+    pub(crate) fn is_valid_kv(
         &self, key: &Vec<u8>, value: Option<&[u8]>, root: StateRoot,
         maybe_intermediate_padding: Option<DeltaMptKeyPadding>,
     ) -> bool
@@ -136,10 +150,9 @@ impl StateProof {
     }
 }
 
-use super::{
-    merkle_patricia_trie::TrieProof,
-    primitives::{MptValue, StateRoot},
-};
+use super::merkle_patricia_trie::TrieProof;
+use cfx_storage_primitives::delta_mpt::{MptValue, StateRoot};
+use fs_extra::dir::create;
 use primitives::{
     CheckInput, DeltaMptKeyPadding, StorageKey, MERKLE_NULL_NODE,
 };

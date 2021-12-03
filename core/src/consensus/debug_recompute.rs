@@ -152,7 +152,7 @@ use crate::consensus::{
     ConsensusGraphInner,
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
-use cfx_storage::StateRootWithAuxInfo;
+use cfx_storage_primitives::StateRootWithAuxInfo;
 use cfx_types::H256;
 use serde_json;
 use std::{fs::File, io::Write, path::Path};

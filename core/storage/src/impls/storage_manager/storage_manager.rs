@@ -823,6 +823,7 @@ impl StorageManager {
         Ok(())
     }
 
+    #[cfg(not(feature = "storage_dev"))]
     pub fn maintain_state_confirmed<ConsensusInner: StateMaintenanceTrait>(
         &self, consensus_inner: &ConsensusInner, stable_checkpoint_height: u64,
         era_epoch_count: u64, confirmed_height: u64,
@@ -1515,37 +1516,40 @@ lazy_static! {
 
 use crate::{
     impls::{
+        config::storage_manager::{
+            ProvideExtraSnapshotSyncConfig, StorageConfiguration,
+        },
         delta_mpt::{
             node_memory_manager::{
                 DeltaMptsCacheAlgorithm, DeltaMptsNodeMemoryManager,
             },
             node_ref_map::DeltaMptId,
+            DeltaMpt, DeltaMptIdGen, DeltaMptIterator, OpenDeltaDbLru,
         },
         errors::*,
         snapshot_manager::SnapshotManagerTrait,
+        state_index::StateIndex,
         state_manager::{DeltaDbManager, SnapshotDb, SnapshotDbManager},
         storage_db::{
             kvdb_sqlite::{
-                kvdb_sqlite_iter_range_impl, KvdbSqliteDestructureTrait,
-                KvdbSqliteStatements,
+                kvdb_sqlite_iter_range_impl, KvdbSqlite,
+                KvdbSqliteDestructureTrait, KvdbSqliteStatements,
             },
             snapshot_db_sqlite::test_lib::check_key_value_load,
         },
         storage_manager::snapshot_manager::SnapshotManager,
     },
     storage_db::{
-        DeltaDbManagerTrait, KeyValueDbIterableTrait, SnapshotDbManagerTrait,
-        SnapshotInfo, SnapshotKeptToProvideSyncStatus,
+        DeltaDbManagerTrait, KeyValueDbIterableTrait, KeyValueDbTrait,
+        SnapshotDbManagerTrait, SnapshotInfo, SnapshotKeptToProvideSyncStatus,
     },
     storage_dir,
     utils::{arc_ext::*, guarded_value::GuardedValue},
-    DeltaMpt, DeltaMptIdGen, DeltaMptIterator, KeyValueDbTrait, KvdbSqlite,
-    OpenDeltaDbLru, ProvideExtraSnapshotSyncConfig, StateIndex,
-    StateRootWithAuxInfo, StorageConfiguration,
 };
 use cfx_internal_common::{
     consensus_api::StateMaintenanceTrait, StateAvailabilityBoundary,
 };
+use cfx_storage_primitives::delta_mpt::StateRootWithAuxInfo;
 use fallible_iterator::FallibleIterator;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use parking_lot::{Mutex, RwLock, RwLockReadGuard};

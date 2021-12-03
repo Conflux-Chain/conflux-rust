@@ -1178,15 +1178,16 @@ enable_deref_mut_plus_impl_or_borrow_mut_self!(
 use crate::{
     impls::{
         errors::*,
+        merkle_patricia_trie::MptKeyValue,
         storage_db::{
             kvdb_sqlite::{
                 kvdb_sqlite_iter_range_excl_impl, kvdb_sqlite_iter_range_impl,
-                KvdbSqliteBorrowMut, KvdbSqliteBorrowShared,
-                KvdbSqliteTransaction,
+                KvdbSqlite, KvdbSqliteBorrowMut, KvdbSqliteBorrowShared,
+                KvdbSqliteStatements, KvdbSqliteTransaction,
             },
             sqlite::{
-                BindValueAppendImpl, MappedRows, SqlBindableValue, ValueRead,
-                ValueReadImpl,
+                BindValueAppendImpl, MappedRows, SqlBindableValue,
+                SqliteConnection, ValueRead, ValueReadImpl,
             },
         },
     },
@@ -1202,7 +1203,6 @@ use crate::{
         tuple::ElementSatisfy,
         wrap::{Wrap, WrappedLifetimeFamily, WrappedTrait},
     },
-    KvdbSqlite, KvdbSqliteStatements, MptKeyValue, SqliteConnection,
 };
 use fallible_iterator::FallibleIterator;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};

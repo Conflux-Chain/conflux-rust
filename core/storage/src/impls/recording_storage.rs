@@ -72,13 +72,13 @@ impl<Storage: StateTrait + StateTraitExt> StateTrait
 
 use crate::{
     impls::{
-        errors::*, merkle_patricia_trie::MptKeyValue, state_proof::StateProof,
-        state_root_aux::StateRootWithAuxInfo,
+        errors::*, merkle_patricia_trie::MptKeyValue,
+        proof_merger::StateProofMerger, state_proof::StateProof,
     },
     state::*,
     utils::access_mode,
-    StateProofMerger,
 };
+use cfx_storage_primitives::delta_mpt::StateRootWithAuxInfo;
 use delegate::delegate;
 use parking_lot::Mutex;
 use primitives::{CheckInput, EpochId, StorageKey};

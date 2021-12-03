@@ -18,7 +18,7 @@ use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
     consensus_internal::REWARD_EPOCH_COUNT,
 };
-use cfx_storage::{storage_db::SnapshotInfo, TrieProof};
+use cfx_storage::{SnapshotInfo, TrieProof};
 use cfx_storage_primitives::{
     StateRoot, StateRootAuxInfo, StateRootWithAuxInfo,
 };
@@ -113,90 +113,70 @@ impl SnapshotManifestManager {
             return Ok(None);
         }
 
-        info!(
+        #[cfg(feature = "storage_dev")]
+        {
+            return Err(Error::from_kind(ErrorKind::NotSupported(
+                "Not using delta_mpt as underlying storage".to_string(),
+            )));
+        }
+
+        #[cfg(not(feature = "storage_dev"))]
+        {
+            info!(
             "Snapshot manifest received, checkpoint = {:?}, chunk_boundaries.len()={}, \
             start={:?}, next={:?}",
             self.snapshot_candidate, response.manifest.chunk_boundaries.len(),
             request.start_chunk, response.manifest.next
         );
 
-        // validate blame state if requested
-        if request.is_initial_request() {
-            if !self.chunk_boundaries.is_empty() {
-                bail!(ErrorKind::InvalidSnapshotManifest(
-                    "Initial manifest is not expected".into(),
-                ));
-            }
-            let (blame_vec_offset, state_root_with_aux_info, snapshot_info) =
-                match Self::validate_blame_states(
-                    ctx,
-                    self.snapshot_candidate.get_snapshot_epoch_id(),
-                    &self.trusted_blame_block,
-                    &response.state_root_vec,
-                    &response.receipt_blame_vec,
-                    &response.bloom_blame_vec,
-                ) {
-                    Some(info_tuple) => info_tuple,
-                    None => {
-                        warn!("failed to validate the blame state, re-sync manifest from other peer");
-                        self.resync_manifest(ctx);
-                        bail!(ErrorKind::InvalidSnapshotManifest(
-                            "invalid blame state in manifest".into(),
-                        ));
-                    }
-                };
+            // validate blame state if requested
+            if request.is_initial_request() {
+                if !self.chunk_boundaries.is_empty() {
+                    bail!(ErrorKind::InvalidSnapshotManifest(
+                        "Initial manifest is not expected".into(),
+                    ));
+                }
+                let (blame_vec_offset, state_root_with_aux_info, snapshot_info) =
+                    match Self::validate_blame_states(
+                        ctx,
+                        self.snapshot_candidate.get_snapshot_epoch_id(),
+                        &self.trusted_blame_block,
+                        &response.state_root_vec,
+                        &response.receipt_blame_vec,
+                        &response.bloom_blame_vec,
+                    ) {
+                        Some(info_tuple) => info_tuple,
+                        None => {
+                            warn!("failed to validate the blame state, re-sync manifest from other peer");
+                            self.resync_manifest(ctx);
+                            bail!(ErrorKind::InvalidSnapshotManifest(
+                                "invalid blame state in manifest".into(),
+                            ));
+                        }
+                    };
 
-            let epoch_receipts =
-                match SnapshotManifestManager::validate_epoch_receipts(
-                    ctx,
-                    blame_vec_offset,
-                    self.snapshot_candidate.get_snapshot_epoch_id(),
-                    &response.receipt_blame_vec,
-                    &response.bloom_blame_vec,
-                    &response.block_receipts,
-                ) {
-                    Some(epoch_receipts) => epoch_receipts,
-                    None => {
-                        warn!("failed to validate the epoch receipts, re-sync manifest from other peer");
-                        self.resync_manifest(ctx);
-                        bail!(ErrorKind::InvalidSnapshotManifest(
-                            "invalid epoch receipts in manifest".into(),
-                        ));
-                    }
-                };
+                let epoch_receipts =
+                    match SnapshotManifestManager::validate_epoch_receipts(
+                        ctx,
+                        blame_vec_offset,
+                        self.snapshot_candidate.get_snapshot_epoch_id(),
+                        &response.receipt_blame_vec,
+                        &response.bloom_blame_vec,
+                        &response.block_receipts,
+                    ) {
+                        Some(epoch_receipts) => epoch_receipts,
+                        None => {
+                            warn!("failed to validate the epoch receipts, re-sync manifest from other peer");
+                            self.resync_manifest(ctx);
+                            bail!(ErrorKind::InvalidSnapshotManifest(
+                                "invalid epoch receipts in manifest".into(),
+                            ));
+                        }
+                    };
 
-            // Check proofs for keys.
-            if let Err(e) =
-                response.manifest.validate(&snapshot_info.merkle_root)
-            {
-                warn!("failed to validate snapshot manifest, error = {:?}", e);
-                bail!(ErrorKind::InvalidSnapshotManifest(
-                    "invalid chunk proofs in manifest".into(),
-                ));
-            }
-            self.related_data = Some(RelatedData {
-                true_state_root_by_blame_info: state_root_with_aux_info,
-                blame_vec_offset,
-                receipt_blame_vec: response.receipt_blame_vec,
-                bloom_blame_vec: response.bloom_blame_vec,
-                epoch_receipts,
-                snapshot_info,
-            });
-        } else {
-            if self.chunk_boundaries.is_empty() {
-                bail!(ErrorKind::InvalidSnapshotManifest(
-                    "Non-initial manifest is not expected".into()
-                ));
-            }
-            debug_assert_eq!(
-                request.start_chunk.as_ref(),
-                self.chunk_boundaries.last()
-            );
-            if let Some(related_data) = &self.related_data {
                 // Check proofs for keys.
-                if let Err(e) = response
-                    .manifest
-                    .validate(&related_data.snapshot_info.merkle_root)
+                if let Err(e) =
+                    response.manifest.validate(&snapshot_info.merkle_root)
                 {
                     warn!(
                         "failed to validate snapshot manifest, error = {:?}",
@@ -206,20 +186,57 @@ impl SnapshotManifestManager {
                         "invalid chunk proofs in manifest".into(),
                     ));
                 }
+                self.related_data = Some(RelatedData {
+                    true_state_root_by_blame_info: state_root_with_aux_info,
+                    blame_vec_offset,
+                    receipt_blame_vec: response.receipt_blame_vec,
+                    bloom_blame_vec: response.bloom_blame_vec,
+                    epoch_receipts,
+                    snapshot_info,
+                });
+            } else {
+                if self.chunk_boundaries.is_empty() {
+                    bail!(ErrorKind::InvalidSnapshotManifest(
+                        "Non-initial manifest is not expected".into()
+                    ));
+                }
+                debug_assert_eq!(
+                    request.start_chunk.as_ref(),
+                    self.chunk_boundaries.last()
+                );
+                if let Some(related_data) = &self.related_data {
+                    // Check proofs for keys.
+                    if let Err(e) = response
+                        .manifest
+                        .validate(&related_data.snapshot_info.merkle_root)
+                    {
+                        warn!(
+                        "failed to validate snapshot manifest, error = {:?}",
+                        e
+                    );
+                        bail!(ErrorKind::InvalidSnapshotManifest(
+                            "invalid chunk proofs in manifest".into(),
+                        ));
+                    }
+                }
             }
+            // The first element is `start_key` and overlaps with the previous
+            // manifest.
+            self.chunk_boundaries
+                .extend_from_slice(&response.manifest.chunk_boundaries);
+            self.chunk_boundary_proofs
+                .extend_from_slice(&response.manifest.chunk_boundary_proofs);
+            if response.manifest.next.is_none() {
+                return Ok(self.related_data.clone());
+            } else {
+                self.request_manifest(
+                    ctx.io,
+                    ctx.manager,
+                    response.manifest.next,
+                );
+            }
+            Ok(None)
         }
-        // The first element is `start_key` and overlaps with the previous
-        // manifest.
-        self.chunk_boundaries
-            .extend_from_slice(&response.manifest.chunk_boundaries);
-        self.chunk_boundary_proofs
-            .extend_from_slice(&response.manifest.chunk_boundary_proofs);
-        if response.manifest.next.is_none() {
-            return Ok(self.related_data.clone());
-        } else {
-            self.request_manifest(ctx.io, ctx.manager, response.manifest.next);
-        }
-        Ok(None)
     }
 
     /// request manifest from random peer
@@ -279,6 +296,7 @@ impl SnapshotManifestManager {
 
     pub fn is_inactive(&self) -> bool { self.active_peers.is_empty() }
 
+    #[cfg(not(feature = "storage_dev"))]
     pub fn validate_blame_states(
         ctx: &Context, snapshot_epoch_id: &H256, trusted_blame_block: &H256,
         state_root_vec: &Vec<StateRoot>, receipt_blame_vec: &Vec<H256>,

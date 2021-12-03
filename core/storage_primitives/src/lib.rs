@@ -4,7 +4,12 @@
 
 // extern crate cfx_primitives;
 
-pub mod key_value;
-pub mod storage_root_aux;
-pub use key_value::StateRoot;
-pub use storage_root_aux::{StateRootAuxInfo, StateRootWithAuxInfo};
+pub mod delta_mpt;
+pub mod dummy;
+mod key_value;
+
+#[cfg(not(feature = "storage-dev"))]
+pub use delta_mpt::*;
+#[cfg(feature = "storage-dev")]
+pub use dummy::*;
+pub use key_value::MptValue;

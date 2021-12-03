@@ -38,9 +38,9 @@ use cfx_parameters::consensus::*;
 use cfx_state::{state_trait::*, CleanupMode};
 use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{
-    StateIndex, StateRootWithAuxInfo, StorageManagerTrait,
-    DEFAULT_EXECUTION_PREFETCH_THREADS,
+    StateIndex, StorageManagerTrait, DEFAULT_EXECUTION_PREFETCH_THREADS,
 };
+use cfx_storage_primitives::StateRootWithAuxInfo;
 use cfx_types::{
     address_util::AddressUtil, BigEndianHash, H160, H256, KECCAK_EMPTY_BLOOM,
     U256, U512,
@@ -581,7 +581,7 @@ impl ConsensusExecutor {
                     last_result
                         .state_root_with_aux_info
                         .aux_info
-                        .state_root_hash,
+                        .state_root_hash(),
                     last_result.receipts_root,
                     last_result.logs_bloom_hash,
                 )?)

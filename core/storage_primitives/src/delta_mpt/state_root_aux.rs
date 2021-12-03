@@ -40,6 +40,12 @@ impl StateRootAuxInfo {
             state_root_hash: genesis_state_root.clone(),
         }
     }
+
+    pub fn state_root_hash(&self) -> H256 { self.state_root_hash.clone() }
+
+    pub fn next_snapshot_epoch(&self) -> EpochId {
+        self.intermediate_epoch_id.clone()
+    }
 }
 
 /// This struct is stored as state execution result and is used to compute state
@@ -113,14 +119,6 @@ impl Decodable for StateRootWithAuxInfo {
     }
 }
 
-use super::key_value::StateRoot;
-use cfx_primitives::{
-    DeltaMptKeyPadding, EpochId, MerkleHash, GENESIS_DELTA_MPT_KEY_PADDING,
-    NULL_EPOCH,
-};
-use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use serde_derive::{Deserialize, Serialize};
-
 /// Only used by storage benchmark due to incompatibility of rlp crate version.
 pub trait StateRootWithAuxInfoToFromRlpBytes {
     fn to_rlp_bytes(&self) -> Vec<u8>;
@@ -137,3 +135,11 @@ impl StateRootWithAuxInfoToFromRlpBytes for StateRootWithAuxInfo {
         Ok(Self::decode(&Rlp::new(bytes))?)
     }
 }
+use super::state_root::StateRoot;
+use cfx_primitives::{
+    DeltaMptKeyPadding, EpochId, MerkleHash, GENESIS_DELTA_MPT_KEY_PADDING,
+    NULL_EPOCH,
+};
+use cfx_types::H256;
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use serde_derive::{Deserialize, Serialize};

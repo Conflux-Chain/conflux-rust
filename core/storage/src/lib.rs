@@ -20,184 +20,82 @@ extern crate log;
 pub mod utils;
 
 pub mod state;
-pub mod state_manager;
+mod state_manager;
+
 #[macro_use]
-pub mod storage_db;
+mod storage_db;
 
 #[cfg(any(test, feature = "testonly_code"))]
 pub mod tests;
 #[cfg(not(any(test, feature = "testonly_code")))]
 mod tests;
 
+mod dummy_impls;
 mod impls;
 
-pub mod storage_dir {
-    use std::path::PathBuf;
-    lazy_static! {
-        pub static ref DELTA_MPTS_DIR: PathBuf =
-            ["storage_db", "delta_mpts"].iter().collect::<PathBuf>();
-        pub static ref SNAPSHOT_DIR: PathBuf =
-            ["storage_db", "snapshot"].iter().collect::<PathBuf>();
-        pub static ref SNAPSHOT_INFO_DB_NAME: &'static str = "snapshot_info";
-        pub static ref SNAPSHOT_INFO_DB_PATH: PathBuf =
-            ["storage_db", "snapshot_info_db"]
-                .iter()
-                .collect::<PathBuf>();
-        pub static ref STORAGE_DIR: PathBuf = "storage_db".into();
-    }
-}
+pub type WithProof = primitives::static_bool::Yes;
+pub type NoProof = primitives::static_bool::No;
 
-/// Consensus parameter is only configurable in test mode.
-#[derive(Debug, Clone)]
-pub struct ConsensusParam {
-    // The current delta switching rule is simply split by height at
-    // multiple of SNAPSHOT_EPOCHS_CAPACITY.
-    //
-    // Only if we see problem dealing with attacks, consider rules like the
-    // size of delta trie.
-    pub snapshot_epoch_count: u32,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum ProvideExtraSnapshotSyncConfig {
-    /// Keep the snapshot at the same epoch as the checkpoint.
-    /// TODO:
-    ///  This config will be removed when there is a more reasonable
-    ///  snapshot sync point.
-    StableCheckpoint,
-    EpochNearestMultipleOf(u32),
-}
-
-impl ProvideExtraSnapshotSyncConfig {
-    pub fn from_str(config: &str) -> Option<Self> {
-        const MULTIPLE_OF_PREFIX: &'static str = "multiple_of_";
-        if config == "checkpoint" {
-            Some(Self::StableCheckpoint)
-        } else if config.starts_with(MULTIPLE_OF_PREFIX) {
-            let number_str = &config[MULTIPLE_OF_PREFIX.len()..];
-            match number_str.parse::<u32>() {
-                Err(_) => None,
-                Ok(num) => Some(Self::EpochNearestMultipleOf(num)),
-            }
-        } else {
-            None
-        }
-    }
-
-    pub fn parse_config_list(
-        config: &str,
-    ) -> std::result::Result<Vec<Self>, String> {
-        let mut list = vec![];
-        for item in config.split(",") {
-            if item.len() > 0 {
-                list.push(Self::from_str(item).ok_or_else(|| {
-                    format!(
-                        "{} is not a valid ProvideExtraSnapshotSyncConfig",
-                        item
-                    )
-                })?);
-            }
-        }
-        Ok(list)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct StorageConfiguration {
-    pub additional_maintained_snapshot_count: u32,
-    pub consensus_param: ConsensusParam,
-    pub debug_snapshot_checker_threads: u16,
-    pub delta_mpts_cache_recent_lfu_factor: f64,
-    pub delta_mpts_cache_start_size: u32,
-    pub delta_mpts_cache_size: u32,
-    pub delta_mpts_node_map_vec_size: u32,
-    pub delta_mpts_slab_idle_size: u32,
-    pub max_open_snapshots: u16,
-    pub path_delta_mpts_dir: PathBuf,
-    pub path_storage_dir: PathBuf,
-    pub path_snapshot_dir: PathBuf,
-    pub path_snapshot_info_db: PathBuf,
-    pub provide_more_snapshot_for_sync: Vec<ProvideExtraSnapshotSyncConfig>,
-    pub max_open_mpt_count: u32,
-}
-
-impl StorageConfiguration {
-    pub fn new_default(
-        conflux_data_dir: &str, snapshot_epoch_count: u32,
-    ) -> Self {
-        let conflux_data_path = Path::new(conflux_data_dir);
-        StorageConfiguration {
-            additional_maintained_snapshot_count: 0,
-            consensus_param: ConsensusParam {
-                snapshot_epoch_count,
-            },
-            debug_snapshot_checker_threads:
-                defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS,
-            delta_mpts_cache_recent_lfu_factor:
-                defaults::DEFAULT_DELTA_MPTS_CACHE_RECENT_LFU_FACTOR,
-            delta_mpts_cache_size: defaults::DEFAULT_DELTA_MPTS_CACHE_SIZE,
-            delta_mpts_cache_start_size:
-                defaults::DEFAULT_DELTA_MPTS_CACHE_START_SIZE,
-            delta_mpts_node_map_vec_size: defaults::DEFAULT_NODE_MAP_SIZE,
-            delta_mpts_slab_idle_size:
-                defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE,
-            max_open_snapshots: defaults::DEFAULT_MAX_OPEN_SNAPSHOTS,
-            path_delta_mpts_dir: conflux_data_path
-                .join(&*storage_dir::DELTA_MPTS_DIR),
-            path_snapshot_dir: conflux_data_path
-                .join(&*storage_dir::SNAPSHOT_DIR),
-            path_snapshot_info_db: conflux_data_path
-                .join(&*storage_dir::SNAPSHOT_INFO_DB_PATH),
-            path_storage_dir: conflux_data_path
-                .join(&*storage_dir::STORAGE_DIR),
-            provide_more_snapshot_for_sync: vec![
-                ProvideExtraSnapshotSyncConfig::StableCheckpoint,
-            ],
-            max_open_mpt_count: defaults::DEFAULT_MAX_OPEN_MPT,
-        }
-    }
-}
-
-use self::impls::{
-    delta_mpt::*, proof_merger::StateProofMerger,
-    storage_db::sqlite::SqliteConnection,
-};
-
+// Export all the config info
 pub use self::impls::{
-    defaults::{self, DEFAULT_EXECUTION_PREFETCH_THREADS},
-    snapshot_sync::{FullSyncVerifier, MptSlicer},
-    storage_db::{
-        kvdb_rocksdb::KvdbRocksdb,
-        kvdb_sqlite::{KvdbSqlite, KvdbSqliteStatements},
-        snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
+    config::storage_manager::{
+        storage_dir, ConsensusParam, ProvideExtraSnapshotSyncConfig,
     },
+    defaults::{self, DEFAULT_EXECUTION_PREFETCH_THREADS},
 };
 
+// Common tools not only for deltampt.
 pub use self::{
     impls::{
         errors::{Error, ErrorKind, Result},
-        merkle_patricia_trie::{
-            simple_mpt::*, KVInserter, MptKeyValue, TrieProof,
+        merkle_patricia_trie::{simple_mpt::*, MptKeyValue, TrieProof},
+        storage_db::{
+            kvdb_rocksdb::KvdbRocksdb,
+            kvdb_sqlite::{KvdbSqlite, KvdbSqliteStatements},
         },
-        node_merkle_proof::{NodeMerkleProof, StorageRootProof},
-        primitives::{StateRoot, StorageRoot},
-        state_proof::StateProof,
-        state_root_aux::{StateRootAuxInfo, StateRootWithAuxInfo},
     },
+    storage_db::{snapshot_db::SnapshotInfo, KeyValueDbTrait},
+};
+
+#[cfg(feature = "storage_dev")]
+pub use self::dummy_impls::{
+    config::storage_manager::StorageConfiguration,
+    proof_type::{StateProof, StorageRootProof},
+    state::State as StorageState,
+    state_index::StateIndex,
+    state_manager::StateManager as StorageManager,
+    state_trait::StateManagerTrait as StorageManagerTrait,
+    state_trait::StateTrait as StorageStateTrait,
+    state_trait::StateTraitExt as StorageStateTraitExt,
+};
+#[cfg(not(feature = "storage_dev"))]
+pub use self::{
     state::{
-        State as StorageState, StateTrait as StorageStateTrait,
-        StateTraitExt as StorageStateTraitExt,
+        State as StorageState, StateProof, StateTrait as StorageStateTrait,
+        StateTraitExt as StorageStateTraitExt, StorageRootProof,
     },
     state_manager::{
         StateIndex, StateManager as StorageManager,
-        StateManagerTrait as StorageManagerTrait,
+        StateManagerTrait as StorageManagerTrait, StorageConfiguration,
     },
-    storage_db::KeyValueDbTrait,
+};
+
+#[cfg(not(feature = "storage_dev"))]
+pub use self::{
+    impls::{
+        merkle_patricia_trie::KVInserter,
+        snapshot_sync::{FullSyncVerifier, MptSlicer},
+        storage_db::snapshot_db_manager_sqlite::SnapshotDbManagerSqlite as SnapshotDbManager,
+    },
+    storage_db::{
+        key_value_db::KeyValueDbIterableTrait,
+        snapshot_db::{OpenSnapshotMptTrait, SnapshotDbTrait},
+        SnapshotDbManagerTrait,
+    },
 };
 
 #[cfg(any(test, feature = "testonly_code"))]
-pub use self::delta_mpt_iterator::DeltaMptIterator;
-#[cfg(any(test, feature = "testonly_code"))]
-pub use self::tests::new_state_manager_for_unit_test as new_storage_manager_for_testing;
-
-use std::path::{Path, PathBuf};
+pub use self::{
+    delta_mpt_iterator::DeltaMptIterator,
+    tests::new_state_manager_for_unit_test as new_storage_manager_for_testing,
+};

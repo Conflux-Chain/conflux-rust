@@ -1,14 +1,10 @@
 use crate::sync::{
     message::{msgid, Context, SnapshotChunkRequest},
-    state::{
-        state_sync_chunk::restore::Restorer,
-        storage::{Chunk, ChunkKey, RangedManifest, SnapshotSyncCandidate},
-    },
+    state::storage::{Chunk, ChunkKey, RangedManifest, SnapshotSyncCandidate},
     synchronization_state::PeerFilter,
 };
 use cfx_storage::{
-    storage_db::SnapshotInfo, FullSyncVerifier, Result as StorageResult,
-    TrieProof,
+    FullSyncVerifier, Result as StorageResult, SnapshotInfo, TrieProof,
 };
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::node_table::NodeId;
@@ -28,7 +24,7 @@ pub struct SnapshotChunkManager {
     num_downloaded: usize,
     config: SnapshotChunkConfig,
 
-    restorer: Restorer,
+    restorer: super::restore::Restorer,
 }
 
 impl SnapshotChunkManager {
@@ -39,7 +35,7 @@ impl SnapshotChunkManager {
         config: SnapshotChunkConfig,
     ) -> StorageResult<Self>
     {
-        let mut restorer = Restorer::new(
+        let mut restorer = super::restore::Restorer::new(
             *snapshot_candidate.get_snapshot_epoch_id(),
             snapshot_info.merkle_root,
         );

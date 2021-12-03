@@ -164,5 +164,7 @@ error_chain! {
             description("tokio::sync::Semaphore::try_acquire(): the semaphore is unavailable."),
             display("tokio::sync::Semaphore::try_acquire(): the semaphore is unavailable."),
         }
+
+        NotDeltaMpt
     }
 }

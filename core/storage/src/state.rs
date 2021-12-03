@@ -9,19 +9,14 @@
 ///
 /// A writable state is copy-on-write reference to the base state in the
 /// state manager. State is supposed to be owned by single user.
-use crate::impls as state_impls;
-
-use super::{utils::access_mode, MptKeyValue, StateRootWithAuxInfo};
+use crate::{impls::errors::*, utils::access_mode, MptKeyValue};
 use primitives::{EpochId, StaticBool, StorageKey};
-use state_impls::{
-    errors::*, node_merkle_proof::NodeMerkleProof,
-    primitives::NodeMerkleTriplet, state_proof::StateProof,
+
+pub use crate::impls::{
+    proof_type::{StateProof, StorageRootProof},
+    state::State,
 };
-
-pub use state_impls::state::State;
-
-pub type WithProof = primitives::static_bool::Yes;
-pub type NoProof = primitives::static_bool::No;
+use cfx_storage_primitives::delta_mpt::{StateRootWithAuxInfo, StorageRoot};
 
 // The trait is created to separate the implementation to another file, and the
 // concrete struct is put into inner mod, because the implementation is
@@ -58,5 +53,5 @@ pub trait StateTraitExt {
     /// compressed path.
     fn get_node_merkle_all_versions<WithProof: StaticBool>(
         &self, access_key: StorageKey,
-    ) -> Result<(NodeMerkleTriplet, NodeMerkleProof)>;
+    ) -> Result<(StorageRoot, StorageRootProof)>;
 }

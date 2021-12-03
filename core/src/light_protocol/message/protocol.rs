@@ -9,8 +9,9 @@ use super::NodeType;
 use crate::message::RequestId;
 use cfx_internal_common::ChainIdParamsDeprecated;
 use cfx_storage::{
-    NodeMerkleProof, StateProof, StateRoot, StorageRoot, TrieProof,
+    StateProof, StorageRootProof as RawStorageRootProof, TrieProof,
 };
+use cfx_storage_primitives::{StateRoot, StorageRoot};
 use primitives::{BlockHeader, BlockReceipts, Receipt, SignedTransaction};
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
@@ -293,7 +294,7 @@ pub struct GetStorageRoots {
 
 #[derive(Clone, Debug, Default, RlpEncodable, RlpDecodable)]
 pub struct StorageRootProof {
-    pub merkle_proof: NodeMerkleProof,
+    pub merkle_proof: RawStorageRootProof,
 
     // state root is validated against witness info retrieved previously;
     // no additional proof needed

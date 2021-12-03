@@ -1,4 +1,4 @@
-use crate::StateRootWithAuxInfo;
+use cfx_storage_primitives::delta_mpt::StateRootWithAuxInfo;
 use primitives::{
     DeltaMptKeyPadding, EpochId, MerkleHash, GENESIS_DELTA_MPT_KEY_PADDING,
     MERKLE_NULL_NODE, NULL_EPOCH,

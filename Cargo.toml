@@ -77,9 +77,10 @@ path = "tools/tg_config_gen/main.rs"
 [workspace]
 
 [features]
-default = ["jemalloc-global"]
+default = ["jemalloc-global","storage-dev"]
 deadlock-detection = ["parking_lot/deadlock_detection"]
 jemalloc-global = ["jemallocator", "malloc_size_of/jemalloc-global"]
+storage-dev = ["cfxcore/storage_dev", "client/storage_dev"]
 
 [patch.crates-io]
 sqlite3-sys = { git = "https://github.com/Conflux-Chain/sqlite3-sys.git", rev = "1de8e5998f7c2d919336660b8ef4e8f52ac43844" }

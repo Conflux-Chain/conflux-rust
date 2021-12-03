@@ -121,5 +121,5 @@ use super::super::super::{
     },
     errors::*,
     merkle_patricia_trie::{mpt_cursor::*, *},
-    primitives::MptValue,
 };
+use cfx_storage_primitives::delta_mpt::MptValue;
