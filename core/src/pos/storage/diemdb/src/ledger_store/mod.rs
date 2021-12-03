@@ -475,7 +475,7 @@ impl LedgerStore {
     pub fn delete_pos_state(&self, block_hash: &HashValue) -> Result<()> {
         let mut cs = ChangeSet::new();
         cs.batch.delete::<PosStateSchema>(block_hash)?;
-        self.db.write_schemas(cs.batch)
+        self.db.write_schemas(cs.batch, true)
     }
 
     /// Read LedgerInfo by block id from the database.
@@ -506,7 +506,7 @@ impl LedgerStore {
     ) -> Result<()> {
         let mut cs = ChangeSet::new();
         cs.batch.put::<RewardEventSchema>(&epoch, event)?;
-        self.db.write_schemas(cs.batch)
+        self.db.write_schemas(cs.batch, false)
     }
 
     pub fn get_reward_event(

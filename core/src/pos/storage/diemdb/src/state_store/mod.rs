@@ -230,7 +230,7 @@ impl TreeWriter<AccountStateBlob> for StateStore {
     fn write_node_batch(&self, node_batch: &NodeBatch) -> Result<()> {
         let mut batch = SchemaBatch::new();
         add_node_batch(&mut batch, node_batch)?;
-        self.db.write_schemas(batch)
+        self.db.write_schemas(batch, false)
     }
 }
 

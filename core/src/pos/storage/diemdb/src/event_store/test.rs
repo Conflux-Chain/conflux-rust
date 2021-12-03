@@ -36,7 +36,7 @@ fn save(
         cs.counter_bumps(version).get(LedgerCounter::EventsCreated),
         events.len()
     );
-    store.db.write_schemas(cs.batch).unwrap();
+    store.db.write_schemas(cs.batch, true).unwrap();
 
     root_hash
 }

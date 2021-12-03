@@ -438,7 +438,7 @@ pub fn prune_state(
         indices.into_iter().try_for_each(|index| {
             batch.delete::<JellyfishMerkleNodeSchema>(&index.node_key)
         })?;
-        db.write_schemas(batch)?;
+        db.write_schemas(batch, false)?;
         Ok(new_least_readable_version)
     }
 }
