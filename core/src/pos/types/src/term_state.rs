@@ -43,8 +43,8 @@ pub mod pos_state_config;
 
 pub const TERM_LIST_LEN: usize = 6;
 pub const ROUND_PER_TERM: Round = 60;
-pub const IN_QUEUE_LOCKED_VIEWS: u64 = 10080;
-pub const OUT_QUEUE_LOCKED_VIEWS: u64 = 10080;
+pub const IN_QUEUE_LOCKED_VIEWS: u64 = 2880;
+pub const OUT_QUEUE_LOCKED_VIEWS: u64 = 2880;
 // The view to start election in the whole PoS consensus protocol.
 
 pub const TERM_MAX_SIZE: usize = 10000;
