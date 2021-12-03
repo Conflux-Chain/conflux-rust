@@ -55,6 +55,7 @@ pub(crate) fn execute_broadcast(
     executor: Handle,
 )
 {
+    diem_trace!("execute_broadcast starts: peer={}", peer);
     let peer_manager = &smp.peer_manager.clone();
     peer_manager.execute_broadcast(peer.clone(), backoff, smp);
     let schedule_backoff = peer_manager.is_backoff_mode(&peer);
@@ -73,6 +74,7 @@ pub(crate) fn execute_broadcast(
             executor,
         ))
     }
+    diem_trace!("execute_broadcast end: peer={}", peer);
 }
 
 // =============================== //
@@ -116,6 +118,7 @@ pub(crate) async fn process_transaction_broadcast(
     timer: HistogramTimer,
 )
 {
+    diem_trace!("process_transaction_broadcast starts: peer={}", peer);
     timer.stop_and_record();
     /*let _timer = counters::process_txn_submit_latency_timer(
         peer.raw_network_id().as_str(),
@@ -144,6 +147,7 @@ pub(crate) async fn process_transaction_broadcast(
         return;
     }
     notify_subscribers(SharedMempoolNotification::ACK, &smp.subscribers);
+    diem_trace!("process_transaction_broadcast ends: peer={}", peer);
 }
 
 fn gen_ack_response(
@@ -165,7 +169,7 @@ fn gen_ack_response(
         }
     }
 
-    diem_debug!(
+    diem_trace!(
         "request[{:?}] from peer[{:?}] retry[{:?}]",
         request_id,
         peer,

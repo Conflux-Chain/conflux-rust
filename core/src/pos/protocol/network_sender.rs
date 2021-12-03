@@ -114,8 +114,10 @@ impl NetworkSender {
                         .request_with_delay(io, request, recipient, None)
                 },
             )
-            .map_err(|_| format_err!("send rpc failed"))?;
-        Ok(res_rx.await?.map_err(|_| format_err!("rpc call failed"))?)
+            .map_err(|e| format_err!("send rpc failed: err={:?}", e))?;
+        Ok(res_rx
+            .await?
+            .map_err(|e| format_err!("rpc call failed: err={:?}", e))?)
     }
 
     /// Send msg to self

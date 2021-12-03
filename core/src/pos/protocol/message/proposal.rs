@@ -11,11 +11,12 @@ use crate::{
 };
 
 use consensus_types::proposal_msg::ProposalMsg;
+use diem_logger::prelude::diem_debug;
 use std::mem::discriminant;
 
 impl Handleable for ProposalMsg {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        debug!("on_proposal, msg={:?}", &self);
+        diem_debug!("on_proposal, msg={:?}", &self);
 
         let peer_address = ctx.get_peer_account_address()?;
 

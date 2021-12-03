@@ -10,11 +10,12 @@ use crate::{
     sync::Error,
 };
 use consensus_types::sync_info::SyncInfo;
+use diem_logger::prelude::diem_debug;
 use std::mem::discriminant;
 
 impl Handleable for SyncInfo {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
-        debug!("on_sync_info, msg={:?}", &self);
+        diem_debug!("on_sync_info, msg={:?}", &self);
 
         let peer_address = ctx.get_peer_account_address()?;
 

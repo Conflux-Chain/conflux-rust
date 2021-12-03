@@ -361,7 +361,7 @@ impl BlockRetriever {
 }
 
 // Max timeout is 16s=RETRIEVAL_INITIAL_TIMEOUT*(2^RETRIEVAL_MAX_EXP)
-const RETRIEVAL_INITIAL_TIMEOUT: Duration = Duration::from_millis(200);
+const RETRIEVAL_INITIAL_TIMEOUT: Duration = Duration::from_millis(1000);
 const RETRIEVAL_MAX_EXP: u32 = 4;
 
 /// Returns exponentially increasing timeout with
