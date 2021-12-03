@@ -44,6 +44,7 @@ use diem_types::term_state::{
 };
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
+use primitives::{block::BlockHeight, BlockNumber};
 use txgen::TransactionGeneratorConfig;
 
 use crate::rpc::{
@@ -1107,10 +1108,7 @@ impl Configuration {
             .raw_conf
             .unnamed_21autumn_transition_number
             .unwrap_or(default_transition_time);
-        params.transition_numbers.cip72b = self
-            .raw_conf
-            .unnamed_21autumn_transition_number
-            .unwrap_or(default_transition_time);
+        params.transition_numbers.cip72b = BlockNumber::MAX;
         params.transition_numbers.cip78 = self
             .raw_conf
             .unnamed_21autumn_transition_number
@@ -1124,10 +1122,7 @@ impl Configuration {
             .raw_conf
             .unnamed_21autumn_transition_height
             .unwrap_or(default_transition_time);
-        params.transition_heights.cip72a = self
-            .raw_conf
-            .unnamed_21autumn_transition_height
-            .unwrap_or(default_transition_time);
+        params.transition_heights.cip72a = BlockHeight::MAX;
         params.transition_heights.cip86 = self
             .raw_conf
             .unnamed_21autumn_transition_height
