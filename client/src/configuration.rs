@@ -296,7 +296,7 @@ build_config! {
         (is_consortium, (bool), false)
         (pos_config_path, (Option<String>), Some("./pos_config/pos_config.yaml".to_string()))
         (pos_genesis_pivot_decision, (Option<H256>), None)
-        (vrf_proposal_threshold, (U256), U256::from_str("0x1111111111111100000000000000000000000000000000000000000000000000").unwrap())
+        (vrf_proposal_threshold, (U256), U256::from_str("1111111111111100000000000000000000000000000000000000000000000000").unwrap())
         // Deferred epoch count before a confirmed epoch.
         (pos_pivot_decision_defer_epoch_count, (u64), 50)
         (pos_reference_enable_height, (u64), 55665000)
