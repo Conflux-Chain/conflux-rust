@@ -486,6 +486,6 @@ fn default_write_options() -> rocksdb::WriteOptions {
 fn fast_write_options() -> rocksdb::WriteOptions {
     let mut opts = rocksdb::WriteOptions::default();
     opts.set_sync(false);
-    opts.disable_wal(true);
+    // opts.disable_wal(true);
     opts
 }
