@@ -28,7 +28,7 @@ pub struct MempoolConfig {
 impl Default for MempoolConfig {
     fn default() -> MempoolConfig {
         MempoolConfig {
-            shared_mempool_tick_interval_ms: 500,
+            shared_mempool_tick_interval_ms: 1000,
             shared_mempool_backoff_interval_ms: 30_000,
             shared_mempool_batch_size: 100,
             shared_mempool_ack_timeout_ms: 5_000,
@@ -36,7 +36,7 @@ impl Default for MempoolConfig {
             // Allow for 1s latency with the default 500ms tick.
             max_broadcasts_per_peer: 2,
             mempool_snapshot_interval_secs: 180,
-            capacity: 1_000_000,
+            capacity: 100_000,
             capacity_per_user: 100,
             default_failovers: 3,
             system_transaction_timeout_secs: 600,
