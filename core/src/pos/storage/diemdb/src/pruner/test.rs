@@ -28,7 +28,7 @@ fn put_account_state_set(
             &mut cs,
         )
         .unwrap()[0];
-    db.write_schemas(cs.batch).unwrap();
+    db.write_schemas(cs.batch, true).unwrap();
 
     root
 }

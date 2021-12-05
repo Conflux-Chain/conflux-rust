@@ -550,7 +550,7 @@ impl DiemDB {
     /// ledger state of some transaction by leveraging rocksdb atomicity
     /// support. Also committed are the LedgerCounters.
     fn commit(&self, sealed_cs: SealedChangeSet) -> Result<()> {
-        self.db.write_schemas(sealed_cs.batch)?;
+        self.db.write_schemas(sealed_cs.batch, false)?;
 
         Ok(())
     }

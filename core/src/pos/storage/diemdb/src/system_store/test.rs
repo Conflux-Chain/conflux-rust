@@ -23,7 +23,7 @@ fn bump_ledger_counters(
     let counters = store
         .bump_ledger_counters(first_version, last_version, &mut cs)
         .unwrap();
-    store.db.write_schemas(cs.batch).unwrap();
+    store.db.write_schemas(cs.batch, true).unwrap();
 
     counters
 }

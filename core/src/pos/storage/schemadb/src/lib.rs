@@ -335,7 +335,7 @@ impl DB {
         // counters. Used in tests only anyway.
         let mut batch = SchemaBatch::new();
         batch.put::<S>(key, value)?;
-        self.write_schemas(batch)
+        self.write_schemas(batch, false)
     }
 
     /// Delete all keys in range [begin, end).
@@ -381,7 +381,9 @@ impl DB {
     }
 
     /// Writes a group of records wrapped in a [`SchemaBatch`].
-    pub fn write_schemas(&self, batch: SchemaBatch) -> Result<()> {
+    pub fn write_schemas(
+        &self, batch: SchemaBatch, fast_write: bool,
+    ) -> Result<()> {
         let _timer = DIEM_SCHEMADB_BATCH_COMMIT_LATENCY_SECONDS
             .with_label_values(&[self.name])
             .start_timer();
@@ -402,8 +404,13 @@ impl DB {
         }
         let serialized_size = db_batch.data_size();
 
+        let write_options = if fast_write {
+            fast_write_options()
+        } else {
+            default_write_options()
+        };
         self.inner
-            .write_opt(&db_batch, &default_write_options())
+            .write_opt(&db_batch, &write_options)
             .map_err(convert_rocksdb_err)?;
 
         // Bump counters only after DB write succeeds.
@@ -473,5 +480,12 @@ impl DB {
 fn default_write_options() -> rocksdb::WriteOptions {
     let mut opts = rocksdb::WriteOptions::default();
     opts.set_sync(true);
+    opts
+}
+
+fn fast_write_options() -> rocksdb::WriteOptions {
+    let mut opts = rocksdb::WriteOptions::default();
+    opts.set_sync(false);
+    // opts.disable_wal(true);
     opts
 }

@@ -199,7 +199,7 @@ fn set_up(
         .map(|info| store.put_ledger_info(info, &mut cs))
         .collect::<Result<Vec<_>>>()
         .unwrap();
-    store.db.write_schemas(cs.batch).unwrap();
+    store.db.write_schemas(cs.batch, true).unwrap();
     store
         .set_latest_ledger_info(ledger_infos_with_sigs.last().unwrap().clone());
 
@@ -212,5 +212,5 @@ fn put_transaction_infos(db: &DiemDB, txn_infos: &[TransactionInfo]) {
     db.ledger_store
         .put_transaction_infos(0, txn_infos, &mut cs)
         .unwrap();
-    db.db.write_schemas(cs.batch).unwrap()
+    db.db.write_schemas(cs.batch, true).unwrap()
 }
