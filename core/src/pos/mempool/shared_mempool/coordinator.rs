@@ -180,7 +180,6 @@ async fn handle_mempool_sync_msg(
     msg: MempoolSyncMsg,
 )
 {
-    debug!("handle_mempool_sync_msg from peer[{:?}]", peer);
     counters::shared_mempool_event_inc("message");
     match msg {
         MempoolSyncMsg::BroadcastTransactionsRequest {

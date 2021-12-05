@@ -7,6 +7,7 @@ use crate::{
     sync::{Error, ErrorKind, ProtocolConfiguration},
 };
 use cfx_parameters::sync::REQUEST_START_WAITING_TIME;
+use diem_logger::prelude::diem_debug;
 use futures::{channel::oneshot, future::Future};
 use network::{node_table::NodeId, NetworkContext};
 use parking_lot::Mutex;
@@ -83,7 +84,7 @@ impl RequestManager {
             // todo remove the request if waiting time is too long?
             // E.g. attacker may broadcast many many invalid block hashes,
             // and no peer could return the corresponding block header.
-            debug!("request_with_delay: add request to waiting_requests, peer={:?}, request={:?}, delay={:?}", peer, request, cur_delay);
+            diem_debug!("request_with_delay: add request to waiting_requests, peer={:?}, request={:?}, delay={:?}", peer, request, cur_delay);
             self.waiting_requests.lock().push(TimedWaitingRequest::new(
                 Instant::now() + cur_delay,
                 WaitingRequest(request, next_delay),
