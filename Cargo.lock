@@ -89,7 +89,7 @@ dependencies = [
 [[package]]
 name = "amt-db"
 version = "0.0.1"
-source = "git+ssh://git@github.com/Conflux-Chain/conflux-amt-ledgerdb.git#a061f9961ec880d5c9c0aa71e414c5925d0dc2da"
+source = "git+ssh://git@github.com/Conflux-Chain/conflux-amt-ledgerdb.git#0d2bf6accde347f2de4e02292064ce592c1f17a5"
 dependencies = [
  "amt-serde-derive",
  "ark-bls12-381",
@@ -118,7 +118,7 @@ dependencies = [
 [[package]]
 name = "amt-serde-derive"
 version = "0.1.0"
-source = "git+ssh://git@github.com/Conflux-Chain/conflux-amt-ledgerdb.git#a061f9961ec880d5c9c0aa71e414c5925d0dc2da"
+source = "git+ssh://git@github.com/Conflux-Chain/conflux-amt-ledgerdb.git#0d2bf6accde347f2de4e02292064ce592c1f17a5"
 dependencies = [
  "proc-macro-crate 1.1.0",
  "proc-macro2 1.0.28",
@@ -745,6 +745,8 @@ dependencies = [
 name = "cfx-storage"
 version = "1.0.0"
 dependencies = [
+ "amt-db",
+ "backtrace",
  "cfg-if 0.1.10",
  "cfx-bytes",
  "cfx-internal-common",
@@ -787,10 +789,13 @@ dependencies = [
 name = "cfx-storage-primitives"
 version = "0.1.0"
 dependencies = [
+ "amt-db",
+ "backtrace",
  "cfg-if 0.1.10",
  "cfx-bytes",
  "cfx-types",
  "keccak-hash",
+ "log 0.4.14",
  "primitives",
  "rlp",
  "rlp_derive",
@@ -834,7 +839,6 @@ dependencies = [
 name = "cfxcore"
 version = "1.1.7"
 dependencies = [
- "amt-db",
  "bit-set",
  "bn",
  "byteorder",
@@ -1175,6 +1179,20 @@ dependencies = [
  "threadpool",
  "toml 0.4.10",
  "txgen",
+]
+
+[[package]]
+name = "consensus_bench"
+version = "0.1.0"
+dependencies = [
+ "cfx-types",
+ "cfxcore",
+ "db",
+ "log 0.4.14",
+ "log4rs",
+ "parking_lot 0.11.1",
+ "primitives",
+ "threadpool",
 ]
 
 [[package]]
@@ -3735,7 +3753,7 @@ dependencies = [
 [[package]]
 name = "ppot2ark"
 version = "0.1.0"
-source = "git+ssh://git@github.com/Conflux-Chain/conflux-amt-ledgerdb.git#a061f9961ec880d5c9c0aa71e414c5925d0dc2da"
+source = "git+ssh://git@github.com/Conflux-Chain/conflux-amt-ledgerdb.git#0d2bf6accde347f2de4e02292064ce592c1f17a5"
 dependencies = [
  "ark-bn254",
  "ark-ec",

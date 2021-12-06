@@ -255,7 +255,10 @@ use crate::impls::{
     merkle_patricia_trie::{CompressedPathRaw, KVInserter, MptKeyValue},
 };
 #[cfg(any(test, feature = "testonly_code"))]
-use crate::{impls::state_manager::StateManager, StorageConfiguration};
+use crate::{
+    impls::config::storage_manager::StorageConfiguration,
+    impls::state_manager::StateManager,
+};
 use fallible_iterator::FallibleIterator;
 use kvdb::{DBTransaction, DBValue, KeyValueDB};
 use parity_util_mem::{MallocSizeOf, MallocSizeOfOps};

@@ -639,15 +639,15 @@ use std::{
 #[cfg(test)]
 use crate::{
     impls::merkle_patricia_trie::{MptMerger, TrieNodeTrait},
+    impls::state_index::StateIndex,
     impls::storage_db::snapshot_mpt::tests::verify_snapshot_db,
-    state::StateTrait,
+    state::{StateTrait, StateTraitExt as StorageStateTraitExt},
     state_manager::StateManagerTrait,
     tests::{
         generate_keys, get_rng_for_test, new_state_manager_for_unit_test,
         snapshot::verifier::FakeSnapshotDb, DumpedMptKvIterator,
         TEST_NUMBER_OF_KEYS,
     },
-    StateIndex, StorageStateTraitExt,
 };
 #[cfg(test)]
 use parking_lot::Mutex;

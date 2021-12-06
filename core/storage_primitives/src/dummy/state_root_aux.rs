@@ -2,31 +2,35 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use rlp_derive::{RlpDecodable, RlpEncodable};
+
 /// Auxiliary information for deferred state root, which is necessary for
 /// state trees look-up. The StateRootAuxInfo should be provided by
 /// consensus layer for state storage access.
-use rlp_derive::{RlpDecodable, RlpEncodable};
 #[derive(
     Clone,
     Debug,
+    Default,
     PartialEq,
     Eq,
-    Serialize,
-    Deserialize,
-    RlpDecodable,
     RlpEncodable,
+    RlpDecodable,
+    SerializeDerive,
+    DeserializeDerive,
 )]
 #[serde(rename_all = "camelCase")]
-pub struct StateRootAuxInfo;
+pub struct StateRootAuxInfo {
+    pub state_root_hash: H256,
+}
 
 impl StateRootAuxInfo {
     pub fn genesis_state_root_aux_info(
         genesis_state_root: &MerkleHash,
     ) -> Self {
-        Self
+        Default::default()
     }
 
-    pub fn state_root_hash(&self) -> H256 { todo!() }
+    pub fn state_root_hash(&self) -> H256 { self.state_root_hash }
 
     pub fn next_snapshot_epoch(&self) -> H256 { todo!() }
 }
@@ -38,8 +42,8 @@ impl StateRootAuxInfo {
     Debug,
     PartialEq,
     Eq,
-    Serialize,
-    Deserialize,
+    DeserializeDerive,
+    SerializeDerive,
     RlpDecodable,
     RlpEncodable,
 )]
@@ -94,4 +98,6 @@ use super::state_root::StateRoot;
 use cfx_primitives::MerkleHash;
 use cfx_types::H256;
 use rlp::DecoderError;
-use serde_derive::{Deserialize, Serialize};
+use serde_derive::{
+    Deserialize as DeserializeDerive, Serialize as SerializeDerive,
+};

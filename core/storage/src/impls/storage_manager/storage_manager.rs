@@ -1517,7 +1517,7 @@ lazy_static! {
 use crate::{
     impls::{
         config::storage_manager::{
-            ProvideExtraSnapshotSyncConfig, StorageConfiguration,
+            storage_dir, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
         },
         delta_mpt::{
             node_memory_manager::{
@@ -1543,7 +1543,6 @@ use crate::{
         DeltaDbManagerTrait, KeyValueDbIterableTrait, KeyValueDbTrait,
         SnapshotDbManagerTrait, SnapshotInfo, SnapshotKeptToProvideSyncStatus,
     },
-    storage_dir,
     utils::{arc_ext::*, guarded_value::GuardedValue},
 };
 use cfx_internal_common::{

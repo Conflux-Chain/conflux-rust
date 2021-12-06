@@ -1,8 +1,8 @@
 // Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
-
-// extern crate cfx_primitives;
+#[macro_use]
+extern crate log;
 
 pub mod delta_mpt;
 pub mod dummy;

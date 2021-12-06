@@ -38,9 +38,7 @@ pub type NoProof = primitives::static_bool::No;
 
 // Export all the config info
 pub use self::impls::{
-    config::storage_manager::{
-        storage_dir, ConsensusParam, ProvideExtraSnapshotSyncConfig,
-    },
+    config::storage_manager::{ConsensusParam, ProvideExtraSnapshotSyncConfig},
     defaults::{self, DEFAULT_EXECUTION_PREFETCH_THREADS},
 };
 
@@ -59,6 +57,7 @@ pub use self::{
 
 #[cfg(feature = "storage_dev")]
 pub use self::dummy_impls::{
+    config::storage_dir,
     config::storage_manager::StorageConfiguration,
     proof_type::{StateProof, StorageRootProof},
     state::State as StorageState,
@@ -70,6 +69,7 @@ pub use self::dummy_impls::{
 };
 #[cfg(not(feature = "storage_dev"))]
 pub use self::{
+    impls::config::storage_manager::storage_dir,
     state::{
         State as StorageState, StateProof, StateTrait as StorageStateTrait,
         StateTraitExt as StorageStateTraitExt, StorageRootProof,
@@ -96,6 +96,6 @@ pub use self::{
 
 #[cfg(any(test, feature = "testonly_code"))]
 pub use self::{
-    delta_mpt_iterator::DeltaMptIterator,
+    impls::delta_mpt::delta_mpt_iterator::DeltaMptIterator,
     tests::new_state_manager_for_unit_test as new_storage_manager_for_testing,
 };

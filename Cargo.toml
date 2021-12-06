@@ -57,9 +57,9 @@ malloc_size_of = {path="util/malloc_size_of"}
 version = "0.3.2"
 optional = true
 
-[[bin]]
-name = "consensus_bench"
-path = "core/benchmark/consensus/src/main.rs"
+#[[bin]]
+#name = "consensus_bench"
+#path = "core/benchmark/consensus/src/main.rs"
 
 [[bin]]
 name = "cfx-gen-dot"
@@ -75,6 +75,8 @@ path = "tools/tg_config_gen/main.rs"
 
 # Use workspace section to allow test all cases under root folder (cargo test --all).
 [workspace]
+members = ["core/benchmark/consensus"]
+
 
 [features]
 default = ["jemalloc-global","storage-dev"]
@@ -96,3 +98,5 @@ overflow-checks = true
 overflow-checks = true
 # Temporarily run with debug assertion before main-net release.
 debug-assertions = true
+#
+package.consensus_bench.debug = false

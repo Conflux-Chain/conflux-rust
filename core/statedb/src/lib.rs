@@ -451,7 +451,10 @@ mod impls {
             }
             // Set storage layout for contracts with storage modification or
             // contracts with storage_layout initialization or modification.
-            for (k, v) in &mut storage_layouts_to_rewrite {
+            let mut vectored_layouts: Vec<(&Vec<u8>, &StorageLayout)> =
+                storage_layouts_to_rewrite.iter().collect();
+            vectored_layouts.sort_unstable_by_key(|(k, _)| *k);
+            for (k, v) in &vectored_layouts {
                 self.commit_storage_layout(k, v, debug_record.as_deref_mut())?;
             }
             // Mark all modification applied.

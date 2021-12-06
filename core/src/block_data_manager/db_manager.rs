@@ -526,7 +526,10 @@ impl DBManager {
     ) -> Option<V>
     where V: DatabaseDecodable {
         let encoded = self.load_from_db(table, db_key)?;
-        Some(V::db_decode(&encoded).expect("decode succeeds"))
+        Some(
+            V::db_decode(&encoded)
+                .expect(&format!("decode succeeds for {:?}", encoded)),
+        )
     }
 
     fn load_might_decodable_val<V>(

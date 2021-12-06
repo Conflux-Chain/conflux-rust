@@ -699,8 +699,8 @@ use crate::{
         FakeStateManager, TEST_NUMBER_OF_KEYS,
     },
     utils::access_mode,
-    StateRootWithAuxInfo,
 };
+use cfx_storage_primitives::delta_mpt::StateRootWithAuxInfo;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use primitives::{Account, StorageKey};
 use rand::{

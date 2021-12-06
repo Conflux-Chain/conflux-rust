@@ -11,10 +11,11 @@ use cfx_internal_common::{ChainIdParams, ChainIdParamsInner};
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 #[cfg(not(feature = "storage_dev"))]
 use cfx_storage::{
-    defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
-    ConsensusParam,
+    defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, ConsensusParam,
 };
-use cfx_storage::{ProvideExtraSnapshotSyncConfig, StorageConfiguration};
+use cfx_storage::{
+    storage_dir, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
+};
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
@@ -633,8 +634,10 @@ impl Configuration {
 
     #[cfg(feature = "storage_dev")]
     pub fn storage_config(&self) -> StorageConfiguration {
+        let conflux_data_path = Path::new(&self.raw_conf.conflux_data_dir);
         StorageConfiguration {
-            conflux_data_dir: self.raw_conf.conflux_data_dir.to_string(),
+            path_storage_dir: conflux_data_path
+                .join(&*storage_dir::STORAGE_DIR),
             snapshot_epoch_count: if self.is_test_mode() {
                 self.raw_conf.dev_snapshot_epoch_count
             } else {

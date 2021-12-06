@@ -647,6 +647,7 @@ fn test_recording_storage() {
 }
 
 use crate::{
+    impls::recording_storage::RecordingStorage,
     state::*,
     state_manager::*,
     tests::{
@@ -654,10 +655,10 @@ use crate::{
         new_state_manager_for_unit_test_with_snapshot_epoch_count,
         FakeStateManager, TEST_NUMBER_OF_KEYS,
     },
-    RecordingStorage,
+    WithProof,
 };
-use cfx_storage_primitives::key_value::{
-    MptValue, NodeMerkleTriplet, StateRoot,
+use cfx_storage_primitives::delta_mpt::{
+    MptValue, StateRoot, StorageRoot as NodeMerkleTriplet,
 };
 use cfx_types::H256;
 use primitives::{DeltaMptKeyPadding, StorageKey};

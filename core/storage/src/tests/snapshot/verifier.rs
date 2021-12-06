@@ -694,9 +694,12 @@ use crate::{
         merkle_patricia_trie::{
             mpt_cursor::rlp_key_value_len, CompressedPathTrait, MptMerger,
         },
-        snapshot_sync::restoration::{
-            full_sync_verifier::FullSyncVerifier,
-            mpt_slice_verifier::MptSliceVerifier,
+        snapshot_sync::{
+            restoration::{
+                full_sync_verifier::FullSyncVerifier,
+                mpt_slice_verifier::MptSliceVerifier,
+            },
+            MptSlicer,
         },
         storage_db::snapshot_db_manager_sqlite::AlreadyOpenSnapshots,
         storage_manager::PersistedSnapshotInfoMap,
@@ -717,7 +720,7 @@ use crate::{
         tuple::ElementSatisfy,
         wrap::{Wrap, WrappedLifetimeFamily, WrappedTrait},
     },
-    DeltaMptIterator, MptKeyValue, MptSlicer,
+    DeltaMptIterator, MptKeyValue,
 };
 use fallible_iterator::FallibleIterator;
 use parking_lot::{Mutex, RwLock, RwLockWriteGuard};

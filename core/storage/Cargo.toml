@@ -42,6 +42,9 @@ sqlite = "0.25"
 sqlite3-sys = "0.12"
 strfmt = "0.1"
 tokio = { version = "0.2", features = ["full"] }
+backtrace = "0.3"
+
+amt-db = { git = "ssh://git@github.com/Conflux-Chain/conflux-amt-ledgerdb.git" }
 
 [dev-dependencies]
 primitives = { path = "../../primitives", features = ["test_no_account_length_check"] }

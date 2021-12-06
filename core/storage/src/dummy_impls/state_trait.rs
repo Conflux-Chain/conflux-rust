@@ -19,7 +19,7 @@ pub use super::{
     state_index::StateIndex,
     state_manager::StateManager,
 };
-use cfx_storage_primitives::{StateRootWithAuxInfo, StorageRoot};
+use cfx_storage_primitives::dummy::{StateRootWithAuxInfo, StorageRoot};
 
 use std::sync::Arc;
 

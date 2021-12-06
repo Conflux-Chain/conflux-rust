@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-cfxcore = { path = "../../../core" }
+cfxcore = { path = "../../../core" , features = ["consensus_bench"] }
 cfx-types = { path = "../../../cfx_types" }
 primitives = { path = "../../../primitives" }
 db = { path = "../../../db" }
@@ -18,8 +18,8 @@ log = "0.4"
 
 [dev-dependencies]
 
-[workspace]
+#[workspace]
 # Note: try to list it in the top level workspace and to exclude it from cfxcore.
 
-[profile.release]
-debug = false
+#[profile.release]
+#debug = false

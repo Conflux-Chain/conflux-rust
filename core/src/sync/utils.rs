@@ -1,14 +1,11 @@
 use crate::{
-    block_data_manager::{BlockDataManager, DataManagerConfiguration, DbType},
-    cache_config::CacheConfig,
+    block_data_manager::BlockDataManager,
     consensus::{
         consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
         ConsensusConfig, ConsensusInnerConfig,
     },
-    db::NUM_COLUMNS,
     machine::new_machine_with_builtin,
     pow::{self, PowComputer, ProofOfWorkConfig},
-    spec::genesis::genesis_block,
     statistics::Statistics,
     sync::{SyncGraphConfig, SynchronizationGraph},
     transaction_pool::TxPoolConfig,
@@ -20,15 +17,26 @@ use cfx_internal_common::ChainIdParamsInner;
 use cfx_parameters::{
     block::{MAX_BLOCK_SIZE_IN_BYTES, REFEREE_DEFAULT_BOUND},
     consensus::{GENESIS_GAS_LIMIT, TRANSACTION_DEFAULT_EPOCH_BOUND},
-    WORKER_COMPUTATION_PARALLELISM,
 };
-use cfx_storage::{StorageConfiguration, StorageManager};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
-use core::str::FromStr;
-use parking_lot::Mutex;
 use primitives::{Block, BlockHeaderBuilder};
-use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
-use threadpool::ThreadPool;
+use std::sync::Arc;
+
+#[cfg(feature = "consensus_bench")]
+use ::{
+    crate::{
+        block_data_manager::{DataManagerConfiguration, DbType},
+        cache_config::CacheConfig,
+        db::NUM_COLUMNS,
+        spec::genesis::genesis_block,
+    },
+    cfx_parameters::WORKER_COMPUTATION_PARALLELISM,
+    cfx_storage::{StorageConfiguration, StorageManager},
+    core::str::FromStr,
+    parking_lot::Mutex,
+    std::{collections::HashMap, path::Path, time::Duration},
+    threadpool::ThreadPool,
+};
 
 pub fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: U256,
@@ -92,6 +100,7 @@ pub fn create_simple_block(
     )
 }
 
+#[cfg(feature = "consensus_bench")]
 pub fn initialize_data_manager(
     db_dir: &str, dbtype: DbType, pow: Arc<PowComputer>, vm: VmFactory,
 ) -> (Arc<BlockDataManager>, Arc<Block>) {
@@ -246,6 +255,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
 }
 
 /// This method is only used in tests and benchmarks.
+#[cfg(feature = "consensus_bench")]
 pub fn initialize_synchronization_graph(
     db_dir: &str, beta: u64, h: u64, tcr: u64, tcb: u64, era_epoch_count: u64,
     dbtype: DbType,

@@ -98,11 +98,13 @@ fn test_slicing_position() {
 }
 
 use crate::{
-    impls::merkle_patricia_trie::{mpt_cursor::rlp_key_value_len, MptMerger},
+    impls::{
+        merkle_patricia_trie::{mpt_cursor::rlp_key_value_len, MptMerger},
+        snapshot_sync::MptSlicer,
+    },
     tests::{
         generate_keys, get_rng_for_test, snapshot::FakeSnapshotMptDb,
         DumpedMptKvIterator, TEST_NUMBER_OF_KEYS,
     },
-    MptSlicer,
 };
 use rand::Rng;
