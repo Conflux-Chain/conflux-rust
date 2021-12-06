@@ -3825,8 +3825,9 @@ impl ConsensusGraphInner {
     ) -> Option<(u64, H256)> {
         let r = match self.hash_to_arena_indices.get(parent_decision_hash) {
             None => {
-                // TODO(lpl): Use confirmed epoch with a delay in
-                // pos-finality spec.
+                // parent_decision is before the current checkpoint, so we just
+                // choose the latest block as a new pivot
+                // decision.
                 let new_decision_height = (confirmed_height.saturating_sub(
                     self.inner_conf.pos_pivot_decision_defer_epoch_count,
                 )) / POS_TERM_EPOCHS
