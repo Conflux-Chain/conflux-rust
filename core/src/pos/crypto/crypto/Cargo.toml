@@ -68,6 +68,7 @@ u64 = ["curve25519-dalek/u64_backend", "ed25519-dalek/u64_backend", "x25519-dale
 u32 = ["curve25519-dalek/u32_backend", "ed25519-dalek/u32_backend", "x25519-dalek/u32_backend"]
 bls-blst = ["bls-signatures/blst"]
 bls-pairing = ["bls-signatures/pairing"]
+blst-portable = ["bls-signatures/blst-portable"]
 
 [[bench]]
 name = "noise"
