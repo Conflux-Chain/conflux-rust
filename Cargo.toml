@@ -93,6 +93,7 @@ deadlock-detection = ["parking_lot/deadlock_detection"]
 jemalloc-global = ["jemallocator", "malloc_size_of/jemalloc-global"]
 bls-blst = ["cfxcore/bls-blst", "diem-crypto/bls-blst"]
 bls-pairing = ["cfxcore/bls-pairing", "diem-crypto/bls-pairing"]
+blst-portable = ["cfxcore/blst-portable", "diem-crypto/blst-portable"]
 
 
 [patch.crates-io]
