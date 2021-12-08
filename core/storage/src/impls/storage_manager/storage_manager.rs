@@ -823,7 +823,7 @@ impl StorageManager {
         Ok(())
     }
 
-    #[cfg(not(feature = "storage_dev"))]
+    #[cfg(not(feature = "storage-dev"))]
     pub fn maintain_state_confirmed<ConsensusInner: StateMaintenanceTrait>(
         &self, consensus_inner: &ConsensusInner, stable_checkpoint_height: u64,
         era_epoch_count: u64, confirmed_height: u64,

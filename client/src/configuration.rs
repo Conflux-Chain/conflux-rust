@@ -9,7 +9,7 @@ use crate::rpc::{
 use cfx_addr::{cfx_addr_decode, Network};
 use cfx_internal_common::{ChainIdParams, ChainIdParamsInner};
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
-#[cfg(not(feature = "storage_dev"))]
+#[cfg(not(feature = "storage-dev"))]
 use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, ConsensusParam,
 };
@@ -634,7 +634,7 @@ impl Configuration {
         }
     }
 
-    #[cfg(feature = "storage_dev")]
+    #[cfg(feature = "storage-dev")]
     pub fn storage_config(&self) -> StorageConfiguration {
         let conflux_data_path = Path::new(&self.raw_conf.conflux_data_dir);
         StorageConfiguration {
@@ -650,7 +650,7 @@ impl Configuration {
         }
     }
 
-    #[cfg(not(feature = "storage_dev"))]
+    #[cfg(not(feature = "storage-dev"))]
     pub fn storage_config(&self) -> StorageConfiguration {
         let conflux_data_path = Path::new(&self.raw_conf.conflux_data_dir);
         StorageConfiguration {

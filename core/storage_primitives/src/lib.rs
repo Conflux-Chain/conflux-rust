@@ -4,12 +4,16 @@
 #[macro_use]
 extern crate log;
 
+pub mod amt;
 pub mod delta_mpt;
-pub mod dummy;
 mod key_value;
+pub mod mpt;
 
-#[cfg(not(feature = "storage-dev"))]
-pub use delta_mpt::*;
-#[cfg(feature = "storage-dev")]
-pub use dummy::*;
 pub use key_value::MptValue;
+
+#[cfg(feature = "amt-storage")]
+pub use amt::*;
+#[cfg(not(any(feature = "amt-storage", feature = "mpt-storage")))]
+pub use delta_mpt::*;
+#[cfg(feature = "mpt-storage")]
+pub use mpt::*;

@@ -113,14 +113,14 @@ impl SnapshotManifestManager {
             return Ok(None);
         }
 
-        #[cfg(feature = "storage_dev")]
+        #[cfg(feature = "storage-dev")]
         {
             return Err(Error::from_kind(ErrorKind::NotSupported(
                 "Not using delta_mpt as underlying storage".to_string(),
             )));
         }
 
-        #[cfg(not(feature = "storage_dev"))]
+        #[cfg(not(feature = "storage-dev"))]
         {
             info!(
             "Snapshot manifest received, checkpoint = {:?}, chunk_boundaries.len()={}, \
@@ -296,7 +296,7 @@ impl SnapshotManifestManager {
 
     pub fn is_inactive(&self) -> bool { self.active_peers.is_empty() }
 
-    #[cfg(not(feature = "storage_dev"))]
+    #[cfg(not(feature = "storage-dev"))]
     pub fn validate_blame_states(
         ctx: &Context, snapshot_epoch_id: &H256, trusted_blame_block: &H256,
         state_root_vec: &Vec<StateRoot>, receipt_blame_vec: &Vec<H256>,

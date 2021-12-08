@@ -26,7 +26,7 @@ impl Decodable for SnapshotKeptToProvideSyncStatus {
     }
 }
 
-#[cfg(not(feature = "storage_dev"))]
+#[cfg(not(feature = "storage-dev"))]
 #[derive(
     Clone, Default, Derivative, DeriveMallocSizeOf, RlpEncodable, RlpDecodable,
 )]
@@ -48,7 +48,7 @@ pub struct SnapshotInfo {
     pub pivot_chain_parts: Vec<EpochId>,
 }
 
-#[cfg(feature = "storage_dev")]
+#[cfg(feature = "storage-dev")]
 #[derive(
     Clone, Default, Derivative, DeriveMallocSizeOf, RlpEncodable, RlpDecodable,
 )]

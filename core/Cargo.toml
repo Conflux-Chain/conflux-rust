@@ -103,5 +103,7 @@ default = ["cfx-storage","cfx-storage-primitives"]
 # we have to define a feature for test code.
 # https://users.rust-lang.org/t/cfg-test-doesnt-propagate-to-external-crates/13046
 testonly_code = []
-storage_dev = ["cfx-storage/storage_dev"]
+storage-dev = []
+amt-storage = ["cfx-storage/amt-storage", "cfx-storage-primitives/amt-storage", "storage-dev"]
+mpt-storage = ["cfx-storage/mpt-storage", "cfx-storage-primitives/mpt-storage", "storage-dev"]
 consensus_bench=[]

@@ -359,11 +359,13 @@ impl BlockDataManager {
     /// This will return the state root of true genesis block.
     pub fn true_genesis_state_root(&self) -> StateRootWithAuxInfo {
         let true_genesis_hash = self.true_genesis.hash();
+        let true_genesis_state_root =
+            self.true_genesis.block_header.deferred_state_root().clone();
         self.storage_manager
             .get_state_no_commit(
                 StateIndex::new_for_readonly(
                     &true_genesis_hash,
-                    &StateRootWithAuxInfo::genesis(&true_genesis_hash),
+                    &StateRootWithAuxInfo::genesis(&true_genesis_state_root),
                 ),
                 /* try_open = */ false,
             )

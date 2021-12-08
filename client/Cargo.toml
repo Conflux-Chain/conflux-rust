@@ -85,7 +85,7 @@ default = []
 # we have to define a feature for test code.
 # https://users.rust-lang.org/t/cfg-test-doesnt-propagate-to-external-crates/13046
 testonly_code = []
-storage_dev = ["cfx-storage/storage_dev"]
+storage-dev = ["cfx-storage/storage-dev"]
 
 [[bench]]
 name = "benchmark"

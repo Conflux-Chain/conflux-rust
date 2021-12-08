@@ -30,8 +30,11 @@ pub mod tests;
 #[cfg(not(any(test, feature = "testonly_code")))]
 mod tests;
 
-mod dummy_impls;
+#[cfg(feature = "amt-storage")]
+mod amt_impls;
 mod impls;
+#[cfg(feature = "mpt-storage")]
+mod mpt_impls;
 
 pub type WithProof = primitives::static_bool::Yes;
 pub type NoProof = primitives::static_bool::No;
@@ -55,8 +58,8 @@ pub use self::{
     storage_db::{snapshot_db::SnapshotInfo, KeyValueDbTrait},
 };
 
-#[cfg(feature = "storage_dev")]
-pub use self::dummy_impls::{
+#[cfg(feature = "amt-storage")]
+pub use self::amt_impls::{
     config::storage_dir,
     config::storage_manager::StorageConfiguration,
     proof_type::{StateProof, StorageRootProof},
@@ -67,7 +70,19 @@ pub use self::dummy_impls::{
     state_trait::StateTrait as StorageStateTrait,
     state_trait::StateTraitExt as StorageStateTraitExt,
 };
-#[cfg(not(feature = "storage_dev"))]
+#[cfg(feature = "mpt-storage")]
+pub use self::mpt_impls::{
+    config::storage_dir,
+    config::storage_manager::StorageConfiguration,
+    proof_type::{StateProof, StorageRootProof},
+    state::State as StorageState,
+    state_index::StateIndex,
+    state_manager::StateManager as StorageManager,
+    state_trait::StateManagerTrait as StorageManagerTrait,
+    state_trait::StateTrait as StorageStateTrait,
+    state_trait::StateTraitExt as StorageStateTraitExt,
+};
+#[cfg(not(feature = "storage-dev"))]
 pub use self::{
     impls::config::storage_manager::storage_dir,
     state::{
@@ -80,7 +95,7 @@ pub use self::{
     },
 };
 
-#[cfg(not(feature = "storage_dev"))]
+#[cfg(not(feature = "storage-dev"))]
 pub use self::{
     impls::{
         merkle_patricia_trie::KVInserter,

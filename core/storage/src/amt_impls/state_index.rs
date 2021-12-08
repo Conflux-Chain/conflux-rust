@@ -1,4 +1,4 @@
-use cfx_storage_primitives::dummy::StateRootWithAuxInfo;
+use cfx_storage_primitives::amt::StateRootWithAuxInfo;
 use primitives::EpochId;
 
 pub struct StateIndex {

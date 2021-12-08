@@ -1,4 +1,4 @@
-pub use cfx_storage_primitives::dummy::{StateRoot, StorageRoot};
+pub use cfx_storage_primitives::amt::{StateRoot, StorageRoot};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 #[derive(Clone, Default, Debug, RlpDecodable, RlpEncodable)]

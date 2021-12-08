@@ -1,9 +1,9 @@
-#![cfg_attr(feature = "storage_dev", allow(unused))]
+#![cfg_attr(feature = "storage-dev", allow(unused))]
 // Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 use crate::sync::{Error, ErrorKind};
-#[cfg(not(feature = "storage_dev"))]
+#[cfg(not(feature = "storage-dev"))]
 use cfx_storage::{
     KeyValueDbIterableTrait, MptSlicer, OpenSnapshotMptTrait, SnapshotDbTrait,
 };
@@ -247,14 +247,14 @@ impl RangedManifest {
             snapshot_epoch_id, start_key
         );
 
-        #[cfg(feature = "storage_dev")]
+        #[cfg(feature = "storage-dev")]
         {
             return Err(Error::from_kind(ErrorKind::NotSupported(
                 "Not using delta_mpt as underlying storage".to_string(),
             )));
         }
 
-        #[cfg(not(feature = "storage_dev"))]
+        #[cfg(not(feature = "storage-dev"))]
         {
             let snapshot_db_manager =
                 storage_manager.get_storage_manager().get_snapshot_manager();
@@ -384,14 +384,14 @@ impl Chunk {
             snapshot_epoch_id, chunk_key
         );
 
-        #[cfg(feature = "storage_dev")]
+        #[cfg(feature = "storage-dev")]
         {
             return Err(Error::from_kind(ErrorKind::NotSupported(
                 "Not using delta_mpt as underlying storage".to_string(),
             )));
         }
 
-        #[cfg(not(feature = "storage_dev"))]
+        #[cfg(not(feature = "storage-dev"))]
         {
             let snapshot_db_manager =
                 storage_manager.get_storage_manager().get_snapshot_manager();

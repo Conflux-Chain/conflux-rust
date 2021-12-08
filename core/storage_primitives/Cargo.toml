@@ -24,4 +24,5 @@ backtrace = "0.3"
 serde_json = "1.0"
 
 [features]
-storage-dev = []
+amt-storage= []
+mpt-storage= []
