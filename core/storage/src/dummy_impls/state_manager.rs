@@ -32,7 +32,7 @@ impl MallocSizeOf for StateManager {
 fn open_backend(db_dir: &str) -> Arc<Database> {
     let mut db_config = DatabaseConfig::with_columns(3);
 
-    db_config.memory_budget = Some(128);
+    db_config.memory_budget = Some(4096);
     db_config.compaction = CompactionProfile::auto(Path::new(db_dir));
     db_config.disable_wal = false;
 
@@ -45,8 +45,9 @@ impl StateManager {
     pub fn get_storage_manager(&self) -> &StateManager { &*self }
 
     pub fn new(conf: StorageConfiguration) -> Result<Self> {
-        println!("Init config");
-        let pp = cached_pp();
+        info!("Loading public params");
+        let pp = cached_pp(conf.public_params_dir.to_str().unwrap());
+        info!("Loaded public params");
         let backend = open_backend(conf.path_storage_dir.to_str().unwrap());
         Ok(Self {
             snapshot_epoch_count: conf.snapshot_epoch_count,
@@ -62,7 +63,7 @@ impl StateManager {
         state_availability_boundary: &RwLock<StateAvailabilityBoundary>,
     ) -> Result<()>
     {
-        warn!("StorageStateManager: No op for maintain_state_confirmed, stable_checkpoint_height {}, era_epoch_count {}, confirmed_height {}", stable_checkpoint_height,era_epoch_count,confirmed_height);
+        info!("AMTStateManager: No op for maintain_state_confirmed, stable_checkpoint_height {}, era_epoch_count {}, confirmed_height {}", stable_checkpoint_height,era_epoch_count,confirmed_height);
         Ok(())
     }
 
@@ -87,7 +88,10 @@ impl StateManagerTrait for StateManager {
         self: &Arc<Self>, parent_epoch_id: StateIndex,
     ) -> Result<Option<State>> {
         if let Some(height) = parent_epoch_id.height {
-            info!("Make state for epoch {}", height);
+            info!(
+                "AMTStateManager: Construct state for new epoch {}",
+                height + 1
+            );
             assert_eq!(height + 1, self.amt_db.read().current_epoch()?)
         }
 

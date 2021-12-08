@@ -417,11 +417,12 @@ pub fn genesis_block(
         genesis_transactions,
     );
     genesis.block_header.compute_hash();
-    debug!(
-        "Initialize genesis_block={:?} hash={:?}",
-        genesis,
+    info!(
+        "Initialize genesis_block: header={:?} hash={:?}",
+        genesis.block_header,
         genesis.hash()
     );
+    debug!("Genesis block body: {:?}", genesis,);
 
     state
         .commit(

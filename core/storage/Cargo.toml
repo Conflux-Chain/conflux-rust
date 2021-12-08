@@ -44,7 +44,7 @@ strfmt = "0.1"
 tokio = { version = "0.2", features = ["full"] }
 backtrace = "0.3"
 
-amt-db = { git = "ssh://git@github.com/Conflux-Chain/conflux-amt-ledgerdb.git" }
+amt-db = { git = "ssh://git@github.com/Conflux-Chain/conflux-amt-ledgerdb.git", features = ["large_amt"] }
 
 [dev-dependencies]
 primitives = { path = "../../primitives", features = ["test_no_account_length_check"] }

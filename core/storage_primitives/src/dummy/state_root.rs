@@ -8,12 +8,22 @@ use cfx_types::H256;
 use keccak_hash::keccak;
 
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
+use serde_derive::{
+    Deserialize as DeserializeDerive, Serialize as SerializeDerive,
+};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 // #[serde(rename_all = "camelCase")]
 pub struct StateRoot {
     pub amt_root: AmtRoot,
+    pub static_root: H256,
+}
+#[derive(
+    Clone, Debug, Default, PartialEq, Eq, DeserializeDerive, SerializeDerive,
+)]
+pub struct StateRootForSerde {
+    pub amt_root: Vec<u8>,
     pub static_root: H256,
 }
 
@@ -71,13 +81,23 @@ fn test_rlp_serde() {
 impl Serialize for StateRoot {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
-        todo!()
+        let serialized_amt_root = self.amt_root.to_bytes_local();
+        let state_root = StateRootForSerde {
+            amt_root: serialized_amt_root,
+            static_root: self.static_root.clone(),
+        };
+        state_root.serialize(serializer)
     }
 }
 
 impl<'de> Deserialize<'de> for StateRoot {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'de> {
-        todo!()
+        let state_root = StateRootForSerde::deserialize(deserializer)?;
+        Ok(StateRoot {
+            amt_root: AmtRoot::from_bytes_local(&state_root.amt_root)
+                .map_err(|_| D::Error::custom("Curve serialize error"))?,
+            static_root: state_root.static_root,
+        })
     }
 }

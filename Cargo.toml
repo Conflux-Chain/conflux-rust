@@ -79,7 +79,7 @@ members = ["core/benchmark/consensus"]
 
 
 [features]
-default = ["jemalloc-global","storage-dev"]
+default = ["jemalloc-global"]
 deadlock-detection = ["parking_lot/deadlock_detection"]
 jemalloc-global = ["jemallocator", "malloc_size_of/jemalloc-global"]
 storage-dev = ["cfxcore/storage_dev", "client/storage_dev"]

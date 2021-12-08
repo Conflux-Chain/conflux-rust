@@ -35,7 +35,7 @@ impl StateTrait for State {
     ) -> crate::Result<()> {
         assert!(!self.read_only);
         assert!(self.root_with_aux.is_none());
-        info!("Set key {:?}, value {:?}", access_key, value);
+        debug!("AMTStateOp: Set key {:?}, value {:?}", access_key, value);
         self.state.write().set(&convert_key(access_key), value);
         Ok(())
     }
@@ -54,7 +54,7 @@ impl StateTrait for State {
         &mut self, access_key_prefix: StorageKey,
     ) -> crate::Result<Option<Vec<MptKeyValue>>> {
         warn!(
-            "No op for delete all. read only: {}, : key:{:?}",
+            "AMTState: No op for delete all. read only: {}, : key:{:?}",
             AM::is_read_only(),
             access_key_prefix
         );
@@ -64,12 +64,12 @@ impl StateTrait for State {
     fn compute_state_root(&mut self) -> crate::Result<StateRootWithAuxInfo> {
         assert!(!self.read_only);
         if self.root_with_aux.is_some() {
-            warn!("StorageState: Do not commit me again");
+            warn!("AMTState: Do not commit me again");
             return Ok(self.root_with_aux.clone().unwrap());
         }
 
         let epoch = self.state.read().current_epoch()?;
-        info!("Compute state root for epoch {:?}", epoch);
+        info!("AMTState: Compute state root for epoch {:?}", epoch);
 
         let (amt_root, static_root) = self.state.write().commit(0)?;
         let state_root = StateRoot {

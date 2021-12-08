@@ -229,6 +229,7 @@ def satoshi_round(amount):
 
 def wait_until(predicate,
                *,
+               interval = 0.5,
                attempts=float('inf'),
                timeout=float('inf'),
                lock=None):
@@ -246,7 +247,7 @@ def wait_until(predicate,
             if predicate():
                 return
         attempt += 1
-        time.sleep(0.5)
+        time.sleep(interval)
 
     # Print the cause of the timeout
     predicate_source = inspect.getsourcelines(predicate)

@@ -2075,7 +2075,7 @@ fn load_key(path: &Path) -> Option<Secret> {
     let mut file = match fs::File::open(path_buf.as_path()) {
         Ok(file) => file,
         Err(e) => {
-            debug!("failed to open key file: {:?}", e);
+            debug!("failed to open key file: {:?} {:?}", path, e);
             return None;
         }
     };

@@ -1118,7 +1118,12 @@ impl SynchronizationProtocolHandler {
 
     pub fn on_mined_block(&self, mut block: Block) {
         let hash = block.block_header.hash();
-        info!("Mined block {:?} header={:?}", hash, block.block_header);
+        info!(
+            "Mined block with {} txs, {:?}, header={:?}",
+            block.transactions.len(),
+            hash,
+            block.block_header
+        );
         let parent_hash = *block.block_header.parent_hash();
 
         assert!(self.graph.contains_block_header(&parent_hash));
