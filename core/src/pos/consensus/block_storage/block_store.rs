@@ -275,8 +275,9 @@ impl BlockStore {
             "parent_id": block_to_commit.parent_id().short_str(),
         );
         self.prune_tree(block_to_commit.id());
-        // After a block is committed, we will never need to execute a block with an earlier
-        // pivot decision, so we can safely prune all staking events before.
+        // After a block is committed, we will never need to execute a block
+        // with an earlier pivot decision, so we can safely prune all
+        // staking events before.
         if let Some(pivot_decision) = pivot_decision_to_commit {
             self.storage.prune_staking_events(&pivot_decision)?;
         }
