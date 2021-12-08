@@ -304,6 +304,19 @@ impl ConsensusDB {
         );
         Ok(staking_events)
     }
+
+    /// Delete all staking events before an PoW epoch number after we have
+    /// committed a PoS block that processes this PoW pivot decision.
+    pub fn delete_staking_events_before(
+        &self, committed_pow_epoch_number: u64,
+    ) -> Result<(), DbError> {
+        self.db
+            .range_delete::<StakingEventsSchema, u64>(
+                &0,
+                &committed_pow_epoch_number,
+            )
+            .map_err(|e| e.into())
+    }
 }
 
 impl LedgerBlockRW for ConsensusDB {
