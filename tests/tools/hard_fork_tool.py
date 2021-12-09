@@ -73,8 +73,8 @@ consensus:
 execution:
   genesis_file_location: ./genesis_file
 logger:
-  file: ./pos.log
-  level: DEBUG
+  file: ./log/pos.log
+  level: INFO
 #storage:
   #dir: ./pos_db/db
 """)
