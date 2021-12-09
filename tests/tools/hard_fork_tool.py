@@ -22,12 +22,13 @@ from test_framework.util import *
 from test_framework.blocktools import encode_hex_0x
 
 
+rpc_url = "http://101.132.158.162:12537"
+bitcoin_block_hash = "00000000000000000005e306896781cf5169a8bdff8aed8dce19c084adf4cc0d"
+
 REGISTER_TOPIC = encode_hex_0x(keccak(b"Register(bytes32,bytes,bytes)"))
 INCREASE_STAKE_TOPIC = encode_hex_0x(keccak(b"IncreaseStake(bytes32,uint64)"))
-
-rpc_url = "http://101.132.158.162:12537"
 client = RpcClient(node=get_simple_rpc_proxy(rpc_url, timeout=10))
-cmd = "./run/pos_config"
+cwd = "./run/pos_config"
 
 voting_power_map = collections.defaultdict(lambda: 0)
 pub_keys_map = {}
@@ -50,16 +51,15 @@ for i in range(0, last_epoch, 1000):
         elif log["topics"][0] == INCREASE_STAKE_TOPIC:
             assert pos_identifier in pub_keys_map
             voting_power_map[pos_identifier] += parse_as_int(log["data"])
-with open(os.path.join(cmd, "public_keys"), "w") as f:
+with open(os.path.join(cwd, "public_keys"), "w") as f:
     for pos_identifier in pub_keys_map.keys():
         f.write(",".join([pub_keys_map[pos_identifier][0][2:], pub_keys_map[pos_identifier][1][2:], str(voting_power_map[pos_identifier])]) + "\n")
 cfx_block_hash = client.block_by_block_number(int_to_hex(475200))["hash"]
-bitcoin_block_hash = "00000000000000000005e306896781cf5169a8bdff8aed8dce19c084adf4cc0d"
 initial_seed = encode_hex(keccak(hexstr=cfx_block_hash[2:]+bitcoin_block_hash))
 tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/pos-genesis-tool")
-check_output([tg_config_gen, "frompub", "--initial-seed={}".format(initial_seed),"public_keys"], cwd=cmd)
-waypoint = open(os.path.join(cmd, "waypoint_config"), "r").readlines()[0]
-conf_file = open(os.path.join(cmd, "pos_config.yaml"), "w")
+check_output([tg_config_gen, "frompub", "--initial-seed={}".format(initial_seed),"public_keys"], cwd=cwd)
+waypoint = open(os.path.join(cwd, "waypoint_config"), "r").readlines()[0]
+conf_file = open(os.path.join(cwd, "pos_config.yaml"), "w")
 conf_file.write(f"""
 base:
   #data_dir: ./pos_db
@@ -79,5 +79,5 @@ logger:
 #storage:
   #dir: ./pos_db/db
 """)
-os.remove(os.path.join(cmd, "public_keys"))
-os.remove(os.path.join(cmd, "waypoint_config"))
+os.remove(os.path.join(cwd, "public_keys"))
+os.remove(os.path.join(cwd, "waypoint_config"))
