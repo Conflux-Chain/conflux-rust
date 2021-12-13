@@ -79,7 +79,9 @@ pub const CHECK_RPC_REQUEST_TIMER: TimerToken = 11;
 const MAX_TXS_BYTES_TO_PROPAGATE: usize = 1024 * 1024; // 1MB
 
 /// The maximum allowed gap between `best_epoch` and `latest_epoch_requested`.
-const EPOCH_SYNC_MAX_GAP: u64 = 20000;
+const EPOCH_SYNC_MAX_GAP_START: u64 = 20000;
+/// The max gap is increased if our best_epoch does not change after timeout.
+const EPOCH_SYNC_MAX_GAP_INCREASE: u64 = 5000;
 /// If not future epochs can be requested because of `EPOCH_SYNC_MAX_GAP`,
 /// after waiting this timeout we'll request from `best_epoch` again.
 const EPOCH_SYNC_RESTART_TIMEOUT_S: u64 = 60 * 10;
@@ -352,8 +354,9 @@ pub struct SynchronizationProtocolHandler {
     pub graph: SharedSynchronizationGraph,
     pub syn: Arc<SynchronizationState>,
     pub request_manager: Arc<RequestManager>,
-    /// The latest `(requested_epoch_number, request_time)`
-    pub latest_epoch_requested: Mutex<(u64, Instant)>,
+    /// The latest `(requested_epoch_number, request_time, old_best_epoch,
+    /// retry_count)`
+    pub latest_epoch_requested: Mutex<(u64, Instant, u64, u64)>,
     #[ignore_malloc_size_of = "only stores reference to others"]
     pub phase_manager: SynchronizationPhaseManager,
     pub phase_manager_lock: Mutex<u32>,
@@ -450,7 +453,7 @@ impl SynchronizationProtocolHandler {
             graph: sync_graph.clone(),
             syn: sync_state.clone(),
             request_manager,
-            latest_epoch_requested: Mutex::new((0, Instant::now())),
+            latest_epoch_requested: Mutex::new((0, Instant::now(), 0, 0)),
             phase_manager: SynchronizationPhaseManager::new(
                 initial_sync_phase,
                 sync_state.clone(),
@@ -831,14 +834,31 @@ impl SynchronizationProtocolHandler {
         let median_peer_epoch =
             self.syn.median_epoch_from_normal_peers().unwrap_or(0);
         let my_best_epoch = self.graph.consensus.best_epoch_number();
-        let (mut latest_requested_epoch, latest_request_time) =
-            *latest_requested;
+        let (
+            mut latest_requested_epoch,
+            latest_request_time,
+            old_best_epoch,
+            mut retry_count,
+        ) = *latest_requested;
+        // We have switched to the correct pivot chain, so we can reset epoch
+        // sync.
+        if old_best_epoch != my_best_epoch {
+            retry_count = 0;
+        }
 
+        // It's possible that there is a malicious heavy subtree that is heavier
+        // than the pivot chain within the next EPOCH_SYNC_MAX_GAP_START epochs.
+        // In this case, if we do not try to download more epochs, our
+        // best_epoch will the tip of the malicious subtree and will remain
+        // unchanged, meaning the syncing process will be blocked forever.
+        // Increase the syncing gap if our pivot chain remain unchanged.
+        let sync_max_gap = EPOCH_SYNC_MAX_GAP_START
+            + EPOCH_SYNC_MAX_GAP_INCREASE * retry_count;
         // If the gap is too large, it means that the next epoch of
         // `my_best_epoch` is missing, either because received
         // epoch_set is wrong or we have too many epochs with
         // blocks not received.
-        if latest_requested_epoch >= my_best_epoch + EPOCH_SYNC_MAX_GAP {
+        if latest_requested_epoch >= my_best_epoch + sync_max_gap {
             if latest_request_time.elapsed()
                 < Duration::from_secs(EPOCH_SYNC_RESTART_TIMEOUT_S)
             {
@@ -846,12 +866,13 @@ impl SynchronizationProtocolHandler {
             } else {
                 // Restart from `my_best_epoch` to fix possible problems.
                 latest_requested_epoch = my_best_epoch;
+                retry_count += 1;
             }
         }
 
         while self.request_manager.num_epochs_in_flight()
             < EPOCH_SYNC_MAX_INFLIGHT
-            && latest_requested_epoch < my_best_epoch + EPOCH_SYNC_MAX_GAP
+            && latest_requested_epoch < my_best_epoch + sync_max_gap
             && (latest_requested_epoch < median_peer_epoch
                 || median_peer_epoch == 0)
         {
@@ -923,7 +944,12 @@ impl SynchronizationProtocolHandler {
                 .request_epoch_hashes(io, peer, epochs, None);
             latest_requested_epoch = until - 1;
         }
-        *latest_requested = (latest_requested_epoch, Instant::now());
+        *latest_requested = (
+            latest_requested_epoch,
+            Instant::now(),
+            my_best_epoch,
+            retry_count,
+        );
     }
 
     pub fn request_block_headers(
