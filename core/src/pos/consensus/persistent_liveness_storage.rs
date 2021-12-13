@@ -70,6 +70,12 @@ pub trait PersistentLivenessStorage: Send + Sync {
         unimplemented!()
     }
 
+    fn prune_staking_events(
+        &self, _committed_pivot_decision: &PivotBlockDecision,
+    ) -> Result<()> {
+        unimplemented!()
+    }
+
     /// Returns a handle of the diemdb.
     fn diem_db(&self) -> Arc<dyn DbReader>;
 }
@@ -474,5 +480,13 @@ impl PersistentLivenessStorage for StorageWriteProxy {
 
     fn get_ledger_block(&self, block_id: &HashValue) -> Result<Option<Block>> {
         Ok(self.db.get_ledger_block(block_id)?)
+    }
+
+    fn prune_staking_events(
+        &self, committed_pivot_decision: &PivotBlockDecision,
+    ) -> Result<()> {
+        Ok(self
+            .db
+            .delete_staking_events_before(committed_pivot_decision.height)?)
     }
 }
