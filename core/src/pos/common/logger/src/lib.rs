@@ -160,7 +160,7 @@
 pub mod prelude {
     pub use crate::{
         debug as diem_debug,
-        diem_logger::FileWriter,
+        diem_logger::{FileWriter, RollingFileWriter},
         error as diem_error, event, info as diem_info, sample as diem_sample,
         sample::{SampleRate, Sampling},
         security::SecurityEvent,
