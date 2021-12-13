@@ -12,7 +12,9 @@ consensus:
 execution:
   genesis_file_location: ./genesis_file
 logger:
-  file: ./pos.log
-  level: DEBUG
+  file: ./log/pos.log
+  level: TRACE
+  rotation_count: 100
+  rotation_file_size_mb: 500
 #storage:
   #dir: ./pos_db/db
