@@ -24,7 +24,6 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
     def run_test(self):
         client = RpcClient(self.nodes[self.num_nodes - 1])
         wait_until(lambda: client.pos_status()["latestVoted"] is not None)
-        print(client.pos_status())
         expected_round = int(client.pos_status()["latestVoted"], 0) + 1
         latest_round_blocks = set()
         while len(latest_round_blocks) <= 1:
@@ -41,19 +40,19 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
         client.generate_empty_blocks(300)
         client.pos_retire_self()
 
-        for i in range(60):
+        for i in range(40):
             print(i)
-            # Retire node 3 after 5 min.
+            # Retire node 3 after 2 min.
             # Generate enough PoW block for PoS to progress
             client.generate_empty_blocks(60)
             # Leave some time for PoS to reach consensus
-            time.sleep(9)
+            time.sleep(3)
             b = client.generate_empty_blocks(1)[0]
             print(client.block_by_hash(b)["posReference"])
 
-        print("balance before unstake", client.get_balance(eth_utils.encode_hex(priv_to_addr(client.node.pow_sk))))
+        self.log.info("balance before unstake %s", client.get_balance(eth_utils.encode_hex(priv_to_addr(client.node.pow_sk))))
         client.wait_for_unstake()
-        print("balance after unstake", client.get_balance(eth_utils.encode_hex(priv_to_addr(client.node.pow_sk))))
+        self.log.info("balance after unstake %s", client.get_balance(eth_utils.encode_hex(priv_to_addr(client.node.pow_sk))))
         # assert (self.nodes[0].getblockcount() == 6002)
 
 if __name__ == '__main__':

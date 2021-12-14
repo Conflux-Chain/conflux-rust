@@ -78,13 +78,11 @@ class ExampleTest(ConfluxTestFramework):
         voting_power_map = {}
         pub_keys_map = {}
         logs = client.get_logs(filter=Filter(from_epoch="earliest", to_epoch="latest_state", address=["0x0888000000000000000000000000000000000005"]))
-        print("logs=", logs)
         for log in logs:
             pos_identifier = log["topics"][1]
             if log["topics"][0] == REGISTER_TOPIC:
                 bls_pub_key, vrf_pub_key = eth_abi.decode_abi(["bytes", "bytes"], decode_hex(log["data"]))
                 pub_keys_map[pos_identifier] = (encode_hex_0x(bls_pub_key), encode_hex_0x(vrf_pub_key))
-                print(pub_keys_map[pos_identifier])
             elif log["topics"][0] == INCREASE_STAKE_TOPIC:
                 assert pos_identifier in pub_keys_map
                 voting_power_map[pos_identifier] = parse_as_int(log["data"])
@@ -102,7 +100,7 @@ class ExampleTest(ConfluxTestFramework):
         time.sleep(2)
 
         latest_pos_ref = self.latest_pos_ref()
-        for i in range(50):
+        for i in range(55):
             print(i)
             if i == 10:
                 self.stop_node(5, clean=True)
