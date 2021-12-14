@@ -781,7 +781,11 @@ impl RpcImpl {
                             hash: hash_value_to_h256(b.id()),
                             epoch: U64::from(b.epoch()),
                             round: U64::from(b.round()),
-                            next_tx_number: Default::default(),
+                            last_tx_number: executed_block
+                                .output()
+                                .version()
+                                .unwrap_or_default()
+                                .into(),
                             miner: b.author().map(|a| H256::from(a.to_u8())),
                             parent_hash: hash_value_to_h256(b.parent_id()),
                             timestamp: U64::from(b.timestamp_usecs()),
