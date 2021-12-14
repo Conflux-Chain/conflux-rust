@@ -511,9 +511,7 @@ pub enum StatusCode {
     ELECTION_NON_ACCEPTED_NODE = 30,
     ELECTION_TERGET_TERM_NOT_OPEN = 31,
     ELECTION_WITHOUT_VOTES = 32,
-    RETIRE_NON_EXISITENT_NODE=33,
-    RETIRE_WITHOUT_ENOUGH_VOTES=34,
-    PIVOT_DECISION_HEIGHT_TOO_OLD=35,
+    PIVOT_DECISION_HEIGHT_TOO_OLD=33,
 
     // When a code module/script is published it is verified. These are the
     // possible errors that can arise from the verification process.
