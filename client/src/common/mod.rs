@@ -47,13 +47,74 @@ pub trait ClientTrait {
     ) -> (Weak<BlockDataManager>, Option<Arc<dyn Stopable>>);
 }
 
+// #[inline]
+// pub fn span_time(span: &Span, _start_time: u64) -> u64 {
+//     span.start_ns / 1_000_000_000
+// }
+
+pub fn group_stat(input: Vec<Span>, by: u64) -> Vec<Span> {
+    let mut output = Vec::new();
+    let mut span_timer: Option<(Span, u64)> = None;
+    let span_time = |span: &Span| span.start_ns / by;
+    for span in input {
+        if span_timer.is_some()
+            && span_time(&span) != span_timer.as_ref().unwrap().1
+        {
+            let mut base_span = span_timer.unwrap().0;
+            base_span.delta = base_span.end_ns - base_span.start_ns;
+            output.push(base_span);
+            span_timer = None;
+        }
+        if span_timer.is_none() {
+            let mut base_span = span.clone();
+            let slot_time = span_time(&base_span);
+            base_span.name = format!("{}", slot_time).into();
+            base_span.start_ns = span.start_ns;
+            base_span.end_ns = 0;
+            base_span.notes = vec![];
+            base_span.children = vec![];
+            span_timer = Some((base_span, slot_time))
+        }
+        let mut base_span = &mut span_timer.as_mut().unwrap().0;
+        base_span.end_ns = u64::max(base_span.end_ns, span.end_ns);
+        base_span.children.push(span);
+    }
+    let mut base_span = span_timer.unwrap().0;
+    base_span.delta = base_span.end_ns - base_span.start_ns;
+    output.push(base_span);
+    output
+}
+
+pub fn dump_stat() {
+    let mut spans = Vec::new();
+    for thread in flame::threads() {
+        if thread.name != Some("Socket IO Worker #3".to_string()) {
+            continue;
+        }
+        spans.extend_from_slice(&thread.spans)
+    }
+
+    let spans = group_stat(spans, 1_000_000_000);
+    let spans = group_stat(spans, 1_000_000_000_000);
+    flame::dump_html_custom(
+        std::fs::File::create("/home/chenxing/tx.html").unwrap(),
+        &spans,
+    )
+    .unwrap();
+}
+
 pub mod client_methods {
     pub fn run(
         this: Box<dyn ClientTrait>, exit_cond_var: Arc<(Mutex<bool>, Condvar)>,
     ) -> bool {
+        // let start_time = SystemTime::now()
+        //     .duration_since(UNIX_EPOCH)
+        //     .unwrap()
+        //     .as_nanos() as u64;
         CtrlC::set_handler({
             let e = exit_cond_var.clone();
             move || {
+                super::dump_stat();
                 *e.0.lock() = true;
                 e.1.notify_all();
             }
@@ -755,6 +816,7 @@ use cfxcore::{
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::public_to_address;
+use flame::Span;
 use jsonrpc_http_server::Server as HttpServer;
 use jsonrpc_tcp_server::Server as TcpServer;
 use jsonrpc_ws_server::Server as WSServer;

@@ -36,6 +36,26 @@ mod impls;
 #[cfg(feature = "mpt-storage")]
 mod mpt_impls;
 
+use metrics::{
+    register_meter_with_group, register_timer_with_group, Meter, Timer,
+};
+use std::sync::Arc;
+
+lazy_static! {
+    static ref STORAGE_GET_TIMER: Arc<dyn Meter> =
+        register_meter_with_group("timer", "storage::get");
+    static ref STORAGE_GET_TIMER2: Arc<dyn Timer> =
+        register_timer_with_group("storage", "storage::get_timer");
+    static ref STORAGE_SET_TIMER: Arc<dyn Meter> =
+        register_meter_with_group("timer", "storage::set");
+    static ref STORAGE_SET_TIMER2: Arc<dyn Timer> =
+        register_timer_with_group("storage", "storage::set_timer");
+    static ref STORAGE_COMMIT_TIMER: Arc<dyn Meter> =
+        register_meter_with_group("timer", "storage::commit");
+    static ref STORAGE_COMMIT_TIMER2: Arc<dyn Timer> =
+        register_timer_with_group("storage", "storage::commit_timer");
+}
+
 pub type WithProof = primitives::static_bool::Yes;
 pub type NoProof = primitives::static_bool::No;
 

@@ -1,11 +1,13 @@
 use crate::{
     state::State,
-    transaction_pool::transaction_pool_inner::TX_POOL_GET_STATE_TIMER,
+    transaction_pool::transaction_pool_inner::{
+        TX_POOL_GET_STATE_TIMER, TX_POOL_GET_STATE_TIMER2,
+    },
 };
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, U256};
-use metrics::MeterTimer;
+use metrics::{MeterTimer, ScopeTimer};
 use primitives::SponsorInfo;
 use std::sync::Arc;
 
@@ -21,6 +23,7 @@ impl AccountCache {
         &self, address: &Address,
     ) -> DbResult<(U256, U256)> {
         let _timer = MeterTimer::time_func(TX_POOL_GET_STATE_TIMER.as_ref());
+        let _timer2 = ScopeTimer::time_scope(TX_POOL_GET_STATE_TIMER2.as_ref());
         Ok((self.state.nonce(address)?, self.state.balance(address)?))
     }
 

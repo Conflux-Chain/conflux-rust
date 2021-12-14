@@ -883,6 +883,9 @@ impl<
         &mut self, tx: &SignedTransaction, mut options: TransactOptions<T>,
     ) -> DbResult<ExecutionOutcome>
     where T: Tracer<Output = trace::trace::ExecTrace> {
+        if cfg!(feature = "no-exec") {
+            return Ok(ExecutionOutcome::Finished(Default::default()));
+        }
         let spec = &self.spec;
         let sender = tx.sender();
         let nonce = self.state.nonce(&sender)?;

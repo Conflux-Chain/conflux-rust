@@ -87,6 +87,8 @@ unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git",
 strum = "0.20"
 strum_macros = "0.20"
 smart-default = "0.6.0"
+flame = { git="https://github.com/llogiq/flame.git" }
+
 
 [dev-dependencies]
 criterion = "0.3"
@@ -107,3 +109,4 @@ storage-dev = []
 amt-storage = ["cfx-storage/amt-storage", "cfx-storage-primitives/amt-storage", "storage-dev"]
 mpt-storage = ["cfx-storage/mpt-storage", "cfx-storage-primitives/mpt-storage", "storage-dev"]
 consensus_bench=[]
+no-exec=[]

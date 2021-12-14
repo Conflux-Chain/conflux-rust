@@ -14,8 +14,13 @@ use parking_lot::RwLock;
 use primitives::{EpochId, StaticBool, StorageKey};
 use std::sync::Arc;
 
+use crate::{
+    STORAGE_COMMIT_TIMER, STORAGE_COMMIT_TIMER2, STORAGE_GET_TIMER,
+    STORAGE_GET_TIMER2, STORAGE_SET_TIMER, STORAGE_SET_TIMER2,
+};
 use keccak_hasher::KeccakHasher;
 use kvdb::DBTransaction;
+use metrics::{MeterTimer, ScopeTimer};
 use patricia_trie_ethereum::RlpCodec;
 use trie_db::{Trie, TrieMut};
 
@@ -36,6 +41,9 @@ fn convert_key(access_key: StorageKey) -> H256 {
 
 impl StateTrait for State {
     fn get(&self, access_key: StorageKey) -> crate::Result<Option<Box<[u8]>>> {
+        let _timer = MeterTimer::time_func(STORAGE_GET_TIMER.as_ref());
+        let _timer2 = ScopeTimer::time_scope(STORAGE_GET_TIMER2.as_ref());
+
         let db = self.state.read();
         let hash_db = &db.as_hash_db();
 
@@ -50,7 +58,10 @@ impl StateTrait for State {
         &mut self, access_key: StorageKey, value: Box<[u8]>,
     ) -> crate::Result<()> {
         assert!(!self.read_only);
-        debug!("MPTStateOp: Set key {:?}, value {:?}", access_key, value);
+        trace!("MPTStateOp: Set key {:?}, value {:?}", access_key, value);
+        let _timer = MeterTimer::time_func(STORAGE_SET_TIMER.as_ref());
+        let _timer2 = ScopeTimer::time_scope(STORAGE_SET_TIMER2.as_ref());
+
         let mut db = self.state.write();
         let hash_db = db.as_hash_db_mut();
 
@@ -83,6 +94,8 @@ impl StateTrait for State {
     }
 
     fn compute_state_root(&mut self) -> crate::Result<StateRootWithAuxInfo> {
+        let _timer = MeterTimer::time_func(STORAGE_COMMIT_TIMER.as_ref());
+        let _timer2 = ScopeTimer::time_scope(STORAGE_COMMIT_TIMER2.as_ref());
         assert!(!self.read_only);
         self.get_state_root()
     }
@@ -99,6 +112,9 @@ impl StateTrait for State {
     fn commit(
         &mut self, epoch: EpochId,
     ) -> crate::Result<StateRootWithAuxInfo> {
+        let _timer = MeterTimer::time_func(STORAGE_COMMIT_TIMER.as_ref());
+        let _timer2 = ScopeTimer::time_scope(STORAGE_COMMIT_TIMER2.as_ref());
+
         let mut batch = DBTransaction::new();
         let mut db = self.state.write();
 

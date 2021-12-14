@@ -30,10 +30,11 @@ use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_statedb::{Result as StateDbResult, StateDb};
 use cfx_storage::{StateIndex, StorageManagerTrait};
 use cfx_types::{Address, H256, U256};
+use flame;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{
-    register_meter_with_group, Gauge, GaugeUsize, Lock, Meter, MeterTimer,
-    RwLockExtensions,
+    register_meter_with_group, register_timer_with_group, Gauge, GaugeUsize,
+    Lock, Meter, MeterTimer, RwLockExtensions, ScopeTimer, Timer,
 };
 use parking_lot::{Mutex, RwLock};
 use primitives::{Account, SignedTransaction, TransactionWithSignature};
@@ -66,20 +67,28 @@ lazy_static! {
         register_meter_with_group("txpool", "insert_txs_failure_tps");
     static ref TX_POOL_INSERT_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::insert_new_tx");
+    static ref TX_POOL_INSERT_TIMER2: Arc<dyn Timer> =
+        register_timer_with_group("txpool_insert", "tx_pool::insert_new_tx");
+    static ref TX_POOL_INSERT_TIMER2_STEP1: Arc<dyn Timer> =
+        register_timer_with_group("txpool_insert", "tx_pool::lock_best_info");
+    static ref TX_POOL_INSERT_TIMER2_STEP2: Arc<dyn Timer> =
+        register_timer_with_group("txpool_insert", "tx_pool::recover");
+    static ref TX_POOL_INSERT_TIMER2_STEP3: Arc<dyn Timer> =
+        register_timer_with_group("txpool_insert", "tx_pool::verify");
     static ref TX_POOL_VERIFY_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::verify");
     static ref TX_POOL_GET_STATE_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::get_state");
     static ref INSERT_TXS_QUOTA_LOCK: Lock =
-        Lock::register("txpool_insert_txs_quota_lock");
+        Lock::register("txpool_lock", "txpool_insert_txs_quota_lock");
     static ref INSERT_TXS_ENQUEUE_LOCK: Lock =
-        Lock::register("txpool_insert_txs_enqueue_lock");
+        Lock::register("txpool_lock", "txpool_insert_txs_enqueue_lock");
     static ref PACK_TRANSACTION_LOCK: Lock =
-        Lock::register("txpool_pack_transactions");
+        Lock::register("txpool_lock", "txpool_pack_transactions");
     static ref NOTIFY_BEST_INFO_LOCK: Lock =
-        Lock::register("txpool_notify_best_info");
+        Lock::register("txpool_lock", "txpool_notify_best_info");
     static ref NOTIFY_MODIFIED_LOCK: Lock =
-        Lock::register("txpool_notify_modified_info");
+        Lock::register("txpool_lock", "txpool_notify_modified_info");
 }
 
 pub struct TxPoolConfig {
@@ -274,10 +283,17 @@ impl TransactionPool {
         INSERT_TPS.mark(1);
         INSERT_TXS_TPS.mark(transactions.len());
         let _timer = MeterTimer::time_func(TX_POOL_INSERT_TIMER.as_ref());
+        let _timer2 = ScopeTimer::time_scope(TX_POOL_INSERT_TIMER2.as_ref());
+        let timer2_step =
+            ScopeTimer::time_scope(TX_POOL_INSERT_TIMER2_STEP1.as_ref());
+        let flamer_out = flame::start_guard("new_transactions");
 
         let mut passed_transactions = Vec::new();
         let mut failure = HashMap::new();
         let current_best_info = self.consensus_best_info.lock().clone();
+        std::mem::drop(timer2_step);
+        let timer2_step =
+            ScopeTimer::time_scope(TX_POOL_INSERT_TIMER2_STEP2.as_ref());
 
         // filter out invalid transactions.
         let mut index = 0;
@@ -295,6 +311,7 @@ impl TransactionPool {
         let vm_spec = self.machine.spec(best_block_number);
         let transitions = &self.machine.params().transition_heights;
 
+        let flamer = flame::start_guard("v_tx");
         while let Some(tx) = transactions.get(index) {
             match self.verify_transaction_tx_pool(
                 tx,
@@ -312,6 +329,10 @@ impl TransactionPool {
                 }
             }
         }
+        flamer.end();
+        std::mem::drop(timer2_step);
+        let timer2_step =
+            ScopeTimer::time_scope(TX_POOL_INSERT_TIMER2_STEP3.as_ref());
 
         if transactions.is_empty() {
             INSERT_TXS_SUCCESS_TPS.mark(passed_transactions.len());
@@ -325,6 +346,8 @@ impl TransactionPool {
         // key after basic verification.
         match self.data_man.recover_unsigned_tx(&transactions) {
             Ok(signed_trans) => {
+                let _flamer = flame::start_guard("v_tx_state");
+
                 let account_cache = self.get_best_state_account_cache();
                 let mut inner =
                     self.inner.write_with_metric(&INSERT_TXS_ENQUEUE_LOCK);
@@ -359,6 +382,7 @@ impl TransactionPool {
                 }
             }
         }
+        std::mem::drop(timer2_step);
 
         TX_POOL_DEFERRED_GAUGE.update(self.total_deferred());
         TX_POOL_UNPACKED_GAUGE.update(self.total_unpacked());
@@ -366,6 +390,8 @@ impl TransactionPool {
 
         INSERT_TXS_SUCCESS_TPS.mark(passed_transactions.len());
         INSERT_TXS_FAILURE_TPS.mark(failure.len());
+
+        flamer_out.end();
 
         (passed_transactions, failure)
     }
@@ -543,6 +569,7 @@ impl TransactionPool {
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
     ) -> Result<(), String>
     {
+        // let _flamer = flame::start_guard("readiness_check");
         inner.insert_transaction_with_readiness_check(
             account_cache,
             transaction,

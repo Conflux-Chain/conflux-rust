@@ -2,6 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use crate::{
+    STORAGE_COMMIT_TIMER, STORAGE_COMMIT_TIMER2, STORAGE_GET_TIMER,
+    STORAGE_GET_TIMER2, STORAGE_SET_TIMER, STORAGE_SET_TIMER2,
+};
+
 pub type ChildrenMerkleMap =
     BTreeMap<ActualSlabIndex, VanillaChildrenTable<MerkleHash>>;
 
@@ -228,6 +233,9 @@ impl Drop for State {
 
 impl StateTrait for State {
     fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
+        let _timer = MeterTimer::time_func(STORAGE_GET_TIMER.as_ref());
+        let _timer2 = ScopeTimer::time_scope(STORAGE_GET_TIMER2.as_ref());
+
         self.ensure_temp_slab_for_db_load();
 
         self.get_from_all_tries::<NoProof>(access_key)
@@ -235,6 +243,9 @@ impl StateTrait for State {
     }
 
     fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()> {
+        let _timer = MeterTimer::time_func(STORAGE_SET_TIMER.as_ref());
+        let _timer2 = ScopeTimer::time_scope(STORAGE_SET_TIMER2.as_ref());
+
         self.pre_modification();
 
         let root_node = self.get_or_create_delta_root_node()?;
@@ -427,6 +438,9 @@ impl StateTrait for State {
     }
 
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {
+        let _timer = MeterTimer::time_func(STORAGE_COMMIT_TIMER.as_ref());
+        let _timer2 = ScopeTimer::time_scope(STORAGE_COMMIT_TIMER2.as_ref());
+
         self.ensure_temp_slab_for_db_load();
 
         let merkle_root = self.compute_merkle_root()?;
@@ -441,6 +455,9 @@ impl StateTrait for State {
 
     // TODO(yz): replace coarse lock with a queue.
     fn commit(&mut self, epoch_id: EpochId) -> Result<StateRootWithAuxInfo> {
+        let _timer = MeterTimer::time_func(STORAGE_COMMIT_TIMER.as_ref());
+        let _timer2 = ScopeTimer::time_scope(STORAGE_COMMIT_TIMER2.as_ref());
+
         self.ensure_temp_slab_for_db_load();
 
         let merkle_root = self.state_root_check()?;
@@ -913,6 +930,7 @@ use cfx_storage_primitives::delta_mpt::{
     MptValue, StateRoot, StateRootAuxInfo, StateRootWithAuxInfo, StorageRoot,
 };
 use fallible_iterator::FallibleIterator;
+use metrics::{MeterTimer, ScopeTimer};
 use primitives::{
     DeltaMptKeyPadding, EpochId, MerkleHash, SkipInputCheck, StaticBool,
     StorageKey, MERKLE_NULL_NODE, NULL_EPOCH,

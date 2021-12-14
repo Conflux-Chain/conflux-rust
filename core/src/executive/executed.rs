@@ -7,7 +7,7 @@ use cfx_types::{Address, U256, U512};
 use primitives::{receipt::StorageChange, LogEntry, TransactionWithSignature};
 use solidity_abi::{ABIDecodable, ABIDecodeError};
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct Executed {
     /// Gas used during execution of transaction.
     pub gas_used: U256,

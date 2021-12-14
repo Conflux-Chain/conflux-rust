@@ -72,6 +72,7 @@ random-crash = { path = "../util/random_crash" }
 cfx-parameters = { path = "../core/parameters" }
 strum = "0.20"
 strum_macros = "0.20"
+flame={git="https://github.com/llogiq/flame.git"}
 
 [dev-dependencies]
 criterion = "0.3"

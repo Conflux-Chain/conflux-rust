@@ -4,12 +4,18 @@ use super::{
     state_trait::{StateTrait, StateTraitExt},
     state_trees::StateTrees,
 };
-use crate::{utils::access_mode::AccessMode, MptKeyValue};
+use crate::{
+    utils::access_mode::AccessMode, MptKeyValue, STORAGE_COMMIT_TIMER,
+    STORAGE_COMMIT_TIMER2, STORAGE_GET_COUNT, STORAGE_GET_TIMER,
+    STORAGE_GET_TIMER2, STORAGE_SET_COUNT, STORAGE_SET_TIMER,
+    STORAGE_SET_TIMER2,
+};
 use amt_db::{crypto::export::ProjectiveCurve, serde::MyToBytes, AmtDb, Key};
 use cfx_storage_primitives::amt::{
     StateRoot, StateRootAuxInfo, StateRootWithAuxInfo, StorageRoot,
 };
 use keccak_hash::keccak;
+use metrics::{MeterTimer, ScopeTimer};
 use parking_lot::RwLock;
 use primitives::{EpochId, StaticBool, StorageKey};
 use std::sync::Arc;
@@ -27,6 +33,9 @@ fn convert_key(access_key: StorageKey) -> Key {
 
 impl StateTrait for State {
     fn get(&self, access_key: StorageKey) -> crate::Result<Option<Box<[u8]>>> {
+        STORAGE_GET_COUNT.mark(1);
+        let _timer = MeterTimer::time_func(STORAGE_GET_TIMER.as_ref());
+        let _timer2 = ScopeTimer::time_scope(STORAGE_GET_TIMER2.as_ref());
         Ok(self.state.read().get(&convert_key(access_key))?)
     }
 
@@ -35,7 +44,10 @@ impl StateTrait for State {
     ) -> crate::Result<()> {
         assert!(!self.read_only);
         assert!(self.root_with_aux.is_none());
-        debug!("AMTStateOp: Set key {:?}, value {:?}", access_key, value);
+        STORAGE_SET_COUNT.mark(1);
+        let _timer = MeterTimer::time_func(STORAGE_SET_TIMER.as_ref());
+        let _timer2 = ScopeTimer::time_scope(STORAGE_SET_TIMER2.as_ref());
+        trace!("AMTStateOp: Set key {:?}, value {:?}", access_key, value);
         self.state.write().set(&convert_key(access_key), value);
         Ok(())
     }
@@ -62,6 +74,9 @@ impl StateTrait for State {
     }
 
     fn compute_state_root(&mut self) -> crate::Result<StateRootWithAuxInfo> {
+        let _timer = MeterTimer::time_func(STORAGE_COMMIT_TIMER.as_ref());
+        let _timer2 = ScopeTimer::time_scope(STORAGE_COMMIT_TIMER2.as_ref());
+
         assert!(!self.read_only);
         if self.root_with_aux.is_some() {
             warn!("AMTState: Do not commit me again");
@@ -102,6 +117,8 @@ impl StateTrait for State {
     fn commit(
         &mut self, _epoch: EpochId,
     ) -> crate::Result<StateRootWithAuxInfo> {
+        let _timer = MeterTimer::time_func(STORAGE_COMMIT_TIMER.as_ref());
+        let _timer2 = ScopeTimer::time_scope(STORAGE_COMMIT_TIMER2.as_ref());
         self.get_state_root()
     }
 }

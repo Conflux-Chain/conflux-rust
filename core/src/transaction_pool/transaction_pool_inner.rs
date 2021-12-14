@@ -13,7 +13,8 @@ use cfx_statedb::Result as StateDbResult;
 use cfx_types::{address_util::AddressUtil, Address, H256, U128, U256, U512};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
-    register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
+    register_meter_with_group, register_timer_with_group, Counter,
+    CounterUsize, Meter, MeterTimer, ScopeTimer, Timer,
 };
 use primitives::{
     Account, Action, SignedTransaction, TransactionWithSignature,
@@ -39,17 +40,29 @@ const GC_CHECK_COUNT: usize = 5;
 lazy_static! {
     static ref TX_POOL_RECALCULATE: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::recalculate");
+    static ref TX_POOL_RECALCULATE_TIMER2: Arc<dyn Timer> =
+        register_timer_with_group("txpool_insert", "tx_pool::recalculate");
     static ref TX_POOL_INNER_INSERT_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::inner_insert");
+    static ref TX_POOL_INNER_INSERT_TIMER2: Arc<dyn Timer> =
+        register_timer_with_group("txpool_insert", "tx_pool::inner_insert");
     static ref DEFERRED_POOL_INNER_INSERT: Arc<dyn Meter> =
         register_meter_with_group("timer", "deferred_pool::inner_insert");
     pub static ref TX_POOL_GET_STATE_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::get_nonce_and_storage");
-    static ref TX_POOL_INNER_WITHOUTCHECK_INSERT_TIMER: Arc<dyn Meter> =
+    pub static ref TX_POOL_INNER_GET_STATE_TIMER2: Arc<dyn Timer> =
+        register_timer_with_group("txpool_insert", "tx_pool::inner_get_state");
+    pub static ref TX_POOL_GET_STATE_TIMER2: Arc<dyn Timer> =
+        register_timer_with_group("txpool_insert", "tx_pool::get_state");
+    pub static ref TX_POOL_INNER_WITHOUTCHECK_INSERT_TIMER: Arc<dyn Meter> =
         register_meter_with_group(
             "timer",
             "tx_pool::inner_without_check_inert"
         );
+    pub static ref TX_POOL_PACK_TRANSACTION: Arc<dyn Timer> =
+        register_timer_with_group("txpool_insert", "tx_pool::pack_transaction");
+    pub static ref TX_POOL_PACK_TRANSACTION_TPS: Arc<dyn Meter> =
+        register_meter_with_group("txpool", "tx_pool::pack_transaction_tps");
     static ref GC_UNEXECUTED_COUNTER: Arc<dyn Counter<usize>> =
         CounterUsize::register_with_group("txpool", "gc_unexecuted");
     static ref GC_READY_COUNTER: Arc<dyn Counter<usize>> =
@@ -791,6 +804,9 @@ impl TransactionPoolInner {
         &mut self, addr: &Address, account_cache: &AccountCache,
     ) -> StateDbResult<()> {
         let _timer = MeterTimer::time_func(TX_POOL_RECALCULATE.as_ref());
+        let _timer2 =
+            ScopeTimer::time_scope(TX_POOL_RECALCULATE_TIMER2.as_ref());
+        // let _flamer = flame::start_guard("recalculate");
         let (nonce, balance) = self
             .get_and_update_nonce_and_balance_from_storage(
                 addr,
@@ -821,6 +837,7 @@ impl TransactionPoolInner {
         machine: &Machine,
     ) -> Vec<Arc<SignedTransaction>>
     {
+        let _timer = ScopeTimer::time_scope(TX_POOL_PACK_TRANSACTION.as_ref());
         let mut packed_transactions: Vec<Arc<SignedTransaction>> = Vec::new();
         if num_txs == 0 {
             return packed_transactions;
@@ -919,6 +936,8 @@ impl TransactionPoolInner {
             );
         }
 
+        TX_POOL_PACK_TRANSACTION_TPS.mark(packed_transactions.len());
+
         packed_transactions
     }
 
@@ -967,6 +986,8 @@ impl TransactionPoolInner {
     ) -> Result<(), String>
     {
         let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
+        let _timer2 =
+            ScopeTimer::time_scope(TX_POOL_INNER_INSERT_TIMER2.as_ref());
         let mut sponsored_gas = U256::from(0);
         let mut sponsored_storage = 0;
 
@@ -1023,11 +1044,16 @@ impl TransactionPoolInner {
             }
         }
 
+        // let flamer = flame::start_guard("get_cached");
+        let timer2 =
+            ScopeTimer::time_scope(TX_POOL_INNER_GET_STATE_TIMER2.as_ref());
         let (state_nonce, state_balance) = account_cache
             .get_nonce_and_balance(&transaction.sender)
             .map_err(|e| {
                 format!("Failed to read account_cache from storage: {}", e)
             })?;
+        std::mem::drop(timer2);
+        // flamer.end();
 
         if transaction.hash[0] & 254 == 0 {
             trace!(

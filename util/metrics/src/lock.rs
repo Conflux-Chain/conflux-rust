@@ -20,11 +20,20 @@ pub struct Lock {
 }
 
 impl Lock {
-    pub fn register(name: &str) -> Self {
+    pub fn register(group: &str, name: &str) -> Self {
         Lock {
-            acquire_tps: register_meter_with_group(name, "acquires"),
-            wait_time: register_meter_with_group(name, "wait_t"),
-            hold_time: register_meter_with_group(name, "hold_t"),
+            acquire_tps: register_meter_with_group(
+                group,
+                format!("{}_acquires", name).as_str(),
+            ),
+            wait_time: register_meter_with_group(
+                group,
+                format!("{}_wait", name).as_str(),
+            ),
+            hold_time: register_meter_with_group(
+                group,
+                format!("{}_hold", name).as_str(),
+            ),
         }
     }
 }

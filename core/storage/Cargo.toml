@@ -50,6 +50,7 @@ trie-db= {version="0.11.0", optional = true}
 keccak-hasher = {git="https://github.com/openethereum/openethereum.git", rev="2ae2949", optional=true}
 patricia-trie-ethereum = {git="https://github.com/openethereum/openethereum.git", rev="2ae2949", optional=true}
 
+metrics = {path="../../util/metrics"}
 
 [dev-dependencies]
 primitives = { path = "../../primitives", features = ["test_no_account_length_check"] }
