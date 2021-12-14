@@ -32,7 +32,7 @@ use crate::{
 use cached_diemdb::CachedDiemDB;
 use consensus_types::db::FakeLedgerBlockDB;
 use diem_config::{config::NodeConfig, utils::get_genesis_txn};
-use diem_logger::prelude::*;
+use diem_logger::{prelude::*, Writer};
 use diem_types::{
     account_address::{from_consensus_public_key, AccountAddress},
     block_info::PivotBlockDecision,
@@ -103,7 +103,17 @@ pub fn start_pos_consensus(
         .level(config.logger.level)
         .read_env();
     if let Some(log_file) = config.logger.file.clone() {
-        logger.printer(Box::new(FileWriter::new(log_file)));
+        let writer = match config.logger.rotation_count {
+            Some(count) => Box::new(RollingFileWriter::new(
+                log_file,
+                count,
+                config.logger.rotation_file_size_mb.unwrap_or(500),
+            ))
+                as Box<dyn Writer + Send + Sync + 'static>,
+            None => Box::new(FileWriter::new(log_file))
+                as Box<dyn Writer + Send + Sync + 'static>,
+        };
+        logger.printer(writer);
     }
     let _logger = Some(logger.build());
 
