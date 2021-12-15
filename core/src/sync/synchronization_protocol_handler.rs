@@ -82,6 +82,10 @@ const MAX_TXS_BYTES_TO_PROPAGATE: usize = 1024 * 1024; // 1MB
 const EPOCH_SYNC_MAX_GAP_START: u64 = 20000;
 /// The max gap is increased if our best_epoch does not change after timeout.
 const EPOCH_SYNC_MAX_GAP_INCREASE: u64 = 5000;
+/// After 20 retries, the gap becomes 120000 epochs = 6 eras. This is usually
+/// larger than the number of epochs after a checkpoint and gives a bound
+/// of the memory usage to maintain downloaded blocks in Sync/Consensus Graph.
+const EPOCH_SYNC_MAX_RETRY_COUNT: u64 = 20;
 /// If not future epochs can be requested because of `EPOCH_SYNC_MAX_GAP`,
 /// after waiting this timeout we'll request from `best_epoch` again.
 const EPOCH_SYNC_RESTART_TIMEOUT_S: u64 = 60 * 10;
@@ -866,7 +870,9 @@ impl SynchronizationProtocolHandler {
             } else {
                 // Restart from `my_best_epoch` to fix possible problems.
                 latest_requested_epoch = my_best_epoch;
-                retry_count += 1;
+                if retry_count < EPOCH_SYNC_MAX_RETRY_COUNT {
+                    retry_count += 1;
+                }
             }
         }
 
