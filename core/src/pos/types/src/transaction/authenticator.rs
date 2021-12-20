@@ -8,7 +8,10 @@
 use crate::account_address::AccountAddress;
 use anyhow::{ensure, Error, Result};
 use diem_crypto::{
-    bls::{BLSPublicKey, BLSSignature},
+    bls::{
+        BLSPublicKey, BLSPublicKeyUnchecked, BLSSignature,
+        BLSSignatureUnchecked,
+    },
     ed25519::{Ed25519PublicKey, Ed25519Signature},
     hash::CryptoHash,
     multi_bls::MultiBLSSignature,
@@ -78,8 +81,37 @@ pub enum TransactionAuthenticator {
         public_key: BLSPublicKey,
         signature: BLSSignature,
     },
-    /// FIXME(lpl): Implement signature aggregation.
-    MultiBLS { signature: MultiBLSSignature }, // ... add more schemes here
+    MultiBLS {
+        signature: MultiBLSSignature,
+    }, // ... add more schemes here
+}
+
+#[derive(Deserialize)]
+pub enum TransactionAuthenticatorUnchecked {
+    BLS {
+        public_key: BLSPublicKeyUnchecked,
+        signature: BLSSignatureUnchecked,
+    },
+    MultiBLS {
+        signature: MultiBLSSignature,
+    },
+}
+
+impl From<TransactionAuthenticatorUnchecked> for TransactionAuthenticator {
+    fn from(t: TransactionAuthenticatorUnchecked) -> Self {
+        match t {
+            TransactionAuthenticatorUnchecked::BLS {
+                public_key,
+                signature,
+            } => Self::BLS {
+                public_key: public_key.into(),
+                signature: signature.into(),
+            },
+            TransactionAuthenticatorUnchecked::MultiBLS { signature } => {
+                Self::MultiBLS { signature }
+            }
+        }
+    }
 }
 
 impl TransactionAuthenticator {
