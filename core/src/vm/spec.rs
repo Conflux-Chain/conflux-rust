@@ -142,7 +142,9 @@ pub struct Spec {
     /// CIP-72: Accept Ethereum transaction signature
     pub cip72: bool,
     /// CIP-78: Correct `is_sponsored` fields in receipt
-    pub cip78: bool,
+    pub cip78a: bool,
+    /// CIP-78: Correct `is_sponsored` fields in receipt
+    pub cip78b: bool,
     /// CIP-80: Ethereum compatible signature recover
     pub cip80: bool,
 }
@@ -275,7 +277,8 @@ impl Spec {
             cip64: false,
             cip71: false,
             cip72: false,
-            cip78: false,
+            cip78a: false,
+            cip78b: false,
             cip80: false,
         }
     }
@@ -291,7 +294,7 @@ impl Spec {
         spec.cip64 = number >= params.transition_numbers.cip64;
         spec.cip71 = number >= params.transition_numbers.cip71;
         spec.cip72 = number >= params.transition_numbers.cip72b;
-        spec.cip78 = number >= params.transition_numbers.cip78;
+        spec.cip78a = number >= params.transition_numbers.cip78a;
         spec.cip80 = number >= params.transition_numbers.cip80;
         spec
     }
