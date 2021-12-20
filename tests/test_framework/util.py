@@ -318,7 +318,7 @@ def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="
             'file': os.path.join(datadir, "diem.log")
         }
         validator_config['mempool'] = {
-            "shared_mempool_tick_interval_ms": "200"
+            "shared_mempool_tick_interval_ms": 200,
         }
         with open(os.path.join(datadir, 'validator_full_node.yaml'), 'w') as f:
             f.write(yaml.dump(validator_config, default_flow_style=False))
