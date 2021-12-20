@@ -10,15 +10,16 @@ use crate::{
 };
 use anyhow::{anyhow, Result};
 use bls_signatures::{
-    PrivateKey as RawPrivateKey, PublicKey as RawPublicKey,
-    Serialize as BLSSerialize, Signature as RawSignature,
+    DeserializeUnchecked, PrivateKey as RawPrivateKey,
+    PublicKey as RawPublicKey, Serialize as BLSSerialize,
+    Signature as RawSignature,
 };
 use diem_crypto_derive::{
     DeserializeKey, SerializeKey, SilentDebug, SilentDisplay,
 };
 use diem_logger::prelude::*;
 use mirai_annotations::*;
-use serde::Serialize;
+use serde::{Deserialize, Deserializer, Serialize};
 use std::convert::TryFrom;
 
 #[cfg(mirai)]
@@ -314,6 +315,77 @@ impl fmt::Debug for BLSSignature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "BLSSignature({})", self)
     }
+}
+
+/// Used to deserialize keys in local storage whose validity has been checked
+/// before.
+#[derive(SerializeKey, DeserializeKey)]
+pub struct BLSPublicKeyUnchecked(RawPublicKey);
+/// Used to deserialize keys in local storage whose validity has been checked
+/// before.
+#[derive(SerializeKey, DeserializeKey)]
+pub struct BLSSignatureUnchecked(RawSignature);
+
+impl TryFrom<&[u8]> for BLSPublicKeyUnchecked {
+    type Error = CryptoMaterialError;
+
+    /// Deserialize an BLSPrivateKey. This method will also check for key
+    /// validity.
+    fn try_from(
+        bytes: &[u8],
+    ) -> std::result::Result<BLSPublicKeyUnchecked, CryptoMaterialError> {
+        match RawPublicKey::from_bytes_unchecked(bytes) {
+            Ok(sig) => Ok(Self(sig)),
+            Err(e) => {
+                diem_debug!(
+                    "BLSPublicKey debug error: bytes={:?}, err={:?}",
+                    bytes,
+                    e
+                );
+                Err(CryptoMaterialError::DeserializationError)
+            }
+        }
+    }
+}
+
+impl TryFrom<&[u8]> for BLSSignatureUnchecked {
+    type Error = CryptoMaterialError;
+
+    /// Deserialize an BLSPrivateKey. This method will also check for key
+    /// validity.
+    fn try_from(
+        bytes: &[u8],
+    ) -> std::result::Result<BLSSignatureUnchecked, CryptoMaterialError> {
+        // TODO(lpl): Check malleability?
+        match RawSignature::from_bytes_unchecked(bytes) {
+            Ok(sig) => Ok(Self(sig)),
+            Err(_) => Err(CryptoMaterialError::DeserializationError),
+        }
+    }
+}
+
+impl ValidCryptoMaterial for BLSPublicKeyUnchecked {
+    fn to_bytes(&self) -> Vec<u8> { self.0.as_bytes() }
+}
+
+impl ValidCryptoMaterial for BLSSignatureUnchecked {
+    fn to_bytes(&self) -> Vec<u8> { self.0.as_bytes() }
+}
+
+impl From<BLSPublicKeyUnchecked> for BLSPublicKey {
+    fn from(unchecked: BLSPublicKeyUnchecked) -> Self { Self(unchecked.0) }
+}
+
+impl From<BLSSignatureUnchecked> for BLSSignature {
+    fn from(unchecked: BLSSignatureUnchecked) -> Self { Self(unchecked.0) }
+}
+
+/// Deserialize public key from local storage.
+pub fn deserialize_bls_public_key_unchecked<'de, D>(
+    deserializer: D,
+) -> Result<BLSPublicKey, D::Error>
+where D: Deserializer<'de> {
+    BLSPublicKeyUnchecked::deserialize(deserializer).map(Into::into)
 }
 
 #[cfg(any(test, feature = "fuzzing"))]

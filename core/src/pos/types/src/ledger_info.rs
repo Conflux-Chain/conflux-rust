@@ -267,6 +267,41 @@ impl LedgerInfoWithV0 {
     }
 }
 
+#[derive(Deserialize)]
+pub struct LedgerInfoWithV0Unchecked {
+    pub ledger_info: LedgerInfo,
+    /// The validator is identified by its account address: in order to verify
+    /// a signature one needs to retrieve the public key of the validator
+    /// for the given epoch.
+    pub signatures: BTreeMap<AccountAddress, BLSSignatureUnchecked>,
+}
+
+impl From<LedgerInfoWithV0Unchecked> for LedgerInfoWithV0 {
+    fn from(unchecked: LedgerInfoWithV0Unchecked) -> Self {
+        Self::new(
+            unchecked.ledger_info,
+            unchecked
+                .signatures
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
+        )
+    }
+}
+
+#[derive(Deserialize)]
+pub enum LedgerInfoWithSignaturesUnchecked {
+    V0(LedgerInfoWithV0Unchecked),
+}
+
+impl From<LedgerInfoWithSignaturesUnchecked> for LedgerInfoWithSignatures {
+    fn from(unchecked: LedgerInfoWithSignaturesUnchecked) -> Self {
+        match unchecked {
+            LedgerInfoWithSignaturesUnchecked::V0(l) => Self::V0(l.into()),
+        }
+    }
+}
+
 //
 // Arbitrary implementation of LedgerInfoWithV0 (for fuzzing)
 //
@@ -276,6 +311,7 @@ use crate::{
 };
 #[cfg(any(test, feature = "fuzzing"))]
 use ::proptest::prelude::*;
+use diem_crypto::bls::BLSSignatureUnchecked;
 
 #[cfg(any(test, feature = "fuzzing"))]
 impl Arbitrary for LedgerInfoWithV0 {
