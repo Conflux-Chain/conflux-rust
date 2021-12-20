@@ -6,7 +6,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    block_data::{BlockData, BlockType},
+    block_data::{BlockData, BlockDataUnchecked, BlockType},
     common::{Author, Payload, Round},
     quorum_cert::QuorumCert,
 };
@@ -52,6 +52,25 @@ pub struct Block {
     /// Optional VRF proof tp prove the author is a valid proposer in this
     /// round.
     vrf_nonce_and_proof: Option<(u64, ConsensusVRFProof)>,
+}
+
+#[derive(Deserialize)]
+pub struct BlockUnchecked {
+    block_data: BlockDataUnchecked,
+    signature: Option<ConsensusSignature>,
+    vrf_nonce_and_proof: Option<(u64, ConsensusVRFProof)>,
+}
+
+impl From<BlockUnchecked> for Block {
+    fn from(b: BlockUnchecked) -> Self {
+        let block_data: BlockData = b.block_data.into();
+        Self {
+            id: block_data.hash(),
+            block_data,
+            signature: b.signature,
+            vrf_nonce_and_proof: b.vrf_nonce_and_proof,
+        }
+    }
 }
 
 impl fmt::Debug for Block {

@@ -17,7 +17,7 @@ use diem_crypto::hash::HashValue;
 use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::{
     collections::BTreeMap,
     fmt::{Display, Formatter},
@@ -300,6 +300,13 @@ impl From<LedgerInfoWithSignaturesUnchecked> for LedgerInfoWithSignatures {
             LedgerInfoWithSignaturesUnchecked::V0(l) => Self::V0(l.into()),
         }
     }
+}
+
+pub fn deserialize_ledger_info_unchecked<'de, D>(
+    deserializer: D,
+) -> Result<LedgerInfoWithSignatures, D::Error>
+where D: Deserializer<'de> {
+    LedgerInfoWithSignaturesUnchecked::deserialize(deserializer).map(Into::into)
 }
 
 //

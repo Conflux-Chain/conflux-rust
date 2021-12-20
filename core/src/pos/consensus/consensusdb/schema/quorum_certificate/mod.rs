@@ -16,7 +16,7 @@
 
 use super::QC_CF_NAME;
 use anyhow::Result;
-use consensus_types::quorum_cert::QuorumCert;
+use consensus_types::quorum_cert::{QuorumCert, QuorumCertUnchecked};
 use diem_crypto::HashValue;
 use schemadb::{
     define_schema,
@@ -36,7 +36,9 @@ impl KeyCodec<QCSchema> for HashValue {
 impl ValueCodec<QCSchema> for QuorumCert {
     fn encode_value(&self) -> Result<Vec<u8>> { Ok(bcs::to_bytes(self)?) }
 
-    fn decode_value(data: &[u8]) -> Result<Self> { Ok(bcs::from_bytes(data)?) }
+    fn decode_value(data: &[u8]) -> Result<Self> {
+        Ok(bcs::from_bytes::<QuorumCertUnchecked>(data).map(Into::into)?)
+    }
 }
 
 #[cfg(test)]

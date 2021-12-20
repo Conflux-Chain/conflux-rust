@@ -92,6 +92,7 @@ pub enum NodeStatus {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct NodeData {
+    /// This struct is only used locally, so loaded public keys must be valid.
     #[serde(deserialize_with = "deserialize_bls_public_key_unchecked")]
     public_key: ConsensusPublicKey,
     vrf_public_key: Option<ConsensusVRFPublicKey>,
