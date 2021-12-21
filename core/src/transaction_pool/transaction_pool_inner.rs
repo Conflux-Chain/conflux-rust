@@ -351,6 +351,7 @@ impl TransactionPoolInner {
         self.ready_nonces_and_balances.clear();
         self.garbage_collector.clear();
         self.txs.clear();
+        self.tx_sponsored_gas_map.clear();
         self.total_received_count = 0;
         self.unpacked_transaction_count = 0;
     }
