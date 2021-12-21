@@ -88,6 +88,14 @@ pub enum TransactionAuthenticator {
 
 #[derive(Deserialize)]
 pub enum TransactionAuthenticatorUnchecked {
+    Ed25519 {
+        public_key: Ed25519PublicKey,
+        signature: Ed25519Signature,
+    },
+    MultiEd25519 {
+        public_key: MultiEd25519PublicKey,
+        signature: MultiEd25519Signature,
+    },
     BLS {
         public_key: BLSPublicKeyUnchecked,
         signature: BLSSignatureUnchecked,
@@ -110,6 +118,20 @@ impl From<TransactionAuthenticatorUnchecked> for TransactionAuthenticator {
             TransactionAuthenticatorUnchecked::MultiBLS { signature } => {
                 Self::MultiBLS { signature }
             }
+            TransactionAuthenticatorUnchecked::Ed25519 {
+                public_key,
+                signature,
+            } => Self::Ed25519 {
+                public_key,
+                signature,
+            },
+            TransactionAuthenticatorUnchecked::MultiEd25519 {
+                public_key,
+                signature,
+            } => Self::MultiEd25519 {
+                public_key,
+                signature,
+            },
         }
     }
 }
