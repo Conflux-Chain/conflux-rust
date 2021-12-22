@@ -522,6 +522,8 @@ impl TransactionPoolInner {
                 } else {
                     self.garbage_collector.insert(&addr, 0, current_timestamp);
                 }
+                self.garbage_collector
+                    .update_ready_tx(&addr, victim.ready_tx_gas_price);
             }
 
             // maintain txs
@@ -585,18 +587,6 @@ impl TransactionPoolInner {
                     &transaction.sender(),
                     state_nonce,
                     state_balance,
-                );
-                let count = self
-                    .deferred_pool
-                    .count_less(&transaction.sender(), &state_nonce);
-                let timestamp = self
-                    .garbage_collector
-                    .get_timestamp(&transaction.sender())
-                    .unwrap_or(self.get_current_timestamp());
-                self.garbage_collector.insert(
-                    &transaction.sender(),
-                    count,
-                    timestamp,
                 );
                 self.txs.insert(transaction.hash(), transaction.clone());
                 self.tx_sponsored_gas_map.insert(
@@ -771,20 +761,14 @@ impl TransactionPoolInner {
         let (nonce, balance) = self
             .get_local_nonce_and_balance(addr)
             .unwrap_or((0.into(), 0.into()));
-        let ret = self
-            .deferred_pool
-            .recalculate_readiness_with_local_info(addr, nonce, balance);
-        self.ready_account_pool.update(addr, ret);
+        self.recalculate_readiness(addr, nonce, balance);
     }
 
     fn recalculate_readiness_with_fixed_info(
         &mut self, addr: &Address, nonce: U256, balance: U256,
     ) {
         self.update_nonce_and_balance(addr, nonce, balance);
-        let ret = self
-            .deferred_pool
-            .recalculate_readiness_with_local_info(addr, nonce, balance);
-        self.ready_account_pool.update(addr, ret);
+        self.recalculate_readiness(addr, nonce, balance);
     }
 
     fn recalculate_readiness_with_state(
@@ -796,12 +780,19 @@ impl TransactionPoolInner {
                 addr,
                 account_cache,
             )?;
+        self.recalculate_readiness(addr, nonce, balance);
+        Ok(())
+    }
+
+    fn recalculate_readiness(
+        &mut self, addr: &Address, nonce: U256, balance: U256,
+    ) {
         let ret = self
             .deferred_pool
             .recalculate_readiness_with_local_info(addr, nonce, balance);
+        self.garbage_collector
+            .update_ready_tx(addr, ret.as_ref().map(|tx| tx.gas_price));
         self.ready_account_pool.update(addr, ret);
-
-        Ok(())
     }
 
     pub fn check_tx_packed_in_deferred_pool(&self, tx_hash: &H256) -> bool {
@@ -888,6 +879,8 @@ impl TransactionPoolInner {
         }
 
         for tx in recycle_txs {
+            // The other status of these transactions remain unchanged, so we do
+            // not need to update other structures like `garbage_collector`.
             self.ready_account_pool.insert(tx);
         }
 

@@ -2,10 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::Address;
+use cfx_types::{Address, U256};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use std::{
-    cmp::{Ord, Ordering, PartialEq, PartialOrd},
+    cmp::{Ord, Ordering, PartialEq, PartialOrd, Reverse},
     collections::HashMap,
     ptr,
 };
@@ -19,6 +19,9 @@ pub struct GarbageCollectorNode {
     pub sender: Address,
     /// This indicates the number of transactions can be garbage collected.
     pub count: usize,
+    /// This indicates the gas price of the ready transaction from the sender.
+    /// If there is no ready transaction, this is `None`.
+    pub ready_tx_gas_price: Option<U256>,
     /// This indicates the latest timestamp when a transaction was garbage
     /// collected.
     pub timestamp: u64,
@@ -26,7 +29,9 @@ pub struct GarbageCollectorNode {
 
 impl Ord for GarbageCollectorNode {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.count.cmp(&other.count) {
+        match (self.count, Reverse(self.ready_tx_gas_price))
+            .cmp(&(other.count, Reverse(other.ready_tx_gas_price)))
+        {
             Ordering::Less => Ordering::Less,
             Ordering::Greater => Ordering::Greater,
             Ordering::Equal => other.timestamp.cmp(&self.timestamp),
@@ -62,6 +67,21 @@ impl GarbageCollector {
         } else {
             self.append(sender, count, timestamp);
         }
+    }
+
+    pub fn update_ready_tx(
+        &mut self, sender: &Address, ready_tx_gas_price: Option<U256>,
+    ) {
+        let index = match self.mapping.get(&sender) {
+            None => {
+                // We always call this after `insert`, so this should not
+                // happen.
+                error!("update_ready_tx with sender node missing!!!");
+                return;
+            }
+            Some(i) => *i,
+        };
+        self.data[index].ready_tx_gas_price = ready_tx_gas_price;
     }
 
     #[allow(unused)]
@@ -104,12 +124,13 @@ impl GarbageCollector {
 
     fn update(&mut self, sender: &Address, count: usize, timestamp: u64) {
         let index = *self.mapping.get(sender).unwrap();
+        let origin_node = self.data[index];
         let node = GarbageCollectorNode {
             sender: *sender,
             count,
             timestamp,
+            ready_tx_gas_price: self.data[index].ready_tx_gas_price,
         };
-        let origin_node = self.data[index];
         self.data[index].count = count;
         self.data[index].timestamp = timestamp;
         match node.cmp(&origin_node) {
@@ -125,6 +146,7 @@ impl GarbageCollector {
         self.data.push(GarbageCollectorNode {
             sender: *sender,
             count,
+            ready_tx_gas_price: None,
             timestamp,
         });
         self.sift_up(self.data.len() - 1);
