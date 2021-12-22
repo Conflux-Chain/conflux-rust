@@ -1521,7 +1521,9 @@ impl BlockDataManager {
         &self, transactions: &Vec<TransactionWithSignature>,
     ) -> Result<Vec<Arc<SignedTransaction>>, DecoderError> {
         let _timer = MeterTimer::time_func(TX_POOL_RECOVER_TIMER.as_ref());
-        self.tx_data_manager.recover_unsigned_tx(transactions)
+        // Return all transactions without checking if it's cached.
+        self.tx_data_manager
+            .recover_unsigned_tx_with_order(transactions)
     }
 
     pub fn recover_block(&self, block: &mut Block) -> Result<(), DecoderError> {

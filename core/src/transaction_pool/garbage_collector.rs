@@ -314,6 +314,7 @@ mod garbage_collector_test {
                 let node = GarbageCollectorNode {
                     sender: addr[idx],
                     count,
+                    ready_tx_gas_price: None,
                     timestamp,
                 };
                 gc.insert(&addr[idx], count, timestamp);

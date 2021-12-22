@@ -331,25 +331,29 @@ impl TransactionPool {
                 let mut to_prop = self.to_propagate_trans.write();
 
                 for tx in signed_trans {
-                    if let Err(e) = self.add_transaction_with_readiness_check(
-                        &mut *inner,
-                        &account_cache,
-                        tx.clone(),
-                        false,
-                        false,
-                    ) {
-                        debug!(
+                    if inner.get(&tx.hash).is_none() {
+                        if let Err(e) = self
+                            .add_transaction_with_readiness_check(
+                                &mut *inner,
+                                &account_cache,
+                                tx.clone(),
+                                false,
+                                false,
+                            )
+                        {
+                            debug!(
                             "tx {:?} fails to be inserted to pool, err={:?}",
                             &tx.hash, e
                         );
-                        failure.insert(tx.hash(), e);
-                        continue;
-                    }
-                    passed_transactions.push(tx.clone());
-                    if !to_prop.contains_key(&tx.hash)
-                        && to_prop.len() < inner.capacity()
-                    {
-                        to_prop.insert(tx.hash, tx);
+                            failure.insert(tx.hash(), e);
+                            continue;
+                        }
+                        passed_transactions.push(tx.clone());
+                        if !to_prop.contains_key(&tx.hash)
+                            && to_prop.len() < inner.capacity()
+                        {
+                            to_prop.insert(tx.hash, tx);
+                        }
                     }
                 }
             }
