@@ -25,7 +25,14 @@ use crate::{
     },
     vm_factory::VmFactory,
 };
-use cfx_parameters::staking::*;
+use cfx_parameters::{
+    internal_contract_addresses::{
+        GAS_PAYMENT_TRACER_ADDRESS, SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+        STORAGE_COLLATERAL_TRACER_ADDRESS,
+        STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+    },
+    staking::*,
+};
 use cfx_state::{
     state_trait::StateOpsTrait, substate_trait::SubstateMngTrait, CleanupMode,
     CollateralCheckResult, StateTrait, SubstateTrait,
@@ -1062,6 +1069,11 @@ impl<
                 &actual_gas_cost,
                 &mut cleanup_mode(&mut tx_substate, &spec),
             )?;
+            options.tracer.prepare_internal_transfer_action(
+                sender,
+                *GAS_PAYMENT_TRACER_ADDRESS,
+                actual_gas_cost,
+            );
 
             return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::NotEnoughCash {
@@ -1075,6 +1087,7 @@ impl<
                     &actual_gas_cost,
                     gas_sponsored,
                     storage_sponsored,
+                    options.tracer.drain(),
                     &self.spec,
                 ),
             ));
@@ -1088,13 +1101,25 @@ impl<
         }
 
         // Subtract the transaction fee from sender or contract.
+        let gas_cost = U256::try_from(gas_cost).unwrap();
+
         if !gas_sponsored {
+            options.tracer.prepare_internal_transfer_action(
+                sender,
+                *GAS_PAYMENT_TRACER_ADDRESS,
+                gas_cost,
+            );
             self.state.sub_balance(
                 &sender,
                 &U256::try_from(gas_cost).unwrap(),
                 &mut cleanup_mode(&mut tx_substate, &spec),
             )?;
         } else {
+            options.tracer.prepare_internal_transfer_action(
+                *SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+                *GAS_PAYMENT_TRACER_ADDRESS,
+                gas_cost,
+            );
             self.state.sub_sponsor_balance_for_gas(
                 &code_address,
                 &U256::try_from(gas_cost).unwrap(),
@@ -1147,6 +1172,7 @@ impl<
                             tx,
                             gas_sponsored,
                             storage_sponsored,
+                            options.tracer.drain(),
                             &spec,
                         ),
                     ));
@@ -1240,7 +1266,7 @@ impl<
             } else {
                 storage_sponsor_eligible
             },
-            options.tracer.drain(),
+            options.tracer,
         )?)
     }
 
@@ -1248,7 +1274,9 @@ impl<
     // post-processing.
     fn kill_process(
         &mut self, suicides: &HashSet<Address>,
-    ) -> DbResult<Substate> {
+        tracer: &mut dyn Tracer<Output = ExecTrace>,
+    ) -> DbResult<Substate>
+    {
         let mut substate = Substate::new();
         for address in suicides {
             if let Some(code_size) = self.state.code_size(address)? {
@@ -1287,9 +1315,14 @@ impl<
                 .state
                 .sponsor_balance_for_collateral(contract_address)?;
 
-            if sponsor_for_gas.is_some() {
+            if let Some(ref sponsor_address) = sponsor_for_gas {
+                tracer.prepare_internal_transfer_action(
+                    *SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+                    *sponsor_address,
+                    sponsor_balance_for_gas.clone(),
+                );
                 self.state.add_balance(
-                    sponsor_for_gas.as_ref().unwrap(),
+                    sponsor_address,
                     &sponsor_balance_for_gas,
                     cleanup_mode(&mut substate, self.spec),
                     self.spec.account_start_nonce,
@@ -1299,9 +1332,15 @@ impl<
                     &sponsor_balance_for_gas,
                 )?;
             }
-            if sponsor_for_collateral.is_some() {
+            if let Some(ref sponsor_address) = sponsor_for_collateral {
+                tracer.prepare_internal_transfer_action(
+                    *SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+                    *sponsor_address,
+                    sponsor_balance_for_collateral.clone(),
+                );
+
                 self.state.add_balance(
-                    sponsor_for_collateral.as_ref().unwrap(),
+                    sponsor_address,
                     &sponsor_balance_for_collateral,
                     cleanup_mode(&mut substate, self.spec),
                     self.spec.account_start_nonce,
@@ -1314,8 +1353,24 @@ impl<
         }
 
         for contract_address in suicides {
-            let burnt_balance = self.state.balance(contract_address)?
-                + self.state.staking_balance(contract_address)?;
+            let contract_balance = self.state.balance(contract_address)?;
+            let staking_balance =
+                self.state.staking_balance(contract_address)?;
+            let burnt_balance = contract_balance + staking_balance;
+
+            if !staking_balance.is_zero() {
+                tracer.prepare_internal_transfer_action(
+                    *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+                    *contract_address,
+                    staking_balance.clone(),
+                );
+            }
+            tracer.prepare_internal_transfer_action(
+                *contract_address,
+                Address::zero(),
+                burnt_balance.clone(),
+            );
+
             self.state.remove_contract(contract_address)?;
             self.state.subtract_total_issued(burnt_balance);
         }
@@ -1324,11 +1379,11 @@ impl<
     }
 
     /// Finalizes the transaction (does refunds and suicides).
-    fn finalize(
+    fn finalize<T: Tracer<Output = ExecTrace>>(
         &mut self, tx: &SignedTransaction, mut substate: Substate,
         result: vm::Result<FinalizationResult>, output: Bytes,
         refund_receiver: Option<Address>, storage_sponsor_paid: bool,
-        trace: Vec<ExecTrace>,
+        mut tracer: T,
     ) -> DbResult<ExecutionOutcome>
     {
         let gas_left = match result {
@@ -1354,8 +1409,18 @@ impl<
         };
 
         if let Some(r) = refund_receiver {
+            tracer.prepare_internal_transfer_action(
+                *GAS_PAYMENT_TRACER_ADDRESS,
+                *SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+                refund_value.clone(),
+            );
             self.state.add_sponsor_balance_for_gas(&r, &refund_value)?;
         } else {
+            tracer.prepare_internal_transfer_action(
+                *GAS_PAYMENT_TRACER_ADDRESS,
+                tx.sender(),
+                refund_value.clone(),
+            );
             self.state.add_balance(
                 &tx.sender(),
                 &refund_value,
@@ -1366,7 +1431,8 @@ impl<
 
         // perform suicides
 
-        let subsubstate = self.kill_process(&substate.suicides())?;
+        let subsubstate =
+            self.kill_process(&substate.suicides(), &mut tracer)?;
         substate.accrue(subsubstate);
 
         // TODO should be added back after enabling dust collection
@@ -1398,6 +1464,7 @@ impl<
                     tx,
                     refund_receiver.is_some(),
                     storage_sponsor_paid,
+                    tracer.drain(),
                     &self.spec,
                 ),
             )),
@@ -1416,11 +1483,21 @@ impl<
                         let (inc, sub) =
                             substate.get_collateral_change(address);
                         if inc > 0 {
+                            tracer.prepare_internal_transfer_action(
+                                *address,
+                                *STORAGE_COLLATERAL_TRACER_ADDRESS,
+                                *DRIPS_PER_STORAGE_COLLATERAL_UNIT * inc,
+                            );
                             storage_collateralized.push(StorageChange {
                                 address: *address,
                                 collaterals: inc.into(),
                             });
                         } else if sub > 0 {
+                            tracer.prepare_internal_transfer_action(
+                                *STORAGE_COLLATERAL_TRACER_ADDRESS,
+                                *address,
+                                *DRIPS_PER_STORAGE_COLLATERAL_UNIT * sub,
+                            );
                             storage_released.push(StorageChange {
                                 address: *address,
                                 collaterals: sub.into(),
@@ -1428,6 +1505,8 @@ impl<
                         }
                     }
                 }
+
+                let trace = tracer.drain();
 
                 let executed = Executed {
                     gas_used,

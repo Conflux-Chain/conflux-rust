@@ -130,7 +130,7 @@ impl ExecutionOutcome {
 impl Executed {
     pub fn not_enough_balance_fee_charged(
         tx: &TransactionWithSignature, fee: &U256, mut gas_sponsor_paid: bool,
-        mut storage_sponsor_paid: bool, spec: &Spec,
+        mut storage_sponsor_paid: bool, trace: Vec<ExecTrace>, spec: &Spec,
     ) -> Self
     {
         let gas_charged = if tx.gas_price == U256::zero() {
@@ -153,13 +153,13 @@ impl Executed {
             storage_collateralized: Vec::new(),
             storage_released: Vec::new(),
             output: Default::default(),
-            trace: Default::default(),
+            trace,
         }
     }
 
     pub fn execution_error_fully_charged(
         tx: &TransactionWithSignature, mut gas_sponsor_paid: bool,
-        mut storage_sponsor_paid: bool, spec: &Spec,
+        mut storage_sponsor_paid: bool, trace: Vec<ExecTrace>, spec: &Spec,
     ) -> Self
     {
         if !spec.cip78b {
@@ -177,7 +177,7 @@ impl Executed {
             storage_collateralized: Vec::new(),
             storage_released: Vec::new(),
             output: Default::default(),
-            trace: Default::default(),
+            trace,
         }
     }
 }
