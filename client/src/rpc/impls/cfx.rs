@@ -10,7 +10,9 @@ use crate::rpc::types::{
 use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
-use cfx_types::{BigEndianHash, H256, H520, U128, U256, U64};
+use cfx_types::{
+    address_util::AddressUtil, BigEndianHash, H256, H520, U128, U256, U64,
+};
 use cfxcore::{
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
@@ -28,7 +30,7 @@ use network::{
 };
 use parking_lot::Mutex;
 use primitives::{
-    filter::LogFilter, Account, Block, BlockReceipts, DepositInfo,
+    filter::LogFilter, Account, Action, Block, BlockReceipts, DepositInfo,
     SignedTransaction, StorageKey, StorageRoot, StorageValue, TransactionIndex,
     TransactionWithSignature, VoteStakeInfo,
 };
@@ -402,6 +404,18 @@ impl RpcImpl {
 
         let tx: TransactionWithSignature =
             invalid_params_check("raw", Rlp::new(&raw.into_vec()).as_val())?;
+
+        if let Action::Call(ref addr) = tx.action {
+            if !addr.is_contract_address()
+                && !addr.is_user_account_address()
+                && !addr.is_builtin_address()
+            {
+                bail!(invalid_params(
+                    "tx",
+                    "Unsupported receiver address type"
+                ));
+            }
+        }
 
         if tx.recover_public().is_err() {
             bail!(invalid_params(
