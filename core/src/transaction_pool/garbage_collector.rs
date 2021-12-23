@@ -2,10 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::Address;
+use cfx_types::{Address, U256};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use std::{
-    cmp::{Ord, Ordering, PartialEq, PartialOrd},
+    cmp::{Ord, Ordering, PartialEq, PartialOrd, Reverse},
     collections::HashMap,
     ptr,
 };
@@ -13,12 +13,17 @@ use std::{
 /// This is the internal node type of `GarbageCollector`.
 /// A node `lhs` is considered as smaller than another node `rhs` if `lhs.count
 /// < rhs.count` or `lhs.count == rhs.count && lhs.timestamp > rhs.timestamp`.
-#[derive(Eq, Copy, Clone, DeriveMallocSizeOf)]
+#[derive(Eq, Copy, Clone, Debug, DeriveMallocSizeOf)]
 pub struct GarbageCollectorNode {
     /// This is the address of a sender.
     pub sender: Address,
     /// This indicates the number of transactions can be garbage collected.
     pub count: usize,
+    /// This indicates if the sender has a ready tx.
+    pub has_ready_tx: bool,
+    /// This indicates the gas price of the lowest nonce transaction from the
+    /// sender. This is only useful when `self.count == 0`.
+    pub first_tx_gas_price: U256,
     /// This indicates the latest timestamp when a transaction was garbage
     /// collected.
     pub timestamp: u64,
@@ -26,7 +31,16 @@ pub struct GarbageCollectorNode {
 
 impl Ord for GarbageCollectorNode {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.count.cmp(&other.count) {
+        match (
+            self.count,
+            Reverse(self.has_ready_tx),
+            Reverse(self.first_tx_gas_price),
+        )
+            .cmp(&(
+                other.count,
+                Reverse(other.has_ready_tx),
+                Reverse(other.first_tx_gas_price),
+            )) {
             Ordering::Less => Ordering::Less,
             Ordering::Greater => Ordering::Greater,
             Ordering::Equal => other.timestamp.cmp(&self.timestamp),
@@ -61,6 +75,35 @@ impl GarbageCollector {
             self.update(sender, count, timestamp);
         } else {
             self.append(sender, count, timestamp);
+        }
+    }
+
+    /// This is guaranteed to be called after `insert` is called.
+    pub fn update_ready_tx(
+        &mut self, sender: &Address, has_ready_tx: bool,
+        first_tx_gas_price: U256,
+    )
+    {
+        let index = match self.mapping.get(&sender) {
+            None => {
+                // We always call this after `insert`, so this should not
+                // happen.
+                error!("update_ready_tx with sender node missing!!!");
+                return;
+            }
+            Some(i) => *i,
+        };
+        let origin_has_ready_tx = self.data[index].has_ready_tx;
+        let origin_first_tx_gas_price = self.data[index].first_tx_gas_price;
+        self.data[index].has_ready_tx = has_ready_tx;
+        self.data[index].first_tx_gas_price = first_tx_gas_price;
+        // The order of node is the opposite of the order of this tuple.
+        match (origin_has_ready_tx, origin_first_tx_gas_price)
+            .cmp(&(has_ready_tx, first_tx_gas_price))
+        {
+            Ordering::Less => self.sift_down(index),
+            Ordering::Greater => self.sift_up(index),
+            _ => {}
         }
     }
 
@@ -104,12 +147,14 @@ impl GarbageCollector {
 
     fn update(&mut self, sender: &Address, count: usize, timestamp: u64) {
         let index = *self.mapping.get(sender).unwrap();
+        let origin_node = self.data[index];
         let node = GarbageCollectorNode {
             sender: *sender,
             count,
+            has_ready_tx: self.data[index].has_ready_tx,
+            first_tx_gas_price: self.data[index].first_tx_gas_price,
             timestamp,
         };
-        let origin_node = self.data[index];
         self.data[index].count = count;
         self.data[index].timestamp = timestamp;
         match node.cmp(&origin_node) {
@@ -125,6 +170,8 @@ impl GarbageCollector {
         self.data.push(GarbageCollectorNode {
             sender: *sender,
             count,
+            has_ready_tx: false,
+            first_tx_gas_price: Default::default(),
             timestamp,
         });
         self.sift_up(self.data.len() - 1);
@@ -191,7 +238,7 @@ impl GarbageCollector {
 #[cfg(test)]
 mod garbage_collector_test {
     use super::{GarbageCollector, GarbageCollectorNode};
-    use cfx_types::Address;
+    use cfx_types::{Address, U256};
     use rand::{RngCore, SeedableRng};
     use rand_xorshift::XorShiftRng;
     use std::collections::HashMap;
@@ -262,6 +309,100 @@ mod garbage_collector_test {
         assert!(gc.pop().is_none());
     }
 
+    #[test]
+    fn test_ready_accounts() {
+        let mut gc = GarbageCollector::default();
+        assert!(gc.is_empty());
+        assert_eq!(gc.gc_size(), 0);
+        assert!(gc.top().is_none());
+        assert!(gc.pop().is_none());
+
+        let mut addr = Vec::new();
+        for _ in 0..10 {
+            addr.push(Address::random());
+        }
+        gc.insert(&addr[0], 0, 10);
+        assert_eq!(gc.len(), 1);
+        assert_eq!(gc.gc_size(), 0);
+        assert_eq!(gc.top().unwrap().sender, addr[0]);
+        assert_eq!(gc.top().unwrap().count, 0);
+        assert_eq!(gc.top().unwrap().timestamp, 10);
+
+        gc.insert(&addr[1], 0, 5);
+        assert_eq!(gc.len(), 2);
+        assert_eq!(gc.gc_size(), 0);
+        assert_eq!(gc.top().unwrap().sender, addr[1]);
+        assert_eq!(gc.top().unwrap().count, 0);
+        assert_eq!(gc.top().unwrap().timestamp, 5);
+
+        gc.update_ready_tx(&addr[1], false, 1.into());
+        assert_eq!(gc.len(), 2);
+        assert_eq!(gc.gc_size(), 0);
+        assert_eq!(gc.top().unwrap().sender, addr[0]);
+        assert_eq!(gc.top().unwrap().count, 0);
+        assert_eq!(gc.top().unwrap().timestamp, 10);
+
+        gc.update_ready_tx(&addr[0], true, 1.into());
+        assert_eq!(gc.len(), 2);
+        assert_eq!(gc.gc_size(), 0);
+        assert_eq!(gc.top().unwrap().sender, addr[1]);
+        assert_eq!(gc.top().unwrap().count, 0);
+        assert_eq!(gc.top().unwrap().timestamp, 5);
+
+        gc.update_ready_tx(&addr[1], true, 2.into());
+        assert_eq!(gc.len(), 2);
+        assert_eq!(gc.gc_size(), 0);
+        assert_eq!(gc.top().unwrap().sender, addr[0]);
+        assert_eq!(gc.top().unwrap().count, 0);
+        assert_eq!(gc.top().unwrap().timestamp, 10);
+
+        gc.update_ready_tx(&addr[0], true, 3.into());
+        assert_eq!(gc.len(), 2);
+        assert_eq!(gc.gc_size(), 0);
+        assert_eq!(gc.top().unwrap().sender, addr[1]);
+        assert_eq!(gc.top().unwrap().count, 0);
+        assert_eq!(gc.top().unwrap().timestamp, 5);
+
+        gc.update_ready_tx(&addr[0], false, 1.into());
+        assert_eq!(gc.len(), 2);
+        assert_eq!(gc.gc_size(), 0);
+        assert_eq!(gc.top().unwrap().sender, addr[0]);
+        assert_eq!(gc.top().unwrap().count, 0);
+        assert_eq!(gc.top().unwrap().timestamp, 10);
+
+        gc.insert(&addr[2], 1, 5);
+        assert_eq!(gc.len(), 3);
+        assert_eq!(gc.gc_size(), 1);
+        assert_eq!(gc.top().unwrap().sender, addr[2]);
+        assert_eq!(gc.top().unwrap().count, 1);
+        assert_eq!(gc.top().unwrap().timestamp, 5);
+
+        let top = gc.pop().unwrap();
+        assert_eq!(top.sender, addr[2]);
+        assert_eq!(top.count, 1);
+        assert_eq!(top.timestamp, 5);
+        assert_eq!(top.first_tx_gas_price, U256::from(0));
+        assert_eq!(gc.len(), 2);
+        assert_eq!(gc.gc_size(), 0);
+        let top = gc.pop().unwrap();
+        assert_eq!(top.sender, addr[0]);
+        assert_eq!(top.count, 0);
+        assert_eq!(top.timestamp, 10);
+        assert_eq!(top.first_tx_gas_price, U256::from(1));
+        assert_eq!(top.has_ready_tx, false);
+        assert_eq!(gc.len(), 1);
+        assert_eq!(gc.gc_size(), 0);
+        let top = gc.pop().unwrap();
+        assert_eq!(top.sender, addr[1]);
+        assert_eq!(top.count, 0);
+        assert_eq!(top.timestamp, 5);
+        assert_eq!(top.first_tx_gas_price, U256::from(2));
+        assert_eq!(top.has_ready_tx, true);
+        assert_eq!(gc.len(), 0);
+        assert_eq!(gc.gc_size(), 0);
+        assert!(gc.pop().is_none());
+    }
+
     fn get_max(
         mapping: &HashMap<Address, GarbageCollectorNode>,
     ) -> Option<GarbageCollectorNode> {
@@ -287,14 +428,23 @@ mod garbage_collector_test {
             let opt: usize = rng.next_u64() as usize % 4;
             if opt <= 2 {
                 let idx: usize = rng.next_u64() as usize % 10000;
-                let count: usize = rng.next_u64() as usize % 1000;
+                let count: usize = rng.next_u64() as usize % 10;
                 let timestamp: u64 = rng.next_u64() % 1000;
+                let has_ready_tx: bool = rng.next_u64() % 2 == 0;
+                let first_tx_gas_price: u64 = rng.next_u64();
                 let node = GarbageCollectorNode {
                     sender: addr[idx],
                     count,
+                    has_ready_tx,
+                    first_tx_gas_price: first_tx_gas_price.into(),
                     timestamp,
                 };
                 gc.insert(&addr[idx], count, timestamp);
+                gc.update_ready_tx(
+                    &addr[idx],
+                    has_ready_tx,
+                    first_tx_gas_price.into(),
+                );
                 let old = mapping.insert(addr[idx], node);
                 sum += count;
                 if old.is_some() {
@@ -326,6 +476,14 @@ mod garbage_collector_test {
                 assert_eq!(
                     gc.top().unwrap().timestamp,
                     get_max(&mapping).unwrap().timestamp
+                );
+                assert_eq!(
+                    gc.top().unwrap().has_ready_tx,
+                    get_max(&mapping).unwrap().has_ready_tx
+                );
+                assert_eq!(
+                    gc.top().unwrap().first_tx_gas_price,
+                    get_max(&mapping).unwrap().first_tx_gas_price
                 );
             }
         }
