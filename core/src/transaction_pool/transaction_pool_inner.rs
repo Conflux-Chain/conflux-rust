@@ -522,8 +522,14 @@ impl TransactionPoolInner {
                 } else {
                     self.garbage_collector.insert(&addr, 0, current_timestamp);
                 }
-                self.garbage_collector
-                    .update_ready_tx(&addr, victim.ready_tx_gas_price);
+                self.garbage_collector.update_ready_tx(
+                    &addr,
+                    self.ready_account_pool.get(&addr).is_some(),
+                    self.deferred_pool
+                        .get_lowest_nonce_tx(&addr)
+                        .expect("addr exist")
+                        .gas_price,
+                );
             }
 
             // maintain txs
@@ -790,8 +796,24 @@ impl TransactionPoolInner {
         let ret = self
             .deferred_pool
             .recalculate_readiness_with_local_info(addr, nonce, balance);
-        self.garbage_collector
-            .update_ready_tx(addr, ret.as_ref().map(|tx| tx.gas_price));
+        // If addr is not in `deferred_pool`, it should have also be removed
+        // from garbage_collector
+        if let Some(tx) = self.deferred_pool.get_lowest_nonce_tx(addr) {
+            self.garbage_collector.update_ready_tx(
+                addr,
+                ret.is_some(),
+                tx.gas_price,
+            );
+        } else {
+            // An account is only removed from `deferred_pool` in GC,
+            // so this is not likely to happen.
+            // One possible reason is that an transactions not in txpool is
+            // executed and passed to notify_modified_accounts.
+            debug!(
+                "recalculate_readiness called for missing account: addr={:?}",
+                addr
+            );
+        }
         self.ready_account_pool.update(addr, ret);
     }
 
