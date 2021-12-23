@@ -19,7 +19,7 @@
 use crate::schema::{ensure_slice_len_eq, TRANSACTION_CF_NAME};
 use anyhow::Result;
 use byteorder::{BigEndian, ReadBytesExt};
-use diem_types::transaction::{Transaction, Version};
+use diem_types::transaction::{Transaction, TransactionUnchecked, Version};
 use schemadb::{
     define_schema,
     schema::{KeyCodec, ValueCodec},
@@ -43,7 +43,9 @@ impl ValueCodec<TransactionSchema> for Transaction {
     }
 
     fn decode_value(data: &[u8]) -> Result<Self> {
-        bcs::from_bytes(data).map_err(Into::into)
+        bcs::from_bytes::<TransactionUnchecked>(data)
+            .map(Into::into)
+            .map_err(Into::into)
     }
 }
 

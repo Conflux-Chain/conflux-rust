@@ -8,7 +8,10 @@
 use crate::account_address::AccountAddress;
 use anyhow::{ensure, Error, Result};
 use diem_crypto::{
-    bls::{BLSPublicKey, BLSSignature},
+    bls::{
+        BLSPublicKey, BLSPublicKeyUnchecked, BLSSignature,
+        BLSSignatureUnchecked,
+    },
     ed25519::{Ed25519PublicKey, Ed25519Signature},
     hash::CryptoHash,
     multi_bls::MultiBLSSignature,
@@ -78,8 +81,59 @@ pub enum TransactionAuthenticator {
         public_key: BLSPublicKey,
         signature: BLSSignature,
     },
-    /// FIXME(lpl): Implement signature aggregation.
-    MultiBLS { signature: MultiBLSSignature }, // ... add more schemes here
+    MultiBLS {
+        signature: MultiBLSSignature,
+    }, // ... add more schemes here
+}
+
+#[derive(Deserialize)]
+pub enum TransactionAuthenticatorUnchecked {
+    Ed25519 {
+        public_key: Ed25519PublicKey,
+        signature: Ed25519Signature,
+    },
+    MultiEd25519 {
+        public_key: MultiEd25519PublicKey,
+        signature: MultiEd25519Signature,
+    },
+    BLS {
+        public_key: BLSPublicKeyUnchecked,
+        signature: BLSSignatureUnchecked,
+    },
+    MultiBLS {
+        signature: MultiBLSSignature,
+    },
+}
+
+impl From<TransactionAuthenticatorUnchecked> for TransactionAuthenticator {
+    fn from(t: TransactionAuthenticatorUnchecked) -> Self {
+        match t {
+            TransactionAuthenticatorUnchecked::BLS {
+                public_key,
+                signature,
+            } => Self::BLS {
+                public_key: public_key.into(),
+                signature: signature.into(),
+            },
+            TransactionAuthenticatorUnchecked::MultiBLS { signature } => {
+                Self::MultiBLS { signature }
+            }
+            TransactionAuthenticatorUnchecked::Ed25519 {
+                public_key,
+                signature,
+            } => Self::Ed25519 {
+                public_key,
+                signature,
+            },
+            TransactionAuthenticatorUnchecked::MultiEd25519 {
+                public_key,
+                signature,
+            } => Self::MultiEd25519 {
+                public_key,
+                signature,
+            },
+        }
+    }
 }
 
 impl TransactionAuthenticator {

@@ -20,7 +20,9 @@
 use crate::schema::LEDGER_INFO_BY_VOTED_BLOCK_CF_NAME;
 use anyhow::Result;
 use diem_crypto::hash::HashValue;
-use diem_types::ledger_info::LedgerInfoWithSignatures;
+use diem_types::ledger_info::{
+    LedgerInfoWithSignatures, LedgerInfoWithSignaturesUnchecked,
+};
 use schemadb::{
     define_schema,
     schema::{KeyCodec, ValueCodec},
@@ -47,6 +49,8 @@ impl ValueCodec<LedgerInfoByVotedBlockSchema> for LedgerInfoWithSignatures {
     }
 
     fn decode_value(data: &[u8]) -> Result<Self> {
-        bcs::from_bytes(data).map_err(Into::into)
+        bcs::from_bytes::<LedgerInfoWithSignaturesUnchecked>(data)
+            .map(Into::into)
+            .map_err(Into::into)
     }
 }

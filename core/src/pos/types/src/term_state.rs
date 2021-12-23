@@ -15,7 +15,10 @@ use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 
 use cfx_types::H256;
-use diem_crypto::{vrf_number_with_nonce, HashValue, Signature, VRFProof};
+use diem_crypto::{
+    bls::deserialize_bls_public_key_unchecked, vrf_number_with_nonce,
+    HashValue, Signature, VRFProof,
+};
 use diem_logger::prelude::*;
 pub use incentives::*;
 use lock_status::NodeLockStatus;
@@ -89,6 +92,8 @@ pub enum NodeStatus {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct NodeData {
+    /// This struct is only used locally, so loaded public keys must be valid.
+    #[serde(deserialize_with = "deserialize_bls_public_key_unchecked")]
     public_key: ConsensusPublicKey,
     vrf_public_key: Option<ConsensusVRFPublicKey>,
     lock_status: NodeLockStatus,

@@ -6,7 +6,10 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{account_address::AccountAddress, on_chain_config::ValidatorSet};
-use diem_crypto::{hash::CryptoHash, Signature, VRFPublicKey, VerifyingKey};
+use diem_crypto::{
+    bls::deserialize_bls_public_key_unchecked, hash::CryptoHash, Signature,
+    VRFPublicKey, VerifyingKey,
+};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt};
 use thiserror::Error;
@@ -58,6 +61,10 @@ pub enum VerifyError {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 pub struct ValidatorConsensusInfo {
+    // We always vote for our local EpochState, and EpochState is included in
+    // the voted hash. Thus, if a malicious pubkey is provided here, its
+    // LedgerInfo won't get a QC.
+    #[serde(deserialize_with = "deserialize_bls_public_key_unchecked")]
     public_key: ConsensusPublicKey,
     /// None if we do not need VRF.
     vrf_public_key: Option<ConsensusVRFPublicKey>,
