@@ -10,13 +10,14 @@ use crate::{
     },
     vm::{ActionParams, Result as VmResult},
 };
-use cfx_types::{Address, U256};
+use cfx_types::{ U256};
 
 pub mod error_unwind;
 pub mod trace;
 pub mod trace_filter;
 
 pub use error_unwind::ErrorUnwind;
+pub use trace::InternalTransferAddress;
 
 /// This trait is used by executive to build traces.
 pub trait Tracer: Send {
@@ -39,7 +40,7 @@ pub trait Tracer: Send {
 
     /// Prepares internal transfer action
     fn prepare_internal_transfer_action(
-        &mut self, from: Address, to: Address, value: U256,
+        &mut self, from: InternalTransferAddress, to: InternalTransferAddress, value: U256,
     );
 
     /// Consumes self and returns all traces.
@@ -61,7 +62,7 @@ impl Tracer for NoopTracer {
     fn prepare_trace_create_result(&mut self, _: &VmResult<ExecutiveResult>) {}
 
     fn prepare_internal_transfer_action(
-        &mut self, _: Address, _: Address, _: U256,
+        &mut self, _: InternalTransferAddress, _: InternalTransferAddress, _: U256,
     ) {
     }
 
@@ -110,7 +111,7 @@ impl Tracer for ExecutiveTracer {
     }
 
     fn prepare_internal_transfer_action(
-        &mut self, from: Address, to: Address, value: U256,
+        &mut self, from: InternalTransferAddress, to: InternalTransferAddress, value: U256,
     ) {
         let trace =
             ExecTrace {

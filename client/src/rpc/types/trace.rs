@@ -15,7 +15,7 @@ use cfxcore::{
         LocalizedTrace as PrimitiveLocalizedTrace, Outcome,
         TransactionExecTraces,
     },
-    vm::CallType,
+    vm::{CallType, CreateType},
 };
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use strum_macros::EnumDiscriminants;
@@ -117,6 +117,7 @@ pub struct Create {
     pub value: U256,
     pub gas: U256,
     pub init: Bytes,
+    pub create_type: CreateType,
 }
 
 impl Create {
@@ -126,6 +127,7 @@ impl Create {
             value: create.value,
             gas: create.gas,
             init: create.init.into(),
+            create_type: create.create_type,
         })
     }
 }
@@ -156,7 +158,9 @@ impl CreateResult {
 #[serde(rename_all = "camelCase")]
 pub struct InternalTransferAction {
     pub from: RpcAddress,
+    pub from_pocket: String,
     pub to: RpcAddress,
+    pub to_pocket: String,
     pub value: U256,
 }
 
@@ -165,8 +169,16 @@ impl InternalTransferAction {
         action: VmInternalTransferAction, network: Network,
     ) -> Result<Self, String> {
         Ok(Self {
-            from: RpcAddress::try_from_h160(action.from, network)?,
-            to: RpcAddress::try_from_h160(action.to, network)?,
+            from: RpcAddress::try_from_h160(
+                action.from.inner_address_or_default(),
+                network,
+            )?,
+            from_pocket: action.from.pocket().into(),
+            to: RpcAddress::try_from_h160(
+                action.to.inner_address_or_default(),
+                network,
+            )?,
+            to_pocket: action.to.pocket().into(),
             value: action.value,
         })
     }

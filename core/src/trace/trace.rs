@@ -5,14 +5,15 @@
 use crate::{
     bytes::Bytes,
     executive::ExecutiveResult,
-    vm::{ActionParams, CallType, Result as vmResult},
+    vm::{ActionParams, CallType, CreateType, Result as vmResult},
 };
 use cfx_internal_common::{DatabaseDecodable, DatabaseEncodable};
 use cfx_types::{Address, Bloom, BloomInput, H256, U256, U64};
 use malloc_size_of_derive::MallocSizeOf;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use serde::Serialize;
+use serde::ser::SerializeStruct;
+use serde::{Serialize, Serializer};
 use strum_macros::EnumDiscriminants;
 
 /// Description of a _call_ action, either a `CALL` operation or a message
@@ -121,21 +122,21 @@ impl From<&vmResult<ExecutiveResult>> for CallResult {
     fn from(r: &vmResult<ExecutiveResult>) -> Self {
         match r {
             Ok(ExecutiveResult {
-                gas_left,
-                return_data,
-                apply_state: true,
-                ..
-            }) => CallResult {
+                   gas_left,
+                   return_data,
+                   apply_state: true,
+                   ..
+               }) => CallResult {
                 outcome: Outcome::Success,
                 gas_left: gas_left.clone(),
                 return_data: return_data.to_vec(),
             },
             Ok(ExecutiveResult {
-                gas_left,
-                return_data,
-                apply_state: false,
-                ..
-            }) => CallResult {
+                   gas_left,
+                   return_data,
+                   apply_state: false,
+                   ..
+               }) => CallResult {
                 outcome: Outcome::Reverted,
                 gas_left: gas_left.clone(),
                 return_data: return_data.to_vec(),
@@ -162,6 +163,8 @@ pub struct Create {
     pub gas: U256,
     /// The init code.
     pub init: Bytes,
+    /// The create type `CREATE` or `CREATE2`
+    pub create_type: CreateType,
 }
 
 impl From<ActionParams> for Create {
@@ -171,6 +174,7 @@ impl From<ActionParams> for Create {
             value: p.value.value(),
             gas: p.gas,
             init: p.code.map_or_else(Vec::new, |c| (*c).clone()),
+            create_type: p.create_type,
         }
     }
 }
@@ -201,11 +205,11 @@ impl From<&vmResult<ExecutiveResult>> for CreateResult {
     fn from(r: &vmResult<ExecutiveResult>) -> Self {
         match r {
             Ok(ExecutiveResult {
-                gas_left,
-                return_data,
-                apply_state: true,
-                create_address,
-            }) => CreateResult {
+                   gas_left,
+                   return_data,
+                   apply_state: true,
+                   create_address,
+               }) => CreateResult {
                 outcome: Outcome::Success,
                 addr: create_address.expect(
                     "Address should not be none in executive result of create",
@@ -214,11 +218,11 @@ impl From<&vmResult<ExecutiveResult>> for CreateResult {
                 return_data: return_data.to_vec(),
             },
             Ok(ExecutiveResult {
-                gas_left,
-                return_data,
-                apply_state: false,
-                ..
-            }) => CreateResult {
+                   gas_left,
+                   return_data,
+                   apply_state: false,
+                   ..
+               }) => CreateResult {
                 outcome: Outcome::Reverted,
                 addr: Address::zero(),
                 gas_left: gas_left.clone(),
@@ -248,23 +252,123 @@ impl CreateResult {
 
 /// Description of the result of an internal transfer action regarding about
 /// CFX.
-#[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable)]
 pub struct InternalTransferAction {
     /// The source address. If it is zero, then it is an interest mint action.
-    pub from: Address,
+    pub from: InternalTransferAddress,
     /// The destination address. If it is zero, then it is a burnt action.
-    pub to: Address,
+    pub to: InternalTransferAddress,
     /// The amount of CFX
     pub value: U256,
+}
+
+impl Serialize for InternalTransferAction {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+        let mut s = serializer.serialize_struct("InternalTransferAction", 5)?;
+        s.serialize_field("from", &self.from.inner_address_or_default())?;
+        s.serialize_field("fromPocket", &*self.from.pocket())?;
+        s.serialize_field("to", &self.to.inner_address_or_default())?;
+        s.serialize_field("toPocket", &*self.to.pocket())?;
+        s.serialize_field("value", &self.value)?;
+        s.end()
+    }
 }
 
 impl InternalTransferAction {
     pub fn bloom(&self) -> Bloom {
         let mut bloom = Bloom::default();
-        bloom.accrue(BloomInput::Raw(self.from.as_bytes()));
-        bloom.accrue(BloomInput::Raw(self.to.as_bytes()));
+        bloom.accrue(BloomInput::Raw(self.from.inner_address_or_default().as_ref()));
+        bloom.accrue(BloomInput::Raw(self.to.inner_address_or_default().as_ref()));
         bloom
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum InternalTransferAddress {
+    Balance(Address),
+    StakingBalance(Address),
+    StorageCollateral(Address),
+    SponsorBalanceForGas(Address),
+    SponsorBalanceForStorage(Address),
+    MintBurn,
+    GasPayment,
+}
+
+impl InternalTransferAddress {
+    pub fn inner_address(&self) -> Option<&Address> {
+        use InternalTransferAddress::*;
+        match self {
+            Balance(addr)
+            | StakingBalance(addr)
+            | StorageCollateral(addr)
+            | SponsorBalanceForGas(addr)
+            | SponsorBalanceForStorage(addr) => Some(addr),
+            MintBurn | GasPayment => None,
+        }
+    }
+
+    pub fn inner_address_or_default(&self) -> Address {
+        self.inner_address().cloned().unwrap_or(Address::zero())
+    }
+
+    pub fn pocket(&self) -> &'static str {
+        use InternalTransferAddress::*;
+        match self {
+            Balance(_) => "balance",
+            StakingBalance(_) => "staking_balance",
+            StorageCollateral(_) => "storage_collateral",
+            SponsorBalanceForGas(_) => "sponsor_balance_for_gas",
+            SponsorBalanceForStorage(_) => "sponsor_balance_for_collateral",
+            MintBurn => "mint_or_burn",
+            GasPayment => "gas_payment",
+        }
+    }
+
+
+    fn type_number(&self) -> u8 {
+        use InternalTransferAddress::*;
+        match self {
+            Balance(_) => 0,
+            StakingBalance(_) => 1,
+            StorageCollateral(_) => 2,
+            SponsorBalanceForGas(_) => 3,
+            SponsorBalanceForStorage(_) => 4,
+            MintBurn => 5,
+            GasPayment => 6,
+        }
+    }
+}
+
+impl Encodable for InternalTransferAddress {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        let maybe_address = self.inner_address();
+        let type_number = self.type_number();
+        if let Some(address) = maybe_address {
+            s.begin_list(2);
+            s.append(&type_number);
+            s.append(address);
+        } else {
+            s.begin_list(1);
+            s.append(&type_number);
+        }
+    }
+}
+
+impl Decodable for InternalTransferAddress {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        use InternalTransferAddress::*;
+
+        let type_number: u8 = rlp.val_at(0)?;
+        match type_number {
+            0 => rlp.val_at(1).map(Balance),
+            1 => rlp.val_at(1).map(StakingBalance),
+            2 => rlp.val_at(1).map(StorageCollateral),
+            3 => rlp.val_at(1).map(SponsorBalanceForGas),
+            4 => rlp.val_at(1).map(SponsorBalanceForStorage),
+            5 => Ok(MintBurn),
+            6 => Ok(GasPayment),
+            _ => Err(DecoderError::Custom("Invalid internal transfer address.")),
+        }
     }
 }
 
@@ -409,7 +513,7 @@ impl Into<Vec<ExecTrace>> for TransactionExecTraces {
 
 /// Represents all traces produced by transactions in a single block.
 #[derive(
-    Debug, PartialEq, Clone, Default, RlpEncodable, RlpDecodable, MallocSizeOf,
+Debug, PartialEq, Clone, Default, RlpEncodable, RlpDecodable, MallocSizeOf,
 )]
 pub struct BlockExecTraces(pub(crate) Vec<TransactionExecTraces>);
 

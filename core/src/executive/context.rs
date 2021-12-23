@@ -11,7 +11,7 @@ use crate::{
     trace::{trace::ExecTrace, Tracer},
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
-        ContractCreateResult, CreateContractAddress, Env, Error,
+        ContractCreateResult, CreateContractAddress, CreateType, Env, Error,
         MessageCallResult, ReturnData, Spec, TrapKind,
     },
 };
@@ -178,6 +178,7 @@ impl<
         ::std::result::Result<ContractCreateResult, TrapKind>,
     >
     {
+        let create_type = CreateType::from_address_scheme(&address_scheme);
         // create new contract address
         let (address, code_hash) = self::contract_address(
             address_scheme,
@@ -211,6 +212,7 @@ impl<
             code_hash,
             data: None,
             call_type: CallType::None,
+            create_type,
             params_type: vm::ParamsType::Embedded,
         };
 
@@ -266,6 +268,7 @@ impl<
             code_hash,
             data: Some(data.to_vec()),
             call_type,
+            create_type: CreateType::None,
             params_type: vm::ParamsType::Separate,
         };
 

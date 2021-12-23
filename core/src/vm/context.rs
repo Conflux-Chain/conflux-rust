@@ -21,7 +21,7 @@
 //! Interface for Evm externalities.
 
 use super::{
-    call_type::CallType,
+    call_create_type::CallType,
     env::Env,
     error::{Result, TrapKind},
     return_data::ReturnData,

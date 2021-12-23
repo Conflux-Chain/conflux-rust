@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 mod action_params;
-mod call_type;
+mod call_create_type;
 mod context;
 mod env;
 mod error;
@@ -15,7 +15,7 @@ pub mod tests;
 
 pub use self::{
     action_params::{ActionParams, ActionValue, ParamsType},
-    call_type::CallType,
+    call_create_type::{CallType, CreateType},
     context::{
         Context, ContractCreateResult, CreateContractAddress, MessageCallResult,
     },
