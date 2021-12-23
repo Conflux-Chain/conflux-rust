@@ -13,7 +13,7 @@ execution:
   genesis_file_location: ./genesis_file
 logger:
   file: ./log/pos.log
-  level: TRACE
+  level: DEBUG
   rotation_count: 100
   rotation_file_size_mb: 500
 #storage:
