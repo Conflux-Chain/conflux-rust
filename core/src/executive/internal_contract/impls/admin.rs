@@ -5,7 +5,7 @@
 use crate::{
     executive::InternalRefContext,
     state::cleanup_mode,
-    trace::{trace::ExecTrace, Tracer, InternalTransferAddress},
+    trace::{InternalTransferAddress, Tracer},
     vm::{self, ActionParams, Spec},
 };
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
@@ -31,8 +31,8 @@ fn available_admin_address(spec: &Spec, address: &Address) -> bool {
 pub fn suicide(
     contract_address: &Address, refund_address: &Address,
     state: &mut dyn StateOpsTrait, spec: &Spec,
-    substate: &mut dyn SubstateTrait,
-    tracer: &mut dyn Tracer<Output=ExecTrace>, account_start_nonce: U256,
+    substate: &mut dyn SubstateTrait, tracer: &mut dyn Tracer,
+    account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     substate.suicides_mut().insert(contract_address.clone());
@@ -116,8 +116,7 @@ pub fn set_admin(
 pub fn destroy(
     contract_address: Address, params: &ActionParams,
     state: &mut dyn StateOpsTrait, spec: &Spec,
-    substate: &mut dyn SubstateTrait,
-    tracer: &mut dyn Tracer<Output=ExecTrace>,
+    substate: &mut dyn SubstateTrait, tracer: &mut dyn Tracer,
 ) -> vm::Result<()>
 {
     debug!("contract_address={:?}", contract_address);

@@ -12,8 +12,7 @@ use cfx_types::{Address, Bloom, BloomInput, H256, U256, U64};
 use malloc_size_of_derive::MallocSizeOf;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use serde::ser::SerializeStruct;
-use serde::{Serialize, Serializer};
+use serde::{ser::SerializeStruct, Serialize, Serializer};
 use strum_macros::EnumDiscriminants;
 
 /// Description of a _call_ action, either a `CALL` operation or a message
@@ -122,21 +121,21 @@ impl From<&vmResult<ExecutiveResult>> for CallResult {
     fn from(r: &vmResult<ExecutiveResult>) -> Self {
         match r {
             Ok(ExecutiveResult {
-                   gas_left,
-                   return_data,
-                   apply_state: true,
-                   ..
-               }) => CallResult {
+                gas_left,
+                return_data,
+                apply_state: true,
+                ..
+            }) => CallResult {
                 outcome: Outcome::Success,
                 gas_left: gas_left.clone(),
                 return_data: return_data.to_vec(),
             },
             Ok(ExecutiveResult {
-                   gas_left,
-                   return_data,
-                   apply_state: false,
-                   ..
-               }) => CallResult {
+                gas_left,
+                return_data,
+                apply_state: false,
+                ..
+            }) => CallResult {
                 outcome: Outcome::Reverted,
                 gas_left: gas_left.clone(),
                 return_data: return_data.to_vec(),
@@ -205,11 +204,11 @@ impl From<&vmResult<ExecutiveResult>> for CreateResult {
     fn from(r: &vmResult<ExecutiveResult>) -> Self {
         match r {
             Ok(ExecutiveResult {
-                   gas_left,
-                   return_data,
-                   apply_state: true,
-                   create_address,
-               }) => CreateResult {
+                gas_left,
+                return_data,
+                apply_state: true,
+                create_address,
+            }) => CreateResult {
                 outcome: Outcome::Success,
                 addr: create_address.expect(
                     "Address should not be none in executive result of create",
@@ -218,11 +217,11 @@ impl From<&vmResult<ExecutiveResult>> for CreateResult {
                 return_data: return_data.to_vec(),
             },
             Ok(ExecutiveResult {
-                   gas_left,
-                   return_data,
-                   apply_state: false,
-                   ..
-               }) => CreateResult {
+                gas_left,
+                return_data,
+                apply_state: false,
+                ..
+            }) => CreateResult {
                 outcome: Outcome::Reverted,
                 addr: Address::zero(),
                 gas_left: gas_left.clone(),
@@ -263,7 +262,8 @@ pub struct InternalTransferAction {
 }
 
 impl Serialize for InternalTransferAction {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
         let mut s = serializer.serialize_struct("InternalTransferAction", 5)?;
         s.serialize_field("from", &self.from.inner_address_or_default())?;
         s.serialize_field("fromPocket", &*self.from.pocket())?;
@@ -277,8 +277,12 @@ impl Serialize for InternalTransferAction {
 impl InternalTransferAction {
     pub fn bloom(&self) -> Bloom {
         let mut bloom = Bloom::default();
-        bloom.accrue(BloomInput::Raw(self.from.inner_address_or_default().as_ref()));
-        bloom.accrue(BloomInput::Raw(self.to.inner_address_or_default().as_ref()));
+        bloom.accrue(BloomInput::Raw(
+            self.from.inner_address_or_default().as_ref(),
+        ));
+        bloom.accrue(BloomInput::Raw(
+            self.to.inner_address_or_default().as_ref(),
+        ));
         bloom
     }
 }
@@ -324,7 +328,6 @@ impl InternalTransferAddress {
         }
     }
 
-
     fn type_number(&self) -> u8 {
         use InternalTransferAddress::*;
         match self {
@@ -367,7 +370,9 @@ impl Decodable for InternalTransferAddress {
             4 => rlp.val_at(1).map(SponsorBalanceForStorage),
             5 => Ok(MintBurn),
             6 => Ok(GasPayment),
-            _ => Err(DecoderError::Custom("Invalid internal transfer address.")),
+            _ => {
+                Err(DecoderError::Custom("Invalid internal transfer address."))
+            }
         }
     }
 }
@@ -513,7 +518,7 @@ impl Into<Vec<ExecTrace>> for TransactionExecTraces {
 
 /// Represents all traces produced by transactions in a single block.
 #[derive(
-Debug, PartialEq, Clone, Default, RlpEncodable, RlpDecodable, MallocSizeOf,
+    Debug, PartialEq, Clone, Default, RlpEncodable, RlpDecodable, MallocSizeOf,
 )]
 pub struct BlockExecTraces(pub(crate) Vec<TransactionExecTraces>);
 

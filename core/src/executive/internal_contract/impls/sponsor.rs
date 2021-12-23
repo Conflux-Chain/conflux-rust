@@ -5,7 +5,7 @@
 use crate::{
     executive::InternalRefContext,
     state::cleanup_mode,
-    trace::{trace::ExecTrace, Tracer, InternalTransferAddress},
+    trace::{InternalTransferAddress, Tracer},
     vm::{self, ActionParams, Spec},
 };
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
@@ -14,8 +14,8 @@ use cfx_types::{Address, U256};
 /// Implementation of `set_sponsor_for_gas(address,uint256)`.
 pub fn set_sponsor_for_gas(
     contract_address: Address, upper_bound: U256, params: &ActionParams,
-    context: &mut InternalRefContext,
-    tracer: &mut dyn Tracer<Output=ExecTrace>, account_start_nonce: U256,
+    context: &mut InternalRefContext, tracer: &mut dyn Tracer,
+    account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
@@ -139,8 +139,8 @@ pub fn set_sponsor_for_gas(
 /// Implementation of `set_sponsor_for_collateral(address)`.
 pub fn set_sponsor_for_collateral(
     contract_address: Address, params: &ActionParams,
-    context: &mut InternalRefContext,
-    tracer: &mut dyn Tracer<Output=ExecTrace>, account_start_nonce: U256,
+    context: &mut InternalRefContext, tracer: &mut dyn Tracer,
+    account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
@@ -193,7 +193,9 @@ pub fn set_sponsor_for_collateral(
         // refund to previous sponsor
         if prev_sponsor.is_some() {
             tracer.prepare_internal_transfer_action(
-                InternalTransferAddress::SponsorBalanceForStorage(contract_address),
+                InternalTransferAddress::SponsorBalanceForStorage(
+                    contract_address,
+                ),
                 InternalTransferAddress::Balance(prev_sponsor.unwrap()),
                 prev_sponsor_balance,
             );

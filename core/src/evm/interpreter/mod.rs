@@ -44,7 +44,7 @@ use super::{
 use crate::{
     bytes::Bytes,
     hash::keccak,
-    trace::{trace::ExecTrace, Tracer},
+    trace::Tracer,
     vm::{
         self, ActionParams, ActionValue, CallType, ContractCreateResult,
         CreateContractAddress, GasLeft, MessageCallResult, ParamsType,
@@ -207,7 +207,7 @@ pub struct Interpreter<Cost: CostType> {
 impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
     fn exec(
         mut self: Box<Self>, context: &mut dyn vm::Context,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> vm::ExecTrapResult<GasLeft>
     {
         loop {
@@ -355,10 +355,8 @@ impl<Cost: CostType> Interpreter<Cost> {
     /// Execute a single step on the VM.
     #[inline(always)]
     pub fn step(
-        &mut self, context: &mut dyn vm::Context,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> InterpreterResult
-    {
+        &mut self, context: &mut dyn vm::Context, tracer: &mut dyn Tracer,
+    ) -> InterpreterResult {
         if self.done {
             return InterpreterResult::Stopped;
         }
@@ -387,10 +385,8 @@ impl<Cost: CostType> Interpreter<Cost> {
     /// Inner helper function for step.
     #[inline(always)]
     fn step_inner(
-        &mut self, context: &mut dyn vm::Context,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> InterpreterResult
-    {
+        &mut self, context: &mut dyn vm::Context, tracer: &mut dyn Tracer,
+    ) -> InterpreterResult {
         let result = match self.resume_result.take() {
             Some(result) => result,
             None => {
@@ -684,7 +680,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     fn exec_instruction(
         &mut self, gas: Cost, context: &mut dyn vm::Context,
         instruction: Instruction, provided: Option<Cost>,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> vm::Result<InstructionResult<Cost>>
     {
         trace!("exec instruction: {:?}", instruction);

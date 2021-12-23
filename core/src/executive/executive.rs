@@ -16,7 +16,7 @@ use crate::{
     hash::keccak,
     machine::Machine,
     state::{cleanup_mode, CallStackInfo, State, Substate},
-    trace::{self, trace::ExecTrace, Tracer, InternalTransferAddress},
+    trace::{self, InternalTransferAddress, Tracer},
     verification::VerificationConfig,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress,
@@ -25,10 +25,7 @@ use crate::{
     },
     vm_factory::VmFactory,
 };
-use cfx_parameters::{
-
-    staking::*,
-};
+use cfx_parameters::staking::*;
 use cfx_state::{
     state_trait::StateOpsTrait, substate_trait::SubstateMngTrait, CleanupMode,
     CollateralCheckResult, StateTrait, SubstateTrait,
@@ -114,17 +111,17 @@ pub fn into_message_call_result(
 ) -> vm::MessageCallResult {
     match result {
         Ok(ExecutiveResult {
-               gas_left,
-               return_data,
-               apply_state: true,
-               ..
-           }) => vm::MessageCallResult::Success(gas_left, return_data),
+            gas_left,
+            return_data,
+            apply_state: true,
+            ..
+        }) => vm::MessageCallResult::Success(gas_left, return_data),
         Ok(ExecutiveResult {
-               gas_left,
-               return_data,
-               apply_state: false,
-               ..
-           }) => vm::MessageCallResult::Reverted(gas_left, return_data),
+            gas_left,
+            return_data,
+            apply_state: false,
+            ..
+        }) => vm::MessageCallResult::Reverted(gas_left, return_data),
         Err(err) => vm::MessageCallResult::Failed(err),
     }
 }
@@ -135,11 +132,11 @@ pub fn into_contract_create_result(
 ) -> vm::ContractCreateResult {
     match result {
         Ok(ExecutiveResult {
-               gas_left,
-               apply_state: true,
-               create_address,
-               ..
-           }) => {
+            gas_left,
+            apply_state: true,
+            create_address,
+            ..
+        }) => {
             // Move the change of contracts_created in substate to
             // process_return.
             let address = create_address
@@ -147,11 +144,11 @@ pub fn into_contract_create_result(
             vm::ContractCreateResult::Created(address.clone(), gas_left)
         }
         Ok(ExecutiveResult {
-               gas_left,
-               apply_state: false,
-               return_data,
-               ..
-           }) => vm::ContractCreateResult::Reverted(gas_left, return_data),
+            gas_left,
+            apply_state: false,
+            return_data,
+            ..
+        }) => vm::ContractCreateResult::Reverted(gas_left, return_data),
         Err(err) => vm::ContractCreateResult::Failed(err),
     }
 }
@@ -234,7 +231,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
 
         // if destination is builtin, try to execute it
         let kind = if let Some(builtin) =
-        machine.builtin(&params.code_address, env.number)
+            machine.builtin(&params.code_address, env.number)
         {
             trace!("CallBuiltin");
             CallCreateExecutiveKind::CallBuiltin(builtin)
@@ -343,7 +340,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         } else {
             if static_flag
                 && (params.call_type == CallType::StaticCall
-                || params.call_type == CallType::Call)
+                    || params.call_type == CallType::Call)
                 && params.value.value() > U256::zero()
             {
                 return Err(vm::Error::MutableCallInStaticContext);
@@ -407,10 +404,10 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// storage collateral change from the cache to substate, merge substate to
     /// its parent and settles down bytecode for newly created contract. If the
     /// execution fails, this function reverts state and drops substate.
-    fn process_return<State: StateTrait<Substate=Substate>>(
+    fn process_return<State: StateTrait<Substate = Substate>>(
         mut self, result: vm::Result<GasLeft>, state: &mut State,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
-        tracer: &mut dyn Tracer<Output=trace::trace::ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> DbResult<vm::Result<ExecutiveResult>>
     {
         let context = self.context.activate(state, callstack);
@@ -469,10 +466,9 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// Execute the executive. If a sub-call/create action is required, a
     /// resume trap error is returned. The caller is then expected to call
     /// `resume` to continue the execution.
-    pub fn exec<State: StateTrait<Substate=Substate>>(
+    pub fn exec<State: StateTrait<Substate = Substate>>(
         mut self, state: &mut State, parent_substate: &mut Substate,
-        callstack: &mut CallStackInfo,
-        tracer: &mut dyn Tracer<Output=trace::trace::ExecTrace>,
+        callstack: &mut CallStackInfo, tracer: &mut dyn Tracer,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
     {
         let status =
@@ -555,10 +551,10 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         self.process_output(output, state, parent_substate, callstack, tracer)
     }
 
-    pub fn resume<State: StateTrait<Substate=Substate>>(
+    pub fn resume<State: StateTrait<Substate = Substate>>(
         mut self, result: vm::Result<ExecutiveResult>, state: &mut State,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
-        tracer: &mut dyn Tracer<Output=ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
     {
         let status =
@@ -601,10 +597,10 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     }
 
     #[inline]
-    fn process_output<State: StateTrait<Substate=Substate>>(
+    fn process_output<State: StateTrait<Substate = Substate>>(
         self, output: ExecTrapResult<GasLeft>, state: &mut State,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
-        tracer: &mut dyn Tracer<Output=trace::trace::ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
     {
         // Convert the `ExecTrapResult` (result of evm) to `ExecutiveTrapResult`
@@ -629,9 +625,9 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// Execute the top call-create executive. This function handles resume
     /// traps and sub-level tracing. The caller is expected to handle
     /// current-level tracing.
-    pub fn consume<State: StateTrait<Substate=Substate>>(
+    pub fn consume<State: StateTrait<Substate = Substate>>(
         self, state: &'a mut State, top_substate: &mut Substate,
-        tracer: &mut dyn Tracer<Output=trace::trace::ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> DbResult<vm::Result<FinalizationResult>>
     {
         let mut callstack = CallStackInfo::new();
@@ -775,7 +771,7 @@ pub type Executive<'a> = ExecutiveGeneric<'a, Substate, State>;
 pub struct ExecutiveGeneric<
     'a,
     Substate: SubstateTrait,
-    State: StateTrait<Substate=Substate>,
+    State: StateTrait<Substate = Substate>,
 > {
     pub state: &'a mut State,
     env: &'a Env,
@@ -786,10 +782,10 @@ pub struct ExecutiveGeneric<
 }
 
 impl<
-    'a,
-    Substate: SubstateMngTrait,
-    State: StateTrait<Substate=Substate>,
-> ExecutiveGeneric<'a, Substate, State>
+        'a,
+        Substate: SubstateMngTrait,
+        State: StateTrait<Substate = Substate>,
+    > ExecutiveGeneric<'a, Substate, State>
 {
     /// Basic constructor.
     pub fn new(
@@ -825,7 +821,7 @@ impl<
 
     pub fn create(
         &mut self, params: ActionParams, substate: &mut Substate,
-        tracer: &mut dyn Tracer<Output=trace::trace::ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> DbResult<vm::Result<FinalizationResult>>
     {
         let vm_factory = self.machine.vm_factory();
@@ -838,14 +834,14 @@ impl<
             self.depth,
             self.static_flag,
         )
-            .consume(self.state, substate, tracer)?;
+        .consume(self.state, substate, tracer)?;
 
         Ok(result)
     }
 
     pub fn call(
         &mut self, params: ActionParams, substate: &mut Substate,
-        tracer: &mut dyn Tracer<Output=trace::trace::ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> DbResult<vm::Result<FinalizationResult>>
     {
         let vm_factory = self.machine.vm_factory();
@@ -858,7 +854,7 @@ impl<
             self.depth,
             self.static_flag,
         )
-            .consume(self.state, substate, tracer)?;
+        .consume(self.state, substate, tracer)?;
 
         Ok(result)
     }
@@ -886,7 +882,7 @@ impl<
     pub fn transact<T>(
         &mut self, tx: &SignedTransaction, mut options: TransactOptions<T>,
     ) -> DbResult<ExecutionOutcome>
-        where T: Tracer<Output=trace::trace::ExecTrace> {
+    where T: Tracer {
         let spec = &self.spec;
         let sender = tx.sender();
         let nonce = self.state.nonce(&sender)?;
@@ -910,10 +906,10 @@ impl<
             && tx.transaction_type() == TransactionType::EthereumLike;
         if !eth_like_tx
             && VerificationConfig::check_transaction_epoch_bound(
-            tx,
-            self.env.epoch_height,
-            self.env.transaction_epoch_bound,
-        ) != 0
+                tx,
+                self.env.epoch_height,
+                self.env.transaction_epoch_bound,
+            ) != 0
         {
             return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
                 ToRepackError::EpochHeightOutOfBound {
@@ -954,8 +950,8 @@ impl<
                     // No need to check for gas sponsor account existence.
                     gas_sponsor_eligible = gas_cost
                         <= U512::from(
-                        self.state.sponsor_gas_bound(&code_address)?,
-                    );
+                            self.state.sponsor_gas_bound(&code_address)?,
+                        );
                     storage_sponsor_eligible = self
                         .state
                         .sponsor_for_collateral(&code_address)?
@@ -1271,10 +1267,8 @@ impl<
     // TODO: maybe we can find a better interface for doing the suicide
     // post-processing.
     fn kill_process(
-        &mut self, suicides: &HashSet<Address>,
-        tracer: &mut dyn Tracer<Output=ExecTrace>,
-    ) -> DbResult<Substate>
-    {
+        &mut self, suicides: &HashSet<Address>, tracer: &mut dyn Tracer,
+    ) -> DbResult<Substate> {
         let mut substate = Substate::new();
         for address in suicides {
             if let Some(code_size) = self.state.code_size(address)? {
@@ -1315,7 +1309,9 @@ impl<
 
             if let Some(ref sponsor_address) = sponsor_for_gas {
                 tracer.prepare_internal_transfer_action(
-                    InternalTransferAddress::SponsorBalanceForGas(*contract_address),
+                    InternalTransferAddress::SponsorBalanceForGas(
+                        *contract_address,
+                    ),
                     InternalTransferAddress::Balance(*sponsor_address),
                     sponsor_balance_for_gas.clone(),
                 );
@@ -1332,7 +1328,9 @@ impl<
             }
             if let Some(ref sponsor_address) = sponsor_for_collateral {
                 tracer.prepare_internal_transfer_action(
-                    InternalTransferAddress::SponsorBalanceForStorage(*contract_address),
+                    InternalTransferAddress::SponsorBalanceForStorage(
+                        *contract_address,
+                    ),
                     InternalTransferAddress::Balance(*sponsor_address),
                     sponsor_balance_for_collateral.clone(),
                 );
@@ -1379,7 +1377,7 @@ impl<
     }
 
     /// Finalizes the transaction (does refunds and suicides).
-    fn finalize<T: Tracer<Output=ExecTrace>>(
+    fn finalize<T: Tracer>(
         &mut self, tx: &SignedTransaction, mut substate: Substate,
         result: vm::Result<FinalizationResult>, output: Bytes,
         refund_receiver: Option<Address>, storage_sponsor_paid: bool,

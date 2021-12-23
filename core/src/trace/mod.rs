@@ -10,7 +10,7 @@ use crate::{
     },
     vm::{ActionParams, Result as VmResult},
 };
-use cfx_types::{ U256};
+use cfx_types::U256;
 
 pub mod error_unwind;
 pub mod trace;
@@ -21,9 +21,6 @@ pub use trace::InternalTransferAddress;
 
 /// This trait is used by executive to build traces.
 pub trait Tracer: Send {
-    /// Data returned when draining the Tracer.
-    type Output;
-
     /// Prepares call trace for given params.
     fn prepare_trace_call(&mut self, params: &ActionParams);
 
@@ -40,19 +37,18 @@ pub trait Tracer: Send {
 
     /// Prepares internal transfer action
     fn prepare_internal_transfer_action(
-        &mut self, from: InternalTransferAddress, to: InternalTransferAddress, value: U256,
+        &mut self, from: InternalTransferAddress, to: InternalTransferAddress,
+        value: U256,
     );
 
     /// Consumes self and returns all traces.
-    fn drain(self) -> Vec<Self::Output>;
+    fn drain(self) -> Vec<ExecTrace>;
 }
 
 /// Nonoperative tracer. Does not trace anything.
 pub struct NoopTracer;
 
 impl Tracer for NoopTracer {
-    type Output = ExecTrace;
-
     fn prepare_trace_call(&mut self, _: &ActionParams) {}
 
     fn prepare_trace_call_result(&mut self, _: &VmResult<ExecutiveResult>) {}
@@ -62,8 +58,10 @@ impl Tracer for NoopTracer {
     fn prepare_trace_create_result(&mut self, _: &VmResult<ExecutiveResult>) {}
 
     fn prepare_internal_transfer_action(
-        &mut self, _: InternalTransferAddress, _: InternalTransferAddress, _: U256,
-    ) {
+        &mut self, _: InternalTransferAddress, _: InternalTransferAddress,
+        _: U256,
+    )
+    {
     }
 
     fn drain(self) -> Vec<ExecTrace> { vec![] }
@@ -76,8 +74,6 @@ pub struct ExecutiveTracer {
 }
 
 impl Tracer for ExecutiveTracer {
-    type Output = ExecTrace;
-
     fn prepare_trace_call(&mut self, params: &ActionParams) {
         let trace = ExecTrace {
             action: Action::Call(Call::from(params.clone())),
@@ -111,8 +107,10 @@ impl Tracer for ExecutiveTracer {
     }
 
     fn prepare_internal_transfer_action(
-        &mut self, from: InternalTransferAddress, to: InternalTransferAddress, value: U256,
-    ) {
+        &mut self, from: InternalTransferAddress, to: InternalTransferAddress,
+        value: U256,
+    )
+    {
         let trace =
             ExecTrace {
                 action: Action::InternalTransferAction(

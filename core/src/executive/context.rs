@@ -8,7 +8,7 @@ use crate::{
     bytes::Bytes,
     machine::Machine,
     state::CallStackInfo,
-    trace::{trace::ExecTrace, Tracer},
+    trace::Tracer,
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
         ContractCreateResult, CreateContractAddress, CreateType, Env, Error,
@@ -379,8 +379,8 @@ impl<
     }
 
     fn suicide(
-        &mut self, refund_address: &Address,
-        tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
+        &mut self, refund_address: &Address, tracer: &mut dyn Tracer,
+        account_start_nonce: U256,
     ) -> vm::Result<()>
     {
         if self.is_static_or_reentrancy() {

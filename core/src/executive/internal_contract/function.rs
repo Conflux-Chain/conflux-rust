@@ -6,7 +6,7 @@ use super::SolidityFunctionTrait;
 use crate::{
     executive::{internal_contract::activate_at::IsActive, InternalRefContext},
     state::CallStackInfo,
-    trace::{trace::ExecTrace, Tracer},
+    trace::Tracer,
     vm::{self, ActionParams, CallType, GasLeft, ReturnData, Spec},
 };
 use cfx_types::U256;
@@ -35,8 +35,7 @@ impl<
 {
     fn execute(
         &self, input: &[u8], params: &ActionParams,
-        context: &mut InternalRefContext,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
     ) -> vm::Result<GasLeft>
     {
         self.pre_execution_check(params, context.callstack, context.spec)?;
@@ -83,8 +82,7 @@ pub trait PreExecCheckTrait: Send + Sync {
 pub trait ExecutionTrait: Send + Sync + InterfaceTrait {
     fn execute_inner(
         &self, input: Self::Input, params: &ActionParams,
-        context: &mut InternalRefContext,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
     ) -> vm::Result<<Self as InterfaceTrait>::Output>;
 }
 

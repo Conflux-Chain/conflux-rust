@@ -4,19 +4,17 @@
 
 use crate::{
     consensus_internal_parameters::MINED_BLOCK_COUNT_PER_QUARTER,
-    trace::{trace::ExecTrace, Tracer,InternalTransferAddress},
+    trace::{InternalTransferAddress, Tracer},
     vm::{self, ActionParams, Env},
 };
-use cfx_parameters::{
-    consensus::ONE_CFX_IN_DRIP,
-};
+use cfx_parameters::consensus::ONE_CFX_IN_DRIP;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{Address, U256};
 
 /// Implementation of `deposit(uint256)`.
 pub fn deposit(
     amount: U256, params: &ActionParams, env: &Env,
-    state: &mut dyn StateOpsTrait, tracer: &mut dyn Tracer<Output = ExecTrace>,
+    state: &mut dyn StateOpsTrait, tracer: &mut dyn Tracer,
 ) -> vm::Result<()>
 {
     if amount < U256::from(ONE_CFX_IN_DRIP) {
@@ -39,7 +37,7 @@ pub fn deposit(
 /// Implementation of `withdraw(uint256)`.
 pub fn withdraw(
     amount: U256, params: &ActionParams, env: &Env,
-    state: &mut dyn StateOpsTrait, tracer: &mut dyn Tracer<Output = ExecTrace>,
+    state: &mut dyn StateOpsTrait, tracer: &mut dyn Tracer,
 ) -> vm::Result<()>
 {
     state.remove_expired_vote_stake_info(&params.sender, env.number)?;

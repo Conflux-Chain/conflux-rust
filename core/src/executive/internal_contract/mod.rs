@@ -23,7 +23,7 @@ use crate::{
     bytes::Bytes,
     hash::keccak,
     spec::CommonParams,
-    trace::{trace::ExecTrace, Tracer},
+    trace::Tracer,
     vm::{self, ActionParams, GasLeft},
 };
 use cfx_types::{Address, H256};
@@ -51,7 +51,7 @@ pub trait InternalContractTrait: Send + Sync + IsActive {
     /// execute this internal contract on the given parameters.
     fn execute(
         &self, params: &ActionParams, context: &mut InternalRefContext,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> vm::Result<GasLeft>
     {
         let call_data = params
@@ -90,8 +90,7 @@ pub trait InternalContractTrait: Send + Sync + IsActive {
 pub trait SolidityFunctionTrait: Send + Sync + IsActive {
     fn execute(
         &self, input: &[u8], params: &ActionParams,
-        context: &mut InternalRefContext,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
     ) -> vm::Result<GasLeft>;
 
     /// The string for function sig
