@@ -51,7 +51,9 @@ use crate::{
         DisputeEvent, ElectionEvent, NodeID, RegisterEvent, RetireEvent,
         UpdateVotingPowerEvent,
     },
-    transaction::authenticator::TransactionAuthenticator,
+    transaction::authenticator::{
+        TransactionAuthenticator, TransactionAuthenticatorUnchecked,
+    },
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
         ConsensusVRFProof, ConsensusVRFPublicKey, MultiConsensusSignature,
@@ -600,6 +602,21 @@ pub struct SignedTransaction {
 
     /// Public key and signature to authenticate
     authenticator: TransactionAuthenticator,
+}
+
+#[derive(Deserialize)]
+pub struct SignedTransactionUnchecked {
+    pub raw_txn: RawTransaction,
+    pub authenticator: TransactionAuthenticatorUnchecked,
+}
+
+impl From<SignedTransactionUnchecked> for SignedTransaction {
+    fn from(t: SignedTransactionUnchecked) -> Self {
+        Self {
+            raw_txn: t.raw_txn,
+            authenticator: t.authenticator.into(),
+        }
+    }
 }
 
 /// A transaction for which the signature has been verified. Created by
@@ -1227,6 +1244,27 @@ pub enum Transaction {
     /// Transaction to update the block metadata resource at the beginning of a
     /// block.
     BlockMetadata(BlockMetadata),
+}
+
+#[derive(Deserialize)]
+pub enum TransactionUnchecked {
+    UserTransaction(SignedTransactionUnchecked),
+    GenesisTransaction(WriteSetPayload),
+    BlockMetadata(BlockMetadata),
+}
+
+impl From<TransactionUnchecked> for Transaction {
+    fn from(t: TransactionUnchecked) -> Self {
+        match t {
+            TransactionUnchecked::UserTransaction(t) => {
+                Self::UserTransaction(t.into())
+            }
+            TransactionUnchecked::GenesisTransaction(t) => {
+                Self::GenesisTransaction(t)
+            }
+            TransactionUnchecked::BlockMetadata(t) => Self::BlockMetadata(t),
+        }
+    }
 }
 
 impl Transaction {

@@ -10,7 +10,9 @@ use anyhow::{ensure, Context};
 use diem_crypto::{hash::CryptoHash, HashValue};
 use diem_types::{
     block_info::BlockInfo,
-    ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
+    ledger_info::{
+        LedgerInfo, LedgerInfoWithSignatures, LedgerInfoWithSignaturesUnchecked,
+    },
     validator_verifier::ValidatorVerifier,
 };
 use serde::{Deserialize, Serialize};
@@ -26,6 +28,21 @@ pub struct QuorumCert {
     /// The signed LedgerInfo of a committed block that carries the data about
     /// the certified block.
     signed_ledger_info: LedgerInfoWithSignatures,
+}
+
+#[derive(Deserialize)]
+pub struct QuorumCertUnchecked {
+    vote_data: VoteData,
+    signed_ledger_info: LedgerInfoWithSignaturesUnchecked,
+}
+
+impl From<QuorumCertUnchecked> for QuorumCert {
+    fn from(q: QuorumCertUnchecked) -> Self {
+        Self {
+            vote_data: q.vote_data,
+            signed_ledger_info: q.signed_ledger_info.into(),
+        }
+    }
 }
 
 impl Display for QuorumCert {

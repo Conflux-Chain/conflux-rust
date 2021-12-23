@@ -100,8 +100,8 @@ impl PosHandler {
         let latest_voted = self.latest_voted().map(|b| U64::from(b.height));
         let latest_tx_number = self
             .block_by_number(BlockNumber::Num(U64::from(block_number)))
-            .and_then(|b| b.next_tx_number.checked_sub(1.into()))
-            .unwrap_or(U64::default());
+            .map(|b| b.last_tx_number.into())
+            .unwrap_or_default();
         Status {
             epoch: U64::from(epoch_state.epoch),
             latest_committed: U64::from(block_number),
@@ -256,7 +256,7 @@ impl PosHandler {
                     height: U64::from(b.view),
                     epoch: U64::from(b.epoch),
                     round: U64::from(b.round),
-                    next_tx_number: U64::from(b.version),
+                    last_tx_number: U64::from(b.version),
                     miner: b.miner.map(|m| H256::from(m.to_u8())),
                     parent_hash: hash_value_to_h256(b.parent_hash),
                     timestamp: U64::from(b.timestamp),
@@ -360,7 +360,7 @@ impl PosHandler {
                     hash: hash_value_to_h256(b.id()),
                     epoch: U64::from(b.epoch()),
                     round: U64::from(b.round()),
-                    next_tx_number: Default::default(),
+                    last_tx_number: Default::default(),
                     miner: b.author().map(|a| H256::from(a.to_u8())),
                     parent_hash: hash_value_to_h256(b.parent_id()),
                     timestamp: U64::from(b.timestamp_usecs()),
@@ -379,7 +379,7 @@ impl PosHandler {
                 {
                     let executed = executed_block.lock();
                     if let Some(version) = executed.output().version() {
-                        rpc_block.next_tx_number = U64::from(version);
+                        rpc_block.last_tx_number = U64::from(version);
                     }
                     rpc_block.pivot_decision = executed
                         .output()
@@ -398,7 +398,7 @@ impl PosHandler {
                     .diem_db()
                     .get_committed_block_by_hash(&b.id())
                 {
-                    rpc_block.next_tx_number = committed_block.version.into();
+                    rpc_block.last_tx_number = committed_block.version.into();
                     rpc_block.pivot_decision =
                         Some(Decision::from(&committed_block.pivot_decision));
                     rpc_block.height = U64::from(committed_block.view);

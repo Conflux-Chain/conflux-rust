@@ -129,21 +129,27 @@ impl ExecutionOutcome {
 
 impl Executed {
     pub fn not_enough_balance_fee_charged(
-        tx: &TransactionWithSignature, fee: &U256,
-    ) -> Self {
+        tx: &TransactionWithSignature, fee: &U256, mut gas_sponsor_paid: bool,
+        mut storage_sponsor_paid: bool, spec: &Spec,
+    ) -> Self
+    {
         let gas_charged = if tx.gas_price == U256::zero() {
             U256::zero()
         } else {
             fee / tx.gas_price
         };
+        if !spec.cip78b {
+            gas_sponsor_paid = false;
+            storage_sponsor_paid = false;
+        }
         Self {
             gas_used: tx.gas,
             gas_charged,
             fee: fee.clone(),
-            gas_sponsor_paid: false,
+            gas_sponsor_paid,
             logs: vec![],
             contracts_created: vec![],
-            storage_sponsor_paid: false,
+            storage_sponsor_paid,
             storage_collateralized: Vec::new(),
             storage_released: Vec::new(),
             output: Default::default(),
@@ -152,16 +158,22 @@ impl Executed {
     }
 
     pub fn execution_error_fully_charged(
-        tx: &TransactionWithSignature,
-    ) -> Self {
+        tx: &TransactionWithSignature, mut gas_sponsor_paid: bool,
+        mut storage_sponsor_paid: bool, spec: &Spec,
+    ) -> Self
+    {
+        if !spec.cip78b {
+            gas_sponsor_paid = false;
+            storage_sponsor_paid = false;
+        }
         Self {
             gas_used: tx.gas,
             gas_charged: tx.gas,
             fee: tx.gas * tx.gas_price,
-            gas_sponsor_paid: false,
+            gas_sponsor_paid,
             logs: vec![],
             contracts_created: vec![],
-            storage_sponsor_paid: false,
+            storage_sponsor_paid,
             storage_collateralized: Vec::new(),
             storage_released: Vec::new(),
             output: Default::default(),
@@ -194,7 +206,7 @@ pub fn revert_reason_decode(output: &Bytes) -> String {
     }
 }
 
-use crate::trace::trace::ExecTrace;
+use crate::{trace::trace::ExecTrace, vm::Spec};
 #[cfg(test)]
 use rustc_hex::FromHex;
 

@@ -7,7 +7,7 @@
 
 use crate::{
     common::{Author, Payload, Round},
-    quorum_cert::QuorumCert,
+    quorum_cert::{QuorumCert, QuorumCertUnchecked},
     vote_data::VoteData,
 };
 use diem_crypto::hash::HashValue;
@@ -15,6 +15,7 @@ use diem_crypto_derive::{BCSCryptoHash, CryptoHasher};
 use diem_types::{
     block_info::BlockInfo,
     ledger_info::{LedgerInfo, LedgerInfoWithSignatures},
+    transaction::SignedTransactionUnchecked,
 };
 use mirai_annotations::*;
 use serde::{Deserialize, Serialize};
@@ -38,6 +39,31 @@ pub enum BlockType {
     /// from the previous epoch.  The genesis block is used as the the first
     /// root block of the BlockTree for all epochs.
     Genesis,
+}
+
+#[derive(Deserialize)]
+pub enum BlockTypeUnchecked {
+    Proposal {
+        payload: Vec<SignedTransactionUnchecked>,
+        author: Author,
+    },
+    NilBlock,
+    Genesis,
+}
+
+impl From<BlockTypeUnchecked> for BlockType {
+    fn from(t: BlockTypeUnchecked) -> Self {
+        match t {
+            BlockTypeUnchecked::Proposal { payload, author } => {
+                Self::Proposal {
+                    payload: payload.into_iter().map(Into::into).collect(),
+                    author,
+                }
+            }
+            BlockTypeUnchecked::NilBlock => Self::NilBlock,
+            BlockTypeUnchecked::Genesis => Self::Genesis,
+        }
+    }
 }
 
 #[derive(
@@ -85,6 +111,27 @@ pub struct BlockData {
     quorum_cert: QuorumCert,
     /// If a block is a real proposal, contains its author and signature.
     block_type: BlockType,
+}
+
+#[derive(Deserialize)]
+pub struct BlockDataUnchecked {
+    pub epoch: u64,
+    pub round: Round,
+    pub timestamp_usecs: u64,
+    pub quorum_cert: QuorumCertUnchecked,
+    pub block_type: BlockTypeUnchecked,
+}
+
+impl From<BlockDataUnchecked> for BlockData {
+    fn from(b: BlockDataUnchecked) -> Self {
+        Self {
+            epoch: b.epoch,
+            round: b.round,
+            timestamp_usecs: b.timestamp_usecs,
+            quorum_cert: b.quorum_cert.into(),
+            block_type: b.block_type.into(),
+        }
+    }
 }
 
 impl BlockData {

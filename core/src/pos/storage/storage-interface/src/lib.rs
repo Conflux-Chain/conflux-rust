@@ -16,7 +16,9 @@ use diem_types::{
     contract_event::ContractEvent,
     epoch_change::EpochChangeProof,
     epoch_state::EpochState,
-    ledger_info::LedgerInfoWithSignatures,
+    ledger_info::{
+        deserialize_ledger_info_unchecked, LedgerInfoWithSignatures,
+    },
     move_resource::MoveStorage,
     proof::{
         definition::LeafCount, AccumulatorConsistencyProof, SparseMerkleProof,
@@ -44,6 +46,8 @@ pub mod state_view;
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct StartupInfo {
     /// The latest ledger info.
+    /// This struct is only used locally, so loaded signatures must be valid.
+    #[serde(deserialize_with = "deserialize_ledger_info_unchecked")]
     pub latest_ledger_info: LedgerInfoWithSignatures,
     /// If the above ledger info doesn't carry a validator set, the latest
     /// validator set. Otherwise `None`.

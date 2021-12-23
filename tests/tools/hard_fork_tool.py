@@ -22,8 +22,11 @@ from test_framework.util import *
 from test_framework.blocktools import encode_hex_0x
 
 
-rpc_url = "http://101.132.158.162:12537"
+# rpc_url = "https://main.confluxrpc.com"
+rpc_url = "https://test.confluxrpc.com"
 bitcoin_block_hash = "00000000000000000005e306896781cf5169a8bdff8aed8dce19c084adf4cc0d"
+start_block_number = 68845000
+end_block_number = 69245000
 
 REGISTER_TOPIC = encode_hex_0x(keccak(b"Register(bytes32,bytes,bytes)"))
 INCREASE_STAKE_TOPIC = encode_hex_0x(keccak(b"IncreaseStake(bytes32,uint64)"))
@@ -32,15 +35,11 @@ cwd = "./run/pos_config"
 
 voting_power_map = collections.defaultdict(lambda: 0)
 pub_keys_map = {}
-last_epoch = client.epoch_number()
-print(last_epoch)
-for i in range(0, last_epoch, 1000):
+for i in range(start_block_number, end_block_number + 1, 1000):
     start = i
-    end = min(i + 999, last_epoch)
-    if end == last_epoch:
-        end -= 12
+    end = min(i + 999, end_block_number + 1)
     print(start, end)
-    logs = client.get_logs(filter=Filter(from_epoch=int_to_hex(start), to_epoch=int_to_hex(end), address=["0x0888000000000000000000000000000000000005"], networkid=8888))
+    logs = client.get_logs(filter=Filter(from_block=hex(start), to_block=hex(end), address=["0x0888000000000000000000000000000000000005"], networkid=1))
     print("logs=", logs)
     for log in logs:
         pos_identifier = log["topics"][1]
@@ -54,7 +53,7 @@ for i in range(0, last_epoch, 1000):
 with open(os.path.join(cwd, "public_keys"), "w") as f:
     for pos_identifier in pub_keys_map.keys():
         f.write(",".join([pub_keys_map[pos_identifier][0][2:], pub_keys_map[pos_identifier][1][2:], str(voting_power_map[pos_identifier])]) + "\n")
-cfx_block_hash = client.block_by_block_number(int_to_hex(475200))["hash"]
+cfx_block_hash = client.block_by_block_number(hex(end_block_number))["hash"]
 initial_seed = encode_hex(keccak(hexstr=cfx_block_hash[2:]+bitcoin_block_hash))
 tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/pos-genesis-tool")
 check_output([tg_config_gen, "frompub", "--initial-seed={}".format(initial_seed),"public_keys"], cwd=cwd)
@@ -74,8 +73,8 @@ consensus:
 execution:
   genesis_file_location: ./genesis_file
 logger:
-  file: ./pos.log
-  level: DEBUG
+  file: ./log/pos.log
+  level: INFO
 #storage:
   #dir: ./pos_db/db
 """)
