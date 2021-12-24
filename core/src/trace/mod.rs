@@ -64,55 +64,113 @@ impl Tracer for NoopTracer {
 /// Simple executive tracer. Traces all calls and creates.
 #[derive(Default)]
 pub struct ExecutiveTracer {
-    traces: Vec<ExecTrace>,
+    traces: Vec<Action>,
+    valid_indices: CheckpointLog<usize>,
 }
 
 impl InternalTransferTracer for ExecutiveTracer {
     fn prepare_internal_transfer_action(
         &mut self, from: AddressPocket, to: AddressPocket, value: U256,
     ) {
-        let trace =
-            ExecTrace {
-                action: Action::InternalTransferAction(
-                    InternalTransferAction { from, to, value },
-                ),
-            };
-        self.traces.push(trace);
+        let action = Action::InternalTransferAction(InternalTransferAction {
+            from,
+            to,
+            value,
+        });
+
+        self.valid_indices.push(self.traces.len());
+        self.traces.push(action);
     }
 }
 
 impl Tracer for ExecutiveTracer {
     fn prepare_trace_call(&mut self, params: &ActionParams) {
-        let trace = ExecTrace {
-            action: Action::Call(Call::from(params.clone())),
-        };
-        self.traces.push(trace);
+        let action = Action::Call(Call::from(params.clone()));
+
+        self.valid_indices.checkpoint();
+        self.valid_indices.push(self.traces.len());
+
+        self.traces.push(action);
     }
 
     fn prepare_trace_call_result(
         &mut self, result: &VmResult<ExecutiveResult>,
     ) {
-        let trace = ExecTrace {
-            action: Action::CallResult(CallResult::from(result)),
-        };
-        self.traces.push(trace);
+        let action = Action::CallResult(CallResult::from(result));
+        let success = matches!(
+            result,
+            Ok(ExecutiveResult {
+                apply_state: true, ..
+            })
+        );
+
+        self.valid_indices.push(self.traces.len());
+        if success {
+            self.valid_indices.discard_checkpoint();
+        } else {
+            self.valid_indices.revert_checkpoint();
+        }
+        self.traces.push(action);
     }
 
     fn prepare_trace_create(&mut self, params: &ActionParams) {
-        let trace = ExecTrace {
-            action: Action::Create(Create::from(params.clone())),
-        };
-        self.traces.push(trace);
+        let action = Action::Create(Create::from(params.clone()));
+
+        self.valid_indices.checkpoint();
+        self.valid_indices.push(self.traces.len());
+        self.traces.push(action);
     }
 
     fn prepare_trace_create_result(
         &mut self, result: &VmResult<ExecutiveResult>,
     ) {
-        let trace = ExecTrace {
-            action: Action::CreateResult(CreateResult::from(result)),
-        };
-        self.traces.push(trace);
+        let action = Action::CreateResult(CreateResult::from(result));
+        let success = matches!(
+            result,
+            Ok(ExecutiveResult {
+                apply_state: true, ..
+            })
+        );
+
+        self.valid_indices.push(self.traces.len());
+        if success {
+            self.valid_indices.discard_checkpoint();
+        } else {
+            self.valid_indices.revert_checkpoint();
+        }
+        self.traces.push(action);
     }
 
-    fn drain(self) -> Vec<ExecTrace> { self.traces }
+    fn drain(self) -> Vec<ExecTrace> {
+        let mut validity: Vec<bool> = vec![false; self.traces.len()];
+        for index in self.valid_indices.drain() {
+            validity[index] = true;
+        }
+        self.traces
+            .into_iter()
+            .zip(validity.into_iter())
+            .map(|(action, valid)| ExecTrace { action, valid })
+            .collect()
+    }
+}
+
+#[derive(Default)]
+struct CheckpointLog<T> {
+    data: Vec<T>,
+    checkpoints: Vec<usize>,
+}
+
+impl<T> CheckpointLog<T> {
+    fn push(&mut self, item: T) { self.data.push(item); }
+
+    fn checkpoint(&mut self) { self.checkpoints.push(self.data.len()); }
+
+    fn revert_checkpoint(&mut self) {
+        let start = self.checkpoints.pop().unwrap();
+        self.data.truncate(start);
+    }
+
+    fn discard_checkpoint(&mut self) { self.checkpoints.pop().unwrap(); }
+
+    fn drain(self) -> Vec<T> { self.data }
 }

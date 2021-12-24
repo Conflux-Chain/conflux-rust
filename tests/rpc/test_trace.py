@@ -25,10 +25,13 @@ class TestTrace(RpcClient):
                     {
                         'action': {
                             'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
-                            'to': 'NET10:TYPE.BUILTIN:AAEJSAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXMTP6NFZ',
+                            'fromPocket': 'balance',
+                            'to': 'NET10:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFDGG0RTY',
+                            'toPocket': 'gas_payment',
                             'value': '0x5208'
                         },
-                        'type': 'internal_transfer_action'
+                        'type': 'internal_transfer_action',
+                        'valid': True,
                     }, {
                         'action': {
                             'callType': 'call',
@@ -38,21 +41,26 @@ class TestTrace(RpcClient):
                             'to': 'NET10:TYPE.USER:AAJBAEAUCAJBAEAUCAJBAEAUCAJBAEAUCA902UEXYP',
                             'value': '0x64'
                         },
-                        'type': 'call'
+                        'type': 'call',
+                        'valid': True,
                     }, {
                         "action": {
                             "gasLeft": "0x0",
                             "outcome": "success",
                             "returnData": "0x"
                         },
-                        "type": "call_result"
+                        "type": "call_result",
+                        'valid': True,
                     }, {
                         'action': {
-                            'from': 'NET10:TYPE.BUILTIN:AAEJSAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXMTP6NFZ',
+                            'from': 'NET10:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFDGG0RTY',
+                            'fromPocket': 'gas_payment',
                             'to': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
+                            'toPocket': 'balance',
                             'value': '0x0'
                         },
-                        'type': 'internal_transfer_action'
+                        'type': 'internal_transfer_action',
+                        'valid': True,
                     }],
                 'transactionHash': tx.hash_hex(),
                 'transactionPosition': '0x0'
@@ -97,10 +105,13 @@ class TestTrace(RpcClient):
             {
                 'action': {
                     'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
-                    'to': 'NET10:TYPE.BUILTIN:AAEJSAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXMTP6NFZ',
+                    'fromPocket': 'balance',
+                    'to': 'NET10:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFDGG0RTY',
+                    'toPocket': 'gas_payment',
                     'value': '0x5208'
 
                 },
+                'valid': True,
                 'blockHash': receipt["blockHash"],
                 'epochHash': receipt["blockHash"],
                 'epochNumber': receipt["epochNumber"],
@@ -117,6 +128,7 @@ class TestTrace(RpcClient):
                     'to': 'NET10:TYPE.USER:AAJBAEAUCAJBAEAUCAJBAEAUCAJBAEAUCA902UEXYP',
                     'value': '0x64'
                 },
+                'valid': True,
                 'blockHash': receipt["blockHash"],
                 'epochHash': receipt["blockHash"],
                 'epochNumber': receipt["epochNumber"],
@@ -128,6 +140,7 @@ class TestTrace(RpcClient):
                     "outcome": "success",
                     "returnData": "0x"
                 },
+                'valid': True,
                 "blockHash": receipt["blockHash"],
                 "epochHash": receipt["blockHash"],
                 "epochNumber": receipt["epochNumber"],
@@ -136,10 +149,13 @@ class TestTrace(RpcClient):
                 "type": "call_result"
             }, {
                 'action': {
-                    'from': 'NET10:TYPE.BUILTIN:AAEJSAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXMTP6NFZ',
+                    'from': 'NET10:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFDGG0RTY',
+                    'fromPocket': 'gas_payment',
                     'to': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
+                    'toPocket': 'balance',
                     'value': '0x0'
                 },
+                'valid': True,
                 'blockHash': receipt["blockHash"],
                 'epochHash': receipt["blockHash"],
                 'epochNumber': receipt["epochNumber"],
@@ -160,9 +176,12 @@ class TestTrace(RpcClient):
             {
                 'action': {
                     'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
-                    'to': 'NET10:TYPE.BUILTIN:AAEJSAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXMTP6NFZ',
+                    'fromPocket': 'balance',
+                    'to': 'NET10:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFDGG0RTY',
+                    'toPocket': 'gas_payment',
                     'value': '0x5208'
                 },
+                'valid': True,
                 'blockHash': block_hash,
                 'epochHash': block_hash,
                 'epochNumber': receipt["epochNumber"],
@@ -178,6 +197,7 @@ class TestTrace(RpcClient):
                     'to': 'NET10:TYPE.USER:AAJBAEAUCAJBAEAUCAJBAEAUCAJBAEAUCA902UEXYP',
                     'value': '0x64'
                 },
+                'valid': True,
                 'blockHash': block_hash,
                 'epochHash': block_hash,
                 'epochNumber': receipt["epochNumber"],
@@ -190,6 +210,7 @@ class TestTrace(RpcClient):
                     "outcome": "success",
                     "returnData": "0x"
                 },
+                'valid': True,
                 "blockHash": block_hash,
                 "epochHash": block_hash,
                 "epochNumber": receipt["epochNumber"],
@@ -198,10 +219,13 @@ class TestTrace(RpcClient):
                 "type": "call_result"
             }, {
                 'action': {
-                    'from': 'NET10:TYPE.BUILTIN:AAEJSAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXMTP6NFZ',
+                    'from': 'NET10:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFDGG0RTY',
+                    'fromPocket': 'gas_payment',
                     'to': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
+                    'toPocket': 'balance',
                     'value': '0x0'
                 },
+                'valid': True,
                 'blockHash': block_hash,
                 'epochHash': block_hash,
                 'epochNumber': receipt["epochNumber"],

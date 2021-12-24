@@ -209,6 +209,7 @@ pub struct LocalizedTransactionTrace {
 #[derive(Debug)]
 pub struct LocalizedTrace {
     pub action: Action,
+    pub valid: bool,
     /// Epoch hash.
     pub epoch_hash: Option<H256>,
     /// Epoch number.
@@ -224,7 +225,7 @@ pub struct LocalizedTrace {
 impl Serialize for LocalizedTrace {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
-        let mut struc = serializer.serialize_struct("LocalizedTrace", 7)?;
+        let mut struc = serializer.serialize_struct("LocalizedTrace", 8)?;
 
         match self.action {
             Action::Call(ref call) => {
@@ -248,6 +249,8 @@ impl Serialize for LocalizedTrace {
                 struc.serialize_field("action", internal_action)?;
             }
         }
+
+        struc.serialize_field("valid", &self.valid)?;
 
         if self.epoch_hash.is_some() {
             struc.serialize_field("epochHash", &self.epoch_hash.unwrap())?;
@@ -287,6 +290,7 @@ impl LocalizedTrace {
             block_hash: Some(trace.block_hash),
             transaction_position: Some(trace.transaction_position),
             transaction_hash: Some(trace.transaction_hash),
+            valid: trace.valid,
         })
     }
 }
@@ -303,9 +307,11 @@ impl LocalizedTransactionTrace {
             traces: traces
                 .into_iter()
                 .map(|t| {
+                    let valid = t.valid;
                     Action::try_from(t.action, network).map(|action| {
                         LocalizedTrace {
                             action,
+                            valid,
                             // Set to None because the information has been
                             // included in the outer
                             // structs

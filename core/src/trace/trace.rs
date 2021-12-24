@@ -369,6 +369,7 @@ pub struct ExecTrace {
     #[ignore_malloc_size_of = "ignored for performance reason"]
     /// Type of action performed by a transaction.
     pub action: Action,
+    pub valid: bool,
 }
 
 impl ExecTrace {
@@ -378,8 +379,9 @@ impl ExecTrace {
 
 impl Encodable for ExecTrace {
     fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(1);
+        s.begin_list(2);
         s.append(&self.action);
+        s.append(&self.valid);
     }
 }
 
@@ -387,6 +389,7 @@ impl Decodable for ExecTrace {
     fn decode(d: &Rlp) -> Result<Self, DecoderError> {
         let res = ExecTrace {
             action: d.val_at(0)?,
+            valid: d.val_at(1)?,
         };
         Ok(res)
     }
@@ -394,6 +397,7 @@ impl Decodable for ExecTrace {
 
 pub struct LocalizedTrace {
     pub action: Action,
+    pub valid: bool,
     /// Epoch hash.
     pub epoch_hash: H256,
     /// Epoch number.
@@ -509,6 +513,7 @@ mod tests {
                 input: vec![],
                 call_type: CallType::Call,
             }),
+            valid: true,
         };
 
         let flat_trace1 = ExecTrace {
@@ -522,6 +527,7 @@ mod tests {
                 input: vec![0x41, 0xc0, 0xe1, 0xb5],
                 call_type: CallType::Call,
             }),
+            valid: true,
         };
 
         let block_traces = BlockExecTraces(vec![

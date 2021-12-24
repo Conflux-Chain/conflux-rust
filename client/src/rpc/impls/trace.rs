@@ -131,6 +131,7 @@ impl TraceHandler {
                                             self.network,
                                         )
                                         .expect("local address convert error"),
+                                        valid: trace.valid,
                                         epoch_hash: Some(pivot_hash),
                                         epoch_number: Some(
                                             self.data_man
