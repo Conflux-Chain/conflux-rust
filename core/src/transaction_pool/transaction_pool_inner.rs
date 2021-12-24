@@ -406,8 +406,9 @@ impl TransactionPoolInner {
                 continue;
             }
 
-            // `count > 0` means this node has executed transactions to GC and
-            // no need to check more.
+            // `count == 0` means all transactions are not executed, so there is
+            // no unconditional garbage collection to conduct and we need to
+            // check if we should replace one unexecuted tx.
             if victim.count == 0 {
                 if victim.sender == new_tx.sender {
                     // We do not GC a not-executed transaction from the same
@@ -778,7 +779,7 @@ impl TransactionPoolInner {
         let ret = self
             .deferred_pool
             .recalculate_readiness_with_local_info(addr, nonce, balance);
-        // If addr is not in `deferred_pool`, it should have also be removed
+        // If addr is not in `deferred_pool`, it should have also been removed
         // from garbage_collector
         if let Some(tx) = self.deferred_pool.get_lowest_nonce_tx(addr) {
             self.garbage_collector.update_ready_tx(
