@@ -36,7 +36,8 @@ class TestSendTx(RpcClient):
         assert_equal(self.send_tx(tx, True), tx.hash_hex())
         # call address starts with 0x30
         tx = self.new_tx(receiver="0x30e45681ac6c53d5a40475f7526bac1fe7590fb8")
-        assert_raises_rpc_error(None, None, self.send_raw_tx, tx)
+        encoded = eth_utils.encode_hex(rlp.encode(tx))
+        assert_raises_rpc_error(None, None, self.send_raw_tx, encoded)
         # call address starts with 0x10
         tx = self.new_tx(receiver="0x10e45681ac6c53d5a40475f7526bac1fe7590fb8")
         assert_equal(self.send_tx(tx, True), tx.hash_hex())
