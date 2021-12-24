@@ -20,6 +20,7 @@
 
 //! EVM call types.
 
+use crate::evm::CreateContractAddress;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use serde::Serialize;
 
@@ -64,6 +65,62 @@ impl Decodable for CallType {
                 _ => {
                     return Err(DecoderError::Custom(
                         "Invalid value of CallType item",
+                    ));
+                }
+            })
+        })
+    }
+}
+
+/// The type of the create-like instruction.
+#[derive(Clone, Eq, PartialEq, Debug, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CreateType {
+    /// Not a create
+    None,
+    /// CREATE
+    CREATE,
+    /// CREATE2
+    CREATE2,
+}
+
+impl CreateType {
+    pub fn from_address_scheme(address: &CreateContractAddress) -> CreateType {
+        match address {
+            CreateContractAddress::FromSenderNonceAndCodeHash => {
+                CreateType::CREATE
+            }
+            CreateContractAddress::FromBlockNumberSenderNonceAndCodeHash => {
+                unreachable!("Inactivate address scheme")
+            }
+            CreateContractAddress::FromSenderSaltAndCodeHash(_) => {
+                CreateType::CREATE2
+            }
+        }
+    }
+}
+
+impl Encodable for CreateType {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        let v = match *self {
+            CreateType::None => 0u32,
+            CreateType::CREATE => 1,
+            CreateType::CREATE2 => 2,
+        };
+        Encodable::rlp_append(&v, s);
+    }
+}
+
+impl Decodable for CreateType {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        rlp.as_val().and_then(|v| {
+            Ok(match v {
+                0u32 => CreateType::None,
+                1 => CreateType::CREATE,
+                2 => CreateType::CREATE2,
+                _ => {
+                    return Err(DecoderError::Custom(
+                        "Invalid value of CreateType item",
                     ));
                 }
             })

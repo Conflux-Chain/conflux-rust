@@ -6,7 +6,7 @@ use super::{super::impls::staking::*, macros::*, ExecutionTrait, SolFnTable};
 use crate::{
     evm::{ActionParams, Spec},
     executive::InternalRefContext,
-    trace::{trace::ExecTrace, Tracer},
+    trace::Tracer,
     vm,
 };
 use cfx_parameters::internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS;
@@ -58,8 +58,7 @@ impl UpfrontPaymentTrait for Deposit {
 impl ExecutionTrait for Deposit {
     fn execute_inner(
         &self, input: U256, params: &ActionParams,
-        context: &mut InternalRefContext,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
     ) -> vm::Result<()>
     {
         deposit(input, params, context.env, context.state, tracer)
@@ -88,8 +87,7 @@ impl UpfrontPaymentTrait for Withdraw {
 impl ExecutionTrait for Withdraw {
     fn execute_inner(
         &self, input: U256, params: &ActionParams,
-        context: &mut InternalRefContext,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
     ) -> vm::Result<()>
     {
         withdraw(input, params, context.env, context.state, tracer)
@@ -118,8 +116,7 @@ impl UpfrontPaymentTrait for VoteLock {
 impl ExecutionTrait for VoteLock {
     fn execute_inner(
         &self, inputs: (U256, U256), params: &ActionParams,
-        context: &mut InternalRefContext,
-        _tracer: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
     ) -> vm::Result<()>
     {
         vote_lock(inputs.0, inputs.1, params, context.env, context.state)
@@ -134,8 +131,7 @@ impl_function_type!(GetStakingBalance, "query_with_default_gas");
 impl ExecutionTrait for GetStakingBalance {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
-        context: &mut InternalRefContext,
-        _tracer: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
     ) -> vm::Result<U256>
     {
         Ok(context.state.staking_balance(&input)?)
@@ -161,8 +157,7 @@ impl UpfrontPaymentTrait for GetLockedStakingBalance {
 impl ExecutionTrait for GetLockedStakingBalance {
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
-        context: &mut InternalRefContext,
-        _tracer: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
     ) -> vm::Result<U256>
     {
         Ok(get_locked_staking(
@@ -193,8 +188,7 @@ impl UpfrontPaymentTrait for GetVotePower {
 impl ExecutionTrait for GetVotePower {
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
-        context: &mut InternalRefContext,
-        _tracer: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
     ) -> vm::Result<U256>
     {
         Ok(get_vote_power(

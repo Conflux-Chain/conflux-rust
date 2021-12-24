@@ -15,7 +15,7 @@ use cfxcore::{
         LocalizedTrace as PrimitiveLocalizedTrace, Outcome,
         TransactionExecTraces,
     },
-    vm::CallType,
+    vm::{CallType, CreateType},
 };
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use strum_macros::EnumDiscriminants;
@@ -117,6 +117,7 @@ pub struct Create {
     pub value: U256,
     pub gas: U256,
     pub init: Bytes,
+    pub create_type: CreateType,
 }
 
 impl Create {
@@ -126,6 +127,7 @@ impl Create {
             value: create.value,
             gas: create.gas,
             init: create.init.into(),
+            create_type: create.create_type,
         })
     }
 }
@@ -156,7 +158,9 @@ impl CreateResult {
 #[serde(rename_all = "camelCase")]
 pub struct InternalTransferAction {
     pub from: RpcAddress,
+    pub from_pocket: String,
     pub to: RpcAddress,
+    pub to_pocket: String,
     pub value: U256,
 }
 
@@ -165,8 +169,16 @@ impl InternalTransferAction {
         action: VmInternalTransferAction, network: Network,
     ) -> Result<Self, String> {
         Ok(Self {
-            from: RpcAddress::try_from_h160(action.from, network)?,
-            to: RpcAddress::try_from_h160(action.to, network)?,
+            from: RpcAddress::try_from_h160(
+                action.from.inner_address_or_default(),
+                network,
+            )?,
+            from_pocket: action.from.pocket().into(),
+            to: RpcAddress::try_from_h160(
+                action.to.inner_address_or_default(),
+                network,
+            )?,
+            to_pocket: action.to.pocket().into(),
             value: action.value,
         })
     }
@@ -197,6 +209,7 @@ pub struct LocalizedTransactionTrace {
 #[derive(Debug)]
 pub struct LocalizedTrace {
     pub action: Action,
+    pub valid: bool,
     /// Epoch hash.
     pub epoch_hash: Option<H256>,
     /// Epoch number.
@@ -212,7 +225,7 @@ pub struct LocalizedTrace {
 impl Serialize for LocalizedTrace {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
-        let mut struc = serializer.serialize_struct("LocalizedTrace", 7)?;
+        let mut struc = serializer.serialize_struct("LocalizedTrace", 8)?;
 
         match self.action {
             Action::Call(ref call) => {
@@ -236,6 +249,8 @@ impl Serialize for LocalizedTrace {
                 struc.serialize_field("action", internal_action)?;
             }
         }
+
+        struc.serialize_field("valid", &self.valid)?;
 
         if self.epoch_hash.is_some() {
             struc.serialize_field("epochHash", &self.epoch_hash.unwrap())?;
@@ -275,6 +290,7 @@ impl LocalizedTrace {
             block_hash: Some(trace.block_hash),
             transaction_position: Some(trace.transaction_position),
             transaction_hash: Some(trace.transaction_hash),
+            valid: trace.valid,
         })
     }
 }
@@ -291,9 +307,11 @@ impl LocalizedTransactionTrace {
             traces: traces
                 .into_iter()
                 .map(|t| {
+                    let valid = t.valid;
                     Action::try_from(t.action, network).map(|action| {
                         LocalizedTrace {
                             action,
+                            valid,
                             // Set to None because the information has been
                             // included in the outer
                             // structs

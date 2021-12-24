@@ -2,17 +2,18 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use super::AddressPocket;
 use crate::{
     bytes::Bytes,
     executive::ExecutiveResult,
-    vm::{ActionParams, CallType, Result as vmResult},
+    vm::{ActionParams, CallType, CreateType, Result as vmResult},
 };
 use cfx_internal_common::{DatabaseDecodable, DatabaseEncodable};
 use cfx_types::{Address, Bloom, BloomInput, H256, U256, U64};
 use malloc_size_of_derive::MallocSizeOf;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use serde::Serialize;
+use serde::{ser::SerializeStruct, Serialize, Serializer};
 use strum_macros::EnumDiscriminants;
 
 /// Description of a _call_ action, either a `CALL` operation or a message
@@ -162,6 +163,8 @@ pub struct Create {
     pub gas: U256,
     /// The init code.
     pub init: Bytes,
+    /// The create type `CREATE` or `CREATE2`
+    pub create_type: CreateType,
 }
 
 impl From<ActionParams> for Create {
@@ -171,6 +174,7 @@ impl From<ActionParams> for Create {
             value: p.value.value(),
             gas: p.gas,
             init: p.code.map_or_else(Vec::new, |c| (*c).clone()),
+            create_type: p.create_type,
         }
     }
 }
@@ -248,22 +252,38 @@ impl CreateResult {
 
 /// Description of the result of an internal transfer action regarding about
 /// CFX.
-#[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable)]
 pub struct InternalTransferAction {
     /// The source address. If it is zero, then it is an interest mint action.
-    pub from: Address,
+    pub from: AddressPocket,
     /// The destination address. If it is zero, then it is a burnt action.
-    pub to: Address,
+    pub to: AddressPocket,
     /// The amount of CFX
     pub value: U256,
+}
+
+impl Serialize for InternalTransferAction {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        let mut s = serializer.serialize_struct("InternalTransferAction", 5)?;
+        s.serialize_field("from", &self.from.inner_address_or_default())?;
+        s.serialize_field("fromPocket", &*self.from.pocket())?;
+        s.serialize_field("to", &self.to.inner_address_or_default())?;
+        s.serialize_field("toPocket", &*self.to.pocket())?;
+        s.serialize_field("value", &self.value)?;
+        s.end()
+    }
 }
 
 impl InternalTransferAction {
     pub fn bloom(&self) -> Bloom {
         let mut bloom = Bloom::default();
-        bloom.accrue(BloomInput::Raw(self.from.as_bytes()));
-        bloom.accrue(BloomInput::Raw(self.to.as_bytes()));
+        bloom.accrue(BloomInput::Raw(
+            self.from.inner_address_or_default().as_ref(),
+        ));
+        bloom.accrue(BloomInput::Raw(
+            self.to.inner_address_or_default().as_ref(),
+        ));
         bloom
     }
 }
@@ -349,6 +369,7 @@ pub struct ExecTrace {
     #[ignore_malloc_size_of = "ignored for performance reason"]
     /// Type of action performed by a transaction.
     pub action: Action,
+    pub valid: bool,
 }
 
 impl ExecTrace {
@@ -358,8 +379,9 @@ impl ExecTrace {
 
 impl Encodable for ExecTrace {
     fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(1);
+        s.begin_list(2);
         s.append(&self.action);
+        s.append(&self.valid);
     }
 }
 
@@ -367,6 +389,7 @@ impl Decodable for ExecTrace {
     fn decode(d: &Rlp) -> Result<Self, DecoderError> {
         let res = ExecTrace {
             action: d.val_at(0)?,
+            valid: d.val_at(1)?,
         };
         Ok(res)
     }
@@ -374,6 +397,7 @@ impl Decodable for ExecTrace {
 
 pub struct LocalizedTrace {
     pub action: Action,
+    pub valid: bool,
     /// Epoch hash.
     pub epoch_hash: H256,
     /// Epoch number.
@@ -489,6 +513,7 @@ mod tests {
                 input: vec![],
                 call_type: CallType::Call,
             }),
+            valid: true,
         };
 
         let flat_trace1 = ExecTrace {
@@ -502,6 +527,7 @@ mod tests {
                 input: vec![0x41, 0xc0, 0xe1, 0xb5],
                 call_type: CallType::Call,
             }),
+            valid: true,
         };
 
         let block_traces = BlockExecTraces(vec![

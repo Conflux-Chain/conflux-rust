@@ -50,6 +50,7 @@ use crate::{
     spec::genesis::{
         genesis_contract_address_four_year, genesis_contract_address_two_year,
     },
+    trace::{AddressPocket, InternalTransferTracer},
     transaction_pool::SharedTransactionPool,
 };
 
@@ -149,12 +150,15 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
     /// checked out. This function should only be called in post-processing
     /// of a transaction.
     fn settle_collateral_for_all(
-        &mut self, substate: &Substate, account_start_nonce: U256,
-    ) -> DbResult<CollateralCheckResult> {
+        &mut self, substate: &Substate,
+        tracer: &mut dyn InternalTransferTracer, account_start_nonce: U256,
+    ) -> DbResult<CollateralCheckResult>
+    {
         for address in substate.keys_for_collateral_changed().iter() {
             match self.settle_collateral_for_address(
                 address,
                 substate,
+                tracer,
                 account_start_nonce,
             )? {
                 CollateralCheckResult::Valid => {}
@@ -168,13 +172,16 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
     // test cases breaks this assumption, which will be fixed in a separated PR.
     fn collect_and_settle_collateral(
         &mut self, original_sender: &Address, storage_limit: &U256,
-        substate: &mut Substate, account_start_nonce: U256,
+        substate: &mut Substate, tracer: &mut dyn InternalTransferTracer,
+        account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult>
     {
         self.collect_ownership_changed(substate)?;
-        let res = match self
-            .settle_collateral_for_all(substate, account_start_nonce)?
-        {
+        let res = match self.settle_collateral_for_all(
+            substate,
+            tracer,
+            account_start_nonce,
+        )? {
             CollateralCheckResult::Valid => {
                 self.check_storage_limit(original_sender, storage_limit)?
             }
@@ -1172,7 +1179,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     /// Charges or refund storage collateral and update `total_storage_tokens`.
     fn settle_collateral_for_address(
         &mut self, addr: &Address, substate: &dyn SubstateTrait,
-        account_start_nonce: U256,
+        tracer: &mut dyn InternalTransferTracer, account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult>
     {
         let (inc_collaterals, sub_collaterals) =
@@ -1182,11 +1189,23 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             *DRIPS_PER_STORAGE_COLLATERAL_UNIT * sub_collaterals,
         );
 
+        let is_contract = self.is_contract_with_code(addr)?;
+
         if !sub.is_zero() {
+            tracer.prepare_internal_transfer_action(
+                /* from */ AddressPocket::StorageCollateral(*addr),
+                /* to */
+                if is_contract {
+                    AddressPocket::SponsorBalanceForStorage(*addr)
+                } else {
+                    AddressPocket::Balance(*addr)
+                },
+                sub,
+            );
             self.sub_collateral_for_storage(addr, &sub, account_start_nonce)?;
         }
         if !inc.is_zero() {
-            let balance = if self.is_contract_with_code(addr)? {
+            let balance = if is_contract {
                 self.sponsor_balance_for_collateral(addr)?
             } else {
                 self.balance(addr)?
@@ -1198,6 +1217,17 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                     got: balance,
                 });
             }
+            tracer.prepare_internal_transfer_action(
+                /* from */
+                if is_contract {
+                    AddressPocket::SponsorBalanceForStorage(*addr)
+                } else {
+                    AddressPocket::Balance(*addr)
+                },
+                /* to */ AddressPocket::StorageCollateral(*addr),
+                sub,
+            );
+
             self.add_collateral_for_storage(addr, &inc)?;
         }
         Ok(CollateralCheckResult::Valid)

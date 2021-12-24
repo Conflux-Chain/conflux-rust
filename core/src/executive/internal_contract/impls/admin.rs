@@ -5,7 +5,7 @@
 use crate::{
     executive::InternalRefContext,
     state::cleanup_mode,
-    trace::{trace::ExecTrace, Tracer},
+    trace::{AddressPocket, Tracer},
     vm::{self, ActionParams, Spec},
 };
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
@@ -31,8 +31,8 @@ fn available_admin_address(spec: &Spec, address: &Address) -> bool {
 pub fn suicide(
     contract_address: &Address, refund_address: &Address,
     state: &mut dyn StateOpsTrait, spec: &Spec,
-    substate: &mut dyn SubstateTrait,
-    tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
+    substate: &mut dyn SubstateTrait, tracer: &mut dyn Tracer,
+    account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     substate.suicides_mut().insert(contract_address.clone());
@@ -42,8 +42,8 @@ pub fn suicide(
         || !spec.is_valid_address(refund_address)
     {
         tracer.prepare_internal_transfer_action(
-            *contract_address,
-            Address::zero(),
+            AddressPocket::Balance(*contract_address),
+            AddressPocket::MintBurn,
             balance,
         );
         // When destroying, the balance will be burnt.
@@ -56,8 +56,8 @@ pub fn suicide(
     } else {
         trace!(target: "context", "Destroying {} -> {} (xfer: {})", contract_address, refund_address, balance);
         tracer.prepare_internal_transfer_action(
-            *contract_address,
-            *refund_address,
+            AddressPocket::Balance(*contract_address),
+            AddressPocket::Balance(*refund_address),
             balance,
         );
         state.transfer_balance(
@@ -98,7 +98,7 @@ pub fn set_admin(
         && context.state.exists(&contract_address)?
         // Allow set admin if requester matches or in contract creation to clear admin.
         && (context.state.admin(&contract_address)?.eq(requester)
-            || clear_admin_in_create)
+        || clear_admin_in_create)
         // Only allow user account to be admin, if not to clear admin.
         && available_admin_address(&context.spec, &new_admin_address)
     {
@@ -116,8 +116,7 @@ pub fn set_admin(
 pub fn destroy(
     contract_address: Address, params: &ActionParams,
     state: &mut dyn StateOpsTrait, spec: &Spec,
-    substate: &mut dyn SubstateTrait,
-    tracer: &mut dyn Tracer<Output = ExecTrace>,
+    substate: &mut dyn SubstateTrait, tracer: &mut dyn Tracer,
 ) -> vm::Result<()>
 {
     debug!("contract_address={:?}", contract_address);
