@@ -412,7 +412,7 @@ impl RpcImpl {
             {
                 bail!(invalid_params(
                     "tx",
-                    "Unsupported receiver address type"
+                    "Sending transactions to invalid address. The first four bits must be 0x0 (built-in/reserved), 0x1 (user-account), or 0x8 (contract)."
                 ));
             }
         }
