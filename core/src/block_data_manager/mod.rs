@@ -534,6 +534,7 @@ impl BlockDataManager {
         persistent: bool,
     )
     {
+        trace! {"insert_block_traces start pivot={:?}", pivot_hash};
         self.insert_version(
             hash,
             &pivot_hash,
@@ -545,6 +546,7 @@ impl BlockDataManager {
             CacheId::BlockTraces(hash),
             persistent,
         );
+        trace! {"insert_block_traces ends pivot={:?}", pivot_hash};
     }
 
     /// remove block traces in memory cache and db
@@ -675,6 +677,7 @@ impl BlockDataManager {
         persistent: bool,
     )
     {
+        trace! {"insert_block_traces start pivot={:?}", epoch};
         let bloom =
             block_receipts
                 .receipts
@@ -698,6 +701,7 @@ impl BlockDataManager {
             CacheId::BlockReceipts(hash),
             persistent,
         );
+        trace! {"insert_block_traces end pivot={:?}", epoch};
     }
 
     pub fn insert_block_reward_result(
