@@ -10,6 +10,7 @@ use crate::{
     },
     vm::{ActionParams, Result as VmResult},
 };
+pub use cfx_state::tracer::{AddressPocket, InternalTransferTracer};
 use cfx_types::U256;
 
 pub mod error_unwind;
@@ -17,10 +18,9 @@ pub mod trace;
 pub mod trace_filter;
 
 pub use error_unwind::ErrorUnwind;
-pub use trace::AddressPocket;
 
 /// This trait is used by executive to build traces.
-pub trait Tracer: Send {
+pub trait Tracer: InternalTransferTracer {
     /// Prepares call trace for given params.
     fn prepare_trace_call(&mut self, params: &ActionParams);
 
@@ -35,17 +35,19 @@ pub trait Tracer: Send {
         &mut self, result: &VmResult<ExecutiveResult>,
     );
 
-    /// Prepares internal transfer action
-    fn prepare_internal_transfer_action(
-        &mut self, from: AddressPocket, to: AddressPocket, value: U256,
-    );
-
     /// Consumes self and returns all traces.
     fn drain(self) -> Vec<ExecTrace>;
 }
 
 /// Nonoperative tracer. Does not trace anything.
 pub struct NoopTracer;
+
+impl InternalTransferTracer for NoopTracer {
+    fn prepare_internal_transfer_action(
+        &mut self, _: AddressPocket, _: AddressPocket, _: U256,
+    ) {
+    }
+}
 
 impl Tracer for NoopTracer {
     fn prepare_trace_call(&mut self, _: &ActionParams) {}
@@ -56,11 +58,6 @@ impl Tracer for NoopTracer {
 
     fn prepare_trace_create_result(&mut self, _: &VmResult<ExecutiveResult>) {}
 
-    fn prepare_internal_transfer_action(
-        &mut self, _: AddressPocket, _: AddressPocket, _: U256,
-    ) {
-    }
-
     fn drain(self) -> Vec<ExecTrace> { vec![] }
 }
 
@@ -68,6 +65,20 @@ impl Tracer for NoopTracer {
 #[derive(Default)]
 pub struct ExecutiveTracer {
     traces: Vec<ExecTrace>,
+}
+
+impl InternalTransferTracer for ExecutiveTracer {
+    fn prepare_internal_transfer_action(
+        &mut self, from: AddressPocket, to: AddressPocket, value: U256,
+    ) {
+        let trace =
+            ExecTrace {
+                action: Action::InternalTransferAction(
+                    InternalTransferAction { from, to, value },
+                ),
+            };
+        self.traces.push(trace);
+    }
 }
 
 impl Tracer for ExecutiveTracer {
@@ -100,18 +111,6 @@ impl Tracer for ExecutiveTracer {
         let trace = ExecTrace {
             action: Action::CreateResult(CreateResult::from(result)),
         };
-        self.traces.push(trace);
-    }
-
-    fn prepare_internal_transfer_action(
-        &mut self, from: AddressPocket, to: AddressPocket, value: U256,
-    ) {
-        let trace =
-            ExecTrace {
-                action: Action::InternalTransferAction(
-                    InternalTransferAction { from, to, value },
-                ),
-            };
         self.traces.push(trace);
     }
 

@@ -1219,6 +1219,7 @@ impl<
                         &sender,
                         &total_storage_limit,
                         &mut substate,
+                        &mut options.tracer,
                         self.spec.account_start_nonce,
                     )?
                     .into_vm_result()
@@ -1266,8 +1267,8 @@ impl<
 
     // TODO: maybe we can find a better interface for doing the suicide
     // post-processing.
-    fn kill_process(
-        &mut self, suicides: &HashSet<Address>, tracer: &mut dyn Tracer,
+    fn kill_process<T: Tracer>(
+        &mut self, suicides: &HashSet<Address>, tracer: &mut T,
     ) -> DbResult<Substate> {
         let mut substate = Substate::new();
         for address in suicides {
@@ -1291,6 +1292,7 @@ impl<
 
         let res = self.state.settle_collateral_for_all(
             &substate,
+            tracer,
             self.spec.account_start_nonce,
         )?;
         // The storage recycling process should never occupy new collateral.
