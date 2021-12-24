@@ -1,3 +1,9 @@
+# 1.1.8
+
+## RPC
+
+- Reject transactions with invalid receiver address in `cfx_sendRawTransaction`.
+
 # 1.1.7
 
 ## RPC
