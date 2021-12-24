@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 mod action_params;
-mod call_type;
+mod call_create_type;
 mod context;
 mod env;
 mod error;
@@ -15,7 +15,7 @@ pub mod tests;
 
 pub use self::{
     action_params::{ActionParams, ActionValue, ParamsType},
-    call_type::CallType,
+    call_create_type::{CallType, CreateType},
     context::{
         Context, ContractCreateResult, CreateContractAddress, MessageCallResult,
     },
@@ -27,7 +27,7 @@ pub use self::{
     return_data::{GasLeft, ReturnData},
     spec::{CleanDustMode, Spec, WasmCosts},
 };
-use crate::trace::{trace::ExecTrace, Tracer};
+use crate::trace::Tracer;
 
 /// Virtual Machine interface
 pub trait Exec: Send {
@@ -35,8 +35,7 @@ pub trait Exec: Send {
     /// It returns either an error, a known amount of gas left, or parameters
     /// to be used to compute the final gas left.
     fn exec(
-        self: Box<Self>, context: &mut dyn Context,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        self: Box<Self>, context: &mut dyn Context, tracer: &mut dyn Tracer,
     ) -> ExecTrapResult<GasLeft>;
 }
 

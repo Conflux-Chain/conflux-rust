@@ -4,20 +4,17 @@
 
 use crate::{
     consensus_internal_parameters::MINED_BLOCK_COUNT_PER_QUARTER,
-    trace::{trace::ExecTrace, Tracer},
+    trace::{AddressPocket, Tracer},
     vm::{self, ActionParams, Env},
 };
-use cfx_parameters::{
-    consensus::ONE_CFX_IN_DRIP,
-    internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-};
+use cfx_parameters::consensus::ONE_CFX_IN_DRIP;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{Address, U256};
 
 /// Implementation of `deposit(uint256)`.
 pub fn deposit(
     amount: U256, params: &ActionParams, env: &Env,
-    state: &mut dyn StateOpsTrait, tracer: &mut dyn Tracer<Output = ExecTrace>,
+    state: &mut dyn StateOpsTrait, tracer: &mut dyn Tracer,
 ) -> vm::Result<()>
 {
     if amount < U256::from(ONE_CFX_IN_DRIP) {
@@ -28,8 +25,8 @@ pub fn deposit(
         ))
     } else {
         tracer.prepare_internal_transfer_action(
-            params.sender,
-            *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            AddressPocket::Balance(params.sender),
+            AddressPocket::StakingBalance(params.sender),
             amount,
         );
         state.deposit(&params.sender, &amount, env.number)?;
@@ -40,7 +37,7 @@ pub fn deposit(
 /// Implementation of `withdraw(uint256)`.
 pub fn withdraw(
     amount: U256, params: &ActionParams, env: &Env,
-    state: &mut dyn StateOpsTrait, tracer: &mut dyn Tracer<Output = ExecTrace>,
+    state: &mut dyn StateOpsTrait, tracer: &mut dyn Tracer,
 ) -> vm::Result<()>
 {
     state.remove_expired_vote_stake_info(&params.sender, env.number)?;
@@ -57,14 +54,14 @@ pub fn withdraw(
         ))
     } else {
         tracer.prepare_internal_transfer_action(
-            *STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-            params.sender,
+            AddressPocket::StakingBalance(params.sender),
+            AddressPocket::Balance(params.sender),
             amount,
         );
         let interest_amount = state.withdraw(&params.sender, &amount)?;
         tracer.prepare_internal_transfer_action(
-            Address::zero(),
-            params.sender,
+            AddressPocket::MintBurn,
+            AddressPocket::Balance(params.sender),
             interest_amount,
         );
         Ok(())

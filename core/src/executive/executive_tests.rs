@@ -9,7 +9,7 @@ use crate::{
     machine::Machine,
     state::{State, Substate},
     test_helpers::get_state_for_genesis_write,
-    trace,
+    trace::{self, NoopTracer},
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
         Spec,
@@ -140,6 +140,7 @@ fn test_sender_balance() {
                 &params.storage_owner,
                 &storage_limit_in_drip,
                 &mut substate,
+                &mut tracer,
                 spec.account_start_nonce,
             )
             .unwrap()
@@ -401,6 +402,7 @@ fn test_call_to_create() {
                 &params.storage_owner,
                 &storage_limit_in_drip,
                 &mut substate,
+                &mut tracer,
                 spec.account_start_nonce,
             )
             .unwrap()
@@ -1020,6 +1022,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &Address::default(),
             &0.into(),
             &mut Substate::new(),
+            &mut NoopTracer,
             spec.account_start_nonce,
         )
         .unwrap();
@@ -1093,6 +1096,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &Address::default(),
             &0.into(),
             &mut Substate::new(),
+            &mut NoopTracer,
             spec.account_start_nonce,
         )
         .unwrap();
@@ -1628,6 +1632,7 @@ fn test_storage_commission_privilege() {
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate,
+                &mut NoopTracer,
                 spec.account_start_nonce,
             )
             .unwrap(),
@@ -1932,6 +1937,7 @@ fn test_storage_commission_privilege() {
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate,
+                &mut NoopTracer,
                 spec.account_start_nonce,
             )
             .unwrap(),

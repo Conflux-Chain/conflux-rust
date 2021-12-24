@@ -16,12 +16,12 @@ use crate::{
     hash::keccak,
     machine::Machine,
     state::{cleanup_mode, CallStackInfo, State, Substate},
-    trace::{self, trace::ExecTrace, Tracer},
+    trace::{self, AddressPocket, Tracer},
     verification::VerificationConfig,
     vm::{
-        self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
-        Exec, ExecTrapError, ExecTrapResult, GasLeft, ResumeCall, ResumeCreate,
-        ReturnData, Spec, TrapError, TrapResult,
+        self, ActionParams, ActionValue, CallType, CreateContractAddress,
+        CreateType, Env, Exec, ExecTrapError, ExecTrapResult, GasLeft,
+        ResumeCall, ResumeCreate, ReturnData, Spec, TrapError, TrapResult,
     },
     vm_factory::VmFactory,
 };
@@ -407,7 +407,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     fn process_return<State: StateTrait<Substate = Substate>>(
         mut self, result: vm::Result<GasLeft>, state: &mut State,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
-        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> DbResult<vm::Result<ExecutiveResult>>
     {
         let context = self.context.activate(state, callstack);
@@ -468,8 +468,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// `resume` to continue the execution.
     pub fn exec<State: StateTrait<Substate = Substate>>(
         mut self, state: &mut State, parent_substate: &mut Substate,
-        callstack: &mut CallStackInfo,
-        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
+        callstack: &mut CallStackInfo, tracer: &mut dyn Tracer,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
     {
         let status =
@@ -555,7 +554,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     pub fn resume<State: StateTrait<Substate = Substate>>(
         mut self, result: vm::Result<ExecutiveResult>, state: &mut State,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
     {
         let status =
@@ -601,7 +600,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     fn process_output<State: StateTrait<Substate = Substate>>(
         self, output: ExecTrapResult<GasLeft>, state: &mut State,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
-        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
     {
         // Convert the `ExecTrapResult` (result of evm) to `ExecutiveTrapResult`
@@ -628,7 +627,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// current-level tracing.
     pub fn consume<State: StateTrait<Substate = Substate>>(
         self, state: &'a mut State, top_substate: &mut Substate,
-        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> DbResult<vm::Result<FinalizationResult>>
     {
         let mut callstack = CallStackInfo::new();
@@ -822,7 +821,7 @@ impl<
 
     pub fn create(
         &mut self, params: ActionParams, substate: &mut Substate,
-        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> DbResult<vm::Result<FinalizationResult>>
     {
         let vm_factory = self.machine.vm_factory();
@@ -842,7 +841,7 @@ impl<
 
     pub fn call(
         &mut self, params: ActionParams, substate: &mut Substate,
-        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> DbResult<vm::Result<FinalizationResult>>
     {
         let vm_factory = self.machine.vm_factory();
@@ -883,7 +882,7 @@ impl<
     pub fn transact<T>(
         &mut self, tx: &SignedTransaction, mut options: TransactOptions<T>,
     ) -> DbResult<ExecutionOutcome>
-    where T: Tracer<Output = trace::trace::ExecTrace> {
+    where T: Tracer {
         let spec = &self.spec;
         let sender = tx.sender();
         let nonce = self.state.nonce(&sender)?;
@@ -1062,6 +1061,11 @@ impl<
                 &actual_gas_cost,
                 &mut cleanup_mode(&mut tx_substate, &spec),
             )?;
+            options.tracer.prepare_internal_transfer_action(
+                AddressPocket::Balance(sender.clone()),
+                AddressPocket::GasPayment,
+                actual_gas_cost,
+            );
 
             return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::NotEnoughCash {
@@ -1075,6 +1079,7 @@ impl<
                     &actual_gas_cost,
                     gas_sponsored,
                     storage_sponsored,
+                    options.tracer.drain(),
                     &self.spec,
                 ),
             ));
@@ -1088,13 +1093,25 @@ impl<
         }
 
         // Subtract the transaction fee from sender or contract.
+        let gas_cost = U256::try_from(gas_cost).unwrap();
+
         if !gas_sponsored {
+            options.tracer.prepare_internal_transfer_action(
+                AddressPocket::Balance(sender),
+                AddressPocket::GasPayment,
+                gas_cost,
+            );
             self.state.sub_balance(
                 &sender,
                 &U256::try_from(gas_cost).unwrap(),
                 &mut cleanup_mode(&mut tx_substate, &spec),
             )?;
         } else {
+            options.tracer.prepare_internal_transfer_action(
+                AddressPocket::SponsorBalanceForGas(code_address),
+                AddressPocket::GasPayment,
+                gas_cost,
+            );
             self.state.sub_sponsor_balance_for_gas(
                 &code_address,
                 &U256::try_from(gas_cost).unwrap(),
@@ -1147,6 +1164,7 @@ impl<
                             tx,
                             gas_sponsored,
                             storage_sponsored,
+                            options.tracer.drain(),
                             &spec,
                         ),
                     ));
@@ -1165,6 +1183,7 @@ impl<
                     code: Some(Arc::new(tx.data.clone())),
                     data: None,
                     call_type: CallType::None,
+                    create_type: CreateType::CREATE,
                     params_type: vm::ParamsType::Embedded,
                 };
                 self.create(params, &mut substate, &mut options.tracer)?
@@ -1183,6 +1202,7 @@ impl<
                     code_hash: self.state.code_hash(address)?,
                     data: Some(tx.data.clone()),
                     call_type: CallType::Call,
+                    create_type: CreateType::None,
                     params_type: vm::ParamsType::Separate,
                 };
                 self.call(params, &mut substate, &mut options.tracer)?
@@ -1199,6 +1219,7 @@ impl<
                         &sender,
                         &total_storage_limit,
                         &mut substate,
+                        &mut options.tracer,
                         self.spec.account_start_nonce,
                     )?
                     .into_vm_result()
@@ -1240,14 +1261,14 @@ impl<
             } else {
                 storage_sponsor_eligible
             },
-            options.tracer.drain(),
+            options.tracer,
         )?)
     }
 
     // TODO: maybe we can find a better interface for doing the suicide
     // post-processing.
-    fn kill_process(
-        &mut self, suicides: &HashSet<Address>,
+    fn kill_process<T: Tracer>(
+        &mut self, suicides: &HashSet<Address>, tracer: &mut T,
     ) -> DbResult<Substate> {
         let mut substate = Substate::new();
         for address in suicides {
@@ -1271,6 +1292,7 @@ impl<
 
         let res = self.state.settle_collateral_for_all(
             &substate,
+            tracer,
             self.spec.account_start_nonce,
         )?;
         // The storage recycling process should never occupy new collateral.
@@ -1287,9 +1309,14 @@ impl<
                 .state
                 .sponsor_balance_for_collateral(contract_address)?;
 
-            if sponsor_for_gas.is_some() {
+            if let Some(ref sponsor_address) = sponsor_for_gas {
+                tracer.prepare_internal_transfer_action(
+                    AddressPocket::SponsorBalanceForGas(*contract_address),
+                    AddressPocket::Balance(*sponsor_address),
+                    sponsor_balance_for_gas.clone(),
+                );
                 self.state.add_balance(
-                    sponsor_for_gas.as_ref().unwrap(),
+                    sponsor_address,
                     &sponsor_balance_for_gas,
                     cleanup_mode(&mut substate, self.spec),
                     self.spec.account_start_nonce,
@@ -1299,9 +1326,15 @@ impl<
                     &sponsor_balance_for_gas,
                 )?;
             }
-            if sponsor_for_collateral.is_some() {
+            if let Some(ref sponsor_address) = sponsor_for_collateral {
+                tracer.prepare_internal_transfer_action(
+                    AddressPocket::SponsorBalanceForStorage(*contract_address),
+                    AddressPocket::Balance(*sponsor_address),
+                    sponsor_balance_for_collateral.clone(),
+                );
+
                 self.state.add_balance(
-                    sponsor_for_collateral.as_ref().unwrap(),
+                    sponsor_address,
                     &sponsor_balance_for_collateral,
                     cleanup_mode(&mut substate, self.spec),
                     self.spec.account_start_nonce,
@@ -1314,21 +1347,36 @@ impl<
         }
 
         for contract_address in suicides {
-            let burnt_balance = self.state.balance(contract_address)?
-                + self.state.staking_balance(contract_address)?;
+            let contract_balance = self.state.balance(contract_address)?;
+            let staking_balance =
+                self.state.staking_balance(contract_address)?;
+
+            tracer.prepare_internal_transfer_action(
+                AddressPocket::StakingBalance(*contract_address),
+                AddressPocket::MintBurn,
+                staking_balance.clone(),
+            );
+
+            tracer.prepare_internal_transfer_action(
+                AddressPocket::Balance(*contract_address),
+                AddressPocket::MintBurn,
+                contract_balance.clone(),
+            );
+
             self.state.remove_contract(contract_address)?;
-            self.state.subtract_total_issued(burnt_balance);
+            self.state
+                .subtract_total_issued(contract_balance + staking_balance);
         }
 
         Ok(substate)
     }
 
     /// Finalizes the transaction (does refunds and suicides).
-    fn finalize(
+    fn finalize<T: Tracer>(
         &mut self, tx: &SignedTransaction, mut substate: Substate,
         result: vm::Result<FinalizationResult>, output: Bytes,
         refund_receiver: Option<Address>, storage_sponsor_paid: bool,
-        trace: Vec<ExecTrace>,
+        mut tracer: T,
     ) -> DbResult<ExecutionOutcome>
     {
         let gas_left = match result {
@@ -1354,8 +1402,18 @@ impl<
         };
 
         if let Some(r) = refund_receiver {
+            tracer.prepare_internal_transfer_action(
+                AddressPocket::GasPayment,
+                AddressPocket::SponsorBalanceForGas(r),
+                refund_value.clone(),
+            );
             self.state.add_sponsor_balance_for_gas(&r, &refund_value)?;
         } else {
+            tracer.prepare_internal_transfer_action(
+                AddressPocket::GasPayment,
+                AddressPocket::Balance(tx.sender()),
+                refund_value.clone(),
+            );
             self.state.add_balance(
                 &tx.sender(),
                 &refund_value,
@@ -1366,7 +1424,8 @@ impl<
 
         // perform suicides
 
-        let subsubstate = self.kill_process(&substate.suicides())?;
+        let subsubstate =
+            self.kill_process(&substate.suicides(), &mut tracer)?;
         substate.accrue(subsubstate);
 
         // TODO should be added back after enabling dust collection
@@ -1398,6 +1457,7 @@ impl<
                     tx,
                     refund_receiver.is_some(),
                     storage_sponsor_paid,
+                    tracer.drain(),
                     &self.spec,
                 ),
             )),
@@ -1428,6 +1488,8 @@ impl<
                         }
                     }
                 }
+
+                let trace = tracer.drain();
 
                 let executed = Executed {
                     gas_used,

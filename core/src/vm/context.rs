@@ -21,17 +21,14 @@
 //! Interface for Evm externalities.
 
 use super::{
-    call_type::CallType,
+    call_create_type::CallType,
     env::Env,
     error::{Result, TrapKind},
     return_data::ReturnData,
     spec::Spec,
     Error,
 };
-use crate::{
-    executive::InternalRefContext,
-    trace::{trace::ExecTrace, Tracer},
-};
+use crate::{executive::InternalRefContext, trace::Tracer};
 use cfx_bytes::Bytes;
 use cfx_types::{Address, H256, U256};
 use std::sync::Arc;
@@ -144,8 +141,8 @@ pub trait Context {
     /// Should be called when contract commits suicide.
     /// Address to which funds should be refunded.
     fn suicide(
-        &mut self, refund_address: &Address,
-        tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
+        &mut self, refund_address: &Address, tracer: &mut dyn Tracer,
+        account_start_nonce: U256,
     ) -> Result<()>;
 
     /// Returns specification.
