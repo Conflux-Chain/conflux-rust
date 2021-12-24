@@ -49,7 +49,6 @@ use cfx_internal_common::{
     EpochExecutionCommitment, StateAvailabilityBoundary, StateRootWithAuxInfo,
 };
 use db_gc_manager::GCProgress;
-use diem_types::block_info::PivotBlockDecision;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use primitives::pos::PosBlockId;
 use std::{hash::Hash, path::Path, time::Duration};
@@ -1307,34 +1306,18 @@ impl BlockDataManager {
             }
             let me_height = self.block_height_by_hash(epoch_hash).unwrap();
             if pos_verifier.pos_option().is_some() && me_height != 0 {
-                let parent_hash = *self
-                    .block_header_by_hash(epoch_hash)
-                    .unwrap()
-                    .parent_hash();
-                if let Err(e) = pos_verifier.consensus_db().get_staking_events(
-                    PivotBlockDecision {
-                        height: me_height - 1,
-                        block_hash: parent_hash,
-                    },
-                    PivotBlockDecision {
-                        height: me_height,
-                        block_hash: *epoch_hash,
-                    },
+                trace!(
+                    "staking events update: height={}, new={}",
+                    me_height,
+                    epoch_hash,
+                );
+                if let Err(e) = pos_verifier.consensus_db().put_staking_events(
+                    me_height,
+                    *epoch_hash,
+                    epoch_staking_events,
                 ) {
-                    debug!(
-                        "staking events update: height={}, new={}, err={:?}",
-                        me_height, epoch_hash, e
-                    );
-                    if let Err(e) =
-                        pos_verifier.consensus_db().put_staking_events(
-                            me_height,
-                            *epoch_hash,
-                            epoch_staking_events,
-                        )
-                    {
-                        error!("epoch_executed err={:?}", e);
-                        return false;
-                    }
+                    error!("epoch_executed err={:?}", e);
+                    return false;
                 }
             }
         }
