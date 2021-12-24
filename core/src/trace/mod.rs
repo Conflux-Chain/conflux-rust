@@ -17,7 +17,7 @@ pub mod trace;
 pub mod trace_filter;
 
 pub use error_unwind::ErrorUnwind;
-pub use trace::InternalTransferAddress;
+pub use trace::AddressPocket;
 
 /// This trait is used by executive to build traces.
 pub trait Tracer: Send {
@@ -37,8 +37,7 @@ pub trait Tracer: Send {
 
     /// Prepares internal transfer action
     fn prepare_internal_transfer_action(
-        &mut self, from: InternalTransferAddress, to: InternalTransferAddress,
-        value: U256,
+        &mut self, from: AddressPocket, to: AddressPocket, value: U256,
     );
 
     /// Consumes self and returns all traces.
@@ -58,10 +57,8 @@ impl Tracer for NoopTracer {
     fn prepare_trace_create_result(&mut self, _: &VmResult<ExecutiveResult>) {}
 
     fn prepare_internal_transfer_action(
-        &mut self, _: InternalTransferAddress, _: InternalTransferAddress,
-        _: U256,
-    )
-    {
+        &mut self, _: AddressPocket, _: AddressPocket, _: U256,
+    ) {
     }
 
     fn drain(self) -> Vec<ExecTrace> { vec![] }
@@ -107,10 +104,8 @@ impl Tracer for ExecutiveTracer {
     }
 
     fn prepare_internal_transfer_action(
-        &mut self, from: InternalTransferAddress, to: InternalTransferAddress,
-        value: U256,
-    )
-    {
+        &mut self, from: AddressPocket, to: AddressPocket, value: U256,
+    ) {
         let trace =
             ExecTrace {
                 action: Action::InternalTransferAction(

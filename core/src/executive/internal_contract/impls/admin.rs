@@ -5,7 +5,7 @@
 use crate::{
     executive::InternalRefContext,
     state::cleanup_mode,
-    trace::{InternalTransferAddress, Tracer},
+    trace::{AddressPocket, Tracer},
     vm::{self, ActionParams, Spec},
 };
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
@@ -42,8 +42,8 @@ pub fn suicide(
         || !spec.is_valid_address(refund_address)
     {
         tracer.prepare_internal_transfer_action(
-            InternalTransferAddress::Balance(*contract_address),
-            InternalTransferAddress::MintBurn,
+            AddressPocket::Balance(*contract_address),
+            AddressPocket::MintBurn,
             balance,
         );
         // When destroying, the balance will be burnt.
@@ -56,8 +56,8 @@ pub fn suicide(
     } else {
         trace!(target: "context", "Destroying {} -> {} (xfer: {})", contract_address, refund_address, balance);
         tracer.prepare_internal_transfer_action(
-            InternalTransferAddress::Balance(*contract_address),
-            InternalTransferAddress::Balance(*refund_address),
+            AddressPocket::Balance(*contract_address),
+            AddressPocket::Balance(*refund_address),
             balance,
         );
         state.transfer_balance(

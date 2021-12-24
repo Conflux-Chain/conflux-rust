@@ -4,7 +4,7 @@
 
 use crate::{
     consensus_internal_parameters::MINED_BLOCK_COUNT_PER_QUARTER,
-    trace::{InternalTransferAddress, Tracer},
+    trace::{AddressPocket, Tracer},
     vm::{self, ActionParams, Env},
 };
 use cfx_parameters::consensus::ONE_CFX_IN_DRIP;
@@ -25,8 +25,8 @@ pub fn deposit(
         ))
     } else {
         tracer.prepare_internal_transfer_action(
-            InternalTransferAddress::Balance(params.sender),
-            InternalTransferAddress::StakingBalance(params.sender),
+            AddressPocket::Balance(params.sender),
+            AddressPocket::StakingBalance(params.sender),
             amount,
         );
         state.deposit(&params.sender, &amount, env.number)?;
@@ -54,14 +54,14 @@ pub fn withdraw(
         ))
     } else {
         tracer.prepare_internal_transfer_action(
-            InternalTransferAddress::StakingBalance(params.sender),
-            InternalTransferAddress::Balance(params.sender),
+            AddressPocket::StakingBalance(params.sender),
+            AddressPocket::Balance(params.sender),
             amount,
         );
         let interest_amount = state.withdraw(&params.sender, &amount)?;
         tracer.prepare_internal_transfer_action(
-            InternalTransferAddress::MintBurn,
-            InternalTransferAddress::Balance(params.sender),
+            AddressPocket::MintBurn,
+            AddressPocket::Balance(params.sender),
             interest_amount,
         );
         Ok(())

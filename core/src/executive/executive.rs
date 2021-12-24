@@ -16,7 +16,7 @@ use crate::{
     hash::keccak,
     machine::Machine,
     state::{cleanup_mode, CallStackInfo, State, Substate},
-    trace::{self, InternalTransferAddress, Tracer},
+    trace::{self, AddressPocket, Tracer},
     verification::VerificationConfig,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress,
@@ -1062,8 +1062,8 @@ impl<
                 &mut cleanup_mode(&mut tx_substate, &spec),
             )?;
             options.tracer.prepare_internal_transfer_action(
-                InternalTransferAddress::Balance(sender.clone()),
-                InternalTransferAddress::GasPayment,
+                AddressPocket::Balance(sender.clone()),
+                AddressPocket::GasPayment,
                 actual_gas_cost,
             );
 
@@ -1097,8 +1097,8 @@ impl<
 
         if !gas_sponsored {
             options.tracer.prepare_internal_transfer_action(
-                InternalTransferAddress::Balance(sender),
-                InternalTransferAddress::GasPayment,
+                AddressPocket::Balance(sender),
+                AddressPocket::GasPayment,
                 gas_cost,
             );
             self.state.sub_balance(
@@ -1108,8 +1108,8 @@ impl<
             )?;
         } else {
             options.tracer.prepare_internal_transfer_action(
-                InternalTransferAddress::SponsorBalanceForGas(code_address),
-                InternalTransferAddress::GasPayment,
+                AddressPocket::SponsorBalanceForGas(code_address),
+                AddressPocket::GasPayment,
                 gas_cost,
             );
             self.state.sub_sponsor_balance_for_gas(
@@ -1309,10 +1309,8 @@ impl<
 
             if let Some(ref sponsor_address) = sponsor_for_gas {
                 tracer.prepare_internal_transfer_action(
-                    InternalTransferAddress::SponsorBalanceForGas(
-                        *contract_address,
-                    ),
-                    InternalTransferAddress::Balance(*sponsor_address),
+                    AddressPocket::SponsorBalanceForGas(*contract_address),
+                    AddressPocket::Balance(*sponsor_address),
                     sponsor_balance_for_gas.clone(),
                 );
                 self.state.add_balance(
@@ -1328,10 +1326,8 @@ impl<
             }
             if let Some(ref sponsor_address) = sponsor_for_collateral {
                 tracer.prepare_internal_transfer_action(
-                    InternalTransferAddress::SponsorBalanceForStorage(
-                        *contract_address,
-                    ),
-                    InternalTransferAddress::Balance(*sponsor_address),
+                    AddressPocket::SponsorBalanceForStorage(*contract_address),
+                    AddressPocket::Balance(*sponsor_address),
                     sponsor_balance_for_collateral.clone(),
                 );
 
@@ -1352,25 +1348,22 @@ impl<
             let contract_balance = self.state.balance(contract_address)?;
             let staking_balance =
                 self.state.staking_balance(contract_address)?;
-            let burnt_balance = contract_balance + staking_balance;
 
-            if !staking_balance.is_zero() {
-                tracer.prepare_internal_transfer_action(
-                    InternalTransferAddress::StakingBalance(*contract_address),
-                    InternalTransferAddress::MintBurn,
-                    staking_balance.clone(),
-                );
-            }
-            if !contract_balance.is_zero() {
-                tracer.prepare_internal_transfer_action(
-                    InternalTransferAddress::Balance(*contract_address),
-                    InternalTransferAddress::MintBurn,
-                    contract_balance.clone(),
-                );
-            }
+            tracer.prepare_internal_transfer_action(
+                AddressPocket::StakingBalance(*contract_address),
+                AddressPocket::MintBurn,
+                staking_balance.clone(),
+            );
+
+            tracer.prepare_internal_transfer_action(
+                AddressPocket::Balance(*contract_address),
+                AddressPocket::MintBurn,
+                contract_balance.clone(),
+            );
 
             self.state.remove_contract(contract_address)?;
-            self.state.subtract_total_issued(burnt_balance);
+            self.state
+                .subtract_total_issued(contract_balance + staking_balance);
         }
 
         Ok(substate)
@@ -1408,15 +1401,15 @@ impl<
 
         if let Some(r) = refund_receiver {
             tracer.prepare_internal_transfer_action(
-                InternalTransferAddress::GasPayment,
-                InternalTransferAddress::SponsorBalanceForGas(r),
+                AddressPocket::GasPayment,
+                AddressPocket::SponsorBalanceForGas(r),
                 refund_value.clone(),
             );
             self.state.add_sponsor_balance_for_gas(&r, &refund_value)?;
         } else {
             tracer.prepare_internal_transfer_action(
-                InternalTransferAddress::GasPayment,
-                InternalTransferAddress::Balance(tx.sender()),
+                AddressPocket::GasPayment,
+                AddressPocket::Balance(tx.sender()),
                 refund_value.clone(),
             );
             self.state.add_balance(

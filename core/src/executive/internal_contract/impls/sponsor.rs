@@ -5,7 +5,7 @@
 use crate::{
     executive::InternalRefContext,
     state::cleanup_mode,
-    trace::{InternalTransferAddress, Tracer},
+    trace::{AddressPocket, Tracer},
     vm::{self, ActionParams, Spec},
 };
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
@@ -77,8 +77,8 @@ pub fn set_sponsor_for_gas(
         // refund to previous sponsor
         if prev_sponsor.is_some() {
             tracer.prepare_internal_transfer_action(
-                InternalTransferAddress::SponsorBalanceForGas(contract_address),
-                InternalTransferAddress::Balance(prev_sponsor.unwrap()),
+                AddressPocket::SponsorBalanceForGas(contract_address),
+                AddressPocket::Balance(prev_sponsor.unwrap()),
                 prev_sponsor_balance,
             );
             state.add_balance(
@@ -89,8 +89,8 @@ pub fn set_sponsor_for_gas(
             )?;
         }
         tracer.prepare_internal_transfer_action(
-            InternalTransferAddress::Balance(params.address),
-            InternalTransferAddress::SponsorBalanceForGas(contract_address),
+            AddressPocket::Balance(params.address),
+            AddressPocket::SponsorBalanceForGas(contract_address),
             sponsor_balance,
         );
         state.sub_balance(
@@ -116,8 +116,8 @@ pub fn set_sponsor_for_gas(
             ));
         }
         tracer.prepare_internal_transfer_action(
-            InternalTransferAddress::Balance(params.address),
-            InternalTransferAddress::SponsorBalanceForGas(contract_address),
+            AddressPocket::Balance(params.address),
+            AddressPocket::SponsorBalanceForGas(contract_address),
             sponsor_balance,
         );
         state.sub_balance(
@@ -193,15 +193,13 @@ pub fn set_sponsor_for_collateral(
         // refund to previous sponsor
         if prev_sponsor.is_some() {
             tracer.prepare_internal_transfer_action(
-                InternalTransferAddress::SponsorBalanceForStorage(
-                    contract_address,
-                ),
-                InternalTransferAddress::Balance(prev_sponsor.unwrap()),
+                AddressPocket::SponsorBalanceForStorage(contract_address),
+                AddressPocket::Balance(prev_sponsor.unwrap()),
                 prev_sponsor_balance,
             );
             tracer.prepare_internal_transfer_action(
-                InternalTransferAddress::Balance(params.address),
-                InternalTransferAddress::Balance(prev_sponsor.unwrap()),
+                AddressPocket::Balance(params.address),
+                AddressPocket::Balance(prev_sponsor.unwrap()),
                 collateral_for_storage,
             );
             state.add_balance(
@@ -214,8 +212,8 @@ pub fn set_sponsor_for_collateral(
             assert_eq!(collateral_for_storage, U256::zero());
         }
         tracer.prepare_internal_transfer_action(
-            InternalTransferAddress::Balance(params.address),
-            InternalTransferAddress::SponsorBalanceForStorage(contract_address),
+            AddressPocket::Balance(params.address),
+            AddressPocket::SponsorBalanceForStorage(contract_address),
             sponsor_balance - collateral_for_storage,
         );
         state.sub_balance(
@@ -230,8 +228,8 @@ pub fn set_sponsor_for_collateral(
         )?;
     } else {
         tracer.prepare_internal_transfer_action(
-            InternalTransferAddress::Balance(params.address),
-            InternalTransferAddress::SponsorBalanceForStorage(contract_address),
+            AddressPocket::Balance(params.address),
+            AddressPocket::SponsorBalanceForStorage(contract_address),
             sponsor_balance,
         );
         state.sub_balance(

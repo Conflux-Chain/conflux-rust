@@ -254,9 +254,9 @@ impl CreateResult {
 #[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable)]
 pub struct InternalTransferAction {
     /// The source address. If it is zero, then it is an interest mint action.
-    pub from: InternalTransferAddress,
+    pub from: AddressPocket,
     /// The destination address. If it is zero, then it is a burnt action.
-    pub to: InternalTransferAddress,
+    pub to: AddressPocket,
     /// The amount of CFX
     pub value: U256,
 }
@@ -288,7 +288,7 @@ impl InternalTransferAction {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum InternalTransferAddress {
+pub enum AddressPocket {
     Balance(Address),
     StakingBalance(Address),
     StorageCollateral(Address),
@@ -298,9 +298,9 @@ pub enum InternalTransferAddress {
     GasPayment,
 }
 
-impl InternalTransferAddress {
+impl AddressPocket {
     pub fn inner_address(&self) -> Option<&Address> {
-        use InternalTransferAddress::*;
+        use AddressPocket::*;
         match self {
             Balance(addr)
             | StakingBalance(addr)
@@ -316,7 +316,7 @@ impl InternalTransferAddress {
     }
 
     pub fn pocket(&self) -> &'static str {
-        use InternalTransferAddress::*;
+        use AddressPocket::*;
         match self {
             Balance(_) => "balance",
             StakingBalance(_) => "staking_balance",
@@ -329,7 +329,7 @@ impl InternalTransferAddress {
     }
 
     fn type_number(&self) -> u8 {
-        use InternalTransferAddress::*;
+        use AddressPocket::*;
         match self {
             Balance(_) => 0,
             StakingBalance(_) => 1,
@@ -342,7 +342,7 @@ impl InternalTransferAddress {
     }
 }
 
-impl Encodable for InternalTransferAddress {
+impl Encodable for AddressPocket {
     fn rlp_append(&self, s: &mut RlpStream) {
         let maybe_address = self.inner_address();
         let type_number = self.type_number();
@@ -357,9 +357,9 @@ impl Encodable for InternalTransferAddress {
     }
 }
 
-impl Decodable for InternalTransferAddress {
+impl Decodable for AddressPocket {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        use InternalTransferAddress::*;
+        use AddressPocket::*;
 
         let type_number: u8 = rlp.val_at(0)?;
         match type_number {
