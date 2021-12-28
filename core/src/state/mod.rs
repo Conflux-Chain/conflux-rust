@@ -1225,7 +1225,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                     AddressPocket::Balance(*addr)
                 },
                 /* to */ AddressPocket::StorageCollateral(*addr),
-                sub,
+                inc,
             );
 
             self.add_collateral_for_storage(addr, &inc)?;
