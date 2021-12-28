@@ -35,6 +35,7 @@ use cfx_parameters::light::{
     CATCH_UP_EPOCH_LAG_THRESHOLD, CLEANUP_PERIOD, HEARTBEAT_PERIOD, SYNC_PERIOD,
 };
 use cfx_types::H256;
+use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 use io::TimerToken;
 use network::{
     node_table::NodeId, service::ProtocolVersion, NetworkContext,
@@ -61,6 +62,7 @@ const REQUEST_CLEANUP_TIMER: TimerToken = 1;
 const LOG_STATISTICS_TIMER: TimerToken = 2;
 const HEARTBEAT_TIMER: TimerToken = 3;
 const TOTAL_WEIGHT_IN_PAST_TIMER: TimerToken = 4;
+const CHECK_SYNC_NOT_READY_BLOCKS_TIMER: TimerToken = 7;
 
 /// Handler is responsible for maintaining peer meta-information and
 /// dispatching messages to the query and sync sub-handlers.
@@ -206,8 +208,6 @@ impl Handler {
             stopped.clone(),
             consensus.get_data_manager().clone(),
         ));
-
-        graph.recover_graph_from_db();
 
         Handler {
             block_txs,
@@ -961,6 +961,11 @@ impl NetworkProtocolHandler for Handler {
 
         io.register_timer(TOTAL_WEIGHT_IN_PAST_TIMER, Duration::from_secs(20))
             .expect("Error registering total weight in past timer");
+        io.register_timer(
+            CHECK_SYNC_NOT_READY_BLOCKS_TIMER,
+            Duration::from_millis(1000),
+        )
+        .expect("Error registering CHECK_FUTURE_BLOCK_TIMER");
     }
 
     fn on_message(&self, io: &dyn NetworkContext, peer: &NodeId, raw: &[u8]) {
@@ -986,21 +991,22 @@ impl NetworkProtocolHandler for Handler {
     }
 
     fn on_peer_connected(
-        &self, io: &dyn NetworkContext, peer: &NodeId,
+        &self, io: &dyn NetworkContext, node_id: &NodeId,
         peer_protocol_version: ProtocolVersion,
+        _pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     )
     {
-        debug!("on_peer_connected: peer={:?}", peer);
+        debug!("on_peer_connected: peer={:?}", node_id);
 
-        match self.send_status(io, peer, peer_protocol_version) {
+        match self.send_status(io, node_id, peer_protocol_version) {
             Ok(_) => {
                 // insert handshaking peer
-                self.peers.insert(*peer);
-                self.peers.get(peer).unwrap().write().protocol_version =
+                self.peers.insert(*node_id);
+                self.peers.get(node_id).unwrap().write().protocol_version =
                     peer_protocol_version;
 
                 if let Some(ref file) = self.throttling_config_file {
-                    let peer = self.peers.get(peer).expect("peer not found");
+                    let peer = self.peers.get(node_id).expect("peer not found");
                     peer.write().unexpected_msgs = TokenBucketManager::load(
                         file,
                         Some("light_protocol::unexpected_msgs"),
@@ -1012,9 +1018,9 @@ impl NetworkProtocolHandler for Handler {
                 warn!("Error while sending status: {}", e);
                 handle_error(
                     io,
-                    peer,
+                    node_id,
                     msgid::INVALID,
-                    &ErrorKind::SendStatusFailed { peer: *peer }.into(),
+                    &ErrorKind::SendStatusFailed { peer: *node_id }.into(),
                 );
             }
         }
@@ -1049,6 +1055,11 @@ impl NetworkProtocolHandler for Handler {
             }
             TOTAL_WEIGHT_IN_PAST_TIMER => {
                 self.consensus.update_total_weight_delta_heartbeat();
+            }
+            CHECK_SYNC_NOT_READY_BLOCKS_TIMER => {
+                self.headers
+                    .graph
+                    .check_not_ready_frontier(true /* header_only */);
             }
             // TODO(thegaram): add other timers (e.g. data_man gc)
             _ => warn!("Unknown timer {} triggered.", timer),

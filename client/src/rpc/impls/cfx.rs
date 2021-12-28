@@ -4,14 +4,13 @@
 
 use crate::rpc::types::{
     call_request::rpc_call_request_network, errors::check_rpc_address_network,
-    RpcAddress, SponsorInfo, TokenSupplyInfo, MAX_GAS_CALL_REQUEST,
+    PoSEconomics, RpcAddress, SponsorInfo, TokenSupplyInfo,
+    MAX_GAS_CALL_REQUEST,
 };
 use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
-use cfx_types::{
-    address_util::AddressUtil, BigEndianHash, H256, H520, U128, U256, U64,
-};
+use cfx_types::{BigEndianHash, H256, H520, U128, U256, U64};
 use cfxcore::{
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
@@ -20,8 +19,8 @@ use cfxcore::{
     SharedSynchronizationService, SharedTransactionPool,
 };
 use cfxcore_accounts::AccountProvider;
-use cfxkey::is_compatible_public;
 use delegate::delegate;
+use diem_types::transaction::TransactionPayload;
 use jsonrpc_core::{BoxFuture, Error as JsonRpcError, Result as JsonRpcResult};
 use network::{
     node_table::{Node, NodeId},
@@ -29,14 +28,16 @@ use network::{
 };
 use parking_lot::Mutex;
 use primitives::{
-    filter::LogFilter, transaction::Action::Call, Account, Block,
-    BlockReceipts, DepositInfo, SignedTransaction, StorageKey, StorageRoot,
-    StorageValue, TransactionIndex, TransactionWithSignature, VoteStakeInfo,
+    filter::LogFilter, Account, Block, BlockReceipts, DepositInfo,
+    SignedTransaction, StorageKey, StorageRoot, StorageValue, TransactionIndex,
+    TransactionWithSignature, VoteStakeInfo,
 };
 use random_crash::*;
 use rlp::Rlp;
 use rustc_hex::ToHex;
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
+use std::{
+    collections::BTreeMap, net::SocketAddr, sync::Arc, thread, time::Duration,
+};
 use txgen::{DirectTransactionGenerator, TransactionGenerator};
 // To convert from RpcResult to BoxFuture by delegate! macro automatically.
 use crate::{
@@ -52,15 +53,14 @@ use crate::{
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
-            sign_call, Account as RpcAccount, AccountPendingInfo,
-            AccountPendingTransactions, BlameInfo, Block as RpcBlock,
-            BlockHashOrEpochNumber, Bytes, CallRequest,
+            pos::Block as PosBlock, sign_call, Account as RpcAccount,
+            AccountPendingInfo, AccountPendingTransactions, BlameInfo,
+            Block as RpcBlock, BlockHashOrEpochNumber, Bytes, CallRequest,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
             EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
             LogFilter as RpcFilter, PackedOrExecuted, Receipt as RpcReceipt,
             RewardInfo as RpcRewardInfo, SendTxRequest, Status as RpcStatus,
-            SyncGraphStates, Transaction as RpcTransaction, TxPoolPendingInfo,
-            TxWithPoolInfo,
+            SyncGraphStates, Transaction as RpcTransaction,
         },
         RpcResult,
     },
@@ -76,9 +76,9 @@ use cfxcore::{
     },
     trace::ErrorUnwind,
 };
+use diem_types::account_address::AccountAddress;
 use lazy_static::lazy_static;
 use metrics::{register_timer_with_group, ScopeTimer, Timer};
-use primitives::transaction::TransactionType;
 use serde::Serialize;
 
 lazy_static! {
@@ -345,11 +345,11 @@ impl RpcImpl {
             Some(t) => t,
             None => account_result_to_rpc_result(
                 "address",
-                Account::new_empty_with_balance(
+                Ok(Account::new_empty_with_balance(
                     address,
                     &U256::zero(), /* balance */
                     &U256::zero(), /* nonce */
-                ),
+                )),
             )?,
         };
 
@@ -378,6 +378,24 @@ impl RpcImpl {
         Ok(state_db.get_accumulate_interest_rate()?.into())
     }
 
+    /// Returns accumulate interest rate of the given epoch
+    fn pos_economics(
+        &self, epoch_num: Option<EpochNumber>,
+    ) -> RpcResult<PoSEconomics> {
+        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
+
+        Ok(PoSEconomics {
+            total_pos_staking_tokens: state_db
+                .get_total_pos_staking_tokens()?,
+            distributable_pos_interest: state_db
+                .get_distributable_pos_interest()?,
+            last_distribute_block: state_db.get_last_distribute_block()?,
+        })
+    }
+
     fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256> {
         let _timer = ScopeTimer::time_scope(SEND_RAW_TX_TIMER.as_ref());
         info!("RPC Request: cfx_sendRawTransaction len={:?}", raw.0.len());
@@ -386,37 +404,41 @@ impl RpcImpl {
         let tx: TransactionWithSignature =
             invalid_params_check("raw", Rlp::new(&raw.into_vec()).as_val())?;
 
-        if tx.transaction_type() == TransactionType::EthereumLike {
-            if let Ok(pubkey) = tx.recover_public() {
-                if !is_compatible_public(&pubkey) {
-                    bail!(invalid_params("tx", "Sending Ethereum like transaction from invalid address: the sender address should start by 0x1 (by Ethereum address rule)."))
-                }
-            } else {
-                bail!(invalid_params(
-                    "tx",
-                    "Can not recover pubkey for Ethereum like tx"
-                ))
-            }
+        if tx.recover_public().is_err() {
+            bail!(invalid_params(
+                "tx",
+                "Can not recover pubkey for Ethereum like tx"
+            ));
         }
 
         let r = self.send_transaction_with_signature(tx);
         if r.is_ok() && self.config.dev_pack_tx_immediately {
             // Try to pack and execute this new tx.
             for _ in 0..DEFERRED_STATE_EPOCH_COUNT {
-                self.generate_one_block(
+                let generated = self.generate_one_block(
                     1, /* num_txs */
                     self.sync
                         .get_synchronization_graph()
                         .verification_config
                         .max_block_size_in_bytes,
                 )?;
+                loop {
+                    // Wait for the new block to be fully processed, so all
+                    // generated blocks form a chain for
+                    // `tx` to be executed.
+                    if self.consensus.best_block_hash() == generated {
+                        break;
+                    } else {
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                }
             }
         }
         r
     }
 
     fn storage_at(
-        &self, address: RpcAddress, position: H256,
+        &self, address: RpcAddress, position: U256,
         epoch_num: Option<EpochNumber>,
     ) -> RpcResult<Option<H256>>
     {
@@ -432,6 +454,8 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
 
+        let position: H256 = H256::from_uint(&position);
+
         let key = StorageKey::new_storage_key(
             &address.hex_address,
             position.as_ref(),
@@ -446,11 +470,12 @@ impl RpcImpl {
     fn send_transaction_with_signature(
         &self, tx: TransactionWithSignature,
     ) -> RpcResult<H256> {
-        if let Call(address) = &tx.transaction.action {
-            if !address.is_valid_address() {
-                bail!(invalid_params("tx", "Sending transactions to invalid address. The first four bits must be 0x0 (built-in/reserved), 0x1 (user-account), or 0x8 (contract)."));
-            }
-        }
+        // if let Call(address) = &tx.transaction.action {
+        //     if !address.is_valid_address() {
+        //         bail!(invalid_params("tx", "Sending transactions to invalid
+        // address. The first four bits must be 0x0 (built-in/reserved), 0x1
+        // (user-account), or 0x8 (contract)."));     }
+        // }
         if self.sync.catch_up_mode() {
             warn!("Ignore send_transaction request {}. Cannot send transaction when the node is still in catch-up mode.", tx.hash());
             bail!(request_rejected_in_catch_up_mode(None));
@@ -566,59 +591,6 @@ impl RpcImpl {
                 Ok(Bytes::new("1".into()))
             }
         }
-    }
-
-    pub fn account_pending_info(
-        &self, address: RpcAddress,
-    ) -> RpcResult<Option<AccountPendingInfo>> {
-        info!("RPC Request: cfx_getAccountPendingInfo({:?})", address);
-        self.check_address_network(address.network)?;
-
-        match self.tx_pool.get_account_pending_info(&(address.into())) {
-            None => Ok(None),
-            Some((
-                local_nonce,
-                pending_count,
-                pending_nonce,
-                next_pending_tx,
-            )) => Ok(Some(AccountPendingInfo {
-                local_nonce: local_nonce.into(),
-                pending_count: pending_count.into(),
-                pending_nonce: pending_nonce.into(),
-                next_pending_tx: next_pending_tx.into(),
-            })),
-        }
-    }
-
-    pub fn account_pending_transactions(
-        &self, address: RpcAddress, maybe_start_nonce: Option<U256>,
-        maybe_limit: Option<U64>,
-    ) -> RpcResult<AccountPendingTransactions>
-    {
-        info!("RPC Request: cfx_getAccountPendingTransactions(addr={:?}, start_nonce={:?}, limit={:?})",
-              address, maybe_start_nonce, maybe_limit);
-        self.check_address_network(address.network)?;
-
-        let (pending_txs, tx_status, pending_count) =
-            self.tx_pool.get_account_pending_transactions(
-                &(address.into()),
-                maybe_start_nonce,
-                maybe_limit.map(|limit| limit.as_usize()),
-            );
-        Ok(AccountPendingTransactions {
-            pending_transactions: pending_txs
-                .into_iter()
-                .map(|tx| {
-                    RpcTransaction::from_signed(
-                        &tx,
-                        None,
-                        *self.sync.network.get_network_type(),
-                    )
-                })
-                .collect::<Result<Vec<RpcTransaction>, String>>()?,
-            first_tx_status: tx_status,
-            pending_count: pending_count.into(),
-        })
     }
 
     pub fn transaction_by_hash(
@@ -859,12 +831,12 @@ impl RpcImpl {
 
     fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
-        adaptive: bool, difficulty: Option<u64>,
+        adaptive: bool, difficulty: Option<u64>, pos_reference: Option<H256>,
     ) -> RpcResult<H256>
     {
         info!(
-            "RPC Request: generate_fixed_block({:?}, {:?}, {:?}, {:?})",
-            parent_hash, referee, num_txs, difficulty
+            "RPC Request: generate_fixed_block({:?}, {:?}, {:?}, {:?}, {:?})",
+            parent_hash, referee, num_txs, difficulty, pos_reference,
         );
         Ok(self.block_gen.generate_fixed_block(
             parent_hash,
@@ -872,6 +844,7 @@ impl RpcImpl {
             num_txs,
             difficulty.unwrap_or(0),
             adaptive,
+            pos_reference,
         )?)
     }
 
@@ -1526,6 +1499,16 @@ impl RpcImpl {
 
         Ok(Some(epoch_receipts))
     }
+
+    fn opened_method_groups(&self) -> RpcResult<Vec<String>> {
+        Ok(self
+            .config
+            .public_rpc_apis
+            .list_apis()
+            .into_iter()
+            .map(|item| format!("{}", item))
+            .collect::<Vec<String>>())
+    }
 }
 
 #[allow(dead_code)]
@@ -1561,6 +1544,8 @@ impl Cfx for CfxHandler {
                 -> BoxFuture<U256>;
             fn get_status(&self) -> JsonRpcResult<RpcStatus>;
             fn get_client_version(&self) -> JsonRpcResult<String>;
+            fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<Option<AccountPendingInfo>>;
+            fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
         }
 
         to self.rpc_impl {
@@ -1568,6 +1553,7 @@ impl Cfx for CfxHandler {
             fn account(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
+            fn pos_economics(&self, num: Option<EpochNumber>) -> BoxFuture<PoSEconomics>;
             fn admin(&self, address: RpcAddress, num: Option<EpochNumber>)
                 -> BoxFuture<Option<RpcAddress>>;
             fn sponsor_info(&self, address: RpcAddress, num: Option<EpochNumber>)
@@ -1590,14 +1576,13 @@ impl Cfx for CfxHandler {
             fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
             fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
             fn send_raw_transaction(&self, raw: Bytes) -> JsonRpcResult<H256>;
-            fn storage_at(&self, addr: RpcAddress, pos: H256, epoch_number: Option<EpochNumber>)
+            fn storage_at(&self, addr: RpcAddress, pos: U256, epoch_number: Option<EpochNumber>)
                 -> BoxFuture<Option<H256>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
-            fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<Option<AccountPendingInfo>>;
-            fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
             fn storage_root(&self, address: RpcAddress, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
+            fn opened_method_groups(&self) -> JsonRpcResult<Vec<String>>;
         }
     }
 }
@@ -1628,6 +1613,17 @@ impl TestRpc for TestRpcImpl {
             fn say_hello(&self) -> JsonRpcResult<String>;
             fn stop(&self) -> JsonRpcResult<()>;
             fn save_node_db(&self) -> JsonRpcResult<()>;
+            fn pos_register(&self, voting_power: U64) -> JsonRpcResult<(Bytes, AccountAddress)>;
+            fn pos_update_voting_power(
+                &self, pos_account: AccountAddress, increased_voting_power: U64,
+            ) -> JsonRpcResult<()>;
+            fn pos_retire_self(&self) -> JsonRpcResult<()>;
+            fn pos_start(&self) -> JsonRpcResult<()>;
+            fn pos_force_vote_proposal(&self, block_id: H256) -> JsonRpcResult<()>;
+            fn pos_force_propose(&self, round: U64, parent_block_id: H256, payload: Vec<TransactionPayload>) -> JsonRpcResult<()>;
+            fn pos_trigger_timeout(&self, timeout_type: String) -> JsonRpcResult<()>;
+            fn pos_force_sign_pivot_decision(&self, block_hash: H256, height: U64) -> JsonRpcResult<()>;
+            fn pos_get_chosen_proposal(&self) -> JsonRpcResult<Option<PosBlock>>;
         }
 
         to self.rpc_impl {
@@ -1643,7 +1639,7 @@ impl TestRpc for TestRpcImpl {
             fn get_pivot_chain_and_weight(&self, height_range: Option<(u64, u64)>) -> JsonRpcResult<Vec<(H256, U256)>>;
             fn get_executed_info(&self, block_hash: H256) -> JsonRpcResult<(H256, H256)> ;
             fn generate_fixed_block(
-                &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>)
+                &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>, pos_reference: Option<H256>)
                 -> JsonRpcResult<H256>;
             fn generate_one_block_with_direct_txgen(
                 &self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize, num_txs_erc20: usize)
@@ -1674,19 +1670,17 @@ impl LocalRpcImpl {
 impl LocalRpc for LocalRpcImpl {
     delegate! {
         to self.common {
-            fn clear_tx_pool(&self) -> JsonRpcResult<()>;
+            fn txpool_content(&self, address: Option<RpcAddress>) -> JsonRpcResult<
+                BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
+            fn txpool_inspect(&self, address: Option<RpcAddress>) -> JsonRpcResult<
+                BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
+            fn txpool_get_account_transactions(&self, address: RpcAddress) -> JsonRpcResult<Vec<RpcTransaction>>;
+            fn txpool_clear(&self) -> JsonRpcResult<()>;
             fn net_node(&self, id: NodeId) -> JsonRpcResult<Option<(String, Node)>>;
             fn net_disconnect_node(&self, id: NodeId, op: Option<UpdateNodeOperation>)
                 -> JsonRpcResult<bool>;
             fn net_sessions(&self, node_id: Option<NodeId>) -> JsonRpcResult<Vec<SessionDetails>>;
             fn net_throttling(&self) -> JsonRpcResult<throttling::Service>;
-            fn tx_inspect(&self, hash: H256) -> JsonRpcResult<TxWithPoolInfo>;
-            fn txpool_content(&self, address: Option<RpcAddress>) -> JsonRpcResult<
-                BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
-            fn txs_from_pool(&self, address: Option<RpcAddress>) -> JsonRpcResult<Vec<RpcTransaction>>;
-            fn txpool_inspect(&self, address: Option<RpcAddress>) -> JsonRpcResult<
-                BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<String>>>>>;
-            fn txpool_status(&self) -> JsonRpcResult<BTreeMap<String, usize>>;
             fn accounts(&self) -> JsonRpcResult<Vec<RpcAddress>>;
             fn new_account(&self, password: String) -> JsonRpcResult<RpcAddress>;
             fn unlock_account(
@@ -1695,7 +1689,6 @@ impl LocalRpc for LocalRpcImpl {
             fn lock_account(&self, address: RpcAddress) -> JsonRpcResult<bool>;
             fn sign(&self, data: Bytes, address: RpcAddress, password: Option<String>)
                 -> JsonRpcResult<H520>;
-            fn tx_inspect_pending(&self, address: RpcAddress) -> JsonRpcResult<TxPoolPendingInfo>;
 
         }
 

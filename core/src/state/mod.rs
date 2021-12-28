@@ -2,19 +2,25 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub use self::{
-    account_entry::{OverlayAccount, COMMISSION_PRIVILEGE_SPECIAL_KEY},
-    substate::{cleanup_mode, CallStackInfo, Substate},
+use std::{
+    collections::{hash_map::Entry, HashMap, HashSet},
+    sync::Arc,
 };
 
-use self::account_entry::{AccountEntry, AccountState};
-use crate::{hash::KECCAK_EMPTY, transaction_pool::SharedTransactionPool};
+use num::integer::Roots;
+use parking_lot::{
+    MappedRwLockWriteGuard, RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard,
+};
+
 use cfx_bytes::Bytes;
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };
 use cfx_parameters::{
-    internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+    internal_contract_addresses::{
+        POS_REGISTER_CONTRACT_ADDRESS,
+        SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+    },
     staking::*,
 };
 use cfx_state::{
@@ -27,19 +33,31 @@ use cfx_statedb::{
     StateDbGeneric as StateDb,
 };
 use cfx_storage::{utils::access_mode, StorageState, StorageStateTrait};
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
-use parking_lot::{
-    MappedRwLockWriteGuard, RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard,
+use cfx_types::{
+    address_util::AddressUtil, Address, BigEndianHash, H256, U256,
 };
+use diem_types::term_state::MAX_TERM_POINTS;
 #[cfg(test)]
 use primitives::storage::STORAGE_LAYOUT_REGULAR_V0;
 use primitives::{
     Account, DepositList, EpochId, SkipInputCheck, SponsorInfo, StorageKey,
     StorageLayout, StorageValue, VoteStakeList,
 };
-use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
-    sync::Arc,
+
+use crate::{
+    executive::{pos_internal_entries, IndexStatus},
+    hash::KECCAK_EMPTY,
+    spec::genesis::{
+        genesis_contract_address_four_year, genesis_contract_address_two_year,
+    },
+    trace::{AddressPocket, InternalTransferTracer},
+    transaction_pool::SharedTransactionPool,
+};
+
+use self::account_entry::{AccountEntry, AccountState};
+pub use self::{
+    account_entry::{OverlayAccount, COMMISSION_PRIVILEGE_SPECIAL_KEY},
+    substate::{cleanup_mode, CallStackInfo, Substate},
 };
 
 mod account_entry;
@@ -59,7 +77,7 @@ pub enum RequireCache {
 }
 
 #[derive(Copy, Clone, Debug)]
-struct StakingState {
+struct WorldStatistics {
     // This is the total number of CFX issued.
     total_issued_tokens: U256,
     // This is the total number of CFX used as staking.
@@ -71,6 +89,12 @@ struct StakingState {
     interest_rate_per_block: U256,
     // This is the accumulated interest rate.
     accumulate_interest_rate: U256,
+    // This is the total number of CFX used for pos staking.
+    total_pos_staking_tokens: U256,
+    // This is the total distributable interest.
+    distributable_pos_interest: U256,
+    // This is the block number of last .
+    last_distribute_block: u64,
 }
 
 pub type State = StateGeneric<StorageState>;
@@ -86,10 +110,10 @@ pub struct StateGeneric<StateDbStorage: StorageStateTrait> {
     // Contains the changes to the states and some unchanged state entries.
     cache: RwLock<HashMap<Address, AccountEntry>>,
     // TODO: try not to make it special?
-    staking_state: StakingState,
+    world_statistics: WorldStatistics,
 
     // Checkpoint to the changes.
-    staking_state_checkpoints: RwLock<Vec<StakingState>>,
+    world_statistics_checkpoints: RwLock<Vec<WorldStatistics>>,
     checkpoints: RwLock<Vec<HashMap<Address, Option<AccountEntry>>>>,
 }
 
@@ -126,12 +150,15 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
     /// checked out. This function should only be called in post-processing
     /// of a transaction.
     fn settle_collateral_for_all(
-        &mut self, substate: &Substate, account_start_nonce: U256,
-    ) -> DbResult<CollateralCheckResult> {
+        &mut self, substate: &Substate,
+        tracer: &mut dyn InternalTransferTracer, account_start_nonce: U256,
+    ) -> DbResult<CollateralCheckResult>
+    {
         for address in substate.keys_for_collateral_changed().iter() {
             match self.settle_collateral_for_address(
                 address,
                 substate,
+                tracer,
                 account_start_nonce,
             )? {
                 CollateralCheckResult::Valid => {}
@@ -145,13 +172,16 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
     // test cases breaks this assumption, which will be fixed in a separated PR.
     fn collect_and_settle_collateral(
         &mut self, original_sender: &Address, storage_limit: &U256,
-        substate: &mut Substate, account_start_nonce: U256,
+        substate: &mut Substate, tracer: &mut dyn InternalTransferTracer,
+        account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult>
     {
         self.collect_ownership_changed(substate)?;
-        let res = match self
-            .settle_collateral_for_all(substate, account_start_nonce)?
-        {
+        let res = match self.settle_collateral_for_all(
+            substate,
+            tracer,
+            account_start_nonce,
+        )? {
             CollateralCheckResult::Valid => {
                 self.check_storage_limit(original_sender, storage_limit)?
             }
@@ -231,7 +261,7 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
         debug!("state.compute_state_root");
 
         assert!(self.checkpoints.get_mut().is_empty());
-        assert!(self.staking_state_checkpoints.get_mut().is_empty());
+        assert!(self.world_statistics_checkpoints.get_mut().is_empty());
 
         let mut sorted_dirty_accounts =
             self.cache.get_mut().drain().collect::<Vec<_>>();
@@ -241,7 +271,8 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
         for (address, entry) in sorted_dirty_accounts.iter_mut() {
             entry.state = AccountState::Committed;
             match &mut entry.account {
-                None => {
+                None => {}
+                Some(account) if account.removed_without_update() => {
                     killed_addresses.push(*address);
                     self.accounts_to_notify.push(Err(*address));
                 }
@@ -251,12 +282,12 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
                         address,
                         debug_record.as_deref_mut(),
                     )?;
-                    self.accounts_to_notify.push(Ok(account.as_account()?));
+                    self.accounts_to_notify.push(Ok(account.as_account()));
                 }
             }
         }
         self.recycle_storage(killed_addresses, debug_record.as_deref_mut())?;
-        self.commit_staking_state(debug_record.as_deref_mut())?;
+        self.commit_world_statistics(debug_record.as_deref_mut())?;
         self.db.compute_state_root(debug_record)
     }
 
@@ -270,19 +301,24 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
         Ok(self.db.commit(epoch_id, debug_record)?)
     }
 }
+
 impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     for StateGeneric<StateDbStorage>
 {
     /// Calculate the secondary reward for the next block number.
-    fn bump_block_number_accumulate_interest(&mut self) -> U256 {
-        assert!(self.staking_state_checkpoints.get_mut().is_empty());
-        self.staking_state.accumulate_interest_rate =
-            self.staking_state.accumulate_interest_rate
+    fn bump_block_number_accumulate_interest(&mut self) {
+        assert!(self.world_statistics_checkpoints.get_mut().is_empty());
+        self.world_statistics.accumulate_interest_rate =
+            self.world_statistics.accumulate_interest_rate
                 * (*INTEREST_RATE_PER_BLOCK_SCALE
-                    + self.staking_state.interest_rate_per_block)
+                    + self.world_statistics.interest_rate_per_block)
                 / *INTEREST_RATE_PER_BLOCK_SCALE;
-        let secondary_reward = self.staking_state.total_storage_tokens
-            * self.staking_state.interest_rate_per_block
+    }
+
+    fn secondary_reward(&self) -> U256 {
+        assert!(self.world_statistics_checkpoints.read().is_empty());
+        let secondary_reward = self.world_statistics.total_storage_tokens
+            * self.world_statistics.interest_rate_per_block
             / *INTEREST_RATE_PER_BLOCK_SCALE;
         // TODO: the interest from tokens other than storage and staking should
         // send to public fund.
@@ -291,15 +327,88 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
 
     /// Maintain `total_issued_tokens`.
     fn add_total_issued(&mut self, v: U256) {
-        assert!(self.staking_state_checkpoints.get_mut().is_empty());
-        self.staking_state.total_issued_tokens += v;
+        assert!(self.world_statistics_checkpoints.get_mut().is_empty());
+        self.world_statistics.total_issued_tokens += v;
     }
 
     /// Maintain `total_issued_tokens`. This is only used in the extremely
     /// unlikely case that there are a lot of partial invalid blocks.
     fn subtract_total_issued(&mut self, v: U256) {
-        assert!(self.staking_state_checkpoints.get_mut().is_empty());
-        self.staking_state.total_issued_tokens -= v;
+        assert!(self.world_statistics_checkpoints.get_mut().is_empty());
+        self.world_statistics.total_issued_tokens -= v;
+    }
+
+    fn add_total_pos_staking(&mut self, v: U256) {
+        self.world_statistics.total_pos_staking_tokens += v;
+    }
+
+    fn inc_distributable_pos_interest(
+        &mut self, current_block_number: u64,
+    ) -> DbResult<()> {
+        assert!(self.world_statistics_checkpoints.get_mut().is_empty());
+
+        if current_block_number
+            > self.world_statistics.last_distribute_block + BLOCKS_PER_HOUR
+        {
+            return Ok(());
+        }
+
+        if self.world_statistics.total_pos_staking_tokens.is_zero() {
+            return Ok(());
+        }
+
+        let total_circulating_tokens = self.total_issued_tokens()
+            - self.balance(&Address::zero())?
+            - self.balance(&genesis_contract_address_four_year())?
+            - self.balance(&genesis_contract_address_two_year())?;
+        let total_pos_staking_tokens =
+            self.world_statistics.total_pos_staking_tokens;
+
+        // The `interest_amount` exactly equals to the floor of
+        // pos_amount * 4% / blocks_per_year / sqrt(pos_amount/total_issued)
+        let interest_amount =
+            sqrt_u256(total_circulating_tokens * total_pos_staking_tokens)
+                / (BLOCKS_PER_YEAR * INVERSE_INTEREST_RATE);
+        self.world_statistics.distributable_pos_interest += interest_amount;
+
+        Ok(())
+    }
+
+    /// Distribute PoS interest to the PoS committee according to their reward
+    /// points. Return the rewarded PoW accounts and their rewarded
+    /// interest.
+    fn distribute_pos_interest<'a>(
+        &mut self, pos_points: Box<dyn Iterator<Item = (&'a H256, u64)> + 'a>,
+        account_start_nonce: U256, current_block_number: u64,
+    ) -> DbResult<Vec<(Address, H256, U256)>>
+    {
+        assert!(self.world_statistics_checkpoints.get_mut().is_empty());
+
+        let distributable_pos_interest =
+            self.world_statistics.distributable_pos_interest;
+
+        let mut account_rewards = Vec::new();
+        for (identifier, points) in pos_points {
+            let address_value = self.storage_at(
+                &POS_REGISTER_CONTRACT_ADDRESS,
+                &pos_internal_entries::address_entry(&identifier),
+            )?;
+            let address = Address::from(H256::from_uint(&address_value));
+            let interest =
+                distributable_pos_interest * points / MAX_TERM_POINTS;
+            account_rewards.push((address, *identifier, interest));
+            self.add_pos_interest(
+                &address,
+                &interest,
+                CleanupMode::ForceCreate, /* Same as distributing block
+                                           * reward. */
+                account_start_nonce,
+            )?;
+        }
+        self.world_statistics.distributable_pos_interest = U256::zero();
+        self.world_statistics.last_distribute_block = current_block_number;
+
+        Ok(account_rewards)
     }
 
     fn new_contract_with_admin(
@@ -331,7 +440,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn is_contract_with_code(&self, address: &Address) -> DbResult<bool> {
-        if !address.is_contract_address() {
+        if !address.maybe_contract_address() {
             return Ok(false);
         }
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
@@ -628,9 +737,21 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         )
     }
 
+    // This is a special implementation to fix the bug in function
+    // `clean_account` while not changing the genesis result.
+    fn genesis_special_clean_account(
+        &mut self, address: &Address,
+    ) -> DbResult<()> {
+        let mut account = Account::new_empty(address);
+        account.code_hash = H256::default();
+        *&mut *self.require_or_new_basic_account(address, &U256::zero())? =
+            OverlayAccount::from_loaded(address, account);
+        Ok(())
+    }
+
     fn clean_account(&mut self, address: &Address) -> DbResult<()> {
         *&mut *self.require_or_new_basic_account(address, &U256::zero())? =
-            OverlayAccount::from_loaded(address, Default::default());
+            OverlayAccount::from_loaded(address, Account::new_empty(address));
         Ok(())
     }
 
@@ -674,27 +795,27 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         Ok(())
     }
 
+    fn add_pos_interest(
+        &mut self, address: &Address, interest: &U256,
+        cleanup_mode: CleanupMode, account_start_nonce: U256,
+    ) -> DbResult<()>
+    {
+        self.add_total_issued(*interest);
+        self.add_balance(address, interest, cleanup_mode, account_start_nonce)?;
+        self.require_or_new_basic_account(address, &account_start_nonce)?
+            .record_interest_receive(interest);
+        Ok(())
+    }
+
     fn add_balance(
         &mut self, address: &Address, by: &U256, cleanup_mode: CleanupMode,
         account_start_nonce: U256,
     ) -> DbResult<()>
     {
         let exists = self.exists(address)?;
-        if !address.is_valid_address() {
-            // Sending to invalid addresses are not allowed. Note that this
-            // check is required because at serialization we assume
-            // only valid addresses.
-            //
-            // There are checks to forbid it at transact level.
-            //
-            // The logic here is intended for incorrect miner coin-base. In this
-            // case, the mining reward get lost.
-            debug!(
-                "add_balance: address does not already exist and is not a valid address. {:?}",
-                address
-            );
-            return Ok(());
-        }
+
+        // The caller should guarantee the validity of address.
+
         if !by.is_zero()
             || (cleanup_mode == CleanupMode::ForceCreate && !exists)
         {
@@ -733,11 +854,11 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
                 )?;
                 account.deposit(
                     *amount,
-                    self.staking_state.accumulate_interest_rate,
+                    self.world_statistics.accumulate_interest_rate,
                     current_block_number,
                 );
             }
-            self.staking_state.total_staking_tokens += *amount;
+            self.world_statistics.total_staking_tokens += *amount;
         }
         Ok(())
     }
@@ -754,12 +875,12 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
                 )?;
                 interest = account.withdraw(
                     *amount,
-                    self.staking_state.accumulate_interest_rate,
+                    self.world_statistics.accumulate_interest_rate,
                 );
             }
             // the interest will be put in balance.
-            self.staking_state.total_issued_tokens += interest;
-            self.staking_state.total_staking_tokens -= *amount;
+            self.world_statistics.total_issued_tokens += interest;
+            self.world_statistics.total_staking_tokens -= *amount;
             Ok(interest)
         } else {
             Ok(U256::zero())
@@ -795,15 +916,27 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn total_issued_tokens(&self) -> U256 {
-        self.staking_state.total_issued_tokens
+        self.world_statistics.total_issued_tokens
     }
 
     fn total_staking_tokens(&self) -> U256 {
-        self.staking_state.total_staking_tokens
+        self.world_statistics.total_staking_tokens
     }
 
     fn total_storage_tokens(&self) -> U256 {
-        self.staking_state.total_storage_tokens
+        self.world_statistics.total_storage_tokens
+    }
+
+    fn total_pos_staking_tokens(&self) -> U256 {
+        self.world_statistics.total_pos_staking_tokens
+    }
+
+    fn distributable_pos_interest(&self) -> U256 {
+        self.world_statistics.distributable_pos_interest
+    }
+
+    fn last_distribute_block(&self) -> u64 {
+        self.world_statistics.last_distribute_block
     }
 
     fn remove_contract(&mut self, address: &Address) -> DbResult<()> {
@@ -818,7 +951,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
             self.cache.get_mut(),
             self.checkpoints.get_mut(),
             address,
-            AccountEntry::new_dirty(None),
+            AccountEntry::new_dirty(Some(OverlayAccount::new_removed(address))),
         );
 
         Ok(())
@@ -853,6 +986,43 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         }
         Ok(())
     }
+
+    fn pos_locked_staking(&self, address: &Address) -> DbResult<U256> {
+        let identifier = BigEndianHash::from_uint(&self.storage_at(
+            &POS_REGISTER_CONTRACT_ADDRESS,
+            &pos_internal_entries::identifier_entry(address),
+        )?);
+        let current_value: IndexStatus = self
+            .storage_at(
+                &POS_REGISTER_CONTRACT_ADDRESS,
+                &pos_internal_entries::index_entry(&identifier),
+            )?
+            .into();
+        Ok(*POS_VOTE_PRICE * current_value.locked())
+    }
+
+    fn update_pos_status(
+        &mut self, identifier: H256, number: u64,
+    ) -> DbResult<()> {
+        let old_value = self.storage_at(
+            &POS_REGISTER_CONTRACT_ADDRESS,
+            &pos_internal_entries::index_entry(&identifier),
+        )?;
+        assert!(!old_value.is_zero(), "If an identifier is unlocked, its index information must be non-zero");
+        let mut status: IndexStatus = old_value.into();
+        let new_unlocked = number - status.unlocked;
+        status.set_unlocked(number);
+        // .expect("Incorrect unlock information");
+        self.require_exists(&POS_REGISTER_CONTRACT_ADDRESS, false)?
+            .change_storage_value(
+                &self.db,
+                &pos_internal_entries::index_entry(&identifier),
+                status.into(),
+            )?;
+        self.world_statistics.total_pos_staking_tokens -=
+            *POS_VOTE_PRICE * new_unlocked;
+        Ok(())
+    }
 }
 
 impl<StateDbStorage: StorageStateTrait> CheckpointTrait
@@ -863,9 +1033,9 @@ impl<StateDbStorage: StorageStateTrait> CheckpointTrait
     /// creation time of the checkpoint and updated after that and before
     /// the creation of the next checkpoint.
     fn checkpoint(&mut self) -> usize {
-        self.staking_state_checkpoints
+        self.world_statistics_checkpoints
             .get_mut()
-            .push(self.staking_state.clone());
+            .push(self.world_statistics.clone());
         let checkpoints = self.checkpoints.get_mut();
         let index = checkpoints.len();
         checkpoints.push(HashMap::new());
@@ -880,7 +1050,7 @@ impl<StateDbStorage: StorageStateTrait> CheckpointTrait
         // merge with previous checkpoint
         let last = self.checkpoints.get_mut().pop();
         if let Some(mut checkpoint) = last {
-            self.staking_state_checkpoints.get_mut().pop();
+            self.world_statistics_checkpoints.get_mut().pop();
             if let Some(ref mut prev) = self.checkpoints.get_mut().last_mut() {
                 if prev.is_empty() {
                     **prev = checkpoint;
@@ -896,8 +1066,8 @@ impl<StateDbStorage: StorageStateTrait> CheckpointTrait
     /// Revert to the last checkpoint and discard it.
     fn revert_to_checkpoint(&mut self) {
         if let Some(mut checkpoint) = self.checkpoints.get_mut().pop() {
-            self.staking_state = self
-                .staking_state_checkpoints
+            self.world_statistics = self
+                .world_statistics_checkpoints
                 .get_mut()
                 .pop()
                 .expect("staking_state_checkpoint should exist");
@@ -933,15 +1103,21 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         let total_issued_tokens = db.get_total_issued_tokens()?;
         let total_staking_tokens = db.get_total_staking_tokens()?;
         let total_storage_tokens = db.get_total_storage_tokens()?;
+        let total_pos_staking_tokens = db.get_total_pos_staking_tokens()?;
+        let distributable_pos_interest = db.get_distributable_pos_interest()?;
+        let last_distribute_block = db.get_last_distribute_block()?;
 
-        let staking_state = if db.is_initialized()? {
-            StakingState {
+        let world_stat = if db.is_initialized()? {
+            WorldStatistics {
                 total_issued_tokens,
                 total_staking_tokens,
                 total_storage_tokens,
                 interest_rate_per_block: annual_interest_rate
                     / U256::from(BLOCKS_PER_YEAR),
                 accumulate_interest_rate,
+                total_pos_staking_tokens,
+                distributable_pos_interest,
+                last_distribute_block,
             }
         } else {
             // If db is not initialized, all the loaded value should be zero.
@@ -965,22 +1141,37 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 total_storage_tokens.is_zero(),
                 "total_storage_tokens is non-zero when db is un-init"
             );
+            assert!(
+                total_pos_staking_tokens.is_zero(),
+                "total_pos_staking_tokens is non-zero when db is un-init"
+            );
+            assert!(
+                distributable_pos_interest.is_zero(),
+                "distributable_pos_interest is non-zero when db is un-init"
+            );
+            assert!(
+                last_distribute_block == 0,
+                "last_distribute_block is non-zero when db is un-init"
+            );
 
-            StakingState {
+            WorldStatistics {
                 total_issued_tokens: U256::default(),
                 total_staking_tokens: U256::default(),
                 total_storage_tokens: U256::default(),
                 interest_rate_per_block: *INITIAL_INTEREST_RATE_PER_BLOCK,
                 accumulate_interest_rate: *ACCUMULATED_INTEREST_RATE_SCALE,
+                total_pos_staking_tokens: U256::default(),
+                distributable_pos_interest: U256::default(),
+                last_distribute_block: u64::default(),
             }
         };
 
         Ok(StateGeneric {
             db,
             cache: Default::default(),
-            staking_state_checkpoints: Default::default(),
+            world_statistics_checkpoints: Default::default(),
             checkpoints: Default::default(),
-            staking_state,
+            world_statistics: world_stat,
             accounts_to_notify: Default::default(),
         })
     }
@@ -988,7 +1179,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     /// Charges or refund storage collateral and update `total_storage_tokens`.
     fn settle_collateral_for_address(
         &mut self, addr: &Address, substate: &dyn SubstateTrait,
-        account_start_nonce: U256,
+        tracer: &mut dyn InternalTransferTracer, account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult>
     {
         let (inc_collaterals, sub_collaterals) =
@@ -998,11 +1189,23 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             *DRIPS_PER_STORAGE_COLLATERAL_UNIT * sub_collaterals,
         );
 
+        let is_contract = self.is_contract_with_code(addr)?;
+
         if !sub.is_zero() {
+            tracer.prepare_internal_transfer_action(
+                /* from */ AddressPocket::StorageCollateral(*addr),
+                /* to */
+                if is_contract {
+                    AddressPocket::SponsorBalanceForStorage(*addr)
+                } else {
+                    AddressPocket::Balance(*addr)
+                },
+                sub,
+            );
             self.sub_collateral_for_storage(addr, &sub, account_start_nonce)?;
         }
         if !inc.is_zero() {
-            let balance = if addr.is_contract_address() {
+            let balance = if is_contract {
                 self.sponsor_balance_for_collateral(addr)?
             } else {
                 self.balance(addr)?
@@ -1014,6 +1217,17 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                     got: balance,
                 });
             }
+            tracer.prepare_internal_transfer_action(
+                /* from */
+                if is_contract {
+                    AddressPocket::SponsorBalanceForStorage(*addr)
+                } else {
+                    AddressPocket::Balance(*addr)
+                },
+                /* to */ AddressPocket::StorageCollateral(*addr),
+                sub,
+            );
+
             self.add_collateral_for_storage(addr, &inc)?;
         }
         Ok(CollateralCheckResult::Valid)
@@ -1052,6 +1266,15 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         Ok(())
     }
 
+    #[cfg(test)]
+    pub fn new_contract_with_code(
+        &mut self, contract: &Address, balance: U256, nonce: U256,
+    ) -> DbResult<()> {
+        self.new_contract(contract, balance, nonce)?;
+        self.init_code(&contract, vec![0x12, 0x34], Address::zero())?;
+        Ok(())
+    }
+
     /// Caller should make sure that staking_balance for this account is
     /// sufficient enough.
     fn add_collateral_for_storage(
@@ -1060,7 +1283,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         if !by.is_zero() {
             self.require_exists(address, false)?
                 .add_collateral_for_storage(by);
-            self.staking_state.total_storage_tokens += *by;
+            self.world_statistics.total_storage_tokens += *by;
         }
         Ok(())
     }
@@ -1075,8 +1298,8 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             self.require_or_new_basic_account(address, &account_start_nonce)?
                 .sub_collateral_for_storage(refundable);
         }
-        self.staking_state.total_storage_tokens -= *by;
-        self.staking_state.total_issued_tokens -= burnt;
+        self.world_statistics.total_storage_tokens -= *by;
+        self.world_statistics.total_issued_tokens -= burnt;
 
         Ok(())
     }
@@ -1120,28 +1343,40 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         }
     }
 
-    fn commit_staking_state(
+    fn commit_world_statistics(
         &mut self, mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()> {
         self.db.set_annual_interest_rate(
-            &(self.staking_state.interest_rate_per_block
+            &(self.world_statistics.interest_rate_per_block
                 * U256::from(BLOCKS_PER_YEAR)),
             debug_record.as_deref_mut(),
         )?;
         self.db.set_accumulate_interest_rate(
-            &self.staking_state.accumulate_interest_rate,
+            &self.world_statistics.accumulate_interest_rate,
             debug_record.as_deref_mut(),
         )?;
         self.db.set_total_issued_tokens(
-            &self.staking_state.total_issued_tokens,
+            &self.world_statistics.total_issued_tokens,
             debug_record.as_deref_mut(),
         )?;
         self.db.set_total_staking_tokens(
-            &self.staking_state.total_staking_tokens,
+            &self.world_statistics.total_staking_tokens,
             debug_record.as_deref_mut(),
         )?;
         self.db.set_total_storage_tokens(
-            &self.staking_state.total_storage_tokens,
+            &self.world_statistics.total_storage_tokens,
+            debug_record.as_deref_mut(),
+        )?;
+        self.db.set_total_pos_staking_tokens(
+            &self.world_statistics.total_pos_staking_tokens,
+            debug_record.as_deref_mut(),
+        )?;
+        self.db.set_distributable_pos_interest(
+            &self.world_statistics.distributable_pos_interest,
+            debug_record.as_deref_mut(),
+        )?;
+        self.db.set_last_distribute_block(
+            self.world_statistics.last_distribute_block,
             debug_record,
         )?;
         Ok(())
@@ -1409,6 +1644,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         }
     }
 
+    #[cfg(test)]
     pub fn set_storage_layout(
         &mut self, address: &Address, layout: StorageLayout,
     ) -> DbResult<()> {
@@ -1519,23 +1755,19 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         &self, address: &Address, account_start_nonce: &U256,
     ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>> {
         self.require_or_set(address, false, |address| {
-            if address.is_valid_address() {
-                // Note that it is possible to first send money to a pre-calculated contract
-                // address and then deploy contracts. So we are going to *allow* sending to a contract
-                // address and use new_basic() to create a *stub* there. Because the contract serialization
-                // is a super-set of the normal address serialization, this should just work.
-                Ok(OverlayAccount::new_basic(
-                    address,
-                    U256::zero(),
-                    account_start_nonce.into(),
-                    None,
-                ))
-            } else {
-                unreachable!(
-                    "address does not already exist and is not an user account. {:?}",
-                    address
-                )
-            }
+            // It is guaranteed that the address is valid.
+
+            // Note that it is possible to first send money to a pre-calculated
+            // contract address and then deploy contracts. So we are
+            // going to *allow* sending to a contract address and
+            // use new_basic() to create a *stub* there. Because the contract
+            // serialization is a super-set of the normal address
+            // serialization, this should just work.
+            Ok(OverlayAccount::new_basic(
+                address,
+                U256::zero(),
+                account_start_nonce.into(),
+            ))
         })
     }
 
@@ -1598,19 +1830,27 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     #[cfg(any(test, feature = "testonly_code"))]
     pub fn clear(&mut self) {
         assert!(self.checkpoints.get_mut().is_empty());
-        assert!(self.staking_state_checkpoints.get_mut().is_empty());
+        assert!(self.world_statistics_checkpoints.get_mut().is_empty());
         self.cache.get_mut().clear();
-        self.staking_state.interest_rate_per_block =
+        self.world_statistics.interest_rate_per_block =
             self.db.get_annual_interest_rate().expect("no db error")
                 / U256::from(BLOCKS_PER_YEAR);
-        self.staking_state.accumulate_interest_rate =
+        self.world_statistics.accumulate_interest_rate =
             self.db.get_accumulate_interest_rate().expect("no db error");
-        self.staking_state.total_issued_tokens =
+        self.world_statistics.total_issued_tokens =
             self.db.get_total_issued_tokens().expect("no db error");
-        self.staking_state.total_staking_tokens =
+        self.world_statistics.total_staking_tokens =
             self.db.get_total_staking_tokens().expect("no db error");
-        self.staking_state.total_storage_tokens =
+        self.world_statistics.total_storage_tokens =
             self.db.get_total_storage_tokens().expect("no db error");
+        self.world_statistics.total_pos_staking_tokens =
+            self.db.get_total_pos_staking_tokens().expect("no db error");
+        self.world_statistics.distributable_pos_interest = self
+            .db
+            .get_distributable_pos_interest()
+            .expect("no db error");
+        self.world_statistics.last_distribute_block =
+            self.db.get_last_distribute_block().expect("no db error");
     }
 }
 
@@ -1622,4 +1862,37 @@ trait AccountEntryProtectedMethods {
     fn code_size(&self) -> Option<usize>;
     fn code(&self) -> Option<Arc<Bytes>>;
     fn code_owner(&self) -> Option<Address>;
+}
+
+fn sqrt_u256(input: U256) -> U256 {
+    let bits = input.bits();
+    if bits <= 64 {
+        return input.as_u64().sqrt().into();
+    }
+
+    /************************************************************
+     ** Step 1: pick the most significant 64 bits and estimate an
+     ** approximate root.
+     ************************************************************
+     **/
+    let significant_bits = 64 - bits % 2;
+    // The `rest_bits` must be even number.
+    let rest_bits = bits - significant_bits;
+    // The `input >> rest_bits` has `significant_bits`
+    let significant_word = (input >> rest_bits).as_u64();
+    // The `init_root` is slightly larger than the correct root.
+    let init_root =
+        U256::from(significant_word.sqrt() + 1u64) << (rest_bits / 2);
+
+    /******************************************************************
+     ** Step 2: use the Newton's method to estimate the accurate value.
+     ******************************************************************
+     **/
+    let mut root = init_root;
+    // Will iterate for at most 4 rounds.
+    while root * root > input {
+        root = (input / root + root) / 2;
+    }
+
+    root
 }

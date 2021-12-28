@@ -3,12 +3,13 @@ import random
 
 import eth_utils
 import rlp
+import json
 
 from .address import hex_to_b32_address, b32_address_to_hex
 from .config import DEFAULT_PY_TEST_CHAIN_ID, default_config
 from .transactions import CONTRACT_DEFAULT_GAS, Transaction, UnsignedTransaction
 from .filter import Filter
-from .utils import priv_to_addr, sha3_256, int_to_bytes, convert_to_nodeid
+from .utils import priv_to_addr, sha3_256, int_to_bytes, convert_to_nodeid, int_to_hex
 
 import sys
 sys.path.append("..")
@@ -18,9 +19,17 @@ from test_framework.util import (
     assert_greater_than_or_equal,
     assert_is_hash_string,
     assert_is_hex_string,
-    wait_until, checktx
+    wait_until, checktx, get_contract_instance
 )
 
+
+file_dir = os.path.dirname(os.path.realpath(__file__))
+REQUEST_BASE = {
+    'gas': CONTRACT_DEFAULT_GAS,
+    'gasPrice': 1,
+    'chainId': 1,
+    "to": b'',
+}
 
 def convert_b32_address_field_to_hex(original_dict: dict, field_name: str):
     if original_dict is not None and field_name in original_dict and original_dict[field_name] not in [None, "null"]:
@@ -98,7 +107,8 @@ class RpcClient:
     def generate_blocks_to_state(self, num_blocks: int = 5, num_txs: int = 1) -> list:
         return self.generate_blocks(num_blocks, num_txs)
 
-    def generate_block_with_parent(self, parent_hash: str, referee: list = [], num_txs: int = 0, adaptive: bool = False) -> str:
+    def generate_block_with_parent(self, parent_hash: str, referee: list = [], num_txs: int = 0, adaptive: bool = False,
+                                   difficulty=None, pos_reference=None) -> str:
         assert_is_hash_string(parent_hash)
 
         for r in referee:
@@ -106,7 +116,7 @@ class RpcClient:
 
         assert_greater_than_or_equal(num_txs, 0)
         # print(parent_hash)
-        block_hash = self.node.generatefixedblock(parent_hash, referee, num_txs, adaptive)
+        block_hash = self.node.generatefixedblock(parent_hash, referee, num_txs, adaptive, difficulty, pos_reference)
         assert_is_hash_string(block_hash)
         return block_hash
 
@@ -267,7 +277,7 @@ class RpcClient:
         return tx_hash
 
     def clear_tx_pool(self):
-        self.node.clear_tx_pool()
+        self.node.txpool_clear()
 
 
     def send_tx(self, tx: Transaction, wait_for_receipt=False, wait_for_catchup=True) -> str:
@@ -322,10 +332,10 @@ class RpcClient:
         return tx
 
     def new_tx(self, sender = None, receiver = None, nonce = None, gas_price=1, gas=21000, value=100, data=b'', sign=True, priv_key=None, storage_limit=None, epoch_height=0, chain_id=DEFAULT_PY_TEST_CHAIN_ID):
+        if priv_key is None:
+            priv_key = default_config["GENESIS_PRI_KEY"]
         if sender is None:
-            sender = self.GENESIS_ADDR
-            if priv_key is None:
-                priv_key = default_config["GENESIS_PRI_KEY"]
+            sender = eth_utils.encode_hex(priv_to_addr(priv_key))
 
         if receiver is None:
             receiver = self.COINBASE_ADDR
@@ -398,7 +408,7 @@ class RpcClient:
 
     def txpool_status(self) -> (int, int):
         status = self.node.txpool_status()
-        return (status["deferred"], status["ready"])
+        return (eth_utils.to_int(hexstr = status["deferred"]), eth_utils.to_int(hexstr = status["ready"]))
 
     def new_tx_for_call(self, contract_addr:str, data_hex:str, nonce:int=None, sender:str=None):
         if sender is None:
@@ -489,3 +499,87 @@ class RpcClient:
 
     def filter_trace(self, filter: dict):
         return self.node.trace_filter(filter)
+
+    def wait_for_pos_register(self, priv_key=None, stake_value=2_000_000, voting_power=None):
+        if priv_key is None:
+            priv_key = self.node.pow_sk
+        if voting_power is None:
+            voting_power = stake_value // default_config["POS_VOTE_COUNT"]
+        address = eth_utils.encode_hex(priv_to_addr(priv_key))
+        initial_tx = self.new_tx(receiver=address, value=(stake_value + 20) * 10 ** 18)
+        self.send_tx(initial_tx, wait_for_receipt=True)
+        stake_tx = self.new_tx(priv_key=priv_key, data=stake_tx_data(stake_value), value=0, receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
+        self.send_tx(stake_tx, wait_for_receipt=True)
+        data, pos_identifier = self.node.pos_register(int_to_hex(voting_power))
+        register_tx = self.new_tx(priv_key=priv_key, data=eth_utils.decode_hex(data), value=0, receiver="0x0888000000000000000000000000000000000005", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+        self.send_tx(register_tx, wait_for_receipt=True)
+        return pos_identifier, priv_key
+
+    def wait_for_unstake(self, priv_key=None, unstake_value=2_000_000):
+        if priv_key is None:
+            priv_key = self.node.pow_sk
+        unstake_tx = self.new_tx(priv_key=priv_key, data=unstake_tx_data(unstake_value), value=0, receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
+        self.send_tx(unstake_tx, wait_for_receipt=True)
+
+    def pos_retire_self(self):
+        retire_tx = self.new_tx(priv_key=self.node.pow_sk, data=retire_tx_data(), value=0, receiver="0x0888000000000000000000000000000000000005", gas=6_000_000)
+        self.send_tx(retire_tx, wait_for_receipt=True)
+
+    def pos_get_consensus_blocks(self):
+        return self.node.pos_getConsensusBlocks()
+
+    def pos_status(self):
+        return self.node.pos_getStatus()
+
+    def pos_get_block(self, block):
+        if isinstance(block, str) and len(block) == 34:
+            return self.node.pos_getBlockByHash(block)
+        else:
+            if isinstance(block, int):
+                block = int_to_hex(block)
+            return self.node.pos_getBlockByNumber(block)
+
+    def pos_proposal_timeout(self):
+        return self.node.pos_trigger_timeout("proposal")
+
+    def pos_local_timeout(self):
+        return self.node.pos_trigger_timeout("local")
+
+    def pos_new_round_timeout(self):
+        return self.node.pos_trigger_timeout("new_round")
+
+    def pos_force_sign_pivot_decision(self, block_hash, height):
+        return self.node.pos_force_sign_pivot_decision(block_hash, height)
+
+    def pos_get_chosen_proposal(self):
+        return self.node.pos_get_chosen_proposal()
+
+    def pos_get_account(self, account_address, view=None):
+        if view is None:
+            return self.node.pos_getAccount(account_address)
+        else:
+            return self.node.pos_getAccount(account_address, view)
+
+
+def stake_tx_data(staking_value: int):
+    staking_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/Staking.json"), "r").read())
+    staking_contract = get_contract_instance(contract_dict=staking_contract_dict)
+    return get_contract_function_data(staking_contract, "deposit", args=[staking_value * 10 ** 18])
+
+def unstake_tx_data(unstaking_value: int):
+    staking_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/Staking.json"), "r").read())
+    staking_contract = get_contract_instance(contract_dict=staking_contract_dict)
+    return get_contract_function_data(staking_contract, "withdraw", args=[unstaking_value * 10 ** 18])
+
+def retire_tx_data():
+    register_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/PoSRegister.json"), "r").read())
+    register_contract = get_contract_instance(contract_dict=register_contract_dict)
+    return get_contract_function_data(register_contract, "retire", args=[2_000])
+
+def get_contract_function_data(contract, name, args):
+    func = getattr(contract.functions, name)
+    attrs = {
+        **REQUEST_BASE,
+    }
+    tx_data = func(*args).buildTransaction(attrs)
+    return eth_utils.decode_hex(tx_data['data'])

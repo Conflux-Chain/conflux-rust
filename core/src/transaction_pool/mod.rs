@@ -197,6 +197,12 @@ impl TransactionPool {
         self.inner.read().get(tx_hash)
     }
 
+    pub fn get_transaction_by_address2nonce(
+        &self, address: Address, nonce: U256,
+    ) -> Option<Arc<SignedTransaction>> {
+        self.inner.read().get_by_address2nonce(address, nonce)
+    }
+
     pub fn check_tx_packed_in_deferred_pool(&self, tx_hash: &H256) -> bool {
         self.inner.read().check_tx_packed_in_deferred_pool(tx_hash)
     }
@@ -206,6 +212,13 @@ impl TransactionPool {
             .read()
             .get_local_nonce_and_balance(address)
             .unwrap_or((0.into(), 0.into()))
+    }
+
+    pub fn get_next_nonce(&self, address: &Address) -> U256 {
+        let (state_nonce, _) = self
+            .get_state_account_info(address)
+            .unwrap_or((0.into(), 0.into()));
+        self.inner.read().get_next_nonce(address, state_nonce)
     }
 
     pub fn get_account_pending_info(
@@ -300,18 +313,6 @@ impl TransactionPool {
             }
         }
 
-        // ensure the pool has enough quota to insert new transactions.
-        let quota = self
-            .inner
-            .write_with_metric(&INSERT_TXS_QUOTA_LOCK)
-            .remaining_quota();
-        if quota < transactions.len() {
-            for tx in transactions.split_off(quota) {
-                trace!("failed to insert tx into pool (quota not enough), hash = {:?}", tx.hash);
-                failure.insert(tx.hash, "txpool is full".into());
-            }
-        }
-
         if transactions.is_empty() {
             INSERT_TXS_SUCCESS_TPS.mark(passed_transactions.len());
             INSERT_TXS_FAILURE_TPS.mark(failure.len());
@@ -330,23 +331,29 @@ impl TransactionPool {
                 let mut to_prop = self.to_propagate_trans.write();
 
                 for tx in signed_trans {
-                    if let Err(e) = self.add_transaction_with_readiness_check(
-                        &mut *inner,
-                        &account_cache,
-                        tx.clone(),
-                        false,
-                        false,
-                    ) {
-                        debug!(
+                    if inner.get(&tx.hash).is_none() {
+                        if let Err(e) = self
+                            .add_transaction_with_readiness_check(
+                                &mut *inner,
+                                &account_cache,
+                                tx.clone(),
+                                false,
+                                false,
+                            )
+                        {
+                            debug!(
                             "tx {:?} fails to be inserted to pool, err={:?}",
                             &tx.hash, e
                         );
-                        failure.insert(tx.hash(), e);
-                        continue;
-                    }
-                    passed_transactions.push(tx.clone());
-                    if !to_prop.contains_key(&tx.hash) {
-                        to_prop.insert(tx.hash, tx);
+                            failure.insert(tx.hash(), e);
+                            continue;
+                        }
+                        passed_transactions.push(tx.clone());
+                        if !to_prop.contains_key(&tx.hash)
+                            && to_prop.len() < inner.capacity()
+                        {
+                            to_prop.insert(tx.hash, tx);
+                        }
                     }
                 }
             }

@@ -8,6 +8,7 @@ use crate::{
     message::{GetMaybeRequestId, Message, MessageProtocolVersionBound, MsgId},
 };
 use network::service::ProtocolVersion;
+use rlp::Encodable;
 
 // generate `pub mod msgid`
 build_msgid! {

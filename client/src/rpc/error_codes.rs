@@ -130,6 +130,17 @@ pub mod codes {
     /// Call() execution error. This is clearly an application level error code,
     /// but we keep the error code to be ethereum rpc client compatible.
     pub const CALL_EXECUTION_ERROR: i64 = -32015;
+
+    /* PoS chain is not started */
+    pub const POS_NOT_ENABLED: i64 = -32078;
+}
+
+pub fn build_rpc_server_error(code: i64, message: String) -> Error {
+    Error {
+        code: ErrorCode::ServerError(code),
+        message,
+        data: None,
+    }
 }
 
 pub fn unimplemented(details: Option<String>) -> Error {
@@ -177,7 +188,7 @@ pub fn request_rejected_in_catch_up_mode(details: Option<String>) -> Error {
 pub fn pivot_assumption_failed(expected: H256, got: H256) -> Error {
     Error {
         code: ErrorCode::ServerError(codes::CONFLUX_PIVOT_CHAIN_UNSTABLE),
-        message: "Pivot assumption failed".into(),
+        message: "pivot chain assumption failed".into(),
         data: Some(Value::String(format!(
             "pivot assumption: {:?}, actual pivot hash: {:?}",
             expected, got

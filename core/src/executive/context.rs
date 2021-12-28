@@ -8,10 +8,10 @@ use crate::{
     bytes::Bytes,
     machine::Machine,
     state::CallStackInfo,
-    trace::{trace::ExecTrace, Tracer},
+    trace::Tracer,
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
-        ContractCreateResult, CreateContractAddress, Env, Error,
+        ContractCreateResult, CreateContractAddress, CreateType, Env, Error,
         MessageCallResult, ReturnData, Spec, TrapKind,
     },
 };
@@ -178,6 +178,7 @@ impl<
         ::std::result::Result<ContractCreateResult, TrapKind>,
     >
     {
+        let create_type = CreateType::from_address_scheme(&address_scheme);
         // create new contract address
         let (address, code_hash) = self::contract_address(
             address_scheme,
@@ -211,6 +212,7 @@ impl<
             code_hash,
             data: None,
             call_type: CallType::None,
+            create_type,
             params_type: vm::ParamsType::Embedded,
         };
 
@@ -266,6 +268,7 @@ impl<
             code_hash,
             data: Some(data.to_vec()),
             call_type,
+            create_type: CreateType::None,
             params_type: vm::ParamsType::Separate,
         };
 
@@ -376,8 +379,8 @@ impl<
     }
 
     fn suicide(
-        &mut self, refund_address: &Address,
-        tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
+        &mut self, refund_address: &Address, tracer: &mut dyn Tracer,
+        account_start_nonce: U256,
     ) -> vm::Result<()>
     {
         if self.is_static_or_reentrancy() {
@@ -495,6 +498,8 @@ mod tests {
             accumulated_gas_used: 0.into(),
             gas_limit: 0.into(),
             epoch_height: 0,
+            pos_view: None,
+            finalized_epoch: None,
             transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
         }
     }
@@ -721,7 +726,11 @@ mod tests {
         contract_address.set_contract_type_bits();
         origin.address = contract_address;
         state
-            .new_contract(&contract_address, U256::zero(), U256::one())
+            .new_contract_with_code(
+                &contract_address,
+                U256::zero(),
+                U256::one(),
+            )
             .expect(&concat!(file!(), ":", line!(), ":", column!()));
         state
             .init_code(

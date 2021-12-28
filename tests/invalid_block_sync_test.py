@@ -13,19 +13,19 @@ from test_framework.util import *
 
 CHAIN_LEN = 400
 class InvalidBodyNode(DefaultNode):
-    def __init__(self):
-        super().__init__()
-        correct_chain = create_chain_of_blocks(parent_hash=self.genesis.hash, parent_height=0, count=CHAIN_LEN)
+    def __init__(self, genesis):
+        super().__init__(genesis)
+        correct_chain = create_chain_of_blocks(parent_hash=self.genesis, parent_height=0, count=CHAIN_LEN)
         invalid_tx = create_transaction(chain_id=0)
-        invalid_body_block = create_block(parent_hash=self.genesis.hash, height=1, transactions=[invalid_tx],
+        invalid_body_block = create_block(parent_hash=self.genesis, height=1, transactions=[invalid_tx],
                                           transaction_root=compute_transaction_root_for_single_transaction(invalid_tx.hash))
         invalid_chain_suffix = create_chain_of_blocks(parent_hash=invalid_body_block.hash, parent_height=1,
                                                       count=CHAIN_LEN)
         last_block = create_block(parent_hash=invalid_chain_suffix[-1].hash, height=CHAIN_LEN + 2,
                                   referee_hashes=[correct_chain[-1].hash])
         invalid_chain = [invalid_body_block] + invalid_chain_suffix + [last_block]
-        self.block_map = {self.genesis.hash: self.genesis}
-        self.epoch_map = {0: self.genesis.hash}
+        self.block_map = {self.genesis: self.genesis}
+        self.epoch_map = {0: self.genesis}
         for i in range(1, CHAIN_LEN + 3):
             b = invalid_chain[i-1]
             self.block_map[b.hash] = b
@@ -62,7 +62,7 @@ class InvalidBodyNode(DefaultNode):
     def send_status(self):
         status = Status(
             ChainIdParams(self.chain_id),
-            self.genesis.block_header.hash, CHAIN_LEN + 2, 0, [self.best_block_hash])
+            self.genesis, CHAIN_LEN + 2, 0, [self.best_block_hash])
         self.send_protocol_msg(status)
 
 class InvalidBodySyncTest(ConfluxTestFramework):
@@ -78,13 +78,14 @@ class InvalidBodySyncTest(ConfluxTestFramework):
             self.nodes[i].wait_for_nodeid()
 
     def run_test(self):
-        conn0 = InvalidBodyNode()
-        conn1 = DefaultNode()
+        genesis = self.nodes[0].cfx_getBlockByEpochNumber("0x0", False)["hash"]
+        conn0 = InvalidBodyNode(genesis)
+        conn1 = DefaultNode(genesis)
         self.nodes[1].add_p2p_connection(conn1)
         network_thread_start()
         conn1.wait_for_status()
         for (h, b) in conn0.block_map.items():
-            if h != conn0.invalid_block:
+            if h != conn0.invalid_block and h != decode_hex(genesis):
                 conn1.send_protocol_msg(NewBlock(block=b))
         wait_for_block_count(self.nodes[1], CHAIN_LEN + 1)
 

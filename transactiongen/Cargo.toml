@@ -21,7 +21,7 @@ network = { path = "../network" }
 cfxkey = { path = "../accounts/cfxkey" }
 log = "0.4"
 db = { path = "../db" }
-toml = "0.4"
+toml = "0.5.8"
 io = { path = "../util/io" }
 priority-send-queue = { path = "../util/priority-send-queue" }
 metrics = { path = "../util/metrics" }

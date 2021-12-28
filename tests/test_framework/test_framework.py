@@ -3,7 +3,7 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Base class for RPC testing."""
-
+from conflux.config import DEFAULT_PY_TEST_CHAIN_ID
 from conflux.messages import Transactions
 from conflux.rpc import RpcClient
 from enum import Enum
@@ -81,6 +81,7 @@ class ConfluxTestFramework:
         self.supports_cli = False
         self.bind_to_localhost_only = True
         self.conf_parameters = {}
+        self.pos_parameters = {"round_time_ms": 1000}
         # The key is file name, and the value is a string as file content.
         self.extra_conf_files = {}
         self.set_test_params()
@@ -303,18 +304,20 @@ class ConfluxTestFramework:
             connect_nodes(self.nodes, i, i + 1)
         sync_blocks(self.nodes)
 
-    def setup_nodes(self, binary=None):
+    def setup_nodes(self, genesis_nodes=None, binary=None, is_consortium=True):
         """Override this method to customize test node setup"""
-        self.add_nodes(self.num_nodes, binary=binary)
+        self.add_nodes(self.num_nodes, genesis_nodes=genesis_nodes, binary=binary, is_consortium=is_consortium)
         self.start_nodes()
 
-    def add_nodes(self, num_nodes, rpchost=None, binary=None, auto_recovery=False, recovery_timeout=30, is_consortium=False):
+    def add_nodes(self, num_nodes, genesis_nodes=None, rpchost=None, binary=None, auto_recovery=False, recovery_timeout=30, is_consortium=True):
         """Instantiate TestNode objects"""
         if binary is None:
             binary = [self.options.conflux] * num_nodes
         assert_equal(len(binary), num_nodes)
+        if genesis_nodes is None:
+            genesis_nodes = num_nodes
         if is_consortium:
-            initialize_tg_config(self.options.tmpdir, num_nodes)
+            initialize_tg_config(self.options.tmpdir, num_nodes, genesis_nodes, DEFAULT_PY_TEST_CHAIN_ID, start_index=len(self.nodes), pos_round_time_ms=self.pos_parameters["round_time_ms"])
         for i in range(num_nodes):
             node_index = len(self.nodes)
             self.nodes.append(
@@ -355,6 +358,10 @@ class ConfluxTestFramework:
         node.start(extra_args, *args, **kwargs)
         node.wait_for_rpc_connection()
         node.wait_for_nodeid()
+        # try:
+        #     node.pos_start()
+        # except Exception as e:
+        #     print(e)
         if phase_to_wait is not None:
             node.wait_for_recovery(phase_to_wait, wait_time)
 

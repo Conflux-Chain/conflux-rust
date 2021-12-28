@@ -26,4 +26,6 @@ pub struct Status {
     pub latest_confirmed: U64,
     /// The latest executed epoch.
     pub latest_state: U64,
+    /// The latest finalized epoch.
+    pub latest_finalized: U64,
 }

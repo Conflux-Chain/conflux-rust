@@ -3,8 +3,12 @@
 // See http://www.gnu.org/licenses/
 
 use super::super::types::{BlameInfo, Block, Bytes};
-use cfx_types::{H256, U256};
+use crate::rpc::types::pos::Block as PosBlock;
+use cfx_types::{H256, U256, U64};
 use cfxcore::PeerInfo;
+use diem_types::{
+    account_address::AccountAddress, transaction::TransactionPayload,
+};
 use jsonrpc_core::Result as RpcResult;
 use jsonrpc_derive::rpc;
 use network::node_table::NodeId;
@@ -27,7 +31,7 @@ pub trait TestRpc {
     #[rpc(name = "generatefixedblock")]
     fn generate_fixed_block(
         &self, parent_hash: H256, referee: Vec<H256>, num_txs: usize,
-        adaptive: bool, difficulty: Option<u64>,
+        adaptive: bool, difficulty: Option<u64>, pos_reference: Option<H256>,
     ) -> RpcResult<H256>;
 
     #[rpc(name = "addnode")]
@@ -110,4 +114,40 @@ pub trait TestRpc {
 
     #[rpc(name = "save_node_db")]
     fn save_node_db(&self) -> RpcResult<()>;
+
+    #[rpc(name = "pos_register")]
+    fn pos_register(
+        &self, voting_power: U64,
+    ) -> RpcResult<(Bytes, AccountAddress)>;
+
+    #[rpc(name = "pos_update_voting_power")]
+    fn pos_update_voting_power(
+        &self, pos_account: AccountAddress, increased_voting_power: U64,
+    ) -> RpcResult<()>;
+
+    #[rpc(name = "pos_retire_self")]
+    fn pos_retire_self(&self) -> RpcResult<()>;
+
+    #[rpc(name = "pos_start")]
+    fn pos_start(&self) -> RpcResult<()>;
+
+    #[rpc(name = "pos_force_vote_proposal")]
+    fn pos_force_vote_proposal(&self, block_id: H256) -> RpcResult<()>;
+
+    #[rpc(name = "pos_force_propose")]
+    fn pos_force_propose(
+        &self, round: U64, parent_block_id: H256,
+        payload: Vec<TransactionPayload>,
+    ) -> RpcResult<()>;
+
+    #[rpc(name = "pos_trigger_timeout")]
+    fn pos_trigger_timeout(&self, timeout_type: String) -> RpcResult<()>;
+
+    #[rpc(name = "pos_force_sign_pivot_decision")]
+    fn pos_force_sign_pivot_decision(
+        &self, block_hash: H256, height: U64,
+    ) -> RpcResult<()>;
+
+    #[rpc(name = "pos_get_chosen_proposal")]
+    fn pos_get_chosen_proposal(&self) -> RpcResult<Option<PosBlock>>;
 }

@@ -10,19 +10,18 @@ use crate::{
     executive::{
         context::LocalContext,
         executed::{ExecutionOutcome, ToRepackError},
-        internal_contract::get_reentrancy_allowance,
         vm_exec::{BuiltinExec, InternalContractExec, NoopExec},
         CollateralCheckResultToVmResult, InternalContractTrait, TxDropError,
     },
     hash::keccak,
     machine::Machine,
     state::{cleanup_mode, CallStackInfo, State, Substate},
-    trace::{self, trace::ExecTrace, Tracer},
+    trace::{self, AddressPocket, Tracer},
     verification::VerificationConfig,
     vm::{
-        self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
-        Exec, ExecTrapError, ExecTrapResult, GasLeft, ResumeCall, ResumeCreate,
-        ReturnData, Spec, TrapError, TrapResult,
+        self, ActionParams, ActionValue, CallType, CreateContractAddress,
+        CreateType, Env, Exec, ExecTrapError, ExecTrapResult, GasLeft,
+        ResumeCall, ResumeCreate, ReturnData, Spec, TrapError, TrapResult,
     },
     vm_factory::VmFactory,
 };
@@ -81,9 +80,9 @@ pub fn contract_address(
             // This is required to enable us to clean up unused user account in
             // future.
             buffer[0] = 0x0;
-            &mut buffer[1..(1 + 20)].copy_from_slice(&sender[..]);
+            buffer[1..(1 + 20)].copy_from_slice(&sender[..]);
             nonce.to_little_endian(&mut buffer[(1 + 20)..(1 + 20 + 32)]);
-            &mut buffer[(1 + 20 + 32)..].copy_from_slice(&code_hash[..]);
+            buffer[(1 + 20 + 32)..].copy_from_slice(&code_hash[..]);
             // In Conflux, we use the first four bits to indicate the type of
             // the address. For contract address, the bits will be
             // set to 0x8.
@@ -94,9 +93,9 @@ pub fn contract_address(
         CreateContractAddress::FromSenderSaltAndCodeHash(salt) => {
             let mut buffer = [0u8; 1 + 20 + 32 + 32];
             buffer[0] = 0xff;
-            &mut buffer[1..(1 + 20)].copy_from_slice(&sender[..]);
-            &mut buffer[(1 + 20)..(1 + 20 + 32)].copy_from_slice(&salt[..]);
-            &mut buffer[(1 + 20 + 32)..].copy_from_slice(&code_hash[..]);
+            buffer[1..(1 + 20)].copy_from_slice(&sender[..]);
+            buffer[(1 + 20)..(1 + 20 + 32)].copy_from_slice(&salt[..]);
+            buffer[(1 + 20 + 32)..].copy_from_slice(&code_hash[..]);
             // In Conflux, we use the first bit to indicate the type of the
             // address. For contract address, the bits will be set to 0x8.
             let mut h = Address::from(keccak(&buffer[..]));
@@ -191,6 +190,7 @@ enum CallCreateExecutiveKind<'a> {
     ExecCall,
     ExecCreate,
 }
+
 pub struct CallCreateExecutive<'a, Substate: SubstateMngTrait> {
     context: LocalContext<'a, Substate>,
     factory: &'a VmFactory,
@@ -407,7 +407,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     fn process_return<State: StateTrait<Substate = Substate>>(
         mut self, result: vm::Result<GasLeft>, state: &mut State,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
-        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> DbResult<vm::Result<ExecutiveResult>>
     {
         let context = self.context.activate(state, callstack);
@@ -468,8 +468,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// `resume` to continue the execution.
     pub fn exec<State: StateTrait<Substate = Substate>>(
         mut self, state: &mut State, parent_substate: &mut Substate,
-        callstack: &mut CallStackInfo,
-        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
+        callstack: &mut CallStackInfo, tracer: &mut dyn Tracer,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
     {
         let status =
@@ -504,12 +503,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         state.checkpoint();
 
         let contract_address = self.get_recipient().clone();
-        let allow_reentrancy = get_reentrancy_allowance(
-            &contract_address,
-            state,
-            &mut self.context.substate,
-        )?;
-        callstack.push(contract_address, is_create, allow_reentrancy);
+        callstack.push(contract_address, is_create);
 
         // Pre execution: transfer value and init contract.
         let spec = self.context.spec;
@@ -560,7 +554,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     pub fn resume<State: StateTrait<Substate = Substate>>(
         mut self, result: vm::Result<ExecutiveResult>, state: &mut State,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
     {
         let status =
@@ -606,7 +600,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     fn process_output<State: StateTrait<Substate = Substate>>(
         self, output: ExecTrapResult<GasLeft>, state: &mut State,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
-        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
     {
         // Convert the `ExecTrapResult` (result of evm) to `ExecutiveTrapResult`
@@ -633,7 +627,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// current-level tracing.
     pub fn consume<State: StateTrait<Substate = Substate>>(
         self, state: &'a mut State, top_substate: &mut Substate,
-        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> DbResult<vm::Result<FinalizationResult>>
     {
         let mut callstack = CallStackInfo::new();
@@ -827,7 +821,7 @@ impl<
 
     pub fn create(
         &mut self, params: ActionParams, substate: &mut Substate,
-        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> DbResult<vm::Result<FinalizationResult>>
     {
         let vm_factory = self.machine.vm_factory();
@@ -847,7 +841,7 @@ impl<
 
     pub fn call(
         &mut self, params: ActionParams, substate: &mut Substate,
-        tracer: &mut dyn Tracer<Output = trace::trace::ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> DbResult<vm::Result<FinalizationResult>>
     {
         let vm_factory = self.machine.vm_factory();
@@ -888,7 +882,7 @@ impl<
     pub fn transact<T>(
         &mut self, tx: &SignedTransaction, mut options: TransactOptions<T>,
     ) -> DbResult<ExecutionOutcome>
-    where T: Tracer<Output = trace::trace::ExecTrace> {
+    where T: Tracer {
         let spec = &self.spec;
         let sender = tx.sender();
         let nonce = self.state.nonce(&sender)?;
@@ -932,57 +926,49 @@ impl<
             tx.gas >= base_gas_required.into(),
             "We have already checked the base gas requirement when we received the block."
         );
-        let init_gas = tx.gas - base_gas_required;
 
         let balance = self.state.balance(&sender)?;
         let gas_cost = tx.gas.full_mul(tx.gas_price);
 
         // Check if contract will pay transaction fee for the sender.
         let mut code_address = Address::zero();
-        let mut gas_sponsored = false;
-        let mut storage_sponsored = false;
-        match tx.action {
-            Action::Call(ref address) => {
-                if !address.is_valid_address() {
-                    return Ok(ExecutionOutcome::NotExecutedDrop(
-                        TxDropError::InvalidRecipientAddress(*address),
-                    ));
-                }
-                if address.is_contract_address() {
-                    code_address = *address;
-                    if self
+        let mut gas_sponsor_eligible = false;
+        let mut storage_sponsor_eligible = false;
+
+        if let Action::Call(ref address) = tx.action {
+            if !spec.is_valid_address(address) {
+                return Ok(ExecutionOutcome::NotExecutedDrop(
+                    TxDropError::InvalidRecipientAddress(*address),
+                ));
+            }
+            if self.state.is_contract_with_code(address)? {
+                code_address = *address;
+                if self
+                    .state
+                    .check_commission_privilege(&code_address, &sender)?
+                {
+                    // No need to check for gas sponsor account existence.
+                    gas_sponsor_eligible = gas_cost
+                        <= U512::from(
+                            self.state.sponsor_gas_bound(&code_address)?,
+                        );
+                    storage_sponsor_eligible = self
                         .state
-                        .check_commission_privilege(&code_address, &sender)?
-                    {
-                        // No need to check for gas sponsor account existence.
-                        gas_sponsored = gas_cost
-                            <= U512::from(
-                                self.state.sponsor_gas_bound(&code_address)?,
-                            );
-                        storage_sponsored = self
-                            .state
-                            .sponsor_for_collateral(&code_address)?
-                            .is_some();
-                    }
+                        .sponsor_for_collateral(&code_address)?
+                        .is_some();
                 }
             }
-            Action::Create => {}
         };
 
-        let mut total_cost = U512::from(tx.value);
+        let code_address = code_address;
+        let gas_sponsor_eligible = gas_sponsor_eligible;
+        let storage_sponsor_eligible = storage_sponsor_eligible;
 
         // Sender pays for gas when sponsor runs out of balance.
-        let gas_sponsor_balance = if gas_sponsored {
-            U512::from(self.state.sponsor_balance_for_gas(&code_address)?)
-        } else {
-            0.into()
-        };
-        let gas_free_of_charge =
-            gas_sponsored && gas_sponsor_balance >= gas_cost;
-
-        if !gas_free_of_charge {
-            total_cost += gas_cost
-        }
+        let sponsor_balance_for_gas =
+            U512::from(self.state.sponsor_balance_for_gas(&code_address)?);
+        let gas_sponsored =
+            gas_sponsor_eligible && sponsor_balance_for_gas >= gas_cost;
 
         // Since the Ethereum transactions do not contain storage limit. All the
         // storage limit will be regarded as u64::MAX. The EthereumLike
@@ -993,42 +979,34 @@ impl<
         } else {
             U256::from(tx.storage_limit) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
         };
-        // No matter who pays the collateral, we only focuses on the storage
-        // limit of sender.
-        let total_storage_limit = if eth_like_tx {
-            U256::MAX
-        } else {
-            self.state.collateral_for_storage(&sender)?
-                + minimum_drip_required_for_storage
-        };
 
-        let storage_sponsor_balance = if storage_sponsored {
-            self.state.sponsor_balance_for_collateral(&code_address)?
-        } else {
-            0.into()
-        };
+        let sponsor_balance_for_storage =
+            self.state.sponsor_balance_for_collateral(&code_address)?;
+        let storage_sponsored = storage_sponsor_eligible
+            && minimum_drip_required_for_storage <= sponsor_balance_for_storage;
 
-        // Find the `storage_owner` in this execution.
-        let storage_owner = {
-            if storage_sponsored
-                && minimum_drip_required_for_storage <= storage_sponsor_balance
-            {
-                // sponsor will pay for collateral for storage
-                code_address
-            } else {
-                // sender will pay for collateral for storage
-                total_cost += minimum_drip_required_for_storage.into();
-                sender
+        let sender_balance = U512::from(balance);
+        let sender_intended_cost = {
+            let mut sender_intended_cost = U512::from(tx.value);
+
+            if !gas_sponsor_eligible {
+                sender_intended_cost += gas_cost;
             }
+            if !storage_sponsor_eligible {
+                sender_intended_cost +=
+                    minimum_drip_required_for_storage.into();
+            }
+            sender_intended_cost
         };
-
-        let balance512 = U512::from(balance);
-        let mut sender_intended_cost = U512::from(tx.value);
-        if !gas_sponsored {
-            sender_intended_cost += gas_cost
-        }
-        if !storage_sponsored {
-            sender_intended_cost += minimum_drip_required_for_storage.into()
+        let total_cost = {
+            let mut total_cost = U512::from(tx.value);
+            if !gas_sponsored {
+                total_cost += gas_cost
+            }
+            if !storage_sponsored {
+                total_cost += minimum_drip_required_for_storage.into();
+            }
+            total_cost
         };
         // Sponsor is allowed however sender do not have enough balance to pay
         // for the extra gas because sponsor has run out of balance in
@@ -1036,7 +1014,20 @@ impl<
         //
         // Sender is not responsible for the incident, therefore we don't fail
         // the transaction.
-        if balance512 >= sender_intended_cost && balance512 < total_cost {
+        if sender_balance >= sender_intended_cost && sender_balance < total_cost
+        {
+            let gas_sponsor_balance = if gas_sponsor_eligible {
+                sponsor_balance_for_gas
+            } else {
+                0.into()
+            };
+
+            let storage_sponsor_balance = if storage_sponsor_eligible {
+                sponsor_balance_for_storage
+            } else {
+                0.into()
+            };
+
             return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
                 ToRepackError::NotEnoughCashFromSponsor {
                     required_gas_cost: gas_cost,
@@ -1048,19 +1039,13 @@ impl<
         }
 
         let mut tx_substate = Substate::new();
-        if balance512 < sender_intended_cost {
+        if sender_balance < sender_intended_cost {
             // Sender is responsible for the insufficient balance.
             // Sub tx fee if not enough cash, and substitute all remaining
             // balance if balance is not enough to pay the tx fee
-            let actual_gas_cost: U256;
+            let actual_gas_cost: U256 =
+                U512::min(gas_cost, sender_balance).try_into().unwrap();
 
-            actual_gas_cost = if gas_cost > balance512 {
-                balance512
-            } else {
-                gas_cost
-            }
-            .try_into()
-            .unwrap();
             // We don't want to bump nonce for non-existent account when we
             // can't charge gas fee. In this case, the sender account will
             // not be created if it does not exist.
@@ -1076,15 +1061,27 @@ impl<
                 &actual_gas_cost,
                 &mut cleanup_mode(&mut tx_substate, &spec),
             )?;
+            options.tracer.prepare_internal_transfer_action(
+                AddressPocket::Balance(sender.clone()),
+                AddressPocket::GasPayment,
+                actual_gas_cost,
+            );
 
             return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::NotEnoughCash {
                     required: total_cost,
-                    got: balance512,
+                    got: sender_balance,
                     actual_gas_cost: actual_gas_cost.clone(),
                     max_storage_limit_cost: minimum_drip_required_for_storage,
                 },
-                Executed::not_enough_balance_fee_charged(tx, &actual_gas_cost),
+                Executed::not_enough_balance_fee_charged(
+                    tx,
+                    &actual_gas_cost,
+                    gas_sponsored,
+                    storage_sponsored,
+                    options.tracer.drain(),
+                    &self.spec,
+                ),
             ));
         } else {
             // From now on sender balance >= total_cost, even if the sender
@@ -1096,18 +1093,48 @@ impl<
         }
 
         // Subtract the transaction fee from sender or contract.
-        if !gas_free_of_charge {
+        let gas_cost = U256::try_from(gas_cost).unwrap();
+
+        if !gas_sponsored {
+            options.tracer.prepare_internal_transfer_action(
+                AddressPocket::Balance(sender),
+                AddressPocket::GasPayment,
+                gas_cost,
+            );
             self.state.sub_balance(
                 &sender,
                 &U256::try_from(gas_cost).unwrap(),
                 &mut cleanup_mode(&mut tx_substate, &spec),
             )?;
         } else {
+            options.tracer.prepare_internal_transfer_action(
+                AddressPocket::SponsorBalanceForGas(code_address),
+                AddressPocket::GasPayment,
+                gas_cost,
+            );
             self.state.sub_sponsor_balance_for_gas(
                 &code_address,
                 &U256::try_from(gas_cost).unwrap(),
             )?;
         }
+
+        let init_gas = tx.gas - base_gas_required;
+
+        // Find the `storage_owner` in this execution.
+        let storage_owner = if storage_sponsored {
+            code_address
+        } else {
+            sender
+        };
+
+        // No matter who pays the collateral, we only focuses on the storage
+        // limit of sender.
+        let total_storage_limit = if eth_like_tx {
+            U256::MAX
+        } else {
+            self.state.collateral_for_storage(&sender)?
+                + minimum_drip_required_for_storage
+        };
 
         self.state.checkpoint();
         let mut substate = Substate::new();
@@ -1133,7 +1160,13 @@ impl<
                         ExecutionError::VmError(vm::Error::ConflictAddress(
                             new_address.clone(),
                         )),
-                        Executed::execution_error_fully_charged(tx),
+                        Executed::execution_error_fully_charged(
+                            tx,
+                            gas_sponsored,
+                            storage_sponsored,
+                            options.tracer.drain(),
+                            &spec,
+                        ),
                     ));
                 }
 
@@ -1150,6 +1183,7 @@ impl<
                     code: Some(Arc::new(tx.data.clone())),
                     data: None,
                     call_type: CallType::None,
+                    create_type: CreateType::CREATE,
                     params_type: vm::ParamsType::Embedded,
                 };
                 self.create(params, &mut substate, &mut options.tracer)?
@@ -1168,6 +1202,7 @@ impl<
                     code_hash: self.state.code_hash(address)?,
                     data: Some(tx.data.clone()),
                     call_type: CallType::Call,
+                    create_type: CreateType::None,
                     params_type: vm::ParamsType::Separate,
                 };
                 self.call(params, &mut substate, &mut options.tracer)?
@@ -1184,6 +1219,7 @@ impl<
                         &sender,
                         &total_storage_limit,
                         &mut substate,
+                        &mut options.tracer,
                         self.spec.account_start_nonce,
                     )?
                     .into_vm_result()
@@ -1207,16 +1243,10 @@ impl<
             (res, out)
         };
 
-        let refund_receiver = if gas_free_of_charge {
+        let refund_receiver = if gas_sponsored {
             Some(code_address)
         } else {
             None
-        };
-
-        let storage_sponsor_paid = if self.spec.cip78 {
-            storage_owner == code_address
-        } else {
-            storage_sponsored
         };
 
         Ok(self.finalize(
@@ -1225,15 +1255,20 @@ impl<
             result,
             output,
             refund_receiver,
-            storage_sponsor_paid,
-            options.tracer.drain(),
+            /* Storage sponsor paid */
+            if self.spec.cip78a {
+                storage_sponsored
+            } else {
+                storage_sponsor_eligible
+            },
+            options.tracer,
         )?)
     }
 
     // TODO: maybe we can find a better interface for doing the suicide
     // post-processing.
-    fn kill_process(
-        &mut self, suicides: &HashSet<Address>,
+    fn kill_process<T: Tracer>(
+        &mut self, suicides: &HashSet<Address>, tracer: &mut T,
     ) -> DbResult<Substate> {
         let mut substate = Substate::new();
         for address in suicides {
@@ -1257,6 +1292,7 @@ impl<
 
         let res = self.state.settle_collateral_for_all(
             &substate,
+            tracer,
             self.spec.account_start_nonce,
         )?;
         // The storage recycling process should never occupy new collateral.
@@ -1273,9 +1309,14 @@ impl<
                 .state
                 .sponsor_balance_for_collateral(contract_address)?;
 
-            if sponsor_for_gas.is_some() {
+            if let Some(ref sponsor_address) = sponsor_for_gas {
+                tracer.prepare_internal_transfer_action(
+                    AddressPocket::SponsorBalanceForGas(*contract_address),
+                    AddressPocket::Balance(*sponsor_address),
+                    sponsor_balance_for_gas.clone(),
+                );
                 self.state.add_balance(
-                    sponsor_for_gas.as_ref().unwrap(),
+                    sponsor_address,
                     &sponsor_balance_for_gas,
                     cleanup_mode(&mut substate, self.spec),
                     self.spec.account_start_nonce,
@@ -1285,9 +1326,15 @@ impl<
                     &sponsor_balance_for_gas,
                 )?;
             }
-            if sponsor_for_collateral.is_some() {
+            if let Some(ref sponsor_address) = sponsor_for_collateral {
+                tracer.prepare_internal_transfer_action(
+                    AddressPocket::SponsorBalanceForStorage(*contract_address),
+                    AddressPocket::Balance(*sponsor_address),
+                    sponsor_balance_for_collateral.clone(),
+                );
+
                 self.state.add_balance(
-                    sponsor_for_collateral.as_ref().unwrap(),
+                    sponsor_address,
                     &sponsor_balance_for_collateral,
                     cleanup_mode(&mut substate, self.spec),
                     self.spec.account_start_nonce,
@@ -1300,21 +1347,36 @@ impl<
         }
 
         for contract_address in suicides {
-            let burnt_balance = self.state.balance(contract_address)?
-                + self.state.staking_balance(contract_address)?;
+            let contract_balance = self.state.balance(contract_address)?;
+            let staking_balance =
+                self.state.staking_balance(contract_address)?;
+
+            tracer.prepare_internal_transfer_action(
+                AddressPocket::StakingBalance(*contract_address),
+                AddressPocket::MintBurn,
+                staking_balance.clone(),
+            );
+
+            tracer.prepare_internal_transfer_action(
+                AddressPocket::Balance(*contract_address),
+                AddressPocket::MintBurn,
+                contract_balance.clone(),
+            );
+
             self.state.remove_contract(contract_address)?;
-            self.state.subtract_total_issued(burnt_balance);
+            self.state
+                .subtract_total_issued(contract_balance + staking_balance);
         }
 
         Ok(substate)
     }
 
     /// Finalizes the transaction (does refunds and suicides).
-    fn finalize(
+    fn finalize<T: Tracer>(
         &mut self, tx: &SignedTransaction, mut substate: Substate,
         result: vm::Result<FinalizationResult>, output: Bytes,
         refund_receiver: Option<Address>, storage_sponsor_paid: bool,
-        trace: Vec<ExecTrace>,
+        mut tracer: T,
     ) -> DbResult<ExecutionOutcome>
     {
         let gas_left = match result {
@@ -1340,8 +1402,18 @@ impl<
         };
 
         if let Some(r) = refund_receiver {
+            tracer.prepare_internal_transfer_action(
+                AddressPocket::GasPayment,
+                AddressPocket::SponsorBalanceForGas(r),
+                refund_value.clone(),
+            );
             self.state.add_sponsor_balance_for_gas(&r, &refund_value)?;
         } else {
+            tracer.prepare_internal_transfer_action(
+                AddressPocket::GasPayment,
+                AddressPocket::Balance(tx.sender()),
+                refund_value.clone(),
+            );
             self.state.add_balance(
                 &tx.sender(),
                 &refund_value,
@@ -1352,7 +1424,8 @@ impl<
 
         // perform suicides
 
-        let subsubstate = self.kill_process(&substate.suicides())?;
+        let subsubstate =
+            self.kill_process(&substate.suicides(), &mut tracer)?;
         substate.accrue(subsubstate);
 
         // TODO should be added back after enabling dust collection
@@ -1380,7 +1453,13 @@ impl<
             Err(vm::Error::StateDbError(e)) => bail!(e.0),
             Err(exception) => Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(exception),
-                Executed::execution_error_fully_charged(tx),
+                Executed::execution_error_fully_charged(
+                    tx,
+                    refund_receiver.is_some(),
+                    storage_sponsor_paid,
+                    tracer.drain(),
+                    &self.spec,
+                ),
             )),
             Ok(r) => {
                 let mut storage_collateralized = Vec::new();
@@ -1409,6 +1488,8 @@ impl<
                         }
                     }
                 }
+
+                let trace = tracer.drain();
 
                 let executed = Executed {
                     gas_used,

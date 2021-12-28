@@ -7,6 +7,7 @@ pub mod consensus_inner;
 pub mod consensus_trait;
 pub mod debug_recompute;
 mod pastset_cache;
+pub mod pos_handler;
 
 pub use crate::consensus::{
     consensus_inner::{ConsensusGraphInner, ConsensusInnerConfig},
@@ -22,8 +23,11 @@ use crate::{
     block_data_manager::{
         BlockDataManager, BlockExecutionResultWithEpoch, DataVersionTuple,
     },
-    consensus::consensus_inner::{
-        consensus_executor::ConsensusExecutionConfiguration, StateBlameInfo,
+    consensus::{
+        consensus_inner::{
+            consensus_executor::ConsensusExecutionConfiguration, StateBlameInfo,
+        },
+        pos_handler::PosVerifier,
     },
     executive::ExecutionOutcome,
     pow::{PowComputer, ProofOfWorkConfig},
@@ -42,11 +46,7 @@ use cfx_internal_common::ChainIdParams;
 use cfx_parameters::{
     consensus::*,
     consensus_internal::REWARD_EPOCH_COUNT,
-    rpc::{
-        GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
-        TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW,
-        TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM,
-    },
+    rpc::{GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_TRANSACTION_SAMPLE_SIZE},
 };
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::StateDb;
@@ -65,6 +65,7 @@ use primitives::{
     epoch::BlockHashOrEpochNumber,
     filter::{FilterError, LogFilter},
     log_entry::LocalizedLogEntry,
+    pos::PosBlockId,
     receipt::Receipt,
     EpochId, EpochNumber, SignedTransaction, TransactionIndex,
 };
@@ -230,12 +231,14 @@ impl ConsensusGraph {
         notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, node_type: NodeType,
+        pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         let inner =
             Arc::new(RwLock::new(ConsensusGraphInner::with_era_genesis(
                 pow_config,
                 pow.clone(),
+                pos_verifier.clone(),
                 data_man.clone(),
                 conf.inner_conf.clone(),
                 era_genesis_block_hash,
@@ -248,6 +251,7 @@ impl ConsensusGraph {
             execution_conf,
             verification_config,
             conf.bench_mode,
+            pos_verifier.clone(),
         );
         let confirmation_meter = ConfirmationMeter::new();
 
@@ -265,6 +269,7 @@ impl ConsensusGraph {
                 statistics,
                 notifications,
                 node_type,
+                pos_verifier,
             ),
             confirmation_meter,
             best_info: RwLock::new(Arc::new(Default::default())),
@@ -291,6 +296,7 @@ impl ConsensusGraph {
         notifications: Arc<Notifications>,
         execution_conf: ConsensusExecutionConfiguration,
         verification_conf: VerificationConfig, node_type: NodeType,
+        pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         let genesis_hash = data_man.get_cur_consensus_era_genesis_hash();
@@ -308,6 +314,7 @@ impl ConsensusGraph {
             execution_conf,
             verification_conf,
             node_type,
+            pos_verifier,
         )
     }
 
@@ -335,6 +342,7 @@ impl ConsensusGraph {
     pub fn check_mining_adaptive_block(
         &self, inner: &mut ConsensusGraphInner, parent_hash: &H256,
         referees: &Vec<H256>, difficulty: &U256,
+        pos_reference: Option<PosBlockId>,
     ) -> bool
     {
         let parent_index =
@@ -355,7 +363,89 @@ impl ConsensusGraph {
             parent_index,
             referee_indices,
             *difficulty,
+            pos_reference,
         )
+    }
+
+    /// After considering the latest `pos_reference`, `parent_hash` may become
+    /// an invalid choice, so this function tries to update the parent and
+    /// referee choices with `pos_reference` provided.
+    pub fn choose_correct_parent(
+        &self, parent_hash: &mut H256, referees: &mut Vec<H256>,
+        blame_info: &mut StateBlameInfo, pos_reference: Option<PosBlockId>,
+    )
+    {
+        let correct_parent_hash = {
+            if let Some(pos_ref) = &pos_reference {
+                loop {
+                    let inner = self.inner.read();
+                    let pivot_decision = inner
+                        .pos_verifier
+                        .get_pivot_decision(pos_ref)
+                        .expect("pos ref committed");
+                    if inner.hash_to_arena_indices.contains_key(&pivot_decision)
+                        || inner.pivot_block_processed(&pivot_decision)
+                    {
+                        // If this pos ref is processed in catching-up, its
+                        // pivot decision may have not been processed
+                        break;
+                    } else {
+                        // Wait without holding consensus inner lock.
+                        drop(inner);
+                        warn!("Wait for PoW to catch up with PoS");
+                        sleep(Duration::from_secs(1));
+                    }
+                }
+            }
+            // recompute `blame_info` needs locking `self.inner`, so we limit
+            // the lock scope here.
+            let mut inner = self.inner.write();
+            referees.retain(|h| inner.hash_to_arena_indices.contains_key(h));
+            let parent_index =
+                *inner.hash_to_arena_indices.get(parent_hash).expect(
+                    "parent_hash is the pivot chain tip,\
+                     so should still exist in ConsensusInner",
+                );
+            let referee_indices: Vec<_> = referees
+                .iter()
+                .map(|h| {
+                    *inner
+                        .hash_to_arena_indices
+                        .get(h)
+                        .expect("Checked by the caller")
+                })
+                .collect();
+            let correct_parent = inner.choose_correct_parent(
+                parent_index,
+                referee_indices,
+                pos_reference,
+            );
+            inner.arena[correct_parent].hash
+        };
+
+        if correct_parent_hash != *parent_hash {
+            debug!(
+                "Change parent from {:?} to {:?}",
+                parent_hash, correct_parent_hash
+            );
+
+            // correct_parent may be among referees, so check and remove it.
+            referees.retain(|i| *i != correct_parent_hash);
+
+            // Old parent is a valid block terminal to refer to.
+            if referees.len() < self.config.referee_bound {
+                referees.push(*parent_hash);
+            }
+
+            // correct_parent may not be on the pivot chain, so recompute
+            // blame_info if needed.
+            *blame_info = self
+                .force_compute_blame_and_deferred_state_for_generation(
+                    parent_hash,
+                )
+                .expect("blame info computation error");
+            *parent_hash = correct_parent_hash;
+        }
     }
 
     /// Convert EpochNumber to height based on the current ConsensusGraph
@@ -371,6 +461,9 @@ impl ConsensusGraph {
                 self.latest_confirmed_epoch_number()
             }
             EpochNumber::LatestMined => self.best_epoch_number(),
+            EpochNumber::LatestFinalized => {
+                self.latest_finalized_epoch_number()
+            }
             EpochNumber::LatestState => self.best_executed_state_epoch_number(),
             EpochNumber::Number(num) => {
                 let epoch_num = num;
@@ -388,9 +481,9 @@ impl ConsensusGraph {
         let inner = self.inner.read();
         let mut last_epoch_number = inner.best_epoch_number();
         let mut number_of_blocks_to_sample = GAS_PRICE_BLOCK_SAMPLE_SIZE;
-        let mut tx_hashes = HashSet::new();
         let mut prices = Vec::new();
-        let mut total_transaction_count_in_processed_blocks = 0;
+        let mut total_block_gas_limit: u64 = 0;
+        let mut total_tx_gas_limit: u64 = 0;
 
         loop {
             if number_of_blocks_to_sample == 0 || last_epoch_number == 0 {
@@ -410,45 +503,41 @@ impl ConsensusGraph {
                     .data_man
                     .block_by_hash(&hash, false /* update_cache */)
                     .unwrap();
-                total_transaction_count_in_processed_blocks +=
-                    block.transactions.len();
+                total_block_gas_limit +=
+                    block.block_header.gas_limit().as_u64();
                 for tx in block.transactions.iter() {
-                    if tx_hashes.insert(tx.hash()) {
-                        prices.push(tx.gas_price().clone());
-                        if prices.len() == GAS_PRICE_TRANSACTION_SAMPLE_SIZE {
-                            break;
-                        }
+                    // add the tx.gas to total_tx_gas_limit even it is packed
+                    // multiple times because these tx all
+                    // will occupy block's gas space
+                    total_tx_gas_limit += tx.transaction.gas.as_u64();
+                    prices.push(tx.gas_price().clone());
+                    if prices.len() == GAS_PRICE_TRANSACTION_SAMPLE_SIZE {
+                        break;
                     }
                 }
                 number_of_blocks_to_sample -= 1;
-                if number_of_blocks_to_sample == 0 {
+                if number_of_blocks_to_sample == 0
+                    || prices.len() == GAS_PRICE_TRANSACTION_SAMPLE_SIZE
+                {
                     break;
                 }
             }
         }
 
-        let processed_block_count =
-            GAS_PRICE_BLOCK_SAMPLE_SIZE - number_of_blocks_to_sample;
-        let average_transaction_count_per_block = if processed_block_count != 0
-        {
-            total_transaction_count_in_processed_blocks / processed_block_count
-        } else {
-            0
-        };
-
         prices.sort();
-        if prices.is_empty() {
+        if prices.is_empty() || total_tx_gas_limit == 0 {
             Some(U256::from(1))
         } else {
-            if average_transaction_count_per_block
-                < TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW
-            {
+            let average_gas_limit_multiple =
+                total_block_gas_limit / total_tx_gas_limit;
+            if average_gas_limit_multiple > 5 {
+                // used less than 20%
                 Some(U256::from(1))
-            } else if average_transaction_count_per_block
-                < TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM
-            {
+            } else if average_gas_limit_multiple >= 2 {
+                // used less than 50%
                 Some(prices[prices.len() / 8])
             } else {
+                // used more than 50%
                 Some(prices[prices.len() / 2])
             }
         }
@@ -783,7 +872,9 @@ impl ConsensusGraph {
 
     pub fn get_log_filter_epoch_range(
         &self, from_epoch: EpochNumber, to_epoch: EpochNumber,
-    ) -> Result<impl Iterator<Item = u64>, FilterError> {
+        check_range: bool,
+    ) -> Result<impl Iterator<Item = u64>, FilterError>
+    {
         // lock so that we have a consistent view
         let _inner = self.inner.read_recursive();
 
@@ -805,14 +896,16 @@ impl ConsensusGraph {
             });
         }
 
-        if let Some(max_gap) = self.config.get_logs_filter_max_epoch_range {
-            // The range includes both ends.
-            if to_epoch - from_epoch + 1 > max_gap {
-                return Err(FilterError::EpochNumberGapTooLarge {
-                    from_epoch,
-                    to_epoch,
-                    max_gap,
-                });
+        if check_range {
+            if let Some(max_gap) = self.config.get_logs_filter_max_epoch_range {
+                // The range includes both ends.
+                if to_epoch - from_epoch + 1 > max_gap {
+                    return Err(FilterError::EpochNumberGapTooLarge {
+                        from_epoch,
+                        to_epoch,
+                        max_gap,
+                    });
+                }
             }
         }
 
@@ -848,7 +941,7 @@ impl ConsensusGraph {
 
     fn filter_logs_by_epochs(
         &self, from_epoch: EpochNumber, to_epoch: EpochNumber,
-        filter: LogFilter,
+        filter: LogFilter, blocks_to_skip: HashSet<H256>,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError>
     {
         let bloom_possibilities = filter.bloom_possibilities();
@@ -862,7 +955,7 @@ impl ConsensusGraph {
 
         let mut logs = self
             // iterate over epochs in reverse order
-            .get_log_filter_epoch_range(from_epoch, to_epoch)?
+            .get_log_filter_epoch_range(from_epoch, to_epoch, !filter.trusted)?
             // we process epochs in each batch in parallel
             // but batches are processed one-by-one
             .chunks(self.config.get_logs_epoch_batch_size)
@@ -881,6 +974,10 @@ impl ConsensusGraph {
                 Err(e) => Either::Right(std::iter::once(Err(e))),
             })
             // take as many as we need
+            .skip_while(|res| match res {
+                Ok(log) => blocks_to_skip.contains(&log.block_hash),
+                Err(_) => false,
+            })
             .skip(offset)
             .take(limit)
             // short-circuit on error
@@ -1060,55 +1157,31 @@ impl ConsensusGraph {
         };
 
         // filter logs based on epochs
+        // out-of-range blocks from the _end_ of the range
+        // are handled by `filter_logs_by_epochs`
+        let skip_from_end = to_epoch_hashes
+            .into_iter()
+            .skip_while(|h| *h != to_hash)
+            .skip(1)
+            .collect();
+
         let epoch_range_logs = self.filter_logs_by_epochs(
             EpochNumber::Number(from_epoch),
             EpochNumber::Number(to_epoch),
             filter,
+            skip_from_end,
         )?;
 
-        // helper for finding relative position of `a` and `b` in `vec`
-        let rel_pos = |vec: &Vec<H256>, a: H256, b: H256| {
-            let position_a = vec.iter().position(|&h| a == h);
-            let position_b = vec.iter().position(|&h| b == h);
+        // remove out-of-range blocks from the _start_ of the range
+        let skip_from_start: HashSet<_> = from_epoch_hashes
+            .into_iter()
+            .take_while(|h| *h != from_hash)
+            .collect();
 
-            match (position_a, position_b) {
-                (Some(pa), Some(pb)) if pa < pb => "before",
-                (Some(pa), Some(pb)) if pa == pb => "equal",
-                (Some(pa), Some(pb)) if pa > pb => "after",
-                _ => "undefined",
-            }
-        };
-
-        // remove out-of-range blocks
-        let first = epoch_range_logs.iter().position(|l| {
-            l.epoch_number > from_epoch
-                || matches!(
-                    rel_pos(&from_epoch_hashes, l.block_hash, from_hash),
-                    "after" | "equal"
-                )
-        });
-
-        let last = epoch_range_logs
-            .iter()
-            .rev()
-            .position(|l| {
-                l.epoch_number < to_epoch
-                    || matches!(
-                        rel_pos(&to_epoch_hashes, l.block_hash, to_hash),
-                        "before" | "equal"
-                    )
-            })
-            .map(|i| epoch_range_logs.len() - i);
-
-        match (first, last) {
-            (Some(f), Some(l)) => Ok(epoch_range_logs[f..l].to_vec()),
-
-            // (None, _) means: all logs returned are in `from_epoch`,
-            // all from blocks with blocks numbers < `from_block`.
-            // (_, None) means: all logs returned are in `to_epoch`,
-            // all from blocks with blocks numbers > `to_block`.
-            _ => Ok(vec![]),
-        }
+        Ok(epoch_range_logs
+            .into_iter()
+            .skip_while(|log| skip_from_start.contains(&log.block_hash))
+            .collect())
     }
 
     pub fn logs(
@@ -1124,6 +1197,7 @@ impl ConsensusGraph {
                 from_epoch.clone(),
                 to_epoch.clone(),
                 filter,
+                Default::default(),
             ),
 
             // filter by block hashes
@@ -1144,6 +1218,7 @@ impl ConsensusGraph {
         }
     }
 
+    // TODO(lpl): Limit epoch range in filter.
     pub fn filter_traces(
         &self, mut filter: TraceFilter,
     ) -> Result<Vec<LocalizedTrace>, FilterError> {
@@ -1387,6 +1462,7 @@ impl ConsensusGraph {
                     }
                     let trace = LocalizedTrace {
                         action: trace.action,
+                        valid: trace.valid,
                         epoch_hash: pivot_hash,
                         epoch_number: epoch_number.into(),
                         block_hash,
@@ -1474,6 +1550,10 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
     fn latest_confirmed_epoch_number(&self) -> u64 {
         self.confirmation_meter.get_confirmed_epoch_num()
+    }
+
+    fn latest_finalized_epoch_number(&self) -> u64 {
+        self.inner.read().latest_epoch_confirmed_by_pos().1
     }
 
     fn best_chain_id(&self) -> u32 {
@@ -1736,6 +1816,15 @@ impl ConsensusGraphTrait for ConsensusGraph {
                 &self.data_man.get_cur_consensus_era_stable_hash(),
             )
             .expect("stable exists");
+
+        if self.best_epoch_number() < stable_genesis_height {
+            // For an archive node, if its terminals are overwritten with
+            // earlier blocks during recovery, it's possible to
+            // reach here with a pivot chain before stable era
+            // checkpoint. Here we wait for it to recover the missing headers
+            // after the overwritten terminals.
+            return false;
+        }
         if let Some(target_epoch) = self.config.sync_state_starting_epoch {
             if stable_genesis_height < target_epoch {
                 return false;
@@ -1770,6 +1859,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
         let new_consensus_inner = ConsensusGraphInner::with_era_genesis(
             old_consensus_inner.pow_config.clone(),
             old_consensus_inner.pow.clone(),
+            old_consensus_inner.pos_verifier.clone(),
             self.data_man.clone(),
             old_consensus_inner.inner_conf.clone(),
             &cur_era_genesis_hash,
@@ -1780,4 +1870,6 @@ impl ConsensusGraphTrait for ConsensusGraph {
 
         self.confirmation_meter.clear();
     }
+
+    fn to_arc_consensus(self: Arc<Self>) -> Arc<ConsensusGraph> { self }
 }

@@ -9,7 +9,7 @@ use crate::{
     machine::Machine,
     state::{State, Substate},
     test_helpers::get_state_for_genesis_write,
-    trace,
+    trace::{self, NoopTracer},
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
         Spec,
@@ -49,6 +49,7 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(test)]
 fn make_byzantium_machine(max_depth: usize) -> Machine {
     let mut machine = crate::machine::new_machine_with_builtin(
         Default::default(),
@@ -139,6 +140,7 @@ fn test_sender_balance() {
                 &params.storage_owner,
                 &storage_limit_in_drip,
                 &mut substate,
+                &mut tracer,
                 spec.account_start_nonce,
             )
             .unwrap()
@@ -370,7 +372,7 @@ fn test_call_to_create() {
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
     state
-        .new_contract(&address, U256::zero(), U256::one())
+        .new_contract_with_code(&address, U256::zero(), U256::one())
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state
         .add_balance(
@@ -400,6 +402,7 @@ fn test_call_to_create() {
                 &params.storage_owner,
                 &storage_limit_in_drip,
                 &mut substate,
+                &mut tracer,
                 spec.account_start_nonce,
             )
             .unwrap()
@@ -444,7 +447,7 @@ fn test_revert() {
         )
         .unwrap();
     state
-        .new_contract(&contract_address, U256::zero(), U256::one())
+        .new_contract_with_code(&contract_address, U256::zero(), U256::one())
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state
         .commit(BigEndianHash::from_uint(&U256::from(1)), None)
@@ -1019,6 +1022,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &Address::default(),
             &0.into(),
             &mut Substate::new(),
+            &mut NoopTracer,
             spec.account_start_nonce,
         )
         .unwrap();
@@ -1092,6 +1096,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &Address::default(),
             &0.into(),
             &mut Substate::new(),
+            &mut NoopTracer,
             spec.account_start_nonce,
         )
         .unwrap();
@@ -1627,6 +1632,7 @@ fn test_storage_commission_privilege() {
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate,
+                &mut NoopTracer,
                 spec.account_start_nonce,
             )
             .unwrap(),
@@ -1931,6 +1937,7 @@ fn test_storage_commission_privilege() {
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate,
+                &mut NoopTracer,
                 spec.account_start_nonce,
             )
             .unwrap(),

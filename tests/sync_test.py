@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-from eth_utils import decode_hex, encode_hex
+from eth_utils import decode_hex
 
-from test_framework.blocktools import create_block, create_transaction
+from test_framework.blocktools import create_block, encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.mininode import *
 from test_framework.util import *
@@ -33,12 +33,12 @@ class SyncTest(ConfluxTestFramework):
         block3 = create_block(parent_hash=best_block, height=3, referee_hashes=[ref_block])
         self.nodes[1].p2p.send_protocol_msg(NewBlock(block=block3))
         for block in [block1, block2, block3]:
-            print(encode_hex(block.hash))
+            print(encode_hex_0x(block.hash))
         connect_nodes(self.nodes, 0, 1)
         sync_blocks(self.nodes, timeout=5)
         best_block = self.nodes[0].best_block_hash()
-        print("best from rust: %s \nbest from local: %s\n" % (best_block, encode_hex(block3.hash)))
-        assert_equal(best_block, encode_hex(block3.hash))
+        print("best from rust: %s \nbest from local: %s\n" % (best_block, encode_hex_0x(block3.hash)))
+        assert_equal(best_block, encode_hex_0x(block3.hash))
         self.log.info("Pass 1")
 
         disconnect_nodes(self.nodes, 0, 1)

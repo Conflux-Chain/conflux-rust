@@ -6,10 +6,9 @@ use super::SolidityFunctionTrait;
 use crate::{
     executive::{internal_contract::activate_at::IsActive, InternalRefContext},
     state::CallStackInfo,
-    trace::{trace::ExecTrace, Tracer},
+    trace::Tracer,
     vm::{self, ActionParams, CallType, GasLeft, ReturnData, Spec},
 };
-use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::U256;
 use solidity_abi::{ABIDecodable, ABIEncodable};
 
@@ -36,19 +35,13 @@ impl<
 {
     fn execute(
         &self, input: &[u8], params: &ActionParams,
-        context: &mut InternalRefContext,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
     ) -> vm::Result<GasLeft>
     {
         self.pre_execution_check(params, context.callstack, context.spec)?;
         let solidity_params = <T::Input as ABIDecodable>::abi_decode(&input)?;
 
-        let cost = self.upfront_gas_payment(
-            &solidity_params,
-            params,
-            context.spec,
-            context.state,
-        );
+        let cost = self.upfront_gas_payment(&solidity_params, params, context);
         if cost > params.gas {
             return Err(vm::Error::OutOfGas);
         }
@@ -89,15 +82,14 @@ pub trait PreExecCheckTrait: Send + Sync {
 pub trait ExecutionTrait: Send + Sync + InterfaceTrait {
     fn execute_inner(
         &self, input: Self::Input, params: &ActionParams,
-        context: &mut InternalRefContext,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
     ) -> vm::Result<<Self as InterfaceTrait>::Output>;
 }
 
 pub trait UpfrontPaymentTrait: Send + Sync + InterfaceTrait {
     fn upfront_gas_payment(
-        &self, input: &Self::Input, params: &ActionParams, spec: &Spec,
-        state: &dyn StateOpsTrait,
+        &self, input: &Self::Input, params: &ActionParams,
+        context: &InternalRefContext,
     ) -> U256;
 }
 
@@ -195,9 +187,9 @@ macro_rules! impl_function_type {
         $(
             impl UpfrontPaymentTrait for $name {
                 fn upfront_gas_payment(
-                    &self, _input: &Self::Input, _params: &ActionParams, spec: &Spec, _state: &dyn StateOpsTrait,
+                    &self, _input: &Self::Input, _params: &ActionParams, context: &InternalRefContext,
                 ) -> U256 {
-                    U256::from($gas(spec))
+                    U256::from($gas(context.spec))
                 }
             }
         )?
@@ -210,9 +202,9 @@ macro_rules! impl_function_type {
 
         impl UpfrontPaymentTrait for $name {
             fn upfront_gas_payment(
-                &self, _input: &Self::Input, _params: &ActionParams, spec: &Spec, _state: &dyn StateOpsTrait,
+                &self, _input: &Self::Input, _params: &ActionParams, context: &InternalRefContext,
             ) -> U256 {
-                U256::from(spec.balance_gas)
+                U256::from(context.spec.balance_gas)
             }
         }
     };

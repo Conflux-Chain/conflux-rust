@@ -44,7 +44,7 @@ use super::{
 use crate::{
     bytes::Bytes,
     hash::keccak,
-    trace::{trace::ExecTrace, Tracer},
+    trace::Tracer,
     vm::{
         self, ActionParams, ActionValue, CallType, ContractCreateResult,
         CreateContractAddress, GasLeft, MessageCallResult, ParamsType,
@@ -52,9 +52,7 @@ use crate::{
     },
 };
 use bit_set::BitSet;
-use cfx_types::{
-    address_util::AddressUtil, Address, BigEndianHash, H256, U256, U512,
-};
+use cfx_types::{Address, BigEndianHash, H256, U256, U512};
 use std::{cmp, convert::TryFrom, marker::PhantomData, mem, sync::Arc};
 
 const GASOMETER_PROOF: &str = "If gasometer is None, Err is immediately returned in step; this function is only called by step; qed";
@@ -209,7 +207,7 @@ pub struct Interpreter<Cost: CostType> {
 impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
     fn exec(
         mut self: Box<Self>, context: &mut dyn vm::Context,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> vm::ExecTrapResult<GasLeft>
     {
         loop {
@@ -357,10 +355,8 @@ impl<Cost: CostType> Interpreter<Cost> {
     /// Execute a single step on the VM.
     #[inline(always)]
     pub fn step(
-        &mut self, context: &mut dyn vm::Context,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> InterpreterResult
-    {
+        &mut self, context: &mut dyn vm::Context, tracer: &mut dyn Tracer,
+    ) -> InterpreterResult {
         if self.done {
             return InterpreterResult::Stopped;
         }
@@ -389,10 +385,8 @@ impl<Cost: CostType> Interpreter<Cost> {
     /// Inner helper function for step.
     #[inline(always)]
     fn step_inner(
-        &mut self, context: &mut dyn vm::Context,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> InterpreterResult
-    {
+        &mut self, context: &mut dyn vm::Context, tracer: &mut dyn Tracer,
+    ) -> InterpreterResult {
         let result = match self.resume_result.take() {
             Some(result) => result,
             None => {
@@ -686,7 +680,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     fn exec_instruction(
         &mut self, gas: Cost, context: &mut dyn vm::Context,
         instruction: Instruction, provided: Option<Cost>,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> vm::Result<InstructionResult<Cost>>
     {
         trace!("exec instruction: {:?}", instruction);
@@ -892,7 +886,8 @@ impl<Cost: CostType> Interpreter<Cost> {
                 // clear return data buffer before creating new call frame.
                 self.return_data = ReturnData::empty();
 
-                let valid_code_address = code_address.is_valid_address();
+                let valid_code_address =
+                    context.spec().is_valid_address(&code_address);
 
                 let can_call = has_balance
                     && context.depth() < context.spec().max_depth

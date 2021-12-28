@@ -6,11 +6,10 @@ use super::{super::impls::admin::*, macros::*, ExecutionTrait, SolFnTable};
 use crate::{
     evm::{ActionParams, Spec},
     executive::InternalRefContext,
-    trace::{trace::ExecTrace, Tracer},
+    trace::Tracer,
     vm,
 };
 use cfx_parameters::internal_contract_addresses::ADMIN_CONTROL_CONTRACT_ADDRESS;
-use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{Address, U256};
 
 make_solidity_contract! {
@@ -29,17 +28,10 @@ impl_function_type!(SetAdmin, "non_payable_write", gas: |spec: &Spec| spec.sstor
 impl ExecutionTrait for SetAdmin {
     fn execute_inner(
         &self, inputs: (Address, Address), params: &ActionParams,
-        context: &mut InternalRefContext,
-        _tracer: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
     ) -> vm::Result<()>
     {
-        set_admin(
-            inputs.0,
-            inputs.1,
-            context.callstack.contract_in_creation(),
-            params,
-            context.state,
-        )
+        set_admin(inputs.0, inputs.1, params, context)
     }
 }
 
@@ -51,8 +43,7 @@ impl_function_type!(Destroy, "non_payable_write", gas: |spec: &Spec| spec.sstore
 impl ExecutionTrait for Destroy {
     fn execute_inner(
         &self, input: Address, params: &ActionParams,
-        context: &mut InternalRefContext,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
     ) -> vm::Result<()>
     {
         destroy(
@@ -74,8 +65,7 @@ impl_function_type!(GetAdmin, "query_with_default_gas");
 impl ExecutionTrait for GetAdmin {
     fn execute_inner(
         &self, input: Address, _params: &ActionParams,
-        context: &mut InternalRefContext,
-        _tracer: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
     ) -> vm::Result<Address>
     {
         Ok(context.state.admin(&input)?)

@@ -36,10 +36,9 @@ impl Default for StateRoot {
 impl StateRoot {
     pub fn compute_state_root_hash(&self) -> H256 {
         let mut buffer: [u8; 96] = [0; 96];
-        &mut buffer[0..32].copy_from_slice(self.snapshot_root.as_bytes());
-        &mut buffer[32..64]
-            .copy_from_slice(self.intermediate_delta_root.as_bytes());
-        &mut buffer[64..96].copy_from_slice(self.delta_root.as_bytes());
+        buffer[0..32].copy_from_slice(self.snapshot_root.as_bytes());
+        buffer[32..64].copy_from_slice(self.intermediate_delta_root.as_bytes());
+        buffer[64..96].copy_from_slice(self.delta_root.as_bytes());
         keccak(&buffer[..])
     }
 

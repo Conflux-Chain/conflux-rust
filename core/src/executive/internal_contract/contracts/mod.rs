@@ -5,7 +5,8 @@
 mod admin;
 mod context;
 mod future;
-mod reentrancy;
+#[allow(unused)]
+mod pos;
 mod sponsor;
 mod staking;
 
@@ -22,8 +23,6 @@ mod macros {
     pub use cfx_types::H256;
     pub use keccak_hash::keccak;
 
-    pub(super) use super::SolFnTable;
-
     pub use super::super::{
         activate_at::{BlockNumber, IsActive},
         function::{
@@ -36,8 +35,9 @@ mod macros {
     pub use crate::spec::CommonParams;
 }
 
+pub(super) use self::pos::{IncreaseStakeEvent, RegisterEvent, RetireEvent};
 pub use self::{
-    admin::AdminControl, context::Context, reentrancy::AntiReentrancyConfig,
+    admin::AdminControl, context::Context, pos::PoSRegister,
     sponsor::SponsorWhitelistControl, staking::Staking,
 };
 
@@ -185,14 +185,15 @@ impl InternalContractMap {
     }
 }
 
-/// All Built-in contracts.
+/// All Built-in contracts. All these addresses will be initialized as an
+/// internal contract in the genesis block of test mode.
 pub fn all_internal_contracts() -> Vec<Box<dyn InternalContractTrait>> {
     vec![
         Box::new(AdminControl::instance()),
         Box::new(Staking::instance()),
         Box::new(SponsorWhitelistControl::instance()),
-        Box::new(AntiReentrancyConfig::instance()),
+        Box::new(future::AntiReentrancyConfig::instance()),
         Box::new(Context::instance()),
-        Box::new(future::PoS::instance()),
+        Box::new(PoSRegister::instance()),
     ]
 }

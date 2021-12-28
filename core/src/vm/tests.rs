@@ -23,10 +23,7 @@ use super::{
     CreateContractAddress, Env, Error, GasLeft, MessageCallResult, Result,
     ReturnData, Spec,
 };
-use crate::{
-    executive::InternalRefContext,
-    trace::{trace::ExecTrace, Tracer},
-};
+use crate::{executive::InternalRefContext, trace::Tracer};
 use cfx_bytes::Bytes;
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 use hash::keccak;
@@ -215,11 +212,11 @@ impl Context for MockContext {
     }
 
     fn suicide(
-        &mut self, refund_address: &Address,
-        _: &mut dyn Tracer<Output = ExecTrace>, _account_start_nonce: U256,
+        &mut self, refund_address: &Address, _: &mut dyn Tracer,
+        _account_start_nonce: U256,
     ) -> Result<()>
     {
-        if !refund_address.is_valid_address() {
+        if !refund_address.is_genesis_valid_address() {
             return Err(Error::InvalidAddress(*refund_address));
         }
         // The following code is from Parity, but it confuse me. Why refund

@@ -103,6 +103,22 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         .unwrap();
     }
 
+    fn add_total_pos_staking(&mut self, _v: U256) { unimplemented!() }
+
+    fn inc_distributable_pos_interest(
+        &mut self, _current_block_number: u64,
+    ) -> Result<()> {
+        unimplemented!()
+    }
+
+    fn distribute_pos_interest<'a>(
+        &mut self, _pos_points: Box<dyn Iterator<Item = (&'a H256, u64)> + 'a>,
+        _account_start_nonce: U256, _current_block_number: u64,
+    ) -> Result<Vec<(Address, H256, U256)>>
+    {
+        unimplemented!()
+    }
+
     fn new_contract_with_admin(
         &mut self, _contract: &Address, _admin: &Address, _balance: U256,
         _nonce: U256, _storage_layout: Option<StorageLayout>,
@@ -120,9 +136,6 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     }
 
     fn is_contract_with_code(&self, address: &Address) -> Result<bool> {
-        if !address.is_contract_address() {
-            return Ok(false);
-        }
         Ok(self
             .get_account(address)?
             .as_ref()
@@ -447,7 +460,9 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
             .map_or(0, |vote_stake_list| vote_stake_list.len()))
     }
 
-    fn clean_account(&mut self, _address: &Address) -> Result<()> {
+    fn genesis_special_clean_account(
+        &mut self, _address: &Address,
+    ) -> Result<()> {
         unimplemented!()
     }
 
@@ -484,6 +499,14 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
     }
 
     fn add_balance(
+        &mut self, _address: &Address, _by: &U256, _cleanup_mode: CleanupMode,
+        _account_start_nonce: U256,
+    ) -> Result<()>
+    {
+        unimplemented!()
+    }
+
+    fn add_pos_interest(
         &mut self, _address: &Address, _by: &U256, _cleanup_mode: CleanupMode,
         _account_start_nonce: U256,
     ) -> Result<()>
@@ -571,6 +594,12 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
             .unwrap_or(U256::zero());
     }
 
+    fn total_pos_staking_tokens(&self) -> U256 { unimplemented!() }
+
+    fn distributable_pos_interest(&self) -> U256 { unimplemented!() }
+
+    fn last_distribute_block(&self) -> u64 { unimplemented!() }
+
     fn remove_contract(&mut self, _address: &Address) -> Result<()> {
         unimplemented!()
     }
@@ -612,6 +641,16 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
                     Ok(())
                 },
             )
+    }
+
+    fn update_pos_status(
+        &mut self, _identifier: H256, _number: u64,
+    ) -> Result<()> {
+        unimplemented!()
+    }
+
+    fn pos_locked_staking(&self, _address: &Address) -> Result<U256> {
+        unimplemented!()
     }
 }
 
@@ -721,7 +760,6 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         )
     }
 
-    #[allow(dead_code)]
     fn require_or_new_basic_account<'a>(
         &'a mut self, address: &Address, account_start_nonce: &U256,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
@@ -769,7 +807,7 @@ use cfx_statedb::{
     TOTAL_BANK_TOKENS_KEY, TOTAL_STORAGE_TOKENS_KEY, TOTAL_TOKENS_KEY,
 };
 use cfx_storage::{utils::guarded_value::NonCopy, StorageStateTrait};
-use cfx_types::{address_util::AddressUtil, Address, H256};
+use cfx_types::{Address, H256};
 use keccak_hash::{keccak, KECCAK_EMPTY};
 use primitives::{
     CodeInfo, DepositList, EpochId, SponsorInfo, StorageLayout, StorageValue,

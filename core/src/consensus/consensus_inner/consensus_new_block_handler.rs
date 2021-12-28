@@ -12,6 +12,7 @@ use crate::{
             consensus_executor::{ConsensusExecutor, EpochExecutionTask},
             ConsensusGraphInner, NULL,
         },
+        pos_handler::PosVerifier,
         ConsensusConfig,
     },
     state_exposer::{ConsensusGraphBlockState, STATE_EXPOSER},
@@ -38,6 +39,7 @@ pub struct ConsensusNewBlockHandler {
     txpool: SharedTransactionPool,
     data_man: Arc<BlockDataManager>,
     executor: Arc<ConsensusExecutor>,
+    pos_verifier: Arc<PosVerifier>,
     statistics: SharedStatistics,
 
     /// Channel used to send epochs to PubSub
@@ -59,7 +61,7 @@ impl ConsensusNewBlockHandler {
         conf: ConsensusConfig, txpool: SharedTransactionPool,
         data_man: Arc<BlockDataManager>, executor: Arc<ConsensusExecutor>,
         statistics: SharedStatistics, notifications: Arc<Notifications>,
-        node_type: NodeType,
+        node_type: NodeType, pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         let epochs_sender = notifications.epochs_ordered.clone();
@@ -67,6 +69,7 @@ impl ConsensusNewBlockHandler {
             Mutex::new(BlameVerifier::new(data_man.clone(), notifications));
 
         Self {
+            pos_verifier,
             conf,
             txpool,
             data_man,
@@ -683,6 +686,34 @@ impl ConsensusNewBlockHandler {
             }
         }
 
+        // Check if `new` is in the subtree of its pos reference.
+        if self
+            .pos_verifier
+            .is_enabled_at_height(inner.arena[new].height)
+        {
+            let pivot_decision = inner
+                .get_pos_reference_pivot_decision(&inner.arena[new].hash)
+                .expect("pos reference checked");
+            match inner.hash_to_arena_indices.get(&pivot_decision) {
+                // Pivot decision is before checkpoint or fake.
+                // Check if it's on the pivot chain.
+                None => {
+                    warn!("Possibly partial invalid due to pos_reference's pivot decision not in consensus graph");
+                    return inner.pivot_block_processed(&pivot_decision);
+                }
+                Some(pivot_decision_arena_index) => {
+                    if inner.lca(new, *pivot_decision_arena_index)
+                        != *pivot_decision_arena_index
+                    {
+                        warn!("Partial invalid due to not in the subtree of pos_reference's pivot decision");
+                        // Not in the subtree of pivot_decision, mark as partial
+                        // invalid.
+                        return false;
+                    }
+                }
+            }
+        }
+
         return true;
     }
 
@@ -1003,8 +1034,13 @@ impl ConsensusNewBlockHandler {
                     inner, me, &anticone,
                 );
 
-            inner.arena[me].data.force_confirm =
-                inner.compute_force_confirm(Some(&timer_chain_tuple));
+            inner.arena[me].data.force_confirm = inner
+                .compute_block_force_confirm(
+                    &timer_chain_tuple,
+                    self.data_man
+                        .pos_reference_by_hash(&inner.arena[me].hash)
+                        .expect("header exist"),
+                );
             debug!(
                 "Force confirm block index {} in the past view of block index={}",
                 inner.arena[me].data.force_confirm, me
@@ -1117,6 +1153,9 @@ impl ConsensusNewBlockHandler {
         let mut fork_at;
         let old_pivot_chain_len = inner.pivot_chain.len();
 
+        // Update consensus inner with a possibly new pos_reference.
+        inner.update_pos_pivot_decision(me);
+
         // Now we are going to maintain the timer chain.
         let diff = inner.arena[me].data.past_view_timer_longest_difficulty
             + inner.get_timer_difficulty(me);
@@ -1176,7 +1215,7 @@ impl ConsensusNewBlockHandler {
         }
 
         meter.aggregate_total_weight_in_past(my_weight);
-        let force_confirm = inner.compute_force_confirm(None);
+        let force_confirm = inner.compute_global_force_confirm();
         let force_height = inner.arena[force_confirm].height;
         let last = inner.pivot_chain.last().cloned().unwrap();
         let force_lca = inner.lca(force_confirm, last);
@@ -1705,9 +1744,14 @@ impl ConsensusNewBlockHandler {
             // so we can safely ignore it in the consensus besides
             // update its sequence number in the data manager.
             if me == NULL {
-                // Block body in the anticone of a checkpoint is not needed.
-                self.data_man
-                    .remove_block_body(hash, true /* remove_db */);
+                // Block body in the anticone of a checkpoint is not needed for
+                // full nodes, but they are still needed to sync
+                // an archive node in the current implementation (to make their
+                // child blocks `graph_ready`), so we still keep
+                // them for now.
+
+                // self.data_man
+                //     .remove_block_body(hash, true /* remove_db */);
                 return;
             }
             me
@@ -1970,7 +2014,7 @@ impl ConsensusNewBlockHandler {
                         .upper_bound += 1;
                 }
             }
-            debug!(
+            info!(
                 "construct_pivot_state: index {} height {} compute_epoch {} has_storage {}.",
                 pivot_index, height, compute_epoch, has_storage,
             );

@@ -1,21 +1,11 @@
-use crate::{
-    block_data_manager::{BlockDataManager, DataManagerConfiguration, DbType},
-    cache_config::CacheConfig,
-    consensus::{
-        consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
-        ConsensusConfig, ConsensusInnerConfig,
-    },
-    db::NUM_COLUMNS,
-    machine::new_machine_with_builtin,
-    pow::{self, PowComputer, ProofOfWorkConfig},
-    spec::genesis::genesis_block,
-    statistics::Statistics,
-    sync::{SyncGraphConfig, SynchronizationGraph},
-    transaction_pool::TxPoolConfig,
-    verification::VerificationConfig,
-    vm_factory::VmFactory,
-    ConsensusGraph, NodeType, Notifications, TransactionPool,
+use std::{
+    collections::HashMap, path::Path, str::FromStr, sync::Arc, time::Duration,
 };
+
+use parking_lot::Mutex;
+use rand_08::{prelude::StdRng, SeedableRng};
+use threadpool::ThreadPool;
+
 use cfx_internal_common::ChainIdParamsInner;
 use cfx_parameters::{
     block::{MAX_BLOCK_SIZE_IN_BYTES, REFEREE_DEFAULT_BOUND},
@@ -24,11 +14,32 @@ use cfx_parameters::{
 };
 use cfx_storage::{StorageConfiguration, StorageManager};
 use cfx_types::{address_util::AddressUtil, Address, H256, U256};
-use core::str::FromStr;
-use parking_lot::Mutex;
+use diem_config::keys::ConfigKey;
+use diem_crypto::Uniform;
+use diem_types::validator_config::{
+    ConsensusPrivateKey, ConsensusVRFPrivateKey,
+};
 use primitives::{Block, BlockHeaderBuilder};
-use std::{collections::HashMap, path::Path, sync::Arc, time::Duration};
-use threadpool::ThreadPool;
+
+use crate::{
+    block_data_manager::{BlockDataManager, DataManagerConfiguration, DbType},
+    cache_config::CacheConfig,
+    consensus::{
+        consensus_inner::consensus_executor::ConsensusExecutionConfiguration,
+        pos_handler::{PosConfiguration, PosVerifier},
+        ConsensusConfig, ConsensusInnerConfig,
+    },
+    db::NUM_COLUMNS,
+    machine::new_machine_with_builtin,
+    pow::{self, PowComputer, ProofOfWorkConfig},
+    spec::genesis::{genesis_block, GenesisPosState},
+    statistics::Statistics,
+    sync::{SyncGraphConfig, SynchronizationGraph},
+    transaction_pool::TxPoolConfig,
+    verification::VerificationConfig,
+    vm_factory::VmFactory,
+    ConsensusGraph, NodeType, Notifications, TransactionPool,
+};
 
 pub fn create_simple_block_impl(
     parent_hash: H256, ref_hashes: Vec<H256>, height: u64, nonce: U256,
@@ -137,6 +148,11 @@ pub fn initialize_data_manager(
         machine.clone(),
         false, /* need_to_execute */
         None,
+        &Some(GenesisPosState {
+            initial_nodes: vec![],
+            initial_committee: vec![],
+            initial_seed: Default::default(),
+        }),
     ));
 
     let data_man = Arc::new(BlockDataManager::new(
@@ -163,12 +179,29 @@ pub fn initialize_synchronization_graph_with_data_manager(
 ) -> (Arc<SynchronizationGraph>, Arc<ConsensusGraph>)
 {
     let machine = Arc::new(new_machine_with_builtin(Default::default(), vm));
+    let mut rng = StdRng::from_seed([0u8; 32]);
+    let pos_verifier = Arc::new(PosVerifier::new(
+        None,
+        // These configurations will not be used.
+        PosConfiguration {
+            bls_key: ConfigKey::new(ConsensusPrivateKey::generate(&mut rng)),
+            vrf_key: ConfigKey::new(ConsensusVRFPrivateKey::generate(&mut rng)),
+            diem_conf_path: Default::default(),
+            protocol_conf: Default::default(),
+            pos_initial_nodes_path: "".to_string(),
+            vrf_proposal_threshold: Default::default(),
+            pos_state_config: Default::default(),
+        },
+        u64::MAX,
+    ));
+
     let verification_config = VerificationConfig::new(
         true, /* test_mode */
         REFEREE_DEFAULT_BOUND,
         MAX_BLOCK_SIZE_IN_BYTES,
         TRANSACTION_DEFAULT_EPOCH_BOUND,
         machine.clone(),
+        pos_verifier.clone(),
     );
 
     let txpool = Arc::new(TransactionPool::new(
@@ -188,6 +221,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         0,                /* stratum_port */
         None,             /* stratum_secret */
         1,                /* pow_problem_window_size */
+        0,                /* cip_height */
     );
     let sync_config = SyncGraphConfig {
         future_block_buffer_capacity: 1,
@@ -206,6 +240,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
                 era_epoch_count,
                 enable_optimistic_execution: false,
                 enable_state_expose: false,
+                pos_pivot_decision_defer_epoch_count: 50,
                 debug_dump_dir_invalid_state_root: None,
                 debug_invalid_state_root_epoch: None,
             },
@@ -229,6 +264,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         },
         verification_config.clone(),
         NodeType::Archive,
+        pos_verifier.clone(),
     ));
 
     let sync = Arc::new(SynchronizationGraph::new(
@@ -239,6 +275,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
         sync_config,
         notifications,
         machine,
+        pos_verifier.clone(),
     ));
 
     (sync, consensus)

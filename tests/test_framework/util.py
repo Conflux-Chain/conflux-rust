@@ -8,7 +8,7 @@ import logging
 import os
 import random
 import re
-from subprocess import CalledProcessError, check_call
+from subprocess import CalledProcessError, check_output
 import time
 import socket
 import threading
@@ -16,6 +16,8 @@ import jsonrpcclient.exceptions
 import solcx
 import web3
 from sys import platform
+import yaml
+import shutil
 
 from test_framework.simple_rpc_proxy import SimpleRpcProxy
 from . import coverage
@@ -263,38 +265,66 @@ def wait_until(predicate,
 # Node functions
 ################
 
-def initialize_tg_config(dirname, nodes):
-    tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/tg_config_gen")
-    check_call([tg_config_gen, "random", "--num-validator={}".format(nodes)], cwd=dirname)
-    consensus_peers_config = open(os.path.join(dirname, "consensus_peers.config.toml")).readlines()
-    private_keys = open(os.path.join(dirname, "private_key")).readlines()
-    print('consensus_peers_config: {}'.format(consensus_peers_config))
-    print('private_keys: {}'.format(private_keys))
-    for n in range(nodes):
+def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="0"*64, start_index=None, pkfile=None, pos_round_time_ms=1000):
+    tg_config_gen = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../target/release/pos-genesis-tool")
+    try:
+        if pkfile is None:
+            check_output([tg_config_gen, "random", "--num-validator={}".format(nodes),
+                    "--num-genesis-validator={}".format(genesis_nodes), "--chain-id={}".format(chain_id),
+                          "--initial-seed={}".format(initial_seed)], cwd=dirname)
+        else:
+            print([tg_config_gen, "frompub", pkfile], dirname)
+            check_output([tg_config_gen, "frompub", "--initial-seed={}".format(initial_seed), pkfile], cwd=dirname)
+    except CalledProcessError as e:
+        print(e.output)
+    waypoint_path = os.path.join(dirname, 'waypoint_config')
+    genesis_path = os.path.join(dirname, 'genesis_file')
+    waypoint = open(waypoint_path, 'r').readlines()[0].strip()
+    private_keys_dir = os.path.join(dirname, "private_keys")
+    if start_index is None:
+        start_index = 0
+    print(start_index, nodes)
+    for n in range(start_index, start_index + nodes):
         datadir = get_datadir_path(dirname, n)
         if not os.path.isdir(datadir):
             os.makedirs(datadir)
-        os.makedirs(os.path.join(datadir, 'net_config'))
-        os.makedirs(os.path.join(datadir, 'tg_config'))
-        with open(os.path.join(datadir, 'tg_config', 'tg_config.conf'), 'w') as f:
-            base_local_conf = {
-                "role": "\"validator\""
+        net_config_dir = os.path.join(datadir, 'blockchain_data', 'net_config')
+        os.makedirs(net_config_dir, exist_ok = True)
+        os.makedirs(os.path.join(datadir, 'diemdb'), exist_ok = True)
+        validator_config = {}
+        validator_config['base'] = {
+            'data_dir': os.path.join(datadir, 'diemdb'),
+            'role': 'validator',
+            'waypoint': {
+                'from_config': waypoint,
             }
-            f.write("enable_state_expose=true\n")
-            f.write("[base]\n")
-            for k in base_local_conf:
-                f.write("{}={}\n".format(k, base_local_conf[k]))
-            consensus_local_conf = {
-                "consensus_peers_file": "\"consensus_peers.config.toml\""
-            }
-            f.write("\n[consensus]\n")
-            for k in consensus_local_conf:
-                f.write("{}={}\n".format(k, consensus_local_conf[k]))
-        with open(os.path.join(datadir, 'tg_config', 'consensus_peers.config.toml'), 'w') as f:
-            for line in consensus_peers_config:
-                f.write(line)
-        with open(os.path.join(datadir, 'net_config', 'key'), 'w') as f:
-            f.write(private_keys[n])
+        }
+        validator_config['execution'] = {
+            'genesis_file_location': genesis_path,
+        }
+        validator_config['storage'] = {
+            'dir': os.path.join(datadir, 'diemdb', 'db'),
+        }
+        validator_config['consensus'] = {
+            'safety_rules': {
+                'service': {
+                    'type': "local",
+                }
+            },
+            'round_initial_timeout_ms': pos_round_time_ms,
+        }
+        validator_config['logger'] = {
+            'level': "TRACE",
+            'file': os.path.join(datadir, "diem.log")
+        }
+        validator_config['mempool'] = {
+            "shared_mempool_tick_interval_ms": 200,
+        }
+        with open(os.path.join(datadir, 'validator_full_node.yaml'), 'w') as f:
+            f.write(yaml.dump(validator_config, default_flow_style=False))
+        shutil.copyfile(os.path.join(private_keys_dir, str(n)), os.path.join(net_config_dir, 'pos_key'))
+        shutil.copyfile(os.path.join(private_keys_dir, "pow_sk"+str(n)), os.path.join(datadir, 'pow_sk'))
+
 
 def initialize_datadir(dirname, n, port_min, conf_parameters, extra_files: dict = {}):
     datadir = get_datadir_path(dirname, n)
@@ -307,7 +337,9 @@ def initialize_datadir(dirname, n, port_min, conf_parameters, extra_files: dict 
             "jsonrpc_local_http_port": str(rpc_port(n)),
             "jsonrpc_ws_port": str(pubsub_port(n)),
             "jsonrpc_http_port": str(remote_rpc_port(n)),
-            "tg_config_path": "\'{}\'".format(os.path.join(datadir, "tg_config/tg_config.conf")),
+            "pos_config_path": "\'{}\'".format(os.path.join(datadir, "validator_full_node.yaml")),
+            "pos_initial_nodes_path": "\'{}\'".format(os.path.join(dirname, "initial_nodes.json")),
+            "pos_private_key_path": "'{}'".format(os.path.join(datadir, "blockchain_data", "net_config", "pos_key"))
         }
         local_conf.update(conflux.config.small_local_test_conf)
         local_conf.update(conf_parameters)

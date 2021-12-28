@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2018"
 
 [dependencies]
-cfxcore = { path = "../../../core" }
+cfxcore = { path = "../../../core", features = ["bls-blst"] }
 cfx-types = { path = "../../../cfx_types", features=["storage_benchmark_no_account_space_check"] }
 cfx-statedb = { path = "../../../core/statedb" }
 cfx-storage = { path = "../../../core/storage" }
@@ -29,6 +29,7 @@ parking_lot = "0.11"
 primitives = { path = "../../../primitives" }
 rlp = { version = "0.3.0", feature = ["ethereum"] }
 serde_json = "1.0"
+base64ct = "=1.1.1"
 
 [patch.'https://github.com/paritytech/parity-ethereum']
 # The upstream ethkey uses the master branch of rust-secp256k1,
@@ -43,6 +44,9 @@ serde_json = "1.0"
 #ethkey = { path = "../../../accounts/ethkey" }
 # This also don't work because cargo scans the whole git and aborted due to lack of Cargo.toml in one dir.
 #ethkey = { package = "ethkey", git = "https://github.com/Conflux-Chain/conflux-rust", commit = "026304" }
+
+[patch.'https://github.com/paritytech/bn']
+bn = {git = 'https://github.com/Conflux-Chain/bn.git', default-features = false, rev="635c4cdd560bc0c8b262e6bf809dc709da8bcd7e", version = "=0.4.4"}
 
 [patch.crates-io]
 parity-snappy = { path = "parity-snappy/rust-snappy" }

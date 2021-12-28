@@ -3,7 +3,7 @@ use crate::{
     vm::{self, ActionParams, Env, Spec},
 };
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
-use cfx_types::{H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, H256, U256};
 
 /// The internal contracts need to access the context parameter directly, e.g.,
 /// `foo(env, spec)`. But `foo(context.env(), context.spec())` will incur
@@ -23,7 +23,7 @@ pub struct InternalRefContext<'a> {
 // here temporarily.
 impl<'a> InternalRefContext<'a> {
     pub fn log(
-        &mut self, param: &ActionParams, spec: &Spec, topics: Vec<H256>,
+        &mut self, params: &ActionParams, spec: &Spec, topics: Vec<H256>,
         data: Vec<u8>,
     ) -> vm::Result<()>
     {
@@ -33,7 +33,7 @@ impl<'a> InternalRefContext<'a> {
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
-        let address = param.address;
+        let address = params.address;
         self.substate.logs_mut().push(LogEntry {
             address,
             topics,
@@ -44,24 +44,35 @@ impl<'a> InternalRefContext<'a> {
     }
 
     pub fn set_storage(
-        &mut self, param: &ActionParams, key: Vec<u8>, value: U256,
+        &mut self, params: &ActionParams, key: Vec<u8>, value: U256,
     ) -> vm::Result<()> {
         self.substate
             .set_storage(
                 self.state,
-                &param.address,
+                &params.address,
                 key,
                 value,
-                param.storage_owner,
+                params.storage_owner,
             )
             .map_err(|e| e.into())
     }
 
     pub fn storage_at(
-        &mut self, param: &ActionParams, key: &[u8],
+        &mut self, params: &ActionParams, key: &[u8],
     ) -> vm::Result<U256> {
         self.substate
-            .storage_at(self.state, &param.address, key)
+            .storage_at(self.state, &params.address, key)
             .map_err(|e| e.into())
+    }
+
+    pub fn is_contract_address(&self, address: &Address) -> vm::Result<bool> {
+        let answer = if self.spec.cip80 {
+            let deployed = self.state.is_contract_with_code(address)?;
+            let deploying = self.callstack.contains_key(address);
+            deployed || deploying
+        } else {
+            address.is_contract_address()
+        };
+        Ok(answer)
     }
 }

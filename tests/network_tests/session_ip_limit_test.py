@@ -26,7 +26,8 @@ class SessionIpLimitTests(ConfluxTestFramework):
         self.setup_nodes()
 
     def run_test(self):
-        peers = [DefaultNode() for _ in range(self.num_peers)]
+        genesis = self.nodes[0].cfx_getBlockByEpochNumber("0x0", False)["hash"]
+        peers = [DefaultNode(genesis) for _ in range(self.num_peers)]
         for p in peers:
             self.nodes[0].add_p2p_connection(p)
         network_thread_start()

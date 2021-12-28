@@ -10,11 +10,10 @@ use crate::{
     executive::InternalRefContext,
     impl_function_type, make_function_table, make_solidity_contract,
     make_solidity_function,
-    trace::{trace::ExecTrace, Tracer},
+    trace::Tracer,
     vm,
 };
 use cfx_parameters::internal_contract_addresses::CONTEXT_CONTRACT_ADDRESS;
-use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{Address, U256};
 #[cfg(test)]
 use rustc_hex::FromHex;
@@ -23,9 +22,16 @@ make_solidity_contract! {
     pub struct Context(CONTEXT_CONTRACT_ADDRESS, generate_fn_table, initialize: |params: &CommonParams| params.transition_numbers.cip64, is_active: |spec: &Spec| spec.cip64);
 }
 
-fn generate_fn_table() -> SolFnTable { make_function_table!(EpochNumber) }
+fn generate_fn_table() -> SolFnTable {
+    make_function_table!(EpochNumber, PoSHeight, FinalizedEpoch)
+}
 
-group_impl_is_active!(|spec: &Spec| spec.cip64, EpochNumber);
+group_impl_is_active!(
+    |spec: &Spec| spec.cip64,
+    EpochNumber,
+    PoSHeight,
+    FinalizedEpoch
+);
 
 make_solidity_function! {
     struct EpochNumber((), "epochNumber()", U256);
@@ -37,11 +43,44 @@ impl_function_type!(EpochNumber, "query", gas: |spec: &Spec| spec.tier_step_gas[
 impl ExecutionTrait for EpochNumber {
     fn execute_inner(
         &self, _input: (), _params: &ActionParams,
-        context: &mut InternalRefContext,
-        _tracer: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
     ) -> vm::Result<U256>
     {
         Ok(U256::from(context.env.epoch_height))
+    }
+}
+
+make_solidity_function! {
+    struct PoSHeight((), "posHeight()", U256);
+}
+
+// same gas cost as the `NUMBER` opcode
+impl_function_type!(PoSHeight, "query", gas: |spec: &Spec| spec.tier_step_gas[(GasPriceTier::Base).idx()]);
+
+impl ExecutionTrait for PoSHeight {
+    fn execute_inner(
+        &self, _input: (), _params: &ActionParams,
+        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
+    ) -> vm::Result<U256>
+    {
+        Ok(context.env.pos_view.unwrap_or(0).into())
+    }
+}
+
+make_solidity_function! {
+    struct FinalizedEpoch((), "finalizedEpochNumber()", U256);
+}
+
+// same gas cost as the `NUMBER` opcode
+impl_function_type!(FinalizedEpoch, "query", gas: |spec: &Spec| spec.tier_step_gas[(GasPriceTier::Base).idx()]);
+
+impl ExecutionTrait for FinalizedEpoch {
+    fn execute_inner(
+        &self, _input: (), _params: &ActionParams,
+        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
+    ) -> vm::Result<U256>
+    {
+        Ok(context.env.finalized_epoch.unwrap_or(0).into())
     }
 }
 

@@ -56,6 +56,24 @@ pub trait StateDbExt {
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>;
 
+    fn get_total_pos_staking_tokens(&self) -> Result<U256>;
+    fn set_total_pos_staking_tokens(
+        &mut self, total_pos_staking_tokens: &U256,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> Result<()>;
+
+    fn get_distributable_pos_interest(&self) -> Result<U256>;
+    fn set_distributable_pos_interest(
+        &mut self, distributable_pos_interest: &U256,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> Result<()>;
+
+    fn get_last_distribute_block(&self) -> Result<u64>;
+    fn set_last_distribute_block(
+        &mut self, last_distribute_block: u64,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> Result<()>;
+
     // This function is used to check whether the db has been initialized when
     // create a state. So we can know the loaded `None` represents "not
     // initialized" or "zero value".
@@ -68,6 +86,11 @@ pub const INTEREST_RATE_KEY: &'static [u8] = b"interest_rate";
 pub const TOTAL_BANK_TOKENS_KEY: &'static [u8] = b"total_staking_tokens";
 pub const TOTAL_STORAGE_TOKENS_KEY: &'static [u8] = b"total_storage_tokens";
 pub const TOTAL_TOKENS_KEY: &'static [u8] = b"total_issued_tokens";
+pub const TOTAL_POS_STAKING_TOKENS_KEY: &'static [u8] =
+    b"total_pos_staking_tokens";
+pub const DISTRIBUTABLE_POS_INTEREST_KEY: &'static [u8] =
+    b"distributable_pos_interest";
+pub const LAST_DISTRIBUTE_BLOCK_KEY: &'static [u8] = b"last_distribute_block";
 
 impl<StateDbStorage: StorageStateTrait> StateDbExt
     for StateDbGeneric<StateDbStorage>
@@ -247,6 +270,84 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         self.set::<U256>(
             total_storage_tokens_key,
             total_storage_tokens,
+            debug_record,
+        )
+    }
+
+    fn get_total_pos_staking_tokens(&self) -> Result<U256> {
+        let total_pos_staking_tokens_key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            TOTAL_POS_STAKING_TOKENS_KEY,
+        );
+        let total_pos_staking_tokens_opt =
+            self.get::<U256>(total_pos_staking_tokens_key)?;
+        Ok(total_pos_staking_tokens_opt.unwrap_or_default())
+    }
+
+    fn set_total_pos_staking_tokens(
+        &mut self, total_pos_staking_tokens: &U256,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> Result<()>
+    {
+        let total_pos_staking_tokens_key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            TOTAL_POS_STAKING_TOKENS_KEY,
+        );
+        self.set::<U256>(
+            total_pos_staking_tokens_key,
+            total_pos_staking_tokens,
+            debug_record,
+        )
+    }
+
+    fn get_distributable_pos_interest(&self) -> Result<U256> {
+        let distributable_pos_interest_key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            DISTRIBUTABLE_POS_INTEREST_KEY,
+        );
+        let distributable_pos_interest_opt =
+            self.get::<U256>(distributable_pos_interest_key)?;
+        Ok(distributable_pos_interest_opt.unwrap_or_default())
+    }
+
+    fn set_distributable_pos_interest(
+        &mut self, distributable_pos_interest: &U256,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> Result<()>
+    {
+        let distributable_pos_interest_key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            DISTRIBUTABLE_POS_INTEREST_KEY,
+        );
+        self.set::<U256>(
+            distributable_pos_interest_key,
+            distributable_pos_interest,
+            debug_record,
+        )
+    }
+
+    fn get_last_distribute_block(&self) -> Result<u64> {
+        let last_distribute_block_key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            LAST_DISTRIBUTE_BLOCK_KEY,
+        );
+        let last_distribute_block_opt =
+            self.get::<U256>(last_distribute_block_key)?;
+        Ok(last_distribute_block_opt.unwrap_or_default().low_u64())
+    }
+
+    fn set_last_distribute_block(
+        &mut self, last_distribute_block: u64,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> Result<()>
+    {
+        let last_distribute_block_key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            LAST_DISTRIBUTE_BLOCK_KEY,
+        );
+        self.set::<U256>(
+            last_distribute_block_key,
+            &U256::from(last_distribute_block),
             debug_record,
         )
     }

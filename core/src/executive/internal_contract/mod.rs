@@ -5,12 +5,15 @@
 mod activate_at;
 mod contracts;
 pub mod function;
-mod impls;
+pub mod impls;
 mod internal_context;
 
 pub use self::{
     contracts::InternalContractMap,
-    impls::{get_reentrancy_allowance, suicide},
+    impls::{
+        pos::{entries as pos_internal_entries, IndexStatus},
+        suicide,
+    },
     internal_context::InternalRefContext,
 };
 pub use solidity_abi::ABIDecodeError;
@@ -20,7 +23,7 @@ use crate::{
     bytes::Bytes,
     hash::keccak,
     spec::CommonParams,
-    trace::{trace::ExecTrace, Tracer},
+    trace::Tracer,
     vm::{self, ActionParams, GasLeft},
 };
 use cfx_types::{Address, H256};
@@ -48,7 +51,7 @@ pub trait InternalContractTrait: Send + Sync + IsActive {
     /// execute this internal contract on the given parameters.
     fn execute(
         &self, params: &ActionParams, context: &mut InternalRefContext,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        tracer: &mut dyn Tracer,
     ) -> vm::Result<GasLeft>
     {
         let call_data = params
@@ -87,8 +90,7 @@ pub trait InternalContractTrait: Send + Sync + IsActive {
 pub trait SolidityFunctionTrait: Send + Sync + IsActive {
     fn execute(
         &self, input: &[u8], params: &ActionParams,
-        context: &mut InternalRefContext,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
     ) -> vm::Result<GasLeft>;
 
     /// The string for function sig
@@ -110,7 +112,6 @@ pub trait SolidityEventTrait: Send + Sync {
     fn log(
         indexed: &Self::Indexed, non_indexed: &Self::NonIndexed,
         param: &ActionParams, context: &mut InternalRefContext,
-        _tracer: &mut dyn Tracer<Output = ExecTrace>,
     ) -> vm::Result<()>
     {
         let mut topics = vec![Self::event_sig()];

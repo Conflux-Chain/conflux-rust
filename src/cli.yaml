@@ -173,6 +173,11 @@ args:
         long: account-provider-refresh-time-ms
         value_name: MS
         takes_value: true
+    - dev-pos-private-key-encryption-password:
+        help: Sets the encryption password for the pos private key file. It's used to encrypt a new generated key or to decrypt an existing key file.
+        long: dev-pos-private-key-encryption-password
+        value_name: PASSWD
+        takes_value: true
     - light:
         long: light
     - archive:
@@ -692,7 +697,7 @@ subcommands:
                                 about: Get the detailed status of specified transaction
                                 args:
                                     - rpc-method:
-                                        default_value: tx_inspect
+                                        default_value: txpool_txWithPoolInfo
                                         hidden: true
                                     - rpc-args:
                                         multiple: true
@@ -740,7 +745,7 @@ subcommands:
                                 about: Remove all transactions
                                 args:
                                     - rpc-method:
-                                        default_value: clear_tx_pool
+                                        default_value: txpool_clear
                                         hidden: true
                     - net:
                         about: Network subcommands
@@ -850,3 +855,30 @@ subcommands:
                                     - rpc-method:
                                         default_value: cfx_getStatus
                                         hidden: true
+                    - pos:
+                        about: PoS subcommands
+                        setting: SubcommandRequiredElseHelp
+                        subcommands:
+                            - register:
+                                about: Return the transaction data needed to register the PoS keys used by this Conflux node.
+                                args:
+                                    - rpc-method:
+                                          default_value: pos_register
+                                          hidden: true
+                                    - rpc-args:
+                                          multiple: true
+                                          use_delimiter: true
+                                          default_value: power:u64
+                                          hidden: true
+                                    - power:
+                                        help: The voting power to register (one voting power is 100 staked CFX)
+                                        long: power
+                                        required: true
+                                        takes_value: true
+
+                            - retire:
+                                  about: Send a PoS transaction to retire this Conflux node.
+                                  args:
+                                      - rpc-method:
+                                            default_value: pos_retire_self
+                                            hidden: true
