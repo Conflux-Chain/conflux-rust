@@ -5,10 +5,7 @@
 use cfx_types::{Address, U256};
 use heap_map::HeapMap;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
-use std::{
-    cmp::{Ord, Ordering, PartialEq, PartialOrd, Reverse},
-    collections::HashMap,
-};
+use std::cmp::{Ord, Ordering, PartialEq, PartialOrd, Reverse};
 
 /// This is the internal node type of `GarbageCollector`.
 /// A node `lhs` is considered as smaller than another node `rhs` if `lhs.count
@@ -29,20 +26,18 @@ pub struct GarbageCollectorValue {
 
 impl Ord for GarbageCollectorValue {
     fn cmp(&self, other: &Self) -> Ordering {
-        match (
+        (
             self.count,
             Reverse(self.has_ready_tx),
             Reverse(self.first_tx_gas_price),
+            Reverse(self.timestamp),
         )
             .cmp(&(
                 other.count,
                 Reverse(other.has_ready_tx),
                 Reverse(other.first_tx_gas_price),
-            )) {
-            Ordering::Less => Ordering::Less,
-            Ordering::Greater => Ordering::Greater,
-            Ordering::Equal => other.timestamp.cmp(&self.timestamp),
-        }
+                Reverse(other.timestamp),
+            ))
     }
 }
 
@@ -57,8 +52,6 @@ impl PartialOrd for GarbageCollectorValue {
 #[derive(Default, DeriveMallocSizeOf)]
 pub struct GarbageCollector {
     heap_map: HeapMap<Address, GarbageCollectorValue>,
-    data: Vec<GarbageCollectorValue>,
-    mapping: HashMap<Address, usize>,
     gc_size: usize,
 }
 
@@ -74,6 +67,10 @@ impl GarbageCollector {
             first_tx_gas_price,
             timestamp,
         };
+        if let Some(origin) = self.heap_map.get(sender) {
+            self.gc_size -= origin.count;
+        }
+        self.gc_size += count;
         self.heap_map.insert(sender, value);
     }
 
@@ -96,11 +93,16 @@ impl GarbageCollector {
 
     pub fn is_empty(&self) -> bool { self.heap_map.is_empty() }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn len(&self) -> usize { self.heap_map.len() }
 
     #[inline]
     pub fn gc_size(&self) -> usize { self.gc_size }
+
+    #[cfg(test)]
+    fn top(&self) -> Option<(&Address, &GarbageCollectorValue)> {
+        self.heap_map.top()
+    }
 }
 
 #[cfg(test)]
@@ -123,33 +125,33 @@ mod garbage_collector_test {
         for _ in 0..10 {
             addr.push(Address::random());
         }
-        gc.insert(&addr[0], 10, 10);
+        gc.insert(&addr[0], 10, 10, false, 0.into());
         assert_eq!(gc.len(), 1);
         assert_eq!(gc.gc_size(), 10);
-        assert_eq!(gc.top().unwrap().sender, addr[0]);
-        assert_eq!(gc.top().unwrap().count, 10);
-        assert_eq!(gc.top().unwrap().timestamp, 10);
+        assert_eq!(*gc.top().unwrap().0, addr[0]);
+        assert_eq!(gc.top().unwrap().1.count, 10);
+        assert_eq!(gc.top().unwrap().1.timestamp, 10);
 
-        gc.insert(&addr[1], 10, 5);
+        gc.insert(&addr[1], 10, 5, false, 0.into());
         assert_eq!(gc.len(), 2);
         assert_eq!(gc.gc_size(), 20);
-        assert_eq!(gc.top().unwrap().sender, addr[1]);
-        assert_eq!(gc.top().unwrap().count, 10);
-        assert_eq!(gc.top().unwrap().timestamp, 5);
+        assert_eq!(*gc.top().unwrap().0, addr[1]);
+        assert_eq!(gc.top().unwrap().1.count, 10);
+        assert_eq!(gc.top().unwrap().1.timestamp, 5);
 
-        gc.insert(&addr[2], 11, 5);
+        gc.insert(&addr[2], 11, 5, false, 0.into());
         assert_eq!(gc.len(), 3);
         assert_eq!(gc.gc_size(), 31);
-        assert_eq!(gc.top().unwrap().sender, addr[2]);
-        assert_eq!(gc.top().unwrap().count, 11);
-        assert_eq!(gc.top().unwrap().timestamp, 5);
+        assert_eq!(*gc.top().unwrap().0, addr[2]);
+        assert_eq!(gc.top().unwrap().1.count, 11);
+        assert_eq!(gc.top().unwrap().1.timestamp, 5);
 
-        gc.insert(&addr[0], 15, 0);
+        gc.insert(&addr[0], 15, 0, false, 0.into());
         assert_eq!(gc.len(), 3);
         assert_eq!(gc.gc_size(), 36);
-        assert_eq!(gc.top().unwrap().sender, addr[0]);
-        assert_eq!(gc.top().unwrap().count, 15);
-        assert_eq!(gc.top().unwrap().timestamp, 0);
+        assert_eq!(*gc.top().unwrap().0, addr[0]);
+        assert_eq!(gc.top().unwrap().1.count, 15);
+        assert_eq!(gc.top().unwrap().1.timestamp, 0);
 
         assert_eq!(gc.get_timestamp(&addr[0]), Some(0));
         assert_eq!(gc.get_timestamp(&addr[1]), Some(5));
@@ -157,21 +159,21 @@ mod garbage_collector_test {
         assert_eq!(gc.get_timestamp(&addr[3]), None);
 
         let top = gc.pop().unwrap();
-        assert_eq!(top.sender, addr[0]);
-        assert_eq!(top.count, 15);
-        assert_eq!(top.timestamp, 0);
+        assert_eq!(top.0, addr[0]);
+        assert_eq!(top.1.count, 15);
+        assert_eq!(top.1.timestamp, 0);
         assert_eq!(gc.len(), 2);
         assert_eq!(gc.gc_size(), 21);
         let top = gc.pop().unwrap();
-        assert_eq!(top.sender, addr[2]);
-        assert_eq!(top.count, 11);
-        assert_eq!(top.timestamp, 5);
+        assert_eq!(top.0, addr[2]);
+        assert_eq!(top.1.count, 11);
+        assert_eq!(top.1.timestamp, 5);
         assert_eq!(gc.len(), 1);
         assert_eq!(gc.gc_size(), 10);
         let top = gc.pop().unwrap();
-        assert_eq!(top.sender, addr[1]);
-        assert_eq!(top.count, 10);
-        assert_eq!(top.timestamp, 5);
+        assert_eq!(top.0, addr[1]);
+        assert_eq!(top.1.count, 10);
+        assert_eq!(top.1.timestamp, 5);
         assert_eq!(gc.len(), 0);
         assert_eq!(gc.gc_size(), 0);
         assert!(gc.pop().is_none());
@@ -189,83 +191,83 @@ mod garbage_collector_test {
         for _ in 0..10 {
             addr.push(Address::random());
         }
-        gc.insert(&addr[0], 0, 10);
+        gc.insert(&addr[0], 0, 10, false, 0.into());
         assert_eq!(gc.len(), 1);
         assert_eq!(gc.gc_size(), 0);
-        assert_eq!(gc.top().unwrap().sender, addr[0]);
-        assert_eq!(gc.top().unwrap().count, 0);
-        assert_eq!(gc.top().unwrap().timestamp, 10);
+        assert_eq!(*gc.top().unwrap().0, addr[0]);
+        assert_eq!(gc.top().unwrap().1.count, 0);
+        assert_eq!(gc.top().unwrap().1.timestamp, 10);
 
-        gc.insert(&addr[1], 0, 5);
+        gc.insert(&addr[1], 0, 5, false, 0.into());
         assert_eq!(gc.len(), 2);
         assert_eq!(gc.gc_size(), 0);
-        assert_eq!(gc.top().unwrap().sender, addr[1]);
-        assert_eq!(gc.top().unwrap().count, 0);
-        assert_eq!(gc.top().unwrap().timestamp, 5);
+        assert_eq!(*gc.top().unwrap().0, addr[1]);
+        assert_eq!(gc.top().unwrap().1.count, 0);
+        assert_eq!(gc.top().unwrap().1.timestamp, 5);
 
-        gc.update_ready_tx(&addr[1], false, 1.into());
+        gc.insert(&addr[1], 0, 5, false, 1.into());
         assert_eq!(gc.len(), 2);
         assert_eq!(gc.gc_size(), 0);
-        assert_eq!(gc.top().unwrap().sender, addr[0]);
-        assert_eq!(gc.top().unwrap().count, 0);
-        assert_eq!(gc.top().unwrap().timestamp, 10);
+        assert_eq!(*gc.top().unwrap().0, addr[0]);
+        assert_eq!(gc.top().unwrap().1.count, 0);
+        assert_eq!(gc.top().unwrap().1.timestamp, 10);
 
-        gc.update_ready_tx(&addr[0], true, 1.into());
+        gc.insert(&addr[0], 0, 10, true, 1.into());
         assert_eq!(gc.len(), 2);
         assert_eq!(gc.gc_size(), 0);
-        assert_eq!(gc.top().unwrap().sender, addr[1]);
-        assert_eq!(gc.top().unwrap().count, 0);
-        assert_eq!(gc.top().unwrap().timestamp, 5);
+        assert_eq!(*gc.top().unwrap().0, addr[1]);
+        assert_eq!(gc.top().unwrap().1.count, 0);
+        assert_eq!(gc.top().unwrap().1.timestamp, 5);
 
-        gc.update_ready_tx(&addr[1], true, 2.into());
+        gc.insert(&addr[1], 0, 5, true, 2.into());
         assert_eq!(gc.len(), 2);
         assert_eq!(gc.gc_size(), 0);
-        assert_eq!(gc.top().unwrap().sender, addr[0]);
-        assert_eq!(gc.top().unwrap().count, 0);
-        assert_eq!(gc.top().unwrap().timestamp, 10);
+        assert_eq!(*gc.top().unwrap().0, addr[0]);
+        assert_eq!(gc.top().unwrap().1.count, 0);
+        assert_eq!(gc.top().unwrap().1.timestamp, 10);
 
-        gc.update_ready_tx(&addr[0], true, 3.into());
+        gc.insert(&addr[0], 0, 10, true, 3.into());
         assert_eq!(gc.len(), 2);
         assert_eq!(gc.gc_size(), 0);
-        assert_eq!(gc.top().unwrap().sender, addr[1]);
-        assert_eq!(gc.top().unwrap().count, 0);
-        assert_eq!(gc.top().unwrap().timestamp, 5);
+        assert_eq!(*gc.top().unwrap().0, addr[1]);
+        assert_eq!(gc.top().unwrap().1.count, 0);
+        assert_eq!(gc.top().unwrap().1.timestamp, 5);
 
-        gc.update_ready_tx(&addr[0], false, 1.into());
+        gc.insert(&addr[0], 0, 10, false, 1.into());
         assert_eq!(gc.len(), 2);
         assert_eq!(gc.gc_size(), 0);
-        assert_eq!(gc.top().unwrap().sender, addr[0]);
-        assert_eq!(gc.top().unwrap().count, 0);
-        assert_eq!(gc.top().unwrap().timestamp, 10);
+        assert_eq!(*gc.top().unwrap().0, addr[0]);
+        assert_eq!(gc.top().unwrap().1.count, 0);
+        assert_eq!(gc.top().unwrap().1.timestamp, 10);
 
-        gc.insert(&addr[2], 1, 5);
+        gc.insert(&addr[2], 1, 5, false, 0.into());
         assert_eq!(gc.len(), 3);
         assert_eq!(gc.gc_size(), 1);
-        assert_eq!(gc.top().unwrap().sender, addr[2]);
-        assert_eq!(gc.top().unwrap().count, 1);
-        assert_eq!(gc.top().unwrap().timestamp, 5);
+        assert_eq!(*gc.top().unwrap().0, addr[2]);
+        assert_eq!(gc.top().unwrap().1.count, 1);
+        assert_eq!(gc.top().unwrap().1.timestamp, 5);
 
         let top = gc.pop().unwrap();
-        assert_eq!(top.sender, addr[2]);
-        assert_eq!(top.count, 1);
-        assert_eq!(top.timestamp, 5);
-        assert_eq!(top.first_tx_gas_price, U256::from(0));
+        assert_eq!(top.0, addr[2]);
+        assert_eq!(top.1.count, 1);
+        assert_eq!(top.1.timestamp, 5);
+        assert_eq!(top.1.first_tx_gas_price, U256::from(0));
         assert_eq!(gc.len(), 2);
         assert_eq!(gc.gc_size(), 0);
         let top = gc.pop().unwrap();
-        assert_eq!(top.sender, addr[0]);
-        assert_eq!(top.count, 0);
-        assert_eq!(top.timestamp, 10);
-        assert_eq!(top.first_tx_gas_price, U256::from(1));
-        assert_eq!(top.has_ready_tx, false);
+        assert_eq!(top.0, addr[0]);
+        assert_eq!(top.1.count, 0);
+        assert_eq!(top.1.timestamp, 10);
+        assert_eq!(top.1.first_tx_gas_price, U256::from(1));
+        assert_eq!(top.1.has_ready_tx, false);
         assert_eq!(gc.len(), 1);
         assert_eq!(gc.gc_size(), 0);
         let top = gc.pop().unwrap();
-        assert_eq!(top.sender, addr[1]);
-        assert_eq!(top.count, 0);
-        assert_eq!(top.timestamp, 5);
-        assert_eq!(top.first_tx_gas_price, U256::from(2));
-        assert_eq!(top.has_ready_tx, true);
+        assert_eq!(top.0, addr[1]);
+        assert_eq!(top.1.count, 0);
+        assert_eq!(top.1.timestamp, 5);
+        assert_eq!(top.1.first_tx_gas_price, U256::from(2));
+        assert_eq!(top.1.has_ready_tx, true);
         assert_eq!(gc.len(), 0);
         assert_eq!(gc.gc_size(), 0);
         assert!(gc.pop().is_none());
@@ -301,15 +303,15 @@ mod garbage_collector_test {
                 let has_ready_tx: bool = rng.next_u64() % 2 == 0;
                 let first_tx_gas_price: u64 = rng.next_u64();
                 let node = GarbageCollectorValue {
-                    sender: addr[idx],
                     count,
                     has_ready_tx,
                     first_tx_gas_price: first_tx_gas_price.into(),
                     timestamp,
                 };
-                gc.insert(&addr[idx], count, timestamp);
-                gc.update_ready_tx(
+                gc.insert(
                     &addr[idx],
+                    count,
+                    timestamp,
                     has_ready_tx,
                     first_tx_gas_price.into(),
                 );
@@ -325,10 +327,10 @@ mod garbage_collector_test {
                 } else {
                     let max = get_max(&mapping).unwrap();
                     let gc_max = gc.pop().unwrap();
-                    assert_eq!(gc_max.count, max.count);
-                    assert_eq!(gc_max.timestamp, max.timestamp);
-                    mapping.remove(&gc_max.sender);
-                    sum -= gc_max.count;
+                    assert_eq!(gc_max.1.count, max.count);
+                    assert_eq!(gc_max.1.timestamp, max.timestamp);
+                    mapping.remove(&gc_max.0);
+                    sum -= gc_max.1.count;
                     assert_eq!(gc.len(), mapping.len());
                 }
             }
@@ -338,19 +340,19 @@ mod garbage_collector_test {
                 assert!(mapping.is_empty());
             } else {
                 assert_eq!(
-                    gc.top().unwrap().count,
+                    gc.top().unwrap().1.count,
                     get_max(&mapping).unwrap().count
                 );
                 assert_eq!(
-                    gc.top().unwrap().timestamp,
+                    gc.top().unwrap().1.timestamp,
                     get_max(&mapping).unwrap().timestamp
                 );
                 assert_eq!(
-                    gc.top().unwrap().has_ready_tx,
+                    gc.top().unwrap().1.has_ready_tx,
                     get_max(&mapping).unwrap().has_ready_tx
                 );
                 assert_eq!(
-                    gc.top().unwrap().first_tx_gas_price,
+                    gc.top().unwrap().1.first_tx_gas_price,
                     get_max(&mapping).unwrap().first_tx_gas_price
                 );
             }

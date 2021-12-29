@@ -69,8 +69,9 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
         }
     }
 
-    #[allow(unused)]
-    pub fn top(&self) -> Option<&Node<K, V>> { self.data.get(0) }
+    pub fn top(&self) -> Option<(&K, &V)> {
+        self.data.get(0).map(|node| (&node.key, &node.value))
+    }
 
     pub fn pop(&mut self) -> Option<(K, V)> {
         if self.is_empty() {
@@ -172,13 +173,5 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
             ptr::copy_nonoverlapping(&val, self.get_mut(pos), 1);
             self.mapping.insert(val.key, pos);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
     }
 }
