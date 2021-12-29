@@ -897,6 +897,7 @@ dependencies = [
  "fs_extra",
  "futures 0.3.17",
  "hashbrown 0.7.2",
+ "heap-map",
  "hibitset",
  "io",
  "itertools 0.9.0",
@@ -2808,6 +2809,14 @@ name = "hashbrown"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
+
+[[package]]
+name = "heap-map"
+version = "0.1.0"
+dependencies = [
+ "malloc_size_of",
+ "malloc_size_of_derive",
+]
 
 [[package]]
 name = "heck"
