@@ -3,20 +3,18 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_types::{Address, U256};
+use heap_map::HeapMap;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use std::{
     cmp::{Ord, Ordering, PartialEq, PartialOrd, Reverse},
     collections::HashMap,
-    ptr,
 };
 
 /// This is the internal node type of `GarbageCollector`.
 /// A node `lhs` is considered as smaller than another node `rhs` if `lhs.count
 /// < rhs.count` or `lhs.count == rhs.count && lhs.timestamp > rhs.timestamp`.
-#[derive(Eq, Copy, Clone, Debug, DeriveMallocSizeOf)]
-pub struct GarbageCollectorNode {
-    /// This is the address of a sender.
-    pub sender: Address,
+#[derive(Default, Eq, PartialEq, Copy, Clone, Debug, DeriveMallocSizeOf)]
+pub struct GarbageCollectorValue {
     /// This indicates the number of transactions can be garbage collected.
     pub count: usize,
     /// This indicates if the sender has a ready tx.
@@ -29,7 +27,7 @@ pub struct GarbageCollectorNode {
     pub timestamp: u64,
 }
 
-impl Ord for GarbageCollectorNode {
+impl Ord for GarbageCollectorValue {
     fn cmp(&self, other: &Self) -> Ordering {
         match (
             self.count,
@@ -48,13 +46,7 @@ impl Ord for GarbageCollectorNode {
     }
 }
 
-impl PartialEq for GarbageCollectorNode {
-    fn eq(&self, other: &Self) -> bool {
-        self.count == other.count && self.timestamp == other.timestamp
-    }
-}
-
-impl PartialOrd for GarbageCollectorNode {
+impl PartialOrd for GarbageCollectorValue {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
@@ -64,180 +56,56 @@ impl PartialOrd for GarbageCollectorNode {
 /// the topmost node is the largest one.
 #[derive(Default, DeriveMallocSizeOf)]
 pub struct GarbageCollector {
-    data: Vec<GarbageCollectorNode>,
+    heap_map: HeapMap<Address, GarbageCollectorValue>,
+    data: Vec<GarbageCollectorValue>,
     mapping: HashMap<Address, usize>,
     gc_size: usize,
 }
 
 impl GarbageCollector {
-    pub fn insert(&mut self, sender: &Address, count: usize, timestamp: u64) {
-        if self.mapping.contains_key(sender) {
-            self.update(sender, count, timestamp);
-        } else {
-            self.append(sender, count, timestamp);
-        }
-    }
-
-    /// This is guaranteed to be called after `insert` is called.
-    pub fn update_ready_tx(
-        &mut self, sender: &Address, has_ready_tx: bool,
-        first_tx_gas_price: U256,
+    pub fn insert(
+        &mut self, sender: &Address, count: usize, timestamp: u64,
+        has_ready_tx: bool, first_tx_gas_price: U256,
     )
     {
-        let index = match self.mapping.get(&sender) {
-            None => {
-                // We always call this after `insert`, so this should not
-                // happen.
-                error!("update_ready_tx with sender node missing!!!");
-                return;
-            }
-            Some(i) => *i,
+        let value = GarbageCollectorValue {
+            count,
+            has_ready_tx,
+            first_tx_gas_price,
+            timestamp,
         };
-        let origin_has_ready_tx = self.data[index].has_ready_tx;
-        let origin_first_tx_gas_price = self.data[index].first_tx_gas_price;
-        self.data[index].has_ready_tx = has_ready_tx;
-        self.data[index].first_tx_gas_price = first_tx_gas_price;
-        // The order of node is the opposite of the order of this tuple.
-        match (origin_has_ready_tx, origin_first_tx_gas_price)
-            .cmp(&(has_ready_tx, first_tx_gas_price))
-        {
-            Ordering::Less => self.sift_down(index),
-            Ordering::Greater => self.sift_up(index),
-            _ => {}
-        }
+        self.heap_map.insert(sender, value);
     }
 
-    #[allow(unused)]
-    pub fn top(&self) -> Option<&GarbageCollectorNode> { self.data.get(0) }
-
-    pub fn pop(&mut self) -> Option<GarbageCollectorNode> {
-        if self.is_empty() {
-            return None;
+    pub fn pop(&mut self) -> Option<(Address, GarbageCollectorValue)> {
+        let item = self.heap_map.pop();
+        if let Some((_, v)) = &item {
+            self.gc_size -= v.count;
         }
-        let item = self.data.swap_remove(0);
-        if !self.is_empty() {
-            self.sift_down(0);
-        }
-        self.gc_size -= item.count;
-        self.mapping.remove(&item.sender);
-        Some(item)
+        item
     }
 
     pub fn clear(&mut self) {
-        self.mapping.clear();
-        self.data.clear();
+        self.heap_map.clear();
         self.gc_size = 0;
     }
 
     pub fn get_timestamp(&self, sender: &Address) -> Option<u64> {
-        self.mapping
-            .get(sender)
-            .map(|index| self.data[*index].timestamp)
+        self.heap_map.get(sender).map(|v| v.timestamp)
     }
 
-    #[inline]
-    pub fn is_empty(&self) -> bool { self.data.is_empty() }
+    pub fn is_empty(&self) -> bool { self.heap_map.is_empty() }
 
-    #[inline]
     #[allow(dead_code)]
-    pub fn len(&self) -> usize { self.data.len() }
+    pub fn len(&self) -> usize { self.heap_map.len() }
 
     #[inline]
     pub fn gc_size(&self) -> usize { self.gc_size }
-
-    fn update(&mut self, sender: &Address, count: usize, timestamp: u64) {
-        let index = *self.mapping.get(sender).unwrap();
-        let origin_node = self.data[index];
-        let node = GarbageCollectorNode {
-            sender: *sender,
-            count,
-            has_ready_tx: self.data[index].has_ready_tx,
-            first_tx_gas_price: self.data[index].first_tx_gas_price,
-            timestamp,
-        };
-        self.data[index].count = count;
-        self.data[index].timestamp = timestamp;
-        match node.cmp(&origin_node) {
-            Ordering::Less => self.sift_down(index),
-            Ordering::Greater => self.sift_up(index),
-            _ => {}
-        }
-        self.gc_size -= origin_node.count;
-        self.gc_size += count;
-    }
-
-    fn append(&mut self, sender: &Address, count: usize, timestamp: u64) {
-        self.data.push(GarbageCollectorNode {
-            sender: *sender,
-            count,
-            has_ready_tx: false,
-            first_tx_gas_price: Default::default(),
-            timestamp,
-        });
-        self.sift_up(self.data.len() - 1);
-        self.gc_size += count;
-    }
-
-    #[inline]
-    unsafe fn get(&self, index: usize) -> &GarbageCollectorNode {
-        self.data.get_unchecked(index)
-    }
-
-    #[inline]
-    unsafe fn get_mut(&mut self, index: usize) -> &mut GarbageCollectorNode {
-        self.data.get_unchecked_mut(index)
-    }
-
-    fn sift_up(&mut self, index: usize) {
-        unsafe {
-            let val = *self.data.get_unchecked(index);
-            let mut pos = index;
-            while pos > 0 {
-                let parent = (pos - 1) / 2;
-                if *self.get(parent) >= val {
-                    break;
-                }
-                let parent_ptr: *const _ = self.get(parent);
-                let hole_ptr = self.get_mut(pos);
-                ptr::copy_nonoverlapping(parent_ptr, hole_ptr, 1);
-                self.mapping.insert(self.get(pos).sender, pos);
-                pos = parent;
-            }
-            ptr::copy_nonoverlapping(&val, self.get_mut(pos), 1);
-            self.mapping.insert(val.sender, pos);
-        }
-    }
-
-    fn sift_down(&mut self, index: usize) {
-        unsafe {
-            let val = *self.data.get_unchecked(index);
-            let mut pos = index;
-            let mut child = pos * 2 + 1;
-            while child < self.data.len() {
-                let right = child + 1;
-                if right < self.data.len() && self.get(right) > self.get(child)
-                {
-                    child = right;
-                }
-                if val >= *self.get(child) {
-                    break;
-                }
-                let child_ptr: *const _ = self.get(child);
-                let hole_ptr = self.get_mut(pos);
-                ptr::copy_nonoverlapping(child_ptr, hole_ptr, 1);
-                self.mapping.insert(self.get(pos).sender, pos);
-                pos = child;
-                child = pos * 2 + 1;
-            }
-            ptr::copy_nonoverlapping(&val, self.get_mut(pos), 1);
-            self.mapping.insert(val.sender, pos);
-        }
-    }
 }
 
 #[cfg(test)]
 mod garbage_collector_test {
-    use super::{GarbageCollector, GarbageCollectorNode};
+    use super::{GarbageCollector, GarbageCollectorValue};
     use cfx_types::{Address, U256};
     use rand::{RngCore, SeedableRng};
     use rand_xorshift::XorShiftRng;
@@ -404,8 +272,8 @@ mod garbage_collector_test {
     }
 
     fn get_max(
-        mapping: &HashMap<Address, GarbageCollectorNode>,
-    ) -> Option<GarbageCollectorNode> {
+        mapping: &HashMap<Address, GarbageCollectorValue>,
+    ) -> Option<GarbageCollectorValue> {
         mapping
             .iter()
             .max_by(|x, y| x.1.cmp(&y.1))
@@ -432,7 +300,7 @@ mod garbage_collector_test {
                 let timestamp: u64 = rng.next_u64() % 1000;
                 let has_ready_tx: bool = rng.next_u64() % 2 == 0;
                 let first_tx_gas_price: u64 = rng.next_u64();
-                let node = GarbageCollectorNode {
+                let node = GarbageCollectorValue {
                     sender: addr[idx],
                     count,
                     has_ready_tx,
