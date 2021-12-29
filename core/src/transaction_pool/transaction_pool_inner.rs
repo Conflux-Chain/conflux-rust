@@ -11,6 +11,7 @@ use crate::{
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_statedb::Result as StateDbResult;
 use cfx_types::{address_util::AddressUtil, Address, H256, U128, U256, U512};
+use heap_map::HeapMap;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
@@ -21,6 +22,7 @@ use primitives::{
 use rlp::*;
 use serde::Serialize;
 use std::{
+    cmp::{Ordering, Reverse},
     collections::HashMap,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
@@ -197,19 +199,106 @@ impl DeferredPool {
     }
 }
 
+#[derive(DeriveMallocSizeOf, Clone)]
+struct PriceOrderedTransaction(Arc<SignedTransaction>);
+
+impl PartialEq for PriceOrderedTransaction {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.gas_price.eq(&other.0.gas_price)
+    }
+}
+
+impl Eq for PriceOrderedTransaction {}
+
+impl PartialOrd for PriceOrderedTransaction {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.0.gas_price.partial_cmp(&other.0.gas_price)
+    }
+}
+
+impl Ord for PriceOrderedTransaction {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.gas_price.cmp(&other.0.gas_price)
+    }
+}
+
 #[derive(DeriveMallocSizeOf)]
 struct ReadyAccountPool {
-    treap: TreapMap<Address, Arc<SignedTransaction>, WeightType>,
-    tx_weight_scaling: u64,
-    tx_weight_exp: u8,
+    packing_pool: PackingPool,
+    waiting_pool: HeapMap<Address, PriceOrderedTransaction>,
 }
 
 impl ReadyAccountPool {
     fn new(tx_weight_scaling: u64, tx_weight_exp: u8) -> Self {
-        ReadyAccountPool {
+        Self {
+            packing_pool: PackingPool::new(tx_weight_scaling, tx_weight_exp),
+            waiting_pool: HeapMap::default(),
+        }
+    }
+
+    fn update(
+        &mut self, address: &Address, tx: Option<Arc<SignedTransaction>>,
+    ) {
+        if let Some(tx) = tx {
+            if tx.hash[0] & 254 == 0 {
+                debug!("Sampled transaction {:?} in ready pool", tx.hash);
+            }
+            for removed_tx in self.packing_pool.insert(tx) {
+                self.waiting_pool
+                    .insert(address, PriceOrderedTransaction(removed_tx));
+            }
+        } else {
+            self.packing_pool.remove(address);
+            self.waiting_pool.remove(address);
+        };
+    }
+
+    fn get(&self, address: &Address) -> Option<Arc<SignedTransaction>> {
+        self.waiting_pool
+            .get(address)
+            .map(|tx| tx.0.clone())
+            .or_else(|| self.packing_pool.get(address))
+    }
+
+    fn pop(&mut self)-> Option<Arc<SignedTransaction>> {
+        let popped_tx = self.packing_pool.pop()?;
+    }
+
+    fn rebalance(&mut self) {
+        while self.total_gas > self.total_gas_capacity {
+            let (addr, _) = self.heap_map.top().expect("total gas not zero");
+            removed_transactions.push(self.remove(addr).unwrap());
+        }
+        removed_transactions
+    }
+}
+
+#[derive(DeriveMallocSizeOf)]
+struct PackingPool {
+    treap: TreapMap<Address, Arc<SignedTransaction>, WeightType>,
+    heap_map: HeapMap<Address, Reverse<PriceOrderedTransaction>>,
+    tx_weight_scaling: u64,
+    tx_weight_exp: u8,
+
+    /// U256 should be sufficient since txpool the limits `max_tx_gas`.
+    /// This limits the number of transactions in the packing pool with their
+    /// gas limits.
+    total_gas_capacity: U256,
+    /// The total gas limit of all transactions in this packing pool.
+    total_gas: U256,
+}
+
+impl PackingPool {
+    fn new(
+        tx_weight_scaling: u64, tx_weight_exp: u8, total_gas_capacity: U256,
+    ) -> Self {
+        PackingPool {
             treap: TreapMap::new(),
+            heap_map: HeapMap::default(),
             tx_weight_scaling,
             tx_weight_exp,
+            total_gas_capacity,
+            total_gas: 0.into(),
         }
     }
 
@@ -217,35 +306,40 @@ impl ReadyAccountPool {
         while self.len() != 0 {
             self.pop();
         }
+        self.heap_map.clear()
     }
 
     fn len(&self) -> usize { self.treap.len() }
 
     fn get(&self, address: &Address) -> Option<Arc<SignedTransaction>> {
-        self.treap.get(address).map(|tx| tx.clone())
+        self.heap_map.get(address).map(|tx| (tx.0).0.clone())
     }
 
     fn remove(&mut self, address: &Address) -> Option<Arc<SignedTransaction>> {
-        self.treap.remove(address)
+        let tx = (self.heap_map.remove(address)?.0).0;
+        self.treap.remove(address);
+        self.total_gas -= tx.gas;
+        Some(tx)
     }
 
-    fn update(
-        &mut self, address: &Address, tx: Option<Arc<SignedTransaction>>,
-    ) -> Option<Arc<SignedTransaction>> {
-        let replaced = if let Some(tx) = tx {
-            if tx.hash[0] & 254 == 0 {
-                debug!("Sampled transaction {:?} in ready pool", tx.hash);
-            }
-            self.insert(tx)
-        } else {
-            self.remove(address)
-        };
-        replaced
-    }
-
+    /// If some transactions are popped because of the total gas limit, return
+    /// the transactions so that they can be inserted into the waiting pool.
+    /// `tx` itself may also be inserted.
+    ///
+    /// Note that if the insertion replaces an old transaction of the same
+    /// sender, it will be dropped instead of being returned.
     fn insert(
         &mut self, tx: Arc<SignedTransaction>,
     ) -> Option<Arc<SignedTransaction>> {
+        if tx.gas_price
+            < self
+                .heap_map
+                .top()
+                .map(|(_, v)| *(v.0).0.gas_price())
+                .unwrap_or(U256::MAX)
+        {
+            return Some(tx);
+        }
         let scaled_weight = tx.gas_price / self.tx_weight_scaling;
         let base_weight = if scaled_weight == U256::zero() {
             0
@@ -260,7 +354,14 @@ impl ReadyAccountPool {
             weight *= base_weight;
         }
 
-        self.treap.insert(tx.sender(), tx.clone(), weight)
+        self.heap_map
+            .insert(&tx.sender, Reverse(PriceOrderedTransaction(tx.clone())));
+        self.total_gas += tx.gas;
+        if let Some(replaced_tx) = self.treap.insert(tx.sender(), tx, weight) {
+            // an old transaction of the same sender is replaced.
+            self.total_gas -= replaced_tx.gas;
+        }
+        None
     }
 
     fn pop(&mut self) -> Option<Arc<SignedTransaction>> {
