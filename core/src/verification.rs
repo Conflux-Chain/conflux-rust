@@ -17,7 +17,7 @@ use cfx_storage::{
     into_simple_mpt_key, make_simple_mpt, simple_mpt_merkle_root,
     simple_mpt_proof, SimpleMpt, TrieProof,
 };
-use cfx_types::{BigEndianHash, H256, U256};
+use cfx_types::{address_util::AddressUtil, BigEndianHash, H256, U256};
 use primitives::{
     block::BlockHeight,
     transaction::{TransactionError, TransactionType},
@@ -599,6 +599,14 @@ impl VerificationConfig {
             bail!(TransactionError::ZeroGasPrice);
         }
 
+        if matches!(mode, VerifyTxMode::Local(..)) {
+            if let Action::Call(ref address) = tx.transaction.action {
+                if !address.is_genesis_valid_address() {
+                    bail!(TransactionError::InvalidReceiver)
+                }
+            }
+        }
+
         // ******************************************
         // Each constraint depends on a mode or a CIP should be
         // implemented in a seperated function.
@@ -671,27 +679,33 @@ impl VerificationConfig {
 
 #[derive(Copy, Clone)]
 pub enum PackingCheckResult {
-    Pack,    // Transaction can be packed.
-    Pending, // Transaction may be ready to packed in the future.
-    Drop,    // Transaction can never be packed.
+    Pack,
+    // Transaction can be packed.
+    Pending,
+    // Transaction may be ready to packed in the future.
+    Drop, // Transaction can never be packed.
 }
 
 #[derive(Copy, Clone)]
 pub enum VerifyTxMode<'a> {
-    Local(VerifyTxLocalMode, &'a Spec), /* Be strict with yourself: We
-                                         * apply more checks in packing
-                                         * transactions and local
-                                         * execution. */
-    Remote, /* Be lenient to others: We apply less
-             * check for transaction in sync graph. */
+    Local(VerifyTxLocalMode, &'a Spec),
+    /* Be strict with yourself: We
+     * apply more checks in packing
+     * transactions and local
+     * execution. */
+    Remote,
+    /* Be lenient to others: We apply less
+     * check for transaction in sync graph. */
 }
 
 #[derive(Copy, Clone)]
 pub enum VerifyTxLocalMode {
-    Full, // Apply all checks.
-    MaybeLater, /* When inserting transactions to tx pool, if its epoch
-           * height is too large, it can be accept even if it is not
-           * regarded as a valid transaction. */
+    Full,
+    // Apply all checks.
+    MaybeLater,
+    /* When inserting transactions to tx pool, if its epoch
+     * height is too large, it can be accept even if it is not
+     * regarded as a valid transaction. */
 }
 
 impl<'a> VerifyTxMode<'a> {

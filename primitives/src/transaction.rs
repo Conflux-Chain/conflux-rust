@@ -97,6 +97,8 @@ pub enum TransactionError {
     ZeroGasPrice,
     /// Ethereum-like transaction with invalid storage limit.
     InvalidEthereumLike,
+    /// Receiver with invalid type bit.
+    InvalidReceiver,
 }
 
 impl From<keylib::Error> for TransactionError {
@@ -158,7 +160,8 @@ impl fmt::Display for TransactionError {
                 format!("Transaction has invalid RLP structure: {}.", err)
             }
             ZeroGasPrice => "Zero gas price is not allowed".into(),
-            InvalidEthereumLike => "Ethereum like transaction should have u64::MAX storage limit".into()
+            InvalidEthereumLike => "Ethereum like transaction should have u64::MAX storage limit".into(),
+            InvalidReceiver => "Sending transaction to invalid address. The first four bits of address must be 0x0, 0x1, or 0x8.".into(),
         };
 
         f.write_fmt(format_args!("Transaction error ({})", msg))
