@@ -91,7 +91,7 @@ impl Transaction {
             Some(PackedOrExecuted::Executed(receipt)) => {
                 block_hash = Some(receipt.block_hash);
                 transaction_index = Some(receipt.index.into());
-                epoch_number = Some(receipt.epoch_number);
+                epoch_number = receipt.epoch_number;
                 block_number = Some(receipt.block_number);
                 if let Some(ref address) = receipt.contract_created {
                     contract_created = Some(address.clone());
