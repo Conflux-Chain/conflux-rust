@@ -19,7 +19,7 @@ pub struct Node<K, V: PartialEq + Eq + Ord> {
 }
 
 impl<K, V: PartialEq + Eq + Ord> Node<K, V> {
-    fn new(key: K, value: V) -> Self { Node { key, value } }
+    pub fn new(key: K, value: V) -> Self { Node { key, value } }
 }
 
 impl<K, V: PartialEq + Eq + Ord> PartialEq for Node<K, V> {
@@ -72,7 +72,7 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
     #[allow(unused)]
     pub fn top(&self) -> Option<&Node<K, V>> { self.data.get(0) }
 
-    pub fn pop(&mut self) -> Option<Node<K, V>> {
+    pub fn pop(&mut self) -> Option<(K, V)> {
         if self.is_empty() {
             return None;
         }
@@ -81,7 +81,7 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
             self.sift_down(0);
         }
         self.mapping.remove(&item.key);
-        Some(item)
+        Some((item.key, item.value))
     }
 
     pub fn clear(&mut self) {
@@ -112,8 +112,13 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
         self.sift_up(self.data.len() - 1);
     }
 
+    pub fn get(&self, key: &K) -> Option<&V> {
+        let index = *self.mapping.get(key)?;
+        self.data.get(index).map(|node| &node.value)
+    }
+
     #[inline]
-    unsafe fn get(&self, index: usize) -> &Node<K, V> {
+    unsafe fn get_unchecked(&self, index: usize) -> &Node<K, V> {
         self.data.get_unchecked(index)
     }
 
@@ -128,13 +133,13 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
             let mut pos = index;
             while pos > 0 {
                 let parent = (pos - 1) / 2;
-                if *self.get(parent) >= val {
+                if *self.get_unchecked(parent) >= val {
                     break;
                 }
-                let parent_ptr: *const _ = self.get(parent);
+                let parent_ptr: *const _ = self.get_unchecked(parent);
                 let hole_ptr = self.get_mut(pos);
                 ptr::copy_nonoverlapping(parent_ptr, hole_ptr, 1);
-                self.mapping.insert(self.get(pos).key, pos);
+                self.mapping.insert(self.get_unchecked(pos).key, pos);
                 pos = parent;
             }
             ptr::copy_nonoverlapping(&val, self.get_mut(pos), 1);
@@ -149,17 +154,18 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
             let mut child = pos * 2 + 1;
             while child < self.data.len() {
                 let right = child + 1;
-                if right < self.data.len() && self.get(right) > self.get(child)
+                if right < self.data.len()
+                    && self.get_unchecked(right) > self.get_unchecked(child)
                 {
                     child = right;
                 }
-                if val >= *self.get(child) {
+                if val >= *self.get_unchecked(child) {
                     break;
                 }
-                let child_ptr: *const _ = self.get(child);
+                let child_ptr: *const _ = self.get_unchecked(child);
                 let hole_ptr = self.get_mut(pos);
                 ptr::copy_nonoverlapping(child_ptr, hole_ptr, 1);
-                self.mapping.insert(self.get(pos).key, pos);
+                self.mapping.insert(self.get_unchecked(pos).key, pos);
                 pos = child;
                 child = pos * 2 + 1;
             }

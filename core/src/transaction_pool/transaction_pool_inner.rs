@@ -399,10 +399,11 @@ impl TransactionPoolInner {
         let mut skipped_self_node = None;
         while self.is_full() && !self.garbage_collector.is_empty() {
             let current_timestamp = self.get_current_timestamp();
-            let victim = self.garbage_collector.pop().unwrap();
+            let (victim_address, victim) =
+                self.garbage_collector.pop().unwrap();
             // Accounts which are not in `deferred_pool` may be inserted
             // into `garbage_collector`, we can just ignore them.
-            if !self.deferred_pool.contain_address(&victim.sender) {
+            if !self.deferred_pool.contain_address(&victim_address) {
                 continue;
             }
 
@@ -410,10 +411,10 @@ impl TransactionPoolInner {
             // no unconditional garbage collection to conduct and we need to
             // check if we should replace one unexecuted tx.
             if victim.count == 0 {
-                if victim.sender == new_tx.sender {
+                if victim_address == new_tx.sender {
                     // We do not GC a not-executed transaction from the same
                     // sender.
-                    skipped_self_node = Some(victim);
+                    skipped_self_node = Some((victim_address, victim));
                     continue;
                 } else if victim.has_ready_tx
                     && victim.first_tx_gas_price >= new_tx.gas_price
@@ -428,10 +429,8 @@ impl TransactionPoolInner {
                 }
             }
 
-            let addr = victim.sender;
-
             let (ready_nonce, _) = self
-                .get_local_nonce_and_balance(&addr)
+                .get_local_nonce_and_balance(&victim_address)
                 .unwrap_or((0.into(), 0.into()));
 
             let tx_with_ready_info =
@@ -447,11 +446,12 @@ impl TransactionPoolInner {
             }
 
             // maintain ready account pool
-            if let Some(ready_tx) = self.ready_account_pool.get(&addr) {
+            if let Some(ready_tx) = self.ready_account_pool.get(&victim_address)
+            {
                 if ready_tx.hash() == to_remove_tx.hash() {
                     warn!("a ready tx is garbage-collected");
                     GC_READY_COUNTER.inc(1);
-                    self.ready_account_pool.remove(&addr);
+                    self.ready_account_pool.remove(&victim_address);
                     if !victim.has_ready_tx {
                         // This should not happen! Means some inconsistency
                         // within `TransactionPoolInner`.
@@ -471,27 +471,29 @@ impl TransactionPoolInner {
             }
 
             // maintain ready info
-            if !self.deferred_pool.contain_address(&addr) {
-                self.ready_nonces_and_balances.remove(&addr);
+            if !self.deferred_pool.contain_address(&victim_address) {
+                self.ready_nonces_and_balances.remove(&victim_address);
             // The picked sender has no transactions now, and has been popped
             // from `garbage_collector`.
             } else {
-                if victim.count > 0 {
-                    self.garbage_collector.insert(
-                        &addr,
-                        victim.count - 1,
-                        current_timestamp,
-                    );
+                let has_ready_tx =
+                    self.ready_account_pool.get(&victim_address).is_some();
+                let first_tx_gas_price = self
+                    .deferred_pool
+                    .get_lowest_nonce_tx(&victim_address)
+                    .expect("addr exist")
+                    .gas_price;
+                let count = if victim.count > 0 {
+                    victim.count - 1
                 } else {
-                    self.garbage_collector.insert(&addr, 0, current_timestamp);
-                }
-                self.garbage_collector.update_ready_tx(
-                    &addr,
-                    self.ready_account_pool.get(&addr).is_some(),
-                    self.deferred_pool
-                        .get_lowest_nonce_tx(&addr)
-                        .expect("addr exist")
-                        .gas_price,
+                    0
+                };
+                self.garbage_collector.insert(
+                    &victim_address,
+                    count,
+                    current_timestamp,
+                    has_ready_tx,
+                    first_tx_gas_price,
                 );
             }
 
@@ -502,14 +504,11 @@ impl TransactionPoolInner {
 
         // Insert back skipped nodes to keep `garbage_collector`
         // unchanged.
-        if let Some(node) = skipped_self_node {
+        if let Some((addr, node)) = skipped_self_node {
             self.garbage_collector.insert(
-                &node.sender,
+                &addr,
                 node.count,
                 node.timestamp,
-            );
-            self.garbage_collector.update_ready_tx(
-                &node.sender,
                 node.has_ready_tx,
                 node.first_tx_gas_price,
             );
@@ -571,6 +570,7 @@ impl TransactionPoolInner {
                     state_nonce,
                     state_balance,
                 );
+                // GarbageCollector will be updated by the caller.
                 self.txs.insert(transaction.hash(), transaction.clone());
                 self.tx_sponsored_gas_map.insert(
                     transaction.hash(),
@@ -691,12 +691,6 @@ impl TransactionPoolInner {
         if !self.deferred_pool.contain_address(address) {
             return;
         }
-        let count = self.deferred_pool.count_less(address, &nonce);
-        let timestamp = self
-            .garbage_collector
-            .get_timestamp(address)
-            .unwrap_or(self.get_current_timestamp());
-        self.garbage_collector.insert(address, count, timestamp);
         self.ready_nonces_and_balances
             .insert((*address).clone(), (nonce, balance));
     }
@@ -708,13 +702,6 @@ impl TransactionPoolInner {
         if !self.deferred_pool.contain_address(address) {
             return Ok(nonce_and_balance);
         }
-        let count =
-            self.deferred_pool.count_less(address, &nonce_and_balance.0);
-        let timestamp = self
-            .garbage_collector
-            .get_timestamp(address)
-            .unwrap_or(self.get_current_timestamp());
-        self.garbage_collector.insert(address, count, timestamp);
         self.ready_nonces_and_balances
             .insert((*address).clone(), nonce_and_balance);
 
@@ -776,8 +763,15 @@ impl TransactionPoolInner {
         // If addr is not in `deferred_pool`, it should have also been removed
         // from garbage_collector
         if let Some(tx) = self.deferred_pool.get_lowest_nonce_tx(addr) {
-            self.garbage_collector.update_ready_tx(
+            let count = self.deferred_pool.count_less(addr, &nonce);
+            let timestamp = self
+                .garbage_collector
+                .get_timestamp(addr)
+                .unwrap_or(self.get_current_timestamp());
+            self.garbage_collector.insert(
                 addr,
+                count,
+                timestamp,
                 ret.is_some(),
                 tx.gas_price,
             );
