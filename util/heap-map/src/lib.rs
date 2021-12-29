@@ -49,6 +49,20 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
         }
     }
 
+    pub fn remove(&mut self, key: &K) -> Option<V> {
+        let index = self.mapping.remove(key)?;
+        let removed_node = self.data.swap_remove(index);
+        if index != self.data.len() {
+            // The last node has been swapped to index
+            match self.data[index].cmp(&removed_node) {
+                Ordering::Less => self.sift_down(index),
+                Ordering::Greater => self.sift_up(index),
+                Ordering::Equal => {}
+            }
+        }
+        Some(removed_node.value)
+    }
+
     /// In-place update some fields of a node's value.
     /// This is guaranteed to be called after `insert` is called.
     pub fn update_with<F>(&mut self, key: &K, mut update_fn: F)
@@ -85,6 +99,11 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
         Some((item.key, item.value))
     }
 
+    pub fn get(&self, key: &K) -> Option<&V> {
+        let index = *self.mapping.get(key)?;
+        self.data.get(index).map(|node| &node.value)
+    }
+
     pub fn clear(&mut self) {
         self.mapping.clear();
         self.data.clear();
@@ -111,11 +130,6 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
     fn append(&mut self, key: &K, value: V) {
         self.data.push(Node::new(*key, value));
         self.sift_up(self.data.len() - 1);
-    }
-
-    pub fn get(&self, key: &K) -> Option<&V> {
-        let index = *self.mapping.get(key)?;
-        self.data.get(index).map(|node| &node.value)
     }
 
     #[inline]
