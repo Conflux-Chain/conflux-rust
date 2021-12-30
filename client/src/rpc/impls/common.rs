@@ -12,11 +12,12 @@ use std::{
 use crate::rpc::{
     impls::pos::hash_value_to_h256,
     types::{
-        errors::check_rpc_address_network, AccountPendingInfo,
-        AccountPendingTransactions, Block as RpcBlock, BlockHashOrEpochNumber,
-        Bytes, CheckBalanceAgainstTransactionResponse, EpochNumber, RpcAddress,
-        Status as RpcStatus, Transaction as RpcTransaction,
-        TxPoolPendingNonceRange, TxPoolStatus, TxWithPoolInfo,
+        errors::check_rpc_address_network, pos::EpochReward,
+        AccountPendingInfo, AccountPendingTransactions, Block as RpcBlock,
+        BlockHashOrEpochNumber, Bytes, CheckBalanceAgainstTransactionResponse,
+        EpochNumber, RpcAddress, Status as RpcStatus,
+        Transaction as RpcTransaction, TxPoolPendingNonceRange, TxPoolStatus,
+        TxWithPoolInfo,
     },
     RpcResult,
 };
@@ -41,6 +42,7 @@ use cfxcore::{
 };
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
+use diem_crypto::hash::HashValue;
 use diem_types::{
     account_address::{from_consensus_public_key, AccountAddress},
     block_info::PivotBlockDecision,
@@ -52,8 +54,9 @@ use network::{
     NetworkService, SessionDetails, UpdateNodeOperation,
 };
 use primitives::{
-    transaction::TransactionType, Account, Action, SignedTransaction,
+    transaction::TransactionType, Account, Action, Block, SignedTransaction,
 };
+use storage_interface::DBReaderForPoW;
 
 fn grouped_txs<T, F>(
     txs: Vec<Arc<SignedTransaction>>, converter: F,
@@ -222,23 +225,10 @@ impl RpcImpl {
     pub fn block_by_epoch_number(
         &self, epoch_num: EpochNumber, include_txs: bool,
     ) -> RpcResult<Option<RpcBlock>> {
+        info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
         let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
-        info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
-
-        let epoch_height = consensus_graph
-            .get_height_from_epoch_number(epoch_num.into())
-            .map_err(RpcError::invalid_params)?;
-
-        let pivot_hash = inner
-            .get_pivot_hash_from_epoch_number(epoch_height)
-            .map_err(RpcError::invalid_params)?;
-
-        let maybe_block = self
-            .data_man
-            .block_by_hash(&pivot_hash, false /* update_cache */);
-
-        match maybe_block {
+        match self.primitive_block_by_epoch_number(epoch_num.into()) {
             None => Ok(None),
             Some(b) => Ok(Some(RpcBlock::new(
                 &*b,
@@ -249,6 +239,75 @@ impl RpcImpl {
                 include_txs,
             )?)),
         }
+    }
+
+    fn primitive_block_by_epoch_number(
+        &self, epoch_num: EpochNumber,
+    ) -> Option<Arc<Block>> {
+        let consensus_graph = self.consensus_graph();
+        let inner = &*consensus_graph.inner.read();
+        let epoch_height = consensus_graph
+            .get_height_from_epoch_number(epoch_num.into())
+            .ok()?;
+
+        let pivot_hash =
+            inner.get_pivot_hash_from_epoch_number(epoch_height).ok()?;
+
+        self.data_man
+            .block_by_hash(&pivot_hash, false /* update_cache */)
+    }
+
+    pub fn get_pos_reward_by_epoch(
+        &self, epoch: U64,
+    ) -> JsonRpcResult<Option<EpochReward>> {
+        if epoch.is_zero() {
+            return Ok(None);
+        }
+        if let Some(block) =
+            self.primitive_block_by_epoch_number(EpochNumber::Num(epoch))
+        {
+            if block.block_header.pos_reference().is_none() {
+                return Ok(None);
+            }
+            if let Some(parent_block) = self
+                .primitive_block_by_epoch_number(EpochNumber::Num(epoch - 1))
+            {
+                if parent_block.block_header.pos_reference().is_none() {
+                    return Ok(None);
+                }
+
+                let block_pos_ref = block.block_header.pos_reference().unwrap();
+                let parent_pos_ref =
+                    parent_block.block_header.pos_reference().unwrap();
+
+                if block_pos_ref == parent_pos_ref {
+                    return Ok(None);
+                }
+
+                let hash = HashValue::from_slice(parent_pos_ref.as_bytes())
+                    .map_err(|_| RpcError::internal_error())?;
+                let pos_block = self
+                    .pos_handler
+                    .diem_db()
+                    .get_committed_block_by_hash(&hash)
+                    .map_err(|_| RpcError::internal_error())?;
+                let epoch_rewards =
+                    self.data_man.pos_reward_by_pos_epoch(pos_block.epoch);
+                if epoch_rewards.is_none() {
+                    return Ok(None);
+                }
+                let reward_info = EpochReward::try_from(
+                    epoch_rewards.unwrap(),
+                    *self.network.get_network_type(),
+                )
+                .map_err(|_| RpcError::internal_error())?;
+                return Ok(Some(reward_info));
+            }
+
+            return Ok(None);
+        }
+
+        Ok(None)
     }
 
     pub fn confirmation_risk_by_hash(

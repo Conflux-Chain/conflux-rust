@@ -38,7 +38,8 @@ use crate::{
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
-            pos::Block as PosBlock, Account as RpcAccount, AccountPendingInfo,
+            pos::{Block as PosBlock, EpochReward},
+            Account as RpcAccount, AccountPendingInfo,
             AccountPendingTransactions, BlameInfo, Block as RpcBlock,
             BlockHashOrEpochNumber, Bytes, CallRequest,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
@@ -1108,6 +1109,7 @@ impl Cfx for CfxHandler {
         fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
         fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
         fn opened_method_groups(&self) -> JsonRpcResult<Vec<String>>;
+        fn get_pos_reward_by_epoch(&self, epoch: U64) -> JsonRpcResult<Option<EpochReward>>;
     }
 }
 

@@ -10,7 +10,8 @@ use super::super::types::{
     SponsorInfo, Status as RpcStatus, TokenSupplyInfo, Transaction,
 };
 use crate::rpc::types::{
-    AccountPendingTransactions, BlockHashOrEpochNumber, RpcAddress,
+    pos::EpochReward, AccountPendingTransactions, BlockHashOrEpochNumber,
+    RpcAddress,
 };
 use cfx_types::{H256, U256, U64};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
@@ -266,6 +267,11 @@ pub trait Cfx {
 
     #[rpc(name = "cfx_openedMethodGroups")]
     fn opened_method_groups(&self) -> JsonRpcResult<Vec<String>>;
+
+    #[rpc(name = "cfx_getPoSRewardByEpoch")]
+    fn get_pos_reward_by_epoch(
+        &self, epoch: U64,
+    ) -> JsonRpcResult<Option<EpochReward>>;
 
     //        /// Returns transaction at given block hash and index.
     //        #[rpc(name = "cfx_getTransactionByBlockHashAndIndex")]
