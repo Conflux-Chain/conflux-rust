@@ -10,7 +10,7 @@ use super::super::types::{
     SponsorInfo, Status as RpcStatus, TokenSupplyInfo, Transaction,
 };
 use crate::rpc::types::{
-    pos::EpochReward, AccountPendingTransactions, BlockHashOrEpochNumber,
+    pos::PoSEpochReward, AccountPendingTransactions, BlockHashOrEpochNumber,
     RpcAddress,
 };
 use cfx_types::{H256, U256, U64};
@@ -270,8 +270,8 @@ pub trait Cfx {
 
     #[rpc(name = "cfx_getPoSRewardByEpoch")]
     fn get_pos_reward_by_epoch(
-        &self, epoch: U64,
-    ) -> JsonRpcResult<Option<EpochReward>>;
+        &self, epoch: EpochNumber,
+    ) -> JsonRpcResult<Option<PoSEpochReward>>;
 
     //        /// Returns transaction at given block hash and index.
     //        #[rpc(name = "cfx_getTransactionByBlockHashAndIndex")]

@@ -9,7 +9,7 @@ use crate::{
         traits::pos::Pos,
         types::pos::{
             tx_type, Account, Block, BlockNumber, CommitteeState, Decision,
-            EpochReward, NodeLockStatus, RpcCommittee, RpcTermData,
+            PoSEpochReward, NodeLockStatus, RpcCommittee, RpcTermData,
             RpcTransactionStatus, RpcTransactionType, Signature, Status,
             Transaction, VotePowerState,
         },
@@ -586,17 +586,14 @@ impl Pos for PosHandler {
 
     fn pos_get_rewards_by_epoch(
         &self, epoch: U64,
-    ) -> JsonRpcResult<Option<EpochReward>> {
-        let reward = match self
+    ) -> JsonRpcResult<Option<PoSEpochReward>> {
+        let reward = self
             .pow_data_manager
             .pos_reward_by_pos_epoch(epoch.as_u64())
-        {
-            None => None,
-            Some(reward) => {
-                EpochReward::try_from(reward, self.network_type).ok()
-            }
-        };
-
+            .map(|reward_info| {
+                PoSEpochReward::try_from(reward_info, self.network_type).ok()
+            })
+            .unwrap_or(None);
         Ok(reward)
     }
 }

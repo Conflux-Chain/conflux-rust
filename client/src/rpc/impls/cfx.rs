@@ -4,7 +4,7 @@
 
 use crate::rpc::types::{
     call_request::rpc_call_request_network, errors::check_rpc_address_network,
-    pos::EpochReward, PoSEconomics, RpcAddress, SponsorInfo, TokenSupplyInfo,
+    pos::PoSEpochReward, PoSEconomics, RpcAddress, SponsorInfo, TokenSupplyInfo,
     MAX_GAS_CALL_REQUEST,
 };
 use blockgen::BlockGenerator;
@@ -1539,7 +1539,7 @@ impl Cfx for CfxHandler {
             fn get_client_version(&self) -> JsonRpcResult<String>;
             fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<Option<AccountPendingInfo>>;
             fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
-            fn get_pos_reward_by_epoch(&self, epoch: U64) -> JsonRpcResult<Option<EpochReward>>;
+            fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
         }
 
         to self.rpc_impl {

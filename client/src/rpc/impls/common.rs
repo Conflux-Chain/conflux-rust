@@ -12,7 +12,7 @@ use std::{
 use crate::rpc::{
     impls::pos::hash_value_to_h256,
     types::{
-        errors::check_rpc_address_network, pos::EpochReward,
+        errors::check_rpc_address_network, pos::PoSEpochReward,
         AccountPendingInfo, AccountPendingTransactions, Block as RpcBlock,
         BlockHashOrEpochNumber, Bytes, CheckBalanceAgainstTransactionResponse,
         EpochNumber, RpcAddress, Status as RpcStatus,
@@ -258,24 +258,26 @@ impl RpcImpl {
     }
 
     pub fn get_pos_reward_by_epoch(
-        &self, epoch: U64,
-    ) -> JsonRpcResult<Option<EpochReward>> {
-        if epoch.is_zero() {
+        &self, epoch: EpochNumber,
+    ) -> JsonRpcResult<Option<PoSEpochReward>> {
+        let maybe_block =
+            self.primitive_block_by_epoch_number(epoch);
+        if maybe_block.is_none() {
             return Ok(None);
         }
-        if let Some(block) =
-            self.primitive_block_by_epoch_number(EpochNumber::Num(epoch))
+        let block = maybe_block.unwrap();
+        if block.block_header.pos_reference().is_none() {
+            return Ok(None);
+        }
+        match self
+            .data_man
+            .block_by_hash(block.block_header.parent_hash(), false)
         {
-            if block.block_header.pos_reference().is_none() {
-                return Ok(None);
-            }
-            if let Some(parent_block) = self
-                .primitive_block_by_epoch_number(EpochNumber::Num(epoch - 1))
-            {
+            None => Ok(None),
+            Some(parent_block) => {
                 if parent_block.block_header.pos_reference().is_none() {
                     return Ok(None);
                 }
-
                 let block_pos_ref = block.block_header.pos_reference().unwrap();
                 let parent_pos_ref =
                     parent_block.block_header.pos_reference().unwrap();
@@ -291,23 +293,23 @@ impl RpcImpl {
                     .diem_db()
                     .get_committed_block_by_hash(&hash)
                     .map_err(|_| RpcError::internal_error())?;
-                let epoch_rewards =
+                let maybe_epoch_rewards =
                     self.data_man.pos_reward_by_pos_epoch(pos_block.epoch);
-                if epoch_rewards.is_none() {
+                if maybe_epoch_rewards.is_none() {
                     return Ok(None);
                 }
-                let reward_info = EpochReward::try_from(
-                    epoch_rewards.unwrap(),
+                let epoch_rewards = maybe_epoch_rewards.unwrap();
+                if epoch_rewards.execution_epoch_hash != block.block_header.hash() {
+                    return Ok(None);
+                }
+                let reward_info: PoSEpochReward = PoSEpochReward::try_from(
+                    epoch_rewards,
                     *self.network.get_network_type(),
                 )
                 .map_err(|_| RpcError::internal_error())?;
-                return Ok(Some(reward_info));
+                Ok(Some(reward_info))
             }
-
-            return Ok(None);
         }
-
-        Ok(None)
     }
 
     pub fn confirmation_risk_by_hash(

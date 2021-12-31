@@ -21,17 +21,17 @@ pub struct Reward {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct EpochReward {
+pub struct PoSEpochReward {
     //
     pub pow_epoch_hash: H256,
     //
     pub account_rewards: Vec<Reward>,
 }
 
-impl EpochReward {
+impl PoSEpochReward {
     pub fn try_from(
         reward: PosRewardInfo, network_type: Network,
-    ) -> Result<EpochReward, String> {
+    ) -> Result<PoSEpochReward, String> {
         let default_value = U256::from(0);
         let mut account_reward_map = HashMap::new();
         let mut account_address_map = HashMap::new();
@@ -54,7 +54,7 @@ impl EpochReward {
             })
             .filter(|r| r.reward > U256::from(0))
             .collect();
-        Ok(EpochReward {
+        Ok(PoSEpochReward {
             pow_epoch_hash: reward.execution_epoch_hash,
             account_rewards,
         })
