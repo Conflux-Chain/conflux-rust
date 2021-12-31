@@ -3,7 +3,7 @@ use std::{cmp::Ordering, collections::HashMap, fmt::Debug, hash, ptr};
 
 /// The `GarbageCollector` maintain a priority queue of `GarbageCollectorNode`,
 /// the topmost node is the largest one.
-#[derive(Default, DeriveMallocSizeOf)]
+#[derive(DeriveMallocSizeOf)]
 pub struct HeapMap<
     K: hash::Hash + Eq + Copy + Debug,
     V: PartialEq + Eq + Ord + Clone,
@@ -38,9 +38,22 @@ impl<K, V: PartialEq + Eq + Ord> Ord for Node<K, V> {
     fn cmp(&self, other: &Self) -> Ordering { self.value.cmp(&other.value) }
 }
 
+impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone> Default
+    for HeapMap<K, V>
+{
+    fn default() -> Self { Self::new() }
+}
+
 impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
     HeapMap<K, V>
 {
+    pub fn new() -> Self {
+        Self {
+            data: vec![],
+            mapping: HashMap::new(),
+        }
+    }
+
     pub fn insert(&mut self, key: &K, value: V) {
         if self.mapping.contains_key(key) {
             self.update(key, value);

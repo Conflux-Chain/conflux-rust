@@ -229,10 +229,16 @@ struct ReadyAccountPool {
 }
 
 impl ReadyAccountPool {
-    fn new(tx_weight_scaling: u64, tx_weight_exp: u8) -> Self {
+    fn new(
+        tx_weight_scaling: u64, tx_weight_exp: u8, total_gas_capacity: U256,
+    ) -> Self {
         Self {
-            packing_pool: PackingPool::new(tx_weight_scaling, tx_weight_exp),
-            waiting_pool: HeapMap::default(),
+            packing_pool: PackingPool::new(
+                tx_weight_scaling,
+                tx_weight_exp,
+                total_gas_capacity,
+            ),
+            waiting_pool: HeapMap::new(),
         }
     }
 
@@ -243,14 +249,59 @@ impl ReadyAccountPool {
             if tx.hash[0] & 254 == 0 {
                 debug!("Sampled transaction {:?} in ready pool", tx.hash);
             }
-            for removed_tx in self.packing_pool.insert(tx) {
-                self.waiting_pool
-                    .insert(address, PriceOrderedTransaction(removed_tx));
-            }
+            self.insert(tx);
         } else {
-            self.packing_pool.remove(address);
-            self.waiting_pool.remove(address);
+            self.remove(address)
         };
+    }
+
+    fn insert(&mut self, tx: Arc<SignedTransaction>) {
+        self.packing_pool.insert(tx);
+        self.try_shrink_packing_pool();
+    }
+
+    fn remove(&mut self, address: &Address) {
+        self.packing_pool.remove(address);
+        self.waiting_pool.remove(address);
+        self.try_fill_packing_pool();
+    }
+
+    fn sample_pop(&mut self) -> Option<Arc<SignedTransaction>> {
+        let popped_tx = self.packing_pool.sample_pop();
+        self.try_fill_packing_pool();
+        popped_tx
+    }
+
+    fn try_shrink_packing_pool(&mut self) {
+        while self.packing_pool.total_gas > self.packing_pool.total_gas_capacity
+        {
+            let tx = self.packing_pool.pop().unwrap();
+            self.waiting_pool
+                .insert(&tx.sender(), PriceOrderedTransaction(tx));
+        }
+    }
+
+    fn try_fill_packing_pool(&mut self) {
+        while self.packing_pool.total_gas < self.packing_pool.total_gas_capacity
+        {
+            let top_waiting_gas = match self.waiting_pool.top() {
+                None => break,
+                Some((_, tx)) => tx.0.gas,
+            };
+            if top_waiting_gas + self.packing_pool.total_gas
+                > self.packing_pool.total_gas_capacity
+            {
+                break;
+            }
+
+            let tx = (self.waiting_pool.pop().unwrap().1).0;
+            self.packing_pool.insert(tx);
+        }
+    }
+
+    fn clear(&mut self) {
+        self.packing_pool.clear();
+        self.waiting_pool.clear();
     }
 
     fn get(&self, address: &Address) -> Option<Arc<SignedTransaction>> {
@@ -260,17 +311,7 @@ impl ReadyAccountPool {
             .or_else(|| self.packing_pool.get(address))
     }
 
-    fn pop(&mut self)-> Option<Arc<SignedTransaction>> {
-        let popped_tx = self.packing_pool.pop()?;
-    }
-
-    fn rebalance(&mut self) {
-        while self.total_gas > self.total_gas_capacity {
-            let (addr, _) = self.heap_map.top().expect("total gas not zero");
-            removed_transactions.push(self.remove(addr).unwrap());
-        }
-        removed_transactions
-    }
+    fn len(&self) -> usize { self.packing_pool.len() + self.waiting_pool.len() }
 }
 
 #[derive(DeriveMallocSizeOf)]
@@ -294,7 +335,7 @@ impl PackingPool {
     ) -> Self {
         PackingPool {
             treap: TreapMap::new(),
-            heap_map: HeapMap::default(),
+            heap_map: HeapMap::new(),
             tx_weight_scaling,
             tx_weight_exp,
             total_gas_capacity,
@@ -304,7 +345,7 @@ impl PackingPool {
 
     fn clear(&mut self) {
         while self.len() != 0 {
-            self.pop();
+            self.sample_pop();
         }
         self.heap_map.clear()
     }
@@ -322,24 +363,11 @@ impl PackingPool {
         Some(tx)
     }
 
-    /// If some transactions are popped because of the total gas limit, return
-    /// the transactions so that they can be inserted into the waiting pool.
-    /// `tx` itself may also be inserted.
-    ///
-    /// Note that if the insertion replaces an old transaction of the same
-    /// sender, it will be dropped instead of being returned.
+    /// If the insertion replaces an old transaction of the same
+    /// sender, it will be returned.
     fn insert(
         &mut self, tx: Arc<SignedTransaction>,
     ) -> Option<Arc<SignedTransaction>> {
-        if tx.gas_price
-            < self
-                .heap_map
-                .top()
-                .map(|(_, v)| *(v.0).0.gas_price())
-                .unwrap_or(U256::MAX)
-        {
-            return Some(tx);
-        }
         let scaled_weight = tx.gas_price / self.tx_weight_scaling;
         let base_weight = if scaled_weight == U256::zero() {
             0
@@ -357,14 +385,15 @@ impl PackingPool {
         self.heap_map
             .insert(&tx.sender, Reverse(PriceOrderedTransaction(tx.clone())));
         self.total_gas += tx.gas;
-        if let Some(replaced_tx) = self.treap.insert(tx.sender(), tx, weight) {
+        let replaced_tx = self.treap.insert(tx.sender(), tx, weight);
+        if let Some(replaced_tx) = replaced_tx.as_ref() {
             // an old transaction of the same sender is replaced.
             self.total_gas -= replaced_tx.gas;
-        }
-        None
+        };
+        replaced_tx
     }
 
-    fn pop(&mut self) -> Option<Arc<SignedTransaction>> {
+    fn sample_pop(&mut self) -> Option<Arc<SignedTransaction>> {
         if self.treap.len() == 0 {
             return None;
         }
@@ -381,6 +410,15 @@ impl PackingPool {
         trace!("Get transaction from ready pool. tx: {:?}", tx.clone());
 
         self.remove(&tx.sender())
+    }
+
+    fn pop(&mut self) -> Option<Arc<SignedTransaction>> {
+        self.heap_map.pop().map(|(addr, tx)| {
+            let tx = (tx.0).0;
+            self.treap.remove(&addr);
+            self.total_gas -= tx.gas;
+            tx
+        })
     }
 }
 
@@ -426,7 +464,9 @@ pub struct TransactionPoolInner {
 impl TransactionPoolInner {
     pub fn new(
         capacity: usize, tx_weight_scaling: u64, tx_weight_exp: u8,
-    ) -> Self {
+        total_gas_capacity: U256,
+    ) -> Self
+    {
         TransactionPoolInner {
             capacity,
             total_received_count: 0,
@@ -435,6 +475,7 @@ impl TransactionPoolInner {
             ready_account_pool: ReadyAccountPool::new(
                 tx_weight_scaling,
                 tx_weight_exp,
+                total_gas_capacity,
             ),
             ready_nonces_and_balances: HashMap::new(),
             garbage_collector: GarbageCollector::default(),
@@ -926,7 +967,7 @@ impl TransactionPoolInner {
         let spec = machine.spec(best_block_number);
         let transitions = &machine.params().transition_heights;
 
-        'out: while let Some(tx) = self.ready_account_pool.pop() {
+        'out: while let Some(tx) = self.ready_account_pool.sample_pop() {
             let tx_size = tx.rlp_size();
             if block_gas_limit - total_tx_gas_limit < *tx.gas_limit()
                 || block_size_limit - total_tx_size < tx_size
@@ -1033,6 +1074,7 @@ impl TransactionPoolInner {
     ) -> (Vec<Arc<SignedTransaction>>, Vec<Arc<SignedTransaction>>) {
         let ready_txs = self
             .ready_account_pool
+            .packing_pool
             .treap
             .iter()
             .filter(|address_tx| {
