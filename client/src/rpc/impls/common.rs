@@ -228,7 +228,19 @@ impl RpcImpl {
         info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
         let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
-        match self.primitive_block_by_epoch_number(epoch_num.into()) {
+
+        let epoch_height = consensus_graph
+            .get_height_from_epoch_number(epoch_num.into())
+            .map_err(RpcError::invalid_params)?;
+
+        let pivot_hash = inner
+            .get_pivot_hash_from_epoch_number(epoch_height)
+            .map_err(RpcError::invalid_params)?;
+
+        let maybe_block = self
+            .data_man
+            .block_by_hash(&pivot_hash, false /* update_cache */);
+        match maybe_block {
             None => Ok(None),
             Some(b) => Ok(Some(RpcBlock::new(
                 &*b,
