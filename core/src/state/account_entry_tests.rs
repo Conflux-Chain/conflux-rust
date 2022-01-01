@@ -9,7 +9,7 @@ use cfx_statedb::StateDb;
 use cfx_storage::{
     tests::new_state_manager_for_unit_test, StorageManagerTrait,
 };
-use cfx_types::{address_util::AddressUtil, Address, U256};
+use cfx_types::{address_util::AddressUtil, Address, U256, AddressWithSpace};
 use primitives::{
     account::ContractAccount, storage::STORAGE_LAYOUT_REGULAR_V0, Account,
     SponsorInfo, VoteStakeList,
@@ -19,13 +19,14 @@ use primitives::{
 fn test_overlay_account_create() {
     let mut address = Address::random();
     address.set_user_account_type_bits();
+    let address_with_space = AddressWithSpace::new_native(&address);
     let account =
-        Account::new_empty_with_balance(&address, &U256::zero(), &U256::zero());
+        Account::new_empty_with_balance(&address_with_space, &U256::zero(), &U256::zero());
     // test new from account 1
-    let overlay_account = OverlayAccount::from_loaded(&address, account);
+    let overlay_account = OverlayAccount::from_loaded(&address_with_space, account);
     assert!(overlay_account.deposit_list().is_none());
     assert!(overlay_account.vote_stake_list().is_none());
-    assert_eq!(*overlay_account.address(), address);
+    assert_eq!(overlay_account.address().address, address);
     assert_eq!(*overlay_account.balance(), 0.into());
     assert_eq!(*overlay_account.nonce(), 0.into());
     assert_eq!(*overlay_account.staking_balance(), 0.into());
@@ -38,8 +39,10 @@ fn test_overlay_account_create() {
 
     let mut contract_addr = Address::random();
     contract_addr.set_contract_type_bits();
+    let contract_addr_with_space = AddressWithSpace::new_native(&contract_addr);
     let mut user_addr = Address::random();
     user_addr.set_user_account_type_bits();
+    let user_addr_with_space = AddressWithSpace::new_native(&user_addr);
     let admin = Address::random();
     let sponsor_info = SponsorInfo {
         sponsor_for_gas: Address::random(),
@@ -63,10 +66,10 @@ fn test_overlay_account_create() {
     );
 
     // test new from account 2
-    let overlay_account = OverlayAccount::from_loaded(&contract_addr, account);
+    let overlay_account = OverlayAccount::from_loaded(&contract_addr_with_space, account);
     assert!(overlay_account.deposit_list().is_none());
     assert!(overlay_account.vote_stake_list().is_none());
-    assert_eq!(*overlay_account.address(), contract_addr);
+    assert_eq!(overlay_account.address().address, contract_addr);
     assert_eq!(*overlay_account.balance(), 101.into());
     assert_eq!(*overlay_account.nonce(), 55.into());
     assert_eq!(*overlay_account.staking_balance(), 11111.into());
@@ -79,10 +82,10 @@ fn test_overlay_account_create() {
 
     // test new basic
     let overlay_account =
-        OverlayAccount::new_basic(&user_addr, 1011.into(), 12345.into());
+        OverlayAccount::new_basic(&user_addr_with_space, 1011.into(), 12345.into());
     assert!(overlay_account.deposit_list().is_none());
     assert!(overlay_account.vote_stake_list().is_none());
-    assert_eq!(*overlay_account.address(), user_addr);
+    assert_eq!(overlay_account.address().address, user_addr);
     assert_eq!(*overlay_account.balance(), 1011.into());
     assert_eq!(*overlay_account.nonce(), 12345.into());
     assert_eq!(*overlay_account.staking_balance(), 0.into());
@@ -104,7 +107,7 @@ fn test_overlay_account_create() {
     );
     assert!(overlay_account.deposit_list().is_none());
     assert!(overlay_account.vote_stake_list().is_none());
-    assert_eq!(*overlay_account.address(), contract_addr);
+    assert_eq!(overlay_account.address().address, contract_addr);
     assert_eq!(*overlay_account.balance(), 5678.into());
     assert_eq!(*overlay_account.nonce(), 1234.into());
     assert_eq!(*overlay_account.staking_balance(), 0.into());
@@ -124,7 +127,7 @@ fn test_overlay_account_create() {
 
     // test new contract with admin
     let overlay_account = OverlayAccount::new_contract_with_admin(
-        &contract_addr,
+        &contract_addr_with_space,
         5678.into(),
         1234.into(),
         &admin,
@@ -132,7 +135,7 @@ fn test_overlay_account_create() {
     );
     assert!(overlay_account.deposit_list().is_none());
     assert!(overlay_account.vote_stake_list().is_none());
-    assert_eq!(*overlay_account.address(), contract_addr);
+    assert_eq!(overlay_account.address().address, contract_addr);
     assert_eq!(*overlay_account.balance(), 5678.into());
     assert_eq!(*overlay_account.nonce(), 1234.into());
     assert_eq!(*overlay_account.staking_balance(), 0.into());
@@ -155,8 +158,9 @@ fn test_deposit_and_withdraw() {
     let db = StateDb::new(storage_manager.get_state_for_genesis_write());
     let mut address = Address::random();
     address.set_user_account_type_bits();
+    let address_with_space = AddressWithSpace::new_native(&address);
     let account =
-        Account::new_empty_with_balance(&address, &U256::zero(), &U256::zero());
+        Account::new_empty_with_balance(&address_with_space, &U256::zero(), &U256::zero());
     let mut accumulated_interest_rate = vec![*ACCUMULATED_INTEREST_RATE_SCALE];
     for _ in 0..100000 {
         let last = *accumulated_interest_rate.last().unwrap();
@@ -166,7 +170,7 @@ fn test_deposit_and_withdraw() {
                 / *INTEREST_RATE_PER_BLOCK_SCALE,
         );
     }
-    let mut overlay_account = OverlayAccount::from_loaded(&address, account);
+    let mut overlay_account = OverlayAccount::from_loaded(&address_with_space, account);
     overlay_account
         .cache_staking_info(
             true, /* cache_deposit_list */
@@ -445,14 +449,15 @@ fn init_test_account() -> OverlayAccount {
     let db = StateDb::new(storage_manager.get_state_for_genesis_write());
     let mut address = Address::random();
     address.set_user_account_type_bits();
+    let address_with_space = AddressWithSpace::new_native(&address);
     let account = Account::new_empty_with_balance(
-        &address,
+        &address_with_space,
         &10_000_000.into(),
         &U256::zero(),
     );
 
     let mut overlay_account =
-        OverlayAccount::from_loaded(&address, account.clone());
+        OverlayAccount::from_loaded(&address_with_space, account.clone());
     overlay_account
         .cache_staking_info(
             true, /* cache_deposit_list */
@@ -642,6 +647,7 @@ fn test_vote_lock() {
 fn test_clone_overwrite() {
     let mut address = Address::random();
     address.set_contract_type_bits();
+    let address_with_space = AddressWithSpace::new_native(&address);
     let admin = Address::random();
     let sponsor_info = SponsorInfo {
         sponsor_for_gas: Address::random(),
@@ -687,9 +693,9 @@ fn test_clone_overwrite() {
     );
 
     let mut overlay_account1 =
-        OverlayAccount::from_loaded(&address, account1.clone());
+        OverlayAccount::from_loaded(&address_with_space, account1.clone());
     let mut overlay_account2 =
-        OverlayAccount::from_loaded(&address, account2.clone());
+        OverlayAccount::from_loaded(&address_with_space, account2.clone());
     assert_eq!(account1, overlay_account1.as_account());
     assert_eq!(account2, overlay_account2.as_account());
 

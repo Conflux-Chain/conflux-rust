@@ -1360,7 +1360,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             self.checkpoints.get_mut(),
             contract,
             AccountEntry::new_dirty(Some(OverlayAccount::new_contract(
-                contract,
+                &contract.address,
                 balance,
                 nonce,
                 Some(STORAGE_LAYOUT_REGULAR_V0),
@@ -1374,7 +1374,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         &mut self, contract: &Address, balance: U256, nonce: U256,
     ) -> DbResult<()> {
         self.new_contract(contract, balance, nonce)?;
-        self.init_code(&contract, vec![0x12, 0x34], Address::zero())?;
+        self.init_code(&contract, vec![0x12, 0x34], RawAddress::zero())?;
         Ok(())
     }
 
@@ -1751,7 +1751,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             ReturnKind::SameAsNext => Ok(Some(self.storage_at(address, key)?)),
             ReturnKind::OriginalAt => {
                 match self.db.get::<StorageValue>(
-                    StorageKey::new_storage_key(address, key.as_ref()),
+                    StorageKey::new_storage_key(&address.address, key.as_ref()).space(address.space),
                 )? {
                     Some(storage_value) => Ok(Some(storage_value.value)),
                     None => Ok(Some(U256::zero())),
