@@ -238,7 +238,7 @@ mod tests {
     use super::CallStackInfo;
     use crate::state::Substate;
     use cfx_state::substate_trait::SubstateMngTrait;
-    use cfx_types::Address;
+    use cfx_types::{Address as RawAddress, AddressWithSpace as Address};
     use primitives::LogEntry;
 
     #[test]
@@ -252,20 +252,20 @@ mod tests {
         let mut sub_state = Substate::new();
         sub_state
             .contracts_created
-            .push(Address::from_low_u64_be(1));
+            .push(Address::new_native(&RawAddress::from_low_u64_be(1)));
         sub_state.logs.push(LogEntry {
-            address: Address::from_low_u64_be(1),
+            address: RawAddress::from_low_u64_be(1),
             topics: vec![],
             data: vec![],
         });
-        sub_state.suicides.insert(Address::from_low_u64_be(10));
+        sub_state.suicides.insert(Address::new_native(&RawAddress::from_low_u64_be(10)));
 
         let mut sub_state_2 = Substate::new();
         sub_state_2
             .contracts_created
-            .push(Address::from_low_u64_be(2));
+            .push(Address::new_native(&RawAddress::from_low_u64_be(2)));
         sub_state_2.logs.push(LogEntry {
-            address: Address::from_low_u64_be(1),
+            address: RawAddress::from_low_u64_be(1),
             topics: vec![],
             data: vec![],
         });
@@ -275,7 +275,9 @@ mod tests {
         assert_eq!(sub_state.suicides.len(), 1);
     }
 
-    fn get_test_address(n: u8) -> Address { Address::from([n; 20]) }
+    fn get_test_address_raw(n: u8) -> RawAddress { RawAddress::from([n; 20]) }
+
+    fn get_test_address(n: u8) -> Address { Address::new_native(&get_test_address_raw(n)) }
 
     #[test]
     fn test_callstack_info() {

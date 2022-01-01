@@ -238,7 +238,7 @@ impl GarbageCollector {
 #[cfg(test)]
 mod garbage_collector_test {
     use super::{GarbageCollector, GarbageCollectorNode};
-    use cfx_types::{Address, U256};
+    use cfx_types::{AddressWithSpace as Address, Address as RawAddress, U256};
     use rand::{RngCore, SeedableRng};
     use rand_xorshift::XorShiftRng;
     use std::collections::HashMap;
@@ -253,7 +253,7 @@ mod garbage_collector_test {
 
         let mut addr = Vec::new();
         for _ in 0..10 {
-            addr.push(Address::random());
+            addr.push(Address::new_native(&RawAddress::random()));
         }
         gc.insert(&addr[0], 10, 10);
         assert_eq!(gc.len(), 1);
@@ -319,7 +319,7 @@ mod garbage_collector_test {
 
         let mut addr = Vec::new();
         for _ in 0..10 {
-            addr.push(Address::random());
+            addr.push(Address::new_native(&RawAddress::random()));
         }
         gc.insert(&addr[0], 0, 10);
         assert_eq!(gc.len(), 1);
@@ -417,7 +417,7 @@ mod garbage_collector_test {
         let mut rng = XorShiftRng::from_entropy();
         let mut addr = Vec::new();
         for _ in 0..10000 {
-            addr.push(Address::random());
+            addr.push(Address::new_native(&RawAddress::random()));
         }
 
         let mut gc = GarbageCollector::default();
