@@ -109,6 +109,7 @@ impl Default for ActionParams {
     /// Returns default ActionParams initialized with zeros
     fn default() -> ActionParams {
         ActionParams {
+            space: Space::Native,
             code_address: Address::default(),
             code_hash: Some(KECCAK_EMPTY),
             address: Address::default(),
