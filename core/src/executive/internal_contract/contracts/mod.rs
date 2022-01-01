@@ -26,7 +26,7 @@ mod macros {
     pub use super::super::{
         activate_at::{BlockNumber, IsActive},
         function::{
-            ExecutionTrait, InterfaceTrait, PreExecCheckConfTrait,
+            SimpleExecutionTrait, InterfaceTrait, PreExecCheckConfTrait,
             UpfrontPaymentTrait,
         },
         InternalContractTrait, SolidityEventTrait, SolidityFunctionTrait,
@@ -42,7 +42,7 @@ pub use self::{
 };
 
 use super::{
-    function::ExecutionTrait, InternalContractTrait, SolidityFunctionTrait,
+    function::SimpleExecutionTrait, InternalContractTrait, SolidityFunctionTrait,
 };
 use crate::{evm::Spec, spec::CommonParams};
 use cfx_types::Address;

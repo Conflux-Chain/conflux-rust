@@ -30,6 +30,8 @@ use cfx_types::{Address, H256};
 use primitives::BlockNumber;
 use solidity_abi::{ABIEncodable, EventIndexEncodable};
 use std::sync::Arc;
+use crate::evm::Spec;
+use crate::vm::{ExecTrapResult, TrapResult};
 
 lazy_static! {
     static ref INTERNAL_CONTRACT_CODE: Arc<Bytes> =
@@ -52,29 +54,14 @@ pub trait InternalContractTrait: Send + Sync + IsActive {
     fn execute(
         &self, params: &ActionParams, context: &mut InternalRefContext,
         tracer: &mut dyn Tracer,
-    ) -> vm::Result<GasLeft>
+    ) -> ExecTrapResult<GasLeft>
     {
-        let call_data = params
-            .data
-            .as_ref()
-            .ok_or(ABIDecodeError("None call data"))?;
-        let (fn_sig_slice, call_params) = if call_data.len() < 4 {
-            return Err(ABIDecodeError("Incomplete function signature").into());
-        } else {
-            call_data.split_at(4)
-        };
-
-        let mut fn_sig = [0u8; 4];
-        fn_sig.clone_from_slice(fn_sig_slice);
-
         let func_table = self.get_func_table();
 
-        let solidity_fn = func_table
-            .get(&fn_sig)
-            .filter(|&func| func.is_active(context.spec))
-            .ok_or(vm::Error::InternalContract(
-                "unsupported function".into(),
-            ))?;
+        let (solidity_fn, call_params) = match load_solidity_fn(&params.data, func_table, context.spec) {
+            Ok(res) => res,
+            Err(err) => { return TrapResult::Return(Err(err)); }
+        };
 
         solidity_fn.execute(call_params, params, context, tracer)
     }
@@ -86,12 +73,34 @@ pub trait InternalContractTrait: Send + Sync + IsActive {
     fn code_size(&self) -> usize { INTERNAL_CONTRACT_CODE.len() }
 }
 
+fn load_solidity_fn<'a>(data: &'a Option<Bytes>, func_table: &'a SolFnTable, spec: &'a Spec) -> vm::Result<(&'a Box<dyn SolidityFunctionTrait>, &'a [u8])> {
+    let call_data = data
+        .as_ref()
+        .ok_or(ABIDecodeError("None call data"))?;
+    let (fn_sig_slice, call_params) = if call_data.len() < 4 {
+        return Err(ABIDecodeError("Incomplete function signature").into());
+    } else {
+        call_data.split_at(4)
+    };
+
+    let mut fn_sig = [0u8; 4];
+    fn_sig.clone_from_slice(fn_sig_slice);
+
+    let solidity_fn = func_table
+        .get(&fn_sig)
+        .filter(|&func| func.is_active(spec))
+        .ok_or(vm::Error::InternalContract(
+            "unsupported function".into(),
+        ))?;
+    Ok((solidity_fn, call_params))
+}
+
 /// Native implementation of a solidity-interface function.
 pub trait SolidityFunctionTrait: Send + Sync + IsActive {
     fn execute(
         &self, input: &[u8], params: &ActionParams,
         context: &mut InternalRefContext, tracer: &mut dyn Tracer,
-    ) -> vm::Result<GasLeft>;
+    ) -> ExecTrapResult<GasLeft>;
 
     /// The string for function sig
     fn name(&self) -> &'static str;

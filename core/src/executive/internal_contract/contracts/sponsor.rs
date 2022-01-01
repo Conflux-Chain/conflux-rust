@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{super::impls::sponsor::*, macros::*, ExecutionTrait, SolFnTable};
+use super::{super::impls::sponsor::*, macros::*, SimpleExecutionTrait, SolFnTable};
 use crate::{
     evm::{ActionParams, Spec},
     executive::InternalRefContext,
@@ -54,7 +54,7 @@ make_solidity_function! {
 }
 impl_function_type!(SetSponsorForGas, "payable_write", gas: |spec: &Spec| 2 * spec.sstore_reset_gas);
 
-impl ExecutionTrait for SetSponsorForGas {
+impl SimpleExecutionTrait for SetSponsorForGas {
     fn execute_inner(
         &self, inputs: (Address, U256), params: &ActionParams,
         context: &mut InternalRefContext, tracer: &mut dyn Tracer,
@@ -76,7 +76,7 @@ make_solidity_function! {
 }
 impl_function_type!(SetSponsorForCollateral, "payable_write", gas: |spec: &Spec| 2 * spec.sstore_reset_gas);
 
-impl ExecutionTrait for SetSponsorForCollateral {
+impl SimpleExecutionTrait for SetSponsorForCollateral {
     fn execute_inner(
         &self, input: Address, params: &ActionParams,
         context: &mut InternalRefContext, tracer: &mut dyn Tracer,
@@ -107,7 +107,7 @@ impl UpfrontPaymentTrait for AddPrivilege {
     }
 }
 
-impl ExecutionTrait for AddPrivilege {
+impl SimpleExecutionTrait for AddPrivilege {
     fn execute_inner(
         &self, addresses: Vec<Address>, params: &ActionParams,
         context: &mut InternalRefContext, _: &mut dyn Tracer,
@@ -138,7 +138,7 @@ impl UpfrontPaymentTrait for RemovePrivilege {
     }
 }
 
-impl ExecutionTrait for RemovePrivilege {
+impl SimpleExecutionTrait for RemovePrivilege {
     fn execute_inner(
         &self, addresses: Vec<Address>, params: &ActionParams,
         context: &mut InternalRefContext, _: &mut dyn Tracer,
@@ -160,7 +160,7 @@ make_solidity_function! {
 }
 impl_function_type!(GetSponsorForGas, "query_with_default_gas");
 
-impl ExecutionTrait for GetSponsorForGas {
+impl SimpleExecutionTrait for GetSponsorForGas {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
         context: &mut InternalRefContext, _: &mut dyn Tracer,
@@ -175,7 +175,7 @@ make_solidity_function! {
 }
 impl_function_type!(GetSponsoredBalanceForGas, "query_with_default_gas");
 
-impl ExecutionTrait for GetSponsoredBalanceForGas {
+impl SimpleExecutionTrait for GetSponsoredBalanceForGas {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
         context: &mut InternalRefContext, _: &mut dyn Tracer,
@@ -190,7 +190,7 @@ make_solidity_function! {
 }
 impl_function_type!(GetSponsoredGasFeeUpperBound, "query_with_default_gas");
 
-impl ExecutionTrait for GetSponsoredGasFeeUpperBound {
+impl SimpleExecutionTrait for GetSponsoredGasFeeUpperBound {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
         context: &mut InternalRefContext, _: &mut dyn Tracer,
@@ -205,7 +205,7 @@ make_solidity_function! {
 }
 impl_function_type!(GetSponsorForCollateral, "query_with_default_gas");
 
-impl ExecutionTrait for GetSponsorForCollateral {
+impl SimpleExecutionTrait for GetSponsorForCollateral {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
         context: &mut InternalRefContext, _: &mut dyn Tracer,
@@ -223,7 +223,7 @@ make_solidity_function! {
 }
 impl_function_type!(GetSponsoredBalanceForCollateral, "query_with_default_gas");
 
-impl ExecutionTrait for GetSponsoredBalanceForCollateral {
+impl SimpleExecutionTrait for GetSponsoredBalanceForCollateral {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
         context: &mut InternalRefContext, _: &mut dyn Tracer,
@@ -238,7 +238,7 @@ make_solidity_function! {
 }
 impl_function_type!(IsWhitelisted, "query", gas: |spec: &Spec| spec.sload_gas);
 
-impl ExecutionTrait for IsWhitelisted {
+impl SimpleExecutionTrait for IsWhitelisted {
     fn execute_inner(
         &self, (contract, user): (Address, Address), _: &ActionParams,
         context: &mut InternalRefContext, _: &mut dyn Tracer,
@@ -257,7 +257,7 @@ make_solidity_function! {
 }
 impl_function_type!(IsAllWhitelisted, "query", gas: |spec: &Spec| spec.sload_gas);
 
-impl ExecutionTrait for IsAllWhitelisted {
+impl SimpleExecutionTrait for IsAllWhitelisted {
     fn execute_inner(
         &self, contract: Address, _: &ActionParams,
         context: &mut InternalRefContext, _: &mut dyn Tracer,
@@ -288,7 +288,7 @@ impl UpfrontPaymentTrait for AddPrivilegeByAdmin {
     }
 }
 
-impl ExecutionTrait for AddPrivilegeByAdmin {
+impl SimpleExecutionTrait for AddPrivilegeByAdmin {
     fn execute_inner(
         &self, (contract, addresses): (Address, Vec<Address>),
         params: &ActionParams, context: &mut InternalRefContext,
@@ -319,7 +319,7 @@ impl UpfrontPaymentTrait for RemovePrivilegeByAdmin {
     }
 }
 
-impl ExecutionTrait for RemovePrivilegeByAdmin {
+impl SimpleExecutionTrait for RemovePrivilegeByAdmin {
     fn execute_inner(
         &self, (contract, addresses): (Address, Vec<Address>),
         params: &ActionParams, context: &mut InternalRefContext,

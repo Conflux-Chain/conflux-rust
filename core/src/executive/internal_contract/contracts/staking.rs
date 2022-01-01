@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{super::impls::staking::*, macros::*, ExecutionTrait, SolFnTable};
+use super::{super::impls::staking::*, macros::*, SimpleExecutionTrait, SolFnTable};
 use crate::{
     evm::{ActionParams, Spec},
     executive::InternalRefContext,
@@ -55,7 +55,7 @@ impl UpfrontPaymentTrait for Deposit {
     }
 }
 
-impl ExecutionTrait for Deposit {
+impl SimpleExecutionTrait for Deposit {
     fn execute_inner(
         &self, input: U256, params: &ActionParams,
         context: &mut InternalRefContext, tracer: &mut dyn Tracer,
@@ -84,7 +84,7 @@ impl UpfrontPaymentTrait for Withdraw {
     }
 }
 
-impl ExecutionTrait for Withdraw {
+impl SimpleExecutionTrait for Withdraw {
     fn execute_inner(
         &self, input: U256, params: &ActionParams,
         context: &mut InternalRefContext, tracer: &mut dyn Tracer,
@@ -113,7 +113,7 @@ impl UpfrontPaymentTrait for VoteLock {
     }
 }
 
-impl ExecutionTrait for VoteLock {
+impl SimpleExecutionTrait for VoteLock {
     fn execute_inner(
         &self, inputs: (U256, U256), params: &ActionParams,
         context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
@@ -128,7 +128,7 @@ make_solidity_function! {
 }
 impl_function_type!(GetStakingBalance, "query_with_default_gas");
 
-impl ExecutionTrait for GetStakingBalance {
+impl SimpleExecutionTrait for GetStakingBalance {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
         context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
@@ -154,7 +154,7 @@ impl UpfrontPaymentTrait for GetLockedStakingBalance {
     }
 }
 
-impl ExecutionTrait for GetLockedStakingBalance {
+impl SimpleExecutionTrait for GetLockedStakingBalance {
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
         context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
@@ -185,7 +185,7 @@ impl UpfrontPaymentTrait for GetVotePower {
     }
 }
 
-impl ExecutionTrait for GetVotePower {
+impl SimpleExecutionTrait for GetVotePower {
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
         context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
