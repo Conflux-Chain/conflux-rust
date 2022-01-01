@@ -238,7 +238,7 @@ impl GarbageCollector {
 #[cfg(test)]
 mod garbage_collector_test {
     use super::{GarbageCollector, GarbageCollectorNode};
-    use cfx_types::{AddressWithSpace as Address, Address as RawAddress, U256};
+    use cfx_types::{Address as RawAddress, AddressWithSpace as Address, U256};
     use rand::{RngCore, SeedableRng};
     use rand_xorshift::XorShiftRng;
     use std::collections::HashMap;

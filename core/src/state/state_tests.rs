@@ -18,7 +18,10 @@ use cfx_storage::{
     tests::new_state_manager_for_unit_test, StateIndex, StorageManager,
     StorageManagerTrait,
 };
-use cfx_types::{address_util::AddressUtil, Address, BigEndianHash, U256, AddressWithSpace, Space};
+use cfx_types::{
+    address_util::AddressUtil, Address, AddressWithSpace, BigEndianHash, Space,
+    U256,
+};
 use keccak_hash::{keccak, KECCAK_EMPTY};
 use primitives::{EpochId, StorageKey, StorageLayout};
 use std::sync::Arc;
@@ -63,14 +66,20 @@ fn checkpoint_basic() {
     state
         .add_collateral_for_storage(&address, &U256::from(1000))
         .unwrap();
-    assert_eq!(state.balance(&address_with_space).unwrap(), U256::from(69u64));
+    assert_eq!(
+        state.balance(&address_with_space).unwrap(),
+        U256::from(69u64)
+    );
     assert_eq!(
         state.collateral_for_storage(&address).unwrap(),
         U256::from(1000)
     );
     assert_eq!(state.total_storage_tokens(), U256::from(1000));
     state.discard_checkpoint();
-    assert_eq!(state.balance(&address_with_space).unwrap(), U256::from(69u64));
+    assert_eq!(
+        state.balance(&address_with_space).unwrap(),
+        U256::from(69u64)
+    );
     state.checkpoint();
     state
         .add_balance(
@@ -92,9 +101,15 @@ fn checkpoint_basic() {
         U256::from(0)
     );
     assert_eq!(state.total_storage_tokens(), U256::from(0));
-    assert_eq!(state.balance(&address_with_space).unwrap(), U256::from(1070u64));
+    assert_eq!(
+        state.balance(&address_with_space).unwrap(),
+        U256::from(1070u64)
+    );
     state.revert_to_checkpoint();
-    assert_eq!(state.balance(&address_with_space).unwrap(), U256::from(69u64));
+    assert_eq!(
+        state.balance(&address_with_space).unwrap(),
+        U256::from(69u64)
+    );
     assert_eq!(
         state.collateral_for_storage(&address).unwrap(),
         U256::from(1000)
@@ -133,14 +148,20 @@ fn checkpoint_nested() {
         state.collateral_for_storage(&address).unwrap(),
         U256::from(1000)
     );
-    assert_eq!(state.balance(&address_with_space).unwrap(), U256::from(69u64));
+    assert_eq!(
+        state.balance(&address_with_space).unwrap(),
+        U256::from(69u64)
+    );
     state.discard_checkpoint();
     assert_eq!(state.total_storage_tokens(), U256::from(1000));
     assert_eq!(
         state.collateral_for_storage(&address).unwrap(),
         U256::from(1000)
     );
-    assert_eq!(state.balance(&address_with_space).unwrap(), U256::from(69u64));
+    assert_eq!(
+        state.balance(&address_with_space).unwrap(),
+        U256::from(69u64)
+    );
     state.revert_to_checkpoint();
     assert_eq!(state.balance(&address_with_space).unwrap(), U256::from(0));
     assert_eq!(state.total_storage_tokens(), U256::from(0));
@@ -168,21 +189,33 @@ fn checkpoint_revert_to_get_storage_at() {
         .unwrap();
 
     assert_eq!(
-        state.checkpoint_storage_at(c0, &address_with_space, &key).unwrap(),
+        state
+            .checkpoint_storage_at(c0, &address_with_space, &key)
+            .unwrap(),
         Some(U256::zero())
     );
     assert_eq!(
-        state.checkpoint_storage_at(c1, &address_with_space, &key).unwrap(),
+        state
+            .checkpoint_storage_at(c1, &address_with_space, &key)
+            .unwrap(),
         Some(U256::zero())
     );
-    assert_eq!(state.storage_at(&address_with_space, &key).unwrap(), U256::one());
+    assert_eq!(
+        state.storage_at(&address_with_space, &key).unwrap(),
+        U256::one()
+    );
 
     state.revert_to_checkpoint();
     assert_eq!(
-        state.checkpoint_storage_at(c0, &address_with_space, &key).unwrap(),
+        state
+            .checkpoint_storage_at(c0, &address_with_space, &key)
+            .unwrap(),
         Some(U256::zero())
     );
-    assert_eq!(state.storage_at(&address_with_space, &key).unwrap(), U256::zero());
+    assert_eq!(
+        state.storage_at(&address_with_space, &key).unwrap(),
+        U256::zero()
+    );
 }
 
 #[test]
@@ -233,11 +266,17 @@ fn checkpoint_from_empty_get_storage_at() {
     substates.push(Substate::new());
     let c3 = state.checkpoint();
     substates.push(Substate::new());
-    state.set_storage(&a_s, k2.clone(), U256::from(3), a).unwrap();
-    state.set_storage(&a_s, k.clone(), U256::from(3), a).unwrap();
+    state
+        .set_storage(&a_s, k2.clone(), U256::from(3), a)
+        .unwrap();
+    state
+        .set_storage(&a_s, k.clone(), U256::from(3), a)
+        .unwrap();
     let c4 = state.checkpoint();
     substates.push(Substate::new());
-    state.set_storage(&a_s, k.clone(), U256::from(4), a).unwrap();
+    state
+        .set_storage(&a_s, k.clone(), U256::from(4), a)
+        .unwrap();
     let c5 = state.checkpoint();
     substates.push(Substate::new());
 
@@ -463,7 +502,10 @@ fn checkpoint_get_storage_at() {
         .set_storage(&contract_a_s, k.clone(), U256::from(0xffff), a)
         .unwrap();
     state
-        .inc_nonce(&contract_a_s, &Spec::new_spec_for_test().account_start_nonce)
+        .inc_nonce(
+            &contract_a_s,
+            &Spec::new_spec_for_test().account_start_nonce,
+        )
         .unwrap();
     assert_eq!(
         state
@@ -840,7 +882,9 @@ fn kill_account_with_checkpoints() {
             U256::one(),
         )
         .unwrap();
-    state_0.set_storage(&a_s, k.clone(), U256::one(), a).unwrap();
+    state_0
+        .set_storage(&a_s, k.clone(), U256::one(), a)
+        .unwrap();
     state_0
         .set_storage_layout(&a_s, StorageLayout::Regular(0))
         .unwrap();
@@ -920,11 +964,14 @@ fn check_result_of_simple_payment_to_killed_account() {
     let a_s = AddressWithSpace::new_native(&a);
     let code = b"asdf"[..].into();
     let code_hash = keccak(&code);
-    let code_key = StorageKey::new_code_key(&a, &code_hash).space(Space::Native);
+    let code_key =
+        StorageKey::new_code_key(&a, &code_hash).space(Space::Native);
     let k = u256_to_vec(&U256::from(0));
     // Need the checkpoint for ownership commitment.
     state_0.checkpoint();
-    state_0.new_contract(&a_s, U256::zero(), U256::one()).unwrap();
+    state_0
+        .new_contract(&a_s, U256::zero(), U256::one())
+        .unwrap();
     state_0.init_code(&a_s, code, sender_addr).unwrap();
     state_0
         .set_storage(&a_s, k.clone(), U256::one(), sender_addr)
@@ -1151,7 +1198,10 @@ fn create_contract_fail_previous_storage() {
     );
     assert_eq!(state.collateral_for_storage(&a).unwrap(), U256::from(0));
     assert_eq!(state.balance(&a_s).unwrap(), U256::from(0));
-    assert_eq!(state.storage_at(&contract_addr_s, &k).unwrap(), U256::zero());
+    assert_eq!(
+        state.storage_at(&contract_addr_s, &k).unwrap(),
+        U256::zero()
+    );
     state.revert_to_checkpoint();
     substates.pop(); // revert to c1
     assert_eq!(
@@ -1276,7 +1326,12 @@ fn test_automatic_collateral_normal_account() {
     state.checkpoint();
     substates.push(Substate::new());
     state
-        .set_storage(&contract_account_s, k1.clone(), U256::one(), normal_account)
+        .set_storage(
+            &contract_account_s,
+            k1.clone(),
+            U256::one(),
+            normal_account,
+        )
         .unwrap();
     assert_eq!(
         state
@@ -1318,10 +1373,20 @@ fn test_automatic_collateral_normal_account() {
     substates.push(Substate::new());
 
     state
-        .set_storage(&contract_account_s, k2.clone(), U256::one(), normal_account)
+        .set_storage(
+            &contract_account_s,
+            k2.clone(),
+            U256::one(),
+            normal_account,
+        )
         .unwrap();
     state
-        .set_storage(&contract_account_s, k3.clone(), U256::one(), normal_account)
+        .set_storage(
+            &contract_account_s,
+            k3.clone(),
+            U256::one(),
+            normal_account,
+        )
         .unwrap();
     assert_ne!(
         state
@@ -1358,7 +1423,12 @@ fn test_automatic_collateral_normal_account() {
     substates.push(Substate::new());
 
     state
-        .set_storage(&contract_account_s, k2.clone(), U256::one(), normal_account)
+        .set_storage(
+            &contract_account_s,
+            k2.clone(),
+            U256::one(),
+            normal_account,
+        )
         .unwrap();
     assert_eq!(
         state

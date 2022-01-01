@@ -48,25 +48,37 @@ fn generate_random_state(
 
     for key in portion(&keys, 0, 7) {
         state_0
-            .set(StorageKey::AccountKey(key).space(Space::Native), key[..].into())
+            .set(
+                StorageKey::AccountKey(key).space(Space::Native),
+                key[..].into(),
+            )
             .expect("Inserting k-v should succeed");
     }
 
     for key in portion(&keys, 1, 7) {
         state_0
-            .set(StorageKey::AccountKey(key).space(Space::Native), key[..].into())
+            .set(
+                StorageKey::AccountKey(key).space(Space::Native),
+                key[..].into(),
+            )
             .expect("Inserting k-v should succeed");
     }
 
     for key in portion(&keys, 2, 7) {
         state_0
-            .set(StorageKey::AccountKey(key).space(Space::Native), key[..].into())
+            .set(
+                StorageKey::AccountKey(key).space(Space::Native),
+                key[..].into(),
+            )
             .expect("Inserting k-v should succeed");
     }
 
     for key in portion(&keys, 3, 7) {
         state_0
-            .set(StorageKey::AccountKey(key).space(Space::Native), key[..].into())
+            .set(
+                StorageKey::AccountKey(key).space(Space::Native),
+                key[..].into(),
+            )
             .expect("Inserting k-v should succeed");
     }
 
@@ -88,25 +100,37 @@ fn generate_random_state(
 
     for key in portion(&keys, 1, 7) {
         state_1
-            .set(StorageKey::AccountKey(key).space(Space::Native), key[..].into())
+            .set(
+                StorageKey::AccountKey(key).space(Space::Native),
+                key[..].into(),
+            )
             .expect("Inserting k-v should succeed");
     }
 
     for key in portion(&keys, 3, 7) {
         state_1
-            .set(StorageKey::AccountKey(key).space(Space::Native), key[..].into())
+            .set(
+                StorageKey::AccountKey(key).space(Space::Native),
+                key[..].into(),
+            )
             .expect("Inserting k-v should succeed");
     }
 
     for key in portion(&keys, 4, 7) {
         state_1
-            .set(StorageKey::AccountKey(key).space(Space::Native), key[..].into())
+            .set(
+                StorageKey::AccountKey(key).space(Space::Native),
+                key[..].into(),
+            )
             .expect("Inserting k-v should succeed");
     }
 
     for key in portion(&keys, 5, 7) {
         state_1
-            .set(StorageKey::AccountKey(key).space(Space::Native), key[..].into())
+            .set(
+                StorageKey::AccountKey(key).space(Space::Native),
+                key[..].into(),
+            )
             .expect("Inserting k-v should succeed");
     }
 
@@ -128,25 +152,37 @@ fn generate_random_state(
 
     for key in portion(&keys, 2, 7) {
         state_2
-            .set(StorageKey::AccountKey(key).space(Space::Native), key[..].into())
+            .set(
+                StorageKey::AccountKey(key).space(Space::Native),
+                key[..].into(),
+            )
             .expect("Inserting k-v should succeed");
     }
 
     for key in portion(&keys, 3, 7) {
         state_2
-            .set(StorageKey::AccountKey(key).space(Space::Native), key[..].into())
+            .set(
+                StorageKey::AccountKey(key).space(Space::Native),
+                key[..].into(),
+            )
             .expect("Inserting k-v should succeed");
     }
 
     for key in portion(&keys, 5, 7) {
         state_2
-            .set(StorageKey::AccountKey(key).space(Space::Native), key[..].into())
+            .set(
+                StorageKey::AccountKey(key).space(Space::Native),
+                key[..].into(),
+            )
             .expect("Inserting k-v should succeed");
     }
 
     for key in portion(&keys, 6, 7) {
         state_2
-            .set(StorageKey::AccountKey(key).space(Space::Native), key[..].into())
+            .set(
+                StorageKey::AccountKey(key).space(Space::Native),
+                key[..].into(),
+            )
             .expect("Inserting k-v should succeed");
     }
 
@@ -416,9 +452,9 @@ fn test_valid_node_merkle_proof_for_existing_key() {
 
     for key in keys {
         let (triplet, proof) = state
-            .get_node_merkle_all_versions::<WithProof>(StorageKey::AccountKey(
-                &key,
-            ).space(Space::Native))
+            .get_node_merkle_all_versions::<WithProof>(
+                StorageKey::AccountKey(&key).space(Space::Native),
+            )
             .expect("node merkle lookup should succeed");
 
         assert!(
@@ -453,9 +489,9 @@ fn test_valid_node_merkle_proof_for_nonexistent_key() {
 
     for key in keys {
         let (triplet, proof) = state
-            .get_node_merkle_all_versions::<WithProof>(StorageKey::AccountKey(
-                &key,
-            ).space(Space::Native))
+            .get_node_merkle_all_versions::<WithProof>(
+                StorageKey::AccountKey(&key).space(Space::Native),
+            )
             .expect("node merkle lookup should succeed");
 
         assert_eq!(triplet.delta, MptValue::None);
@@ -487,9 +523,9 @@ fn test_invalid_node_merkle_proof() {
 
     for key in keys {
         let (triplet, proof) = state
-            .get_node_merkle_all_versions::<WithProof>(StorageKey::AccountKey(
-                &key,
-            ).space(Space::Native))
+            .get_node_merkle_all_versions::<WithProof>(
+                StorageKey::AccountKey(&key).space(Space::Native),
+            )
             .expect("node merkle lookup should succeed");
 
         assert!(
@@ -656,7 +692,10 @@ use crate::{
     },
     RecordingStorage,
 };
-use cfx_types::{H256, Space};
-use primitives::{DeltaMptKeyPadding, MptValue, NodeMerkleTriplet, StateRoot, StorageKey, StorageKeyWithSpace};
+use cfx_types::{Space, H256};
+use primitives::{
+    DeltaMptKeyPadding, MptValue, NodeMerkleTriplet, StateRoot, StorageKey,
+    StorageKeyWithSpace,
+};
 use rand::{seq::SliceRandom, Rng};
 use rand_chacha::ChaChaRng;

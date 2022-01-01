@@ -1751,7 +1751,8 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             ReturnKind::SameAsNext => Ok(Some(self.storage_at(address, key)?)),
             ReturnKind::OriginalAt => {
                 match self.db.get::<StorageValue>(
-                    StorageKey::new_storage_key(&address.address, key.as_ref()).space(address.space),
+                    StorageKey::new_storage_key(&address.address, key.as_ref())
+                        .space(address.space),
                 )? {
                     Some(storage_value) => Ok(Some(storage_value.value)),
                     None => Ok(Some(U256::zero())),

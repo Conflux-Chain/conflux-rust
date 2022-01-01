@@ -12,7 +12,7 @@ use cfx_storage::{
     storage_db::{KeyValueDbTraitRead, SnapshotDbManagerTrait, SnapshotInfo},
     DeltaMptIterator, Error as StorageError, StateIndex, StorageConfiguration,
 };
-use cfx_types::{Address, H256, AddressWithSpace};
+use cfx_types::{Address, AddressWithSpace, H256};
 use cfxcore::sync::Error;
 use clap::{App, Arg, ArgMatches};
 use log::LevelFilter;
@@ -20,7 +20,10 @@ use log4rs::{
     append::console::ConsoleAppender,
     config::{Appender, Config, Root},
 };
-use primitives::{Account, MerkleHash, StateRoot, StorageKey, MERKLE_NULL_NODE, NULL_EPOCH, StorageKeyWithSpace};
+use primitives::{
+    Account, MerkleHash, StateRoot, StorageKey, StorageKeyWithSpace,
+    MERKLE_NULL_NODE, NULL_EPOCH,
+};
 use std::{
     cmp::min, collections::HashMap, fmt::Debug, fs::remove_dir_all,
     path::PathBuf, str::FromStr, sync::Arc, time::Instant,
@@ -183,7 +186,8 @@ fn main() -> Result<(), Error> {
         )?
         .expect("exists");
     for (addr, account) in &accounts_map {
-        let value: Option<Box<[u8]>> = snapshot2.get(addr.address.as_bytes())?;
+        let value: Option<Box<[u8]>> =
+            snapshot2.get(addr.address.as_bytes())?;
         assert!(value.is_some(), "Address {:?} does not exist", addr);
         let account_bytes = rlp::encode(account);
         let get_bytes = value.unwrap();
@@ -350,7 +354,8 @@ fn prepare_state(
 
 fn add_accounts(
     manager: &Arc<StateManager>, parent: H256, height: &mut u64,
-    accounts_per_epoch: usize, new_account_map: &HashMap<AddressWithSpace, Account>,
+    accounts_per_epoch: usize,
+    new_account_map: &HashMap<AddressWithSpace, Account>,
     old_state_root: &StateRootWithAuxInfo, state_root: &StateRootWithAuxInfo,
 ) -> Result<(H256, MerkleHash), StorageError>
 {
@@ -424,7 +429,11 @@ where
         let (addr, account) =
             account_map.next().expect("Caller has checked the size");
         state
-            .set(StorageKey::new_account_key(&addr.address).space(addr.space), account, None)
+            .set(
+                StorageKey::new_account_key(&addr.address).space(addr.space),
+                account,
+                None,
+            )
             .unwrap();
     }
     let epoch = H256::random();

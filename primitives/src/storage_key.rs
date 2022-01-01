@@ -658,8 +658,8 @@ use std::{
 #[cfg(test)]
 mod tests {
     use super::{delta_mpt_storage_key::*, DeltaMptKeyPadding, StorageKey};
-    use cfx_types::{Address, H256, Space};
     use crate::StorageKeyWithSpace;
+    use cfx_types::{Address, Space, H256};
 
     #[test]
     fn test_delta_mpt_account_key() {
@@ -683,7 +683,8 @@ mod tests {
             .parse::<Address>()
             .unwrap();
 
-        let key = StorageKey::new_storage_root_key(&address).space(Space::Native);
+        let key =
+            StorageKey::new_storage_root_key(&address).space(Space::Native);
         let bytes = key.to_delta_mpt_key_bytes(&padding);
         let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
@@ -699,7 +700,8 @@ mod tests {
 
         let storage_key = &[99; 32];
 
-        let key = StorageKey::new_storage_key(&address, storage_key).space(Space::Native);
+        let key = StorageKey::new_storage_key(&address, storage_key)
+            .space(Space::Native);
         let bytes = key.to_delta_mpt_key_bytes(&padding);
         let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
@@ -732,7 +734,8 @@ mod tests {
                 .parse::<H256>()
                 .unwrap();
 
-        let key = StorageKey::new_code_key(&address, &code_hash).space(Space::Native);
+        let key =
+            StorageKey::new_code_key(&address, &code_hash).space(Space::Native);
         let bytes = key.to_delta_mpt_key_bytes(&padding);
         let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
@@ -746,7 +749,8 @@ mod tests {
             .parse::<Address>()
             .unwrap();
 
-        let key = StorageKey::new_deposit_list_key(&address).space(Space::Native);
+        let key =
+            StorageKey::new_deposit_list_key(&address).space(Space::Native);
         let bytes = key.to_delta_mpt_key_bytes(&padding);
         let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);

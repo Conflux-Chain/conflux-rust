@@ -7,9 +7,9 @@ use cfx_internal_common::StateRootWithAuxInfo;
 use cfx_storage::{
     utils::access_mode, ErrorKind, MptKeyValue, Result, StorageStateTrait,
 };
-use primitives::{EpochId, StorageKey, MERKLE_NULL_NODE, StorageKeyWithSpace};
-use std::{cell::RefCell, collections::HashMap};
 use cfx_types::Space;
+use primitives::{EpochId, StorageKey, StorageKeyWithSpace, MERKLE_NULL_NODE};
+use std::{cell::RefCell, collections::HashMap};
 
 type StorageValue = Box<[u8]>;
 type RawStorage = HashMap<Vec<u8>, StorageValue>;
@@ -94,7 +94,9 @@ impl StorageStateTrait for MockStorage {
         unimplemented!()
     }
 
-    fn get(&self, access_key: StorageKeyWithSpace) -> Result<Option<Box<[u8]>>> {
+    fn get(
+        &self, access_key: StorageKeyWithSpace,
+    ) -> Result<Option<Box<[u8]>>> {
         *self.num_reads.borrow_mut() += 1;
         let key = access_key.to_key_bytes();
         Ok(self.contents.get(&key).cloned())
@@ -104,7 +106,9 @@ impl StorageStateTrait for MockStorage {
         Err(ErrorKind::Msg("No state root".to_owned()).into())
     }
 
-    fn set(&mut self, access_key: StorageKeyWithSpace, value: Box<[u8]>) -> Result<()> {
+    fn set(
+        &mut self, access_key: StorageKeyWithSpace, value: Box<[u8]>,
+    ) -> Result<()> {
         *self.num_writes.get_mut() += 1;
         let key = access_key.to_key_bytes();
         self.contents.insert(key, value);
@@ -115,7 +119,9 @@ impl StorageStateTrait for MockStorage {
 type StateDbTest = StateDbGeneric<MockStorage>;
 
 // convert `key` to storage interface format
-fn storage_key(key: &'static [u8]) -> StorageKeyWithSpace { StorageKey::AccountKey(key).space(Space::Native) }
+fn storage_key(key: &'static [u8]) -> StorageKeyWithSpace {
+    StorageKey::AccountKey(key).space(Space::Native)
+}
 
 // convert `key` to raw storage format
 fn key(key: &'static [u8]) -> Vec<u8> { storage_key(key).to_key_bytes() }

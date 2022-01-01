@@ -1074,15 +1074,18 @@ mod tests {
 
     #[test]
     fn new_overlay_account_is_default() {
-        let normal_addr =
-            AddressWithSpace::new_native(&Address::from_str("1000000000000000000000000000000000000000")
-                .unwrap());
-        let contract_addr =
-            AddressWithSpace::new_native(&Address::from_str("8000000000000000000000000000000000000000")
-                .unwrap());
-        let builtin_addr =
-            AddressWithSpace::new_native(&Address::from_str("0000000000000000000000000000000000000000")
-                .unwrap());
+        let normal_addr = AddressWithSpace::new_native(
+            &Address::from_str("1000000000000000000000000000000000000000")
+                .unwrap(),
+        );
+        let contract_addr = AddressWithSpace::new_native(
+            &Address::from_str("8000000000000000000000000000000000000000")
+                .unwrap(),
+        );
+        let builtin_addr = AddressWithSpace::new_native(
+            &Address::from_str("0000000000000000000000000000000000000000")
+                .unwrap(),
+        );
 
         test_account_is_default(&mut OverlayAccount::new_basic(
             &normal_addr,

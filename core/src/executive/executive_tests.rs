@@ -35,7 +35,8 @@ use cfx_storage::{
     StateIndex,
 };
 use cfx_types::{
-    address_util::AddressUtil, Address, BigEndianHash, U256, U512, AddressWithSpace
+    address_util::AddressUtil, Address, AddressWithSpace, BigEndianHash, U256,
+    U512,
 };
 use keylib::{Generator, Random};
 use primitives::{
@@ -75,7 +76,8 @@ fn test_contract_address() {
             &U256::from(88),
             &[],
         )
-        .0.address
+        .0
+        .address
     );
 }
 
@@ -299,7 +301,8 @@ fn test_suicide_when_creation() {
     let FinalizationResult {
         gas_left,
         apply_state,
-        return_data: _, ..
+        return_data: _,
+        ..
     } = ex
         .create(params, &mut substate, &mut tracer)
         .expect("no db error")
@@ -429,7 +432,8 @@ fn test_call_to_create() {
 fn test_revert() {
     let contract_address =
         Address::from_str("8d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
-    let contract_address_with_space = AddressWithSpace::new_native(&contract_address);
+    let contract_address_with_space =
+        AddressWithSpace::new_native(&contract_address);
     let sender =
         Address::from_str("1f572e5295c57f15886f9b263e2f6d2d6c7b5ec6").unwrap();
     let sender_with_space = AddressWithSpace::new_native(&sender);
@@ -453,7 +457,11 @@ fn test_revert() {
         )
         .unwrap();
     state
-        .new_contract_with_code(&contract_address_with_space, U256::zero(), U256::one())
+        .new_contract_with_code(
+            &contract_address_with_space,
+            U256::zero(),
+            U256::one(),
+        )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state
         .commit(BigEndianHash::from_uint(&U256::from(1)), None)
@@ -485,7 +493,9 @@ fn test_revert() {
     assert_eq!(result, U256::from(15_001));
     assert_eq!(output[..], returns[..]);
     assert_eq!(
-        state.storage_at(&contract_address_with_space, &vec![0; 32]).unwrap(),
+        state
+            .storage_at(&contract_address_with_space, &vec![0; 32])
+            .unwrap(),
         U256::zero()
     );
 }
@@ -1010,9 +1020,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             Some(STORAGE_LAYOUT_REGULAR_V0),
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
-    state
-        .init_code(&address, code.clone(), sender)
-        .unwrap();
+    state.init_code(&address, code.clone(), sender).unwrap();
     state
         .add_balance(
             &sender_with_space,
@@ -1295,7 +1303,9 @@ fn test_commission_privilege() {
     .sign(caller3.secret());
     assert_eq!(tx.sender().address, caller3.address());
     assert_eq!(
-        state.balance(&AddressWithSpace::new_native(&caller3.address())).unwrap(),
+        state
+            .balance(&AddressWithSpace::new_native(&caller3.address()))
+            .unwrap(),
         U256::from(100_000)
     );
     let options = TransactOptions::with_no_tracing();
@@ -1307,9 +1317,16 @@ fn test_commission_privilege() {
             .unwrap();
 
     assert_eq!(gas_used, U256::from(58_030));
-    assert_eq!(state.nonce(&AddressWithSpace::new_native(&caller3.address())).unwrap(), U256::from(1));
     assert_eq!(
-        state.balance(&AddressWithSpace::new_native(&caller3.address())).unwrap(),
+        state
+            .nonce(&AddressWithSpace::new_native(&caller3.address()))
+            .unwrap(),
+        U256::from(1)
+    );
+    assert_eq!(
+        state
+            .balance(&AddressWithSpace::new_native(&caller3.address()))
+            .unwrap(),
         U256::from(41_970)
     );
     assert_eq!(
@@ -1332,7 +1349,9 @@ fn test_commission_privilege() {
     .sign(caller1.secret());
     assert_eq!(tx.sender().address, caller1.address());
     assert_eq!(
-        state.balance(&AddressWithSpace::new_native(&caller1.address())).unwrap(),
+        state
+            .balance(&AddressWithSpace::new_native(&caller1.address()))
+            .unwrap(),
         U256::from(100_000)
     );
     let options = TransactOptions::with_no_tracing();
@@ -1344,9 +1363,16 @@ fn test_commission_privilege() {
             .unwrap();
 
     assert_eq!(gas_used, U256::from(58_030));
-    assert_eq!(state.nonce(&AddressWithSpace::new_native(&caller1.address())).unwrap(), U256::from(1));
     assert_eq!(
-        state.balance(&AddressWithSpace::new_native(&caller1.address())).unwrap(),
+        state
+            .nonce(&AddressWithSpace::new_native(&caller1.address()))
+            .unwrap(),
+        U256::from(1)
+    );
+    assert_eq!(
+        state
+            .balance(&AddressWithSpace::new_native(&caller1.address()))
+            .unwrap(),
         U256::from(100_000)
     );
     assert_eq!(
@@ -1369,7 +1395,9 @@ fn test_commission_privilege() {
     .sign(caller2.secret());
     assert_eq!(tx.sender().address, caller2.address());
     assert_eq!(
-        state.balance(&AddressWithSpace::new_native(&caller2.address())).unwrap(),
+        state
+            .balance(&AddressWithSpace::new_native(&caller2.address()))
+            .unwrap(),
         U256::from(100_000)
     );
     let options = TransactOptions::with_no_tracing();
@@ -1381,9 +1409,16 @@ fn test_commission_privilege() {
             .unwrap();
 
     assert_eq!(gas_used, U256::from(58_030));
-    assert_eq!(state.nonce(&AddressWithSpace::new_native(&caller2.address())).unwrap(), U256::from(1));
     assert_eq!(
-        state.balance(&AddressWithSpace::new_native(&caller2.address())).unwrap(),
+        state
+            .nonce(&AddressWithSpace::new_native(&caller2.address()))
+            .unwrap(),
+        U256::from(1)
+    );
+    assert_eq!(
+        state
+            .balance(&AddressWithSpace::new_native(&caller2.address()))
+            .unwrap(),
         U256::from(25_000)
     );
     assert_eq!(
@@ -1420,7 +1455,9 @@ fn test_commission_privilege() {
     .sign(caller2.secret());
     assert_eq!(tx.sender().address, caller2.address());
     assert_eq!(
-        state.balance(&AddressWithSpace::new_native(&caller2.address())).unwrap(),
+        state
+            .balance(&AddressWithSpace::new_native(&caller2.address()))
+            .unwrap(),
         U256::from(25_000)
     );
     let options = TransactOptions::with_no_tracing();
@@ -1432,9 +1469,16 @@ fn test_commission_privilege() {
             .unwrap();
 
     assert_eq!(gas_used, U256::from(58_030));
-    assert_eq!(state.nonce(&AddressWithSpace::new_native(&caller2.address())).unwrap(), U256::from(2));
     assert_eq!(
-        state.balance(&AddressWithSpace::new_native(&caller2.address())).unwrap(),
+        state
+            .nonce(&AddressWithSpace::new_native(&caller2.address()))
+            .unwrap(),
+        U256::from(2)
+    );
+    assert_eq!(
+        state
+            .balance(&AddressWithSpace::new_native(&caller2.address()))
+            .unwrap(),
         U256::from(25_000)
     );
     assert_eq!(
@@ -1464,7 +1508,9 @@ fn test_commission_privilege() {
     .sign(caller3.secret());
     assert_eq!(tx.sender().address, caller3.address());
     assert_eq!(
-        state.balance(&AddressWithSpace::new_native(&caller3.address())).unwrap(),
+        state
+            .balance(&AddressWithSpace::new_native(&caller3.address()))
+            .unwrap(),
         U256::from(41_970)
     );
     let options = TransactOptions::with_no_tracing();
@@ -1476,9 +1522,16 @@ fn test_commission_privilege() {
             .unwrap();
 
     assert_eq!(gas_used, U256::from(58_030));
-    assert_eq!(state.nonce(&AddressWithSpace::new_native(&caller3.address())).unwrap(), U256::from(2));
     assert_eq!(
-        state.balance(&AddressWithSpace::new_native(&caller3.address())).unwrap(),
+        state
+            .nonce(&AddressWithSpace::new_native(&caller3.address()))
+            .unwrap(),
+        U256::from(2)
+    );
+    assert_eq!(
+        state
+            .balance(&AddressWithSpace::new_native(&caller3.address()))
+            .unwrap(),
         U256::from(41_970)
     );
     assert_eq!(
@@ -1583,7 +1636,9 @@ fn test_storage_commission_privilege() {
         )
         .unwrap();
     assert_eq!(
-        state.sponsor_balance_for_collateral(&address.address).unwrap(),
+        state
+            .sponsor_balance_for_collateral(&address.address)
+            .unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
     assert_eq!(gas_used, U256::from(26_017));
@@ -1633,10 +1688,18 @@ fn test_storage_commission_privilege() {
     let mut substate = Substate::new();
     state.checkpoint();
     state
-        .add_commission_privilege(address.address, sender.address(), caller1.address())
+        .add_commission_privilege(
+            address.address,
+            sender.address(),
+            caller1.address(),
+        )
         .unwrap();
     state
-        .add_commission_privilege(address.address, sender.address(), caller2.address())
+        .add_commission_privilege(
+            address.address,
+            sender.address(),
+            caller2.address(),
+        )
         .unwrap();
     assert_eq!(
         state
@@ -1680,11 +1743,15 @@ fn test_storage_commission_privilege() {
 
     // caller3 call with no privilege
     assert_eq!(
-        state.balance(&AddressWithSpace::new_native(&caller3.address())).unwrap(),
+        state
+            .balance(&AddressWithSpace::new_native(&caller3.address()))
+            .unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000),
     );
     assert_eq!(
-        state.sponsor_balance_for_collateral(&address.address).unwrap(),
+        state
+            .sponsor_balance_for_collateral(&address.address)
+            .unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
     let tx = Transaction {
@@ -1726,11 +1793,15 @@ fn test_storage_commission_privilege() {
     );
     assert_eq!(gas_used, U256::from(26_017));
     assert_eq!(
-        state.sponsor_balance_for_collateral(&address.address).unwrap(),
+        state
+            .sponsor_balance_for_collateral(&address.address)
+            .unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
     assert_eq!(
-        state.balance(&AddressWithSpace::new_native(&caller3.address())).unwrap(),
+        state
+            .balance(&AddressWithSpace::new_native(&caller3.address()))
+            .unwrap(),
         U256::from(925_000)
     );
     assert_eq!(
@@ -1756,11 +1827,15 @@ fn test_storage_commission_privilege() {
 
     // caller1 call with privilege
     assert_eq!(
-        state.balance(&AddressWithSpace::new_native(&caller1.address())).unwrap(),
+        state
+            .balance(&AddressWithSpace::new_native(&caller1.address()))
+            .unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000),
     );
     assert_eq!(
-        state.sponsor_balance_for_collateral(&address.address).unwrap(),
+        state
+            .sponsor_balance_for_collateral(&address.address)
+            .unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
     let tx = Transaction {
@@ -1802,7 +1877,9 @@ fn test_storage_commission_privilege() {
     );
     assert_eq!(gas_used, U256::from(26_017));
     assert_eq!(
-        state.balance(&AddressWithSpace::new_native(&caller1.address())).unwrap(),
+        state
+            .balance(&AddressWithSpace::new_native(&caller1.address()))
+            .unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(925_000),
     );
     assert_eq!(
@@ -1818,16 +1895,23 @@ fn test_storage_commission_privilege() {
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
-        state.sponsor_balance_for_collateral(&address.address).unwrap(),
+        state
+            .sponsor_balance_for_collateral(&address.address)
+            .unwrap(),
         U256::zero()
     );
-    assert_eq!(state.staking_balance(&address.address).unwrap(), U256::zero());
+    assert_eq!(
+        state.staking_balance(&address.address).unwrap(),
+        U256::zero()
+    );
     assert_eq!(
         state.collateral_for_storage(&address.address).unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
     assert_eq!(
-        state.balance(&AddressWithSpace::new_native(&caller3.address())).unwrap(),
+        state
+            .balance(&AddressWithSpace::new_native(&caller3.address()))
+            .unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(925_000)
     );
     assert_eq!(
@@ -1854,7 +1938,9 @@ fn test_storage_commission_privilege() {
     // caller2 call with commission privilege and not enough sponsor
     // balance, the owner will transfer to caller2.
     assert_eq!(
-        state.balance(&AddressWithSpace::new_native(&caller2.address())).unwrap(),
+        state
+            .balance(&AddressWithSpace::new_native(&caller2.address()))
+            .unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000),
     );
     let tx = Transaction {
@@ -1896,7 +1982,9 @@ fn test_storage_commission_privilege() {
     );
     assert_eq!(gas_used, U256::from(26_017));
     assert_eq!(
-        state.balance(&AddressWithSpace::new_native(&caller2.address())).unwrap(),
+        state
+            .balance(&AddressWithSpace::new_native(&caller2.address()))
+            .unwrap(),
         U256::from(925_000)
     );
     assert_eq!(
@@ -1912,10 +2000,15 @@ fn test_storage_commission_privilege() {
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
     assert_eq!(
-        state.sponsor_balance_for_collateral(&address.address).unwrap(),
+        state
+            .sponsor_balance_for_collateral(&address.address)
+            .unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY
     );
-    assert_eq!(state.staking_balance(&address.address).unwrap(), U256::zero());
+    assert_eq!(
+        state.staking_balance(&address.address).unwrap(),
+        U256::zero()
+    );
     assert_eq!(
         state.collateral_for_storage(&address.address).unwrap(),
         U256::from(0),
@@ -1983,7 +2076,9 @@ fn test_storage_commission_privilege() {
         .unwrap());
 
     assert_eq!(
-        state.balance(&AddressWithSpace::new_native(&caller1.address())).unwrap(),
+        state
+            .balance(&AddressWithSpace::new_native(&caller1.address()))
+            .unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(925_000),
     );
     let tx = Transaction {
@@ -2025,7 +2120,9 @@ fn test_storage_commission_privilege() {
     );
     assert_eq!(gas_used, U256::from(26_017));
     assert_eq!(
-        state.balance(&AddressWithSpace::new_native(&caller1.address())).unwrap(),
+        state
+            .balance(&AddressWithSpace::new_native(&caller1.address()))
+            .unwrap(),
         U256::from(850_000)
     );
     assert_eq!(
@@ -2041,14 +2138,21 @@ fn test_storage_commission_privilege() {
         U256::from(0),
     );
     assert_eq!(
-        state.balance(&AddressWithSpace::new_native(&caller2.address())).unwrap(),
+        state
+            .balance(&AddressWithSpace::new_native(&caller2.address()))
+            .unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(925_000),
     );
     assert_eq!(
-        state.sponsor_balance_for_collateral(&address.address).unwrap(),
+        state
+            .sponsor_balance_for_collateral(&address.address)
+            .unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
-    assert_eq!(state.staking_balance(&address.address).unwrap(), U256::zero());
+    assert_eq!(
+        state.staking_balance(&address.address).unwrap(),
+        U256::zero()
+    );
     assert_eq!(
         state.collateral_for_storage(&address.address).unwrap(),
         U256::zero()

@@ -258,7 +258,9 @@ mod tests {
             topics: vec![],
             data: vec![],
         });
-        sub_state.suicides.insert(Address::new_native(&RawAddress::from_low_u64_be(10)));
+        sub_state
+            .suicides
+            .insert(Address::new_native(&RawAddress::from_low_u64_be(10)));
 
         let mut sub_state_2 = Substate::new();
         sub_state_2
@@ -277,7 +279,9 @@ mod tests {
 
     fn get_test_address_raw(n: u8) -> RawAddress { RawAddress::from([n; 20]) }
 
-    fn get_test_address(n: u8) -> Address { Address::new_native(&get_test_address_raw(n)) }
+    fn get_test_address(n: u8) -> Address {
+        Address::new_native(&get_test_address_raw(n))
+    }
 
     #[test]
     fn test_callstack_info() {
