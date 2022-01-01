@@ -538,7 +538,7 @@ mod tests {
     use cfx_storage::{
         new_storage_manager_for_testing, tests::FakeStateManager,
     };
-    use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+    use cfx_types::{address_util::AddressUtil, Address, H256, U256, AddressWithSpace, Space};
     use std::str::FromStr;
 
     fn get_test_origin() -> OriginInfo {
@@ -605,7 +605,7 @@ mod tests {
             };
             setup
                 .state
-                .init_code(&Address::zero(), vec![], Address::zero())
+                .init_code(&AddressWithSpace::zero_native(), vec![], Address::zero())
                 .ok();
 
             setup
@@ -620,6 +620,7 @@ mod tests {
         let mut callstack = CallStackInfo::new();
 
         let mut lctx = LocalContext::new(
+            Space::Native,
             &setup.env,
             &setup.machine,
             &setup.spec,
@@ -642,6 +643,7 @@ mod tests {
         let mut callstack = CallStackInfo::new();
 
         let mut lctx = LocalContext::new(
+            Space::Native,
             &setup.env,
             &setup.machine,
             &setup.spec,
@@ -762,6 +764,7 @@ mod tests {
 
         {
             let mut lctx = LocalContext::new(
+                Space::Native,
                 &setup.env,
                 &setup.machine,
                 &setup.spec,
@@ -790,16 +793,17 @@ mod tests {
         let mut contract_address = Address::zero();
         contract_address.set_contract_type_bits();
         origin.address = contract_address;
+        let contract_address_w_space = AddressWithSpace::new_native(&contract_address);
         state
             .new_contract_with_code(
-                &contract_address,
+                &contract_address_w_space,
                 U256::zero(),
                 U256::one(),
             )
             .expect(&concat!(file!(), ":", line!(), ":", column!()));
         state
             .init_code(
-                &contract_address,
+                &contract_address_w_space,
                 // Use empty code in test because we don't have storage
                 // collateral balance.
                 "".into(),
@@ -809,6 +813,7 @@ mod tests {
 
         {
             let mut lctx = LocalContext::new(
+                Space::Native,
                 &setup.env,
                 &setup.machine,
                 &setup.spec,
