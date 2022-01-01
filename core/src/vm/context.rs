@@ -30,7 +30,7 @@ use super::{
 };
 use crate::{executive::InternalRefContext, trace::Tracer};
 use cfx_bytes::Bytes;
-use cfx_types::{Address, H256, U256};
+use cfx_types::{Address, AddressWithSpace, Space, H256, U256};
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -38,7 +38,7 @@ use std::sync::Arc;
 pub enum ContractCreateResult {
     /// Returned when creation was successful.
     /// Contains an address of newly created contract and gas left.
-    Created(Address, U256),
+    Created(AddressWithSpace, U256),
     /// Returned when contract creation failed.
     /// Returns the reason so block trace can record it.
     Failed(Error),
@@ -153,6 +153,9 @@ pub trait Context {
 
     /// Returns the chain ID of the blockchain
     fn chain_id(&self) -> u64;
+
+    /// Returns the space of the blockchain
+    fn space(&self) -> Space;
 
     /// Returns current depth of execution.
     ///

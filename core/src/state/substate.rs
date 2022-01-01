@@ -9,7 +9,7 @@ use cfx_state::{
     state_trait::StateOpsTrait, substate_trait::SubstateMngTrait, SubstateTrait,
 };
 use cfx_statedb::Result as DbResult;
-use cfx_types::{Address, U256};
+use cfx_types::{Address as RawAddress, AddressWithSpace as Address, U256};
 use primitives::LogEntry;
 use std::collections::{HashMap, HashSet};
 
@@ -91,7 +91,9 @@ impl CallStackInfo {
         if let [.., second_last, last] =
             self.call_stack_recipient_addresses.as_slice()
         {
-            if last.0 == *ADMIN_CONTROL_CONTRACT_ADDRESS && second_last.1 {
+            if last.0 == Address::new_native(&ADMIN_CONTROL_CONTRACT_ADDRESS)
+                && second_last.1
+            {
                 Some(&second_last.0)
             } else {
                 None
@@ -114,9 +116,9 @@ pub struct Substate {
     // touched is never used and it is not maintained properly.
     pub touched: HashSet<Address>,
     /// Any accounts that occupy some storage.
-    pub storage_collateralized: HashMap<Address, u64>,
+    pub storage_collateralized: HashMap<RawAddress, u64>,
     /// Any accounts that release some storage.
-    pub storage_released: HashMap<Address, u64>,
+    pub storage_released: HashMap<RawAddress, u64>,
     /// Any logs.
     pub logs: Vec<LogEntry>,
     /// Created contracts.
@@ -141,7 +143,7 @@ impl SubstateMngTrait for Substate {
 }
 
 impl SubstateTrait for Substate {
-    fn get_collateral_change(&self, address: &Address) -> (u64, u64) {
+    fn get_collateral_change(&self, address: &RawAddress) -> (u64, u64) {
         let inc = self
             .storage_collateralized
             .get(address)
@@ -171,13 +173,15 @@ impl SubstateTrait for Substate {
     // maintained without help from state.
     fn set_storage(
         &mut self, state: &mut dyn StateOpsTrait, address: &Address,
-        key: Vec<u8>, value: U256, owner: Address,
+        key: Vec<u8>, value: U256, owner: RawAddress,
     ) -> DbResult<()>
     {
         state.set_storage(address, key, value, owner)
     }
 
-    fn record_storage_occupy(&mut self, address: &Address, collaterals: u64) {
+    fn record_storage_occupy(
+        &mut self, address: &RawAddress, collaterals: u64,
+    ) {
         *self.storage_collateralized.entry(*address).or_insert(0) +=
             collaterals;
     }
@@ -190,11 +194,13 @@ impl SubstateTrait for Substate {
         &mut self.contracts_created
     }
 
-    fn record_storage_release(&mut self, address: &Address, collaterals: u64) {
+    fn record_storage_release(
+        &mut self, address: &RawAddress, collaterals: u64,
+    ) {
         *self.storage_released.entry(*address).or_insert(0) += collaterals;
     }
 
-    fn keys_for_collateral_changed(&self) -> HashSet<&Address> {
+    fn keys_for_collateral_changed(&self) -> HashSet<&RawAddress> {
         let affected_address1: HashSet<_> =
             self.storage_collateralized.keys().collect();
         let affected_address2: HashSet<_> =

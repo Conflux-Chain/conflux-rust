@@ -26,7 +26,7 @@ mod macros {
     pub use super::super::{
         activate_at::{BlockNumber, IsActive},
         function::{
-            SimpleExecutionTrait, InterfaceTrait, PreExecCheckConfTrait,
+            InterfaceTrait, PreExecCheckConfTrait, SimpleExecutionTrait,
             UpfrontPaymentTrait,
         },
         InternalContractTrait, SolidityEventTrait, SolidityFunctionTrait,
@@ -42,10 +42,11 @@ pub use self::{
 };
 
 use super::{
-    function::SimpleExecutionTrait, InternalContractTrait, SolidityFunctionTrait,
+    function::SimpleExecutionTrait, InternalContractTrait,
+    SolidityFunctionTrait,
 };
 use crate::{evm::Spec, spec::CommonParams};
-use cfx_types::Address;
+use cfx_types::{Address, AddressWithSpace, Space};
 use primitives::BlockNumber;
 use std::collections::{BTreeMap, HashMap};
 
@@ -177,10 +178,13 @@ impl InternalContractMap {
     }
 
     pub fn contract(
-        &self, address: &Address, spec: &Spec,
+        &self, address: &AddressWithSpace, spec: &Spec,
     ) -> Option<&Box<dyn InternalContractTrait>> {
+        if address.space != Space::Native {
+            return None;
+        }
         self.builtin
-            .get(address)
+            .get(&address.address)
             .filter(|&func| func.is_active(spec))
     }
 }

@@ -60,15 +60,15 @@ mod impls {
     // We skip the accessed_entries for getting original value.
     pub trait StateDbGetOriginalMethods {
         fn get_original_raw_with_proof(
-            &self, key: StorageKey,
+            &self, key: StorageKeyWithSpace,
         ) -> Result<(Option<Box<[u8]>>, StateProof)>;
 
         fn get_original_storage_root(
-            &self, address: &Address,
+            &self, address: &AddressWithSpace,
         ) -> Result<StorageRoot>;
 
         fn get_original_storage_root_with_proof(
-            &self, address: &Address,
+            &self, address: &AddressWithSpace,
         ) -> Result<(StorageRoot, StorageRootProof)>;
     }
 
@@ -116,7 +116,9 @@ mod impls {
         }
 
         /// Update the accessed_entries while getting the value.
-        pub fn get_raw(&self, key: StorageKey) -> Result<Option<Arc<[u8]>>> {
+        pub fn get_raw(
+            &self, key: StorageKeyWithSpace,
+        ) -> Result<Option<Arc<[u8]>>> {
             let key_bytes = key.to_key_bytes();
             let mut r;
             let accessed_entries_read_guard = self.accessed_entries.read();
@@ -145,7 +147,7 @@ mod impls {
         /// This method will read from db if `key` is not present.
         /// This method will also update the latest checkpoint if necessary.
         fn modify_single_value(
-            &mut self, key: StorageKey, value: Option<Box<[u8]>>,
+            &mut self, key: StorageKeyWithSpace, value: Option<Box<[u8]>>,
         ) -> Result<()> {
             let key_bytes = key.to_key_bytes();
             let mut entry =
@@ -181,7 +183,7 @@ mod impls {
         }
 
         pub fn set_raw(
-            &mut self, key: StorageKey, value: Box<[u8]>,
+            &mut self, key: StorageKeyWithSpace, value: Box<[u8]>,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
         ) -> Result<()>
         {
@@ -197,7 +199,7 @@ mod impls {
         }
 
         pub fn delete(
-            &mut self, key: StorageKey,
+            &mut self, key: StorageKeyWithSpace,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
         ) -> Result<()>
         {
@@ -213,7 +215,7 @@ mod impls {
         }
 
         pub fn delete_all<AM: access_mode::AccessMode>(
-            &mut self, key_prefix: StorageKey,
+            &mut self, key_prefix: StorageKeyWithSpace,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
         ) -> Result<Vec<MptKeyValue>>
         {
@@ -310,7 +312,9 @@ mod impls {
         ) -> Result<()>
         {
             if !storage_layouts_to_rewrite.contains_key(address) {
-                let storage_layout_key = StorageKey::StorageRootKey(address);
+                // TODO: EVM core: Work later
+                let storage_layout_key =
+                    StorageKey::StorageRootKey(address).space(Space::Native);
                 let current_storage_layout = match accessed_entries
                     .get(&storage_layout_key.to_key_bytes())
                 {
@@ -349,12 +353,14 @@ mod impls {
         }
 
         pub fn set_storage_layout(
-            &mut self, address: &Address, storage_layout: StorageLayout,
+            &mut self, address: &AddressWithSpace,
+            storage_layout: StorageLayout,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
         ) -> Result<()>
         {
             self.set_raw(
-                StorageKey::new_storage_root_key(address),
+                StorageKey::new_storage_root_key(&address.address)
+                    .space(address.space),
                 storage_layout.to_bytes().into_boxed_slice(),
                 debug_record,
             )
@@ -367,7 +373,8 @@ mod impls {
             debug_record: Option<&mut ComputeEpochDebugRecord>,
         ) -> Result<()>
         {
-            let key = StorageKey::StorageRootKey(address);
+            // TODO: EVM core: work later (same as layout)
+            let key = StorageKey::StorageRootKey(address).space(Space::Native);
             let value = layout.to_bytes().into_boxed_slice();
             if let Some(record) = debug_record {
                 record.state_ops.push(StateOp::StorageLevelOp {
@@ -387,8 +394,9 @@ mod impls {
             // First of all, apply all changes to the underlying storage.
             for (k, v) in accessed_entries {
                 if v.is_modified() {
-                    let storage_key =
-                        StorageKey::from_key_bytes::<SkipInputCheck>(k);
+                    let storage_key = StorageKeyWithSpace::from_key_bytes::<
+                        SkipInputCheck,
+                    >(k);
                     match &v.current_value {
                         Some(v) => {
                             self.storage.set(storage_key, (&**v).into())?;
@@ -399,7 +407,7 @@ mod impls {
                     }
 
                     if let StorageKey::StorageKey { address_bytes, .. } =
-                        &storage_key
+                        &storage_key.key
                     {
                         Self::load_storage_layout(
                             &mut storage_layouts_to_rewrite,
@@ -410,7 +418,7 @@ mod impls {
                             &accessed_entries,
                         )?;
                     } else if let StorageKey::AccountKey(address_bytes) =
-                        &storage_key
+                        &storage_key.key
                     {
                         // Contract initialization must set StorageLayout.
                         if (address_bytes.is_builtin_address()
@@ -434,7 +442,7 @@ mod impls {
                         }
                     } else if let StorageKey::CodeKey {
                         address_bytes, ..
-                    } = &storage_key
+                    } = &storage_key.key
                     {
                         // The code key is only set in contract creation, so we
                         // do not need to check it again.
@@ -497,7 +505,7 @@ mod impls {
         for StateDb<Storage>
     {
         fn get_original_raw_with_proof(
-            &self, key: StorageKey,
+            &self, key: StorageKeyWithSpace,
         ) -> Result<(Option<Box<[u8]>>, StateProof)> {
             let r = Ok(self.storage.get_with_proof(key)?);
             trace!("get_original_raw_with_proof key={:?}, value={:?}", key, r);
@@ -505,9 +513,10 @@ mod impls {
         }
 
         fn get_original_storage_root(
-            &self, address: &Address,
+            &self, address: &AddressWithSpace,
         ) -> Result<StorageRoot> {
-            let key = StorageKey::new_storage_root_key(address);
+            let key = StorageKey::new_storage_root_key(&address.address)
+                .space(address.space);
 
             let (root, _) =
                 self.storage.get_node_merkle_all_versions::<NoProof>(key)?;
@@ -516,9 +525,10 @@ mod impls {
         }
 
         fn get_original_storage_root_with_proof(
-            &self, address: &Address,
+            &self, address: &AddressWithSpace,
         ) -> Result<(StorageRoot, StorageRootProof)> {
-            let key = StorageKey::new_storage_root_key(address);
+            let key = StorageKey::new_storage_root_key(&address.address)
+                .space(address.space);
 
             self.storage
                 .get_node_merkle_all_versions::<WithProof>(key)
@@ -635,11 +645,14 @@ mod impls {
         MptKeyValue, StateProof, StorageRootProof, StorageStateTrait,
         StorageStateTraitExt,
     };
-    use cfx_types::{address_util::AddressUtil, Address};
+    use cfx_types::{
+        address_util::AddressUtil, Address, AddressWithSpace, Space,
+    };
     use hashbrown::HashMap;
     use parking_lot::RwLock;
     use primitives::{
-        EpochId, SkipInputCheck, StorageKey, StorageLayout, StorageRoot,
+        EpochId, SkipInputCheck, StorageKey, StorageKeyWithSpace,
+        StorageLayout, StorageRoot,
     };
     use std::{
         collections::{btree_map::Entry::Occupied, BTreeMap},

@@ -1,14 +1,15 @@
 use crate::{
     builtin::Builtin,
-    evm::{CallType, Context, GasLeft, ReturnData},
+    evm::{CallType, Context, GasLeft, MessageCallResult, ReturnData},
     executive::InternalContractTrait,
     trace::Tracer,
-    vm::{ActionParams, Error as VmError, Exec, ExecTrapResult, TrapResult},
+    vm::{
+        ActionParams, Error as VmError, Exec, ExecTrapResult, ResumeCall,
+        TrapResult,
+    },
 };
 use cfx_bytes::BytesRef;
 use cfx_types::U256;
-use crate::evm::MessageCallResult;
-use crate::vm::ResumeCall;
 
 pub struct NoopExec {
     pub gas: U256,
@@ -76,14 +77,16 @@ impl<'a> Exec for InternalContractExec<'a> {
         let result = if self.params.call_type != CallType::Call
             && self.params.call_type != CallType::StaticCall
         {
-            TrapResult::Return(Err(VmError::InternalContract("Incorrect call type.".into())))
+            TrapResult::Return(Err(VmError::InternalContract(
+                "Incorrect call type.".into(),
+            )))
         } else {
             let mut context = context.internal_ref();
             self.internal.execute(&self.params, &mut context, tracer)
         };
-        if let TrapResult::Return(ref vm_result) = result{
+        if let TrapResult::Return(ref vm_result) = result {
             debug!("Internal Call Result: {:?}", vm_result);
-        }else{
+        } else {
             debug!("Internal Call Has a sub-call/create");
         }
 
@@ -92,7 +95,9 @@ impl<'a> Exec for InternalContractExec<'a> {
 }
 
 impl<'a> ResumeCall for InternalContractExec<'a> {
-    fn resume_call(self: Box<Self>, result: MessageCallResult) -> Box<dyn Exec> {
+    fn resume_call(
+        self: Box<Self>, _result: MessageCallResult,
+    ) -> Box<dyn Exec> {
         todo!()
     }
 }

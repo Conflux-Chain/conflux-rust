@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 pub trait SubstateTrait {
-    fn get_collateral_change(&self, address: &Address) -> (u64, u64);
+    fn get_collateral_change(&self, address: &RawAddress) -> (u64, u64);
 
     fn logs(&self) -> &[LogEntry];
 
@@ -15,19 +15,21 @@ pub trait SubstateTrait {
 
     fn set_storage(
         &mut self, state: &mut dyn StateOpsTrait, address: &Address,
-        key: Vec<u8>, value: U256, owner: Address,
+        key: Vec<u8>, value: U256, owner: RawAddress,
     ) -> DbResult<()>;
 
-    fn record_storage_occupy(&mut self, address: &Address, collaterals: u64);
+    fn record_storage_occupy(&mut self, address: &RawAddress, collaterals: u64);
 
     fn touched(&mut self) -> &mut HashSet<Address>;
 
     fn contracts_created(&self) -> &[Address];
     fn contracts_created_mut(&mut self) -> &mut Vec<Address>;
 
-    fn record_storage_release(&mut self, address: &Address, collaterals: u64);
+    fn record_storage_release(
+        &mut self, address: &RawAddress, collaterals: u64,
+    );
 
-    fn keys_for_collateral_changed(&self) -> HashSet<&Address>;
+    fn keys_for_collateral_changed(&self) -> HashSet<&RawAddress>;
 
     fn suicides(&self) -> &HashSet<Address>;
 
@@ -42,6 +44,6 @@ pub trait SubstateMngTrait: SubstateTrait {
 
 use crate::state_trait::StateOpsTrait;
 use cfx_statedb::Result as DbResult;
-use cfx_types::{Address, U256};
+use cfx_types::{Address as RawAddress, AddressWithSpace as Address, U256};
 use primitives::LogEntry;
 use std::collections::HashSet;

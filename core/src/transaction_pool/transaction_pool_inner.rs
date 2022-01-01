@@ -10,7 +10,10 @@ use crate::{
 };
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_statedb::Result as StateDbResult;
-use cfx_types::{address_util::AddressUtil, Address, H256, U128, U256, U512};
+use cfx_types::{
+    address_util::AddressUtil, AddressWithSpace as Address, Space, H256, U128,
+    U256, U512,
+};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
@@ -72,7 +75,8 @@ impl DeferredPool {
     fn insert(&mut self, tx: TxWithReadyInfo, force: bool) -> InsertResult {
         // It's safe to create a new bucket, cause inserting to a empty bucket
         // will always be success
-        let bucket = self.buckets.entry(tx.sender).or_insert(NoncePool::new());
+        let bucket =
+            self.buckets.entry(tx.sender()).or_insert(NoncePool::new());
         bucket.insert(&tx, force)
     }
 
@@ -410,7 +414,7 @@ impl TransactionPoolInner {
             // no unconditional garbage collection to conduct and we need to
             // check if we should replace one unexecuted tx.
             if victim.count == 0 {
-                if victim.sender == new_tx.sender {
+                if victim.sender == new_tx.sender() {
                     // We do not GC a not-executed transaction from the same
                     // sender.
                     skipped_self_node = Some(victim);
@@ -949,7 +953,7 @@ impl TransactionPoolInner {
         let deferred_txs = self
             .txs
             .values()
-            .filter(|tx| address == None || tx.sender == address.unwrap())
+            .filter(|tx| address == None || tx.sender() == address.unwrap())
             .map(|v| v.clone())
             .collect();
 
@@ -980,17 +984,19 @@ impl TransactionPoolInner {
                         )
                     })?
                 {
-                    if account_cache
-                        .check_commission_privilege(
-                            &callee,
-                            &transaction.sender(),
-                        )
-                        .map_err(|e| {
-                            format!(
+                    let sender = transaction.sender();
+                    if sender.space == Space::Native
+                        && account_cache
+                            .check_commission_privilege(
+                                &callee,
+                                &sender.address,
+                            )
+                            .map_err(|e| {
+                                format!(
                                 "Failed to read account_cache from storage: {}",
                                 e
                             )
-                        })?
+                            })?
                     {
                         let estimated_gas_u512 =
                             transaction.gas.full_mul(transaction.gas_price);
@@ -1022,7 +1028,7 @@ impl TransactionPoolInner {
         }
 
         let (state_nonce, state_balance) = account_cache
-            .get_nonce_and_balance(&transaction.sender)
+            .get_nonce_and_balance(&transaction.sender())
             .map_err(|e| {
                 format!("Failed to read account_cache from storage: {}", e)
             })?;
@@ -1070,7 +1076,7 @@ impl TransactionPoolInner {
         }
 
         self.recalculate_readiness_with_state(
-            &transaction.sender,
+            &transaction.sender(),
             account_cache,
         )
         .map_err(|e| {

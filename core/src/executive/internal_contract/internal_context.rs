@@ -3,7 +3,9 @@ use crate::{
     vm::{self, ActionParams, Env, Spec},
 };
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use cfx_types::{
+    address_util::AddressUtil, Address, AddressWithSpace, H256, U256,
+};
 
 /// The internal contracts need to access the context parameter directly, e.g.,
 /// `foo(env, spec)`. But `foo(context.env(), context.spec())` will incur
@@ -46,10 +48,11 @@ impl<'a> InternalRefContext<'a> {
     pub fn set_storage(
         &mut self, params: &ActionParams, key: Vec<u8>, value: U256,
     ) -> vm::Result<()> {
+        let receiver = AddressWithSpace::new(params.address, params.space);
         self.substate
             .set_storage(
                 self.state,
-                &params.address,
+                &receiver,
                 key,
                 value,
                 params.storage_owner,
@@ -60,16 +63,18 @@ impl<'a> InternalRefContext<'a> {
     pub fn storage_at(
         &mut self, params: &ActionParams, key: &[u8],
     ) -> vm::Result<U256> {
+        let receiver = AddressWithSpace::new(params.address, params.space);
         self.substate
-            .storage_at(self.state, &params.address, key)
+            .storage_at(self.state, &receiver, key)
             .map_err(|e| e.into())
     }
 
     pub fn is_contract_address(&self, address: &Address) -> vm::Result<bool> {
         let answer = if self.spec.cip80 {
-            let deployed = self.state.is_contract_with_code(address)?;
-            let deploying = self.callstack.contains_key(address);
-            deployed || deploying
+            unreachable!("Dropped CIP 80");
+        // let deployed = self.state.is_contract_with_code(address)?;
+        // let deploying = self.callstack.contains_key(address);
+        // deployed || deploying
         } else {
             address.is_contract_address()
         };

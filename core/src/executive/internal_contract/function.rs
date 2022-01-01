@@ -7,15 +7,21 @@ use crate::{
     executive::{internal_contract::activate_at::IsActive, InternalRefContext},
     state::CallStackInfo,
     trace::Tracer,
-    vm::{self, ActionParams, CallType, GasLeft, ReturnData, Spec},
+    vm::{
+        self, ActionParams, CallType, ExecTrapResult, GasLeft, ReturnData,
+        Spec, TrapResult,
+    },
 };
 use cfx_types::U256;
 use solidity_abi::{ABIDecodable, ABIEncodable};
-use crate::vm::{ExecTrapResult, TrapResult};
 
-pub trait SolidityFunctionConfigTrait: InterfaceTrait + PreExecCheckTrait + UpfrontPaymentTrait {}
+pub trait SolidityFunctionConfigTrait:
+    InterfaceTrait + PreExecCheckTrait + UpfrontPaymentTrait
+{
+}
 
-impl<T> SolidityFunctionConfigTrait for T where T: InterfaceTrait + PreExecCheckTrait + UpfrontPaymentTrait {}
+impl<T> SolidityFunctionConfigTrait for T where T: InterfaceTrait + PreExecCheckTrait + UpfrontPaymentTrait
+{}
 
 /// The standard implementation of the solidity function trait. The developer of
 /// new functions should implement the following traits.
@@ -30,26 +36,35 @@ impl<T> SolidityFunctionConfigTrait for T where T: InterfaceTrait + PreExecCheck
 ///
 /// You always needs to implement `ExecutionTrait`, which is the core of the
 /// function execution.
-impl<
-    T: SolidityFunctionConfigTrait + ExecutionTrait + IsActive,
-> SolidityFunctionTrait for T
+impl<T: SolidityFunctionConfigTrait + ExecutionTrait + IsActive>
+    SolidityFunctionTrait for T
 {
     fn execute(
         &self, input: &[u8], params: &ActionParams,
         context: &mut InternalRefContext, tracer: &mut dyn Tracer,
     ) -> ExecTrapResult<GasLeft>
     {
-        let (solidity_params, cost) = match preprocessing(self, input, params, context) {
-            Ok(res) => res,
-            Err(err) => { return TrapResult::Return(Err(err)); }
-        };
+        let (solidity_params, cost) =
+            match preprocessing(self, input, params, context) {
+                Ok(res) => res,
+                Err(err) => {
+                    return TrapResult::Return(Err(err));
+                }
+            };
 
-        match ExecutionTrait::execute_inner(self, solidity_params, params, context, tracer) {
+        match ExecutionTrait::execute_inner(
+            self,
+            solidity_params,
+            params,
+            context,
+            tracer,
+        ) {
             TrapResult::Return(output) => {
                 let vm_result = output.and_then(|output| {
                     let output = output.abi_encode();
                     let length = output.len();
-                    let return_cost = (length + 31) / 32 * context.spec.memory_gas;
+                    let return_cost =
+                        (length + 31) / 32 * context.spec.memory_gas;
                     if params.gas < cost + return_cost {
                         Err(vm::Error::OutOfGas)
                     } else {
@@ -71,7 +86,11 @@ impl<
     fn name(&self) -> &'static str { return Self::NAME_AND_PARAMS; }
 }
 
-fn preprocessing<T: SolidityFunctionConfigTrait>(sol_fn: &T, input: &[u8], params: &ActionParams, context: &InternalRefContext) -> vm::Result<(T::Input, U256)> {
+fn preprocessing<T: SolidityFunctionConfigTrait>(
+    sol_fn: &T, input: &[u8], params: &ActionParams,
+    context: &InternalRefContext,
+) -> vm::Result<(T::Input, U256)>
+{
     sol_fn.pre_execution_check(params, context.callstack, context.spec)?;
     let solidity_params = <T::Input as ABIDecodable>::abi_decode(&input)?;
     let cost = sol_fn.upfront_gas_payment(&solidity_params, params, context);
@@ -94,7 +113,6 @@ pub trait PreExecCheckTrait: Send + Sync {
     ) -> vm::Result<()>;
 }
 
-
 pub trait ExecutionTrait: Send + Sync + InterfaceTrait {
     fn execute_inner(
         &self, input: Self::Input, params: &ActionParams,
@@ -110,9 +128,17 @@ pub trait SimpleExecutionTrait: Send + Sync + InterfaceTrait {
     ) -> vm::Result<<Self as InterfaceTrait>::Output>;
 }
 
-impl<T> ExecutionTrait for T where T: SimpleExecutionTrait {
-    fn execute_inner(&self, input: Self::Input, params: &ActionParams, context: &mut InternalRefContext, tracer: &mut dyn Tracer) -> ExecTrapResult<<Self as InterfaceTrait>::Output> {
-        let result = SimpleExecutionTrait::execute_inner(self, input, params, context, tracer);
+impl<T> ExecutionTrait for T
+where T: SimpleExecutionTrait
+{
+    fn execute_inner(
+        &self, input: Self::Input, params: &ActionParams,
+        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
+    ) -> ExecTrapResult<<Self as InterfaceTrait>::Output>
+    {
+        let result = SimpleExecutionTrait::execute_inner(
+            self, input, params, context, tracer,
+        );
         TrapResult::Return(result)
     }
 }
@@ -133,10 +159,8 @@ pub trait PreExecCheckConfTrait: Send + Sync {
 
 impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
     fn pre_execution_check(
-        &self, params: &ActionParams, call_stack: &CallStackInfo,
-        spec: &Spec,
-    ) -> vm::Result<()>
-    {
+        &self, params: &ActionParams, call_stack: &CallStackInfo, spec: &Spec,
+    ) -> vm::Result<()> {
         if !Self::PAYABLE && !params.value.value().is_zero() {
             return Err(vm::Error::InternalContract(
                 "should not transfer balance to Staking contract".into(),
@@ -145,7 +169,7 @@ impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
 
         if Self::HAS_WRITE_OP
             && (call_stack.in_reentrancy(spec)
-            || params.call_type == CallType::StaticCall)
+                || params.call_type == CallType::StaticCall)
         {
             return Err(vm::Error::MutableCallInStaticContext);
         }

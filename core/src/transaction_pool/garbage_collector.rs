@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{Address, U256};
+use cfx_types::{AddressWithSpace as Address, U256};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use std::{
     cmp::{Ord, Ordering, PartialEq, PartialOrd, Reverse},

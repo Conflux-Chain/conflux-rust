@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{bytes::Bytes, vm};
-use cfx_types::{Address, U256, U512};
+use cfx_types::{Address, AddressWithSpace, U256, U512};
 use primitives::{receipt::StorageChange, LogEntry, TransactionWithSignature};
 use solidity_abi::{ABIDecodable, ABIDecodeError};
 
@@ -39,7 +39,7 @@ pub struct Executed {
     /// eg. sender creates contract A and A in constructor creates contract B
     ///
     /// B creation ends first, and it will be the first element of the vector.
-    pub contracts_created: Vec<Address>,
+    pub contracts_created: Vec<AddressWithSpace>,
     /// Transaction output.
     pub output: Bytes,
     /// The trace of this transaction.

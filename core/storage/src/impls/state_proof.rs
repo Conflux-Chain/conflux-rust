@@ -54,16 +54,19 @@ impl StateProof {
         let intermediate_root = &root.intermediate_delta_root;
         let snapshot_root = &root.snapshot_root;
 
-        let delta_mpt_padding =
-            StorageKey::delta_mpt_padding(&snapshot_root, &intermediate_root);
+        let delta_mpt_padding = StorageKeyWithSpace::delta_mpt_padding(
+            &snapshot_root,
+            &intermediate_root,
+        );
 
-        let storage_key = match StorageKey::from_key_bytes::<CheckInput>(&key) {
-            Ok(k) => k,
-            Err(e) => {
-                warn!("Checking proof with invalid key: {:?}", e);
-                return false;
-            }
-        };
+        let storage_key =
+            match StorageKeyWithSpace::from_key_bytes::<CheckInput>(&key) {
+                Ok(k) => k,
+                Err(e) => {
+                    warn!("Checking proof with invalid key: {:?}", e);
+                    return false;
+                }
+            };
 
         let delta_mpt_key =
             storage_key.to_delta_mpt_key_bytes(&delta_mpt_padding);
@@ -138,7 +141,7 @@ impl StateProof {
 
 use crate::impls::merkle_patricia_trie::TrieProof;
 use primitives::{
-    CheckInput, DeltaMptKeyPadding, MptValue, StateRoot, StorageKey,
+    CheckInput, DeltaMptKeyPadding, MptValue, StateRoot, StorageKeyWithSpace,
     MERKLE_NULL_NODE,
 };
 use rlp_derive::{RlpDecodable, RlpEncodable};

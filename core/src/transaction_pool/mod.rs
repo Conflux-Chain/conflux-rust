@@ -29,7 +29,7 @@ use account_cache::AccountCache;
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_statedb::{Result as StateDbResult, StateDb};
 use cfx_storage::{StateIndex, StorageManagerTrait};
-use cfx_types::{Address, H256, U256};
+use cfx_types::{AddressWithSpace as Address, H256, U256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Lock, Meter, MeterTimer,
@@ -716,8 +716,8 @@ impl TransactionPool {
             debug!(
                 "should not trigger recycle transaction, nonce = {}, sender = {:?}, \
                 account nonce = {}, hash = {:?} .",
-                &tx.nonce, &tx.sender,
-                account_cache.get_nonce(&tx.sender)?, tx.hash);
+                &tx.nonce, &tx.sender(),
+                account_cache.get_nonce(&tx.sender())?, tx.hash);
 
             if let Err(e) = self.verify_transaction_tx_pool(
                 &tx,

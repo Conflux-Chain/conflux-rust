@@ -9,6 +9,56 @@ pub use ethereum_types::{
     H160, H256, H512, H520, H64, U128, U256, U512, U64,
 };
 
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Debug, Ord, PartialOrd)]
+pub enum Space {
+    Native,
+    Ethereum,
+}
+
+impl Default for Space {
+    fn default() -> Self { Space::Native }
+}
+
+#[derive(Default, Eq, PartialEq, Hash, Copy, Clone, Debug, Ord, PartialOrd)]
+pub struct AddressWithSpace {
+    pub address: Address,
+    pub space: Space,
+}
+
+impl AddressWithSpace {
+    #[inline]
+    pub fn new(address: Address, space: Space) -> Self {
+        Self { address, space }
+    }
+
+    #[inline]
+    pub fn new_native(address: &Address) -> Self {
+        Self {
+            address: *address,
+            space: Space::Native,
+        }
+    }
+
+    #[inline]
+    pub fn new_evm(address: &Address) -> Self {
+        Self {
+            address: *address,
+            space: Space::Ethereum,
+        }
+    }
+
+    #[inline]
+    pub fn zero_native() -> Self {
+        Self {
+            address: Address::zero(),
+            space: Space::Native,
+        }
+    }
+
+    #[inline]
+    pub fn assert_native(&self) { assert_eq!(self.space, Space::Native) }
+}
+
 /// The KECCAK hash of an empty bloom filter (0x00 * 256)
 pub const KECCAK_EMPTY_BLOOM: H256 = H256([
     0xd3, 0x97, 0xb3, 0xb0, 0x43, 0xd8, 0x7f, 0xcd, 0x6f, 0xad, 0x12, 0x91,

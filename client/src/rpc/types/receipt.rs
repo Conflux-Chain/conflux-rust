@@ -4,7 +4,7 @@
 
 use crate::rpc::types::{Log, RpcAddress};
 use cfx_addr::Network;
-use cfx_types::{Bloom, H256, U256, U64};
+use cfx_types::{AddressWithSpace, Bloom, H256, U256, U64};
 use cfxcore::{executive::contract_address, vm::CreateContractAddress};
 use primitives::{
     receipt::{
@@ -103,12 +103,14 @@ impl Receipt {
             let (created_address, _) = contract_address(
                 CreateContractAddress::FromSenderNonceAndCodeHash,
                 block_number.into(),
-                &transaction.sender,
+                &AddressWithSpace::new_native(&transaction.sender),
                 &transaction.nonce,
                 &transaction.data,
             );
-            address =
-                Some(RpcAddress::try_from_h160(created_address, network)?);
+            address = Some(RpcAddress::try_from_h160(
+                created_address.address,
+                network,
+            )?);
         }
 
         // this is an array, but it will only have at most one element:
