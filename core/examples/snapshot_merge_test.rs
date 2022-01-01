@@ -12,7 +12,7 @@ use cfx_storage::{
     storage_db::{KeyValueDbTraitRead, SnapshotDbManagerTrait, SnapshotInfo},
     DeltaMptIterator, Error as StorageError, StateIndex, StorageConfiguration,
 };
-use cfx_types::{Address, H256};
+use cfx_types::{Address, H256, AddressWithSpace};
 use cfxcore::sync::Error;
 use clap::{App, Arg, ArgMatches};
 use log::LevelFilter;
@@ -20,9 +20,7 @@ use log4rs::{
     append::console::ConsoleAppender,
     config::{Appender, Config, Root},
 };
-use primitives::{
-    Account, MerkleHash, StateRoot, StorageKey, MERKLE_NULL_NODE, NULL_EPOCH,
-};
+use primitives::{Account, MerkleHash, StateRoot, StorageKey, MERKLE_NULL_NODE, NULL_EPOCH, StorageKeyWithSpace};
 use std::{
     cmp::min, collections::HashMap, fmt::Debug, fs::remove_dir_all,
     path::PathBuf, str::FromStr, sync::Arc, time::Instant,
@@ -117,12 +115,12 @@ fn main() -> Result<(), Error> {
             snapshot_epoch_id: NULL_EPOCH,
             intermediate_epoch_id: snapshot1_epoch,
             maybe_intermediate_mpt_key_padding: Some(
-                StorageKey::delta_mpt_padding(
+                StorageKeyWithSpace::delta_mpt_padding(
                     &MERKLE_NULL_NODE,
                     &MERKLE_NULL_NODE,
                 ),
             ),
-            delta_mpt_key_padding: StorageKey::delta_mpt_padding(
+            delta_mpt_key_padding: StorageKeyWithSpace::delta_mpt_padding(
                 &MERKLE_NULL_NODE,
                 &snapshot1_delta_root,
             ),
@@ -185,7 +183,7 @@ fn main() -> Result<(), Error> {
         )?
         .expect("exists");
     for (addr, account) in &accounts_map {
-        let value: Option<Box<[u8]>> = snapshot2.get(addr.as_bytes())?;
+        let value: Option<Box<[u8]>> = snapshot2.get(addr.address.as_bytes())?;
         assert!(value.is_some(), "Address {:?} does not exist", addr);
         let account_bytes = rlp::encode(account);
         let get_bytes = value.unwrap();
@@ -326,13 +324,13 @@ fn initialize_genesis(
 fn prepare_state(
     manager: &Arc<StateManager>, parent: H256, height: &mut u64,
     accounts: usize, accounts_per_epoch: usize,
-    account_map: &mut HashMap<Address, Account>,
+    account_map: &mut HashMap<AddressWithSpace, Account>,
     old_state_root: &StateRootWithAuxInfo, state_root: &StateRootWithAuxInfo,
 ) -> Result<(H256, MerkleHash), StorageError>
 {
     let mut new_account_map = HashMap::new();
     for i in 0..accounts {
-        let addr = Address::random();
+        let addr = AddressWithSpace::new_native(&Address::random());
         let account =
             Account::new_empty_with_balance(&addr, &i.into(), &0.into());
         new_account_map.insert(addr, account);
@@ -352,7 +350,7 @@ fn prepare_state(
 
 fn add_accounts(
     manager: &Arc<StateManager>, parent: H256, height: &mut u64,
-    accounts_per_epoch: usize, new_account_map: &HashMap<Address, Account>,
+    accounts_per_epoch: usize, new_account_map: &HashMap<AddressWithSpace, Account>,
     old_state_root: &StateRootWithAuxInfo, state_root: &StateRootWithAuxInfo,
 ) -> Result<(H256, MerkleHash), StorageError>
 {
@@ -415,7 +413,7 @@ fn add_accounts_and_commit<'a, Iter>(
     state_index: StateIndex,
 ) -> H256
 where
-    Iter: Iterator<Item = (&'a Address, &'a Account)>,
+    Iter: Iterator<Item = (&'a AddressWithSpace, &'a Account)>,
 {
     let state = manager
         .get_state_for_next_epoch(state_index)
@@ -426,7 +424,7 @@ where
         let (addr, account) =
             account_map.next().expect("Caller has checked the size");
         state
-            .set(StorageKey::new_account_key(&addr), account, None)
+            .set(StorageKey::new_account_key(&addr.address).space(addr.space), account, None)
             .unwrap();
     }
     let epoch = H256::random();

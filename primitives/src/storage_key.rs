@@ -658,7 +658,8 @@ use std::{
 #[cfg(test)]
 mod tests {
     use super::{delta_mpt_storage_key::*, DeltaMptKeyPadding, StorageKey};
-    use cfx_types::{Address, H256};
+    use cfx_types::{Address, H256, Space};
+    use crate::StorageKeyWithSpace;
 
     #[test]
     fn test_delta_mpt_account_key() {
@@ -668,9 +669,9 @@ mod tests {
             .parse::<Address>()
             .unwrap();
 
-        let key = StorageKey::new_account_key(&address);
+        let key = StorageKey::new_account_key(&address).space(Space::Native);
         let bytes = key.to_delta_mpt_key_bytes(&padding);
-        let key2 = StorageKey::from_delta_mpt_key(&bytes[..]);
+        let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
     }
 
@@ -682,9 +683,9 @@ mod tests {
             .parse::<Address>()
             .unwrap();
 
-        let key = StorageKey::new_storage_root_key(&address);
+        let key = StorageKey::new_storage_root_key(&address).space(Space::Native);
         let bytes = key.to_delta_mpt_key_bytes(&padding);
-        let key2 = StorageKey::from_delta_mpt_key(&bytes[..]);
+        let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
     }
 
@@ -698,9 +699,9 @@ mod tests {
 
         let storage_key = &[99; 32];
 
-        let key = StorageKey::new_storage_key(&address, storage_key);
+        let key = StorageKey::new_storage_key(&address, storage_key).space(Space::Native);
         let bytes = key.to_delta_mpt_key_bytes(&padding);
-        let key2 = StorageKey::from_delta_mpt_key(&bytes[..]);
+        let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
     }
 
@@ -712,9 +713,9 @@ mod tests {
             .parse::<Address>()
             .unwrap();
 
-        let key = StorageKey::new_code_root_key(&address);
+        let key = StorageKey::new_code_root_key(&address).space(Space::Native);
         let bytes = key.to_delta_mpt_key_bytes(&padding);
-        let key2 = StorageKey::from_delta_mpt_key(&bytes[..]);
+        let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
     }
 
@@ -731,9 +732,9 @@ mod tests {
                 .parse::<H256>()
                 .unwrap();
 
-        let key = StorageKey::new_code_key(&address, &code_hash);
+        let key = StorageKey::new_code_key(&address, &code_hash).space(Space::Native);
         let bytes = key.to_delta_mpt_key_bytes(&padding);
-        let key2 = StorageKey::from_delta_mpt_key(&bytes[..]);
+        let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
     }
 
@@ -745,9 +746,9 @@ mod tests {
             .parse::<Address>()
             .unwrap();
 
-        let key = StorageKey::new_deposit_list_key(&address);
+        let key = StorageKey::new_deposit_list_key(&address).space(Space::Native);
         let bytes = key.to_delta_mpt_key_bytes(&padding);
-        let key2 = StorageKey::from_delta_mpt_key(&bytes[..]);
+        let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
     }
 
@@ -759,9 +760,9 @@ mod tests {
             .parse::<Address>()
             .unwrap();
 
-        let key = StorageKey::new_vote_list_key(&address);
+        let key = StorageKey::new_vote_list_key(&address).space(Space::Native);
         let bytes = key.to_delta_mpt_key_bytes(&padding);
-        let key2 = StorageKey::from_delta_mpt_key(&bytes[..]);
+        let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
     }
 }

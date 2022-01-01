@@ -540,7 +540,7 @@ fn test_random_account(
     assert_eq!(
         account,
         Account::new_from_rlp(
-            account.address_local_info,
+            account.address_local_info.address,
             &Rlp::new(&account.rlp_bytes()),
         )
         .unwrap()
