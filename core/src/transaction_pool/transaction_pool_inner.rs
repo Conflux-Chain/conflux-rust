@@ -1090,7 +1090,7 @@ impl TransactionPoolInner {
 #[cfg(test)]
 mod test_transaction_pool_inner {
     use super::{DeferredPool, InsertResult, TxWithReadyInfo};
-    use cfx_types::{Address, U256};
+    use cfx_types::{Address as RawAddress, AddressWithSpace as Address, U256};
     use keylib::{Generator, KeyPair, Random};
     use primitives::{Action, SignedTransaction, Transaction};
     use std::sync::Arc;
@@ -1103,7 +1103,7 @@ mod test_transaction_pool_inner {
                 nonce: U256::from(nonce),
                 gas_price: U256::from(gas_price),
                 gas: U256::from(50000),
-                action: Action::Call(Address::random()),
+                action: Action::Call(RawAddress::random()),
                 value: U256::from(value),
                 storage_limit: 0,
                 epoch_height: 0,
@@ -1134,8 +1134,11 @@ mod test_transaction_pool_inner {
 
         // insert txs of same sender
         let alice = Random.generate().unwrap();
+        let alice_addr_s = Address::new_native(&alice.address());
         let bob = Random.generate().unwrap();
+        let bob_addr_s = Address::new_native(&bob.address());
         let eva = Random.generate().unwrap();
+        let eva_addr_s = Address::new_native(&eva.address());
 
         let alice_tx1 = new_test_tx_with_read_info(
             &alice, 5, 10, 100, false, /* packed */
@@ -1158,27 +1161,27 @@ mod test_transaction_pool_inner {
             InsertResult::NewAdded
         );
 
-        assert_eq!(deferred_pool.contain_address(&alice.address()), true);
+        assert_eq!(deferred_pool.contain_address(&alice_addr_s), true);
 
-        assert_eq!(deferred_pool.contain_address(&eva.address()), false);
+        assert_eq!(deferred_pool.contain_address(&eva_addr_s), false);
 
-        assert_eq!(deferred_pool.remove_lowest_nonce(&eva.address()), None);
+        assert_eq!(deferred_pool.remove_lowest_nonce(&eva_addr_s), None);
 
-        assert_eq!(deferred_pool.contain_address(&bob.address()), false);
+        assert_eq!(deferred_pool.contain_address(&bob_addr_s), false);
 
         assert_eq!(
             deferred_pool.insert(alice_tx2.clone(), false /* force */),
             InsertResult::NewAdded
         );
 
-        assert_eq!(deferred_pool.remove_lowest_nonce(&bob.address()), None);
+        assert_eq!(deferred_pool.remove_lowest_nonce(&bob_addr_s), None);
 
         assert_eq!(
             deferred_pool.insert(bob_tx1.clone(), false /* force */),
             InsertResult::NewAdded
         );
 
-        assert_eq!(deferred_pool.contain_address(&bob.address()), true);
+        assert_eq!(deferred_pool.contain_address(&bob_addr_s), true);
 
         assert_eq!(
             deferred_pool.insert(bob_tx2.clone(), false /* force */),
@@ -1196,30 +1199,30 @@ mod test_transaction_pool_inner {
         );
 
         assert_eq!(
-            deferred_pool.get_lowest_nonce(&bob.address()),
+            deferred_pool.get_lowest_nonce(&bob_addr_s),
             Some(&(1.into()))
         );
 
         assert_eq!(
-            deferred_pool.remove_lowest_nonce(&bob.address()),
+            deferred_pool.remove_lowest_nonce(&bob_addr_s),
             Some(bob_tx1.clone())
         );
 
         assert_eq!(
-            deferred_pool.get_lowest_nonce(&bob.address()),
+            deferred_pool.get_lowest_nonce(&bob_addr_s),
             Some(&(2.into()))
         );
 
-        assert_eq!(deferred_pool.contain_address(&bob.address()), true);
+        assert_eq!(deferred_pool.contain_address(&bob_addr_s), true);
 
         assert_eq!(
-            deferred_pool.remove_lowest_nonce(&bob.address()),
+            deferred_pool.remove_lowest_nonce(&bob_addr_s),
             Some(bob_tx2_new.clone())
         );
 
-        assert_eq!(deferred_pool.get_lowest_nonce(&bob.address()), None);
+        assert_eq!(deferred_pool.get_lowest_nonce(&bob_addr_s), None);
 
-        assert_eq!(deferred_pool.contain_address(&bob.address()), false);
+        assert_eq!(deferred_pool.contain_address(&bob_addr_s), false);
     }
 
     #[test]
@@ -1227,6 +1230,7 @@ mod test_transaction_pool_inner {
         let mut deferred_pool = super::DeferredPool::new();
 
         let alice = Random.generate().unwrap();
+        let alice_addr_s = Address::new_native(&alice.address());
 
         let gas = 50000;
         let tx1 = new_test_tx_with_read_info(
@@ -1253,7 +1257,7 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
-                &alice.address(),
+                &alice_addr_s,
                 5.into(),
                 exact_cost.into()
             ),
@@ -1262,7 +1266,7 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
-                &alice.address(),
+                &alice_addr_s,
                 7.into(),
                 exact_cost.into()
             ),
@@ -1271,7 +1275,7 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
-                &alice.address(),
+                &alice_addr_s,
                 8.into(),
                 exact_cost.into()
             ),
@@ -1281,7 +1285,7 @@ mod test_transaction_pool_inner {
         deferred_pool.insert(tx3.clone(), false /* force */);
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
-                &alice.address(),
+                &alice_addr_s,
                 4.into(),
                 exact_cost.into()
             ),
@@ -1290,7 +1294,7 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
-                &alice.address(),
+                &alice_addr_s,
                 5.into(),
                 exact_cost.into()
             ),
@@ -1299,7 +1303,7 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
-                &alice.address(),
+                &alice_addr_s,
                 7.into(),
                 exact_cost.into()
             ),
@@ -1308,7 +1312,7 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
-                &alice.address(),
+                &alice_addr_s,
                 8.into(),
                 exact_cost.into()
             ),
@@ -1317,7 +1321,7 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
-                &alice.address(),
+                &alice_addr_s,
                 9.into(),
                 exact_cost.into()
             ),
@@ -1326,7 +1330,7 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
-                &alice.address(),
+                &alice_addr_s,
                 10.into(),
                 exact_cost.into()
             ),
@@ -1335,7 +1339,7 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
-                &alice.address(),
+                &alice_addr_s,
                 5.into(),
                 (exact_cost - 1).into()
             ),
