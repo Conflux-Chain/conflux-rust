@@ -170,7 +170,10 @@ fn assert_snapshot_mpt_formation(mpt_kv_iter: &DumpedMptKvIterator) {
         let mut state = state_manager.get_state_for_genesis_write();
         for (key, value) in &mpt_kv_iter.kv {
             state
-                .set(StorageKey::AccountKey(key), value.clone())
+                .set(
+                    StorageKey::AccountKey(key).space(Space::Native),
+                    value.clone(),
+                )
                 .expect("Failed to insert key.");
         }
 
@@ -234,7 +237,7 @@ fn test_mpt_node_path_to_from_db_key() {
     for (key, value) in &mpt_kv {
         state
             .set(
-                StorageKey::AccountKey(key),
+                StorageKey::AccountKey(key).space(Space::Native),
                 value.clone().into_boxed_slice(),
             )
             .expect("Failed to insert key.");
@@ -255,8 +258,9 @@ fn test_mpt_node_path_to_from_db_key() {
     // Second, use compressed path as mpt_node_path to test
     // mpt_node_path_to_db_key / mpt_node_path_from_db_key.
     for (key, value) in &mpt_kv {
-        let (v, proof) =
-            state.get_with_proof(StorageKey::AccountKey(key)).unwrap();
+        let (v, proof) = state
+            .get_with_proof(StorageKey::AccountKey(key).space(Space::Native))
+            .unwrap();
         assert_eq!(v, Some(value.clone().into_boxed_slice()));
         for node in proof.delta_proof.unwrap().get_proof_nodes() {
             let compressed_path = node.compressed_path_ref();
@@ -649,6 +653,8 @@ use crate::{
     },
     StateIndex, StorageStateTraitExt,
 };
+#[cfg(test)]
+use cfx_types::Space;
 #[cfg(test)]
 use parking_lot::Mutex;
 #[cfg(test)]

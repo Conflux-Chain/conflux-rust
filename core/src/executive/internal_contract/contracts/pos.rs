@@ -2,7 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{super::impls::pos::*, macros::*, ExecutionTrait, SolFnTable};
+use super::{
+    super::impls::pos::*, macros::*, SimpleExecutionTrait, SolFnTable,
+};
 use crate::{
     evm::{ActionParams, Spec},
     executive::InternalRefContext,
@@ -88,7 +90,7 @@ impl UpfrontPaymentTrait for Register {
         );
     }
 }
-impl ExecutionTrait for Register {
+impl SimpleExecutionTrait for Register {
     fn execute_inner(
         &self, inputs: (H256, u64, BlsPubKey, VrfPubKey, BlsProof),
         params: &ActionParams, context: &mut InternalRefContext,
@@ -134,7 +136,7 @@ impl UpfrontPaymentTrait for IncreaseStake {
         return U256::from(log_gas + io_gas);
     }
 }
-impl ExecutionTrait for IncreaseStake {
+impl SimpleExecutionTrait for IncreaseStake {
     fn execute_inner(
         &self, inputs: u64, params: &ActionParams,
         context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
@@ -153,7 +155,7 @@ make_solidity_function! {
     struct Retire(u64, "retire(uint64)");
 }
 impl_function_type!(Retire, "non_payable_write", gas: |spec: &Spec| spec.retire_gas);
-impl ExecutionTrait for Retire {
+impl SimpleExecutionTrait for Retire {
     fn execute_inner(
         &self, votes: u64, params: &ActionParams,
         context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
@@ -172,7 +174,7 @@ make_solidity_function! {
     struct GetStatus(H256, "getVotes(bytes32)", (u64,u64));
 }
 impl_function_type!(GetStatus, "query", gas: |spec: &Spec| spec.sload_gas + spec.sha3_gas);
-impl ExecutionTrait for GetStatus {
+impl SimpleExecutionTrait for GetStatus {
     fn execute_inner(
         &self, inputs: H256, params: &ActionParams,
         context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
@@ -187,7 +189,7 @@ make_solidity_function! {
     struct IdentifierToAddress(H256, "identifierToAddress(bytes32)", Address);
 }
 impl_function_type!(IdentifierToAddress, "query", gas: |spec: &Spec| spec.sload_gas + spec.sha3_gas);
-impl ExecutionTrait for IdentifierToAddress {
+impl SimpleExecutionTrait for IdentifierToAddress {
     fn execute_inner(
         &self, inputs: H256, params: &ActionParams,
         context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
@@ -201,7 +203,7 @@ make_solidity_function! {
     struct AddressToIdentifier(Address, "addressToIdentifier(address)", H256);
 }
 impl_function_type!(AddressToIdentifier, "query", gas: |spec: &Spec| spec.sload_gas + spec.sha3_gas);
-impl ExecutionTrait for AddressToIdentifier {
+impl SimpleExecutionTrait for AddressToIdentifier {
     fn execute_inner(
         &self, inputs: Address, params: &ActionParams,
         context: &mut InternalRefContext, _tracer: &mut dyn Tracer,

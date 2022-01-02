@@ -295,7 +295,8 @@ impl Spec {
         spec.cip71 = number >= params.transition_numbers.cip71;
         spec.cip72 = number >= params.transition_numbers.cip72b;
         spec.cip78a = number >= params.transition_numbers.cip78a;
-        spec.cip80 = number >= params.transition_numbers.cip80;
+        // TODO: Clean up this, CIP80 is dropped
+        spec.cip80 = false; // number >= params.transition_numbers.cip80;
         spec
     }
 

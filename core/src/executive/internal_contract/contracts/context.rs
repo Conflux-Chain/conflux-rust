@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{macros::*, ExecutionTrait, SolFnTable};
+use super::{macros::*, SimpleExecutionTrait, SolFnTable};
 #[cfg(test)]
 use crate::check_signature;
 use crate::{
@@ -40,7 +40,7 @@ make_solidity_function! {
 // same gas cost as the `NUMBER` opcode
 impl_function_type!(EpochNumber, "query", gas: |spec: &Spec| spec.tier_step_gas[(GasPriceTier::Base).idx()]);
 
-impl ExecutionTrait for EpochNumber {
+impl SimpleExecutionTrait for EpochNumber {
     fn execute_inner(
         &self, _input: (), _params: &ActionParams,
         context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
@@ -57,7 +57,7 @@ make_solidity_function! {
 // same gas cost as the `NUMBER` opcode
 impl_function_type!(PoSHeight, "query", gas: |spec: &Spec| spec.tier_step_gas[(GasPriceTier::Base).idx()]);
 
-impl ExecutionTrait for PoSHeight {
+impl SimpleExecutionTrait for PoSHeight {
     fn execute_inner(
         &self, _input: (), _params: &ActionParams,
         context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
@@ -74,7 +74,7 @@ make_solidity_function! {
 // same gas cost as the `NUMBER` opcode
 impl_function_type!(FinalizedEpoch, "query", gas: |spec: &Spec| spec.tier_step_gas[(GasPriceTier::Base).idx()]);
 
-impl ExecutionTrait for FinalizedEpoch {
+impl SimpleExecutionTrait for FinalizedEpoch {
     fn execute_inner(
         &self, _input: (), _params: &ActionParams,
         context: &mut InternalRefContext, _tracer: &mut dyn Tracer,

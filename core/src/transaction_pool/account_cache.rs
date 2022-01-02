@@ -4,7 +4,7 @@ use crate::{
 };
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::Result as DbResult;
-use cfx_types::{Address, U256};
+use cfx_types::{Address, AddressWithSpace, U256};
 use metrics::MeterTimer;
 use primitives::SponsorInfo;
 use std::sync::Arc;
@@ -18,13 +18,13 @@ impl AccountCache {
     pub fn new(state: Arc<State>) -> Self { AccountCache { state } }
 
     pub fn get_nonce_and_balance(
-        &self, address: &Address,
+        &self, address: &AddressWithSpace,
     ) -> DbResult<(U256, U256)> {
         let _timer = MeterTimer::time_func(TX_POOL_GET_STATE_TIMER.as_ref());
         Ok((self.state.nonce(address)?, self.state.balance(address)?))
     }
 
-    pub fn get_nonce(&self, address: &Address) -> DbResult<U256> {
+    pub fn get_nonce(&self, address: &AddressWithSpace) -> DbResult<U256> {
         self.state.nonce(address)
     }
 

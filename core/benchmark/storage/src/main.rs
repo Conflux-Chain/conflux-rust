@@ -1769,7 +1769,7 @@ impl TxReplayer {
                                 // ethereum-types because conflux use a newer
                                 // version
                                 unsafe { std::mem::transmute(&sender) },
-                            ),
+                            ).space(Space::Native),
                             &account,
                             None,
                         )
@@ -1828,7 +1828,7 @@ impl TxReplayer {
                         // ethereum-types because conflux use a newer
                         // version
                         unsafe { std::mem::transmute(&receiver) },
-                    ),
+                    ).space(Space::Native),
                     &account,
                     None,
                 )
@@ -2181,7 +2181,7 @@ use cfx_storage::{
     KvdbSqlite, KvdbSqliteStatements, StateIndex, StorageConfiguration,
     StorageManager, StorageManagerTrait,
 };
-use cfx_types::hexstr_to_h256;
+use cfx_types::{hexstr_to_h256, Space};
 use clap::{App, Arg, ArgMatches};
 use env_logger;
 use error_chain::*;

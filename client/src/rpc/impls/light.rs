@@ -3,7 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::errors::check_rpc_address_network;
-use cfx_types::{BigEndianHash, H160, H256, H520, U128, U256, U64};
+use cfx_types::{
+    AddressWithSpace, BigEndianHash, H160, H256, H520, U128, U256, U64,
+};
 use cfxcore::{
     block_data_manager::BlockDataManager,
     consensus_parameters::ONE_GDRIP_IN_DRIP,
@@ -148,7 +150,7 @@ impl RpcImpl {
             let account = account.unwrap_or(account_result_to_rpc_result(
                 "address",
                 Ok(Account::new_empty_with_balance(
-                    &address.hex_address,
+                    &AddressWithSpace::new_native(&address.hex_address),
                     &U256::zero(), /* balance */
                     &U256::zero(), /* nonce */
                 )),

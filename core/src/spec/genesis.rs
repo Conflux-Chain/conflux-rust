@@ -25,7 +25,9 @@ use cfx_parameters::{
 use cfx_state::{state_trait::*, CleanupMode};
 use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{StorageManager, StorageManagerTrait};
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use cfx_types::{
+    address_util::AddressUtil, Address, AddressWithSpace, H256, U256,
+};
 use diem_crypto::{
     bls::BLSPrivateKey, ec_vrf::EcVrfPublicKey, PrivateKey, ValidCryptoMaterial,
 };
@@ -119,7 +121,7 @@ pub fn initialize_internal_contract_accounts(
         {
             for address in addresses {
                 state.new_contract_with_admin(
-                    address,
+                    &AddressWithSpace::new_native(&address),
                     /* No admin; admin = */ &Address::zero(),
                     /* balance = */ U256::zero(),
                     contract_start_nonce,
@@ -132,20 +134,20 @@ pub fn initialize_internal_contract_accounts(
     .expect(&concat!(file!(), ":", line!(), ":", column!()));
 }
 
-fn genesis_contract_address_impl(idx: usize, code: &Bytes) -> Address {
+fn genesis_contract_address_impl(idx: usize, code: &Bytes) -> AddressWithSpace {
     let genesis_account_address =
         GENESIS_ACCOUNT_ADDRESS_STR.parse::<Address>().unwrap();
     let (address, _) = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
         0.into(),
-        &genesis_account_address,
+        &AddressWithSpace::new_native(&genesis_account_address),
         &U256::from(idx),
         code,
     );
     address
 }
 
-pub fn genesis_contract_address_four_year() -> Address {
+pub fn genesis_contract_address_four_year() -> AddressWithSpace {
     genesis_contract_address_impl(
         2,
         &GENESIS_TRANSACTION_CREATE_GENESIS_TOKEN_MANAGER_FOUR_YEAR_UNLOCK
@@ -154,7 +156,7 @@ pub fn genesis_contract_address_four_year() -> Address {
     )
 }
 
-pub fn genesis_contract_address_two_year() -> Address {
+pub fn genesis_contract_address_two_year() -> AddressWithSpace {
     genesis_contract_address_impl(
         1,
         &GENESIS_TRANSACTION_CREATE_GENESIS_TOKEN_MANAGER_TWO_YEAR_UNLOCK
@@ -188,7 +190,7 @@ pub fn genesis_block(
     for (addr, balance) in genesis_accounts {
         state
             .add_balance(
-                &addr,
+                &AddressWithSpace::new_native(&addr),
                 &balance,
                 CleanupMode::NoEmpty,
                 /* account_start_nonce = */ U256::zero(),
@@ -198,8 +200,9 @@ pub fn genesis_block(
     }
     state.add_total_issued(total_balance);
 
-    let genesis_account_address =
-        GENESIS_ACCOUNT_ADDRESS_STR.parse::<Address>().unwrap();
+    let genesis_account_address = AddressWithSpace::new_native(
+        &GENESIS_ACCOUNT_ADDRESS_STR.parse::<Address>().unwrap(),
+    );
 
     let genesis_token_count =
         U256::from(GENESIS_TOKEN_COUNT_IN_CFX) * U256::from(ONE_CFX_IN_DRIP);
@@ -389,7 +392,7 @@ pub fn genesis_block(
             );
 
             state
-                .set_admin(&contract_address, &Address::zero())
+                .set_admin(&contract_address.address, &Address::zero())
                 .expect("");
             info!(
                 "Genesis {:?} addresses: {:?}",
@@ -405,7 +408,7 @@ pub fn genesis_block(
             // TODO(lpl): Pass in signed tx so they can be retired.
             state
                 .add_balance(
-                    &node.address,
+                    &AddressWithSpace::new_native(&node.address),
                     &(stake_balance
                         + U256::from(ONE_CFX_IN_DRIP) * U256::from(20)),
                     CleanupMode::NoEmpty,
@@ -413,7 +416,10 @@ pub fn genesis_block(
                 )
                 .unwrap();
             state.deposit(&node.address, &stake_balance, 0).unwrap();
-            let signed_tx = node.register_tx.clone().fake_sign(node.address);
+            let signed_tx = node
+                .register_tx
+                .clone()
+                .fake_sign(AddressWithSpace::new_native(&node.address));
             execute_genesis_transaction(
                 &signed_tx,
                 &mut state,
@@ -423,7 +429,7 @@ pub fn genesis_block(
     }
 
     state
-        .genesis_special_clean_account(&genesis_account_address)
+        .genesis_special_clean_account(&genesis_account_address.address)
         .expect("Clean account failed");
 
     let state_root = state

@@ -23,7 +23,7 @@ pub trait StateTrait: CheckpointTrait {
 
     // FIXME: add doc string.
     fn collect_and_settle_collateral(
-        &mut self, original_sender: &Address, storage_limit: &U256,
+        &mut self, original_sender: &RawAddress, storage_limit: &U256,
         substate: &mut Self::Substate, tracer: &mut dyn InternalTransferTracer,
         account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult>;
@@ -31,7 +31,7 @@ pub trait StateTrait: CheckpointTrait {
     // TODO: maybe we can find a better interface for doing the suicide
     // post-processing.
     fn record_storage_and_whitelist_entries_release(
-        &mut self, address: &Address, substate: &mut Self::Substate,
+        &mut self, address: &RawAddress, substate: &mut Self::Substate,
     ) -> DbResult<()>;
 
     fn compute_state_root(
@@ -66,10 +66,10 @@ pub trait StateOpsTrait {
     fn distribute_pos_interest<'a>(
         &mut self, pos_points: Box<dyn Iterator<Item = (&'a H256, u64)> + 'a>,
         account_start_nonce: U256, current_block_number: u64,
-    ) -> DbResult<Vec<(Address, H256, U256)>>;
+    ) -> DbResult<Vec<(RawAddress, H256, U256)>>;
 
     fn new_contract_with_admin(
-        &mut self, contract: &Address, admin: &Address, balance: U256,
+        &mut self, contract: &Address, admin: &RawAddress, balance: U256,
         nonce: U256, storage_layout: Option<StorageLayout>,
     ) -> DbResult<()>;
 
@@ -77,99 +77,104 @@ pub trait StateOpsTrait {
 
     fn is_contract_with_code(&self, address: &Address) -> DbResult<bool>;
 
-    fn sponsor_for_gas(&self, address: &Address) -> DbResult<Option<Address>>;
+    fn sponsor_for_gas(
+        &self, address: &RawAddress,
+    ) -> DbResult<Option<RawAddress>>;
 
     fn sponsor_for_collateral(
-        &self, address: &Address,
-    ) -> DbResult<Option<Address>>;
+        &self, address: &RawAddress,
+    ) -> DbResult<Option<RawAddress>>;
 
     fn set_sponsor_for_gas(
-        &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
-        upper_bound: &U256,
+        &self, address: &RawAddress, sponsor: &RawAddress,
+        sponsor_balance: &U256, upper_bound: &U256,
     ) -> DbResult<()>;
 
     fn set_sponsor_for_collateral(
-        &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
+        &self, address: &RawAddress, sponsor: &RawAddress,
+        sponsor_balance: &U256,
     ) -> DbResult<()>;
 
-    fn sponsor_info(&self, address: &Address) -> DbResult<Option<SponsorInfo>>;
+    fn sponsor_info(
+        &self, address: &RawAddress,
+    ) -> DbResult<Option<SponsorInfo>>;
 
-    fn sponsor_gas_bound(&self, address: &Address) -> DbResult<U256>;
+    fn sponsor_gas_bound(&self, address: &RawAddress) -> DbResult<U256>;
 
-    fn sponsor_balance_for_gas(&self, address: &Address) -> DbResult<U256>;
+    fn sponsor_balance_for_gas(&self, address: &RawAddress) -> DbResult<U256>;
 
     fn sponsor_balance_for_collateral(
-        &self, address: &Address,
+        &self, address: &RawAddress,
     ) -> DbResult<U256>;
 
     fn set_admin(
-        &mut self, contract_address: &Address, admin: &Address,
+        &mut self, contract_address: &RawAddress, admin: &RawAddress,
     ) -> DbResult<()>;
 
     fn sub_sponsor_balance_for_gas(
-        &mut self, address: &Address, by: &U256,
+        &mut self, address: &RawAddress, by: &U256,
     ) -> DbResult<()>;
 
     fn add_sponsor_balance_for_gas(
-        &mut self, address: &Address, by: &U256,
+        &mut self, address: &RawAddress, by: &U256,
     ) -> DbResult<()>;
 
     fn sub_sponsor_balance_for_collateral(
-        &mut self, address: &Address, by: &U256,
+        &mut self, address: &RawAddress, by: &U256,
     ) -> DbResult<()>;
 
     fn add_sponsor_balance_for_collateral(
-        &mut self, address: &Address, by: &U256,
+        &mut self, address: &RawAddress, by: &U256,
     ) -> DbResult<()>;
 
     fn check_commission_privilege(
-        &self, contract_address: &Address, user: &Address,
+        &self, contract_address: &RawAddress, user: &RawAddress,
     ) -> DbResult<bool>;
 
     fn add_commission_privilege(
-        &mut self, contract_address: Address, contract_owner: Address,
-        user: Address,
+        &mut self, contract_address: RawAddress, contract_owner: RawAddress,
+        user: RawAddress,
     ) -> DbResult<()>;
 
     fn remove_commission_privilege(
-        &mut self, contract_address: Address, contract_owner: Address,
-        user: Address,
+        &mut self, contract_address: RawAddress, contract_owner: RawAddress,
+        user: RawAddress,
     ) -> DbResult<()>;
 
     fn nonce(&self, address: &Address) -> DbResult<U256>;
 
     fn init_code(
-        &mut self, address: &Address, code: Vec<u8>, owner: Address,
+        &mut self, address: &Address, code: Vec<u8>, owner: RawAddress,
     ) -> DbResult<()>;
 
     fn code_hash(&self, address: &Address) -> DbResult<Option<H256>>;
 
     fn code_size(&self, address: &Address) -> DbResult<Option<usize>>;
 
-    fn code_owner(&self, address: &Address) -> DbResult<Option<Address>>;
+    fn code_owner(&self, address: &Address) -> DbResult<Option<RawAddress>>;
 
     fn code(&self, address: &Address) -> DbResult<Option<Arc<Vec<u8>>>>;
 
-    fn staking_balance(&self, address: &Address) -> DbResult<U256>;
+    fn staking_balance(&self, address: &RawAddress) -> DbResult<U256>;
 
-    fn collateral_for_storage(&self, address: &Address) -> DbResult<U256>;
+    fn collateral_for_storage(&self, address: &RawAddress) -> DbResult<U256>;
 
-    fn admin(&self, address: &Address) -> DbResult<Address>;
+    fn admin(&self, address: &RawAddress) -> DbResult<RawAddress>;
 
     fn withdrawable_staking_balance(
-        &self, address: &Address, current_block_number: u64,
+        &self, address: &RawAddress, current_block_number: u64,
     ) -> DbResult<U256>;
 
     fn locked_staking_balance_at_block_number(
-        &self, address: &Address, block_number: u64,
+        &self, address: &RawAddress, block_number: u64,
     ) -> DbResult<U256>;
 
-    fn deposit_list_length(&self, address: &Address) -> DbResult<usize>;
+    fn deposit_list_length(&self, address: &RawAddress) -> DbResult<usize>;
 
-    fn vote_stake_list_length(&self, address: &Address) -> DbResult<usize>;
+    fn vote_stake_list_length(&self, address: &RawAddress) -> DbResult<usize>;
 
     fn genesis_special_clean_account(
-        &mut self, address: &Address,
+        &mut self, address: &RawAddress,
     ) -> DbResult<()>;
 
     fn clean_account(&mut self, address: &Address) -> DbResult<()>;
@@ -189,7 +194,7 @@ pub trait StateOpsTrait {
         account_start_nonce: U256,
     ) -> DbResult<()>;
     fn add_pos_interest(
-        &mut self, address: &Address, by: &U256, cleanup_mode: CleanupMode,
+        &mut self, address: &RawAddress, by: &U256, cleanup_mode: CleanupMode,
         account_start_nonce: U256,
     ) -> DbResult<()>;
     fn transfer_balance(
@@ -198,17 +203,21 @@ pub trait StateOpsTrait {
     ) -> DbResult<()>;
 
     fn deposit(
-        &mut self, address: &Address, amount: &U256, current_block_number: u64,
+        &mut self, address: &RawAddress, amount: &U256,
+        current_block_number: u64,
     ) -> DbResult<()>;
 
-    fn withdraw(&mut self, address: &Address, amount: &U256) -> DbResult<U256>;
+    fn withdraw(
+        &mut self, address: &RawAddress, amount: &U256,
+    ) -> DbResult<U256>;
 
     fn vote_lock(
-        &mut self, address: &Address, amount: &U256, unlock_block_number: u64,
+        &mut self, address: &RawAddress, amount: &U256,
+        unlock_block_number: u64,
     ) -> DbResult<()>;
 
     fn remove_expired_vote_stake_info(
-        &mut self, address: &Address, current_block_number: u64,
+        &mut self, address: &RawAddress, current_block_number: u64,
     ) -> DbResult<()>;
 
     fn total_issued_tokens(&self) -> U256;
@@ -232,14 +241,15 @@ pub trait StateOpsTrait {
     fn storage_at(&self, address: &Address, key: &[u8]) -> DbResult<U256>;
 
     fn set_storage(
-        &mut self, address: &Address, key: Vec<u8>, value: U256, owner: Address,
+        &mut self, address: &Address, key: Vec<u8>, value: U256,
+        owner: RawAddress,
     ) -> DbResult<()>;
 
     fn update_pos_status(
         &mut self, identifier: H256, number: u64,
     ) -> DbResult<()>;
 
-    fn pos_locked_staking(&self, address: &Address) -> DbResult<U256>;
+    fn pos_locked_staking(&self, address: &RawAddress) -> DbResult<U256>;
 }
 
 pub trait CheckpointTrait: StateOpsTrait {
@@ -265,6 +275,8 @@ use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };
 use cfx_statedb::Result as DbResult;
-use cfx_types::{Address, H256, U256};
+use cfx_types::{
+    Address as RawAddress, AddressWithSpace as Address, H256, U256,
+};
 use primitives::{EpochId, SponsorInfo, StorageLayout};
 use std::sync::Arc;

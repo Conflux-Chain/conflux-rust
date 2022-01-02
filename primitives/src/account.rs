@@ -3,7 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{bytes::Bytes, hash::KECCAK_EMPTY};
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use cfx_types::{
+    address_util::AddressUtil, Address, AddressWithSpace, Space, H256, U256,
+};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde_derive::{Deserialize, Serialize};
@@ -252,7 +254,7 @@ pub struct SponsorInfo {
 pub struct Account {
     /// This field is not part of Account data, but kept for convenience. It
     /// should be rarely used except for debugging.
-    address_local_info: Address,
+    address_local_info: AddressWithSpace,
     pub balance: U256,
     pub nonce: U256,
     pub code_hash: H256,
@@ -302,19 +304,26 @@ pub struct ContractAccount {
     pub sponsor_info: SponsorInfo,
 }
 
-impl Account {
-    pub fn address(&self) -> &Address { &self.address_local_info }
+#[derive(RlpEncodable, RlpDecodable)]
+pub struct EthereumAccount {
+    pub balance: U256,
+    pub nonce: U256,
+    pub code_hash: H256,
+}
 
-    pub fn set_address(&mut self, address: Address) {
+impl Account {
+    pub fn address(&self) -> &AddressWithSpace { &self.address_local_info }
+
+    pub fn set_address(&mut self, address: AddressWithSpace) {
         self.address_local_info = address;
     }
 
-    pub fn new_empty(address: &Address) -> Account {
+    pub fn new_empty(address: &AddressWithSpace) -> Account {
         Self::new_empty_with_balance(address, &U256::from(0), &U256::from(0))
     }
 
     pub fn new_empty_with_balance(
-        address: &Address, balance: &U256, nonce: &U256,
+        address: &AddressWithSpace, balance: &U256, nonce: &U256,
     ) -> Account {
         Self {
             address_local_info: *address,
@@ -331,7 +340,7 @@ impl Account {
 
     fn from_basic_account(address: Address, a: BasicAccount) -> Self {
         Self {
-            address_local_info: address,
+            address_local_info: AddressWithSpace::new_native(&address),
             balance: a.balance,
             nonce: a.nonce,
             code_hash: KECCAK_EMPTY,
@@ -345,7 +354,7 @@ impl Account {
 
     pub fn from_contract_account(address: Address, a: ContractAccount) -> Self {
         Self {
-            address_local_info: address,
+            address_local_info: AddressWithSpace::new_native(&address),
             balance: a.balance,
             nonce: a.nonce,
             code_hash: a.code_hash,
@@ -357,7 +366,19 @@ impl Account {
         }
     }
 
+    fn from_ethereum_account(address: Address, a: EthereumAccount) -> Self {
+        let address = AddressWithSpace::new_evm(&address);
+        Self {
+            address_local_info: address,
+            balance: a.balance,
+            nonce: a.nonce,
+            code_hash: a.code_hash,
+            ..Self::new_empty(&address)
+        }
+    }
+
     pub fn to_basic_account(&self) -> BasicAccount {
+        assert_eq!(self.address_local_info.space, Space::Native);
         BasicAccount {
             balance: self.balance,
             nonce: self.nonce,
@@ -368,6 +389,7 @@ impl Account {
     }
 
     pub fn to_contract_account(&self) -> ContractAccount {
+        assert_eq!(self.address_local_info.space, Space::Native);
         ContractAccount {
             balance: self.balance,
             nonce: self.nonce,
@@ -380,6 +402,15 @@ impl Account {
         }
     }
 
+    pub fn to_evm_account(&self) -> EthereumAccount {
+        assert_eq!(self.address_local_info.space, Space::Ethereum);
+        EthereumAccount {
+            balance: self.balance,
+            nonce: self.nonce,
+            code_hash: self.code_hash,
+        }
+    }
+
     pub fn new_from_rlp(
         address: Address, rlp: &Rlp,
     ) -> Result<Self, AccountError> {
@@ -389,6 +420,10 @@ impl Account {
                 ContractAccount::decode(rlp)?,
             ),
             5 => Self::from_basic_account(address, BasicAccount::decode(rlp)?),
+            3 => Self::from_ethereum_account(
+                address,
+                EthereumAccount::decode(rlp)?,
+            ),
             _ => {
                 return Err(AccountError::InvalidRlp(
                     DecoderError::RlpIncorrectListLen,
@@ -401,6 +436,11 @@ impl Account {
 
 impl Encodable for Account {
     fn rlp_append(&self, stream: &mut RlpStream) {
+        if self.address_local_info.space == Space::Ethereum {
+            stream.append_internal(&self.to_evm_account());
+            return;
+        }
+
         // After CIP-80, an address started by 0x8 is still stored as
         // contract format in underlying db, even if it may be a normal address.
         // In order to achieve backward compatible.
@@ -408,7 +448,7 @@ impl Encodable for Account {
         // It is impossible to have an all-zero hash value. But some previous
         // bug make one of the genesis accounts has all zero genesis hash.
         if self.code_hash != KECCAK_EMPTY && !self.code_hash.is_zero()
-            || self.address_local_info.is_contract_address()
+            || self.address_local_info.address.is_contract_address()
         {
             // A contract address can hold balance before its initialization
             // as a recipient of a simple transaction.
@@ -500,8 +540,8 @@ fn test_random_account(
     assert_eq!(
         account,
         Account::new_from_rlp(
-            account.address_local_info,
-            &Rlp::new(&account.rlp_bytes())
+            account.address_local_info.address,
+            &Rlp::new(&account.rlp_bytes()),
         )
         .unwrap()
     );

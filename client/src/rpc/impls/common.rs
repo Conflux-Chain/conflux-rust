@@ -33,7 +33,9 @@ use parking_lot::{Condvar, Mutex};
 use crate::rpc::types::pos::{Block as RpcPosBlock, Decision};
 use cfx_addr::Network;
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-use cfx_types::{Address, H160, H256, H520, U128, U256, U512, U64};
+use cfx_types::{
+    Address, AddressWithSpace, H160, H256, H520, U128, U256, U512, U64,
+};
 use cfxcore::{
     consensus::pos_handler::PosVerifier, rpc_errors::invalid_params_check,
     spec::genesis::register_transaction, BlockDataManager, ConsensusGraph,
@@ -893,8 +895,9 @@ impl RpcImpl {
         &self, address: RpcAddress,
     ) -> RpcResult<Vec<RpcTransaction>> {
         self.check_address_network(address.network)?;
-        let (ready_txs, deferred_txs) =
-            self.tx_pool.content(Some(address.into()));
+        let (ready_txs, deferred_txs) = self
+            .tx_pool
+            .content(Some(AddressWithSpace::new_native(&address.into())));
         let converter =
             |tx: &Arc<SignedTransaction>| -> Result<RpcTransaction, String> {
                 RpcTransaction::from_signed(
@@ -916,7 +919,10 @@ impl RpcImpl {
     ) -> RpcResult<Option<RpcTransaction>> {
         let tx = self
             .tx_pool
-            .get_transaction_by_address2nonce(address.into(), nonce)
+            .get_transaction_by_address2nonce(
+                AddressWithSpace::new_native(&address.into()),
+                nonce,
+            )
             .map(|tx| {
                 RpcTransaction::from_signed(
                     &tx,
@@ -944,7 +950,9 @@ impl RpcImpl {
             }
         };
 
-        let (ready_txs, deferred_txs) = self.tx_pool.content(address);
+        let (ready_txs, deferred_txs) = self
+            .tx_pool
+            .content(address.as_ref().map(AddressWithSpace::new_native));
         let converter = |tx: Arc<SignedTransaction>| -> RpcTransaction {
             RpcTransaction::from_signed(&tx, None, *self.network.get_network_type())
                 .expect("transaction conversion with correct network id should not fail")
@@ -973,7 +981,9 @@ impl RpcImpl {
             }
         };
 
-        let (ready_txs, deferred_txs) = self.tx_pool.content(address);
+        let (ready_txs, deferred_txs) = self
+            .tx_pool
+            .content(address.as_ref().map(AddressWithSpace::new_native));
         let converter = |tx: Arc<SignedTransaction>| -> String {
             let to = match tx.action {
                 Action::Create => "<Create contract>".into(),
@@ -1124,9 +1134,12 @@ impl RpcImpl {
         self.check_address_network(address.network)?;
 
         let mut ret = TxPoolPendingNonceRange::default();
-        let (pending_txs, _, _) = self
-            .tx_pool
-            .get_account_pending_transactions(&address.hex_address, None, None);
+        let (pending_txs, _, _) =
+            self.tx_pool.get_account_pending_transactions(
+                &AddressWithSpace::new_native(&address.hex_address),
+                None,
+                None,
+            );
         let mut max_nonce: U256 = U256::from(0);
         let mut min_nonce: U256 = U256::max_value();
         for tx in pending_txs.iter() {
@@ -1143,7 +1156,9 @@ impl RpcImpl {
     }
 
     pub fn txpool_next_nonce(&self, address: RpcAddress) -> RpcResult<U256> {
-        Ok(self.tx_pool.get_next_nonce(&address.hex_address))
+        Ok(self.tx_pool.get_next_nonce(&AddressWithSpace::new_native(
+            &address.hex_address,
+        )))
     }
 
     pub fn account_pending_info(
@@ -1152,7 +1167,9 @@ impl RpcImpl {
         info!("RPC Request: cfx_getAccountPendingInfo({:?})", address);
         self.check_address_network(address.network)?;
 
-        match self.tx_pool.get_account_pending_info(&(address.into())) {
+        match self.tx_pool.get_account_pending_info(
+            &AddressWithSpace::new_native(&address.into()),
+        ) {
             None => Ok(None),
             Some((
                 local_nonce,
@@ -1179,7 +1196,7 @@ impl RpcImpl {
 
         let (pending_txs, tx_status, pending_count) =
             self.tx_pool.get_account_pending_transactions(
-                &(address.into()),
+                &AddressWithSpace::new_native(&(address.into())),
                 maybe_start_nonce,
                 maybe_limit.map(|limit| limit.as_usize()),
             );

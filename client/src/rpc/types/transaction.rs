@@ -98,7 +98,7 @@ impl Transaction {
             transaction_index,
             status,
             contract_created,
-            from: RpcAddress::try_from_h160(t.sender(), network)?,
+            from: RpcAddress::try_from_h160(t.sender().address, network)?,
             to: match t.action {
                 Action::Create => None,
                 Action::Call(ref address) => {

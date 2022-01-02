@@ -12,7 +12,7 @@ use cfx_parameters::staking::COLLATERAL_UNITS_PER_STORAGE_KEY;
 use cfx_state::SubstateTrait;
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
 use cfx_storage::StorageStateTrait;
-use cfx_types::{Address, H256, U256};
+use cfx_types::{Address, AddressWithSpace, Space, H256, U256};
 use parking_lot::RwLock;
 use primitives::{
     is_default::IsDefault, Account, CodeInfo, DepositInfo, DepositList,
@@ -31,7 +31,7 @@ lazy_static! {
 /// Keeps track of changes to the code and storage.
 /// The changes are applied in `commit_storage` and `commit_code`
 pub struct OverlayAccount {
-    address: Address,
+    address: AddressWithSpace,
 
     // Balance of the account.
     balance: U256,
@@ -117,7 +117,7 @@ pub struct OverlayAccount {
 
 impl OverlayAccount {
     /// Create an OverlayAccount from loaded account.
-    pub fn from_loaded(address: &Address, account: Account) -> Self {
+    pub fn from_loaded(address: &AddressWithSpace, account: Account) -> Self {
         let overlay_account = OverlayAccount {
             address: address.clone(),
             balance: account.balance,
@@ -145,7 +145,9 @@ impl OverlayAccount {
 
     /// Create an OverlayAccount of basic account when the account doesn't exist
     /// before.
-    pub fn new_basic(address: &Address, balance: U256, nonce: U256) -> Self {
+    pub fn new_basic(
+        address: &AddressWithSpace, balance: U256, nonce: U256,
+    ) -> Self {
         OverlayAccount {
             address: address.clone(),
             balance,
@@ -171,7 +173,7 @@ impl OverlayAccount {
 
     /// Create an OverlayAccount of basic account when the account doesn't exist
     /// before.
-    pub fn new_removed(address: &Address) -> Self {
+    pub fn new_removed(address: &AddressWithSpace) -> Self {
         OverlayAccount {
             address: address.clone(),
             balance: Default::default(),
@@ -204,7 +206,7 @@ impl OverlayAccount {
     ) -> Self
     {
         Self::new_contract_with_admin(
-            address,
+            &AddressWithSpace::new_native(address),
             balance,
             nonce,
             &Address::zero(),
@@ -215,8 +217,8 @@ impl OverlayAccount {
     /// Create an OverlayAccount of contract account when the account doesn't
     /// exist before.
     pub fn new_contract_with_admin(
-        address: &Address, balance: U256, nonce: U256, admin: &Address,
-        storage_layout: Option<StorageLayout>,
+        address: &AddressWithSpace, balance: U256, nonce: U256,
+        admin: &Address, storage_layout: Option<StorageLayout>,
     ) -> Self
     {
         OverlayAccount {
@@ -269,7 +271,7 @@ impl OverlayAccount {
         self.is_removed_contract && self.as_account().is_default()
     }
 
-    pub fn address(&self) -> &Address { &self.address }
+    pub fn address(&self) -> &AddressWithSpace { &self.address }
 
     pub fn balance(&self) -> &U256 { &self.balance }
 
@@ -280,6 +282,7 @@ impl OverlayAccount {
         upper_bound: &U256,
     )
     {
+        self.address.assert_native();
         self.sponsor_info.sponsor_for_gas = *sponsor;
         self.sponsor_info.sponsor_balance_for_gas = *sponsor_balance;
         self.sponsor_info.sponsor_gas_bound = *upper_bound;
@@ -288,31 +291,42 @@ impl OverlayAccount {
     pub fn set_sponsor_for_collateral(
         &mut self, sponsor: &Address, sponsor_balance: &U256,
     ) {
+        self.address.assert_native();
         self.sponsor_info.sponsor_for_collateral = *sponsor;
         self.sponsor_info.sponsor_balance_for_collateral = *sponsor_balance;
     }
 
-    pub fn admin(&self) -> &Address { &self.admin }
+    pub fn admin(&self) -> &Address {
+        self.address.assert_native();
+        &self.admin
+    }
 
     pub fn sub_sponsor_balance_for_gas(&mut self, by: &U256) {
+        self.address.assert_native();
         assert!(self.sponsor_info.sponsor_balance_for_gas >= *by);
         self.sponsor_info.sponsor_balance_for_gas -= *by;
     }
 
     pub fn add_sponsor_balance_for_gas(&mut self, by: &U256) {
+        self.address.assert_native();
         self.sponsor_info.sponsor_balance_for_gas += *by;
     }
 
     pub fn sub_sponsor_balance_for_collateral(&mut self, by: &U256) {
+        self.address.assert_native();
         assert!(self.sponsor_info.sponsor_balance_for_collateral >= *by);
         self.sponsor_info.sponsor_balance_for_collateral -= *by;
     }
 
     pub fn add_sponsor_balance_for_collateral(&mut self, by: &U256) {
+        self.address.assert_native();
         self.sponsor_info.sponsor_balance_for_collateral += *by;
     }
 
-    pub fn set_admin(&mut self, admin: &Address) { self.admin = admin.clone(); }
+    pub fn set_admin(&mut self, admin: &Address) {
+        self.address.assert_native();
+        self.admin = admin.clone();
+    }
 
     pub fn check_commission_privilege<StateDbStorage: StorageStateTrait>(
         &self, db: &StateDbGeneric<StateDbStorage>, contract_address: &Address,
@@ -674,21 +688,22 @@ impl OverlayAccount {
     fn get_and_cache_storage<StateDbStorage: StorageStateTrait>(
         storage_value_read_cache: &mut HashMap<Vec<u8>, U256>,
         storage_owner_lv2_write_cache: &mut HashMap<Vec<u8>, Option<Address>>,
-        db: &StateDbGeneric<StateDbStorage>, address: &Address, key: &[u8],
-        cache_ownership: bool,
+        db: &StateDbGeneric<StateDbStorage>, address: &AddressWithSpace,
+        key: &[u8], cache_ownership: bool,
     ) -> DbResult<U256>
     {
         assert!(!storage_owner_lv2_write_cache.contains_key(key));
         if let Some(value) = db.get::<StorageValue>(
-            StorageKey::new_storage_key(address, key.as_ref()),
+            StorageKey::new_storage_key(&address.address, key.as_ref())
+                .space(address.space),
         )? {
             storage_value_read_cache.insert(key.to_vec(), value.value);
-            if cache_ownership {
+            if cache_ownership && address.space == Space::Native {
                 storage_owner_lv2_write_cache.insert(
                     key.to_vec(),
                     Some(match value.owner {
                         Some(owner) => owner,
-                        None => *address,
+                        None => address.address,
                     }),
                 );
             }
@@ -812,7 +827,8 @@ impl OverlayAccount {
     }
 
     pub fn commit<StateDbStorage: StorageStateTrait>(
-        &mut self, state: &mut StateGeneric<StateDbStorage>, address: &Address,
+        &mut self, state: &mut StateGeneric<StateDbStorage>,
+        address: &AddressWithSpace,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()>
     {
@@ -841,7 +857,8 @@ impl OverlayAccount {
         for (k, v) in Arc::make_mut(&mut self.storage_value_write_cache).drain()
         {
             let address_key =
-                StorageKey::new_storage_key(&self.address, k.as_ref());
+                StorageKey::new_storage_key(&self.address.address, k.as_ref())
+                    .space(self.address.space);
             match v.is_zero() {
                 true => {
                     state.db.delete(address_key, debug_record.as_deref_mut())?
@@ -856,7 +873,9 @@ impl OverlayAccount {
                         address_key,
                         &StorageValue {
                             value: v,
-                            owner: if owner == self.address {
+                            owner: if owner == self.address.address
+                                || self.address.space == Space::Ethereum
+                            {
                                 None
                             } else {
                                 Some(owner)
@@ -869,8 +888,11 @@ impl OverlayAccount {
         }
 
         if let Some(code_info) = self.code.as_ref() {
-            let storage_key =
-                StorageKey::new_code_key(&self.address, &self.code_hash);
+            let storage_key = StorageKey::new_code_key(
+                &self.address.address,
+                &self.code_hash,
+            )
+            .space(self.address.space);
             state.db.set::<CodeInfo>(
                 storage_key,
                 code_info,
@@ -879,7 +901,9 @@ impl OverlayAccount {
         }
 
         if let Some(deposit_list) = self.deposit_list.as_ref() {
-            let storage_key = StorageKey::new_deposit_list_key(&self.address);
+            let storage_key =
+                StorageKey::new_deposit_list_key(&self.address.address)
+                    .space(self.address.space);
             state.db.set::<DepositList>(
                 storage_key,
                 deposit_list,
@@ -888,7 +912,9 @@ impl OverlayAccount {
         }
 
         if let Some(vote_stake_list) = self.vote_stake_list.as_ref() {
-            let storage_key = StorageKey::new_vote_list_key(&self.address);
+            let storage_key =
+                StorageKey::new_vote_list_key(&self.address.address)
+                    .space(self.address.space);
             state.db.set::<VoteStakeList>(
                 storage_key,
                 vote_stake_list,
@@ -905,7 +931,7 @@ impl OverlayAccount {
         }
 
         state.db.set::<Account>(
-            StorageKey::new_account_key(address),
+            StorageKey::new_account_key(&address.address).space(address.space),
             &self.as_account(),
             debug_record,
         )?;
@@ -1048,15 +1074,18 @@ mod tests {
 
     #[test]
     fn new_overlay_account_is_default() {
-        let normal_addr =
-            Address::from_str("1000000000000000000000000000000000000000")
-                .unwrap();
-        let contract_addr =
-            Address::from_str("8000000000000000000000000000000000000000")
-                .unwrap();
-        let builtin_addr =
-            Address::from_str("0000000000000000000000000000000000000000")
-                .unwrap();
+        let normal_addr = AddressWithSpace::new_native(
+            &Address::from_str("1000000000000000000000000000000000000000")
+                .unwrap(),
+        );
+        let contract_addr = AddressWithSpace::new_native(
+            &Address::from_str("8000000000000000000000000000000000000000")
+                .unwrap(),
+        );
+        let builtin_addr = AddressWithSpace::new_native(
+            &Address::from_str("0000000000000000000000000000000000000000")
+                .unwrap(),
+        );
 
         test_account_is_default(&mut OverlayAccount::new_basic(
             &normal_addr,
@@ -1064,7 +1093,7 @@ mod tests {
             U256::zero(),
         ));
         test_account_is_default(&mut OverlayAccount::new_contract(
-            &contract_addr,
+            &contract_addr.address,
             U256::zero(),
             U256::zero(),
             /* storage_layout = */ None,

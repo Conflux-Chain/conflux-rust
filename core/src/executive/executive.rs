@@ -31,7 +31,10 @@ use cfx_state::{
     CollateralCheckResult, StateTrait, SubstateTrait,
 };
 use cfx_statedb::Result as DbResult;
-use cfx_types::{address_util::AddressUtil, Address, H256, U256, U512, U64};
+use cfx_types::{
+    address_util::AddressUtil, Address, AddressWithSpace, Space, H256, U256,
+    U512, U64,
+};
 use primitives::{
     receipt::StorageChange,
     storage::STORAGE_LAYOUT_REGULAR_V0,
@@ -46,12 +49,13 @@ use std::{
 
 /// Calculate new contract address.
 pub fn contract_address(
-    address_scheme: CreateContractAddress, block_number: U64, sender: &Address,
-    nonce: &U256, code: &[u8],
-) -> (Address, Option<H256>)
+    address_scheme: CreateContractAddress, block_number: U64,
+    sender: &AddressWithSpace, nonce: &U256, code: &[u8],
+) -> (AddressWithSpace, Option<H256>)
 {
+    // TODO: EVM core: different contract rule
     let code_hash = keccak(code);
-    match address_scheme {
+    let (address, code_hash) = match address_scheme {
         CreateContractAddress::FromBlockNumberSenderNonceAndCodeHash => {
             let mut buffer = [0u8; 1 + 8 + 20 + 32 + 32];
             let (lead_bytes, rest) = buffer.split_at_mut(1);
@@ -64,7 +68,7 @@ pub fn contract_address(
             // up unused user account in future.
             lead_bytes[0] = 0x0;
             block_number.to_little_endian(block_number_bytes);
-            sender_bytes.copy_from_slice(&sender[..]);
+            sender_bytes.copy_from_slice(&sender.address[..]);
             nonce.to_little_endian(nonce_bytes);
             code_hash_bytes.copy_from_slice(&code_hash[..]);
             // In Conflux, we use the first four bits to indicate the type of
@@ -80,7 +84,7 @@ pub fn contract_address(
             // This is required to enable us to clean up unused user account in
             // future.
             buffer[0] = 0x0;
-            buffer[1..(1 + 20)].copy_from_slice(&sender[..]);
+            buffer[1..(1 + 20)].copy_from_slice(&sender.address[..]);
             nonce.to_little_endian(&mut buffer[(1 + 20)..(1 + 20 + 32)]);
             buffer[(1 + 20 + 32)..].copy_from_slice(&code_hash[..]);
             // In Conflux, we use the first four bits to indicate the type of
@@ -93,7 +97,7 @@ pub fn contract_address(
         CreateContractAddress::FromSenderSaltAndCodeHash(salt) => {
             let mut buffer = [0u8; 1 + 20 + 32 + 32];
             buffer[0] = 0xff;
-            buffer[1..(1 + 20)].copy_from_slice(&sender[..]);
+            buffer[1..(1 + 20)].copy_from_slice(&sender.address[..]);
             buffer[(1 + 20)..(1 + 20 + 32)].copy_from_slice(&salt[..]);
             buffer[(1 + 20 + 32)..].copy_from_slice(&code_hash[..]);
             // In Conflux, we use the first bit to indicate the type of the
@@ -102,7 +106,8 @@ pub fn contract_address(
             h.set_contract_type_bits();
             (h, Some(code_hash))
         }
-    }
+    };
+    return (AddressWithSpace::new(address, sender.space), code_hash);
 }
 
 /// Convert a finalization result into a VM message call result.
@@ -132,6 +137,7 @@ pub fn into_contract_create_result(
 ) -> vm::ContractCreateResult {
     match result {
         Ok(ExecutiveResult {
+            space,
             gas_left,
             apply_state: true,
             create_address,
@@ -141,7 +147,8 @@ pub fn into_contract_create_result(
             // process_return.
             let address = create_address
                 .expect("ExecutiveResult for Create executive should be some.");
-            vm::ContractCreateResult::Created(address.clone(), gas_left)
+            let address = AddressWithSpace { address, space };
+            vm::ContractCreateResult::Created(address, gas_left)
         }
         Ok(ExecutiveResult {
             gas_left,
@@ -228,20 +235,24 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         let substate = Substate::new();
         // This logic is moved from function exec.
         let origin = OriginInfo::from(&params);
+        let code_address = AddressWithSpace {
+            address: params.code_address,
+            space: params.space,
+        };
 
         // if destination is builtin, try to execute it
         let kind = if let Some(builtin) =
             machine.builtin(&params.code_address, env.number)
         {
+            // Builtin is located for both Conflux Space and EVM Space.
             trace!("CallBuiltin");
             CallCreateExecutiveKind::CallBuiltin(builtin)
-        } else if let Some(internal) = machine
-            .internal_contracts()
-            .contract(&params.code_address, spec)
+        } else if let Some(internal) =
+            machine.internal_contracts().contract(&code_address, spec)
         {
             debug!(
                 "CallInternalContract: address={:?} data={:?}",
-                params.code_address, params.data
+                code_address, params.data
             );
             CallCreateExecutiveKind::CallInternalContract(internal)
         } else {
@@ -254,6 +265,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
             }
         };
         let context = LocalContext::new(
+            params.space,
             env,
             machine,
             spec,
@@ -294,6 +306,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         let substate = Substate::new();
 
         let context = LocalContext::new(
+            params.space,
             env,
             machine,
             spec,
@@ -355,10 +368,19 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         substate: &mut dyn SubstateTrait, account_start_nonce: U256,
     ) -> DbResult<()>
     {
+        let sender = AddressWithSpace {
+            address: params.sender,
+            space: params.space,
+        };
+        let receiver = AddressWithSpace {
+            address: params.address,
+            space: params.space,
+        };
+        // TODO: EVM core, special logic for cross space call.
         if let ActionValue::Transfer(val) = params.value {
             state.transfer_balance(
-                &params.sender,
-                &params.address,
+                &sender,
+                &receiver,
                 &val,
                 cleanup_mode(substate, &spec),
                 account_start_nonce,
@@ -374,17 +396,25 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         storage_layout: Option<StorageLayout>, contract_start_nonce: U256,
     ) -> DbResult<()>
     {
+        let sender = AddressWithSpace {
+            address: params.sender,
+            space: params.space,
+        };
+        let receiver = AddressWithSpace {
+            address: params.address,
+            space: params.space,
+        };
         if let ActionValue::Transfer(val) = params.value {
             // It is possible to first send money to a pre-calculated
             // contract address.
-            let prev_balance = state.balance(&params.address)?;
+            let prev_balance = state.balance(&receiver)?;
             state.sub_balance(
-                &params.sender,
+                &sender,
                 &val,
                 &mut cleanup_mode(substate, &spec),
             )?;
             state.new_contract_with_admin(
-                &params.address,
+                &receiver,
                 &params.original_sender,
                 val.saturating_add(prev_balance),
                 contract_start_nonce,
@@ -432,7 +462,10 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
             let mut substate = self.context.substate;
             state.collect_ownership_changed(&mut substate)?; /* only fail for db error. */
             if let Some(create_address) = self.create_address {
-                substate.contracts_created_mut().push(create_address);
+                substate.contracts_created_mut().push(AddressWithSpace::new(
+                    create_address,
+                    self.context.space,
+                ));
             }
 
             state.discard_checkpoint();
@@ -503,7 +536,10 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         state.checkpoint();
 
         let contract_address = self.get_recipient().clone();
-        callstack.push(contract_address, is_create);
+        callstack.push(
+            AddressWithSpace::new(contract_address, self.context.space),
+            is_create,
+        );
 
         // Pre execution: transfer value and init contract.
         let spec = self.context.spec;
@@ -720,6 +756,8 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
 /// The result contains more data than finalization result.
 #[derive(Debug)]
 pub struct ExecutiveResult {
+    /// Space
+    pub space: Space,
     /// Final amount of gas left.
     pub gas_left: U256,
     /// Apply execution state changes or revert them.
@@ -733,6 +771,7 @@ pub struct ExecutiveResult {
 impl Into<FinalizationResult> for ExecutiveResult {
     fn into(self) -> FinalizationResult {
         FinalizationResult {
+            space: self.space,
             gas_left: self.gas_left,
             apply_state: self.apply_state,
             return_data: self.return_data,
@@ -745,6 +784,7 @@ impl ExecutiveResult {
         result: FinalizationResult, create_address: Option<Address>,
     ) -> Self {
         ExecutiveResult {
+            space: result.space,
             gas_left: result.gas_left,
             apply_state: result.apply_state,
             return_data: result.return_data,
@@ -935,30 +975,34 @@ impl<
         let mut gas_sponsor_eligible = false;
         let mut storage_sponsor_eligible = false;
 
-        if let Action::Call(ref address) = tx.action {
-            if !spec.is_valid_address(address) {
-                return Ok(ExecutionOutcome::NotExecutedDrop(
-                    TxDropError::InvalidRecipientAddress(*address),
-                ));
-            }
-            if self.state.is_contract_with_code(address)? {
-                code_address = *address;
-                if self
-                    .state
-                    .check_commission_privilege(&code_address, &sender)?
-                {
-                    // No need to check for gas sponsor account existence.
-                    gas_sponsor_eligible = gas_cost
-                        <= U512::from(
-                            self.state.sponsor_gas_bound(&code_address)?,
-                        );
-                    storage_sponsor_eligible = self
-                        .state
-                        .sponsor_for_collateral(&code_address)?
-                        .is_some();
+        if sender.space == Space::Native {
+            if let Action::Call(ref address) = tx.action {
+                if !spec.is_valid_address(address) {
+                    return Ok(ExecutionOutcome::NotExecutedDrop(
+                        TxDropError::InvalidRecipientAddress(*address),
+                    ));
+                }
+                if self.state.is_contract_with_code(
+                    &AddressWithSpace::new_native(address),
+                )? {
+                    code_address = *address;
+                    if self.state.check_commission_privilege(
+                        &code_address,
+                        &sender.address,
+                    )? {
+                        // No need to check for gas sponsor account existence.
+                        gas_sponsor_eligible = gas_cost
+                            <= U512::from(
+                                self.state.sponsor_gas_bound(&code_address)?,
+                            );
+                        storage_sponsor_eligible = self
+                            .state
+                            .sponsor_for_collateral(&code_address)?
+                            .is_some();
+                    }
                 }
             }
-        };
+        }
 
         let code_address = code_address;
         let gas_sponsor_eligible = gas_sponsor_eligible;
@@ -1061,8 +1105,9 @@ impl<
                 &actual_gas_cost,
                 &mut cleanup_mode(&mut tx_substate, &spec),
             )?;
+            // TODO: EVM core: update for trace later.
             options.tracer.prepare_internal_transfer_action(
-                AddressPocket::Balance(sender.clone()),
+                AddressPocket::Balance(sender.address.clone()),
                 AddressPocket::GasPayment,
                 actual_gas_cost,
             );
@@ -1097,7 +1142,7 @@ impl<
 
         if !gas_sponsored {
             options.tracer.prepare_internal_transfer_action(
-                AddressPocket::Balance(sender),
+                AddressPocket::Balance(sender.address),
                 AddressPocket::GasPayment,
                 gas_cost,
             );
@@ -1124,7 +1169,7 @@ impl<
         let storage_owner = if storage_sponsored {
             code_address
         } else {
-            sender
+            sender.address
         };
 
         // No matter who pays the collateral, we only focuses on the storage
@@ -1132,7 +1177,8 @@ impl<
         let total_storage_limit = if eth_like_tx {
             U256::MAX
         } else {
-            self.state.collateral_for_storage(&sender)?
+            // TODO: EVM core: move out sponsor check.
+            self.state.collateral_for_storage(&sender.address)?
                 + minimum_drip_required_for_storage
         };
 
@@ -1154,11 +1200,13 @@ impl<
                 // not happen. Unless we enable account dust in
                 // future. We add this check just in case it
                 // helps in future.
-                if self.state.is_contract_with_code(&new_address)? {
+                if sender.space == Space::Native
+                    && self.state.is_contract_with_code(&new_address)?
+                {
                     self.state.revert_to_checkpoint();
                     return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                         ExecutionError::VmError(vm::Error::ConflictAddress(
-                            new_address.clone(),
+                            new_address.address.clone(),
                         )),
                         Executed::execution_error_fully_charged(
                             tx,
@@ -1171,11 +1219,12 @@ impl<
                 }
 
                 let params = ActionParams {
-                    code_address: new_address,
+                    space: sender.space,
+                    code_address: new_address.address,
                     code_hash: None,
-                    address: new_address,
-                    sender,
-                    original_sender: sender,
+                    address: new_address.address,
+                    sender: sender.address,
+                    original_sender: sender.address,
                     storage_owner,
                     gas: init_gas,
                     gas_price: tx.gas_price,
@@ -1189,17 +1238,19 @@ impl<
                 self.create(params, &mut substate, &mut options.tracer)?
             }
             Action::Call(ref address) => {
+                let address = AddressWithSpace::new(*address, sender.space);
                 let params = ActionParams {
-                    code_address: *address,
-                    address: *address,
-                    sender,
-                    original_sender: sender,
+                    space: sender.space,
+                    code_address: address.address,
+                    address: address.address,
+                    sender: sender.address,
+                    original_sender: sender.address,
                     storage_owner,
                     gas: init_gas,
                     gas_price: tx.gas_price,
                     value: ActionValue::Transfer(tx.value),
-                    code: self.state.code(address)?,
-                    code_hash: self.state.code_hash(address)?,
+                    code: self.state.code(&address)?,
+                    code_hash: self.state.code_hash(&address)?,
                     data: Some(tx.data.clone()),
                     call_type: CallType::Call,
                     create_type: CreateType::None,
@@ -1214,16 +1265,20 @@ impl<
                 // TODO: in fact, we don't need collect again here. But this is
                 // only the performance optimization and we put it in the later
                 // PR.
-                self.state
-                    .collect_and_settle_collateral(
-                        &sender,
-                        &total_storage_limit,
-                        &mut substate,
-                        &mut options.tracer,
-                        self.spec.account_start_nonce,
-                    )?
-                    .into_vm_result()
-                    .and(Ok(finalize_res))
+                if sender.space == Space::Native {
+                    self.state
+                        .collect_and_settle_collateral(
+                            &sender.address,
+                            &total_storage_limit,
+                            &mut substate,
+                            &mut options.tracer,
+                            self.spec.account_start_nonce,
+                        )?
+                        .into_vm_result()
+                        .and(Ok(finalize_res))
+                } else {
+                    Ok(finalize_res)
+                }
             });
             let out = match &res {
                 Ok(res) => {
@@ -1268,7 +1323,7 @@ impl<
     // TODO: maybe we can find a better interface for doing the suicide
     // post-processing.
     fn kill_process<T: Tracer>(
-        &mut self, suicides: &HashSet<Address>, tracer: &mut T,
+        &mut self, suicides: &HashSet<AddressWithSpace>, tracer: &mut T,
     ) -> DbResult<Substate> {
         let mut substate = Substate::new();
         for address in suicides {
@@ -1284,10 +1339,12 @@ impl<
                 );
             }
 
-            self.state.record_storage_and_whitelist_entries_release(
-                address,
-                &mut substate,
-            )?;
+            if address.space == Space::Native {
+                self.state.record_storage_and_whitelist_entries_release(
+                    &address.address,
+                    &mut substate,
+                )?;
+            }
         }
 
         let res = self.state.settle_collateral_for_all(
@@ -1298,7 +1355,11 @@ impl<
         // The storage recycling process should never occupy new collateral.
         assert_eq!(res, CollateralCheckResult::Valid);
 
-        for contract_address in suicides {
+        for contract_address in suicides
+            .iter()
+            .filter(|x| x.space == Space::Native)
+            .map(|x| &x.address)
+        {
             let sponsor_for_gas =
                 self.state.sponsor_for_gas(contract_address)?;
             let sponsor_for_collateral =
@@ -1316,7 +1377,7 @@ impl<
                     sponsor_balance_for_gas.clone(),
                 );
                 self.state.add_balance(
-                    sponsor_address,
+                    &AddressWithSpace::new_native(sponsor_address),
                     &sponsor_balance_for_gas,
                     cleanup_mode(&mut substate, self.spec),
                     self.spec.account_start_nonce,
@@ -1334,7 +1395,7 @@ impl<
                 );
 
                 self.state.add_balance(
-                    sponsor_address,
+                    &AddressWithSpace::new_native(sponsor_address),
                     &sponsor_balance_for_collateral,
                     cleanup_mode(&mut substate, self.spec),
                     self.spec.account_start_nonce,
@@ -1347,25 +1408,27 @@ impl<
         }
 
         for contract_address in suicides {
+            if contract_address.space == Space::Native {
+                let contract_address = contract_address.address;
+                let staking_balance =
+                    self.state.staking_balance(&contract_address)?;
+                tracer.prepare_internal_transfer_action(
+                    AddressPocket::StakingBalance(contract_address),
+                    AddressPocket::MintBurn,
+                    staking_balance.clone(),
+                );
+                self.state.subtract_total_issued(staking_balance);
+            }
+
             let contract_balance = self.state.balance(contract_address)?;
-            let staking_balance =
-                self.state.staking_balance(contract_address)?;
-
             tracer.prepare_internal_transfer_action(
-                AddressPocket::StakingBalance(*contract_address),
-                AddressPocket::MintBurn,
-                staking_balance.clone(),
-            );
-
-            tracer.prepare_internal_transfer_action(
-                AddressPocket::Balance(*contract_address),
+                AddressPocket::Balance(contract_address.address),
                 AddressPocket::MintBurn,
                 contract_balance.clone(),
             );
 
             self.state.remove_contract(contract_address)?;
-            self.state
-                .subtract_total_issued(contract_balance + staking_balance);
+            self.state.subtract_total_issued(contract_balance);
         }
 
         Ok(substate)
@@ -1411,7 +1474,7 @@ impl<
         } else {
             tracer.prepare_internal_transfer_action(
                 AddressPocket::GasPayment,
-                AddressPocket::Balance(tx.sender()),
+                AddressPocket::Balance(tx.sender().address),
                 refund_value.clone(),
             );
             self.state.add_balance(
@@ -1474,7 +1537,7 @@ impl<
                     affected_address.sort();
                     for address in affected_address {
                         let (inc, sub) =
-                            substate.get_collateral_change(address);
+                            substate.get_collateral_change(&address);
                         if inc > 0 {
                             storage_collateralized.push(StorageChange {
                                 address: *address,

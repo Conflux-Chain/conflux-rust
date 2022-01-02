@@ -19,7 +19,7 @@ use cfx_parameters::staking::{
     code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
 use cfx_state::{StateTrait, SubstateMngTrait, SubstateTrait};
-use cfx_types::{Address, H256, U256};
+use cfx_types::{Address, AddressWithSpace, Space, H256, U256};
 use primitives::transaction::UNSIGNED_SENDER;
 use std::sync::Arc;
 
@@ -69,6 +69,7 @@ pub struct Context<
 /// executive. It will be never change during the lifetime of its corresponding
 /// executive.
 pub struct LocalContext<'a, Substate: SubstateTrait> {
+    pub space: Space,
     pub env: &'a Env,
     pub depth: usize,
     pub is_create: bool,
@@ -81,12 +82,13 @@ pub struct LocalContext<'a, Substate: SubstateTrait> {
 
 impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
     pub fn new(
-        env: &'a Env, machine: &'a Machine, spec: &'a Spec, depth: usize,
-        origin: OriginInfo, substate: Substate, is_create: bool,
+        space: Space, env: &'a Env, machine: &'a Machine, spec: &'a Spec,
+        depth: usize, origin: OriginInfo, substate: Substate, is_create: bool,
         static_flag: bool,
     ) -> Self
     {
         LocalContext {
+            space,
             env,
             depth,
             origin,
@@ -121,13 +123,21 @@ impl<
     > ContextTrait for Context<'a, 'b, Substate, State>
 {
     fn storage_at(&self, key: &Vec<u8>) -> vm::Result<U256> {
+        let caller = AddressWithSpace {
+            address: self.local_part.origin.address,
+            space: self.local_part.space,
+        };
         self.local_part
             .substate
-            .storage_at(self.state, &self.local_part.origin.address, key)
+            .storage_at(self.state, &caller, key)
             .map_err(Into::into)
     }
 
     fn set_storage(&mut self, key: Vec<u8>, value: U256) -> vm::Result<()> {
+        let caller = AddressWithSpace {
+            address: self.local_part.origin.address,
+            space: self.local_part.space,
+        };
         if self.is_static_or_reentrancy() {
             Err(vm::Error::MutableCallInStaticContext)
         } else {
@@ -135,7 +145,7 @@ impl<
                 .substate
                 .set_storage(
                     self.state,
-                    &self.local_part.origin.address,
+                    &caller,
                     key,
                     value,
                     self.local_part.origin.storage_owner,
@@ -145,11 +155,19 @@ impl<
     }
 
     fn exists(&self, address: &Address) -> vm::Result<bool> {
-        self.state.exists(address).map_err(Into::into)
+        let address = AddressWithSpace {
+            address: *address,
+            space: self.local_part.space,
+        };
+        self.state.exists(&address).map_err(Into::into)
     }
 
     fn exists_and_not_null(&self, address: &Address) -> vm::Result<bool> {
-        self.state.exists_and_not_null(address).map_err(Into::into)
+        let address = AddressWithSpace {
+            address: *address,
+            space: self.local_part.space,
+        };
+        self.state.exists_and_not_null(&address).map_err(Into::into)
     }
 
     fn origin_balance(&self) -> vm::Result<U256> {
@@ -158,7 +176,11 @@ impl<
     }
 
     fn balance(&self, address: &Address) -> vm::Result<U256> {
-        self.state.balance(address).map_err(Into::into)
+        let address = AddressWithSpace {
+            address: *address,
+            space: self.local_part.space,
+        };
+        self.state.balance(&address).map_err(Into::into)
     }
 
     fn blockhash(&mut self, number: &U256) -> H256 {
@@ -178,21 +200,29 @@ impl<
         ::std::result::Result<ContractCreateResult, TrapKind>,
     >
     {
+        let caller = AddressWithSpace {
+            address: self.local_part.origin.address,
+            space: self.local_part.space,
+        };
+
         let create_type = CreateType::from_address_scheme(&address_scheme);
         // create new contract address
-        let (address, code_hash) = self::contract_address(
+        let (address_with_space, code_hash) = self::contract_address(
             address_scheme,
             self.local_part.env.number.into(),
-            &self.local_part.origin.address,
-            &self.state.nonce(&self.local_part.origin.address)?,
+            &caller,
+            &self.state.nonce(&caller)?,
             &code,
         );
+
+        let address = address_with_space.address;
 
         // For a contract address already with code, we do not allow overlap the
         // address. This should generally not happen. Unless we enable
         // account dust in future. We add this check just in case it
         // helps in future.
-        if self.state.is_contract_with_code(&address)? {
+        if self.state.is_contract_with_code(&address_with_space)? {
+            // TODO: EVM core: remove address conflict.
             debug!("Contract address conflict!");
             let err = Error::ConflictAddress(address.clone());
             return Ok(Ok(ContractCreateResult::Failed(err)));
@@ -200,6 +230,7 @@ impl<
 
         // prepare the params
         let params = ActionParams {
+            space: self.local_part.space,
             code_address: address.clone(),
             address: address.clone(),
             sender: self.local_part.origin.address.clone(),
@@ -221,7 +252,7 @@ impl<
                 || params.sender != UNSIGNED_SENDER
             {
                 self.state.inc_nonce(
-                    &self.local_part.origin.address,
+                    &caller,
                     // The sender of a CREATE call is guaranteed to exist,
                     // therefore the start_nonce below
                     // doesn't matter.
@@ -241,21 +272,27 @@ impl<
     {
         trace!(target: "context", "call");
 
+        let code_address_with_space = AddressWithSpace {
+            address: *code_address,
+            space: self.local_part.space,
+        };
+
         let (code, code_hash) = if let Some(contract) = self
             .local_part
             .machine
             .internal_contracts()
-            .contract(code_address, self.local_part.spec)
+            .contract(&code_address_with_space, self.local_part.spec)
         {
             (Some(contract.code()), Some(contract.code_hash()))
         } else {
             (
-                self.state.code(code_address)?,
-                self.state.code_hash(code_address)?,
+                self.state.code(&code_address_with_space)?,
+                self.state.code_hash(&code_address_with_space)?,
             )
         };
 
         let mut params = ActionParams {
+            space: self.local_part.space,
             sender: *sender_address,
             address: *receive_address,
             value: ActionValue::Apparent(self.local_part.origin.value),
@@ -280,41 +317,55 @@ impl<
     }
 
     fn extcode(&self, address: &Address) -> vm::Result<Option<Arc<Bytes>>> {
+        let address = AddressWithSpace {
+            address: *address,
+            space: self.local_part.space,
+        };
         if let Some(contract) = self
             .local_part
             .machine
             .internal_contracts()
-            .contract(address, self.local_part.spec)
+            .contract(&address, self.local_part.spec)
         {
             Ok(Some(contract.code()))
         } else {
-            Ok(self.state.code(address)?)
+            Ok(self.state.code(&address)?)
         }
     }
 
     fn extcodehash(&self, address: &Address) -> vm::Result<Option<H256>> {
+        let address = AddressWithSpace {
+            address: *address,
+            space: self.local_part.space,
+        };
+
         if let Some(contract) = self
             .local_part
             .machine
             .internal_contracts()
-            .contract(address, self.local_part.spec)
+            .contract(&address, self.local_part.spec)
         {
             Ok(Some(contract.code_hash()))
         } else {
-            Ok(self.state.code_hash(address)?)
+            Ok(self.state.code_hash(&address)?)
         }
     }
 
     fn extcodesize(&self, address: &Address) -> vm::Result<Option<usize>> {
+        let address = AddressWithSpace {
+            address: *address,
+            space: self.local_part.space,
+        };
+
         if let Some(contract) = self
             .local_part
             .machine
             .internal_contracts()
-            .contract(address, self.local_part.spec)
+            .contract(&address, self.local_part.spec)
         {
             Ok(Some(contract.code_size()))
         } else {
-            Ok(self.state.code_size(address)?)
+            Ok(self.state.code_size(&address)?)
         }
     }
 
@@ -339,6 +390,11 @@ impl<
         self, gas: &U256, data: &ReturnData, apply_state: bool,
     ) -> vm::Result<U256>
     where Self: Sized {
+        let caller = AddressWithSpace {
+            address: self.local_part.origin.address,
+            space: self.local_part.space,
+        };
+
         match self.local_part.is_create {
             false => Ok(*gas),
             true if apply_state => {
@@ -367,7 +423,7 @@ impl<
                 );
 
                 self.state.init_code(
-                    &self.local_part.origin.address,
+                    &caller,
                     data.to_vec(),
                     self.local_part.origin.storage_owner,
                 )?;
@@ -387,9 +443,16 @@ impl<
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
+        let contract_address = AddressWithSpace::new(
+            self.local_part.origin.address,
+            self.local_part.space,
+        );
+        let refund_address =
+            AddressWithSpace::new(*refund_address, self.local_part.space);
+
         suicide_impl(
-            &self.local_part.origin.address,
-            refund_address,
+            &contract_address,
+            &refund_address,
             self.state,
             &self.local_part.spec,
             &mut self.local_part.substate,
@@ -401,6 +464,8 @@ impl<
     fn spec(&self) -> &Spec { &self.local_part.spec }
 
     fn env(&self) -> &Env { &self.local_part.env }
+
+    fn space(&self) -> Space { self.local_part.space }
 
     fn chain_id(&self) -> u64 {
         self.local_part
@@ -473,7 +538,9 @@ mod tests {
     use cfx_storage::{
         new_storage_manager_for_testing, tests::FakeStateManager,
     };
-    use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+    use cfx_types::{
+        address_util::AddressUtil, Address, AddressWithSpace, Space, H256, U256,
+    };
     use std::str::FromStr;
 
     fn get_test_origin() -> OriginInfo {
@@ -540,7 +607,11 @@ mod tests {
             };
             setup
                 .state
-                .init_code(&Address::zero(), vec![], Address::zero())
+                .init_code(
+                    &AddressWithSpace::zero_native(),
+                    vec![],
+                    Address::zero(),
+                )
                 .ok();
 
             setup
@@ -555,6 +626,7 @@ mod tests {
         let mut callstack = CallStackInfo::new();
 
         let mut lctx = LocalContext::new(
+            Space::Native,
             &setup.env,
             &setup.machine,
             &setup.spec,
@@ -577,6 +649,7 @@ mod tests {
         let mut callstack = CallStackInfo::new();
 
         let mut lctx = LocalContext::new(
+            Space::Native,
             &setup.env,
             &setup.machine,
             &setup.spec,
@@ -697,6 +770,7 @@ mod tests {
 
         {
             let mut lctx = LocalContext::new(
+                Space::Native,
                 &setup.env,
                 &setup.machine,
                 &setup.spec,
@@ -725,16 +799,18 @@ mod tests {
         let mut contract_address = Address::zero();
         contract_address.set_contract_type_bits();
         origin.address = contract_address;
+        let contract_address_w_space =
+            AddressWithSpace::new_native(&contract_address);
         state
             .new_contract_with_code(
-                &contract_address,
+                &contract_address_w_space,
                 U256::zero(),
                 U256::one(),
             )
             .expect(&concat!(file!(), ":", line!(), ":", column!()));
         state
             .init_code(
-                &contract_address,
+                &contract_address_w_space,
                 // Use empty code in test because we don't have storage
                 // collateral balance.
                 "".into(),
@@ -744,6 +820,7 @@ mod tests {
 
         {
             let mut lctx = LocalContext::new(
+                Space::Native,
                 &setup.env,
                 &setup.machine,
                 &setup.spec,

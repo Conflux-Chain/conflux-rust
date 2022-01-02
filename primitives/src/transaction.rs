@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{bytes::Bytes, hash::keccak};
-use cfx_types::{Address, BigEndianHash, H160, H256, U256};
+use cfx_types::{Address, AddressWithSpace, BigEndianHash, H160, H256, U256};
 use keylib::{
     self, public_to_address, recover, verify_public, Public, Secret, Signature,
 };
@@ -290,7 +290,8 @@ impl Transaction {
 
     /// Specify the sender; this won't survive the serialize/deserialize
     /// process, but can be cloned.
-    pub fn fake_sign(self, from: Address) -> SignedTransaction {
+    pub fn fake_sign(self, from: AddressWithSpace) -> SignedTransaction {
+        // TODO: EVM core: for EVM tx
         SignedTransaction {
             transaction: TransactionWithSignature {
                 transaction: TransactionWithSignatureSerializePart {
@@ -303,7 +304,7 @@ impl Transaction {
                 rlp_size: None,
             }
             .compute_hash(),
-            sender: from,
+            sender: from.address,
             public: None,
         }
     }
@@ -529,7 +530,10 @@ impl SignedTransaction {
     }
 
     /// Returns transaction sender.
-    pub fn sender(&self) -> Address { self.sender }
+    pub fn sender(&self) -> AddressWithSpace {
+        // TODO: EVM core: sender from EVM core tx.
+        AddressWithSpace::new_native(&self.sender)
+    }
 
     pub fn nonce(&self) -> U256 { self.transaction.nonce }
 
