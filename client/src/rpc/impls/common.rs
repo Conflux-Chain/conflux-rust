@@ -437,7 +437,7 @@ impl RpcImpl {
         // TODO: check if address is not in reserved address space.
         // We pass "num" into next_nonce() function for the error reporting
         // rpc_param_name because the user passed epoch number could be invalid.
-        consensus_graph.next_nonce(address.hex_address, num.into(), "num")
+        consensus_graph.next_nonce(address.hex_address.with_native_space(), num.into(), "num")
     }
 }
 

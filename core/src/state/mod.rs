@@ -233,6 +233,7 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
                 }) {
                     let storage_value =
                         rlp::decode::<StorageValue>(value.as_ref())?;
+                    // Must native space
                     let storage_owner =
                         storage_value.owner.as_ref().unwrap_or(address);
                     substate.record_storage_release(
