@@ -12,7 +12,7 @@ use cfx_storage::{
     storage_db::{KeyValueDbTraitRead, SnapshotDbManagerTrait, SnapshotInfo},
     DeltaMptIterator, Error as StorageError, StateIndex, StorageConfiguration,
 };
-use cfx_types::{Address, AddressWithSpace, H256};
+use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, H256};
 use cfxcore::sync::Error;
 use clap::{App, Arg, ArgMatches};
 use log::LevelFilter;
