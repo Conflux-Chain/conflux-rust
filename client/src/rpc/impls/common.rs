@@ -33,9 +33,7 @@ use parking_lot::{Condvar, Mutex};
 use crate::rpc::types::pos::{Block as RpcPosBlock, Decision};
 use cfx_addr::Network;
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-use cfx_types::{
-    Address, AddressSpaceUtil, H160, H256, H520, U128, U256, U512, U64,
-};
+use cfx_types::{Address, AddressSpaceUtil, H160, H256, H520, Space, U128, U256, U512, U64};
 use cfxcore::{
     consensus::pos_handler::PosVerifier, rpc_errors::invalid_params_check,
     spec::genesis::register_transaction, BlockDataManager, ConsensusGraph,
@@ -54,7 +52,7 @@ use network::{
     NetworkService, SessionDetails, UpdateNodeOperation,
 };
 use primitives::{
-    transaction::TransactionType, Account, Action, SignedTransaction,
+     Account, Action, SignedTransaction,
 };
 
 fn grouped_txs<T, F>(
@@ -872,7 +870,7 @@ impl RpcImpl {
                     rpc_error
                 })?;
             let required_storage_collateral =
-                if tx.transaction.transaction_type() == TransactionType::Normal
+                if tx.transaction.space() == Space::Native
                 {
                     U256::from(tx.storage_limit)
                         * *DRIPS_PER_STORAGE_COLLATERAL_UNIT

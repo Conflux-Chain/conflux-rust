@@ -986,7 +986,7 @@ impl TransactionPoolInner {
         // Compute sponsored_gas for `transaction`
         if let Action::Call(callee) = &transaction.action {
             // FIXME: This is a quick fix for performance issue.
-            if callee.maybe_contract_address() {
+            if callee.is_contract_address() {
                 if let Some(sponsor_info) =
                     account_cache.get_sponsor_info(callee).map_err(|e| {
                         format!(

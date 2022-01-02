@@ -448,7 +448,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         &self, address: &AddressWithSpace,
     ) -> DbResult<bool> {
         if address.space == Space::Native
-            && !address.address.maybe_contract_address()
+            && !address.address.is_contract_address()
         {
             return Ok(false);
         }

@@ -38,7 +38,7 @@ use cfx_types::{
 use primitives::{
     receipt::StorageChange,
     storage::STORAGE_LAYOUT_REGULAR_V0,
-    transaction::{Action, TransactionType},
+    transaction::{Action},
     SignedTransaction, StorageLayout,
 };
 use std::{
@@ -939,9 +939,9 @@ impl<
         }
 
         // Validate transaction epoch height.
-        let eth_like_tx = spec.cip72
-            && tx.transaction_type() == TransactionType::EthereumLike;
-        if !eth_like_tx
+        let eth_space_tx = spec.cip90
+            && tx.space() == Space::Ethereum;
+        if !eth_space_tx
             && VerificationConfig::check_transaction_epoch_bound(
                 tx,
                 self.env.epoch_height,
@@ -1016,7 +1016,7 @@ impl<
         // storage limit will be regarded as u64::MAX. The EthereumLike
         // transaction should bypass the balance for storage check in
         // pre-execution.
-        let minimum_drip_required_for_storage = if eth_like_tx {
+        let minimum_drip_required_for_storage = if eth_space_tx {
             U256::zero()
         } else {
             U256::from(tx.storage_limit) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
@@ -1172,7 +1172,7 @@ impl<
 
         // No matter who pays the collateral, we only focuses on the storage
         // limit of sender.
-        let total_storage_limit = if eth_like_tx {
+        let total_storage_limit = if eth_space_tx {
             U256::MAX
         } else {
             // TODO: EVM core: move out sponsor check.

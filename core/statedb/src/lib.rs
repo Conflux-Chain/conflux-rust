@@ -422,7 +422,7 @@ mod impls {
                     {
                         // Contract initialization must set StorageLayout.
                         if (address_bytes.is_builtin_address()
-                            || address_bytes.maybe_contract_address())
+                            || address_bytes.is_contract_address())
                             && v.original_value.is_none()
                         {
                             let result = Self::load_storage_layout(
