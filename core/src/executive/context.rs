@@ -264,7 +264,7 @@ impl<
             }
         }
 
-        return Ok(Err(TrapKind::Create(params, address)));
+        return Ok(Err(TrapKind::Create(params)));
     }
 
     fn call(
@@ -514,6 +514,7 @@ impl<
             state: self.state,
             substate: &mut self.local_part.substate,
             static_flag: self.local_part.static_flag,
+            depth: self.local_part.depth,
         }
     }
 }
