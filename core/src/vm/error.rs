@@ -30,7 +30,7 @@ use std::fmt;
 #[derive(Debug)]
 pub enum TrapKind {
     Call(ActionParams),
-    Create(ActionParams, Address),
+    Create(ActionParams),
 }
 
 pub enum TrapError<Call, Create> {

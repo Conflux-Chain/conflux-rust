@@ -4,6 +4,7 @@
 
 mod admin;
 mod context;
+mod cross_space;
 mod future;
 #[allow(unused)]
 mod pos;
@@ -26,19 +27,21 @@ mod macros {
     pub use super::super::{
         activate_at::{BlockNumber, IsActive},
         function::{
-            InterfaceTrait, PreExecCheckConfTrait, SimpleExecutionTrait,
-            UpfrontPaymentTrait,
+            ExecutionTrait, InterfaceTrait, PreExecCheckConfTrait,
+            SimpleExecutionTrait, UpfrontPaymentTrait,
         },
         InternalContractTrait, SolidityEventTrait, SolidityFunctionTrait,
     };
+
+    pub use cfx_statedb::Result as DbResult;
 
     pub use crate::spec::CommonParams;
 }
 
 pub(super) use self::pos::{IncreaseStakeEvent, RegisterEvent, RetireEvent};
 pub use self::{
-    admin::AdminControl, context::Context, pos::PoSRegister,
-    sponsor::SponsorWhitelistControl, staking::Staking,
+    admin::AdminControl, context::Context, cross_space::CrossSpaceCall,
+    pos::PoSRegister, sponsor::SponsorWhitelistControl, staking::Staking,
 };
 
 use super::{
@@ -199,5 +202,11 @@ pub fn all_internal_contracts() -> Vec<Box<dyn InternalContractTrait>> {
         Box::new(future::AntiReentrancyConfig::instance()),
         Box::new(Context::instance()),
         Box::new(PoSRegister::instance()),
+        Box::new(CrossSpaceCall::instance()),
+        Box::new(future::Reserved7::instance()),
+        Box::new(future::Reserved8::instance()),
+        Box::new(future::Reserved9::instance()),
+        Box::new(future::Reserved10::instance()),
+        Box::new(future::Reserved11::instance()),
     ]
 }

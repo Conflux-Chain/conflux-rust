@@ -63,7 +63,7 @@ impl UpfrontPaymentTrait for Register {
     fn upfront_gas_payment(
         &self, inputs: &(H256, u64, BlsPubKey, VrfPubKey, BlsProof),
         _params: &ActionParams, context: &InternalRefContext,
-    ) -> U256
+    ) -> DbResult<U256>
     {
         let (_identifier, _vote_power, bls_pubkey, vrf_pubkey, _bls_proof) =
             inputs;
@@ -81,13 +81,13 @@ impl UpfrontPaymentTrait for Register {
             (bls_pubkey.len() + vrf_pubkey.len() + 31) / 32 * spec.sha3_gas;
         let pubkey_verify_gas = 50_000;
 
-        return U256::from(
+        return Ok(U256::from(
             io_gas
                 + register_log_gas
                 + increase_stake_log_gas
                 + pubkey_hash_gas
                 + pubkey_verify_gas,
-        );
+        ));
     }
 }
 impl SimpleExecutionTrait for Register {
@@ -125,7 +125,7 @@ impl UpfrontPaymentTrait for IncreaseStake {
     fn upfront_gas_payment(
         &self, _: &Self::Input, _params: &ActionParams,
         context: &InternalRefContext,
-    ) -> U256
+    ) -> DbResult<U256>
     {
         let spec = context.spec;
         let log_gas =
@@ -133,7 +133,7 @@ impl UpfrontPaymentTrait for IncreaseStake {
         let io_gas =
             2 * spec.sstore_reset_gas + 3 * spec.sload_gas + 3 * spec.sha3_gas;
 
-        return U256::from(log_gas + io_gas);
+        return Ok(U256::from(log_gas + io_gas));
     }
 }
 impl SimpleExecutionTrait for IncreaseStake {
