@@ -37,6 +37,10 @@ class TestGetTxReceiptByHash(RpcClient):
         assert_equal(receipt['storageReleased'], [])
         assert_equal(receipt['txExecErrorMsg'], None)
 
+        block = self.block_by_hash(receipt["blockHash"])
+        assert_equal(block["blockNumber"], receipt["blockNumber"])
+        assert_equal(block["epochNumber"], receipt["epochNumber"])
+
     def test_receipt_with_storage_changes(self):
         bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), CONTRACT_PATH)
         assert (os.path.isfile(bytecode_file))

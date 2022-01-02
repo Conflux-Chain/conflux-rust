@@ -23,6 +23,8 @@ class TestGetTxByHash(RpcClient):
         assert_equal(tx2["hash"], tx_hash)
         assert_equal(tx2["blockHash"], None)
         assert_equal(tx2["transactionIndex"], None)
+        assert_equal(tx2["blockNumber"], None)
+        assert_equal(tx2["epochNumber"], None)
 
         self.wait_for_receipt(tx_hash)
 
@@ -60,6 +62,8 @@ class TestGetTxByHash(RpcClient):
 
         block = self.block_by_hash(tx2["blockHash"])
         assert_equal(block["transactions"][0], tx_hash)
+        assert_equal(tx2["blockNumber"], block["blockNumber"])
+        assert_equal(tx2["epochNumber"], block["epochNumber"])
 
     def test_pivot_chain_changed(self):
         root = self.generate_block()
