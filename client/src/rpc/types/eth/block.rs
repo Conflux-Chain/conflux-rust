@@ -231,7 +231,7 @@ impl<T: Serialize> Serialize for Rich<T> {
 //         let serialized = serde_json::to_string(&t).unwrap();
 //         assert_eq!(
 //             serialized,
-//             
+//
 // r#"[{"hash":"
 // 0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"
 // 0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"
@@ -244,7 +244,7 @@ impl<T: Serialize> Serialize for Rich<T> {
 //         let serialized = serde_json::to_string(&t).unwrap();
 //         assert_eq!(
 //             serialized,
-//             
+//
 // r#"["0x0000000000000000000000000000000000000000000000000000000000000000"]"#
 //         );
 //     }
@@ -287,7 +287,7 @@ impl<T: Serialize> Serialize for Rich<T> {
 //
 //         assert_eq!(
 //             serialized_block,
-//             
+//
 // r#"{"hash":"
 // 0x0000000000000000000000000000000000000000000000000000000000000000","
 // parentHash":"
@@ -307,7 +307,7 @@ impl<T: Serialize> Serialize for Rich<T> {
 // 0x","0x"],"uncles":[],"transactions":[],"size":"0x45"}"#         );
 //         assert_eq!(
 //             serialized_rich_block,
-//             
+//
 // r#"{"author":"0x0000000000000000000000000000000000000000","difficulty":"0x0",
 // "extraData":"0x","gasLimit":"0x0","gasUsed":"0x0","hash":"
 // 0x0000000000000000000000000000000000000000000000000000000000000000","
@@ -366,7 +366,7 @@ impl<T: Serialize> Serialize for Rich<T> {
 //
 //         assert_eq!(
 //             serialized_block,
-//             
+//
 // r#"{"hash":"
 // 0x0000000000000000000000000000000000000000000000000000000000000000","
 // parentHash":"
@@ -386,7 +386,7 @@ impl<T: Serialize> Serialize for Rich<T> {
 // 0x","0x"],"uncles":[],"transactions":[],"size":null}"#         );
 //         assert_eq!(
 //             serialized_rich_block,
-//             
+//
 // r#"{"author":"0x0000000000000000000000000000000000000000","difficulty":"0x0",
 // "extraData":"0x","gasLimit":"0x0","gasUsed":"0x0","hash":"
 // 0x0000000000000000000000000000000000000000000000000000000000000000","
@@ -442,7 +442,7 @@ impl<T: Serialize> Serialize for Rich<T> {
 //
 //         assert_eq!(
 //             serialized_header,
-//             
+//
 // r#"{"hash":"
 // 0x0000000000000000000000000000000000000000000000000000000000000000","
 // parentHash":"
@@ -462,7 +462,7 @@ impl<T: Serialize> Serialize for Rich<T> {
 // }"#         );
 //         assert_eq!(
 //             serialized_rich_header,
-//             
+//
 // r#"{"author":"0x0000000000000000000000000000000000000000","difficulty":"0x0",
 // "extraData":"0x","gasLimit":"0x0","gasUsed":"0x0","hash":"
 // 0x0000000000000000000000000000000000000000000000000000000000000000","

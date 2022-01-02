@@ -189,7 +189,7 @@ impl Serialize for FilterChanges {
 //             vec![
 //                 VariadicValue::Single(
 //                     H256::from_str(
-//                         
+//
 // "000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b"
 //                     )
 //                     .unwrap()
@@ -198,13 +198,13 @@ impl Serialize for FilterChanges {
 //                 VariadicValue::Null,
 //                 VariadicValue::Multiple(vec![
 //                     H256::from_str(
-//                         
+//
 // "000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b"
 //                     )
 //                     .unwrap()
 //                     .into(),
 //                     H256::from_str(
-//                         
+//
 // "0000000000000000000000000aff3454fce5edbc8cca8697c15331677e6ebccc"
 //                     )
 //                     .unwrap()
@@ -242,7 +242,7 @@ impl Serialize for FilterChanges {
 //                 VariadicValue::Null,
 //                 VariadicValue::Single(
 //                     H256::from_str(
-//                         
+//
 // "000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b",
 //                     )
 //                     .unwrap(),
@@ -262,7 +262,7 @@ impl Serialize for FilterChanges {
 //                 topics: vec![
 //                     None,
 //                     Some(vec![H256::from_str(
-//                         
+//
 // "000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b"
 //                     )
 //                     .unwrap()]),

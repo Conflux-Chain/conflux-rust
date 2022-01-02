@@ -141,8 +141,8 @@ pub struct Receipt {
 //             contract_address: None,
 //             logs: legacy_receipt.logs.into_iter().map(Into::into).collect(),
 //             status_code:
-// Self::outcome_to_status_code(&legacy_receipt.outcome),             
-// state_root: Self::outcome_to_state_root(legacy_receipt.outcome),             
+// Self::outcome_to_status_code(&legacy_receipt.outcome),
+// state_root: Self::outcome_to_state_root(legacy_receipt.outcome),
 // logs_bloom: legacy_receipt.log_bloom,             effective_gas_price:
 // Default::default(),         }
 //     }
@@ -185,7 +185,7 @@ pub struct Receipt {
 //             transaction_hash: Some(H256::zero()),
 //             transaction_index: Some(0.into()),
 //             block_hash: Some(
-//                 
+//
 // "ed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5"
 //                     .parse()
 //                     .unwrap(),
@@ -196,19 +196,19 @@ pub struct Receipt {
 //             contract_address: None,
 //             logs: vec![Log {
 //                 address:
-// "33990122638b9132ca29c723bdf037f1a891a70c".parse().unwrap(),                 
-// topics: vec![                     
+// "33990122638b9132ca29c723bdf037f1a891a70c".parse().unwrap(),
+// topics: vec![
 // "a6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc"
 //                         .parse()
 //                         .unwrap(),
-//                     
+//
 // "4861736852656700000000000000000000000000000000000000000000000000"
 //                         .parse()
 //                         .unwrap(),
 //                 ],
 //                 data: vec![].into(),
 //                 block_hash: Some(
-//                     
+//
 // "ed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5"
 //                         .parse()
 //                         .unwrap(),
