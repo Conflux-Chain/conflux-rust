@@ -1,3 +1,7 @@
+// Copyright 2019-2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 // Copyright 2015-2020 Parity Technologies (UK) Ltd.
 // This file is part of OpenEthereum.
 
@@ -17,6 +21,7 @@
 use cfx_types::{H160, H256, H512, U256, U64};
 use serde::{ser::SerializeStruct, Serialize, Serializer};
 use primitives::SignedTransaction;
+use crate::rpc::types::Bytes;
 
 /// Transaction
 #[derive(Debug, Default, Clone, PartialEq, Serialize)]

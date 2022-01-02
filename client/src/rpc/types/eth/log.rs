@@ -1,3 +1,7 @@
+// Copyright 2019-2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 // Copyright 2015-2020 Parity Technologies (UK) Ltd.
 // This file is part of OpenEthereum.
 
@@ -50,7 +54,7 @@ pub struct Log {
 
 impl Log {
     pub fn try_from_localized(
-        e: LocalizedLogEntry, network: Network,
+        e: LocalizedLogEntry
     ) -> Result<Log, String> {
         unimplemented!();
         // Ok(Log {
@@ -66,7 +70,7 @@ impl Log {
         // })
     }
 
-    pub fn try_from(e: LogEntry, network: Network) -> Result<Log, String> {
+    pub fn try_from(e: LogEntry) -> Result<Log, String> {
         unimplemented!();
         // Ok(Log {
         //     address: RpcAddress::try_from_h160(e.address, network)?,

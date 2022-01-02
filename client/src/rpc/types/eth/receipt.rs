@@ -1,3 +1,7 @@
+// Copyright 2019-2021 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
 // Copyright 2015-2020 Parity Technologies (UK) Ltd.
 // This file is part of OpenEthereum.
 
