@@ -28,6 +28,7 @@ mod trace;
 mod trace_filter;
 mod transaction;
 mod tx_pool;
+pub mod eth;
 
 pub use self::{
     account::Account,

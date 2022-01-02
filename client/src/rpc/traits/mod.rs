@@ -17,3 +17,4 @@ pub mod pos;
 pub mod pubsub;
 pub mod test;
 pub mod trace;
+pub mod eth;
