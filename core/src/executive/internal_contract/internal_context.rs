@@ -18,6 +18,7 @@ pub struct InternalRefContext<'a> {
     pub state: &'a mut dyn StateOpsTrait,
     pub substate: &'a mut dyn SubstateTrait,
     pub static_flag: bool,
+    pub depth: usize,
 }
 
 // The following implementation is copied from `executive/context.rs`. I know

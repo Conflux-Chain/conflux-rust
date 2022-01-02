@@ -227,7 +227,7 @@ impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
                             params, self,
                         ));
                     }
-                    TrapKind::Create(params, _) => {
+                    TrapKind::Create(params) => {
                         return vm::TrapResult::SubCallCreate(
                             TrapError::Create(params, self),
                         );

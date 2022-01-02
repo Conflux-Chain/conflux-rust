@@ -11,9 +11,6 @@ make_solidity_contract! {
 }
 
 make_solidity_contract! {
-    pub(super) struct CrossSpaceCall(CROSS_SPACE_CONTRACT_ADDRESS, "placeholder");
-}
-make_solidity_contract! {
     pub(super) struct Reserved7(RESERVED7, "placeholder");
 }
 make_solidity_contract! {

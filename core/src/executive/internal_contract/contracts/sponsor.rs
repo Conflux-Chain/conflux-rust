@@ -103,9 +103,9 @@ impl UpfrontPaymentTrait for AddPrivilege {
     fn upfront_gas_payment(
         &self, input: &Vec<Address>, _: &ActionParams,
         context: &InternalRefContext,
-    ) -> U256
+    ) -> DbResult<U256>
     {
-        U256::from(context.spec.sstore_reset_gas) * input.len()
+        Ok(U256::from(context.spec.sstore_reset_gas) * input.len())
     }
 }
 
@@ -134,9 +134,9 @@ impl UpfrontPaymentTrait for RemovePrivilege {
     fn upfront_gas_payment(
         &self, input: &Vec<Address>, _: &ActionParams,
         context: &InternalRefContext,
-    ) -> U256
+    ) -> DbResult<U256>
     {
-        U256::from(context.spec.sstore_reset_gas) * input.len()
+        Ok(U256::from(context.spec.sstore_reset_gas) * input.len())
     }
 }
 
@@ -284,9 +284,9 @@ impl UpfrontPaymentTrait for AddPrivilegeByAdmin {
     fn upfront_gas_payment(
         &self, (_contract, addresses): &(Address, Vec<Address>),
         _: &ActionParams, context: &InternalRefContext,
-    ) -> U256
+    ) -> DbResult<U256>
     {
-        U256::from(context.spec.sstore_reset_gas) * addresses.len()
+        Ok(U256::from(context.spec.sstore_reset_gas) * addresses.len())
     }
 }
 
@@ -315,9 +315,9 @@ impl UpfrontPaymentTrait for RemovePrivilegeByAdmin {
     fn upfront_gas_payment(
         &self, (_contract, addresses): &(Address, Vec<Address>),
         _: &ActionParams, context: &InternalRefContext,
-    ) -> U256
+    ) -> DbResult<U256>
     {
-        U256::from(context.spec.sstore_reset_gas) * addresses.len()
+        Ok(U256::from(context.spec.sstore_reset_gas) * addresses.len())
     }
 }
 
