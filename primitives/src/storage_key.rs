@@ -537,22 +537,6 @@ mod delta_mpt_storage_key {
         key
     }
 
-    #[test]
-    fn tmp() {
-        let mut address = vec![0u8; 20];
-        address[18] = 77;
-        address[19] = 77;
-        let mut storage_key = vec![0u8; 32];
-        storage_key[30] = 99;
-        storage_key[31] = 99;
-
-        let ans =
-            new_storage_root_key(&address, &GENESIS_DELTA_MPT_KEY_PADDING);
-        for (i, n) in ans.iter().enumerate() {
-            println!("{}: {}", i, n);
-        }
-    }
-
     pub fn new_code_root_key(
         address: &[u8], padding: &DeltaMptKeyPadding,
     ) -> Vec<u8> {
