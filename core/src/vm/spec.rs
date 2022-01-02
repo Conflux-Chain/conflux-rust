@@ -139,14 +139,12 @@ pub struct Spec {
     pub cip64: bool,
     /// CIP-71: Configurable anti-reentrancy: if configuration enabled
     pub cip71: bool,
-    /// CIP-72: Accept Ethereum transaction signature
-    pub cip72: bool,
     /// CIP-78: Correct `is_sponsored` fields in receipt
     pub cip78a: bool,
     /// CIP-78: Correct `is_sponsored` fields in receipt
     pub cip78b: bool,
-    /// CIP-80: Ethereum compatible signature recover
-    pub cip80: bool,
+    /// CIP-90: Two Space for Transaction Execution
+    pub cip90: bool,
 }
 
 /// Wasm cost table
@@ -276,10 +274,9 @@ impl Spec {
             cip62: false,
             cip64: false,
             cip71: false,
-            cip72: false,
+            cip90: false,
             cip78a: false,
             cip78b: false,
-            cip80: false,
         }
     }
 
@@ -293,10 +290,8 @@ impl Spec {
         spec.cip62 = number >= params.transition_numbers.cip62;
         spec.cip64 = number >= params.transition_numbers.cip64;
         spec.cip71 = number >= params.transition_numbers.cip71;
-        spec.cip72 = number >= params.transition_numbers.cip72b;
+        spec.cip90 = number >= params.transition_numbers.cip90b;
         spec.cip78a = number >= params.transition_numbers.cip78a;
-        // TODO: Clean up this, CIP80 is dropped
-        spec.cip80 = false; // number >= params.transition_numbers.cip80;
         spec
     }
 
@@ -312,11 +307,7 @@ impl Spec {
     }
 
     pub fn is_valid_address(&self, address: &Address) -> bool {
-        if self.cip80 {
-            address.is_cip80_valid_address()
-        } else {
-            address.is_genesis_valid_address()
-        }
+        address.is_genesis_valid_address()
     }
 }
 

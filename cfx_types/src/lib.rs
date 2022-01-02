@@ -110,15 +110,8 @@ pub mod address_util {
                 || self.is_null_address()
         }
 
-        fn is_cip80_valid_address(&self) -> bool { true }
-
         #[inline]
         fn is_contract_address(&self) -> bool {
-            self.address_type_bits() == TYPE_BITS_CONTRACT
-        }
-
-        #[inline]
-        fn maybe_contract_address(&self) -> bool {
             self.address_type_bits() == TYPE_BITS_CONTRACT
         }
 

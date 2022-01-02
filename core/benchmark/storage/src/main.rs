@@ -1597,6 +1597,7 @@ impl Drop for TxReplayer {
 impl TxReplayer {
     const EPOCH_TXS: u64 = 20000;
     const SNAPSHOT_EPOCHS_CAPACITY: u32 = 400;
+
     // const SNAPSHOT_EPOCHS_CAPACITY: u32 = 10;
 
     pub fn new(
@@ -1769,7 +1770,8 @@ impl TxReplayer {
                                 // ethereum-types because conflux use a newer
                                 // version
                                 unsafe { std::mem::transmute(&sender) },
-                            ).with_native_space(),
+                            )
+                            .with_native_space(),
                             &account,
                             None,
                         )
@@ -1828,7 +1830,8 @@ impl TxReplayer {
                         // ethereum-types because conflux use a newer
                         // version
                         unsafe { std::mem::transmute(&receiver) },
-                    ).with_native_space(),
+                    )
+                    .with_native_space(),
                     &account,
                     None,
                 )
