@@ -21,7 +21,7 @@
 use crate::rpc::types::Bytes;
 use cfx_types::{H160, H256, H512, U256, U64};
 use primitives::SignedTransaction;
-use serde::{Serialize, Serializer};
+use serde::Serialize;
 
 /// Transaction
 #[derive(Debug, Default, Clone, PartialEq, Serialize)]
