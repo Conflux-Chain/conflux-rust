@@ -17,12 +17,11 @@ use cfx_storage::{
     into_simple_mpt_key, make_simple_mpt, simple_mpt_merkle_root,
     simple_mpt_proof, SimpleMpt, TrieProof,
 };
-use cfx_types::{address_util::AddressUtil, BigEndianHash, H256, Space, U256};
+use cfx_types::{address_util::AddressUtil, BigEndianHash, Space, H256, U256};
 use primitives::{
-    block::BlockHeight,
-    transaction::{TransactionError},
-    Action, Block, BlockHeader, BlockReceipts, MerkleHash, Receipt,
-    SignedTransaction, TransactionWithSignature,
+    block::BlockHeight, transaction::TransactionError, Action, Block,
+    BlockHeader, BlockReceipts, MerkleHash, Receipt, SignedTransaction,
+    TransactionWithSignature,
 };
 use rlp::Encodable;
 use std::{collections::HashSet, convert::TryInto, sync::Arc};

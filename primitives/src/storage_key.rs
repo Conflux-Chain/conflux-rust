@@ -208,7 +208,7 @@ impl<'a> StorageKeyWithSpace<'a> {
                 Self::EVM_SPACE_TYPE,
                 &key_bytes[ACCOUNT_KEYPART_BYTES..],
             ]
-                .concat()
+            .concat()
         };
     }
 
@@ -297,7 +297,7 @@ impl<'a> StorageKeyWithSpace<'a> {
                 Self::EVM_SPACE_TYPE,
                 &key_bytes[Self::ACCOUNT_BYTES..],
             ]
-                .concat()
+            .concat()
         };
     }
 
@@ -307,11 +307,12 @@ impl<'a> StorageKeyWithSpace<'a> {
     pub fn from_key_bytes<ShouldCheckInput: StaticBool>(
         bytes: &'a [u8],
     ) -> <FromKeyBytesResult<ShouldCheckInput> as ConditionalReturnValue<'a>>::Output
-        where FromKeyBytesResult<ShouldCheckInput>: ConditionalReturnValue<'a> {
+where FromKeyBytesResult<ShouldCheckInput>: ConditionalReturnValue<'a>{
         let key = if bytes.len() <= Self::ACCOUNT_BYTES {
             StorageKey::AccountKey(bytes).with_native_space()
         } else if bytes.len() == Self::ACCOUNT_BYTES + 1 {
-            StorageKey::AccountKey(&bytes[..Self::ACCOUNT_BYTES]).with_evm_space()
+            StorageKey::AccountKey(&bytes[..Self::ACCOUNT_BYTES])
+                .with_evm_space()
         } else {
             let address_bytes = &bytes[0..Self::ACCOUNT_BYTES];
 
@@ -323,7 +324,9 @@ impl<'a> StorageKeyWithSpace<'a> {
                 &bytes[Self::ACCOUNT_BYTES..]
             };
 
-            let storage_key_no_space = if bytes.starts_with(Self::STORAGE_PREFIX) {
+            let storage_key_no_space = if bytes
+                .starts_with(Self::STORAGE_PREFIX)
+            {
                 let bytes = &bytes[Self::STORAGE_PREFIX_LEN..];
                 if bytes.len() > 0 {
                     StorageKey::StorageKey {
@@ -367,7 +370,7 @@ impl<'a> StorageKeyWithSpace<'a> {
 
             let space = if extension_bit {
                 Space::Ethereum
-            }else{
+            } else {
                 Space::Native
             };
 
@@ -780,8 +783,7 @@ mod tests {
         let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
 
-        let key =
-            StorageKey::new_storage_root_key(&address).with_evm_space();
+        let key = StorageKey::new_storage_root_key(&address).with_evm_space();
         let bytes = key.to_delta_mpt_key_bytes(&padding);
         let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
@@ -803,8 +805,8 @@ mod tests {
         let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
 
-        let key = StorageKey::new_storage_key(&address, storage_key)
-            .with_evm_space();
+        let key =
+            StorageKey::new_storage_key(&address, storage_key).with_evm_space();
         let bytes = key.to_delta_mpt_key_bytes(&padding);
         let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
@@ -869,8 +871,7 @@ mod tests {
         let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
 
-        let key =
-            StorageKey::new_deposit_list_key(&address).with_evm_space();
+        let key = StorageKey::new_deposit_list_key(&address).with_evm_space();
         let bytes = key.to_delta_mpt_key_bytes(&padding);
         let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);

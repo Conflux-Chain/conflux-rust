@@ -3,7 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{bytes::Bytes, hash::keccak};
-use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, BigEndianHash, H160, H256, Space, U256};
+use cfx_types::{
+    Address, AddressSpaceUtil, AddressWithSpace, BigEndianHash, Space, H160,
+    H256, U256,
+};
 use keylib::{
     self, public_to_address, recover, verify_public, Public, Secret, Signature,
 };

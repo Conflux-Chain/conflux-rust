@@ -51,7 +51,7 @@ use cfx_parameters::{
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::StateDb;
 use cfx_storage::state_manager::StateManagerTrait;
-use cfx_types::{ AddressWithSpace, Bloom, H256, U256};
+use cfx_types::{AddressWithSpace, Bloom, H256, U256};
 use either::Either;
 use itertools::Itertools;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};

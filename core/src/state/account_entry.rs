@@ -381,9 +381,13 @@ impl OverlayAccount {
         self.set_storage(key, U256::zero(), contract_owner);
     }
 
-    pub fn staking_balance(&self) -> &U256 { &self.staking_balance }
+    pub fn staking_balance(&self) -> &U256 {
+        self.address.assert_native();
+        &self.staking_balance
+    }
 
     pub fn collateral_for_storage(&self) -> &U256 {
+        self.address.assert_native();
         &self.collateral_for_storage
     }
 
@@ -393,12 +397,14 @@ impl OverlayAccount {
     }
 
     pub fn remove_expired_vote_stake_info(&mut self, block_number: u64) {
+        self.address.assert_native();
         assert!(self.vote_stake_list.is_some());
         let vote_stake_list = self.vote_stake_list.as_mut().unwrap();
         vote_stake_list.remove_expired_vote_stake_info(block_number)
     }
 
     pub fn withdrawable_staking_balance(&self, block_number: u64) -> U256 {
+        self.address.assert_native();
         assert!(self.vote_stake_list.is_some());
         let vote_stake_list = self.vote_stake_list.as_ref().unwrap();
         return vote_stake_list
@@ -457,6 +463,7 @@ impl OverlayAccount {
         deposit_time: u64,
     )
     {
+        self.address.assert_native();
         assert!(self.deposit_list.is_some());
         self.sub_balance(&amount);
         self.staking_balance += amount;
@@ -471,6 +478,7 @@ impl OverlayAccount {
     pub fn withdraw(
         &mut self, amount: U256, accumulated_interest_rate: U256,
     ) -> U256 {
+        self.address.assert_native();
         assert!(self.deposit_list.is_some());
         let deposit_list = self.deposit_list.as_mut().unwrap();
         self.staking_balance -= amount;
@@ -498,6 +506,7 @@ impl OverlayAccount {
     }
 
     pub fn vote_lock(&mut self, amount: U256, unlock_block_number: u64) {
+        self.address.assert_native();
         assert!(self.vote_stake_list.is_some());
         assert!(amount <= self.staking_balance);
         let vote_stake_list = self.vote_stake_list.as_mut().unwrap();
@@ -505,6 +514,7 @@ impl OverlayAccount {
     }
 
     pub fn add_collateral_for_storage(&mut self, by: &U256) {
+        self.address.assert_native();
         if self.is_contract() {
             self.sub_sponsor_balance_for_collateral(by);
         } else {
@@ -514,6 +524,7 @@ impl OverlayAccount {
     }
 
     pub fn sub_collateral_for_storage(&mut self, by: &U256) {
+        self.address.assert_native();
         assert!(self.collateral_for_storage >= *by);
         if self.is_contract() {
             self.add_sponsor_balance_for_collateral(by);
@@ -524,6 +535,7 @@ impl OverlayAccount {
     }
 
     pub fn record_interest_receive(&mut self, interest: &U256) {
+        self.address.assert_native();
         self.accumulated_interest_return += *interest;
     }
 
@@ -556,6 +568,7 @@ impl OverlayAccount {
         db: &StateDbGeneric<StateDbStorage>,
     ) -> DbResult<bool>
     {
+        self.address.assert_native();
         assert!(!self.is_removed_contract);
         if cache_deposit_list && self.deposit_list.is_none() {
             let deposit_list_opt = if self.reset_storage() {
@@ -617,6 +630,9 @@ impl OverlayAccount {
     pub fn set_storage(&mut self, key: Vec<u8>, value: U256, owner: Address) {
         Arc::make_mut(&mut self.storage_value_write_cache)
             .insert(key.clone(), value);
+        if self.address.space == Space::Ethereum {
+            return;
+        }
         let lv1_write_cache =
             Arc::make_mut(&mut self.storage_owner_lv1_write_cache);
         if value.is_zero() {
@@ -756,6 +772,7 @@ impl OverlayAccount {
     pub fn original_ownership_at<StateDbStorage: StorageStateTrait>(
         &self, db: &StateDbGeneric<StateDbStorage>, key: &Vec<u8>,
     ) -> DbResult<Option<Address>> {
+        self.address.assert_native();
         assert!(!self.is_removed_contract);
         if let Some(value) = self.storage_owner_lv2_write_cache.read().get(key)
         {
@@ -792,6 +809,7 @@ impl OverlayAccount {
         substate: &mut dyn SubstateTrait,
     ) -> DbResult<()>
     {
+        self.address.assert_native();
         if self.is_removed_contract {
             return Ok(());
         }
@@ -866,23 +884,23 @@ impl OverlayAccount {
                     state.db.delete(address_key, debug_record.as_deref_mut())?
                 }
                 false => {
-                    let owner = storage_owner_lv2_write_cache
-                        .get(&k)
-                        .expect("all key must exist")
-                        .expect("owner exists");
+                    let owner = if self.address.space == Space::Ethereum {
+                        None
+                    } else {
+                        let current_owner = storage_owner_lv2_write_cache
+                            .get(&k)
+                            .expect("all key must exist")
+                            .expect("owner exists");
+                        if current_owner == self.address.address {
+                            None
+                        } else {
+                            Some(current_owner)
+                        }
+                    };
 
                     state.db.set::<StorageValue>(
                         address_key,
-                        &StorageValue {
-                            value: v,
-                            owner: if owner == self.address.address
-                                || self.address.space == Space::Ethereum
-                            {
-                                None
-                            } else {
-                                Some(owner)
-                            },
-                        },
+                        &StorageValue { value: v, owner },
                         debug_record.as_deref_mut(),
                     )?
                 }
@@ -903,6 +921,7 @@ impl OverlayAccount {
         }
 
         if let Some(deposit_list) = self.deposit_list.as_ref() {
+            self.address.assert_native();
             let storage_key =
                 StorageKey::new_deposit_list_key(&self.address.address)
                     .with_space(self.address.space);
@@ -914,6 +933,7 @@ impl OverlayAccount {
         }
 
         if let Some(vote_stake_list) = self.vote_stake_list.as_ref() {
+            self.address.assert_native();
             let storage_key =
                 StorageKey::new_vote_list_key(&self.address.address)
                     .with_space(self.address.space);

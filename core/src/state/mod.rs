@@ -130,7 +130,9 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
         &mut self, substate: &mut Substate,
     ) -> DbResult<()> {
         if let Some(checkpoint) = self.checkpoints.get_mut().last() {
-            for address in checkpoint.keys() {
+            for address in
+                checkpoint.keys().filter(|a| a.space == Space::Native)
+            {
                 if let Some(ref mut maybe_acc) = self
                     .cache
                     .get_mut()
@@ -422,6 +424,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         nonce: U256, storage_layout: Option<StorageLayout>,
     ) -> DbResult<()>
     {
+        assert!(contract.space == Space::Native || admin.is_zero());
         Self::update_cache(
             self.cache.get_mut(),
             self.checkpoints.get_mut(),

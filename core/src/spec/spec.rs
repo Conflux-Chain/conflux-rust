@@ -79,7 +79,6 @@ pub struct TransitionsEpochHeight {
     pub cip86: BlockHeight,
     /// CIP90: Two Space for Transaction Execution
     pub cip90a: BlockHeight,
-
 }
 
 impl Default for CommonParams {

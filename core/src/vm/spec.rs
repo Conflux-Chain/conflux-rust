@@ -307,9 +307,7 @@ impl Spec {
     }
 
     pub fn is_valid_address(&self, address: &Address) -> bool {
-
-            address.is_genesis_valid_address()
-
+        address.is_genesis_valid_address()
     }
 }
 

@@ -70,9 +70,6 @@ impl<'a> InternalRefContext<'a> {
     }
 
     pub fn is_contract_address(&self, address: &Address) -> vm::Result<bool> {
-
-
-
         Ok(address.is_contract_address())
     }
 }

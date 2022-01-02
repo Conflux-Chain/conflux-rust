@@ -14,8 +14,8 @@ use cfx_types::{
     Space, U256,
 };
 
-fn available_admin_address(_spec: &Spec,address: &Address) -> bool {
-        address.is_user_account_address() || address.is_null_address()
+fn available_admin_address(_spec: &Spec, address: &Address) -> bool {
+    address.is_user_account_address() || address.is_null_address()
 }
 
 /// The Actual Implementation of `suicide`.

@@ -405,6 +405,11 @@ impl Account {
 
     pub fn to_evm_account(&self) -> EthereumAccount {
         assert_eq!(self.address_local_info.space, Space::Ethereum);
+        assert!(self.staking_balance.is_zero());
+        assert!(self.collateral_for_storage.is_zero());
+        assert!(self.accumulated_interest_return.is_zero());
+        assert!(self.admin.is_zero());
+        assert_eq!(self.sponsor_info, Default::default());
         EthereumAccount {
             balance: self.balance,
             nonce: self.nonce,

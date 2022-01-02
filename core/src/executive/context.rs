@@ -223,8 +223,9 @@ impl<
         // address. This should generally not happen. Unless we enable
         // account dust in future. We add this check just in case it
         // helps in future.
-        if self.state.is_contract_with_code(&address_with_space)? {
-            // TODO: EVM core: remove address conflict.
+        if self.local_part.space == Space::Native
+            && self.state.is_contract_with_code(&address_with_space)?
+        {
             debug!("Contract address conflict!");
             let err = Error::ConflictAddress(address.clone());
             return Ok(Ok(ContractCreateResult::Failed(err)));
@@ -274,10 +275,8 @@ impl<
     {
         trace!(target: "context", "call");
 
-        let code_address_with_space = AddressWithSpace {
-            address: *code_address,
-            space: self.local_part.space,
-        };
+        let code_address_with_space =
+            code_address.with_space(self.local_part.space);
 
         let (code, code_hash) = if let Some(contract) = self
             .local_part
@@ -319,10 +318,7 @@ impl<
     }
 
     fn extcode(&self, address: &Address) -> vm::Result<Option<Arc<Bytes>>> {
-        let address = AddressWithSpace {
-            address: *address,
-            space: self.local_part.space,
-        };
+        let address = address.with_space(self.local_part.space);
         if let Some(contract) = self
             .local_part
             .machine
@@ -336,10 +332,7 @@ impl<
     }
 
     fn extcodehash(&self, address: &Address) -> vm::Result<Option<H256>> {
-        let address = AddressWithSpace {
-            address: *address,
-            space: self.local_part.space,
-        };
+        let address = address.with_space(self.local_part.space);
 
         if let Some(contract) = self
             .local_part
@@ -354,10 +347,7 @@ impl<
     }
 
     fn extcodesize(&self, address: &Address) -> vm::Result<Option<usize>> {
-        let address = AddressWithSpace {
-            address: *address,
-            space: self.local_part.space,
-        };
+        let address = address.with_space(self.local_part.space);
 
         if let Some(contract) = self
             .local_part
@@ -392,10 +382,11 @@ impl<
         self, gas: &U256, data: &ReturnData, apply_state: bool,
     ) -> vm::Result<U256>
     where Self: Sized {
-        let caller = AddressWithSpace {
-            address: self.local_part.origin.address,
-            space: self.local_part.space,
-        };
+        let caller = self
+            .local_part
+            .origin
+            .address
+            .with_space(self.local_part.space);
 
         match self.local_part.is_create {
             false => Ok(*gas),
@@ -414,21 +405,30 @@ impl<
                         false => Ok(*gas),
                     };
                 }
-                let collateral_units_for_code =
-                    code_collateral_units(data.len());
-                let collateral_in_drips = U256::from(collateral_units_for_code)
-                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-                debug!("ret()  collateral_for_code={:?}", collateral_in_drips);
-                self.local_part.substate.record_storage_occupy(
-                    &self.local_part.origin.storage_owner,
-                    collateral_units_for_code,
-                );
 
-                self.state.init_code(
-                    &caller,
-                    data.to_vec(),
-                    self.local_part.origin.storage_owner,
-                )?;
+                if self.local_part.space == Space::Native {
+                    let collateral_units_for_code =
+                        code_collateral_units(data.len());
+                    let collateral_in_drips =
+                        U256::from(collateral_units_for_code)
+                            * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+                    debug!(
+                        "ret()  collateral_for_code={:?}",
+                        collateral_in_drips
+                    );
+                    self.local_part.substate.record_storage_occupy(
+                        &self.local_part.origin.storage_owner,
+                        collateral_units_for_code,
+                    );
+                }
+
+                let owner = if self.local_part.space == Space::Native {
+                    self.local_part.origin.storage_owner
+                } else {
+                    Address::zero()
+                };
+
+                self.state.init_code(&caller, data.to_vec(), owner)?;
 
                 Ok(*gas - return_cost)
             }
