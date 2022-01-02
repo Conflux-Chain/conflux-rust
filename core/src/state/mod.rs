@@ -34,9 +34,8 @@ use cfx_statedb::{
 };
 use cfx_storage::{utils::access_mode, StorageState, StorageStateTrait};
 use cfx_types::{
-    address_util::AddressUtil, Address as RawAddress,
-    AddressWithSpace as Address, AddressWithSpace, BigEndianHash, Space, H256,
-    U256,
+    address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
+    BigEndianHash, Space, H256, U256,
 };
 use diem_types::term_state::MAX_TERM_POINTS;
 #[cfg(test)]
@@ -105,18 +104,18 @@ pub struct StateGeneric<StateDbStorage: StorageStateTrait> {
     db: StateDb<StateDbStorage>,
 
     // Only created once for txpool notification.
-    // Each element is an Ok(Account) for updated account, or Err(Address)
-    // for deleted account.
-    accounts_to_notify: Vec<Result<Account, Address>>,
+    // Each element is an Ok(Account) for updated account, or
+    // Err(AddressWithSpace) for deleted account.
+    accounts_to_notify: Vec<Result<Account, AddressWithSpace>>,
 
     // Contains the changes to the states and some unchanged state entries.
-    cache: RwLock<HashMap<Address, AccountEntry>>,
+    cache: RwLock<HashMap<AddressWithSpace, AccountEntry>>,
     // TODO: try not to make it special?
     world_statistics: WorldStatistics,
 
     // Checkpoint to the changes.
     world_statistics_checkpoints: RwLock<Vec<WorldStatistics>>,
-    checkpoints: RwLock<Vec<HashMap<Address, Option<AccountEntry>>>>,
+    checkpoints: RwLock<Vec<HashMap<AddressWithSpace, Option<AccountEntry>>>>,
 }
 
 impl<StateDbStorage: StorageStateTrait> StateTrait
@@ -173,7 +172,7 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
     // TODO: This function can only be called after VM execution. There are some
     // test cases breaks this assumption, which will be fixed in a separated PR.
     fn collect_and_settle_collateral(
-        &mut self, original_sender: &RawAddress, storage_limit: &U256,
+        &mut self, original_sender: &Address, storage_limit: &U256,
         substate: &mut Substate, tracer: &mut dyn InternalTransferTracer,
         account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult>
@@ -193,7 +192,7 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
     }
 
     fn record_storage_and_whitelist_entries_release(
-        &mut self, address: &RawAddress, substate: &mut Substate,
+        &mut self, address: &Address, substate: &mut Substate,
     ) -> DbResult<()> {
         self.remove_whitelists_for_contract::<access_mode::Write>(address)?;
 
@@ -202,9 +201,7 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
         //  somewhere then apply the collateral change.
         {
             let mut sponsor_whitelist_control_address = self.require_exists(
-                &Address::new_native(
-                    &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-                ),
+                &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS.with_native_space(),
                 /* require_code = */ false,
             )?;
             sponsor_whitelist_control_address
@@ -213,11 +210,11 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
 
         let account_cache_read_guard = self.cache.read();
         let maybe_account = account_cache_read_guard
-            .get(&Address::new_native(address))
+            .get(&address.with_native_space())
             .and_then(|acc| acc.account.as_ref());
 
         let storage_key_value = self.db.delete_all::<access_mode::Read>(
-            StorageKey::new_storage_root_key(address).space(Space::Native),
+            StorageKey::new_storage_root_key(address).with_native_space(),
             None,
         )?;
         for (key, value) in &storage_key_value {
@@ -366,7 +363,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         }
 
         let total_circulating_tokens = self.total_issued_tokens()
-            - self.balance(&Address::new_native(&RawAddress::zero()))?
+            - self.balance(&Address::zero().with_native_space())?
             - self.balance(&genesis_contract_address_four_year())?
             - self.balance(&genesis_contract_address_two_year())?;
         let total_pos_staking_tokens =
@@ -388,7 +385,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     fn distribute_pos_interest<'a>(
         &mut self, pos_points: Box<dyn Iterator<Item = (&'a H256, u64)> + 'a>,
         account_start_nonce: U256, current_block_number: u64,
-    ) -> DbResult<Vec<(RawAddress, H256, U256)>>
+    ) -> DbResult<Vec<(Address, H256, U256)>>
     {
         assert!(self.world_statistics_checkpoints.get_mut().is_empty());
 
@@ -398,10 +395,10 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         let mut account_rewards = Vec::new();
         for (identifier, points) in pos_points {
             let address_value = self.storage_at(
-                &AddressWithSpace::new_native(&POS_REGISTER_CONTRACT_ADDRESS),
+                &POS_REGISTER_CONTRACT_ADDRESS.with_native_space(),
                 &pos_internal_entries::address_entry(&identifier),
             )?;
-            let address = RawAddress::from(H256::from_uint(&address_value));
+            let address = Address::from(H256::from_uint(&address_value));
             let interest =
                 distributable_pos_interest * points / MAX_TERM_POINTS;
             account_rewards.push((address, *identifier, interest));
@@ -420,7 +417,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn new_contract_with_admin(
-        &mut self, contract: &Address, admin: &RawAddress, balance: U256,
+        &mut self, contract: &AddressWithSpace, admin: &Address, balance: U256,
         nonce: U256, storage_layout: Option<StorageLayout>,
     ) -> DbResult<()>
     {
@@ -441,13 +438,15 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         Ok(())
     }
 
-    fn balance(&self, address: &Address) -> DbResult<U256> {
+    fn balance(&self, address: &AddressWithSpace) -> DbResult<U256> {
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |account| *account.balance())
         })
     }
 
-    fn is_contract_with_code(&self, address: &Address) -> DbResult<bool> {
+    fn is_contract_with_code(
+        &self, address: &AddressWithSpace,
+    ) -> DbResult<bool> {
         if address.space == Space::Native
             && !address.address.maybe_contract_address()
         {
@@ -458,11 +457,9 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         })
     }
 
-    fn sponsor_for_gas(
-        &self, address: &RawAddress,
-    ) -> DbResult<Option<RawAddress>> {
+    fn sponsor_for_gas(&self, address: &Address) -> DbResult<Option<Address>> {
         self.ensure_account_loaded(
-            &Address::new_native(address),
+            &address.with_native_space(),
             RequireCache::None,
             |acc| {
                 acc.map_or(None, |acc| {
@@ -473,10 +470,10 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn sponsor_for_collateral(
-        &self, address: &RawAddress,
-    ) -> DbResult<Option<RawAddress>> {
+        &self, address: &Address,
+    ) -> DbResult<Option<Address>> {
         self.ensure_account_loaded(
-            &Address::new_native(address),
+            &address.with_native_space(),
             RequireCache::None,
             |acc| {
                 acc.map_or(None, |acc| {
@@ -487,14 +484,14 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn set_sponsor_for_gas(
-        &self, address: &RawAddress, sponsor: &RawAddress,
-        sponsor_balance: &U256, upper_bound: &U256,
+        &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
+        upper_bound: &U256,
     ) -> DbResult<()>
     {
         if *sponsor != self.sponsor_for_gas(address)?.unwrap_or_default()
             || *sponsor_balance != self.sponsor_balance_for_gas(address)?
         {
-            self.require_exists(&Address::new_native(address), false)
+            self.require_exists(&address.with_native_space(), false)
                 .map(|mut x| {
                     x.set_sponsor_for_gas(sponsor, sponsor_balance, upper_bound)
                 })
@@ -504,15 +501,13 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn set_sponsor_for_collateral(
-        &self, address: &RawAddress, sponsor: &RawAddress,
-        sponsor_balance: &U256,
-    ) -> DbResult<()>
-    {
+        &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
+    ) -> DbResult<()> {
         if *sponsor != self.sponsor_for_collateral(address)?.unwrap_or_default()
             || *sponsor_balance
                 != self.sponsor_balance_for_collateral(address)?
         {
-            self.require_exists(&Address::new_native(address), false)
+            self.require_exists(&address.with_native_space(), false)
                 .map(|mut x| {
                     x.set_sponsor_for_collateral(sponsor, sponsor_balance)
                 })
@@ -521,19 +516,17 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         }
     }
 
-    fn sponsor_info(
-        &self, address: &RawAddress,
-    ) -> DbResult<Option<SponsorInfo>> {
+    fn sponsor_info(&self, address: &Address) -> DbResult<Option<SponsorInfo>> {
         self.ensure_account_loaded(
-            &Address::new_native(address),
+            &address.with_native_space(),
             RequireCache::None,
             |maybe_acc| maybe_acc.map(|acc| acc.sponsor_info().clone()),
         )
     }
 
-    fn sponsor_gas_bound(&self, address: &RawAddress) -> DbResult<U256> {
+    fn sponsor_gas_bound(&self, address: &Address) -> DbResult<U256> {
         self.ensure_account_loaded(
-            &Address::new_native(address),
+            &address.with_native_space(),
             RequireCache::None,
             |acc| {
                 acc.map_or(U256::zero(), |acc| {
@@ -543,9 +536,9 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         )
     }
 
-    fn sponsor_balance_for_gas(&self, address: &RawAddress) -> DbResult<U256> {
+    fn sponsor_balance_for_gas(&self, address: &Address) -> DbResult<U256> {
         self.ensure_account_loaded(
-            &Address::new_native(address),
+            &address.with_native_space(),
             RequireCache::None,
             |acc| {
                 acc.map_or(U256::zero(), |acc| {
@@ -556,10 +549,10 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn sponsor_balance_for_collateral(
-        &self, address: &RawAddress,
+        &self, address: &Address,
     ) -> DbResult<U256> {
         self.ensure_account_loaded(
-            &Address::new_native(address),
+            &address.with_native_space(),
             RequireCache::None,
             |acc| {
                 acc.map_or(U256::zero(), |acc| {
@@ -570,75 +563,58 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn set_admin(
-        &mut self, contract_address: &RawAddress, admin: &RawAddress,
+        &mut self, contract_address: &Address, admin: &Address,
     ) -> DbResult<()> {
-        self.require_exists(
-            &AddressWithSpace::new_native(&contract_address),
-            false,
-        )?
-        .set_admin(admin);
+        self.require_exists(&contract_address.with_native_space(), false)?
+            .set_admin(admin);
         Ok(())
     }
 
     fn sub_sponsor_balance_for_gas(
-        &mut self, address: &RawAddress, by: &U256,
+        &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
-            self.require_exists(
-                &AddressWithSpace::new_native(&address),
-                false,
-            )?
-            .sub_sponsor_balance_for_gas(by);
+            self.require_exists(&address.with_native_space(), false)?
+                .sub_sponsor_balance_for_gas(by);
         }
         Ok(())
     }
 
     fn add_sponsor_balance_for_gas(
-        &mut self, address: &RawAddress, by: &U256,
+        &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
-            self.require_exists(
-                &AddressWithSpace::new_native(&address),
-                false,
-            )?
-            .add_sponsor_balance_for_gas(by);
+            self.require_exists(&address.with_native_space(), false)?
+                .add_sponsor_balance_for_gas(by);
         }
         Ok(())
     }
 
     fn sub_sponsor_balance_for_collateral(
-        &mut self, address: &RawAddress, by: &U256,
+        &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
-            self.require_exists(
-                &AddressWithSpace::new_native(&address),
-                false,
-            )?
-            .sub_sponsor_balance_for_collateral(by);
+            self.require_exists(&address.with_native_space(), false)?
+                .sub_sponsor_balance_for_collateral(by);
         }
         Ok(())
     }
 
     fn add_sponsor_balance_for_collateral(
-        &mut self, address: &RawAddress, by: &U256,
+        &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
-            self.require_exists(
-                &AddressWithSpace::new_native(&address),
-                false,
-            )?
-            .add_sponsor_balance_for_collateral(by);
+            self.require_exists(&address.with_native_space(), false)?
+                .add_sponsor_balance_for_collateral(by);
         }
         Ok(())
     }
 
     fn check_commission_privilege(
-        &self, contract_address: &RawAddress, user: &RawAddress,
+        &self, contract_address: &Address, user: &Address,
     ) -> DbResult<bool> {
         match self.ensure_account_loaded(
-            &AddressWithSpace::new_native(
-                &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-            ),
+            &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS.with_native_space(),
             RequireCache::None,
             |acc| {
                 acc.map_or(Ok(false), |acc| {
@@ -657,14 +633,14 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn add_commission_privilege(
-        &mut self, contract_address: RawAddress, contract_owner: RawAddress,
-        user: RawAddress,
+        &mut self, contract_address: Address, contract_owner: Address,
+        user: Address,
     ) -> DbResult<()>
     {
         info!("add_commission_privilege contract_address: {:?}, contract_owner: {:?}, user: {:?}", contract_address, contract_owner, user);
 
         let mut account = self.require_exists(
-            &Address::new_native(&SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS),
+            &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS.with_native_space(),
             false,
         )?;
         Ok(account.add_commission_privilege(
@@ -675,12 +651,12 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn remove_commission_privilege(
-        &mut self, contract_address: RawAddress, contract_owner: RawAddress,
-        user: RawAddress,
+        &mut self, contract_address: Address, contract_owner: Address,
+        user: Address,
     ) -> DbResult<()>
     {
         let mut account = self.require_exists(
-            &Address::new_native(&SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS),
+            &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS.with_native_space(),
             false,
         )?;
         Ok(account.remove_commission_privilege(
@@ -692,47 +668,51 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
 
     // TODO: maybe return error for reserved address? Not sure where is the best
     //  place to do the check.
-    fn nonce(&self, address: &Address) -> DbResult<U256> {
+    fn nonce(&self, address: &AddressWithSpace) -> DbResult<U256> {
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |account| *account.nonce())
         })
     }
 
     fn init_code(
-        &mut self, address: &Address, code: Bytes, owner: RawAddress,
+        &mut self, address: &AddressWithSpace, code: Bytes, owner: Address,
     ) -> DbResult<()> {
         self.require_exists(address, false)?.init_code(code, owner);
         Ok(())
     }
 
-    fn code_hash(&self, address: &Address) -> DbResult<Option<H256>> {
+    fn code_hash(&self, address: &AddressWithSpace) -> DbResult<Option<H256>> {
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.and_then(|acc| Some(acc.code_hash()))
         })
     }
 
-    fn code_size(&self, address: &Address) -> DbResult<Option<usize>> {
+    fn code_size(&self, address: &AddressWithSpace) -> DbResult<Option<usize>> {
         self.ensure_account_loaded(address, RequireCache::Code, |acc| {
             acc.and_then(|acc| acc.code_size())
         })
     }
 
-    fn code_owner(&self, address: &Address) -> DbResult<Option<RawAddress>> {
+    fn code_owner(
+        &self, address: &AddressWithSpace,
+    ) -> DbResult<Option<Address>> {
         address.assert_native();
         self.ensure_account_loaded(address, RequireCache::Code, |acc| {
             acc.as_ref().map_or(None, |acc| acc.code_owner())
         })
     }
 
-    fn code(&self, address: &Address) -> DbResult<Option<Arc<Vec<u8>>>> {
+    fn code(
+        &self, address: &AddressWithSpace,
+    ) -> DbResult<Option<Arc<Vec<u8>>>> {
         self.ensure_account_loaded(address, RequireCache::Code, |acc| {
             acc.as_ref().map_or(None, |acc| acc.code())
         })
     }
 
-    fn staking_balance(&self, address: &RawAddress) -> DbResult<U256> {
+    fn staking_balance(&self, address: &Address) -> DbResult<U256> {
         self.ensure_account_loaded(
-            &Address::new_native(address),
+            &address.with_native_space(),
             RequireCache::None,
             |acc| {
                 acc.map_or(U256::zero(), |account| *account.staking_balance())
@@ -740,9 +720,9 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         )
     }
 
-    fn collateral_for_storage(&self, address: &RawAddress) -> DbResult<U256> {
+    fn collateral_for_storage(&self, address: &Address) -> DbResult<U256> {
         self.ensure_account_loaded(
-            &Address::new_native(address),
+            &address.with_native_space(),
             RequireCache::None,
             |acc| {
                 acc.map_or(U256::zero(), |account| {
@@ -752,19 +732,19 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         )
     }
 
-    fn admin(&self, address: &RawAddress) -> DbResult<RawAddress> {
+    fn admin(&self, address: &Address) -> DbResult<Address> {
         self.ensure_account_loaded(
-            &Address::new_native(address),
+            &address.with_native_space(),
             RequireCache::None,
-            |acc| acc.map_or(RawAddress::zero(), |acc| *acc.admin()),
+            |acc| acc.map_or(Address::zero(), |acc| *acc.admin()),
         )
     }
 
     fn withdrawable_staking_balance(
-        &self, address: &RawAddress, current_block_number: u64,
+        &self, address: &Address, current_block_number: u64,
     ) -> DbResult<U256> {
         self.ensure_account_loaded(
-            &Address::new_native(address),
+            &address.with_native_space(),
             RequireCache::VoteStakeList,
             |acc| {
                 acc.map_or(U256::zero(), |acc| {
@@ -775,10 +755,10 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn locked_staking_balance_at_block_number(
-        &self, address: &RawAddress, block_number: u64,
+        &self, address: &Address, block_number: u64,
     ) -> DbResult<U256> {
         self.ensure_account_loaded(
-            &Address::new_native(address),
+            &address.with_native_space(),
             RequireCache::VoteStakeList,
             |acc| {
                 acc.map_or(U256::zero(), |acc| {
@@ -789,9 +769,9 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         )
     }
 
-    fn deposit_list_length(&self, address: &RawAddress) -> DbResult<usize> {
+    fn deposit_list_length(&self, address: &Address) -> DbResult<usize> {
         self.ensure_account_loaded(
-            &Address::new_native(address),
+            &address.with_native_space(),
             RequireCache::DepositList,
             |acc| {
                 acc.map_or(0, |acc| acc.deposit_list().map_or(0, |l| l.len()))
@@ -799,9 +779,9 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         )
     }
 
-    fn vote_stake_list_length(&self, address: &RawAddress) -> DbResult<usize> {
+    fn vote_stake_list_length(&self, address: &Address) -> DbResult<usize> {
         self.ensure_account_loaded(
-            &Address::new_native(address),
+            &address.with_native_space(),
             RequireCache::VoteStakeList,
             |acc| {
                 acc.map_or(0, |acc| {
@@ -814,9 +794,9 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     // This is a special implementation to fix the bug in function
     // `clean_account` while not changing the genesis result.
     fn genesis_special_clean_account(
-        &mut self, address: &RawAddress,
+        &mut self, address: &Address,
     ) -> DbResult<()> {
-        let address = Address::new_native(address);
+        let address = address.with_native_space();
         let mut account = Account::new_empty(&address);
         account.code_hash = H256::default();
         *&mut *self.require_or_new_basic_account(&address, &U256::zero())? =
@@ -824,7 +804,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         Ok(())
     }
 
-    fn clean_account(&mut self, address: &Address) -> DbResult<()> {
+    fn clean_account(&mut self, address: &AddressWithSpace) -> DbResult<()> {
         *&mut *self.require_or_new_basic_account(address, &U256::zero())? =
             OverlayAccount::from_loaded(address, Account::new_empty(address));
         Ok(())
@@ -833,7 +813,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     // TODO: This implementation will fail
     // tests::load_chain_tests::test_load_chain. We need to figure out why.
     //
-    // fn clean_account(&mut self, address: &Address) -> DbResult<()> {
+    // fn clean_account(&mut self, address: &AddressWithSpace) -> DbResult<()> {
     //     Self::update_cache(
     //         self.cache.get_mut(),
     //         self.checkpoints.get_mut(),
@@ -844,20 +824,24 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     // }
 
     fn inc_nonce(
-        &mut self, address: &Address, account_start_nonce: &U256,
+        &mut self, address: &AddressWithSpace, account_start_nonce: &U256,
     ) -> DbResult<()> {
         self.require_or_new_basic_account(address, account_start_nonce)
             .map(|mut x| x.inc_nonce())
     }
 
-    fn set_nonce(&mut self, address: &Address, nonce: &U256) -> DbResult<()> {
+    fn set_nonce(
+        &mut self, address: &AddressWithSpace, nonce: &U256,
+    ) -> DbResult<()> {
         self.require_or_new_basic_account(address, nonce)
             .map(|mut x| x.set_nonce(&nonce))
     }
 
     fn sub_balance(
-        &mut self, address: &Address, by: &U256, cleanup_mode: &mut CleanupMode,
-    ) -> DbResult<()> {
+        &mut self, address: &AddressWithSpace, by: &U256,
+        cleanup_mode: &mut CleanupMode,
+    ) -> DbResult<()>
+    {
         if !by.is_zero() {
             self.require_exists(address, false)?.sub_balance(by);
         }
@@ -871,11 +855,11 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn add_pos_interest(
-        &mut self, address: &RawAddress, interest: &U256,
+        &mut self, address: &Address, interest: &U256,
         cleanup_mode: CleanupMode, account_start_nonce: U256,
     ) -> DbResult<()>
     {
-        let address = Address::new_native(address);
+        let address = address.with_native_space();
         self.add_total_issued(*interest);
         self.add_balance(
             &address,
@@ -889,8 +873,8 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn add_balance(
-        &mut self, address: &Address, by: &U256, cleanup_mode: CleanupMode,
-        account_start_nonce: U256,
+        &mut self, address: &AddressWithSpace, by: &U256,
+        cleanup_mode: CleanupMode, account_start_nonce: U256,
     ) -> DbResult<()>
     {
         let exists = self.exists(address)?;
@@ -913,7 +897,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn transfer_balance(
-        &mut self, from: &Address, to: &Address, by: &U256,
+        &mut self, from: &AddressWithSpace, to: &AddressWithSpace, by: &U256,
         mut cleanup_mode: CleanupMode, account_start_nonce: U256,
     ) -> DbResult<()>
     {
@@ -923,11 +907,9 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn deposit(
-        &mut self, address: &RawAddress, amount: &U256,
-        current_block_number: u64,
-    ) -> DbResult<()>
-    {
-        let address = Address::new_native(address);
+        &mut self, address: &Address, amount: &U256, current_block_number: u64,
+    ) -> DbResult<()> {
+        let address = address.with_native_space();
         if !amount.is_zero() {
             {
                 let mut account = self.require_exists(&address, false)?;
@@ -947,10 +929,8 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         Ok(())
     }
 
-    fn withdraw(
-        &mut self, address: &RawAddress, amount: &U256,
-    ) -> DbResult<U256> {
-        let address = Address::new_native(address);
+    fn withdraw(&mut self, address: &Address, amount: &U256) -> DbResult<U256> {
+        let address = address.with_native_space();
         if !amount.is_zero() {
             let interest;
             {
@@ -975,11 +955,9 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn vote_lock(
-        &mut self, address: &RawAddress, amount: &U256,
-        unlock_block_number: u64,
-    ) -> DbResult<()>
-    {
-        let address = Address::new_native(address);
+        &mut self, address: &Address, amount: &U256, unlock_block_number: u64,
+    ) -> DbResult<()> {
+        let address = address.with_native_space();
         if !amount.is_zero() {
             let mut account = self.require_exists(&address, false)?;
             account.cache_staking_info(
@@ -993,9 +971,9 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn remove_expired_vote_stake_info(
-        &mut self, address: &RawAddress, current_block_number: u64,
+        &mut self, address: &Address, current_block_number: u64,
     ) -> DbResult<()> {
-        let address = Address::new_native(address);
+        let address = address.with_native_space();
         let mut account = self.require_exists(&address, false)?;
         account.cache_staking_info(
             false, /* cache_deposit_list */
@@ -1030,7 +1008,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         self.world_statistics.last_distribute_block
     }
 
-    fn remove_contract(&mut self, address: &Address) -> DbResult<()> {
+    fn remove_contract(&mut self, address: &AddressWithSpace) -> DbResult<()> {
         if address.space == Space::Native {
             let removed_whitelist = self
                 .remove_whitelists_for_contract::<access_mode::Write>(
@@ -1054,19 +1032,23 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         Ok(())
     }
 
-    fn exists(&self, address: &Address) -> DbResult<bool> {
+    fn exists(&self, address: &AddressWithSpace) -> DbResult<bool> {
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.is_some()
         })
     }
 
-    fn exists_and_not_null(&self, address: &Address) -> DbResult<bool> {
+    fn exists_and_not_null(
+        &self, address: &AddressWithSpace,
+    ) -> DbResult<bool> {
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(false, |acc| !acc.is_null())
         })
     }
 
-    fn storage_at(&self, address: &Address, key: &[u8]) -> DbResult<U256> {
+    fn storage_at(
+        &self, address: &AddressWithSpace, key: &[u8],
+    ) -> DbResult<U256> {
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(Ok(U256::zero()), |account| {
                 account.storage_at(&self.db, key)
@@ -1075,8 +1057,8 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn set_storage(
-        &mut self, address: &Address, key: Vec<u8>, value: U256,
-        owner: RawAddress,
+        &mut self, address: &AddressWithSpace, key: Vec<u8>, value: U256,
+        owner: Address,
     ) -> DbResult<()>
     {
         if self.storage_at(address, &key)? != value {
@@ -1086,14 +1068,14 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         Ok(())
     }
 
-    fn pos_locked_staking(&self, address: &RawAddress) -> DbResult<U256> {
+    fn pos_locked_staking(&self, address: &Address) -> DbResult<U256> {
         let identifier = BigEndianHash::from_uint(&self.storage_at(
-            &AddressWithSpace::new_native(&POS_REGISTER_CONTRACT_ADDRESS),
+            &POS_REGISTER_CONTRACT_ADDRESS.with_native_space(),
             &pos_internal_entries::identifier_entry(address),
         )?);
         let current_value: IndexStatus = self
             .storage_at(
-                &AddressWithSpace::new_native(&POS_REGISTER_CONTRACT_ADDRESS),
+                &POS_REGISTER_CONTRACT_ADDRESS.with_native_space(),
                 &pos_internal_entries::index_entry(&identifier),
             )?
             .into();
@@ -1104,7 +1086,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         &mut self, identifier: H256, number: u64,
     ) -> DbResult<()> {
         let old_value = self.storage_at(
-            &AddressWithSpace::new_native(&POS_REGISTER_CONTRACT_ADDRESS),
+            &POS_REGISTER_CONTRACT_ADDRESS.with_native_space(),
             &pos_internal_entries::index_entry(&identifier),
         )?;
         assert!(!old_value.is_zero(), "If an identifier is unlocked, its index information must be non-zero");
@@ -1113,7 +1095,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         status.set_unlocked(number);
         // .expect("Incorrect unlock information");
         self.require_exists(
-            &AddressWithSpace::new_native(&POS_REGISTER_CONTRACT_ADDRESS),
+            &POS_REGISTER_CONTRACT_ADDRESS.with_native_space(),
             false,
         )?
         .change_storage_value(
@@ -1280,11 +1262,11 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
 
     /// Charges or refund storage collateral and update `total_storage_tokens`.
     fn settle_collateral_for_address(
-        &mut self, addr: &RawAddress, substate: &dyn SubstateTrait,
+        &mut self, addr: &Address, substate: &dyn SubstateTrait,
         tracer: &mut dyn InternalTransferTracer, account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult>
     {
-        let addr_with_space = Address::new_native(addr);
+        let addr_with_space = addr.with_native_space();
         let (inc_collaterals, sub_collaterals) =
             substate.get_collateral_change(addr);
         let (inc, sub) = (
@@ -1337,7 +1319,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     fn check_storage_limit(
-        &self, original_sender: &RawAddress, storage_limit: &U256,
+        &self, original_sender: &Address, storage_limit: &U256,
     ) -> DbResult<CollateralCheckResult> {
         let collateral_for_storage =
             self.collateral_for_storage(original_sender)?;
@@ -1353,7 +1335,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
 
     #[cfg(test)]
     pub fn new_contract(
-        &mut self, contract: &Address, balance: U256, nonce: U256,
+        &mut self, contract: &AddressWithSpace, balance: U256, nonce: U256,
     ) -> DbResult<()> {
         Self::update_cache(
             self.cache.get_mut(),
@@ -1371,20 +1353,20 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
 
     #[cfg(test)]
     pub fn new_contract_with_code(
-        &mut self, contract: &Address, balance: U256, nonce: U256,
+        &mut self, contract: &AddressWithSpace, balance: U256, nonce: U256,
     ) -> DbResult<()> {
         self.new_contract(contract, balance, nonce)?;
-        self.init_code(&contract, vec![0x12, 0x34], RawAddress::zero())?;
+        self.init_code(&contract, vec![0x12, 0x34], Address::zero())?;
         Ok(())
     }
 
     /// Caller should make sure that staking_balance for this account is
     /// sufficient enough.
     fn add_collateral_for_storage(
-        &mut self, address: &RawAddress, by: &U256,
+        &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
-            self.require_exists(&AddressWithSpace::new_native(address), false)?
+            self.require_exists(&address.with_native_space(), false)?
                 .add_collateral_for_storage(by);
             self.world_statistics.total_storage_tokens += *by;
         }
@@ -1392,14 +1374,14 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     fn sub_collateral_for_storage(
-        &mut self, address: &RawAddress, by: &U256, account_start_nonce: U256,
+        &mut self, address: &Address, by: &U256, account_start_nonce: U256,
     ) -> DbResult<()> {
         let collateral = self.collateral_for_storage(address)?;
         let refundable = if by > &collateral { &collateral } else { by };
         let burnt = *by - *refundable;
         if !refundable.is_zero() {
             self.require_or_new_basic_account(
-                &Address::new_native(address),
+                &address.with_native_space(),
                 &account_start_nonce,
             )?
             .sub_collateral_for_storage(refundable);
@@ -1411,7 +1393,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     #[allow(dead_code)]
-    pub fn touch(&mut self, address: &Address) -> DbResult<()> {
+    pub fn touch(&mut self, address: &AddressWithSpace) -> DbResult<()> {
         drop(self.require_exists(address, false)?);
         Ok(())
     }
@@ -1491,7 +1473,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     /// Assume that only contract with zero `collateral_for_storage` will be
     /// killed.
     pub fn recycle_storage(
-        &mut self, killed_addresses: Vec<Address>,
+        &mut self, killed_addresses: Vec<AddressWithSpace>,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()>
     {
@@ -1499,27 +1481,27 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         for address in &killed_addresses {
             self.db.delete_all::<access_mode::Write>(
                 StorageKey::new_storage_root_key(&address.address)
-                    .space(address.space),
+                    .with_space(address.space),
                 debug_record.as_deref_mut(),
             )?;
             self.db.delete_all::<access_mode::Write>(
                 StorageKey::new_code_root_key(&address.address)
-                    .space(address.space),
+                    .with_space(address.space),
                 debug_record.as_deref_mut(),
             )?;
             self.db.delete(
                 StorageKey::new_account_key(&address.address)
-                    .space(address.space),
+                    .with_space(address.space),
                 debug_record.as_deref_mut(),
             )?;
             self.db.delete(
                 StorageKey::new_deposit_list_key(&address.address)
-                    .space(address.space),
+                    .with_space(address.space),
                 debug_record.as_deref_mut(),
             )?;
             self.db.delete(
                 StorageKey::new_vote_list_key(&address.address)
-                    .space(address.space),
+                    .with_space(address.space),
                 debug_record.as_deref_mut(),
             )?;
         }
@@ -1560,19 +1542,19 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     fn remove_whitelists_for_contract<AM: access_mode::AccessMode>(
-        &mut self, address: &RawAddress,
-    ) -> DbResult<HashMap<Vec<u8>, RawAddress>> {
+        &mut self, address: &Address,
+    ) -> DbResult<HashMap<Vec<u8>, Address>> {
         let mut storage_owner_map = HashMap::new();
         let key_values = self.db.delete_all::<AM>(
             StorageKey::new_storage_key(
                 &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
                 address.as_ref(),
             )
-            .space(Space::Native),
+            .with_native_space(),
             /* debug_record = */ None,
         )?;
         let mut sponsor_whitelist_control_address = self.require_exists(
-            &Address::new_native(&SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS),
+            &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS.with_native_space(),
             /* require_code = */ false,
         )?;
         for (key, value) in &key_values {
@@ -1618,7 +1600,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                     key.clone(),
                     U256::zero(),
                     /* owner doesn't matter for 0 value */
-                    RawAddress::zero(),
+                    Address::zero(),
                 );
             }
         }
@@ -1627,7 +1609,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     /// Return whether or not the address exists.
-    pub fn try_load(&self, address: &Address) -> DbResult<bool> {
+    pub fn try_load(&self, address: &AddressWithSpace) -> DbResult<bool> {
         match self.ensure_account_loaded(address, RequireCache::None, |maybe| {
             maybe.is_some()
         }) {
@@ -1651,8 +1633,9 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     //  there have been changes to kill_account and collateral processing.
     #[allow(unused)]
     pub fn kill_garbage(
-        &mut self, touched: &HashSet<Address>, remove_empty_touched: bool,
-        min_balance: &Option<U256>, kill_contracts: bool,
+        &mut self, touched: &HashSet<AddressWithSpace>,
+        remove_empty_touched: bool, min_balance: &Option<U256>,
+        kill_contracts: bool,
     ) -> DbResult<()>
     {
         // TODO: consider both balance and staking_balance
@@ -1698,8 +1681,10 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     /// Get the value of storage at a specific checkpoint.
     #[cfg(test)]
     pub fn checkpoint_storage_at(
-        &self, start_checkpoint_index: usize, address: &Address, key: &Vec<u8>,
-    ) -> DbResult<Option<U256>> {
+        &self, start_checkpoint_index: usize, address: &AddressWithSpace,
+        key: &Vec<u8>,
+    ) -> DbResult<Option<U256>>
+    {
         #[derive(Debug)]
         enum ReturnKind {
             OriginalAt,
@@ -1752,7 +1737,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             ReturnKind::OriginalAt => {
                 match self.db.get::<StorageValue>(
                     StorageKey::new_storage_key(&address.address, key.as_ref())
-                        .space(address.space),
+                        .with_space(address.space),
                 )? {
                     Some(storage_value) => Ok(Some(storage_value.value)),
                     None => Ok(Some(U256::zero())),
@@ -1763,7 +1748,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
 
     #[cfg(test)]
     pub fn set_storage_layout(
-        &mut self, address: &Address, layout: StorageLayout,
+        &mut self, address: &AddressWithSpace, layout: StorageLayout,
     ) -> DbResult<()> {
         self.require_exists(address, false)?
             .set_storage_layout(layout);
@@ -1771,9 +1756,9 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     fn update_cache(
-        cache: &mut HashMap<Address, AccountEntry>,
-        checkpoints: &mut Vec<HashMap<Address, Option<AccountEntry>>>,
-        address: &Address, account: AccountEntry,
+        cache: &mut HashMap<AddressWithSpace, AccountEntry>,
+        checkpoints: &mut Vec<HashMap<AddressWithSpace, Option<AccountEntry>>>,
+        address: &AddressWithSpace, account: AccountEntry,
     )
     {
         let is_dirty = account.is_dirty();
@@ -1786,8 +1771,8 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     fn insert_cache_if_fresh_account(
-        cache: &mut HashMap<Address, AccountEntry>, address: &Address,
-        maybe_account: Option<OverlayAccount>,
+        cache: &mut HashMap<AddressWithSpace, AccountEntry>,
+        address: &AddressWithSpace, maybe_account: Option<OverlayAccount>,
     ) -> bool
     {
         if !cache.contains_key(address) {
@@ -1799,7 +1784,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     pub fn ensure_account_loaded<F, U>(
-        &self, address: &Address, require: RequireCache, f: F,
+        &self, address: &AddressWithSpace, require: RequireCache, f: F,
     ) -> DbResult<U>
     where F: Fn(Option<&OverlayAccount>) -> U {
         // Return immediately when there is no need to have db operation.
@@ -1858,10 +1843,10 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     fn require_exists(
-        &self, address: &Address, require_code: bool,
+        &self, address: &AddressWithSpace, require_code: bool,
     ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>> {
         fn no_account_is_an_error(
-            address: &Address,
+            address: &AddressWithSpace,
         ) -> DbResult<OverlayAccount> {
             bail!(DbErrorKind::IncompleteDatabase(address.address));
         }
@@ -1869,7 +1854,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     fn require_or_new_basic_account(
-        &self, address: &Address, account_start_nonce: &U256,
+        &self, address: &AddressWithSpace, account_start_nonce: &U256,
     ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>> {
         self.require_or_set(address, false, |address| {
             // It is guaranteed that the address is valid.
@@ -1889,9 +1874,9 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     fn require_or_set<F>(
-        &self, address: &Address, require_code: bool, default: F,
+        &self, address: &AddressWithSpace, require_code: bool, default: F,
     ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>>
-    where F: FnOnce(&Address) -> DbResult<OverlayAccount> {
+    where F: FnOnce(&AddressWithSpace) -> DbResult<OverlayAccount> {
         let mut cache;
         if !self.cache.read().contains_key(address) {
             let account = self
@@ -1978,7 +1963,7 @@ trait AccountEntryProtectedMethods {
     fn vote_stake_list(&self) -> Option<&VoteStakeList>;
     fn code_size(&self) -> Option<usize>;
     fn code(&self) -> Option<Arc<Bytes>>;
-    fn code_owner(&self) -> Option<RawAddress>;
+    fn code_owner(&self) -> Option<Address>;
 }
 
 fn sqrt_u256(input: U256) -> U256 {

@@ -4,7 +4,7 @@
 
 use crate::rpc::types::errors::check_rpc_address_network;
 use cfx_types::{
-    AddressWithSpace, BigEndianHash, H160, H256, H520, U128, U256, U64,
+    AddressSpaceUtil, BigEndianHash, H160, H256, H520, U128, U256, U64,
 };
 use cfxcore::{
     block_data_manager::BlockDataManager,
@@ -150,7 +150,7 @@ impl RpcImpl {
             let account = account.unwrap_or(account_result_to_rpc_result(
                 "address",
                 Ok(Account::new_empty_with_balance(
-                    &AddressWithSpace::new_native(&address.hex_address),
+                    &address.hex_address.with_native_space(),
                     &U256::zero(), /* balance */
                     &U256::zero(), /* nonce */
                 )),

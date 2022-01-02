@@ -10,9 +10,7 @@ use crate::rpc::types::{
 use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
-use cfx_types::{
-    AddressWithSpace, BigEndianHash, Space, H256, H520, U128, U256, U64,
-};
+use cfx_types::{AddressSpaceUtil, BigEndianHash, H256, H520, U128, U256, U64};
 use cfxcore::{
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
@@ -163,7 +161,7 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
 
-        let address = AddressWithSpace::new_native(&address.hex_address);
+        let address = address.hex_address.with_native_space();
 
         let code = match state_db.get_account(&address)? {
             Some(acc) => match state_db.get_code(&address, &acc.code_hash)? {
@@ -190,8 +188,8 @@ impl RpcImpl {
         let state_db = self
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
-        let acc = state_db
-            .get_account(&AddressWithSpace::new_native(&address.hex_address))?;
+        let acc =
+            state_db.get_account(&address.hex_address.with_native_space())?;
 
         Ok(acc.map_or(U256::zero(), |acc| acc.balance).into())
     }
@@ -212,9 +210,7 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
 
-        match state_db
-            .get_account(&AddressWithSpace::new_native(&address.hex_address))?
-        {
+        match state_db.get_account(&address.hex_address.with_native_space())? {
             None => Ok(None),
             Some(acc) => {
                 Ok(Some(RpcAddress::try_from_h160(acc.admin, network)?))
@@ -238,9 +234,7 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
 
-        match state_db
-            .get_account(&AddressWithSpace::new_native(&address.hex_address))?
-        {
+        match state_db.get_account(&address.hex_address.with_native_space())? {
             None => Ok(SponsorInfo::default(network)?),
             Some(acc) => Ok(SponsorInfo::try_from(acc.sponsor_info, network)?),
         }
@@ -260,8 +254,8 @@ impl RpcImpl {
         let state_db = self
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
-        let acc = state_db
-            .get_account(&AddressWithSpace::new_native(&address.hex_address))?;
+        let acc =
+            state_db.get_account(&address.hex_address.with_native_space())?;
 
         Ok(acc.map_or(U256::zero(), |acc| acc.staking_balance).into())
     }
@@ -281,9 +275,9 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
 
-        match state_db.get_deposit_list(&AddressWithSpace::new_native(
-            &address.hex_address,
-        ))? {
+        match state_db
+            .get_deposit_list(&address.hex_address.with_native_space())?
+        {
             None => Ok(vec![]),
             Some(deposit_list) => Ok(deposit_list.0),
         }
@@ -304,9 +298,9 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
 
-        match state_db.get_vote_list(&AddressWithSpace::new_native(
-            &address.hex_address,
-        ))? {
+        match state_db
+            .get_vote_list(&address.hex_address.with_native_space())?
+        {
             None => Ok(vec![]),
             Some(vote_list) => Ok(vote_list.0),
         }
@@ -326,8 +320,8 @@ impl RpcImpl {
         let state_db = self
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
-        let acc = state_db
-            .get_account(&AddressWithSpace::new_native(&address.hex_address))?;
+        let acc =
+            state_db.get_account(&address.hex_address.with_native_space())?;
 
         Ok(acc
             .map_or(U256::zero(), |acc| acc.collateral_for_storage)
@@ -353,19 +347,18 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
 
-        let account = match state_db
-            .get_account(&AddressWithSpace::new_native(address))?
-        {
-            Some(t) => t,
-            None => account_result_to_rpc_result(
-                "address",
-                Ok(Account::new_empty_with_balance(
-                    &AddressWithSpace::new_native(address),
-                    &U256::zero(), /* balance */
-                    &U256::zero(), /* nonce */
-                )),
-            )?,
-        };
+        let account =
+            match state_db.get_account(&address.with_native_space())? {
+                Some(t) => t,
+                None => account_result_to_rpc_result(
+                    "address",
+                    Ok(Account::new_empty_with_balance(
+                        &address.with_native_space(),
+                        &U256::zero(), /* balance */
+                        &U256::zero(), /* nonce */
+                    )),
+                )?,
+            };
 
         Ok(RpcAccount::try_from(account, network)?)
     }
@@ -474,7 +467,7 @@ impl RpcImpl {
             &address.hex_address,
             position.as_ref(),
         )
-        .space(Space::Native);
+        .with_native_space();
 
         Ok(match state_db.get::<StorageValue>(key)? {
             Some(entry) => Some(H256::from_uint(&entry.value).into()),
@@ -582,9 +575,9 @@ impl RpcImpl {
         let root = self
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "epoch_num")?
-            .get_original_storage_root(&AddressWithSpace::new_native(
-                &address.hex_address,
-            ))?;
+            .get_original_storage_root(
+                &address.hex_address.with_native_space(),
+            )?;
 
         Ok(Some(root))
     }
@@ -1249,10 +1242,8 @@ impl RpcImpl {
             account_addr, contract_addr, gas_limit, gas_price, storage_limit, epoch
         );
 
-        let account_addr =
-            AddressWithSpace::new_native(&account_addr.hex_address);
-        let contract_addr =
-            AddressWithSpace::new_native(&contract_addr.hex_address);
+        let account_addr = account_addr.hex_address.with_native_space();
+        let contract_addr = contract_addr.hex_address.with_native_space();
 
         if storage_limit > U256::from(std::u64::MAX) {
             bail!(JsonRpcError::invalid_params(format!("storage_limit has to be within the range of u64 but {} supplied!", storage_limit)));

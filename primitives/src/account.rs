@@ -4,7 +4,8 @@
 
 use crate::{bytes::Bytes, hash::KECCAK_EMPTY};
 use cfx_types::{
-    address_util::AddressUtil, Address, AddressWithSpace, Space, H256, U256,
+    address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
+    Space, H256, U256,
 };
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
@@ -340,7 +341,7 @@ impl Account {
 
     fn from_basic_account(address: Address, a: BasicAccount) -> Self {
         Self {
-            address_local_info: AddressWithSpace::new_native(&address),
+            address_local_info: address.with_native_space(),
             balance: a.balance,
             nonce: a.nonce,
             code_hash: KECCAK_EMPTY,
@@ -354,7 +355,7 @@ impl Account {
 
     pub fn from_contract_account(address: Address, a: ContractAccount) -> Self {
         Self {
-            address_local_info: AddressWithSpace::new_native(&address),
+            address_local_info: address.with_native_space(),
             balance: a.balance,
             nonce: a.nonce,
             code_hash: a.code_hash,
@@ -367,7 +368,7 @@ impl Account {
     }
 
     fn from_ethereum_account(address: Address, a: EthereumAccount) -> Self {
-        let address = AddressWithSpace::new_evm(&address);
+        let address = address.with_evm_space();
         Self {
             address_local_info: address,
             balance: a.balance,

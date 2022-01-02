@@ -7,7 +7,6 @@ use cfx_internal_common::StateRootWithAuxInfo;
 use cfx_storage::{
     utils::access_mode, ErrorKind, MptKeyValue, Result, StorageStateTrait,
 };
-use cfx_types::Space;
 use primitives::{EpochId, StorageKey, StorageKeyWithSpace, MERKLE_NULL_NODE};
 use std::{cell::RefCell, collections::HashMap};
 
@@ -120,7 +119,7 @@ type StateDbTest = StateDbGeneric<MockStorage>;
 
 // convert `key` to storage interface format
 fn storage_key(key: &'static [u8]) -> StorageKeyWithSpace {
-    StorageKey::AccountKey(key).space(Space::Native)
+    StorageKey::AccountKey(key).with_native_space()
 }
 
 // convert `key` to raw storage format

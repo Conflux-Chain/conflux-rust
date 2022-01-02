@@ -19,8 +19,7 @@ use cfx_storage::{
     StorageManagerTrait,
 };
 use cfx_types::{
-    address_util::AddressUtil, Address, AddressWithSpace, BigEndianHash, Space,
-    U256,
+    address_util::AddressUtil, Address, AddressSpaceUtil, BigEndianHash, U256,
 };
 use keccak_hash::{keccak, KECCAK_EMPTY};
 use primitives::{EpochId, StorageKey, StorageLayout};
@@ -53,7 +52,7 @@ fn checkpoint_basic() {
     let mut state = get_state_for_genesis_write(&storage_manager);
     let mut address = Address::zero();
     address.set_user_account_type_bits();
-    let address_with_space = AddressWithSpace::new_native(&address);
+    let address_with_space = address.with_native_space();
     state.checkpoint();
     state
         .add_balance(
@@ -123,7 +122,7 @@ fn checkpoint_nested() {
     let mut state = get_state_for_genesis_write(&storage_manager);
     let mut address = Address::zero();
     address.set_user_account_type_bits();
-    let address_with_space = AddressWithSpace::new_native(&address);
+    let address_with_space = address.with_native_space();
     assert_eq!(state.total_storage_tokens(), U256::from(0));
     assert_eq!(state.balance(&address_with_space).unwrap(), U256::from(0));
     assert_eq!(
@@ -177,7 +176,7 @@ fn checkpoint_revert_to_get_storage_at() {
     let mut state = get_state_for_genesis_write(&storage_manager);
     let mut address = Address::zero();
     address.set_contract_type_bits();
-    let address_with_space = AddressWithSpace::new_native(&address);
+    let address_with_space = address.with_native_space();
     let key = u256_to_vec(&U256::from(0));
     let c0 = state.checkpoint();
     let c1 = state.checkpoint();
@@ -224,7 +223,7 @@ fn checkpoint_from_empty_get_storage_at() {
     let mut state = get_state_for_genesis_write(&storage_manager);
     let mut a = Address::zero();
     a.set_contract_type_bits();
-    let a_s = AddressWithSpace::new_native(&a);
+    let a_s = a.with_native_space();
     let sponsor = Address::random();
     let k = u256_to_vec(&U256::from(0));
     let k2 = u256_to_vec(&U256::from(1));
@@ -468,10 +467,10 @@ fn checkpoint_get_storage_at() {
     let mut state = get_state_for_genesis_write(&storage_manager);
     let mut a = Address::zero();
     a.set_user_account_type_bits();
-    let a_s = AddressWithSpace::new_native(&a);
+    let a_s = a.with_native_space();
     let mut contract_a = Address::zero();
     contract_a.set_contract_type_bits();
-    let contract_a_s = AddressWithSpace::new_native(&contract_a);
+    let contract_a_s = contract_a.with_native_space();
     let sponsor = Address::random();
     let k = u256_to_vec(&U256::from(0));
     let k2 = u256_to_vec(&U256::from(1));
@@ -871,7 +870,7 @@ fn kill_account_with_checkpoints() {
     let mut state_0 = get_state_for_genesis_write(&storage_manager);
     let mut a = Address::zero();
     a.set_contract_type_bits();
-    let a_s = AddressWithSpace::new_native(&a);
+    let a_s = a.with_native_space();
     let k = u256_to_vec(&U256::from(0));
     // Need the checkpoint for ownership commitment.
     state_0.checkpoint();
@@ -951,7 +950,7 @@ fn check_result_of_simple_payment_to_killed_account() {
     let storage_manager = new_state_manager_for_unit_test();
     let mut state_0 = get_state_for_genesis_write(&storage_manager);
     let sender_addr = DEV_GENESIS_KEY_PAIR.address();
-    let sender_addr_s = AddressWithSpace::new_native(&sender_addr);
+    let sender_addr_s = sender_addr.with_native_space();
     state_0
         .require_or_new_basic_account(
             &sender_addr_s,
@@ -961,11 +960,10 @@ fn check_result_of_simple_payment_to_killed_account() {
         .add_balance(&ONE_CFX_IN_DRIP.into());
     let mut a = Address::zero();
     a.set_contract_type_bits();
-    let a_s = AddressWithSpace::new_native(&a);
+    let a_s = a.with_native_space();
     let code = b"asdf"[..].into();
     let code_hash = keccak(&code);
-    let code_key =
-        StorageKey::new_code_key(&a, &code_hash).space(Space::Native);
+    let code_key = StorageKey::new_code_key(&a, &code_hash).with_native_space();
     let k = u256_to_vec(&U256::from(0));
     // Need the checkpoint for ownership commitment.
     state_0.checkpoint();
@@ -1032,7 +1030,7 @@ fn create_contract_fail() {
     let mut substate = Substate::new();
     let mut state = get_state_for_genesis_write(&storage_manager);
     let a = Address::from_low_u64_be(1000);
-    let a_s = AddressWithSpace::new_native(&a);
+    let a_s = a.with_native_space();
 
     state.checkpoint(); // c1
     state
@@ -1082,10 +1080,10 @@ fn create_contract_fail_previous_storage() {
     let mut state = get_state_for_genesis_write(&storage_manager);
     let mut a = Address::from_low_u64_be(1000);
     a.set_user_account_type_bits();
-    let a_s = AddressWithSpace::new_native(&a);
+    let a_s = a.with_native_space();
     let mut contract_addr = a;
     contract_addr.set_contract_type_bits();
-    let contract_addr_s = AddressWithSpace::new_native(&contract_addr);
+    let contract_addr_s = contract_addr.with_native_space();
     let k = u256_to_vec(&U256::from(0));
 
     let mut substates = Vec::<Substate>::new();
@@ -1229,10 +1227,10 @@ fn test_automatic_collateral_normal_account() {
     let mut state = get_state_for_genesis_write(&storage_manager);
     let mut normal_account = Address::from_low_u64_be(0);
     normal_account.set_user_account_type_bits();
-    let normal_account_s = AddressWithSpace::new_native(&normal_account);
+    let normal_account_s = normal_account.with_native_space();
     let mut contract_account = Address::from_low_u64_be(1);
     contract_account.set_contract_type_bits();
-    let contract_account_s = AddressWithSpace::new_native(&contract_account);
+    let contract_account_s = contract_account.with_native_space();
     let k1 = u256_to_vec(&U256::from(0));
     let k2 = u256_to_vec(&U256::from(1));
     let k3 = u256_to_vec(&U256::from(3));
@@ -1557,7 +1555,7 @@ fn test_automatic_collateral_contract_account() {
     let mut state = get_state_for_genesis_write(&storage_manager);
     let mut contract_account = Address::from_low_u64_be(1);
     contract_account.set_contract_type_bits();
-    let contract_account_s = AddressWithSpace::new_native(&contract_account);
+    let contract_account_s = contract_account.with_native_space();
     let sponsor = Address::random();
     let k1 = u256_to_vec(&U256::from(0));
     let k2 = u256_to_vec(&U256::from(1));

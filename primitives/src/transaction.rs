@@ -3,7 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{bytes::Bytes, hash::keccak};
-use cfx_types::{Address, AddressWithSpace, BigEndianHash, H160, H256, U256};
+use cfx_types::{
+    Address, AddressSpaceUtil, AddressWithSpace, BigEndianHash, H160, H256,
+    U256,
+};
 use keylib::{
     self, public_to_address, recover, verify_public, Public, Secret, Signature,
 };
@@ -532,7 +535,7 @@ impl SignedTransaction {
     /// Returns transaction sender.
     pub fn sender(&self) -> AddressWithSpace {
         // TODO: EVM core: sender from EVM core tx.
-        AddressWithSpace::new_native(&self.sender)
+        self.sender.with_native_space()
     }
 
     pub fn nonce(&self) -> U256 { self.transaction.nonce }

@@ -10,7 +10,8 @@ use crate::{
 };
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{
-    address_util::AddressUtil, Address, AddressWithSpace, Space, U256,
+    address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
+    Space, U256,
 };
 
 fn available_admin_address(spec: &Spec, address: &Address) -> bool {
@@ -94,11 +95,11 @@ pub fn set_admin(
     );
 
     let clear_admin_in_create = context.callstack.contract_in_creation()
-        == Some(&AddressWithSpace::new_native(&contract_address))
+        == Some(&contract_address.with_native_space())
         && new_admin_address.is_null_address();
 
     if context.is_contract_address(&contract_address)?
-        && context.state.exists(&AddressWithSpace::new_native(&contract_address))?
+        && context.state.exists(&contract_address.with_native_space())?
         // Allow set admin if requester matches or in contract creation to clear admin.
         && (context.state.admin(&contract_address)?.eq(requester)
         || clear_admin_in_create)
@@ -128,8 +129,8 @@ pub fn destroy(
     let admin = state.admin(&contract_address)?;
     if admin == *requester {
         suicide(
-            &AddressWithSpace::new_native(&contract_address),
-            &AddressWithSpace::new_native(&admin),
+            &contract_address.with_native_space(),
+            &admin.with_native_space(),
             state,
             spec,
             substate,

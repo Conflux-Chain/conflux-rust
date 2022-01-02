@@ -12,7 +12,7 @@ use crate::rpc::{
 };
 use cfx_addr::Network;
 use cfx_types::{
-    address_util::AddressUtil, Address, AddressWithSpace, U256, U64,
+    address_util::AddressUtil, Address, AddressSpaceUtil, U256, U64,
 };
 use cfxcore::rpc_errors::invalid_params_check;
 use cfxcore_accounts::AccountProvider;
@@ -169,7 +169,7 @@ pub fn sign_call(
         chain_id,
         data: request.data.unwrap_or_default().into_vec(),
     }
-    .fake_sign(AddressWithSpace::new_native(&from)))
+    .fake_sign(from.with_native_space()))
 }
 
 pub fn rpc_call_request_network(

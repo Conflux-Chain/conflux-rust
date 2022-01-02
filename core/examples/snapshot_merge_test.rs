@@ -12,7 +12,7 @@ use cfx_storage::{
     storage_db::{KeyValueDbTraitRead, SnapshotDbManagerTrait, SnapshotInfo},
     DeltaMptIterator, Error as StorageError, StateIndex, StorageConfiguration,
 };
-use cfx_types::{Address, AddressWithSpace, H256};
+use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, H256};
 use cfxcore::sync::Error;
 use clap::{App, Arg, ArgMatches};
 use log::LevelFilter;
@@ -334,7 +334,7 @@ fn prepare_state(
 {
     let mut new_account_map = HashMap::new();
     for i in 0..accounts {
-        let addr = AddressWithSpace::new_native(&Address::random());
+        let addr = Address::random().with_native_space();
         let account =
             Account::new_empty_with_balance(&addr, &i.into(), &0.into());
         new_account_map.insert(addr, account);
@@ -430,7 +430,8 @@ where
             account_map.next().expect("Caller has checked the size");
         state
             .set(
-                StorageKey::new_account_key(&addr.address).space(addr.space),
+                StorageKey::new_account_key(&addr.address)
+                    .with_space(addr.space),
                 account,
                 None,
             )

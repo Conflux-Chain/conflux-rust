@@ -1769,7 +1769,7 @@ impl TxReplayer {
                                 // ethereum-types because conflux use a newer
                                 // version
                                 unsafe { std::mem::transmute(&sender) },
-                            ).space(Space::Native),
+                            ).with_native_space(),
                             &account,
                             None,
                         )
@@ -1828,7 +1828,7 @@ impl TxReplayer {
                         // ethereum-types because conflux use a newer
                         // version
                         unsafe { std::mem::transmute(&receiver) },
-                    ).space(Space::Native),
+                    ).with_native_space(),
                     &account,
                     None,
                 )

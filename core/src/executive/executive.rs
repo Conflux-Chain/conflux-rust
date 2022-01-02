@@ -32,8 +32,8 @@ use cfx_state::{
 };
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
-    address_util::AddressUtil, Address, AddressWithSpace, Space, H256, U256,
-    U512, U64,
+    address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
+    Space, H256, U256, U512, U64,
 };
 use primitives::{
     receipt::StorageChange,
@@ -107,7 +107,7 @@ pub fn contract_address(
             (h, Some(code_hash))
         }
     };
-    return (AddressWithSpace::new(address, sender.space), code_hash);
+    return (address.with_space(sender.space), code_hash);
 }
 
 /// Convert a finalization result into a VM message call result.
@@ -462,10 +462,9 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
             let mut substate = self.context.substate;
             state.collect_ownership_changed(&mut substate)?; /* only fail for db error. */
             if let Some(create_address) = self.create_address {
-                substate.contracts_created_mut().push(AddressWithSpace::new(
-                    create_address,
-                    self.context.space,
-                ));
+                substate
+                    .contracts_created_mut()
+                    .push(create_address.with_space(self.context.space));
             }
 
             state.discard_checkpoint();
@@ -536,10 +535,8 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         state.checkpoint();
 
         let contract_address = self.get_recipient().clone();
-        callstack.push(
-            AddressWithSpace::new(contract_address, self.context.space),
-            is_create,
-        );
+        callstack
+            .push(contract_address.with_space(self.context.space), is_create);
 
         // Pre execution: transfer value and init contract.
         let spec = self.context.spec;
@@ -982,9 +979,10 @@ impl<
                         TxDropError::InvalidRecipientAddress(*address),
                     ));
                 }
-                if self.state.is_contract_with_code(
-                    &AddressWithSpace::new_native(address),
-                )? {
+                if self
+                    .state
+                    .is_contract_with_code(&address.with_native_space())?
+                {
                     code_address = *address;
                     if self.state.check_commission_privilege(
                         &code_address,
@@ -1238,7 +1236,7 @@ impl<
                 self.create(params, &mut substate, &mut options.tracer)?
             }
             Action::Call(ref address) => {
-                let address = AddressWithSpace::new(*address, sender.space);
+                let address = address.with_space(sender.space);
                 let params = ActionParams {
                     space: sender.space,
                     code_address: address.address,
@@ -1377,7 +1375,7 @@ impl<
                     sponsor_balance_for_gas.clone(),
                 );
                 self.state.add_balance(
-                    &AddressWithSpace::new_native(sponsor_address),
+                    &sponsor_address.with_native_space(),
                     &sponsor_balance_for_gas,
                     cleanup_mode(&mut substate, self.spec),
                     self.spec.account_start_nonce,
@@ -1395,7 +1393,7 @@ impl<
                 );
 
                 self.state.add_balance(
-                    &AddressWithSpace::new_native(sponsor_address),
+                    &sponsor_address.with_native_space(),
                     &sponsor_balance_for_collateral,
                     cleanup_mode(&mut substate, self.spec),
                     self.spec.account_start_nonce,

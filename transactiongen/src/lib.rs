@@ -16,7 +16,7 @@ extern crate secret_store;
 
 use crate::bytes::Bytes;
 use cfx_types::{
-    Address, AddressWithSpace, BigEndianHash, H256, H512, U256, U512,
+    Address, AddressSpaceUtil, BigEndianHash, H256, H512, U256, U512,
 };
 use cfxcore::{
     executive::contract_address, vm::CreateContractAddress,
@@ -200,9 +200,7 @@ impl TransactionGenerator {
             // FIXME: to use for this function, then change unwrap() to ?.
             let (nonce, balance) = txgen
                 .txpool
-                .get_state_account_info(&AddressWithSpace::new_native(
-                    &sender_address,
-                ))
+                .get_state_account_info(&sender_address.with_native_space())
                 .unwrap();
             if nonce.cmp(sender_nonce) != Ordering::Equal {
                 *sender_nonce = nonce.clone();
@@ -301,7 +299,7 @@ impl DirectTransactionGenerator {
         let info = (
             start_key_pair,
             Account::new_empty_with_balance(
-                &AddressWithSpace::new_native(&start_address),
+                &start_address.with_native_space(),
                 &start_balance,
                 &0.into(), /* nonce */
             ),
@@ -316,7 +314,7 @@ impl DirectTransactionGenerator {
             // A fake block_number. There field is unnecessary in Ethereum
             // replay test.
             0.into(),
-            &AddressWithSpace::new_native(&contract_creator),
+            &contract_creator.with_native_space(),
             &0.into(),
             // A fake code. There field is unnecessary in Ethereum replay test.
             &[],
@@ -393,7 +391,7 @@ impl DirectTransactionGenerator {
                             (
                                 kp,
                                 Account::new_empty_with_balance(
-                                    &AddressWithSpace::new_native(&address),
+                                    &address.with_native_space(),
                                     &0.into(), /* balance */
                                     &0.into(), /* nonce */
                                 ),
