@@ -18,7 +18,7 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use cfx_types::{H512, U256};
+use cfx_types::U256;
 use serde::{Serialize, Serializer};
 
 /// Sync info
@@ -48,9 +48,7 @@ pub enum SyncStatus {
 
 impl Serialize for SyncStatus {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    where S: Serializer {
         match *self {
             SyncStatus::Info(ref info) => info.serialize(serializer),
             SyncStatus::None => false.serialize(serializer),

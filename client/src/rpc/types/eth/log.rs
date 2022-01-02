@@ -18,9 +18,9 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::rpc::types::Bytes;
 use cfx_types::{H160, H256, U256};
 use primitives::log_entry::{LocalizedLogEntry, LogEntry};
-use crate::rpc::types::Bytes;
 
 /// Log
 #[derive(Debug, Serialize, PartialEq, Eq, Hash, Clone)]
@@ -53,9 +53,7 @@ pub struct Log {
 }
 
 impl Log {
-    pub fn try_from_localized(
-        e: LocalizedLogEntry
-    ) -> Result<Log, String> {
+    pub fn try_from_localized(_e: LocalizedLogEntry) -> Result<Log, String> {
         unimplemented!();
         // Ok(Log {
         //     address: RpcAddress::try_from_h160(e.entry.address, network)?,
@@ -70,7 +68,7 @@ impl Log {
         // })
     }
 
-    pub fn try_from(e: LogEntry) -> Result<Log, String> {
+    pub fn try_from(_e: LogEntry) -> Result<Log, String> {
         unimplemented!();
         // Ok(Log {
         //     address: RpcAddress::try_from_h160(e.address, network)?,

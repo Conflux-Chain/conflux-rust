@@ -18,10 +18,10 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use cfx_types::{H160, H256, H512, U256, U64};
-use serde::{ser::SerializeStruct, Serialize, Serializer};
-use primitives::SignedTransaction;
 use crate::rpc::types::Bytes;
+use cfx_types::{H160, H256, H512, U256, U64};
+use primitives::SignedTransaction;
+use serde::{Serialize, Serializer};
 
 /// Transaction
 #[derive(Debug, Default, Clone, PartialEq, Serialize)]
@@ -63,7 +63,8 @@ pub struct Transaction {
     pub public_key: Option<H512>,
     /// The network id of the transaction, if any.
     pub chain_id: Option<U64>,
-    /// The standardised V field of the signature (0 or 1). Used by legacy transaction
+    /// The standardised V field of the signature (0 or 1). Used by legacy
+    /// transaction
     #[serde(skip_serializing_if = "Option::is_none")]
     pub standard_v: Option<U256>,
     /// The standardised V field of the signature.
@@ -72,27 +73,27 @@ pub struct Transaction {
     pub r: U256,
     /// The S field of the signature.
     pub s: U256,
-    // /// Transaction activates at specified block.
-    // pub condition: Option<TransactionCondition>,
-    // /// optional access list
-    // #[serde(skip_serializing_if = "Option::is_none")]
-    // pub access_list: Option<AccessList>,
-    // /// miner bribe
-    // #[serde(skip_serializing_if = "Option::is_none")]
-    // pub max_priority_fee_per_gas: Option<U256>,
+    /* /// Transaction activates at specified block.
+     * pub condition: Option<TransactionCondition>,
+     * /// optional access list
+     * #[serde(skip_serializing_if = "Option::is_none")]
+     * pub access_list: Option<AccessList>,
+     * /// miner bribe
+     * #[serde(skip_serializing_if = "Option::is_none")]
+     * pub max_priority_fee_per_gas: Option<U256>, */
 }
 
 impl Transaction {
     /// Convert `SignedTransaction` into RPC Transaction.
-    pub fn from_signed(t: SignedTransaction) -> Transaction {
+    pub fn from_signed(_t: SignedTransaction) -> Transaction {
         unimplemented!();
         // let signature = t.signature();
         // let scheme = CreateContractAddress::FromSenderAndNonce;
         //
         // let access_list = match t.as_unsigned() {
         //     TypedTransaction::AccessList(tx) => {
-        //         Some(tx.access_list.clone().into_iter().map(Into::into).collect())
-        //     }
+        //         Some(tx.access_list.clone().into_iter().map(Into::into).
+        // collect())     }
         //     TypedTransaction::EIP1559Transaction(tx) => Some(
         //         tx.transaction
         //             .access_list
@@ -105,9 +106,9 @@ impl Transaction {
         // };
         //
         // let (max_fee_per_gas, max_priority_fee_per_gas) =
-        //     if let TypedTransaction::EIP1559Transaction(tx) = t.as_unsigned() {
-        //         (Some(tx.tx().gas_price), Some(tx.max_priority_fee_per_gas))
-        //     } else {
+        //     if let TypedTransaction::EIP1559Transaction(tx) = t.as_unsigned()
+        // {         (Some(tx.tx().gas_price),
+        // Some(tx.max_priority_fee_per_gas))     } else {
         //         (None, None)
         //     };
         //
@@ -135,8 +136,8 @@ impl Transaction {
         //     input: Bytes::new(t.tx().data.clone()),
         //     creates: match t.tx().action {
         //         Action::Create => {
-        //             Some(contract_address(scheme, &t.sender(), &t.tx().nonce, &t.tx().data).0)
-        //         }
+        //             Some(contract_address(scheme, &t.sender(), &t.tx().nonce,
+        // &t.tx().data).0)         }
         //         Action::Call(_) => None,
         //     },
         //     raw: t.encode().into(),

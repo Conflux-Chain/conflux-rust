@@ -11,6 +11,7 @@ pub mod call_request;
 mod consensus_graph_states;
 mod epoch_number;
 pub mod errors;
+pub mod eth;
 mod filter;
 mod index;
 mod log;
@@ -28,7 +29,6 @@ mod trace;
 mod trace_filter;
 mod transaction;
 mod tx_pool;
-pub mod eth;
 
 pub use self::{
     account::Account,

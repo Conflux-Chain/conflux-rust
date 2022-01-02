@@ -18,21 +18,18 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::rpc::types::{eth::Log, EpochNumber as BlockNumber};
 use cfx_types::{H160, H256};
-use jsonrpc_core::Error as RpcError;
 use serde::{
     de::{DeserializeOwned, Error},
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use serde_json::{from_value, Value};
-use crate::rpc::types::{EpochNumber as BlockNumber};
-use crate::rpc::types::eth::Log;
 
 /// Variadic value
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum VariadicValue<T>
-where
-    T: DeserializeOwned,
+where T: DeserializeOwned
 {
     /// Single
     Single(T),
@@ -43,13 +40,10 @@ where
 }
 
 impl<'a, T> Deserialize<'a> for VariadicValue<T>
-where
-    T: DeserializeOwned,
+where T: DeserializeOwned
 {
     fn deserialize<D>(deserializer: D) -> Result<VariadicValue<T>, D::Error>
-    where
-        D: Deserializer<'a>,
-    {
+    where D: Deserializer<'a> {
         let v: Value = Deserialize::deserialize(deserializer)?;
 
         if v.is_null() {
@@ -59,7 +53,12 @@ where
         from_value(v.clone())
             .map(VariadicValue::Single)
             .or_else(|_| from_value(v).map(VariadicValue::Multiple))
-            .map_err(|err| D::Error::custom(format!("Invalid variadic value type: {}", err)))
+            .map_err(|err| {
+                D::Error::custom(format!(
+                    "Invalid variadic value type: {}",
+                    err
+                ))
+            })
     }
 }
 
@@ -89,8 +88,8 @@ pub struct Filter {
 
 // impl Filter {
 //     pub fn try_into(self) -> Result<EthFilter, RpcError> {
-//         if self.block_hash.is_some() && (self.from_block.is_some() || self.to_block.is_some()) {
-//             return Err(invalid_params(
+//         if self.block_hash.is_some() && (self.from_block.is_some() ||
+// self.to_block.is_some()) {             return Err(invalid_params(
 //                 "blockHash",
 //                 "blockHash is mutually exclusive with fromBlock/toBlock",
 //             ));
@@ -158,18 +157,16 @@ pub enum FilterChanges {
     Empty,
 }
 
-// impl Serialize for FilterChanges {
-//     fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer,
-//     {
-//         match *self {
-//             FilterChanges::Logs(ref logs) => logs.serialize(s),
-//             FilterChanges::Hashes(ref hashes) => hashes.serialize(s),
-//             FilterChanges::Empty => (&[] as &[Value]).serialize(s),
-//         }
-//     }
-// }
+impl Serialize for FilterChanges {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        match *self {
+            FilterChanges::Logs(ref logs) => logs.serialize(s),
+            FilterChanges::Hashes(ref hashes) => hashes.serialize(s),
+            FilterChanges::Empty => (&[] as &[Value]).serialize(s),
+        }
+    }
+}
 
 // #[cfg(test)]
 // mod tests {
@@ -182,14 +179,18 @@ pub enum FilterChanges {
 //
 //     #[test]
 //     fn topic_deserialization() {
-//         let s = r#"["0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b", null, ["0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b", "0x0000000000000000000000000aff3454fce5edbc8cca8697c15331677e6ebccc"]]"#;
+//         let s =
+// r#"["0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+// null, ["0x000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+// "0x0000000000000000000000000aff3454fce5edbc8cca8697c15331677e6ebccc"]]"#;
 //         let deserialized: Vec<Topic> = serde_json::from_str(s).unwrap();
 //         assert_eq!(
 //             deserialized,
 //             vec![
 //                 VariadicValue::Single(
 //                     H256::from_str(
-//                         "000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b"
+//                         
+// "000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b"
 //                     )
 //                     .unwrap()
 //                     .into()
@@ -197,12 +198,14 @@ pub enum FilterChanges {
 //                 VariadicValue::Null,
 //                 VariadicValue::Multiple(vec![
 //                     H256::from_str(
-//                         "000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b"
+//                         
+// "000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b"
 //                     )
 //                     .unwrap()
 //                     .into(),
 //                     H256::from_str(
-//                         "0000000000000000000000000aff3454fce5edbc8cca8697c15331677e6ebccc"
+//                         
+// "0000000000000000000000000aff3454fce5edbc8cca8697c15331677e6ebccc"
 //                     )
 //                     .unwrap()
 //                     .into(),
@@ -239,7 +242,8 @@ pub enum FilterChanges {
 //                 VariadicValue::Null,
 //                 VariadicValue::Single(
 //                     H256::from_str(
-//                         "000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b",
+//                         
+// "000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b",
 //                     )
 //                     .unwrap(),
 //                 ),
@@ -258,7 +262,8 @@ pub enum FilterChanges {
 //                 topics: vec![
 //                     None,
 //                     Some(vec![H256::from_str(
-//                         "000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b"
+//                         
+// "000000000000000000000000a94f5374fce5edbc8e2a8697c15331677e6ebf0b"
 //                     )
 //                     .unwrap()]),
 //                     None,

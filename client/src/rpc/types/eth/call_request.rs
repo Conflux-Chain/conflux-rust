@@ -18,9 +18,8 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
+use crate::rpc::types::{eth::transaction_access_list::AccessList, Bytes};
 use cfx_types::{H160, U256, U64};
-use crate::rpc::types::Bytes;
-use crate::rpc::types::eth::transaction_access_list::AccessList;
 
 /// Call request
 #[derive(Debug, Default, PartialEq, Deserialize)]
@@ -69,8 +68,8 @@ pub struct CallRequest {
 //             data: self.data.map(Into::into),
 //             nonce: self.nonce.map(Into::into),
 //             access_list: self.access_list.map(Into::into),
-//             max_priority_fee_per_gas: self.max_priority_fee_per_gas.map(Into::into),
-//         }
+//             max_priority_fee_per_gas:
+// self.max_priority_fee_per_gas.map(Into::into),         }
 //     }
 // }
 //
@@ -121,15 +120,16 @@ pub struct CallRequest {
 // 			"gas": "0x76c0",
 // 			"gasPrice": "0x9184e72a000",
 // 			"value": "0x9184e72a",
-// 			"data": "0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"
+// 			"data":
+// "0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"
 // 		}"#;
 //         let deserialized: CallRequest = serde_json::from_str(s).unwrap();
 //
 //         assert_eq!(deserialized, CallRequest {
 //             transaction_type: Default::default(),
-// 			from: Some(H160::from_str("b60e8dd61c5d32be8058bb8eb970870f07233155").unwrap()),
-// 			to: Some(H160::from_str("d46e8dd67c5d32be8058bb8eb970870f07244567").unwrap()),
-// 			gas_price: Some(U256::from_str("9184e72a000").unwrap()),
+// 			from: Some(H160::from_str("b60e8dd61c5d32be8058bb8eb970870f07233155").
+// unwrap()), 			to: Some(H160::from_str("d46e8dd67c5d32be8058bb8eb970870f07244567"
+// ).unwrap()), 			gas_price: Some(U256::from_str("9184e72a000").unwrap()),
 // 			max_fee_per_gas: None,
 // 			gas: Some(U256::from_str("76c0").unwrap()),
 // 			value: Some(U256::from_str("9184e72a").unwrap()),
