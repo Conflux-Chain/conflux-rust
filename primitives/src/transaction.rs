@@ -4,8 +4,8 @@
 
 use crate::{bytes::Bytes, hash::keccak};
 use cfx_types::{
-    Address, AddressSpaceUtil, AddressWithSpace, BigEndianHash, H160, H256,
-    U256,
+    Address, AddressSpaceUtil, AddressWithSpace, BigEndianHash, Space, H160,
+    H256, U256,
 };
 use keylib::{
     self, public_to_address, recover, verify_public, Public, Secret, Signature,
@@ -241,23 +241,18 @@ pub struct Transaction {
     pub data: Bytes,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum TransactionType {
-    Normal,
-    EthereumLike,
-}
-
 impl Transaction {
     // This function returns the hash value used in transaction signature. It is
     // different from transaction hash. The transaction hash also contains
     // signatures.
     pub fn signature_hash(&self) -> H256 {
         let mut s = RlpStream::new();
-        match self.transaction_type() {
-            TransactionType::Normal => {
+        match self.space() {
+            Space::Native => {
                 s.append(self);
             }
-            TransactionType::EthereumLike => {
+            Space::Ethereum => {
+                // EIP-155 Transaction type.
                 s.begin_list(9);
                 s.append(&self.nonce);
                 s.append(&self.gas_price);
@@ -273,11 +268,11 @@ impl Transaction {
         keccak(s.as_raw())
     }
 
-    pub fn transaction_type(&self) -> TransactionType {
+    pub fn space(&self) -> Space {
         if self.epoch_height == u64::MAX {
-            TransactionType::EthereumLike
+            Space::Ethereum
         } else {
-            TransactionType::Normal
+            Space::Native
         }
     }
 
@@ -534,8 +529,7 @@ impl SignedTransaction {
 
     /// Returns transaction sender.
     pub fn sender(&self) -> AddressWithSpace {
-        // TODO: EVM core: sender from EVM core tx.
-        self.sender.with_native_space()
+        self.sender.with_space(self.space())
     }
 
     pub fn nonce(&self) -> U256 { self.transaction.nonce }

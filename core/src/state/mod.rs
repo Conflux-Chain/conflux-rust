@@ -130,7 +130,9 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
         &mut self, substate: &mut Substate,
     ) -> DbResult<()> {
         if let Some(checkpoint) = self.checkpoints.get_mut().last() {
-            for address in checkpoint.keys() {
+            for address in
+                checkpoint.keys().filter(|a| a.space == Space::Native)
+            {
                 if let Some(ref mut maybe_acc) = self
                     .cache
                     .get_mut()
@@ -233,6 +235,7 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
                 }) {
                     let storage_value =
                         rlp::decode::<StorageValue>(value.as_ref())?;
+                    // Must native space
                     let storage_owner =
                         storage_value.owner.as_ref().unwrap_or(address);
                     substate.record_storage_release(
@@ -421,6 +424,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         nonce: U256, storage_layout: Option<StorageLayout>,
     ) -> DbResult<()>
     {
+        assert!(contract.space == Space::Native || admin.is_zero());
         Self::update_cache(
             self.cache.get_mut(),
             self.checkpoints.get_mut(),
@@ -448,7 +452,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         &self, address: &AddressWithSpace,
     ) -> DbResult<bool> {
         if address.space == Space::Native
-            && !address.address.maybe_contract_address()
+            && !address.address.is_contract_address()
         {
             return Ok(false);
         }

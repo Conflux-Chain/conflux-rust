@@ -51,7 +51,7 @@ use cfx_parameters::{
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::StateDb;
 use cfx_storage::state_manager::StateManagerTrait;
-use cfx_types::{AddressSpaceUtil, Bloom, H160, H256, U256};
+use cfx_types::{AddressWithSpace, Bloom, H256, U256};
 use either::Either;
 use itertools::Itertools;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
@@ -654,7 +654,7 @@ impl ConsensusGraph {
     // TODO: maybe return error for reserved address? Not sure where is the best
     //  place to do the check.
     pub fn next_nonce(
-        &self, address: H160,
+        &self, address: AddressWithSpace,
         block_hash_or_epoch_number: BlockHashOrEpochNumber,
         rpc_param_name: &str,
     ) -> RpcResult<U256>
@@ -671,7 +671,7 @@ impl ConsensusGraph {
         let state =
             self.get_state_by_epoch_number(epoch_number, rpc_param_name)?;
 
-        Ok(state.nonce(&address.with_native_space())?)
+        Ok(state.nonce(&address)?)
     }
 
     fn earliest_epoch_for_log_filter(&self) -> u64 {

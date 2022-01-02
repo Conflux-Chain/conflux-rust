@@ -70,14 +70,6 @@ impl<'a> InternalRefContext<'a> {
     }
 
     pub fn is_contract_address(&self, address: &Address) -> vm::Result<bool> {
-        let answer = if self.spec.cip80 {
-            unreachable!("Dropped CIP 80");
-        // let deployed = self.state.is_contract_with_code(address)?;
-        // let deploying = self.callstack.contains_key(address);
-        // deployed || deploying
-        } else {
-            address.is_contract_address()
-        };
-        Ok(answer)
+        Ok(address.is_contract_address())
     }
 }

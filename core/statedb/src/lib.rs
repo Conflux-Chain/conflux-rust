@@ -306,15 +306,19 @@ mod impls {
         /// the local changes (i.e. accessed_entries), then from the
         /// storage if it's untouched.
         fn load_storage_layout(
-            storage_layouts_to_rewrite: &mut HashMap<Vec<u8>, StorageLayout>,
-            accept_account_deletion: bool, address: &[u8], storage: &Storage,
-            accessed_entries: &AccessedEntries,
+            storage_layouts_to_rewrite: &mut HashMap<
+                (Vec<u8>, Space),
+                StorageLayout,
+            >,
+            accept_account_deletion: bool, address: &[u8], space: Space,
+            storage: &Storage, accessed_entries: &AccessedEntries,
         ) -> Result<()>
         {
-            if !storage_layouts_to_rewrite.contains_key(address) {
-                // TODO: EVM core: Work later
+            if !storage_layouts_to_rewrite
+                .contains_key(&(address.to_vec(), space))
+            {
                 let storage_layout_key =
-                    StorageKey::StorageRootKey(address).with_native_space();
+                    StorageKey::StorageRootKey(address).with_space(space);
                 let current_storage_layout = match accessed_entries
                     .get(&storage_layout_key.to_key_bytes())
                 {
@@ -347,7 +351,7 @@ mod impls {
                     },
                 };
                 storage_layouts_to_rewrite
-                    .insert(address.into(), current_storage_layout);
+                    .insert((address.into(), space), current_storage_layout);
             }
             Ok(())
         }
@@ -369,12 +373,11 @@ mod impls {
         /// storage_layout is special, because it must always present if there
         /// is any storage value changed.
         fn commit_storage_layout(
-            &mut self, address: &[u8], layout: &StorageLayout,
+            &mut self, address: &[u8], space: Space, layout: &StorageLayout,
             debug_record: Option<&mut ComputeEpochDebugRecord>,
         ) -> Result<()>
         {
-            // TODO: EVM core: work later (same as layout)
-            let key = StorageKey::StorageRootKey(address).with_native_space();
+            let key = StorageKey::StorageRootKey(address).with_space(space);
             let value = layout.to_bytes().into_boxed_slice();
             if let Some(record) = debug_record {
                 record.state_ops.push(StateOp::StorageLevelOp {
@@ -414,6 +417,7 @@ mod impls {
                             /* accept_account_deletion = */
                             v.current_value.is_none(),
                             address_bytes,
+                            storage_key.space,
                             &self.storage,
                             &accessed_entries,
                         )?;
@@ -422,22 +426,26 @@ mod impls {
                     {
                         // Contract initialization must set StorageLayout.
                         if (address_bytes.is_builtin_address()
-                            || address_bytes.maybe_contract_address())
+                            || address_bytes.is_contract_address()
+                            || storage_key.space == Space::Ethereum)
                             && v.original_value.is_none()
                         {
                             let result = Self::load_storage_layout(
                                 &mut storage_layouts_to_rewrite,
                                 /* accept_account_deletion = */ false,
                                 address_bytes,
+                                storage_key.space,
                                 &self.storage,
                                 &accessed_entries,
                             );
                             if result.is_err() {
-                                info!(
-                                    "Address {:?} has no storage_layout. \
-                                    It's probably created by a balance transfer or a normal address after cip-80.",
-                                    Address::from_slice(address_bytes),
-                                );
+                                if storage_key.space == Space::Native {
+                                    warn!(
+                                        "Contract address {:?} is created without storage_layout. \
+                                        It's probably created by a balance transfer.",
+                                        Address::from_slice(address_bytes),
+                                    );
+                                }
                             }
                         }
                     } else if let StorageKey::CodeKey {
@@ -453,6 +461,7 @@ mod impls {
                                 &mut storage_layouts_to_rewrite,
                                 /* accept_account_deletion = */ false,
                                 address_bytes,
+                                storage_key.space,
                                 &self.storage,
                                 &accessed_entries,
                             )?;
@@ -462,8 +471,13 @@ mod impls {
             }
             // Set storage layout for contracts with storage modification or
             // contracts with storage_layout initialization or modification.
-            for (k, v) in &mut storage_layouts_to_rewrite {
-                self.commit_storage_layout(k, v, debug_record.as_deref_mut())?;
+            for ((k, space), v) in &mut storage_layouts_to_rewrite {
+                self.commit_storage_layout(
+                    k,
+                    *space,
+                    v,
+                    debug_record.as_deref_mut(),
+                )?;
             }
             // Mark all modification applied.
             self.accessed_entries = Default::default();
@@ -645,7 +659,9 @@ mod impls {
         MptKeyValue, StateProof, StorageRootProof, StorageStateTrait,
         StorageStateTraitExt,
     };
-    use cfx_types::{address_util::AddressUtil, Address, AddressWithSpace};
+    use cfx_types::{
+        address_util::AddressUtil, Address, AddressWithSpace, Space,
+    };
     use hashbrown::HashMap;
     use parking_lot::RwLock;
     use primitives::{

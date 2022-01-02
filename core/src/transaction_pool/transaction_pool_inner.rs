@@ -984,54 +984,54 @@ impl TransactionPoolInner {
         let mut sponsored_storage = 0;
 
         // Compute sponsored_gas for `transaction`
-        if let Action::Call(callee) = &transaction.action {
-            // FIXME: This is a quick fix for performance issue.
-            if callee.maybe_contract_address() {
-                if let Some(sponsor_info) =
-                    account_cache.get_sponsor_info(callee).map_err(|e| {
-                        format!(
-                            "Failed to read account_cache from storage: {}",
-                            e
-                        )
-                    })?
-                {
-                    let sender = transaction.sender();
-                    if sender.space == Space::Native
-                        && account_cache
-                            .check_commission_privilege(
-                                &callee,
-                                &sender.address,
-                            )
-                            .map_err(|e| {
-                                format!(
+        if transaction.sender().space == Space::Native {
+            if let Action::Call(callee) = &transaction.action {
+                // FIXME: This is a quick fix for performance issue.
+                if callee.is_contract_address() {
+                    if let Some(sponsor_info) =
+                        account_cache.get_sponsor_info(callee).map_err(|e| {
+                            format!(
                                 "Failed to read account_cache from storage: {}",
                                 e
                             )
-                            })?
+                        })?
                     {
-                        let estimated_gas_u512 =
-                            transaction.gas.full_mul(transaction.gas_price);
-                        // Normally, it is less than 2^128
-                        let estimated_gas = if estimated_gas_u512
-                            > U512::from(U128::max_value())
+                        if account_cache
+                            .check_commission_privilege(
+                                &callee,
+                                &transaction.sender().address,
+                            )
+                            .map_err(|e| {
+                                format!(
+                                    "Failed to read account_cache from storage: {}",
+                                    e
+                                )
+                            })?
                         {
-                            U256::from(U128::max_value())
-                        } else {
-                            transaction.gas * transaction.gas_price
-                        };
-                        if estimated_gas <= sponsor_info.sponsor_gas_bound
-                            && estimated_gas
+                            let estimated_gas_u512 =
+                                transaction.gas.full_mul(transaction.gas_price);
+                            // Normally, it is less than 2^128
+                            let estimated_gas = if estimated_gas_u512
+                                > U512::from(U128::max_value())
+                            {
+                                U256::from(U128::max_value())
+                            } else {
+                                transaction.gas * transaction.gas_price
+                            };
+                            if estimated_gas <= sponsor_info.sponsor_gas_bound
+                                && estimated_gas
                                 <= sponsor_info.sponsor_balance_for_gas
-                        {
-                            sponsored_gas = transaction.gas;
-                        }
-                        let estimated_collateral =
-                            U256::from(transaction.storage_limit)
-                                * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-                        if estimated_collateral
-                            <= sponsor_info.sponsor_balance_for_collateral
-                        {
-                            sponsored_storage = transaction.storage_limit;
+                            {
+                                sponsored_gas = transaction.gas;
+                            }
+                            let estimated_collateral =
+                                U256::from(transaction.storage_limit)
+                                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+                            if estimated_collateral
+                                <= sponsor_info.sponsor_balance_for_collateral
+                            {
+                                sponsored_storage = transaction.storage_limit;
+                            }
                         }
                     }
                 }

@@ -14,14 +14,8 @@ use cfx_types::{
     Space, U256,
 };
 
-fn available_admin_address(spec: &Spec, address: &Address) -> bool {
-    if spec.cip80 {
-        true
-    } else {
-        // Before CIP-80, Only allow user account to be admin, if not to clear
-        // admin.
-        address.is_user_account_address() || address.is_null_address()
-    }
+fn available_admin_address(_spec: &Spec, address: &Address) -> bool {
+    address.is_user_account_address() || address.is_null_address()
 }
 
 /// The Actual Implementation of `suicide`.

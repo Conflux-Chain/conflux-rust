@@ -17,12 +17,11 @@ use cfx_storage::{
     into_simple_mpt_key, make_simple_mpt, simple_mpt_merkle_root,
     simple_mpt_proof, SimpleMpt, TrieProof,
 };
-use cfx_types::{address_util::AddressUtil, BigEndianHash, H256, U256};
+use cfx_types::{address_util::AddressUtil, BigEndianHash, Space, H256, U256};
 use primitives::{
-    block::BlockHeight,
-    transaction::{TransactionError, TransactionType},
-    Action, Block, BlockHeader, BlockReceipts, MerkleHash, Receipt,
-    SignedTransaction, TransactionWithSignature,
+    block::BlockHeight, transaction::TransactionError, Action, Block,
+    BlockHeader, BlockReceipts, MerkleHash, Receipt, SignedTransaction,
+    TransactionWithSignature,
 };
 use rlp::Encodable;
 use std::{collections::HashSet, convert::TryInto, sync::Arc};
@@ -493,25 +492,25 @@ impl VerificationConfig {
     // If the boolean variable returns true, it means this transaction do not
     // need check epoch height.
     fn can_skip_epoch_check(
-        tx: &TransactionWithSignature, cip72a: bool, mode: &VerifyTxMode,
+        tx: &TransactionWithSignature, cip90a: bool, mode: &VerifyTxMode,
     ) -> bool {
-        if tx.transaction_type() != TransactionType::EthereumLike {
+        if tx.space() == Space::Native {
             return false;
         }
 
         match mode {
             VerifyTxMode::Local(_, _) if mode.is_maybe_later() => true,
-            VerifyTxMode::Local(_, spec) => cip72a && spec.cip72,
-            VerifyTxMode::Remote => cip72a,
+            VerifyTxMode::Local(_, spec) => cip90a && spec.cip90,
+            VerifyTxMode::Remote => cip90a,
         }
     }
 
     fn verify_transaction_epoch_height(
         tx: &TransactionWithSignature, block_height: u64,
-        transaction_epoch_bound: u64, cip72a: bool, mode: &VerifyTxMode,
+        transaction_epoch_bound: u64, cip90a: bool, mode: &VerifyTxMode,
     ) -> Result<(), TransactionError>
     {
-        if Self::can_skip_epoch_check(tx, cip72a, mode) {
+        if Self::can_skip_epoch_check(tx, cip90a, mode) {
             return Ok(());
         }
 
@@ -538,7 +537,7 @@ impl VerificationConfig {
         transitions: &TransitionsEpochHeight, spec: &Spec,
     ) -> PackingCheckResult
     {
-        let cip72a = height >= transitions.cip72a;
+        let cip90a = height >= transitions.cip90a;
 
         let tx_pool_mode =
             VerifyTxMode::Local(VerifyTxLocalMode::MaybeLater, spec);
@@ -548,7 +547,7 @@ impl VerificationConfig {
             tx,
             height,
             self.transaction_epoch_bound,
-            cip72a,
+            cip90a,
             &packing_mode,
         )
         .is_ok()
@@ -558,7 +557,7 @@ impl VerificationConfig {
             tx,
             height,
             self.transaction_epoch_bound,
-            cip72a,
+            cip90a,
             &tx_pool_mode,
         )
         .is_ok()
@@ -612,13 +611,13 @@ impl VerificationConfig {
         // implemented in a seperated function.
         // ******************************************
         let cip76 = height >= transitions.cip76;
-        let cip72a = height >= transitions.cip72a;
+        let cip90a = height >= transitions.cip90a;
 
         Self::verify_transaction_epoch_height(
             tx,
             height,
             self.transaction_epoch_bound,
-            cip72a,
+            cip90a,
             &mode,
         )?;
 
@@ -662,11 +661,11 @@ impl VerificationConfig {
     fn check_eth_like(
         tx: &TransactionWithSignature,
     ) -> Result<(), TransactionError> {
-        if tx.transaction_type() != TransactionType::EthereumLike {
+        if tx.space() != Space::Ethereum {
             return Ok(());
         }
 
-        // We do not check if cip72a is activated or not. Even if cip72a is
+        // We do not check if cip90a is activated or not. Even if cip90a is
         // not activated, a transaction with target epoch == u64::MAX and
         // storage limit != u64::MAX can never be packed.
         if tx.storage_limit != u64::MAX {

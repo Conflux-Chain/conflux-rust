@@ -34,7 +34,7 @@ use crate::rpc::types::pos::{Block as RpcPosBlock, Decision};
 use cfx_addr::Network;
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_types::{
-    Address, AddressSpaceUtil, H160, H256, H520, U128, U256, U512, U64,
+    Address, AddressSpaceUtil, Space, H160, H256, H520, U128, U256, U512, U64,
 };
 use cfxcore::{
     consensus::pos_handler::PosVerifier, rpc_errors::invalid_params_check,
@@ -53,9 +53,7 @@ use network::{
     throttling::{self, THROTTLING_SERVICE},
     NetworkService, SessionDetails, UpdateNodeOperation,
 };
-use primitives::{
-    transaction::TransactionType, Account, Action, SignedTransaction,
-};
+use primitives::{Account, Action, SignedTransaction};
 
 fn grouped_txs<T, F>(
     txs: Vec<Arc<SignedTransaction>>, converter: F,
@@ -439,7 +437,11 @@ impl RpcImpl {
         // TODO: check if address is not in reserved address space.
         // We pass "num" into next_nonce() function for the error reporting
         // rpc_param_name because the user passed epoch number could be invalid.
-        consensus_graph.next_nonce(address.hex_address, num.into(), "num")
+        consensus_graph.next_nonce(
+            address.hex_address.with_native_space(),
+            num.into(),
+            "num",
+        )
     }
 }
 
@@ -872,8 +874,7 @@ impl RpcImpl {
                     rpc_error
                 })?;
             let required_storage_collateral =
-                if tx.transaction.transaction_type() == TransactionType::Normal
-                {
+                if tx.transaction.space() == Space::Native {
                     U256::from(tx.storage_limit)
                         * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
                 } else {

@@ -36,11 +36,10 @@ use cfx_types::{
     Space, H256, U256, U512, U64,
 };
 use primitives::{
-    receipt::StorageChange,
-    storage::STORAGE_LAYOUT_REGULAR_V0,
-    transaction::{Action, TransactionType},
-    SignedTransaction, StorageLayout,
+    receipt::StorageChange, storage::STORAGE_LAYOUT_REGULAR_V0,
+    transaction::Action, SignedTransaction, StorageLayout,
 };
+use rlp::RlpStream;
 use std::{
     collections::HashSet,
     convert::{TryFrom, TryInto},
@@ -49,36 +48,46 @@ use std::{
 
 /// Calculate new contract address.
 pub fn contract_address(
-    address_scheme: CreateContractAddress, block_number: U64,
+    address_scheme: CreateContractAddress, _block_number: U64,
     sender: &AddressWithSpace, nonce: &U256, code: &[u8],
 ) -> (AddressWithSpace, Option<H256>)
 {
-    // TODO: EVM core: different contract rule
     let code_hash = keccak(code);
     let (address, code_hash) = match address_scheme {
-        CreateContractAddress::FromBlockNumberSenderNonceAndCodeHash => {
-            let mut buffer = [0u8; 1 + 8 + 20 + 32 + 32];
-            let (lead_bytes, rest) = buffer.split_at_mut(1);
-            let (block_number_bytes, rest) = rest.split_at_mut(8);
-            let (sender_bytes, rest) = rest.split_at_mut(Address::len_bytes());
-            let (nonce_bytes, code_hash_bytes) =
-                rest.split_at_mut(H256::len_bytes());
-            // In Conflux, we take block_number and CodeHash into address
-            // calculation. This is required to enable us to clean
-            // up unused user account in future.
-            lead_bytes[0] = 0x0;
-            block_number.to_little_endian(block_number_bytes);
-            sender_bytes.copy_from_slice(&sender.address[..]);
-            nonce.to_little_endian(nonce_bytes);
-            code_hash_bytes.copy_from_slice(&code_hash[..]);
-            // In Conflux, we use the first four bits to indicate the type of
-            // the address. For contract address, the bits will be
-            // set to 0x8.
-            let mut h = Address::from(keccak(&buffer[..]));
-            h.set_contract_type_bits();
+        CreateContractAddress::FromSenderNonce => {
+            assert_eq!(sender.space, Space::Ethereum);
+            let mut rlp = RlpStream::new_list(2);
+            rlp.append(&sender.address);
+            rlp.append(nonce);
+            let h = Address::from(keccak(rlp.as_raw()));
             (h, Some(code_hash))
         }
+        CreateContractAddress::FromBlockNumberSenderNonceAndCodeHash => {
+            unreachable!("Inactive setting");
+            // let mut buffer = [0u8; 1 + 8 + 20 + 32 + 32];
+            // let (lead_bytes, rest) = buffer.split_at_mut(1);
+            // let (block_number_bytes, rest) = rest.split_at_mut(8);
+            // let (sender_bytes, rest) =
+            // rest.split_at_mut(Address::len_bytes());
+            // let (nonce_bytes, code_hash_bytes) =
+            //     rest.split_at_mut(H256::len_bytes());
+            // // In Conflux, we take block_number and CodeHash into address
+            // // calculation. This is required to enable us to clean
+            // // up unused user account in future.
+            // lead_bytes[0] = 0x0;
+            // block_number.to_little_endian(block_number_bytes);
+            // sender_bytes.copy_from_slice(&sender.address[..]);
+            // nonce.to_little_endian(nonce_bytes);
+            // code_hash_bytes.copy_from_slice(&code_hash[..]);
+            // // In Conflux, we use the first four bits to indicate the type of
+            // // the address. For contract address, the bits will be
+            // // set to 0x8.
+            // let mut h = Address::from(keccak(&buffer[..]));
+            // h.set_contract_type_bits();
+            // (h, Some(code_hash))
+        }
         CreateContractAddress::FromSenderNonceAndCodeHash => {
+            assert_eq!(sender.space, Space::Native);
             let mut buffer = [0u8; 1 + 20 + 32 + 32];
             // In Conflux, we append CodeHash to determine the address as well.
             // This is required to enable us to clean up unused user account in
@@ -103,7 +112,9 @@ pub fn contract_address(
             // In Conflux, we use the first bit to indicate the type of the
             // address. For contract address, the bits will be set to 0x8.
             let mut h = Address::from(keccak(&buffer[..]));
-            h.set_contract_type_bits();
+            if sender.space == Space::Native {
+                h.set_contract_type_bits();
+            }
             (h, Some(code_hash))
         }
     };
@@ -240,11 +251,10 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
             space: params.space,
         };
 
-        // if destination is builtin, try to execute it
+        // Builtin is located for both Conflux Space and EVM Space.
         let kind = if let Some(builtin) =
             machine.builtin(&params.code_address, env.number)
         {
-            // Builtin is located for both Conflux Space and EVM Space.
             trace!("CallBuiltin");
             CallCreateExecutiveKind::CallBuiltin(builtin)
         } else if let Some(internal) =
@@ -376,7 +386,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
             address: params.address,
             space: params.space,
         };
-        // TODO: EVM core, special logic for cross space call.
         if let ActionValue::Transfer(val) = params.value {
             state.transfer_balance(
                 &sender,
@@ -413,11 +422,21 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                 &val,
                 &mut cleanup_mode(substate, &spec),
             )?;
+            let admin = if params.space == Space::Native {
+                params.original_sender
+            } else {
+                Address::zero()
+            };
+            let nonce = if params.space == Space::Native {
+                contract_start_nonce
+            } else {
+                U256::from(1)
+            };
             state.new_contract_with_admin(
                 &receiver,
-                &params.original_sender,
+                &admin,
                 val.saturating_add(prev_balance),
-                contract_start_nonce,
+                nonce,
                 storage_layout,
             )?;
         } else {
@@ -818,6 +837,14 @@ pub struct ExecutiveGeneric<
     static_flag: bool,
 }
 
+struct SponsorCheckOutput {
+    sender_intended_cost: U512,
+    total_cost: U512,
+    gas_sponsored: bool,
+    storage_sponsored: bool,
+    storage_sponsor_eligible: bool,
+}
+
 impl<
         'a,
         Substate: SubstateMngTrait,
@@ -916,6 +943,120 @@ impl<
         self.transact(tx, options)
     }
 
+    fn sponsor_check(
+        &self, tx: &SignedTransaction, spec: &Spec, sender_balance: U512,
+        gas_cost: U512, storage_cost: U256,
+    ) -> DbResult<Result<SponsorCheckOutput, ExecutionOutcome>>
+    {
+        let sender = tx.sender();
+        // Check if contract will pay transaction fee for the sender.
+        let mut code_address = Address::zero();
+        let mut gas_sponsor_eligible = false;
+        let mut storage_sponsor_eligible = false;
+
+        if let Action::Call(ref address) = tx.action {
+            if !spec.is_valid_address(address) {
+                return Ok(Err(ExecutionOutcome::NotExecutedDrop(
+                    TxDropError::InvalidRecipientAddress(*address),
+                )));
+            }
+            if self
+                .state
+                .is_contract_with_code(&address.with_native_space())?
+            {
+                code_address = *address;
+                if self.state.check_commission_privilege(
+                    &code_address,
+                    &sender.address,
+                )? {
+                    // No need to check for gas sponsor account existence.
+                    gas_sponsor_eligible = gas_cost
+                        <= U512::from(
+                            self.state.sponsor_gas_bound(&code_address)?,
+                        );
+                    storage_sponsor_eligible = self
+                        .state
+                        .sponsor_for_collateral(&code_address)?
+                        .is_some();
+                }
+            }
+        }
+
+        let code_address = code_address;
+        let gas_sponsor_eligible = gas_sponsor_eligible;
+        let storage_sponsor_eligible = storage_sponsor_eligible;
+
+        // Sender pays for gas when sponsor runs out of balance.
+        let sponsor_balance_for_gas =
+            U512::from(self.state.sponsor_balance_for_gas(&code_address)?);
+        let gas_sponsored =
+            gas_sponsor_eligible && sponsor_balance_for_gas >= gas_cost;
+
+        let sponsor_balance_for_storage =
+            self.state.sponsor_balance_for_collateral(&code_address)?;
+        let storage_sponsored = storage_sponsor_eligible
+            && storage_cost <= sponsor_balance_for_storage;
+
+        let sender_intended_cost = {
+            let mut sender_intended_cost = U512::from(tx.value);
+
+            if !gas_sponsor_eligible {
+                sender_intended_cost += gas_cost;
+            }
+            if !storage_sponsor_eligible {
+                sender_intended_cost += storage_cost.into();
+            }
+            sender_intended_cost
+        };
+        let total_cost = {
+            let mut total_cost = U512::from(tx.value);
+            if !gas_sponsored {
+                total_cost += gas_cost
+            }
+            if !storage_sponsored {
+                total_cost += storage_cost.into();
+            }
+            total_cost
+        };
+        // Sponsor is allowed however sender do not have enough balance to pay
+        // for the extra gas because sponsor has run out of balance in
+        // the mean time.
+        //
+        // Sender is not responsible for the incident, therefore we don't fail
+        // the transaction.
+        if sender_balance >= sender_intended_cost && sender_balance < total_cost
+        {
+            let gas_sponsor_balance = if gas_sponsor_eligible {
+                sponsor_balance_for_gas
+            } else {
+                0.into()
+            };
+
+            let storage_sponsor_balance = if storage_sponsor_eligible {
+                sponsor_balance_for_storage
+            } else {
+                0.into()
+            };
+
+            return Ok(Err(ExecutionOutcome::NotExecutedToReconsiderPacking(
+                ToRepackError::NotEnoughCashFromSponsor {
+                    required_gas_cost: gas_cost,
+                    gas_sponsor_balance,
+                    required_storage_cost: storage_cost,
+                    storage_sponsor_balance,
+                },
+            )));
+        }
+
+        return Ok(Ok(SponsorCheckOutput {
+            sender_intended_cost,
+            total_cost,
+            gas_sponsored,
+            storage_sponsored,
+            storage_sponsor_eligible,
+        }));
+    }
+
     pub fn transact<T>(
         &mut self, tx: &SignedTransaction, mut options: TransactOptions<T>,
     ) -> DbResult<ExecutionOutcome>
@@ -939,9 +1080,8 @@ impl<
         }
 
         // Validate transaction epoch height.
-        let eth_like_tx = spec.cip72
-            && tx.transaction_type() == TransactionType::EthereumLike;
-        if !eth_like_tx
+        let eth_space_tx = spec.cip90 && tx.space() == Space::Ethereum;
+        if !eth_space_tx
             && VerificationConfig::check_transaction_epoch_bound(
                 tx,
                 self.env.epoch_height,
@@ -966,119 +1106,39 @@ impl<
 
         let balance = self.state.balance(&sender)?;
         let gas_cost = tx.gas.full_mul(tx.gas_price);
-
-        // Check if contract will pay transaction fee for the sender.
-        let mut code_address = Address::zero();
-        let mut gas_sponsor_eligible = false;
-        let mut storage_sponsor_eligible = false;
-
-        if sender.space == Space::Native {
-            if let Action::Call(ref address) = tx.action {
-                if !spec.is_valid_address(address) {
-                    return Ok(ExecutionOutcome::NotExecutedDrop(
-                        TxDropError::InvalidRecipientAddress(*address),
-                    ));
-                }
-                if self
-                    .state
-                    .is_contract_with_code(&address.with_native_space())?
-                {
-                    code_address = *address;
-                    if self.state.check_commission_privilege(
-                        &code_address,
-                        &sender.address,
-                    )? {
-                        // No need to check for gas sponsor account existence.
-                        gas_sponsor_eligible = gas_cost
-                            <= U512::from(
-                                self.state.sponsor_gas_bound(&code_address)?,
-                            );
-                        storage_sponsor_eligible = self
-                            .state
-                            .sponsor_for_collateral(&code_address)?
-                            .is_some();
-                    }
-                }
-            }
-        }
-
-        let code_address = code_address;
-        let gas_sponsor_eligible = gas_sponsor_eligible;
-        let storage_sponsor_eligible = storage_sponsor_eligible;
-
-        // Sender pays for gas when sponsor runs out of balance.
-        let sponsor_balance_for_gas =
-            U512::from(self.state.sponsor_balance_for_gas(&code_address)?);
-        let gas_sponsored =
-            gas_sponsor_eligible && sponsor_balance_for_gas >= gas_cost;
-
-        // Since the Ethereum transactions do not contain storage limit. All the
-        // storage limit will be regarded as u64::MAX. The EthereumLike
-        // transaction should bypass the balance for storage check in
-        // pre-execution.
-        let minimum_drip_required_for_storage = if eth_like_tx {
-            U256::zero()
-        } else {
-            U256::from(tx.storage_limit) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
-        };
-
-        let sponsor_balance_for_storage =
-            self.state.sponsor_balance_for_collateral(&code_address)?;
-        let storage_sponsored = storage_sponsor_eligible
-            && minimum_drip_required_for_storage <= sponsor_balance_for_storage;
-
+        let storage_cost =
+            U256::from(tx.storage_limit) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
         let sender_balance = U512::from(balance);
-        let sender_intended_cost = {
-            let mut sender_intended_cost = U512::from(tx.value);
 
-            if !gas_sponsor_eligible {
-                sender_intended_cost += gas_cost;
+        let SponsorCheckOutput {
+            sender_intended_cost,
+            total_cost,
+            gas_sponsored,
+            storage_sponsored,
+            storage_sponsor_eligible,
+        } = if sender.space == Space::Native {
+            match self.sponsor_check(
+                tx,
+                &spec,
+                sender_balance,
+                gas_cost,
+                storage_cost,
+            )? {
+                Ok(res) => res,
+                Err(err) => {
+                    return Ok(err);
+                }
             }
-            if !storage_sponsor_eligible {
-                sender_intended_cost +=
-                    minimum_drip_required_for_storage.into();
+        } else {
+            let sender_cost = U512::from(tx.value) + gas_cost;
+            SponsorCheckOutput {
+                sender_intended_cost: sender_cost,
+                total_cost: sender_cost,
+                gas_sponsored: false,
+                storage_sponsored: false,
+                storage_sponsor_eligible: false,
             }
-            sender_intended_cost
         };
-        let total_cost = {
-            let mut total_cost = U512::from(tx.value);
-            if !gas_sponsored {
-                total_cost += gas_cost
-            }
-            if !storage_sponsored {
-                total_cost += minimum_drip_required_for_storage.into();
-            }
-            total_cost
-        };
-        // Sponsor is allowed however sender do not have enough balance to pay
-        // for the extra gas because sponsor has run out of balance in
-        // the mean time.
-        //
-        // Sender is not responsible for the incident, therefore we don't fail
-        // the transaction.
-        if sender_balance >= sender_intended_cost && sender_balance < total_cost
-        {
-            let gas_sponsor_balance = if gas_sponsor_eligible {
-                sponsor_balance_for_gas
-            } else {
-                0.into()
-            };
-
-            let storage_sponsor_balance = if storage_sponsor_eligible {
-                sponsor_balance_for_storage
-            } else {
-                0.into()
-            };
-
-            return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
-                ToRepackError::NotEnoughCashFromSponsor {
-                    required_gas_cost: gas_cost,
-                    gas_sponsor_balance,
-                    required_storage_cost: minimum_drip_required_for_storage,
-                    storage_sponsor_balance,
-                },
-            ));
-        }
 
         let mut tx_substate = Substate::new();
         if sender_balance < sender_intended_cost {
@@ -1115,7 +1175,7 @@ impl<
                     required: total_cost,
                     got: sender_balance,
                     actual_gas_cost: actual_gas_cost.clone(),
-                    max_storage_limit_cost: minimum_drip_required_for_storage,
+                    max_storage_limit_cost: storage_cost,
                 },
                 Executed::not_enough_balance_fee_charged(
                     tx,
@@ -1137,6 +1197,11 @@ impl<
 
         // Subtract the transaction fee from sender or contract.
         let gas_cost = U256::try_from(gas_cost).unwrap();
+        // For tracer only when tx is sponsored.
+        let code_address = match tx.action {
+            Action::Create => Address::zero(),
+            Action::Call(ref address) => *address,
+        };
 
         if !gas_sponsored {
             options.tracer.prepare_internal_transfer_action(
@@ -1172,13 +1237,8 @@ impl<
 
         // No matter who pays the collateral, we only focuses on the storage
         // limit of sender.
-        let total_storage_limit = if eth_like_tx {
-            U256::MAX
-        } else {
-            // TODO: EVM core: move out sponsor check.
-            self.state.collateral_for_storage(&sender.address)?
-                + minimum_drip_required_for_storage
-        };
+        let total_storage_limit =
+            self.state.collateral_for_storage(&sender.address)? + storage_cost;
 
         self.state.checkpoint();
         let mut substate = Substate::new();
@@ -1263,20 +1323,18 @@ impl<
                 // TODO: in fact, we don't need collect again here. But this is
                 // only the performance optimization and we put it in the later
                 // PR.
-                if sender.space == Space::Native {
-                    self.state
-                        .collect_and_settle_collateral(
-                            &sender.address,
-                            &total_storage_limit,
-                            &mut substate,
-                            &mut options.tracer,
-                            self.spec.account_start_nonce,
-                        )?
-                        .into_vm_result()
-                        .and(Ok(finalize_res))
-                } else {
-                    Ok(finalize_res)
-                }
+
+                // For a ethereum space tx, this function has no op.
+                self.state
+                    .collect_and_settle_collateral(
+                        &sender.address,
+                        &total_storage_limit,
+                        &mut substate,
+                        &mut options.tracer,
+                        self.spec.account_start_nonce,
+                    )?
+                    .into_vm_result()
+                    .and(Ok(finalize_res))
             });
             let out = match &res {
                 Ok(res) => {
@@ -1331,10 +1389,12 @@ impl<
                 // empty.
                 let code_owner =
                     self.state.code_owner(address)?.expect("code owner exists");
-                substate.record_storage_release(
-                    &code_owner,
-                    code_collateral_units(code_size),
-                );
+                if address.space == Space::Native {
+                    substate.record_storage_release(
+                        &code_owner,
+                        code_collateral_units(code_size),
+                    );
+                }
             }
 
             if address.space == Space::Native {
