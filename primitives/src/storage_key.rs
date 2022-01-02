@@ -74,6 +74,10 @@ impl<'a> StorageKey<'a> {
         self.with_space(Space::Native)
     }
 
+    pub fn with_evm_space(self) -> StorageKeyWithSpace<'a> {
+        self.with_space(Space::Ethereum)
+    }
+
     pub fn new_account_key(address: &'a Address) -> Self {
         StorageKey::AccountKey(&address.0)
     }
@@ -126,6 +130,7 @@ impl<'a> StorageKeyWithSpace<'a> {
     const CODE_HASH_PREFIX_LEN: usize = 4;
     const DEPOSIT_LIST_LEN: usize = 7;
     const DEPOSIT_LIST_PREFIX: &'static [u8] = b"deposit";
+    pub const EVM_SPACE_TYPE: &'static [u8] = b"\x81";
     const STORAGE_PREFIX: &'static [u8] = b"data";
     const STORAGE_PREFIX_LEN: usize = 4;
     const VOTE_LIST_LEN: usize = 4;
@@ -134,7 +139,7 @@ impl<'a> StorageKeyWithSpace<'a> {
     pub fn to_delta_mpt_key_bytes(
         &self, padding: &DeltaMptKeyPadding,
     ) -> Vec<u8> {
-        match self.key {
+        let key_bytes = match self.key {
             StorageKey::AccountKey(address_bytes) => {
                 if address_bytes.len() == Self::ACCOUNT_BYTES {
                     delta_mpt_storage_key::new_account_key(
@@ -147,7 +152,7 @@ impl<'a> StorageKeyWithSpace<'a> {
                     let mut x = Vec::with_capacity(address_bytes.len());
                     x.extend_from_slice(address_bytes);
 
-                    x
+                    return x;
                 } else {
                     unsafe { unreachable_unchecked() }
                     /*
@@ -192,11 +197,23 @@ impl<'a> StorageKeyWithSpace<'a> {
             StorageKey::VoteListKey(address_bytes) => {
                 delta_mpt_storage_key::new_vote_list_key(address_bytes, padding)
             }
-        }
+        };
+
+        return if self.space == Space::Native {
+            key_bytes
+        } else {
+            // Insert "0x81" at the position 32.
+            [
+                &key_bytes[..ACCOUNT_KEYPART_BYTES],
+                Self::EVM_SPACE_TYPE,
+                &key_bytes[ACCOUNT_KEYPART_BYTES..],
+            ]
+            .concat()
+        };
     }
 
     pub fn to_key_bytes(&self) -> Vec<u8> {
-        match self.key {
+        let key_bytes = match self.key {
             StorageKey::AccountKey(address_bytes) => {
                 let mut key = Vec::with_capacity(Self::ACCOUNT_BYTES);
                 key.extend_from_slice(address_bytes);
@@ -269,22 +286,47 @@ impl<'a> StorageKeyWithSpace<'a> {
 
                 key
             }
-        }
+        };
+
+        return if self.space == Space::Native {
+            key_bytes
+        } else {
+            // Insert "0x81" at the position 20.
+            [
+                &key_bytes[..Self::ACCOUNT_BYTES],
+                Self::EVM_SPACE_TYPE,
+                &key_bytes[Self::ACCOUNT_BYTES..],
+            ]
+            .concat()
+        };
     }
 
     // from_key_bytes::<CheckInput>(...) returns Result<StorageKey, String>
     // from_key_bytes::<SkipInputCheck>(...) returns StorageKey, crashes on
     // error
     pub fn from_key_bytes<ShouldCheckInput: StaticBool>(
-        mut bytes: &'a [u8],
+        bytes: &'a [u8],
     ) -> <FromKeyBytesResult<ShouldCheckInput> as ConditionalReturnValue<'a>>::Output
 where FromKeyBytesResult<ShouldCheckInput>: ConditionalReturnValue<'a>{
         let key = if bytes.len() <= Self::ACCOUNT_BYTES {
-            StorageKey::AccountKey(bytes)
+            StorageKey::AccountKey(bytes).with_native_space()
+        } else if bytes.len() == Self::ACCOUNT_BYTES + 1 {
+            StorageKey::AccountKey(&bytes[..Self::ACCOUNT_BYTES])
+                .with_evm_space()
         } else {
             let address_bytes = &bytes[0..Self::ACCOUNT_BYTES];
-            bytes = &bytes[Self::ACCOUNT_BYTES..];
-            if bytes.starts_with(Self::STORAGE_PREFIX) {
+
+            let extension_bit: bool = bytes[Self::ACCOUNT_BYTES] & 0x80 != 0;
+            let bytes = if extension_bit {
+                assert_eq!(bytes[Self::ACCOUNT_BYTES], Self::EVM_SPACE_TYPE[0]);
+                &bytes[(Self::ACCOUNT_BYTES + 1)..]
+            } else {
+                &bytes[Self::ACCOUNT_BYTES..]
+            };
+
+            let storage_key_no_space = if bytes
+                .starts_with(Self::STORAGE_PREFIX)
+            {
                 let bytes = &bytes[Self::STORAGE_PREFIX_LEN..];
                 if bytes.len() > 0 {
                     StorageKey::StorageKey {
@@ -324,11 +366,18 @@ where FromKeyBytesResult<ShouldCheckInput>: ConditionalReturnValue<'a>{
                 } else {
                     unsafe { unreachable_unchecked() }
                 }
-            }
+            };
+
+            let space = if extension_bit {
+                Space::Ethereum
+            } else {
+                Space::Native
+            };
+
+            storage_key_no_space.with_space(space)
         };
 
-        // TODO: EVM core: design a coding method for EVM core
-        <FromKeyBytesResult<ShouldCheckInput> as ConditionalReturnValue<'a>>::from_key(key.with_native_space())
+        <FromKeyBytesResult<ShouldCheckInput> as ConditionalReturnValue<'a>>::from_key(key)
     }
 }
 
@@ -488,6 +537,22 @@ mod delta_mpt_storage_key {
         key
     }
 
+    #[test]
+    fn tmp() {
+        let mut address = vec![0u8; 20];
+        address[18] = 77;
+        address[19] = 77;
+        let mut storage_key = vec![0u8; 32];
+        storage_key[30] = 99;
+        storage_key[31] = 99;
+
+        let ans =
+            new_storage_root_key(&address, &GENESIS_DELTA_MPT_KEY_PADDING);
+        for (i, n) in ans.iter().enumerate() {
+            println!("{}: {}", i, n);
+        }
+    }
+
     pub fn new_code_root_key(
         address: &[u8], padding: &DeltaMptKeyPadding,
     ) -> Vec<u8> {
@@ -568,7 +633,7 @@ mod delta_mpt_storage_key {
         pub fn from_delta_mpt_key(
             delta_mpt_key: &'a [u8],
         ) -> StorageKeyWithSpace<'a> {
-            let mut remaining_bytes = delta_mpt_key;
+            let remaining_bytes = delta_mpt_key;
             let bytes_len = remaining_bytes.len();
             if bytes_len < ACCOUNT_KEYPART_BYTES {
                 if cfg!(feature = "test_no_account_length_check") {
@@ -593,21 +658,35 @@ mod delta_mpt_storage_key {
                     return StorageKey::AccountKey(address_bytes)
                         .with_native_space();
                 }
-                remaining_bytes = &remaining_bytes[ACCOUNT_KEYPART_BYTES..];
-                if remaining_bytes
+                if bytes_len == ACCOUNT_KEYPART_BYTES + 1 {
+                    return StorageKey::AccountKey(address_bytes)
+                        .with_evm_space();
+                }
+                let extension_bit =
+                    remaining_bytes[ACCOUNT_KEYPART_BYTES] & 0x80 != 0;
+
+                let remaining_bytes = if extension_bit {
+                    assert_eq!(
+                        remaining_bytes[ACCOUNT_KEYPART_BYTES],
+                        StorageKeyWithSpace::EVM_SPACE_TYPE[0]
+                    );
+                    &remaining_bytes[(ACCOUNT_KEYPART_BYTES + 1)..]
+                } else {
+                    &remaining_bytes[ACCOUNT_KEYPART_BYTES..]
+                };
+
+                let storage_key_no_space = if remaining_bytes
                     .starts_with(StorageKeyWithSpace::STORAGE_PREFIX)
                 {
                     if remaining_bytes.len()
                         == StorageKeyWithSpace::STORAGE_PREFIX_LEN
                     {
                         StorageKey::StorageRootKey(address_bytes)
-                            .with_native_space()
                     } else {
                         StorageKey::StorageKey {
                             address_bytes,
                             storage_key: &remaining_bytes[KEY_PADDING_BYTES..],
                         }
-                        .with_native_space()
                     }
                 } else if remaining_bytes
                     .starts_with(StorageKeyWithSpace::CODE_HASH_PREFIX)
@@ -619,20 +698,17 @@ mod delta_mpt_storage_key {
                             address_bytes,
                             code_hash_bytes: bytes,
                         }
-                        .with_native_space()
                     } else {
                         StorageKey::CodeRootKey(address_bytes)
-                            .with_native_space()
                     }
                 } else if remaining_bytes
                     .starts_with(StorageKeyWithSpace::DEPOSIT_LIST_PREFIX)
                 {
                     StorageKey::DepositListKey(address_bytes)
-                        .with_native_space()
                 } else if remaining_bytes
                     .starts_with(StorageKeyWithSpace::VOTE_LIST_PREFIX)
                 {
-                    StorageKey::VoteListKey(address_bytes).with_native_space()
+                    StorageKey::VoteListKey(address_bytes)
                 } else {
                     if cfg!(debug_assertions) {
                         unreachable!(
@@ -642,13 +718,21 @@ mod delta_mpt_storage_key {
                     } else {
                         unsafe { unreachable_unchecked() }
                     }
-                }
+                };
+
+                let space = if extension_bit {
+                    Space::Ethereum
+                } else {
+                    Space::Native
+                };
+                storage_key_no_space.with_space(space)
             }
         }
     }
 }
 
 use super::{MerkleHash, MERKLE_NULL_NODE};
+use crate::storage_key::delta_mpt_storage_key::ACCOUNT_KEYPART_BYTES;
 use cfx_types::{Address, Space, H256};
 use hash::keccak;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
@@ -678,6 +762,11 @@ mod tests {
         let bytes = key.to_delta_mpt_key_bytes(&padding);
         let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
+
+        let key = StorageKey::new_account_key(&address).with_evm_space();
+        let bytes = key.to_delta_mpt_key_bytes(&padding);
+        let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
+        assert_eq!(key, key2);
     }
 
     #[test]
@@ -690,6 +779,11 @@ mod tests {
 
         let key =
             StorageKey::new_storage_root_key(&address).with_native_space();
+        let bytes = key.to_delta_mpt_key_bytes(&padding);
+        let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
+        assert_eq!(key, key2);
+
+        let key = StorageKey::new_storage_root_key(&address).with_evm_space();
         let bytes = key.to_delta_mpt_key_bytes(&padding);
         let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
@@ -710,6 +804,12 @@ mod tests {
         let bytes = key.to_delta_mpt_key_bytes(&padding);
         let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
+
+        let key =
+            StorageKey::new_storage_key(&address, storage_key).with_evm_space();
+        let bytes = key.to_delta_mpt_key_bytes(&padding);
+        let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
+        assert_eq!(key, key2);
     }
 
     #[test]
@@ -721,6 +821,11 @@ mod tests {
             .unwrap();
 
         let key = StorageKey::new_code_root_key(&address).with_native_space();
+        let bytes = key.to_delta_mpt_key_bytes(&padding);
+        let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
+        assert_eq!(key, key2);
+
+        let key = StorageKey::new_code_root_key(&address).with_evm_space();
         let bytes = key.to_delta_mpt_key_bytes(&padding);
         let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
@@ -744,6 +849,12 @@ mod tests {
         let bytes = key.to_delta_mpt_key_bytes(&padding);
         let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
+
+        let key =
+            StorageKey::new_code_key(&address, &code_hash).with_evm_space();
+        let bytes = key.to_delta_mpt_key_bytes(&padding);
+        let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
+        assert_eq!(key, key2);
     }
 
     #[test]
@@ -759,6 +870,11 @@ mod tests {
         let bytes = key.to_delta_mpt_key_bytes(&padding);
         let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);
+
+        let key = StorageKey::new_deposit_list_key(&address).with_evm_space();
+        let bytes = key.to_delta_mpt_key_bytes(&padding);
+        let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
+        assert_eq!(key, key2);
     }
 
     #[test]
@@ -770,6 +886,11 @@ mod tests {
             .unwrap();
 
         let key = StorageKey::new_vote_list_key(&address).with_native_space();
+        let bytes = key.to_delta_mpt_key_bytes(&padding);
+        let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
+        assert_eq!(key, key2);
+
+        let key = StorageKey::new_vote_list_key(&address).with_evm_space();
         let bytes = key.to_delta_mpt_key_bytes(&padding);
         let key2 = StorageKeyWithSpace::from_delta_mpt_key(&bytes[..]);
         assert_eq!(key, key2);

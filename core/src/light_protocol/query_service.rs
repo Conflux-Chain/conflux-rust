@@ -379,23 +379,33 @@ impl QueryService {
     }
 
     fn account_key(address: &H160) -> Vec<u8> {
-        StorageKey::new_account_key(&address).to_key_bytes()
+        StorageKey::new_account_key(&address)
+            .with_native_space()
+            .to_key_bytes()
     }
 
     fn code_key(address: &H160, code_hash: &H256) -> Vec<u8> {
-        StorageKey::new_code_key(&address, &code_hash).to_key_bytes()
+        StorageKey::new_code_key(&address, &code_hash)
+            .with_native_space()
+            .to_key_bytes()
     }
 
     fn storage_key(address: &H160, position: &[u8]) -> Vec<u8> {
-        StorageKey::new_storage_key(&address, &position).to_key_bytes()
+        StorageKey::new_storage_key(&address, &position)
+            .with_native_space()
+            .to_key_bytes()
     }
 
     fn deposit_list_key(address: &H160) -> Vec<u8> {
-        StorageKey::new_deposit_list_key(address).to_key_bytes()
+        StorageKey::new_deposit_list_key(address)
+            .with_native_space()
+            .to_key_bytes()
     }
 
     fn vote_list_key(address: &H160) -> Vec<u8> {
-        StorageKey::new_vote_list_key(address).to_key_bytes()
+        StorageKey::new_vote_list_key(address)
+            .with_native_space()
+            .to_key_bytes()
     }
 
     pub async fn get_account(
@@ -560,6 +570,7 @@ impl QueryService {
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             INTEREST_RATE_KEY,
         )
+        .with_native_space()
         .to_key_bytes();
 
         self.retrieve_state_entry::<U256>(epoch, key)
@@ -578,6 +589,7 @@ impl QueryService {
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             ACCUMULATE_INTEREST_RATE_KEY,
         )
+        .with_native_space()
         .to_key_bytes();
 
         self.retrieve_state_entry::<U256>(epoch, key)
@@ -596,16 +608,19 @@ impl QueryService {
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             TOTAL_POS_STAKING_TOKENS_KEY,
         )
+        .with_native_space()
         .to_key_bytes();
         let key2 = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             DISTRIBUTABLE_POS_INTEREST_KEY,
         )
+        .with_native_space()
         .to_key_bytes();
         let key3 = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             LAST_DISTRIBUTE_BLOCK_KEY,
         )
+        .with_native_space()
         .to_key_bytes();
 
         let total_pos_staking = try_join!(
