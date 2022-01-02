@@ -8,3 +8,14 @@ mod log;
 mod receipt;
 mod sync;
 mod transaction;
+
+pub use self::{
+    transaction::Transaction,
+    log::Log,
+    filter::Filter,
+    filter::FilterChanges,
+    receipt::Receipt,
+    block::Block,
+    block::RichBlock,
+    sync::SyncStatus
+};
