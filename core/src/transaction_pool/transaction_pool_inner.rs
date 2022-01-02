@@ -11,8 +11,7 @@ use crate::{
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_statedb::Result as StateDbResult;
 use cfx_types::{
-    address_util::AddressUtil, AddressWithSpace as Address, Space, H256, U128,
-    U256, U512,
+    address_util::AddressUtil, AddressWithSpace, Space, H256, U128, U256, U512,
 };
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
@@ -60,7 +59,7 @@ lazy_static! {
 
 #[derive(DeriveMallocSizeOf)]
 struct DeferredPool {
-    buckets: HashMap<Address, NoncePool>,
+    buckets: HashMap<AddressWithSpace, NoncePool>,
 }
 
 impl DeferredPool {
@@ -80,12 +79,12 @@ impl DeferredPool {
         bucket.insert(&tx, force)
     }
 
-    fn contain_address(&self, addr: &Address) -> bool {
+    fn contain_address(&self, addr: &AddressWithSpace) -> bool {
         self.buckets.contains_key(addr)
     }
 
     fn check_sender_and_nonce_exists(
-        &self, sender: &Address, nonce: &U256,
+        &self, sender: &AddressWithSpace, nonce: &U256,
     ) -> bool {
         if let Some(bucket) = self.buckets.get(sender) {
             bucket.check_nonce_exists(nonce)
@@ -94,7 +93,7 @@ impl DeferredPool {
         }
     }
 
-    fn count_less(&self, sender: &Address, nonce: &U256) -> usize {
+    fn count_less(&self, sender: &AddressWithSpace, nonce: &U256) -> usize {
         if let Some(bucket) = self.buckets.get(sender) {
             bucket.count_less(nonce)
         } else {
@@ -103,7 +102,7 @@ impl DeferredPool {
     }
 
     fn remove_lowest_nonce(
-        &mut self, addr: &Address,
+        &mut self, addr: &AddressWithSpace,
     ) -> Option<TxWithReadyInfo> {
         match self.buckets.get_mut(addr) {
             None => None,
@@ -117,14 +116,14 @@ impl DeferredPool {
         }
     }
 
-    fn get_lowest_nonce(&self, addr: &Address) -> Option<&U256> {
+    fn get_lowest_nonce(&self, addr: &AddressWithSpace) -> Option<&U256> {
         self.buckets
             .get(addr)
             .and_then(|bucket| bucket.get_lowest_nonce_tx().map(|r| &r.nonce))
     }
 
     fn get_lowest_nonce_tx(
-        &self, addr: &Address,
+        &self, addr: &AddressWithSpace,
     ) -> Option<&SignedTransaction> {
         self.buckets
             .get(addr)
@@ -132,7 +131,7 @@ impl DeferredPool {
     }
 
     fn recalculate_readiness_with_local_info(
-        &mut self, addr: &Address, nonce: U256, balance: U256,
+        &mut self, addr: &AddressWithSpace, nonce: U256, balance: U256,
     ) -> Option<Arc<SignedTransaction>> {
         if let Some(bucket) = self.buckets.get(addr) {
             bucket.recalculate_readiness_with_local_info(nonce, balance)
@@ -142,7 +141,7 @@ impl DeferredPool {
     }
 
     fn get_pending_info(
-        &self, addr: &Address, nonce: &U256,
+        &self, addr: &AddressWithSpace, nonce: &U256,
     ) -> Option<(usize, Arc<SignedTransaction>)> {
         if let Some(bucket) = self.buckets.get(addr) {
             bucket.get_pending_info(nonce)
@@ -152,7 +151,7 @@ impl DeferredPool {
     }
 
     fn get_pending_transactions(
-        &self, addr: &Address, start_nonce: &U256, local_nonce: &U256,
+        &self, addr: &AddressWithSpace, start_nonce: &U256, local_nonce: &U256,
         local_balance: &U256,
     ) -> (Vec<Arc<SignedTransaction>>, Option<PendingReason>)
     {
@@ -172,7 +171,7 @@ impl DeferredPool {
         }
     }
 
-    fn check_tx_packed(&self, addr: Address, nonce: U256) -> bool {
+    fn check_tx_packed(&self, addr: AddressWithSpace, nonce: U256) -> bool {
         if let Some(bucket) = self.buckets.get(&addr) {
             if let Some(tx_with_ready_info) = bucket.get_tx_by_nonce(nonce) {
                 tx_with_ready_info.is_already_packed()
@@ -184,7 +183,9 @@ impl DeferredPool {
         }
     }
 
-    fn last_succ_nonce(&self, addr: Address, from_nonce: U256) -> Option<U256> {
+    fn last_succ_nonce(
+        &self, addr: AddressWithSpace, from_nonce: U256,
+    ) -> Option<U256> {
         let bucket = self.buckets.get(&addr)?;
         let mut next_nonce = from_nonce;
         loop {
@@ -203,7 +204,7 @@ impl DeferredPool {
 
 #[derive(DeriveMallocSizeOf)]
 struct ReadyAccountPool {
-    treap: TreapMap<Address, Arc<SignedTransaction>, WeightType>,
+    treap: TreapMap<AddressWithSpace, Arc<SignedTransaction>, WeightType>,
     tx_weight_scaling: u64,
     tx_weight_exp: u8,
 }
@@ -225,17 +226,23 @@ impl ReadyAccountPool {
 
     fn len(&self) -> usize { self.treap.len() }
 
-    fn get(&self, address: &Address) -> Option<Arc<SignedTransaction>> {
+    fn get(
+        &self, address: &AddressWithSpace,
+    ) -> Option<Arc<SignedTransaction>> {
         self.treap.get(address).map(|tx| tx.clone())
     }
 
-    fn remove(&mut self, address: &Address) -> Option<Arc<SignedTransaction>> {
+    fn remove(
+        &mut self, address: &AddressWithSpace,
+    ) -> Option<Arc<SignedTransaction>> {
         self.treap.remove(address)
     }
 
     fn update(
-        &mut self, address: &Address, tx: Option<Arc<SignedTransaction>>,
-    ) -> Option<Arc<SignedTransaction>> {
+        &mut self, address: &AddressWithSpace,
+        tx: Option<Arc<SignedTransaction>>,
+    ) -> Option<Arc<SignedTransaction>>
+    {
         let replaced = if let Some(tx) = tx {
             if tx.hash[0] & 254 == 0 {
                 debug!("Sampled transaction {:?} in ready pool", tx.hash);
@@ -318,7 +325,7 @@ pub struct TransactionPoolInner {
     /// Updated with the storage data after a block is processed in consensus
     /// (set_tx_packed), after epoch execution, or during transaction
     /// insertion.
-    ready_nonces_and_balances: HashMap<Address, (U256, U256)>,
+    ready_nonces_and_balances: HashMap<AddressWithSpace, (U256, U256)>,
     garbage_collector: GarbageCollector,
     /// Keeps all transactions in the transaction pool.
     /// It should contain the same transaction set as `deferred_pool`.
@@ -372,7 +379,7 @@ impl TransactionPoolInner {
     }
 
     pub fn get_by_address2nonce(
-        &self, address: Address, nonce: U256,
+        &self, address: AddressWithSpace, nonce: U256,
     ) -> Option<Arc<SignedTransaction>> {
         let bucket = self.deferred_pool.buckets.get(&address)?;
         bucket.get_tx_by_nonce(nonce).map(|tx| tx.transaction)
@@ -618,7 +625,7 @@ impl TransactionPoolInner {
     }
 
     pub fn get_account_pending_info(
-        &self, address: &Address,
+        &self, address: &AddressWithSpace,
     ) -> Option<(U256, U256, U256, H256)> {
         let (local_nonce, _local_balance) = self
             .get_local_nonce_and_balance(address)
@@ -637,7 +644,7 @@ impl TransactionPoolInner {
     }
 
     pub fn get_account_pending_transactions(
-        &self, address: &Address, maybe_start_nonce: Option<U256>,
+        &self, address: &AddressWithSpace, maybe_start_nonce: Option<U256>,
         maybe_limit: Option<usize>,
     ) -> (
         Vec<Arc<SignedTransaction>>,
@@ -690,13 +697,13 @@ impl TransactionPoolInner {
     }
 
     pub fn get_local_nonce_and_balance(
-        &self, address: &Address,
+        &self, address: &AddressWithSpace,
     ) -> Option<(U256, U256)> {
         self.ready_nonces_and_balances.get(address).map(|x| *x)
     }
 
     fn update_nonce_and_balance(
-        &mut self, address: &Address, nonce: U256, balance: U256,
+        &mut self, address: &AddressWithSpace, nonce: U256, balance: U256,
     ) {
         if !self.deferred_pool.contain_address(address) {
             return;
@@ -712,7 +719,7 @@ impl TransactionPoolInner {
     }
 
     fn get_and_update_nonce_and_balance_from_storage(
-        &mut self, address: &Address, state: &AccountCache,
+        &mut self, address: &AddressWithSpace, state: &AccountCache,
     ) -> StateDbResult<(U256, U256)> {
         let nonce_and_balance = state.get_nonce_and_balance(address)?;
         if !self.deferred_pool.contain_address(address) {
@@ -731,7 +738,7 @@ impl TransactionPoolInner {
         Ok(nonce_and_balance)
     }
 
-    pub fn get_lowest_nonce(&self, addr: &Address) -> U256 {
+    pub fn get_lowest_nonce(&self, addr: &AddressWithSpace) -> U256 {
         let mut ret = 0.into();
         if let Some((nonce, _)) = self.get_local_nonce_and_balance(addr) {
             ret = nonce;
@@ -744,13 +751,17 @@ impl TransactionPoolInner {
         ret
     }
 
-    pub fn get_next_nonce(&self, address: &Address, state_nonce: U256) -> U256 {
+    pub fn get_next_nonce(
+        &self, address: &AddressWithSpace, state_nonce: U256,
+    ) -> U256 {
         self.deferred_pool
             .last_succ_nonce(*address, state_nonce)
             .unwrap_or(state_nonce)
     }
 
-    fn recalculate_readiness_with_local_info(&mut self, addr: &Address) {
+    fn recalculate_readiness_with_local_info(
+        &mut self, addr: &AddressWithSpace,
+    ) {
         let (nonce, balance) = self
             .get_local_nonce_and_balance(addr)
             .unwrap_or((0.into(), 0.into()));
@@ -758,14 +769,14 @@ impl TransactionPoolInner {
     }
 
     fn recalculate_readiness_with_fixed_info(
-        &mut self, addr: &Address, nonce: U256, balance: U256,
+        &mut self, addr: &AddressWithSpace, nonce: U256, balance: U256,
     ) {
         self.update_nonce_and_balance(addr, nonce, balance);
         self.recalculate_readiness(addr, nonce, balance);
     }
 
     fn recalculate_readiness_with_state(
-        &mut self, addr: &Address, account_cache: &AccountCache,
+        &mut self, addr: &AddressWithSpace, account_cache: &AccountCache,
     ) -> StateDbResult<()> {
         let _timer = MeterTimer::time_func(TX_POOL_RECALCULATE.as_ref());
         let (nonce, balance) = self
@@ -778,7 +789,7 @@ impl TransactionPoolInner {
     }
 
     fn recalculate_readiness(
-        &mut self, addr: &Address, nonce: U256, balance: U256,
+        &mut self, addr: &AddressWithSpace, nonce: U256, balance: U256,
     ) {
         let ret = self
             .deferred_pool
@@ -938,7 +949,7 @@ impl TransactionPoolInner {
 
     /// content retrieves the ready and deferred transactions.
     pub fn content(
-        &self, address: Option<Address>,
+        &self, address: Option<AddressWithSpace>,
     ) -> (Vec<Arc<SignedTransaction>>, Vec<Arc<SignedTransaction>>) {
         let ready_txs = self
             .ready_account_pool
@@ -1090,7 +1101,7 @@ impl TransactionPoolInner {
 #[cfg(test)]
 mod test_transaction_pool_inner {
     use super::{DeferredPool, InsertResult, TxWithReadyInfo};
-    use cfx_types::{Address as RawAddress, AddressWithSpace as Address, U256};
+    use cfx_types::{Address, AddressSpaceUtil, U256};
     use keylib::{Generator, KeyPair, Random};
     use primitives::{Action, SignedTransaction, Transaction};
     use std::sync::Arc;
@@ -1103,7 +1114,7 @@ mod test_transaction_pool_inner {
                 nonce: U256::from(nonce),
                 gas_price: U256::from(gas_price),
                 gas: U256::from(50000),
-                action: Action::Call(RawAddress::random()),
+                action: Action::Call(Address::random()),
                 value: U256::from(value),
                 storage_limit: 0,
                 epoch_height: 0,
@@ -1134,11 +1145,11 @@ mod test_transaction_pool_inner {
 
         // insert txs of same sender
         let alice = Random.generate().unwrap();
-        let alice_addr_s = Address::new_native(&alice.address());
+        let alice_addr_s = alice.address().with_native_space();
         let bob = Random.generate().unwrap();
-        let bob_addr_s = Address::new_native(&bob.address());
+        let bob_addr_s = bob.address().with_native_space();
         let eva = Random.generate().unwrap();
-        let eva_addr_s = Address::new_native(&eva.address());
+        let eva_addr_s = eva.address().with_native_space();
 
         let alice_tx1 = new_test_tx_with_read_info(
             &alice, 5, 10, 100, false, /* packed */
@@ -1230,7 +1241,7 @@ mod test_transaction_pool_inner {
         let mut deferred_pool = super::DeferredPool::new();
 
         let alice = Random.generate().unwrap();
-        let alice_addr_s = Address::new_native(&alice.address());
+        let alice_addr_s = alice.address().with_native_space();
 
         let gas = 50000;
         let tx1 = new_test_tx_with_read_info(

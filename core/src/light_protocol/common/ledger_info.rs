@@ -14,7 +14,7 @@ use cfx_storage::{
     state_manager::StateManagerTrait,
     StateProof, StorageRootProof,
 };
-use cfx_types::{Address, AddressWithSpace, Bloom, H256};
+use cfx_types::{Address, AddressSpaceUtil, Bloom, H256};
 use primitives::{
     Block, BlockHeader, BlockHeaderBuilder, BlockReceipts, CheckInput,
     EpochNumber, StorageKeyWithSpace, StorageRoot,
@@ -227,7 +227,7 @@ impl LedgerInfo {
     ) -> Result<(StorageRoot, StorageRootProof), Error> {
         let state = self.state_of(epoch)?;
         Ok(StateDb::new(state).get_original_storage_root_with_proof(
-            &AddressWithSpace::new_native(address),
+            &address.with_native_space(),
         )?)
     }
 

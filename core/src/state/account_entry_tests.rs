@@ -9,7 +9,7 @@ use cfx_statedb::StateDb;
 use cfx_storage::{
     tests::new_state_manager_for_unit_test, StorageManagerTrait,
 };
-use cfx_types::{address_util::AddressUtil, Address, AddressWithSpace, U256};
+use cfx_types::{address_util::AddressUtil, Address, AddressSpaceUtil, U256};
 use primitives::{
     account::ContractAccount, storage::STORAGE_LAYOUT_REGULAR_V0, Account,
     SponsorInfo, VoteStakeList,
@@ -19,7 +19,7 @@ use primitives::{
 fn test_overlay_account_create() {
     let mut address = Address::random();
     address.set_user_account_type_bits();
-    let address_with_space = AddressWithSpace::new_native(&address);
+    let address_with_space = address.with_native_space();
     let account = Account::new_empty_with_balance(
         &address_with_space,
         &U256::zero(),
@@ -43,10 +43,10 @@ fn test_overlay_account_create() {
 
     let mut contract_addr = Address::random();
     contract_addr.set_contract_type_bits();
-    let contract_addr_with_space = AddressWithSpace::new_native(&contract_addr);
+    let contract_addr_with_space = contract_addr.with_native_space();
     let mut user_addr = Address::random();
     user_addr.set_user_account_type_bits();
-    let user_addr_with_space = AddressWithSpace::new_native(&user_addr);
+    let user_addr_with_space = user_addr.with_native_space();
     let admin = Address::random();
     let sponsor_info = SponsorInfo {
         sponsor_for_gas: Address::random(),
@@ -166,7 +166,7 @@ fn test_deposit_and_withdraw() {
     let db = StateDb::new(storage_manager.get_state_for_genesis_write());
     let mut address = Address::random();
     address.set_user_account_type_bits();
-    let address_with_space = AddressWithSpace::new_native(&address);
+    let address_with_space = address.with_native_space();
     let account = Account::new_empty_with_balance(
         &address_with_space,
         &U256::zero(),
@@ -461,7 +461,7 @@ fn init_test_account() -> OverlayAccount {
     let db = StateDb::new(storage_manager.get_state_for_genesis_write());
     let mut address = Address::random();
     address.set_user_account_type_bits();
-    let address_with_space = AddressWithSpace::new_native(&address);
+    let address_with_space = address.with_native_space();
     let account = Account::new_empty_with_balance(
         &address_with_space,
         &10_000_000.into(),
@@ -659,7 +659,7 @@ fn test_vote_lock() {
 fn test_clone_overwrite() {
     let mut address = Address::random();
     address.set_contract_type_bits();
-    let address_with_space = AddressWithSpace::new_native(&address);
+    let address_with_space = address.with_native_space();
     let admin = Address::random();
     let sponsor_info = SponsorInfo {
         sponsor_for_gas: Address::random(),

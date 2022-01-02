@@ -9,6 +9,8 @@ pub use ethereum_types::{
     H160, H256, H512, H520, H64, U128, U256, U512, U64,
 };
 
+pub use self::space_util::AddressSpaceUtil;
+
 #[derive(Eq, PartialEq, Hash, Copy, Clone, Debug, Ord, PartialOrd)]
 pub enum Space {
     Native,
@@ -27,36 +29,30 @@ pub struct AddressWithSpace {
 
 impl AddressWithSpace {
     #[inline]
-    pub fn new(address: Address, space: Space) -> Self {
-        Self { address, space }
-    }
-
-    #[inline]
-    pub fn new_native(address: &Address) -> Self {
-        Self {
-            address: *address,
-            space: Space::Native,
-        }
-    }
-
-    #[inline]
-    pub fn new_evm(address: &Address) -> Self {
-        Self {
-            address: *address,
-            space: Space::Ethereum,
-        }
-    }
-
-    #[inline]
-    pub fn zero_native() -> Self {
-        Self {
-            address: Address::zero(),
-            space: Space::Native,
-        }
-    }
-
-    #[inline]
     pub fn assert_native(&self) { assert_eq!(self.space, Space::Native) }
+}
+
+pub mod space_util {
+    use super::{Address, AddressWithSpace, Space};
+
+    pub trait AddressSpaceUtil: Sized {
+        fn with_space(self, space: Space) -> AddressWithSpace;
+        fn with_native_space(self) -> AddressWithSpace {
+            self.with_space(Space::Native)
+        }
+        fn with_evm_space(self) -> AddressWithSpace {
+            self.with_space(Space::Ethereum)
+        }
+    }
+
+    impl AddressSpaceUtil for Address {
+        fn with_space(self, space: Space) -> AddressWithSpace {
+            AddressWithSpace {
+                address: self,
+                space,
+            }
+        }
+    }
 }
 
 /// The KECCAK hash of an empty bloom filter (0x00 * 256)

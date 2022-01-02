@@ -19,7 +19,9 @@ use cfx_parameters::staking::{
     code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
 use cfx_state::{StateTrait, SubstateMngTrait, SubstateTrait};
-use cfx_types::{Address, AddressWithSpace, Space, H256, U256};
+use cfx_types::{
+    Address, AddressSpaceUtil, AddressWithSpace, Space, H256, U256,
+};
 use primitives::transaction::UNSIGNED_SENDER;
 use std::sync::Arc;
 
@@ -443,16 +445,13 @@ impl<
             return Err(vm::Error::MutableCallInStaticContext);
         }
 
-        let contract_address = AddressWithSpace::new(
-            self.local_part.origin.address,
-            self.local_part.space,
-        );
-        let refund_address =
-            AddressWithSpace::new(*refund_address, self.local_part.space);
-
         suicide_impl(
-            &contract_address,
-            &refund_address,
+            &self
+                .local_part
+                .origin
+                .address
+                .with_space(self.local_part.space),
+            &refund_address.with_space(self.local_part.space),
             self.state,
             &self.local_part.spec,
             &mut self.local_part.substate,
@@ -539,7 +538,7 @@ mod tests {
         new_storage_manager_for_testing, tests::FakeStateManager,
     };
     use cfx_types::{
-        address_util::AddressUtil, Address, AddressWithSpace, Space, H256, U256,
+        address_util::AddressUtil, Address, AddressSpaceUtil, Space, H256, U256,
     };
     use std::str::FromStr;
 
@@ -608,7 +607,7 @@ mod tests {
             setup
                 .state
                 .init_code(
-                    &AddressWithSpace::zero_native(),
+                    &Address::zero().with_native_space(),
                     vec![],
                     Address::zero(),
                 )
@@ -799,8 +798,7 @@ mod tests {
         let mut contract_address = Address::zero();
         contract_address.set_contract_type_bits();
         origin.address = contract_address;
-        let contract_address_w_space =
-            AddressWithSpace::new_native(&contract_address);
+        let contract_address_w_space = contract_address.with_native_space();
         state
             .new_contract_with_code(
                 &contract_address_w_space,

@@ -46,7 +46,7 @@ use cfx_storage::{
     StorageManagerTrait,
 };
 use cfx_types::{
-    address_util::AddressUtil, AddressWithSpace, BigEndianHash, H160, H256,
+    address_util::AddressUtil, AddressSpaceUtil, BigEndianHash, H160, H256,
     KECCAK_EMPTY_BLOOM, U256, U512,
 };
 use core::convert::TryFrom;
@@ -1735,7 +1735,7 @@ impl ConsensusExecutionHandler {
             if spec.is_valid_address(&address) {
                 state
                     .add_balance(
-                        &AddressWithSpace::new_native(&address),
+                        &address.with_native_space(),
                         &reward,
                         CleanupMode::ForceCreate,
                         spec.account_start_nonce,

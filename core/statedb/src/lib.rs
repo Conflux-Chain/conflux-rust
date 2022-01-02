@@ -314,7 +314,7 @@ mod impls {
             if !storage_layouts_to_rewrite.contains_key(address) {
                 // TODO: EVM core: Work later
                 let storage_layout_key =
-                    StorageKey::StorageRootKey(address).space(Space::Native);
+                    StorageKey::StorageRootKey(address).with_native_space();
                 let current_storage_layout = match accessed_entries
                     .get(&storage_layout_key.to_key_bytes())
                 {
@@ -360,7 +360,7 @@ mod impls {
         {
             self.set_raw(
                 StorageKey::new_storage_root_key(&address.address)
-                    .space(address.space),
+                    .with_space(address.space),
                 storage_layout.to_bytes().into_boxed_slice(),
                 debug_record,
             )
@@ -374,7 +374,7 @@ mod impls {
         ) -> Result<()>
         {
             // TODO: EVM core: work later (same as layout)
-            let key = StorageKey::StorageRootKey(address).space(Space::Native);
+            let key = StorageKey::StorageRootKey(address).with_native_space();
             let value = layout.to_bytes().into_boxed_slice();
             if let Some(record) = debug_record {
                 record.state_ops.push(StateOp::StorageLevelOp {
@@ -516,7 +516,7 @@ mod impls {
             &self, address: &AddressWithSpace,
         ) -> Result<StorageRoot> {
             let key = StorageKey::new_storage_root_key(&address.address)
-                .space(address.space);
+                .with_space(address.space);
 
             let (root, _) =
                 self.storage.get_node_merkle_all_versions::<NoProof>(key)?;
@@ -528,7 +528,7 @@ mod impls {
             &self, address: &AddressWithSpace,
         ) -> Result<(StorageRoot, StorageRootProof)> {
             let key = StorageKey::new_storage_root_key(&address.address)
-                .space(address.space);
+                .with_space(address.space);
 
             self.storage
                 .get_node_merkle_all_versions::<WithProof>(key)
@@ -645,9 +645,7 @@ mod impls {
         MptKeyValue, StateProof, StorageRootProof, StorageStateTrait,
         StorageStateTraitExt,
     };
-    use cfx_types::{
-        address_util::AddressUtil, Address, AddressWithSpace, Space,
-    };
+    use cfx_types::{address_util::AddressUtil, Address, AddressWithSpace};
     use hashbrown::HashMap;
     use parking_lot::RwLock;
     use primitives::{

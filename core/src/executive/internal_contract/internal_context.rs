@@ -4,7 +4,7 @@ use crate::{
 };
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{
-    address_util::AddressUtil, Address, AddressWithSpace, H256, U256,
+    address_util::AddressUtil, Address, AddressSpaceUtil, H256, U256,
 };
 
 /// The internal contracts need to access the context parameter directly, e.g.,
@@ -48,7 +48,7 @@ impl<'a> InternalRefContext<'a> {
     pub fn set_storage(
         &mut self, params: &ActionParams, key: Vec<u8>, value: U256,
     ) -> vm::Result<()> {
-        let receiver = AddressWithSpace::new(params.address, params.space);
+        let receiver = params.address.with_space(params.space);
         self.substate
             .set_storage(
                 self.state,
@@ -63,7 +63,7 @@ impl<'a> InternalRefContext<'a> {
     pub fn storage_at(
         &mut self, params: &ActionParams, key: &[u8],
     ) -> vm::Result<U256> {
-        let receiver = AddressWithSpace::new(params.address, params.space);
+        let receiver = params.address.with_space(params.space);
         self.substate
             .storage_at(self.state, &receiver, key)
             .map_err(|e| e.into())

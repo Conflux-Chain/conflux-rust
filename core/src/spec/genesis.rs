@@ -26,7 +26,8 @@ use cfx_state::{state_trait::*, CleanupMode};
 use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{StorageManager, StorageManagerTrait};
 use cfx_types::{
-    address_util::AddressUtil, Address, AddressWithSpace, H256, U256,
+    address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
+    H256, U256,
 };
 use diem_crypto::{
     bls::BLSPrivateKey, ec_vrf::EcVrfPublicKey, PrivateKey, ValidCryptoMaterial,
@@ -121,7 +122,7 @@ pub fn initialize_internal_contract_accounts(
         {
             for address in addresses {
                 state.new_contract_with_admin(
-                    &AddressWithSpace::new_native(&address),
+                    &address.with_native_space(),
                     /* No admin; admin = */ &Address::zero(),
                     /* balance = */ U256::zero(),
                     contract_start_nonce,
@@ -140,7 +141,7 @@ fn genesis_contract_address_impl(idx: usize, code: &Bytes) -> AddressWithSpace {
     let (address, _) = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
         0.into(),
-        &AddressWithSpace::new_native(&genesis_account_address),
+        &genesis_account_address.with_native_space(),
         &U256::from(idx),
         code,
     );
@@ -190,7 +191,7 @@ pub fn genesis_block(
     for (addr, balance) in genesis_accounts {
         state
             .add_balance(
-                &AddressWithSpace::new_native(&addr),
+                &addr.with_native_space(),
                 &balance,
                 CleanupMode::NoEmpty,
                 /* account_start_nonce = */ U256::zero(),
@@ -200,9 +201,10 @@ pub fn genesis_block(
     }
     state.add_total_issued(total_balance);
 
-    let genesis_account_address = AddressWithSpace::new_native(
-        &GENESIS_ACCOUNT_ADDRESS_STR.parse::<Address>().unwrap(),
-    );
+    let genesis_account_address = GENESIS_ACCOUNT_ADDRESS_STR
+        .parse::<Address>()
+        .unwrap()
+        .with_native_space();
 
     let genesis_token_count =
         U256::from(GENESIS_TOKEN_COUNT_IN_CFX) * U256::from(ONE_CFX_IN_DRIP);
@@ -408,7 +410,7 @@ pub fn genesis_block(
             // TODO(lpl): Pass in signed tx so they can be retired.
             state
                 .add_balance(
-                    &AddressWithSpace::new_native(&node.address),
+                    &node.address.with_native_space(),
                     &(stake_balance
                         + U256::from(ONE_CFX_IN_DRIP) * U256::from(20)),
                     CleanupMode::NoEmpty,
@@ -419,7 +421,7 @@ pub fn genesis_block(
             let signed_tx = node
                 .register_tx
                 .clone()
-                .fake_sign(AddressWithSpace::new_native(&node.address));
+                .fake_sign(node.address.with_native_space());
             execute_genesis_transaction(
                 &signed_tx,
                 &mut state,
