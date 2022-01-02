@@ -59,7 +59,6 @@ impl Serialize for SyncStatus {
 #[cfg(test)]
 mod tests {
     use super::{SyncInfo, SyncStatus};
-    use cfx_types::H512;
     use serde_json;
 
     #[test]
