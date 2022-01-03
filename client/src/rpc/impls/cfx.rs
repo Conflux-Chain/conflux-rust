@@ -11,7 +11,8 @@ use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
 use cfx_types::{
-    Address, AddressSpaceUtil, BigEndianHash, H256, H520, U128, U256, U64,
+    Address, AddressSpaceUtil, BigEndianHash, Space, H256, H520, U128, U256,
+    U64,
 };
 use cfxcore::{
     executive::{ExecutionError, ExecutionOutcome, TxDropError},

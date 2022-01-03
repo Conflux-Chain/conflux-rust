@@ -16,7 +16,7 @@ extern crate secret_store;
 
 use crate::bytes::Bytes;
 use cfx_types::{
-    Address, AddressSpaceUtil, BigEndianHash, H256, H512, U256, U512,
+    Address, AddressSpaceUtil, BigEndianHash, Space, H256, H512, U256, U512,
 };
 use cfxcore::{
     executive::contract_address, vm::CreateContractAddress,
