@@ -62,7 +62,7 @@ impl Transaction {
             data: Default::default(),
             storage_limit: Default::default(),
             epoch_height: Default::default(),
-            chain_id: U256::one(),
+            chain_id: U256::zero(),
             status: Default::default(),
             v: Default::default(),
             r: Default::default(),
