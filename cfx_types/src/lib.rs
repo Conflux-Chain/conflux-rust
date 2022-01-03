@@ -59,6 +59,8 @@ impl AllChainID {
     }
 
     pub fn in_native_space(&self) -> u32 { self.in_space(Space::Native) }
+
+    pub fn in_evm_space(&self) -> u32 { self.in_space(Space::Ethereum) }
 }
 
 impl Default for Space {
