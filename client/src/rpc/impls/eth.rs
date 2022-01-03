@@ -204,7 +204,7 @@ impl EthHandler {
             transaction_hash: Some(tx.hash().clone()),
             transaction_index: Some(tx_index.index.into()), /* TODO: Compute
                                                              * a correct index,
-                                                             * */
+                                                             */
             block_hash: Some(exec_info.pivot_hash),
             from: Some(tx.sender().address),
             to: match tx.action() {
@@ -221,7 +221,7 @@ impl EthHandler {
             logs_bloom: inner.log_bloom,
             status_code: None, // TODO: make sure what it is.
             effective_gas_price: *tx.gas_price(), /* TODO: what it is, is it
-                                                   * after cip-1559? */
+                                * after cip-1559? */
         };
 
         Ok(receipt)
