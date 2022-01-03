@@ -311,7 +311,7 @@ impl SentTransactionContainer {
 }
 
 #[derive(Eq, PartialEq, Hash, DeriveMallocSizeOf)]
-pub struct InflightPendingTrasnactionItem {
+pub struct InflightPendingTransactionItem {
     pub fixed_byte_part: TxPropagateId,
     pub random_byte_part: u8,
     pub window_index: usize,
@@ -320,14 +320,14 @@ pub struct InflightPendingTrasnactionItem {
     pub index: usize,
     pub peer_id: NodeId,
 }
-impl InflightPendingTrasnactionItem {
+impl InflightPendingTransactionItem {
     pub fn new(
         fixed_byte_part: TxPropagateId, random_byte_part: u8,
         window_index: usize, key1: u64, key2: u64, index: usize,
         peer_id: NodeId,
     ) -> Self
     {
-        InflightPendingTrasnactionItem {
+        InflightPendingTransactionItem {
             fixed_byte_part,
             random_byte_part,
             window_index,
@@ -342,8 +342,8 @@ impl InflightPendingTrasnactionItem {
 #[derive(DeriveMallocSizeOf)]
 struct InflightPendingTransactionContainerInner {
     txid_hashmap:
-        HashMap<TxPropagateId, HashSet<Arc<InflightPendingTrasnactionItem>>>,
-    time_window: TimeWindow<Arc<InflightPendingTrasnactionItem>>,
+        HashMap<TxPropagateId, HashSet<Arc<InflightPendingTransactionItem>>>,
+    time_window: TimeWindow<Arc<InflightPendingTransactionItem>>,
 }
 
 impl InflightPendingTransactionContainerInner {
@@ -375,7 +375,7 @@ impl InflightPendingTransactionContainer {
     pub fn generate_tx_requests_from_inflight_pending_pool(
         &mut self, signed_transactions: &Vec<Arc<SignedTransaction>>,
     ) -> (
-        Vec<Arc<InflightPendingTrasnactionItem>>,
+        Vec<Arc<InflightPendingTransactionItem>>,
         HashSet<TxPropagateId>,
     ) {
         let _timer = MeterTimer::time_func(
@@ -416,7 +416,7 @@ impl InflightPendingTransactionContainer {
     }
 
     pub fn append_inflight_pending_items(
-        &mut self, items: Vec<InflightPendingTrasnactionItem>,
+        &mut self, items: Vec<InflightPendingTransactionItem>,
     ) {
         let mut values = Vec::new();
         for item in items {

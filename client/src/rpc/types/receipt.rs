@@ -11,7 +11,7 @@ use primitives::{
         Receipt as PrimitiveReceipt, StorageChange as PrimitiveStorageChange,
     },
     transaction::Action,
-    SignedTransaction as PrimitiveTransaction, TransactionIndex,
+    SignedTransaction as PrimitiveTransaction, Transaction, TransactionIndex,
 };
 use serde_derive::Serialize;
 
@@ -99,13 +99,20 @@ impl Receipt {
         } = receipt;
 
         let mut address = None;
-        if Action::Create == transaction.action && outcome_status == 0 {
+        let unsigned = if let Transaction::Native(ref unsigned) =
+            transaction.unsigned
+        {
+            unsigned
+        } else {
+            bail!(format!("Does not support EIP-155 transaction in Conflux space RPC. get_receipt for tx: {:?}",transaction));
+        };
+        if Action::Create == unsigned.action && outcome_status == 0 {
             let (created_address, _) = contract_address(
                 CreateContractAddress::FromSenderNonceAndCodeHash,
                 block_number.into(),
                 &transaction.sender.with_native_space(),
-                &transaction.nonce,
-                &transaction.data,
+                &unsigned.nonce,
+                &unsigned.data,
             );
             address = Some(RpcAddress::try_from_h160(
                 created_address.address,
@@ -128,7 +135,7 @@ impl Receipt {
             gas_used: (accumulated_gas_used - prior_gas_used).into(),
             gas_fee: gas_fee.into(),
             from: RpcAddress::try_from_h160(transaction.sender, network)?,
-            to: match &transaction.action {
+            to: match &unsigned.action {
                 Action::Create => None,
                 Action::Call(address) => {
                     Some(RpcAddress::try_from_h160(address.clone(), network)?)

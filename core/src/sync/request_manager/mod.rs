@@ -40,7 +40,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tx_handler::{
-    InflightPendingTransactionContainer, InflightPendingTrasnactionItem,
+    InflightPendingTransactionContainer, InflightPendingTransactionItem,
     ReceivedTransactionContainer, SentTransactionContainer,
 };
 
@@ -348,7 +348,7 @@ impl RequestManager {
             let mut tx_request_indices = Vec::new();
             let mut hashes_request_indices = Vec::new();
             let mut inflight_pending_items: Vec<
-                InflightPendingTrasnactionItem,
+                InflightPendingTransactionItem,
             > = Vec::new();
 
             //process short ids
@@ -375,7 +375,7 @@ impl RequestManager {
                 } else {
                     // Already being requested, put in inflight pending queue
                     inflight_pending_items.push(
-                        InflightPendingTrasnactionItem::new(
+                        InflightPendingTransactionItem::new(
                             fixed_bytes,
                             random_bytes,
                             window_index,
