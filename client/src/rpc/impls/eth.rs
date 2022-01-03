@@ -7,32 +7,84 @@ use crate::rpc::{
     types::{
         eth::{
             CallRequest, Filter, FilterChanges, Log, Receipt, RichBlock,
-            SyncStatus, Transaction,
+            SyncInfo, SyncStatus, Transaction,
         },
         Bytes, EpochNumber as BlockNumber, Index,
     },
 };
 use cfx_types::{H160, H256, U256, U64};
+use cfxcore::{
+    SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
+};
 use jsonrpc_core::BoxFuture;
 
 pub struct EthHandler {
-    // TODO
+    consensus: SharedConsensusGraph,
+    sync: SharedSynchronizationService,
+    _tx_pool: SharedTransactionPool,
+}
+
+impl EthHandler {
+    pub fn new(
+        consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
+        tx_pool: SharedTransactionPool,
+    ) -> Self
+    {
+        EthHandler {
+            consensus,
+            sync,
+            _tx_pool: tx_pool,
+        }
+    }
 }
 
 impl Eth for EthHandler {
     type Metadata = ();
 
-    fn protocol_version(&self) -> jsonrpc_core::Result<String> { todo!() }
+    fn protocol_version(&self) -> jsonrpc_core::Result<String> {
+        // 65 is a common ETH version now
+        Ok(format!("{}", 65))
+    }
 
-    fn syncing(&self) -> jsonrpc_core::Result<SyncStatus> { todo!() }
+    fn syncing(&self) -> jsonrpc_core::Result<SyncStatus> {
+        if self.sync.catch_up_mode() {
+            Ok(
+                // Now pass some statistics of Conflux just to make the
+                // interface happy
+                SyncStatus::Info(SyncInfo {
+                    starting_block: U256::from(self.consensus.block_count()),
+                    current_block: U256::from(self.consensus.block_count()),
+                    highest_block: U256::from(
+                        self.sync.get_synchronization_graph().block_count(),
+                    ),
+                    warp_chunks_amount: None,
+                    warp_chunks_processed: None,
+                }),
+            )
+        } else {
+            Ok(SyncStatus::None)
+        }
+    }
 
-    fn hashrate(&self) -> jsonrpc_core::Result<U256> { todo!() }
+    fn hashrate(&self) -> jsonrpc_core::Result<U256> {
+        // We do not mine
+        Ok(U256::zero())
+    }
 
-    fn author(&self) -> jsonrpc_core::Result<H160> { todo!() }
+    fn author(&self) -> jsonrpc_core::Result<H160> {
+        // We do not care this, just return zero address
+        Ok(H160::zero())
+    }
 
-    fn is_mining(&self) -> jsonrpc_core::Result<bool> { todo!() }
+    fn is_mining(&self) -> jsonrpc_core::Result<bool> {
+        // We do not mine from ETH perspective
+        Ok(false)
+    }
 
-    fn chain_id(&self) -> jsonrpc_core::Result<Option<U64>> { todo!() }
+    fn chain_id(&self) -> jsonrpc_core::Result<Option<U64>> {
+        // TODO: Change this
+        return Ok(Some(U64::from(201005)));
+    }
 
     fn gas_price(&self) -> BoxFuture<U256> { todo!() }
 
@@ -141,18 +193,6 @@ impl Eth for EthHandler {
     fn uncle_by_block_number_and_index(
         &self, _: BlockNumber, _: Index,
     ) -> BoxFuture<Option<RichBlock>> {
-        todo!()
-    }
-
-    fn compilers(&self) -> jsonrpc_core::Result<Vec<String>> { todo!() }
-
-    fn compile_lll(&self, _: String) -> jsonrpc_core::Result<Bytes> { todo!() }
-
-    fn compile_solidity(&self, _: String) -> jsonrpc_core::Result<Bytes> {
-        todo!()
-    }
-
-    fn compile_serpent(&self, _: String) -> jsonrpc_core::Result<Bytes> {
         todo!()
     }
 
