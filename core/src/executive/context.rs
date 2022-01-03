@@ -467,12 +467,14 @@ impl<
     fn space(&self) -> Space { self.local_part.space }
 
     fn chain_id(&self) -> u64 {
+        let space = self.local_part.space;
         self.local_part
             .machine
             .params()
             .chain_id
             .read()
-            .get_chain_id(self.local_part.env.epoch_height) as u64
+            .get_chain_id(self.local_part.env.epoch_height)
+            .in_space(space) as u64
     }
 
     fn depth(&self) -> usize { self.local_part.depth }

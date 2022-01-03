@@ -17,7 +17,9 @@ use cfx_storage::{
     into_simple_mpt_key, make_simple_mpt, simple_mpt_merkle_root,
     simple_mpt_proof, SimpleMpt, TrieProof,
 };
-use cfx_types::{address_util::AddressUtil, BigEndianHash, Space, H256, U256};
+use cfx_types::{
+    address_util::AddressUtil, AllChainID, BigEndianHash, Space, H256, U256,
+};
 use primitives::{
     block::BlockHeight,
     transaction::{NativeTransaction, TransactionError},
@@ -431,7 +433,7 @@ impl VerificationConfig {
     /// should discard this block and all its descendants.
     #[inline]
     pub fn verify_sync_graph_block_basic(
-        &self, block: &Block, chain_id: u32,
+        &self, block: &Block, chain_id: AllChainID,
     ) -> Result<(), Error> {
         self.verify_block_integrity(block)?;
 
@@ -554,7 +556,7 @@ impl VerificationConfig {
     // transactions may have different logics. But they share a lot of similar
     // rules. We combine them together for convenient in the future upgrades..
     pub fn verify_transaction_common(
-        &self, tx: &TransactionWithSignature, chain_id: u32,
+        &self, tx: &TransactionWithSignature, chain_id: AllChainID,
         height: BlockHeight, transitions: &TransitionsEpochHeight,
         mode: VerifyTxMode,
     ) -> Result<(), TransactionError>
@@ -568,10 +570,11 @@ impl VerificationConfig {
             ));
         }
 
-        if tx.chain_id() != chain_id {
+        if tx.chain_id() != chain_id.in_space(tx.space()) {
             bail!(TransactionError::ChainIdMismatch {
-                expected: chain_id,
+                expected: chain_id.in_space(tx.space()),
                 got: tx.chain_id(),
+                space: tx.space(),
             });
         }
 
