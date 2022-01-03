@@ -11,7 +11,8 @@ use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
 use cfx_types::{
-    Address, AddressSpaceUtil, BigEndianHash, H256, H520, U128, U256, U64,
+    Address, AddressSpaceUtil, BigEndianHash, Space, H256, H520, U128, U256,
+    U64,
 };
 use cfxcore::{
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
@@ -31,8 +32,8 @@ use network::{
 use parking_lot::Mutex;
 use primitives::{
     filter::LogFilter, Account, Block, BlockReceipts, DepositInfo,
-    SignedTransaction, StorageKey, StorageRoot, StorageValue, TransactionIndex,
-    TransactionWithSignature, VoteStakeInfo,
+    SignedTransaction, StorageKey, StorageRoot, StorageValue, Transaction,
+    TransactionIndex, TransactionWithSignature, VoteStakeInfo,
 };
 use random_crash::*;
 use rlp::Rlp;
@@ -541,7 +542,12 @@ impl RpcImpl {
 
         let epoch_height = consensus_graph.best_epoch_number();
         let chain_id = consensus_graph.best_chain_id();
-        tx.sign_with(epoch_height, chain_id, password, self.accounts.clone())
+        tx.sign_with(
+            epoch_height,
+            chain_id.in_native_space(),
+            password,
+            self.accounts.clone(),
+        )
     }
 
     fn send_transaction(
@@ -884,7 +890,7 @@ impl RpcImpl {
                         &mut block_size_limit,
                         num_txs_simple,
                         num_txs_erc20,
-                        self.consensus.best_chain_id(),
+                        self.consensus.best_chain_id().in_native_space(),
                     );
 
                 Ok(block_gen.generate_block(
@@ -943,9 +949,17 @@ impl RpcImpl {
             match tx.recover_public() {
                 Ok(public) => {
                     let mut signed_tx = SignedTransaction::new(public, tx);
+                    let unsigned = if let Transaction::Native(
+                        ref mut unsigned,
+                    ) =
+                        signed_tx.transaction.transaction.unsigned
+                    {
+                        unsigned
+                    } else {
+                        bail!(invalid_params(&format!("raw_txs, tx {:?}", signed_tx), format!("Does not support EIP-155 transaction in cfx RPC.")));
+                    };
                     if tx_data_len > 0 {
-                        signed_tx.transaction.transaction.unsigned.data =
-                            vec![0; tx_data_len];
+                        unsigned.data = vec![0; tx_data_len];
                     }
                     transactions.push(Arc::new(signed_tx));
                 }
@@ -1298,7 +1312,8 @@ impl RpcImpl {
 
         let best_epoch_height = consensus_graph.best_epoch_number();
         let chain_id = consensus_graph.best_chain_id();
-        let signed_tx = sign_call(best_epoch_height, chain_id, request)?;
+        let signed_tx =
+            sign_call(best_epoch_height, chain_id.in_native_space(), request)?;
         trace!("call tx {:?}", signed_tx);
         consensus_graph.call_virtual(&signed_tx, epoch.into())
     }

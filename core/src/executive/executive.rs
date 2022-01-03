@@ -37,7 +37,7 @@ use cfx_types::{
 };
 use primitives::{
     receipt::StorageChange, storage::STORAGE_LAYOUT_REGULAR_V0,
-    transaction::Action, SignedTransaction, StorageLayout,
+    transaction::Action, SignedTransaction, StorageLayout, Transaction,
 };
 use rlp::RlpStream;
 use std::{
@@ -930,7 +930,7 @@ impl<
         let balance = self.state.balance(&sender)?;
         // Give the sender a sufficient balance.
         let needed_balance = U256::MAX / U256::from(2);
-        self.state.set_nonce(&sender, &tx.nonce)?;
+        self.state.set_nonce(&sender, &tx.nonce())?;
         if balance < needed_balance {
             self.state.add_balance(
                 &sender,
@@ -954,7 +954,7 @@ impl<
         let mut gas_sponsor_eligible = false;
         let mut storage_sponsor_eligible = false;
 
-        if let Action::Call(ref address) = tx.action {
+        if let Action::Call(ref address) = tx.action() {
             if !spec.is_valid_address(address) {
                 return Ok(Err(ExecutionOutcome::NotExecutedDrop(
                     TxDropError::InvalidRecipientAddress(*address),
@@ -998,7 +998,7 @@ impl<
             && storage_cost <= sponsor_balance_for_storage;
 
         let sender_intended_cost = {
-            let mut sender_intended_cost = U512::from(tx.value);
+            let mut sender_intended_cost = U512::from(tx.value());
 
             if !gas_sponsor_eligible {
                 sender_intended_cost += gas_cost;
@@ -1009,7 +1009,7 @@ impl<
             sender_intended_cost
         };
         let total_cost = {
-            let mut total_cost = U512::from(tx.value);
+            let mut total_cost = U512::from(tx.value());
             if !gas_sponsored {
                 total_cost += gas_cost
             }
@@ -1066,48 +1066,60 @@ impl<
         let nonce = self.state.nonce(&sender)?;
 
         // Validate transaction nonce
-        if tx.nonce < nonce {
+        if *tx.nonce() < nonce {
             return Ok(ExecutionOutcome::NotExecutedDrop(
-                TxDropError::OldNonce(nonce, tx.nonce),
+                TxDropError::OldNonce(nonce, *tx.nonce()),
             ));
-        } else if tx.nonce > nonce {
+        } else if *tx.nonce() > nonce {
             return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
                 ToRepackError::InvalidNonce {
                     expected: nonce,
-                    got: tx.nonce,
+                    got: *tx.nonce(),
                 },
             ));
         }
 
         // Validate transaction epoch height.
-        let eth_space_tx = spec.cip90 && tx.space() == Space::Ethereum;
-        if !eth_space_tx
-            && VerificationConfig::check_transaction_epoch_bound(
+        if let Transaction::Native(ref tx) = tx.transaction.transaction.unsigned
+        {
+            if VerificationConfig::check_transaction_epoch_bound(
                 tx,
                 self.env.epoch_height,
                 self.env.transaction_epoch_bound,
             ) != 0
-        {
-            return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
-                ToRepackError::EpochHeightOutOfBound {
-                    block_height: self.env.epoch_height,
-                    set: tx.epoch_height,
-                    transaction_epoch_bound: self.env.transaction_epoch_bound,
-                },
-            ));
+            {
+                return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
+                    ToRepackError::EpochHeightOutOfBound {
+                        block_height: self.env.epoch_height,
+                        set: tx.epoch_height,
+                        transaction_epoch_bound: self
+                            .env
+                            .transaction_epoch_bound,
+                    },
+                ));
+            }
         }
 
-        let base_gas_required =
-            Self::gas_required_for(tx.action == Action::Create, &tx.data, spec);
+        let base_gas_required = Self::gas_required_for(
+            tx.action() == &Action::Create,
+            &tx.data(),
+            spec,
+        );
         assert!(
-            tx.gas >= base_gas_required.into(),
+            *tx.gas() >= base_gas_required.into(),
             "We have already checked the base gas requirement when we received the block."
         );
 
         let balance = self.state.balance(&sender)?;
-        let gas_cost = tx.gas.full_mul(tx.gas_price);
-        let storage_cost =
-            U256::from(tx.storage_limit) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+        let gas_cost = tx.gas().full_mul(*tx.gas_price());
+        let storage_cost = if let Transaction::Native(ref tx) =
+            tx.transaction.transaction.unsigned
+        {
+            U256::from(tx.storage_limit) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+        } else {
+            U256::zero()
+        };
+
         let sender_balance = U512::from(balance);
 
         let SponsorCheckOutput {
@@ -1130,7 +1142,7 @@ impl<
                 }
             }
         } else {
-            let sender_cost = U512::from(tx.value) + gas_cost;
+            let sender_cost = U512::from(tx.value()) + gas_cost;
             SponsorCheckOutput {
                 sender_intended_cost: sender_cost,
                 total_cost: sender_cost,
@@ -1198,7 +1210,7 @@ impl<
         // Subtract the transaction fee from sender or contract.
         let gas_cost = U256::try_from(gas_cost).unwrap();
         // For tracer only when tx is sponsored.
-        let code_address = match tx.action {
+        let code_address = match tx.action() {
             Action::Create => Address::zero(),
             Action::Call(ref address) => *address,
         };
@@ -1226,7 +1238,7 @@ impl<
             )?;
         }
 
-        let init_gas = tx.gas - base_gas_required;
+        let init_gas = tx.gas() - base_gas_required;
 
         // Find the `storage_owner` in this execution.
         let storage_owner = if storage_sponsored {
@@ -1243,14 +1255,14 @@ impl<
         self.state.checkpoint();
         let mut substate = Substate::new();
 
-        let res = match tx.action {
+        let res = match tx.action() {
             Action::Create => {
                 let (new_address, _code_hash) = contract_address(
                     CreateContractAddress::FromSenderNonceAndCodeHash,
                     self.env.number.into(),
                     &sender,
                     &nonce,
-                    &tx.data,
+                    &tx.data(),
                 );
 
                 // For a contract address already with code, we do not allow
@@ -1285,9 +1297,9 @@ impl<
                     original_sender: sender.address,
                     storage_owner,
                     gas: init_gas,
-                    gas_price: tx.gas_price,
-                    value: ActionValue::Transfer(tx.value),
-                    code: Some(Arc::new(tx.data.clone())),
+                    gas_price: *tx.gas_price(),
+                    value: ActionValue::Transfer(*tx.value()),
+                    code: Some(Arc::new(tx.data().clone())),
                     data: None,
                     call_type: CallType::None,
                     create_type: CreateType::CREATE,
@@ -1305,11 +1317,11 @@ impl<
                     original_sender: sender.address,
                     storage_owner,
                     gas: init_gas,
-                    gas_price: tx.gas_price,
-                    value: ActionValue::Transfer(tx.value),
+                    gas_price: *tx.gas_price(),
+                    value: ActionValue::Transfer(*tx.value()),
                     code: self.state.code(&address)?,
                     code_hash: self.state.code_hash(&address)?,
-                    data: Some(tx.data.clone()),
+                    data: Some(tx.data().clone()),
                     call_type: CallType::Call,
                     create_type: CreateType::None,
                     params_type: vm::ParamsType::Separate,
@@ -1506,20 +1518,24 @@ impl<
         };
 
         // gas_used is only used to estimate gas needed
-        let gas_used = tx.gas - gas_left;
+        let gas_used = tx.gas() - gas_left;
         // gas_left should be smaller than 1/4 of gas_limit, otherwise
         // 3/4 of gas_limit is charged.
         let charge_all = (gas_left + gas_left + gas_left) >= gas_used;
         let (gas_charged, fees_value, refund_value) = if charge_all {
-            let gas_refunded = tx.gas >> 2;
-            let gas_charged = tx.gas - gas_refunded;
+            let gas_refunded = tx.gas() >> 2;
+            let gas_charged = tx.gas() - gas_refunded;
             (
                 gas_charged,
-                gas_charged * tx.gas_price,
-                gas_refunded * tx.gas_price,
+                gas_charged * tx.gas_price(),
+                gas_refunded * tx.gas_price(),
             )
         } else {
-            (gas_used, gas_used * tx.gas_price, gas_left * tx.gas_price)
+            (
+                gas_used,
+                gas_used * tx.gas_price(),
+                gas_left * tx.gas_price(),
+            )
         };
 
         if let Some(r) = refund_receiver {
@@ -1558,7 +1574,7 @@ impl<
 
         //        // perform garbage-collection
         //        let min_balance = if spec.kill_dust != CleanDustMode::Off {
-        //            Some(U256::from(spec.tx_gas) * tx.gas_price)
+        //            Some(U256::from(spec.tx_gas) * tx.gas_price())
         //        } else {
         //            None
         //        };

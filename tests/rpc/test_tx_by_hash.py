@@ -48,7 +48,7 @@ class TestGetTxByHash(RpcClient):
         assert_equal(tx2["from"], self.GENESIS_ADDR)
         assert_equal(tx2["to"], to)
         assert_equal(tx2["nonce"], hex(tx.nonce))
-        assert_equal(tx2["gas"], hex(tx.gas))
+        assert_equal(tx2["gas"], hex(tx.gas()))
         assert_equal(tx2["gasPrice"], hex(tx.gas_price))
         assert_equal(tx2["value"], hex(tx.value))
         assert_equal(tx2["data"], eth_utils.encode_hex(tx.data))

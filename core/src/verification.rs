@@ -17,11 +17,14 @@ use cfx_storage::{
     into_simple_mpt_key, make_simple_mpt, simple_mpt_merkle_root,
     simple_mpt_proof, SimpleMpt, TrieProof,
 };
-use cfx_types::{address_util::AddressUtil, BigEndianHash, Space, H256, U256};
+use cfx_types::{
+    address_util::AddressUtil, AllChainID, BigEndianHash, Space, H256, U256,
+};
 use primitives::{
-    block::BlockHeight, transaction::TransactionError, Action, Block,
-    BlockHeader, BlockReceipts, MerkleHash, Receipt, SignedTransaction,
-    TransactionWithSignature,
+    block::BlockHeight,
+    transaction::{NativeTransaction, TransactionError},
+    Action, Block, BlockHeader, BlockReceipts, MerkleHash, Receipt,
+    SignedTransaction, Transaction, TransactionWithSignature,
 };
 use rlp::Encodable;
 use std::{collections::HashSet, convert::TryInto, sync::Arc};
@@ -430,7 +433,7 @@ impl VerificationConfig {
     /// should discard this block and all its descendants.
     #[inline]
     pub fn verify_sync_graph_block_basic(
-        &self, block: &Block, chain_id: u32,
+        &self, block: &Block, chain_id: AllChainID,
     ) -> Result<(), Error> {
         self.verify_block_integrity(block)?;
 
@@ -475,10 +478,8 @@ impl VerificationConfig {
     }
 
     pub fn check_transaction_epoch_bound(
-        tx: &TransactionWithSignature, block_height: u64,
-        transaction_epoch_bound: u64,
-    ) -> i8
-    {
+        tx: &NativeTransaction, block_height: u64, transaction_epoch_bound: u64,
+    ) -> i8 {
         if tx.epoch_height.wrapping_add(transaction_epoch_bound) < block_height
         {
             -1
@@ -489,31 +490,11 @@ impl VerificationConfig {
         }
     }
 
-    // If the boolean variable returns true, it means this transaction do not
-    // need check epoch height.
-    fn can_skip_epoch_check(
-        tx: &TransactionWithSignature, cip90a: bool, mode: &VerifyTxMode,
-    ) -> bool {
-        if tx.space() == Space::Native {
-            return false;
-        }
-
-        match mode {
-            VerifyTxMode::Local(_, _) if mode.is_maybe_later() => true,
-            VerifyTxMode::Local(_, spec) => cip90a && spec.cip90,
-            VerifyTxMode::Remote => cip90a,
-        }
-    }
-
     fn verify_transaction_epoch_height(
-        tx: &TransactionWithSignature, block_height: u64,
-        transaction_epoch_bound: u64, cip90a: bool, mode: &VerifyTxMode,
+        tx: &NativeTransaction, block_height: u64,
+        transaction_epoch_bound: u64, mode: &VerifyTxMode,
     ) -> Result<(), TransactionError>
     {
-        if Self::can_skip_epoch_check(tx, cip90a, mode) {
-            return Ok(());
-        }
-
         let result = Self::check_transaction_epoch_bound(
             tx,
             block_height,
@@ -532,6 +513,15 @@ impl VerificationConfig {
         }
     }
 
+    fn fast_recheck_inner<F>(spec: &Spec, f: F) -> (bool, bool)
+    where F: Fn(&VerifyTxMode) -> bool {
+        let tx_pool_mode =
+            VerifyTxMode::Local(VerifyTxLocalMode::MaybeLater, spec);
+        let packing_mode = VerifyTxMode::Local(VerifyTxLocalMode::Full, spec);
+
+        (f(&packing_mode), f(&tx_pool_mode))
+    }
+
     pub fn fast_recheck(
         &self, tx: &TransactionWithSignature, height: BlockHeight,
         transitions: &TransitionsEpochHeight, spec: &Spec,
@@ -539,32 +529,26 @@ impl VerificationConfig {
     {
         let cip90a = height >= transitions.cip90a;
 
-        let tx_pool_mode =
-            VerifyTxMode::Local(VerifyTxLocalMode::MaybeLater, spec);
-        let packing_mode = VerifyTxMode::Local(VerifyTxLocalMode::Full, spec);
-
-        if Self::verify_transaction_epoch_height(
-            tx,
-            height,
-            self.transaction_epoch_bound,
-            cip90a,
-            &packing_mode,
-        )
-        .is_ok()
-        {
-            PackingCheckResult::Pack
-        } else if Self::verify_transaction_epoch_height(
-            tx,
-            height,
-            self.transaction_epoch_bound,
-            cip90a,
-            &tx_pool_mode,
-        )
-        .is_ok()
-        {
-            PackingCheckResult::Pending
-        } else {
-            PackingCheckResult::Drop
+        let (can_pack, later_pack) =
+            if let Transaction::Native(ref tx) = tx.unsigned {
+                Self::fast_recheck_inner(spec, |mode: &VerifyTxMode| {
+                    Self::verify_transaction_epoch_height(
+                        tx,
+                        height,
+                        self.transaction_epoch_bound,
+                        mode,
+                    )
+                    .is_ok()
+                })
+            } else {
+                Self::fast_recheck_inner(spec, |mode: &VerifyTxMode| {
+                    Self::check_eip155_transaction(tx, cip90a, mode)
+                })
+            };
+        match (can_pack, later_pack) {
+            (true, _) => PackingCheckResult::Pack,
+            (false, true) => PackingCheckResult::Pending,
+            (false, false) => PackingCheckResult::Drop,
         }
     }
 
@@ -572,7 +556,7 @@ impl VerificationConfig {
     // transactions may have different logics. But they share a lot of similar
     // rules. We combine them together for convenient in the future upgrades..
     pub fn verify_transaction_common(
-        &self, tx: &TransactionWithSignature, chain_id: u32,
+        &self, tx: &TransactionWithSignature, chain_id: AllChainID,
         height: BlockHeight, transitions: &TransitionsEpochHeight,
         mode: VerifyTxMode,
     ) -> Result<(), TransactionError>
@@ -586,20 +570,21 @@ impl VerificationConfig {
             ));
         }
 
-        if tx.chain_id != chain_id {
+        if tx.chain_id() != chain_id.in_space(tx.space()) {
             bail!(TransactionError::ChainIdMismatch {
-                expected: chain_id,
-                got: tx.chain_id,
+                expected: chain_id.in_space(tx.space()),
+                got: tx.chain_id(),
+                space: tx.space(),
             });
         }
 
         // Forbid zero-gas-price tx
-        if tx.gas_price == 0.into() {
+        if tx.gas_price().is_zero() {
             bail!(TransactionError::ZeroGasPrice);
         }
 
         if matches!(mode, VerifyTxMode::Local(..)) {
-            if let Action::Call(ref address) = tx.transaction.action {
+            if let Action::Call(ref address) = tx.transaction.action() {
                 if !address.is_genesis_valid_address() {
                     bail!(TransactionError::InvalidReceiver)
                 }
@@ -613,17 +598,36 @@ impl VerificationConfig {
         let cip76 = height >= transitions.cip76;
         let cip90a = height >= transitions.cip90a;
 
-        Self::verify_transaction_epoch_height(
-            tx,
-            height,
-            self.transaction_epoch_bound,
-            cip90a,
-            &mode,
-        )?;
+        if let Transaction::Native(ref tx) = tx.unsigned {
+            Self::verify_transaction_epoch_height(
+                tx,
+                height,
+                self.transaction_epoch_bound,
+                &mode,
+            )?;
+        }
+
+        if !Self::check_eip155_transaction(tx, cip90a, &mode) {
+            bail!(TransactionError::InvalidEthereumLike);
+        }
 
         Self::check_gas_limit(tx, cip76, &mode)?;
-        Self::check_eth_like(tx)?;
         Ok(())
+    }
+
+    fn check_eip155_transaction(
+        tx: &TransactionWithSignature, cip90a: bool, mode: &VerifyTxMode,
+    ) -> bool {
+        if tx.space() == Space::Native {
+            return true;
+        }
+
+        use VerifyTxLocalMode::*;
+        match mode {
+            VerifyTxMode::Local(Full, spec) => cip90a && spec.cip90,
+            VerifyTxMode::Local(MaybeLater, _spec) => true,
+            VerifyTxMode::Remote => cip90a,
+        }
     }
 
     /// Check transaction intrinsic gas. Influenced by CIP-76.
@@ -643,33 +647,16 @@ impl VerificationConfig {
 
         if let Some(spec) = maybe_spec {
             let tx_intrinsic_gas = Executive::gas_required_for(
-                tx.action == Action::Create,
-                &tx.data,
+                *tx.action() == Action::Create,
+                &tx.data(),
                 &spec,
             );
-            if tx.gas < (tx_intrinsic_gas as usize).into() {
+            if *tx.gas() < (tx_intrinsic_gas as usize).into() {
                 bail!(TransactionError::NotEnoughBaseGas {
                     required: tx_intrinsic_gas.into(),
-                    got: tx.gas
+                    got: *tx.gas()
                 });
             }
-        }
-
-        Ok(())
-    }
-
-    fn check_eth_like(
-        tx: &TransactionWithSignature,
-    ) -> Result<(), TransactionError> {
-        if tx.space() != Space::Ethereum {
-            return Ok(());
-        }
-
-        // We do not check if cip90a is activated or not. Even if cip90a is
-        // not activated, a transaction with target epoch == u64::MAX and
-        // storage limit != u64::MAX can never be packed.
-        if tx.storage_limit != u64::MAX {
-            return Err(TransactionError::InvalidEthereumLike);
         }
 
         Ok(())

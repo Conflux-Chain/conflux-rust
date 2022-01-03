@@ -53,7 +53,7 @@ use network::{
     throttling::{self, THROTTLING_SERVICE},
     NetworkService, SessionDetails, UpdateNodeOperation,
 };
-use primitives::{Account, Action, SignedTransaction};
+use primitives::{Account, Action, SignedTransaction, Transaction};
 
 fn grouped_txs<T, F>(
     txs: Vec<Arc<SignedTransaction>>, converter: F,
@@ -647,7 +647,11 @@ impl RpcImpl {
         Ok(RpcStatus {
             best_hash: best_info.best_block_hash.into(),
             block_number: block_number.into(),
-            chain_id: best_info.chain_id.into(),
+            chain_id: best_info.chain_id.in_native_space().into(),
+            ethereum_space_chain_id: best_info
+                .chain_id
+                .in_space(Space::Ethereum)
+                .into(),
             epoch_number: best_info.best_epoch_number.into(),
             latest_checkpoint,
             latest_confirmed,
@@ -678,6 +682,11 @@ impl RpcImpl {
             voting_power.as_u64(),
             0,
         );
+        let tx = if let Transaction::Native(tx) = tx {
+            tx
+        } else {
+            unreachable!("register transaction must be native space");
+        };
         let identifier = from_consensus_public_key(
             &self.pos_handler.config().bls_key.public_key(),
             &self.pos_handler.config().vrf_key.public_key(),
@@ -853,6 +862,7 @@ impl RpcImpl {
         Ok(THROTTLING_SERVICE.read().clone())
     }
 
+    // MARK: Conflux space rpc supports EVM space transaction
     pub fn txpool_tx_with_pool_info(
         &self, hash: H256,
     ) -> JsonRpcResult<TxWithPoolInfo> {
@@ -874,14 +884,15 @@ impl RpcImpl {
                     rpc_error
                 })?;
             let required_storage_collateral =
-                if tx.transaction.space() == Space::Native {
+                if let Transaction::Native(ref tx) = tx.unsigned {
                     U256::from(tx.storage_limit)
                         * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
                 } else {
                     U256::zero()
                 };
-            let required_balance =
-                tx.value + tx.gas * tx.gas_price + required_storage_collateral;
+            let required_balance = tx.value()
+                + tx.gas() * tx.gas_price()
+                + required_storage_collateral;
             ret.local_balance_enough = local_balance > required_balance;
             ret.state_balance_enough = state_balance > required_balance;
             ret.local_balance = local_balance;
@@ -986,14 +997,17 @@ impl RpcImpl {
             .tx_pool
             .content(address.map(AddressSpaceUtil::with_native_space));
         let converter = |tx: Arc<SignedTransaction>| -> String {
-            let to = match tx.action {
+            let to = match tx.action() {
                 Action::Create => "<Create contract>".into(),
                 Action::Call(addr) => format!("{:?}", addr),
             };
 
             format!(
                 "{}: {:?} drip + {:?} gas * {:?} drip",
-                to, tx.value, tx.gas, tx.gas_price
+                to,
+                tx.value(),
+                tx.gas(),
+                tx.gas_price()
             )
         };
 
@@ -1144,11 +1158,11 @@ impl RpcImpl {
         let mut max_nonce: U256 = U256::from(0);
         let mut min_nonce: U256 = U256::max_value();
         for tx in pending_txs.iter() {
-            if tx.nonce > max_nonce {
-                max_nonce = tx.nonce;
+            if *tx.nonce() > max_nonce {
+                max_nonce = *tx.nonce();
             }
-            if tx.nonce < min_nonce {
-                min_nonce = tx.nonce;
+            if *tx.nonce() < min_nonce {
+                min_nonce = *tx.nonce();
             }
         }
         ret.min_nonce = min_nonce;

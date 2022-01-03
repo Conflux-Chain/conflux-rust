@@ -3,14 +3,14 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{message::Bytes, vm};
-use cfx_internal_common::ChainIdParams;
+use cfx_internal_common::{ChainIdParams, ChainIdParamsInner};
 use cfx_parameters::{
     consensus::{ONE_UCFX_IN_DRIP, TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT},
     consensus_internal::{
         ANTICONE_PENALTY_RATIO, INITIAL_BASE_MINING_REWARD_IN_UCFX,
     },
 };
-use cfx_types::{U256, U512};
+use cfx_types::{AllChainID, U256, U512};
 use primitives::{block::BlockHeight, BlockNumber};
 use std::collections::BTreeMap;
 
@@ -89,7 +89,7 @@ impl Default for CommonParams {
             account_start_nonce: 0x00.into(),
             maximum_extra_data_size: 0x20,
             network_id: 0x1,
-            chain_id: Default::default(),
+            chain_id: ChainIdParamsInner::new_simple(AllChainID::new(1, 1)),
             subprotocol_name: "cfx".into(),
             min_gas_limit: 10_000_000.into(),
             gas_limit_bound_divisor: 0x0400.into(),

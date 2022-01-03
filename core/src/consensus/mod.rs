@@ -51,7 +51,7 @@ use cfx_parameters::{
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::StateDb;
 use cfx_storage::state_manager::StateManagerTrait;
-use cfx_types::{AddressWithSpace, Bloom, H256, U256};
+use cfx_types::{AddressWithSpace, AllChainID, Bloom, H256, U256};
 use either::Either;
 use itertools::Itertools;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
@@ -161,7 +161,7 @@ impl ConsensusGraphStatistics {
 
 #[derive(Default, Debug, DeriveMallocSizeOf)]
 pub struct BestInformation {
-    pub chain_id: u32,
+    pub chain_id: AllChainID,
     pub best_block_hash: H256,
     pub best_epoch_number: u64,
     pub current_difficulty: U256,
@@ -170,7 +170,7 @@ pub struct BestInformation {
 }
 
 impl BestInformation {
-    pub fn best_chain_id(&self) -> u32 { self.chain_id }
+    pub fn best_chain_id(&self) -> AllChainID { self.chain_id }
 }
 
 /// ConsensusGraph is a layer on top of SynchronizationGraph. A SyncGraph
@@ -506,10 +506,10 @@ impl ConsensusGraph {
                 total_block_gas_limit +=
                     block.block_header.gas_limit().as_u64();
                 for tx in block.transactions.iter() {
-                    // add the tx.gas to total_tx_gas_limit even it is packed
+                    // add the tx.gas() to total_tx_gas_limit even it is packed
                     // multiple times because these tx all
                     // will occupy block's gas space
-                    total_tx_gas_limit += tx.transaction.gas.as_u64();
+                    total_tx_gas_limit += tx.transaction.gas().as_u64();
                     prices.push(tx.gas_price().clone());
                     if prices.len() == GAS_PRICE_TRANSACTION_SAMPLE_SIZE {
                         break;
@@ -1556,7 +1556,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
         self.inner.read().latest_epoch_confirmed_by_pos().1
     }
 
-    fn best_chain_id(&self) -> u32 {
+    fn best_chain_id(&self) -> AllChainID {
         self.best_info.read_recursive().best_chain_id()
     }
 
