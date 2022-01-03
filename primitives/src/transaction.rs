@@ -38,6 +38,7 @@ pub enum TransactionError {
     ChainIdMismatch {
         expected: u32,
         got: u32,
+        space: Space,
     },
     /// Epoch height out of bound.
     EpochHeightOutOfBound {
@@ -121,8 +122,8 @@ impl fmt::Display for TransactionError {
         use self::TransactionError::*;
         let msg = match *self {
             AlreadyImported => "Already imported".into(),
-            ChainIdMismatch { expected, got } => {
-                format!("Chain id mismatch, expected {}, got {}", expected, got)
+            ChainIdMismatch { expected, got, space } => {
+                format!("Chain id mismatch, expected {}, got {}, space {:?}", expected, got,space)
             }
             EpochHeightOutOfBound {
                 block_height,

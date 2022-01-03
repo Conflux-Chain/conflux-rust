@@ -35,7 +35,7 @@ use cfx_statedb::{
     INTEREST_RATE_KEY, LAST_DISTRIBUTE_BLOCK_KEY, TOTAL_POS_STAKING_TOKENS_KEY,
 };
 use cfx_types::{
-    address_util::AddressUtil, BigEndianHash, Bloom, H160, H256,
+    address_util::AddressUtil, AllChainID, BigEndianHash, Bloom, H160, H256,
     KECCAK_EMPTY_BLOOM, U256,
 };
 use futures::{
@@ -811,7 +811,9 @@ impl QueryService {
         Ok(matching)
     }
 
-    pub fn get_latest_verifiable_chain_id(&self) -> Result<u32, FilterError> {
+    pub fn get_latest_verifiable_chain_id(
+        &self,
+    ) -> Result<AllChainID, FilterError> {
         let epoch_number = self.get_latest_verifiable_epoch_number()?;
         Ok(self
             .consensus

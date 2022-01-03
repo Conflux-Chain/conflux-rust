@@ -13,7 +13,7 @@ use cfx_parameters::{
     WORKER_COMPUTATION_PARALLELISM,
 };
 use cfx_storage::{StorageConfiguration, StorageManager};
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, AllChainID, H256, U256};
 use diem_config::keys::ConfigKey;
 use diem_crypto::Uniform;
 use diem_types::validator_config::{
@@ -231,7 +231,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
     let notifications = Notifications::init();
     let consensus = Arc::new(ConsensusGraph::new(
         ConsensusConfig {
-            chain_id: ChainIdParamsInner::new_simple(0),
+            chain_id: ChainIdParamsInner::new_simple(AllChainID::new(1, 1)),
             inner_conf: ConsensusInnerConfig {
                 adaptive_weight_beta: beta,
                 heavy_block_difficulty_ratio: h,
