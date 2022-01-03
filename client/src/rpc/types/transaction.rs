@@ -7,15 +7,16 @@ use cfx_addr::Network;
 use cfx_types::{Space, H256, U256, U64};
 use cfxkey::Error;
 use primitives::{
-    transaction::Action, NativeTransaction, SignedTransaction,
-    Transaction as PrimitiveTransaction, TransactionIndex,
+    transaction::Action, Eip155Transaction, NativeTransaction,
+    SignedTransaction, Transaction as PrimitiveTransaction, TransactionIndex,
     TransactionWithSignature, TransactionWithSignatureSerializePart,
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transaction {
-    pub space: Space,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub space: Option<Space>,
     pub hash: H256,
     pub nonce: U256,
     pub block_hash: Option<H256>,
@@ -47,7 +48,7 @@ pub enum PackedOrExecuted {
 impl Transaction {
     pub fn default(network: Network) -> Result<Transaction, String> {
         Ok(Transaction {
-            space: Default::default(),
+            space: None,
             hash: Default::default(),
             nonce: Default::default(),
             block_hash: Default::default(),
@@ -99,8 +100,12 @@ impl Transaction {
             } else {
                 (0, 0)
             };
+        let space = match t.space() {
+            Space::Native => None,
+            Space::Ethereum => Some(Space::Ethereum),
+        };
         Ok(Transaction {
-            space: t.space(),
+            space,
             hash: t.transaction.hash().into(),
             nonce: t.nonce().into(),
             block_hash,
@@ -130,21 +135,37 @@ impl Transaction {
     pub fn into_signed(self) -> Result<SignedTransaction, Error> {
         let tx_with_sig = TransactionWithSignature {
             transaction: TransactionWithSignatureSerializePart {
-                unsigned: NativeTransaction {
-                    nonce: self.nonce.into(),
-                    gas_price: self.gas_price.into(),
-                    gas: self.gas.into(),
-                    action: match self.to {
-                        None => Action::Create,
-                        Some(address) => Action::Call(address.into()),
-                    },
-                    value: self.value.into(),
-                    storage_limit: self.storage_limit.as_u64(),
-                    epoch_height: self.epoch_height.as_u64(),
-                    chain_id: self.chain_id.as_u32(),
-                    data: self.data.into(),
-                }
-                .into(),
+                unsigned: if self.space == Some(Space::Ethereum) {
+                    Eip155Transaction {
+                        nonce: self.nonce.into(),
+                        gas_price: self.gas_price.into(),
+                        gas: self.gas.into(),
+                        action: match self.to {
+                            None => Action::Create,
+                            Some(address) => Action::Call(address.into()),
+                        },
+                        value: self.value.into(),
+                        chain_id: self.chain_id.as_u32(),
+                        data: self.data.into(),
+                    }
+                    .into()
+                } else {
+                    NativeTransaction {
+                        nonce: self.nonce.into(),
+                        gas_price: self.gas_price.into(),
+                        gas: self.gas.into(),
+                        action: match self.to {
+                            None => Action::Create,
+                            Some(address) => Action::Call(address.into()),
+                        },
+                        value: self.value.into(),
+                        storage_limit: self.storage_limit.as_u64(),
+                        epoch_height: self.epoch_height.as_u64(),
+                        chain_id: self.chain_id.as_u32(),
+                        data: self.data.into(),
+                    }
+                    .into()
+                },
                 v: self.v.as_usize() as u8,
                 r: self.r.into(),
                 s: self.s.into(),
