@@ -21,7 +21,7 @@ use jsonrpc_core::BoxFuture;
 pub struct EthHandler {
     consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService,
-    tx_pool: SharedTransactionPool,
+    _tx_pool: SharedTransactionPool,
 }
 
 impl EthHandler {
@@ -33,7 +33,7 @@ impl EthHandler {
         EthHandler {
             consensus,
             sync,
-            tx_pool,
+            _tx_pool: tx_pool,
         }
     }
 }
@@ -43,12 +43,12 @@ impl Eth for EthHandler {
 
     fn protocol_version(&self) -> jsonrpc_core::Result<String> {
         // 65 is a common ETH version now
-        OK(format!("{}", 65))
+        Ok(format!("{}", 65))
     }
 
     fn syncing(&self) -> jsonrpc_core::Result<SyncStatus> {
         if self.sync.catch_up_mode() {
-            OK(
+            Ok(
                 // Now pass some statistics of Conflux just to make the
                 // interface happy
                 SyncStatus::Info(SyncInfo {
@@ -62,28 +62,28 @@ impl Eth for EthHandler {
                 }),
             )
         } else {
-            OK(None)
+            Ok(SyncStatus::None)
         }
     }
 
     fn hashrate(&self) -> jsonrpc_core::Result<U256> {
         // We do not mine
-        OK(U256::zero())
+        Ok(U256::zero())
     }
 
     fn author(&self) -> jsonrpc_core::Result<H160> {
         // We do not care this, just return zero address
-        OK(H160::zero())
+        Ok(H160::zero())
     }
 
     fn is_mining(&self) -> jsonrpc_core::Result<bool> {
         // We do not mine from ETH perspective
-        OK(false)
+        Ok(false)
     }
 
     fn chain_id(&self) -> jsonrpc_core::Result<Option<U64>> {
         // TODO: Change this
-        return OK(Some(201005));
+        return Ok(Some(U64::from(201005)));
     }
 
     fn gas_price(&self) -> BoxFuture<U256> { todo!() }
