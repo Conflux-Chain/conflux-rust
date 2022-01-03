@@ -302,19 +302,19 @@ impl<EthTxT: EthTxTypeTrait> EthTxVerifierWorkerThread<EthTxT> {
         };
 
         // Verify and update nonce.
-        if !self.check_nonce(&tx_req.sender, &tx.nonce) {
+        if !self.check_nonce(&tx_req.sender, &tx.nonce()) {
             self.n_nonce_error += 1;
             return None;
         } else {
             self.current_nonce_map
-                .insert(tx_req.sender.clone(), tx.nonce + 1);
+                .insert(tx_req.sender.clone(), tx.nonce() + 1);
         }
 
         // We do not verify the balance. Instead, we allow the balance to go
         // negative, because we are only testing the tps capability of
         // Conflux.
 
-        match tx.action {
+        match tx.action() {
             ethcore_types::transaction::Action::Create => {
                 // Create a contract.
                 // we do not admit creation of contract in verifier
@@ -947,9 +947,9 @@ impl TxMaker for RealizedEthTxMaker {
         &self, tx: &UnverifiedTransaction, maybe_sender: Option<Address>,
     ) -> Option<Self::TxType> {
         let receiver;
-        let tx_fee = tx.gas * tx.gas_price;
+        let tx_fee = tx.gas() * tx.gas_price();
 
-        match tx.action {
+        match tx.action() {
             ethcore_types::transaction::Action::Call(ref to) => {
                 receiver = Some(*to);
             }

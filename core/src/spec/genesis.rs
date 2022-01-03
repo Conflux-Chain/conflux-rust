@@ -50,6 +50,7 @@ use crate::{
     vm::{CreateContractAddress, Env},
 };
 use diem_types::account_address::AccountAddress;
+use primitives::transaction::NativeTransaction;
 
 pub const DEV_GENESIS_PRI_KEY: &'static str =
     "46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f";
@@ -229,12 +230,12 @@ pub fn genesis_block(
     let mut debug_record = Some(ComputeEpochDebugRecord::default());
 
     let genesis_chain_id = genesis_chain_id.unwrap_or(0);
-    let mut genesis_transaction = Transaction::default();
+    let mut genesis_transaction = NativeTransaction::default();
     genesis_transaction.data = GENESIS_TRANSACTION_DATA_STR.as_bytes().into();
     genesis_transaction.action = Action::Call(Default::default());
     genesis_transaction.chain_id = genesis_chain_id;
 
-    let mut create_create2factory_transaction = Transaction::default();
+    let mut create_create2factory_transaction = NativeTransaction::default();
     create_create2factory_transaction.nonce = 0.into();
     create_create2factory_transaction.data =
         GENESIS_TRANSACTION_CREATE_CREATE2FACTORY
@@ -247,7 +248,7 @@ pub fn genesis_block(
     create_create2factory_transaction.storage_limit = 512;
 
     let mut create_genesis_token_manager_two_year_unlock_transaction =
-        Transaction::default();
+        NativeTransaction::default();
     create_genesis_token_manager_two_year_unlock_transaction.nonce = 1.into();
     create_genesis_token_manager_two_year_unlock_transaction.data =
         GENESIS_TRANSACTION_CREATE_GENESIS_TOKEN_MANAGER_TWO_YEAR_UNLOCK
@@ -267,7 +268,7 @@ pub fn genesis_block(
         16000;
 
     let mut create_genesis_token_manager_four_year_unlock_transaction =
-        Transaction::default();
+        NativeTransaction::default();
     create_genesis_token_manager_four_year_unlock_transaction.nonce = 2.into();
     create_genesis_token_manager_four_year_unlock_transaction.data =
         GENESIS_TRANSACTION_CREATE_GENESIS_TOKEN_MANAGER_FOUR_YEAR_UNLOCK
@@ -286,7 +287,8 @@ pub fn genesis_block(
     create_genesis_token_manager_four_year_unlock_transaction.storage_limit =
         32000;
 
-    let mut create_genesis_investor_fund_transaction = Transaction::default();
+    let mut create_genesis_investor_fund_transaction =
+        NativeTransaction::default();
     create_genesis_investor_fund_transaction.nonce = 3.into();
     create_genesis_investor_fund_transaction.data =
         GENESIS_TRANSACTION_CREATE_FUND_POOL.from_hex().unwrap();
@@ -296,7 +298,7 @@ pub fn genesis_block(
     create_genesis_investor_fund_transaction.gas_price = 1.into();
     create_genesis_investor_fund_transaction.storage_limit = 1000;
 
-    let mut create_genesis_team_fund_transaction = Transaction::default();
+    let mut create_genesis_team_fund_transaction = NativeTransaction::default();
     create_genesis_team_fund_transaction.nonce = 4.into();
     create_genesis_team_fund_transaction.data =
         GENESIS_TRANSACTION_CREATE_FUND_POOL.from_hex().unwrap();
@@ -306,7 +308,7 @@ pub fn genesis_block(
     create_genesis_team_fund_transaction.gas_price = 1.into();
     create_genesis_team_fund_transaction.storage_limit = 1000;
 
-    let mut create_genesis_eco_fund_transaction = Transaction::default();
+    let mut create_genesis_eco_fund_transaction = NativeTransaction::default();
     create_genesis_eco_fund_transaction.nonce = 5.into();
     create_genesis_eco_fund_transaction.data =
         GENESIS_TRANSACTION_CREATE_FUND_POOL.from_hex().unwrap();
@@ -316,7 +318,8 @@ pub fn genesis_block(
     create_genesis_eco_fund_transaction.gas_price = 1.into();
     create_genesis_eco_fund_transaction.storage_limit = 1000;
 
-    let mut create_genesis_community_fund_transaction = Transaction::default();
+    let mut create_genesis_community_fund_transaction =
+        NativeTransaction::default();
     create_genesis_community_fund_transaction.nonce = 6.into();
     create_genesis_community_fund_transaction.data =
         GENESIS_TRANSACTION_CREATE_FUND_POOL.from_hex().unwrap();
@@ -390,7 +393,7 @@ pub fn genesis_block(
                 0.into(),
                 &genesis_account_address,
                 &(i - 1).into(),
-                &genesis_transactions[i].as_ref().data,
+                genesis_transactions[i].as_ref().data(),
             );
 
             state
@@ -418,10 +421,15 @@ pub fn genesis_block(
                 )
                 .unwrap();
             state.deposit(&node.address, &stake_balance, 0).unwrap();
-            let signed_tx = node
-                .register_tx
-                .clone()
-                .fake_sign(node.address.with_native_space());
+            let tx = if let Transaction::Native(ref tx) = node.register_tx {
+                tx
+            } else {
+                unreachable!(
+                    "Genesis block should not have Ethereum transaction"
+                );
+            };
+            let signed_tx =
+                tx.clone().fake_sign(node.address.with_native_space());
             execute_genesis_transaction(
                 &signed_tx,
                 &mut state,
@@ -530,7 +538,7 @@ pub fn register_transaction(
     let mut call_data: Vec<u8> = "e335b451".from_hex().unwrap();
     call_data.extend_from_slice(&params.abi_encode());
 
-    let mut tx = Transaction::default();
+    let mut tx = NativeTransaction::default();
     tx.nonce = 0.into();
     tx.data = call_data;
     tx.value = U256::zero();
@@ -539,7 +547,7 @@ pub fn register_transaction(
     tx.gas = 200000.into();
     tx.gas_price = 1.into();
     tx.storage_limit = 16000;
-    tx
+    Transaction::Native(tx)
 }
 
 fn execute_genesis_transaction(

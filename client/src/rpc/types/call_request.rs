@@ -18,8 +18,8 @@ use cfxcore::rpc_errors::invalid_params_check;
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
 use primitives::{
-    transaction::Action, SignedTransaction,
-    Transaction as PrimitiveTransaction, TransactionWithSignature,
+    transaction::Action, NativeTransaction as PrimitiveTransaction,
+    SignedTransaction, Transaction, TransactionWithSignature,
 };
 use std::{cmp::min, sync::Arc};
 
@@ -131,11 +131,15 @@ impl SendTxRequest {
 
         let password = password.map(Password::from);
         let sig = accounts
-            .sign(self.from.into(), password, tx.signature_hash())
+            .sign(
+                self.from.into(),
+                password,
+                Transaction::from(tx.clone()).signature_hash(),
+            )
             // TODO: sign error into secret store error codes.
             .map_err(|e| format!("failed to sign transaction: {:?}", e))?;
 
-        Ok(tx.with_signature(sig))
+        Ok(Transaction::from(tx).with_signature(sig))
     }
 }
 

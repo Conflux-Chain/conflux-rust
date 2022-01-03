@@ -11,14 +11,14 @@ use crate::{
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_statedb::Result as StateDbResult;
 use cfx_types::{
-    address_util::AddressUtil, AddressWithSpace, Space, H256, U128, U256, U512,
+    address_util::AddressUtil, AddressWithSpace, H256, U128, U256, U512,
 };
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
 };
 use primitives::{
-    Account, Action, SignedTransaction, TransactionWithSignature,
+    Account, Action, SignedTransaction, Transaction, TransactionWithSignature,
 };
 use rlp::*;
 use serde::Serialize;
@@ -119,7 +119,7 @@ impl DeferredPool {
     fn get_lowest_nonce(&self, addr: &AddressWithSpace) -> Option<&U256> {
         self.buckets
             .get(addr)
-            .and_then(|bucket| bucket.get_lowest_nonce_tx().map(|r| &r.nonce))
+            .and_then(|bucket| bucket.get_lowest_nonce_tx().map(|r| r.nonce()))
     }
 
     fn get_lowest_nonce_tx(
@@ -257,7 +257,7 @@ impl ReadyAccountPool {
     fn insert(
         &mut self, tx: Arc<SignedTransaction>,
     ) -> Option<Arc<SignedTransaction>> {
-        let scaled_weight = tx.gas_price / self.tx_weight_scaling;
+        let scaled_weight = tx.gas_price() / self.tx_weight_scaling;
         let base_weight = if scaled_weight == U256::zero() {
             0
         } else if scaled_weight >= *MAX_WEIGHT {
@@ -427,7 +427,7 @@ impl TransactionPoolInner {
                     skipped_self_node = Some(victim);
                     continue;
                 } else if victim.has_ready_tx
-                    && victim.first_tx_gas_price >= new_tx.gas_price
+                    && victim.first_tx_gas_price >= *new_tx.gas_price()
                 {
                     // If all transactions are not executed but some accounts
                     // are not ready to be packed, we directly replace a
@@ -454,7 +454,7 @@ impl TransactionPoolInner {
 
             // We have to garbage collect an unexecuted transaction.
             // TODO: Implement more heuristic strategies
-            if to_remove_tx.nonce >= ready_nonce {
+            if *to_remove_tx.nonce() >= ready_nonce {
                 assert_eq!(victim.count, 0);
                 GC_UNEXECUTED_COUNTER.inc(1);
                 warn!("an unexecuted tx is garbage-collected.");
@@ -476,7 +476,7 @@ impl TransactionPoolInner {
 
             if !self
                 .deferred_pool
-                .check_tx_packed(addr.clone(), to_remove_tx.nonce)
+                .check_tx_packed(addr.clone(), *to_remove_tx.nonce())
             {
                 self.unpacked_transaction_count = self
                     .unpacked_transaction_count
@@ -505,10 +505,11 @@ impl TransactionPoolInner {
                 self.garbage_collector.update_ready_tx(
                     &addr,
                     self.ready_account_pool.get(&addr).is_some(),
-                    self.deferred_pool
+                    *self
+                        .deferred_pool
                         .get_lowest_nonce_tx(&addr)
                         .expect("addr exist")
-                        .gas_price,
+                        .gas_price(),
                 );
             }
 
@@ -634,7 +635,7 @@ impl TransactionPoolInner {
             Some((pending_count, pending_tx)) => Some((
                 local_nonce,
                 U256::from(pending_count),
-                pending_tx.nonce(),
+                *pending_tx.nonce(),
                 pending_tx.hash(),
             )),
             None => {
@@ -800,7 +801,7 @@ impl TransactionPoolInner {
             self.garbage_collector.update_ready_tx(
                 addr,
                 ret.is_some(),
-                tx.gas_price,
+                *tx.gas_price(),
             );
         } else {
             // An account is only removed from `deferred_pool` in GC,
@@ -818,7 +819,7 @@ impl TransactionPoolInner {
     pub fn check_tx_packed_in_deferred_pool(&self, tx_hash: &H256) -> bool {
         match self.txs.get(tx_hash) {
             Some(tx) => {
-                self.deferred_pool.check_tx_packed(tx.sender(), tx.nonce())
+                self.deferred_pool.check_tx_packed(tx.sender(), *tx.nonce())
             }
             None => false,
         }
@@ -983,9 +984,11 @@ impl TransactionPoolInner {
         let mut sponsored_gas = U256::from(0);
         let mut sponsored_storage = 0;
 
+        let sender = transaction.sender();
+
         // Compute sponsored_gas for `transaction`
-        if transaction.sender().space == Space::Native {
-            if let Action::Call(callee) = &transaction.action {
+        if let Transaction::Native(ref transaction) = transaction.unsigned {
+            if let Action::Call(ref callee) = transaction.action {
                 // FIXME: This is a quick fix for performance issue.
                 if callee.is_contract_address() {
                     if let Some(sponsor_info) =
@@ -999,7 +1002,7 @@ impl TransactionPoolInner {
                         if account_cache
                             .check_commission_privilege(
                                 &callee,
-                                &transaction.sender().address,
+                                &sender.address,
                             )
                             .map_err(|e| {
                                 format!(
@@ -1047,10 +1050,10 @@ impl TransactionPoolInner {
         if transaction.hash[0] & 254 == 0 {
             trace!(
                 "Transaction {:?} sender: {:?} current nonce: {:?}, state nonce:{:?}",
-                transaction.hash, transaction.sender, transaction.nonce, state_nonce
+                transaction.hash, transaction.sender, transaction.nonce(), state_nonce
             );
         }
-        if transaction.nonce
+        if *transaction.nonce()
             >= state_nonce
                 + U256::from(FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET)
         {
@@ -1063,11 +1066,11 @@ impl TransactionPoolInner {
                 transaction.hash()
             ));
         } else if !packed /* Because we may get slightly out-dated state for transaction pool, we should allow transaction pool to set already past-nonce transactions to packed. */
-            && transaction.nonce < state_nonce
+            && *transaction.nonce() < state_nonce
         {
             trace!(
-                "Transaction {:?} is discarded due to a too stale nonce, self.nonce={}, state_nonce={}",
-                transaction.hash(), transaction.nonce, state_nonce,
+                "Transaction {:?} is discarded due to a too stale nonce, self.nonce()={}, state_nonce={}",
+                transaction.hash(), transaction.nonce(), state_nonce,
             );
             return Err(format!(
                 "Transaction {:?} is discarded due to a too stale nonce",
@@ -1103,14 +1106,16 @@ mod test_transaction_pool_inner {
     use super::{DeferredPool, InsertResult, TxWithReadyInfo};
     use cfx_types::{Address, AddressSpaceUtil, U256};
     use keylib::{Generator, KeyPair, Random};
-    use primitives::{Action, SignedTransaction, Transaction};
+    use primitives::{
+        Action, NativeTransaction, SignedTransaction, Transaction,
+    };
     use std::sync::Arc;
 
     fn new_test_tx(
         sender: &KeyPair, nonce: usize, gas_price: usize, value: usize,
     ) -> Arc<SignedTransaction> {
         Arc::new(
-            Transaction {
+            Transaction::from(NativeTransaction {
                 nonce: U256::from(nonce),
                 gas_price: U256::from(gas_price),
                 gas: U256::from(50000),
@@ -1118,9 +1123,9 @@ mod test_transaction_pool_inner {
                 value: U256::from(value),
                 storage_limit: 0,
                 epoch_height: 0,
-                chain_id: 0,
+                chain_id: 1,
                 data: Vec::new(),
-            }
+            })
             .sign(sender.secret()),
         )
     }
@@ -1206,7 +1211,7 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.insert(bob_tx2.clone(), false /* force */),
-            InsertResult::Failed(format!("Tx with same nonce already inserted. To replace it, you need to specify a gas price > {}", bob_tx2_new.gas_price))
+            InsertResult::Failed(format!("Tx with same nonce already inserted. To replace it, you need to specify a gas price > {}", bob_tx2_new.gas_price()))
         );
 
         assert_eq!(
