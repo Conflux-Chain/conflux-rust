@@ -34,7 +34,7 @@ use crate::rpc::types::pos::{Block as RpcPosBlock, Decision};
 use cfx_addr::Network;
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_types::{
-    Address, AddressSpaceUtil, H160, H256, H520, U128, U256, U512, U64,
+    Address, AddressSpaceUtil, Space, H160, H256, H520, U128, U256, U512, U64,
 };
 use cfxcore::{
     consensus::pos_handler::PosVerifier, rpc_errors::invalid_params_check,
@@ -647,7 +647,11 @@ impl RpcImpl {
         Ok(RpcStatus {
             best_hash: best_info.best_block_hash.into(),
             block_number: block_number.into(),
-            chain_id: best_info.chain_id.into(),
+            chain_id: best_info.chain_id.in_native_space().into(),
+            ethereum_space_chain_id: best_info
+                .chain_id
+                .in_space(Space::Ethereum)
+                .into(),
             epoch_number: best_info.best_epoch_number.into(),
             latest_checkpoint,
             latest_confirmed,

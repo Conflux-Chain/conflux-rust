@@ -16,7 +16,7 @@ extern crate secret_store;
 
 use crate::bytes::Bytes;
 use cfx_types::{
-    Address, AddressSpaceUtil, BigEndianHash, H256, H512, U256, U512,
+    Address, AddressSpaceUtil, BigEndianHash, Space, H256, H512, U256, U512,
 };
 use cfxcore::{
     executive::contract_address, vm::CreateContractAddress,
@@ -222,7 +222,7 @@ impl TransactionGenerator {
                 value: balance_to_transfer,
                 action: Action::Call(receiver_address),
                 storage_limit: 0,
-                chain_id: txgen.consensus.best_chain_id(),
+                chain_id: txgen.consensus.best_chain_id().in_native_space(),
                 epoch_height: txgen.consensus.best_epoch_number(),
                 data: Bytes::new(),
             }

@@ -11,7 +11,8 @@ use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
 use cfx_types::{
-    Address, AddressSpaceUtil, BigEndianHash, H256, H520, U128, U256, U64,
+    Address, AddressSpaceUtil, BigEndianHash, Space, H256, H520, U128, U256,
+    U64,
 };
 use cfxcore::{
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
@@ -541,7 +542,12 @@ impl RpcImpl {
 
         let epoch_height = consensus_graph.best_epoch_number();
         let chain_id = consensus_graph.best_chain_id();
-        tx.sign_with(epoch_height, chain_id, password, self.accounts.clone())
+        tx.sign_with(
+            epoch_height,
+            chain_id.in_native_space(),
+            password,
+            self.accounts.clone(),
+        )
     }
 
     fn send_transaction(
@@ -884,7 +890,7 @@ impl RpcImpl {
                         &mut block_size_limit,
                         num_txs_simple,
                         num_txs_erc20,
-                        self.consensus.best_chain_id(),
+                        self.consensus.best_chain_id().in_native_space(),
                     );
 
                 Ok(block_gen.generate_block(
@@ -1306,7 +1312,8 @@ impl RpcImpl {
 
         let best_epoch_height = consensus_graph.best_epoch_number();
         let chain_id = consensus_graph.best_chain_id();
-        let signed_tx = sign_call(best_epoch_height, chain_id, request)?;
+        let signed_tx =
+            sign_call(best_epoch_height, chain_id.in_native_space(), request)?;
         trace!("call tx {:?}", signed_tx);
         consensus_graph.call_virtual(&signed_tx, epoch.into())
     }

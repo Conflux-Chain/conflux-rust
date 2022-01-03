@@ -2,25 +2,31 @@
 #[derive(Clone, Debug, Eq, RlpEncodable, RlpDecodable, PartialEq, Default)]
 pub struct ChainIdParamsDeprecated {
     /// Preconfigured chain_id.
-    pub chain_id: u32,
+    pub chain_id: AllChainID,
 }
 
 impl ChainIdParamsDeprecated {
     /// The function return the chain_id with given parameters
-    pub fn get_chain_id(&self, _epoch_number: u64) -> u32 { self.chain_id }
+    pub fn get_chain_id(&self, _epoch_number: u64) -> AllChainID {
+        self.chain_id
+    }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, RlpEncodable, RlpDecodable)]
-pub struct ChainIdParamsInner {
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ChainIdParamsInnerGeneric<ChainID> {
     heights: Vec<u64>,
-    chain_ids: Vec<u32>,
+    chain_ids: Vec<ChainID>,
 }
 
+pub type ChainIdParamsInner = ChainIdParamsInnerGeneric<AllChainID>;
+pub type ChainIdParamsOneChainInner = ChainIdParamsInnerGeneric<u32>;
 pub type ChainIdParams = Arc<RwLock<ChainIdParamsInner>>;
 
-impl ChainIdParamsInner {
+impl<T> ChainIdParamsInnerGeneric<T>
+where T: Clone + Debug + Default + PartialEq + Encodable + Decodable + Copy
+{
     /// The function return the chain_id with given parameters
-    pub fn get_chain_id(&self, epoch_number: u64) -> u32 {
+    pub fn get_chain_id(&self, epoch_number: u64) -> T {
         let index = self
             .heights
             .binary_search(&epoch_number)
@@ -28,21 +34,37 @@ impl ChainIdParamsInner {
         self.chain_ids[index]
     }
 
-    pub fn new_inner(chain_id: u32) -> Self {
+    pub fn new_inner(chain_id: T) -> Self {
         Self {
             heights: vec![0],
             chain_ids: vec![chain_id],
         }
     }
 
-    pub fn new_simple(chain_id: u32) -> ChainIdParams {
-        Arc::new(RwLock::new(Self::new_inner(chain_id)))
-    }
+    pub fn matches(&self, other: &Self, peer_epoch_number: u64) -> bool {
+        // Sub-array check. One height to epoch id map must be a sub-array of
+        // another.
+        let min_len = min(self.heights.len(), other.heights.len());
+        let sub_array_check = other.heights[0..min_len]
+            == self.heights[0..min_len]
+            && other.chain_ids[0..min_len] == self.chain_ids[0..min_len];
 
-    pub fn new_from_inner(x: &Self) -> ChainIdParams {
-        Arc::new(RwLock::new(x.clone()))
+        if sub_array_check {
+            // Check if peer has a high epoch_number but a shorter height to
+            // epoch id map, so that the chain_id of ourselves is
+            // not a match anymore.
+            let index = self
+                .heights
+                .binary_search(&peer_epoch_number)
+                .unwrap_or_else(|x| x - 1);
+            min_len > index
+        } else {
+            return false;
+        }
     }
+}
 
+impl ChainIdParamsOneChainInner {
     pub fn parse_config_str(config: &str) -> std::result::Result<Self, String> {
         let mut parsed = Self::default();
         let value = config
@@ -99,27 +121,15 @@ impl ChainIdParamsInner {
             ));
         }
     }
+}
 
-    pub fn matches(&self, other: &Self, peer_epoch_number: u64) -> bool {
-        // Sub-array check. One height to epoch id map must be a sub-array of
-        // another.
-        let min_len = min(self.heights.len(), other.heights.len());
-        let sub_array_check = other.heights[0..min_len]
-            == self.heights[0..min_len]
-            && other.chain_ids[0..min_len] == self.chain_ids[0..min_len];
+impl ChainIdParamsInner {
+    pub fn new_simple(chain_id: AllChainID) -> ChainIdParams {
+        Arc::new(RwLock::new(Self::new_inner(chain_id)))
+    }
 
-        if sub_array_check {
-            // Check if peer has a high epoch_number but a shorter height to
-            // epoch id map, so that the chain_id of ourselves is
-            // not a match anymore.
-            let index = self
-                .heights
-                .binary_search(&peer_epoch_number)
-                .unwrap_or_else(|x| x - 1);
-            min_len > index
-        } else {
-            return false;
-        }
+    pub fn new_from_inner(x: &Self) -> ChainIdParams {
+        Arc::new(RwLock::new(x.clone()))
     }
 }
 
@@ -135,6 +145,7 @@ impl From<ChainIdParamsDeprecated> for ChainIdParamsInner {
 #[cfg(test)]
 mod test {
     use super::*;
+    use ChainIdParamsInnerGeneric as ChainIdParamsInner;
 
     #[test]
     fn test_parse_config_str() {
@@ -236,5 +247,7 @@ mod test {
     }
 }
 
+use cfx_types::AllChainID;
 use parking_lot::RwLock;
-use std::{cmp::min, collections::BTreeSet, sync::Arc};
+use rlp::{Decodable, Encodable};
+use std::{cmp::min, collections::BTreeSet, fmt::Debug, sync::Arc};

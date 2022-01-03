@@ -29,7 +29,7 @@ use account_cache::AccountCache;
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_statedb::{Result as StateDbResult, StateDb};
 use cfx_storage::{StateIndex, StorageManagerTrait};
-use cfx_types::{AddressWithSpace as Address, H256, U256};
+use cfx_types::{AddressWithSpace as Address, AllChainID, H256, U256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Lock, Meter, MeterTimer,
@@ -489,8 +489,8 @@ impl TransactionPool {
     /// readiness
     fn verify_transaction_tx_pool(
         &self, transaction: &TransactionWithSignature, basic_check: bool,
-        chain_id: u32, best_height: u64, transitions: &TransitionsEpochHeight,
-        spec: &Spec,
+        chain_id: AllChainID, best_height: u64,
+        transitions: &TransitionsEpochHeight, spec: &Spec,
     ) -> Result<(), String>
     {
         let _timer = MeterTimer::time_func(TX_POOL_VERIFY_TIMER.as_ref());
