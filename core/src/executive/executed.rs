@@ -133,17 +133,17 @@ impl Executed {
         mut storage_sponsor_paid: bool, trace: Vec<ExecTrace>, spec: &Spec,
     ) -> Self
     {
-        let gas_charged = if tx.gas_price == U256::zero() {
+        let gas_charged = if *tx.gas_price() == U256::zero() {
             U256::zero()
         } else {
-            fee / tx.gas_price
+            fee / tx.gas_price()
         };
         if !spec.cip78b {
             gas_sponsor_paid = false;
             storage_sponsor_paid = false;
         }
         Self {
-            gas_used: tx.gas,
+            gas_used: *tx.gas(),
             gas_charged,
             fee: fee.clone(),
             gas_sponsor_paid,
@@ -167,9 +167,9 @@ impl Executed {
             storage_sponsor_paid = false;
         }
         Self {
-            gas_used: tx.gas,
-            gas_charged: tx.gas,
-            fee: tx.gas * tx.gas_price,
+            gas_used: *tx.gas(),
+            gas_charged: *tx.gas(),
+            fee: tx.gas() * tx.gas_price(),
             gas_sponsor_paid,
             logs: vec![],
             contracts_created: vec![],

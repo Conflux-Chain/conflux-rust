@@ -41,7 +41,7 @@ use cfx_types::{
 use keylib::{Generator, Random};
 use primitives::{
     storage::STORAGE_LAYOUT_REGULAR_V0, transaction::Action, EpochId,
-    Transaction,
+    NativeTransaction, Transaction,
 };
 use rustc_hex::FromHex;
 use std::{
@@ -558,7 +558,7 @@ fn test_keccak() {
 #[test]
 fn test_not_enough_cash() {
     let keypair = Random.generate().unwrap();
-    let t = Transaction {
+    let t = Transaction::from(NativeTransaction {
         action: Action::Create,
         value: U256::from(18),
         data: "3331600055".from_hex().unwrap(),
@@ -566,9 +566,9 @@ fn test_not_enough_cash() {
         gas_price: U256::one(),
         storage_limit: 0,
         epoch_height: 0,
-        chain_id: 0,
+        chain_id: 1,
         nonce: U256::zero(),
-    }
+    })
     .sign(keypair.secret());
     let sender = t.sender();
 
@@ -587,7 +587,7 @@ fn test_not_enough_cash() {
             spec.account_start_nonce,
         )
         .unwrap();
-    let correct_cost = min(t.gas_price * t.gas, 100_017.into());
+    let correct_cost = min(t.gas_price() * t.gas(), 100_017.into());
 
     let res = {
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
@@ -1201,7 +1201,7 @@ fn test_commission_privilege() {
         )
         .unwrap();
 
-    let tx = Transaction {
+    let tx = Transaction::from(NativeTransaction {
         nonce: 0.into(),
         gas_price: U256::from(1),
         gas: U256::from(100_000),
@@ -1209,9 +1209,9 @@ fn test_commission_privilege() {
         action: Action::Call(address.address),
         storage_limit: 0,
         epoch_height: 0,
-        chain_id: 0,
+        chain_id: 1,
         data: vec![],
-    }
+    })
     .sign(sender_key.secret());
     assert_eq!(tx.sender().address, sender);
     let options = TransactOptions::with_no_tracing();
@@ -1288,7 +1288,7 @@ fn test_commission_privilege() {
     );
 
     // call with no commission privilege
-    let tx = Transaction {
+    let tx = Transaction::from(NativeTransaction {
         nonce: 0.into(),
         gas_price: U256::from(1),
         gas: U256::from(60_000),
@@ -1296,9 +1296,9 @@ fn test_commission_privilege() {
         action: Action::Call(address.address),
         storage_limit: 0,
         epoch_height: 0,
-        chain_id: 0,
+        chain_id: 1,
         data: vec![],
-    }
+    })
     .sign(caller3.secret());
     assert_eq!(tx.sender().address, caller3.address());
     assert_eq!(
@@ -1332,7 +1332,7 @@ fn test_commission_privilege() {
     );
 
     // call with commission privilege and enough commission balance
-    let tx = Transaction {
+    let tx = Transaction::from(NativeTransaction {
         nonce: 0.into(),
         gas_price: U256::from(1),
         gas: U256::from(100_000),
@@ -1340,9 +1340,9 @@ fn test_commission_privilege() {
         action: Action::Call(address.address),
         storage_limit: 0,
         epoch_height: 0,
-        chain_id: 0,
+        chain_id: 1,
         data: vec![],
-    }
+    })
     .sign(caller1.secret());
     assert_eq!(tx.sender().address, caller1.address());
     assert_eq!(
@@ -1376,7 +1376,7 @@ fn test_commission_privilege() {
     );
 
     // call with commission privilege and not enough commission balance
-    let tx = Transaction {
+    let tx = Transaction::from(NativeTransaction {
         nonce: 0.into(),
         gas_price: U256::from(1),
         gas: U256::from(100_000),
@@ -1384,9 +1384,9 @@ fn test_commission_privilege() {
         action: Action::Call(address.address),
         storage_limit: 0,
         epoch_height: 0,
-        chain_id: 0,
+        chain_id: 1,
         data: vec![],
-    }
+    })
     .sign(caller2.secret());
     assert_eq!(tx.sender().address, caller2.address());
     assert_eq!(
@@ -1434,7 +1434,7 @@ fn test_commission_privilege() {
     );
 
     // call with commission privilege and enough commission balance
-    let tx = Transaction {
+    let tx = Transaction::from(NativeTransaction {
         nonce: 1.into(),
         gas_price: U256::from(1),
         gas: U256::from(100_000),
@@ -1442,9 +1442,9 @@ fn test_commission_privilege() {
         action: Action::Call(address.address),
         storage_limit: 0,
         epoch_height: 0,
-        chain_id: 0,
+        chain_id: 1,
         data: vec![],
-    }
+    })
     .sign(caller2.secret());
     assert_eq!(tx.sender().address, caller2.address());
     assert_eq!(
@@ -1485,7 +1485,7 @@ fn test_commission_privilege() {
         .check_commission_privilege(&address.address, &caller3.address())
         .unwrap());
     // call with commission privilege and enough commission balance
-    let tx = Transaction {
+    let tx = Transaction::from(NativeTransaction {
         nonce: 1.into(),
         gas_price: U256::from(1),
         gas: U256::from(100_000),
@@ -1493,9 +1493,9 @@ fn test_commission_privilege() {
         action: Action::Call(address.address),
         storage_limit: 0,
         epoch_height: 0,
-        chain_id: 0,
+        chain_id: 1,
         data: vec![],
-    }
+    })
     .sign(caller3.secret());
     assert_eq!(tx.sender().address, caller3.address());
     assert_eq!(
@@ -1585,7 +1585,7 @@ fn test_storage_commission_privilege() {
         .unwrap();
 
     // simple call to create a storage entry
-    let tx = Transaction {
+    let tx = Transaction::from(NativeTransaction {
         nonce: 0.into(),
         gas_price: U256::from(1),
         gas: U256::from(100_000),
@@ -1593,9 +1593,9 @@ fn test_storage_commission_privilege() {
         action: Action::Call(address.address),
         storage_limit: COLLATERAL_UNITS_PER_STORAGE_KEY,
         epoch_height: 0,
-        chain_id: 0,
+        chain_id: 1,
         data: vec![],
-    }
+    })
     .sign(sender.secret());
     assert_eq!(tx.sender().address, sender.address());
     let options = TransactOptions::with_no_tracing();
@@ -1743,7 +1743,7 @@ fn test_storage_commission_privilege() {
             .unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
-    let tx = Transaction {
+    let tx = Transaction::from(NativeTransaction {
         nonce: 0.into(),
         gas_price: U256::from(1),
         gas: U256::from(100_000),
@@ -1751,9 +1751,9 @@ fn test_storage_commission_privilege() {
         action: Action::Call(address.address),
         storage_limit: COLLATERAL_UNITS_PER_STORAGE_KEY,
         epoch_height: 0,
-        chain_id: 0,
+        chain_id: 1,
         data: vec![],
-    }
+    })
     .sign(caller3.secret());
     assert_eq!(tx.sender().address, caller3.address());
     let options = TransactOptions::with_no_tracing();
@@ -1827,7 +1827,7 @@ fn test_storage_commission_privilege() {
             .unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY,
     );
-    let tx = Transaction {
+    let tx = Transaction::from(NativeTransaction {
         nonce: 0.into(),
         gas_price: U256::from(1),
         gas: U256::from(100_000),
@@ -1835,9 +1835,9 @@ fn test_storage_commission_privilege() {
         action: Action::Call(address.address),
         storage_limit: COLLATERAL_UNITS_PER_STORAGE_KEY,
         epoch_height: 0,
-        chain_id: 0,
+        chain_id: 1,
         data: vec![],
-    }
+    })
     .sign(caller1.secret());
     assert_eq!(tx.sender().address, caller1.address());
     let options = TransactOptions::with_no_tracing();
@@ -1932,7 +1932,7 @@ fn test_storage_commission_privilege() {
             .unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000),
     );
-    let tx = Transaction {
+    let tx = Transaction::from(NativeTransaction {
         nonce: 0.into(),
         gas_price: U256::from(1),
         gas: U256::from(100_000),
@@ -1940,9 +1940,9 @@ fn test_storage_commission_privilege() {
         action: Action::Call(address.address),
         storage_limit: COLLATERAL_UNITS_PER_STORAGE_KEY,
         epoch_height: 0,
-        chain_id: 0,
+        chain_id: 1,
         data: vec![],
-    }
+    })
     .sign(caller2.secret());
     assert_eq!(tx.sender().address, caller2.address());
     let options = TransactOptions::with_no_tracing();
@@ -2070,7 +2070,7 @@ fn test_storage_commission_privilege() {
             .unwrap(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(925_000),
     );
-    let tx = Transaction {
+    let tx = Transaction::from(NativeTransaction {
         nonce: 1.into(),
         gas_price: U256::from(1),
         gas: U256::from(100_000),
@@ -2078,9 +2078,9 @@ fn test_storage_commission_privilege() {
         action: Action::Call(address.address),
         storage_limit: COLLATERAL_UNITS_PER_STORAGE_KEY,
         epoch_height: 0,
-        chain_id: 0,
+        chain_id: 1,
         data: vec![],
-    }
+    })
     .sign(caller1.secret());
     assert_eq!(tx.sender().address, caller1.address());
     let options = TransactOptions::with_no_tracing();

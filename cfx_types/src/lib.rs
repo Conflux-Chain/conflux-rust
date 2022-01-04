@@ -3,15 +3,29 @@
 // See http://www.gnu.org/licenses/
 
 extern crate ethereum_types;
+extern crate serde;
+extern crate serde_derive;
 
 pub use ethereum_types::{
     Address, BigEndianHash, Bloom, BloomInput, Public, Secret, Signature, H128,
     H160, H256, H512, H520, H64, U128, U256, U512, U64,
 };
+use serde_derive::{Deserialize, Serialize};
 
 pub use self::space_util::AddressSpaceUtil;
 
-#[derive(Eq, PartialEq, Hash, Copy, Clone, Debug, Ord, PartialOrd)]
+#[derive(
+    Eq,
+    PartialEq,
+    Hash,
+    Copy,
+    Clone,
+    Debug,
+    Ord,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+)]
 pub enum Space {
     Native,
     Ethereum,

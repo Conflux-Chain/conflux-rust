@@ -2184,7 +2184,7 @@ use cfx_storage::{
     KvdbSqlite, KvdbSqliteStatements, StateIndex, StorageConfiguration,
     StorageManager, StorageManagerTrait,
 };
-use cfx_types::{hexstr_to_h256, Space};
+use cfx_types::{hexstr_to_h256};
 use clap::{App, Arg, ArgMatches};
 use env_logger;
 use error_chain::*;
