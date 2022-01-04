@@ -468,7 +468,7 @@ mod tests {
         let serialized = serde_json::to_string(&t).unwrap();
         assert_eq!(
             serialized,
-            r#"[{"space":"Native","hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"transactionIndex":null,"from":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","contractCreated":null,"data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x1","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#
+            r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"transactionIndex":null,"from":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","contractCreated":null,"data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x1","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#
         );
 
         let t = BlockTransactions::Hashes(vec![H256::default()]);
@@ -491,7 +491,7 @@ mod tests {
         let result_block_transactions = BlockTransactions::Full(vec![
             Transaction::default(Network::Main).unwrap(),
         ]);
-        let serialized = r#"[{"space":"Native","hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x1","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#;
+        let serialized = r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x1","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#;
         let deserialized_block_transactions: BlockTransactions =
             serde_json::from_str(serialized).unwrap();
         assert_eq!(result_block_transactions, deserialized_block_transactions);
