@@ -20,7 +20,9 @@
 
 use crate::rpc::types::Bytes;
 use cfx_types::{H160, H256, H512, U256, U64};
-use primitives::SignedTransaction;
+use cfxcore::{executive::contract_address, vm::CreateContractAddress};
+use primitives::{Action, SignedTransaction};
+use rlp::Encodable;
 use serde::Serialize;
 
 /// Transaction
@@ -85,11 +87,11 @@ pub struct Transaction {
 
 impl Transaction {
     /// Convert `SignedTransaction` into RPC Transaction.
-    pub fn from_signed(_t: SignedTransaction) -> Transaction {
-        unimplemented!();
-        // let signature = t.signature();
-        // let scheme = CreateContractAddress::FromSenderAndNonce;
-        //
+    pub fn from_signed(t: &SignedTransaction) -> Transaction {
+        let signature = t.signature();
+        let scheme = CreateContractAddress::FromSenderNonce;
+
+        // We only support EIP-155
         // let access_list = match t.as_unsigned() {
         //     TypedTransaction::AccessList(tx) => {
         //         Some(tx.access_list.clone().into_iter().map(Into::into).
@@ -104,54 +106,58 @@ impl Transaction {
         //     ),
         //     TypedTransaction::Legacy(_) => None,
         // };
-        //
+
         // let (max_fee_per_gas, max_priority_fee_per_gas) =
         //     if let TypedTransaction::EIP1559Transaction(tx) = t.as_unsigned()
         // {         (Some(tx.tx().gas_price),
         // Some(tx.max_priority_fee_per_gas))     } else {
         //         (None, None)
         //     };
-        //
+
         // let standard_v = if t.tx_type() == TypedTxId::Legacy {
         //     Some(t.standard_v())
         // } else {
         //     None
         // };
-        //
-        // Transaction {
-        //     hash: t.hash(),
-        //     nonce: t.tx().nonce,
-        //     block_hash: None,
-        //     block_number: None,
-        //     transaction_index: None,
-        //     from: t.sender(),
-        //     to: match t.tx().action {
-        //         Action::Create => None,
-        //         Action::Call(ref address) => Some(*address),
-        //     },
-        //     value: t.tx().value,
-        //     gas_price: t.tx().gas_price,
-        //     max_fee_per_gas,
-        //     gas: t.tx().gas,
-        //     input: Bytes::new(t.tx().data.clone()),
-        //     creates: match t.tx().action {
-        //         Action::Create => {
-        //             Some(contract_address(scheme, &t.sender(), &t.tx().nonce,
-        // &t.tx().data).0)         }
-        //         Action::Call(_) => None,
-        //     },
-        //     raw: t.encode().into(),
-        //     public_key: t.public_key().map(Into::into),
-        //     chain_id: t.chain_id().map(U64::from),
-        //     standard_v: standard_v.map(Into::into),
-        //     v: t.v().into(),
-        //     r: signature.r().into(),
-        //     s: signature.s().into(),
-        //     condition: None,
-        //     transaction_type: t.tx_type().to_U64_option_id(),
-        //     access_list,
-        //     max_priority_fee_per_gas,
-        // }
+
+        Transaction {
+            hash: t.hash(),
+            nonce: *t.nonce(),
+            block_hash: None,
+            block_number: None,
+            transaction_index: None,
+            from: t.sender().address,
+            to: match t.action() {
+                Action::Create => None,
+                Action::Call(ref address) => Some(*address),
+            },
+            value: *t.value(),
+            gas_price: *t.gas_price(),
+            max_fee_per_gas: None, // TODO: I'm not sure what it is.
+            gas: *t.gas(),
+            input: Bytes::new(t.data().clone()),
+            creates: match t.action() {
+                Action::Create => Some(
+                    contract_address(
+                        scheme,
+                        U64::zero(),
+                        &t.sender(),
+                        t.nonce(),
+                        t.data(),
+                    )
+                    .0
+                    .address,
+                ),
+                Action::Call(_) => None,
+            },
+            raw: Bytes::new(t.transaction.transaction.rlp_bytes()),
+            public_key: t.public().map(Into::into),
+            chain_id: Some(U64::from(t.chain_id() as u64)),
+            standard_v: None, // TODO: I'm not sure what it is.
+            v: signature.v().into(),
+            r: signature.r().into(),
+            s: signature.s().into(),
+        }
     }
 }
 

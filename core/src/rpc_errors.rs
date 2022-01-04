@@ -35,6 +35,13 @@ impl From<JsonRpcError> for Error {
     fn from(j: JsonRpcError) -> Self { ErrorKind::JsonRpcError(j).into() }
 }
 
+impl From<Error> for JsonRpcError {
+    fn from(_: Error) -> Self {
+        // TODO: EVM core: Error mapping.
+        todo!()
+    }
+}
+
 pub fn invalid_params_check<T, E: Display>(
     param: &str, r: std::result::Result<T, E>,
 ) -> Result<T> {
