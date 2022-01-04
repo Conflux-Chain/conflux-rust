@@ -18,15 +18,13 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::{collections::BTreeMap, ops::Deref};
-
 use crate::rpc::types::{eth::Transaction, Bytes};
 use cfx_types::{Bloom as H2048, H160, H256, U256};
-use serde::{ser::Error, Serialize, Serializer};
-use cfxcore::block_data_manager::DataVersionTuple;
-use cfxcore::consensus::ConsensusGraphInner;
-use malloc_size_of::MallocSizeOf;
-use primitives::{Block as PrimitiveBlock};
+use cfxcore::{
+    block_data_manager::DataVersionTuple, consensus::ConsensusGraphInner,
+};
+use primitives::Block as PrimitiveBlock;
+use serde::{Serialize, Serializer};
 
 /// Block Transactions
 #[derive(Debug)]
@@ -144,7 +142,9 @@ pub struct Header {
 }
 
 impl Block {
-    pub fn new(b: &PrimitiveBlock, full: bool, consensus_inner: &ConsensusGraphInner) -> Self {
+    pub fn new(
+        b: &PrimitiveBlock, full: bool, consensus_inner: &ConsensusGraphInner,
+    ) -> Self {
         // get the block.gas_used
         let tx_len = b.transactions.len();
         let gas_used = if tx_len == 0 {
@@ -171,7 +171,9 @@ impl Block {
         Block {
             hash: Some(b.block_header.hash()),
             parent_hash: b.block_header.parent_hash().clone(),
-            uncles_hash: if let Some(uncle) = b.block_header.referee_hashes().first() {
+            uncles_hash: if let Some(uncle) =
+                b.block_header.referee_hashes().first()
+            {
                 uncle.clone()
             } else {
                 H256::zero()
@@ -181,11 +183,15 @@ impl Block {
             state_root: b.block_header.deferred_state_root().clone(),
             transactions_root: b.block_header.transactions_root().clone(),
             receipts_root: b.block_header.deferred_receipts_root().clone(),
-            number: Some(b.block_header.height().into()), // We use height to replace block number for ETH interface
+            number: Some(b.block_header.height().into()), /* We use height to
+                                                           * replace block
+                                                           * number for ETH
+                                                           * interface */
             gas_used: gas_used.unwrap_or(U256::zero()),
             gas_limit: b.block_header.gas_limit().into(),
             extra_data: Default::default(),
-            logs_bloom: b.block_header.deferred_logs_bloom_hash().into(),
+            logs_bloom: None, /* TODO: We cannot provide a proper bloom for
+                               * ETH interface now */
             timestamp: b.block_header.timestamp().into(),
             difficulty: b.block_header.difficulty().into(),
             total_difficulty: None,
@@ -193,7 +199,12 @@ impl Block {
             base_fee_per_gas: None,
             uncles: b.block_header.referee_hashes().clone(),
             transactions: if full {
-                BlockTransactions::Full(b.transactions.iter().map( |t| Transaction::from_signed(t)).collect())
+                BlockTransactions::Full(
+                    b.transactions
+                        .iter()
+                        .map(|t| Transaction::from_signed(t))
+                        .collect(),
+                )
             } else {
                 BlockTransactions::Hashes(b.transaction_hashes())
             },
