@@ -1198,6 +1198,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "slab",
+ "static_assertions",
  "storage-interface",
  "strum 0.20.0",
  "strum_macros 0.20.1",

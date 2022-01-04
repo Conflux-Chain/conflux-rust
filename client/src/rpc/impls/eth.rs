@@ -226,9 +226,8 @@ impl EthHandler {
 
         let block_hash = Some(exec_info.pivot_hash);
         let block_number = Some(exec_info.epoch_number.into());
-        let transaction_index = Some(tx_index.index.into()); /* TODO: Compute
-                                                              * a correct index,
-                                                              */
+        /* TODO: EVM core: Compute a correct index*/
+        let transaction_index = Some(tx_index.index.into());
         let transaction_hash = Some(tx.hash());
 
         let logs = primitive_receipt
@@ -243,7 +242,7 @@ impl EthHandler {
                 block_number,
                 transaction_hash,
                 transaction_index,
-                log_index: None, // TODO: count log_index
+                log_index: None, // TODO: EVM core: count log_index
                 transaction_log_index: None,
                 log_type: "".to_string(),
                 removed: false,
@@ -336,6 +335,7 @@ impl Eth for EthHandler {
     }
 
     fn accounts(&self) -> jsonrpc_core::Result<Vec<H160>> {
+        // TODO: EVM core: discussion: do we really need this? Maybe not, because EVM has enough dev tools and don't need dev mode.
         // We do not expect people to use the ETH rpc to manage accounts
         Ok(vec![])
     }
@@ -403,6 +403,7 @@ impl Eth for EthHandler {
     fn block_by_hash(
         &self, hash: H256, full: bool,
     ) -> jsonrpc_core::Result<Option<Block>> {
+        // TODO: EVM core: discussion: return one block or the whole epoch (pivot header + epoch transactions.)
         let block_op = self
             .consensus
             .get_data_manager()
@@ -418,7 +419,7 @@ impl Eth for EthHandler {
     fn block_by_number(
         &self, block_num: BlockNumber, include_txs: bool,
     ) -> jsonrpc_core::Result<Option<Block>> {
-        // TODO: When including transactions, consider packing all transactions.
+        // TODO: EVM core: discussion: same as block by number.
         let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
         info!("RPC Request: eth_getBlockByNumber block_number={:?} include_txs={:?}", block_num, include_txs);
@@ -464,6 +465,8 @@ impl Eth for EthHandler {
     fn block_transaction_count_by_hash(
         &self, hash: H256,
     ) -> jsonrpc_core::Result<Option<U256>> {
+        // TODO: EVM core: filter out Conflux space tx and add EVM space virtual tx (tx created by cross-space call).
+
         let block_op = self
             .consensus
             .get_data_manager()
@@ -478,6 +481,7 @@ impl Eth for EthHandler {
     fn block_transaction_count_by_number(
         &self, block_num: BlockNumber,
     ) -> jsonrpc_core::Result<Option<U256>> {
+        // TODO: EVM core: same as block_transaction_count_by_number
         let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
         info!(
@@ -575,7 +579,7 @@ impl Eth for EthHandler {
     fn call(
         &self, request: CallRequest, epoch: Option<BlockNumber>,
     ) -> jsonrpc_core::Result<Bytes> {
-        // TODO: Check the EVM error message. To make the assert_error_eq test
+        // TODO: EVM core: Check the EVM error message. To make the assert_error_eq test
         // case in solidity project compatible.
         match self.exec_transaction(request, epoch)? {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(expected, got)) => {
@@ -616,8 +620,7 @@ impl Eth for EthHandler {
     fn estimate_gas(
         &self, request: CallRequest, epoch: Option<BlockNumber>,
     ) -> jsonrpc_core::Result<U256> {
-        // TODO: Check the EVM error message. To make the assert_error_eq test
-        // case in solidity project compatible.
+        // TODO: EVM core: same as call
         let executed = match self.exec_transaction(request, epoch)? {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(expected, got)) => {
                 bail!(call_execution_error(
@@ -731,13 +734,15 @@ impl Eth for EthHandler {
     fn transaction_by_block_hash_and_index(
         &self, _: H256, _: Index,
     ) -> jsonrpc_core::Result<Option<Transaction>> {
-        todo!()
+        // TODO: Conflux space doesn't support this method either.
+        Err(RpcError::method_not_found())
     }
 
     fn transaction_by_block_number_and_index(
         &self, _: BlockNumber, _: Index,
     ) -> jsonrpc_core::Result<Option<Transaction>> {
-        todo!()
+        // TODO: Conflux space doesn't support this method either.
+        Err(RpcError::method_not_found())
     }
 
     fn transaction_receipt(
