@@ -9,7 +9,7 @@ pub use ledger_info::LedgerInfo;
 pub use peers::{FullPeerFilter, FullPeerState, LightPeerState, Peers};
 
 use super::{Error, ErrorKind};
-use cfx_internal_common::ChainIdParamsInner;
+use cfx_internal_common::ChainIdParamsOneChainInner;
 use std::{cmp, fmt::Debug};
 
 pub fn max_of_collection<I, T: Ord>(collection: I) -> Option<T>
@@ -20,9 +20,12 @@ where I: Iterator<Item = T> {
     })
 }
 
+// TODO: we validate for Conflux space currently.
 pub fn validate_chain_id(
-    ours: &ChainIdParamsInner, theirs: ChainIdParamsInner, peer_height: u64,
-) -> Result<(), Error> {
+    ours: &ChainIdParamsOneChainInner, theirs: ChainIdParamsOneChainInner,
+    peer_height: u64,
+) -> Result<(), Error>
+{
     if !ours.matches(&theirs, peer_height) {
         let error_kind = ErrorKind::ChainIdMismatch {
             ours: ours.clone(),
