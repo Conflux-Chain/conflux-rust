@@ -192,25 +192,25 @@ pub trait Eth {
         &self, _: BlockNumber, _: Index,
     ) -> BoxFuture<Option<RichBlock>>;
 
-    /// Returns available compilers.
-    /// @deprecated
-    #[rpc(name = "eth_getCompilers")]
-    fn compilers(&self) -> Result<Vec<String>>;
-
-    /// Compiles lll code.
-    /// @deprecated
-    #[rpc(name = "eth_compileLLL")]
-    fn compile_lll(&self, _: String) -> Result<Bytes>;
-
-    /// Compiles solidity.
-    /// @deprecated
-    #[rpc(name = "eth_compileSolidity")]
-    fn compile_solidity(&self, _: String) -> Result<Bytes>;
-
-    /// Compiles serpent.
-    /// @deprecated
-    #[rpc(name = "eth_compileSerpent")]
-    fn compile_serpent(&self, _: String) -> Result<Bytes>;
+    // /// Returns available compilers.
+    // /// @deprecated
+    // #[rpc(name = "eth_getCompilers")]
+    // fn compilers(&self) -> Result<Vec<String>>;
+    //
+    // /// Compiles lll code.
+    // /// @deprecated
+    // #[rpc(name = "eth_compileLLL")]
+    // fn compile_lll(&self, _: String) -> Result<Bytes>;
+    //
+    // /// Compiles solidity.
+    // /// @deprecated
+    // #[rpc(name = "eth_compileSolidity")]
+    // fn compile_solidity(&self, _: String) -> Result<Bytes>;
+    //
+    // /// Compiles serpent.
+    // /// @deprecated
+    // #[rpc(name = "eth_compileSerpent")]
+    // fn compile_serpent(&self, _: String) -> Result<Bytes>;
 
     /// Returns logs matching given filter object.
     #[rpc(name = "eth_getLogs")]

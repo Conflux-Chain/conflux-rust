@@ -331,6 +331,9 @@ impl From<NativeTransaction> for Transaction {
     fn from(tx: NativeTransaction) -> Self { Self::Native(tx) }
 }
 
+impl From<Eip155Transaction> for Transaction {
+    fn from(tx: Eip155Transaction) -> Self { Self::Ethereum(tx) }
+}
 impl Encodable for Transaction {
     fn rlp_append(&self, s: &mut RlpStream) {
         match self {

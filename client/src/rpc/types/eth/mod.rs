@@ -17,6 +17,6 @@ pub use self::{
     filter::{Filter, FilterChanges},
     log::Log,
     receipt::Receipt,
-    sync::SyncStatus,
+    sync::{SyncInfo, SyncStatus},
     transaction::Transaction,
 };
