@@ -10,6 +10,7 @@ mod receipt;
 mod sync;
 mod transaction;
 mod transaction_access_list;
+mod block_number;
 
 pub use self::{
     block::{Block, RichBlock},
@@ -18,5 +19,5 @@ pub use self::{
     log::Log,
     receipt::Receipt,
     sync::{SyncInfo, SyncStatus},
-    transaction::Transaction,
+    transaction::Transaction, block_number::BlockNumber,
 };

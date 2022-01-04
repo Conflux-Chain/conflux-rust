@@ -26,7 +26,7 @@ use cfxcore::{
 };
 use primitives::{
     receipt::TRANSACTION_OUTCOME_SUCCESS, Action, Eip155Transaction,
-    EpochNumber as BlockNumber, SignedTransaction, StorageKey, StorageValue,
+    EpochNumber, SignedTransaction, StorageKey, StorageValue,
     TransactionIndex, TransactionWithSignature,
 };
 
@@ -39,7 +39,7 @@ use crate::rpc::{
     types::{
         eth::{
             CallRequest, Filter, FilterChanges, Log, Receipt, RichBlock,
-            SyncInfo, SyncStatus, Transaction,
+            SyncInfo, SyncStatus, Transaction, BlockNumber,
         },
         Bytes, Index, MAX_GAS_CALL_REQUEST,
     },
@@ -96,7 +96,7 @@ impl EthHandler {
         &self, request: CallRequest, epoch: Option<BlockNumber>,
     ) -> CfxRpcResult<ExecutionOutcome> {
         let consensus_graph = self.consensus_graph();
-        let epoch = epoch.unwrap_or(BlockNumber::LatestState);
+        let epoch = epoch.map(Into::into).unwrap_or(EpochNumber::LatestState);
 
         let chain_id = self.consensus.best_chain_id();
         let signed_tx = sign_call(chain_id.in_evm_space(), request)?;
@@ -276,8 +276,10 @@ impl EthHandler {
 }
 
 impl Eth for EthHandler {
-    type Metadata = ();
-
+    fn client_version(&self) -> jsonrpc_core::Result<String> {
+        Ok(format!("Conflux"))
+    }
+    
     fn protocol_version(&self) -> jsonrpc_core::Result<String> {
         // 65 is a common ETH version now
         Ok(format!("{}", 65))
@@ -332,7 +334,7 @@ impl Eth for EthHandler {
 
     fn block_number(&self) -> jsonrpc_core::Result<U256> {
         let consensus_graph = self.consensus_graph();
-        let epoch_num = BlockNumber::LatestMined;
+        let epoch_num = EpochNumber::LatestMined;
         info!("RPC Request: eth_blockNumber()");
         match consensus_graph.get_height_from_epoch_number(epoch_num.into()) {
             Ok(height) => Ok(height.into()),
@@ -343,7 +345,7 @@ impl Eth for EthHandler {
     fn balance(
         &self, address: H160, num: Option<BlockNumber>,
     ) -> jsonrpc_core::Result<U256> {
-        let epoch_num = num.unwrap_or(BlockNumber::LatestState).into();
+        let epoch_num = num.map(Into::into).unwrap_or(EpochNumber::LatestState).into();
 
         info!(
             "RPC Request: eth_getBalance address={:?} epoch_num={:?}",
@@ -363,7 +365,7 @@ impl Eth for EthHandler {
     fn storage_at(
         &self, address: H160, position: U256, epoch_num: Option<BlockNumber>,
     ) -> jsonrpc_core::Result<H256> {
-        let epoch_num = epoch_num.unwrap_or(BlockNumber::LatestState).into();
+        let epoch_num = epoch_num.map(Into::into).unwrap_or(EpochNumber::LatestState);
 
         info!(
             "RPC Request: eth_getStorageAt address={:?}, position={:?}, epoch_num={:?})",
@@ -431,7 +433,7 @@ impl Eth for EthHandler {
     fn code_at(
         &self, address: H160, epoch_num: Option<BlockNumber>,
     ) -> jsonrpc_core::Result<Bytes> {
-        let epoch_num = epoch_num.unwrap_or(BlockNumber::LatestState).into();
+        let epoch_num = epoch_num.map(Into::into).unwrap_or(EpochNumber::LatestState);
 
         info!(
             "RPC Request: eth_getCode address={:?} epoch_num={:?}",
@@ -489,6 +491,7 @@ impl Eth for EthHandler {
     ) -> jsonrpc_core::Result<Bytes> {
         // TODO: Check the EVM error message. To make the assert_error_eq test
         // case in solidity project compatible.
+        let epoch = epoch.map(Into::into);
         match self.exec_transaction(request, epoch)? {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(expected, got)) => {
                 bail!(call_execution_error(

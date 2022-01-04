@@ -26,17 +26,16 @@ use jsonrpc_derive::rpc;
 use crate::rpc::types::{
     eth::{
         CallRequest, Filter, FilterChanges, Log, Receipt, RichBlock,
-        SyncStatus, Transaction,
+        SyncStatus, Transaction,BlockNumber
     },
     Bytes, Index,
 };
-use primitives::EpochNumber as BlockNumber;
 
 /// Eth rpc interface.
 #[rpc(server)]
 pub trait Eth {
-    /// RPC Metadata
-    type Metadata;
+    #[rpc(name = "web3_clientVersion")]
+    fn client_version(&self) -> Result<String>;
 
     /// Returns protocol version encoded as a string (quotes are necessary).
     #[rpc(name = "eth_protocolVersion")]
