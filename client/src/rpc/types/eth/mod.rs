@@ -13,7 +13,7 @@ mod transaction_access_list;
 mod block_number;
 
 pub use self::{
-    block::{Block, RichBlock},
+    block::Block,
     call_request::CallRequest,
     filter::{Filter, FilterChanges},
     log::Log,

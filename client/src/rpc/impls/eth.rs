@@ -4,10 +4,10 @@
 
 use std::cmp::min;
 
-use cfx_statedb::StateDbExt;
-use jsonrpc_core::{BoxFuture, Result as RpcResult};
+use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use rlp::Rlp;
 
+use cfx_statedb::StateDbExt;
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H160, H256, U256, U64,
 };
@@ -24,21 +24,18 @@ use cfxcore::{
     ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
-use primitives::{
-    receipt::TRANSACTION_OUTCOME_SUCCESS, Action, Eip155Transaction,
-    EpochNumber, SignedTransaction, StorageKey, StorageValue,
-    TransactionIndex, TransactionWithSignature,
-};
+use primitives::{receipt::TRANSACTION_OUTCOME_SUCCESS, Action, Eip155Transaction, EpochNumber, SignedTransaction, StorageKey, StorageValue, TransactionIndex, TransactionWithSignature, BlockHashOrEpochNumber};
 
 use crate::rpc::{
     error_codes::{
-        call_execution_error, invalid_params, request_rejected_in_catch_up_mode,
+        call_execution_error, invalid_params,
+        request_rejected_in_catch_up_mode, unimplemented,
     },
     impls::cfx::BlockExecInfo,
     traits::eth::{Eth, EthFilter},
     types::{
         eth::{
-            CallRequest, Filter, FilterChanges, Log, Receipt, RichBlock,
+Block, CallRequest, Filter, FilterChanges, Log, Receipt,
             SyncInfo, SyncStatus, Transaction, BlockNumber,
         },
         Bytes, Index, MAX_GAS_CALL_REQUEST,
@@ -326,11 +323,20 @@ impl Eth for EthHandler {
         ));
     }
 
-    fn gas_price(&self) -> BoxFuture<U256> { todo!() }
+    fn gas_price(&self) -> jsonrpc_core::Result<U256> {
+        // TODO: Change this
+        Ok(U256::from(5000000000u64))
+    }
 
-    fn max_priority_fee_per_gas(&self) -> BoxFuture<U256> { todo!() }
+    fn max_priority_fee_per_gas(&self) -> jsonrpc_core::Result<U256> {
+        // TODO: Change this
+        Ok(U256::from(10000000000u64))
+    }
 
-    fn accounts(&self) -> jsonrpc_core::Result<Vec<H160>> { todo!() }
+    fn accounts(&self) -> jsonrpc_core::Result<Vec<H160>> {
+        // We do not expect people to use the ETH rpc to manage accounts
+        Ok(vec![])
+    }
 
     fn block_number(&self) -> jsonrpc_core::Result<U256> {
         let consensus_graph = self.consensus_graph();
@@ -392,41 +398,119 @@ impl Eth for EthHandler {
         )
     }
 
-    fn block_by_hash(&self, _: H256, _: bool) -> BoxFuture<Option<RichBlock>> {
-        todo!()
+    fn block_by_hash(
+        &self, hash: H256, full: bool,
+    ) -> jsonrpc_core::Result<Option<Block>> {
+        let block_op = self
+            .consensus
+            .get_data_manager()
+            .block_by_hash(&hash, false);
+        if let Some(block) = block_op {
+            let inner = self.consensus_graph().inner.read();
+            Ok(Some(Block::new(&*block, full, &*inner)))
+        } else {
+            Ok(None)
+        }
     }
 
     fn block_by_number(
-        &self, _: BlockNumber, _: bool,
-    ) -> BoxFuture<Option<RichBlock>> {
-        todo!()
+        &self, block_num: BlockNumber, include_txs: bool,
+    ) -> jsonrpc_core::Result<Option<Block>> {
+        // TODO: When including transactions, consider packing all transactions.
+        let consensus_graph = self.consensus_graph();
+        let inner = &*consensus_graph.inner.read();
+        info!("RPC Request: eth_getBlockByNumber block_number={:?} include_txs={:?}", block_num, include_txs);
+
+        let epoch_height = consensus_graph
+            .get_height_from_epoch_number(block_num.into())
+            .map_err(RpcError::invalid_params)?;
+
+        let pivot_hash = inner
+            .get_pivot_hash_from_epoch_number(epoch_height)
+            .map_err(RpcError::invalid_params)?;
+
+        let maybe_block = self
+            .consensus
+            .get_data_manager()
+            .block_by_hash(&pivot_hash, false /* update_cache */);
+
+        match maybe_block {
+            None => Ok(None),
+            Some(b) => Ok(Some(Block::new(&*b, include_txs, inner))),
+        }
     }
 
     fn transaction_count(
-        &self, _: H160, _: Option<BlockNumber>,
-    ) -> BoxFuture<U256> {
-        todo!()
+        &self, address: H160, num: Option<BlockNumber>,
+    ) -> jsonrpc_core::Result<U256> {
+        let consensus_graph = self.consensus_graph();
+
+        let num = num.map(Into::into).unwrap_or(EpochNumber::LatestState);
+
+        info!(
+            "RPC Request: eth_getTransactionCount address={:?} block_number={:?}",
+            address, num
+        );
+
+        Ok(consensus_graph.next_nonce(
+            address.with_native_space(),
+            BlockHashOrEpochNumber::EpochNumber(num),
+            "num",
+        )?)
     }
 
     fn block_transaction_count_by_hash(
-        &self, _: H256,
-    ) -> BoxFuture<Option<U256>> {
-        todo!()
+        &self, hash: H256,
+    ) -> jsonrpc_core::Result<Option<U256>> {
+        let block_op = self
+            .consensus
+            .get_data_manager()
+            .block_by_hash(&hash, false);
+        if let Some(block) = block_op {
+            Ok(Some(U256::from(block.transactions.len())))
+        } else {
+            Ok(None)
+        }
     }
 
     fn block_transaction_count_by_number(
-        &self, _: BlockNumber,
-    ) -> BoxFuture<Option<U256>> {
-        todo!()
+        &self, block_num: BlockNumber,
+    ) -> jsonrpc_core::Result<Option<U256>> {
+        let consensus_graph = self.consensus_graph();
+        let inner = &*consensus_graph.inner.read();
+        info!(
+            "RPC Request: eth_getBlockTransactionCountByHash block_number={:?}",
+            block_num
+        );
+
+        let epoch_height = consensus_graph
+            .get_height_from_epoch_number(block_num.into())
+            .map_err(RpcError::invalid_params)?;
+
+        let pivot_hash = inner
+            .get_pivot_hash_from_epoch_number(epoch_height)
+            .map_err(RpcError::invalid_params)?;
+
+        let maybe_block = self
+            .consensus
+            .get_data_manager()
+            .block_by_hash(&pivot_hash, false /* update_cache */);
+
+        match maybe_block {
+            None => Ok(None),
+            Some(b) => Ok(Some(U256::from(b.transactions.len()))),
+        }
     }
 
-    fn block_uncles_count_by_hash(&self, _: H256) -> BoxFuture<Option<U256>> {
+    fn block_uncles_count_by_hash(
+        &self, _: H256,
+    ) -> jsonrpc_core::Result<Option<U256>> {
         todo!()
     }
 
     fn block_uncles_count_by_number(
         &self, _: BlockNumber,
-    ) -> BoxFuture<Option<U256>> {
+    ) -> jsonrpc_core::Result<Option<U256>> {
         todo!()
     }
 
@@ -559,7 +643,7 @@ impl Eth for EthHandler {
                 // When a revert exception happens, there is usually an error in the sub-calls.
                 // So we return the trace information for debugging contract.
                 let errors = ErrorUnwind::from_traces(executed.trace).errors.iter()
-                    .map(|(addr, error)| {
+                    .map(|(addr,error)| {
                         format!("{}: {}", addr, error)
                     })
                     .collect::<Vec<String>>();
@@ -567,8 +651,8 @@ impl Eth for EthHandler {
                 // Decode revert error
                 let revert_error = revert_reason_decode(&executed.output);
                 let revert_error = if !revert_error.is_empty() {
-                    format!(": {}.", revert_error)
-                } else {
+                    format!(": {}.",revert_error)
+                }else{
                     format!(".")
                 };
 
@@ -645,13 +729,13 @@ impl Eth for EthHandler {
 
     fn transaction_by_block_hash_and_index(
         &self, _: H256, _: Index,
-    ) -> BoxFuture<Option<Transaction>> {
+    ) -> jsonrpc_core::Result<Option<Transaction>> {
         todo!()
     }
 
     fn transaction_by_block_number_and_index(
         &self, _: BlockNumber, _: Index,
-    ) -> BoxFuture<Option<Transaction>> {
+    ) -> jsonrpc_core::Result<Option<Transaction>> {
         todo!()
     }
 
@@ -678,17 +762,17 @@ impl Eth for EthHandler {
 
     fn uncle_by_block_hash_and_index(
         &self, _: H256, _: Index,
-    ) -> BoxFuture<Option<RichBlock>> {
+    ) -> jsonrpc_core::Result<Option<Block>> {
         todo!()
     }
 
     fn uncle_by_block_number_and_index(
         &self, _: BlockNumber, _: Index,
-    ) -> BoxFuture<Option<RichBlock>> {
+    ) -> jsonrpc_core::Result<Option<Block>> {
         todo!()
     }
 
-    fn logs(&self, _: Filter) -> BoxFuture<Vec<Log>> { todo!() }
+    fn logs(&self, _: Filter) -> jsonrpc_core::Result<Vec<Log>> { todo!() }
 
     fn submit_hashrate(&self, _: U256, _: H256) -> jsonrpc_core::Result<bool> {
         todo!()
@@ -696,19 +780,39 @@ impl Eth for EthHandler {
 }
 
 impl EthFilter for EthHandler {
-    fn new_filter(&self, _: Filter) -> jsonrpc_core::Result<U256> { todo!() }
-
-    fn new_block_filter(&self) -> jsonrpc_core::Result<U256> { todo!() }
-
-    fn new_pending_transaction_filter(&self) -> jsonrpc_core::Result<U256> {
-        todo!()
+    fn new_filter(&self, _: Filter) -> jsonrpc_core::Result<U256> {
+        bail!(unimplemented(Some(
+            "ETH Filter RPC not implemented!".into()
+        )));
     }
 
-    fn filter_changes(&self, _: Index) -> BoxFuture<FilterChanges> { todo!() }
+    fn new_block_filter(&self) -> jsonrpc_core::Result<U256> {
+        bail!(unimplemented(Some(
+            "ETH Filter RPC not implemented!".into()
+        )));
+    }
 
-    fn filter_logs(&self, _: Index) -> BoxFuture<Vec<Log>> { todo!() }
+    fn new_pending_transaction_filter(&self) -> jsonrpc_core::Result<U256> {
+        bail!(unimplemented(Some(
+            "ETH Filter RPC not implemented!".into()
+        )));
+    }
+
+    fn filter_changes(&self, _: Index) -> jsonrpc_core::Result<FilterChanges> {
+        bail!(unimplemented(Some(
+            "ETH Filter RPC not implemented!".into()
+        )));
+    }
+
+    fn filter_logs(&self, _: Index) -> jsonrpc_core::Result<Vec<Log>> {
+        bail!(unimplemented(Some(
+            "ETH Filter RPC not implemented!".into()
+        )));
+    }
 
     fn uninstall_filter(&self, _: Index) -> jsonrpc_core::Result<bool> {
-        todo!()
+        bail!(unimplemented(Some(
+            "ETH Filter RPC not implemented!".into()
+        )));
     }
 }
