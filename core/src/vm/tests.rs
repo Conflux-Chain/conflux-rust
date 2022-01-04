@@ -25,7 +25,7 @@ use super::{
 };
 use crate::{executive::InternalRefContext, trace::Tracer};
 use cfx_bytes::Bytes;
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, Space, H256, U256};
 use hash::keccak;
 use std::{
     collections::{HashMap, HashSet},
@@ -246,4 +246,6 @@ impl Context for MockContext {
     }
 
     fn internal_ref(&mut self) -> InternalRefContext { unimplemented!() }
+
+    fn space(&self) -> Space { Space::Native }
 }

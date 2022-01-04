@@ -11,6 +11,7 @@ pub mod call_request;
 mod consensus_graph_states;
 mod epoch_number;
 pub mod errors;
+pub mod eth;
 mod filter;
 mod index;
 mod log;

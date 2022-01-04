@@ -10,14 +10,16 @@ use crate::{
 };
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_statedb::Result as StateDbResult;
-use cfx_types::{address_util::AddressUtil, Address, H256, U128, U256, U512};
+use cfx_types::{
+    address_util::AddressUtil, AddressWithSpace, H256, U128, U256, U512,
+};
 use heap_map::HeapMap;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
 };
 use primitives::{
-    Account, Action, SignedTransaction, TransactionWithSignature,
+    Account, Action, SignedTransaction, Transaction, TransactionWithSignature,
 };
 use rlp::*;
 use serde::Serialize;
@@ -59,7 +61,7 @@ lazy_static! {
 
 #[derive(DeriveMallocSizeOf)]
 struct DeferredPool {
-    buckets: HashMap<Address, NoncePool>,
+    buckets: HashMap<AddressWithSpace, NoncePool>,
 }
 
 impl DeferredPool {
@@ -74,16 +76,17 @@ impl DeferredPool {
     fn insert(&mut self, tx: TxWithReadyInfo, force: bool) -> InsertResult {
         // It's safe to create a new bucket, cause inserting to a empty bucket
         // will always be success
-        let bucket = self.buckets.entry(tx.sender).or_insert(NoncePool::new());
+        let bucket =
+            self.buckets.entry(tx.sender()).or_insert(NoncePool::new());
         bucket.insert(&tx, force)
     }
 
-    fn contain_address(&self, addr: &Address) -> bool {
+    fn contain_address(&self, addr: &AddressWithSpace) -> bool {
         self.buckets.contains_key(addr)
     }
 
     fn check_sender_and_nonce_exists(
-        &self, sender: &Address, nonce: &U256,
+        &self, sender: &AddressWithSpace, nonce: &U256,
     ) -> bool {
         if let Some(bucket) = self.buckets.get(sender) {
             bucket.check_nonce_exists(nonce)
@@ -92,7 +95,7 @@ impl DeferredPool {
         }
     }
 
-    fn count_less(&self, sender: &Address, nonce: &U256) -> usize {
+    fn count_less(&self, sender: &AddressWithSpace, nonce: &U256) -> usize {
         if let Some(bucket) = self.buckets.get(sender) {
             bucket.count_less(nonce)
         } else {
@@ -101,7 +104,7 @@ impl DeferredPool {
     }
 
     fn remove_lowest_nonce(
-        &mut self, addr: &Address,
+        &mut self, addr: &AddressWithSpace,
     ) -> Option<TxWithReadyInfo> {
         match self.buckets.get_mut(addr) {
             None => None,
@@ -115,14 +118,14 @@ impl DeferredPool {
         }
     }
 
-    fn get_lowest_nonce(&self, addr: &Address) -> Option<&U256> {
+    fn get_lowest_nonce(&self, addr: &AddressWithSpace) -> Option<&U256> {
         self.buckets
             .get(addr)
-            .and_then(|bucket| bucket.get_lowest_nonce_tx().map(|r| &r.nonce))
+            .and_then(|bucket| bucket.get_lowest_nonce_tx().map(|r| r.nonce()))
     }
 
     fn get_lowest_nonce_tx(
-        &self, addr: &Address,
+        &self, addr: &AddressWithSpace,
     ) -> Option<&SignedTransaction> {
         self.buckets
             .get(addr)
@@ -130,7 +133,7 @@ impl DeferredPool {
     }
 
     fn recalculate_readiness_with_local_info(
-        &mut self, addr: &Address, nonce: U256, balance: U256,
+        &mut self, addr: &AddressWithSpace, nonce: U256, balance: U256,
     ) -> Option<Arc<SignedTransaction>> {
         if let Some(bucket) = self.buckets.get(addr) {
             bucket.recalculate_readiness_with_local_info(nonce, balance)
@@ -140,7 +143,7 @@ impl DeferredPool {
     }
 
     fn get_pending_info(
-        &self, addr: &Address, nonce: &U256,
+        &self, addr: &AddressWithSpace, nonce: &U256,
     ) -> Option<(usize, Arc<SignedTransaction>)> {
         if let Some(bucket) = self.buckets.get(addr) {
             bucket.get_pending_info(nonce)
@@ -150,7 +153,7 @@ impl DeferredPool {
     }
 
     fn get_pending_transactions(
-        &self, addr: &Address, start_nonce: &U256, local_nonce: &U256,
+        &self, addr: &AddressWithSpace, start_nonce: &U256, local_nonce: &U256,
         local_balance: &U256,
     ) -> (Vec<Arc<SignedTransaction>>, Option<PendingReason>)
     {
@@ -170,7 +173,7 @@ impl DeferredPool {
         }
     }
 
-    fn check_tx_packed(&self, addr: Address, nonce: U256) -> bool {
+    fn check_tx_packed(&self, addr: AddressWithSpace, nonce: U256) -> bool {
         if let Some(bucket) = self.buckets.get(&addr) {
             if let Some(tx_with_ready_info) = bucket.get_tx_by_nonce(nonce) {
                 tx_with_ready_info.is_already_packed()
@@ -182,7 +185,9 @@ impl DeferredPool {
         }
     }
 
-    fn last_succ_nonce(&self, addr: Address, from_nonce: U256) -> Option<U256> {
+    fn last_succ_nonce(
+        &self, addr: AddressWithSpace, from_nonce: U256,
+    ) -> Option<U256> {
         let bucket = self.buckets.get(&addr)?;
         let mut next_nonce = from_nonce;
         loop {
@@ -316,7 +321,7 @@ impl ReadyAccountPool {
 
 #[derive(DeriveMallocSizeOf)]
 struct PackingPool {
-    treap: TreapMap<Address, Arc<SignedTransaction>, WeightType>,
+    treap: TreapMap<AddressWithSpace, Arc<SignedTransaction>, WeightType>,
     heap_map: HeapMap<Address, Reverse<PriceOrderedTransaction>>,
     tx_weight_scaling: u64,
     tx_weight_exp: u8,
@@ -352,11 +357,15 @@ impl PackingPool {
 
     fn len(&self) -> usize { self.treap.len() }
 
-    fn get(&self, address: &Address) -> Option<Arc<SignedTransaction>> {
+    fn get(
+        &self, address: &AddressWithSpace,
+    ) -> Option<Arc<SignedTransaction>> {
         self.heap_map.get(address).map(|tx| (tx.0).0.clone())
     }
 
-    fn remove(&mut self, address: &Address) -> Option<Arc<SignedTransaction>> {
+    fn remove(
+        &mut self, address: &AddressWithSpace,
+    ) -> Option<Arc<SignedTransaction>> {
         let tx = (self.heap_map.remove(address)?.0).0;
         self.treap.remove(address);
         self.total_gas -= tx.gas;
@@ -368,7 +377,7 @@ impl PackingPool {
     fn insert(
         &mut self, tx: Arc<SignedTransaction>,
     ) -> Option<Arc<SignedTransaction>> {
-        let scaled_weight = tx.gas_price / self.tx_weight_scaling;
+        let scaled_weight = tx.gas_price() / self.tx_weight_scaling;
         let base_weight = if scaled_weight == U256::zero() {
             0
         } else if scaled_weight >= *MAX_WEIGHT {
@@ -453,7 +462,7 @@ pub struct TransactionPoolInner {
     /// Updated with the storage data after a block is processed in consensus
     /// (set_tx_packed), after epoch execution, or during transaction
     /// insertion.
-    ready_nonces_and_balances: HashMap<Address, (U256, U256)>,
+    ready_nonces_and_balances: HashMap<AddressWithSpace, (U256, U256)>,
     garbage_collector: GarbageCollector,
     /// Keeps all transactions in the transaction pool.
     /// It should contain the same transaction set as `deferred_pool`.
@@ -510,7 +519,7 @@ impl TransactionPoolInner {
     }
 
     pub fn get_by_address2nonce(
-        &self, address: Address, nonce: U256,
+        &self, address: AddressWithSpace, nonce: U256,
     ) -> Option<Arc<SignedTransaction>> {
         let bucket = self.deferred_pool.buckets.get(&address)?;
         bucket.get_tx_by_nonce(nonce).map(|tx| tx.transaction)
@@ -553,13 +562,13 @@ impl TransactionPoolInner {
             // no unconditional garbage collection to conduct and we need to
             // check if we should replace one unexecuted tx.
             if victim.count == 0 {
-                if victim_address == new_tx.sender {
+                if victim_address == new_tx.sender() {
                     // We do not GC a not-executed transaction from the same
                     // sender.
                     skipped_self_node = Some((victim_address, victim));
                     continue;
                 } else if victim.has_ready_tx
-                    && victim.first_tx_gas_price >= new_tx.gas_price
+                    && victim.first_tx_gas_price >= *new_tx.gas_price()
                 {
                     // If all transactions are not executed but some accounts
                     // are not ready to be packed, we directly replace a
@@ -584,7 +593,7 @@ impl TransactionPoolInner {
 
             // We have to garbage collect an unexecuted transaction.
             // TODO: Implement more heuristic strategies
-            if to_remove_tx.nonce >= ready_nonce {
+            if *to_remove_tx.nonce() >= ready_nonce {
                 assert_eq!(victim.count, 0);
                 GC_UNEXECUTED_COUNTER.inc(1);
                 warn!("an unexecuted tx is garbage-collected.");
@@ -607,7 +616,7 @@ impl TransactionPoolInner {
 
             if !self
                 .deferred_pool
-                .check_tx_packed(victim_address, to_remove_tx.nonce)
+                .check_tx_packed(victim_address, *to_remove_tx.nonce())
             {
                 self.unpacked_transaction_count = self
                     .unpacked_transaction_count
@@ -626,11 +635,11 @@ impl TransactionPoolInner {
             } else {
                 let has_ready_tx =
                     self.ready_account_pool.get(&victim_address).is_some();
-                let first_tx_gas_price = self
+                let first_tx_gas_price = *self
                     .deferred_pool
                     .get_lowest_nonce_tx(&victim_address)
                     .expect("addr exist")
-                    .gas_price;
+                    .gas_price();
                 let count = if victim.count > 0 {
                     victim.count - 1
                 } else {
@@ -756,7 +765,7 @@ impl TransactionPoolInner {
     }
 
     pub fn get_account_pending_info(
-        &self, address: &Address,
+        &self, address: &AddressWithSpace,
     ) -> Option<(U256, U256, U256, H256)> {
         let (local_nonce, _local_balance) = self
             .get_local_nonce_and_balance(address)
@@ -765,7 +774,7 @@ impl TransactionPoolInner {
             Some((pending_count, pending_tx)) => Some((
                 local_nonce,
                 U256::from(pending_count),
-                pending_tx.nonce(),
+                *pending_tx.nonce(),
                 pending_tx.hash(),
             )),
             None => {
@@ -775,7 +784,7 @@ impl TransactionPoolInner {
     }
 
     pub fn get_account_pending_transactions(
-        &self, address: &Address, maybe_start_nonce: Option<U256>,
+        &self, address: &AddressWithSpace, maybe_start_nonce: Option<U256>,
         maybe_limit: Option<usize>,
     ) -> (
         Vec<Arc<SignedTransaction>>,
@@ -828,13 +837,13 @@ impl TransactionPoolInner {
     }
 
     pub fn get_local_nonce_and_balance(
-        &self, address: &Address,
+        &self, address: &AddressWithSpace,
     ) -> Option<(U256, U256)> {
         self.ready_nonces_and_balances.get(address).map(|x| *x)
     }
 
     fn update_nonce_and_balance(
-        &mut self, address: &Address, nonce: U256, balance: U256,
+        &mut self, address: &AddressWithSpace, nonce: U256, balance: U256,
     ) {
         if !self.deferred_pool.contain_address(address) {
             return;
@@ -844,7 +853,7 @@ impl TransactionPoolInner {
     }
 
     fn get_and_update_nonce_and_balance_from_storage(
-        &mut self, address: &Address, state: &AccountCache,
+        &mut self, address: &AddressWithSpace, state: &AccountCache,
     ) -> StateDbResult<(U256, U256)> {
         let nonce_and_balance = state.get_nonce_and_balance(address)?;
         if !self.deferred_pool.contain_address(address) {
@@ -856,7 +865,7 @@ impl TransactionPoolInner {
         Ok(nonce_and_balance)
     }
 
-    pub fn get_lowest_nonce(&self, addr: &Address) -> U256 {
+    pub fn get_lowest_nonce(&self, addr: &AddressWithSpace) -> U256 {
         let mut ret = 0.into();
         if let Some((nonce, _)) = self.get_local_nonce_and_balance(addr) {
             ret = nonce;
@@ -869,13 +878,17 @@ impl TransactionPoolInner {
         ret
     }
 
-    pub fn get_next_nonce(&self, address: &Address, state_nonce: U256) -> U256 {
+    pub fn get_next_nonce(
+        &self, address: &AddressWithSpace, state_nonce: U256,
+    ) -> U256 {
         self.deferred_pool
             .last_succ_nonce(*address, state_nonce)
             .unwrap_or(state_nonce)
     }
 
-    fn recalculate_readiness_with_local_info(&mut self, addr: &Address) {
+    fn recalculate_readiness_with_local_info(
+        &mut self, addr: &AddressWithSpace,
+    ) {
         let (nonce, balance) = self
             .get_local_nonce_and_balance(addr)
             .unwrap_or((0.into(), 0.into()));
@@ -883,14 +896,14 @@ impl TransactionPoolInner {
     }
 
     fn recalculate_readiness_with_fixed_info(
-        &mut self, addr: &Address, nonce: U256, balance: U256,
+        &mut self, addr: &AddressWithSpace, nonce: U256, balance: U256,
     ) {
         self.update_nonce_and_balance(addr, nonce, balance);
         self.recalculate_readiness(addr, nonce, balance);
     }
 
     fn recalculate_readiness_with_state(
-        &mut self, addr: &Address, account_cache: &AccountCache,
+        &mut self, addr: &AddressWithSpace, account_cache: &AccountCache,
     ) -> StateDbResult<()> {
         let _timer = MeterTimer::time_func(TX_POOL_RECALCULATE.as_ref());
         let (nonce, balance) = self
@@ -903,7 +916,7 @@ impl TransactionPoolInner {
     }
 
     fn recalculate_readiness(
-        &mut self, addr: &Address, nonce: U256, balance: U256,
+        &mut self, addr: &AddressWithSpace, nonce: U256, balance: U256,
     ) {
         let ret = self
             .deferred_pool
@@ -921,7 +934,7 @@ impl TransactionPoolInner {
                 count,
                 timestamp,
                 ret.is_some(),
-                tx.gas_price,
+                *tx.gas_price(),
             );
         } else {
             // An account is only removed from `deferred_pool` in GC,
@@ -939,7 +952,7 @@ impl TransactionPoolInner {
     pub fn check_tx_packed_in_deferred_pool(&self, tx_hash: &H256) -> bool {
         match self.txs.get(tx_hash) {
             Some(tx) => {
-                self.deferred_pool.check_tx_packed(tx.sender(), tx.nonce())
+                self.deferred_pool.check_tx_packed(tx.sender(), *tx.nonce())
             }
             None => false,
         }
@@ -1070,7 +1083,7 @@ impl TransactionPoolInner {
 
     /// content retrieves the ready and deferred transactions.
     pub fn content(
-        &self, address: Option<Address>,
+        &self, address: Option<AddressWithSpace>,
     ) -> (Vec<Arc<SignedTransaction>>, Vec<Arc<SignedTransaction>>) {
         let ready_txs = self
             .ready_account_pool
@@ -1086,7 +1099,7 @@ impl TransactionPoolInner {
         let deferred_txs = self
             .txs
             .values()
-            .filter(|tx| address == None || tx.sender == address.unwrap())
+            .filter(|tx| address == None || tx.sender() == address.unwrap())
             .map(|v| v.clone())
             .collect();
 
@@ -1105,53 +1118,57 @@ impl TransactionPoolInner {
         let mut sponsored_gas = U256::from(0);
         let mut sponsored_storage = 0;
 
+        let sender = transaction.sender();
+
         // Compute sponsored_gas for `transaction`
-        if let Action::Call(callee) = &transaction.action {
-            // FIXME: This is a quick fix for performance issue.
-            if callee.maybe_contract_address() {
-                if let Some(sponsor_info) =
-                    account_cache.get_sponsor_info(callee).map_err(|e| {
-                        format!(
-                            "Failed to read account_cache from storage: {}",
-                            e
-                        )
-                    })?
-                {
-                    if account_cache
-                        .check_commission_privilege(
-                            &callee,
-                            &transaction.sender(),
-                        )
-                        .map_err(|e| {
+        if let Transaction::Native(ref transaction) = transaction.unsigned {
+            if let Action::Call(ref callee) = transaction.action {
+                // FIXME: This is a quick fix for performance issue.
+                if callee.is_contract_address() {
+                    if let Some(sponsor_info) =
+                        account_cache.get_sponsor_info(callee).map_err(|e| {
                             format!(
                                 "Failed to read account_cache from storage: {}",
                                 e
                             )
                         })?
                     {
-                        let estimated_gas_u512 =
-                            transaction.gas.full_mul(transaction.gas_price);
-                        // Normally, it is less than 2^128
-                        let estimated_gas = if estimated_gas_u512
-                            > U512::from(U128::max_value())
+                        if account_cache
+                            .check_commission_privilege(
+                                &callee,
+                                &sender.address,
+                            )
+                            .map_err(|e| {
+                                format!(
+                                    "Failed to read account_cache from storage: {}",
+                                    e
+                                )
+                            })?
                         {
-                            U256::from(U128::max_value())
-                        } else {
-                            transaction.gas * transaction.gas_price
-                        };
-                        if estimated_gas <= sponsor_info.sponsor_gas_bound
-                            && estimated_gas
+                            let estimated_gas_u512 =
+                                transaction.gas.full_mul(transaction.gas_price);
+                            // Normally, it is less than 2^128
+                            let estimated_gas = if estimated_gas_u512
+                                > U512::from(U128::max_value())
+                            {
+                                U256::from(U128::max_value())
+                            } else {
+                                transaction.gas * transaction.gas_price
+                            };
+                            if estimated_gas <= sponsor_info.sponsor_gas_bound
+                                && estimated_gas
                                 <= sponsor_info.sponsor_balance_for_gas
-                        {
-                            sponsored_gas = transaction.gas;
-                        }
-                        let estimated_collateral =
-                            U256::from(transaction.storage_limit)
-                                * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-                        if estimated_collateral
-                            <= sponsor_info.sponsor_balance_for_collateral
-                        {
-                            sponsored_storage = transaction.storage_limit;
+                            {
+                                sponsored_gas = transaction.gas;
+                            }
+                            let estimated_collateral =
+                                U256::from(transaction.storage_limit)
+                                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+                            if estimated_collateral
+                                <= sponsor_info.sponsor_balance_for_collateral
+                            {
+                                sponsored_storage = transaction.storage_limit;
+                            }
                         }
                     }
                 }
@@ -1159,7 +1176,7 @@ impl TransactionPoolInner {
         }
 
         let (state_nonce, state_balance) = account_cache
-            .get_nonce_and_balance(&transaction.sender)
+            .get_nonce_and_balance(&transaction.sender())
             .map_err(|e| {
                 format!("Failed to read account_cache from storage: {}", e)
             })?;
@@ -1167,10 +1184,10 @@ impl TransactionPoolInner {
         if transaction.hash[0] & 254 == 0 {
             trace!(
                 "Transaction {:?} sender: {:?} current nonce: {:?}, state nonce:{:?}",
-                transaction.hash, transaction.sender, transaction.nonce, state_nonce
+                transaction.hash, transaction.sender, transaction.nonce(), state_nonce
             );
         }
-        if transaction.nonce
+        if *transaction.nonce()
             >= state_nonce
                 + U256::from(FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET)
         {
@@ -1183,11 +1200,11 @@ impl TransactionPoolInner {
                 transaction.hash()
             ));
         } else if !packed /* Because we may get slightly out-dated state for transaction pool, we should allow transaction pool to set already past-nonce transactions to packed. */
-            && transaction.nonce < state_nonce
+            && *transaction.nonce() < state_nonce
         {
             trace!(
-                "Transaction {:?} is discarded due to a too stale nonce, self.nonce={}, state_nonce={}",
-                transaction.hash(), transaction.nonce, state_nonce,
+                "Transaction {:?} is discarded due to a too stale nonce, self.nonce()={}, state_nonce={}",
+                transaction.hash(), transaction.nonce(), state_nonce,
             );
             return Err(format!(
                 "Transaction {:?} is discarded due to a too stale nonce",
@@ -1207,7 +1224,7 @@ impl TransactionPoolInner {
         }
 
         self.recalculate_readiness_with_state(
-            &transaction.sender,
+            &transaction.sender(),
             account_cache,
         )
         .map_err(|e| {
@@ -1221,16 +1238,18 @@ impl TransactionPoolInner {
 #[cfg(test)]
 mod test_transaction_pool_inner {
     use super::{DeferredPool, InsertResult, TxWithReadyInfo};
-    use cfx_types::{Address, U256};
+    use cfx_types::{Address, AddressSpaceUtil, U256};
     use keylib::{Generator, KeyPair, Random};
-    use primitives::{Action, SignedTransaction, Transaction};
+    use primitives::{
+        Action, NativeTransaction, SignedTransaction, Transaction,
+    };
     use std::sync::Arc;
 
     fn new_test_tx(
         sender: &KeyPair, nonce: usize, gas_price: usize, value: usize,
     ) -> Arc<SignedTransaction> {
         Arc::new(
-            Transaction {
+            Transaction::from(NativeTransaction {
                 nonce: U256::from(nonce),
                 gas_price: U256::from(gas_price),
                 gas: U256::from(50000),
@@ -1238,9 +1257,9 @@ mod test_transaction_pool_inner {
                 value: U256::from(value),
                 storage_limit: 0,
                 epoch_height: 0,
-                chain_id: 0,
+                chain_id: 1,
                 data: Vec::new(),
-            }
+            })
             .sign(sender.secret()),
         )
     }
@@ -1265,8 +1284,11 @@ mod test_transaction_pool_inner {
 
         // insert txs of same sender
         let alice = Random.generate().unwrap();
+        let alice_addr_s = alice.address().with_native_space();
         let bob = Random.generate().unwrap();
+        let bob_addr_s = bob.address().with_native_space();
         let eva = Random.generate().unwrap();
+        let eva_addr_s = eva.address().with_native_space();
 
         let alice_tx1 = new_test_tx_with_read_info(
             &alice, 5, 10, 100, false, /* packed */
@@ -1289,27 +1311,27 @@ mod test_transaction_pool_inner {
             InsertResult::NewAdded
         );
 
-        assert_eq!(deferred_pool.contain_address(&alice.address()), true);
+        assert_eq!(deferred_pool.contain_address(&alice_addr_s), true);
 
-        assert_eq!(deferred_pool.contain_address(&eva.address()), false);
+        assert_eq!(deferred_pool.contain_address(&eva_addr_s), false);
 
-        assert_eq!(deferred_pool.remove_lowest_nonce(&eva.address()), None);
+        assert_eq!(deferred_pool.remove_lowest_nonce(&eva_addr_s), None);
 
-        assert_eq!(deferred_pool.contain_address(&bob.address()), false);
+        assert_eq!(deferred_pool.contain_address(&bob_addr_s), false);
 
         assert_eq!(
             deferred_pool.insert(alice_tx2.clone(), false /* force */),
             InsertResult::NewAdded
         );
 
-        assert_eq!(deferred_pool.remove_lowest_nonce(&bob.address()), None);
+        assert_eq!(deferred_pool.remove_lowest_nonce(&bob_addr_s), None);
 
         assert_eq!(
             deferred_pool.insert(bob_tx1.clone(), false /* force */),
             InsertResult::NewAdded
         );
 
-        assert_eq!(deferred_pool.contain_address(&bob.address()), true);
+        assert_eq!(deferred_pool.contain_address(&bob_addr_s), true);
 
         assert_eq!(
             deferred_pool.insert(bob_tx2.clone(), false /* force */),
@@ -1323,34 +1345,34 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.insert(bob_tx2.clone(), false /* force */),
-            InsertResult::Failed(format!("Tx with same nonce already inserted. To replace it, you need to specify a gas price > {}", bob_tx2_new.gas_price))
+            InsertResult::Failed(format!("Tx with same nonce already inserted. To replace it, you need to specify a gas price > {}", bob_tx2_new.gas_price()))
         );
 
         assert_eq!(
-            deferred_pool.get_lowest_nonce(&bob.address()),
+            deferred_pool.get_lowest_nonce(&bob_addr_s),
             Some(&(1.into()))
         );
 
         assert_eq!(
-            deferred_pool.remove_lowest_nonce(&bob.address()),
+            deferred_pool.remove_lowest_nonce(&bob_addr_s),
             Some(bob_tx1.clone())
         );
 
         assert_eq!(
-            deferred_pool.get_lowest_nonce(&bob.address()),
+            deferred_pool.get_lowest_nonce(&bob_addr_s),
             Some(&(2.into()))
         );
 
-        assert_eq!(deferred_pool.contain_address(&bob.address()), true);
+        assert_eq!(deferred_pool.contain_address(&bob_addr_s), true);
 
         assert_eq!(
-            deferred_pool.remove_lowest_nonce(&bob.address()),
+            deferred_pool.remove_lowest_nonce(&bob_addr_s),
             Some(bob_tx2_new.clone())
         );
 
-        assert_eq!(deferred_pool.get_lowest_nonce(&bob.address()), None);
+        assert_eq!(deferred_pool.get_lowest_nonce(&bob_addr_s), None);
 
-        assert_eq!(deferred_pool.contain_address(&bob.address()), false);
+        assert_eq!(deferred_pool.contain_address(&bob_addr_s), false);
     }
 
     #[test]
@@ -1358,6 +1380,7 @@ mod test_transaction_pool_inner {
         let mut deferred_pool = super::DeferredPool::new();
 
         let alice = Random.generate().unwrap();
+        let alice_addr_s = alice.address().with_native_space();
 
         let gas = 50000;
         let tx1 = new_test_tx_with_read_info(
@@ -1384,7 +1407,7 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
-                &alice.address(),
+                &alice_addr_s,
                 5.into(),
                 exact_cost.into()
             ),
@@ -1393,7 +1416,7 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
-                &alice.address(),
+                &alice_addr_s,
                 7.into(),
                 exact_cost.into()
             ),
@@ -1402,7 +1425,7 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
-                &alice.address(),
+                &alice_addr_s,
                 8.into(),
                 exact_cost.into()
             ),
@@ -1412,7 +1435,7 @@ mod test_transaction_pool_inner {
         deferred_pool.insert(tx3.clone(), false /* force */);
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
-                &alice.address(),
+                &alice_addr_s,
                 4.into(),
                 exact_cost.into()
             ),
@@ -1421,7 +1444,7 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
-                &alice.address(),
+                &alice_addr_s,
                 5.into(),
                 exact_cost.into()
             ),
@@ -1430,7 +1453,7 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
-                &alice.address(),
+                &alice_addr_s,
                 7.into(),
                 exact_cost.into()
             ),
@@ -1439,7 +1462,7 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
-                &alice.address(),
+                &alice_addr_s,
                 8.into(),
                 exact_cost.into()
             ),
@@ -1448,7 +1471,7 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
-                &alice.address(),
+                &alice_addr_s,
                 9.into(),
                 exact_cost.into()
             ),
@@ -1457,7 +1480,7 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
-                &alice.address(),
+                &alice_addr_s,
                 10.into(),
                 exact_cost.into()
             ),
@@ -1466,7 +1489,7 @@ mod test_transaction_pool_inner {
 
         assert_eq!(
             deferred_pool.recalculate_readiness_with_local_info(
-                &alice.address(),
+                &alice_addr_s,
                 5.into(),
                 (exact_cost - 1).into()
             ),

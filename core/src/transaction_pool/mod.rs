@@ -29,7 +29,7 @@ use account_cache::AccountCache;
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_statedb::{Result as StateDbResult, StateDb};
 use cfx_storage::{StateIndex, StorageManagerTrait};
-use cfx_types::{Address, H256, U256};
+use cfx_types::{AddressWithSpace as Address, AllChainID, H256, U256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Lock, Meter, MeterTimer,
@@ -494,8 +494,8 @@ impl TransactionPool {
     /// readiness
     fn verify_transaction_tx_pool(
         &self, transaction: &TransactionWithSignature, basic_check: bool,
-        chain_id: u32, best_height: u64, transitions: &TransitionsEpochHeight,
-        spec: &Spec,
+        chain_id: AllChainID, best_height: u64,
+        transitions: &TransitionsEpochHeight, spec: &Spec,
     ) -> Result<(), String>
     {
         let _timer = MeterTimer::time_func(TX_POOL_VERIFY_TIMER.as_ref());
@@ -521,23 +521,25 @@ impl TransactionPool {
 
         // check transaction gas limit
         let max_tx_gas = *self.config.max_tx_gas.read();
-        if transaction.gas > max_tx_gas {
+        if *transaction.gas() > max_tx_gas {
             warn!(
                 "Transaction discarded due to above gas limit: {} > {:?}",
-                transaction.gas, max_tx_gas
+                transaction.gas(),
+                max_tx_gas
             );
             return Err(format!(
                 "transaction gas {} exceeds the maximum value {:?}, the half of pivot block gas limit",
-                transaction.gas, max_tx_gas
+                transaction.gas(), max_tx_gas
             ));
         }
 
         // check transaction gas price
-        if transaction.gas_price < self.config.min_tx_price.into() {
-            trace!("Transaction {} discarded due to below minimal gas price: price {}", transaction.hash(), transaction.gas_price);
+        if *transaction.gas_price() < self.config.min_tx_price.into() {
+            trace!("Transaction {} discarded due to below minimal gas price: price {}", transaction.hash(), transaction.gas_price());
             return Err(format!(
                 "transaction gas price {} less than the minimum value {}",
-                transaction.gas_price, self.config.min_tx_price
+                transaction.gas_price(),
+                self.config.min_tx_price
             ));
         }
 
@@ -721,8 +723,8 @@ impl TransactionPool {
             debug!(
                 "should not trigger recycle transaction, nonce = {}, sender = {:?}, \
                 account nonce = {}, hash = {:?} .",
-                &tx.nonce, &tx.sender,
-                account_cache.get_nonce(&tx.sender)?, tx.hash);
+                &tx.nonce(), &tx.sender(),
+                account_cache.get_nonce(&tx.sender())?, tx.hash);
 
             if let Err(e) = self.verify_transaction_tx_pool(
                 &tx,

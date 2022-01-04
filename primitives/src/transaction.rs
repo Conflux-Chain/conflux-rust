@@ -3,7 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{bytes::Bytes, hash::keccak};
-use cfx_types::{Address, BigEndianHash, H160, H256, U256};
+use cfx_types::{
+    Address, AddressSpaceUtil, AddressWithSpace, BigEndianHash, Space, H160,
+    H256, U256,
+};
 use keylib::{
     self, public_to_address, recover, verify_public, Public, Secret, Signature,
 };
@@ -35,6 +38,7 @@ pub enum TransactionError {
     ChainIdMismatch {
         expected: u32,
         got: u32,
+        space: Space,
     },
     /// Epoch height out of bound.
     EpochHeightOutOfBound {
@@ -97,6 +101,8 @@ pub enum TransactionError {
     ZeroGasPrice,
     /// Ethereum-like transaction with invalid storage limit.
     InvalidEthereumLike,
+    /// Receiver with invalid type bit.
+    InvalidReceiver,
 }
 
 impl From<keylib::Error> for TransactionError {
@@ -116,8 +122,8 @@ impl fmt::Display for TransactionError {
         use self::TransactionError::*;
         let msg = match *self {
             AlreadyImported => "Already imported".into(),
-            ChainIdMismatch { expected, got } => {
-                format!("Chain id mismatch, expected {}, got {}", expected, got)
+            ChainIdMismatch { expected, got, space } => {
+                format!("Chain id mismatch, expected {}, got {}, space {:?}", expected, got,space)
             }
             EpochHeightOutOfBound {
                 block_height,
@@ -158,7 +164,8 @@ impl fmt::Display for TransactionError {
                 format!("Transaction has invalid RLP structure: {}.", err)
             }
             ZeroGasPrice => "Zero gas price is not allowed".into(),
-            InvalidEthereumLike => "Ethereum like transaction should have u64::MAX storage limit".into()
+            InvalidEthereumLike => "Ethereum like transaction should have u64::MAX storage limit".into(),
+            InvalidReceiver => "Sending transaction to invalid address. The first four bits of address must be 0x0, 0x1, or 0x8.".into(),
         };
 
         f.write_fmt(format_args!("Transaction error ({})", msg))
@@ -212,7 +219,7 @@ impl Encodable for Action {
     Serialize,
     Deserialize,
 )]
-pub struct Transaction {
+pub struct NativeTransaction {
     /// Nonce.
     pub nonce: U256,
     /// Gas price.
@@ -235,10 +242,161 @@ pub struct Transaction {
     pub data: Bytes,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum TransactionType {
-    Normal,
-    EthereumLike,
+impl NativeTransaction {
+    /// Specify the sender; this won't survive the serialize/deserialize
+    /// process, but can be cloned.
+    pub fn fake_sign(self, from: AddressWithSpace) -> SignedTransaction {
+        // TODO: EVM core: for EVM tx
+        SignedTransaction {
+            transaction: TransactionWithSignature {
+                transaction: TransactionWithSignatureSerializePart {
+                    unsigned: Transaction::Native(self),
+                    r: U256::one(),
+                    s: U256::one(),
+                    v: 0,
+                },
+                hash: H256::zero(),
+                rlp_size: None,
+            }
+            .compute_hash(),
+            sender: from.address,
+            public: None,
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Eip155Transaction {
+    /// Nonce.
+    pub nonce: U256,
+    /// Gas price.
+    pub gas_price: U256,
+    /// Gas paid up front for transaction execution.
+    pub gas: U256,
+    /// Action, can be either call or contract create.
+    pub action: Action,
+    /// Transferred value.
+    pub value: U256,
+    /// The chain id of the transaction
+    pub chain_id: u32,
+    /// Transaction data.
+    pub data: Bytes,
+}
+
+impl Encodable for Eip155Transaction {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_list(9);
+        s.append(&self.nonce);
+        s.append(&self.gas_price);
+        s.append(&self.gas);
+        s.append(&self.action);
+        s.append(&self.value);
+        s.append(&self.data);
+        s.append(&self.chain_id);
+        s.append(&0u8);
+        s.append(&0u8);
+    }
+}
+
+impl Decodable for Eip155Transaction {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        if !(rlp.at(7)?.is_empty() && rlp.at(8)?.is_empty()) {
+            return Err(DecoderError::Custom(
+                "The last two items should be empty",
+            ));
+        }
+        Ok(Self {
+            nonce: rlp.val_at(0)?,
+            gas_price: rlp.val_at(1)?,
+            gas: rlp.val_at(2)?,
+            action: rlp.val_at(3)?,
+            value: rlp.val_at(4)?,
+            chain_id: rlp.val_at(5)?,
+            data: rlp.val_at(6)?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Transaction {
+    Native(NativeTransaction),
+    Ethereum(Eip155Transaction),
+}
+
+impl Default for Transaction {
+    fn default() -> Self { Transaction::Native(Default::default()) }
+}
+
+impl From<NativeTransaction> for Transaction {
+    fn from(tx: NativeTransaction) -> Self { Self::Native(tx) }
+}
+
+impl From<Eip155Transaction> for Transaction {
+    fn from(tx: Eip155Transaction) -> Self { Self::Ethereum(tx) }
+}
+impl Encodable for Transaction {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        match self {
+            Transaction::Native(tx) => {
+                s.append(tx);
+            }
+            Transaction::Ethereum(tx) => {
+                s.append(tx);
+            }
+        }
+    }
+}
+
+impl Decodable for Transaction {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        if rlp.item_count()? != 9 {
+            return Err(DecoderError::RlpInvalidLength);
+        }
+        let detected_eip155 = rlp.at(7)?.is_empty() && rlp.at(8)?.is_empty();
+        let tx = if detected_eip155 {
+            Transaction::Ethereum(Eip155Transaction::decode(rlp)?)
+        } else {
+            Transaction::Native(NativeTransaction::decode(rlp)?)
+        };
+        Ok(tx)
+    }
+}
+
+macro_rules! access_common_ref {
+    ($field: ident, $ty: ident) => {
+        pub fn $field(&self) -> &$ty{
+            match self {
+                Transaction::Native(tx) => &tx.$field,
+                Transaction::Ethereum(tx) => &tx.$field,
+            }
+        }
+    };
+}
+
+macro_rules! access_common {
+    ($field: ident, $ty: ident) => {
+        pub fn $field(&self) -> $ty{
+            match self {
+                Transaction::Native(tx) => tx.$field,
+                Transaction::Ethereum(tx) => tx.$field,
+            }
+        }
+    };
+}
+impl Transaction {
+    access_common_ref!(gas, U256);
+
+    access_common_ref!(gas_price, U256);
+
+    access_common_ref!(data, Bytes);
+
+    access_common_ref!(nonce, U256);
+
+    access_common_ref!(action, Action);
+
+    access_common_ref!(value, U256);
+
+    access_common!(chain_id, u32);
 }
 
 impl Transaction {
@@ -247,31 +405,14 @@ impl Transaction {
     // signatures.
     pub fn signature_hash(&self) -> H256 {
         let mut s = RlpStream::new();
-        match self.transaction_type() {
-            TransactionType::Normal => {
-                s.append(self);
-            }
-            TransactionType::EthereumLike => {
-                s.begin_list(9);
-                s.append(&self.nonce);
-                s.append(&self.gas_price);
-                s.append(&self.gas);
-                s.append(&self.action);
-                s.append(&self.value);
-                s.append(&self.data);
-                s.append(&self.chain_id);
-                s.append(&0u8);
-                s.append(&0u8);
-            }
-        }
+        s.append(self);
         keccak(s.as_raw())
     }
 
-    pub fn transaction_type(&self) -> TransactionType {
-        if self.epoch_height == u64::MAX {
-            TransactionType::EthereumLike
-        } else {
-            TransactionType::Normal
+    pub fn space(&self) -> Space {
+        match self {
+            Transaction::Native(_) => Space::Native,
+            Transaction::Ethereum(_) => Space::Ethereum,
         }
     }
 
@@ -283,26 +424,6 @@ impl Transaction {
             .recover_public()
             .expect("secret is valid so it's recoverable");
         SignedTransaction::new(public, tx_with_sig)
-    }
-
-    /// Specify the sender; this won't survive the serialize/deserialize
-    /// process, but can be cloned.
-    pub fn fake_sign(self, from: Address) -> SignedTransaction {
-        SignedTransaction {
-            transaction: TransactionWithSignature {
-                transaction: TransactionWithSignatureSerializePart {
-                    unsigned: self,
-                    r: U256::one(),
-                    s: U256::one(),
-                    v: 0,
-                },
-                hash: H256::zero(),
-                rlp_size: None,
-            }
-            .compute_hash(),
-            sender: from,
-            public: None,
-        }
     }
 
     /// Signs the transaction with signature.
@@ -323,7 +444,7 @@ impl Transaction {
 
 impl MallocSizeOf for Transaction {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.data.size_of(ops)
+        self.data().size_of(ops)
     }
 }
 
@@ -526,20 +647,22 @@ impl SignedTransaction {
     }
 
     /// Returns transaction sender.
-    pub fn sender(&self) -> Address { self.sender }
+    pub fn sender(&self) -> AddressWithSpace {
+        self.sender.with_space(self.space())
+    }
 
-    pub fn nonce(&self) -> U256 { self.transaction.nonce }
+    pub fn nonce(&self) -> &U256 { self.transaction.nonce() }
 
     /// Checks if signature is empty.
     pub fn is_unsigned(&self) -> bool { self.transaction.is_unsigned() }
 
     pub fn hash(&self) -> H256 { self.transaction.hash() }
 
-    pub fn gas(&self) -> &U256 { &self.transaction.gas }
+    pub fn gas(&self) -> &U256 { &self.transaction.gas() }
 
-    pub fn gas_price(&self) -> &U256 { &self.transaction.gas_price }
+    pub fn gas_price(&self) -> &U256 { &self.transaction.gas_price() }
 
-    pub fn gas_limit(&self) -> &U256 { &self.transaction.gas }
+    pub fn gas_limit(&self) -> &U256 { &self.transaction.gas() }
 
     pub fn rlp_size(&self) -> usize { self.transaction.rlp_size() }
 

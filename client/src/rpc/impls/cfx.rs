@@ -10,7 +10,9 @@ use crate::rpc::types::{
 use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
-use cfx_types::{BigEndianHash, H256, H520, U128, U256, U64};
+use cfx_types::{
+    Address, AddressSpaceUtil, BigEndianHash, H256, H520, U128, U256, U64,
+};
 use cfxcore::{
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
@@ -29,8 +31,8 @@ use network::{
 use parking_lot::Mutex;
 use primitives::{
     filter::LogFilter, Account, Block, BlockReceipts, DepositInfo,
-    SignedTransaction, StorageKey, StorageRoot, StorageValue, TransactionIndex,
-    TransactionWithSignature, VoteStakeInfo,
+    SignedTransaction, StorageKey, StorageRoot, StorageValue, Transaction,
+    TransactionIndex, TransactionWithSignature, VoteStakeInfo,
 };
 use random_crash::*;
 use rlp::Rlp;
@@ -161,10 +163,10 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
 
-        let address = &address.hex_address;
+        let address = address.hex_address.with_native_space();
 
-        let code = match state_db.get_account(address)? {
-            Some(acc) => match state_db.get_code(address, &acc.code_hash)? {
+        let code = match state_db.get_account(&address)? {
+            Some(acc) => match state_db.get_code(&address, &acc.code_hash)? {
                 Some(code) => (*code.code).clone(),
                 _ => vec![],
             },
@@ -188,7 +190,8 @@ impl RpcImpl {
         let state_db = self
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
-        let acc = state_db.get_account(&address.hex_address)?;
+        let acc =
+            state_db.get_account(&address.hex_address.with_native_space())?;
 
         Ok(acc.map_or(U256::zero(), |acc| acc.balance).into())
     }
@@ -209,7 +212,7 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
 
-        match state_db.get_account(&address.hex_address)? {
+        match state_db.get_account(&address.hex_address.with_native_space())? {
             None => Ok(None),
             Some(acc) => {
                 Ok(Some(RpcAddress::try_from_h160(acc.admin, network)?))
@@ -233,7 +236,7 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
 
-        match state_db.get_account(&address.hex_address)? {
+        match state_db.get_account(&address.hex_address.with_native_space())? {
             None => Ok(SponsorInfo::default(network)?),
             Some(acc) => Ok(SponsorInfo::try_from(acc.sponsor_info, network)?),
         }
@@ -253,7 +256,8 @@ impl RpcImpl {
         let state_db = self
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
-        let acc = state_db.get_account(&address.hex_address)?;
+        let acc =
+            state_db.get_account(&address.hex_address.with_native_space())?;
 
         Ok(acc.map_or(U256::zero(), |acc| acc.staking_balance).into())
     }
@@ -273,7 +277,9 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
 
-        match state_db.get_deposit_list(&address.hex_address)? {
+        match state_db
+            .get_deposit_list(&address.hex_address.with_native_space())?
+        {
             None => Ok(vec![]),
             Some(deposit_list) => Ok(deposit_list.0),
         }
@@ -294,7 +300,9 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
 
-        match state_db.get_vote_list(&address.hex_address)? {
+        match state_db
+            .get_vote_list(&address.hex_address.with_native_space())?
+        {
             None => Ok(vec![]),
             Some(vote_list) => Ok(vote_list.0),
         }
@@ -314,7 +322,8 @@ impl RpcImpl {
         let state_db = self
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
-        let acc = state_db.get_account(&address.hex_address)?;
+        let acc =
+            state_db.get_account(&address.hex_address.with_native_space())?;
 
         Ok(acc
             .map_or(U256::zero(), |acc| acc.collateral_for_storage)
@@ -340,17 +349,18 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
 
-        let account = match state_db.get_account(address)? {
-            Some(t) => t,
-            None => account_result_to_rpc_result(
-                "address",
-                Ok(Account::new_empty_with_balance(
-                    address,
-                    &U256::zero(), /* balance */
-                    &U256::zero(), /* nonce */
-                )),
-            )?,
-        };
+        let account =
+            match state_db.get_account(&address.with_native_space())? {
+                Some(t) => t,
+                None => account_result_to_rpc_result(
+                    "address",
+                    Ok(Account::new_empty_with_balance(
+                        &address.with_native_space(),
+                        &U256::zero(), /* balance */
+                        &U256::zero(), /* nonce */
+                    )),
+                )?,
+            };
 
         Ok(RpcAccount::try_from(account, network)?)
     }
@@ -458,7 +468,8 @@ impl RpcImpl {
         let key = StorageKey::new_storage_key(
             &address.hex_address,
             position.as_ref(),
-        );
+        )
+        .with_native_space();
 
         Ok(match state_db.get::<StorageValue>(key)? {
             Some(entry) => Some(H256::from_uint(&entry.value).into()),
@@ -516,7 +527,7 @@ impl RpcImpl {
             // the check.
 
             let nonce = consensus_graph.next_nonce(
-                tx.from.clone().into(),
+                Address::from(tx.from.clone()).with_native_space(),
                 BlockHashOrEpochNumber::EpochNumber(EpochNumber::LatestState)
                     .into_primitive(),
                 // For an invalid_params error, the name of the params should
@@ -530,7 +541,12 @@ impl RpcImpl {
 
         let epoch_height = consensus_graph.best_epoch_number();
         let chain_id = consensus_graph.best_chain_id();
-        tx.sign_with(epoch_height, chain_id, password, self.accounts.clone())
+        tx.sign_with(
+            epoch_height,
+            chain_id.in_native_space(),
+            password,
+            self.accounts.clone(),
+        )
     }
 
     fn send_transaction(
@@ -566,7 +582,9 @@ impl RpcImpl {
         let root = self
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "epoch_num")?
-            .get_original_storage_root(&address.hex_address)?;
+            .get_original_storage_root(
+                &address.hex_address.with_native_space(),
+            )?;
 
         Ok(Some(root))
     }
@@ -871,7 +889,7 @@ impl RpcImpl {
                         &mut block_size_limit,
                         num_txs_simple,
                         num_txs_erc20,
-                        self.consensus.best_chain_id(),
+                        self.consensus.best_chain_id().in_native_space(),
                     );
 
                 Ok(block_gen.generate_block(
@@ -930,9 +948,17 @@ impl RpcImpl {
             match tx.recover_public() {
                 Ok(public) => {
                     let mut signed_tx = SignedTransaction::new(public, tx);
+                    let unsigned = if let Transaction::Native(
+                        ref mut unsigned,
+                    ) =
+                        signed_tx.transaction.transaction.unsigned
+                    {
+                        unsigned
+                    } else {
+                        bail!(invalid_params(&format!("raw_txs, tx {:?}", signed_tx), format!("Does not support EIP-155 transaction in cfx RPC.")));
+                    };
                     if tx_data_len > 0 {
-                        signed_tx.transaction.transaction.unsigned.data =
-                            vec![0; tx_data_len];
+                        unsigned.data = vec![0; tx_data_len];
                     }
                     transactions.push(Arc::new(signed_tx));
                 }
@@ -1231,8 +1257,8 @@ impl RpcImpl {
             account_addr, contract_addr, gas_limit, gas_price, storage_limit, epoch
         );
 
-        let account_addr = &account_addr.hex_address;
-        let contract_addr = &contract_addr.hex_address;
+        let account_addr = account_addr.hex_address.with_native_space();
+        let contract_addr = contract_addr.hex_address.with_native_space();
 
         if storage_limit > U256::from(std::u64::MAX) {
             bail!(JsonRpcError::invalid_params(format!("storage_limit has to be within the range of u64 but {} supplied!", storage_limit)));
@@ -1247,8 +1273,10 @@ impl RpcImpl {
 
         let user_account = state_db.get_account(&account_addr)?;
         let contract_account = state_db.get_account(&contract_addr)?;
-        let is_sponsored =
-            state.check_commission_privilege(&contract_addr, &account_addr)?;
+        let is_sponsored = state.check_commission_privilege(
+            &contract_addr.address,
+            &account_addr.address,
+        )?;
 
         Ok(common::check_balance_against_transaction(
             user_account,
@@ -1283,7 +1311,8 @@ impl RpcImpl {
 
         let best_epoch_height = consensus_graph.best_epoch_number();
         let chain_id = consensus_graph.best_chain_id();
-        let signed_tx = sign_call(best_epoch_height, chain_id, request)?;
+        let signed_tx =
+            sign_call(best_epoch_height, chain_id.in_native_space(), request)?;
         trace!("call tx {:?}", signed_tx);
         consensus_graph.call_virtual(&signed_tx, epoch.into())
     }

@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_types::{Address, U256};
+use cfx_types::{AddressWithSpace, U256};
 use heap_map::HeapMap;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use std::cmp::{Ord, Ordering, PartialEq, PartialOrd, Reverse};
@@ -51,7 +51,7 @@ impl PartialOrd for GarbageCollectorValue {
 /// the topmost node is the largest one.
 #[derive(Default, DeriveMallocSizeOf)]
 pub struct GarbageCollector {
-    heap_map: HeapMap<Address, GarbageCollectorValue>,
+    heap_map: HeapMap<AddressWithSpace, GarbageCollectorValue>,
     gc_size: usize,
 }
 
@@ -87,7 +87,7 @@ impl GarbageCollector {
         self.gc_size = 0;
     }
 
-    pub fn get_timestamp(&self, sender: &Address) -> Option<u64> {
+    pub fn get_timestamp(&self, sender: &AddressWithSpace) -> Option<u64> {
         self.heap_map.get(sender).map(|v| v.timestamp)
     }
 
@@ -108,7 +108,7 @@ impl GarbageCollector {
 #[cfg(test)]
 mod garbage_collector_test {
     use super::{GarbageCollector, GarbageCollectorValue};
-    use cfx_types::{Address, U256};
+    use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, U256};
     use rand::{RngCore, SeedableRng};
     use rand_xorshift::XorShiftRng;
     use std::collections::HashMap;
@@ -123,7 +123,7 @@ mod garbage_collector_test {
 
         let mut addr = Vec::new();
         for _ in 0..10 {
-            addr.push(Address::random());
+            addr.push(Address::random().with_native_space());
         }
         gc.insert(&addr[0], 10, 10, false, 0.into());
         assert_eq!(gc.len(), 1);
@@ -189,7 +189,7 @@ mod garbage_collector_test {
 
         let mut addr = Vec::new();
         for _ in 0..10 {
-            addr.push(Address::random());
+            addr.push(Address::random().with_native_space());
         }
         gc.insert(&addr[0], 0, 10, false, 0.into());
         assert_eq!(gc.len(), 1);
@@ -274,7 +274,7 @@ mod garbage_collector_test {
     }
 
     fn get_max(
-        mapping: &HashMap<Address, GarbageCollectorValue>,
+        mapping: &HashMap<AddressWithSpace, GarbageCollectorValue>,
     ) -> Option<GarbageCollectorValue> {
         mapping
             .iter()
@@ -287,7 +287,7 @@ mod garbage_collector_test {
         let mut rng = XorShiftRng::from_entropy();
         let mut addr = Vec::new();
         for _ in 0..10000 {
-            addr.push(Address::random());
+            addr.push(Address::random().with_native_space());
         }
 
         let mut gc = GarbageCollector::default();

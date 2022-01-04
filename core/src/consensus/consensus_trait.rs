@@ -12,7 +12,7 @@ use crate::{
     ConsensusGraph,
 };
 use cfx_statedb::StateDb;
-use cfx_types::{H256, U256};
+use cfx_types::{AllChainID, H256, U256};
 use primitives::{EpochId, EpochNumber, SignedTransaction};
 use std::{any::Any, collections::HashSet, sync::Arc};
 
@@ -44,7 +44,7 @@ pub trait ConsensusGraphTrait: Send + Sync {
 
     fn latest_finalized_epoch_number(&self) -> u64;
 
-    fn best_chain_id(&self) -> u32;
+    fn best_chain_id(&self) -> AllChainID;
 
     fn best_block_hash(&self) -> H256;
 

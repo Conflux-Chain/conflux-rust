@@ -11,13 +11,15 @@ use crate::rpc::{
     RpcResult,
 };
 use cfx_addr::Network;
-use cfx_types::{address_util::AddressUtil, Address, U256, U64};
+use cfx_types::{
+    address_util::AddressUtil, Address, AddressSpaceUtil, U256, U64,
+};
 use cfxcore::rpc_errors::invalid_params_check;
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
 use primitives::{
-    transaction::Action, SignedTransaction,
-    Transaction as PrimitiveTransaction, TransactionWithSignature,
+    transaction::Action, NativeTransaction as PrimitiveTransaction,
+    SignedTransaction, Transaction, TransactionWithSignature,
 };
 use std::{cmp::min, sync::Arc};
 
@@ -129,11 +131,15 @@ impl SendTxRequest {
 
         let password = password.map(Password::from);
         let sig = accounts
-            .sign(self.from.into(), password, tx.signature_hash())
+            .sign(
+                self.from.into(),
+                password,
+                Transaction::from(tx.clone()).signature_hash(),
+            )
             // TODO: sign error into secret store error codes.
             .map_err(|e| format!("failed to sign transaction: {:?}", e))?;
 
-        Ok(tx.with_signature(sig))
+        Ok(Transaction::from(tx).with_signature(sig))
     }
 }
 
@@ -167,7 +173,7 @@ pub fn sign_call(
         chain_id,
         data: request.data.unwrap_or_default().into_vec(),
     }
-    .fake_sign(from))
+    .fake_sign(from.with_native_space()))
 }
 
 pub fn rpc_call_request_network(
