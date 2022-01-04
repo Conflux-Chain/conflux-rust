@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+pub const EXCEPTION_ERROR: i64 = -32016;
+
 error_chain! {
     links {
     }
@@ -36,9 +38,40 @@ impl From<JsonRpcError> for Error {
 }
 
 impl From<Error> for JsonRpcError {
-    fn from(_: Error) -> Self {
-        // TODO: EVM core: Error mapping.
-        todo!()
+    fn from(e: Error) -> JsonRpcError {
+        match e.0 {
+            ErrorKind::JsonRpcError(j) => j,
+            ErrorKind::InvalidParam(param, details) => {
+                invalid_params(&param, details)
+            }
+            ErrorKind::Msg(_)
+            | ErrorKind::Decoder(_)
+
+            // TODO(thegaram): consider returning InvalidParams instead
+            | ErrorKind::FilterError(_)
+
+            // TODO(thegaram): make error conversion more fine-grained here
+            | ErrorKind::LightProtocol(_)
+            | ErrorKind::StateDb(_)
+            | ErrorKind::Storage(_) => JsonRpcError {
+                code: jsonrpc_core::ErrorCode::ServerError(EXCEPTION_ERROR),
+                message: format!("Error processing request: {}", e),
+                data: None,
+            },
+            // We exhausted all possible ErrorKinds here, however
+            // https://stackoverflow.com/questions/36440021/whats-purpose-of-errorkind-nonexhaustive
+            ErrorKind::__Nonexhaustive {} => unsafe {
+                std::hint::unreachable_unchecked()
+            },
+        }
+    }
+}
+
+pub fn invalid_params<T: Debug>(param: &str, details: T) -> JsonRpcError {
+    JsonRpcError {
+        code: jsonrpc_core::ErrorCode::InvalidParams,
+        message: format!("Invalid parameters: {}", param),
+        data: Some(Value::String(format!("{:?}", details))),
     }
 }
 
@@ -73,7 +106,9 @@ pub fn account_result_to_rpc_result<T>(
 use crate::light_protocol::Error as LightProtocolError;
 use cfx_statedb::Error as StateDbError;
 use cfx_storage::Error as StorageError;
-use jsonrpc_core::Error as JsonRpcError;
+use jsonrpc_core::{Error as JsonRpcError};
 use primitives::{account::AccountError, filter::FilterError};
 use rlp::DecoderError;
 use std::fmt::Display;
+use serde_json::Value;
+use std::fmt::Debug;
