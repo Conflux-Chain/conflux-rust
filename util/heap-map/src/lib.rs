@@ -70,7 +70,9 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
             match self.data[index].cmp(&removed_node) {
                 Ordering::Less => self.sift_down(index),
                 Ordering::Greater => self.sift_up(index),
-                Ordering::Equal => {}
+                Ordering::Equal => {
+                    self.mapping.insert(self.data[index].key, index);
+                }
             }
         }
         Some(removed_node.value)
