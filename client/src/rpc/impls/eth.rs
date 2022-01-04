@@ -13,18 +13,21 @@ use cfx_types::{
 };
 use cfxcore::{
     executive::{
-        revert_reason_decode, ExecutionError, ExecutionOutcome, TxDropError,
+        contract_address, revert_reason_decode, ExecutionError,
+        ExecutionOutcome, TxDropError,
     },
     rpc_errors::{
         invalid_params_check, Error as CfxRpcError, Result as CfxRpcResult,
     },
     trace::ErrorUnwind,
-    vm, ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
+    vm::{self, CreateContractAddress},
+    ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
 use primitives::{
-    Action, Eip155Transaction, EpochNumber as BlockNumber, SignedTransaction,
-    StorageKey, StorageValue, TransactionIndex, TransactionWithSignature,
+    receipt::TRANSACTION_OUTCOME_SUCCESS, Action, Eip155Transaction,
+    EpochNumber as BlockNumber, SignedTransaction, StorageKey, StorageValue,
+    TransactionIndex, TransactionWithSignature,
 };
 
 use crate::rpc::{
@@ -189,7 +192,7 @@ impl EthHandler {
             bail!("Inconsistent state");
         }
 
-        let _prior_gas_used = match id {
+        let prior_gas_used = match id {
             0 => U256::zero(),
             id => {
                 exec_info.block_receipts.receipts[id - 1].accumulated_gas_used
@@ -197,31 +200,75 @@ impl EthHandler {
         };
 
         let tx = &exec_info.block.transactions[id];
-        let inner = &exec_info.block_receipts.receipts[id];
+        let primitive_receipt = &exec_info.block_receipts.receipts[id];
+
+        let status_code = if primitive_receipt.outcome_status
+            == TRANSACTION_OUTCOME_SUCCESS
+        {
+            1u32
+        } else {
+            0
+        };
+
+        let contract_address = if let Action::Create = tx.action() {
+            let (contract_address, _) = contract_address(
+                CreateContractAddress::FromSenderNonce,
+                0.into(),
+                &tx.sender(),
+                tx.nonce(),
+                tx.data(),
+            );
+            Some(contract_address.address)
+        } else {
+            None
+        };
+
+        let block_hash = Some(exec_info.pivot_hash);
+        let block_number = Some(exec_info.epoch_number.into());
+        let transaction_index = Some(tx_index.index.into()); /* TODO: Compute
+                                                              * a correct index,
+                                                              */
+        let transaction_hash = Some(tx.hash());
+
+        let logs = primitive_receipt
+            .logs
+            .iter()
+            .cloned()
+            .map(|log| Log {
+                address: log.address,
+                topics: log.topics,
+                data: Bytes(log.data),
+                block_hash,
+                block_number,
+                transaction_hash,
+                transaction_index,
+                log_index: None, // TODO: count log_index
+                transaction_log_index: None,
+                log_type: "".to_string(),
+                removed: false,
+            })
+            .collect();
 
         let receipt = Receipt {
-            transaction_type: None, //TODO: how is it defined?
-            transaction_hash: Some(tx.hash().clone()),
-            transaction_index: Some(tx_index.index.into()), /* TODO: Compute
-                                                             * a correct index,
-                                                             */
-            block_hash: Some(exec_info.pivot_hash),
+            transaction_type: None,
+            transaction_hash,
+            transaction_index,
+            block_hash,
             from: Some(tx.sender().address),
             to: match tx.action() {
                 Action::Create => None,
                 Action::Call(addr) => Some(*addr),
             },
             block_number: Some(exec_info.epoch_number.into()),
-            cumulative_gas_used: inner.accumulated_gas_used,
-            gas_used: None, /* TODO: compute gas used. The acutal use or
-                             * charged? */
-            contract_address: None, // TODO: compute contract address by tx.
-            logs: inner.logs.iter().map(|_| todo!()).collect(), /* TODO: log mapping */
+            cumulative_gas_used: primitive_receipt.accumulated_gas_used,
+            gas_used: (primitive_receipt.accumulated_gas_used - prior_gas_used)
+                .into(),
+            contract_address,
+            logs,
             state_root: exec_info.maybe_state_root.clone(),
-            logs_bloom: inner.log_bloom,
-            status_code: None, // TODO: make sure what it is.
-            effective_gas_price: *tx.gas_price(), /* TODO: what it is, is it
-                                * after cip-1559? */
+            logs_bloom: primitive_receipt.log_bloom,
+            status_code: Some(status_code.into()),
+            effective_gas_price: *tx.gas_price(),
         };
 
         Ok(receipt)
@@ -509,7 +556,7 @@ impl Eth for EthHandler {
                 // When a revert exception happens, there is usually an error in the sub-calls.
                 // So we return the trace information for debugging contract.
                 let errors = ErrorUnwind::from_traces(executed.trace).errors.iter()
-                    .map(|(addr,error)| {
+                    .map(|(addr, error)| {
                         format!("{}: {}", addr, error)
                     })
                     .collect::<Vec<String>>();
@@ -517,15 +564,15 @@ impl Eth for EthHandler {
                 // Decode revert error
                 let revert_error = revert_reason_decode(&executed.output);
                 let revert_error = if !revert_error.is_empty() {
-                    format!(": {}.",revert_error)
-                }else{
+                    format!(": {}.", revert_error)
+                } else {
                     format!(".")
                 };
 
                 // Try to fetch the innermost error.
-                let innermost_error = if errors.len()>0{
+                let innermost_error = if errors.len() > 0 {
                     format!(" Innermost error is at {}.", errors[0])
-                }else{
+                } else {
                     String::default()
                 };
 
