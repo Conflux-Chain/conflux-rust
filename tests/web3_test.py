@@ -52,13 +52,13 @@ class Web3Test(ConfluxTestFramework):
     def cross_space_transfer(self, to, value):
         if to.startswith("0x"):
             to = to[2:]
-        to=to.lower()
+        to = to.lower()
         client = RpcClient(self.nodes[0])
         cross_space = "0x0888000000000000000000000000000000000006"
         data = decode_hex(
             f"0x1b8b921d000000000000000000000000{to}00000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000")
         genesis_addr = self.genesis_addr
-        tx = client.new_tx(value=1 * 10 ** 18, receiver=cross_space, data=data, nonce=self.get_nonce(genesis_addr),
+        tx = client.new_tx(value=value, receiver=cross_space, data=data, nonce=self.get_nonce(genesis_addr),
                            gas=1000000)
         client.send_tx(tx, True)
         self.wait_for_tx([tx], True)
@@ -72,17 +72,22 @@ class Web3Test(ConfluxTestFramework):
         self.log.info(f'http://{ip}:{port}')
         self.w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/'))
         assert_equal(self.w3.isConnected(), True)
-        account = self.w3.eth.accounts.privateKeyToAccount('0x348ce564d427a3311b6536bbcff9390d69395b06ed6c486954e971d960fe8709')
+        account = self.w3.eth.account.privateKeyToAccount(
+            '0x348ce564d427a3311b6536bbcff9390d69395b06ed6c486954e971d960fe8709')
 
         addr = account.address
 
         self.cross_space_transfer(addr, 1 * 10 ** 18)
-        assert_equal(1*10**18, self.w3.eth.get_balance(addr))
+        assert_equal(1 * 10 ** 18, self.w3.eth.get_balance(addr))
 
         receiver = Web3.toChecksumAddress("10000000000000000000000000000000000000aa")
-        signed = account.signTransaction({"to":receiver,"value": 5*10**17})
-        print(signed["hash"])
-
+        signed = account.signTransaction({"to": receiver, "value": 5 * 10 ** 17, "gasPrice": 1, "gas": 1, "nonce": 0})
+        # print(signed)
+        tx_hash = signed["hash"]
+        self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+        RpcClient(self.nodes[0]).generate_block(1)
+        receipt = self.w3.eth.waitForTransactionReceipt(tx_hash)
+        self.log.info(receipt)
 
         self.nodes[0].stop()
 
