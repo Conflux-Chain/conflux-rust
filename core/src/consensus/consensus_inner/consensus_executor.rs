@@ -46,8 +46,8 @@ use cfx_storage::{
     StorageManagerTrait,
 };
 use cfx_types::{
-    address_util::AddressUtil, AddressSpaceUtil, BigEndianHash, H160, H256,
-    KECCAK_EMPTY_BLOOM, U256, U512,
+    address_util::AddressUtil, AddressSpaceUtil, AllChainID, BigEndianHash,
+    H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
 };
 use core::convert::TryFrom;
 use hash::KECCAK_EMPTY_LIST_RLP;
@@ -1836,7 +1836,7 @@ impl ConsensusExecutionHandler {
             "tx",
             self.verification_config.verify_transaction_common(
                 tx,
-                tx.chain_id(),
+                AllChainID::fake_for_virtual(tx.chain_id()),
                 block_height,
                 transitions,
                 VerifyTxMode::Local(VerifyTxLocalMode::Full, &spec),

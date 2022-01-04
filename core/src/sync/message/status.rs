@@ -31,7 +31,12 @@ impl Handleable for StatusV2 {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_status, msg=:{:?}", self);
 
-        let chain_id = ctx.manager.graph.consensus.best_chain_id();
+        let chain_id = ctx
+            .manager
+            .graph
+            .consensus
+            .best_chain_id()
+            .in_native_space();
         if chain_id != self.chain_id.chain_id {
             debug!(
                 "Peer {:?} chain_id mismatches (ours: {:?}, theirs: {:?})",
@@ -141,7 +146,14 @@ impl Handleable for StatusV3 {
     fn handle(self, ctx: &Context) -> Result<(), Error> {
         debug!("on_status, msg=:{:?}", self);
 
-        let chain_id = ctx.manager.graph.consensus.get_config().chain_id.read();
+        let chain_id = ctx
+            .manager
+            .graph
+            .consensus
+            .get_config()
+            .chain_id
+            .read()
+            .to_native_space_params();
         if !chain_id.matches(&self.chain_id.clone().into(), self.best_epoch) {
             debug!(
                 "Peer {:?} chain_id mismatches (ours: {:?}, theirs: {:?})",

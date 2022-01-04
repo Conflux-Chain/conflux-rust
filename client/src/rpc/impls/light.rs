@@ -531,8 +531,12 @@ impl RpcImpl {
             let chain_id = light.get_latest_verifiable_chain_id().map_err(|_| {
                 format!("the light client cannot retrieve/verify the latest chain_id.")
             })?;
-            let tx =
-                tx.sign_with(epoch_height, chain_id, password, accounts)?;
+            let tx = tx.sign_with(
+                epoch_height,
+                chain_id.in_native_space(),
+                password,
+                accounts,
+            )?;
 
             Self::send_tx_helper(light, Bytes::new(tx.rlp_bytes()))
         };
