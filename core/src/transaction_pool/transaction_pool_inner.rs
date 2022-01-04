@@ -248,8 +248,10 @@ impl ReadyAccountPool {
     }
 
     fn update(
-        &mut self, address: &AddressWithSpace, tx: Option<Arc<SignedTransaction>>,
-    ) {
+        &mut self, address: &AddressWithSpace,
+        tx: Option<Arc<SignedTransaction>>,
+    )
+    {
         if let Some(tx) = tx {
             if tx.hash[0] & 254 == 0 {
                 debug!("Sampled transaction {:?} in ready pool", tx.hash);
@@ -309,7 +311,9 @@ impl ReadyAccountPool {
         self.waiting_pool.clear();
     }
 
-    fn get(&self, address: &AddressWithSpace) -> Option<Arc<SignedTransaction>> {
+    fn get(
+        &self, address: &AddressWithSpace,
+    ) -> Option<Arc<SignedTransaction>> {
         self.waiting_pool
             .get(address)
             .map(|tx| tx.0.clone())
