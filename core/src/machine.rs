@@ -10,7 +10,7 @@ use crate::{
     vm::Spec,
     vm_factory::VmFactory,
 };
-use cfx_types::{Address, H256};
+use cfx_types::{Address, AddressWithSpace, Space, H256};
 use primitives::BlockNumber;
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -20,15 +20,20 @@ pub struct Machine {
     params: CommonParams,
     vm: VmFactory,
     builtins: Arc<BTreeMap<Address, Builtin>>,
+    builtins_evm: Arc<BTreeMap<Address, Builtin>>,
     internal_contracts: Arc<InternalContractMap>,
     spec_rules: Option<Box<SpecCreationRules>>,
 }
 
 impl Machine {
     pub fn builtin(
-        &self, address: &Address, block_number: BlockNumber,
+        &self, address: &AddressWithSpace, block_number: BlockNumber,
     ) -> Option<&Builtin> {
-        self.builtins.get(address).and_then(|b| {
+        let builtins = match address.space {
+            Space::Native => &self.builtins,
+            Space::Ethereum => &self.builtins_evm,
+        };
+        builtins.get(&address.address).and_then(|b| {
             if b.is_active(block_number) {
                 Some(b)
             } else {
@@ -74,18 +79,25 @@ pub fn new_machine(params: CommonParams, vm: VmFactory) -> Machine {
         params,
         vm,
         builtins: Arc::new(BTreeMap::new()),
+        builtins_evm: Arc::new(Default::default()),
         internal_contracts: Arc::new(InternalContractMap::default()),
         spec_rules: None,
     }
 }
 
-fn new_builtin_map(params: &CommonParams) -> BTreeMap<Address, Builtin> {
+fn new_builtin_map(
+    params: &CommonParams, space: Space,
+) -> BTreeMap<Address, Builtin> {
     let mut btree = BTreeMap::new();
+
     btree.insert(
         Address::from(H256::from_low_u64_be(1)),
         Builtin::new(
             Box::new(Linear::new(3000, 0)),
-            builtin_factory("ecrecover"),
+            match space {
+                Space::Native => builtin_factory("ecrecover"),
+                Space::Ethereum => builtin_factory("ecrecover_evm"),
+            },
             0,
         ),
     );
@@ -151,12 +163,15 @@ fn new_builtin_map(params: &CommonParams) -> BTreeMap<Address, Builtin> {
 pub fn new_machine_with_builtin(
     params: CommonParams, vm: VmFactory,
 ) -> Machine {
-    let builtin = new_builtin_map(&params);
+    let builtin = new_builtin_map(&params, Space::Native);
+    let builtin_evm = new_builtin_map(&params, Space::Ethereum);
+
     let internal_contracts = InternalContractMap::new(&params);
     Machine {
         params,
         vm,
         builtins: Arc::new(builtin),
+        builtins_evm: Arc::new(builtin_evm),
         internal_contracts: Arc::new(internal_contracts),
         spec_rules: None,
     }

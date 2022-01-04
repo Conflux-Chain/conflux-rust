@@ -106,9 +106,8 @@ pub fn account_result_to_rpc_result<T>(
 use crate::light_protocol::Error as LightProtocolError;
 use cfx_statedb::Error as StateDbError;
 use cfx_storage::Error as StorageError;
-use jsonrpc_core::{Error as JsonRpcError};
+use jsonrpc_core::Error as JsonRpcError;
 use primitives::{account::AccountError, filter::FilterError};
 use rlp::DecoderError;
-use std::fmt::Display;
 use serde_json::Value;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};

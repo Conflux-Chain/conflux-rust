@@ -30,9 +30,10 @@ class Web3Test(ConfluxTestFramework):
 
     def set_test_params(self):
         self.num_nodes = 2
-        # self.conf_parameters = {
-        #     "public_rpc_apis": "\"cfx,evm,debug,test,pubsub,trace\"",
-        # }
+        self.conf_parameters = {
+            "log_level": "\"debug\"",
+            # "public_rpc_apis": "\"cfx,evm,debug,test,pubsub,trace\"",
+        }
 
     def setup_network(self):
         self.setup_nodes()
@@ -68,26 +69,32 @@ class Web3Test(ConfluxTestFramework):
 
         ip = self.nodes[0].ip
         port = self.nodes[0].rpcport
-
-        self.log.info(f'http://{ip}:{port}')
         self.w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/'))
+
         assert_equal(self.w3.isConnected(), True)
         account = self.w3.eth.account.privateKeyToAccount(
             '0x348ce564d427a3311b6536bbcff9390d69395b06ed6c486954e971d960fe8709')
 
-        addr = account.address
+        sender = account.address
 
-        self.cross_space_transfer(addr, 1 * 10 ** 18)
-        assert_equal(1 * 10 ** 18, self.w3.eth.get_balance(addr))
+        self.cross_space_transfer(sender, 1 * 10 ** 18)
+        assert_equal(1 * 10 ** 18, self.w3.eth.get_balance(sender))
 
         receiver = Web3.toChecksumAddress("10000000000000000000000000000000000000aa")
-        signed = account.signTransaction({"to": receiver, "value": 5 * 10 ** 17, "gasPrice": 1, "gas": 1, "nonce": 0})
-        # print(signed)
+        signed = account.signTransaction(
+            {"to": receiver, "value": 5 * 10 ** 17, "gasPrice": 1, "gas": 21000, "nonce": 0, "chainId": 10})
         tx_hash = signed["hash"]
-        self.w3.eth.sendRawTransaction(signed["rawTransaction"])
-        RpcClient(self.nodes[0]).generate_block(1)
+        return_tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+        assert_equal(tx_hash, return_tx_hash)
+
+        client = RpcClient(self.nodes[0])
+        client.generate_block(1)
+        client.generate_blocks(10)
         receipt = self.w3.eth.waitForTransactionReceipt(tx_hash)
-        self.log.info(receipt)
+        assert_equal(receipt["status"], 1)
+
+        assert_equal(5 * 10 ** 17, self.w3.eth.get_balance(receiver))
+        assert_equal(5 * 10 ** 17 - 21000, self.w3.eth.get_balance(sender))
 
         self.nodes[0].stop()
 

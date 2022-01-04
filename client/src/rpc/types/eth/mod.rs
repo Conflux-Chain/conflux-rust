@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 mod block;
+mod block_number;
 mod call_request;
 mod filter;
 mod log;
@@ -10,14 +11,14 @@ mod receipt;
 mod sync;
 mod transaction;
 mod transaction_access_list;
-mod block_number;
 
 pub use self::{
     block::Block,
+    block_number::BlockNumber,
     call_request::CallRequest,
     filter::{Filter, FilterChanges},
     log::Log,
     receipt::Receipt,
     sync::{SyncInfo, SyncStatus},
-    transaction::Transaction, block_number::BlockNumber,
+    transaction::Transaction,
 };

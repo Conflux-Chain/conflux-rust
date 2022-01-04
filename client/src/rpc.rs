@@ -52,7 +52,7 @@ use self::{
         trace::TraceHandler,
     },
     traits::{
-        cfx::Cfx, debug::LocalRpc, pool::TransactionPool, pos::Pos,eth::Eth,
+        cfx::Cfx, debug::LocalRpc, eth::Eth, pool::TransactionPool, pos::Pos,
         pubsub::PubSub, test::TestRpc, trace::Trace,
     },
 };
@@ -315,7 +315,7 @@ fn setup_rpc_apis_light(
                 );
                 handler.extend_with(RpcProxy::new(cfx, interceptor));
             }
-            Api::Evm=>{
+            Api::Evm => {
                 warn!("Light nodes do not support evm ports.");
             }
             Api::Debug => {

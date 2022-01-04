@@ -772,7 +772,7 @@ pub fn initialize_txgens(
     let maybe_direct_txgen_with_contract = if conf.is_test_or_dev_mode() {
         Some(Arc::new(Mutex::new(DirectTransactionGenerator::new(
             network_key_pair,
-            &public_to_address(DEV_GENESIS_KEY_PAIR_2.public()),
+            &public_to_address(DEV_GENESIS_KEY_PAIR_2.public(), true),
             U256::from_dec_str("10000000000000000").unwrap(),
             U256::from_dec_str("10000000000000000").unwrap(),
         ))))
@@ -822,9 +822,7 @@ pub mod delegate_convert {
         BoxFuture, Error as JsonRpcError, Result as JsonRpcResult,
     };
 
-    use crate::rpc::{
-        RpcBoxFuture, RpcError, RpcResult,
-    };
+    use crate::rpc::{RpcBoxFuture, RpcError, RpcResult};
 
     pub trait Into<T> {
         fn into(x: Self) -> T;
@@ -845,9 +843,7 @@ pub mod delegate_convert {
     }
 
     impl Into<JsonRpcError> for RpcError {
-        fn into(e: Self) -> JsonRpcError {
-            e.into()
-        }
+        fn into(e: Self) -> JsonRpcError { e.into() }
     }
 
     pub fn into_jsonrpc_result<T>(r: RpcResult<T>) -> JsonRpcResult<T> {

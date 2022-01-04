@@ -24,7 +24,11 @@ use cfxcore::{
     ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
-use primitives::{receipt::TRANSACTION_OUTCOME_SUCCESS, Action, Eip155Transaction, EpochNumber, SignedTransaction, StorageKey, StorageValue, TransactionIndex, TransactionWithSignature, BlockHashOrEpochNumber};
+use primitives::{
+    receipt::TRANSACTION_OUTCOME_SUCCESS, Action, BlockHashOrEpochNumber,
+    Eip155Transaction, EpochNumber, SignedTransaction, StorageKey,
+    StorageValue, TransactionIndex, TransactionWithSignature,
+};
 
 use crate::rpc::{
     error_codes::{
@@ -35,8 +39,8 @@ use crate::rpc::{
     traits::eth::{Eth, EthFilter},
     types::{
         eth::{
-Block, CallRequest, Filter, FilterChanges, Log, Receipt,
-            SyncInfo, SyncStatus, Transaction, BlockNumber,
+            Block, BlockNumber, CallRequest, Filter, FilterChanges, Log,
+            Receipt, SyncInfo, SyncStatus, Transaction,
         },
         Bytes, Index, MAX_GAS_CALL_REQUEST,
     },
@@ -222,7 +226,7 @@ impl EthHandler {
 
         let block_hash = Some(exec_info.pivot_hash);
         let block_number = Some(exec_info.epoch_number.into());
-        /* TODO: EVM core: Compute a correct index*/
+        /* TODO: EVM core: Compute a correct index */
         let transaction_index = Some(tx_index.index.into());
         let transaction_hash = Some(tx.hash());
 
@@ -275,7 +279,7 @@ impl Eth for EthHandler {
     fn client_version(&self) -> jsonrpc_core::Result<String> {
         Ok(format!("Conflux"))
     }
-    
+
     fn protocol_version(&self) -> jsonrpc_core::Result<String> {
         // 65 is a common ETH version now
         Ok(format!("{}", 65))
@@ -333,7 +337,8 @@ impl Eth for EthHandler {
     }
 
     fn accounts(&self) -> jsonrpc_core::Result<Vec<H160>> {
-        // TODO: EVM core: discussion: do we really need this? Maybe not, because EVM has enough dev tools and don't need dev mode.
+        // TODO: EVM core: discussion: do we really need this? Maybe not,
+        // because EVM has enough dev tools and don't need dev mode.
         // We do not expect people to use the ETH rpc to manage accounts
         Ok(vec![])
     }
@@ -351,7 +356,10 @@ impl Eth for EthHandler {
     fn balance(
         &self, address: H160, num: Option<BlockNumber>,
     ) -> jsonrpc_core::Result<U256> {
-        let epoch_num = num.map(Into::into).unwrap_or(EpochNumber::LatestState).into();
+        let epoch_num = num
+            .map(Into::into)
+            .unwrap_or(EpochNumber::LatestState)
+            .into();
 
         info!(
             "RPC Request: eth_getBalance address={:?} epoch_num={:?}",
@@ -371,7 +379,9 @@ impl Eth for EthHandler {
     fn storage_at(
         &self, address: H160, position: U256, epoch_num: Option<BlockNumber>,
     ) -> jsonrpc_core::Result<H256> {
-        let epoch_num = epoch_num.map(Into::into).unwrap_or(EpochNumber::LatestState);
+        let epoch_num = epoch_num
+            .map(Into::into)
+            .unwrap_or(EpochNumber::LatestState);
 
         info!(
             "RPC Request: eth_getStorageAt address={:?}, position={:?}, epoch_num={:?})",
@@ -401,7 +411,8 @@ impl Eth for EthHandler {
     fn block_by_hash(
         &self, hash: H256, full: bool,
     ) -> jsonrpc_core::Result<Option<Block>> {
-        // TODO: EVM core: discussion: return one block or the whole epoch (pivot header + epoch transactions.)
+        // TODO: EVM core: discussion: return one block or the whole epoch
+        // (pivot header + epoch transactions.)
         let block_op = self
             .consensus
             .get_data_manager()
@@ -463,7 +474,8 @@ impl Eth for EthHandler {
     fn block_transaction_count_by_hash(
         &self, hash: H256,
     ) -> jsonrpc_core::Result<Option<U256>> {
-        // TODO: EVM core: filter out Conflux space tx and add EVM space virtual tx (tx created by cross-space call).
+        // TODO: EVM core: filter out Conflux space tx and add EVM space virtual
+        // tx (tx created by cross-space call).
 
         let block_op = self
             .consensus
@@ -521,7 +533,9 @@ impl Eth for EthHandler {
     fn code_at(
         &self, address: H160, epoch_num: Option<BlockNumber>,
     ) -> jsonrpc_core::Result<Bytes> {
-        let epoch_num = epoch_num.map(Into::into).unwrap_or(EpochNumber::LatestState);
+        let epoch_num = epoch_num
+            .map(Into::into)
+            .unwrap_or(EpochNumber::LatestState);
 
         info!(
             "RPC Request: eth_getCode address={:?} epoch_num={:?}",
@@ -577,8 +591,8 @@ impl Eth for EthHandler {
     fn call(
         &self, request: CallRequest, epoch: Option<BlockNumber>,
     ) -> jsonrpc_core::Result<Bytes> {
-        // TODO: EVM core: Check the EVM error message. To make the assert_error_eq test
-        // case in solidity project compatible.
+        // TODO: EVM core: Check the EVM error message. To make the
+        // assert_error_eq test case in solidity project compatible.
         let epoch = epoch.map(Into::into);
         match self.exec_transaction(request, epoch)? {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(expected, got)) => {

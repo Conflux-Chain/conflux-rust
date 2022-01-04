@@ -25,8 +25,8 @@ use jsonrpc_derive::rpc;
 
 use crate::rpc::types::{
     eth::{
-        Block, CallRequest, Filter, FilterChanges, Log, Receipt,
-        SyncStatus, Transaction,BlockNumber
+        Block, BlockNumber, CallRequest, Filter, FilterChanges, Log, Receipt,
+        SyncStatus, Transaction,
     },
     Bytes, Index,
 };
