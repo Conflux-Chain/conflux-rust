@@ -2,14 +2,12 @@
 #[derive(Clone, Debug, Eq, RlpEncodable, RlpDecodable, PartialEq, Default)]
 pub struct ChainIdParamsDeprecated {
     /// Preconfigured chain_id.
-    pub chain_id: AllChainID,
+    pub chain_id: u32,
 }
 
 impl ChainIdParamsDeprecated {
     /// The function return the chain_id with given parameters
-    pub fn get_chain_id(&self, _epoch_number: u64) -> AllChainID {
-        self.chain_id
-    }
+    pub fn get_chain_id(&self, _epoch_number: u64) -> u32 { self.chain_id }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -131,9 +129,20 @@ impl ChainIdParamsInner {
     pub fn new_from_inner(x: &Self) -> ChainIdParams {
         Arc::new(RwLock::new(x.clone()))
     }
+
+    pub fn to_native_space_params(&self) -> ChainIdParamsOneChainInner {
+        ChainIdParamsOneChainInner {
+            heights: self.heights.clone(),
+            chain_ids: self
+                .chain_ids
+                .iter()
+                .map(|x| x.in_native_space())
+                .collect(),
+        }
+    }
 }
 
-impl From<ChainIdParamsDeprecated> for ChainIdParamsInner {
+impl From<ChainIdParamsDeprecated> for ChainIdParamsOneChainInner {
     fn from(x: ChainIdParamsDeprecated) -> Self {
         Self {
             heights: vec![0],
