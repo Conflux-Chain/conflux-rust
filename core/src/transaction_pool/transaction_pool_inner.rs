@@ -209,7 +209,7 @@ struct PriceOrderedTransaction(Arc<SignedTransaction>);
 
 impl PartialEq for PriceOrderedTransaction {
     fn eq(&self, other: &Self) -> bool {
-        self.0.gas_price.eq(&other.0.gas_price)
+        self.0.gas_price().eq(other.0.gas_price())
     }
 }
 
@@ -217,20 +217,20 @@ impl Eq for PriceOrderedTransaction {}
 
 impl PartialOrd for PriceOrderedTransaction {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.0.gas_price.partial_cmp(&other.0.gas_price)
+        self.0.gas_price().partial_cmp(other.0.gas_price())
     }
 }
 
 impl Ord for PriceOrderedTransaction {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.0.gas_price.cmp(&other.0.gas_price)
+        self.0.gas_price().cmp(other.0.gas_price())
     }
 }
 
 #[derive(DeriveMallocSizeOf)]
 struct ReadyAccountPool {
     packing_pool: PackingPool,
-    waiting_pool: HeapMap<Address, PriceOrderedTransaction>,
+    waiting_pool: HeapMap<AddressWithSpace, PriceOrderedTransaction>,
 }
 
 impl ReadyAccountPool {
@@ -248,7 +248,7 @@ impl ReadyAccountPool {
     }
 
     fn update(
-        &mut self, address: &Address, tx: Option<Arc<SignedTransaction>>,
+        &mut self, address: &AddressWithSpace, tx: Option<Arc<SignedTransaction>>,
     ) {
         if let Some(tx) = tx {
             if tx.hash[0] & 254 == 0 {
@@ -265,7 +265,7 @@ impl ReadyAccountPool {
         self.try_shrink_packing_pool();
     }
 
-    fn remove(&mut self, address: &Address) {
+    fn remove(&mut self, address: &AddressWithSpace) {
         self.packing_pool.remove(address);
         self.waiting_pool.remove(address);
         self.try_fill_packing_pool();
@@ -291,7 +291,7 @@ impl ReadyAccountPool {
         {
             let top_waiting_gas = match self.waiting_pool.top() {
                 None => break,
-                Some((_, tx)) => tx.0.gas,
+                Some((_, tx)) => *tx.0.gas(),
             };
             if top_waiting_gas + self.packing_pool.total_gas
                 > self.packing_pool.total_gas_capacity
@@ -309,7 +309,7 @@ impl ReadyAccountPool {
         self.waiting_pool.clear();
     }
 
-    fn get(&self, address: &Address) -> Option<Arc<SignedTransaction>> {
+    fn get(&self, address: &AddressWithSpace) -> Option<Arc<SignedTransaction>> {
         self.waiting_pool
             .get(address)
             .map(|tx| tx.0.clone())
@@ -322,7 +322,7 @@ impl ReadyAccountPool {
 #[derive(DeriveMallocSizeOf)]
 struct PackingPool {
     treap: TreapMap<AddressWithSpace, Arc<SignedTransaction>, WeightType>,
-    heap_map: HeapMap<Address, Reverse<PriceOrderedTransaction>>,
+    heap_map: HeapMap<AddressWithSpace, Reverse<PriceOrderedTransaction>>,
     tx_weight_scaling: u64,
     tx_weight_exp: u8,
 
@@ -368,7 +368,7 @@ impl PackingPool {
     ) -> Option<Arc<SignedTransaction>> {
         let tx = (self.heap_map.remove(address)?.0).0;
         self.treap.remove(address);
-        self.total_gas -= tx.gas;
+        self.total_gas -= *tx.gas();
         Some(tx)
     }
 
@@ -392,12 +392,12 @@ impl PackingPool {
         }
 
         self.heap_map
-            .insert(&tx.sender, Reverse(PriceOrderedTransaction(tx.clone())));
-        self.total_gas += tx.gas;
+            .insert(&tx.sender(), Reverse(PriceOrderedTransaction(tx.clone())));
+        self.total_gas += *tx.gas();
         let replaced_tx = self.treap.insert(tx.sender(), tx, weight);
         if let Some(replaced_tx) = replaced_tx.as_ref() {
             // an old transaction of the same sender is replaced.
-            self.total_gas -= replaced_tx.gas;
+            self.total_gas -= *replaced_tx.gas();
         };
         replaced_tx
     }
@@ -425,7 +425,7 @@ impl PackingPool {
         self.heap_map.pop().map(|(addr, tx)| {
             let tx = (tx.0).0;
             self.treap.remove(&addr);
-            self.total_gas -= tx.gas;
+            self.total_gas -= *tx.gas();
             tx
         })
     }

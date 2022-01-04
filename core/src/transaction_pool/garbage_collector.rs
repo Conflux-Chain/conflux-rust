@@ -57,7 +57,7 @@ pub struct GarbageCollector {
 
 impl GarbageCollector {
     pub fn insert(
-        &mut self, sender: &Address, count: usize, timestamp: u64,
+        &mut self, sender: &AddressWithSpace, count: usize, timestamp: u64,
         has_ready_tx: bool, first_tx_gas_price: U256,
     )
     {
@@ -74,7 +74,7 @@ impl GarbageCollector {
         self.heap_map.insert(sender, value);
     }
 
-    pub fn pop(&mut self) -> Option<(Address, GarbageCollectorValue)> {
+    pub fn pop(&mut self) -> Option<(AddressWithSpace, GarbageCollectorValue)> {
         let item = self.heap_map.pop();
         if let Some((_, v)) = &item {
             self.gc_size -= v.count;
@@ -100,7 +100,7 @@ impl GarbageCollector {
     pub fn gc_size(&self) -> usize { self.gc_size }
 
     #[cfg(test)]
-    fn top(&self) -> Option<(&Address, &GarbageCollectorValue)> {
+    fn top(&self) -> Option<(&AddressWithSpace, &GarbageCollectorValue)> {
         self.heap_map.top()
     }
 }
