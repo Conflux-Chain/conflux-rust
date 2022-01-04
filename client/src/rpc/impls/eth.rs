@@ -6,6 +6,7 @@ use std::cmp::min;
 
 use cfx_statedb::StateDbExt;
 use jsonrpc_core::{BoxFuture, Result as RpcResult};
+use jsonrpc_core_client::RpcError;
 use rlp::Rlp;
 
 use cfx_types::{
@@ -22,10 +23,8 @@ use cfxcore::{
     vm, ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
-use primitives::{
-    Action, Eip155Transaction, EpochNumber as BlockNumber, SignedTransaction,
-    StorageKey, StorageValue, TransactionIndex, TransactionWithSignature,
-};
+use malloc_size_of::MallocSizeOf;
+use primitives::{Action, BlockHashOrEpochNumber, Eip155Transaction, EpochNumber as BlockNumber, SignedTransaction, StorageKey, StorageValue, TransactionIndex, TransactionWithSignature};
 
 use crate::rpc::{
     error_codes::{
@@ -35,7 +34,7 @@ use crate::rpc::{
     traits::eth::{Eth, EthFilter},
     types::{
         eth::{
-            CallRequest, Filter, FilterChanges, Log, Receipt, RichBlock,
+            CallRequest, Filter, FilterChanges, Log, Receipt, Block,
             SyncInfo, SyncStatus, Transaction,
         },
         Bytes, Index, MAX_GAS_CALL_REQUEST,
@@ -277,11 +276,20 @@ impl Eth for EthHandler {
         ));
     }
 
-    fn gas_price(&self) -> BoxFuture<U256> { todo!() }
+    fn gas_price(&self) -> jsonrpc_core::Result<U256> {
+        // TODO: Change this
+        Ok(U256::from(5000000000))
+    }
 
-    fn max_priority_fee_per_gas(&self) -> BoxFuture<U256> { todo!() }
+    fn max_priority_fee_per_gas(&self) -> jsonrpc_core::Result<U256> {
+        // TODO: Change this
+        Ok(U256::from( 10000000000))
+    }
 
-    fn accounts(&self) -> jsonrpc_core::Result<Vec<H160>> { todo!() }
+    fn accounts(&self) -> jsonrpc_core::Result<Vec<H160>> {
+        // We do not expect people to use the ETH rpc to manage accounts
+        Ok(vec![])
+    }
 
     fn block_number(&self) -> jsonrpc_core::Result<U256> {
         let consensus_graph = self.consensus_graph();
@@ -343,32 +351,99 @@ impl Eth for EthHandler {
         )
     }
 
-    fn block_by_hash(&self, _: H256, _: bool) -> BoxFuture<Option<RichBlock>> {
-        todo!()
+    fn block_by_hash(&self, hash: H256, full: bool) -> jsonrpc_core::Result<Option<Block>> {
+        let block_op = self.consensus.get_data_manager().block_by_hash(&hash, false);
+        if let Some(block) = block_op {
+            let inner = self.consensus_graph().inner.read();
+            Ok(Some(Block::new(&*block, full, &*inner)))
+        } else {
+            Ok(None)
+        }
     }
 
     fn block_by_number(
-        &self, _: BlockNumber, _: bool,
-    ) -> BoxFuture<Option<RichBlock>> {
-        todo!()
+        &self, epoch_num: BlockNumber, include_txs: bool,
+    ) -> jsonrpc_core::Result<Option<Block>> {
+        let consensus_graph = self.consensus_graph();
+        let inner = &*consensus_graph.inner.read();
+        info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
+
+        let epoch_height = consensus_graph
+            .get_height_from_epoch_number(epoch_num.into())
+            .map_err(RpcError::invalid_params)?;
+
+        let pivot_hash = inner
+            .get_pivot_hash_from_epoch_number(epoch_height)
+            .map_err(RpcError::invalid_params)?;
+
+        let maybe_block = self
+            .data_man
+            .block_by_hash(&pivot_hash, false /* update_cache */);
+
+        match maybe_block {
+            None => Ok(None),
+            Some(b) => Ok(Some(Block::new(
+                &*b,
+                include_txs, inner)?)),
+        }
     }
 
     fn transaction_count(
-        &self, _: H160, _: Option<BlockNumber>,
-    ) -> BoxFuture<U256> {
-        todo!()
+        &self, address: H160, num: Option<BlockNumber>,
+    ) -> jsonrpc_core::Result<U256> {
+        self.check_address_network(address.network)?;
+        let consensus_graph = self.consensus_graph();
+
+        let num = num.unwrap_or(
+            BlockNumber::LatestState,
+        );
+
+        info!(
+            "RPC Request: cfx_getNextNonce address={:?} epoch_num={:?}",
+            address, num
+        );
+
+        Ok(consensus_graph.next_nonce(
+            address.hex_address.with_native_space(),
+            num.into(),
+            "num",
+        )?)
     }
 
     fn block_transaction_count_by_hash(
-        &self, _: H256,
-    ) -> BoxFuture<Option<U256>> {
-        todo!()
+        &self, hash: H256
+    ) -> jsonrpc_core::Result<Option<U256>> {
+        let block_op = self.consensus.get_data_manager().block_by_hash(&hash, false);
+        if let Some(block) = block_op {
+            Ok(Some(U256::from(block.transactions.size_of())))
+        } else {
+            Ok(None)
+        }
     }
 
     fn block_transaction_count_by_number(
-        &self, _: BlockNumber,
-    ) -> BoxFuture<Option<U256>> {
-        todo!()
+        &self, epoch_num: BlockNumber,
+    ) -> jsonrpc_core::Result<Option<U256>> {
+        let consensus_graph = self.consensus_graph();
+        let inner = &*consensus_graph.inner.read();
+        info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?}", epoch_num);
+
+        let epoch_height = consensus_graph
+            .get_height_from_epoch_number(epoch_num.into())
+            .map_err(RpcError::invalid_params)?;
+
+        let pivot_hash = inner
+            .get_pivot_hash_from_epoch_number(epoch_height)
+            .map_err(RpcError::invalid_params)?;
+
+        let maybe_block = self
+            .data_man
+            .block_by_hash(&pivot_hash, false /* update_cache */);
+
+        match maybe_block {
+            None => Ok(None),
+            Some(b) => Ok(b.transactions.size_of()),
+        }
     }
 
     fn block_uncles_count_by_hash(&self, _: H256) -> BoxFuture<Option<U256>> {
@@ -628,13 +703,13 @@ impl Eth for EthHandler {
 
     fn uncle_by_block_hash_and_index(
         &self, _: H256, _: Index,
-    ) -> BoxFuture<Option<RichBlock>> {
+    ) -> BoxFuture<Option<Block>> {
         todo!()
     }
 
     fn uncle_by_block_number_and_index(
         &self, _: BlockNumber, _: Index,
-    ) -> BoxFuture<Option<RichBlock>> {
+    ) -> BoxFuture<Option<Block>> {
         todo!()
     }
 
@@ -646,19 +721,27 @@ impl Eth for EthHandler {
 }
 
 impl EthFilter for EthHandler {
-    fn new_filter(&self, _: Filter) -> jsonrpc_core::Result<U256> { todo!() }
-
-    fn new_block_filter(&self) -> jsonrpc_core::Result<U256> { todo!() }
-
-    fn new_pending_transaction_filter(&self) -> jsonrpc_core::Result<U256> {
-        todo!()
+    fn new_filter(&self, _: Filter) -> jsonrpc_core::Result<U256> {
+        bail!(call_execution_error(Some("ETH Filter RPC not implemented!")));
     }
 
-    fn filter_changes(&self, _: Index) -> BoxFuture<FilterChanges> { todo!() }
+    fn new_block_filter(&self) -> jsonrpc_core::Result<U256> {
+        bail!(call_execution_error(Some("ETH Filter RPC not implemented!")));
+    }
 
-    fn filter_logs(&self, _: Index) -> BoxFuture<Vec<Log>> { todo!() }
+    fn new_pending_transaction_filter(&self) -> jsonrpc_core::Result<U256> {
+        bail!(call_execution_error(Some("ETH Filter RPC not implemented!")));
+    }
+
+    fn filter_changes(&self, _: Index) -> BoxFuture<FilterChanges> {
+        bail!(call_execution_error(Some("ETH Filter RPC not implemented!")));
+    }
+
+    fn filter_logs(&self, _: Index) -> BoxFuture<Vec<Log>> {
+        bail!(call_execution_error(Some("ETH Filter RPC not implemented!")));
+    }
 
     fn uninstall_filter(&self, _: Index) -> jsonrpc_core::Result<bool> {
-        todo!()
+        bail!(call_execution_error(Some("ETH Filter RPC not implemented!")));
     }
 }

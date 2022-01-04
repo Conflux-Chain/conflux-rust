@@ -25,7 +25,7 @@ use jsonrpc_derive::rpc;
 
 use crate::rpc::types::{
     eth::{
-        CallRequest, Filter, FilterChanges, Log, Receipt, RichBlock,
+        CallRequest, Filter, FilterChanges, Log, Receipt, Block,
         SyncStatus, Transaction,
     },
     Bytes, Index,
@@ -102,13 +102,13 @@ pub trait Eth {
 
     /// Returns block with given hash.
     #[rpc(name = "eth_getBlockByHash")]
-    fn block_by_hash(&self, _: H256, _: bool) -> BoxFuture<Option<RichBlock>>;
+    fn block_by_hash(&self, _: H256, _: bool) -> BoxFuture<Option<Block>>;
 
     /// Returns block with given number.
     #[rpc(name = "eth_getBlockByNumber")]
     fn block_by_number(
         &self, _: BlockNumber, _: bool,
-    ) -> BoxFuture<Option<RichBlock>>;
+    ) -> BoxFuture<Option<Block>>;
 
     /// Returns the number of transactions sent from given address at given time
     /// (block number).
@@ -185,13 +185,13 @@ pub trait Eth {
     #[rpc(name = "eth_getUncleByBlockHashAndIndex")]
     fn uncle_by_block_hash_and_index(
         &self, _: H256, _: Index,
-    ) -> BoxFuture<Option<RichBlock>>;
+    ) -> BoxFuture<Option<Block>>;
 
     /// Returns an uncles at given block and index.
     #[rpc(name = "eth_getUncleByBlockNumberAndIndex")]
     fn uncle_by_block_number_and_index(
         &self, _: BlockNumber, _: Index,
-    ) -> BoxFuture<Option<RichBlock>>;
+    ) -> BoxFuture<Option<Block>>;
 
     // /// Returns available compilers.
     // /// @deprecated

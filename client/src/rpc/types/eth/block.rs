@@ -23,6 +23,10 @@ use std::{collections::BTreeMap, ops::Deref};
 use crate::rpc::types::{eth::Transaction, Bytes};
 use cfx_types::{Bloom as H2048, H160, H256, U256};
 use serde::{ser::Error, Serialize, Serializer};
+use cfxcore::block_data_manager::DataVersionTuple;
+use cfxcore::consensus::ConsensusGraphInner;
+use malloc_size_of::MallocSizeOf;
+use primitives::{Block as PrimitiveBlock};
 
 /// Block Transactions
 #[derive(Debug)]
@@ -139,6 +143,65 @@ pub struct Header {
     pub size: Option<U256>,
 }
 
+impl Block {
+    pub fn new(b: &PrimitiveBlock, full: bool, consensus_inner: &ConsensusGraphInner) -> Self {
+        // get the block.gas_used
+        let tx_len = b.transactions.len();
+        let gas_used = if tx_len == 0 {
+            Some(U256::from(0))
+        } else {
+            let maybe_results = consensus_inner
+                .block_execution_results_by_hash(
+                    &b.hash(),
+                    false, /* update_cache */
+                );
+            match maybe_results {
+                Some(DataVersionTuple(_, execution_result)) => {
+                    let receipt = execution_result
+                        .block_receipts
+                        .receipts
+                        .get(tx_len - 1)
+                        .unwrap();
+                    Some(receipt.accumulated_gas_used)
+                }
+                None => None,
+            }
+        };
+
+        Block {
+            hash: Some(b.block_header.hash()),
+            parent_hash: b.block_header.parent_hash().clone(),
+            uncles_hash: if let Some(uncle) = b.block_header.referee_hashes().first() {
+                uncle.clone()
+            } else {
+                H256::zero()
+            },
+            author: b.block_header.author().clone(),
+            miner: b.block_header.author().clone(),
+            state_root: b.block_header.deferred_state_root().clone(),
+            transactions_root: b.block_header.transactions_root().clone(),
+            receipts_root: b.block_header.deferred_receipts_root().clone(),
+            number: Some(b.block_header.height().into()), // We use height to replace block number for ETH interface
+            gas_used: gas_used.unwrap_or(U256::zero()),
+            gas_limit: b.block_header.gas_limit().into(),
+            extra_data: Default::default(),
+            logs_bloom: b.block_header.deferred_logs_bloom_hash().into(),
+            timestamp: b.block_header.timestamp().into(),
+            difficulty: b.block_header.difficulty().into(),
+            total_difficulty: None,
+            seal_fields: vec![],
+            base_fee_per_gas: None,
+            uncles: b.block_header.referee_hashes().clone(),
+            transactions: if full {
+                BlockTransactions::Full(b.transactions.iter().map( |t| Transaction::from_signed(t)).collect())
+            } else {
+                BlockTransactions::Hashes(b.transaction_hashes())
+            },
+            size: Some(U256::from(b.size())),
+        }
+    }
+}
+
 // impl Header {
 //     pub fn new(h: &EthHeader, eip1559_transition: BlockNumber) -> Self {
 //         let eip1559_enabled = h.number() >= eip1559_transition;
@@ -173,49 +236,49 @@ pub struct Header {
 //     }
 // }
 
-/// Block representation with additional info.
-pub type RichBlock = Rich<Block>;
-
-// /// Header representation with additional info.
-// pub type RichHeader = Rich<Header>;
-
-/// Value representation with additional info
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Rich<T> {
-    /// Standard value.
-    pub inner: T,
-    /// Engine-specific fields with additional description.
-    /// Should be included directly to serialized block object.
-    // TODO [ToDr] #[serde(skip_serializing)]
-    pub extra_info: BTreeMap<String, String>,
-}
-
-impl<T> Deref for Rich<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target { &self.inner }
-}
-
-impl<T: Serialize> Serialize for Rich<T> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
-        use serde_json::{to_value, Value};
-
-        let serialized = (to_value(&self.inner), to_value(&self.extra_info));
-        if let (Ok(Value::Object(mut value)), Ok(Value::Object(extras))) =
-            serialized
-        {
-            // join two objects
-            value.extend(extras);
-            // and serialize
-            value.serialize(serializer)
-        } else {
-            Err(S::Error::custom(
-                "Unserializable structures: expected objects",
-            ))
-        }
-    }
-}
+// /// Block representation with additional info.
+// pub type RichBlock = Rich<Block>;
+//
+// // /// Header representation with additional info.
+// // pub type RichHeader = Rich<Header>;
+//
+// /// Value representation with additional info
+// #[derive(Debug, Clone, PartialEq, Eq)]
+// pub struct Rich<T> {
+//     /// Standard value.
+//     pub inner: T,
+//     /// Engine-specific fields with additional description.
+//     /// Should be included directly to serialized block object.
+//     // TODO [ToDr] #[serde(skip_serializing)]
+//     pub extra_info: BTreeMap<String, String>,
+// }
+//
+// impl<T> Deref for Rich<T> {
+//     type Target = T;
+//
+//     fn deref(&self) -> &Self::Target { &self.inner }
+// }
+//
+// impl<T: Serialize> Serialize for Rich<T> {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where S: Serializer {
+//         use serde_json::{to_value, Value};
+//
+//         let serialized = (to_value(&self.inner), to_value(&self.extra_info));
+//         if let (Ok(Value::Object(mut value)), Ok(Value::Object(extras))) =
+//             serialized
+//         {
+//             // join two objects
+//             value.extend(extras);
+//             // and serialize
+//             value.serialize(serializer)
+//         } else {
+//             Err(S::Error::custom(
+//                 "Unserializable structures: expected objects",
+//             ))
+//         }
+//     }
+// }
 
 // #[cfg(test)]
 // mod tests {
