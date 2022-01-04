@@ -9,7 +9,7 @@ class TestGetTxByHash(RpcClient):
     def test_hash_zero(self):
         tx = self.get_tx(self.ZERO_HASH)
         assert_equal(tx, None)
-    
+
     def test_tx_not_found(self):
         tx_hash = self.rand_hash()
         tx = self.get_tx(tx_hash)
@@ -18,7 +18,7 @@ class TestGetTxByHash(RpcClient):
     def test_tx_pending(self):
         tx = self.new_tx()
         tx_hash = self.send_tx(tx)
-        
+
         tx2 = self.get_tx(tx_hash)
         assert_equal(tx2["hash"], tx_hash)
         assert_equal(tx2["blockHash"], None)
