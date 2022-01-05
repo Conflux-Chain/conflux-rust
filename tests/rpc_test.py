@@ -68,6 +68,10 @@ class RpcTest(ConfluxTestFramework):
         for i in range(len(self.nodes)):
             datadir = get_datadir_path(self.options.tmpdir, i)
             shutil.rmtree(datadir)
+        old_pos_files = ["initial_nodes.json", "genesis_file", "waypoint_config", "public_key"]
+        for f in old_pos_files:
+            os.remove(os.path.join(self.options.tmpdir, f))
+        shutil.rmtree(os.path.join(self.options.tmpdir, "private_keys"))
         self.nodes = []
         self.add_nodes(1)
         node_index = len(self.nodes) - 1

@@ -78,7 +78,9 @@ impl SnapshotDbManagerSqlite {
 
             // To serialize simultaneous opens.
             let _open_lock = self.open_create_delete_lock.lock();
-            if let Some(already_open) =
+            // If it's not in already_open_snapshots, the sqlite db must have
+            // been closed.
+            while let Some(already_open) =
                 self.already_open_snapshots.read().get(&snapshot_path)
             {
                 match already_open {
@@ -88,7 +90,21 @@ impl SnapshotDbManagerSqlite {
                     }
                     Some(open_shared_weak) => {
                         match Weak::upgrade(open_shared_weak) {
-                            None => {}
+                            None => {
+                                // All `Arc` of the sqlite db have been dropped,
+                                // but the inner
+                                // struct (sqlite db itself) drop is called
+                                // after decreasing
+                                // the strong_ref count, so it may still be open
+                                // at this time,
+                                // and after it's closed it will be removed from
+                                // `already_open_snapshots`.
+                                // Thus, here we wait for it to be removed to
+                                // ensure that when we try
+                                // to open it, it's guaranteed to be closed.
+                                thread::sleep(Duration::from_millis(5));
+                                continue;
+                            }
                             Some(already_open) => {
                                 return Ok(Some(already_open));
                             }
@@ -439,20 +455,33 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
 
     fn destroy_snapshot(&self, snapshot_epoch_id: &EpochId) -> Result<()> {
         let path = self.get_snapshot_db_path(snapshot_epoch_id);
-        let maybe_snapshot = match self.already_open_snapshots.read().get(&path)
-        {
-            Some(Some(snapshot)) => Weak::upgrade(snapshot),
-            Some(None) => {
-                // This should not happen because Conflux always write on a
-                // snapshot db under a temporary name. All completed snapshots
-                // are readonly.
-                if cfg!(debug_assertions) {
-                    unreachable!("Try to destroy a snapshot being open exclusively for write.")
-                } else {
-                    unsafe { unreachable_unchecked() }
+        let maybe_snapshot = loop {
+            match self.already_open_snapshots.read().get(&path) {
+                Some(Some(snapshot)) => {
+                    match Weak::upgrade(snapshot) {
+                        None => {
+                            // This is transient and we wait for the db to be
+                            // fully closed.
+                            // The assumption is the same as in
+                            // `open_snapshot_readonly`.
+                            thread::sleep(Duration::from_millis(5));
+                            continue;
+                        }
+                        Some(snapshot) => break Some(snapshot),
+                    }
                 }
-            }
-            None => None,
+                Some(None) => {
+                    // This should not happen because Conflux always write on a
+                    // snapshot db under a temporary name. All completed
+                    // snapshots are readonly.
+                    if cfg!(debug_assertions) {
+                        unreachable!("Try to destroy a snapshot being open exclusively for write.")
+                    } else {
+                        unsafe { unreachable_unchecked() }
+                    }
+                }
+                None => break None,
+            };
         };
 
         match maybe_snapshot {
@@ -518,5 +547,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
     sync::{Arc, Weak},
+    thread,
+    time::Duration,
 };
 use tokio::sync::Semaphore;
