@@ -812,8 +812,8 @@ impl Eth for EthHandler {
                         .block_by_hash(&ref_hash, false);
                     let inner = self.consensus_graph().inner.read();
                     match block {
-                        None => return Ok(None), /* This should not happen
-                                                   * though */
+                        None => return Ok(None), /* This should not happen */
+                        // though
                         Some(b) => {
                             return Ok(Some(RpcBlock::new(&*b, false, &*inner)))
                         }
@@ -841,8 +841,8 @@ impl Eth for EthHandler {
                         .block_by_hash(&ref_hash, false);
                     let inner = self.consensus_graph().inner.read();
                     match block {
-                        None => return Ok(None), /* This should not happen
-                                                   * though */
+                        None => return Ok(None), /* This should not happen */
+                        // though
                         Some(b) => {
                             return Ok(Some(RpcBlock::new(&*b, false, &*inner)))
                         }
