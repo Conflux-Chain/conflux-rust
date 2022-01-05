@@ -21,7 +21,7 @@ use threadpool::ThreadPool;
 
 use blockgen::BlockGenerator;
 use cfx_storage::StorageManager;
-use cfx_types::{address_util::AddressUtil, Address, U256};
+use cfx_types::{address_util::AddressUtil, Address, Space, U256};
 pub use cfxcore::pos::pos::DiemHandle;
 use cfxcore::{
     block_data_manager::BlockDataManager,
@@ -366,6 +366,12 @@ pub fn initialize_common_modules(
         conf.raw_conf.chain_id,
         &initial_nodes,
     );
+    let mut genesis_accounts = genesis_accounts;
+    let genesis_accounts = genesis_accounts
+        .drain()
+        .filter(|(addr, _)| addr.space == Space::Native)
+        .map(|(addr, x)| (addr.address, x))
+        .collect();
     debug!("Initialize genesis_block={:?}", genesis_block);
     if conf.raw_conf.pos_genesis_pivot_decision.is_none() {
         conf.raw_conf.pos_genesis_pivot_decision = Some(genesis_block.hash());
