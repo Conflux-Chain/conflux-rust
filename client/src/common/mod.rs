@@ -772,7 +772,7 @@ pub fn initialize_txgens(
     let maybe_direct_txgen_with_contract = if conf.is_test_or_dev_mode() {
         Some(Arc::new(Mutex::new(DirectTransactionGenerator::new(
             network_key_pair,
-            &public_to_address(DEV_GENESIS_KEY_PAIR_2.public()),
+            &public_to_address(DEV_GENESIS_KEY_PAIR_2.public(), true),
             U256::from_dec_str("10000000000000000").unwrap(),
             U256::from_dec_str("10000000000000000").unwrap(),
         ))))
@@ -815,17 +815,14 @@ pub fn initialize_txgens(
 }
 
 pub mod delegate_convert {
-    use std::hint::unreachable_unchecked;
+    use std::convert::Into as StdInto;
 
     use jsonrpc_core::{
         futures::{future::IntoFuture, Future},
         BoxFuture, Error as JsonRpcError, Result as JsonRpcResult,
     };
 
-    use crate::rpc::{
-        error_codes::{codes::EXCEPTION_ERROR, invalid_params},
-        JsonRpcErrorKind, RpcBoxFuture, RpcError, RpcErrorKind, RpcResult,
-    };
+    use crate::rpc::{RpcBoxFuture, RpcError, RpcResult};
 
     pub trait Into<T> {
         fn into(x: Self) -> T;
@@ -846,33 +843,7 @@ pub mod delegate_convert {
     }
 
     impl Into<JsonRpcError> for RpcError {
-        fn into(e: Self) -> JsonRpcError {
-            match e.0 {
-                JsonRpcErrorKind(j) => j,
-                RpcErrorKind::InvalidParam(param, details) => {
-                    invalid_params(&param, details)
-                }
-                RpcErrorKind::Msg(_)
-                | RpcErrorKind::Decoder(_)
-
-                // TODO(thegaram): consider returning InvalidParams instead
-                | RpcErrorKind::FilterError(_)
-
-                // TODO(thegaram): make error conversion more fine-grained here
-                | RpcErrorKind::LightProtocol(_)
-                | RpcErrorKind::StateDb(_)
-                | RpcErrorKind::Storage(_) => JsonRpcError {
-                    code: jsonrpc_core::ErrorCode::ServerError(EXCEPTION_ERROR),
-                    message: format!("Error processing request: {}", e),
-                    data: None,
-                },
-                // We exhausted all possible ErrorKinds here, however
-                // https://stackoverflow.com/questions/36440021/whats-purpose-of-errorkind-nonexhaustive
-                RpcErrorKind::__Nonexhaustive {} => unsafe {
-                    unreachable_unchecked()
-                },
-            }
-        }
+        fn into(e: Self) -> JsonRpcError { e.into() }
     }
 
     pub fn into_jsonrpc_result<T>(r: RpcResult<T>) -> JsonRpcResult<T> {

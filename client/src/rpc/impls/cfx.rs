@@ -104,7 +104,7 @@ pub struct RpcImpl {
     pub consensus: SharedConsensusGraph,
     pub sync: SharedSynchronizationService,
     block_gen: Arc<BlockGenerator>,
-    tx_pool: SharedTransactionPool,
+    pub tx_pool: SharedTransactionPool,
     maybe_txgen: Option<Arc<TransactionGenerator>>,
     maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
     accounts: Arc<AccountProvider>,

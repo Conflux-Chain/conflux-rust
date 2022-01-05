@@ -297,7 +297,7 @@ impl DirectTransactionGenerator {
         start_balance: U256, start_erc20_balance: U256,
     ) -> DirectTransactionGenerator
     {
-        let start_address = public_to_address(start_key_pair.public());
+        let start_address = public_to_address(start_key_pair.public(), true);
         let info = (
             start_key_pair,
             Account::new_empty_with_balance(
@@ -386,7 +386,7 @@ impl DirectTransactionGenerator {
                 true => loop {
                     let kp =
                         Random.generate().expect("Fail to generate KeyPair.");
-                    let address = public_to_address(kp.public());
+                    let address = public_to_address(kp.public(), true);
                     if self.accounts.get(&address).is_none() {
                         self.accounts.insert(
                             address,

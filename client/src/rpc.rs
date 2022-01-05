@@ -52,7 +52,7 @@ use self::{
         trace::TraceHandler,
     },
     traits::{
-        cfx::Cfx, debug::LocalRpc, pool::TransactionPool, pos::Pos,
+        cfx::Cfx, debug::LocalRpc, eth::Eth, pool::TransactionPool, pos::Pos,
         pubsub::PubSub, test::TestRpc, trace::Trace,
     },
 };
@@ -62,6 +62,7 @@ use crate::{
     configuration::Configuration,
     rpc::{
         error_codes::request_rejected_too_many_request_error,
+        impls::eth::EthHandler,
         interceptor::{RpcInterceptor, RpcProxy},
         rpc_apis::{Api, ApiSet},
     },
@@ -204,6 +205,20 @@ fn setup_rpc_apis(
                 );
                 handler.extend_with(RpcProxy::new(cfx, interceptor));
             }
+            Api::Evm => {
+                info!("Add EVM RPC");
+                let evm = EthHandler::new(
+                    rpc.consensus.clone(),
+                    rpc.sync.clone(),
+                    rpc.tx_pool.clone(),
+                )
+                .to_delegate();
+                let interceptor = ThrottleInterceptor::new(
+                    throttling_conf,
+                    throttling_section,
+                );
+                handler.extend_with(RpcProxy::new(evm, interceptor))
+            }
             Api::Debug => {
                 handler.extend_with(
                     LocalRpcImpl::new(common.clone(), rpc.clone())
@@ -299,6 +314,9 @@ fn setup_rpc_apis_light(
                     throttling_section,
                 );
                 handler.extend_with(RpcProxy::new(cfx, interceptor));
+            }
+            Api::Evm => {
+                warn!("Light nodes do not support evm ports.");
             }
             Api::Debug => {
                 handler.extend_with(
