@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::cmp::min;
+use std::{cmp::min, sync::Arc};
 
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use rlp::Rlp;
@@ -25,9 +25,9 @@ use cfxcore::{
     SharedTransactionPool,
 };
 use primitives::{
-    receipt::TRANSACTION_OUTCOME_SUCCESS, Action, BlockHashOrEpochNumber,
-    Eip155Transaction, EpochNumber, SignedTransaction, StorageKey,
-    StorageValue, TransactionIndex, TransactionWithSignature,
+    receipt::TRANSACTION_OUTCOME_SUCCESS, Action, Block,
+    BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, SignedTransaction,
+    StorageKey, StorageValue, TransactionIndex, TransactionWithSignature,
 };
 
 use crate::rpc::{
@@ -39,8 +39,8 @@ use crate::rpc::{
     traits::eth::{Eth, EthFilter},
     types::{
         eth::{
-            Block, BlockNumber, CallRequest, Filter, FilterChanges, Log,
-            Receipt, SyncInfo, SyncStatus, Transaction,
+            Block as RpcBlock, BlockNumber, CallRequest, Filter, FilterChanges,
+            Log, Receipt, SyncInfo, SyncStatus, Transaction,
         },
         Bytes, Index, MAX_GAS_CALL_REQUEST,
     },
@@ -93,6 +93,30 @@ pub fn sign_call(
 }
 
 impl EthHandler {
+    fn get_block_by_number(
+        &self, block_num: BlockNumber,
+    ) -> jsonrpc_core::Result<Option<Arc<Block>>> {
+        let consensus_graph = self.consensus_graph();
+        let inner = &*consensus_graph.inner.read();
+        info!(
+            "RPC Request: eth_getBlockTransactionCountByHash block_number={:?}",
+            block_num
+        );
+
+        let epoch_height = consensus_graph
+            .get_height_from_epoch_number(block_num.into())
+            .map_err(RpcError::invalid_params)?;
+
+        let pivot_hash = inner
+            .get_pivot_hash_from_epoch_number(epoch_height)
+            .map_err(RpcError::invalid_params)?;
+
+        Ok(self
+            .consensus
+            .get_data_manager()
+            .block_by_hash(&pivot_hash, false /* update_cache */))
+    }
+
     fn exec_transaction(
         &self, request: CallRequest, epoch: Option<BlockNumber>,
     ) -> CfxRpcResult<ExecutionOutcome> {
@@ -410,7 +434,7 @@ impl Eth for EthHandler {
 
     fn block_by_hash(
         &self, hash: H256, full: bool,
-    ) -> jsonrpc_core::Result<Option<Block>> {
+    ) -> jsonrpc_core::Result<Option<RpcBlock>> {
         // TODO: EVM core: discussion: return one block or the whole epoch
         // (pivot header + epoch transactions.)
         let block_op = self
@@ -419,7 +443,7 @@ impl Eth for EthHandler {
             .block_by_hash(&hash, false);
         if let Some(block) = block_op {
             let inner = self.consensus_graph().inner.read();
-            Ok(Some(Block::new(&*block, full, &*inner)))
+            Ok(Some(RpcBlock::new(&*block, full, &*inner)))
         } else {
             Ok(None)
         }
@@ -427,28 +451,16 @@ impl Eth for EthHandler {
 
     fn block_by_number(
         &self, block_num: BlockNumber, include_txs: bool,
-    ) -> jsonrpc_core::Result<Option<Block>> {
-        // TODO: EVM core: discussion: same as block by number.
-        let consensus_graph = self.consensus_graph();
-        let inner = &*consensus_graph.inner.read();
+    ) -> jsonrpc_core::Result<Option<RpcBlock>> {
         info!("RPC Request: eth_getBlockByNumber block_number={:?} include_txs={:?}", block_num, include_txs);
-
-        let epoch_height = consensus_graph
-            .get_height_from_epoch_number(block_num.into())
-            .map_err(RpcError::invalid_params)?;
-
-        let pivot_hash = inner
-            .get_pivot_hash_from_epoch_number(epoch_height)
-            .map_err(RpcError::invalid_params)?;
-
-        let maybe_block = self
-            .consensus
-            .get_data_manager()
-            .block_by_hash(&pivot_hash, false /* update_cache */);
+        let maybe_block = self.get_block_by_number(block_num)?;
 
         match maybe_block {
             None => Ok(None),
-            Some(b) => Ok(Some(Block::new(&*b, include_txs, inner))),
+            Some(b) => {
+                let inner = self.consensus_graph().inner.read();
+                Ok(Some(RpcBlock::new(&*b, include_txs, &*inner)))
+            }
         }
     }
 
@@ -491,26 +503,11 @@ impl Eth for EthHandler {
     fn block_transaction_count_by_number(
         &self, block_num: BlockNumber,
     ) -> jsonrpc_core::Result<Option<U256>> {
-        // TODO: EVM core: same as block_transaction_count_by_number
-        let consensus_graph = self.consensus_graph();
-        let inner = &*consensus_graph.inner.read();
         info!(
             "RPC Request: eth_getBlockTransactionCountByHash block_number={:?}",
             block_num
         );
-
-        let epoch_height = consensus_graph
-            .get_height_from_epoch_number(block_num.into())
-            .map_err(RpcError::invalid_params)?;
-
-        let pivot_hash = inner
-            .get_pivot_hash_from_epoch_number(epoch_height)
-            .map_err(RpcError::invalid_params)?;
-
-        let maybe_block = self
-            .consensus
-            .get_data_manager()
-            .block_by_hash(&pivot_hash, false /* update_cache */);
+        let maybe_block = self.get_block_by_number(block_num)?;
 
         match maybe_block {
             None => Ok(None),
@@ -519,15 +516,30 @@ impl Eth for EthHandler {
     }
 
     fn block_uncles_count_by_hash(
-        &self, _: H256,
+        &self, hash: H256,
     ) -> jsonrpc_core::Result<Option<U256>> {
-        todo!()
+        let maybe_block = self
+            .consensus
+            .get_data_manager()
+            .block_by_hash(&hash, false);
+        match maybe_block {
+            None => Ok(None),
+            Some(b) => {
+                Ok(Some(U256::from(b.block_header.referee_hashes().len())))
+            }
+        }
     }
 
     fn block_uncles_count_by_number(
-        &self, _: BlockNumber,
+        &self, block_num: BlockNumber,
     ) -> jsonrpc_core::Result<Option<U256>> {
-        todo!()
+        let maybe_block = self.get_block_by_number(block_num)?;
+        match maybe_block {
+            None => Ok(None),
+            Some(b) => {
+                Ok(Some(U256::from(b.block_header.referee_hashes().len())))
+            }
+        }
     }
 
     fn code_at(
@@ -780,21 +792,74 @@ impl Eth for EthHandler {
     }
 
     fn uncle_by_block_hash_and_index(
-        &self, _: H256, _: Index,
-    ) -> jsonrpc_core::Result<Option<Block>> {
-        todo!()
+        &self, hash: H256, idx: Index,
+    ) -> jsonrpc_core::Result<Option<RpcBlock>> {
+        let maybe_block = self
+            .consensus
+            .get_data_manager()
+            .block_by_hash(&hash, false);
+        let index = idx.value();
+        match maybe_block {
+            None => return Ok(None),
+            Some(b) => {
+                if b.block_header.referee_hashes().len() <= index {
+                    return Ok(None);
+                } else {
+                    let ref_hash = b.block_header.referee_hashes()[index];
+                    let block = self
+                        .consensus
+                        .get_data_manager()
+                        .block_by_hash(&ref_hash, false);
+                    let inner = self.consensus_graph().inner.read();
+                    match block {
+                        None => return Ok(None), /* This should not happen
+                                                   * though */
+                        Some(b) => {
+                            return Ok(Some(RpcBlock::new(&*b, false, &*inner)))
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fn uncle_by_block_number_and_index(
-        &self, _: BlockNumber, _: Index,
-    ) -> jsonrpc_core::Result<Option<Block>> {
-        todo!()
+        &self, block_num: BlockNumber, idx: Index,
+    ) -> jsonrpc_core::Result<Option<RpcBlock>> {
+        let maybe_block = self.get_block_by_number(block_num)?;
+        let index = idx.value();
+        match maybe_block {
+            None => return Ok(None),
+            Some(b) => {
+                if b.block_header.referee_hashes().len() <= index {
+                    return Ok(None);
+                } else {
+                    let ref_hash = b.block_header.referee_hashes()[index];
+                    let block = self
+                        .consensus
+                        .get_data_manager()
+                        .block_by_hash(&ref_hash, false);
+                    let inner = self.consensus_graph().inner.read();
+                    match block {
+                        None => return Ok(None), /* This should not happen
+                                                   * though */
+                        Some(b) => {
+                            return Ok(Some(RpcBlock::new(&*b, false, &*inner)))
+                        }
+                    }
+                }
+            }
+        }
     }
 
-    fn logs(&self, _: Filter) -> jsonrpc_core::Result<Vec<Log>> { todo!() }
+    fn logs(&self, _: Filter) -> jsonrpc_core::Result<Vec<Log>> {
+        // TODO: Properly handle logs
+        Ok(vec![])
+    }
 
     fn submit_hashrate(&self, _: U256, _: H256) -> jsonrpc_core::Result<bool> {
-        todo!()
+        // We do not care mining
+        Ok(false)
     }
 }
 
