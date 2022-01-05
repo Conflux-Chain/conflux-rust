@@ -99,11 +99,16 @@ impl ResumeCall for Resume {
         self: Box<Self>, result: MessageCallResult,
     ) -> Box<dyn Exec> {
         let pass_result = match result {
-            MessageCallResult::Success(gas_left, data) => PassResult {
-                gas_left,
-                return_data: Ok(data),
-                apply_state: true,
-            },
+            MessageCallResult::Success(gas_left, data) => {
+                let encoded_output = data.to_vec().abi_encode();
+                let length = encoded_output.len();
+                let return_data = ReturnData::new(encoded_output, 0, length);
+                PassResult {
+                    gas_left,
+                    return_data: Ok(return_data),
+                    apply_state: true,
+                }
+            }
             MessageCallResult::Failed(err) => PassResult {
                 gas_left: U256::zero(),
                 return_data: Err(err),
