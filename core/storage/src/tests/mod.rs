@@ -180,7 +180,7 @@ impl KVInserter<MptKeyValue> for DumpedMptKvIterator {
     fn push(&mut self, v: MptKeyValue) -> Result<()> {
         let (mpt_key, value) = v;
         let snapshot_key =
-            StorageKey::from_delta_mpt_key(&mpt_key).to_key_bytes();
+            StorageKeyWithSpace::from_delta_mpt_key(&mpt_key).to_key_bytes();
 
         self.kv.push((snapshot_key, value));
         Ok(())
@@ -262,7 +262,7 @@ use crate::{
 use fallible_iterator::FallibleIterator;
 use kvdb::{DBTransaction, DBValue, KeyValueDB};
 use parity_util_mem::{MallocSizeOf, MallocSizeOfOps};
-use primitives::StorageKey;
+use primitives::StorageKeyWithSpace;
 #[cfg(any(test, feature = "testonly_code"))]
 use rand::random;
 #[cfg(test)]

@@ -52,7 +52,7 @@ use crate::{
     },
 };
 use bit_set::BitSet;
-use cfx_types::{Address, BigEndianHash, H256, U256, U512};
+use cfx_types::{Address, BigEndianHash, Space, H256, U256, U512};
 use std::{cmp, convert::TryFrom, marker::PhantomData, mem, sync::Arc};
 
 const GASOMETER_PROOF: &str = "If gasometer is None, Err is immediately returned in step; this function is only called by step; qed";
@@ -118,6 +118,8 @@ enum InstructionResult<Gas> {
 /// ActionParams without code, so that it can be feed into CodeReader.
 #[derive(Debug)]
 struct InterpreterParams {
+    /// Space
+    pub space: Space,
     /// Address of currently executed code.
     pub code_address: Address,
     /// Hash of currently executed code.
@@ -149,6 +151,7 @@ struct InterpreterParams {
 impl From<ActionParams> for InterpreterParams {
     fn from(params: ActionParams) -> Self {
         InterpreterParams {
+            space: params.space,
             code_address: params.code_address,
             code_hash: params.code_hash,
             address: params.address,
@@ -185,6 +188,7 @@ impl From<vm::Error> for InterpreterResult {
 
 /// Interpreter EVM implementation
 pub struct Interpreter<Cost: CostType> {
+    pub space: Space,
     mem: Vec<u8>,
     cache: Arc<SharedCache>,
     params: InterpreterParams,
@@ -223,7 +227,7 @@ impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
                             params, self,
                         ));
                     }
-                    TrapKind::Create(params, _) => {
+                    TrapKind::Create(params) => {
                         return vm::TrapResult::SubCallCreate(
                             TrapError::Create(params, self),
                         );
@@ -288,7 +292,11 @@ impl<Cost: 'static + CostType> vm::ResumeCreate for Interpreter<Cost> {
     ) -> Box<dyn vm::Exec> {
         match result {
             ContractCreateResult::Created(address, gas_left) => {
-                self.stack.push(address_to_u256(address));
+                // The internal contract may create contract to evm space from
+                // cfx space. However, it should not be processed by
+                // interpreter.
+                assert_eq!(address.space, self.space);
+                self.stack.push(address_to_u256(address.address));
                 self.resume_result = Some(InstructionResult::UnusedGas(
                     Cost::from_u256(gas_left)
                         .expect("Gas left cannot be greater."),
@@ -332,6 +340,7 @@ impl<Cost: CostType> Interpreter<Cost> {
         let return_stack = Vec::with_capacity(MAX_SUB_STACK_SIZE);
 
         Interpreter {
+            space: params.space,
             cache,
             params,
             reader,
@@ -731,7 +740,8 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let init_off = self.stack.pop_back();
                 let init_size = self.stack.pop_back();
                 let address_scheme = match instruction {
-					instructions::CREATE => CreateContractAddress::FromSenderNonceAndCodeHash,
+					instructions::CREATE if context.space() == Space::Native => CreateContractAddress::FromSenderNonceAndCodeHash,
+                    instructions::CREATE if context.space() == Space::Ethereum => CreateContractAddress::FromSenderNonce,
 					instructions::CREATE2 => {
                         let h: H256 = BigEndianHash::from_uint(&self.stack.pop_back());
                         CreateContractAddress::FromSenderSaltAndCodeHash(h)
@@ -766,7 +776,9 @@ impl<Cost: CostType> Interpreter<Cost> {
                 )?;
                 return match create_result {
                     Ok(ContractCreateResult::Created(address, gas_left)) => {
-                        self.stack.push(address_to_u256(address));
+                        // Only reachable in Mocktest
+                        assert_eq!(address.space, Space::Native);
+                        self.stack.push(address_to_u256(address.address));
                         Ok(InstructionResult::UnusedGas(
                             Cost::from_u256(gas_left)
                                 .expect("Gas left cannot be greater."),
@@ -886,8 +898,11 @@ impl<Cost: CostType> Interpreter<Cost> {
                 // clear return data buffer before creating new call frame.
                 self.return_data = ReturnData::empty();
 
-                let valid_code_address =
-                    context.spec().is_valid_address(&code_address);
+                let valid_code_address = if context.space() == Space::Native {
+                    context.spec().is_valid_address(&code_address)
+                } else {
+                    true
+                };
 
                 let can_call = has_balance
                     && context.depth() < context.spec().max_depth

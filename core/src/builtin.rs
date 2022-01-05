@@ -30,7 +30,7 @@ use num::{BigUint, One, Zero};
 use parity_crypto::digest;
 
 use crate::bytes::BytesRef;
-use cfx_types::{H256, U256};
+use cfx_types::{Space, H256, U256};
 use cfxkey::{public_to_address, Address};
 use keylib::{recover as ec_recover, Signature};
 
@@ -231,7 +231,10 @@ impl Builtin {
 pub fn builtin_factory(name: &str) -> Box<dyn Impl> {
     match name {
         "identity" => Box::new(Identity) as Box<dyn Impl>,
-        "ecrecover" => Box::new(EcRecover) as Box<dyn Impl>,
+        "ecrecover" => Box::new(EcRecover(Space::Native)) as Box<dyn Impl>,
+        "ecrecover_evm" => {
+            Box::new(EcRecover(Space::Ethereum)) as Box<dyn Impl>
+        }
         "sha256" => Box::new(Sha256) as Box<dyn Impl>,
         "ripemd160" => Box::new(Ripemd160) as Box<dyn Impl>,
         "modexp" => Box::new(ModexpImpl) as Box<dyn Impl>,
@@ -256,7 +259,7 @@ struct Identity;
 
 #[derive(Debug)]
 #[allow(dead_code)]
-struct EcRecover;
+struct EcRecover(Space);
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -315,7 +318,7 @@ impl Impl for EcRecover {
         if s.is_valid() {
             if let Ok(p) = ec_recover(&s, &hash) {
                 // We use public_to_address() here
-                let addr = public_to_address(&p);
+                let addr = public_to_address(&p, self.0 == Space::Native);
                 output.write(0, &[0; 12]);
                 output.write(12, &addr[0..Address::len_bytes()]);
             }

@@ -38,7 +38,10 @@ fn test_set_get() {
 
     for key in &keys {
         state
-            .set(StorageKey::AccountKey(key), key[..].into())
+            .set(
+                StorageKey::AccountKey(key).with_native_space(),
+                key[..].into(),
+            )
             .expect("Failed to insert key.");
     }
 
@@ -46,7 +49,7 @@ fn test_set_get() {
 
     for key in &keys {
         let value = state
-            .get(StorageKey::AccountKey(key))
+            .get(StorageKey::AccountKey(key).with_native_space())
             .expect("Failed to get key.")
             .expect("Failed to get key");
         let equal = (&**key).eq(value.as_ref());
@@ -76,7 +79,10 @@ fn test_get_set_at_second_commit() {
 
     for key in keys_0 {
         state_0
-            .set(StorageKey::AccountKey(key), key[..].into())
+            .set(
+                StorageKey::AccountKey(key).with_native_space(),
+                key[..].into(),
+            )
             .expect("Failed to insert key.");
     }
 
@@ -95,7 +101,10 @@ fn test_get_set_at_second_commit() {
     for key in keys_1_new {
         let value = vec![&key[..], &key[..]].concat();
         state_1
-            .set(StorageKey::AccountKey(key), value.into())
+            .set(
+                StorageKey::AccountKey(key).with_native_space(),
+                value.into(),
+            )
             .expect("Failed to insert key.");
     }
 
@@ -105,14 +114,17 @@ fn test_get_set_at_second_commit() {
     );
     for key in keys_1_overwritten {
         let old_value = state_1
-            .get(StorageKey::AccountKey(key))
+            .get(StorageKey::AccountKey(key).with_native_space())
             .expect("Failed to get key.")
             .expect("Failed to get key");
         let equal = (&**key).eq(old_value.as_ref());
         assert_eq!(equal, true);
         let value = vec![&key[..], &key[..]].concat();
         state_1
-            .set(StorageKey::AccountKey(key), value.into())
+            .set(
+                StorageKey::AccountKey(key).with_native_space(),
+                value.into(),
+            )
             .expect("Failed to insert key.");
     }
 
@@ -122,7 +134,7 @@ fn test_get_set_at_second_commit() {
     );
     for key in keys_remain {
         let value = state_1
-            .get(StorageKey::AccountKey(key))
+            .get(StorageKey::AccountKey(key).with_native_space())
             .expect("Failed to get key.")
             .expect("Failed to get key");
         let equal = (&**key).eq(value.as_ref());
@@ -135,7 +147,7 @@ fn test_get_set_at_second_commit() {
     );
     for key in keys_1_overwritten {
         let value = state_1
-            .get(StorageKey::AccountKey(key))
+            .get(StorageKey::AccountKey(key).with_native_space())
             .expect("Failed to get key.")
             .expect("Failed to get key");
         let expected_value = vec![&key[..], &key[..]].concat();
@@ -176,15 +188,17 @@ fn test_snapshot_random_read_performance() {
     let mut state_0 = state_manager.get_state_for_genesis_write();
     for key in &keys {
         let mut address = Address::from_slice(
-            &[&**key; 4].concat()[0..StorageKey::ACCOUNT_BYTES],
+            &[&**key; 4].concat()[0..StorageKeyWithSpace::ACCOUNT_BYTES],
         );
         address.set_user_account_type_bits();
+        let address_space = address.with_native_space();
         let account = Account::new_empty_with_balance(
-            &address,
+            &address_space,
             &DEFAULT_BALANCE.into(),
             &0.into(),
         );
-        let account_key = StorageKey::new_account_key(&address);
+        let account_key =
+            StorageKey::new_account_key(&address).with_native_space();
         state_0
             .set(account_key, rlp::encode(&account).into())
             .expect("Failed to set key");
@@ -263,7 +277,7 @@ fn simulate_transactions(
     let mut addresses = Vec::with_capacity(keys.len());
     for key in keys {
         let mut address = Address::from_slice(
-            &[&**key; 4].concat()[0..StorageKey::ACCOUNT_BYTES],
+            &[&**key; 4].concat()[0..StorageKeyWithSpace::ACCOUNT_BYTES],
         );
         address.set_user_account_type_bits();
         addresses.push(address);
@@ -314,7 +328,10 @@ fn simulate_transactions(
                 for address in addresses_range {
                     value_range[i] = Some(
                         state_r
-                            .get(StorageKey::new_account_key(&address))
+                            .get(
+                                StorageKey::new_account_key(&address)
+                                    .with_native_space(),
+                            )
                             .expect("Failed to get key.")
                             .expect("no such key"),
                     );
@@ -331,7 +348,10 @@ fn simulate_transactions(
         for address in &addresses {
             values[i] = Some(
                 state
-                    .get(StorageKey::new_account_key(&address))
+                    .get(
+                        StorageKey::new_account_key(&address)
+                            .with_native_space(),
+                    )
                     .expect("Failed to get key.")
                     .expect("no such key"),
             );
@@ -363,10 +383,11 @@ fn simulate_transactions(
     for i in 0..len {
         let key = keys[i];
         let mut address = Address::from_slice(
-            &[key; 4].concat()[0..StorageKey::ACCOUNT_BYTES],
+            &[key; 4].concat()[0..StorageKeyWithSpace::ACCOUNT_BYTES],
         );
         address.set_user_account_type_bits();
-        let account_key = StorageKey::new_account_key(&address);
+        let account_key =
+            StorageKey::new_account_key(&address).with_native_space();
 
         state
             .set(account_key, values[i].take().unwrap())
@@ -402,7 +423,10 @@ fn test_set_delete() {
     // Insert part 1 and commit.
     for key in keys_0.iter() {
         state
-            .set(StorageKey::AccountKey(key), key[..].into())
+            .set(
+                StorageKey::AccountKey(key).with_native_space(),
+                key[..].into(),
+            )
             .expect("Failed to insert key.");
     }
     let mut epoch_id = H256::default();
@@ -419,7 +443,10 @@ fn test_set_delete() {
         .unwrap();
     for key in keys_1.iter() {
         state
-            .set(StorageKey::AccountKey(key), key[..].into())
+            .set(
+                StorageKey::AccountKey(key).with_native_space(),
+                key[..].into(),
+            )
             .expect("Failed to insert key.");
     }
 
@@ -428,7 +455,7 @@ fn test_set_delete() {
     println!("Testing with {} delete operations.", keys.len());
     for key in &keys {
         let value = state
-            .delete_test_only(StorageKey::AccountKey(key))
+            .delete_test_only(StorageKey::AccountKey(key).with_native_space())
             .expect("Failed to delete key.")
             .expect("Failed to get key");
         let equal = (&**key).eq(value.as_ref());
@@ -463,7 +490,8 @@ fn test_set_delete_all() {
             .set(
                 StorageKey::AccountKey(
                     vec![&key[..], &key[..]].concat().as_slice(),
-                ),
+                )
+                .with_native_space(),
                 key[..].into(),
             )
             .expect("Failed to insert key.");
@@ -485,7 +513,8 @@ fn test_set_delete_all() {
             .set(
                 StorageKey::AccountKey(
                     vec![&key[..], &key[..]].concat().as_slice(),
-                ),
+                )
+                .with_native_space(),
                 key[..].into(),
             )
             .expect("Failed to insert key.");
@@ -499,9 +528,9 @@ fn test_set_delete_all() {
         let key_prefix = &key[0..(2 + rng.gen::<usize>() % 2)];
 
         let value = state
-            .delete_all::<access_mode::Write>(StorageKey::AccountKey(
-                key_prefix,
-            ))
+            .delete_all::<access_mode::Write>(
+                StorageKey::AccountKey(key_prefix).with_native_space(),
+            )
             .expect("Failed to delete key.");
         if value.is_none() {
             continue;
@@ -517,7 +546,9 @@ fn test_set_delete_all() {
         }
 
         let value = state
-            .delete_all::<access_mode::Write>(StorageKey::AccountKey(key))
+            .delete_all::<access_mode::Write>(
+                StorageKey::AccountKey(key).with_native_space(),
+            )
             .expect("Failed to delete key.");
         assert_eq!(value, None);
     }
@@ -549,7 +580,10 @@ fn test_set_order() {
         let actual_key = vec![key_slice; 3].concat();
         let actual_value = vec![key_slice; 1 + (key[0] % 21) as usize].concat();
         state_0
-            .set(StorageKey::AccountKey(&actual_key), actual_value.into())
+            .set(
+                StorageKey::AccountKey(&actual_key).with_native_space(),
+                actual_value.into(),
+            )
             .expect("Failed to insert key.");
     }
     let _merkle_0 = state_0.compute_state_root().unwrap();
@@ -563,7 +597,10 @@ fn test_set_order() {
         let actual_key = vec![key_slice; 3].concat();
         let actual_value = vec![key_slice; 1 + (key[0] % 32) as usize].concat();
         state_1
-            .set(StorageKey::AccountKey(&actual_key), actual_value.into())
+            .set(
+                StorageKey::AccountKey(&actual_key).with_native_space(),
+                actual_value.into(),
+            )
             .expect("Failed to insert key.");
     }
     let merkle_1 = state_1.compute_state_root().unwrap();
@@ -577,7 +614,10 @@ fn test_set_order() {
         let actual_key = vec![key_slice; 3].concat();
         let actual_value = vec![key_slice; 1 + (key[0] % 32) as usize].concat();
         state_2
-            .set(StorageKey::AccountKey(&actual_key), actual_value.into())
+            .set(
+                StorageKey::AccountKey(&actual_key).with_native_space(),
+                actual_value.into(),
+            )
             .expect("Failed to insert key.");
     }
     let merkle_2 = state_2.compute_state_root().unwrap();
@@ -607,7 +647,10 @@ fn test_set_order_concurrent() {
         let actual_key = vec![key_slice; 3].concat();
         let actual_value = vec![key_slice; 1 + (key[0] % 21) as usize].concat();
         state_0
-            .set(StorageKey::AccountKey(&actual_key), actual_value.into())
+            .set(
+                StorageKey::AccountKey(&actual_key).with_native_space(),
+                actual_value.into(),
+            )
             .expect("Failed to insert key.");
     }
     let _merkle_0 = state_0.compute_state_root().unwrap();
@@ -628,7 +671,10 @@ fn test_set_order_concurrent() {
         let actual_key = vec![key_slice; 3].concat();
         let actual_value = vec![key_slice; 1 + (key[0] % 32) as usize].concat();
         state_1
-            .set(StorageKey::AccountKey(&actual_key), actual_value.into())
+            .set(
+                StorageKey::AccountKey(&actual_key).with_native_space(),
+                actual_value.into(),
+            )
             .expect("Failed to insert key.");
     }
     let merkle_1 = state_1.compute_state_root().unwrap();
@@ -667,7 +713,7 @@ fn test_set_order_concurrent() {
                     vec![key_slice; 1 + (key[0] % 32) as usize].concat();
                 state_2
                     .set(
-                        StorageKey::AccountKey(&actual_key),
+                        StorageKey::AccountKey(&actual_key).with_native_space(),
                         actual_value.into(),
                     )
                     .expect("Failed to insert key.");
@@ -701,8 +747,10 @@ use crate::{
     utils::access_mode,
     StateRootWithAuxInfo,
 };
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
-use primitives::{Account, StorageKey};
+use cfx_types::{
+    address_util::AddressUtil, Address, AddressSpaceUtil, H256, U256,
+};
+use primitives::{Account, StorageKey, StorageKeyWithSpace};
 use rand::{
     distributions::{Distribution, Uniform},
     seq::SliceRandom,

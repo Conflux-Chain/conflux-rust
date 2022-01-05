@@ -87,6 +87,7 @@ pub enum CreateType {
 impl CreateType {
     pub fn from_address_scheme(address: &CreateContractAddress) -> CreateType {
         match address {
+            CreateContractAddress::FromSenderNonce => CreateType::CREATE,
             CreateContractAddress::FromSenderNonceAndCodeHash => {
                 CreateType::CREATE
             }

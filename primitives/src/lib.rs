@@ -50,7 +50,8 @@ pub use crate::{
     },
     storage_key::*,
     transaction::{
-        Action, SignedTransaction, Transaction, TransactionWithSignature,
+        Action, Eip155Transaction, NativeTransaction, SignedTransaction,
+        Transaction, TransactionWithSignature,
         TransactionWithSignatureSerializePart, TxPropagateId,
     },
     transaction_index::TransactionIndex,

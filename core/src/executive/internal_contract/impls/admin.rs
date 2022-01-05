@@ -9,16 +9,13 @@ use crate::{
     vm::{self, ActionParams, Spec},
 };
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
-use cfx_types::{address_util::AddressUtil, Address, U256};
+use cfx_types::{
+    address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
+    Space, U256,
+};
 
-fn available_admin_address(spec: &Spec, address: &Address) -> bool {
-    if spec.cip80 {
-        true
-    } else {
-        // Before CIP-80, Only allow user account to be admin, if not to clear
-        // admin.
-        address.is_user_account_address() || address.is_null_address()
-    }
+fn available_admin_address(_spec: &Spec, address: &Address) -> bool {
+    address.is_user_account_address() || address.is_null_address()
 }
 
 /// The Actual Implementation of `suicide`.
@@ -29,7 +26,7 @@ fn available_admin_address(spec: &Spec, address: &Address) -> bool {
 ///   3. refund contract balance
 ///   4. kill the contract
 pub fn suicide(
-    contract_address: &Address, refund_address: &Address,
+    contract_address: &AddressWithSpace, refund_address: &AddressWithSpace,
     state: &mut dyn StateOpsTrait, spec: &Spec,
     substate: &mut dyn SubstateTrait, tracer: &mut dyn Tracer,
     account_start_nonce: U256,
@@ -39,10 +36,11 @@ pub fn suicide(
     let balance = state.balance(contract_address)?;
 
     if refund_address == contract_address
-        || !spec.is_valid_address(refund_address)
+        || (!spec.is_valid_address(&refund_address.address)
+            && refund_address.space == Space::Native)
     {
         tracer.prepare_internal_transfer_action(
-            AddressPocket::Balance(*contract_address),
+            AddressPocket::Balance(contract_address.address),
             AddressPocket::MintBurn,
             balance,
         );
@@ -54,10 +52,10 @@ pub fn suicide(
         )?;
         state.subtract_total_issued(balance);
     } else {
-        trace!(target: "context", "Destroying {} -> {} (xfer: {})", contract_address, refund_address, balance);
+        trace!(target: "context", "Destroying {} -> {} (xfer: {})", contract_address.address, refund_address.address, balance);
         tracer.prepare_internal_transfer_action(
-            AddressPocket::Balance(*contract_address),
-            AddressPocket::Balance(*refund_address),
+            AddressPocket::Balance(contract_address.address),
+            AddressPocket::Balance(refund_address.address),
             balance,
         );
         state.transfer_balance(
@@ -91,11 +89,11 @@ pub fn set_admin(
     );
 
     let clear_admin_in_create = context.callstack.contract_in_creation()
-        == Some(&contract_address)
+        == Some(&contract_address.with_native_space())
         && new_admin_address.is_null_address();
 
     if context.is_contract_address(&contract_address)?
-        && context.state.exists(&contract_address)?
+        && context.state.exists(&contract_address.with_native_space())?
         // Allow set admin if requester matches or in contract creation to clear admin.
         && (context.state.admin(&contract_address)?.eq(requester)
         || clear_admin_in_create)
@@ -125,8 +123,8 @@ pub fn destroy(
     let admin = state.admin(&contract_address)?;
     if admin == *requester {
         suicide(
-            &contract_address,
-            &admin,
+            &contract_address.with_native_space(),
+            &admin.with_native_space(),
             state,
             spec,
             substate,

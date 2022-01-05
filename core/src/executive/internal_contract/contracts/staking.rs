@@ -2,7 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{super::impls::staking::*, macros::*, ExecutionTrait, SolFnTable};
+use super::{
+    super::impls::staking::*, macros::*, SimpleExecutionTrait, SolFnTable,
+};
 use crate::{
     evm::{ActionParams, Spec},
     executive::InternalRefContext,
@@ -45,17 +47,15 @@ impl UpfrontPaymentTrait for Deposit {
     fn upfront_gas_payment(
         &self, _: &Self::Input, params: &ActionParams,
         context: &InternalRefContext,
-    ) -> U256
+    ) -> DbResult<U256>
     {
-        let length = context
-            .state
-            .deposit_list_length(&params.sender)
-            .unwrap_or(0);
-        U256::from(2 * context.spec.sstore_reset_gas) * U256::from(length + 1)
+        let length = context.state.deposit_list_length(&params.sender)?;
+        Ok(U256::from(2 * context.spec.sstore_reset_gas)
+            * U256::from(length + 1))
     }
 }
 
-impl ExecutionTrait for Deposit {
+impl SimpleExecutionTrait for Deposit {
     fn execute_inner(
         &self, input: U256, params: &ActionParams,
         context: &mut InternalRefContext, tracer: &mut dyn Tracer,
@@ -74,17 +74,14 @@ impl UpfrontPaymentTrait for Withdraw {
     fn upfront_gas_payment(
         &self, _input: &Self::Input, params: &ActionParams,
         context: &InternalRefContext,
-    ) -> U256
+    ) -> DbResult<U256>
     {
-        let length = context
-            .state
-            .deposit_list_length(&params.sender)
-            .unwrap_or(0);
-        U256::from(2 * context.spec.sstore_reset_gas) * U256::from(length)
+        let length = context.state.deposit_list_length(&params.sender)?;
+        Ok(U256::from(2 * context.spec.sstore_reset_gas) * U256::from(length))
     }
 }
 
-impl ExecutionTrait for Withdraw {
+impl SimpleExecutionTrait for Withdraw {
     fn execute_inner(
         &self, input: U256, params: &ActionParams,
         context: &mut InternalRefContext, tracer: &mut dyn Tracer,
@@ -103,17 +100,14 @@ impl UpfrontPaymentTrait for VoteLock {
     fn upfront_gas_payment(
         &self, _input: &Self::Input, params: &ActionParams,
         context: &InternalRefContext,
-    ) -> U256
+    ) -> DbResult<U256>
     {
-        let length = context
-            .state
-            .vote_stake_list_length(&params.sender)
-            .unwrap_or(0);
-        U256::from(2 * context.spec.sstore_reset_gas) * U256::from(length)
+        let length = context.state.vote_stake_list_length(&params.sender)?;
+        Ok(U256::from(2 * context.spec.sstore_reset_gas) * U256::from(length))
     }
 }
 
-impl ExecutionTrait for VoteLock {
+impl SimpleExecutionTrait for VoteLock {
     fn execute_inner(
         &self, inputs: (U256, U256), params: &ActionParams,
         context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
@@ -128,7 +122,7 @@ make_solidity_function! {
 }
 impl_function_type!(GetStakingBalance, "query_with_default_gas");
 
-impl ExecutionTrait for GetStakingBalance {
+impl SimpleExecutionTrait for GetStakingBalance {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
         context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
@@ -147,14 +141,14 @@ impl UpfrontPaymentTrait for GetLockedStakingBalance {
     fn upfront_gas_payment(
         &self, (address, _): &(Address, U256), _: &ActionParams,
         context: &InternalRefContext,
-    ) -> U256
+    ) -> DbResult<U256>
     {
-        let length = context.state.vote_stake_list_length(address).unwrap_or(0);
-        U256::from(context.spec.sload_gas) * U256::from(length + 1)
+        let length = context.state.vote_stake_list_length(address)?;
+        Ok(U256::from(context.spec.sload_gas) * U256::from(length + 1))
     }
 }
 
-impl ExecutionTrait for GetLockedStakingBalance {
+impl SimpleExecutionTrait for GetLockedStakingBalance {
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
         context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
@@ -178,14 +172,14 @@ impl UpfrontPaymentTrait for GetVotePower {
     fn upfront_gas_payment(
         &self, (address, _): &(Address, U256), _: &ActionParams,
         context: &InternalRefContext,
-    ) -> U256
+    ) -> DbResult<U256>
     {
-        let length = context.state.vote_stake_list_length(address).unwrap_or(0);
-        U256::from(context.spec.sload_gas) * U256::from(length + 1)
+        let length = context.state.vote_stake_list_length(address)?;
+        Ok(U256::from(context.spec.sload_gas) * U256::from(length + 1))
     }
 }
 
-impl ExecutionTrait for GetVotePower {
+impl SimpleExecutionTrait for GetVotePower {
     fn execute_inner(
         &self, (address, block_number): (Address, U256), _: &ActionParams,
         context: &mut InternalRefContext, _tracer: &mut dyn Tracer,

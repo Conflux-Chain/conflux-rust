@@ -14,10 +14,10 @@ use cfx_storage::{
     state_manager::StateManagerTrait,
     StateProof, StorageRootProof,
 };
-use cfx_types::{Address, Bloom, H256};
+use cfx_types::{Address, AddressSpaceUtil, Bloom, H256};
 use primitives::{
     Block, BlockHeader, BlockHeaderBuilder, BlockReceipts, CheckInput,
-    EpochNumber, StorageKey, StorageRoot,
+    EpochNumber, StorageKeyWithSpace, StorageRoot,
 };
 
 pub struct LedgerInfo {
@@ -211,7 +211,7 @@ impl LedgerInfo {
     ) -> Result<(Option<Vec<u8>>, StateProof), Error> {
         let state = self.state_of(epoch)?;
 
-        let key = StorageKey::from_key_bytes::<CheckInput>(&key)?;
+        let key = StorageKeyWithSpace::from_key_bytes::<CheckInput>(&key)?;
 
         let (value, proof) =
             StateDb::new(state).get_original_raw_with_proof(key)?;
@@ -226,10 +226,9 @@ impl LedgerInfo {
         &self, epoch: u64, address: &Address,
     ) -> Result<(StorageRoot, StorageRootProof), Error> {
         let state = self.state_of(epoch)?;
-        Ok(
-            StateDb::new(state)
-                .get_original_storage_root_with_proof(address)?,
-        )
+        Ok(StateDb::new(state).get_original_storage_root_with_proof(
+            &address.with_native_space(),
+        )?)
     }
 
     /// Get the epoch receipts corresponding to the execution of `epoch`.

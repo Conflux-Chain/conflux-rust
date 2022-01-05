@@ -15,7 +15,9 @@ extern crate rustc_hex;
 extern crate secret_store;
 
 use crate::bytes::Bytes;
-use cfx_types::{Address, BigEndianHash, H256, H512, U256, U512};
+use cfx_types::{
+    Address, AddressSpaceUtil, BigEndianHash, H256, H512, U256, U512,
+};
 use cfxcore::{
     executive::contract_address, vm::CreateContractAddress,
     SharedConsensusGraph, SharedSynchronizationService, SharedTransactionPool,
@@ -25,7 +27,8 @@ use lazy_static::lazy_static;
 use metrics::{register_meter_with_group, Meter};
 use parking_lot::RwLock;
 use primitives::{
-    transaction::Action, Account, SignedTransaction, Transaction,
+    transaction::{Action, NativeTransaction},
+    Account, SignedTransaction, Transaction,
 };
 use rand::prelude::*;
 use rlp::Encodable;
@@ -198,7 +201,7 @@ impl TransactionGenerator {
             // FIXME: to use for this function, then change unwrap() to ?.
             let (nonce, balance) = txgen
                 .txpool
-                .get_state_account_info(&sender_address)
+                .get_state_account_info(&sender_address.with_native_space())
                 .unwrap();
             if nonce.cmp(sender_nonce) != Ordering::Equal {
                 *sender_nonce = nonce.clone();
@@ -212,17 +215,18 @@ impl TransactionGenerator {
             );
             // Generate the transaction, sign it, and push into the transaction
             // pool
-            let tx = Transaction {
+            let tx: Transaction = NativeTransaction {
                 nonce: *sender_nonce,
                 gas_price: U256::from(1u64),
                 gas: U256::from(21000u64),
                 value: balance_to_transfer,
                 action: Action::Call(receiver_address),
                 storage_limit: 0,
-                chain_id: txgen.consensus.best_chain_id(),
+                chain_id: txgen.consensus.best_chain_id().in_native_space(),
                 epoch_height: txgen.consensus.best_epoch_number(),
                 data: Bytes::new(),
-            };
+            }
+            .into();
 
             let signed_tx = tx.sign(&address_secret_pair[&sender_address]);
             let mut tx_to_insert = Vec::new();
@@ -293,11 +297,11 @@ impl DirectTransactionGenerator {
         start_balance: U256, start_erc20_balance: U256,
     ) -> DirectTransactionGenerator
     {
-        let start_address = public_to_address(start_key_pair.public());
+        let start_address = public_to_address(start_key_pair.public(), true);
         let info = (
             start_key_pair,
             Account::new_empty_with_balance(
-                &start_address,
+                &start_address.with_native_space(),
                 &start_balance,
                 &0.into(), /* nonce */
             ),
@@ -312,7 +316,7 @@ impl DirectTransactionGenerator {
             // A fake block_number. There field is unnecessary in Ethereum
             // replay test.
             0.into(),
-            &contract_creator,
+            &contract_creator.with_native_space(),
             &0.into(),
             // A fake code. There field is unnecessary in Ethereum replay test.
             &[],
@@ -327,7 +331,7 @@ impl DirectTransactionGenerator {
         DirectTransactionGenerator {
             accounts,
             address_by_index,
-            erc20_address,
+            erc20_address: erc20_address.address,
         }
     }
 
@@ -382,14 +386,14 @@ impl DirectTransactionGenerator {
                 true => loop {
                     let kp =
                         Random.generate().expect("Fail to generate KeyPair.");
-                    let address = public_to_address(kp.public());
+                    let address = public_to_address(kp.public(), true);
                     if self.accounts.get(&address).is_none() {
                         self.accounts.insert(
                             address,
                             (
                                 kp,
                                 Account::new_empty_with_balance(
-                                    &address,
+                                    &address.with_native_space(),
                                     &0.into(), /* balance */
                                     &0.into(), /* nonce */
                                 ),
@@ -403,7 +407,7 @@ impl DirectTransactionGenerator {
                 },
             };
 
-            let tx = Transaction {
+            let tx: Transaction = NativeTransaction {
                 nonce: sender_nonce,
                 gas_price,
                 gas,
@@ -416,7 +420,8 @@ impl DirectTransactionGenerator {
                 epoch_height: 0,
                 chain_id,
                 data: vec![0u8; 128],
-            };
+            }
+            .into();
             let signed_transaction = tx.sign(sender_kp.secret());
             let rlp_size = signed_transaction.transaction.rlp_bytes().len();
             if *block_size_limit <= rlp_size {
@@ -493,7 +498,7 @@ impl DirectTransactionGenerator {
             .from_hex()
             .unwrap();
 
-            let tx = Transaction {
+            let tx: Transaction = NativeTransaction {
                 nonce: sender_nonce,
                 gas_price,
                 gas,
@@ -506,7 +511,8 @@ impl DirectTransactionGenerator {
                 epoch_height: 0,
                 chain_id,
                 data: tx_data,
-            };
+            }
+            .into();
             let signed_transaction = tx.sign(sender_kp.secret());
             let rlp_size = signed_transaction.transaction.rlp_bytes().len();
             if *block_size_limit <= rlp_size {

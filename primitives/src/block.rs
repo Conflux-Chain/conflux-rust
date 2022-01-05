@@ -85,7 +85,7 @@ impl Block {
     pub fn total_gas(&self) -> U256 {
         let mut sum = U256::from(0);
         for t in &self.transactions {
-            sum += t.gas;
+            sum += *t.gas();
         }
         sum
     }
