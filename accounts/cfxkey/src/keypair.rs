@@ -95,6 +95,10 @@ impl KeyPair {
     pub fn public(&self) -> &Public { &self.public }
 
     pub fn address(&self) -> Address { public_to_address(&self.public, true) }
+
+    pub fn evm_address(&self) -> Address {
+        public_to_address(&self.public, false)
+    }
 }
 
 #[cfg(test)]

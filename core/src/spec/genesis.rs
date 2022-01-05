@@ -77,27 +77,37 @@ lazy_static! {
         KeyPair::from_secret(DEV_GENESIS_PRI_KEY_2.parse().unwrap()).unwrap();
 }
 
-pub fn default(dev_or_test_mode: bool) -> HashMap<Address, U256> {
+pub fn default(dev_or_test_mode: bool) -> HashMap<AddressWithSpace, U256> {
     if !dev_or_test_mode {
         return HashMap::new();
     }
-    let mut accounts: HashMap<Address, U256> = HashMap::new();
+    let mut accounts: HashMap<AddressWithSpace, U256> = HashMap::new();
     // FIXME: Decide the genesis initialization for mainnet.
     let balance = U256::from_dec_str("5000000000000000000000000000000000")
         .expect("Not overflow"); // 5*10^33
-    accounts.insert(DEV_GENESIS_KEY_PAIR.address(), balance);
-    accounts.insert(DEV_GENESIS_KEY_PAIR_2.address(), balance);
+    accounts
+        .insert(DEV_GENESIS_KEY_PAIR.address().with_native_space(), balance);
+    accounts.insert(
+        DEV_GENESIS_KEY_PAIR_2.address().with_native_space(),
+        balance,
+    );
+    accounts
+        .insert(DEV_GENESIS_KEY_PAIR.evm_address().with_evm_space(), balance);
+    accounts.insert(
+        DEV_GENESIS_KEY_PAIR_2.evm_address().with_evm_space(),
+        balance,
+    );
     accounts
 }
 
 pub fn load_secrets_file(
     path: &String, secret_store: &SecretStore,
-) -> Result<HashMap<Address, U256>, String> {
+) -> Result<HashMap<AddressWithSpace, U256>, String> {
     let file = File::open(path)
         .map_err(|e| format!("failed to open file: {:?}", e))?;
     let buffered = BufReader::new(file);
 
-    let mut accounts: HashMap<Address, U256> = HashMap::new();
+    let mut accounts: HashMap<AddressWithSpace, U256> = HashMap::new();
     let balance =
         U256::from_dec_str("10000000000000000000000").map_err(|e| {
             format!(
@@ -108,7 +118,7 @@ pub fn load_secrets_file(
     for line in buffered.lines() {
         let keypair =
             KeyPair::from_secret(line.unwrap().parse().unwrap()).unwrap();
-        accounts.insert(keypair.address(), balance.clone());
+        accounts.insert(keypair.address().with_native_space(), balance.clone());
         secret_store.insert(keypair);
     }
     Ok(accounts)
@@ -171,9 +181,10 @@ pub fn genesis_contract_address_two_year() -> AddressWithSpace {
 /// resetting, the chain of the older version will be discarded
 pub fn genesis_block(
     storage_manager: &Arc<StorageManager>,
-    genesis_accounts: HashMap<Address, U256>, test_net_version: Address,
-    initial_difficulty: U256, machine: Arc<Machine>, need_to_execute: bool,
-    genesis_chain_id: Option<u32>, initial_nodes: &Option<GenesisPosState>,
+    genesis_accounts: HashMap<AddressWithSpace, U256>,
+    test_net_version: Address, initial_difficulty: U256, machine: Arc<Machine>,
+    need_to_execute: bool, genesis_chain_id: Option<u32>,
+    initial_nodes: &Option<GenesisPosState>,
 ) -> Block
 {
     let mut state =
@@ -192,7 +203,7 @@ pub fn genesis_block(
     for (addr, balance) in genesis_accounts {
         state
             .add_balance(
-                &addr.with_native_space(),
+                &addr,
                 &balance,
                 CleanupMode::NoEmpty,
                 /* account_start_nonce = */ U256::zero(),
@@ -572,7 +583,7 @@ fn execute_genesis_transaction(
 
 pub fn load_file(
     path: &String, address_parser: impl Fn(&str) -> Result<Address, String>,
-) -> Result<HashMap<Address, U256>, String> {
+) -> Result<HashMap<AddressWithSpace, U256>, String> {
     let mut content = String::new();
     let mut file = File::open(path)
         .map_err(|e| format!("failed to open file: {:?}", e))?;
@@ -582,7 +593,7 @@ pub fn load_file(
         .parse::<toml::Value>()
         .map_err(|e| format!("failed to parse toml file: {:?}", e))?;
 
-    let mut accounts: HashMap<Address, U256> = HashMap::new();
+    let mut accounts: HashMap<AddressWithSpace, U256> = HashMap::new();
     match account_values {
         Value::Table(table) => {
             for (key, value) in table {
@@ -596,7 +607,7 @@ pub fn load_file(
                 match value {
                     Value::String(balance) => {
                         let balance = U256::from_dec_str(&balance).map_err(|e| format!("failed to parse balance: value = {}, error = {:?}", balance, e))?;
-                        accounts.insert(addr, balance);
+                        accounts.insert(addr.with_native_space(), balance);
                     }
                     _ => {
                         return Err(
