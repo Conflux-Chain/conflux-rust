@@ -3,13 +3,19 @@ pragma solidity >=0.5.0;
 
 interface CrossSpaceCall {
 
-    function create(bytes calldata init) external payable returns (address);
+    function createEVM(bytes calldata init) external payable returns (bytes20);
 
-    function create2(bytes calldata init, bytes32 salt) external payable returns (address);
+    function create2EVM(bytes calldata init, bytes32 salt) external payable returns (bytes20);
 
-    function call(address to, bytes calldata data) external payable returns (bytes memory output);
+    function transferEVM(bytes20 to) external payable returns (bytes memory output);
 
-    function staticCall(address to, bytes calldata data) external view returns (address);
+    function callEVM(bytes20 to, bytes calldata data) external payable returns (bytes memory output);
 
-    function withdraw(uint256 value) external;
+    function staticCallEVM(bytes20 to, bytes calldata data) external view returns (bytes memory output);
+
+    function withdrawFromMapped(uint256 value) external;
+
+    function mappedBalance(address addr) external view returns (uint256);
+
+    function mappedNonce(address addr) external view returns (uint256);
 }
