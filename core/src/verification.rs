@@ -583,7 +583,7 @@ impl VerificationConfig {
             bail!(TransactionError::ZeroGasPrice);
         }
 
-        if matches!(mode, VerifyTxMode::Local(..)) {
+        if matches!(mode, VerifyTxMode::Local(..)) && tx.space()==Space::Native{
             if let Action::Call(ref address) = tx.transaction.action() {
                 if !address.is_genesis_valid_address() {
                     bail!(TransactionError::InvalidReceiver)

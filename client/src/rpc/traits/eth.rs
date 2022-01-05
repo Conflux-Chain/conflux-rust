@@ -37,6 +37,9 @@ pub trait Eth {
     #[rpc(name = "web3_clientVersion")]
     fn client_version(&self) -> Result<String>;
 
+    #[rpc(name = "net_version")]
+    fn net_version(&self) -> Result<String>;
+
     /// Returns protocol version encoded as a string (quotes are necessary).
     #[rpc(name = "eth_protocolVersion")]
     fn protocol_version(&self) -> Result<String>;
