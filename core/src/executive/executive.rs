@@ -1256,8 +1256,14 @@ impl<
 
         let res = match tx.action() {
             Action::Create => {
+                let address_scheme = match tx.space() {
+                    Space::Native => {
+                        CreateContractAddress::FromSenderNonceAndCodeHash
+                    }
+                    Space::Ethereum => CreateContractAddress::FromSenderNonce,
+                };
                 let (new_address, _code_hash) = contract_address(
-                    CreateContractAddress::FromSenderNonceAndCodeHash,
+                    address_scheme,
                     self.env.number.into(),
                     &sender,
                     &nonce,
