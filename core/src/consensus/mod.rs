@@ -335,6 +335,12 @@ impl ConsensusGraph {
             Ok(_) => (),
             Err(msg) => warn!("wait_for_generation() gets the following error from the ConsensusExecutor: {}", msg)
         }
+        // Ensure that `best_info` has been updated when this returns, so if we
+        // are calling RPCs to generate many blocks, they will form a
+        // strict chain. Note that it's okay to call `update_best_info`
+        // multiple times, and we only generate blocks after
+        // `ready_for_mining` is true.
+        self.update_best_info(true);
     }
 
     /// Determine whether the next mined block should have adaptive weight or
