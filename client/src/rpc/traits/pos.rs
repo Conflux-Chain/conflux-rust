@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::pos::{
-    Account, Block, BlockNumber, CommitteeState, EpochReward, Status,
+    Account, Block, BlockNumber, CommitteeState, PoSEpochReward, Status,
     Transaction,
 };
 use cfx_types::{H256, U64};
@@ -66,5 +66,5 @@ pub trait Pos {
     #[rpc(name = "pos_getRewardsByEpoch")]
     fn pos_get_rewards_by_epoch(
         &self, epoch: U64,
-    ) -> JsonRpcResult<Option<EpochReward>>;
+    ) -> JsonRpcResult<Option<PoSEpochReward>>;
 }

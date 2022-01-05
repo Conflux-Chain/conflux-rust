@@ -3,7 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::errors::check_rpc_address_network;
-use cfx_types::{BigEndianHash, H160, H256, H520, U128, U256, U64};
+use cfx_types::{
+    AddressSpaceUtil, BigEndianHash, H160, H256, H520, U128, U256, U64,
+};
 use cfxcore::{
     block_data_manager::BlockDataManager,
     consensus_parameters::ONE_GDRIP_IN_DRIP,
@@ -38,7 +40,8 @@ use crate::{
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
-            pos::Block as PosBlock, Account as RpcAccount, AccountPendingInfo,
+            pos::{Block as PosBlock, PoSEpochReward},
+            Account as RpcAccount, AccountPendingInfo,
             AccountPendingTransactions, BlameInfo, Block as RpcBlock,
             BlockHashOrEpochNumber, Bytes, CallRequest,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
@@ -148,7 +151,7 @@ impl RpcImpl {
             let account = account.unwrap_or(account_result_to_rpc_result(
                 "address",
                 Ok(Account::new_empty_with_balance(
-                    &address.hex_address,
+                    &address.hex_address.with_native_space(),
                     &U256::zero(), /* balance */
                     &U256::zero(), /* nonce */
                 )),
@@ -529,8 +532,12 @@ impl RpcImpl {
             let chain_id = light.get_latest_verifiable_chain_id().map_err(|_| {
                 format!("the light client cannot retrieve/verify the latest chain_id.")
             })?;
-            let tx =
-                tx.sign_with(epoch_height, chain_id, password, accounts)?;
+            let tx = tx.sign_with(
+                epoch_height,
+                chain_id.in_native_space(),
+                password,
+                accounts,
+            )?;
 
             Self::send_tx_helper(light, Bytes::new(tx.rlp_bytes()))
         };
@@ -1108,6 +1115,7 @@ impl Cfx for CfxHandler {
         fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
         fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
         fn opened_method_groups(&self) -> JsonRpcResult<Vec<String>>;
+        fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
     }
 }
 

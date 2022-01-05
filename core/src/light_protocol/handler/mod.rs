@@ -499,7 +499,7 @@ impl Handler {
         } else {
             msg = Box::new(StatusPingV2 {
                 chain_id: ChainIdParamsDeprecated {
-                    chain_id: self.consensus.best_chain_id(),
+                    chain_id: self.consensus.best_chain_id().in_native_space(),
                 },
                 genesis_hash: self
                     .consensus
@@ -555,7 +555,12 @@ impl Handler {
         self.validate_peer_type(status.node_type)?;
         self.validate_genesis_hash(status.genesis_hash)?;
         validate_chain_id(
-            &self.consensus.get_config().chain_id.read(),
+            &self
+                .consensus
+                .get_config()
+                .chain_id
+                .read()
+                .to_native_space_params(),
             status.chain_id.into(),
             status.best_epoch,
         )?;
@@ -586,7 +591,7 @@ impl Handler {
             peer,
             StatusPongV2 {
                 chain_id: ChainIdParamsDeprecated {
-                    chain_id: self.consensus.best_chain_id(),
+                    chain_id: self.consensus.best_chain_id().in_native_space(),
                 },
                 node_type: status.node_type,
                 genesis_hash: status.genesis_hash,

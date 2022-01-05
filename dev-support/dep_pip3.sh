@@ -3,20 +3,20 @@
 set -e
 
 function install() {
-	if [ "`pip3 show $1`" =  "" ]; then
+	if [ "`pip3 show ${1%%=*}`" =  "" ]; then
 		pip3 install $1
 	fi
 }
 
 install eth-utils
 install rlp
-install py_ecc
-install coincurve
+install py-ecc==5.2.0
+install coincurve==15.0.1
 install pysha3
-install trie
+install trie==1.4.0
 install web3
 install py-solc-x
-install jsonrpcclient
+install jsonrpcclient==3.3.6
 install asyncio
 install websockets
 install pyyaml

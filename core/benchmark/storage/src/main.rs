@@ -1597,6 +1597,7 @@ impl Drop for TxReplayer {
 impl TxReplayer {
     const EPOCH_TXS: u64 = 20000;
     const SNAPSHOT_EPOCHS_CAPACITY: u32 = 400;
+
     // const SNAPSHOT_EPOCHS_CAPACITY: u32 = 10;
 
     pub fn new(
@@ -1769,7 +1770,8 @@ impl TxReplayer {
                                 // ethereum-types because conflux use a newer
                                 // version
                                 unsafe { std::mem::transmute(&sender) },
-                            ),
+                            )
+                            .with_native_space(),
                             &account,
                             None,
                         )
@@ -1828,7 +1830,8 @@ impl TxReplayer {
                         // ethereum-types because conflux use a newer
                         // version
                         unsafe { std::mem::transmute(&receiver) },
-                    ),
+                    )
+                    .with_native_space(),
                     &account,
                     None,
                 )
@@ -2181,7 +2184,7 @@ use cfx_storage::{
     KvdbSqlite, KvdbSqliteStatements, StateIndex, StorageConfiguration,
     StorageManager, StorageManagerTrait,
 };
-use cfx_types::hexstr_to_h256;
+use cfx_types::{hexstr_to_h256};
 use clap::{App, Arg, ArgMatches};
 use env_logger;
 use error_chain::*;

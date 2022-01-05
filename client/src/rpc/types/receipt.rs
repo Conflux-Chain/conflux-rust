@@ -4,14 +4,14 @@
 
 use crate::rpc::types::{Log, RpcAddress};
 use cfx_addr::Network;
-use cfx_types::{Bloom, H256, U256, U64};
+use cfx_types::{AddressSpaceUtil, Bloom, H256, U256, U64};
 use cfxcore::{executive::contract_address, vm::CreateContractAddress};
 use primitives::{
     receipt::{
         Receipt as PrimitiveReceipt, StorageChange as PrimitiveStorageChange,
     },
     transaction::Action,
-    SignedTransaction as PrimitiveTransaction, TransactionIndex,
+    SignedTransaction as PrimitiveTransaction, Transaction, TransactionIndex,
 };
 use serde_derive::Serialize;
 
@@ -99,16 +99,25 @@ impl Receipt {
         } = receipt;
 
         let mut address = None;
-        if Action::Create == transaction.action && outcome_status == 0 {
+        let unsigned = if let Transaction::Native(ref unsigned) =
+            transaction.unsigned
+        {
+            unsigned
+        } else {
+            bail!(format!("Does not support EIP-155 transaction in Conflux space RPC. get_receipt for tx: {:?}",transaction));
+        };
+        if Action::Create == unsigned.action && outcome_status == 0 {
             let (created_address, _) = contract_address(
                 CreateContractAddress::FromSenderNonceAndCodeHash,
                 block_number.into(),
-                &transaction.sender,
-                &transaction.nonce,
-                &transaction.data,
+                &transaction.sender.with_native_space(),
+                &unsigned.nonce,
+                &unsigned.data,
             );
-            address =
-                Some(RpcAddress::try_from_h160(created_address, network)?);
+            address = Some(RpcAddress::try_from_h160(
+                created_address.address,
+                network,
+            )?);
         }
 
         // this is an array, but it will only have at most one element:
@@ -126,7 +135,7 @@ impl Receipt {
             gas_used: (accumulated_gas_used - prior_gas_used).into(),
             gas_fee: gas_fee.into(),
             from: RpcAddress::try_from_h160(transaction.sender, network)?,
-            to: match &transaction.action {
+            to: match &unsigned.action {
                 Action::Create => None,
                 Action::Call(address) => {
                     Some(RpcAddress::try_from_h160(address.clone(), network)?)

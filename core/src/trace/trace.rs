@@ -209,6 +209,7 @@ impl From<&vmResult<ExecutiveResult>> for CreateResult {
                 return_data,
                 apply_state: true,
                 create_address,
+                ..
             }) => CreateResult {
                 outcome: Outcome::Success,
                 addr: create_address.expect(
