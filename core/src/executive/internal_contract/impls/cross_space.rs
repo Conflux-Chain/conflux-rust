@@ -70,7 +70,7 @@ impl ResumeCreate for Resume {
     ) -> Box<dyn Exec> {
         let pass_result = match result {
             ContractCreateResult::Created(address, gas_left) => {
-                let encoded_output = address.address.abi_encode();
+                let encoded_output = address.address.0.abi_encode();
                 let length = encoded_output.len();
                 let return_data = ReturnData::new(encoded_output, 0, length);
                 PassResult {
@@ -219,6 +219,10 @@ pub fn call_to_evmcore(
         params_type: vm::ParamsType::Separate,
     };
 
+    context
+        .state
+        .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
+
     return Ok(ExecTrap::Call(next_params, Box::new(Resume)));
 }
 
@@ -307,6 +311,21 @@ pub fn withdraw_from_evmcore(
         cleanup_mode(context.substate, context.spec),
         context.spec.account_start_nonce,
     )?;
+    context
+        .state
+        .inc_nonce(&mapped_address, &context.spec.account_start_nonce)?;
 
     Ok(())
+}
+
+pub fn mapped_balance(
+    address: Address, context: &mut InternalRefContext,
+) -> vm::Result<U256> {
+    Ok(context.state.balance(&evm_map(address))?)
+}
+
+pub fn mapped_nonce(
+    address: Address, context: &mut InternalRefContext,
+) -> vm::Result<U256> {
+    Ok(context.state.nonce(&evm_map(address))?)
 }
