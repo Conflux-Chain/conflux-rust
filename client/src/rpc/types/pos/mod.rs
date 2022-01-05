@@ -19,7 +19,7 @@ pub use self::{
     committee::{CommitteeState, NodeVotingPower, RpcCommittee, RpcTermData},
     decision::Decision,
     node_lock_status::{NodeLockStatus, VotePowerState},
-    reward::{EpochReward, Reward},
+    reward::{PoSEpochReward, Reward},
     status::Status,
     transaction::{
         tx_type, RpcTransactionStatus, RpcTransactionType, Transaction,
