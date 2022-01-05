@@ -25,6 +25,7 @@ use hashbrown::HashMap as FastHashMap;
 use parking_lot;
 use slab::Slab;
 use std::{
+    cmp::Reverse,
     collections::{BinaryHeap, HashSet, VecDeque},
     hash::{BuildHasher, Hash},
     mem::{self, size_of},
@@ -32,6 +33,7 @@ use std::{
     os::raw::c_void,
     sync::Arc,
 };
+
 /// A C function that takes a pointer to a heap allocation and returns its size.
 type VoidPtrToSizeFn = unsafe extern "C" fn(ptr: *const c_void) -> usize;
 
@@ -424,6 +426,12 @@ impl<T: MallocSizeOf> MallocSizeOf for std::sync::RwLock<T> {
 impl<T: MallocSizeOf> MallocSizeOf for parking_lot::RwLock<T> {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
         self.read().size_of(ops)
+    }
+}
+
+impl<T: MallocSizeOf> MallocSizeOf for Reverse<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.0.size_of(ops)
     }
 }
 

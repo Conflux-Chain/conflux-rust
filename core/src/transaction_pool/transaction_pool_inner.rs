@@ -13,6 +13,7 @@ use cfx_statedb::Result as StateDbResult;
 use cfx_types::{
     address_util::AddressUtil, AddressWithSpace, H256, U128, U256, U512,
 };
+use heap_map::HeapMap;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
@@ -23,6 +24,7 @@ use primitives::{
 use rlp::*;
 use serde::Serialize;
 use std::{
+    cmp::{Ordering, Reverse},
     collections::HashMap,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
@@ -202,26 +204,159 @@ impl DeferredPool {
     }
 }
 
+#[derive(DeriveMallocSizeOf, Clone)]
+struct PriceOrderedTransaction(Arc<SignedTransaction>);
+
+impl PartialEq for PriceOrderedTransaction {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.gas_price().eq(other.0.gas_price())
+    }
+}
+
+impl Eq for PriceOrderedTransaction {}
+
+impl PartialOrd for PriceOrderedTransaction {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.0.gas_price().partial_cmp(other.0.gas_price())
+    }
+}
+
+impl Ord for PriceOrderedTransaction {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.gas_price().cmp(other.0.gas_price())
+    }
+}
+
 #[derive(DeriveMallocSizeOf)]
 struct ReadyAccountPool {
-    treap: TreapMap<AddressWithSpace, Arc<SignedTransaction>, WeightType>,
-    tx_weight_scaling: u64,
-    tx_weight_exp: u8,
+    packing_pool: PackingPool,
+    waiting_pool: HeapMap<AddressWithSpace, PriceOrderedTransaction>,
 }
 
 impl ReadyAccountPool {
-    fn new(tx_weight_scaling: u64, tx_weight_exp: u8) -> Self {
-        ReadyAccountPool {
+    fn new(
+        tx_weight_scaling: u64, tx_weight_exp: u8, total_gas_capacity: U256,
+    ) -> Self {
+        Self {
+            packing_pool: PackingPool::new(
+                tx_weight_scaling,
+                tx_weight_exp,
+                total_gas_capacity,
+            ),
+            waiting_pool: HeapMap::new(),
+        }
+    }
+
+    fn update(
+        &mut self, address: &AddressWithSpace,
+        tx: Option<Arc<SignedTransaction>>,
+    )
+    {
+        if let Some(tx) = tx {
+            if tx.hash[0] & 254 == 0 {
+                debug!("Sampled transaction {:?} in ready pool", tx.hash);
+            }
+            self.insert(tx);
+        } else {
+            self.remove(address)
+        };
+    }
+
+    fn insert(&mut self, tx: Arc<SignedTransaction>) {
+        self.packing_pool.insert(tx);
+        self.try_shrink_packing_pool();
+    }
+
+    fn remove(&mut self, address: &AddressWithSpace) {
+        self.packing_pool.remove(address);
+        self.waiting_pool.remove(address);
+        self.try_fill_packing_pool();
+    }
+
+    fn sample_pop(&mut self) -> Option<Arc<SignedTransaction>> {
+        let popped_tx = self.packing_pool.sample_pop();
+        self.try_fill_packing_pool();
+        popped_tx
+    }
+
+    fn try_shrink_packing_pool(&mut self) {
+        while self.packing_pool.total_gas > self.packing_pool.total_gas_capacity
+        {
+            let tx = self.packing_pool.pop().unwrap();
+            self.waiting_pool
+                .insert(&tx.sender(), PriceOrderedTransaction(tx));
+        }
+    }
+
+    fn try_fill_packing_pool(&mut self) {
+        while self.packing_pool.total_gas < self.packing_pool.total_gas_capacity
+        {
+            let top_waiting_gas = match self.waiting_pool.top() {
+                None => break,
+                Some((_, tx)) => *tx.0.gas(),
+            };
+            if top_waiting_gas + self.packing_pool.total_gas
+                > self.packing_pool.total_gas_capacity
+            {
+                break;
+            }
+
+            let tx = (self.waiting_pool.pop().unwrap().1).0;
+            self.packing_pool.insert(tx);
+        }
+    }
+
+    fn clear(&mut self) {
+        self.packing_pool.clear();
+        self.waiting_pool.clear();
+    }
+
+    fn get(
+        &self, address: &AddressWithSpace,
+    ) -> Option<Arc<SignedTransaction>> {
+        self.waiting_pool
+            .get(address)
+            .map(|tx| tx.0.clone())
+            .or_else(|| self.packing_pool.get(address))
+    }
+
+    fn len(&self) -> usize { self.packing_pool.len() + self.waiting_pool.len() }
+}
+
+#[derive(DeriveMallocSizeOf)]
+struct PackingPool {
+    treap: TreapMap<AddressWithSpace, Arc<SignedTransaction>, WeightType>,
+    heap_map: HeapMap<AddressWithSpace, Reverse<PriceOrderedTransaction>>,
+    tx_weight_scaling: u64,
+    tx_weight_exp: u8,
+
+    /// U256 should be sufficient since txpool the limits `max_tx_gas`.
+    /// This limits the number of transactions in the packing pool with their
+    /// gas limits.
+    total_gas_capacity: U256,
+    /// The total gas limit of all transactions in this packing pool.
+    total_gas: U256,
+}
+
+impl PackingPool {
+    fn new(
+        tx_weight_scaling: u64, tx_weight_exp: u8, total_gas_capacity: U256,
+    ) -> Self {
+        PackingPool {
             treap: TreapMap::new(),
+            heap_map: HeapMap::new(),
             tx_weight_scaling,
             tx_weight_exp,
+            total_gas_capacity,
+            total_gas: 0.into(),
         }
     }
 
     fn clear(&mut self) {
         while self.len() != 0 {
-            self.pop();
+            self.sample_pop();
         }
+        self.heap_map.clear()
     }
 
     fn len(&self) -> usize { self.treap.len() }
@@ -229,31 +364,20 @@ impl ReadyAccountPool {
     fn get(
         &self, address: &AddressWithSpace,
     ) -> Option<Arc<SignedTransaction>> {
-        self.treap.get(address).map(|tx| tx.clone())
+        self.heap_map.get(address).map(|tx| (tx.0).0.clone())
     }
 
     fn remove(
         &mut self, address: &AddressWithSpace,
     ) -> Option<Arc<SignedTransaction>> {
-        self.treap.remove(address)
+        let tx = (self.heap_map.remove(address)?.0).0;
+        self.treap.remove(address);
+        self.total_gas -= *tx.gas();
+        Some(tx)
     }
 
-    fn update(
-        &mut self, address: &AddressWithSpace,
-        tx: Option<Arc<SignedTransaction>>,
-    ) -> Option<Arc<SignedTransaction>>
-    {
-        let replaced = if let Some(tx) = tx {
-            if tx.hash[0] & 254 == 0 {
-                debug!("Sampled transaction {:?} in ready pool", tx.hash);
-            }
-            self.insert(tx)
-        } else {
-            self.remove(address)
-        };
-        replaced
-    }
-
+    /// If the insertion replaces an old transaction of the same
+    /// sender, it will be returned.
     fn insert(
         &mut self, tx: Arc<SignedTransaction>,
     ) -> Option<Arc<SignedTransaction>> {
@@ -271,10 +395,18 @@ impl ReadyAccountPool {
             weight *= base_weight;
         }
 
-        self.treap.insert(tx.sender(), tx.clone(), weight)
+        self.heap_map
+            .insert(&tx.sender(), Reverse(PriceOrderedTransaction(tx.clone())));
+        self.total_gas += *tx.gas();
+        let replaced_tx = self.treap.insert(tx.sender(), tx, weight);
+        if let Some(replaced_tx) = replaced_tx.as_ref() {
+            // an old transaction of the same sender is replaced.
+            self.total_gas -= *replaced_tx.gas();
+        };
+        replaced_tx
     }
 
-    fn pop(&mut self) -> Option<Arc<SignedTransaction>> {
+    fn sample_pop(&mut self) -> Option<Arc<SignedTransaction>> {
         if self.treap.len() == 0 {
             return None;
         }
@@ -291,6 +423,15 @@ impl ReadyAccountPool {
         trace!("Get transaction from ready pool. tx: {:?}", tx.clone());
 
         self.remove(&tx.sender())
+    }
+
+    fn pop(&mut self) -> Option<Arc<SignedTransaction>> {
+        self.heap_map.pop().map(|(addr, tx)| {
+            let tx = (tx.0).0;
+            self.treap.remove(&addr);
+            self.total_gas -= *tx.gas();
+            tx
+        })
     }
 }
 
@@ -336,7 +477,9 @@ pub struct TransactionPoolInner {
 impl TransactionPoolInner {
     pub fn new(
         capacity: usize, tx_weight_scaling: u64, tx_weight_exp: u8,
-    ) -> Self {
+        total_gas_capacity: U256,
+    ) -> Self
+    {
         TransactionPoolInner {
             capacity,
             total_received_count: 0,
@@ -345,6 +488,7 @@ impl TransactionPoolInner {
             ready_account_pool: ReadyAccountPool::new(
                 tx_weight_scaling,
                 tx_weight_exp,
+                total_gas_capacity,
             ),
             ready_nonces_and_balances: HashMap::new(),
             garbage_collector: GarbageCollector::default(),
@@ -410,10 +554,11 @@ impl TransactionPoolInner {
         let mut skipped_self_node = None;
         while self.is_full() && !self.garbage_collector.is_empty() {
             let current_timestamp = self.get_current_timestamp();
-            let victim = self.garbage_collector.pop().unwrap();
+            let (victim_address, victim) =
+                self.garbage_collector.pop().unwrap();
             // Accounts which are not in `deferred_pool` may be inserted
             // into `garbage_collector`, we can just ignore them.
-            if !self.deferred_pool.contain_address(&victim.sender) {
+            if !self.deferred_pool.contain_address(&victim_address) {
                 continue;
             }
 
@@ -421,10 +566,10 @@ impl TransactionPoolInner {
             // no unconditional garbage collection to conduct and we need to
             // check if we should replace one unexecuted tx.
             if victim.count == 0 {
-                if victim.sender == new_tx.sender() {
+                if victim_address == new_tx.sender() {
                     // We do not GC a not-executed transaction from the same
                     // sender.
-                    skipped_self_node = Some(victim);
+                    skipped_self_node = Some((victim_address, victim));
                     continue;
                 } else if victim.has_ready_tx
                     && victim.first_tx_gas_price >= *new_tx.gas_price()
@@ -439,15 +584,13 @@ impl TransactionPoolInner {
                 }
             }
 
-            let addr = victim.sender;
-
             let (ready_nonce, _) = self
-                .get_local_nonce_and_balance(&addr)
+                .get_local_nonce_and_balance(&victim_address)
                 .unwrap_or((0.into(), 0.into()));
 
             let to_remove_tx = self
                 .deferred_pool
-                .remove_lowest_nonce(&addr)
+                .remove_lowest_nonce(&victim_address)
                 .unwrap()
                 .get_arc_tx()
                 .clone();
@@ -461,11 +604,12 @@ impl TransactionPoolInner {
             }
 
             // maintain ready account pool
-            if let Some(ready_tx) = self.ready_account_pool.get(&addr) {
+            if let Some(ready_tx) = self.ready_account_pool.get(&victim_address)
+            {
                 if ready_tx.hash() == to_remove_tx.hash() {
                     warn!("a ready tx is garbage-collected");
                     GC_READY_COUNTER.inc(1);
-                    self.ready_account_pool.remove(&addr);
+                    self.ready_account_pool.remove(&victim_address);
                     if !victim.has_ready_tx {
                         // This should not happen! Means some inconsistency
                         // within `TransactionPoolInner`.
@@ -476,7 +620,7 @@ impl TransactionPoolInner {
 
             if !self
                 .deferred_pool
-                .check_tx_packed(addr.clone(), *to_remove_tx.nonce())
+                .check_tx_packed(victim_address, *to_remove_tx.nonce())
             {
                 self.unpacked_transaction_count = self
                     .unpacked_transaction_count
@@ -488,28 +632,29 @@ impl TransactionPoolInner {
             }
 
             // maintain ready info
-            if !self.deferred_pool.contain_address(&addr) {
-                self.ready_nonces_and_balances.remove(&addr);
+            if !self.deferred_pool.contain_address(&victim_address) {
+                self.ready_nonces_and_balances.remove(&victim_address);
             // The picked sender has no transactions now, and has been popped
             // from `garbage_collector`.
             } else {
-                if victim.count > 0 {
-                    self.garbage_collector.insert(
-                        &addr,
-                        victim.count - 1,
-                        current_timestamp,
-                    );
+                let has_ready_tx =
+                    self.ready_account_pool.get(&victim_address).is_some();
+                let first_tx_gas_price = *self
+                    .deferred_pool
+                    .get_lowest_nonce_tx(&victim_address)
+                    .expect("addr exist")
+                    .gas_price();
+                let count = if victim.count > 0 {
+                    victim.count - 1
                 } else {
-                    self.garbage_collector.insert(&addr, 0, current_timestamp);
-                }
-                self.garbage_collector.update_ready_tx(
-                    &addr,
-                    self.ready_account_pool.get(&addr).is_some(),
-                    *self
-                        .deferred_pool
-                        .get_lowest_nonce_tx(&addr)
-                        .expect("addr exist")
-                        .gas_price(),
+                    0
+                };
+                self.garbage_collector.insert(
+                    &victim_address,
+                    count,
+                    current_timestamp,
+                    has_ready_tx,
+                    first_tx_gas_price,
                 );
             }
 
@@ -520,14 +665,11 @@ impl TransactionPoolInner {
 
         // Insert back skipped nodes to keep `garbage_collector`
         // unchanged.
-        if let Some(node) = skipped_self_node {
+        if let Some((addr, node)) = skipped_self_node {
             self.garbage_collector.insert(
-                &node.sender,
+                &addr,
                 node.count,
                 node.timestamp,
-            );
-            self.garbage_collector.update_ready_tx(
-                &node.sender,
                 node.has_ready_tx,
                 node.first_tx_gas_price,
             );
@@ -589,6 +731,7 @@ impl TransactionPoolInner {
                     state_nonce,
                     state_balance,
                 );
+                // GarbageCollector will be updated by the caller.
                 self.txs.insert(transaction.hash(), transaction.clone());
                 self.tx_sponsored_gas_map.insert(
                     transaction.hash(),
@@ -709,12 +852,6 @@ impl TransactionPoolInner {
         if !self.deferred_pool.contain_address(address) {
             return;
         }
-        let count = self.deferred_pool.count_less(address, &nonce);
-        let timestamp = self
-            .garbage_collector
-            .get_timestamp(address)
-            .unwrap_or(self.get_current_timestamp());
-        self.garbage_collector.insert(address, count, timestamp);
         self.ready_nonces_and_balances
             .insert((*address).clone(), (nonce, balance));
     }
@@ -726,13 +863,6 @@ impl TransactionPoolInner {
         if !self.deferred_pool.contain_address(address) {
             return Ok(nonce_and_balance);
         }
-        let count =
-            self.deferred_pool.count_less(address, &nonce_and_balance.0);
-        let timestamp = self
-            .garbage_collector
-            .get_timestamp(address)
-            .unwrap_or(self.get_current_timestamp());
-        self.garbage_collector.insert(address, count, timestamp);
         self.ready_nonces_and_balances
             .insert((*address).clone(), nonce_and_balance);
 
@@ -798,8 +928,15 @@ impl TransactionPoolInner {
         // If addr is not in `deferred_pool`, it should have also been removed
         // from garbage_collector
         if let Some(tx) = self.deferred_pool.get_lowest_nonce_tx(addr) {
-            self.garbage_collector.update_ready_tx(
+            let count = self.deferred_pool.count_less(addr, &nonce);
+            let timestamp = self
+                .garbage_collector
+                .get_timestamp(addr)
+                .unwrap_or(self.get_current_timestamp());
+            self.garbage_collector.insert(
                 addr,
+                count,
+                timestamp,
                 ret.is_some(),
                 *tx.gas_price(),
             );
@@ -847,7 +984,7 @@ impl TransactionPoolInner {
         let spec = machine.spec(best_block_number);
         let transitions = &machine.params().transition_heights;
 
-        'out: while let Some(tx) = self.ready_account_pool.pop() {
+        'out: while let Some(tx) = self.ready_account_pool.sample_pop() {
             let tx_size = tx.rlp_size();
             if block_gas_limit - total_tx_gas_limit < *tx.gas_limit()
                 || block_size_limit - total_tx_size < tx_size
@@ -954,6 +1091,7 @@ impl TransactionPoolInner {
     ) -> (Vec<Arc<SignedTransaction>>, Vec<Arc<SignedTransaction>>) {
         let ready_txs = self
             .ready_account_pool
+            .packing_pool
             .treap
             .iter()
             .filter(|address_tx| {

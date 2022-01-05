@@ -35,7 +35,7 @@ class EthLikeUnsignedTransaction(rlp.Serializable):
         super(EthLikeUnsignedTransaction, self).__init__(
             nonce=unsigned_tx.nonce,
             gas_price=unsigned_tx.gas_price,
-            gas=unsigned_tx.gas(),
+            gas=unsigned_tx.gas,
             value=unsigned_tx.value,
             action=unsigned_tx.action,
             data=unsigned_tx.data,
