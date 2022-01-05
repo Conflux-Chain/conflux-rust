@@ -46,8 +46,8 @@ use cfx_storage::{
     StorageManagerTrait,
 };
 use cfx_types::{
-    address_util::AddressUtil, BigEndianHash, H160, H256, KECCAK_EMPTY_BLOOM,
-    U256, U512,
+    address_util::AddressUtil, AddressSpaceUtil, AllChainID, BigEndianHash,
+    H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
 };
 use core::convert::TryFrom;
 use hash::KECCAK_EMPTY_LIST_RLP;
@@ -1161,7 +1161,7 @@ impl ConsensusExecutionHandler {
                 for block in epoch_blocks.iter() {
                     for transaction in block.transactions.iter() {
                         accounts.push(&transaction.sender);
-                        match transaction.action {
+                        match transaction.action() {
                             Action::Call(ref address) => accounts.push(address),
                             _ => {}
                         }
@@ -1735,7 +1735,7 @@ impl ConsensusExecutionHandler {
             if spec.is_valid_address(&address) {
                 state
                     .add_balance(
-                        &address,
+                        &address.with_native_space(),
                         &reward,
                         CleanupMode::ForceCreate,
                         spec.account_start_nonce,
@@ -1836,7 +1836,7 @@ impl ConsensusExecutionHandler {
             "tx",
             self.verification_config.verify_transaction_common(
                 tx,
-                tx.chain_id,
+                AllChainID::fake_for_virtual(tx.chain_id()),
                 block_height,
                 transitions,
                 VerifyTxMode::Local(VerifyTxLocalMode::Full, &spec),
@@ -1879,7 +1879,7 @@ impl ConsensusExecutionHandler {
             difficulty: Default::default(),
             accumulated_gas_used: U256::zero(),
             last_hash: epoch_id.clone(),
-            gas_limit: tx.gas.clone(),
+            gas_limit: tx.gas().clone(),
             epoch_height: block_height,
             pos_view: pos_view_number,
             finalized_epoch: pivot_decision_epoch,

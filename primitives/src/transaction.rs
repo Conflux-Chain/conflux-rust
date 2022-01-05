@@ -3,7 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{bytes::Bytes, hash::keccak};
-use cfx_types::{Address, BigEndianHash, H160, H256, U256};
+use cfx_types::{
+    Address, AddressSpaceUtil, AddressWithSpace, BigEndianHash, Space, H160,
+    H256, U256,
+};
 use keylib::{
     self, public_to_address, recover, verify_public, Public, Secret, Signature,
 };
@@ -35,6 +38,7 @@ pub enum TransactionError {
     ChainIdMismatch {
         expected: u32,
         got: u32,
+        space: Space,
     },
     /// Epoch height out of bound.
     EpochHeightOutOfBound {
@@ -118,8 +122,8 @@ impl fmt::Display for TransactionError {
         use self::TransactionError::*;
         let msg = match *self {
             AlreadyImported => "Already imported".into(),
-            ChainIdMismatch { expected, got } => {
-                format!("Chain id mismatch, expected {}, got {}", expected, got)
+            ChainIdMismatch { expected, got, space } => {
+                format!("Chain id mismatch, expected {}, got {}, space {:?}", expected, got, space)
             }
             EpochHeightOutOfBound {
                 block_height,
@@ -215,7 +219,7 @@ impl Encodable for Action {
     Serialize,
     Deserialize,
 )]
-pub struct Transaction {
+pub struct NativeTransaction {
     /// Nonce.
     pub nonce: U256,
     /// Gas price.
@@ -238,10 +242,189 @@ pub struct Transaction {
     pub data: Bytes,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum TransactionType {
-    Normal,
-    EthereumLike,
+impl NativeTransaction {
+    /// Specify the sender; this won't survive the serialize/deserialize
+    /// process, but can be cloned.
+    pub fn fake_sign(self, from: AddressWithSpace) -> SignedTransaction {
+        // TODO: EVM core: for EVM tx
+        SignedTransaction {
+            transaction: TransactionWithSignature {
+                transaction: TransactionWithSignatureSerializePart {
+                    unsigned: Transaction::Native(self),
+                    r: U256::one(),
+                    s: U256::one(),
+                    v: 0,
+                },
+                hash: H256::zero(),
+                rlp_size: None,
+            }
+            .compute_hash(),
+            sender: from.address,
+            public: None,
+        }
+    }
+}
+
+/// Replay protection logic for v part of transaction's signature
+pub mod eip155_signature {
+    /// Adds chain id into v
+    pub fn add_chain_replay_protection(v: u8, chain_id: Option<u64>) -> u64 {
+        v as u64
+            + if let Some(n) = chain_id {
+                35 + n * 2
+            } else {
+                27
+            }
+    }
+
+    /// Returns refined v
+    /// 0 if `v` would have been 27 under "Electrum" notation, 1 if 28 or 4 if
+    /// invalid.
+    pub fn extract_standard_v(v: u64) -> u8 {
+        match v {
+            v if v == 27 => 0,
+            v if v == 28 => 1,
+            v if v >= 35 => ((v - 1) % 2) as u8,
+            _ => 4,
+        }
+    }
+
+    pub fn extract_chain_id_from_legacy_v(v: u64) -> Option<u64> {
+        if v >= 35 {
+            Some((v - 35) / 2 as u64)
+        } else {
+            None
+        }
+    }
+}
+
+impl Eip155Transaction {
+    /// Specify the sender; this won't survive the serialize/deserialize
+    /// process, but can be cloned.
+    pub fn fake_sign(self, from: AddressWithSpace) -> SignedTransaction {
+        SignedTransaction {
+            transaction: TransactionWithSignature {
+                transaction: TransactionWithSignatureSerializePart {
+                    unsigned: Transaction::Ethereum(self),
+                    r: U256::one(),
+                    s: U256::one(),
+                    v: 0,
+                },
+                hash: H256::zero(),
+                rlp_size: None,
+            }
+            .compute_hash(),
+            sender: from.address,
+            public: None,
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Eip155Transaction {
+    /// Nonce.
+    pub nonce: U256,
+    /// Gas price.
+    pub gas_price: U256,
+    /// Gas paid up front for transaction execution.
+    pub gas: U256,
+    /// Action, can be either call or contract create.
+    pub action: Action,
+    /// Transferred value.
+    pub value: U256,
+    /// The chain id of the transaction
+    pub chain_id: u32,
+    /// Transaction data.
+    pub data: Bytes,
+}
+
+impl Encodable for Eip155Transaction {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        s.begin_list(9);
+        s.append(&self.nonce);
+        s.append(&self.gas_price);
+        s.append(&self.gas);
+        s.append(&self.action);
+        s.append(&self.value);
+        s.append(&self.data);
+        s.append(&self.chain_id);
+        s.append(&0u8);
+        s.append(&0u8);
+    }
+}
+
+// impl Decodable for Eip155Transaction {
+//     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+//         if !(rlp.at(7)?.is_empty() && rlp.at(8)?.is_empty()) {
+//             return Err(DecoderError::Custom(
+//                 "The last two items should be empty",
+//             ));
+//         }
+//         Ok(Self {
+//             nonce: rlp.val_at(0)?,
+//             gas_price: rlp.val_at(1)?,
+//             gas: rlp.val_at(2)?,
+//             action: rlp.val_at(3)?,
+//             value: rlp.val_at(4)?,
+//             chain_id: rlp.val_at(5)?,
+//             data: rlp.val_at(6)?,
+//         })
+//     }
+// }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Transaction {
+    Native(NativeTransaction),
+    Ethereum(Eip155Transaction),
+}
+
+impl Default for Transaction {
+    fn default() -> Self { Transaction::Native(Default::default()) }
+}
+
+impl From<NativeTransaction> for Transaction {
+    fn from(tx: NativeTransaction) -> Self { Self::Native(tx) }
+}
+
+impl From<Eip155Transaction> for Transaction {
+    fn from(tx: Eip155Transaction) -> Self { Self::Ethereum(tx) }
+}
+
+macro_rules! access_common_ref {
+    ($field: ident, $ty: ident) => {
+        pub fn $field(&self) -> &$ty{
+            match self {
+                Transaction::Native(tx) => &tx.$field,
+                Transaction::Ethereum(tx) => &tx.$field,
+            }
+        }
+    };
+}
+
+macro_rules! access_common {
+    ($field: ident, $ty: ident) => {
+        pub fn $field(&self) -> $ty{
+            match self {
+                Transaction::Native(tx) => tx.$field,
+                Transaction::Ethereum(tx) => tx.$field,
+            }
+        }
+    };
+}
+impl Transaction {
+    access_common_ref!(gas, U256);
+
+    access_common_ref!(gas_price, U256);
+
+    access_common_ref!(data, Bytes);
+
+    access_common_ref!(nonce, U256);
+
+    access_common_ref!(action, Action);
+
+    access_common_ref!(value, U256);
+
+    access_common!(chain_id, u32);
 }
 
 impl Transaction {
@@ -250,31 +433,21 @@ impl Transaction {
     // signatures.
     pub fn signature_hash(&self) -> H256 {
         let mut s = RlpStream::new();
-        match self.transaction_type() {
-            TransactionType::Normal => {
-                s.append(self);
+        match self {
+            Transaction::Native(tx) => {
+                s.append(tx);
             }
-            TransactionType::EthereumLike => {
-                s.begin_list(9);
-                s.append(&self.nonce);
-                s.append(&self.gas_price);
-                s.append(&self.gas);
-                s.append(&self.action);
-                s.append(&self.value);
-                s.append(&self.data);
-                s.append(&self.chain_id);
-                s.append(&0u8);
-                s.append(&0u8);
+            Transaction::Ethereum(tx) => {
+                s.append(tx);
             }
         }
         keccak(s.as_raw())
     }
 
-    pub fn transaction_type(&self) -> TransactionType {
-        if self.epoch_height == u64::MAX {
-            TransactionType::EthereumLike
-        } else {
-            TransactionType::Normal
+    pub fn space(&self) -> Space {
+        match self {
+            Transaction::Native(_) => Space::Native,
+            Transaction::Ethereum(_) => Space::Ethereum,
         }
     }
 
@@ -286,26 +459,6 @@ impl Transaction {
             .recover_public()
             .expect("secret is valid so it's recoverable");
         SignedTransaction::new(public, tx_with_sig)
-    }
-
-    /// Specify the sender; this won't survive the serialize/deserialize
-    /// process, but can be cloned.
-    pub fn fake_sign(self, from: Address) -> SignedTransaction {
-        SignedTransaction {
-            transaction: TransactionWithSignature {
-                transaction: TransactionWithSignatureSerializePart {
-                    unsigned: self,
-                    r: U256::one(),
-                    s: U256::one(),
-                    v: 0,
-                },
-                hash: H256::zero(),
-                rlp_size: None,
-            }
-            .compute_hash(),
-            sender: from,
-            public: None,
-        }
     }
 
     /// Signs the transaction with signature.
@@ -326,21 +479,12 @@ impl Transaction {
 
 impl MallocSizeOf for Transaction {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
-        self.data.size_of(ops)
+        self.data().size_of(ops)
     }
 }
 
 /// Signed transaction information without verified signature.
-#[derive(
-    Debug,
-    Clone,
-    Eq,
-    PartialEq,
-    RlpEncodable,
-    RlpDecodable,
-    Serialize,
-    Deserialize,
-)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TransactionWithSignatureSerializePart {
     /// Plain Transaction.
     pub unsigned: Transaction,
@@ -351,6 +495,102 @@ pub struct TransactionWithSignatureSerializePart {
     pub r: U256,
     /// The S field of the signature; helps describe the point on the curve.
     pub s: U256,
+}
+
+impl Encodable for TransactionWithSignatureSerializePart {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        match self.unsigned {
+            Transaction::Native(ref tx) => {
+                s.begin_list(4);
+                s.append(tx);
+                s.append(&self.v);
+                s.append(&self.r);
+                s.append(&self.s);
+            }
+            Transaction::Ethereum(ref tx) => {
+                let Eip155Transaction {
+                    nonce,
+                    gas_price,
+                    gas,
+                    action,
+                    value,
+                    data,
+                    chain_id,
+                } = tx;
+                let legacy_v = eip155_signature::add_chain_replay_protection(
+                    self.v,
+                    Some(*chain_id as u64),
+                );
+                s.begin_list(9);
+                s.append(nonce);
+                s.append(gas_price);
+                s.append(gas);
+                s.append(action);
+                s.append(value);
+                s.append(data);
+                s.append(&legacy_v);
+                s.append(&self.r);
+                s.append(&self.s);
+            }
+        }
+    }
+}
+
+impl Decodable for TransactionWithSignatureSerializePart {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        match rlp.item_count()? {
+            4 => {
+                let unsigned: NativeTransaction = rlp.val_at(0)?;
+                let v: u8 = rlp.val_at(1)?;
+                let r: U256 = rlp.val_at(2)?;
+                let s: U256 = rlp.val_at(3)?;
+                Ok(TransactionWithSignatureSerializePart {
+                    unsigned: Transaction::Native(unsigned),
+                    v,
+                    r,
+                    s,
+                })
+            }
+            9 => {
+                let nonce: U256 = rlp.val_at(0)?;
+                let gas_price: U256 = rlp.val_at(1)?;
+                let gas: U256 = rlp.val_at(2)?;
+                let action: Action = rlp.val_at(3)?;
+                let value: U256 = rlp.val_at(4)?;
+                let data: Vec<u8> = rlp.val_at(5)?;
+                let legacy_v: u64 = rlp.val_at(6)?;
+                let r: U256 = rlp.val_at(7)?;
+                let s: U256 = rlp.val_at(8)?;
+
+                let v = eip155_signature::extract_standard_v(legacy_v);
+                let chain_id = if let Some(chain_id) =
+                    eip155_signature::extract_chain_id_from_legacy_v(legacy_v)
+                {
+                    chain_id as u32
+                } else {
+                    return Err(DecoderError::Custom(
+                        "ChainId is not specified",
+                    ));
+                };
+
+                Ok(TransactionWithSignatureSerializePart {
+                    unsigned: Transaction::Ethereum(Eip155Transaction {
+                        nonce,
+                        gas_price,
+                        gas,
+                        action,
+                        value,
+                        chain_id,
+                        data,
+                    }),
+                    v,
+                    r,
+                    s,
+                })
+            }
+            _ => Err(DecoderError::RlpInvalidLength),
+        }
+    }
 }
 
 impl Deref for TransactionWithSignatureSerializePart {
@@ -383,7 +623,7 @@ impl Decodable for TransactionWithSignature {
         let hash = keccak(d.as_raw());
         let rlp_size = Some(d.as_raw().len());
         // Check item count of TransactionWithSignatureSerializePart
-        if d.item_count()? != 4 {
+        if d.item_count()? != 4 && d.item_count()? != 9 {
             return Err(DecoderError::RlpIncorrectListLen);
         }
         let transaction = d.as_val()?;
@@ -506,7 +746,10 @@ impl SignedTransaction {
                 public: None,
             }
         } else {
-            let sender = public_to_address(&public);
+            let sender = public_to_address(
+                &public,
+                transaction.space() == Space::Native,
+            );
             SignedTransaction {
                 transaction,
                 sender,
@@ -524,25 +767,28 @@ impl SignedTransaction {
     }
 
     pub fn set_public(&mut self, public: Public) {
-        self.sender = public_to_address(&public);
+        let type_nibble = self.unsigned.space() == Space::Native;
+        self.sender = public_to_address(&public, type_nibble);
         self.public = Some(public);
     }
 
     /// Returns transaction sender.
-    pub fn sender(&self) -> Address { self.sender }
+    pub fn sender(&self) -> AddressWithSpace {
+        self.sender.with_space(self.space())
+    }
 
-    pub fn nonce(&self) -> U256 { self.transaction.nonce }
+    pub fn nonce(&self) -> &U256 { self.transaction.nonce() }
 
     /// Checks if signature is empty.
     pub fn is_unsigned(&self) -> bool { self.transaction.is_unsigned() }
 
     pub fn hash(&self) -> H256 { self.transaction.hash() }
 
-    pub fn gas(&self) -> &U256 { &self.transaction.gas }
+    pub fn gas(&self) -> &U256 { &self.transaction.gas() }
 
-    pub fn gas_price(&self) -> &U256 { &self.transaction.gas_price }
+    pub fn gas_price(&self) -> &U256 { &self.transaction.gas_price() }
 
-    pub fn gas_limit(&self) -> &U256 { &self.transaction.gas }
+    pub fn gas_limit(&self) -> &U256 { &self.transaction.gas() }
 
     pub fn rlp_size(&self) -> usize { self.transaction.rlp_size() }
 

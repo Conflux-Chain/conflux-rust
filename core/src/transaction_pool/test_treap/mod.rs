@@ -5,7 +5,7 @@
 use super::TreapMap;
 use cfx_types::{Address, Public, H256, U256, U512};
 use keylib::Signature;
-use primitives::{Action, SignedTransaction, Transaction};
+use primitives::{Action, NativeTransaction, SignedTransaction, Transaction};
 use rand::{Rng, RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use rand_xorshift::XorShiftRng;
@@ -100,7 +100,7 @@ fn next_u256(rng: &mut ChaChaRng) -> U256 {
 fn next_signed_transaction(rng: &mut ChaChaRng) -> SignedTransaction {
     SignedTransaction::new(
         Public::from_low_u64_be(0),
-        Transaction {
+        Transaction::from(NativeTransaction {
             nonce: 0.into(),
             gas_price: next_u256(rng),
             gas: next_u256(rng),
@@ -108,9 +108,9 @@ fn next_signed_transaction(rng: &mut ChaChaRng) -> SignedTransaction {
             action: Action::Call(Address::from_low_u64_be(0)),
             storage_limit: 0,
             epoch_height: 0,
-            chain_id: 0,
+            chain_id: 1,
             data: vec![],
-        }
+        })
         .with_signature(Signature::default()),
     )
 }

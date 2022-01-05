@@ -29,7 +29,7 @@ use futures::future::FutureExt;
 use lru_time_cache::LruCache;
 use network::{node_table::NodeId, NetworkContext};
 use parking_lot::RwLock;
-use primitives::{StorageKey, StorageRoot};
+use primitives::{StorageKey, StorageKeyWithSpace, StorageRoot};
 use std::{future::Future, sync::Arc};
 
 #[derive(Debug)]
@@ -241,7 +241,7 @@ impl StorageRoots {
 
         // construct padding
         let maybe_intermediate_padding = maybe_prev_root.map(|root| {
-            StorageKey::delta_mpt_padding(
+            StorageKeyWithSpace::delta_mpt_padding(
                 &root.snapshot_root,
                 &root.intermediate_delta_root,
             )

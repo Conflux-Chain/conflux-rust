@@ -9,7 +9,7 @@ use crate::{
 };
 use cfx_parameters::consensus::ONE_CFX_IN_DRIP;
 use cfx_state::state_trait::StateOpsTrait;
-use cfx_types::{Address, U256};
+use cfx_types::{Address, AddressSpaceUtil, U256};
 
 /// Implementation of `deposit(uint256)`.
 pub fn deposit(
@@ -19,7 +19,7 @@ pub fn deposit(
 {
     if amount < U256::from(ONE_CFX_IN_DRIP) {
         Err(vm::Error::InternalContract("invalid deposit amount".into()))
-    } else if state.balance(&params.sender)? < amount {
+    } else if state.balance(&params.sender.with_native_space())? < amount {
         Err(vm::Error::InternalContract(
             "not enough balance to deposit".into(),
         ))

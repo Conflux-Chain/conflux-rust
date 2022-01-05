@@ -26,7 +26,10 @@ impl Account {
         account: PrimitiveAccount, network: Network,
     ) -> Result<Self, String> {
         Ok(Self {
-            address: RpcAddress::try_from_h160(*account.address(), network)?,
+            address: RpcAddress::try_from_h160(
+                account.address().address,
+                network,
+            )?,
             balance: account.balance.into(),
             nonce: account.nonce.into(),
             code_hash: account.code_hash.into(),

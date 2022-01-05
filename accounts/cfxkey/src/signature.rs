@@ -233,7 +233,7 @@ pub fn verify_address(
     address: &Address, signature: &Signature, message: &Message,
 ) -> Result<bool, Error> {
     let public = recover(signature, message)?;
-    let recovered_address = public_to_address(&public);
+    let recovered_address = public_to_address(&public, true);
     Ok(address == &recovered_address)
 }
 

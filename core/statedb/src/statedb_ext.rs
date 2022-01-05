@@ -3,28 +3,31 @@
 // See http://www.gnu.org/licenses/
 
 pub trait StateDbExt {
-    fn get<T>(&self, key: StorageKey) -> Result<Option<T>>
+    fn get<T>(&self, key: StorageKeyWithSpace) -> Result<Option<T>>
     where T: ::rlp::Decodable;
 
     fn set<T>(
-        &mut self, key: StorageKey, value: &T,
+        &mut self, key: StorageKeyWithSpace, value: &T,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>
     where
         T: ::rlp::Encodable + IsDefault;
 
-    fn get_account(&self, address: &Address) -> Result<Option<Account>>;
+    fn get_account(
+        &self, address: &AddressWithSpace,
+    ) -> Result<Option<Account>>;
 
     fn get_code(
-        &self, address: &Address, code_hash: &H256,
+        &self, address: &AddressWithSpace, code_hash: &H256,
     ) -> Result<Option<CodeInfo>>;
 
     fn get_deposit_list(
-        &self, address: &Address,
+        &self, address: &AddressWithSpace,
     ) -> Result<Option<DepositList>>;
 
-    fn get_vote_list(&self, address: &Address)
-        -> Result<Option<VoteStakeList>>;
+    fn get_vote_list(
+        &self, address: &AddressWithSpace,
+    ) -> Result<Option<VoteStakeList>>;
 
     fn get_annual_interest_rate(&self) -> Result<U256>;
     fn set_annual_interest_rate(
@@ -95,7 +98,7 @@ pub const LAST_DISTRIBUTE_BLOCK_KEY: &'static [u8] = b"last_distribute_block";
 impl<StateDbStorage: StorageStateTrait> StateDbExt
     for StateDbGeneric<StateDbStorage>
 {
-    fn get<T>(&self, key: StorageKey) -> Result<Option<T>>
+    fn get<T>(&self, key: StorageKeyWithSpace) -> Result<Option<T>>
     where T: ::rlp::Decodable {
         match self.get_raw(key) {
             Ok(None) => Ok(None),
@@ -105,7 +108,7 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
     }
 
     fn set<T>(
-        &mut self, key: StorageKey, value: &T,
+        &mut self, key: StorageKeyWithSpace, value: &T,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>
     where
@@ -122,39 +125,56 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         }
     }
 
-    fn get_account(&self, address: &Address) -> Result<Option<Account>> {
-        match self.get_raw(StorageKey::new_account_key(address)) {
+    fn get_account(
+        &self, address: &AddressWithSpace,
+    ) -> Result<Option<Account>> {
+        match self.get_raw(
+            StorageKey::new_account_key(&address.address)
+                .with_space(address.space),
+        ) {
             Ok(None) => Ok(None),
-            Ok(Some(raw)) => {
-                Ok(Some(Account::new_from_rlp(*address, &Rlp::new(&raw))?))
-            }
+            Ok(Some(raw)) => Ok(Some(Account::new_from_rlp(
+                address.address,
+                &Rlp::new(&raw),
+            )?)),
             Err(e) => bail!(e),
         }
     }
 
     fn get_code(
-        &self, address: &Address, code_hash: &H256,
+        &self, address: &AddressWithSpace, code_hash: &H256,
     ) -> Result<Option<CodeInfo>> {
-        self.get::<CodeInfo>(StorageKey::new_code_key(address, code_hash))
+        self.get::<CodeInfo>(
+            StorageKey::new_code_key(&address.address, code_hash)
+                .with_space(address.space),
+        )
     }
 
     fn get_deposit_list(
-        &self, address: &Address,
+        &self, address: &AddressWithSpace,
     ) -> Result<Option<DepositList>> {
-        self.get::<DepositList>(StorageKey::new_deposit_list_key(address))
+        address.assert_native();
+        self.get::<DepositList>(
+            StorageKey::new_deposit_list_key(&address.address)
+                .with_native_space(),
+        )
     }
 
     fn get_vote_list(
-        &self, address: &Address,
+        &self, address: &AddressWithSpace,
     ) -> Result<Option<VoteStakeList>> {
-        self.get::<VoteStakeList>(StorageKey::new_vote_list_key(address))
+        address.assert_native();
+        self.get::<VoteStakeList>(
+            StorageKey::new_vote_list_key(&address.address).with_native_space(),
+        )
     }
 
     fn get_annual_interest_rate(&self) -> Result<U256> {
         let interest_rate_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             INTEREST_RATE_KEY,
-        );
+        )
+        .with_native_space();
         let interest_rate_opt = self.get::<U256>(interest_rate_key)?;
         Ok(interest_rate_opt.unwrap_or_default())
     }
@@ -167,7 +187,8 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         let interest_rate_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             INTEREST_RATE_KEY,
-        );
+        )
+        .with_native_space();
         self.set::<U256>(interest_rate_key, interest_rate, debug_record)
     }
 
@@ -175,7 +196,8 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         let acc_interest_rate_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             ACCUMULATE_INTEREST_RATE_KEY,
-        );
+        )
+        .with_native_space();
         let acc_interest_rate_opt = self.get::<U256>(acc_interest_rate_key)?;
         Ok(acc_interest_rate_opt.unwrap_or_default())
     }
@@ -188,7 +210,8 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         let acc_interest_rate_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             ACCUMULATE_INTEREST_RATE_KEY,
-        );
+        )
+        .with_native_space();
         self.set::<U256>(
             acc_interest_rate_key,
             accumulate_interest_rate,
@@ -200,7 +223,8 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         let total_issued_tokens_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             TOTAL_TOKENS_KEY,
-        );
+        )
+        .with_native_space();
         let total_issued_tokens_opt =
             self.get::<U256>(total_issued_tokens_key)?;
         Ok(total_issued_tokens_opt.unwrap_or_default())
@@ -214,7 +238,8 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         let total_issued_tokens_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             TOTAL_TOKENS_KEY,
-        );
+        )
+        .with_native_space();
         self.set::<U256>(
             total_issued_tokens_key,
             total_issued_tokens,
@@ -226,7 +251,8 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         let total_staking_tokens_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             TOTAL_BANK_TOKENS_KEY,
-        );
+        )
+        .with_native_space();
         let total_staking_tokens_opt =
             self.get::<U256>(total_staking_tokens_key)?;
         Ok(total_staking_tokens_opt.unwrap_or_default())
@@ -240,7 +266,8 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         let total_staking_tokens_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             TOTAL_BANK_TOKENS_KEY,
-        );
+        )
+        .with_native_space();
         self.set::<U256>(
             total_staking_tokens_key,
             total_staking_tokens,
@@ -252,7 +279,8 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         let total_storage_tokens_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             TOTAL_STORAGE_TOKENS_KEY,
-        );
+        )
+        .with_native_space();
         let total_storage_tokens_opt =
             self.get::<U256>(total_storage_tokens_key)?;
         Ok(total_storage_tokens_opt.unwrap_or_default())
@@ -266,7 +294,8 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         let total_storage_tokens_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             TOTAL_STORAGE_TOKENS_KEY,
-        );
+        )
+        .with_native_space();
         self.set::<U256>(
             total_storage_tokens_key,
             total_storage_tokens,
@@ -278,7 +307,8 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         let total_pos_staking_tokens_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             TOTAL_POS_STAKING_TOKENS_KEY,
-        );
+        )
+        .with_native_space();
         let total_pos_staking_tokens_opt =
             self.get::<U256>(total_pos_staking_tokens_key)?;
         Ok(total_pos_staking_tokens_opt.unwrap_or_default())
@@ -292,7 +322,8 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         let total_pos_staking_tokens_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             TOTAL_POS_STAKING_TOKENS_KEY,
-        );
+        )
+        .with_native_space();
         self.set::<U256>(
             total_pos_staking_tokens_key,
             total_pos_staking_tokens,
@@ -304,7 +335,8 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         let distributable_pos_interest_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             DISTRIBUTABLE_POS_INTEREST_KEY,
-        );
+        )
+        .with_native_space();
         let distributable_pos_interest_opt =
             self.get::<U256>(distributable_pos_interest_key)?;
         Ok(distributable_pos_interest_opt.unwrap_or_default())
@@ -318,7 +350,8 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         let distributable_pos_interest_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             DISTRIBUTABLE_POS_INTEREST_KEY,
-        );
+        )
+        .with_native_space();
         self.set::<U256>(
             distributable_pos_interest_key,
             distributable_pos_interest,
@@ -330,7 +363,8 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         let last_distribute_block_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             LAST_DISTRIBUTE_BLOCK_KEY,
-        );
+        )
+        .with_native_space();
         let last_distribute_block_opt =
             self.get::<U256>(last_distribute_block_key)?;
         Ok(last_distribute_block_opt.unwrap_or_default().low_u64())
@@ -344,7 +378,8 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         let last_distribute_block_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             LAST_DISTRIBUTE_BLOCK_KEY,
-        );
+        )
+        .with_native_space();
         self.set::<U256>(
             last_distribute_block_key,
             &U256::from(last_distribute_block),
@@ -356,7 +391,8 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         let interest_rate_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
             INTEREST_RATE_KEY,
-        );
+        )
+        .with_native_space();
         let interest_rate_opt = self.get::<U256>(interest_rate_key)?;
         Ok(interest_rate_opt.is_some())
     }
@@ -366,9 +402,9 @@ use super::{Result, StateDbGeneric};
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS;
 use cfx_storage::StorageStateTrait;
-use cfx_types::{Address, H256, U256};
+use cfx_types::{AddressWithSpace, H256, U256};
 use primitives::{
     is_default::IsDefault, Account, CodeInfo, DepositList, StorageKey,
-    VoteStakeList,
+    StorageKeyWithSpace, VoteStakeList,
 };
 use rlp::Rlp;

@@ -837,6 +837,10 @@ name = "cfx-types"
 version = "0.1.0"
 dependencies = [
  "ethereum-types 0.9.2",
+ "rlp",
+ "rlp_derive",
+ "serde",
+ "serde_derive",
 ]
 
 [[package]]
@@ -1194,6 +1198,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "slab",
+ "static_assertions",
  "storage-interface",
  "strum 0.20.0",
  "strum_macros 0.20.1",

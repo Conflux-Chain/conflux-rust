@@ -9,14 +9,14 @@ use cfx_state::{
     state_trait::StateOpsTrait, substate_trait::SubstateMngTrait, SubstateTrait,
 };
 use cfx_statedb::Result as DbResult;
-use cfx_types::{Address, U256};
+use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, U256};
 use primitives::LogEntry;
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 pub struct CallStackInfo {
-    call_stack_recipient_addresses: Vec<(Address, bool)>,
-    address_counter: HashMap<Address, u32>,
+    call_stack_recipient_addresses: Vec<(AddressWithSpace, bool)>,
+    address_counter: HashMap<AddressWithSpace, u32>,
     first_reentrancy_depth: Option<usize>,
 }
 
@@ -29,7 +29,7 @@ impl CallStackInfo {
         }
     }
 
-    pub fn push(&mut self, address: Address, is_create: bool) {
+    pub fn push(&mut self, address: AddressWithSpace, is_create: bool) {
         // We should still use the correct behaviour to check if reentrancy
         // happens.
         if self.last() != Some(&address) && self.contains_key(&address) {
@@ -42,7 +42,7 @@ impl CallStackInfo {
         *self.address_counter.entry(address).or_insert(0) += 1;
     }
 
-    pub fn pop(&mut self) -> Option<(Address, bool)> {
+    pub fn pop(&mut self) -> Option<(AddressWithSpace, bool)> {
         let maybe_address = self.call_stack_recipient_addresses.pop();
         if let Some((address, _is_create)) = &maybe_address {
             let poped_address_cnt = self
@@ -62,13 +62,13 @@ impl CallStackInfo {
         maybe_address
     }
 
-    pub fn last(&self) -> Option<&Address> {
+    pub fn last(&self) -> Option<&AddressWithSpace> {
         self.call_stack_recipient_addresses
             .last()
             .map(|(address, _is_create)| address)
     }
 
-    pub fn contains_key(&self, key: &Address) -> bool {
+    pub fn contains_key(&self, key: &AddressWithSpace) -> bool {
         self.address_counter.contains_key(key)
     }
 
@@ -87,11 +87,13 @@ impl CallStackInfo {
         }
     }
 
-    pub fn contract_in_creation(&self) -> Option<&Address> {
+    pub fn contract_in_creation(&self) -> Option<&AddressWithSpace> {
         if let [.., second_last, last] =
             self.call_stack_recipient_addresses.as_slice()
         {
-            if last.0 == *ADMIN_CONTROL_CONTRACT_ADDRESS && second_last.1 {
+            if last.0 == ADMIN_CONTROL_CONTRACT_ADDRESS.with_native_space()
+                && second_last.1
+            {
                 Some(&second_last.0)
             } else {
                 None
@@ -109,10 +111,10 @@ impl CallStackInfo {
 #[derive(Debug, Default)]
 pub struct Substate {
     /// Any accounts that have suicided.
-    pub suicides: HashSet<Address>,
+    pub suicides: HashSet<AddressWithSpace>,
     /// Any accounts that are touched.
     // touched is never used and it is not maintained properly.
-    pub touched: HashSet<Address>,
+    pub touched: HashSet<AddressWithSpace>,
     /// Any accounts that occupy some storage.
     pub storage_collateralized: HashMap<Address, u64>,
     /// Any accounts that release some storage.
@@ -120,7 +122,7 @@ pub struct Substate {
     /// Any logs.
     pub logs: Vec<LogEntry>,
     /// Created contracts.
-    pub contracts_created: Vec<Address>,
+    pub contracts_created: Vec<AddressWithSpace>,
 }
 
 impl SubstateMngTrait for Substate {
@@ -162,15 +164,17 @@ impl SubstateTrait for Substate {
     // Let VM access storage from substate so that storage ownership can be
     // maintained without help from state.
     fn storage_at(
-        &self, state: &dyn StateOpsTrait, address: &Address, key: &[u8],
-    ) -> DbResult<U256> {
+        &self, state: &dyn StateOpsTrait, address: &AddressWithSpace,
+        key: &[u8],
+    ) -> DbResult<U256>
+    {
         state.storage_at(address, key)
     }
 
     // Let VM access storage from substate so that storage ownership can be
     // maintained without help from state.
     fn set_storage(
-        &mut self, state: &mut dyn StateOpsTrait, address: &Address,
+        &mut self, state: &mut dyn StateOpsTrait, address: &AddressWithSpace,
         key: Vec<u8>, value: U256, owner: Address,
     ) -> DbResult<()>
     {
@@ -182,11 +186,15 @@ impl SubstateTrait for Substate {
             collaterals;
     }
 
-    fn touched(&mut self) -> &mut HashSet<Address> { &mut self.touched }
+    fn touched(&mut self) -> &mut HashSet<AddressWithSpace> {
+        &mut self.touched
+    }
 
-    fn contracts_created(&self) -> &[Address] { &self.contracts_created }
+    fn contracts_created(&self) -> &[AddressWithSpace] {
+        &self.contracts_created
+    }
 
-    fn contracts_created_mut(&mut self) -> &mut Vec<Address> {
+    fn contracts_created_mut(&mut self) -> &mut Vec<AddressWithSpace> {
         &mut self.contracts_created
     }
 
@@ -205,9 +213,11 @@ impl SubstateTrait for Substate {
             .collect()
     }
 
-    fn suicides(&self) -> &HashSet<Address> { &self.suicides }
+    fn suicides(&self) -> &HashSet<AddressWithSpace> { &self.suicides }
 
-    fn suicides_mut(&mut self) -> &mut HashSet<Address> { &mut self.suicides }
+    fn suicides_mut(&mut self) -> &mut HashSet<AddressWithSpace> {
+        &mut self.suicides
+    }
 }
 
 /// Get the cleanup mode object from this.
@@ -232,7 +242,7 @@ mod tests {
     use super::CallStackInfo;
     use crate::state::Substate;
     use cfx_state::substate_trait::SubstateMngTrait;
-    use cfx_types::Address;
+    use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace};
     use primitives::LogEntry;
 
     #[test]
@@ -246,18 +256,20 @@ mod tests {
         let mut sub_state = Substate::new();
         sub_state
             .contracts_created
-            .push(Address::from_low_u64_be(1));
+            .push(Address::from_low_u64_be(1).with_native_space());
         sub_state.logs.push(LogEntry {
             address: Address::from_low_u64_be(1),
             topics: vec![],
             data: vec![],
         });
-        sub_state.suicides.insert(Address::from_low_u64_be(10));
+        sub_state
+            .suicides
+            .insert(Address::from_low_u64_be(10).with_native_space());
 
         let mut sub_state_2 = Substate::new();
         sub_state_2
             .contracts_created
-            .push(Address::from_low_u64_be(2));
+            .push(Address::from_low_u64_be(2).with_native_space());
         sub_state_2.logs.push(LogEntry {
             address: Address::from_low_u64_be(1),
             topics: vec![],
@@ -269,7 +281,11 @@ mod tests {
         assert_eq!(sub_state.suicides.len(), 1);
     }
 
-    fn get_test_address(n: u8) -> Address { Address::from([n; 20]) }
+    fn get_test_address_raw(n: u8) -> Address { Address::from([n; 20]) }
+
+    fn get_test_address(n: u8) -> AddressWithSpace {
+        get_test_address_raw(n).with_native_space()
+    }
 
     #[test]
     fn test_callstack_info() {

@@ -9,7 +9,7 @@ use crate::{
         traits::pos::Pos,
         types::pos::{
             tx_type, Account, Block, BlockNumber, CommitteeState, Decision,
-            PoSEpochReward, NodeLockStatus, RpcCommittee, RpcTermData,
+            NodeLockStatus, PoSEpochReward, RpcCommittee, RpcTermData,
             RpcTransactionStatus, RpcTransactionType, Signature, Status,
             Transaction, VotePowerState,
         },
