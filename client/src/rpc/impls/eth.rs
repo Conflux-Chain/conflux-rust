@@ -305,6 +305,11 @@ impl Eth for EthHandler {
         Ok(format!("Conflux"))
     }
 
+    fn net_version(&self) -> jsonrpc_core::Result<String> {
+        info!("RPC Request: net_version");
+        Ok(format!("{}", self.consensus.best_chain_id().in_evm_space()))
+    }
+
     fn protocol_version(&self) -> jsonrpc_core::Result<String> {
         info!("RPC Request: eth_protocolVersion");
         // 65 is a common ETH version now
@@ -352,9 +357,7 @@ impl Eth for EthHandler {
 
     fn chain_id(&self) -> jsonrpc_core::Result<Option<U64>> {
         info!("RPC Request: eth_chainId");
-        return Ok(Some(
-            self.consensus.best_chain_id().in_native_space().into(),
-        ));
+        return Ok(Some(self.consensus.best_chain_id().in_evm_space().into()));
     }
 
     fn gas_price(&self) -> jsonrpc_core::Result<U256> {
@@ -379,7 +382,7 @@ impl Eth for EthHandler {
 
     fn block_number(&self) -> jsonrpc_core::Result<U256> {
         let consensus_graph = self.consensus_graph();
-        let epoch_num = EpochNumber::LatestMined;
+        let epoch_num = EpochNumber::LatestState;
         info!("RPC Request: eth_blockNumber()");
         match consensus_graph.get_height_from_epoch_number(epoch_num.into()) {
             Ok(height) => Ok(height.into()),

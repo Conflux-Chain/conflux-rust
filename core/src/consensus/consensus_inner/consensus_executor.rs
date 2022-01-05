@@ -47,7 +47,7 @@ use cfx_storage::{
 };
 use cfx_types::{
     address_util::AddressUtil, AddressSpaceUtil, AllChainID, BigEndianHash,
-    H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
+    Space, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
 };
 use core::convert::TryFrom;
 use hash::KECCAK_EMPTY_LIST_RLP;
@@ -1869,7 +1869,9 @@ impl ConsensusExecutionHandler {
 
         let author = {
             let mut address = H160::random();
-            address.set_user_account_type_bits();
+            if tx.space() == Space::Native {
+                address.set_user_account_type_bits();
+            }
             address
         };
 
