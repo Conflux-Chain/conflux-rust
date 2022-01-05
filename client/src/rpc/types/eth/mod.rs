@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 mod block;
+mod block_number;
 mod call_request;
 mod filter;
 mod log;
@@ -12,7 +13,8 @@ mod transaction;
 mod transaction_access_list;
 
 pub use self::{
-    block::{Block, RichBlock},
+    block::Block,
+    block_number::BlockNumber,
     call_request::CallRequest,
     filter::{Filter, FilterChanges},
     log::Log,

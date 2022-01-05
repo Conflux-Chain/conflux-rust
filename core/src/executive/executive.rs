@@ -252,28 +252,27 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         };
 
         // Builtin is located for both Conflux Space and EVM Space.
-        let kind = if let Some(builtin) =
-            machine.builtin(&params.code_address, env.number)
-        {
-            trace!("CallBuiltin");
-            CallCreateExecutiveKind::CallBuiltin(builtin)
-        } else if let Some(internal) =
-            machine.internal_contracts().contract(&code_address, spec)
-        {
-            debug!(
-                "CallInternalContract: address={:?} data={:?}",
-                code_address, params.data
-            );
-            CallCreateExecutiveKind::CallInternalContract(internal)
-        } else {
-            if params.code.is_some() {
-                trace!("ExecCall");
-                CallCreateExecutiveKind::ExecCall
+        let kind =
+            if let Some(builtin) = machine.builtin(&code_address, env.number) {
+                trace!("CallBuiltin");
+                CallCreateExecutiveKind::CallBuiltin(builtin)
+            } else if let Some(internal) =
+                machine.internal_contracts().contract(&code_address, spec)
+            {
+                debug!(
+                    "CallInternalContract: address={:?} data={:?}",
+                    code_address, params.data
+                );
+                CallCreateExecutiveKind::CallInternalContract(internal)
             } else {
-                trace!("Transfer");
-                CallCreateExecutiveKind::Transfer
-            }
-        };
+                if params.code.is_some() {
+                    trace!("ExecCall");
+                    CallCreateExecutiveKind::ExecCall
+                } else {
+                    trace!("Transfer");
+                    CallCreateExecutiveKind::Transfer
+                }
+            };
         let context = LocalContext::new(
             params.space,
             env,
@@ -1257,8 +1256,14 @@ impl<
 
         let res = match tx.action() {
             Action::Create => {
+                let address_scheme = match tx.space() {
+                    Space::Native => {
+                        CreateContractAddress::FromSenderNonceAndCodeHash
+                    }
+                    Space::Ethereum => CreateContractAddress::FromSenderNonce,
+                };
                 let (new_address, _code_hash) = contract_address(
-                    CreateContractAddress::FromSenderNonceAndCodeHash,
+                    address_scheme,
                     self.env.number.into(),
                     &sender,
                     &nonce,

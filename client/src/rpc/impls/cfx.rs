@@ -4,8 +4,8 @@
 
 use crate::rpc::types::{
     call_request::rpc_call_request_network, errors::check_rpc_address_network,
-    PoSEconomics, RpcAddress, SponsorInfo, TokenSupplyInfo,
-    MAX_GAS_CALL_REQUEST,
+    pos::PoSEpochReward, PoSEconomics, RpcAddress, SponsorInfo,
+    TokenSupplyInfo, MAX_GAS_CALL_REQUEST,
 };
 use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
@@ -91,12 +91,12 @@ lazy_static! {
 }
 
 #[derive(Debug)]
-struct BlockExecInfo {
-    block_receipts: Arc<BlockReceipts>,
-    block: Arc<Block>,
-    epoch_number: u64,
-    maybe_state_root: Option<H256>,
-    pivot_hash: H256,
+pub(crate) struct BlockExecInfo {
+    pub(crate) block_receipts: Arc<BlockReceipts>,
+    pub(crate) block: Arc<Block>,
+    pub(crate) epoch_number: u64,
+    pub(crate) maybe_state_root: Option<H256>,
+    pub(crate) pivot_hash: H256,
 }
 
 pub struct RpcImpl {
@@ -104,7 +104,7 @@ pub struct RpcImpl {
     pub consensus: SharedConsensusGraph,
     pub sync: SharedSynchronizationService,
     block_gen: Arc<BlockGenerator>,
-    tx_pool: SharedTransactionPool,
+    pub tx_pool: SharedTransactionPool,
     maybe_txgen: Option<Arc<TransactionGenerator>>,
     maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
     accounts: Arc<AccountProvider>,
@@ -1568,6 +1568,7 @@ impl Cfx for CfxHandler {
             fn get_client_version(&self) -> JsonRpcResult<String>;
             fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<Option<AccountPendingInfo>>;
             fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
+            fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
         }
 
         to self.rpc_impl {

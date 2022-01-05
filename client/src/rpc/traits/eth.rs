@@ -20,22 +20,25 @@
 
 //! Eth rpc interface.
 use cfx_types::{H160, H256, U256, U64};
-use jsonrpc_core::{BoxFuture, Result};
+use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
 
 use crate::rpc::types::{
     eth::{
-        CallRequest, Filter, FilterChanges, Log, Receipt, RichBlock,
+        Block, BlockNumber, CallRequest, Filter, FilterChanges, Log, Receipt,
         SyncStatus, Transaction,
     },
-    Bytes, EpochNumber as BlockNumber, Index,
+    Bytes, Index,
 };
 
 /// Eth rpc interface.
 #[rpc(server)]
 pub trait Eth {
-    /// RPC Metadata
-    type Metadata;
+    #[rpc(name = "web3_clientVersion")]
+    fn client_version(&self) -> Result<String>;
+
+    #[rpc(name = "net_version")]
+    fn net_version(&self) -> Result<String>;
 
     /// Returns protocol version encoded as a string (quotes are necessary).
     #[rpc(name = "eth_protocolVersion")]
@@ -65,11 +68,11 @@ pub trait Eth {
 
     /// Returns current gas_price.
     #[rpc(name = "eth_gasPrice")]
-    fn gas_price(&self) -> BoxFuture<U256>;
+    fn gas_price(&self) -> Result<U256>;
 
     /// Returns current max_priority_fee
     #[rpc(name = "eth_maxPriorityFeePerGas")]
-    fn max_priority_fee_per_gas(&self) -> BoxFuture<U256>;
+    fn max_priority_fee_per_gas(&self) -> Result<U256>;
 
     // /// Returns transaction fee history.
     // #[rpc(name = "eth_feeHistory")]
@@ -86,7 +89,7 @@ pub trait Eth {
 
     /// Returns balance of the given account.
     #[rpc(name = "eth_getBalance")]
-    fn balance(&self, _: H160, _: Option<BlockNumber>) -> BoxFuture<U256>;
+    fn balance(&self, _: H160, _: Option<BlockNumber>) -> Result<U256>;
 
     // /// Returns the account- and storage-values of the specified account
     // including the Merkle-proof #[rpc(name = "eth_getProof")]
@@ -97,50 +100,47 @@ pub trait Eth {
     #[rpc(name = "eth_getStorageAt")]
     fn storage_at(
         &self, _: H160, _: U256, _: Option<BlockNumber>,
-    ) -> BoxFuture<H256>;
+    ) -> jsonrpc_core::Result<H256>;
 
     /// Returns block with given hash.
     #[rpc(name = "eth_getBlockByHash")]
-    fn block_by_hash(&self, _: H256, _: bool) -> BoxFuture<Option<RichBlock>>;
+    fn block_by_hash(&self, _: H256, _: bool) -> Result<Option<Block>>;
 
     /// Returns block with given number.
     #[rpc(name = "eth_getBlockByNumber")]
-    fn block_by_number(
-        &self, _: BlockNumber, _: bool,
-    ) -> BoxFuture<Option<RichBlock>>;
+    fn block_by_number(&self, _: BlockNumber, _: bool)
+        -> Result<Option<Block>>;
 
     /// Returns the number of transactions sent from given address at given time
     /// (block number).
     #[rpc(name = "eth_getTransactionCount")]
     fn transaction_count(
         &self, _: H160, _: Option<BlockNumber>,
-    ) -> BoxFuture<U256>;
+    ) -> Result<U256>;
 
     /// Returns the number of transactions in a block with given hash.
     #[rpc(name = "eth_getBlockTransactionCountByHash")]
-    fn block_transaction_count_by_hash(
-        &self, _: H256,
-    ) -> BoxFuture<Option<U256>>;
+    fn block_transaction_count_by_hash(&self, _: H256) -> Result<Option<U256>>;
 
     /// Returns the number of transactions in a block with given block number.
     #[rpc(name = "eth_getBlockTransactionCountByNumber")]
     fn block_transaction_count_by_number(
         &self, _: BlockNumber,
-    ) -> BoxFuture<Option<U256>>;
+    ) -> Result<Option<U256>>;
 
     /// Returns the number of uncles in a block with given hash.
     #[rpc(name = "eth_getUncleCountByBlockHash")]
-    fn block_uncles_count_by_hash(&self, _: H256) -> BoxFuture<Option<U256>>;
+    fn block_uncles_count_by_hash(&self, _: H256) -> Result<Option<U256>>;
 
     /// Returns the number of uncles in a block with given block number.
     #[rpc(name = "eth_getUncleCountByBlockNumber")]
     fn block_uncles_count_by_number(
         &self, _: BlockNumber,
-    ) -> BoxFuture<Option<U256>>;
+    ) -> Result<Option<U256>>;
 
     /// Returns the code at given address at given time (block number).
     #[rpc(name = "eth_getCode")]
-    fn code_at(&self, _: H160, _: Option<BlockNumber>) -> BoxFuture<Bytes>;
+    fn code_at(&self, _: H160, _: Option<BlockNumber>) -> Result<Bytes>;
 
     /// Sends signed transaction, returning its hash.
     #[rpc(name = "eth_sendRawTransaction")]
@@ -152,45 +152,45 @@ pub trait Eth {
 
     /// Call contract, returning the output data.
     #[rpc(name = "eth_call")]
-    fn call(&self, _: CallRequest, _: Option<BlockNumber>) -> BoxFuture<Bytes>;
+    fn call(&self, _: CallRequest, _: Option<BlockNumber>) -> Result<Bytes>;
 
     /// Estimate gas needed for execution of given contract.
     #[rpc(name = "eth_estimateGas")]
     fn estimate_gas(
         &self, _: CallRequest, _: Option<BlockNumber>,
-    ) -> BoxFuture<U256>;
+    ) -> Result<U256>;
 
     /// Get transaction by its hash.
     #[rpc(name = "eth_getTransactionByHash")]
-    fn transaction_by_hash(&self, _: H256) -> BoxFuture<Option<Transaction>>;
+    fn transaction_by_hash(&self, _: H256) -> Result<Option<Transaction>>;
 
     /// Returns transaction at given block hash and index.
     #[rpc(name = "eth_getTransactionByBlockHashAndIndex")]
     fn transaction_by_block_hash_and_index(
         &self, _: H256, _: Index,
-    ) -> BoxFuture<Option<Transaction>>;
+    ) -> Result<Option<Transaction>>;
 
     /// Returns transaction by given block number and index.
     #[rpc(name = "eth_getTransactionByBlockNumberAndIndex")]
     fn transaction_by_block_number_and_index(
         &self, _: BlockNumber, _: Index,
-    ) -> BoxFuture<Option<Transaction>>;
+    ) -> Result<Option<Transaction>>;
 
     /// Returns transaction receipt by transaction hash.
     #[rpc(name = "eth_getTransactionReceipt")]
-    fn transaction_receipt(&self, _: H256) -> BoxFuture<Option<Receipt>>;
+    fn transaction_receipt(&self, _: H256) -> Result<Option<Receipt>>;
 
     /// Returns an uncles at given block and index.
     #[rpc(name = "eth_getUncleByBlockHashAndIndex")]
     fn uncle_by_block_hash_and_index(
         &self, _: H256, _: Index,
-    ) -> BoxFuture<Option<RichBlock>>;
+    ) -> Result<Option<Block>>;
 
     /// Returns an uncles at given block and index.
     #[rpc(name = "eth_getUncleByBlockNumberAndIndex")]
     fn uncle_by_block_number_and_index(
         &self, _: BlockNumber, _: Index,
-    ) -> BoxFuture<Option<RichBlock>>;
+    ) -> Result<Option<Block>>;
 
     // /// Returns available compilers.
     // /// @deprecated
@@ -214,7 +214,7 @@ pub trait Eth {
 
     /// Returns logs matching given filter object.
     #[rpc(name = "eth_getLogs")]
-    fn logs(&self, _: Filter) -> BoxFuture<Vec<Log>>;
+    fn logs(&self, _: Filter) -> Result<Vec<Log>>;
 
     // /// Returns the hash of the current block, the seedHash, and the boundary
     // condition to be met. #[rpc(name = "eth_getWork")]
@@ -247,11 +247,11 @@ pub trait EthFilter {
 
     /// Returns filter changes since last poll.
     #[rpc(name = "eth_getFilterChanges")]
-    fn filter_changes(&self, _: Index) -> BoxFuture<FilterChanges>;
+    fn filter_changes(&self, _: Index) -> Result<FilterChanges>;
 
     /// Returns all logs matching given filter (in a range 'from' - 'to').
     #[rpc(name = "eth_getFilterLogs")]
-    fn filter_logs(&self, _: Index) -> BoxFuture<Vec<Log>>;
+    fn filter_logs(&self, _: Index) -> Result<Vec<Log>>;
 
     /// Uninstalls filter.
     #[rpc(name = "eth_uninstallFilter")]

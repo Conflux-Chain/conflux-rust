@@ -588,12 +588,9 @@ impl TransactionPoolInner {
                 .get_local_nonce_and_balance(&victim_address)
                 .unwrap_or((0.into(), 0.into()));
 
-            let to_remove_tx = self
-                .deferred_pool
-                .remove_lowest_nonce(&victim_address)
-                .unwrap()
-                .get_arc_tx()
-                .clone();
+            let tx_with_ready_info =
+                self.deferred_pool.remove_lowest_nonce(&victim_address).unwrap();
+            let to_remove_tx = tx_with_ready_info.get_arc_tx().clone();
 
             // We have to garbage collect an unexecuted transaction.
             // TODO: Implement more heuristic strategies
@@ -618,10 +615,7 @@ impl TransactionPoolInner {
                 }
             }
 
-            if !self
-                .deferred_pool
-                .check_tx_packed(victim_address, *to_remove_tx.nonce())
-            {
+            if !tx_with_ready_info.is_already_packed() {
                 self.unpacked_transaction_count = self
                     .unpacked_transaction_count
                     .checked_sub(1)
