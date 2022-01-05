@@ -45,7 +45,10 @@ use cfx_storage::{
     defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
     StorageManagerTrait,
 };
-use cfx_types::{address_util::AddressUtil, AddressSpaceUtil, AllChainID, BigEndianHash, H160, H256, KECCAK_EMPTY_BLOOM, Space, U256, U512};
+use cfx_types::{
+    address_util::AddressUtil, AddressSpaceUtil, AllChainID, BigEndianHash,
+    Space, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
+};
 use core::convert::TryFrom;
 use hash::KECCAK_EMPTY_LIST_RLP;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
