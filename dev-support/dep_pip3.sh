@@ -3,7 +3,7 @@
 set -e
 
 function install() {
-	if [ "`pip3 show $1`" =  "" ]; then
+	if [ "`pip3 show ${1%%=*}`" =  "" ]; then
 		pip3 install $1
 	fi
 }
