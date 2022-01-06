@@ -25,7 +25,7 @@ pub fn deposit(
         ))
     } else {
         tracer.prepare_internal_transfer_action(
-            AddressPocket::Balance(params.sender),
+            AddressPocket::Balance(params.sender.with_space(params.space)),
             AddressPocket::StakingBalance(params.sender),
             amount,
         );
@@ -55,13 +55,13 @@ pub fn withdraw(
     } else {
         tracer.prepare_internal_transfer_action(
             AddressPocket::StakingBalance(params.sender),
-            AddressPocket::Balance(params.sender),
+            AddressPocket::Balance(params.sender.with_space(params.space)),
             amount,
         );
         let interest_amount = state.withdraw(&params.sender, &amount)?;
         tracer.prepare_internal_transfer_action(
             AddressPocket::MintBurn,
-            AddressPocket::Balance(params.sender),
+            AddressPocket::Balance(params.sender.with_space(params.space)),
             interest_amount,
         );
         Ok(())

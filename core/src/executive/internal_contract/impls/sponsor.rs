@@ -81,7 +81,9 @@ pub fn set_sponsor_for_gas(
         if prev_sponsor.is_some() {
             tracer.prepare_internal_transfer_action(
                 AddressPocket::SponsorBalanceForGas(contract_address),
-                AddressPocket::Balance(prev_sponsor.unwrap()),
+                AddressPocket::Balance(
+                    prev_sponsor.unwrap().with_native_space(),
+                ),
                 prev_sponsor_balance,
             );
             state.add_balance(
@@ -92,7 +94,7 @@ pub fn set_sponsor_for_gas(
             )?;
         }
         tracer.prepare_internal_transfer_action(
-            AddressPocket::Balance(params.address),
+            AddressPocket::Balance(params.address.with_space(params.space)),
             AddressPocket::SponsorBalanceForGas(contract_address),
             sponsor_balance,
         );
@@ -119,7 +121,7 @@ pub fn set_sponsor_for_gas(
             ));
         }
         tracer.prepare_internal_transfer_action(
-            AddressPocket::Balance(params.address),
+            AddressPocket::Balance(params.address.with_space(params.space)),
             AddressPocket::SponsorBalanceForGas(contract_address),
             sponsor_balance,
         );
@@ -197,19 +199,19 @@ pub fn set_sponsor_for_collateral(
             ));
         }
         // refund to previous sponsor
-        if prev_sponsor.is_some() {
+        if let Some(ref prev_sponsor) = prev_sponsor {
             tracer.prepare_internal_transfer_action(
                 AddressPocket::SponsorBalanceForStorage(contract_address),
-                AddressPocket::Balance(prev_sponsor.unwrap()),
+                AddressPocket::Balance(prev_sponsor.with_native_space()),
                 prev_sponsor_balance,
             );
             tracer.prepare_internal_transfer_action(
-                AddressPocket::Balance(params.address),
-                AddressPocket::Balance(prev_sponsor.unwrap()),
+                AddressPocket::Balance(params.address.with_space(params.space)),
+                AddressPocket::Balance(prev_sponsor.with_native_space()),
                 collateral_for_storage,
             );
             state.add_balance(
-                &prev_sponsor.as_ref().unwrap().with_native_space(),
+                &prev_sponsor.with_native_space(),
                 &(prev_sponsor_balance + collateral_for_storage),
                 cleanup_mode(substate, &spec),
                 account_start_nonce,
@@ -218,7 +220,7 @@ pub fn set_sponsor_for_collateral(
             assert_eq!(collateral_for_storage, U256::zero());
         }
         tracer.prepare_internal_transfer_action(
-            AddressPocket::Balance(params.address),
+            AddressPocket::Balance(params.address.with_space(params.space)),
             AddressPocket::SponsorBalanceForStorage(contract_address),
             sponsor_balance - collateral_for_storage,
         );
@@ -234,7 +236,7 @@ pub fn set_sponsor_for_collateral(
         )?;
     } else {
         tracer.prepare_internal_transfer_action(
-            AddressPocket::Balance(params.address),
+            AddressPocket::Balance(params.address.with_space(params.space)),
             AddressPocket::SponsorBalanceForStorage(contract_address),
             sponsor_balance,
         );

@@ -40,7 +40,7 @@ pub fn suicide(
             && refund_address.space == Space::Native)
     {
         tracer.prepare_internal_transfer_action(
-            AddressPocket::Balance(contract_address.address),
+            AddressPocket::Balance(*contract_address),
             AddressPocket::MintBurn,
             balance,
         );
@@ -54,8 +54,8 @@ pub fn suicide(
     } else {
         trace!(target: "context", "Destroying {} -> {} (xfer: {})", contract_address.address, refund_address.address, balance);
         tracer.prepare_internal_transfer_action(
-            AddressPocket::Balance(contract_address.address),
-            AddressPocket::Balance(refund_address.address),
+            AddressPocket::Balance(*contract_address),
+            AddressPocket::Balance(*refund_address),
             balance,
         );
         state.transfer_balance(

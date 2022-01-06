@@ -1287,7 +1287,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 if is_contract {
                     AddressPocket::SponsorBalanceForStorage(*addr)
                 } else {
-                    AddressPocket::Balance(*addr)
+                    AddressPocket::Balance(addr.with_native_space())
                 },
                 sub,
             );
@@ -1311,7 +1311,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 if is_contract {
                     AddressPocket::SponsorBalanceForStorage(*addr)
                 } else {
-                    AddressPocket::Balance(*addr)
+                    AddressPocket::Balance(addr.with_native_space())
                 },
                 /* to */ AddressPocket::StorageCollateral(*addr),
                 inc,
