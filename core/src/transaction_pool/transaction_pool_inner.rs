@@ -272,6 +272,10 @@ impl ReadyAccountPool {
     }
 
     fn insert(&mut self, tx: Arc<SignedTransaction>) {
+        // We always replace the old tx from the same sender, so we remove it
+        // from `waiting_pool` first to avoid having transactions from
+        // the same sender to exist in both `packing_pool` and `waiting_pool`.
+        self.waiting_pool.remove(&tx.sender());
         self.packing_pool.insert(tx);
         self.try_shrink_packing_pool();
     }
@@ -330,6 +334,9 @@ impl ReadyAccountPool {
     }
 
     fn len(&self) -> usize { self.packing_pool.len() + self.waiting_pool.len() }
+
+    #[cfg(test)]
+    fn top(&self) -> Option<Arc<SignedTransaction>> { self.packing_pool.top() }
 }
 
 #[derive(DeriveMallocSizeOf)]
@@ -444,6 +451,11 @@ impl PackingPool {
             self.total_gas -= *tx.gas();
             tx
         })
+    }
+
+    #[cfg(test)]
+    fn top(&self) -> Option<Arc<SignedTransaction>> {
+        self.heap_map.top().map(|(_, tx)| (tx.0).0.clone())
     }
 }
 
@@ -1250,6 +1262,7 @@ impl TransactionPoolInner {
 #[cfg(test)]
 mod test_transaction_pool_inner {
     use super::{DeferredPool, InsertResult, TxWithReadyInfo};
+    use crate::transaction_pool::transaction_pool_inner::ReadyAccountPool;
     use cfx_types::{Address, AddressSpaceUtil, U256};
     use keylib::{Generator, KeyPair, Random};
     use primitives::{
@@ -1507,5 +1520,70 @@ mod test_transaction_pool_inner {
             ),
             None
         );
+    }
+
+    #[test]
+    fn test_ready_account_pool() {
+        let mut ready_pool = ReadyAccountPool::new(1, 1, 50001.into());
+        let account_count = 3;
+        let mut senders = Vec::with_capacity(account_count);
+        let mut sender_addresses = Vec::with_capacity(account_count);
+        for _ in 0..account_count {
+            let sender = Random.generate().unwrap();
+            sender_addresses.push(sender.address().with_native_space());
+            senders.push(sender);
+        }
+        ready_pool.update(
+            &sender_addresses[0],
+            Some(new_test_tx(&senders[0], 0, 2, 0)),
+        );
+        assert_eq!(ready_pool.top().unwrap().sender(), sender_addresses[0]);
+        assert_eq!(ready_pool.waiting_pool.len(), 0);
+        assert_eq!(ready_pool.packing_pool.len(), 1);
+        ready_pool.update(
+            &sender_addresses[1],
+            Some(new_test_tx(&senders[1], 0, 3, 0)),
+        );
+        assert_eq!(ready_pool.top().unwrap().sender(), sender_addresses[1]);
+        assert_eq!(ready_pool.waiting_pool.len(), 1);
+        assert_eq!(ready_pool.packing_pool.len(), 1);
+        ready_pool.update(
+            &sender_addresses[0],
+            Some(new_test_tx(&senders[0], 0, 4, 0)),
+        );
+        assert_eq!(ready_pool.top().unwrap().sender(), sender_addresses[0]);
+        assert_eq!(ready_pool.waiting_pool.len(), 1);
+        assert_eq!(ready_pool.packing_pool.len(), 1);
+        ready_pool.update(
+            &sender_addresses[2],
+            Some(new_test_tx(&senders[2], 0, 1, 0)),
+        );
+        assert_eq!(ready_pool.top().unwrap().sender(), sender_addresses[0]);
+        assert_eq!(ready_pool.waiting_pool.len(), 2);
+        assert_eq!(ready_pool.packing_pool.len(), 1);
+        for i in 0..account_count {
+            assert_eq!(
+                ready_pool.get(&sender_addresses[i]).unwrap().sender(),
+                sender_addresses[i]
+            );
+        }
+        ready_pool.update(&sender_addresses[0], None);
+        assert_eq!(ready_pool.top().unwrap().sender(), sender_addresses[1]);
+        for i in 1..account_count {
+            assert_eq!(
+                ready_pool.get(&sender_addresses[i]).unwrap().sender(),
+                sender_addresses[i]
+            );
+        }
+        assert_eq!(
+            ready_pool.sample_pop().unwrap().sender(),
+            sender_addresses[1]
+        );
+        assert_eq!(
+            ready_pool.sample_pop().unwrap().sender(),
+            sender_addresses[2]
+        );
+        assert_eq!(ready_pool.packing_pool.len(), 0);
+        assert_eq!(ready_pool.waiting_pool.len(), 0);
     }
 }
