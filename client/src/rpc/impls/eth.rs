@@ -497,7 +497,7 @@ impl Eth for EthHandler {
                 let num =
                     num.map(Into::into).unwrap_or(EpochNumber::LatestState);
                 self.consensus_graph().next_nonce(
-                    address.with_native_space(),
+                    address.with_evm_space(),
                     BlockHashOrEpochNumber::EpochNumber(num),
                     "num",
                 )?
