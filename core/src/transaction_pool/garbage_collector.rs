@@ -7,20 +7,26 @@ use heap_map::HeapMap;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use std::cmp::{Ord, Ordering, PartialEq, PartialOrd, Reverse};
 
-/// This is the internal node type of `GarbageCollector`.
+/// This is the internal node value type of `GarbageCollector`.
 /// A node `lhs` is considered as smaller than another node `rhs` if `lhs.count
-/// < rhs.count` or `lhs.count == rhs.count && lhs.timestamp > rhs.timestamp`.
+/// < rhs.count` or `lhs.count == rhs.count && (lhs.has_ready_tx,
+/// lhs.first_tx_gas_price, lhs.timestamp) > (rhs.has_ready_tx,
+/// rhs.first_tx_gas_price, rhs.timestamp)`.
 #[derive(Default, Eq, PartialEq, Copy, Clone, Debug, DeriveMallocSizeOf)]
 pub struct GarbageCollectorValue {
     /// This indicates the number of transactions can be garbage collected.
+    /// A higher count has a higher GC priority.
     pub count: usize,
     /// This indicates if the sender has a ready tx.
+    /// Unready txs has a higher GC priority than ready txs.
     pub has_ready_tx: bool,
     /// This indicates the gas price of the lowest nonce transaction from the
     /// sender. This is only useful when `self.count == 0`.
+    /// A higher gas price has a lower GC priority.
     pub first_tx_gas_price: U256,
     /// This indicates the latest timestamp when a transaction was garbage
     /// collected.
+    /// A higher timestamp (the tx is newer) has a lower GC priority.
     pub timestamp: u64,
 }
 
@@ -47,7 +53,7 @@ impl PartialOrd for GarbageCollectorValue {
     }
 }
 
-/// The `GarbageCollector` maintain a priority queue of `GarbageCollectorNode`,
+/// The `GarbageCollector` maintain a priority queue of `GarbageCollectorValue`,
 /// the topmost node is the largest one.
 #[derive(Default, DeriveMallocSizeOf)]
 pub struct GarbageCollector {
@@ -56,6 +62,8 @@ pub struct GarbageCollector {
 }
 
 impl GarbageCollector {
+    /// Insert the latest txpool status of `sender` account into
+    /// `GarbageCollector`.
     pub fn insert(
         &mut self, sender: &AddressWithSpace, count: usize, timestamp: u64,
         has_ready_tx: bool, first_tx_gas_price: U256,
@@ -74,6 +82,10 @@ impl GarbageCollector {
         self.heap_map.insert(sender, value);
     }
 
+    /// Pop the node with the highest GC priority.
+    /// Note that each node corresponds to one account, so if the account still
+    /// have transactions after this GC operation, it should be inserted
+    /// back.
     pub fn pop(&mut self) -> Option<(AddressWithSpace, GarbageCollectorValue)> {
         let item = self.heap_map.pop();
         if let Some((_, v)) = &item {

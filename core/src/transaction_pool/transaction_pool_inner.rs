@@ -227,9 +227,18 @@ impl Ord for PriceOrderedTransaction {
     }
 }
 
+/// `ReadyAccountPool` maintains all ready transactions, and a subset with high
+/// gas prices will be sampled for packing. Each account has at most one ready
+/// transaction, and a ready account/transaction is either in `packing_pool` or
+/// `waiting_pool`. All transactions in `packing_pool` have no less gas price
+/// than the ones in `waiting_pool`. When `packing_pool` has an available
+/// capacity, we will try to move the highest gas price transactions from
+/// `waiting_pool` to `packing_pool`.
 #[derive(DeriveMallocSizeOf)]
 struct ReadyAccountPool {
+    /// Keeps all high gas price transactions that can be sampled for packing.
     packing_pool: PackingPool,
+    /// Keeps all low gas price transactions.
     waiting_pool: HeapMap<AddressWithSpace, PriceOrderedTransaction>,
 }
 
@@ -325,7 +334,10 @@ impl ReadyAccountPool {
 
 #[derive(DeriveMallocSizeOf)]
 struct PackingPool {
+    /// A balance tree used to randomly sample transactions with `gas_price` as
+    /// a sampling weight.
     treap: TreapMap<AddressWithSpace, Arc<SignedTransaction>, WeightType>,
+    /// A priority queue to order transactions based on their gas_price.
     heap_map: HeapMap<AddressWithSpace, Reverse<PriceOrderedTransaction>>,
     tx_weight_scaling: u64,
     tx_weight_exp: u8,
@@ -588,8 +600,10 @@ impl TransactionPoolInner {
                 .get_local_nonce_and_balance(&victim_address)
                 .unwrap_or((0.into(), 0.into()));
 
-            let tx_with_ready_info =
-                self.deferred_pool.remove_lowest_nonce(&victim_address).unwrap();
+            let tx_with_ready_info = self
+                .deferred_pool
+                .remove_lowest_nonce(&victim_address)
+                .unwrap();
             let to_remove_tx = tx_with_ready_info.get_arc_tx().clone();
 
             // We have to garbage collect an unexecuted transaction.

@@ -1,8 +1,8 @@
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use std::{cmp::Ordering, collections::HashMap, fmt::Debug, hash, ptr};
 
-/// The `GarbageCollector` maintain a priority queue of `GarbageCollectorNode`,
-/// the topmost node is the largest one.
+/// The `HeapMap` maintain a max heap along with a hash map to support
+/// additional `remove` and `update` operations.
 #[derive(DeriveMallocSizeOf)]
 pub struct HeapMap<
     K: hash::Hash + Eq + Copy + Debug,
@@ -54,14 +54,19 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
         }
     }
 
-    pub fn insert(&mut self, key: &K, value: V) {
+    /// Insert a K-V into the HeapMap.
+    /// Return the old value if `key` already exist. Return `None` otherwise.
+    pub fn insert(&mut self, key: &K, value: V) -> Option<V> {
         if self.mapping.contains_key(key) {
-            self.update(key, value);
+            let old_value = self.update(key, value);
+            Some(old_value)
         } else {
             self.append(key, value);
+            None
         }
     }
 
+    /// Remove `key` from the HeapMap.
     pub fn remove(&mut self, key: &K) -> Option<V> {
         let index = self.mapping.remove(key)?;
         let removed_node = self.data.swap_remove(index);
@@ -79,7 +84,6 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
     }
 
     /// In-place update some fields of a node's value.
-    /// This is guaranteed to be called after `insert` is called.
     pub fn update_with<F>(&mut self, key: &K, mut update_fn: F)
     where F: FnMut(&mut V) -> () {
         let index = match self.mapping.get(&key) {
@@ -98,10 +102,12 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
         }
     }
 
+    /// Return the top K-V reference tuple.
     pub fn top(&self) -> Option<(&K, &V)> {
         self.data.get(0).map(|node| (&node.key, &node.value))
     }
 
+    /// Pop the top node and return it as a K-V tuple.
     pub fn pop(&mut self) -> Option<(K, V)> {
         if self.is_empty() {
             return None;
@@ -114,11 +120,13 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
         Some((item.key, item.value))
     }
 
+    /// Get the value reference of `key`.
     pub fn get(&self, key: &K) -> Option<&V> {
         let index = *self.mapping.get(key)?;
         self.data.get(index).map(|node| &node.value)
     }
 
+    /// Clear all key-values of the HeapMap.
     pub fn clear(&mut self) {
         self.mapping.clear();
         self.data.clear();
@@ -131,7 +139,7 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
     #[allow(dead_code)]
     pub fn len(&self) -> usize { self.data.len() }
 
-    fn update(&mut self, key: &K, value: V) {
+    fn update(&mut self, key: &K, value: V) -> V {
         let index = *self.mapping.get(key).unwrap();
         let origin_node = self.data[index].clone();
         self.data[index] = Node::new(*key, value);
@@ -140,6 +148,7 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
             Ordering::Greater => self.sift_up(index),
             _ => {}
         }
+        origin_node.value
     }
 
     fn append(&mut self, key: &K, value: V) {
