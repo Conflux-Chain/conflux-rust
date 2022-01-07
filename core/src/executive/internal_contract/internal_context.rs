@@ -41,6 +41,7 @@ impl<'a> InternalRefContext<'a> {
             address,
             topics,
             data,
+            space: Some(params.space),
         });
 
         Ok(())

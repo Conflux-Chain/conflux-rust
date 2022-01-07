@@ -5,7 +5,7 @@
 //! Log entry type definition.
 
 use crate::{block::BlockNumber, bytes::Bytes};
-use cfx_types::{Address, Bloom, BloomInput, H256};
+use cfx_types::{Address, Bloom, BloomInput, Space, H256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use serde_derive::{Deserialize, Serialize};
 use std::ops::Deref;
@@ -30,6 +30,10 @@ pub struct LogEntry {
     pub topics: Vec<H256>,
     /// The data associated with the `LOG` operation.
     pub data: Bytes,
+    /// The space associated with `address`.
+    /// Note: we use `Option` for backward-compatibility.
+    // TODO(thegaram): double check that this change is compatible
+    pub space: Option<Space>,
 }
 
 impl MallocSizeOf for LogEntry {

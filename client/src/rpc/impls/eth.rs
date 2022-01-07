@@ -25,9 +25,11 @@ use cfxcore::{
     SharedTransactionPool,
 };
 use primitives::{
-    receipt::TRANSACTION_OUTCOME_SUCCESS, Action, Block,
-    BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, SignedTransaction,
-    StorageKey, StorageValue, TransactionIndex, TransactionWithSignature,
+    filter::{LogFilter, LogFilterParams},
+    receipt::TRANSACTION_OUTCOME_SUCCESS,
+    Action, Block, BlockHashOrEpochNumber, Eip155Transaction, EpochNumber,
+    SignedTransaction, StorageKey, StorageValue, TransactionIndex,
+    TransactionWithSignature,
 };
 
 use crate::rpc::{
@@ -268,7 +270,6 @@ impl EthHandler {
                 transaction_index,
                 log_index: None, // TODO: EVM core: count log_index
                 transaction_log_index: None,
-                log_type: "".to_string(),
                 removed: false,
             })
             .collect();
@@ -909,10 +910,54 @@ impl Eth for EthHandler {
         }
     }
 
-    fn logs(&self, _: Filter) -> jsonrpc_core::Result<Vec<Log>> {
-        warn!("RPC Request (Not Supported!): eth_getLogs");
-        // TODO: Properly handle logs
-        Ok(vec![])
+    fn logs(&self, filter: Filter) -> jsonrpc_core::Result<Vec<Log>> {
+        info!("RPC Request: eth_getLogs({:?})", filter);
+        let consensus_graph = self.consensus_graph();
+
+        let params = LogFilterParams {
+            address: filter.address.map(|v| v.to_vec()),
+            topics: filter
+                .topics
+                .unwrap_or(vec![])
+                .into_iter()
+                .map(|t| t.to_opt())
+                .collect(),
+            offset: None,
+            limit: filter.limit,
+            trusted: false,
+            space: Some(Space::Ethereum),
+        };
+
+        // TODO: use block number or epoch number?
+        let filter = LogFilter::EpochLogFilter {
+            from_epoch: filter
+                .from_block
+                .map(|n| n.into())
+                .unwrap_or(EpochNumber::LatestCheckpoint),
+            to_epoch: filter
+                .to_block
+                .map(|n| n.into())
+                .unwrap_or(EpochNumber::LatestState),
+            params,
+        };
+
+        // // If max_limit is set, the value in `filter` will be modified to
+        // // satisfy this limitation to avoid loading too many blocks
+        // // TODO Should the response indicate that the filter is modified?
+        // if let Some(max_limit) = self.config.get_logs_filter_max_limit {
+        //     if filter.limit.is_none() || filter.limit.unwrap() > max_limit {
+        //         filter.limit = Some(max_limit);
+        //     }
+        // }
+
+        Ok(consensus_graph
+            .logs(filter)
+            .map_err(|err| CfxRpcError::from(err))?
+            .iter()
+            .cloned()
+            .map(|l| Log::try_from_localized(l))
+            .collect::<Result<_, _>>()
+            .map_err(|err| CfxRpcError::from(err))?)
     }
 
     fn submit_hashrate(&self, _: U256, _: H256) -> jsonrpc_core::Result<bool> {

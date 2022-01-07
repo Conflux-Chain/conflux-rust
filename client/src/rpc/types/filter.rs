@@ -4,7 +4,7 @@
 
 use super::{EpochNumber, RpcAddress};
 use crate::rpc::helpers::{maybe_vec_into, VariadicValue};
-use cfx_types::{H256, U64};
+use cfx_types::{Space, H256, U64};
 use jsonrpc_core::Error as RpcError;
 use primitives::filter::{LogFilter as PrimitiveFilter, LogFilterParams};
 use serde::{Deserialize, Serialize};
@@ -135,6 +135,9 @@ impl LogFilter {
             offset,
             limit,
             trusted: false,
+            // TODO(thegaram): double check that this is only reachable from
+            // Conflux RPCs
+            space: Some(Space::Native),
         };
 
         // choose filter type based on fields

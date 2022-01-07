@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 extern crate ethereum_types;
+extern crate rlp;
 extern crate rlp_derive;
 extern crate serde;
 extern crate serde_derive;
@@ -11,6 +12,7 @@ pub use ethereum_types::{
     Address, BigEndianHash, Bloom, BloomInput, Public, Secret, Signature, H128,
     H160, H256, H512, H520, H64, U128, U256, U512, U64,
 };
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde_derive::{Deserialize, Serialize};
 
@@ -31,6 +33,25 @@ pub use self::space_util::AddressSpaceUtil;
 pub enum Space {
     Native,
     Ethereum,
+}
+
+impl Encodable for Space {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        let _ = match self {
+            Space::Native => s.append(&0u8),
+            Space::Ethereum => s.append(&1u8),
+        };
+    }
+}
+
+impl Decodable for Space {
+    fn decode(rlp: &Rlp) -> std::result::Result<Self, DecoderError> {
+        match rlp.as_val::<u8>()? {
+            0 => Ok(Space::Native),
+            1 => Ok(Space::Ethereum),
+            _ => Err(DecoderError::Custom("Unknown address space in RLP")),
+        }
+    }
 }
 
 #[derive(

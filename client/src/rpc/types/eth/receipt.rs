@@ -218,7 +218,6 @@ pub struct Receipt {
 //                 transaction_index: Some(0.into()),
 //                 transaction_log_index: None,
 //                 log_index: Some(1.into()),
-//                 log_type: "mined".into(),
 //                 removed: false,
 //             }],
 //             logs_bloom: Bloom::from_low_u64_be(15),

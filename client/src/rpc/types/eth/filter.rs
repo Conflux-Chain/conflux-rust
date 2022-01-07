@@ -62,6 +62,26 @@ where T: DeserializeOwned
     }
 }
 
+impl<T> VariadicValue<T>
+where T: DeserializeOwned
+{
+    pub fn to_vec(self) -> Vec<T> {
+        match self {
+            VariadicValue::Null => vec![],
+            VariadicValue::Single(x) => vec![x],
+            VariadicValue::Multiple(xs) => xs,
+        }
+    }
+
+    pub fn to_opt(self) -> Option<Vec<T>> {
+        match self {
+            VariadicValue::Null => None,
+            VariadicValue::Single(x) => Some(vec![x]),
+            VariadicValue::Multiple(xs) => Some(xs),
+        }
+    }
+}
+
 /// Filter Address
 pub type FilterAddress = VariadicValue<H160>;
 /// Topic
