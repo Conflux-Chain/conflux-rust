@@ -196,7 +196,7 @@ impl LogFilter {
 mod tests {
     use super::{super::RpcAddress, EpochNumber, LogFilter, VariadicValue};
     use cfx_addr::Network;
-    use cfx_types::{H160, H256, U64};
+    use cfx_types::{Space, H160, H256, U64};
     use primitives::{
         epoch::EpochNumber as PrimitiveEpochNumber,
         filter::{LogFilter as PrimitiveFilter, LogFilterParams},
@@ -387,6 +387,7 @@ mod tests {
                 offset: Some(1),
                 limit: Some(2),
                 trusted: false,
+                space: Some(Space::Native),
             },
         };
 
@@ -435,6 +436,7 @@ mod tests {
                 offset: Some(1),
                 limit: Some(2),
                 trusted: false,
+                space: Some(Space::Native),
             },
         };
 
@@ -491,6 +493,7 @@ mod tests {
                 offset: Some(1),
                 limit: Some(2),
                 trusted: false,
+                space: Some(Space::Native),
             },
         };
 
