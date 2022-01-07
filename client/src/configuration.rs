@@ -97,9 +97,8 @@ build_config! {
         //
         // `dev` mode is for users to run a single node that automatically
         //     generates blocks with fixed intervals
-        //     * Open port 12535 for ws rpc if `jsonrpc_ws_port` is not provided.
-        //     * Open port 12536 for tcp rpc if `jsonrpc_tcp_port` is not provided.
-        //     * Open port 12537 for http rpc if `jsonrpc_http_port` is not provided.
+        //     * You are expected to also set `jsonrpc_ws_port`, `jsonrpc_tcp_port`,
+        //       and `jsonrpc_http_port` if you want RPC functionalities.
         //     * generate blocks automatically without PoW.
         //     * Skip catch-up mode even there is no peer
         //
@@ -371,17 +370,6 @@ impl Configuration {
         let mut config = Configuration::default();
         config.raw_conf = RawConfiguration::parse(matches)?;
 
-        if config.is_dev_mode() {
-            if config.raw_conf.jsonrpc_ws_port.is_none() {
-                config.raw_conf.jsonrpc_ws_port = Some(12535);
-            }
-            if config.raw_conf.jsonrpc_tcp_port.is_none() {
-                config.raw_conf.jsonrpc_tcp_port = Some(12536);
-            }
-            if config.raw_conf.jsonrpc_http_port.is_none() {
-                config.raw_conf.jsonrpc_http_port = Some(12537);
-            }
-        };
         if matches.is_present("archive") {
             config.raw_conf.node_type = Some(NodeType::Archive);
         } else if matches.is_present("full") {
