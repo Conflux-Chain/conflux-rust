@@ -12,15 +12,7 @@ use std::ops::Deref;
 
 /// A record of execution for a `LOG` operation.
 #[derive(
-    Default,
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    RlpEncodable,
-    RlpDecodable,
-    Serialize,
-    Deserialize,
+    Default, Debug, Clone, PartialEq, Eq, RlpEncodable, Serialize, Deserialize,
 )]
 pub struct LogEntry {
     /// The address of the contract executing at the point of the `LOG`
@@ -31,9 +23,27 @@ pub struct LogEntry {
     /// The data associated with the `LOG` operation.
     pub data: Bytes,
     /// The space associated with `address`.
-    /// Note: we use `Option` for backward-compatibility.
-    // TODO(thegaram): double check that this change is compatible
-    pub space: Option<Space>,
+    pub space: Space,
+}
+
+// We want to remain backward-compatible with pre-CIP90 entries in the DB.
+// However, rlp_derive::RlpDecodable is not backward-compatible when adding new
+// fields, so we implement backward-compatible decoding manually.
+impl rlp::Decodable for LogEntry {
+    fn decode(rlp: &rlp::Rlp) -> Result<Self, rlp::DecoderError> {
+        let space = match rlp.val_at(3) {
+            Ok(space) => space,
+            Err(rlp::DecoderError::RlpIsTooShort) => Space::Native,
+            Err(e) => return Err(e),
+        };
+
+        Ok(LogEntry {
+            address: rlp.val_at(0)?,
+            topics: rlp.list_at(1)?,
+            data: rlp.val_at(2)?,
+            space,
+        })
+    }
 }
 
 impl MallocSizeOf for LogEntry {

@@ -302,8 +302,7 @@ impl LogFilterParams {
     /// Returns true if given log entry matches filter.
     pub fn matches(&self, log: &LogEntry) -> bool {
         if let Some(filter_space) = self.space {
-            // NOTE: pre-hardfork logs will have None
-            if log.space.unwrap_or(Space::Native) != filter_space {
+            if log.space != filter_space {
                 return false;
             }
         }
