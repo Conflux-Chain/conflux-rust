@@ -49,7 +49,7 @@ class RpcTest(ConfluxTestFramework):
         cur_dir = os.path.dirname(os.path.abspath(__file__))
         sub_dir = os.path.join(cur_dir, name)
         for file in os.listdir(sub_dir):
-            if file.startswith("test_trace") and file.endswith(".py"):
+            if file.startswith("test_") and file.endswith(".py"):
                 module_name = file[0:-3]
                 module = __import__(name + "." + module_name, fromlist=True)
                 self._test_module(module)

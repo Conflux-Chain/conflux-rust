@@ -53,16 +53,17 @@ impl From<Space> for &'static str {
 
 impl Encodable for Space {
     fn rlp_append(&self, s: &mut RlpStream) {
-        match self {
-            Space::Native => s.append(&1u8),
-            Space::Ethereum => s.append(&2u8),
+        let type_int: u8 = match self {
+            Space::Native => 1,
+            Space::Ethereum => 2,
         };
+        type_int.rlp_append(s)
     }
 }
 
 impl Decodable for Space {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        match rlp.as_val()? {
+        match u8::decode(rlp)? {
             1u8 => Ok(Space::Native),
             2u8 => Ok(Space::Ethereum),
             _ => Err(DecoderError::Custom("Unrecognized space byte.")),
