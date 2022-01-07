@@ -93,7 +93,15 @@ impl Deref for LocalizedLogEntry {
 #[cfg(test)]
 mod tests {
     use super::LogEntry;
-    use cfx_types::{Address, Bloom};
+    use crate::bytes::Bytes;
+    use cfx_types::{Address, Bloom, Space, H256};
+
+    #[derive(PartialEq, Eq, RlpEncodable)]
+    pub struct LogEntryOld {
+        pub address: Address,
+        pub topics: Vec<H256>,
+        pub data: Bytes,
+    }
 
     #[test]
     fn test_empty_log_bloom() {
@@ -105,7 +113,44 @@ mod tests {
             address,
             topics: vec![],
             data: vec![],
+            space: Space::Native,
         };
         assert_eq!(log.bloom(), bloom);
+    }
+
+    #[test]
+    fn test_rlp() {
+        let address = "0f572e5295c57f15886f9b263e2f6d2d6c7b5ec6"
+            .parse::<Address>()
+            .unwrap();
+
+        // check RLP for new version
+        let log = LogEntry {
+            address,
+            topics: vec![],
+            data: vec![],
+            space: Space::Ethereum,
+        };
+
+        assert_eq!(log, rlp::decode(&rlp::encode(&log)).unwrap());
+
+        // check RLP for old version
+        let log_old = LogEntryOld {
+            address,
+            topics: vec![],
+            data: vec![],
+        };
+
+        let log_new: LogEntry = rlp::decode(&rlp::encode(&log_old)).unwrap();
+
+        assert_eq!(
+            log_new,
+            LogEntry {
+                address,
+                topics: vec![],
+                data: vec![],
+                space: Space::Native,
+            }
+        );
     }
 }
