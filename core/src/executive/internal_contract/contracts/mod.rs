@@ -17,6 +17,8 @@ mod macros {
     #[cfg(test)]
     pub use rustc_hex::FromHex;
 
+    pub use sha3_macro::keccak;
+
     pub use crate::{
         group_impl_is_active, impl_function_type, make_function_table,
         make_solidity_contract, make_solidity_event, make_solidity_function,
