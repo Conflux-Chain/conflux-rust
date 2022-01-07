@@ -41,6 +41,7 @@ pub struct Log {
     /// Transaction Index
     pub transaction_index: Option<U256>,
     /// Log Index in Block
+    // FIXME(thegaram): currently we're using the epoch log index here
     pub log_index: Option<U256>,
     /// Log Index in Transaction
     pub transaction_log_index: Option<U256>,

@@ -242,7 +242,7 @@ mod tests {
     use super::CallStackInfo;
     use crate::state::Substate;
     use cfx_state::substate_trait::SubstateMngTrait;
-    use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace};
+    use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, Space};
     use primitives::LogEntry;
 
     #[test]
@@ -261,6 +261,7 @@ mod tests {
             address: Address::from_low_u64_be(1),
             topics: vec![],
             data: vec![],
+            space: Space::Native,
         });
         sub_state
             .suicides
@@ -274,6 +275,7 @@ mod tests {
             address: Address::from_low_u64_be(1),
             topics: vec![],
             data: vec![],
+            space: Space::Native,
         });
 
         sub_state.accrue(sub_state_2);
