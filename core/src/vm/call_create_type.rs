@@ -25,7 +25,7 @@ use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use serde::Serialize;
 
 /// The type of the call-like instruction.
-#[derive(Debug, PartialEq, Clone, Serialize)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CallType {
     /// Not a CALL.
