@@ -106,34 +106,25 @@ pub trait SolidityFunctionTrait: Send + Sync + IsActive {
     fn name(&self) -> &'static str;
 
     /// The function sig for this function
-    fn function_sig(&self) -> [u8; 4] {
-        let mut answer = [0u8; 4];
-        answer.clone_from_slice(&keccak(self.name()).as_ref()[0..4]);
-        answer
-    }
+    fn function_sig(&self) -> [u8; 4];
 }
 
 /// Native implementation of a solidity-interface function.
 pub trait SolidityEventTrait: Send + Sync {
     type Indexed: EventIndexEncodable;
     type NonIndexed: ABIEncodable;
+    const EVENT_SIG: H256;
 
     fn log(
         indexed: &Self::Indexed, non_indexed: &Self::NonIndexed,
         param: &ActionParams, context: &mut InternalRefContext,
     ) -> vm::Result<()>
     {
-        let mut topics = vec![Self::event_sig()];
+        let mut topics = vec![Self::EVENT_SIG];
         topics.extend_from_slice(&indexed.indexed_event_encode());
 
         let data = non_indexed.abi_encode();
 
         context.log(param, context.spec, topics, data)
     }
-
-    /// The string for function sig
-    fn name() -> &'static str;
-
-    /// The event signature
-    fn event_sig() -> H256 { keccak(Self::name()) }
 }
