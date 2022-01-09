@@ -1211,7 +1211,9 @@ impl RpcImpl {
         // MAX_GAS_CALL_REQUEST, 0.8 is chosen to check if it's close.
         const TOO_MUCH_GAS_USED: u64 =
             (0.8 * (MAX_GAS_CALL_REQUEST as f32)) as u64;
-        if executed.gas_used >= U256::from(TOO_MUCH_GAS_USED) {
+        if executed.estimated_gas_limit.unwrap()
+            >= U256::from(TOO_MUCH_GAS_USED)
+        {
             bail!(call_execution_error(
                 format!(
                     "Gas too high. Most likely there are problems within the contract code. \
@@ -1233,7 +1235,7 @@ impl RpcImpl {
             // 2. In Conflux, we recommend setting the gas_limit to (gas_used *
             // 4) / 3, because the extra gas will be refunded up to
             // 1/4 of the gas limit.
-            gas_limit: executed.gas_used * 4 / 3,
+            gas_limit: executed.estimated_gas_limit.unwrap(),
             gas_used: executed.gas_used,
             storage_collateralized,
         };

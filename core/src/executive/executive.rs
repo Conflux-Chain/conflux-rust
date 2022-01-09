@@ -222,6 +222,16 @@ impl TransactOptions {
             },
         }
     }
+
+    pub fn virtual_call() -> Self {
+        Self {
+            observer: Observer {
+                tracer: Some(ExecutiveTracer::default()),
+                gas_man: Some(GasMan::default()),
+                _noop: (),
+            },
+        }
+    }
 }
 
 enum CallCreateExecutiveKind<'a> {
@@ -1413,6 +1423,12 @@ impl<
             None
         };
 
+        let estimated_gas_limit = options
+            .observer
+            .gas_man
+            .as_ref()
+            .map(|g| g.gas_required() + base_gas_required);
+
         Ok(self.finalize(
             tx,
             tx_substate,
@@ -1426,6 +1442,7 @@ impl<
                 storage_sponsor_eligible
             },
             options.observer,
+            estimated_gas_limit,
         )?)
     }
 
@@ -1552,7 +1569,7 @@ impl<
         &mut self, tx: &SignedTransaction, mut substate: Substate,
         result: vm::Result<FinalizationResult>, output: Bytes,
         refund_receiver: Option<Address>, storage_sponsor_paid: bool,
-        mut observer: Observer,
+        mut observer: Observer, estimated_gas_limit: Option<U256>,
     ) -> DbResult<ExecutionOutcome>
     {
         let gas_left = match result {
@@ -1684,6 +1701,7 @@ impl<
                     storage_released,
                     output,
                     trace,
+                    estimated_gas_limit,
                 };
 
                 if r.apply_state {

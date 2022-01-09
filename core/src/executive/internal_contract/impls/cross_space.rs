@@ -62,7 +62,7 @@ pub fn call_gas(
     Ok(call_gas + address_mapping_gas)
 }
 
-pub struct Resume;
+pub struct Resume(pub U256);
 
 impl ResumeCreate for Resume {
     fn resume_create(
@@ -74,7 +74,7 @@ impl ResumeCreate for Resume {
                 let length = encoded_output.len();
                 let return_data = ReturnData::new(encoded_output, 0, length);
                 PassResult {
-                    gas_left,
+                    gas_left: gas_left + self.0,
                     return_data: Ok(return_data),
                     apply_state: true,
                 }
@@ -85,7 +85,7 @@ impl ResumeCreate for Resume {
                 apply_state: false,
             },
             ContractCreateResult::Reverted(gas_left, data) => PassResult {
-                gas_left,
+                gas_left: gas_left + self.0,
                 return_data: Ok(data),
                 apply_state: false,
             },
@@ -104,7 +104,7 @@ impl ResumeCall for Resume {
                 let length = encoded_output.len();
                 let return_data = ReturnData::new(encoded_output, 0, length);
                 PassResult {
-                    gas_left,
+                    gas_left: gas_left + self.0,
                     return_data: Ok(return_data),
                     apply_state: true,
                 }
@@ -115,7 +115,7 @@ impl ResumeCall for Resume {
                 apply_state: false,
             },
             MessageCallResult::Reverted(gas_left, data) => PassResult {
-                gas_left,
+                gas_left: gas_left + self.0,
                 return_data: Ok(data),
                 apply_state: false,
             },
@@ -183,12 +183,13 @@ pub fn call_to_evmcore(
         return Err(vm::Error::InternalContract("Exceed Depth".into()));
     }
 
-    let call_gas = gas_left
+    let call_gas = gas_left / 20
         + if params.value.value() > U256::zero() {
             U256::from(context.spec.call_stipend)
         } else {
             U256::zero()
         };
+    let reserved_gas = gas_left - gas_left / 20;
 
     let mapped_sender = evm_map(params.sender);
     let mapped_origin = evm_map(params.original_sender);
@@ -228,7 +229,7 @@ pub fn call_to_evmcore(
         .state
         .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
 
-    return Ok(ExecTrap::Call(next_params, Box::new(Resume)));
+    return Ok(ExecTrap::Call(next_params, Box::new(Resume(reserved_gas))));
 }
 
 pub fn create_to_evmcore(
@@ -240,12 +241,13 @@ pub fn create_to_evmcore(
         return Err(vm::Error::InternalContract("Exceed Depth".into()));
     }
 
-    let call_gas = gas_left
+    let call_gas = gas_left / 20
         + if params.value.value() > U256::zero() {
             U256::from(context.spec.call_stipend)
         } else {
             U256::zero()
         };
+    let reserved_gas = gas_left - gas_left / 20;
 
     let mapped_sender = evm_map(params.sender);
     let mapped_origin = evm_map(params.original_sender);
@@ -296,7 +298,10 @@ pub fn create_to_evmcore(
         .state
         .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
 
-    return Ok(ExecTrap::Create(next_params, Box::new(Resume)));
+    return Ok(ExecTrap::Create(
+        next_params,
+        Box::new(Resume(reserved_gas)),
+    ));
 }
 
 pub fn withdraw_from_evmcore(
