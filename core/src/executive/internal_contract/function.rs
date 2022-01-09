@@ -199,6 +199,7 @@ impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
 /// use cfxcore::make_solidity_function;
 /// use cfx_types::{Address,U256};
 /// use cfxcore::executive::function::InterfaceTrait;
+/// use sha3_macro::keccak;
 ///
 /// make_solidity_function!{
 ///     struct WhateverStructName((Address, Address), "get_whitelist(address,address)", bool);
