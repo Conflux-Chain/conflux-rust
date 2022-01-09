@@ -4,7 +4,7 @@
 
 use crate::{
     consensus_internal_parameters::MINED_BLOCK_COUNT_PER_QUARTER,
-    trace::{AddressPocket, Tracer},
+    observer::{AddressPocket, VmObserve},
     vm::{self, ActionParams, Env},
 };
 use cfx_parameters::consensus::ONE_CFX_IN_DRIP;
@@ -14,7 +14,7 @@ use cfx_types::{Address, AddressSpaceUtil, U256};
 /// Implementation of `deposit(uint256)`.
 pub fn deposit(
     amount: U256, params: &ActionParams, env: &Env,
-    state: &mut dyn StateOpsTrait, tracer: &mut dyn Tracer,
+    state: &mut dyn StateOpsTrait, tracer: &mut dyn VmObserve,
 ) -> vm::Result<()>
 {
     if amount < U256::from(ONE_CFX_IN_DRIP) {
@@ -24,7 +24,7 @@ pub fn deposit(
             "not enough balance to deposit".into(),
         ))
     } else {
-        tracer.prepare_internal_transfer_action(
+        tracer.trace_internal_transfer(
             AddressPocket::Balance(params.sender),
             AddressPocket::StakingBalance(params.sender),
             amount,
@@ -37,7 +37,7 @@ pub fn deposit(
 /// Implementation of `withdraw(uint256)`.
 pub fn withdraw(
     amount: U256, params: &ActionParams, env: &Env,
-    state: &mut dyn StateOpsTrait, tracer: &mut dyn Tracer,
+    state: &mut dyn StateOpsTrait, tracer: &mut dyn VmObserve,
 ) -> vm::Result<()>
 {
     state.remove_expired_vote_stake_info(&params.sender, env.number)?;
@@ -53,13 +53,13 @@ pub fn withdraw(
             "not enough unlocked staking balance to withdraw".into(),
         ))
     } else {
-        tracer.prepare_internal_transfer_action(
+        tracer.trace_internal_transfer(
             AddressPocket::StakingBalance(params.sender),
             AddressPocket::Balance(params.sender),
             amount,
         );
         let interest_amount = state.withdraw(&params.sender, &amount)?;
-        tracer.prepare_internal_transfer_action(
+        tracer.trace_internal_transfer(
             AddressPocket::MintBurn,
             AddressPocket::Balance(params.sender),
             interest_amount,

@@ -17,7 +17,7 @@ use crate::{
 use cfx_addr::Network;
 use cfx_types::H256;
 use cfxcore::{
-    block_data_manager::DataVersionTuple, trace::trace::ExecTrace,
+    block_data_manager::DataVersionTuple, observer::trace::ExecTrace,
     BlockDataManager, ConsensusGraph, SharedConsensusGraph,
 };
 use jsonrpc_core::Result as JsonRpcResult;

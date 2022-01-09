@@ -8,7 +8,7 @@ use super::{
 use crate::{
     evm::{ActionParams, Spec},
     executive::InternalRefContext,
-    trace::Tracer,
+    observer::VmObserve,
     vm,
 };
 use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
@@ -59,7 +59,7 @@ impl_function_type!(SetSponsorForGas, "payable_write", gas: |spec: &Spec| 2 * sp
 impl SimpleExecutionTrait for SetSponsorForGas {
     fn execute_inner(
         &self, inputs: (Address, U256), params: &ActionParams,
-        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
         set_sponsor_for_gas(
@@ -81,7 +81,7 @@ impl_function_type!(SetSponsorForCollateral, "payable_write", gas: |spec: &Spec|
 impl SimpleExecutionTrait for SetSponsorForCollateral {
     fn execute_inner(
         &self, input: Address, params: &ActionParams,
-        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
         set_sponsor_for_collateral(
@@ -112,7 +112,7 @@ impl UpfrontPaymentTrait for AddPrivilege {
 impl SimpleExecutionTrait for AddPrivilege {
     fn execute_inner(
         &self, addresses: Vec<Address>, params: &ActionParams,
-        context: &mut InternalRefContext, _: &mut dyn Tracer,
+        context: &mut InternalRefContext, _: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
         if !context.is_contract_address(&params.sender)? {
@@ -143,7 +143,7 @@ impl UpfrontPaymentTrait for RemovePrivilege {
 impl SimpleExecutionTrait for RemovePrivilege {
     fn execute_inner(
         &self, addresses: Vec<Address>, params: &ActionParams,
-        context: &mut InternalRefContext, _: &mut dyn Tracer,
+        context: &mut InternalRefContext, _: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
         if !context.is_contract_address(&params.sender)? {
@@ -165,7 +165,7 @@ impl_function_type!(GetSponsorForGas, "query_with_default_gas");
 impl SimpleExecutionTrait for GetSponsorForGas {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
-        context: &mut InternalRefContext, _: &mut dyn Tracer,
+        context: &mut InternalRefContext, _: &mut dyn VmObserve,
     ) -> vm::Result<Address>
     {
         Ok(context.state.sponsor_for_gas(&input)?.unwrap_or_default())
@@ -180,7 +180,7 @@ impl_function_type!(GetSponsoredBalanceForGas, "query_with_default_gas");
 impl SimpleExecutionTrait for GetSponsoredBalanceForGas {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
-        context: &mut InternalRefContext, _: &mut dyn Tracer,
+        context: &mut InternalRefContext, _: &mut dyn VmObserve,
     ) -> vm::Result<U256>
     {
         Ok(context.state.sponsor_balance_for_gas(&input)?)
@@ -195,7 +195,7 @@ impl_function_type!(GetSponsoredGasFeeUpperBound, "query_with_default_gas");
 impl SimpleExecutionTrait for GetSponsoredGasFeeUpperBound {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
-        context: &mut InternalRefContext, _: &mut dyn Tracer,
+        context: &mut InternalRefContext, _: &mut dyn VmObserve,
     ) -> vm::Result<U256>
     {
         Ok(context.state.sponsor_gas_bound(&input)?)
@@ -210,7 +210,7 @@ impl_function_type!(GetSponsorForCollateral, "query_with_default_gas");
 impl SimpleExecutionTrait for GetSponsorForCollateral {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
-        context: &mut InternalRefContext, _: &mut dyn Tracer,
+        context: &mut InternalRefContext, _: &mut dyn VmObserve,
     ) -> vm::Result<Address>
     {
         Ok(context
@@ -228,7 +228,7 @@ impl_function_type!(GetSponsoredBalanceForCollateral, "query_with_default_gas");
 impl SimpleExecutionTrait for GetSponsoredBalanceForCollateral {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
-        context: &mut InternalRefContext, _: &mut dyn Tracer,
+        context: &mut InternalRefContext, _: &mut dyn VmObserve,
     ) -> vm::Result<U256>
     {
         Ok(context.state.sponsor_balance_for_collateral(&input)?)
@@ -243,7 +243,7 @@ impl_function_type!(IsWhitelisted, "query", gas: |spec: &Spec| spec.sload_gas);
 impl SimpleExecutionTrait for IsWhitelisted {
     fn execute_inner(
         &self, (contract, user): (Address, Address), _: &ActionParams,
-        context: &mut InternalRefContext, _: &mut dyn Tracer,
+        context: &mut InternalRefContext, _: &mut dyn VmObserve,
     ) -> vm::Result<bool>
     {
         if context.is_contract_address(&contract)? {
@@ -262,7 +262,7 @@ impl_function_type!(IsAllWhitelisted, "query", gas: |spec: &Spec| spec.sload_gas
 impl SimpleExecutionTrait for IsAllWhitelisted {
     fn execute_inner(
         &self, contract: Address, _: &ActionParams,
-        context: &mut InternalRefContext, _: &mut dyn Tracer,
+        context: &mut InternalRefContext, _: &mut dyn VmObserve,
     ) -> vm::Result<bool>
     {
         if context.is_contract_address(&contract)? {
@@ -294,7 +294,7 @@ impl SimpleExecutionTrait for AddPrivilegeByAdmin {
     fn execute_inner(
         &self, (contract, addresses): (Address, Vec<Address>),
         params: &ActionParams, context: &mut InternalRefContext,
-        _: &mut dyn Tracer,
+        _: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
         if context.is_contract_address(&contract)?
@@ -325,7 +325,7 @@ impl SimpleExecutionTrait for RemovePrivilegeByAdmin {
     fn execute_inner(
         &self, (contract, addresses): (Address, Vec<Address>),
         params: &ActionParams, context: &mut InternalRefContext,
-        _: &mut dyn Tracer,
+        _: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
         if context.is_contract_address(&contract)?

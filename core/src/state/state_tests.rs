@@ -5,7 +5,7 @@
 use super::{CleanupMode, CollateralCheckResult, State, Substate};
 use crate::{
     spec::genesis::DEV_GENESIS_KEY_PAIR,
-    test_helpers::get_state_for_genesis_write, trace::NoopTracer, vm::Spec,
+    test_helpers::get_state_for_genesis_write, vm::Spec,
 };
 use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
 use cfx_state::{
@@ -310,7 +310,7 @@ fn checkpoint_from_empty_get_storage_at() {
                 &a,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
@@ -377,7 +377,7 @@ fn checkpoint_from_empty_get_storage_at() {
                 &a,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
@@ -430,7 +430,7 @@ fn checkpoint_from_empty_get_storage_at() {
                 &a,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
@@ -512,7 +512,7 @@ fn checkpoint_get_storage_at() {
                 &a,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
@@ -660,7 +660,7 @@ fn checkpoint_get_storage_at() {
                 &contract_a,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
@@ -752,7 +752,7 @@ fn checkpoint_get_storage_at() {
                 &contract_a,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
@@ -829,7 +829,7 @@ fn checkpoint_get_storage_at() {
                 &contract_a,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
@@ -1059,7 +1059,7 @@ fn create_contract_fail() {
                 &a,
                 &U256::MAX,
                 &mut substate,
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
@@ -1119,7 +1119,7 @@ fn create_contract_fail_previous_storage() {
                 &a,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
@@ -1289,7 +1289,7 @@ fn test_automatic_collateral_normal_account() {
                 &normal_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
@@ -1337,7 +1337,7 @@ fn test_automatic_collateral_normal_account() {
                 &normal_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
@@ -1392,7 +1392,7 @@ fn test_automatic_collateral_normal_account() {
                 &normal_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
@@ -1434,7 +1434,7 @@ fn test_automatic_collateral_normal_account() {
                 &normal_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
@@ -1477,7 +1477,7 @@ fn test_automatic_collateral_normal_account() {
                 &normal_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
@@ -1522,7 +1522,7 @@ fn test_automatic_collateral_normal_account() {
                 &normal_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
@@ -1611,7 +1611,7 @@ fn test_automatic_collateral_contract_account() {
                 &contract_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
@@ -1649,7 +1649,7 @@ fn test_automatic_collateral_contract_account() {
                 &contract_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
@@ -1703,7 +1703,7 @@ fn test_automatic_collateral_contract_account() {
                 &contract_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
@@ -1750,7 +1750,7 @@ fn test_automatic_collateral_contract_account() {
                 &contract_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
@@ -1795,7 +1795,7 @@ fn test_automatic_collateral_contract_account() {
                 &contract_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),
@@ -1841,7 +1841,7 @@ fn test_automatic_collateral_contract_account() {
                 &contract_account,
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
-                &mut NoopTracer,
+                &mut (),
                 Spec::new_spec_for_test().account_start_nonce
             )
             .unwrap(),

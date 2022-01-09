@@ -7,14 +7,44 @@ use cfx_types::{Address, U256};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
 /// This trait is used by executive to build traces.
-pub trait InternalTransferTracer: Send {
+pub trait StateTracer: Send {
     /// Prepares internal transfer action
-    fn prepare_internal_transfer_action(
+    fn trace_internal_transfer(
         &mut self, from: AddressPocket, to: AddressPocket, value: U256,
     );
 }
 
-#[derive(Debug, Clone, PartialEq)]
+impl StateTracer for () {
+    fn trace_internal_transfer(
+        &mut self, _: AddressPocket, _: AddressPocket, _: U256,
+    ) {
+    }
+}
+
+impl<T> StateTracer for &mut T
+where T: StateTracer
+{
+    fn trace_internal_transfer(
+        &mut self, from: AddressPocket, to: AddressPocket, value: U256,
+    ) {
+        (*self).trace_internal_transfer(from, to, value);
+    }
+}
+
+impl<S, T> StateTracer for (&mut S, &mut T)
+where
+    S: StateTracer,
+    T: StateTracer,
+{
+    fn trace_internal_transfer(
+        &mut self, from: AddressPocket, to: AddressPocket, value: U256,
+    ) {
+        self.0.trace_internal_transfer(from, to, value);
+        self.1.trace_internal_transfer(from, to, value);
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AddressPocket {
     Balance(Address),
     StakingBalance(Address),

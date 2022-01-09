@@ -5,8 +5,8 @@
 use super::SolidityFunctionTrait;
 use crate::{
     executive::{internal_contract::activate_at::IsActive, InternalRefContext},
+    observer::VmObserve,
     state::CallStackInfo,
-    trace::Tracer,
     vm::{
         self, ActionParams, CallType, ExecTrapResult, GasLeft, ReturnData,
         Spec, TrapResult,
@@ -42,7 +42,7 @@ impl<T: SolidityFunctionConfigTrait + ExecutionTrait + IsActive>
 {
     fn execute(
         &self, input: &[u8], params: &ActionParams,
-        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> ExecTrapResult<GasLeft>
     {
         let (solidity_params, cost) =
@@ -121,7 +121,7 @@ pub trait PreExecCheckTrait: Send + Sync {
 pub trait ExecutionTrait: Send + Sync + InterfaceTrait {
     fn execute_inner(
         &self, input: Self::Input, params: &ActionParams, gas_left: U256,
-        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> ExecTrapResult<<Self as InterfaceTrait>::Output>;
 }
 
@@ -129,7 +129,7 @@ pub trait ExecutionTrait: Send + Sync + InterfaceTrait {
 pub trait SimpleExecutionTrait: Send + Sync + InterfaceTrait {
     fn execute_inner(
         &self, input: Self::Input, params: &ActionParams,
-        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> vm::Result<<Self as InterfaceTrait>::Output>;
 }
 
@@ -138,7 +138,7 @@ where T: SimpleExecutionTrait
 {
     fn execute_inner(
         &self, input: Self::Input, params: &ActionParams, _gas_left: U256,
-        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> ExecTrapResult<<Self as InterfaceTrait>::Output>
     {
         let result = SimpleExecutionTrait::execute_inner(

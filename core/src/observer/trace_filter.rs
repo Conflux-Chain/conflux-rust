@@ -1,4 +1,4 @@
-use crate::trace::trace::ActionType;
+use crate::observer::trace::ActionType;
 use cfx_types::H256;
 use primitives::EpochNumber;
 

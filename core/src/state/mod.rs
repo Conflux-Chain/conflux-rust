@@ -48,10 +48,10 @@ use primitives::{
 use crate::{
     executive::{pos_internal_entries, IndexStatus},
     hash::KECCAK_EMPTY,
+    observer::{AddressPocket, StateTracer},
     spec::genesis::{
         genesis_contract_address_four_year, genesis_contract_address_two_year,
     },
-    trace::{AddressPocket, InternalTransferTracer},
     transaction_pool::SharedTransactionPool,
 };
 
@@ -154,7 +154,7 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
     /// of a transaction.
     fn settle_collateral_for_all(
         &mut self, substate: &Substate,
-        tracer: &mut dyn InternalTransferTracer, account_start_nonce: U256,
+        tracer: &mut dyn StateTracer, account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult>
     {
         for address in substate.keys_for_collateral_changed().iter() {
@@ -175,7 +175,7 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
     // test cases breaks this assumption, which will be fixed in a separated PR.
     fn collect_and_settle_collateral(
         &mut self, original_sender: &Address, storage_limit: &U256,
-        substate: &mut Substate, tracer: &mut dyn InternalTransferTracer,
+        substate: &mut Substate, tracer: &mut dyn StateTracer,
         account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult>
     {
@@ -1267,7 +1267,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     /// Charges or refund storage collateral and update `total_storage_tokens`.
     fn settle_collateral_for_address(
         &mut self, addr: &Address, substate: &dyn SubstateTrait,
-        tracer: &mut dyn InternalTransferTracer, account_start_nonce: U256,
+        tracer: &mut dyn StateTracer, account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult>
     {
         let addr_with_space = addr.with_native_space();
@@ -1281,7 +1281,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         let is_contract = self.is_contract_with_code(&addr_with_space)?;
 
         if !sub.is_zero() {
-            tracer.prepare_internal_transfer_action(
+            tracer.trace_internal_transfer(
                 /* from */ AddressPocket::StorageCollateral(*addr),
                 /* to */
                 if is_contract {
@@ -1306,7 +1306,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                     got: balance,
                 });
             }
-            tracer.prepare_internal_transfer_action(
+            tracer.trace_internal_transfer(
                 /* from */
                 if is_contract {
                     AddressPocket::SponsorBalanceForStorage(*addr)

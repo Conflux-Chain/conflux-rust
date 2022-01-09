@@ -468,7 +468,7 @@ impl DatabaseEncodable for BlockExecTraces {
 #[cfg(test)]
 mod tests {
     use crate::{
-        trace::trace::{
+        observer::trace::{
             Action, BlockExecTraces, Call, ExecTrace, TransactionExecTraces,
         },
         vm::CallType,

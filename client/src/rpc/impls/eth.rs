@@ -16,10 +16,10 @@ use cfxcore::{
         contract_address, revert_reason_decode, ExecutionError,
         ExecutionOutcome, TxDropError,
     },
+    observer::ErrorUnwind,
     rpc_errors::{
         invalid_params_check, Error as CfxRpcError, Result as CfxRpcResult,
     },
-    trace::ErrorUnwind,
     vm::{self, CreateContractAddress},
     ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
