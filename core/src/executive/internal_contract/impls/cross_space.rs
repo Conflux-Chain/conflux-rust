@@ -3,7 +3,11 @@ use crate::{
         ActionParams, CallType, Context, ContractCreateResult,
         CreateContractAddress, GasLeft, MessageCallResult, ReturnData,
     },
-    executive::{contract_address, InternalRefContext},
+    executive::{
+        contract_address,
+        internal_contract::contracts::{CallEvent, CreateEvent, WithdrawEvent},
+        InternalRefContext, SolidityEventTrait,
+    },
     observer::VmObserve,
     state::cleanup_mode,
     vm::{
@@ -20,7 +24,7 @@ use solidity_abi::ABIEncodable;
 use std::{marker::PhantomData, sync::Arc};
 
 pub fn create_gas(
-    context: &InternalRefContext, hash_length: usize,
+    context: &InternalRefContext, code_length: usize, hash_length: usize,
 ) -> DbResult<U256> {
     let base_gas = U256::from(context.spec.create_gas);
     let hash_words = (hash_length + 31) / 32;
@@ -30,12 +34,18 @@ pub fn create_gas(
 
     let address_mapping_gas = context.spec.sha3_gas * 2;
 
-    Ok(base_gas + keccak_code_gas + address_mapping_gas)
+    let log_data_length = H256::len_bytes() * 4 + code_length;
+
+    let log_gas = context.spec.log_gas
+        + 3 * context.spec.log_topic_gas
+        + context.spec.log_data_gas * log_data_length;
+
+    Ok(base_gas + keccak_code_gas + address_mapping_gas + log_gas)
 }
 
 pub fn call_gas(
     receiver: Address, params: &ActionParams, context: &InternalRefContext,
-    is_static: bool,
+    data_length: usize, is_static: bool,
 ) -> DbResult<U256>
 {
     let new_account_gas = if !is_static
@@ -59,7 +69,17 @@ pub fn call_gas(
 
     let address_mapping_gas = context.spec.sha3_gas * 3;
 
-    Ok(call_gas + address_mapping_gas)
+    let log_data_length = H256::len_bytes() * 4 + data_length;
+
+    let log_gas = if !is_static {
+        context.spec.log_gas
+            + 3 * context.spec.log_topic_gas
+            + context.spec.log_data_gas * log_data_length
+    } else {
+        0
+    };
+
+    Ok(call_gas + address_mapping_gas + log_gas)
 }
 
 pub struct Resume;
@@ -218,15 +238,25 @@ pub fn call_to_evmcore(
         gas_price: params.gas_price,
         code,
         code_hash,
-        data: Some(data),
+        data: Some(data.clone()),
         call_type,
         create_type: CreateType::None,
         params_type: vm::ParamsType::Separate,
     };
 
+    let nonce = context.state.nonce(&mapped_sender)?;
     context
         .state
         .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
+
+    if call_type == CallType::Call {
+        CallEvent::log(
+            &(mapped_sender.address.0, address.address.0),
+            &(params.value.value(), nonce, data),
+            params,
+            context,
+        )?;
+    }
 
     return Ok(ExecTrap::Call(next_params, Box::new(Resume)));
 }
@@ -284,7 +314,7 @@ pub fn create_to_evmcore(
         gas: call_gas,
         gas_price: params.gas_price,
         value: ActionValue::Transfer(params.value.value()),
-        code: Some(Arc::new(init)),
+        code: Some(Arc::new(init.clone())),
         code_hash,
         data: None,
         call_type: CallType::None,
@@ -292,16 +322,25 @@ pub fn create_to_evmcore(
         params_type: ParamsType::Embedded,
     };
 
+    let nonce = context.state.nonce(&mapped_sender)?;
     context
         .state
         .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
+    CreateEvent::log(
+        &(mapped_sender.address.0, address.0),
+        &(params.value.value(), nonce, init),
+        params,
+        context,
+    )?;
 
     return Ok(ExecTrap::Create(next_params, Box::new(Resume)));
 }
 
 pub fn withdraw_from_evmcore(
-    sender: Address, value: U256, context: &mut InternalRefContext,
-) -> vm::Result<()> {
+    sender: Address, value: U256, params: &ActionParams,
+    context: &mut InternalRefContext,
+) -> vm::Result<()>
+{
     let mapped_address = evm_map(sender);
     let balance = context.state.balance(&mapped_address)?;
     if balance < value {
@@ -319,6 +358,12 @@ pub fn withdraw_from_evmcore(
     context
         .state
         .inc_nonce(&mapped_address, &context.spec.account_start_nonce)?;
+    WithdrawEvent::log(
+        &(mapped_address.address.0, sender),
+        &params.value.value(),
+        params,
+        context,
+    )?;
 
     Ok(())
 }
