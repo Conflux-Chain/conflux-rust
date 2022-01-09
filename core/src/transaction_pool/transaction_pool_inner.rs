@@ -10,9 +10,7 @@ use crate::{
 };
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_statedb::Result as StateDbResult;
-use cfx_types::{
-    address_util::AddressUtil, AddressWithSpace, H256, U128, U256, U512,
-};
+use cfx_types::{Address, address_util::AddressUtil, AddressWithSpace, H256, Space, U128, U256, U512};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
@@ -204,7 +202,8 @@ impl DeferredPool {
 
 #[derive(DeriveMallocSizeOf)]
 struct ReadyAccountPool {
-    treap: TreapMap<AddressWithSpace, Arc<SignedTransaction>, WeightType>,
+    treap_native: TreapMap<Address, Arc<SignedTransaction>, WeightType>,
+    treap_evm: TreapMap<Address, Arc<SignedTransaction>, WeightType>,
     tx_weight_scaling: u64,
     tx_weight_exp: u8,
 }
@@ -212,7 +211,8 @@ struct ReadyAccountPool {
 impl ReadyAccountPool {
     fn new(tx_weight_scaling: u64, tx_weight_exp: u8) -> Self {
         ReadyAccountPool {
-            treap: TreapMap::new(),
+            treap_native: TreapMap::new(),
+            treap_evm: TreapMap::new(),
             tx_weight_scaling,
             tx_weight_exp,
         }
@@ -224,18 +224,26 @@ impl ReadyAccountPool {
         }
     }
 
-    fn len(&self) -> usize { self.treap.len() }
+    fn len(&self) -> usize {
+        self.treap_native.len() + self.treap_evm.len()
+    }
 
     fn get(
         &self, address: &AddressWithSpace,
     ) -> Option<Arc<SignedTransaction>> {
-        self.treap.get(address).map(|tx| tx.clone())
+        match address.space {
+            Space::Native => self.treap_native.get(&address.address).map(| tx | tx.clone()),
+            Space::Ethereum => self.treap_evm.get(&address.address).map(| tx | tx.clone())
+        }
     }
 
     fn remove(
         &mut self, address: &AddressWithSpace,
     ) -> Option<Arc<SignedTransaction>> {
-        self.treap.remove(address)
+        match address.space {
+            Space::Native => self.treap_native.remove(&address.address),
+            Space::Ethereum => self.treap_evm.remove(&address.address)
+        }
     }
 
     fn update(
@@ -271,26 +279,90 @@ impl ReadyAccountPool {
             weight *= base_weight;
         }
 
-        self.treap.insert(tx.sender(), tx.clone(), weight)
+        let sender = tx.sender();
+        match sender.space {
+            Space::Native => self.treap_native.insert(sender.address, tx.clone(), weight),
+            Space::Ethereum => self.treap_evm.insert(sender.address, tx.clone(), weight)
+        }
     }
 
-    fn pop(&mut self) -> Option<Arc<SignedTransaction>> {
-        if self.treap.len() == 0 {
+    fn peek_native(&self) -> Option<Arc<SignedTransaction>> {
+        if self.treap_native.len() == 0 {
             return None;
         }
 
-        let sum_gas_price = self.treap.sum_weight();
+        let sum_gas_price = self.treap_native.sum_weight();
         let mut rand_value = rand::random();
         rand_value = rand_value % sum_gas_price;
 
-        let tx = self
-            .treap
+        Some(self
+            .treap_native
             .get_by_weight(rand_value)
             .expect("Failed to pick transaction by weight")
-            .clone();
-        trace!("Get transaction from ready pool. tx: {:?}", tx.clone());
+            .clone())
+    }
 
-        self.remove(&tx.sender())
+    fn peek_evm(&self) -> Option<Arc<SignedTransaction>> {
+        if self.treap_evm.len() == 0 {
+            return None;
+        }
+
+        let sum_gas_price = self.treap_evm.sum_weight();
+        let mut rand_value = rand::random();
+        rand_value = rand_value % sum_gas_price;
+
+        Some(self
+            .treap_evm
+            .get_by_weight(rand_value)
+            .expect("Failed to pick transaction by weight")
+            .clone())
+    }
+
+    fn pop_native(&mut self) -> Option<Arc<SignedTransaction>> {
+        let tx_opt = self.peek_native();
+        match tx_opt {
+            None => None,
+            Some(tx) => {
+                trace!("Get transaction from ready pool. tx: {:?}", tx.clone());
+                self.remove(&tx.sender())
+            }
+        }
+    }
+
+    fn pop_evm(&mut self) -> Option<Arc<SignedTransaction>> {
+        let tx_opt = self.peek_evm();
+        match tx_opt {
+            None => None,
+            Some(tx) => {
+                trace!("Get transaction from ready pool. tx: {:?}", tx.clone());
+                self.remove(&tx.sender())
+            }
+        }
+    }
+
+    fn pop(&mut self) -> Option<Arc<SignedTransaction>> {
+        let tx_native_opt = self.peek_native();
+        let tx_evm_opt = self.peek_evm();
+        match (tx_native_opt, tx_evm_opt) {
+            (None, None) => None,
+            (None, Some(tx)) => {
+                trace!("Get transaction from ready pool. tx: {:?}", tx.clone());
+                self.remove(&tx.sender())
+            },
+            (Some(tx), None) => {
+                trace!("Get transaction from ready pool. tx: {:?}", tx.clone());
+                self.remove(&tx.sender())
+            },
+            (Some(tx_native), Some(tx_evm)) => {
+                if tx_native.gas_price() > tx_evm.gas_price() {
+                    trace!("Get transaction from ready pool. tx: {:?}", tx_native.clone());
+                    self.remove(&tx_native.sender())
+                } else {
+                    trace!("Get transaction from ready pool. tx: {:?}", tx_evm.clone());
+                    self.remove(&tx_evm.sender())
+                }
+            }
+        }
     }
 }
 
@@ -948,7 +1020,7 @@ impl TransactionPoolInner {
     ) -> (Vec<Arc<SignedTransaction>>, Vec<Arc<SignedTransaction>>) {
         let ready_txs = self
             .ready_account_pool
-            .treap
+            .treap_native
             .iter()
             .filter(|address_tx| {
                 address == None || &address.unwrap() == address_tx.0
