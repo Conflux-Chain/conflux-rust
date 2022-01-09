@@ -199,11 +199,11 @@ pub mod block {
     // The following parameter controls how many blocks are allowed to
     // contain EVM Space transactions. Setting it to N means that one block
     // must has a height of the multiple of N to contain EVM transactions.
-    pub const EVM_TRANSACTION_BLOCK_RATIO: usize = 10;
+    pub const EVM_TRANSACTION_BLOCK_RATIO: u64 = 10;
     // The following parameter controls the ratio of gas limit allowed for
     // EVM space transactions. Setting it to N means that only 1/N of th
     // block gas limit can be used for EVM transaction enabled blocks.
-    pub const EVM_TRANSACTION_GAS_RATIO: usize = 2;
+    pub const EVM_TRANSACTION_GAS_RATIO: u64 = 2;
 }
 
 pub mod staking {
