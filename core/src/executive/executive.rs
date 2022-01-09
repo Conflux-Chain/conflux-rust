@@ -971,7 +971,7 @@ impl<
                 self.spec.account_start_nonce,
             )?;
         }
-        let options = TransactOptions::with_tracing();
+        let options = TransactOptions::virtual_call();
         self.transact(tx, options)
     }
 
