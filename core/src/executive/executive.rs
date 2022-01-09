@@ -1176,7 +1176,7 @@ impl<
             )?;
             // TODO: EVM core: update for trace later.
             options.tracer.prepare_internal_transfer_action(
-                AddressPocket::Balance(sender.address.clone()),
+                AddressPocket::Balance(sender.address.with_space(tx.space())),
                 AddressPocket::GasPayment,
                 actual_gas_cost,
             );
@@ -1216,7 +1216,7 @@ impl<
 
         if !gas_sponsored {
             options.tracer.prepare_internal_transfer_action(
-                AddressPocket::Balance(sender.address),
+                AddressPocket::Balance(sender.address.with_space(tx.space())),
                 AddressPocket::GasPayment,
                 gas_cost,
             );
@@ -1448,7 +1448,7 @@ impl<
             if let Some(ref sponsor_address) = sponsor_for_gas {
                 tracer.prepare_internal_transfer_action(
                     AddressPocket::SponsorBalanceForGas(*contract_address),
-                    AddressPocket::Balance(*sponsor_address),
+                    AddressPocket::Balance(sponsor_address.with_native_space()),
                     sponsor_balance_for_gas.clone(),
                 );
                 self.state.add_balance(
@@ -1465,7 +1465,7 @@ impl<
             if let Some(ref sponsor_address) = sponsor_for_collateral {
                 tracer.prepare_internal_transfer_action(
                     AddressPocket::SponsorBalanceForStorage(*contract_address),
-                    AddressPocket::Balance(*sponsor_address),
+                    AddressPocket::Balance(sponsor_address.with_native_space()),
                     sponsor_balance_for_collateral.clone(),
                 );
 
@@ -1484,11 +1484,10 @@ impl<
 
         for contract_address in suicides {
             if contract_address.space == Space::Native {
-                let contract_address = contract_address.address;
                 let staking_balance =
-                    self.state.staking_balance(&contract_address)?;
+                    self.state.staking_balance(&contract_address.address)?;
                 tracer.prepare_internal_transfer_action(
-                    AddressPocket::StakingBalance(contract_address),
+                    AddressPocket::StakingBalance(contract_address.address),
                     AddressPocket::MintBurn,
                     staking_balance.clone(),
                 );
@@ -1497,7 +1496,7 @@ impl<
 
             let contract_balance = self.state.balance(contract_address)?;
             tracer.prepare_internal_transfer_action(
-                AddressPocket::Balance(contract_address.address),
+                AddressPocket::Balance(*contract_address),
                 AddressPocket::MintBurn,
                 contract_balance.clone(),
             );
@@ -1553,7 +1552,7 @@ impl<
         } else {
             tracer.prepare_internal_transfer_action(
                 AddressPocket::GasPayment,
-                AddressPocket::Balance(tx.sender().address),
+                AddressPocket::Balance(tx.sender()),
                 refund_value.clone(),
             );
             self.state.add_balance(
