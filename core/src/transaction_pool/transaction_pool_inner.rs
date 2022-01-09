@@ -930,7 +930,7 @@ impl TransactionPoolInner {
         let mut big_tx_resample_times_limit = 10;
         let mut eth_tx_resample_times_limit = 10;
 
-        let mut sample_eth_tx = (evm_gas_limit > U256::zero());
+        let mut sample_eth_tx = evm_gas_limit > U256::zero();
         let mut recycle_txs = Vec::new();
 
         let spec = machine.spec(best_block_number);
@@ -954,7 +954,7 @@ impl TransactionPoolInner {
                 }
             }
             if tx.space() == Space::Ethereum {
-                if eth_gas_limit - eth_total_tx_gas_limit < *tx.gas_limit() {
+                if evm_gas_limit - eth_total_tx_gas_limit < *tx.gas_limit() {
                     recycle_txs.push(tx.clone());
                     if eth_tx_resample_times_limit > 0 {
                         eth_tx_resample_times_limit -= 1;
