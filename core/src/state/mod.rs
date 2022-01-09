@@ -153,8 +153,8 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
     /// checked out. This function should only be called in post-processing
     /// of a transaction.
     fn settle_collateral_for_all(
-        &mut self, substate: &Substate,
-        tracer: &mut dyn StateTracer, account_start_nonce: U256,
+        &mut self, substate: &Substate, tracer: &mut dyn StateTracer,
+        account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult>
     {
         for address in substate.keys_for_collateral_changed().iter() {
@@ -1287,7 +1287,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 if is_contract {
                     AddressPocket::SponsorBalanceForStorage(*addr)
                 } else {
-                    AddressPocket::Balance(*addr)
+                    AddressPocket::Balance(addr.with_native_space())
                 },
                 sub,
             );
@@ -1311,7 +1311,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 if is_contract {
                     AddressPocket::SponsorBalanceForStorage(*addr)
                 } else {
-                    AddressPocket::Balance(*addr)
+                    AddressPocket::Balance(addr.with_native_space())
                 },
                 /* to */ AddressPocket::StorageCollateral(*addr),
                 inc,

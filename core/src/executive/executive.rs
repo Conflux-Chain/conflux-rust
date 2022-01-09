@@ -16,8 +16,7 @@ use crate::{
     hash::keccak,
     machine::Machine,
     observer::{
-        tracer::ExecutiveTracer, AddressPocket, GasMan,
-        StateTracer, VmObserve,
+        tracer::ExecutiveTracer, AddressPocket, GasMan, StateTracer, VmObserve,
     },
     state::{cleanup_mode, CallStackInfo, State, Substate},
     verification::VerificationConfig,
@@ -1197,15 +1196,11 @@ impl<
                 &actual_gas_cost,
                 &mut cleanup_mode(&mut tx_substate, &spec),
             )?;
-            // TODO: EVM core: update for trace later.
-            options
-                .observer
-                .as_state_tracer()
-                .trace_internal_transfer(
-                    AddressPocket::Balance(sender.address.clone()),
-                    AddressPocket::GasPayment,
-                    actual_gas_cost,
-                );
+            options.observer.as_state_tracer().trace_internal_transfer(
+                AddressPocket::Balance(sender.address.with_space(tx.space())),
+                AddressPocket::GasPayment,
+                actual_gas_cost,
+            );
 
             return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::NotEnoughCash {
@@ -1244,28 +1239,22 @@ impl<
         };
 
         if !gas_sponsored {
-            options
-                .observer
-                .as_state_tracer()
-                .trace_internal_transfer(
-                    AddressPocket::Balance(sender.address),
-                    AddressPocket::GasPayment,
-                    gas_cost,
-                );
+            options.observer.as_state_tracer().trace_internal_transfer(
+                AddressPocket::Balance(sender.address.with_space(tx.space())),
+                AddressPocket::GasPayment,
+                gas_cost,
+            );
             self.state.sub_balance(
                 &sender,
                 &U256::try_from(gas_cost).unwrap(),
                 &mut cleanup_mode(&mut tx_substate, &spec),
             )?;
         } else {
-            options
-                .observer
-                .as_state_tracer()
-                .trace_internal_transfer(
-                    AddressPocket::SponsorBalanceForGas(code_address),
-                    AddressPocket::GasPayment,
-                    gas_cost,
-                );
+            options.observer.as_state_tracer().trace_internal_transfer(
+                AddressPocket::SponsorBalanceForGas(code_address),
+                AddressPocket::GasPayment,
+                gas_cost,
+            );
 
             self.state.sub_sponsor_balance_for_gas(
                 &code_address,
@@ -1497,7 +1486,7 @@ impl<
             if let Some(ref sponsor_address) = sponsor_for_gas {
                 tracer.trace_internal_transfer(
                     AddressPocket::SponsorBalanceForGas(*contract_address),
-                    AddressPocket::Balance(*sponsor_address),
+                    AddressPocket::Balance(sponsor_address.with_native_space()),
                     sponsor_balance_for_gas.clone(),
                 );
                 self.state.add_balance(
@@ -1514,7 +1503,7 @@ impl<
             if let Some(ref sponsor_address) = sponsor_for_collateral {
                 tracer.trace_internal_transfer(
                     AddressPocket::SponsorBalanceForStorage(*contract_address),
-                    AddressPocket::Balance(*sponsor_address),
+                    AddressPocket::Balance(sponsor_address.with_native_space()),
                     sponsor_balance_for_collateral.clone(),
                 );
 
@@ -1546,7 +1535,7 @@ impl<
 
             let contract_balance = self.state.balance(contract_address)?;
             tracer.trace_internal_transfer(
-                AddressPocket::Balance(contract_address.address),
+                AddressPocket::Balance(*contract_address),
                 AddressPocket::MintBurn,
                 contract_balance.clone(),
             );
@@ -1602,7 +1591,7 @@ impl<
         } else {
             observer.as_state_tracer().trace_internal_transfer(
                 AddressPocket::GasPayment,
-                AddressPocket::Balance(tx.sender().address),
+                AddressPocket::Balance(tx.sender()),
                 refund_value.clone(),
             );
             self.state.add_balance(

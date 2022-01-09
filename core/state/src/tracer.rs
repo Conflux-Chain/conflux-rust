@@ -3,7 +3,7 @@
 // I don't know why we have such a trait, which define almost all the
 // implementation details of state access as trait functions.
 
-use cfx_types::{Address, U256};
+use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, Space, U256};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
 /// This trait is used by executive to build traces.
@@ -46,7 +46,7 @@ where
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AddressPocket {
-    Balance(Address),
+    Balance(AddressWithSpace),
     StakingBalance(Address),
     StorageCollateral(Address),
     SponsorBalanceForGas(Address),
@@ -59,7 +59,7 @@ impl AddressPocket {
     pub fn inner_address(&self) -> Option<&Address> {
         use AddressPocket::*;
         match self {
-            Balance(addr)
+            Balance(AddressWithSpace { address: addr, .. })
             | StakingBalance(addr)
             | StorageCollateral(addr)
             | SponsorBalanceForGas(addr)
@@ -85,16 +85,32 @@ impl AddressPocket {
         }
     }
 
+    pub fn space(&self) -> &'static str {
+        use AddressPocket::*;
+        match self {
+            Balance(AddressWithSpace { space, .. }) => space.clone().into(),
+            MintBurn | GasPayment => "none",
+            _ => Space::Native.into(),
+        }
+    }
+
     fn type_number(&self) -> u8 {
         use AddressPocket::*;
         match self {
-            Balance(_) => 0,
+            Balance(AddressWithSpace {
+                space: Space::Native,
+                ..
+            }) => 0,
             StakingBalance(_) => 1,
             StorageCollateral(_) => 2,
             SponsorBalanceForGas(_) => 3,
             SponsorBalanceForStorage(_) => 4,
             MintBurn => 5,
             GasPayment => 6,
+            Balance(AddressWithSpace {
+                space: Space::Ethereum,
+                ..
+            }) => 7,
         }
     }
 }
@@ -120,13 +136,18 @@ impl Decodable for AddressPocket {
 
         let type_number: u8 = rlp.val_at(0)?;
         match type_number {
-            0 => rlp.val_at(1).map(Balance),
+            0 => rlp
+                .val_at(1)
+                .map(|addr: Address| Balance(addr.with_native_space())),
             1 => rlp.val_at(1).map(StakingBalance),
             2 => rlp.val_at(1).map(StorageCollateral),
             3 => rlp.val_at(1).map(SponsorBalanceForGas),
             4 => rlp.val_at(1).map(SponsorBalanceForStorage),
             5 => Ok(MintBurn),
             6 => Ok(GasPayment),
+            7 => rlp
+                .val_at(1)
+                .map(|addr: Address| Balance(addr.with_evm_space())),
             _ => {
                 Err(DecoderError::Custom("Invalid internal transfer address."))
             }

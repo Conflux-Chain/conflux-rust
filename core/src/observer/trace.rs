@@ -9,7 +9,7 @@ use crate::{
     vm::{ActionParams, CallType, CreateType, Result as vmResult},
 };
 use cfx_internal_common::{DatabaseDecodable, DatabaseEncodable};
-use cfx_types::{Address, Bloom, BloomInput, H256, U256, U64};
+use cfx_types::{Address, Bloom, BloomInput, Space, H256, U256, U64};
 use malloc_size_of_derive::MallocSizeOf;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
@@ -21,6 +21,8 @@ use strum_macros::EnumDiscriminants;
 #[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Call {
+    /// The space
+    pub space: Space,
     /// The sending account.
     pub from: Address,
     /// The destination account.
@@ -39,6 +41,7 @@ impl From<ActionParams> for Call {
     fn from(p: ActionParams) -> Self {
         match p.call_type {
             CallType::DelegateCall | CallType::CallCode => Call {
+                space: p.space,
                 from: p.address,
                 to: p.code_address,
                 value: p.value.value(),
@@ -47,6 +50,7 @@ impl From<ActionParams> for Call {
                 call_type: p.call_type,
             },
             _ => Call {
+                space: p.space,
                 from: p.sender,
                 to: p.address,
                 value: p.value.value(),
@@ -155,6 +159,8 @@ impl From<&vmResult<ExecutiveResult>> for CallResult {
 #[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Create {
+    /// Space
+    pub space: Space,
     /// The address of the creator.
     pub from: Address,
     /// The value with which the new account is endowed.
@@ -170,6 +176,7 @@ pub struct Create {
 impl From<ActionParams> for Create {
     fn from(p: ActionParams) -> Self {
         Create {
+            space: p.space,
             from: p.sender,
             value: p.value.value(),
             gas: p.gas,
@@ -269,8 +276,10 @@ impl Serialize for InternalTransferAction {
         let mut s = serializer.serialize_struct("InternalTransferAction", 5)?;
         s.serialize_field("from", &self.from.inner_address_or_default())?;
         s.serialize_field("fromPocket", &*self.from.pocket())?;
+        s.serialize_field("fromSpace", &*self.from.space())?;
         s.serialize_field("to", &self.to.inner_address_or_default())?;
         s.serialize_field("toPocket", &*self.to.pocket())?;
+        s.serialize_field("toSpace", &*self.to.space())?;
         s.serialize_field("value", &self.value)?;
         s.end()
     }
@@ -505,6 +514,7 @@ mod tests {
 
         let flat_trace = ExecTrace {
             action: Action::Call(Call {
+                space: Default::default(),
                 from: "8dda5e016e674683241bf671cced51e7239ea2bc"
                     .parse()
                     .unwrap(),
@@ -519,6 +529,7 @@ mod tests {
 
         let flat_trace1 = ExecTrace {
             action: Action::Call(Call {
+                space: Default::default(),
                 from: "3d0768da09ce77d25e2d998e6a7b6ed4b9116c2d"
                     .parse()
                     .unwrap(),
