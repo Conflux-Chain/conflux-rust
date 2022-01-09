@@ -459,7 +459,9 @@ impl VerificationConfig {
             )?;
             block_size += t.rlp_size();
             block_total_gas += *t.gas_limit();
-            evm_total_gas += *t.gas_limit();
+            if t.space() == Space::Ethereum {
+                evm_total_gas += *t.gas_limit();
+            }
         }
 
         if block_size > self.max_block_size_in_bytes {
