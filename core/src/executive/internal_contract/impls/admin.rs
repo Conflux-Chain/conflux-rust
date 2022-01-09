@@ -4,8 +4,8 @@
 
 use crate::{
     executive::InternalRefContext,
+    observer::{AddressPocket, VmObserve},
     state::cleanup_mode,
-    trace::{AddressPocket, Tracer},
     vm::{self, ActionParams, Spec},
 };
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
@@ -28,7 +28,7 @@ fn available_admin_address(_spec: &Spec, address: &Address) -> bool {
 pub fn suicide(
     contract_address: &AddressWithSpace, refund_address: &AddressWithSpace,
     state: &mut dyn StateOpsTrait, spec: &Spec,
-    substate: &mut dyn SubstateTrait, tracer: &mut dyn Tracer,
+    substate: &mut dyn SubstateTrait, tracer: &mut dyn VmObserve,
     account_start_nonce: U256,
 ) -> vm::Result<()>
 {
@@ -39,7 +39,7 @@ pub fn suicide(
         || (!spec.is_valid_address(&refund_address.address)
             && refund_address.space == Space::Native)
     {
-        tracer.prepare_internal_transfer_action(
+        tracer.trace_internal_transfer(
             AddressPocket::Balance(*contract_address),
             AddressPocket::MintBurn,
             balance,
@@ -53,7 +53,7 @@ pub fn suicide(
         state.subtract_total_issued(balance);
     } else {
         trace!(target: "context", "Destroying {} -> {} (xfer: {})", contract_address.address, refund_address.address, balance);
-        tracer.prepare_internal_transfer_action(
+        tracer.trace_internal_transfer(
             AddressPocket::Balance(*contract_address),
             AddressPocket::Balance(*refund_address),
             balance,
@@ -114,7 +114,7 @@ pub fn set_admin(
 pub fn destroy(
     contract_address: Address, params: &ActionParams,
     state: &mut dyn StateOpsTrait, spec: &Spec,
-    substate: &mut dyn SubstateTrait, tracer: &mut dyn Tracer,
+    substate: &mut dyn SubstateTrait, tracer: &mut dyn VmObserve,
 ) -> vm::Result<()>
 {
     debug!("contract_address={:?}", contract_address);

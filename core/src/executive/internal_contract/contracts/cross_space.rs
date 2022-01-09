@@ -18,7 +18,7 @@ use crate::{
     },
     impl_function_type, make_function_table, make_solidity_contract,
     make_solidity_function,
-    trace::Tracer,
+    observer::VmObserve,
     vm::{self, ExecTrapResult},
 };
 use cfx_parameters::internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS;
@@ -88,7 +88,7 @@ impl UpfrontPaymentTrait for CreateToEVM {
 impl ExecutionTrait for CreateToEVM {
     fn execute_inner(
         &self, init: Bytes, params: &ActionParams, gas_left: U256,
-        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> ExecTrapResult<Bytes20>
     {
         let trap = create_to_evmcore(init, None, params, gas_left, context);
@@ -143,7 +143,7 @@ impl UpfrontPaymentTrait for TransferToEVM {
 impl ExecutionTrait for TransferToEVM {
     fn execute_inner(
         &self, to: Bytes20, params: &ActionParams, gas_left: U256,
-        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> ExecTrapResult<Bytes>
     {
         let trap = call_to_evmcore(
@@ -178,7 +178,7 @@ impl ExecutionTrait for CallToEVM {
     fn execute_inner(
         &self, (to, data): (Bytes20, Bytes), params: &ActionParams,
         gas_left: U256, context: &mut InternalRefContext,
-        _tracer: &mut dyn Tracer,
+        _tracer: &mut dyn VmObserve,
     ) -> ExecTrapResult<Bytes>
     {
         let trap = call_to_evmcore(
@@ -213,7 +213,7 @@ impl ExecutionTrait for StaticCallToEVM {
     fn execute_inner(
         &self, (to, data): (Bytes20, Bytes), params: &ActionParams,
         gas_left: U256, context: &mut InternalRefContext,
-        _tracer: &mut dyn Tracer,
+        _tracer: &mut dyn VmObserve,
     ) -> ExecTrapResult<Bytes>
     {
         let trap = call_to_evmcore(
@@ -237,7 +237,7 @@ impl_function_type!(Withdraw, "non_payable_write", gas: |spec: &Spec| spec.call_
 impl SimpleExecutionTrait for Withdraw {
     fn execute_inner(
         &self, value: U256, params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
         withdraw_from_evmcore(params.sender, value, params, context)
@@ -253,7 +253,7 @@ impl_function_type!(MappedBalance, "query", gas: |spec: &Spec| spec.balance_gas 
 impl SimpleExecutionTrait for MappedBalance {
     fn execute_inner(
         &self, addr: Address, _params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<U256>
     {
         mapped_balance(addr, context)
@@ -269,7 +269,7 @@ impl_function_type!(MappedNonce, "query", gas: |spec: &Spec| spec.balance_gas + 
 impl SimpleExecutionTrait for MappedNonce {
     fn execute_inner(
         &self, addr: Address, _params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<U256>
     {
         mapped_nonce(addr, context)

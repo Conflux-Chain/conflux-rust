@@ -7,7 +7,7 @@ use crate::rpc::types::Bytes;
 use cfx_addr::Network;
 use cfx_types::{H256, U256, U64};
 use cfxcore::{
-    trace::trace::{
+    observer::trace::{
         Action as VmAction, ActionType as VmActionType, BlockExecTraces,
         Call as VmCall, CallResult as VmCallResult, Create as VmCreate,
         CreateResult as VmCreateResult, ExecTrace,

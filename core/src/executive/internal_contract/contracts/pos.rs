@@ -8,7 +8,7 @@ use super::{
 use crate::{
     evm::{ActionParams, Spec},
     executive::InternalRefContext,
-    trace::Tracer,
+    observer::VmObserve,
     vm,
 };
 use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
@@ -94,7 +94,7 @@ impl SimpleExecutionTrait for Register {
     fn execute_inner(
         &self, inputs: (H256, u64, BlsPubKey, VrfPubKey, BlsProof),
         params: &ActionParams, context: &mut InternalRefContext,
-        _tracer: &mut dyn Tracer,
+        _tracer: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
         if !context.spec.cip43_init && context.env.pos_view.is_none() {
@@ -139,7 +139,7 @@ impl UpfrontPaymentTrait for IncreaseStake {
 impl SimpleExecutionTrait for IncreaseStake {
     fn execute_inner(
         &self, inputs: u64, params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
         if !context.spec.cip43_init && context.env.pos_view.is_none() {
@@ -158,7 +158,7 @@ impl_function_type!(Retire, "non_payable_write", gas: |spec: &Spec| spec.retire_
 impl SimpleExecutionTrait for Retire {
     fn execute_inner(
         &self, votes: u64, params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
         if context.env.pos_view.is_none() {
@@ -177,7 +177,7 @@ impl_function_type!(GetStatus, "query", gas: |spec: &Spec| spec.sload_gas + spec
 impl SimpleExecutionTrait for GetStatus {
     fn execute_inner(
         &self, inputs: H256, params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<(u64, u64)>
     {
         let status = get_status(inputs, params, context)?;
@@ -192,7 +192,7 @@ impl_function_type!(IdentifierToAddress, "query", gas: |spec: &Spec| spec.sload_
 impl SimpleExecutionTrait for IdentifierToAddress {
     fn execute_inner(
         &self, inputs: H256, params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<Address>
     {
         identifier_to_address(inputs, params, context)
@@ -206,7 +206,7 @@ impl_function_type!(AddressToIdentifier, "query", gas: |spec: &Spec| spec.sload_
 impl SimpleExecutionTrait for AddressToIdentifier {
     fn execute_inner(
         &self, inputs: Address, params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<H256>
     {
         address_to_identifier(inputs, params, context)

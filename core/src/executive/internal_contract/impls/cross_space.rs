@@ -8,8 +8,8 @@ use crate::{
         internal_contract::contracts::{CallEvent, CreateEvent, WithdrawEvent},
         InternalRefContext, SolidityEventTrait,
     },
+    observer::VmObserve,
     state::cleanup_mode,
-    trace::Tracer,
     vm::{
         self, ActionValue, CreateType, Exec, ExecTrapError as ExecTrap,
         ExecTrapResult, ParamsType, ResumeCall, ResumeCreate, TrapResult,
@@ -153,7 +153,7 @@ pub struct PassResult {
 impl Exec for PassResult {
     fn exec(
         mut self: Box<Self>, context: &mut dyn Context,
-        _tracer: &mut dyn Tracer,
+        _tracer: &mut dyn VmObserve,
     ) -> ExecTrapResult<GasLeft>
     {
         if let Ok(ref data) = self.return_data {

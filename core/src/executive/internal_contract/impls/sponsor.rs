@@ -4,8 +4,8 @@
 
 use crate::{
     executive::InternalRefContext,
+    observer::{AddressPocket, VmObserve},
     state::cleanup_mode,
-    trace::{AddressPocket, Tracer},
     vm::{self, ActionParams, Spec},
 };
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
@@ -14,7 +14,7 @@ use cfx_types::{Address, AddressSpaceUtil, U256};
 /// Implementation of `set_sponsor_for_gas(address,uint256)`.
 pub fn set_sponsor_for_gas(
     contract_address: Address, upper_bound: U256, params: &ActionParams,
-    context: &mut InternalRefContext, tracer: &mut dyn Tracer,
+    context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     account_start_nonce: U256,
 ) -> vm::Result<()>
 {
@@ -79,7 +79,7 @@ pub fn set_sponsor_for_gas(
         }
         // refund to previous sponsor
         if prev_sponsor.is_some() {
-            tracer.prepare_internal_transfer_action(
+            tracer.trace_internal_transfer(
                 AddressPocket::SponsorBalanceForGas(contract_address),
                 AddressPocket::Balance(
                     prev_sponsor.unwrap().with_native_space(),
@@ -93,7 +93,7 @@ pub fn set_sponsor_for_gas(
                 account_start_nonce,
             )?;
         }
-        tracer.prepare_internal_transfer_action(
+        tracer.trace_internal_transfer(
             AddressPocket::Balance(params.address.with_space(params.space)),
             AddressPocket::SponsorBalanceForGas(contract_address),
             sponsor_balance,
@@ -120,7 +120,8 @@ pub fn set_sponsor_for_gas(
                 "cannot change upper_bound to a smaller one".into(),
             ));
         }
-        tracer.prepare_internal_transfer_action(
+
+        tracer.trace_internal_transfer(
             AddressPocket::Balance(params.address.with_space(params.space)),
             AddressPocket::SponsorBalanceForGas(contract_address),
             sponsor_balance,
@@ -144,7 +145,7 @@ pub fn set_sponsor_for_gas(
 /// Implementation of `set_sponsor_for_collateral(address)`.
 pub fn set_sponsor_for_collateral(
     contract_address: Address, params: &ActionParams,
-    context: &mut InternalRefContext, tracer: &mut dyn Tracer,
+    context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     account_start_nonce: U256,
 ) -> vm::Result<()>
 {
@@ -200,12 +201,12 @@ pub fn set_sponsor_for_collateral(
         }
         // refund to previous sponsor
         if let Some(ref prev_sponsor) = prev_sponsor {
-            tracer.prepare_internal_transfer_action(
+            tracer.trace_internal_transfer(
                 AddressPocket::SponsorBalanceForStorage(contract_address),
                 AddressPocket::Balance(prev_sponsor.with_native_space()),
                 prev_sponsor_balance,
             );
-            tracer.prepare_internal_transfer_action(
+            tracer.trace_internal_transfer(
                 AddressPocket::Balance(params.address.with_space(params.space)),
                 AddressPocket::Balance(prev_sponsor.with_native_space()),
                 collateral_for_storage,
@@ -219,7 +220,7 @@ pub fn set_sponsor_for_collateral(
         } else {
             assert_eq!(collateral_for_storage, U256::zero());
         }
-        tracer.prepare_internal_transfer_action(
+        tracer.trace_internal_transfer(
             AddressPocket::Balance(params.address.with_space(params.space)),
             AddressPocket::SponsorBalanceForStorage(contract_address),
             sponsor_balance - collateral_for_storage,
@@ -235,7 +236,7 @@ pub fn set_sponsor_for_collateral(
             &(sponsor_balance - collateral_for_storage),
         )?;
     } else {
-        tracer.prepare_internal_transfer_action(
+        tracer.trace_internal_transfer(
             AddressPocket::Balance(params.address.with_space(params.space)),
             AddressPocket::SponsorBalanceForStorage(contract_address),
             sponsor_balance,

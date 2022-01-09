@@ -1,6 +1,6 @@
 use crate::{
     executive::revert_reason_decode,
-    trace::trace::{
+    observer::trace::{
         Action, Call, CallResult, Create, CreateResult, ExecTrace, Outcome,
     },
 };

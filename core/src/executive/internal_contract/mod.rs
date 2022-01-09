@@ -23,8 +23,8 @@ use crate::{
     bytes::Bytes,
     evm::Spec,
     hash::keccak,
+    observer::VmObserve,
     spec::CommonParams,
-    trace::Tracer,
     vm::{self, ActionParams, ExecTrapResult, GasLeft, TrapResult},
 };
 use cfx_types::{Address, H256};
@@ -52,7 +52,7 @@ pub trait InternalContractTrait: Send + Sync + IsActive {
     /// execute this internal contract on the given parameters.
     fn execute(
         &self, params: &ActionParams, context: &mut InternalRefContext,
-        tracer: &mut dyn Tracer,
+        tracer: &mut dyn VmObserve,
     ) -> ExecTrapResult<GasLeft>
     {
         let func_table = self.get_func_table();
@@ -99,7 +99,7 @@ fn load_solidity_fn<'a>(
 pub trait SolidityFunctionTrait: Send + Sync + IsActive {
     fn execute(
         &self, input: &[u8], params: &ActionParams,
-        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> ExecTrapResult<GasLeft>;
 
     /// The string for function sig

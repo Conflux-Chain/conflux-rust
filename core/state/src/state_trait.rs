@@ -17,14 +17,14 @@ pub trait StateTrait: CheckpointTrait {
     /// checked out. This function should only be called in post-processing
     /// of a transaction.
     fn settle_collateral_for_all(
-        &mut self, substate: &Self::Substate,
-        tracer: &mut dyn InternalTransferTracer, account_start_nonce: U256,
+        &mut self, substate: &Self::Substate, tracer: &mut dyn StateTracer,
+        account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult>;
 
     // FIXME: add doc string.
     fn collect_and_settle_collateral(
         &mut self, original_sender: &Address, storage_limit: &U256,
-        substate: &mut Self::Substate, tracer: &mut dyn InternalTransferTracer,
+        substate: &mut Self::Substate, tracer: &mut dyn StateTracer,
         account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult>;
 
@@ -273,7 +273,7 @@ pub trait CheckpointTrait: StateOpsTrait {
 }
 
 use super::{CleanupMode, CollateralCheckResult};
-use crate::{substate_trait::SubstateTrait, tracer::InternalTransferTracer};
+use crate::{substate_trait::SubstateTrait, tracer::StateTracer};
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };

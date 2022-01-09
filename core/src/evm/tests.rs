@@ -21,7 +21,6 @@
 use super::{factory::Factory, vmtype::VMType};
 use crate::{
     evm::interpreter::MAX_SUB_STACK_SIZE,
-    trace,
     vm::{
         self,
         tests::{test_finalize, MockCall, MockCallType, MockContext},
@@ -49,7 +48,7 @@ fn test_add(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -75,7 +74,7 @@ fn test_sha3(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -101,7 +100,7 @@ fn test_address(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -131,7 +130,7 @@ fn test_origin(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut context = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, context.spec(), context.depth());
@@ -160,7 +159,7 @@ fn test_selfbalance(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     ctx.balances = {
         let mut x = HashMap::new();
@@ -193,7 +192,7 @@ fn test_sender(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -219,7 +218,7 @@ fn test_chain_id(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new().with_chain_id(9);
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -260,7 +259,7 @@ fn test_extcodecopy(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     ctx.codes.insert(sender, Arc::new(sender_code));
 
     //let gas_left = {
@@ -288,7 +287,7 @@ fn test_log_empty(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -323,7 +322,7 @@ fn test_log_sender(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -363,7 +362,7 @@ fn test_blockhash(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     ctx.blockhashes.insert(U256::zero(), blockhash.clone());
 
     let gas_left = {
@@ -391,7 +390,7 @@ fn test_calldataload(factory: super::Factory) {
     params.code = Some(Arc::new(code));
     params.data = Some(data);
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -416,7 +415,7 @@ fn test_author(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     ctx.env.author = author;
 
     let gas_left = {
@@ -441,7 +440,7 @@ fn test_timestamp(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     ctx.env.timestamp = timestamp;
 
     let gas_left = {
@@ -466,7 +465,7 @@ fn test_number(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     ctx.env.number = number;
 
     let gas_left = {
@@ -491,7 +490,7 @@ fn test_difficulty(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     ctx.env.difficulty = difficulty;
 
     let gas_left = {
@@ -516,7 +515,7 @@ fn test_gas_limit(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     ctx.env.gas_limit = gas_limit;
 
     let gas_left = {
@@ -540,7 +539,7 @@ fn test_mul(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -563,7 +562,7 @@ fn test_sub(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -586,7 +585,7 @@ fn test_div(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -609,7 +608,7 @@ fn test_div_zero(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -634,7 +633,7 @@ fn test_mod(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -664,7 +663,7 @@ fn test_smod(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -694,7 +693,7 @@ fn test_sdiv(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -722,7 +721,7 @@ fn test_exp(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     //let gas_left = {
     {
@@ -756,7 +755,7 @@ fn test_comparison(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -797,7 +796,7 @@ fn test_signed_comparison(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -835,7 +834,7 @@ fn test_bitops(factory: super::Factory) {
     params.gas = U256::from(150_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -883,7 +882,7 @@ fn test_addmod_mulmod(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -921,7 +920,7 @@ fn test_byte(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -949,7 +948,7 @@ fn test_signextend(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -978,7 +977,7 @@ fn test_badinstruction_int() {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let err = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -999,7 +998,7 @@ fn test_pop(factory: super::Factory) {
     params.gas = U256::from(100_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -1027,7 +1026,7 @@ fn test_extops(factory: super::Factory) {
     params.value = ActionValue::Transfer(U256::from(0x99));
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     //let gas_left = {
     {
@@ -1076,7 +1075,7 @@ fn test_jumps(factory: super::Factory) {
     params.gas = U256::from(150_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     //let gas_left = {
     {
@@ -1107,7 +1106,7 @@ fn test_subs_simple(factory: super::Factory) {
     params.gas = U256::from(18);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -1126,7 +1125,7 @@ fn test_subs_two_levels(factory: super::Factory) {
     params.gas = U256::from(36);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -1145,7 +1144,7 @@ fn test_subs_invalid_jump(factory: super::Factory) {
     params.gas = U256::from(24);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let current = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -1166,7 +1165,7 @@ fn test_subs_shallow_return_stack(factory: super::Factory) {
     params.gas = U256::from(24);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let current = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -1205,7 +1204,7 @@ fn test_subs_substack_limit(factory: super::Factory) {
     params.gas = U256::from(1_000_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -1227,7 +1226,7 @@ fn test_subs_substack_out(factory: super::Factory) {
     params.gas = U256::from(1_000_000);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let current = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -1249,7 +1248,7 @@ fn test_subs_sub_at_end(factory: super::Factory) {
     params.gas = U256::from(30);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let gas_left = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -1267,7 +1266,7 @@ fn test_subs_walk_into_subroutine(factory: super::Factory) {
     params.gas = U256::from(100);
     params.code = Some(Arc::new(code));
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
 
     let current = {
         let vm = factory.create(params, ctx.spec(), ctx.depth());
@@ -1289,7 +1288,7 @@ fn test_calls(factory: super::Factory) {
     params.code = Some(Arc::new(code));
     params.address = address.clone();
     let mut ctx = MockContext::new();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     ctx.balances = {
         let mut s = HashMap::new();
         s.insert(params.address.clone(), params.gas);
@@ -1342,7 +1341,7 @@ fn test_create_in_staticcall(factory: super::Factory) {
     params.code = Some(Arc::new(code));
     params.address = address.clone();
     let mut ctx = MockContext::new_spec();
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     ctx.is_static = true;
 
     let err = {

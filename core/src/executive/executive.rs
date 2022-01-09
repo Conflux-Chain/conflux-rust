@@ -15,8 +15,10 @@ use crate::{
     },
     hash::keccak,
     machine::Machine,
+    observer::{
+        tracer::ExecutiveTracer, AddressPocket, GasMan, StateTracer, VmObserve,
+    },
     state::{cleanup_mode, CallStackInfo, State, Substate},
-    trace::{self, AddressPocket, Tracer},
     verification::VerificationConfig,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress,
@@ -172,31 +174,52 @@ pub fn into_contract_create_result(
 }
 
 /// Transaction execution options.
-#[derive(Copy, Clone, PartialEq)]
-pub struct TransactOptions<T> {
-    /// Enable call tracing.
-    pub tracer: T,
+pub struct TransactOptions {
+    pub observer: Observer,
 }
 
-impl<T> TransactOptions<T> {
-    /// Create new `TransactOptions` with given tracer and VM tracer.
-    pub fn new(tracer: T) -> Self { TransactOptions { tracer } }
+pub struct Observer {
+    pub tracer: Option<ExecutiveTracer>,
+    pub gas_man: Option<GasMan>,
+    _noop: (),
 }
 
-impl TransactOptions<trace::ExecutiveTracer> {
-    /// Creates new `TransactOptions` with default tracing and no VM tracing.
-    pub fn with_tracing() -> Self {
-        TransactOptions {
-            tracer: trace::ExecutiveTracer::default(),
+impl Observer {
+    pub fn as_vm_observe<'a>(&'a mut self) -> Box<dyn VmObserve + 'a> {
+        match (self.tracer.as_mut(), self.gas_man.as_mut()) {
+            (Some(tracer), Some(gas_man)) => Box::new((tracer, gas_man)),
+            (Some(tracer), None) => Box::new(tracer),
+            (None, Some(gas_man)) => Box::new(gas_man),
+            (None, None) => Box::new(&mut self._noop),
+        }
+    }
+
+    pub fn as_state_tracer(&mut self) -> &mut dyn StateTracer {
+        match self.tracer.as_mut() {
+            None => &mut self._noop,
+            Some(tracer) => tracer,
         }
     }
 }
 
-impl TransactOptions<trace::NoopTracer> {
-    /// Creates new `TransactOptions` without any tracing.
+impl TransactOptions {
+    pub fn with_tracing() -> Self {
+        Self {
+            observer: Observer {
+                tracer: Some(ExecutiveTracer::default()),
+                gas_man: None,
+                _noop: (),
+            },
+        }
+    }
+
     pub fn with_no_tracing() -> Self {
-        TransactOptions {
-            tracer: trace::NoopTracer,
+        Self {
+            observer: Observer {
+                tracer: Some(ExecutiveTracer::default()),
+                gas_man: None,
+                _noop: (),
+            },
         }
     }
 }
@@ -455,7 +478,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     fn process_return<State: StateTrait<Substate = Substate>>(
         mut self, result: vm::Result<GasLeft>, state: &mut State,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
-        tracer: &mut dyn Tracer,
+        tracer: &mut dyn VmObserve,
     ) -> DbResult<vm::Result<ExecutiveResult>>
     {
         let context = self.context.activate(state, callstack);
@@ -469,9 +492,9 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         let executive_result = vm::separate_out_db_error(executive_result)?;
 
         if self.context.is_create {
-            tracer.prepare_trace_create_result(&executive_result);
+            tracer.record_create_result(&executive_result);
         } else {
-            tracer.prepare_trace_call_result(&executive_result);
+            tracer.record_call_result(&executive_result);
         }
 
         let apply_state =
@@ -518,7 +541,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// `resume` to continue the execution.
     pub fn exec<State: StateTrait<Substate = Substate>>(
         mut self, state: &mut State, parent_substate: &mut Substate,
-        callstack: &mut CallStackInfo, tracer: &mut dyn Tracer,
+        callstack: &mut CallStackInfo, tracer: &mut dyn VmObserve,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
     {
         let status =
@@ -543,9 +566,9 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                 "CallCreateExecutiveKind::ExecCreate: contract_addr = {:?}",
                 params.address
             );
-            tracer.prepare_trace_create(&params);
+            tracer.record_create(&params);
         } else {
-            tracer.prepare_trace_call(&params);
+            tracer.record_call(&params);
         }
 
         // Make checkpoint for this executive, callstack is always maintained
@@ -605,7 +628,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     pub fn resume<State: StateTrait<Substate = Substate>>(
         mut self, result: vm::Result<ExecutiveResult>, state: &mut State,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
-        tracer: &mut dyn Tracer,
+        tracer: &mut dyn VmObserve,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
     {
         let status =
@@ -651,7 +674,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     fn process_output<State: StateTrait<Substate = Substate>>(
         self, output: ExecTrapResult<GasLeft>, state: &mut State,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
-        tracer: &mut dyn Tracer,
+        tracer: &mut dyn VmObserve,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
     {
         // Convert the `ExecTrapResult` (result of evm) to `ExecutiveTrapResult`
@@ -678,7 +701,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// current-level tracing.
     pub fn consume<State: StateTrait<Substate = Substate>>(
         self, state: &'a mut State, top_substate: &mut Substate,
-        tracer: &mut dyn Tracer,
+        tracer: &mut dyn VmObserve,
     ) -> DbResult<vm::Result<FinalizationResult>>
     {
         let mut callstack = CallStackInfo::new();
@@ -884,7 +907,7 @@ impl<
 
     pub fn create(
         &mut self, params: ActionParams, substate: &mut Substate,
-        tracer: &mut dyn Tracer,
+        tracer: &mut dyn VmObserve,
     ) -> DbResult<vm::Result<FinalizationResult>>
     {
         let vm_factory = self.machine.vm_factory();
@@ -904,7 +927,7 @@ impl<
 
     pub fn call(
         &mut self, params: ActionParams, substate: &mut Substate,
-        tracer: &mut dyn Tracer,
+        tracer: &mut dyn VmObserve,
     ) -> DbResult<vm::Result<FinalizationResult>>
     {
         let vm_factory = self.machine.vm_factory();
@@ -1056,10 +1079,9 @@ impl<
         }));
     }
 
-    pub fn transact<T>(
-        &mut self, tx: &SignedTransaction, mut options: TransactOptions<T>,
-    ) -> DbResult<ExecutionOutcome>
-    where T: Tracer {
+    pub fn transact(
+        &mut self, tx: &SignedTransaction, mut options: TransactOptions,
+    ) -> DbResult<ExecutionOutcome> {
         let spec = &self.spec;
         let sender = tx.sender();
         let nonce = self.state.nonce(&sender)?;
@@ -1174,8 +1196,7 @@ impl<
                 &actual_gas_cost,
                 &mut cleanup_mode(&mut tx_substate, &spec),
             )?;
-            // TODO: EVM core: update for trace later.
-            options.tracer.prepare_internal_transfer_action(
+            options.observer.as_state_tracer().trace_internal_transfer(
                 AddressPocket::Balance(sender.address.with_space(tx.space())),
                 AddressPocket::GasPayment,
                 actual_gas_cost,
@@ -1193,7 +1214,10 @@ impl<
                     &actual_gas_cost,
                     gas_sponsored,
                     storage_sponsored,
-                    options.tracer.drain(),
+                    options
+                        .observer
+                        .tracer
+                        .map_or(Default::default(), |t| t.drain()),
                     &self.spec,
                 ),
             ));
@@ -1215,7 +1239,7 @@ impl<
         };
 
         if !gas_sponsored {
-            options.tracer.prepare_internal_transfer_action(
+            options.observer.as_state_tracer().trace_internal_transfer(
                 AddressPocket::Balance(sender.address.with_space(tx.space())),
                 AddressPocket::GasPayment,
                 gas_cost,
@@ -1226,11 +1250,12 @@ impl<
                 &mut cleanup_mode(&mut tx_substate, &spec),
             )?;
         } else {
-            options.tracer.prepare_internal_transfer_action(
+            options.observer.as_state_tracer().trace_internal_transfer(
                 AddressPocket::SponsorBalanceForGas(code_address),
                 AddressPocket::GasPayment,
                 gas_cost,
             );
+
             self.state.sub_sponsor_balance_for_gas(
                 &code_address,
                 &U256::try_from(gas_cost).unwrap(),
@@ -1287,7 +1312,10 @@ impl<
                             tx,
                             gas_sponsored,
                             storage_sponsored,
-                            options.tracer.drain(),
+                            options
+                                .observer
+                                .tracer
+                                .map_or(Default::default(), |t| t.drain()),
                             &spec,
                         ),
                     ));
@@ -1310,7 +1338,11 @@ impl<
                     create_type: CreateType::CREATE,
                     params_type: vm::ParamsType::Embedded,
                 };
-                self.create(params, &mut substate, &mut options.tracer)?
+                self.create(
+                    params,
+                    &mut substate,
+                    &mut *options.observer.as_vm_observe(),
+                )?
             }
             Action::Call(ref address) => {
                 let address = address.with_space(sender.space);
@@ -1331,7 +1363,11 @@ impl<
                     create_type: CreateType::None,
                     params_type: vm::ParamsType::Separate,
                 };
-                self.call(params, &mut substate, &mut options.tracer)?
+                self.call(
+                    params,
+                    &mut substate,
+                    &mut *options.observer.as_vm_observe(),
+                )?
             }
         };
 
@@ -1347,7 +1383,7 @@ impl<
                         &sender.address,
                         &total_storage_limit,
                         &mut substate,
-                        &mut options.tracer,
+                        options.observer.as_state_tracer(),
                         self.spec.account_start_nonce,
                     )?
                     .into_vm_result()
@@ -1389,15 +1425,17 @@ impl<
             } else {
                 storage_sponsor_eligible
             },
-            options.tracer,
+            options.observer,
         )?)
     }
 
     // TODO: maybe we can find a better interface for doing the suicide
     // post-processing.
-    fn kill_process<T: Tracer>(
-        &mut self, suicides: &HashSet<AddressWithSpace>, tracer: &mut T,
-    ) -> DbResult<Substate> {
+    fn kill_process(
+        &mut self, suicides: &HashSet<AddressWithSpace>,
+        tracer: &mut dyn StateTracer,
+    ) -> DbResult<Substate>
+    {
         let mut substate = Substate::new();
         for address in suicides {
             if let Some(code_size) = self.state.code_size(address)? {
@@ -1446,7 +1484,7 @@ impl<
                 .sponsor_balance_for_collateral(contract_address)?;
 
             if let Some(ref sponsor_address) = sponsor_for_gas {
-                tracer.prepare_internal_transfer_action(
+                tracer.trace_internal_transfer(
                     AddressPocket::SponsorBalanceForGas(*contract_address),
                     AddressPocket::Balance(sponsor_address.with_native_space()),
                     sponsor_balance_for_gas.clone(),
@@ -1463,7 +1501,7 @@ impl<
                 )?;
             }
             if let Some(ref sponsor_address) = sponsor_for_collateral {
-                tracer.prepare_internal_transfer_action(
+                tracer.trace_internal_transfer(
                     AddressPocket::SponsorBalanceForStorage(*contract_address),
                     AddressPocket::Balance(sponsor_address.with_native_space()),
                     sponsor_balance_for_collateral.clone(),
@@ -1484,10 +1522,11 @@ impl<
 
         for contract_address in suicides {
             if contract_address.space == Space::Native {
+                let contract_address = contract_address.address;
                 let staking_balance =
-                    self.state.staking_balance(&contract_address.address)?;
-                tracer.prepare_internal_transfer_action(
-                    AddressPocket::StakingBalance(contract_address.address),
+                    self.state.staking_balance(&contract_address)?;
+                tracer.trace_internal_transfer(
+                    AddressPocket::StakingBalance(contract_address),
                     AddressPocket::MintBurn,
                     staking_balance.clone(),
                 );
@@ -1495,7 +1534,7 @@ impl<
             }
 
             let contract_balance = self.state.balance(contract_address)?;
-            tracer.prepare_internal_transfer_action(
+            tracer.trace_internal_transfer(
                 AddressPocket::Balance(*contract_address),
                 AddressPocket::MintBurn,
                 contract_balance.clone(),
@@ -1509,11 +1548,11 @@ impl<
     }
 
     /// Finalizes the transaction (does refunds and suicides).
-    fn finalize<T: Tracer>(
+    fn finalize(
         &mut self, tx: &SignedTransaction, mut substate: Substate,
         result: vm::Result<FinalizationResult>, output: Bytes,
         refund_receiver: Option<Address>, storage_sponsor_paid: bool,
-        mut tracer: T,
+        mut observer: Observer,
     ) -> DbResult<ExecutionOutcome>
     {
         let gas_left = match result {
@@ -1543,14 +1582,14 @@ impl<
         };
 
         if let Some(r) = refund_receiver {
-            tracer.prepare_internal_transfer_action(
+            observer.as_state_tracer().trace_internal_transfer(
                 AddressPocket::GasPayment,
                 AddressPocket::SponsorBalanceForGas(r),
                 refund_value.clone(),
             );
             self.state.add_sponsor_balance_for_gas(&r, &refund_value)?;
         } else {
-            tracer.prepare_internal_transfer_action(
+            observer.as_state_tracer().trace_internal_transfer(
                 AddressPocket::GasPayment,
                 AddressPocket::Balance(tx.sender()),
                 refund_value.clone(),
@@ -1565,8 +1604,8 @@ impl<
 
         // perform suicides
 
-        let subsubstate =
-            self.kill_process(&substate.suicides(), &mut tracer)?;
+        let subsubstate = self
+            .kill_process(&substate.suicides(), observer.as_state_tracer())?;
         substate.accrue(subsubstate);
 
         // TODO should be added back after enabling dust collection
@@ -1598,7 +1637,7 @@ impl<
                     tx,
                     refund_receiver.is_some(),
                     storage_sponsor_paid,
-                    tracer.drain(),
+                    observer.tracer.map_or(Default::default(), |t| t.drain()),
                     &self.spec,
                 ),
             )),
@@ -1630,7 +1669,8 @@ impl<
                     }
                 }
 
-                let trace = tracer.drain();
+                let trace =
+                    observer.tracer.map_or(Default::default(), |t| t.drain());
 
                 let executed = Executed {
                     gas_used,
