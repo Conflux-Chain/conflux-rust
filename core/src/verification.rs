@@ -475,8 +475,8 @@ impl VerificationConfig {
         if evm_total_gas > evm_space_gas_limit {
             return Err(From::from(BlockError::InvalidBlockGasLimit(
                 OutOfBounds {
-                    min: Some(*evm_space_gas_limit),
-                    max: Some(*evm_space_gas_limit),
+                    min: Some(evm_space_gas_limit),
+                    max: Some(evm_space_gas_limit),
                     found: evm_total_gas,
                 },
             )));
