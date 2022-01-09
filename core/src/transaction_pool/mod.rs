@@ -26,7 +26,10 @@ use crate::{
     vm::Spec,
 };
 use account_cache::AccountCache;
-use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
+use cfx_parameters::block::{
+    DEFAULT_TARGET_BLOCK_GAS_LIMIT, EVM_TRANSACTION_BLOCK_RATIO,
+    EVM_TRANSACTION_GAS_RATIO,
+};
 use cfx_statedb::{Result as StateDbResult, StateDb};
 use cfx_storage::{StateIndex, StorageManagerTrait};
 use cfx_types::{AddressWithSpace as Address, AllChainID, H256, U256};
@@ -606,8 +609,9 @@ impl TransactionPool {
     }
 
     pub fn pack_transactions<'a>(
-        &self, num_txs: usize, block_gas_limit: U256, block_size_limit: usize,
-        mut best_epoch_height: u64, mut best_block_number: u64,
+        &self, num_txs: usize, block_gas_limit: U256, evm_gas_limit: U256,
+        block_size_limit: usize, mut best_epoch_height: u64,
+        mut best_block_number: u64,
     ) -> Vec<Arc<SignedTransaction>>
     {
         let mut inner = self.inner.write_with_metric(&PACK_TRANSACTION_LOCK);
@@ -617,6 +621,7 @@ impl TransactionPool {
         inner.pack_transactions(
             num_txs,
             block_gas_limit,
+            evm_gas_limit,
             block_size_limit,
             best_epoch_height,
             best_block_number,
@@ -787,10 +792,19 @@ impl TransactionPool {
 
         let target_gas_limit = self.config.target_block_gas_limit.into();
         let self_gas_limit = min(max(target_gas_limit, gas_lower), gas_upper);
+        let evm_gas_limit = if (consensus_best_info_clone.best_epoch_number + 1)
+            % EVM_TRANSACTION_BLOCK_RATIO
+            == 0
+        {
+            self_gas_limit / EVM_TRANSACTION_GAS_RATIO
+        } else {
+            U256::zero()
+        };
 
         let transactions_from_pool = self.pack_transactions(
             num_txs,
             self_gas_limit.clone(),
+            evm_gas_limit,
             block_size_limit,
             consensus_best_info_clone.best_epoch_number,
             consensus_best_info_clone.best_block_number,
