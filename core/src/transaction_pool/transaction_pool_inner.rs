@@ -1056,6 +1056,7 @@ impl TransactionPoolInner {
                 .treap_native
                 .iter()
                 .chain(self.ready_account_pool.treap_evm.iter())
+                .map(|(_, tx)| tx.clone())
                 .collect()
         };
 
