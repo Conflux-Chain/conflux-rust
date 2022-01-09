@@ -89,7 +89,7 @@ class Web3Test(ConfluxTestFramework):
 
         client = RpcClient(self.nodes[0])
         client.generate_block(1)
-        client.generate_blocks(10)
+        client.generate_blocks(20, 1)
         receipt = self.w3.eth.waitForTransactionReceipt(tx_hash)
         assert_equal(receipt["status"], 1)
 

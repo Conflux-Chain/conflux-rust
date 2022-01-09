@@ -441,6 +441,13 @@ impl VerificationConfig {
         let mut block_total_gas = U256::zero();
 
         let block_height = block.block_header.height();
+        let evm_space_gas_limit =
+            if block_height % EVM_TRANSACTION_BLOCK_RATIO == 0 {
+                *block.block_header.gas_limit() / EVM_TRANSACTION_GAS_RATIO
+            } else {
+                U256::zero()
+            };
+        let mut evm_total_gas = U256::zero();
         let transitions = &self.machine.params().transition_heights;
         for t in &block.transactions {
             self.verify_transaction_common(
@@ -452,6 +459,9 @@ impl VerificationConfig {
             )?;
             block_size += t.rlp_size();
             block_total_gas += *t.gas_limit();
+            if t.space() == Space::Ethereum {
+                evm_total_gas += *t.gas_limit();
+            }
         }
 
         if block_size > self.max_block_size_in_bytes {
@@ -460,6 +470,16 @@ impl VerificationConfig {
                     min: None,
                     max: Some(self.max_block_size_in_bytes as u64),
                     found: block_size as u64,
+                },
+            )));
+        }
+
+        if evm_total_gas > evm_space_gas_limit {
+            return Err(From::from(BlockError::InvalidBlockGasLimit(
+                OutOfBounds {
+                    min: Some(evm_space_gas_limit),
+                    max: Some(evm_space_gas_limit),
+                    found: evm_total_gas,
                 },
             )));
         }

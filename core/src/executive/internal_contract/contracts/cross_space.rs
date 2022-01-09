@@ -35,7 +35,7 @@ make_solidity_contract! {
 fn generate_fn_table() -> SolFnTable {
     make_function_table!(
         CreateToEVM,
-        Create2ToEVM,
+        // Create2ToEVM,
         TransferToEVM,
         CallToEVM,
         StaticCallToEVM,
@@ -48,7 +48,7 @@ fn generate_fn_table() -> SolFnTable {
 group_impl_is_active!(
     |spec: &Spec| spec.cip90,
     CreateToEVM,
-    Create2ToEVM,
+    // Create2ToEVM,
     TransferToEVM,
     CallToEVM,
     StaticCallToEVM,
@@ -56,6 +56,18 @@ group_impl_is_active!(
     MappedBalance,
     MappedNonce
 );
+
+make_solidity_event! {
+    pub struct CallEvent("Call(bytes20,bytes20,uint256,uint256,bytes)", indexed: (Bytes20, Bytes20), non_indexed: (U256,U256, Bytes));
+}
+
+make_solidity_event! {
+    pub struct CreateEvent("Create(bytes20,bytes20,uint256,uint256,bytes)", indexed: (Bytes20, Bytes20), non_indexed: (U256, U256, Bytes));
+}
+
+make_solidity_event! {
+    pub struct WithdrawEvent("Withdraw(bytes20,address,uint256)", indexed: (Bytes20, Address), non_indexed: U256);
+}
 
 make_solidity_function! {
     struct CreateToEVM(Bytes, "createEVM(bytes)", Bytes20);
@@ -65,11 +77,11 @@ impl_function_type!(CreateToEVM, "payable_write");
 
 impl UpfrontPaymentTrait for CreateToEVM {
     fn upfront_gas_payment(
-        &self, _input: &Bytes, _params: &ActionParams,
+        &self, init: &Bytes, _params: &ActionParams,
         context: &InternalRefContext,
     ) -> DbResult<U256>
     {
-        create_gas(context, 0)
+        create_gas(context, init.len(), 0)
     }
 }
 
@@ -84,33 +96,33 @@ impl ExecutionTrait for CreateToEVM {
     }
 }
 
-make_solidity_function! {
-    struct Create2ToEVM((Bytes,H256), "create2EVM(bytes,bytes32)", Bytes20);
-}
-
-impl_function_type!(Create2ToEVM, "payable_write");
-
-impl UpfrontPaymentTrait for Create2ToEVM {
-    fn upfront_gas_payment(
-        &self, (ref init, _): &(Bytes, H256), _params: &ActionParams,
-        context: &InternalRefContext,
-    ) -> DbResult<U256>
-    {
-        create_gas(context, init.len())
-    }
-}
-impl ExecutionTrait for Create2ToEVM {
-    fn execute_inner(
-        &self, (init, salt): (Bytes, H256), params: &ActionParams,
-        gas_left: U256, context: &mut InternalRefContext,
-        _tracer: &mut dyn VmObserve,
-    ) -> ExecTrapResult<Bytes20>
-    {
-        let trap =
-            create_to_evmcore(init, Some(salt), params, gas_left, context);
-        process_trap(trap, PhantomData)
-    }
-}
+// make_solidity_function! {
+//     struct Create2ToEVM((Bytes,H256), "create2EVM(bytes,bytes32)", Bytes20);
+// }
+//
+// impl_function_type!(Create2ToEVM, "payable_write");
+//
+// impl UpfrontPaymentTrait for Create2ToEVM {
+//     fn upfront_gas_payment(
+//         &self, (ref init, _): &(Bytes, H256), _params: &ActionParams,
+//         context: &InternalRefContext,
+//     ) -> DbResult<U256>
+//     {
+//         create_gas(context, init.len())
+//     }
+// }
+// impl ExecutionTrait for Create2ToEVM {
+//     fn execute_inner(
+//         &self, (init, salt): (Bytes, H256), params: &ActionParams,
+//         gas_left: U256, context: &mut InternalRefContext,
+//         _tracer: &mut dyn Tracer,
+//     ) -> ExecTrapResult<Bytes20>
+//     {
+//         let trap =
+//             create_to_evmcore(init, Some(salt), params, gas_left, context);
+//         process_trap(trap, PhantomData)
+//     }
+// }
 
 make_solidity_function! {
     struct TransferToEVM(Bytes20, "transferEVM(bytes20)", Bytes);
@@ -124,9 +136,10 @@ impl UpfrontPaymentTrait for TransferToEVM {
         context: &InternalRefContext,
     ) -> DbResult<U256>
     {
-        call_gas(H160(*receiver), params, context, false)
+        call_gas(H160(*receiver), params, context, 0, false)
     }
 }
+
 impl ExecutionTrait for TransferToEVM {
     fn execute_inner(
         &self, to: Bytes20, params: &ActionParams, gas_left: U256,
@@ -153,13 +166,14 @@ impl_function_type!(CallToEVM, "payable_write");
 
 impl UpfrontPaymentTrait for CallToEVM {
     fn upfront_gas_payment(
-        &self, (ref receiver, _): &(Bytes20, Bytes), params: &ActionParams,
+        &self, (ref receiver, data): &(Bytes20, Bytes), params: &ActionParams,
         context: &InternalRefContext,
     ) -> DbResult<U256>
     {
-        call_gas(H160(*receiver), params, context, false)
+        call_gas(H160(*receiver), params, context, data.len(), false)
     }
 }
+
 impl ExecutionTrait for CallToEVM {
     fn execute_inner(
         &self, (to, data): (Bytes20, Bytes), params: &ActionParams,
@@ -187,13 +201,14 @@ impl_function_type!(StaticCallToEVM, "query");
 
 impl UpfrontPaymentTrait for StaticCallToEVM {
     fn upfront_gas_payment(
-        &self, (ref receiver, _): &(Bytes20, Bytes), params: &ActionParams,
+        &self, (ref receiver, data): &(Bytes20, Bytes), params: &ActionParams,
         context: &InternalRefContext,
     ) -> DbResult<U256>
     {
-        call_gas(H160(*receiver), params, context, true)
+        call_gas(H160(*receiver), params, context, data.len(), true)
     }
 }
+
 impl ExecutionTrait for StaticCallToEVM {
     fn execute_inner(
         &self, (to, data): (Bytes20, Bytes), params: &ActionParams,
@@ -217,7 +232,7 @@ make_solidity_function! {
     struct Withdraw(U256, "withdrawFromMapped(uint256)");
 }
 
-impl_function_type!(Withdraw, "non_payable_write", gas: |spec: &Spec| spec.call_value_transfer_gas);
+impl_function_type!(Withdraw, "non_payable_write", gas: |spec: &Spec| spec.call_value_transfer_gas+spec.log_gas+spec.log_topic_gas*3+spec.log_data_gas*H256::len_bytes());
 
 impl SimpleExecutionTrait for Withdraw {
     fn execute_inner(
@@ -225,7 +240,7 @@ impl SimpleExecutionTrait for Withdraw {
         context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
-        withdraw_from_evmcore(params.sender, value, context)
+        withdraw_from_evmcore(params.sender, value, params, context)
     }
 }
 
