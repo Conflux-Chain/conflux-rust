@@ -329,6 +329,7 @@ impl ReadyAccountPool {
         )
     }
 
+    #[allow(unused)]
     fn pop_native(&mut self) -> Option<Arc<SignedTransaction>> {
         let tx_opt = self.peek_native();
         match tx_opt {
@@ -340,6 +341,7 @@ impl ReadyAccountPool {
         }
     }
 
+    #[allow(unused)]
     fn pop_evm(&mut self) -> Option<Arc<SignedTransaction>> {
         let tx_opt = self.peek_evm();
         match tx_opt {
