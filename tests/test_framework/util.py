@@ -315,7 +315,7 @@ def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="
         }
         validator_config['logger'] = {
             'level': "TRACE",
-            'file': os.path.join(datadir, "diem.log")
+            'file': os.path.join(datadir, "pos.log")
         }
         validator_config['mempool'] = {
             "shared_mempool_tick_interval_ms": 200,

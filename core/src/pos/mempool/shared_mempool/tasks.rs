@@ -477,7 +477,7 @@ pub(crate) async fn process_config_update(
     _validator: Arc<RwLock<TransactionValidator>>,
 )
 {
-    diem_info!(LogSchema::event_log(
+    diem_trace!(LogSchema::event_log(
         LogEntry::ReconfigUpdate,
         LogEvent::Process
     )

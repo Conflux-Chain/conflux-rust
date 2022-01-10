@@ -315,7 +315,7 @@ impl PosLedgerDB {
         diem_info!(
             path = path,
             time_ms = %instant.elapsed().as_millis(),
-            "Opened DiemDB.",
+            "Opened PosLedgerDB.",
         );
         Ok(ret)
     }
