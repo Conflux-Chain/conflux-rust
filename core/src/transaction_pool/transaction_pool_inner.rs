@@ -14,6 +14,7 @@ use cfx_types::{
     address_util::AddressUtil, Address, AddressWithSpace, Space, H256, U128,
     U256, U512,
 };
+use heap_map::HeapMap;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
@@ -24,6 +25,7 @@ use primitives::{
 use rlp::*;
 use serde::Serialize;
 use std::{
+    cmp::{Ordering, Reverse},
     collections::HashMap,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
@@ -203,70 +205,195 @@ impl DeferredPool {
     }
 }
 
-#[derive(DeriveMallocSizeOf)]
-struct ReadyAccountPool {
-    treap_native: TreapMap<Address, Arc<SignedTransaction>, WeightType>,
-    treap_evm: TreapMap<Address, Arc<SignedTransaction>, WeightType>,
-    tx_weight_scaling: u64,
-    tx_weight_exp: u8,
+#[derive(DeriveMallocSizeOf, Clone)]
+struct PriceOrderedTransaction(Arc<SignedTransaction>);
+
+impl PartialEq for PriceOrderedTransaction {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.gas_price().eq(other.0.gas_price())
+    }
 }
 
-impl ReadyAccountPool {
-    fn new(tx_weight_scaling: u64, tx_weight_exp: u8) -> Self {
-        ReadyAccountPool {
-            treap_native: TreapMap::new(),
-            treap_evm: TreapMap::new(),
+impl Eq for PriceOrderedTransaction {}
+
+impl PartialOrd for PriceOrderedTransaction {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.0.gas_price().partial_cmp(other.0.gas_price())
+    }
+}
+
+impl Ord for PriceOrderedTransaction {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.gas_price().cmp(other.0.gas_price())
+    }
+}
+
+/// `ReadyAccountPool` maintains all ready transactions, and a subset with high
+/// gas prices will be sampled for packing. Each account has at most one ready
+/// transaction, and a ready account/transaction is either in `packing_pool` or
+/// `waiting_pool`. All transactions in `packing_pool` have no less gas price
+/// than the ones in `waiting_pool`. When `packing_pool` has an available
+/// capacity, we will try to move the highest gas price transactions from
+/// `waiting_pool` to `packing_pool`.
+#[derive(DeriveMallocSizeOf)]
+struct SpacedReadyAccountPool {
+    /// Keeps all high gas price transactions that can be sampled for packing.
+    packing_pool: PackingPool,
+    /// Keeps all low gas price transactions.
+    waiting_pool: HeapMap<Address, PriceOrderedTransaction>,
+}
+
+impl SpacedReadyAccountPool {
+    fn new(
+        tx_weight_scaling: u64, tx_weight_exp: u8, total_gas_capacity: U256,
+    ) -> Self {
+        Self {
+            packing_pool: PackingPool::new(
+                tx_weight_scaling,
+                tx_weight_exp,
+                total_gas_capacity,
+            ),
+            waiting_pool: HeapMap::new(),
+        }
+    }
+
+    fn update(
+        &mut self, address: &Address, tx: Option<Arc<SignedTransaction>>,
+    ) {
+        if let Some(tx) = tx {
+            if tx.hash[0] & 254 == 0 {
+                debug!("Sampled transaction {:?} in ready pool", tx.hash);
+            }
+            self.insert(tx);
+        } else {
+            self.remove(address)
+        };
+    }
+
+    fn insert(&mut self, tx: Arc<SignedTransaction>) {
+        // We always replace the old tx from the same sender, so we remove it
+        // from `waiting_pool` first to avoid having transactions from
+        // the same sender to exist in both `packing_pool` and `waiting_pool`.
+        self.waiting_pool.remove(&tx.sender().address);
+        self.packing_pool.insert(tx);
+        self.try_shrink_packing_pool();
+    }
+
+    fn remove(&mut self, address: &Address) {
+        self.packing_pool.remove(address);
+        self.waiting_pool.remove(address);
+        self.try_fill_packing_pool();
+    }
+
+    fn sample_pop(&mut self) -> Option<Arc<SignedTransaction>> {
+        let popped_tx = self.packing_pool.sample_pop();
+        self.try_fill_packing_pool();
+        popped_tx
+    }
+
+    fn sample_peek(&self) -> Option<Arc<SignedTransaction>> {
+        self.packing_pool.sample_peek()
+    }
+
+    fn try_shrink_packing_pool(&mut self) {
+        while self.packing_pool.total_gas > self.packing_pool.total_gas_capacity
+        {
+            let tx = self.packing_pool.pop().unwrap();
+            self.waiting_pool
+                .insert(&tx.sender().address, PriceOrderedTransaction(tx));
+        }
+    }
+
+    fn try_fill_packing_pool(&mut self) {
+        while self.packing_pool.total_gas < self.packing_pool.total_gas_capacity
+        {
+            let top_waiting_gas = match self.waiting_pool.top() {
+                None => break,
+                Some((_, tx)) => *tx.0.gas(),
+            };
+            if top_waiting_gas + self.packing_pool.total_gas
+                > self.packing_pool.total_gas_capacity
+            {
+                break;
+            }
+
+            let tx = (self.waiting_pool.pop().unwrap().1).0;
+            self.packing_pool.insert(tx);
+        }
+    }
+
+    fn clear(&mut self) {
+        self.packing_pool.clear();
+        self.waiting_pool.clear();
+    }
+
+    fn get(&self, address: &Address) -> Option<Arc<SignedTransaction>> {
+        self.waiting_pool
+            .get(address)
+            .map(|tx| tx.0.clone())
+            .or_else(|| self.packing_pool.get(address))
+    }
+
+    fn len(&self) -> usize { self.packing_pool.len() + self.waiting_pool.len() }
+
+    #[cfg(test)]
+    fn top(&self) -> Option<Arc<SignedTransaction>> { self.packing_pool.top() }
+}
+
+#[derive(DeriveMallocSizeOf)]
+struct PackingPool {
+    /// A balance tree used to randomly sample transactions with `gas_price` as
+    /// a sampling weight.
+    treap: TreapMap<Address, Arc<SignedTransaction>, WeightType>,
+    /// A priority queue to order transactions based on their gas_price.
+    heap_map: HeapMap<Address, Reverse<PriceOrderedTransaction>>,
+    tx_weight_scaling: u64,
+    tx_weight_exp: u8,
+
+    /// U256 should be sufficient since txpool the limits `max_tx_gas`.
+    /// This limits the number of transactions in the packing pool with their
+    /// gas limits.
+    total_gas_capacity: U256,
+    /// The total gas limit of all transactions in this packing pool.
+    total_gas: U256,
+}
+
+impl PackingPool {
+    fn new(
+        tx_weight_scaling: u64, tx_weight_exp: u8, total_gas_capacity: U256,
+    ) -> Self {
+        PackingPool {
+            treap: TreapMap::new(),
+            heap_map: HeapMap::new(),
             tx_weight_scaling,
             tx_weight_exp,
+            total_gas_capacity,
+            total_gas: 0.into(),
         }
     }
 
     fn clear(&mut self) {
         while self.len() != 0 {
-            self.pop();
+            self.sample_pop();
         }
+        self.heap_map.clear()
     }
 
-    fn len(&self) -> usize { self.treap_native.len() + self.treap_evm.len() }
+    fn len(&self) -> usize { self.treap.len() }
 
-    fn get(
-        &self, address: &AddressWithSpace,
-    ) -> Option<Arc<SignedTransaction>> {
-        match address.space {
-            Space::Native => {
-                self.treap_native.get(&address.address).map(|tx| tx.clone())
-            }
-            Space::Ethereum => {
-                self.treap_evm.get(&address.address).map(|tx| tx.clone())
-            }
-        }
+    fn get(&self, address: &Address) -> Option<Arc<SignedTransaction>> {
+        self.heap_map.get(address).map(|tx| (tx.0).0.clone())
     }
 
-    fn remove(
-        &mut self, address: &AddressWithSpace,
-    ) -> Option<Arc<SignedTransaction>> {
-        match address.space {
-            Space::Native => self.treap_native.remove(&address.address),
-            Space::Ethereum => self.treap_evm.remove(&address.address),
-        }
+    fn remove(&mut self, address: &Address) -> Option<Arc<SignedTransaction>> {
+        let tx = (self.heap_map.remove(address)?.0).0;
+        self.treap.remove(address);
+        self.total_gas -= *tx.gas();
+        Some(tx)
     }
 
-    fn update(
-        &mut self, address: &AddressWithSpace,
-        tx: Option<Arc<SignedTransaction>>,
-    ) -> Option<Arc<SignedTransaction>>
-    {
-        let replaced = if let Some(tx) = tx {
-            if tx.hash[0] & 254 == 0 {
-                debug!("Sampled transaction {:?} in ready pool", tx.hash);
-            }
-            self.insert(tx)
-        } else {
-            self.remove(address)
-        };
-        replaced
-    }
-
+    /// If the insertion replaces an old transaction of the same
+    /// sender, it will be returned.
     fn insert(
         &mut self, tx: Arc<SignedTransaction>,
     ) -> Option<Arc<SignedTransaction>> {
@@ -284,73 +411,149 @@ impl ReadyAccountPool {
             weight *= base_weight;
         }
 
-        let sender = tx.sender();
-        match sender.space {
+        self.heap_map.insert(
+            &tx.sender().address,
+            Reverse(PriceOrderedTransaction(tx.clone())),
+        );
+        self.total_gas += *tx.gas();
+        let replaced_tx = self.treap.insert(tx.sender().address, tx, weight);
+        if let Some(replaced_tx) = replaced_tx.as_ref() {
+            // an old transaction of the same sender is replaced.
+            self.total_gas -= *replaced_tx.gas();
+        };
+        replaced_tx
+    }
+
+    fn sample_pop(&mut self) -> Option<Arc<SignedTransaction>> {
+        if self.treap.len() == 0 {
+            return None;
+        }
+
+        let sum_gas_price = self.treap.sum_weight();
+        let mut rand_value = rand::random();
+        rand_value = rand_value % sum_gas_price;
+
+        let tx = self
+            .treap
+            .get_by_weight(rand_value)
+            .expect("Failed to pick transaction by weight")
+            .clone();
+        trace!("Get transaction from ready pool. tx: {:?}", tx.clone());
+
+        self.remove(&tx.sender().address)
+    }
+
+    fn sample_peek(&self) -> Option<Arc<SignedTransaction>> {
+        if self.treap.len() == 0 {
+            return None;
+        }
+
+        let sum_gas_price = self.treap.sum_weight();
+        let mut rand_value = rand::random();
+        rand_value = rand_value % sum_gas_price;
+
+        Some(
+            self.treap
+                .get_by_weight(rand_value)
+                .expect("Failed to pick transaction by weight")
+                .clone(),
+        )
+    }
+
+    fn pop(&mut self) -> Option<Arc<SignedTransaction>> {
+        self.heap_map.pop().map(|(addr, tx)| {
+            let tx = (tx.0).0;
+            self.treap.remove(&addr);
+            self.total_gas -= *tx.gas();
+            tx
+        })
+    }
+
+    #[cfg(test)]
+    fn top(&self) -> Option<Arc<SignedTransaction>> {
+        self.heap_map.top().map(|(_, tx)| (tx.0).0.clone())
+    }
+}
+
+#[derive(DeriveMallocSizeOf)]
+struct ReadyAccountPool {
+    native_pool: SpacedReadyAccountPool,
+    evm_pool: SpacedReadyAccountPool,
+}
+
+impl ReadyAccountPool {
+    fn new(
+        tx_weight_scaling: u64, tx_weight_exp: u8, total_gas_capacity: U256,
+    ) -> Self {
+        Self {
+            native_pool: SpacedReadyAccountPool::new(
+                tx_weight_scaling,
+                tx_weight_exp,
+                total_gas_capacity,
+            ),
+            evm_pool: SpacedReadyAccountPool::new(
+                tx_weight_scaling,
+                tx_weight_exp,
+                total_gas_capacity,
+            ),
+        }
+    }
+
+    fn len(&self) -> usize { self.native_pool.len() + self.evm_pool.len() }
+
+    fn get(
+        &self, address: &AddressWithSpace,
+    ) -> Option<Arc<SignedTransaction>> {
+        match address.space {
             Space::Native => {
-                self.treap_native.insert(sender.address, tx.clone(), weight)
+                self.native_pool.get(&address.address).map(|tx| tx.clone())
             }
             Space::Ethereum => {
-                self.treap_evm.insert(sender.address, tx.clone(), weight)
+                self.evm_pool.get(&address.address).map(|tx| tx.clone())
             }
+        }
+    }
+
+    fn update(
+        &mut self, address: &AddressWithSpace,
+        tx: Option<Arc<SignedTransaction>>,
+    )
+    {
+        match address.space {
+            Space::Native => self.native_pool.update(&address.address, tx),
+            Space::Ethereum => self.evm_pool.update(&address.address, tx),
+        }
+    }
+
+    fn remove(&mut self, address: &AddressWithSpace) {
+        match address.space {
+            Space::Native => self.native_pool.remove(&address.address),
+            Space::Ethereum => self.evm_pool.remove(&address.address),
+        }
+    }
+
+    fn insert(&mut self, tx: Arc<SignedTransaction>) {
+        match tx.sender().space {
+            Space::Native => self.native_pool.insert(tx.clone()),
+            Space::Ethereum => self.evm_pool.insert(tx.clone()),
         }
     }
 
     fn peek_native(&self) -> Option<Arc<SignedTransaction>> {
-        if self.treap_native.len() == 0 {
-            return None;
-        }
-
-        let sum_gas_price = self.treap_native.sum_weight();
-        let mut rand_value = rand::random();
-        rand_value = rand_value % sum_gas_price;
-
-        Some(
-            self.treap_native
-                .get_by_weight(rand_value)
-                .expect("Failed to pick transaction by weight")
-                .clone(),
-        )
+        self.native_pool.sample_peek()
     }
 
     fn peek_evm(&self) -> Option<Arc<SignedTransaction>> {
-        if self.treap_evm.len() == 0 {
-            return None;
-        }
-
-        let sum_gas_price = self.treap_evm.sum_weight();
-        let mut rand_value = rand::random();
-        rand_value = rand_value % sum_gas_price;
-
-        Some(
-            self.treap_evm
-                .get_by_weight(rand_value)
-                .expect("Failed to pick transaction by weight")
-                .clone(),
-        )
+        self.evm_pool.sample_peek()
     }
 
-    #[allow(unused)]
     fn pop_native(&mut self) -> Option<Arc<SignedTransaction>> {
-        let tx_opt = self.peek_native();
-        match tx_opt {
-            None => None,
-            Some(tx) => {
-                trace!("Get transaction from ready pool. tx: {:?}", tx.clone());
-                self.remove(&tx.sender())
-            }
-        }
+        self.native_pool.sample_pop()
     }
 
     #[allow(unused)]
     fn pop_evm(&mut self) -> Option<Arc<SignedTransaction>> {
-        let tx_opt = self.peek_evm();
-        match tx_opt {
-            None => None,
-            Some(tx) => {
-                trace!("Get transaction from ready pool. tx: {:?}", tx.clone());
-                self.remove(&tx.sender())
-            }
-        }
+        self.evm_pool.sample_pop()
     }
 
     fn pop(&mut self) -> Option<Arc<SignedTransaction>> {
@@ -359,29 +562,48 @@ impl ReadyAccountPool {
         match (tx_native_opt, tx_evm_opt) {
             (None, None) => None,
             (None, Some(tx)) => {
-                trace!("Get transaction from ready pool. tx: {:?}", tx.clone());
-                self.remove(&tx.sender())
+                trace!(
+                    "Get transaction from evm ready pool. tx: {:?}",
+                    tx.clone()
+                );
+                self.remove(&tx.sender());
+                self.evm_pool.try_fill_packing_pool();
+                Some(tx)
             }
             (Some(tx), None) => {
-                trace!("Get transaction from ready pool. tx: {:?}", tx.clone());
-                self.remove(&tx.sender())
+                trace!(
+                    "Get transaction from native ready pool. tx: {:?}",
+                    tx.clone()
+                );
+                self.remove(&tx.sender());
+                self.native_pool.try_fill_packing_pool();
+                Some(tx)
             }
             (Some(tx_native), Some(tx_evm)) => {
                 if tx_native.gas_price() > tx_evm.gas_price() {
                     trace!(
-                        "Get transaction from ready pool. tx: {:?}",
+                        "Get transaction from native ready pool. tx: {:?}",
                         tx_native.clone()
                     );
-                    self.remove(&tx_native.sender())
+                    self.remove(&tx_native.sender());
+                    self.native_pool.try_fill_packing_pool();
+                    Some(tx_native)
                 } else {
                     trace!(
-                        "Get transaction from ready pool. tx: {:?}",
+                        "Get transaction from evm ready pool. tx: {:?}",
                         tx_evm.clone()
                     );
-                    self.remove(&tx_evm.sender())
+                    self.remove(&tx_evm.sender());
+                    self.evm_pool.try_fill_packing_pool();
+                    Some(tx_evm)
                 }
             }
         }
+    }
+
+    fn clear(&mut self) {
+        self.native_pool.clear();
+        self.evm_pool.clear();
     }
 }
 
@@ -427,7 +649,9 @@ pub struct TransactionPoolInner {
 impl TransactionPoolInner {
     pub fn new(
         capacity: usize, tx_weight_scaling: u64, tx_weight_exp: u8,
-    ) -> Self {
+        total_gas_capacity: U256,
+    ) -> Self
+    {
         TransactionPoolInner {
             capacity,
             total_received_count: 0,
@@ -436,6 +660,7 @@ impl TransactionPoolInner {
             ready_account_pool: ReadyAccountPool::new(
                 tx_weight_scaling,
                 tx_weight_exp,
+                total_gas_capacity,
             ),
             ready_nonces_and_balances: HashMap::new(),
             garbage_collector: GarbageCollector::default(),
@@ -501,10 +726,11 @@ impl TransactionPoolInner {
         let mut skipped_self_node = None;
         while self.is_full() && !self.garbage_collector.is_empty() {
             let current_timestamp = self.get_current_timestamp();
-            let victim = self.garbage_collector.pop().unwrap();
+            let (victim_address, victim) =
+                self.garbage_collector.pop().unwrap();
             // Accounts which are not in `deferred_pool` may be inserted
             // into `garbage_collector`, we can just ignore them.
-            if !self.deferred_pool.contain_address(&victim.sender) {
+            if !self.deferred_pool.contain_address(&victim_address) {
                 continue;
             }
 
@@ -512,10 +738,10 @@ impl TransactionPoolInner {
             // no unconditional garbage collection to conduct and we need to
             // check if we should replace one unexecuted tx.
             if victim.count == 0 {
-                if victim.sender == new_tx.sender() {
+                if victim_address == new_tx.sender() {
                     // We do not GC a not-executed transaction from the same
                     // sender.
-                    skipped_self_node = Some(victim);
+                    skipped_self_node = Some((victim_address, victim));
                     continue;
                 } else if victim.has_ready_tx
                     && victim.first_tx_gas_price >= *new_tx.gas_price()
@@ -530,14 +756,14 @@ impl TransactionPoolInner {
                 }
             }
 
-            let addr = victim.sender;
-
             let (ready_nonce, _) = self
-                .get_local_nonce_and_balance(&addr)
+                .get_local_nonce_and_balance(&victim_address)
                 .unwrap_or((0.into(), 0.into()));
 
-            let tx_with_ready_info =
-                self.deferred_pool.remove_lowest_nonce(&addr).unwrap();
+            let tx_with_ready_info = self
+                .deferred_pool
+                .remove_lowest_nonce(&victim_address)
+                .unwrap();
             let to_remove_tx = tx_with_ready_info.get_arc_tx().clone();
 
             // We have to garbage collect an unexecuted transaction.
@@ -549,11 +775,12 @@ impl TransactionPoolInner {
             }
 
             // maintain ready account pool
-            if let Some(ready_tx) = self.ready_account_pool.get(&addr) {
+            if let Some(ready_tx) = self.ready_account_pool.get(&victim_address)
+            {
                 if ready_tx.hash() == to_remove_tx.hash() {
                     warn!("a ready tx is garbage-collected");
                     GC_READY_COUNTER.inc(1);
-                    self.ready_account_pool.remove(&addr);
+                    self.ready_account_pool.remove(&victim_address);
                     if !victim.has_ready_tx {
                         // This should not happen! Means some inconsistency
                         // within `TransactionPoolInner`.
@@ -573,28 +800,29 @@ impl TransactionPoolInner {
             }
 
             // maintain ready info
-            if !self.deferred_pool.contain_address(&addr) {
-                self.ready_nonces_and_balances.remove(&addr);
+            if !self.deferred_pool.contain_address(&victim_address) {
+                self.ready_nonces_and_balances.remove(&victim_address);
             // The picked sender has no transactions now, and has been popped
             // from `garbage_collector`.
             } else {
-                if victim.count > 0 {
-                    self.garbage_collector.insert(
-                        &addr,
-                        victim.count - 1,
-                        current_timestamp,
-                    );
+                let has_ready_tx =
+                    self.ready_account_pool.get(&victim_address).is_some();
+                let first_tx_gas_price = *self
+                    .deferred_pool
+                    .get_lowest_nonce_tx(&victim_address)
+                    .expect("addr exist")
+                    .gas_price();
+                let count = if victim.count > 0 {
+                    victim.count - 1
                 } else {
-                    self.garbage_collector.insert(&addr, 0, current_timestamp);
-                }
-                self.garbage_collector.update_ready_tx(
-                    &addr,
-                    self.ready_account_pool.get(&addr).is_some(),
-                    *self
-                        .deferred_pool
-                        .get_lowest_nonce_tx(&addr)
-                        .expect("addr exist")
-                        .gas_price(),
+                    0
+                };
+                self.garbage_collector.insert(
+                    &victim_address,
+                    count,
+                    current_timestamp,
+                    has_ready_tx,
+                    first_tx_gas_price,
                 );
             }
 
@@ -605,14 +833,11 @@ impl TransactionPoolInner {
 
         // Insert back skipped nodes to keep `garbage_collector`
         // unchanged.
-        if let Some(node) = skipped_self_node {
+        if let Some((addr, node)) = skipped_self_node {
             self.garbage_collector.insert(
-                &node.sender,
+                &addr,
                 node.count,
                 node.timestamp,
-            );
-            self.garbage_collector.update_ready_tx(
-                &node.sender,
                 node.has_ready_tx,
                 node.first_tx_gas_price,
             );
@@ -674,6 +899,7 @@ impl TransactionPoolInner {
                     state_nonce,
                     state_balance,
                 );
+                // GarbageCollector will be updated by the caller.
                 self.txs.insert(transaction.hash(), transaction.clone());
                 self.tx_sponsored_gas_map.insert(
                     transaction.hash(),
@@ -794,12 +1020,6 @@ impl TransactionPoolInner {
         if !self.deferred_pool.contain_address(address) {
             return;
         }
-        let count = self.deferred_pool.count_less(address, &nonce);
-        let timestamp = self
-            .garbage_collector
-            .get_timestamp(address)
-            .unwrap_or(self.get_current_timestamp());
-        self.garbage_collector.insert(address, count, timestamp);
         self.ready_nonces_and_balances
             .insert((*address).clone(), (nonce, balance));
     }
@@ -811,13 +1031,6 @@ impl TransactionPoolInner {
         if !self.deferred_pool.contain_address(address) {
             return Ok(nonce_and_balance);
         }
-        let count =
-            self.deferred_pool.count_less(address, &nonce_and_balance.0);
-        let timestamp = self
-            .garbage_collector
-            .get_timestamp(address)
-            .unwrap_or(self.get_current_timestamp());
-        self.garbage_collector.insert(address, count, timestamp);
         self.ready_nonces_and_balances
             .insert((*address).clone(), nonce_and_balance);
 
@@ -883,8 +1096,15 @@ impl TransactionPoolInner {
         // If addr is not in `deferred_pool`, it should have also been removed
         // from garbage_collector
         if let Some(tx) = self.deferred_pool.get_lowest_nonce_tx(addr) {
-            self.garbage_collector.update_ready_tx(
+            let count = self.deferred_pool.count_less(addr, &nonce);
+            let timestamp = self
+                .garbage_collector
+                .get_timestamp(addr)
+                .unwrap_or(self.get_current_timestamp());
+            self.garbage_collector.insert(
                 addr,
+                count,
+                timestamp,
                 ret.is_some(),
                 *tx.gas_price(),
             );
@@ -1000,7 +1220,6 @@ impl TransactionPoolInner {
                     .unwrap_or((U256::from(0), 0)),
             );
             self.recalculate_readiness_with_local_info(&tx.sender());
-
             if packed_transactions.len() >= num_txs {
                 break 'out;
             }
@@ -1059,29 +1278,31 @@ impl TransactionPoolInner {
     pub fn content(
         &self, address: Option<AddressWithSpace>,
     ) -> (Vec<Arc<SignedTransaction>>, Vec<Arc<SignedTransaction>>) {
-        let ready_txs = if let Some(addr) = address {
-            if addr.space == Space::Native {
-                self.ready_account_pool
-                    .treap_native
-                    .iter()
-                    .filter(|address_tx| addr.address == *address_tx.0)
-                    .map(|(_, tx)| tx.clone())
-                    .collect()
-            } else {
-                self.ready_account_pool
-                    .treap_evm
+        let ready_txs = match address {
+            Some(addr) => {
+                let spaced_pool = match addr.space {
+                    Space::Native => &self.ready_account_pool.native_pool,
+                    Space::Ethereum => &self.ready_account_pool.evm_pool,
+                };
+                spaced_pool
+                    .packing_pool
+                    .treap
                     .iter()
                     .filter(|address_tx| addr.address == *address_tx.0)
                     .map(|(_, tx)| tx.clone())
                     .collect()
             }
-        } else {
-            self.ready_account_pool
-                .treap_native
+            None => self
+                .ready_account_pool
+                .native_pool
+                .packing_pool
+                .treap
                 .iter()
-                .chain(self.ready_account_pool.treap_evm.iter())
+                .chain(
+                    self.ready_account_pool.evm_pool.packing_pool.treap.iter(),
+                )
                 .map(|(_, tx)| tx.clone())
-                .collect()
+                .collect(),
         };
 
         let deferred_txs = self
@@ -1226,6 +1447,7 @@ impl TransactionPoolInner {
 #[cfg(test)]
 mod test_transaction_pool_inner {
     use super::{DeferredPool, InsertResult, TxWithReadyInfo};
+    use crate::transaction_pool::transaction_pool_inner::ReadyAccountPool;
     use cfx_types::{Address, AddressSpaceUtil, U256};
     use keylib::{Generator, KeyPair, Random};
     use primitives::{
@@ -1483,5 +1705,79 @@ mod test_transaction_pool_inner {
             ),
             None
         );
+    }
+
+    #[test]
+    fn test_ready_account_pool() {
+        let mut ready_pool = ReadyAccountPool::new(1, 1, 50001.into());
+        let account_count = 3;
+        let mut senders = Vec::with_capacity(account_count);
+        let mut sender_addresses = Vec::with_capacity(account_count);
+        for _ in 0..account_count {
+            let sender = Random.generate().unwrap();
+            sender_addresses.push(sender.address().with_native_space());
+            senders.push(sender);
+        }
+        ready_pool.update(
+            &sender_addresses[0],
+            Some(new_test_tx(&senders[0], 0, 2, 0)),
+        );
+        assert_eq!(
+            ready_pool.native_pool.top().unwrap().sender(),
+            sender_addresses[0]
+        );
+        assert_eq!(ready_pool.native_pool.waiting_pool.len(), 0);
+        assert_eq!(ready_pool.native_pool.packing_pool.len(), 1);
+        ready_pool.update(
+            &sender_addresses[1],
+            Some(new_test_tx(&senders[1], 0, 3, 0)),
+        );
+        assert_eq!(
+            ready_pool.native_pool.top().unwrap().sender(),
+            sender_addresses[1]
+        );
+        assert_eq!(ready_pool.native_pool.waiting_pool.len(), 1);
+        assert_eq!(ready_pool.native_pool.packing_pool.len(), 1);
+        ready_pool.update(
+            &sender_addresses[0],
+            Some(new_test_tx(&senders[0], 0, 4, 0)),
+        );
+        assert_eq!(
+            ready_pool.native_pool.top().unwrap().sender(),
+            sender_addresses[0]
+        );
+        assert_eq!(ready_pool.native_pool.waiting_pool.len(), 1);
+        assert_eq!(ready_pool.native_pool.packing_pool.len(), 1);
+        ready_pool.update(
+            &sender_addresses[2],
+            Some(new_test_tx(&senders[2], 0, 1, 0)),
+        );
+        assert_eq!(
+            ready_pool.native_pool.top().unwrap().sender(),
+            sender_addresses[0]
+        );
+        assert_eq!(ready_pool.native_pool.waiting_pool.len(), 2);
+        assert_eq!(ready_pool.native_pool.packing_pool.len(), 1);
+        for i in 0..account_count {
+            assert_eq!(
+                ready_pool.get(&sender_addresses[i]).unwrap().sender(),
+                sender_addresses[i]
+            );
+        }
+        ready_pool.update(&sender_addresses[0], None);
+        assert_eq!(
+            ready_pool.native_pool.top().unwrap().sender(),
+            sender_addresses[1]
+        );
+        for i in 1..account_count {
+            assert_eq!(
+                ready_pool.get(&sender_addresses[i]).unwrap().sender(),
+                sender_addresses[i]
+            );
+        }
+        assert_eq!(ready_pool.pop().unwrap().sender(), sender_addresses[1]);
+        assert_eq!(ready_pool.pop().unwrap().sender(), sender_addresses[2]);
+        assert_eq!(ready_pool.native_pool.packing_pool.len(), 0);
+        assert_eq!(ready_pool.native_pool.waiting_pool.len(), 0);
     }
 }

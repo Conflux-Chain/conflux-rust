@@ -91,6 +91,7 @@ pub struct TxPoolConfig {
     pub max_tx_gas: RwLock<U256>,
     pub tx_weight_scaling: u64,
     pub tx_weight_exp: u8,
+    pub packing_gas_limit_block_count: u64,
     pub target_block_gas_limit: u64,
 }
 
@@ -110,6 +111,7 @@ impl Default for TxPoolConfig {
             // weight.
             tx_weight_scaling: 1,
             tx_weight_exp: 1,
+            packing_gas_limit_block_count: 10,
             target_block_gas_limit: DEFAULT_TARGET_BLOCK_GAS_LIMIT,
         }
     }
@@ -166,6 +168,9 @@ impl TransactionPool {
             config.capacity,
             config.tx_weight_scaling,
             config.tx_weight_exp,
+            (config.packing_gas_limit_block_count
+                * config.target_block_gas_limit)
+                .into(),
         );
         let best_executed_state = Mutex::new(
             Self::best_executed_state(
