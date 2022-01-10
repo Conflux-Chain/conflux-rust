@@ -1722,30 +1722,42 @@ mod test_transaction_pool_inner {
             &sender_addresses[0],
             Some(new_test_tx(&senders[0], 0, 2, 0)),
         );
-        assert_eq!(ready_pool.top().unwrap().sender(), sender_addresses[0]);
-        assert_eq!(ready_pool.waiting_pool.len(), 0);
-        assert_eq!(ready_pool.packing_pool.len(), 1);
+        assert_eq!(
+            ready_pool.native_pool.top().unwrap().sender(),
+            sender_addresses[0]
+        );
+        assert_eq!(ready_pool.native_pool.waiting_pool.len(), 0);
+        assert_eq!(ready_pool.native_pool.packing_pool.len(), 1);
         ready_pool.update(
             &sender_addresses[1],
             Some(new_test_tx(&senders[1], 0, 3, 0)),
         );
-        assert_eq!(ready_pool.top().unwrap().sender(), sender_addresses[1]);
-        assert_eq!(ready_pool.waiting_pool.len(), 1);
-        assert_eq!(ready_pool.packing_pool.len(), 1);
+        assert_eq!(
+            ready_pool.native_pool.top().unwrap().sender(),
+            sender_addresses[1]
+        );
+        assert_eq!(ready_pool.native_pool.waiting_pool.len(), 1);
+        assert_eq!(ready_pool.native_pool.packing_pool.len(), 1);
         ready_pool.update(
             &sender_addresses[0],
             Some(new_test_tx(&senders[0], 0, 4, 0)),
         );
-        assert_eq!(ready_pool.top().unwrap().sender(), sender_addresses[0]);
-        assert_eq!(ready_pool.waiting_pool.len(), 1);
-        assert_eq!(ready_pool.packing_pool.len(), 1);
+        assert_eq!(
+            ready_pool.native_pool.top().unwrap().sender(),
+            sender_addresses[0]
+        );
+        assert_eq!(ready_pool.native_pool.waiting_pool.len(), 1);
+        assert_eq!(ready_pool.native_pool.packing_pool.len(), 1);
         ready_pool.update(
             &sender_addresses[2],
             Some(new_test_tx(&senders[2], 0, 1, 0)),
         );
-        assert_eq!(ready_pool.top().unwrap().sender(), sender_addresses[0]);
-        assert_eq!(ready_pool.waiting_pool.len(), 2);
-        assert_eq!(ready_pool.packing_pool.len(), 1);
+        assert_eq!(
+            ready_pool.native_pool.top().unwrap().sender(),
+            sender_addresses[0]
+        );
+        assert_eq!(ready_pool.native_pool.waiting_pool.len(), 2);
+        assert_eq!(ready_pool.native_pool.packing_pool.len(), 1);
         for i in 0..account_count {
             assert_eq!(
                 ready_pool.get(&sender_addresses[i]).unwrap().sender(),
@@ -1753,7 +1765,10 @@ mod test_transaction_pool_inner {
             );
         }
         ready_pool.update(&sender_addresses[0], None);
-        assert_eq!(ready_pool.top().unwrap().sender(), sender_addresses[1]);
+        assert_eq!(
+            ready_pool.native_pool.top().unwrap().sender(),
+            sender_addresses[1]
+        );
         for i in 1..account_count {
             assert_eq!(
                 ready_pool.get(&sender_addresses[i]).unwrap().sender(),
@@ -1762,7 +1777,7 @@ mod test_transaction_pool_inner {
         }
         assert_eq!(ready_pool.pop().unwrap().sender(), sender_addresses[1]);
         assert_eq!(ready_pool.pop().unwrap().sender(), sender_addresses[2]);
-        assert_eq!(ready_pool.packing_pool.len(), 0);
-        assert_eq!(ready_pool.waiting_pool.len(), 0);
+        assert_eq!(ready_pool.native_pool.packing_pool.len(), 0);
+        assert_eq!(ready_pool.native_pool.waiting_pool.len(), 0);
     }
 }
