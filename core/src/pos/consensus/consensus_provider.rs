@@ -10,7 +10,7 @@ use std::sync::{atomic::AtomicBool, Arc};
 use futures::channel::{mpsc, oneshot};
 use tokio::runtime::{self, Runtime};
 
-use cached_diemdb::CachedDiemDB;
+use cached_diemdb::CachedPosLedgerDB;
 use channel::diem_channel;
 use consensus_types::db::LedgerBlockRW;
 use diem_config::config::NodeConfig;
@@ -44,7 +44,7 @@ pub fn start_consensus(
     network_receiver: NetworkReceivers,
     consensus_to_mempool_sender: mpsc::Sender<ConsensusRequest>,
     state_sync_client: StateSyncClient, diem_db: Arc<dyn DbReader>,
-    db_with_cache: Arc<CachedDiemDB>,
+    db_with_cache: Arc<CachedPosLedgerDB>,
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
     author: AccountAddress,
     tx_sender: mpsc::Sender<(

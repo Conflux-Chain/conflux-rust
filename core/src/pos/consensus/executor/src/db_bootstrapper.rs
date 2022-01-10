@@ -9,7 +9,7 @@
 
 use crate::{vm::VMExecutor, Executor};
 use anyhow::{ensure, format_err, Result};
-use cached_diemdb::CachedDiemDB;
+use cached_diemdb::CachedPosLedgerDB;
 use consensus_types::db::FakeLedgerBlockDB;
 use diem_crypto::{hash::PRE_GENESIS_BLOCK_ID, HashValue};
 use diem_logger::prelude::*;
@@ -143,7 +143,7 @@ pub fn calculate_genesis<V: VMExecutor>(
     // existing block chain. In the very extreme and sad situation of losing
     // quorum among validators, we refer to the second use case said above.
     let genesis_version = tree_state.num_transactions;
-    let db_with_cache = Arc::new(CachedDiemDB::new_on_unbootstrapped_db(
+    let db_with_cache = Arc::new(CachedPosLedgerDB::new_on_unbootstrapped_db(
         db.clone(),
         tree_state,
         initial_seed,

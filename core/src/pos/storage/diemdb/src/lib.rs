@@ -165,7 +165,7 @@ fn update_rocksdb_properties(db: &DB) -> Result<()> {
     let _timer = DIEM_STORAGE_OTHER_TIMERS_SECONDS
         .with_label_values(&["update_rocksdb_properties"])
         .start_timer();
-    for cf_name in DiemDB::column_families() {
+    for cf_name in PosLedgerDB::column_families() {
         for (property_name, rocksdb_property_argument) in &*ROCKSDB_PROPERTY_MAP
         {
             DIEM_STORAGE_ROCKSDB_PROPERTIES
@@ -225,7 +225,7 @@ impl Drop for RocksdbPropertyReporter {
 /// This holds a handle to the underlying DB responsible for physical storage
 /// and provides APIs for access to the core Diem data structures.
 #[derive(Debug)]
-pub struct DiemDB {
+pub struct PosLedgerDB {
     db: Arc<DB>,
     ledger_store: Arc<LedgerStore>,
     transaction_store: Arc<TransactionStore>,
@@ -236,7 +236,7 @@ pub struct DiemDB {
     pruner: Option<Pruner>,
 }
 
-impl DiemDB {
+impl PosLedgerDB {
     fn column_families() -> Vec<ColumnFamilyName> {
         vec![
             /* LedgerInfo CF = */ DEFAULT_CF_NAME,
@@ -264,7 +264,7 @@ impl DiemDB {
     fn new_with_db(db: DB, prune_window: Option<u64>) -> Self {
         let db = Arc::new(db);
 
-        DiemDB {
+        PosLedgerDB {
             db: Arc::clone(&db),
             event_store: Arc::new(EventStore::new(Arc::clone(&db))),
             ledger_store: Arc::new(LedgerStore::new(Arc::clone(&db))),
@@ -562,7 +562,7 @@ impl DiemDB {
     }
 }
 
-impl DbReader for DiemDB {
+impl DbReader for PosLedgerDB {
     fn get_epoch_ending_ledger_infos(
         &self, start_epoch: u64, end_epoch: u64,
     ) -> Result<EpochChangeProof> {
@@ -877,7 +877,7 @@ impl DbReader for DiemDB {
     }
 }
 
-impl DbWriter for DiemDB {
+impl DbWriter for PosLedgerDB {
     /// `first_version` is the version of the first transaction in
     /// `txns_to_commit`. When `ledger_info_with_sigs` is provided, verify
     /// that the transaction accumulator root hash it carries is generated
@@ -1010,7 +1010,7 @@ impl DbWriter for DiemDB {
     }
 }
 
-impl DBReaderForPoW for DiemDB {
+impl DBReaderForPoW for PosLedgerDB {
     fn get_latest_ledger_info_option(
         &self,
     ) -> Option<LedgerInfoWithSignatures> {
@@ -1089,7 +1089,7 @@ pub trait GetRestoreHandler {
     fn get_restore_handler(&self) -> RestoreHandler;
 }
 
-impl GetRestoreHandler for Arc<DiemDB> {
+impl GetRestoreHandler for Arc<PosLedgerDB> {
     fn get_restore_handler(&self) -> RestoreHandler {
         RestoreHandler::new(
             Arc::clone(&self.db),

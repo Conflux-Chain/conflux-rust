@@ -6,7 +6,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::*;
-use crate::{change_set::ChangeSet, state_store::StateStore, DiemDB};
+use crate::{change_set::ChangeSet, state_store::StateStore, PosLedgerDB};
 use diem_crypto::HashValue;
 use diem_temppath::TempPath;
 use diem_types::{
@@ -52,7 +52,7 @@ fn test_pruner() {
     let value2 = AccountStateBlob::from(vec![0x03]);
 
     let tmp_dir = TempPath::new();
-    let db = DiemDB::new_for_test(&tmp_dir).db;
+    let db = PosLedgerDB::new_for_test(&tmp_dir).db;
     let state_store = &StateStore::new(Arc::clone(&db));
     let pruner =
         Pruner::new(Arc::clone(&db), 0 /* historical_versions_to_keep */);
@@ -114,7 +114,7 @@ fn test_worker_quit_eagerly() {
     let value2 = AccountStateBlob::from(vec![0x03]);
 
     let tmp_dir = TempPath::new();
-    let db = DiemDB::new_for_test(&tmp_dir).db;
+    let db = PosLedgerDB::new_for_test(&tmp_dir).db;
     let state_store = &StateStore::new(Arc::clone(&db));
 
     let _root0 = put_account_state_set(

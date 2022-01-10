@@ -18,7 +18,7 @@ use crate::pos::{
     protocol::network_sender::NetworkSender,
 };
 use anyhow::Result;
-use cached_diemdb::CachedDiemDB;
+use cached_diemdb::CachedPosLedgerDB;
 use channel::diem_channel::Receiver;
 use diem_config::config::MempoolConfig;
 use diem_crypto::HashValue;
@@ -53,7 +53,7 @@ pub(crate) struct SharedMempool {
     pub mempool: Arc<Mutex<CoreMempool>>,
     pub config: MempoolConfig,
     pub network_sender: NetworkSender,
-    pub db_with_cache: Arc<CachedDiemDB>,
+    pub db_with_cache: Arc<CachedPosLedgerDB>,
     pub validator: Arc<RwLock<TransactionValidator>>,
     pub peer_manager: Arc<PeerManager>,
     pub subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,

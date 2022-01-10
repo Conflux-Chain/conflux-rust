@@ -22,7 +22,7 @@ use threadpool::ThreadPool;
 use blockgen::BlockGenerator;
 use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, Space, U256};
-pub use cfxcore::pos::pos::DiemHandle;
+pub use cfxcore::pos::pos::PosDropHandle;
 use cfxcore::{
     block_data_manager::BlockDataManager,
     consensus::pos_handler::{PosConfiguration, PosVerifier},

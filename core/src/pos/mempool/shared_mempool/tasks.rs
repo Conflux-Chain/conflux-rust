@@ -24,7 +24,7 @@ use crate::pos::mempool::{
     ConsensusResponse, SubmissionStatus,
 };
 use anyhow::Result;
-use cached_diemdb::CachedDiemDB;
+use cached_diemdb::CachedPosLedgerDB;
 use diem_infallible::{Mutex, RwLock};
 use diem_logger::prelude::*;
 use diem_metrics::HistogramTimer;
@@ -365,8 +365,10 @@ pub(crate) async fn process_state_sync_request(
 }
 
 pub(crate) async fn process_consensus_request(
-    db: Arc<CachedDiemDB>, mempool: &Mutex<CoreMempool>, req: ConsensusRequest,
-) {
+    db: Arc<CachedPosLedgerDB>, mempool: &Mutex<CoreMempool>,
+    req: ConsensusRequest,
+)
+{
     // Start latency timer
     let start_time = Instant::now();
     diem_debug!(
