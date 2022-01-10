@@ -76,7 +76,7 @@ pub trait PersistentLivenessStorage: Send + Sync {
         unimplemented!()
     }
 
-    /// Returns a handle of the diemdb.
+    /// Returns a handle of the pos-ledger-db.
     fn diem_db(&self) -> Arc<dyn DbReader>;
 }
 

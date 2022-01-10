@@ -19,7 +19,7 @@ use diem_secure_net::NetworkServer;
 use diem_types::{
     account_state_blob::AccountStateBlob, proof::SparseMerkleProof,
 };
-use diemdb::DiemDB;
+use pos_ledger_db::DiemDB;
 use std::{
     sync::Arc,
     thread::{self, JoinHandle},

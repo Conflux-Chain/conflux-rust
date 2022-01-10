@@ -10,7 +10,7 @@ use std::sync::{atomic::AtomicBool, Arc};
 use futures::channel::{mpsc, oneshot};
 use tokio::runtime::{self, Runtime};
 
-use cached_diemdb::CachedPosLedgerDB;
+use cached_pos_ledger_db::CachedPosLedgerDB;
 use channel::diem_channel;
 use consensus_types::db::LedgerBlockRW;
 use diem_config::config::NodeConfig;

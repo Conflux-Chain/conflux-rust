@@ -288,7 +288,7 @@ impl PosLedgerDB {
             "Do not set prune_window when opening readonly.",
         );
 
-        let path = db_root_path.as_ref().join("diemdb");
+        let path = db_root_path.as_ref().join("pos-ledger-db");
         let instant = Instant::now();
 
         let mut rocksdb_opts = gen_rocksdb_options(&rocksdb_config);
@@ -305,7 +305,7 @@ impl PosLedgerDB {
             rocksdb_opts.create_missing_column_families(true);
             DB::open(
                 path.clone(),
-                "diemdb",
+                "pos-ledger-db",
                 Self::column_families(),
                 rocksdb_opts,
             )?

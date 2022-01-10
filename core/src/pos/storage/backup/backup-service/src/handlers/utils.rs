@@ -9,7 +9,7 @@ use anyhow::Result;
 use bytes::Bytes;
 use diem_logger::prelude::*;
 use diem_metrics::{register_histogram_vec, register_int_counter_vec, HistogramVec, IntCounterVec};
-use diemdb::backup::backup_handler::BackupHandler;
+use pos_ledger_db::backup::backup_handler::BackupHandler;
 use hyper::Body;
 use once_cell::sync::Lazy;
 use serde::Serialize;

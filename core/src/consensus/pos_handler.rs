@@ -36,7 +36,7 @@ use crate::{
     sync::ProtocolConfiguration,
     ConsensusGraph,
 };
-use cached_diemdb::CachedPosLedgerDB;
+use cached_pos_ledger_db::CachedPosLedgerDB;
 use consensus_types::block::Block;
 use diem_config::config::SafetyRulesTestConfig;
 use diem_types::{
@@ -46,9 +46,9 @@ use diem_types::{
     term_state::pos_state_config::{PosStateConfig, POS_STATE_CONFIG},
     transaction::TransactionPayload,
 };
-use diemdb::PosLedgerDB;
 use network::NetworkService;
 use parking_lot::Mutex;
+use pos_ledger_db::PosLedgerDB;
 use std::{fs, io::Read, path::PathBuf};
 
 pub type PosVerifier = PosHandler;

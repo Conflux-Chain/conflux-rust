@@ -9,7 +9,7 @@
 use anyhow::Result;
 
 use diem_types::{account_address::AccountAddress, event::EventKey};
-use diemdb::diemsum::Diemsum;
+use pos_ledger_db::diemsum::Diemsum;
 use serde::Serialize;
 use serde_json::to_string_pretty;
 use std::path::PathBuf;
@@ -21,7 +21,7 @@ use structopt::StructOpt;
     about = "A command line tool that offers multiple data access commands for DiemDB"
 )]
 struct Opt {
-    /// The parent dir of diemdb
+    /// The parent dir of pos-ledger-db
     #[structopt(long = "db", parse(from_os_str))]
     db_dir: PathBuf,
 

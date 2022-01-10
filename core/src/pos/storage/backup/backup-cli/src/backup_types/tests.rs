@@ -26,7 +26,7 @@ use crate::{
 use diem_config::config::RocksdbConfig;
 use diem_temppath::TempPath;
 use diem_types::transaction::Version;
-use diemdb::DiemDB;
+use pos_ledger_db::DiemDB;
 use executor_test_helpers::integration_test_impl::test_execution_with_storage_impl;
 use proptest::prelude::*;
 use std::{convert::TryInto, sync::Arc};

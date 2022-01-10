@@ -11,7 +11,7 @@ use anyhow::Result;
 use compiled_stdlib::name_for_script;
 use diem_config::config::RocksdbConfig;
 use diem_logger::info as diem_info;
-use diemdb::DiemDB;
+use pos_ledger_db::DiemDB;
 use std::path::PathBuf;
 use storage_interface::DbReader;
 

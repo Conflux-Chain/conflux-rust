@@ -17,7 +17,7 @@ use std::{
 use anyhow::{anyhow, bail, ensure, format_err, Result};
 use fail::fail_point;
 
-use cached_diemdb::CachedPosLedgerDB;
+use cached_pos_ledger_db::CachedPosLedgerDB;
 use cfx_types::H256;
 use consensus_types::db::LedgerBlockRW;
 use diem_crypto::{

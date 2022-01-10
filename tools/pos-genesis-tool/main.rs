@@ -54,8 +54,8 @@ use diem_types::{
     waypoint::Waypoint,
     write_set::WriteSet,
 };
-use diemdb::PosLedgerDB;
 use executor::{db_bootstrapper::generate_waypoint, vm::FakeVM};
+use pos_ledger_db::PosLedgerDB;
 use std::{
     collections::{BTreeMap, BinaryHeap, HashMap},
     path::Path,

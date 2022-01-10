@@ -9,7 +9,7 @@ use crate::utils::error_notes::ErrorNotes;
 use anyhow::Result;
 use diem_crypto::HashValue;
 use diem_types::transaction::Version;
-use diemdb::backup::backup_handler::DbState;
+use pos_ledger_db::backup::backup_handler::DbState;
 use futures::TryStreamExt;
 use structopt::StructOpt;
 use tokio::io::{AsyncRead, AsyncReadExt};

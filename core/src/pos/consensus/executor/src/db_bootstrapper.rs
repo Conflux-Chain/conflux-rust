@@ -9,7 +9,7 @@
 
 use crate::{vm::VMExecutor, Executor};
 use anyhow::{ensure, format_err, Result};
-use cached_diemdb::CachedPosLedgerDB;
+use cached_pos_ledger_db::CachedPosLedgerDB;
 use consensus_types::db::FakeLedgerBlockDB;
 use diem_crypto::{hash::PRE_GENESIS_BLOCK_ID, HashValue};
 use diem_logger::prelude::*;

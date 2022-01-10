@@ -24,7 +24,7 @@ use crate::pos::mempool::{
     ConsensusResponse, SubmissionStatus,
 };
 use anyhow::Result;
-use cached_diemdb::CachedPosLedgerDB;
+use cached_pos_ledger_db::CachedPosLedgerDB;
 use diem_infallible::{Mutex, RwLock};
 use diem_logger::prelude::*;
 use diem_metrics::HistogramTimer;

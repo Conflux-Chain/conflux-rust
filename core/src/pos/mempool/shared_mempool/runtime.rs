@@ -20,7 +20,7 @@ use crate::pos::{
     protocol::network_sender::NetworkSender,
 };
 use anyhow::Result;
-use cached_diemdb::CachedPosLedgerDB;
+use cached_pos_ledger_db::CachedPosLedgerDB;
 use channel::diem_channel;
 use diem_config::config::NodeConfig;
 use diem_infallible::{Mutex, RwLock};

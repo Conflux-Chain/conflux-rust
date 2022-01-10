@@ -29,7 +29,7 @@ use crate::{
     spec::genesis::GenesisPosState,
     sync::ProtocolConfiguration,
 };
-use cached_diemdb::CachedPosLedgerDB;
+use cached_pos_ledger_db::CachedPosLedgerDB;
 use consensus_types::db::FakeLedgerBlockDB;
 use diem_config::{config::NodeConfig, utils::get_genesis_txn};
 use diem_logger::{prelude::*, Writer};
@@ -41,7 +41,6 @@ use diem_types::{
     validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
     PeerId,
 };
-use diemdb::PosLedgerDB;
 use executor::{db_bootstrapper::maybe_bootstrap, vm::FakeVM, Executor};
 use executor_types::ChunkExecutor;
 use futures::{
@@ -52,6 +51,7 @@ use futures::{
     executor::block_on,
 };
 use network::NetworkService;
+use pos_ledger_db::PosLedgerDB;
 use pow_types::FakePowHandler;
 use std::{
     boxed::Box,

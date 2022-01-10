@@ -290,10 +290,10 @@ def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="
             os.makedirs(datadir)
         net_config_dir = os.path.join(datadir, 'blockchain_data', 'net_config')
         os.makedirs(net_config_dir, exist_ok = True)
-        os.makedirs(os.path.join(datadir, 'diemdb'), exist_ok = True)
+        os.makedirs(os.path.join(datadir, 'pos-ledger-db'), exist_ok = True)
         validator_config = {}
         validator_config['base'] = {
-            'data_dir': os.path.join(datadir, 'diemdb'),
+            'data_dir': os.path.join(datadir, 'pos-ledger-db'),
             'role': 'validator',
             'waypoint': {
                 'from_config': waypoint,
@@ -303,7 +303,7 @@ def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="
             'genesis_file_location': genesis_path,
         }
         validator_config['storage'] = {
-            'dir': os.path.join(datadir, 'diemdb', 'db'),
+            'dir': os.path.join(datadir, 'pos-ledger-db', 'db'),
         }
         validator_config['consensus'] = {
             'safety_rules': {

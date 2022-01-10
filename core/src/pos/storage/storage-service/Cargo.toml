@@ -17,7 +17,7 @@ futures = "0.3.12"
 bcs = "0.1.2"
 diem-config = { path = "../../config" }
 diem-crypto = { path = "../../crypto/crypto" }
-diemdb = { path = "../diemdb" }
+pos-ledger-db = { path = "../pos-ledger-db" }
 diem-logger = { path = "../../common/logger" }
 diem-metrics = { path = "../../common/metrics" }
 diem-secure-net = { path = "../../secure/net" }
@@ -29,7 +29,7 @@ proptest = { version = "1.0.0", optional = true }
 
 [dev-dependencies]
 itertools = "0.10.0"
-diemdb = { path = "../diemdb", features = ["fuzzing"] }
+pos-ledger-db = { path = "../pos-ledger-db", features = ["fuzzing"] }
 diem-temppath = { path = "../../common/temppath" }
 proptest = "1.0.0"
 storage-client = { path = "../storage-client" }
