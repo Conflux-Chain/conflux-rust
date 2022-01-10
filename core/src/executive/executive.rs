@@ -1427,7 +1427,7 @@ impl<
             .observer
             .gas_man
             .as_ref()
-            .map(|g| g.gas_required() + base_gas_required);
+            .map(|g| g.gas_required() * 7 / 6 + base_gas_required);
 
         Ok(self.finalize(
             tx,

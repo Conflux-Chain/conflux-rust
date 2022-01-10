@@ -1211,17 +1211,19 @@ impl RpcImpl {
         // MAX_GAS_CALL_REQUEST, 0.8 is chosen to check if it's close.
         const TOO_MUCH_GAS_USED: u64 =
             (0.8 * (MAX_GAS_CALL_REQUEST as f32)) as u64;
-        if executed.estimated_gas_limit.unwrap()
-            >= U256::from(TOO_MUCH_GAS_USED)
-        {
+        // TODO: this value should always be Some(..) unless incorrect
+        // implementation. Should return an error for server bugs later.
+        let estimated_gas_limit =
+            executed.estimated_gas_limit.unwrap_or(U256::zero());
+        if estimated_gas_limit >= U256::from(TOO_MUCH_GAS_USED) {
             bail!(call_execution_error(
                 format!(
                     "Gas too high. Most likely there are problems within the contract code. \
                     gas {}, storage_limit {}",
-                    executed.gas_used, storage_collateralized
+                   estimated_gas_limit, storage_collateralized
                 ),
                 format!(
-                    "gas {}, storage_limit {}", executed.gas_used, storage_collateralized
+                    "gas {}, storage_limit {}", estimated_gas_limit, storage_collateralized
                 )
                 .into_bytes(),
             ));
@@ -1236,7 +1238,7 @@ impl RpcImpl {
             // 4) / 3, because the extra gas will be refunded up to
             // 1/4 of the gas limit.
             gas_limit: executed.estimated_gas_limit.unwrap(),
-            gas_used: executed.gas_used,
+            gas_used: estimated_gas_limit,
             storage_collateralized,
         };
         Ok(response)

@@ -760,21 +760,24 @@ impl Eth for EthHandler {
         // MAX_GAS_CALL_REQUEST, 0.8 is chosen to check if it's close.
         const TOO_MUCH_GAS_USED: u64 =
             (0.8 * (MAX_GAS_CALL_REQUEST as f32)) as u64;
-        let gas_limit = executed.estimated_gas_limit.unwrap();
-        if gas_limit >= U256::from(TOO_MUCH_GAS_USED) {
+        // TODO: this value should always be Some(..) unless incorrect
+        // implementation. Should return an error for server bugs later.
+        let estimated_gas_limit =
+            executed.estimated_gas_limit.unwrap_or(U256::zero());
+        if estimated_gas_limit >= U256::from(TOO_MUCH_GAS_USED) {
             bail!(call_execution_error(
                 format!(
                     "Gas too high. Most likely there are problems within the contract code. \
                     gas {}",
-                    gas_limit
+                    estimated_gas_limit
                 ),
                 format!(
-                    "gas {}", gas_limit
+                    "gas {}", estimated_gas_limit
                 )
                 .into_bytes(),
             ));
         }
-        Ok(gas_limit)
+        Ok(estimated_gas_limit)
     }
 
     fn transaction_by_hash(
