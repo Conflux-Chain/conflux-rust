@@ -25,11 +25,9 @@ use cfxcore::{
     SharedTransactionPool,
 };
 use primitives::{
-    filter::{LogFilter, LogFilterParams},
-    receipt::TRANSACTION_OUTCOME_SUCCESS,
-    Action, Block, BlockHashOrEpochNumber, Eip155Transaction, EpochNumber,
-    SignedTransaction, StorageKey, StorageValue, TransactionIndex,
-    TransactionWithSignature,
+    filter::LogFilter, receipt::TRANSACTION_OUTCOME_SUCCESS, Action, Block,
+    BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, SignedTransaction,
+    StorageKey, StorageValue, TransactionIndex, TransactionWithSignature,
 };
 
 use crate::rpc::{
@@ -913,33 +911,7 @@ impl Eth for EthHandler {
     fn logs(&self, filter: Filter) -> jsonrpc_core::Result<Vec<Log>> {
         info!("RPC Request: eth_getLogs({:?})", filter);
         let consensus_graph = self.consensus_graph();
-
-        let params = LogFilterParams {
-            address: filter.address.map(|v| v.to_vec()),
-            topics: filter
-                .topics
-                .unwrap_or(vec![])
-                .into_iter()
-                .map(|t| t.to_opt())
-                .collect(),
-            offset: None,
-            limit: filter.limit,
-            trusted: false,
-            space: Some(Space::Ethereum),
-        };
-
-        // TODO: use block number or epoch number?
-        let filter = LogFilter::EpochLogFilter {
-            from_epoch: filter
-                .from_block
-                .map(|n| n.into())
-                .unwrap_or(EpochNumber::LatestCheckpoint),
-            to_epoch: filter
-                .to_block
-                .map(|n| n.into())
-                .unwrap_or(EpochNumber::LatestState),
-            params,
-        };
+        let filter: LogFilter = filter.into_primitive()?;
 
         // // If max_limit is set, the value in `filter` will be modified to
         // // satisfy this limitation to avoid loading too many blocks

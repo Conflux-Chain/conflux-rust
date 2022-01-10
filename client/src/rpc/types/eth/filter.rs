@@ -19,7 +19,12 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::rpc::types::{eth::Log, EpochNumber as BlockNumber};
-use cfx_types::{H160, H256};
+use cfx_types::{Space, H160, H256};
+use jsonrpc_core::Error as RpcError;
+use primitives::{
+    filter::{LogFilter as PrimitiveFilter, LogFilterParams},
+    EpochNumber,
+};
 use serde::{
     de::{DeserializeOwned, Error},
     Deserialize, Deserializer, Serialize, Serializer,
@@ -104,6 +109,57 @@ pub struct Filter {
     pub topics: Option<Vec<Topic>>,
     /// Limit
     pub limit: Option<usize>,
+}
+
+impl Filter {
+    pub fn into_primitive(self) -> Result<PrimitiveFilter, RpcError> {
+        let params = LogFilterParams {
+            address: self.address.map(|v| v.to_vec()),
+            topics: self
+                .topics
+                .unwrap_or(vec![])
+                .into_iter()
+                .map(|t| t.to_opt())
+                .collect(),
+            offset: None,
+            limit: self.limit,
+            trusted: false,
+            space: Some(Space::Ethereum),
+        };
+
+        match (&self.from_block, &self.to_block, &self.block_hash) {
+            // block hash filter
+            (None, None, Some(block_hash)) => {
+                Ok(PrimitiveFilter::BlockHashLogFilter {
+                    block_hashes: vec![*block_hash],
+                    params,
+                })
+            }
+
+            // block number range filter
+            (_, _, None) => {
+                // TODO(thegaram): use block number or epoch number?
+                Ok(PrimitiveFilter::EpochLogFilter {
+                    from_epoch: self
+                        .from_block
+                        .map(|n| n.into())
+                        .unwrap_or(EpochNumber::LatestCheckpoint),
+                    to_epoch: self
+                        .to_block
+                        .map(|n| n.into())
+                        .unwrap_or(EpochNumber::LatestState),
+                    params,
+                })
+            }
+
+            // any other case is considered an error
+            _ => {
+                bail!(RpcError::invalid_params(
+                    format!("Filter must provide one of the following: (1) a block number range through `fromBlock` and `toBlock`, (2) a set of block hashes through `blockHash`")
+                ));
+            }
+        }
+    }
 }
 
 // impl Filter {
