@@ -57,9 +57,8 @@ impl Log {
             topics: e.entry.topics.into_iter().map(Into::into).collect(),
             data: e.entry.data.into(),
             block_hash: Some(e.block_hash.into()),
-            // TODO(thegaram): add correct value.
-            // should we use epoch number of block number here?
-            block_number: Some(0.into()),
+            // note: blocks in EVM space RPCs correspond to epochs
+            block_number: Some(e.epoch_number.into()),
             transaction_hash: Some(e.transaction_hash.into()),
             transaction_index: Some(e.transaction_index.into()),
             log_index: Some(e.log_index.into()),

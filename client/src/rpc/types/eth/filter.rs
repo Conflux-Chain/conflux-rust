@@ -137,20 +137,18 @@ impl Filter {
             }
 
             // block number range filter
-            (_, _, None) => {
-                // TODO(thegaram): use block number or epoch number?
-                Ok(PrimitiveFilter::EpochLogFilter {
-                    from_epoch: self
-                        .from_block
-                        .map(|n| n.into())
-                        .unwrap_or(EpochNumber::LatestCheckpoint),
-                    to_epoch: self
-                        .to_block
-                        .map(|n| n.into())
-                        .unwrap_or(EpochNumber::LatestState),
-                    params,
-                })
-            }
+            // note: blocks in EVM space RPCs correspond to epochs
+            (_, _, None) => Ok(PrimitiveFilter::EpochLogFilter {
+                from_epoch: self
+                    .from_block
+                    .map(|n| n.into())
+                    .unwrap_or(EpochNumber::LatestCheckpoint),
+                to_epoch: self
+                    .to_block
+                    .map(|n| n.into())
+                    .unwrap_or(EpochNumber::LatestState),
+                params,
+            }),
 
             // any other case is considered an error
             _ => {
