@@ -257,6 +257,7 @@ impl EthHandler {
         let logs = primitive_receipt
             .logs
             .iter()
+            .filter(|l| l.space == Space::Ethereum)
             .cloned()
             .map(|log| Log {
                 address: log.address,
