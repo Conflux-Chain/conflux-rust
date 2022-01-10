@@ -14,7 +14,7 @@ const FILTER_BLOCK_HASH_LIMIT: usize = 128;
 
 #[derive(PartialEq, Debug, Serialize, Deserialize, Eq, Hash, Clone)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct LogFilter {
+pub struct CfxRpcLogFilter {
     /// Search will be applied from this epoch number.
     pub from_epoch: Option<EpochNumber>,
 
@@ -60,7 +60,7 @@ pub struct LogFilter {
     pub limit: Option<U64>,
 }
 
-impl LogFilter {
+impl CfxRpcLogFilter {
     pub fn into_primitive(self) -> Result<PrimitiveFilter, RpcError> {
         // from_epoch, to_epoch
         let from_epoch = self
@@ -135,8 +135,6 @@ impl LogFilter {
             offset,
             limit,
             trusted: false,
-            // TODO(thegaram): double check that this is only reachable from
-            // Conflux RPCs
             space: Some(Space::Native),
         };
 

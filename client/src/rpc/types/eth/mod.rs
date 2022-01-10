@@ -16,7 +16,7 @@ pub use self::{
     block::Block,
     block_number::BlockNumber,
     call_request::CallRequest,
-    filter::{Filter, FilterChanges},
+    filter::{EthRpcLogFilter, FilterChanges},
     log::Log,
     receipt::Receipt,
     sync::{SyncInfo, SyncStatus},

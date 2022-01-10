@@ -43,13 +43,12 @@ use crate::{
             pos::{Block as PosBlock, PoSEpochReward},
             Account as RpcAccount, AccountPendingInfo,
             AccountPendingTransactions, BlameInfo, Block as RpcBlock,
-            BlockHashOrEpochNumber, Bytes, CallRequest,
+            BlockHashOrEpochNumber, Bytes, CallRequest, CfxRpcLogFilter,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
             EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
-            LogFilter as RpcFilter, PoSEconomics, Receipt as RpcReceipt,
-            RewardInfo as RpcRewardInfo, RpcAddress, SendTxRequest,
-            SponsorInfo, Status as RpcStatus, SyncGraphStates, TokenSupplyInfo,
-            Transaction as RpcTransaction,
+            PoSEconomics, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
+            RpcAddress, SendTxRequest, SponsorInfo, Status as RpcStatus,
+            SyncGraphStates, TokenSupplyInfo, Transaction as RpcTransaction,
         },
         RpcBoxFuture, RpcResult,
     },
@@ -420,7 +419,7 @@ impl RpcImpl {
         Box::new(fut.boxed().compat())
     }
 
-    fn get_logs(&self, filter: RpcFilter) -> RpcBoxFuture<Vec<RpcLog>> {
+    fn get_logs(&self, filter: CfxRpcLogFilter) -> RpcBoxFuture<Vec<RpcLog>> {
         info!("RPC Request: cfx_getLogs filter={:?}", filter);
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
@@ -1091,7 +1090,7 @@ impl Cfx for CfxHandler {
             fn deposit_list(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<Vec<DepositInfo>>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<U256>;
             fn gas_price(&self) -> BoxFuture<U256>;
-            fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
+            fn get_logs(&self, filter: CfxRpcLogFilter) -> BoxFuture<Vec<RpcLog>>;
             fn interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn next_nonce(&self, address: RpcAddress, num: Option<BlockHashOrEpochNumber>) -> BoxFuture<U256>;
             fn pos_economics(&self, num: Option<EpochNumber>) -> BoxFuture<PoSEconomics>;

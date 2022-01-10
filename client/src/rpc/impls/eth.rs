@@ -39,8 +39,8 @@ use crate::rpc::{
     traits::eth::{Eth, EthFilter},
     types::{
         eth::{
-            Block as RpcBlock, BlockNumber, CallRequest, Filter, FilterChanges,
-            Log, Receipt, SyncInfo, SyncStatus, Transaction,
+            Block as RpcBlock, BlockNumber, CallRequest, EthRpcLogFilter,
+            FilterChanges, Log, Receipt, SyncInfo, SyncStatus, Transaction,
         },
         Bytes, Index, MAX_GAS_CALL_REQUEST,
     },
@@ -909,7 +909,7 @@ impl Eth for EthHandler {
         }
     }
 
-    fn logs(&self, filter: Filter) -> jsonrpc_core::Result<Vec<Log>> {
+    fn logs(&self, filter: EthRpcLogFilter) -> jsonrpc_core::Result<Vec<Log>> {
         info!("RPC Request: eth_getLogs({:?})", filter);
         let consensus_graph = self.consensus_graph();
         let filter: LogFilter = filter.into_primitive()?;
@@ -941,7 +941,7 @@ impl Eth for EthHandler {
 }
 
 impl EthFilter for EthHandler {
-    fn new_filter(&self, _: Filter) -> jsonrpc_core::Result<U256> {
+    fn new_filter(&self, _: EthRpcLogFilter) -> jsonrpc_core::Result<U256> {
         warn!("RPC Request (Not Supported!): eth_newFilter");
         bail!(unimplemented(Some(
             "ETH Filter RPC not implemented!".into()

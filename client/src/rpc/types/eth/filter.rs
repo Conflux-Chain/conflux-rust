@@ -96,7 +96,7 @@ pub type Topic = VariadicValue<H256>;
 #[derive(Debug, PartialEq, Clone, Deserialize, Eq, Hash)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-pub struct Filter {
+pub struct EthRpcLogFilter {
     /// From Block
     pub from_block: Option<BlockNumber>,
     /// To Block
@@ -111,7 +111,7 @@ pub struct Filter {
     pub limit: Option<usize>,
 }
 
-impl Filter {
+impl EthRpcLogFilter {
     pub fn into_primitive(self) -> Result<PrimitiveFilter, RpcError> {
         let params = LogFilterParams {
             address: self.address.map(|v| v.to_vec()),
