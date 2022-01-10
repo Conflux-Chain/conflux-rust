@@ -781,11 +781,23 @@ impl Eth for EthHandler {
     ) -> jsonrpc_core::Result<Option<Transaction>> {
         info!("RPC Request: eth_getTransactionByHash({:?})", hash);
 
-        if let Some((tx, _)) =
+        if let Some((tx, tx_info)) =
             self.consensus.get_transaction_info_by_hash(&hash)
         {
             return if tx.space() == Space::Ethereum {
-                Ok(Some(Transaction::from_signed(&tx)))
+                let maybe_block_number: Option<U256> = match self
+                    .get_block_execution_info(&tx_info.tx_index.block_hash)?
+                {
+                    None => None,
+                    Some(res) => Some(res.epoch_number.into()),
+                };
+                let block_info = (
+                    Some(tx_info.tx_index.block_hash),
+                    maybe_block_number,
+                    Some(tx_info.tx_index.index.into()),
+                );
+                let tx = Transaction::from_signed(&tx, block_info);
+                Ok(Some(tx))
             } else {
                 Ok(None)
             };
@@ -793,7 +805,7 @@ impl Eth for EthHandler {
 
         if let Some(tx) = self.tx_pool.get_transaction(&hash) {
             return if tx.space() == Space::Ethereum {
-                Ok(Some(Transaction::from_signed(&tx)))
+                Ok(Some(Transaction::from_signed(&tx, (None, None, None))))
             } else {
                 Ok(None)
             };

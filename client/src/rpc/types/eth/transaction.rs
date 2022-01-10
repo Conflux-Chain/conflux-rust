@@ -87,7 +87,11 @@ pub struct Transaction {
 
 impl Transaction {
     /// Convert `SignedTransaction` into RPC Transaction.
-    pub fn from_signed(t: &SignedTransaction) -> Transaction {
+    pub fn from_signed(
+        t: &SignedTransaction,
+        block_info: (Option<H256>, Option<U256>, Option<U256>),
+    ) -> Transaction
+    {
         let signature = t.signature();
         let scheme = CreateContractAddress::FromSenderNonce;
 
@@ -123,9 +127,9 @@ impl Transaction {
         Transaction {
             hash: t.hash(),
             nonce: *t.nonce(),
-            block_hash: None,
-            block_number: None,
-            transaction_index: None,
+            block_hash: block_info.0,
+            block_number: block_info.1,
+            transaction_index: block_info.2,
             from: t.sender().address,
             to: match t.action() {
                 Action::Create => None,

@@ -190,8 +190,9 @@ impl Block {
             gas_used: gas_used.unwrap_or(U256::zero()),
             gas_limit: b.block_header.gas_limit().into(),
             extra_data: Default::default(),
-            logs_bloom: None, /* TODO: We cannot provide a proper bloom for
-                               * ETH interface now */
+            logs_bloom: Some(H2048::zero()), /* TODO: We cannot provide a
+                                              * proper bloom for
+                                              * ETH interface now */
             timestamp: b.block_header.timestamp().into(),
             difficulty: b.block_header.difficulty().into(),
             total_difficulty: None,
@@ -202,7 +203,16 @@ impl Block {
                 BlockTransactions::Full(
                     b.transactions
                         .iter()
-                        .map(|t| Transaction::from_signed(t))
+                        .map(|t| {
+                            Transaction::from_signed(
+                                t,
+                                (
+                                    Some(b.block_header.hash()),
+                                    Some(b.block_header.height().into()),
+                                    None,
+                                ),
+                            )
+                        })
                         .collect(),
                 )
             } else {
