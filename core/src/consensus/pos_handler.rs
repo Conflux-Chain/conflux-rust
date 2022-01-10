@@ -84,7 +84,7 @@ pub trait PosInterface: Send + Sync {
 
     fn get_epoch_state(&self, block_id: &PosBlockId) -> EpochState;
 
-    fn diem_db(&self) -> &Arc<PosLedgerDB>;
+    fn pos_ledger_db(&self) -> &Arc<PosLedgerDB>;
 
     fn consensus_db(&self) -> &Arc<ConsensusDB>;
 
@@ -203,7 +203,7 @@ impl PosHandler {
             self.conf.vrf_proposal_threshold;
         pos_config.consensus.chain_id = ChainId::new(network.network_id());
 
-        let diem_handler = start_pos_consensus(
+        let pos_drop_handle = start_pos_consensus(
             &pos_config,
             network,
             self.conf.protocol_conf.clone(),
@@ -225,16 +225,16 @@ impl PosHandler {
         );
         debug!("PoS initialized");
         let pos_connection = PosConnection::new(
-            diem_handler.pos_ledger_db.clone(),
-            diem_handler.consensus_db.clone(),
-            diem_handler.cached_db.clone(),
+            pos_drop_handle.pos_ledger_db.clone(),
+            pos_drop_handle.consensus_db.clone(),
+            pos_drop_handle.cached_db.clone(),
         );
-        diem_handler.pow_handler.initialize(consensus);
+        pos_drop_handle.pow_handler.initialize(consensus);
         if self.pos.set(Box::new(pos_connection)).is_err() {
             bail!("PoS initialized twice!");
         }
         *self.test_command_sender.lock() = Some(test_command_sender);
-        *self.drop_handle.lock() = Some(diem_handler);
+        *self.drop_handle.lock() = Some(pos_drop_handle);
         Ok(())
     }
 
@@ -355,7 +355,9 @@ impl PosHandler {
         Some(events)
     }
 
-    pub fn diem_db(&self) -> &Arc<PosLedgerDB> { self.pos().diem_db() }
+    pub fn pos_ledger_db(&self) -> &Arc<PosLedgerDB> {
+        self.pos().pos_ledger_db()
+    }
 
     pub fn consensus_db(&self) -> &Arc<ConsensusDB> {
         self.pos().consensus_db()
@@ -369,10 +371,13 @@ impl PosHandler {
         self.network.lock().take();
         self.consensus_network_receiver.lock().take();
         self.mempool_network_receiver.lock().take();
-        self.drop_handle.lock().take().map(|diem_handler| {
-            let diem_db = diem_handler.pos_ledger_db.clone();
-            let consensus_db = diem_handler.consensus_db.clone();
-            (Arc::downgrade(&diem_db), Arc::downgrade(&consensus_db))
+        self.drop_handle.lock().take().map(|pos_drop_handle| {
+            let pos_ledger_db = pos_drop_handle.pos_ledger_db.clone();
+            let consensus_db = pos_drop_handle.consensus_db.clone();
+            (
+                Arc::downgrade(&pos_ledger_db),
+                Arc::downgrade(&consensus_db),
+            )
         })
     }
 }
@@ -568,7 +573,7 @@ impl PosInterface for PosConnection {
             .clone()
     }
 
-    fn diem_db(&self) -> &Arc<PosLedgerDB> { &self.pos_storage }
+    fn pos_ledger_db(&self) -> &Arc<PosLedgerDB> { &self.pos_storage }
 
     fn consensus_db(&self) -> &Arc<ConsensusDB> { &self.consensus_db }
 

@@ -43,7 +43,7 @@ pub fn start_consensus(
     node_config: &NodeConfig, network_sender: NetworkSender,
     network_receiver: NetworkReceivers,
     consensus_to_mempool_sender: mpsc::Sender<ConsensusRequest>,
-    state_sync_client: StateSyncClient, diem_db: Arc<dyn DbReader>,
+    state_sync_client: StateSyncClient, pos_ledger_db: Arc<dyn DbReader>,
     db_with_cache: Arc<CachedPosLedgerDB>,
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
     author: AccountAddress,
@@ -62,7 +62,7 @@ pub fn start_consensus(
         .worker_threads(4)
         .build()
         .expect("Failed to create Tokio runtime!");
-    let storage = Arc::new(StorageWriteProxy::new(node_config, diem_db));
+    let storage = Arc::new(StorageWriteProxy::new(node_config, pos_ledger_db));
     let consensus_db = storage.consensus_db();
     let txn_manager = Arc::new(MempoolProxy::new(
         consensus_to_mempool_sender,

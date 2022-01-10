@@ -202,7 +202,7 @@ pub fn setup_pos_environment(
     // });
 
     let mut instant = Instant::now();
-    let (diem_db, db_rw) = DbReaderWriter::wrap(
+    let (pos_ledger_db, db_rw) = DbReaderWriter::wrap(
         PosLedgerDB::open(
             &node_config.storage.dir(),
             false, /* readonly */
@@ -289,10 +289,6 @@ pub fn setup_pos_environment(
 
     let db_with_cache = Arc::new(CachedPosLedgerDB::new(db_rw));
 
-    // TODO (linxi): pos rpc
-    //let rpc_runtime = bootstrap_rpc(&node_config, chain_id, diem_db.clone(),
-    // mp_client_sender);
-
     instant = Instant::now();
     let mempool = diem_mempool::bootstrap(
         node_config,
@@ -326,7 +322,7 @@ pub fn setup_pos_environment(
             consensus_network_receiver,
             consensus_to_mempool_sender,
             state_sync_client,
-            diem_db.clone(),
+            pos_ledger_db.clone(),
             db_with_cache.clone(),
             consensus_reconfig_events,
             own_pos_public_key.map_or_else(
@@ -346,7 +342,7 @@ pub fn setup_pos_environment(
         stopped,
         _state_sync_bootstrapper: state_sync_bootstrapper,
         _mempool: mempool,
-        pos_ledger_db: diem_db,
+        pos_ledger_db,
         cached_db: db_with_cache,
         consensus_db,
         tx_sender: mp_client_sender,
