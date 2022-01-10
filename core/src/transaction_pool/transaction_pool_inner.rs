@@ -11,7 +11,8 @@ use crate::{
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_statedb::Result as StateDbResult;
 use cfx_types::{
-    address_util::AddressUtil, AddressWithSpace, H256, U128, U256, U512,
+    address_util::AddressUtil, Address, AddressWithSpace, Space, H256, U128,
+    U256, U512,
 };
 use heap_map::HeapMap;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -235,14 +236,14 @@ impl Ord for PriceOrderedTransaction {
 /// capacity, we will try to move the highest gas price transactions from
 /// `waiting_pool` to `packing_pool`.
 #[derive(DeriveMallocSizeOf)]
-struct ReadyAccountPool {
+struct SpacedReadyAccountPool {
     /// Keeps all high gas price transactions that can be sampled for packing.
     packing_pool: PackingPool,
     /// Keeps all low gas price transactions.
-    waiting_pool: HeapMap<AddressWithSpace, PriceOrderedTransaction>,
+    waiting_pool: HeapMap<Address, PriceOrderedTransaction>,
 }
 
-impl ReadyAccountPool {
+impl SpacedReadyAccountPool {
     fn new(
         tx_weight_scaling: u64, tx_weight_exp: u8, total_gas_capacity: U256,
     ) -> Self {
@@ -257,10 +258,8 @@ impl ReadyAccountPool {
     }
 
     fn update(
-        &mut self, address: &AddressWithSpace,
-        tx: Option<Arc<SignedTransaction>>,
-    )
-    {
+        &mut self, address: &Address, tx: Option<Arc<SignedTransaction>>,
+    ) {
         if let Some(tx) = tx {
             if tx.hash[0] & 254 == 0 {
                 debug!("Sampled transaction {:?} in ready pool", tx.hash);
@@ -275,12 +274,12 @@ impl ReadyAccountPool {
         // We always replace the old tx from the same sender, so we remove it
         // from `waiting_pool` first to avoid having transactions from
         // the same sender to exist in both `packing_pool` and `waiting_pool`.
-        self.waiting_pool.remove(&tx.sender());
+        self.waiting_pool.remove(&tx.sender().address);
         self.packing_pool.insert(tx);
         self.try_shrink_packing_pool();
     }
 
-    fn remove(&mut self, address: &AddressWithSpace) {
+    fn remove(&mut self, address: &Address) {
         self.packing_pool.remove(address);
         self.waiting_pool.remove(address);
         self.try_fill_packing_pool();
@@ -292,12 +291,16 @@ impl ReadyAccountPool {
         popped_tx
     }
 
+    fn sample_peek(&self) -> Option<Arc<SignedTransaction>> {
+        self.packing_pool.sample_peek()
+    }
+
     fn try_shrink_packing_pool(&mut self) {
         while self.packing_pool.total_gas > self.packing_pool.total_gas_capacity
         {
             let tx = self.packing_pool.pop().unwrap();
             self.waiting_pool
-                .insert(&tx.sender(), PriceOrderedTransaction(tx));
+                .insert(&tx.sender().address, PriceOrderedTransaction(tx));
         }
     }
 
@@ -324,9 +327,7 @@ impl ReadyAccountPool {
         self.waiting_pool.clear();
     }
 
-    fn get(
-        &self, address: &AddressWithSpace,
-    ) -> Option<Arc<SignedTransaction>> {
+    fn get(&self, address: &Address) -> Option<Arc<SignedTransaction>> {
         self.waiting_pool
             .get(address)
             .map(|tx| tx.0.clone())
@@ -343,9 +344,9 @@ impl ReadyAccountPool {
 struct PackingPool {
     /// A balance tree used to randomly sample transactions with `gas_price` as
     /// a sampling weight.
-    treap: TreapMap<AddressWithSpace, Arc<SignedTransaction>, WeightType>,
+    treap: TreapMap<Address, Arc<SignedTransaction>, WeightType>,
     /// A priority queue to order transactions based on their gas_price.
-    heap_map: HeapMap<AddressWithSpace, Reverse<PriceOrderedTransaction>>,
+    heap_map: HeapMap<Address, Reverse<PriceOrderedTransaction>>,
     tx_weight_scaling: u64,
     tx_weight_exp: u8,
 
@@ -380,15 +381,11 @@ impl PackingPool {
 
     fn len(&self) -> usize { self.treap.len() }
 
-    fn get(
-        &self, address: &AddressWithSpace,
-    ) -> Option<Arc<SignedTransaction>> {
+    fn get(&self, address: &Address) -> Option<Arc<SignedTransaction>> {
         self.heap_map.get(address).map(|tx| (tx.0).0.clone())
     }
 
-    fn remove(
-        &mut self, address: &AddressWithSpace,
-    ) -> Option<Arc<SignedTransaction>> {
+    fn remove(&mut self, address: &Address) -> Option<Arc<SignedTransaction>> {
         let tx = (self.heap_map.remove(address)?.0).0;
         self.treap.remove(address);
         self.total_gas -= *tx.gas();
@@ -414,10 +411,12 @@ impl PackingPool {
             weight *= base_weight;
         }
 
-        self.heap_map
-            .insert(&tx.sender(), Reverse(PriceOrderedTransaction(tx.clone())));
+        self.heap_map.insert(
+            &tx.sender().address,
+            Reverse(PriceOrderedTransaction(tx.clone())),
+        );
         self.total_gas += *tx.gas();
-        let replaced_tx = self.treap.insert(tx.sender(), tx, weight);
+        let replaced_tx = self.treap.insert(tx.sender().address, tx, weight);
         if let Some(replaced_tx) = replaced_tx.as_ref() {
             // an old transaction of the same sender is replaced.
             self.total_gas -= *replaced_tx.gas();
@@ -441,7 +440,24 @@ impl PackingPool {
             .clone();
         trace!("Get transaction from ready pool. tx: {:?}", tx.clone());
 
-        self.remove(&tx.sender())
+        self.remove(&tx.sender().address)
+    }
+
+    fn sample_peek(&self) -> Option<Arc<SignedTransaction>> {
+        if self.treap.len() == 0 {
+            return None;
+        }
+
+        let sum_gas_price = self.treap.sum_weight();
+        let mut rand_value = rand::random();
+        rand_value = rand_value % sum_gas_price;
+
+        Some(
+            self.treap
+                .get_by_weight(rand_value)
+                .expect("Failed to pick transaction by weight")
+                .clone(),
+        )
     }
 
     fn pop(&mut self) -> Option<Arc<SignedTransaction>> {
@@ -456,6 +472,137 @@ impl PackingPool {
     #[cfg(test)]
     fn top(&self) -> Option<Arc<SignedTransaction>> {
         self.heap_map.top().map(|(_, tx)| (tx.0).0.clone())
+    }
+}
+
+#[derive(DeriveMallocSizeOf)]
+struct ReadyAccountPool {
+    native_pool: SpacedReadyAccountPool,
+    evm_pool: SpacedReadyAccountPool,
+}
+
+impl ReadyAccountPool {
+    fn new(
+        tx_weight_scaling: u64, tx_weight_exp: u8, total_gas_capacity: U256,
+    ) -> Self {
+        Self {
+            native_pool: SpacedReadyAccountPool::new(
+                tx_weight_scaling,
+                tx_weight_exp,
+                total_gas_capacity,
+            ),
+            evm_pool: SpacedReadyAccountPool::new(
+                tx_weight_scaling,
+                tx_weight_exp,
+                total_gas_capacity,
+            ),
+        }
+    }
+
+    fn len(&self) -> usize { self.native_pool.len() + self.evm_pool.len() }
+
+    fn get(
+        &self, address: &AddressWithSpace,
+    ) -> Option<Arc<SignedTransaction>> {
+        match address.space {
+            Space::Native => {
+                self.native_pool.get(&address.address).map(|tx| tx.clone())
+            }
+            Space::Ethereum => {
+                self.evm_pool.get(&address.address).map(|tx| tx.clone())
+            }
+        }
+    }
+
+    fn update(
+        &mut self, address: &AddressWithSpace,
+        tx: Option<Arc<SignedTransaction>>,
+    )
+    {
+        match address.space {
+            Space::Native => self.native_pool.update(&address.address, tx),
+            Space::Ethereum => self.evm_pool.update(&address.address, tx),
+        }
+    }
+
+    fn remove(&mut self, address: &AddressWithSpace) {
+        match address.space {
+            Space::Native => self.native_pool.remove(&address.address),
+            Space::Ethereum => self.evm_pool.remove(&address.address),
+        }
+    }
+
+    fn insert(&mut self, tx: Arc<SignedTransaction>) {
+        match tx.sender().space {
+            Space::Native => self.native_pool.insert(tx.clone()),
+            Space::Ethereum => self.evm_pool.insert(tx.clone()),
+        }
+    }
+
+    fn peek_native(&self) -> Option<Arc<SignedTransaction>> {
+        self.native_pool.sample_peek()
+    }
+
+    fn peek_evm(&self) -> Option<Arc<SignedTransaction>> {
+        self.evm_pool.sample_peek()
+    }
+
+    fn pop_native(&mut self) -> Option<Arc<SignedTransaction>> {
+        self.native_pool.sample_pop()
+    }
+
+    fn pop_evm(&mut self) -> Option<Arc<SignedTransaction>> {
+        self.evm_pool.sample_pop()
+    }
+
+    fn sample_pop(&mut self) -> Option<Arc<SignedTransaction>> {
+        let tx_native_opt = self.peek_native();
+        let tx_evm_opt = self.peek_evm();
+        match (tx_native_opt, tx_evm_opt) {
+            (None, None) => None,
+            (None, Some(tx)) => {
+                trace!(
+                    "Get transaction from evm ready pool. tx: {:?}",
+                    tx.clone()
+                );
+                self.remove(&tx.sender());
+                self.evm_pool.try_fill_packing_pool();
+                Some(tx)
+            }
+            (Some(tx), None) => {
+                trace!(
+                    "Get transaction from native ready pool. tx: {:?}",
+                    tx.clone()
+                );
+                self.remove(&tx.sender());
+                self.native_pool.try_fill_packing_pool();
+                Some(tx)
+            }
+            (Some(tx_native), Some(tx_evm)) => {
+                if tx_native.gas_price() > tx_evm.gas_price() {
+                    trace!(
+                        "Get transaction from native ready pool. tx: {:?}",
+                        tx_native.clone()
+                    );
+                    self.remove(&tx_native.sender());
+                    self.native_pool.try_fill_packing_pool();
+                    Some(tx_native)
+                } else {
+                    trace!(
+                        "Get transaction from evm ready pool. tx: {:?}",
+                        tx_evm.clone()
+                    );
+                    self.remove(&tx_evm.sender());
+                    self.evm_pool.try_fill_packing_pool();
+                    Some(tx_evm)
+                }
+            }
+        }
+    }
+
+    fn clear(&mut self) {
+        self.native_pool.clear();
+        self.evm_pool.clear();
     }
 }
 
@@ -1109,16 +1256,32 @@ impl TransactionPoolInner {
     pub fn content(
         &self, address: Option<AddressWithSpace>,
     ) -> (Vec<Arc<SignedTransaction>>, Vec<Arc<SignedTransaction>>) {
-        let ready_txs = self
-            .ready_account_pool
-            .packing_pool
-            .treap
-            .iter()
-            .filter(|address_tx| {
-                address == None || &address.unwrap() == address_tx.0
-            })
-            .map(|(_, tx)| tx.clone())
-            .collect();
+        let ready_txs = match address {
+            Some(addr) => {
+                let spaced_pool = match addr.space {
+                    Space::Native => &self.ready_account_pool.native_pool,
+                    Space::Ethereum => &self.ready_account_pool.evm_pool,
+                };
+                spaced_pool
+                    .packing_pool
+                    .treap
+                    .iter()
+                    .filter(|address_tx| addr.address == *address_tx.0)
+                    .map(|(_, tx)| tx.clone())
+                    .collect()
+            }
+            None => self
+                .ready_account_pool
+                .native_pool
+                .packing_pool
+                .treap
+                .iter()
+                .chain(
+                    self.ready_account_pool.evm_pool.packing_pool.treap.iter(),
+                )
+                .map(|(_, tx)| tx.clone())
+                .collect(),
+        };
 
         let deferred_txs = self
             .txs
