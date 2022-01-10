@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 extern crate ethereum_types;
+extern crate rlp;
 extern crate rlp_derive;
 extern crate serde;
 extern crate serde_derive;
@@ -11,6 +12,7 @@ pub use ethereum_types::{
     Address, BigEndianHash, Bloom, BloomInput, Public, Secret, Signature, H128,
     H160, H256, H512, H520, H64, U128, U256, U512, U64,
 };
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde_derive::{Deserialize, Serialize};
 
@@ -31,6 +33,42 @@ pub use self::space_util::AddressSpaceUtil;
 pub enum Space {
     Native,
     Ethereum,
+}
+
+impl From<Space> for String {
+    fn from(space: Space) -> Self {
+        let str: &'static str = space.into();
+        str.into()
+    }
+}
+
+impl From<Space> for &'static str {
+    fn from(space: Space) -> Self {
+        match space {
+            Space::Native => "native",
+            Space::Ethereum => "evm",
+        }
+    }
+}
+
+impl Encodable for Space {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        let type_int: u8 = match self {
+            Space::Native => 1,
+            Space::Ethereum => 2,
+        };
+        type_int.rlp_append(s)
+    }
+}
+
+impl Decodable for Space {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        match u8::decode(rlp)? {
+            1u8 => Ok(Space::Native),
+            2u8 => Ok(Space::Ethereum),
+            _ => Err(DecoderError::Custom("Unrecognized space byte.")),
+        }
+    }
 }
 
 #[derive(

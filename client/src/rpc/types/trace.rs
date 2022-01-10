@@ -7,7 +7,7 @@ use crate::rpc::types::Bytes;
 use cfx_addr::Network;
 use cfx_types::{H256, U256, U64};
 use cfxcore::{
-    trace::trace::{
+    observer::trace::{
         Action as VmAction, ActionType as VmActionType, BlockExecTraces,
         Call as VmCall, CallResult as VmCallResult, Create as VmCreate,
         CreateResult as VmCreateResult, ExecTrace,
@@ -71,6 +71,7 @@ impl Into<VmActionType> for ActionType {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Call {
+    pub space: String,
     pub from: RpcAddress,
     pub to: RpcAddress,
     pub value: U256,
@@ -82,6 +83,7 @@ pub struct Call {
 impl Call {
     fn try_from(call: VmCall, network: Network) -> Result<Self, String> {
         Ok(Self {
+            space: call.space.into(),
             from: RpcAddress::try_from_h160(call.from, network)?,
             to: RpcAddress::try_from_h160(call.to, network)?,
             value: call.value,
@@ -113,6 +115,7 @@ impl From<VmCallResult> for CallResult {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Create {
+    pub space: String,
     pub from: RpcAddress,
     pub value: U256,
     pub gas: U256,
@@ -123,6 +126,7 @@ pub struct Create {
 impl Create {
     fn try_from(create: VmCreate, network: Network) -> Result<Self, String> {
         Ok(Self {
+            space: create.space.into(),
             from: RpcAddress::try_from_h160(create.from, network)?,
             value: create.value,
             gas: create.gas,
@@ -159,8 +163,10 @@ impl CreateResult {
 pub struct InternalTransferAction {
     pub from: RpcAddress,
     pub from_pocket: String,
+    pub from_space: String,
     pub to: RpcAddress,
     pub to_pocket: String,
+    pub to_space: String,
     pub value: U256,
 }
 
@@ -174,11 +180,13 @@ impl InternalTransferAction {
                 network,
             )?,
             from_pocket: action.from.pocket().into(),
+            from_space: action.from.space().into(),
             to: RpcAddress::try_from_h160(
                 action.to.inner_address_or_default(),
                 network,
             )?,
             to_pocket: action.to.pocket().into(),
+            to_space: action.to.space().into(),
             value: action.value,
         })
     }

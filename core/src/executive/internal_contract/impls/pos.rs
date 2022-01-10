@@ -290,26 +290,21 @@ pub fn decode_register_info(event: &LogEntry) -> Option<StakingEvent> {
         return None;
     }
 
-    match event
-        .topics
-        .first()
-        .expect("First topic is event sig")
-        .clone()
-    {
-        sig if sig == RegisterEvent::event_sig() => {
+    match event.topics.first().expect("First topic is event sig") {
+        sig if sig == &RegisterEvent::EVENT_SIG => {
             let identifier =
                 event.topics.get(1).expect("Second topic is identifier");
             let (verified_bls_pubkey, vrf_pubkey) =
                 <(Bytes, Bytes)>::abi_decode(&event.data).unwrap();
             Some(Register(*identifier, verified_bls_pubkey, vrf_pubkey))
         }
-        sig if sig == IncreaseStakeEvent::event_sig() => {
+        sig if sig == &IncreaseStakeEvent::EVENT_SIG => {
             let identifier =
                 event.topics.get(1).expect("Second topic is identifier");
             let power = u64::abi_decode(&event.data).unwrap();
             Some(IncreaseStake(*identifier, power))
         }
-        sig if sig == RetireEvent::event_sig() => {
+        sig if sig == &RetireEvent::EVENT_SIG => {
             let identifier =
                 event.topics.get(1).expect("Second topic is identifier");
             let votes = u64::abi_decode(&event.data).unwrap();

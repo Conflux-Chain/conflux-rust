@@ -7,8 +7,8 @@ use super::{executive::*, suicide as suicide_impl, InternalRefContext};
 use crate::{
     bytes::Bytes,
     machine::Machine,
+    observer::VmObserve,
     state::CallStackInfo,
-    trace::Tracer,
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
         ContractCreateResult, CreateContractAddress, CreateType, Env, Error,
@@ -437,7 +437,7 @@ impl<
     }
 
     fn suicide(
-        &mut self, refund_address: &Address, tracer: &mut dyn Tracer,
+        &mut self, refund_address: &Address, tracer: &mut dyn VmObserve,
         account_start_nonce: U256,
     ) -> vm::Result<()>
     {
@@ -530,7 +530,6 @@ mod tests {
         machine::{new_machine_with_builtin, Machine},
         state::{CallStackInfo, State, Substate},
         test_helpers::get_state_for_genesis_write,
-        trace,
         vm::{Context as ContextTrait, Env, Spec},
     };
     use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
@@ -832,7 +831,7 @@ mod tests {
                 false, /* static_flag */
             );
             let mut ctx = lctx.activate(state, &mut callstack);
-            let mut tracer = trace::NoopTracer;
+            let mut tracer = ();
             ctx.suicide(
                 &refund_account,
                 &mut tracer,

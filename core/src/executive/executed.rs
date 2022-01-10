@@ -206,7 +206,7 @@ pub fn revert_reason_decode(output: &Bytes) -> String {
     }
 }
 
-use crate::{trace::trace::ExecTrace, vm::Spec};
+use crate::{observer::trace::ExecTrace, vm::Spec};
 #[cfg(test)]
 use rustc_hex::FromHex;
 

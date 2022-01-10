@@ -56,8 +56,8 @@ class Web3Test(ConfluxTestFramework):
         to = to.lower()
         client = RpcClient(self.nodes[0])
         cross_space = "0x0888000000000000000000000000000000000006"
-        data = decode_hex(
-            f"0x1b8b921d000000000000000000000000{to}00000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000")
+
+        data = decode_hex(f"0xda8d5daf{to}000000000000000000000000")
         genesis_addr = self.genesis_addr
         tx = client.new_tx(value=value, receiver=cross_space, data=data, nonce=self.get_nonce(genesis_addr),
                            gas=1000000)
@@ -89,7 +89,7 @@ class Web3Test(ConfluxTestFramework):
 
         client = RpcClient(self.nodes[0])
         client.generate_block(1)
-        client.generate_blocks(10)
+        client.generate_blocks(20, 1)
         receipt = self.w3.eth.waitForTransactionReceipt(tx_hash)
         assert_equal(receipt["status"], 1)
 

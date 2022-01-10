@@ -16,10 +16,10 @@ use cfxcore::{
         contract_address, revert_reason_decode, ExecutionError,
         ExecutionOutcome, TxDropError,
     },
+    observer::ErrorUnwind,
     rpc_errors::{
         invalid_params_check, Error as CfxRpcError, Result as CfxRpcResult,
     },
-    trace::ErrorUnwind,
     vm::{self, CreateContractAddress},
     ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
@@ -484,20 +484,27 @@ impl Eth for EthHandler {
     fn transaction_count(
         &self, address: H160, num: Option<BlockNumber>,
     ) -> jsonrpc_core::Result<U256> {
-        let consensus_graph = self.consensus_graph();
-
-        let num = num.map(Into::into).unwrap_or(EpochNumber::LatestState);
-
         info!(
             "RPC Request: eth_getTransactionCount address={:?} block_number={:?}",
             address, num
         );
 
-        Ok(consensus_graph.next_nonce(
-            address.with_native_space(),
-            BlockHashOrEpochNumber::EpochNumber(num),
-            "num",
-        )?)
+        let nonce = match num {
+            Some(BlockNumber::Pending) => {
+                self.tx_pool.get_next_nonce(&address.with_evm_space())
+            }
+            _ => {
+                let num =
+                    num.map(Into::into).unwrap_or(EpochNumber::LatestState);
+                self.consensus_graph().next_nonce(
+                    address.with_evm_space(),
+                    BlockHashOrEpochNumber::EpochNumber(num),
+                    "num",
+                )?
+            }
+        };
+
+        Ok(nonce)
     }
 
     fn block_transaction_count_by_hash(

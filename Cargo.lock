@@ -952,6 +952,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "sha3-macro",
  "short-hex-str",
  "siphasher",
  "slab",
@@ -5647,6 +5648,16 @@ dependencies = [
  "digest 0.9.0",
  "keccak",
  "opaque-debug 0.3.0",
+]
+
+[[package]]
+name = "sha3-macro"
+version = "0.1.0"
+dependencies = [
+ "keccak-hash",
+ "proc-macro2 1.0.32",
+ "quote 1.0.10",
+ "syn 1.0.81",
 ]
 
 [[package]]
