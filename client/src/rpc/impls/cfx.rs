@@ -73,10 +73,10 @@ use cfxcore::{
     consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
     executive::revert_reason_decode,
+    observer::ErrorUnwind,
     spec::genesis::{
         genesis_contract_address_four_year, genesis_contract_address_two_year,
     },
-    trace::ErrorUnwind,
 };
 use diem_types::account_address::AccountAddress;
 use lazy_static::lazy_static;

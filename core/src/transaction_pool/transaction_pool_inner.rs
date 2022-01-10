@@ -912,7 +912,7 @@ impl TransactionPoolInner {
 
     /// pack at most num_txs transactions randomly
     pub fn pack_transactions<'a>(
-        &mut self, num_txs: usize, block_gas_limit: U256,
+        &mut self, num_txs: usize, block_gas_limit: U256, evm_gas_limit: U256,
         block_size_limit: usize, best_epoch_height: u64,
         best_block_number: u64, verification_config: &VerificationConfig,
         machine: &Machine,
@@ -924,15 +924,23 @@ impl TransactionPoolInner {
         }
 
         let mut total_tx_gas_limit: U256 = 0.into();
+        let mut eth_total_tx_gas_limit: U256 = 0.into();
         let mut total_tx_size: usize = 0;
 
         let mut big_tx_resample_times_limit = 10;
+        let mut eth_tx_resample_times_limit = 10;
+
+        let mut sample_eth_tx = evm_gas_limit > U256::zero();
         let mut recycle_txs = Vec::new();
 
         let spec = machine.spec(best_block_number);
         let transitions = &machine.params().transition_heights;
 
-        'out: while let Some(tx) = self.ready_account_pool.pop() {
+        'out: while let Some(tx) = if sample_eth_tx {
+            self.ready_account_pool.pop()
+        } else {
+            self.ready_account_pool.pop_native()
+        } {
             let tx_size = tx.rlp_size();
             if block_gas_limit - total_tx_gas_limit < *tx.gas_limit()
                 || block_size_limit - total_tx_size < tx_size
@@ -943,6 +951,17 @@ impl TransactionPoolInner {
                     continue 'out;
                 } else {
                     break 'out;
+                }
+            }
+            if tx.space() == Space::Ethereum {
+                if evm_gas_limit - eth_total_tx_gas_limit < *tx.gas_limit() {
+                    recycle_txs.push(tx.clone());
+                    if eth_tx_resample_times_limit > 0 {
+                        eth_tx_resample_times_limit -= 1;
+                    } else {
+                        sample_eth_tx = false;
+                    }
+                    continue 'out;
                 }
             }
 
@@ -964,6 +983,9 @@ impl TransactionPoolInner {
             }
 
             total_tx_gas_limit += *tx.gas_limit();
+            if tx.space() == Space::Ethereum {
+                eth_total_tx_gas_limit += *tx.gas_limit();
+            }
             total_tx_size += tx_size;
 
             packed_transactions.push(tx.clone());

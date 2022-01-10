@@ -309,6 +309,7 @@ impl BlockGenerator {
         let transactions = self.txpool.pack_transactions(
             num_txs,
             block_gas_limit,
+            U256::zero(),
             block_size_limit,
             best_info.best_epoch_number,
             best_info.best_block_number,

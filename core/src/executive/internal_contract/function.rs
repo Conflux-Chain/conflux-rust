@@ -5,8 +5,8 @@
 use super::SolidityFunctionTrait;
 use crate::{
     executive::{internal_contract::activate_at::IsActive, InternalRefContext},
+    observer::VmObserve,
     state::CallStackInfo,
-    trace::Tracer,
     vm::{
         self, ActionParams, CallType, ExecTrapResult, GasLeft, ReturnData,
         Spec, TrapResult,
@@ -42,7 +42,7 @@ impl<T: SolidityFunctionConfigTrait + ExecutionTrait + IsActive>
 {
     fn execute(
         &self, input: &[u8], params: &ActionParams,
-        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> ExecTrapResult<GasLeft>
     {
         let (solidity_params, cost) =
@@ -89,6 +89,8 @@ impl<T: SolidityFunctionConfigTrait + ExecutionTrait + IsActive>
     }
 
     fn name(&self) -> &'static str { return Self::NAME_AND_PARAMS; }
+
+    fn function_sig(&self) -> [u8; 4] { return Self::FUNC_SIG; }
 }
 
 fn preprocessing<T: SolidityFunctionConfigTrait>(
@@ -109,6 +111,7 @@ pub trait InterfaceTrait {
     type Input: ABIDecodable;
     type Output: ABIEncodable;
     const NAME_AND_PARAMS: &'static str;
+    const FUNC_SIG: [u8; 4];
 }
 
 pub trait PreExecCheckTrait: Send + Sync {
@@ -121,7 +124,7 @@ pub trait PreExecCheckTrait: Send + Sync {
 pub trait ExecutionTrait: Send + Sync + InterfaceTrait {
     fn execute_inner(
         &self, input: Self::Input, params: &ActionParams, gas_left: U256,
-        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> ExecTrapResult<<Self as InterfaceTrait>::Output>;
 }
 
@@ -129,7 +132,7 @@ pub trait ExecutionTrait: Send + Sync + InterfaceTrait {
 pub trait SimpleExecutionTrait: Send + Sync + InterfaceTrait {
     fn execute_inner(
         &self, input: Self::Input, params: &ActionParams,
-        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> vm::Result<<Self as InterfaceTrait>::Output>;
 }
 
@@ -138,7 +141,7 @@ where T: SimpleExecutionTrait
 {
     fn execute_inner(
         &self, input: Self::Input, params: &ActionParams, _gas_left: U256,
-        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> ExecTrapResult<<Self as InterfaceTrait>::Output>
     {
         let result = SimpleExecutionTrait::execute_inner(
@@ -196,6 +199,7 @@ impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
 /// use cfxcore::make_solidity_function;
 /// use cfx_types::{Address,U256};
 /// use cfxcore::executive::function::InterfaceTrait;
+/// use sha3_macro::keccak;
 ///
 /// make_solidity_function!{
 ///     struct WhateverStructName((Address, Address), "get_whitelist(address,address)", bool);
@@ -224,6 +228,10 @@ macro_rules! make_solidity_function {
             type Input = $input;
             type Output = $output;
             const NAME_AND_PARAMS: &'static str = $interface;
+            const FUNC_SIG: [u8; 4] = {
+                let x = keccak!($interface);
+                [x[0],x[1],x[2],x[3]]
+            };
         }
     };
 }
@@ -280,10 +288,7 @@ macro_rules! make_solidity_event {
         impl SolidityEventTrait for $name {
             $(type Indexed = $indexed;)?
             $(type NonIndexed = $non_indexed;)?
-
-            fn name() -> &'static str {
-                $interface
-            }
+            const EVENT_SIG: H256 = H256(keccak!($interface));
         }
     };
 }

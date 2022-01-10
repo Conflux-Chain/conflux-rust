@@ -30,14 +30,14 @@ use crate::{
         pos_handler::PosVerifier,
     },
     executive::ExecutionOutcome,
+    observer::{
+        trace::{ActionType, BlockExecTraces, LocalizedTrace},
+        trace_filter::TraceFilter,
+    },
     pow::{PowComputer, ProofOfWorkConfig},
     rpc_errors::{invalid_params_check, Result as RpcResult},
     state::State,
     statistics::SharedStatistics,
-    trace::{
-        trace::{ActionType, BlockExecTraces, LocalizedTrace},
-        trace_filter::TraceFilter,
-    },
     transaction_pool::SharedTransactionPool,
     verification::VerificationConfig,
     NodeType, Notifications,
