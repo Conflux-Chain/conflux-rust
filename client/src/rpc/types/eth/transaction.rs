@@ -19,7 +19,7 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::rpc::types::Bytes;
-use cfx_types::{H160, H256, H512, U256, U64};
+use cfx_types::{Space, H160, H256, H512, U256, U64};
 use cfxcore::{executive::contract_address, vm::CreateContractAddress};
 use primitives::{Action, SignedTransaction};
 use rlp::Encodable;
@@ -89,7 +89,10 @@ impl Transaction {
     /// Convert `SignedTransaction` into RPC Transaction.
     pub fn from_signed(t: &SignedTransaction) -> Transaction {
         let signature = t.signature();
-        let scheme = CreateContractAddress::FromSenderNonce;
+        let scheme = match t.sender().space {
+            Space::Ethereum => CreateContractAddress::FromSenderNonce,
+            Space::Native => CreateContractAddress::FromSenderNonceAndCodeHash,
+        };
 
         // We only support EIP-155
         // let access_list = match t.as_unsigned() {
