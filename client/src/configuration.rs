@@ -293,6 +293,7 @@ build_config! {
         (target_block_gas_limit, (u64), DEFAULT_TARGET_BLOCK_GAS_LIMIT)
         (executive_trace, (bool), false)
         (check_status_genesis, (bool), true)
+        (packing_gas_limit_block_count, (u64), 10)
 
         // TreeGraph Section.
         (is_consortium, (bool), false)
@@ -917,6 +918,9 @@ impl Configuration {
             min_tx_price: self.raw_conf.tx_pool_min_tx_gas_price,
             tx_weight_scaling: self.raw_conf.tx_weight_scaling,
             tx_weight_exp: self.raw_conf.tx_weight_exp,
+            packing_gas_limit_block_count: self
+                .raw_conf
+                .packing_gas_limit_block_count,
             target_block_gas_limit: self.raw_conf.target_block_gas_limit,
         }
     }

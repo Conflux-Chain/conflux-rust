@@ -3,7 +3,7 @@ description = "Conflux core library"
 homepage = "https://www.confluxnetwork.org"
 license = "GPL-3.0"
 name = "cfxcore"
-version = "1.1.4"
+version = "2.0.0"
 edition = "2018"
 
 [dependencies]
@@ -129,6 +129,7 @@ proptest = { version = "1.0.0", optional = true }
 proptest-derive = { version = "0.3.0", optional = true }
 diem-temppath = { path = "./src/pos/common/temppath" }
 crash-handler = { path = "../core/src/pos/common/crash-handler" }
+heap-map = {path = "../util/heap-map" }
 
 [dev-dependencies]
 criterion = "0.3"
