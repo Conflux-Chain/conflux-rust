@@ -226,8 +226,6 @@ impl BlockStore {
     ) -> anyhow::Result<()> {
         let block_id_to_commit =
             finality_proof.ledger_info().consensus_block_id();
-        let pivot_decision_to_commit =
-            finality_proof.ledger_info().pivot_decision().cloned();
         diem_debug!("BlockStore::commit: id={}", block_id_to_commit);
         let block_to_commit = self
             .get_block(block_id_to_commit)
@@ -278,9 +276,8 @@ impl BlockStore {
         // After a block is committed, we will never need to execute a block
         // with an earlier pivot decision, so we can safely prune all
         // staking events before.
-        if let Some(pivot_decision) = pivot_decision_to_commit {
-            self.storage.prune_staking_events(&pivot_decision)?;
-        }
+        // TODO: Delete range causes OOM now. Prune staking events after the
+        // rocksdb issue is solved.
         Ok(())
     }
 
