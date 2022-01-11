@@ -56,6 +56,7 @@ impl Log {
             address: e.entry.address,
             topics: e.entry.topics.into_iter().map(Into::into).collect(),
             data: e.entry.data.into(),
+            // TODO(thegaram): use pivot hash instead
             block_hash: Some(e.block_hash.into()),
             // note: blocks in EVM space RPCs correspond to epochs
             block_number: Some(e.epoch_number.into()),

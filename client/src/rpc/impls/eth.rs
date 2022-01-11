@@ -236,6 +236,7 @@ impl EthHandler {
         };
 
         let contract_address = if let Action::Create = tx.action() {
+            // TODO(thegaram): do not return address if failed
             let (contract_address, _) = contract_address(
                 CreateContractAddress::FromSenderNonce,
                 0.into(),

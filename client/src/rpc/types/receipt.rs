@@ -4,7 +4,7 @@
 
 use crate::rpc::types::{Log, RpcAddress};
 use cfx_addr::Network;
-use cfx_types::{AddressSpaceUtil, Bloom, H256, U256, U64};
+use cfx_types::{AddressSpaceUtil, Bloom, Space, H256, U256, U64};
 use cfxcore::{executive::contract_address, vm::CreateContractAddress};
 use primitives::{
     receipt::{
@@ -145,6 +145,7 @@ impl Receipt {
             contract_created: address,
             logs: logs
                 .into_iter()
+                .filter(|l| l.space == Space::Native)
                 .map(|l| Log::try_from(l, network))
                 .collect::<Result<_, _>>()?,
             logs_bloom: log_bloom,

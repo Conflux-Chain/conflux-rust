@@ -131,6 +131,7 @@ impl EthRpcLogFilter {
             // block hash filter
             (None, None, Some(block_hash)) => {
                 Ok(PrimitiveFilter::BlockHashLogFilter {
+                    // TODO(thegaram): include all block hashes from epoch
                     block_hashes: vec![*block_hash],
                     params,
                 })
