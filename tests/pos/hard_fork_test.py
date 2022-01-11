@@ -92,7 +92,7 @@ class ExampleTest(ConfluxTestFramework):
         initialize_tg_config(self.options.tmpdir, len(self.nodes), len(self.nodes), DEFAULT_PY_TEST_CHAIN_ID, pkfile="public_keys")
 
         # generate blocks until pos start
-        self.nodes[0].generate_empty_blocks(400)
+        self.nodes[0].generate_empty_blocks(500)
         sync_blocks(self.nodes)
         pos_identifier, _ = client.wait_for_pos_register()
         client.generate_empty_blocks(400)
