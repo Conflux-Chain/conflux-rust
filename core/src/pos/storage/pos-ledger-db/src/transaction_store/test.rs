@@ -6,7 +6,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::*;
-use crate::DiemDB;
+use crate::PosLedgerDB;
 use diem_proptest_helpers::Index;
 use diem_temppath::TempPath;
 use diem_types::{
@@ -28,7 +28,7 @@ proptest! {
         ),
     ) {
         let tmp_dir = TempPath::new();
-        let db = DiemDB::new_for_test(&tmp_dir);
+        let db = PosLedgerDB::new_for_test(&tmp_dir);
         let store = &db.transaction_store;
         let txns = init_store(universe, gens, &store);
 
@@ -62,7 +62,7 @@ proptest! {
         ),
     ) {
         let tmp_dir = TempPath::new();
-        let db = DiemDB::new_for_test(&tmp_dir);
+        let db = PosLedgerDB::new_for_test(&tmp_dir);
         let store = &db.transaction_store;
         let txns = init_store(universe, gens, &store);
 
@@ -118,7 +118,7 @@ proptest! {
         )
     ) {
         let tmp_dir = TempPath::new();
-        let db = DiemDB::new_for_test(&tmp_dir);
+        let db = PosLedgerDB::new_for_test(&tmp_dir);
         let store = &db.transaction_store;
 
         let mut cs = ChangeSet::new();

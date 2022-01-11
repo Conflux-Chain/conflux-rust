@@ -13,7 +13,7 @@ use crate::handlers::utils::{
 };
 use diem_crypto::hash::HashValue;
 use diem_types::transaction::Version;
-use diemdb::backup::backup_handler::BackupHandler;
+use pos_ledger_db::backup::backup_handler::BackupHandler;
 use warp::{filters::BoxedFilter, reply::Reply, Filter};
 
 static DB_STATE: &str = "db_state";

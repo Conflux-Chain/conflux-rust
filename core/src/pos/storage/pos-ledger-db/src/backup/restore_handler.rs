@@ -8,7 +8,7 @@
 use crate::{
     change_set::ChangeSet, event_store::EventStore, ledger_store::LedgerStore,
     schema::transaction_accumulator::TransactionAccumulatorSchema,
-    state_store::StateStore, transaction_store::TransactionStore, DiemDB,
+    state_store::StateStore, transaction_store::TransactionStore, PosLedgerDB,
 };
 use anyhow::{ensure, Result};
 use diem_crypto::{hash::SPARSE_MERKLE_PLACEHOLDER_HASH, HashValue};
@@ -28,7 +28,7 @@ use storage_interface::{DbReader, TreeState};
 #[derive(Clone)]
 pub struct RestoreHandler {
     db: Arc<DB>,
-    pub diemdb: Arc<DiemDB>,
+    pub diemdb: Arc<PosLedgerDB>,
     ledger_store: Arc<LedgerStore>,
     transaction_store: Arc<TransactionStore>,
     state_store: Arc<StateStore>,
@@ -37,7 +37,7 @@ pub struct RestoreHandler {
 
 impl RestoreHandler {
     pub(crate) fn new(
-        db: Arc<DB>, diemdb: Arc<DiemDB>, ledger_store: Arc<LedgerStore>,
+        db: Arc<DB>, diemdb: Arc<PosLedgerDB>, ledger_store: Arc<LedgerStore>,
         transaction_store: Arc<TransactionStore>, state_store: Arc<StateStore>,
         event_store: Arc<EventStore>,
     ) -> Self

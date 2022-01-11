@@ -301,7 +301,7 @@ impl RpcImpl {
                     .map_err(|_| RpcError::internal_error())?;
                 let pos_block = self
                     .pos_handler
-                    .diem_db()
+                    .pos_ledger_db()
                     .get_committed_block_by_hash(&hash)
                     .map_err(|_| RpcError::internal_error())?;
                 let maybe_epoch_rewards =

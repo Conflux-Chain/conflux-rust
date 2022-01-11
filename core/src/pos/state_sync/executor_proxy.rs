@@ -421,7 +421,7 @@ mod tests {
         transaction::{Transaction, WriteSetPayload},
     };
     use diem_vm::DiemVM;
-    use diemdb::DiemDB;
+    use pos-ledger-db::DiemDB;
     use executor::Executor;
     use executor_test_helpers::{
         bootstrap_genesis, gen_block_id, gen_ledger_info_with_sigs,

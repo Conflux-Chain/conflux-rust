@@ -20,7 +20,7 @@ use crate::{
 use diem_config::config::RocksdbConfig;
 use diem_temppath::TempPath;
 use diem_types::transaction::PRE_GENESIS_VERSION;
-use diemdb::DiemDB;
+use pos_ledger_db::DiemDB;
 use std::{convert::TryInto, sync::Arc};
 use storage_interface::DbReader;
 use tokio::time::Duration;

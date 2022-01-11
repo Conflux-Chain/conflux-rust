@@ -259,7 +259,7 @@ impl EpochManager {
         );
         let proof = self
             .storage
-            .diem_db()
+            .pos_ledger_db()
             .get_epoch_ending_ledger_infos(
                 request.start_epoch,
                 request.end_epoch,
@@ -531,7 +531,7 @@ impl EpochManager {
                 // genesis pivot decision
                 vrf_seed: self
                     .storage
-                    .diem_db()
+                    .pos_ledger_db()
                     .get_latest_ledger_info()
                     .expect("non-empty ledger info")
                     .ledger_info()

@@ -6,7 +6,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::*;
-use crate::DiemDB;
+use crate::PosLedgerDB;
 use diem_crypto::hash::ACCUMULATOR_PLACEHOLDER_HASH;
 use diem_proptest_helpers::Index;
 use diem_temppath::TempPath;
@@ -44,7 +44,7 @@ fn save(
 #[test]
 fn test_put_empty() {
     let tmp_dir = TempPath::new();
-    let db = DiemDB::new_for_test(&tmp_dir);
+    let db = PosLedgerDB::new_for_test(&tmp_dir);
     let store = &db.event_store;
     let mut cs = ChangeSet::new();
     assert_eq!(
@@ -56,7 +56,7 @@ fn test_put_empty() {
 #[test]
 fn test_error_on_get_from_empty() {
     let tmp_dir = TempPath::new();
-    let db = DiemDB::new_for_test(&tmp_dir);
+    let db = PosLedgerDB::new_for_test(&tmp_dir);
     let store = &db.event_store;
 
     assert!(store
@@ -70,7 +70,7 @@ proptest! {
     #[test]
     fn test_put_get_verify(events in vec(any::<ContractEvent>().no_shrink(), 1..100)) {
         let tmp_dir = TempPath::new();
-        let db = DiemDB::new_for_test(&tmp_dir);
+        let db = PosLedgerDB::new_for_test(&tmp_dir);
         let store = &db.event_store;
 
         let root_hash = save(store, 100, &events);
@@ -102,7 +102,7 @@ proptest! {
     ) {
 
         let tmp_dir = TempPath::new();
-        let db = DiemDB::new_for_test(&tmp_dir);
+        let db = PosLedgerDB::new_for_test(&tmp_dir);
         let store = &db.event_store;
         // Save 3 chunks at different versions
         save(store, 99 /*version*/, &events1);
