@@ -256,6 +256,7 @@ impl ReadyAccountPool {
     }
 
     fn insert(&mut self, tx: Arc<SignedTransaction>) {
+        self.waiting_pool.remove(&tx.sender());
         self.packing_pool.insert(tx);
         self.try_shrink_packing_pool();
     }
