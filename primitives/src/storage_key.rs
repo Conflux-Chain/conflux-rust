@@ -318,6 +318,16 @@ where FromKeyBytesResult<ShouldCheckInput>: ConditionalReturnValue<'a>{
 
             let extension_bit: bool = bytes[Self::ACCOUNT_BYTES] & 0x80 != 0;
             let bytes = if extension_bit {
+                // check for incorrect extension byte
+                if ShouldCheckInput::value() == CheckInput::value()
+                    && bytes[Self::ACCOUNT_BYTES] != Self::EVM_SPACE_TYPE[0]
+                {
+                    return <FromKeyBytesResult<ShouldCheckInput> as ConditionalReturnValue<'a>>::from_result(
+                        Err(format!("Unexpected extension byte: {:?}", bytes[Self::ACCOUNT_BYTES]))
+                    );
+                }
+
+                // with `SkipInputCheck`, crash on incorrect extension byte
                 assert_eq!(bytes[Self::ACCOUNT_BYTES], Self::EVM_SPACE_TYPE[0]);
                 &bytes[(Self::ACCOUNT_BYTES + 1)..]
             } else {

@@ -10,7 +10,7 @@ use std::sync::{atomic::AtomicBool, Arc};
 use futures::channel::{mpsc, oneshot};
 use tokio::runtime::{self, Runtime};
 
-use cached_diemdb::CachedDiemDB;
+use cached_pos_ledger_db::CachedPosLedgerDB;
 use channel::diem_channel;
 use consensus_types::db::LedgerBlockRW;
 use diem_config::config::NodeConfig;
@@ -43,8 +43,8 @@ pub fn start_consensus(
     node_config: &NodeConfig, network_sender: NetworkSender,
     network_receiver: NetworkReceivers,
     consensus_to_mempool_sender: mpsc::Sender<ConsensusRequest>,
-    state_sync_client: StateSyncClient, diem_db: Arc<dyn DbReader>,
-    db_with_cache: Arc<CachedDiemDB>,
+    state_sync_client: StateSyncClient, pos_ledger_db: Arc<dyn DbReader>,
+    db_with_cache: Arc<CachedPosLedgerDB>,
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
     author: AccountAddress,
     tx_sender: mpsc::Sender<(
@@ -62,7 +62,7 @@ pub fn start_consensus(
         .worker_threads(4)
         .build()
         .expect("Failed to create Tokio runtime!");
-    let storage = Arc::new(StorageWriteProxy::new(node_config, diem_db));
+    let storage = Arc::new(StorageWriteProxy::new(node_config, pos_ledger_db));
     let consensus_db = storage.consensus_db();
     let txn_manager = Arc::new(MempoolProxy::new(
         consensus_to_mempool_sender,

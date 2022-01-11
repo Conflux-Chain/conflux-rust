@@ -5,7 +5,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{test_helper::arb_blocks_to_commit, DiemDB};
+use crate::{test_helper::arb_blocks_to_commit, PosLedgerDB};
 use anyhow::Result;
 use diem_temppath::TempPath;
 use proptest::prelude::*;
@@ -17,7 +17,7 @@ proptest! {
     #[test]
     fn test_get_transaction_iter(input in arb_blocks_to_commit()) {
         let tmp_dir = TempPath::new();
-        let db = DiemDB::new_for_test(&tmp_dir);
+        let db = PosLedgerDB::new_for_test(&tmp_dir);
 
         let mut cur_ver = 0;
         for (txns_to_commit, ledger_info_with_sigs) in input.iter() {

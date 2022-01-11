@@ -32,7 +32,7 @@ fn to_blocks_to_commit(
     // transaction basis. Result is used to test the batch PUBLIC API for
     // saving everything, i.e. `save_transactions()`
     let tmp_dir = TempPath::new();
-    let db = DiemDB::new_for_test(&tmp_dir);
+    let db = PosLedgerDB::new_for_test(&tmp_dir);
 
     let mut cur_ver = 0;
     let mut cur_txn_accu_hash = HashValue::zero();

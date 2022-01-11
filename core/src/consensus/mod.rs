@@ -799,7 +799,7 @@ impl ConsensusGraph {
             epoch,
             block_hash,
             receipts,
-            block.transaction_hashes(),
+            block.transaction_hashes(/* space filter */ None),
         )))
     }
 

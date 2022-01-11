@@ -72,7 +72,7 @@ impl Pruner {
 
         DIEM_STORAGE_PRUNE_WINDOW.set(historical_versions_to_keep as i64);
         let worker_thread = std::thread::Builder::new()
-            .name("diemdb_pruner".into())
+            .name("pos_ledger_db_pruner".into())
             .spawn(move || {
                 Worker::new(db, command_receiver, worker_progress_clone).work()
             })

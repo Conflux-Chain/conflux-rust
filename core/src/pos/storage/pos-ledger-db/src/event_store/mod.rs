@@ -9,7 +9,7 @@
 //! and events themselves.
 #![allow(unused)]
 
-use super::DiemDB;
+use super::PosLedgerDB;
 use crate::{
     change_set::ChangeSet,
     errors::DiemDbError,

@@ -646,7 +646,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4964518bd3b4a8190e832886cdc0da9794f12e8e6c1613a9e90ff331c4c8724b"
 
 [[package]]
-name = "cached-diemdb"
+name = "cached-pos-ledger-db"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -655,8 +655,8 @@ dependencies = [
  "diem-infallible",
  "diem-logger",
  "diem-types",
- "diemdb",
  "executor-types",
+ "pos-ledger-db",
  "serde",
  "storage-interface",
 ]
@@ -863,7 +863,7 @@ dependencies = [
  "bls-signatures",
  "bounded-executor",
  "byteorder",
- "cached-diemdb",
+ "cached-pos-ledger-db",
  "cfx-addr",
  "cfx-bytes",
  "cfx-internal-common",
@@ -890,7 +890,6 @@ dependencies = [
  "diem-secure-storage",
  "diem-temppath",
  "diem-types",
- "diemdb",
  "either",
  "error-chain",
  "executor",
@@ -930,6 +929,7 @@ dependencies = [
  "parity-crypto",
  "parity-util-mem",
  "parking_lot 0.11.2",
+ "pos-ledger-db",
  "pow-types",
  "primal",
  "primitives",
@@ -1125,7 +1125,7 @@ dependencies = [
  "app_dirs",
  "bigdecimal",
  "blockgen",
- "cached-diemdb",
+ "cached-pos-ledger-db",
  "cfx-addr",
  "cfx-bytes",
  "cfx-internal-common",
@@ -1154,7 +1154,6 @@ dependencies = [
  "diem-temppath",
  "diem-time-service",
  "diem-types",
- "diemdb",
  "dir",
  "error-chain",
  "executor",
@@ -1183,6 +1182,7 @@ dependencies = [
  "num-bigint",
  "order-stat",
  "parking_lot 0.11.2",
+ "pos-ledger-db",
  "pow-types",
  "primitives",
  "rand 0.7.3",
@@ -1253,7 +1253,6 @@ dependencies = [
  "db",
  "diem-crypto",
  "diem-types",
- "diemdb",
  "dir",
  "docopt",
  "env_logger",
@@ -1280,6 +1279,7 @@ dependencies = [
  "panic_hook",
  "parity-wordlist",
  "parking_lot 0.11.2",
+ "pos-ledger-db",
  "primitives",
  "rand 0.8.4",
  "rlp",
@@ -2004,41 +2004,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "diemdb"
-version = "0.1.0"
-dependencies = [
- "accumulator",
- "anyhow",
- "arc-swap 1.4.0",
- "bcs",
- "byteorder",
- "consensus-types",
- "diem-config",
- "diem-crypto",
- "diem-infallible",
- "diem-jellyfish-merkle",
- "diem-logger",
- "diem-metrics",
- "diem-proptest-helpers",
- "diem-temppath",
- "diem-types",
- "executor-types",
- "itertools 0.10.1",
- "move-core-types",
- "num-derive",
- "num-traits",
- "num-variants",
- "once_cell",
- "proptest",
- "proptest-derive",
- "rand 0.8.4",
- "schemadb",
- "serde",
- "storage-interface",
- "thiserror",
-]
-
-[[package]]
 name = "digest"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2274,7 +2239,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
- "cached-diemdb",
+ "cached-pos-ledger-db",
  "cfx-types",
  "consensus-types",
  "diem-crypto",
@@ -4658,6 +4623,41 @@ dependencies = [
  "cpuid-bool",
  "opaque-debug 0.3.0",
  "universal-hash",
+]
+
+[[package]]
+name = "pos-ledger-db"
+version = "0.1.0"
+dependencies = [
+ "accumulator",
+ "anyhow",
+ "arc-swap 1.4.0",
+ "bcs",
+ "byteorder",
+ "consensus-types",
+ "diem-config",
+ "diem-crypto",
+ "diem-infallible",
+ "diem-jellyfish-merkle",
+ "diem-logger",
+ "diem-metrics",
+ "diem-proptest-helpers",
+ "diem-temppath",
+ "diem-types",
+ "executor-types",
+ "itertools 0.10.1",
+ "move-core-types",
+ "num-derive",
+ "num-traits",
+ "num-variants",
+ "once_cell",
+ "proptest",
+ "proptest-derive",
+ "rand 0.8.4",
+ "schemadb",
+ "serde",
+ "storage-interface",
+ "thiserror",
 ]
 
 [[package]]

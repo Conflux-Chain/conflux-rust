@@ -22,7 +22,7 @@ use threadpool::ThreadPool;
 use blockgen::BlockGenerator;
 use cfx_storage::StorageManager;
 use cfx_types::{address_util::AddressUtil, Address, Space, U256};
-pub use cfxcore::pos::pos::DiemHandle;
+pub use cfxcore::pos::pos::PosDropHandle;
 use cfxcore::{
     block_data_manager::BlockDataManager,
     consensus::pos_handler::{PosConfiguration, PosVerifier},
@@ -177,9 +177,9 @@ pub mod client_methods {
         let mut graceful = true;
         graceful &= check_graceful_shutdown(ledger_db);
         debug!("ledger_db drop: graceful = {}", graceful);
-        if let Some((diem_db, consensus_db)) = maybe_pos_db {
-            graceful &= check_graceful_shutdown(diem_db);
-            debug!("diem_db drop: graceful = {}", graceful);
+        if let Some((pos_ledger_db, consensus_db)) = maybe_pos_db {
+            graceful &= check_graceful_shutdown(pos_ledger_db);
+            debug!("pos_ledger_db drop: graceful = {}", graceful);
             graceful &= check_graceful_shutdown(consensus_db);
             debug!("consensus_db drop: graceful = {}", graceful);
         }

@@ -5,7 +5,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{DiemDB, Order, MAX_LIMIT};
+use crate::{Order, PosLedgerDB, MAX_LIMIT};
 use anyhow::{ensure, format_err, Result};
 use diem_config::config::RocksdbConfig;
 use diem_types::{
@@ -19,12 +19,12 @@ use std::{convert::AsRef, path::Path};
 use storage_interface::{DbReader, StartupInfo};
 
 pub struct Diemsum {
-    db: DiemDB,
+    db: PosLedgerDB,
 }
 
 impl Diemsum {
     pub fn new<P: AsRef<Path> + Clone>(db_root_path: P) -> Result<Self> {
-        let db = DiemDB::open(
+        let db = PosLedgerDB::open(
             db_root_path,
             true, /* read only */
             None, /* no prune_window */
