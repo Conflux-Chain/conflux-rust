@@ -153,8 +153,8 @@ impl Transaction {
             raw: Bytes::new(t.transaction.transaction.rlp_bytes()),
             public_key: t.public().map(Into::into),
             chain_id: Some(U64::from(t.chain_id() as u64)),
-            standard_v: None, // TODO: I'm not sure what it is.
-            v: signature.v().into(),
+            standard_v: Some(signature.v().into()),
+            v: (signature.v() as u32 + t.chain_id() * 2 + 35).into(), /* The protected EIP155 v */
             r: signature.r().into(),
             s: signature.s().into(),
         }
