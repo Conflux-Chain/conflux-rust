@@ -7,7 +7,6 @@ use std::{collections::BTreeMap, convert::TryInto, path::PathBuf, sync::Arc};
 use lazy_static::*;
 use parking_lot::RwLock;
 use rand::Rng;
-use rustc_hex::FromHex;
 
 use cfx_addr::{cfx_addr_decode, Network};
 use cfx_internal_common::{ChainIdParams, ChainIdParamsInner};

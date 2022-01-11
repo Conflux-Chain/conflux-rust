@@ -433,8 +433,10 @@ impl TransactionPoolInner {
                 .get_local_nonce_and_balance(&victim_address)
                 .unwrap_or((0.into(), 0.into()));
 
-            let tx_with_ready_info =
-                self.deferred_pool.remove_lowest_nonce(&addr).unwrap();
+            let tx_with_ready_info = self
+                .deferred_pool
+                .remove_lowest_nonce(&victim_address)
+                .unwrap();
             let to_remove_tx = tx_with_ready_info.get_arc_tx().clone();
 
             // We have to garbage collect an unexecuted transaction.
