@@ -58,11 +58,12 @@ use crate::{
             pos::Block as PosBlock, sign_call, Account as RpcAccount,
             AccountPendingInfo, AccountPendingTransactions, BlameInfo,
             Block as RpcBlock, BlockHashOrEpochNumber, Bytes, CallRequest,
-            CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
-            EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
-            LogFilter as RpcFilter, PackedOrExecuted, Receipt as RpcReceipt,
-            RewardInfo as RpcRewardInfo, SendTxRequest, Status as RpcStatus,
-            SyncGraphStates, Transaction as RpcTransaction,
+            CfxRpcLogFilter, CheckBalanceAgainstTransactionResponse,
+            ConsensusGraphStates, EpochNumber,
+            EstimateGasAndCollateralResponse, Log as RpcLog, PackedOrExecuted,
+            Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, SendTxRequest,
+            Status as RpcStatus, SyncGraphStates,
+            Transaction as RpcTransaction,
         },
         RpcResult,
     },
@@ -998,7 +999,7 @@ impl RpcImpl {
         ))
     }
 
-    fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
+    fn get_logs(&self, filter: CfxRpcLogFilter) -> RpcResult<Vec<RpcLog>> {
         // all addresses specified should be for the correct network
         if let Some(addresses) = &filter.address {
             for address in addresses.iter() {
@@ -1600,7 +1601,7 @@ impl Cfx for CfxHandler {
             fn check_balance_against_transaction(
                 &self, account_addr: RpcAddress, contract_addr: RpcAddress, gas_limit: U256, gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>,
             ) -> BoxFuture<CheckBalanceAgainstTransactionResponse>;
-            fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
+            fn get_logs(&self, filter: CfxRpcLogFilter) -> BoxFuture<Vec<RpcLog>>;
             fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
             fn send_raw_transaction(&self, raw: Bytes) -> JsonRpcResult<H256>;
             fn storage_at(&self, addr: RpcAddress, pos: U256, epoch_number: Option<EpochNumber>)

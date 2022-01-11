@@ -79,6 +79,7 @@ def run():
             "network_tests",
             "pos",
             "pubsub",
+            "evm_space",
             ]
     slow_tests = {"full_node_tests/p2p_era_test.py"}
 

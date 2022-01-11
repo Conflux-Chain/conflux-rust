@@ -25,7 +25,7 @@ use cfxcore::{
     SharedTransactionPool,
 };
 use primitives::{
-    receipt::TRANSACTION_OUTCOME_SUCCESS, Action, Block,
+    filter::LogFilter, receipt::TRANSACTION_OUTCOME_SUCCESS, Action, Block,
     BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, SignedTransaction,
     StorageKey, StorageValue, TransactionIndex, TransactionWithSignature,
 };
@@ -39,8 +39,8 @@ use crate::rpc::{
     traits::eth::{Eth, EthFilter},
     types::{
         eth::{
-            Block as RpcBlock, BlockNumber, CallRequest, Filter, FilterChanges,
-            Log, Receipt, SyncInfo, SyncStatus, Transaction,
+            Block as RpcBlock, BlockNumber, CallRequest, EthRpcLogFilter,
+            FilterChanges, Log, Receipt, SyncInfo, SyncStatus, Transaction,
         },
         Bytes, Index, MAX_GAS_CALL_REQUEST,
     },
@@ -236,6 +236,7 @@ impl EthHandler {
         };
 
         let contract_address = if let Action::Create = tx.action() {
+            // TODO(thegaram): do not return address if failed
             let (contract_address, _) = contract_address(
                 CreateContractAddress::FromSenderNonce,
                 0.into(),
@@ -257,6 +258,7 @@ impl EthHandler {
         let logs = primitive_receipt
             .logs
             .iter()
+            .filter(|l| l.space == Space::Ethereum)
             .cloned()
             .map(|log| Log {
                 address: log.address,
@@ -268,7 +270,6 @@ impl EthHandler {
                 transaction_index,
                 log_index: None, // TODO: EVM core: count log_index
                 transaction_log_index: None,
-                log_type: "".to_string(),
                 removed: false,
             })
             .collect();
@@ -917,10 +918,28 @@ impl Eth for EthHandler {
         }
     }
 
-    fn logs(&self, _: Filter) -> jsonrpc_core::Result<Vec<Log>> {
-        warn!("RPC Request (Not Supported!): eth_getLogs");
-        // TODO: Properly handle logs
-        Ok(vec![])
+    fn logs(&self, filter: EthRpcLogFilter) -> jsonrpc_core::Result<Vec<Log>> {
+        info!("RPC Request: eth_getLogs({:?})", filter);
+        let consensus_graph = self.consensus_graph();
+        let filter: LogFilter = filter.into_primitive()?;
+
+        // // If max_limit is set, the value in `filter` will be modified to
+        // // satisfy this limitation to avoid loading too many blocks
+        // // TODO Should the response indicate that the filter is modified?
+        // if let Some(max_limit) = self.config.get_logs_filter_max_limit {
+        //     if filter.limit.is_none() || filter.limit.unwrap() > max_limit {
+        //         filter.limit = Some(max_limit);
+        //     }
+        // }
+
+        Ok(consensus_graph
+            .logs(filter)
+            .map_err(|err| CfxRpcError::from(err))?
+            .iter()
+            .cloned()
+            .map(|l| Log::try_from_localized(l))
+            .collect::<Result<_, _>>()
+            .map_err(|err| CfxRpcError::from(err))?)
     }
 
     fn submit_hashrate(&self, _: U256, _: H256) -> jsonrpc_core::Result<bool> {
@@ -931,7 +950,7 @@ impl Eth for EthHandler {
 }
 
 impl EthFilter for EthHandler {
-    fn new_filter(&self, _: Filter) -> jsonrpc_core::Result<U256> {
+    fn new_filter(&self, _: EthRpcLogFilter) -> jsonrpc_core::Result<U256> {
         warn!("RPC Request (Not Supported!): eth_newFilter");
         bail!(unimplemented(Some(
             "ETH Filter RPC not implemented!".into()

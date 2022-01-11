@@ -373,6 +373,7 @@ impl<
             address,
             topics,
             data: data.to_vec(),
+            space: self.local_part.space,
         });
 
         Ok(())

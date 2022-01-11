@@ -4,10 +4,10 @@
 
 use super::super::types::{
     Account as RpcAccount, AccountPendingInfo, Block, Bytes, CallRequest,
-    CheckBalanceAgainstTransactionResponse, EpochNumber,
-    EstimateGasAndCollateralResponse, Log as RpcLog, LogFilter as RpcFilter,
-    PoSEconomics, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
-    SponsorInfo, Status as RpcStatus, TokenSupplyInfo, Transaction,
+    CfxRpcLogFilter, CheckBalanceAgainstTransactionResponse, EpochNumber,
+    EstimateGasAndCollateralResponse, Log as RpcLog, PoSEconomics,
+    Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, SponsorInfo,
+    Status as RpcStatus, TokenSupplyInfo, Transaction,
 };
 use crate::rpc::types::{
     pos::PoSEpochReward, AccountPendingTransactions, BlockHashOrEpochNumber,
@@ -167,7 +167,7 @@ pub trait Cfx {
 
     /// Returns logs matching the filter provided.
     #[rpc(name = "cfx_getLogs")]
-    fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
+    fn get_logs(&self, filter: CfxRpcLogFilter) -> BoxFuture<Vec<RpcLog>>;
 
     /// Get transaction by its hash.
     #[rpc(name = "cfx_getTransactionByHash")]
