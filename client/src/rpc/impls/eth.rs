@@ -470,14 +470,14 @@ impl Eth for EthHandler {
         &self, block_num: BlockNumber, include_txs: bool,
     ) -> jsonrpc_core::Result<Option<RpcBlock>> {
         info!("RPC Request: eth_getBlockByNumber block_number={:?} include_txs={:?}", block_num, include_txs);
-        let maybe_block = self.get_block_by_number(block_num)?;
+        let maybe_block = self.get_block_by_number(block_num);
 
         match maybe_block {
-            None => Ok(None),
-            Some(b) => {
+            Ok(Some(b)) => {
                 let inner = self.consensus_graph().inner.read();
                 Ok(Some(RpcBlock::new(&*b, include_txs, &*inner)))
-            }
+            },
+            _ => Ok(None),
         }
     }
 
