@@ -30,7 +30,7 @@ use std::collections::HashMap;
 use storage_interface::Order;
 
 fn verify_epochs(
-    db: &DiemDB, ledger_infos_with_sigs: &[LedgerInfoWithSignatures],
+    db: &PosLedgerDB, ledger_infos_with_sigs: &[LedgerInfoWithSignatures],
 ) {
     const LIMIT: usize = 2;
     let mut actual_epoch_change_lis = Vec::new();
@@ -88,7 +88,7 @@ pub fn test_save_blocks_impl(
     input: Vec<(Vec<TransactionToCommit>, LedgerInfoWithSignatures)>,
 ) {
     let tmp_dir = TempPath::new();
-    let db = DiemDB::new_for_test(&tmp_dir);
+    let db = PosLedgerDB::new_for_test(&tmp_dir);
 
     let num_batches = input.len();
     let mut cur_ver = 0;
@@ -148,7 +148,7 @@ fn test_sync_transactions_impl(
     input: Vec<(Vec<TransactionToCommit>, LedgerInfoWithSignatures)>,
 ) {
     let tmp_dir = TempPath::new();
-    let db = DiemDB::new_for_test(&tmp_dir);
+    let db = PosLedgerDB::new_for_test(&tmp_dir);
 
     let num_batches = input.len();
     let mut cur_ver = 0;
@@ -343,7 +343,7 @@ fn group_events_by_event_key(
 }
 
 fn verify_committed_transactions(
-    _db: &DiemDB, _txns_to_commit: &[TransactionToCommit],
+    _db: &PosLedgerDB, _txns_to_commit: &[TransactionToCommit],
     _first_version: Version, _ledger_info_with_sigs: &LedgerInfoWithSignatures,
     _is_latest: bool,
 )
@@ -402,7 +402,7 @@ fn test_get_first_seq_num_and_limit() {
 #[test]
 fn test_too_many_requested() {
     let tmp_dir = TempPath::new();
-    let db = DiemDB::new_for_test(&tmp_dir);
+    let db = PosLedgerDB::new_for_test(&tmp_dir);
 
     assert!(db.get_transactions(0, 1001 /* limit */, 0, true).is_err());
 }
@@ -410,7 +410,7 @@ fn test_too_many_requested() {
 #[test]
 fn test_get_latest_tree_state() {
     let tmp_dir = TempPath::new();
-    let db = DiemDB::new_for_test(&tmp_dir);
+    let db = PosLedgerDB::new_for_test(&tmp_dir);
 
     // entirely emtpy db
     let empty = db.get_latest_tree_state().unwrap();
@@ -449,7 +449,7 @@ fn test_get_latest_tree_state() {
 }
 
 fn put_transaction_info(
-    db: &DiemDB, version: Version, txn_info: &TransactionInfo,
+    db: &PosLedgerDB, version: Version, txn_info: &TransactionInfo,
 ) {
     let mut cs = ChangeSet::new();
     db.ledger_store

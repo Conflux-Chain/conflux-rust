@@ -24,12 +24,12 @@ use storage_interface::{DbReaderWriter, TreeState};
 mod logging;
 mod speculation_cache;
 
-pub struct CachedDiemDB {
+pub struct CachedPosLedgerDB {
     pub db: DbReaderWriter,
     pub cache: Mutex<SpeculationCache>,
 }
 
-impl CachedDiemDB {
+impl CachedPosLedgerDB {
     pub fn new(db: DbReaderWriter) -> Self {
         let startup_info = db
             .reader

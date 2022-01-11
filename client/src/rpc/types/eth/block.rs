@@ -19,7 +19,7 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::rpc::types::{eth::Transaction, Bytes};
-use cfx_types::{Bloom as H2048, H160, H256, U256};
+use cfx_types::{Bloom as H2048, Space, H160, H256, U256};
 use cfxcore::{
     block_data_manager::DataVersionTuple, consensus::ConsensusGraphInner,
 };
@@ -202,11 +202,14 @@ impl Block {
                 BlockTransactions::Full(
                     b.transactions
                         .iter()
+                        .filter(|tx| tx.space() == Space::Ethereum)
                         .map(|t| Transaction::from_signed(t))
                         .collect(),
                 )
             } else {
-                BlockTransactions::Hashes(b.transaction_hashes())
+                BlockTransactions::Hashes(
+                    b.transaction_hashes(Some(Space::Ethereum)),
+                )
             },
             size: Some(U256::from(b.size())),
         }

@@ -14,7 +14,7 @@ structopt = "0.3.21"
 tempfile = "3.2.0"
 
 compiled-stdlib = { path = "../../language/diem-framework/compiled" }
-diemdb = { path = "../diemdb" }
+pos-ledger-db = { path = "../pos-ledger-db" }
 diem-config = { path = "../../config" }
 diem-crypto = { path = "../../crypto/crypto" }
 diem-types = { path = "../../types" }

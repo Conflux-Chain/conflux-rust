@@ -44,6 +44,8 @@ pub struct Executed {
     pub output: Bytes,
     /// The trace of this transaction.
     pub trace: Vec<ExecTrace>,
+    /// An accurate gas estimation for gas usage, used in rpc
+    pub estimated_gas_limit: Option<U256>,
 }
 
 #[derive(Debug)]
@@ -154,6 +156,7 @@ impl Executed {
             storage_released: Vec::new(),
             output: Default::default(),
             trace,
+            estimated_gas_limit: None,
         }
     }
 
@@ -178,6 +181,7 @@ impl Executed {
             storage_released: Vec::new(),
             output: Default::default(),
             trace,
+            estimated_gas_limit: None,
         }
     }
 }

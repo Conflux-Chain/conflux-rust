@@ -1,5 +1,5 @@
 [package]
-name = "cached-diemdb"
+name = "cached-pos-ledger-db"
 version = "0.1.0"
 edition = "2018"
 
@@ -8,7 +8,7 @@ anyhow = "1.0.38"
 serde = { version = "1.0.124", features = ["derive"] }
 
 consensus-types = { path = "../../consensus/consensus-types"}
-diemdb = { path = "../diemdb" }
+pos-ledger-db = { path = "../pos-ledger-db" }
 diem-crypto = { path = "../../crypto/crypto" }
 diem-infallible = { path = "../../common/infallible" }
 diem-logger = { path = "../../common/logger" }

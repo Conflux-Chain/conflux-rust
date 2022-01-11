@@ -243,7 +243,7 @@ impl PersistentLivenessStorage for MockStorage {
         Ok(EpochChangeProof::new(vec![lis], false))
     }
 
-    fn diem_db(&self) -> Arc<dyn DbReader> { unimplemented!() }
+    fn pos_ledger_db(&self) -> Arc<dyn DbReader> { unimplemented!() }
 }
 
 /// A storage that ignores any requests, used in the tests that don't care about
@@ -306,5 +306,5 @@ impl PersistentLivenessStorage for EmptyStorage {
         unimplemented!()
     }
 
-    fn diem_db(&self) -> Arc<dyn DbReader> { unimplemented!() }
+    fn pos_ledger_db(&self) -> Arc<dyn DbReader> { unimplemented!() }
 }

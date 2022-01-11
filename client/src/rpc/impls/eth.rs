@@ -719,7 +719,7 @@ impl Eth for EthHandler {
                 // When a revert exception happens, there is usually an error in the sub-calls.
                 // So we return the trace information for debugging contract.
                 let errors = ErrorUnwind::from_traces(executed.trace).errors.iter()
-                    .map(|(addr,error)| {
+                    .map(|(addr, error)| {
                         format!("{}: {}", addr, error)
                     })
                     .collect::<Vec<String>>();
@@ -727,8 +727,8 @@ impl Eth for EthHandler {
                 // Decode revert error
                 let revert_error = revert_reason_decode(&executed.output);
                 let revert_error = if !revert_error.is_empty() {
-                    format!(": {}.",revert_error)
-                }else{
+                    format!(": {}.", revert_error)
+                } else {
                     format!(".")
                 };
 
@@ -761,20 +761,24 @@ impl Eth for EthHandler {
         // MAX_GAS_CALL_REQUEST, 0.8 is chosen to check if it's close.
         const TOO_MUCH_GAS_USED: u64 =
             (0.8 * (MAX_GAS_CALL_REQUEST as f32)) as u64;
-        if executed.gas_used >= U256::from(TOO_MUCH_GAS_USED) {
+        // TODO: this value should always be Some(..) unless incorrect
+        // implementation. Should return an error for server bugs later.
+        let estimated_gas_limit =
+            executed.estimated_gas_limit.unwrap_or(U256::zero());
+        if estimated_gas_limit >= U256::from(TOO_MUCH_GAS_USED) {
             bail!(call_execution_error(
                 format!(
                     "Gas too high. Most likely there are problems within the contract code. \
                     gas {}",
-                    executed.gas_used
+                    estimated_gas_limit
                 ),
                 format!(
-                    "gas {}", executed.gas_used
+                    "gas {}", estimated_gas_limit
                 )
                 .into_bytes(),
             ));
         }
-        Ok(executed.gas_used * 4 / 3)
+        Ok(estimated_gas_limit)
     }
 
     fn transaction_by_hash(
@@ -872,7 +876,9 @@ impl Eth for EthHandler {
                         None => return Ok(None), /* This should not happen */
                         // though
                         Some(b) => {
-                            return Ok(Some(RpcBlock::new(&*b, false, &*inner)))
+                            return Ok(Some(RpcBlock::new(
+                                &*b, false, &*inner,
+                            )));
                         }
                     }
                 }
@@ -902,7 +908,9 @@ impl Eth for EthHandler {
                         None => return Ok(None), /* This should not happen */
                         // though
                         Some(b) => {
-                            return Ok(Some(RpcBlock::new(&*b, false, &*inner)))
+                            return Ok(Some(RpcBlock::new(
+                                &*b, false, &*inner,
+                            )));
                         }
                     }
                 }

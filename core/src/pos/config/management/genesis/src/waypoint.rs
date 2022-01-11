@@ -10,7 +10,7 @@ use diem_management::{config::ConfigPath, error::Error, secure_backend::SharedBa
 use diem_temppath::TempPath;
 use diem_types::{chain_id::ChainId, waypoint::Waypoint};
 use diem_vm::DiemVM;
-use diemdb::DiemDB;
+use pos_ledger_db::DiemDB;
 use executor::db_bootstrapper;
 use storage_interface::DbReaderWriter;
 use structopt::StructOpt;

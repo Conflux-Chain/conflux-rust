@@ -6,7 +6,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::*;
-use crate::{pruner, DiemDB};
+use crate::{pruner, PosLedgerDB};
 use diem_jellyfish_merkle::restore::JellyfishMerkleRestore;
 use diem_temppath::TempPath;
 use diem_types::{
@@ -80,7 +80,7 @@ fn verify_state_in_store(
 #[test]
 fn test_empty_store() {
     let tmp_dir = TempPath::new();
-    let db = DiemDB::new_for_test(&tmp_dir);
+    let db = PosLedgerDB::new_for_test(&tmp_dir);
     let store = &db.state_store;
     let address = AccountAddress::new([1u8; AccountAddress::LENGTH]);
     assert!(store
@@ -91,7 +91,7 @@ fn test_empty_store() {
 #[test]
 fn test_state_store_reader_writer() {
     let tmp_dir = TempPath::new();
-    let db = DiemDB::new_for_test(&tmp_dir);
+    let db = PosLedgerDB::new_for_test(&tmp_dir);
     let store = &db.state_store;
     let address1 = AccountAddress::new([1u8; AccountAddress::LENGTH]);
     let address2 = AccountAddress::new([2u8; AccountAddress::LENGTH]);
@@ -145,7 +145,7 @@ fn test_retired_records() {
     let value3_update = AccountStateBlob::from(vec![0x13]);
 
     let tmp_dir = TempPath::new();
-    let db = DiemDB::new_for_test(&tmp_dir);
+    let db = PosLedgerDB::new_for_test(&tmp_dir);
     let store = &db.state_store;
 
     // Update.
@@ -238,7 +238,7 @@ proptest! {
         let kvs: Vec<_> = input.into_iter().collect();
 
         let tmp_dir = TempPath::new();
-        let db = DiemDB::new_for_test(&tmp_dir);
+        let db = PosLedgerDB::new_for_test(&tmp_dir);
         let store = &db.state_store;
         init_store(&store, kvs.clone().into_iter());
 
@@ -268,7 +268,7 @@ proptest! {
             })
     ) {
         let tmp_dir1 = TempPath::new();
-        let db1 = DiemDB::new_for_test(&tmp_dir1);
+        let db1 = PosLedgerDB::new_for_test(&tmp_dir1);
         let store1 = &db1.state_store;
         init_store(&store1, input.clone().into_iter());
 
@@ -276,7 +276,7 @@ proptest! {
         let expected_root_hash = store1.get_root_hash(version).unwrap();
 
         let tmp_dir2 = TempPath::new();
-        let db2 = DiemDB::new_for_test(&tmp_dir2);
+        let db2 = PosLedgerDB::new_for_test(&tmp_dir2);
         let store2 = &db2.state_store;
 
         let mut restore =
@@ -326,7 +326,7 @@ proptest! {
             })
     ) {
         let tmp_dir1 = TempPath::new();
-        let db1 = DiemDB::new_for_test(&tmp_dir1);
+        let db1 = PosLedgerDB::new_for_test(&tmp_dir1);
         let store1 = &db1.state_store;
         init_store(&store1, input.clone().into_iter());
 
@@ -334,7 +334,7 @@ proptest! {
         let expected_root_hash = store1.get_root_hash(version).unwrap();
 
         let tmp_dir2 = TempPath::new();
-        let db2 = DiemDB::new_for_test(&tmp_dir2);
+        let db2 = PosLedgerDB::new_for_test(&tmp_dir2);
         let store2 = &db2.state_store;
 
         let mut restore =

@@ -10,7 +10,7 @@ use diem_config::utils::get_available_port;
 use diem_proptest_helpers::ValueGenerator;
 use diem_temppath::TempPath;
 use diem_types::{ledger_info::LedgerInfoWithSignatures, transaction::TransactionToCommit};
-use diemdb::{test_helper::arb_blocks_to_commit, DiemDB};
+use pos_ledger_db::{test_helper::arb_blocks_to_commit, DiemDB};
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::Arc,
