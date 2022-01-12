@@ -524,7 +524,9 @@ impl Eth for EthHandler {
             .get_data_manager()
             .block_by_hash(&hash, false);
         if let Some(block) = block_op {
-            Ok(Some(U256::from(block.transactions.len())))
+            Ok(Some(U256::from(
+                block.transaction_hashes(Some(Space::Ethereum)).len(),
+            )))
         } else {
             Ok(None)
         }
@@ -541,7 +543,9 @@ impl Eth for EthHandler {
 
         match maybe_block {
             None => Ok(None),
-            Some(b) => Ok(Some(U256::from(b.transactions.len()))),
+            Some(b) => Ok(Some(U256::from(
+                b.transaction_hashes(Some(Space::Ethereum)).len(),
+            ))),
         }
     }
 
