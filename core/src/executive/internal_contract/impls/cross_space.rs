@@ -15,6 +15,7 @@ use crate::{
         ExecTrapResult, ParamsType, ResumeCall, ResumeCreate, TrapResult,
     },
 };
+use cfx_parameters::block::CROSS_SPACE_GAS_RATIO;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
     Address, AddressSpaceUtil, AddressWithSpace, Space, H256, U256,
@@ -203,13 +204,13 @@ pub fn call_to_evmcore(
         return Err(vm::Error::InternalContract("Exceed Depth".into()));
     }
 
-    let call_gas = gas_left / 20
+    let call_gas = gas_left / CROSS_SPACE_GAS_RATIO
         + if params.value.value() > U256::zero() {
             U256::from(context.spec.call_stipend)
         } else {
             U256::zero()
         };
-    let reserved_gas = gas_left - gas_left / 20;
+    let reserved_gas = gas_left - gas_left / CROSS_SPACE_GAS_RATIO;
 
     let mapped_sender = evm_map(params.sender);
     let mapped_origin = evm_map(params.original_sender);
@@ -271,13 +272,13 @@ pub fn create_to_evmcore(
         return Err(vm::Error::InternalContract("Exceed Depth".into()));
     }
 
-    let call_gas = gas_left / 20
+    let call_gas = gas_left / CROSS_SPACE_GAS_RATIO
         + if params.value.value() > U256::zero() {
             U256::from(context.spec.call_stipend)
         } else {
             U256::zero()
         };
-    let reserved_gas = gas_left - gas_left / 20;
+    let reserved_gas = gas_left - gas_left / CROSS_SPACE_GAS_RATIO;
 
     let mapped_sender = evm_map(params.sender);
     let mapped_origin = evm_map(params.original_sender);
