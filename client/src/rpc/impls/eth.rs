@@ -875,8 +875,6 @@ impl Eth for EthHandler {
 
     fn logs(&self, filter: EthRpcLogFilter) -> jsonrpc_core::Result<Vec<Log>> {
         info!("RPC Request: eth_getLogs({:?})", filter);
-        let consensus_graph = self.consensus_graph();
-        let filter: LogFilter = filter.into_primitive()?;
 
         if let Some(max_limit) = self.config.get_logs_filter_max_limit {
             if filter.limit.is_none() || filter.limit.unwrap() > max_limit {
@@ -888,7 +886,11 @@ impl Eth for EthHandler {
             }
         }
 
-        Ok(consensus_graph
+        let filter: LogFilter =
+            filter.into_primitive(self.consensus.clone())?;
+
+        Ok(self
+            .consensus_graph()
             .logs(filter)
             .map_err(|err| CfxRpcError::from(err))?
             .iter()
