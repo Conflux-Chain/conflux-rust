@@ -35,7 +35,7 @@ use crate::rpc::{
         call_execution_error, invalid_params,
         request_rejected_in_catch_up_mode, unimplemented,
     },
-    impls::cfx::BlockExecInfo,
+    impls::{cfx::BlockExecInfo, RpcImplConfiguration},
     traits::eth::{Eth, EthFilter},
     types::{
         eth::{
@@ -47,6 +47,7 @@ use crate::rpc::{
 };
 
 pub struct EthHandler {
+    config: RpcImplConfiguration,
     consensus: SharedConsensusGraph,
     sync: SharedSynchronizationService,
     tx_pool: SharedTransactionPool,
@@ -54,11 +55,12 @@ pub struct EthHandler {
 
 impl EthHandler {
     pub fn new(
-        consensus: SharedConsensusGraph, sync: SharedSynchronizationService,
-        tx_pool: SharedTransactionPool,
+        config: RpcImplConfiguration, consensus: SharedConsensusGraph,
+        sync: SharedSynchronizationService, tx_pool: SharedTransactionPool,
     ) -> Self
     {
         EthHandler {
+            config,
             consensus,
             sync,
             tx_pool,
@@ -98,10 +100,6 @@ impl EthHandler {
     ) -> jsonrpc_core::Result<Option<Arc<Block>>> {
         let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
-        info!(
-            "RPC Request: eth_getBlockTransactionCountByHash block_number={:?}",
-            block_num
-        );
 
         let epoch_height = consensus_graph
             .get_height_from_epoch_number(block_num.into())
@@ -111,6 +109,7 @@ impl EthHandler {
             .get_pivot_hash_from_epoch_number(epoch_height)
             .map_err(RpcError::invalid_params)?;
 
+        // TODO: combine all blocks from epoch
         Ok(self
             .consensus
             .get_data_manager()
@@ -879,14 +878,15 @@ impl Eth for EthHandler {
         let consensus_graph = self.consensus_graph();
         let filter: LogFilter = filter.into_primitive()?;
 
-        // // If max_limit is set, the value in `filter` will be modified to
-        // // satisfy this limitation to avoid loading too many blocks
-        // // TODO Should the response indicate that the filter is modified?
-        // if let Some(max_limit) = self.config.get_logs_filter_max_limit {
-        //     if filter.limit.is_none() || filter.limit.unwrap() > max_limit {
-        //         filter.limit = Some(max_limit);
-        //     }
-        // }
+        if let Some(max_limit) = self.config.get_logs_filter_max_limit {
+            if filter.limit.is_none() || filter.limit.unwrap() > max_limit {
+                // fail so that different behavior from eth is easy to detect
+                bail!(invalid_params(
+                    "filter",
+                    format!("This node only allows filters with `limit` set to {} or less", max_limit))
+                );
+            }
+        }
 
         Ok(consensus_graph
             .logs(filter)
