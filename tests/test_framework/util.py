@@ -283,7 +283,6 @@ def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="
     private_keys_dir = os.path.join(dirname, "private_keys")
     if start_index is None:
         start_index = 0
-    print(start_index, nodes)
     for n in range(start_index, start_index + nodes):
         datadir = get_datadir_path(dirname, n)
         if not os.path.isdir(datadir):

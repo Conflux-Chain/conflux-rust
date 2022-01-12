@@ -5,6 +5,7 @@
 use crate::{message::Bytes, vm};
 use cfx_internal_common::{ChainIdParams, ChainIdParamsInner};
 use cfx_parameters::{
+    block::{EVM_TRANSACTION_BLOCK_RATIO, EVM_TRANSACTION_GAS_RATIO},
     consensus::{ONE_UCFX_IN_DRIP, TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT},
     consensus_internal::{
         ANTICONE_PENALTY_RATIO, INITIAL_BASE_MINING_REWARD_IN_UCFX,
@@ -38,6 +39,11 @@ pub struct CommonParams {
     pub anticone_penalty_ratio: u64,
     /// Initial base rewards according to block height.
     pub base_block_rewards: BTreeMap<BlockHeight, U256>,
+    /// The ratio of blocks in the EVM transactions
+    pub evm_transaction_block_ratio: u64,
+    /// The gas ratio of evm transactions for the block can pack the EVM
+    /// transactions
+    pub evm_transaction_gas_ratio: u64,
 
     /// Set the internal contracts to state at the genesis blocks, even if it
     /// is not activated.
@@ -96,6 +102,8 @@ impl Default for CommonParams {
             max_transaction_size: 300 * 1024,
             anticone_penalty_ratio: ANTICONE_PENALTY_RATIO,
             base_block_rewards,
+            evm_transaction_block_ratio: EVM_TRANSACTION_BLOCK_RATIO,
+            evm_transaction_gas_ratio: EVM_TRANSACTION_GAS_RATIO,
             early_set_internal_contracts_states: false,
             transition_numbers: Default::default(),
             transition_heights: Default::default(),

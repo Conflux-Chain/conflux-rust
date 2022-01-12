@@ -3,12 +3,15 @@ use crate::{
     executive::ExecutiveResult,
     vm::{ActionParams, Result as VmResult},
 };
-use cfx_parameters::internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS;
+use cfx_parameters::{
+    block::CROSS_SPACE_GAS_RATIO,
+    internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS,
+};
 use cfx_state::tracer::{AddressPocket, StateTracer};
 use cfx_types::U256;
 
 const EVM_RATIO: (u64, u64) = (64, 63);
-const CROSS_SPACE_RATIO: (u64, u64) = (20, 1);
+const CROSS_SPACE_RATIO: (u64, u64) = (CROSS_SPACE_GAS_RATIO, 1);
 
 struct ExecutiveLevel {
     init_gas: U256,

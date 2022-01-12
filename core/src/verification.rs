@@ -441,12 +441,15 @@ impl VerificationConfig {
         let mut block_total_gas = U256::zero();
 
         let block_height = block.block_header.height();
-        let evm_space_gas_limit =
-            if block_height % EVM_TRANSACTION_BLOCK_RATIO == 0 {
-                *block.block_header.gas_limit() / EVM_TRANSACTION_GAS_RATIO
-            } else {
-                U256::zero()
-            };
+        let evm_space_gas_limit = if block_height
+            % self.machine.params().evm_transaction_block_ratio
+            == 0
+        {
+            *block.block_header.gas_limit()
+                / self.machine.params().evm_transaction_gas_ratio
+        } else {
+            U256::zero()
+        };
         let mut evm_total_gas = U256::zero();
         let transitions = &self.machine.params().transition_heights;
         for t in &block.transactions {

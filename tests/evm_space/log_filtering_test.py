@@ -168,7 +168,7 @@ class CrossSpaceLogFilteringTest(ConfluxTestFramework):
             "to": None,
             "value": 0,
             "gasPrice": 1,
-            "gas": 150000,
+            "gas": 210000,
             "nonce": nonce,
             "chainId": 10,
             "data": bytecode,
@@ -181,6 +181,7 @@ class CrossSpaceLogFilteringTest(ConfluxTestFramework):
         self.rpc.generate_block(1)
         self.rpc.generate_blocks(20, 1)
         receipt = self.w3.eth.waitForTransactionReceipt(tx_hash)
+        print(receipt)
         assert_equal(receipt["status"], 1)
         addr = receipt["contractAddress"]
         return addr
