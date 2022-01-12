@@ -101,7 +101,7 @@ pub(crate) struct BlockExecInfo {
 }
 
 pub struct RpcImpl {
-    config: RpcImplConfiguration,
+    pub config: RpcImplConfiguration,
     pub consensus: SharedConsensusGraph,
     pub sync: SharedSynchronizationService,
     block_gen: Arc<BlockGenerator>,

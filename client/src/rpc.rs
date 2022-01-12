@@ -208,6 +208,7 @@ fn setup_rpc_apis(
             Api::Evm => {
                 info!("Add EVM RPC");
                 let evm = EthHandler::new(
+                    rpc.config.clone(),
                     rpc.consensus.clone(),
                     rpc.sync.clone(),
                     rpc.tx_pool.clone(),
