@@ -32,6 +32,7 @@ class Web3Test(ConfluxTestFramework):
         self.num_nodes = 2
         self.conf_parameters = {
             "log_level": "\"debug\"",
+            "evm_transaction_block_ratio": 1,
             # "public_rpc_apis": "\"cfx,evm,debug,test,pubsub,trace\"",
         }
 
@@ -89,7 +90,7 @@ class Web3Test(ConfluxTestFramework):
 
         client = RpcClient(self.nodes[0])
         client.generate_block(1)
-        client.generate_blocks(20, 1)
+        client.generate_blocks(10)
         receipt = self.w3.eth.waitForTransactionReceipt(tx_hash)
         assert_equal(receipt["status"], 1)
 

@@ -26,10 +26,7 @@ use crate::{
     vm::Spec,
 };
 use account_cache::AccountCache;
-use cfx_parameters::block::{
-    DEFAULT_TARGET_BLOCK_GAS_LIMIT, EVM_TRANSACTION_BLOCK_RATIO,
-    EVM_TRANSACTION_GAS_RATIO,
-};
+use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_statedb::{Result as StateDbResult, StateDb};
 use cfx_storage::{StateIndex, StorageManagerTrait};
 use cfx_types::{AddressWithSpace as Address, AllChainID, H256, U256};
@@ -798,10 +795,10 @@ impl TransactionPool {
         let target_gas_limit = self.config.target_block_gas_limit.into();
         let self_gas_limit = min(max(target_gas_limit, gas_lower), gas_upper);
         let evm_gas_limit = if (consensus_best_info_clone.best_epoch_number + 1)
-            % EVM_TRANSACTION_BLOCK_RATIO
+            % self.machine.params().evm_transaction_block_ratio
             == 0
         {
-            self_gas_limit / EVM_TRANSACTION_GAS_RATIO
+            self_gas_limit / self.machine.params().evm_transaction_gas_ratio
         } else {
             U256::zero()
         };

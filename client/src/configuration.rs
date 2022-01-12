@@ -116,6 +116,8 @@ build_config! {
         (log_conf, (Option<String>), None)
         (log_file, (Option<String>), None)
         (max_block_size_in_bytes, (usize), MAX_BLOCK_SIZE_IN_BYTES)
+        (evm_transaction_block_ratio,(u64),EVM_TRANSACTION_BLOCK_RATIO)
+        (evm_transaction_gas_ratio,(u64),EVM_TRANSACTION_GAS_RATIO)
         (metrics_enabled, (bool), false)
         (metrics_influxdb_host, (Option<String>), None)
         (metrics_influxdb_db, (String), "conflux".into())
@@ -1079,6 +1081,10 @@ impl Configuration {
 
         params.chain_id = self.chain_id_params();
         params.anticone_penalty_ratio = self.raw_conf.anticone_penalty_ratio;
+        params.evm_transaction_block_ratio =
+            self.raw_conf.evm_transaction_block_ratio;
+        params.evm_transaction_gas_ratio =
+            self.raw_conf.evm_transaction_gas_ratio;
 
         params.transition_heights.cip40 =
             self.raw_conf.tanzanite_transition_height;

@@ -1217,7 +1217,11 @@ impl<Cost: CostType> Interpreter<Cost> {
                 self.stack.push(U256::from(context.env().timestamp));
             }
             instructions::NUMBER => {
-                self.stack.push(U256::from(context.env().number));
+                let block_number = match context.space() {
+                    Space::Native => context.env().number,
+                    Space::Ethereum => context.env().epoch_height,
+                };
+                self.stack.push(U256::from(block_number));
             }
             instructions::DIFFICULTY => {
                 self.stack.push(context.env().difficulty.clone());
