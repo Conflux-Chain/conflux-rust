@@ -162,6 +162,14 @@ pub fn invalid_params<T: fmt::Debug>(param: &str, details: T) -> Error {
     }
 }
 
+pub fn internal_error<T: fmt::Debug>(details: T) -> Error {
+    Error {
+        code: ErrorCode::InternalError,
+        message: "Internal error".into(),
+        data: Some(Value::String(format!("{:?}", details))),
+    }
+}
+
 pub fn call_execution_error(message: String, output: Vec<u8>) -> Error {
     Error {
         code: ErrorCode::ServerError(codes::CALL_EXECUTION_ERROR),
