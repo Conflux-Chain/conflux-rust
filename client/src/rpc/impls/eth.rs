@@ -548,17 +548,12 @@ impl Eth for EthHandler {
         &self, hash: H256,
     ) -> jsonrpc_core::Result<Option<U256>> {
         info!("RPC Request: eth_getUncleCountByBlockHash hash={:?}", hash,);
-        Ok(Some(U256::zero()))
-        /*let maybe_block = self
+        let maybe_block = self
             .consensus
             .get_data_manager()
             .block_by_hash(&hash, false);
-        match maybe_block {
-            None => Ok(None),
-            Some(b) => {
-                Ok(Some(U256::from(b.block_header.referee_hashes().len())))
-            }
-        }*/
+
+        Ok(maybe_block.map(|_| 0.into()))
     }
 
     fn block_uncles_count_by_number(
@@ -568,14 +563,8 @@ impl Eth for EthHandler {
             "RPC Request: eth_getUncleCountByBlockNumber block_number={:?}",
             block_num
         );
-        Ok(Some(U256::zero()))
-        /*let maybe_block = self.get_block_by_number(block_num)?;
-        match maybe_block {
-            None => Ok(None),
-            Some(b) => {
-                Ok(Some(U256::from(b.block_header.referee_hashes().len())))
-            }
-        }*/
+        let maybe_block = self.get_block_by_number(block_num)?;
+        Ok(maybe_block.map(|_| 0.into()))
     }
 
     fn code_at(
@@ -856,69 +845,16 @@ impl Eth for EthHandler {
             "RPC Request: eth_getUncleByBlockHashAndIndex hash={:?}, idx={:?}",
             hash, idx
         );
+        // We do not have uncle block
         Ok(None)
-        /*let maybe_block = self
-            .consensus
-            .get_data_manager()
-            .block_by_hash(&hash, false);
-        let index = idx.value();
-        match maybe_block {
-            None => return Ok(None),
-            Some(b) => {
-                if b.block_header.referee_hashes().len() <= index {
-                    return Ok(None);
-                } else {
-                    let ref_hash = b.block_header.referee_hashes()[index];
-                    let block = self
-                        .consensus
-                        .get_data_manager()
-                        .block_by_hash(&ref_hash, false);
-                    let inner = self.consensus_graph().inner.read();
-                    match block {
-                        None => return Ok(None), /* This should not happen */
-                        // though
-                        Some(b) => {
-                            return Ok(Some(RpcBlock::new(
-                                &*b, false, &*inner,
-                            )));
-                        }
-                    }
-                }
-            }
-        }*/
     }
 
     fn uncle_by_block_number_and_index(
         &self, block_num: BlockNumber, idx: Index,
     ) -> jsonrpc_core::Result<Option<RpcBlock>> {
         info!("RPC Request: eth_getUncleByBlockNumberAndIndex block_num={:?}, idx={:?}", block_num, idx);
+        // We do not have uncle block
         Ok(None)
-        /*let maybe_block = self.get_block_by_number(block_num)?;
-        let index = idx.value();
-        match maybe_block {
-            None => return Ok(None),
-            Some(b) => {
-                if b.block_header.referee_hashes().len() <= index {
-                    return Ok(None);
-                } else {
-                    let ref_hash = b.block_header.referee_hashes()[index];
-                    let block = self
-                        .consensus
-                        .get_data_manager()
-                        .block_by_hash(&ref_hash, false);
-                    let inner = self.consensus_graph().inner.read();
-                    match block {
-                        None => return Ok(None), /* This should not happen */
-                        // though
-                        Some(b) => {
-                            return Ok(Some(RpcBlock::new(
-                                &*b, false, &*inner,
-                            )));
-                        }
-                    }
-                }
-            }
-        }*/
     }
 
     fn logs(&self, _: Filter) -> jsonrpc_core::Result<Vec<Log>> {
