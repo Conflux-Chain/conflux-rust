@@ -26,8 +26,10 @@ class TestTrace(RpcClient):
                         'action': {
                             'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
                             'fromPocket': 'balance',
+                            'fromSpace': 'native',
                             'to': 'NET10:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFDGG0RTY',
                             'toPocket': 'gas_payment',
+                            'toSpace': 'none',
                             'value': '0x5208'
                         },
                         'type': 'internal_transfer_action',
@@ -35,6 +37,7 @@ class TestTrace(RpcClient):
                     }, {
                         'action': {
                             'callType': 'call',
+                            'space': 'native',
                             'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
                             'gas': '0x0',
                             'input': '0x',
@@ -55,8 +58,10 @@ class TestTrace(RpcClient):
                         'action': {
                             'from': 'NET10:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFDGG0RTY',
                             'fromPocket': 'gas_payment',
+                            'fromSpace': 'none',
                             'to': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
                             'toPocket': 'balance',
+                            'toSpace': 'native',
                             'value': '0x0'
                         },
                         'type': 'internal_transfer_action',
@@ -106,8 +111,10 @@ class TestTrace(RpcClient):
                 'action': {
                     'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
                     'fromPocket': 'balance',
+                    'fromSpace': 'native',
                     'to': 'NET10:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFDGG0RTY',
                     'toPocket': 'gas_payment',
+                    'toSpace': 'none',
                     'value': '0x5208'
 
                 },
@@ -122,6 +129,7 @@ class TestTrace(RpcClient):
                 'type': 'call',
                 'action': {
                     'callType': 'call',
+                    'space': 'native',
                     'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
                     'gas': '0x0',
                     'input': '0x',
@@ -151,8 +159,10 @@ class TestTrace(RpcClient):
                 'action': {
                     'from': 'NET10:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFDGG0RTY',
                     'fromPocket': 'gas_payment',
+                    'fromSpace': 'none',
                     'to': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
                     'toPocket': 'balance',
+                    'toSpace': 'native',
                     'value': '0x0'
                 },
                 'valid': True,
@@ -177,8 +187,10 @@ class TestTrace(RpcClient):
                 'action': {
                     'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
                     'fromPocket': 'balance',
+                    'fromSpace': 'native',
                     'to': 'NET10:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFDGG0RTY',
                     'toPocket': 'gas_payment',
+                    'toSpace': 'none',
                     'value': '0x5208'
                 },
                 'valid': True,
@@ -191,6 +203,7 @@ class TestTrace(RpcClient):
             }, {
                 'action': {
                     'callType': 'call',
+                    'space': 'native',
                     'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
                     'gas': '0x0',
                     'input': '0x',
@@ -221,8 +234,10 @@ class TestTrace(RpcClient):
                 'action': {
                     'from': 'NET10:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFDGG0RTY',
                     'fromPocket': 'gas_payment',
+                    'fromSpace': 'none',
                     'to': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
                     'toPocket': 'balance',
+                    'toSpace': 'native',
                     'value': '0x0'
                 },
                 'valid': True,

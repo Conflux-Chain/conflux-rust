@@ -16,16 +16,16 @@ use cfxcore::{
         contract_address, revert_reason_decode, ExecutionError,
         ExecutionOutcome, TxDropError,
     },
+    observer::ErrorUnwind,
     rpc_errors::{
         invalid_params_check, Error as CfxRpcError, Result as CfxRpcResult,
     },
-    trace::ErrorUnwind,
     vm::{self, CreateContractAddress},
     ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
 use primitives::{
-    receipt::TRANSACTION_OUTCOME_SUCCESS, Action, Block,
+    filter::LogFilter, receipt::TRANSACTION_OUTCOME_SUCCESS, Action, Block,
     BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, SignedTransaction,
     StorageKey, StorageValue, TransactionIndex, TransactionWithSignature,
 };
@@ -39,8 +39,8 @@ use crate::rpc::{
     traits::eth::{Eth, EthFilter},
     types::{
         eth::{
-            Block as RpcBlock, BlockNumber, CallRequest, Filter, FilterChanges,
-            Log, Receipt, SyncInfo, SyncStatus, Transaction,
+            Block as RpcBlock, BlockNumber, CallRequest, EthRpcLogFilter,
+            FilterChanges, Log, Receipt, SyncInfo, SyncStatus, Transaction,
         },
         Bytes, Index, MAX_GAS_CALL_REQUEST,
     },
@@ -236,6 +236,7 @@ impl EthHandler {
         };
 
         let contract_address = if let Action::Create = tx.action() {
+            // TODO(thegaram): do not return address if failed
             let (contract_address, _) = contract_address(
                 CreateContractAddress::FromSenderNonce,
                 0.into(),
@@ -257,6 +258,7 @@ impl EthHandler {
         let logs = primitive_receipt
             .logs
             .iter()
+            .filter(|l| l.space == Space::Ethereum)
             .cloned()
             .map(|log| Log {
                 address: log.address,
@@ -268,7 +270,6 @@ impl EthHandler {
                 transaction_index,
                 log_index: None, // TODO: EVM core: count log_index
                 transaction_log_index: None,
-                log_type: "".to_string(),
                 removed: false,
             })
             .collect();
@@ -470,34 +471,41 @@ impl Eth for EthHandler {
         &self, block_num: BlockNumber, include_txs: bool,
     ) -> jsonrpc_core::Result<Option<RpcBlock>> {
         info!("RPC Request: eth_getBlockByNumber block_number={:?} include_txs={:?}", block_num, include_txs);
-        let maybe_block = self.get_block_by_number(block_num)?;
+        let maybe_block = self.get_block_by_number(block_num);
 
         match maybe_block {
-            None => Ok(None),
-            Some(b) => {
+            Ok(Some(b)) => {
                 let inner = self.consensus_graph().inner.read();
                 Ok(Some(RpcBlock::new(&*b, include_txs, &*inner)))
             }
+            _ => Ok(None),
         }
     }
 
     fn transaction_count(
         &self, address: H160, num: Option<BlockNumber>,
     ) -> jsonrpc_core::Result<U256> {
-        let consensus_graph = self.consensus_graph();
-
-        let num = num.map(Into::into).unwrap_or(EpochNumber::LatestState);
-
         info!(
             "RPC Request: eth_getTransactionCount address={:?} block_number={:?}",
             address, num
         );
 
-        Ok(consensus_graph.next_nonce(
-            address.with_native_space(),
-            BlockHashOrEpochNumber::EpochNumber(num),
-            "num",
-        )?)
+        let nonce = match num {
+            Some(BlockNumber::Pending) => {
+                self.tx_pool.get_next_nonce(&address.with_evm_space())
+            }
+            _ => {
+                let num =
+                    num.map(Into::into).unwrap_or(EpochNumber::LatestState);
+                self.consensus_graph().next_nonce(
+                    address.with_evm_space(),
+                    BlockHashOrEpochNumber::EpochNumber(num),
+                    "num",
+                )?
+            }
+        };
+
+        Ok(nonce)
     }
 
     fn block_transaction_count_by_hash(
@@ -516,7 +524,9 @@ impl Eth for EthHandler {
             .get_data_manager()
             .block_by_hash(&hash, false);
         if let Some(block) = block_op {
-            Ok(Some(U256::from(block.transactions.len())))
+            Ok(Some(U256::from(
+                block.transaction_hashes(Some(Space::Ethereum)).len(),
+            )))
         } else {
             Ok(None)
         }
@@ -533,7 +543,9 @@ impl Eth for EthHandler {
 
         match maybe_block {
             None => Ok(None),
-            Some(b) => Ok(Some(U256::from(b.transactions.len()))),
+            Some(b) => Ok(Some(U256::from(
+                b.transaction_hashes(Some(Space::Ethereum)).len(),
+            ))),
         }
     }
 
@@ -545,12 +557,8 @@ impl Eth for EthHandler {
             .consensus
             .get_data_manager()
             .block_by_hash(&hash, false);
-        match maybe_block {
-            None => Ok(None),
-            Some(b) => {
-                Ok(Some(U256::from(b.block_header.referee_hashes().len())))
-            }
-        }
+
+        Ok(maybe_block.map(|_| 0.into()))
     }
 
     fn block_uncles_count_by_number(
@@ -561,12 +569,7 @@ impl Eth for EthHandler {
             block_num
         );
         let maybe_block = self.get_block_by_number(block_num)?;
-        match maybe_block {
-            None => Ok(None),
-            Some(b) => {
-                Ok(Some(U256::from(b.block_header.referee_hashes().len())))
-            }
-        }
+        Ok(maybe_block.map(|_| 0.into()))
     }
 
     fn code_at(
@@ -711,7 +714,7 @@ impl Eth for EthHandler {
                 // When a revert exception happens, there is usually an error in the sub-calls.
                 // So we return the trace information for debugging contract.
                 let errors = ErrorUnwind::from_traces(executed.trace).errors.iter()
-                    .map(|(addr,error)| {
+                    .map(|(addr, error)| {
                         format!("{}: {}", addr, error)
                     })
                     .collect::<Vec<String>>();
@@ -719,8 +722,8 @@ impl Eth for EthHandler {
                 // Decode revert error
                 let revert_error = revert_reason_decode(&executed.output);
                 let revert_error = if !revert_error.is_empty() {
-                    format!(": {}.",revert_error)
-                }else{
+                    format!(": {}.", revert_error)
+                } else {
                     format!(".")
                 };
 
@@ -753,20 +756,24 @@ impl Eth for EthHandler {
         // MAX_GAS_CALL_REQUEST, 0.8 is chosen to check if it's close.
         const TOO_MUCH_GAS_USED: u64 =
             (0.8 * (MAX_GAS_CALL_REQUEST as f32)) as u64;
-        if executed.gas_used >= U256::from(TOO_MUCH_GAS_USED) {
+        // TODO: this value should always be Some(..) unless incorrect
+        // implementation. Should return an error for server bugs later.
+        let estimated_gas_limit =
+            executed.estimated_gas_limit.unwrap_or(U256::zero());
+        if estimated_gas_limit >= U256::from(TOO_MUCH_GAS_USED) {
             bail!(call_execution_error(
                 format!(
                     "Gas too high. Most likely there are problems within the contract code. \
                     gas {}",
-                    executed.gas_used
+                    estimated_gas_limit
                 ),
                 format!(
-                    "gas {}", executed.gas_used
+                    "gas {}", estimated_gas_limit
                 )
                 .into_bytes(),
             ));
         }
-        Ok(executed.gas_used * 4 / 3)
+        Ok(estimated_gas_limit)
     }
 
     fn transaction_by_hash(
@@ -774,11 +781,23 @@ impl Eth for EthHandler {
     ) -> jsonrpc_core::Result<Option<Transaction>> {
         info!("RPC Request: eth_getTransactionByHash({:?})", hash);
 
-        if let Some((tx, _)) =
+        if let Some((tx, tx_info)) =
             self.consensus.get_transaction_info_by_hash(&hash)
         {
             return if tx.space() == Space::Ethereum {
-                Ok(Some(Transaction::from_signed(&tx)))
+                let maybe_block_number: Option<U256> = match self
+                    .get_block_execution_info(&tx_info.tx_index.block_hash)?
+                {
+                    None => None,
+                    Some(res) => Some(res.epoch_number.into()),
+                };
+                let block_info = (
+                    Some(tx_info.tx_index.block_hash),
+                    maybe_block_number,
+                    Some(tx_info.tx_index.index.into()),
+                );
+                let tx = Transaction::from_signed(&tx, block_info);
+                Ok(Some(tx))
             } else {
                 Ok(None)
             };
@@ -786,7 +805,7 @@ impl Eth for EthHandler {
 
         if let Some(tx) = self.tx_pool.get_transaction(&hash) {
             return if tx.space() == Space::Ethereum {
-                Ok(Some(Transaction::from_signed(&tx)))
+                Ok(Some(Transaction::from_signed(&tx, (None, None, None))))
             } else {
                 Ok(None)
             };
@@ -843,69 +862,40 @@ impl Eth for EthHandler {
             "RPC Request: eth_getUncleByBlockHashAndIndex hash={:?}, idx={:?}",
             hash, idx
         );
-        let maybe_block = self
-            .consensus
-            .get_data_manager()
-            .block_by_hash(&hash, false);
-        let index = idx.value();
-        match maybe_block {
-            None => return Ok(None),
-            Some(b) => {
-                if b.block_header.referee_hashes().len() <= index {
-                    return Ok(None);
-                } else {
-                    let ref_hash = b.block_header.referee_hashes()[index];
-                    let block = self
-                        .consensus
-                        .get_data_manager()
-                        .block_by_hash(&ref_hash, false);
-                    let inner = self.consensus_graph().inner.read();
-                    match block {
-                        None => return Ok(None), /* This should not happen */
-                        // though
-                        Some(b) => {
-                            return Ok(Some(RpcBlock::new(&*b, false, &*inner)))
-                        }
-                    }
-                }
-            }
-        }
+        // We do not have uncle block
+        Ok(None)
     }
 
     fn uncle_by_block_number_and_index(
         &self, block_num: BlockNumber, idx: Index,
     ) -> jsonrpc_core::Result<Option<RpcBlock>> {
         info!("RPC Request: eth_getUncleByBlockNumberAndIndex block_num={:?}, idx={:?}", block_num, idx);
-        let maybe_block = self.get_block_by_number(block_num)?;
-        let index = idx.value();
-        match maybe_block {
-            None => return Ok(None),
-            Some(b) => {
-                if b.block_header.referee_hashes().len() <= index {
-                    return Ok(None);
-                } else {
-                    let ref_hash = b.block_header.referee_hashes()[index];
-                    let block = self
-                        .consensus
-                        .get_data_manager()
-                        .block_by_hash(&ref_hash, false);
-                    let inner = self.consensus_graph().inner.read();
-                    match block {
-                        None => return Ok(None), /* This should not happen */
-                        // though
-                        Some(b) => {
-                            return Ok(Some(RpcBlock::new(&*b, false, &*inner)))
-                        }
-                    }
-                }
-            }
-        }
+        // We do not have uncle block
+        Ok(None)
     }
 
-    fn logs(&self, _: Filter) -> jsonrpc_core::Result<Vec<Log>> {
-        warn!("RPC Request (Not Supported!): eth_getLogs");
-        // TODO: Properly handle logs
-        Ok(vec![])
+    fn logs(&self, filter: EthRpcLogFilter) -> jsonrpc_core::Result<Vec<Log>> {
+        info!("RPC Request: eth_getLogs({:?})", filter);
+        let consensus_graph = self.consensus_graph();
+        let filter: LogFilter = filter.into_primitive()?;
+
+        // // If max_limit is set, the value in `filter` will be modified to
+        // // satisfy this limitation to avoid loading too many blocks
+        // // TODO Should the response indicate that the filter is modified?
+        // if let Some(max_limit) = self.config.get_logs_filter_max_limit {
+        //     if filter.limit.is_none() || filter.limit.unwrap() > max_limit {
+        //         filter.limit = Some(max_limit);
+        //     }
+        // }
+
+        Ok(consensus_graph
+            .logs(filter)
+            .map_err(|err| CfxRpcError::from(err))?
+            .iter()
+            .cloned()
+            .map(|l| Log::try_from_localized(l))
+            .collect::<Result<_, _>>()
+            .map_err(|err| CfxRpcError::from(err))?)
     }
 
     fn submit_hashrate(&self, _: U256, _: H256) -> jsonrpc_core::Result<bool> {
@@ -916,7 +906,7 @@ impl Eth for EthHandler {
 }
 
 impl EthFilter for EthHandler {
-    fn new_filter(&self, _: Filter) -> jsonrpc_core::Result<U256> {
+    fn new_filter(&self, _: EthRpcLogFilter) -> jsonrpc_core::Result<U256> {
         warn!("RPC Request (Not Supported!): eth_newFilter");
         bail!(unimplemented(Some(
             "ETH Filter RPC not implemented!".into()

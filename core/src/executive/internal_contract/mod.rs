@@ -23,8 +23,8 @@ use crate::{
     bytes::Bytes,
     evm::Spec,
     hash::keccak,
+    observer::VmObserve,
     spec::CommonParams,
-    trace::Tracer,
     vm::{self, ActionParams, ExecTrapResult, GasLeft, TrapResult},
 };
 use cfx_types::{Address, H256};
@@ -52,7 +52,7 @@ pub trait InternalContractTrait: Send + Sync + IsActive {
     /// execute this internal contract on the given parameters.
     fn execute(
         &self, params: &ActionParams, context: &mut InternalRefContext,
-        tracer: &mut dyn Tracer,
+        tracer: &mut dyn VmObserve,
     ) -> ExecTrapResult<GasLeft>
     {
         let func_table = self.get_func_table();
@@ -99,41 +99,32 @@ fn load_solidity_fn<'a>(
 pub trait SolidityFunctionTrait: Send + Sync + IsActive {
     fn execute(
         &self, input: &[u8], params: &ActionParams,
-        context: &mut InternalRefContext, tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> ExecTrapResult<GasLeft>;
 
     /// The string for function sig
     fn name(&self) -> &'static str;
 
     /// The function sig for this function
-    fn function_sig(&self) -> [u8; 4] {
-        let mut answer = [0u8; 4];
-        answer.clone_from_slice(&keccak(self.name()).as_ref()[0..4]);
-        answer
-    }
+    fn function_sig(&self) -> [u8; 4];
 }
 
 /// Native implementation of a solidity-interface function.
 pub trait SolidityEventTrait: Send + Sync {
     type Indexed: EventIndexEncodable;
     type NonIndexed: ABIEncodable;
+    const EVENT_SIG: H256;
 
     fn log(
         indexed: &Self::Indexed, non_indexed: &Self::NonIndexed,
         param: &ActionParams, context: &mut InternalRefContext,
     ) -> vm::Result<()>
     {
-        let mut topics = vec![Self::event_sig()];
+        let mut topics = vec![Self::EVENT_SIG];
         topics.extend_from_slice(&indexed.indexed_event_encode());
 
         let data = non_indexed.abi_encode();
 
         context.log(param, context.spec, topics, data)
     }
-
-    /// The string for function sig
-    fn name() -> &'static str;
-
-    /// The event signature
-    fn event_sig() -> H256 { keccak(Self::name()) }
 }

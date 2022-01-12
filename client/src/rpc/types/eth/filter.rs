@@ -19,7 +19,12 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::rpc::types::{eth::Log, EpochNumber as BlockNumber};
-use cfx_types::{H160, H256};
+use cfx_types::{Space, H160, H256};
+use jsonrpc_core::Error as RpcError;
+use primitives::{
+    filter::{LogFilter as PrimitiveFilter, LogFilterParams},
+    EpochNumber,
+};
 use serde::{
     de::{DeserializeOwned, Error},
     Deserialize, Deserializer, Serialize, Serializer,
@@ -62,6 +67,26 @@ where T: DeserializeOwned
     }
 }
 
+impl<T> VariadicValue<T>
+where T: DeserializeOwned
+{
+    pub fn to_vec(self) -> Vec<T> {
+        match self {
+            VariadicValue::Null => vec![],
+            VariadicValue::Single(x) => vec![x],
+            VariadicValue::Multiple(xs) => xs,
+        }
+    }
+
+    pub fn to_opt(self) -> Option<Vec<T>> {
+        match self {
+            VariadicValue::Null => None,
+            VariadicValue::Single(x) => Some(vec![x]),
+            VariadicValue::Multiple(xs) => Some(xs),
+        }
+    }
+}
+
 /// Filter Address
 pub type FilterAddress = VariadicValue<H160>;
 /// Topic
@@ -71,7 +96,7 @@ pub type Topic = VariadicValue<H256>;
 #[derive(Debug, PartialEq, Clone, Deserialize, Eq, Hash)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-pub struct Filter {
+pub struct EthRpcLogFilter {
     /// From Block
     pub from_block: Option<BlockNumber>,
     /// To Block
@@ -84,6 +109,56 @@ pub struct Filter {
     pub topics: Option<Vec<Topic>>,
     /// Limit
     pub limit: Option<usize>,
+}
+
+impl EthRpcLogFilter {
+    pub fn into_primitive(self) -> Result<PrimitiveFilter, RpcError> {
+        let params = LogFilterParams {
+            address: self.address.map(|v| v.to_vec()),
+            topics: self
+                .topics
+                .unwrap_or(vec![])
+                .into_iter()
+                .map(|t| t.to_opt())
+                .collect(),
+            offset: None,
+            limit: self.limit,
+            trusted: false,
+            space: Some(Space::Ethereum),
+        };
+
+        match (&self.from_block, &self.to_block, &self.block_hash) {
+            // block hash filter
+            (None, None, Some(block_hash)) => {
+                Ok(PrimitiveFilter::BlockHashLogFilter {
+                    // TODO(thegaram): include all block hashes from epoch
+                    block_hashes: vec![*block_hash],
+                    params,
+                })
+            }
+
+            // block number range filter
+            // note: blocks in EVM space RPCs correspond to epochs
+            (_, _, None) => Ok(PrimitiveFilter::EpochLogFilter {
+                from_epoch: self
+                    .from_block
+                    .map(|n| n.into())
+                    .unwrap_or(EpochNumber::LatestCheckpoint),
+                to_epoch: self
+                    .to_block
+                    .map(|n| n.into())
+                    .unwrap_or(EpochNumber::LatestState),
+                params,
+            }),
+
+            // any other case is considered an error
+            _ => {
+                bail!(RpcError::invalid_params(
+                    format!("Filter must provide one of the following: (1) a block number range through `fromBlock` and `toBlock`, (2) a set of block hashes through `blockHash`")
+                ));
+            }
+        }
+    }
 }
 
 // impl Filter {

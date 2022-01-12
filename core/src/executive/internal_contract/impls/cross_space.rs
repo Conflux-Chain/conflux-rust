@@ -3,14 +3,19 @@ use crate::{
         ActionParams, CallType, Context, ContractCreateResult,
         CreateContractAddress, GasLeft, MessageCallResult, ReturnData,
     },
-    executive::{contract_address, InternalRefContext},
+    executive::{
+        contract_address,
+        internal_contract::contracts::{CallEvent, CreateEvent, WithdrawEvent},
+        InternalRefContext, SolidityEventTrait,
+    },
+    observer::VmObserve,
     state::cleanup_mode,
-    trace::Tracer,
     vm::{
         self, ActionValue, CreateType, Exec, ExecTrapError as ExecTrap,
         ExecTrapResult, ParamsType, ResumeCall, ResumeCreate, TrapResult,
     },
 };
+use cfx_parameters::block::CROSS_SPACE_GAS_RATIO;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
     Address, AddressSpaceUtil, AddressWithSpace, Space, H256, U256,
@@ -20,7 +25,7 @@ use solidity_abi::ABIEncodable;
 use std::{marker::PhantomData, sync::Arc};
 
 pub fn create_gas(
-    context: &InternalRefContext, hash_length: usize,
+    context: &InternalRefContext, code_length: usize, hash_length: usize,
 ) -> DbResult<U256> {
     let base_gas = U256::from(context.spec.create_gas);
     let hash_words = (hash_length + 31) / 32;
@@ -30,12 +35,18 @@ pub fn create_gas(
 
     let address_mapping_gas = context.spec.sha3_gas * 2;
 
-    Ok(base_gas + keccak_code_gas + address_mapping_gas)
+    let log_data_length = H256::len_bytes() * 4 + code_length;
+
+    let log_gas = context.spec.log_gas
+        + 3 * context.spec.log_topic_gas
+        + context.spec.log_data_gas * log_data_length;
+
+    Ok(base_gas + keccak_code_gas + address_mapping_gas + log_gas)
 }
 
 pub fn call_gas(
     receiver: Address, params: &ActionParams, context: &InternalRefContext,
-    is_static: bool,
+    data_length: usize, is_static: bool,
 ) -> DbResult<U256>
 {
     let new_account_gas = if !is_static
@@ -59,10 +70,20 @@ pub fn call_gas(
 
     let address_mapping_gas = context.spec.sha3_gas * 3;
 
-    Ok(call_gas + address_mapping_gas)
+    let log_data_length = H256::len_bytes() * 4 + data_length;
+
+    let log_gas = if !is_static {
+        context.spec.log_gas
+            + 3 * context.spec.log_topic_gas
+            + context.spec.log_data_gas * log_data_length
+    } else {
+        0
+    };
+
+    Ok(call_gas + address_mapping_gas + log_gas)
 }
 
-pub struct Resume;
+pub struct Resume(pub U256);
 
 impl ResumeCreate for Resume {
     fn resume_create(
@@ -74,7 +95,7 @@ impl ResumeCreate for Resume {
                 let length = encoded_output.len();
                 let return_data = ReturnData::new(encoded_output, 0, length);
                 PassResult {
-                    gas_left,
+                    gas_left: gas_left + self.0,
                     return_data: Ok(return_data),
                     apply_state: true,
                 }
@@ -85,7 +106,7 @@ impl ResumeCreate for Resume {
                 apply_state: false,
             },
             ContractCreateResult::Reverted(gas_left, data) => PassResult {
-                gas_left,
+                gas_left: gas_left + self.0,
                 return_data: Ok(data),
                 apply_state: false,
             },
@@ -104,7 +125,7 @@ impl ResumeCall for Resume {
                 let length = encoded_output.len();
                 let return_data = ReturnData::new(encoded_output, 0, length);
                 PassResult {
-                    gas_left,
+                    gas_left: gas_left + self.0,
                     return_data: Ok(return_data),
                     apply_state: true,
                 }
@@ -115,7 +136,7 @@ impl ResumeCall for Resume {
                 apply_state: false,
             },
             MessageCallResult::Reverted(gas_left, data) => PassResult {
-                gas_left,
+                gas_left: gas_left + self.0,
                 return_data: Ok(data),
                 apply_state: false,
             },
@@ -133,7 +154,7 @@ pub struct PassResult {
 impl Exec for PassResult {
     fn exec(
         mut self: Box<Self>, context: &mut dyn Context,
-        _tracer: &mut dyn Tracer,
+        _tracer: &mut dyn VmObserve,
     ) -> ExecTrapResult<GasLeft>
     {
         if let Ok(ref data) = self.return_data {
@@ -183,12 +204,13 @@ pub fn call_to_evmcore(
         return Err(vm::Error::InternalContract("Exceed Depth".into()));
     }
 
-    let call_gas = gas_left
+    let call_gas = gas_left / CROSS_SPACE_GAS_RATIO
         + if params.value.value() > U256::zero() {
             U256::from(context.spec.call_stipend)
         } else {
             U256::zero()
         };
+    let reserved_gas = gas_left - gas_left / CROSS_SPACE_GAS_RATIO;
 
     let mapped_sender = evm_map(params.sender);
     let mapped_origin = evm_map(params.original_sender);
@@ -218,17 +240,27 @@ pub fn call_to_evmcore(
         gas_price: params.gas_price,
         code,
         code_hash,
-        data: Some(data),
+        data: Some(data.clone()),
         call_type,
         create_type: CreateType::None,
         params_type: vm::ParamsType::Separate,
     };
 
+    let nonce = context.state.nonce(&mapped_sender)?;
     context
         .state
         .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
 
-    return Ok(ExecTrap::Call(next_params, Box::new(Resume)));
+    if call_type == CallType::Call {
+        CallEvent::log(
+            &(mapped_sender.address.0, address.address.0),
+            &(params.value.value(), nonce, data),
+            params,
+            context,
+        )?;
+    }
+
+    return Ok(ExecTrap::Call(next_params, Box::new(Resume(reserved_gas))));
 }
 
 pub fn create_to_evmcore(
@@ -240,12 +272,13 @@ pub fn create_to_evmcore(
         return Err(vm::Error::InternalContract("Exceed Depth".into()));
     }
 
-    let call_gas = gas_left
+    let call_gas = gas_left / CROSS_SPACE_GAS_RATIO
         + if params.value.value() > U256::zero() {
             U256::from(context.spec.call_stipend)
         } else {
             U256::zero()
         };
+    let reserved_gas = gas_left - gas_left / CROSS_SPACE_GAS_RATIO;
 
     let mapped_sender = evm_map(params.sender);
     let mapped_origin = evm_map(params.original_sender);
@@ -284,7 +317,7 @@ pub fn create_to_evmcore(
         gas: call_gas,
         gas_price: params.gas_price,
         value: ActionValue::Transfer(params.value.value()),
-        code: Some(Arc::new(init)),
+        code: Some(Arc::new(init.clone())),
         code_hash,
         data: None,
         call_type: CallType::None,
@@ -292,16 +325,28 @@ pub fn create_to_evmcore(
         params_type: ParamsType::Embedded,
     };
 
+    let nonce = context.state.nonce(&mapped_sender)?;
     context
         .state
         .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
+    CreateEvent::log(
+        &(mapped_sender.address.0, address.0),
+        &(params.value.value(), nonce, init),
+        params,
+        context,
+    )?;
 
-    return Ok(ExecTrap::Create(next_params, Box::new(Resume)));
+    return Ok(ExecTrap::Create(
+        next_params,
+        Box::new(Resume(reserved_gas)),
+    ));
 }
 
 pub fn withdraw_from_evmcore(
-    sender: Address, value: U256, context: &mut InternalRefContext,
-) -> vm::Result<()> {
+    sender: Address, value: U256, params: &ActionParams,
+    context: &mut InternalRefContext,
+) -> vm::Result<()>
+{
     let mapped_address = evm_map(sender);
     let balance = context.state.balance(&mapped_address)?;
     if balance < value {
@@ -319,6 +364,12 @@ pub fn withdraw_from_evmcore(
     context
         .state
         .inc_nonce(&mapped_address, &context.spec.account_start_nonce)?;
+    WithdrawEvent::log(
+        &(mapped_address.address.0, sender),
+        &params.value.value(),
+        params,
+        context,
+    )?;
 
     Ok(())
 }

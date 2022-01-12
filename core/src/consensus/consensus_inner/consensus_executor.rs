@@ -19,6 +19,7 @@ use crate::{
         TransactOptions,
     },
     machine::Machine,
+    observer::trace::{ExecTrace, TransactionExecTraces},
     rpc_errors::{invalid_params_check, Result as RpcResult},
     spec::genesis::initialize_internal_contract_accounts,
     state::{
@@ -27,7 +28,6 @@ use crate::{
         },
         State,
     },
-    trace::trace::{ExecTrace, TransactionExecTraces},
     verification::{
         compute_receipts_root, VerificationConfig, VerifyTxLocalMode,
         VerifyTxMode,
@@ -1253,15 +1253,14 @@ impl ConsensusExecutionHandler {
                 let mut storage_released = Vec::new();
                 let mut storage_collateralized = Vec::new();
 
-                let r = if self.config.executive_trace {
-                    let options = TransactOptions::with_tracing();
-                    Executive::new(state, &env, self.machine.as_ref(), &spec)
-                        .transact(transaction, options)?
+                let options = if self.config.executive_trace {
+                    TransactOptions::with_tracing()
                 } else {
-                    let options = TransactOptions::with_no_tracing();
-                    Executive::new(state, &env, self.machine.as_ref(), &spec)
-                        .transact(transaction, options)?
+                    TransactOptions::with_no_tracing()
                 };
+                let r =
+                    Executive::new(state, &env, self.machine.as_ref(), &spec)
+                        .transact(transaction, options)?;
 
                 let gas_fee;
                 let mut gas_sponsor_paid = false;

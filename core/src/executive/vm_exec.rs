@@ -2,7 +2,7 @@ use crate::{
     builtin::Builtin,
     evm::{CallType, Context, GasLeft, MessageCallResult, ReturnData},
     executive::InternalContractTrait,
-    trace::Tracer,
+    observer::VmObserve,
     vm::{
         ActionParams, Error as VmError, Exec, ExecTrapResult, ResumeCall,
         TrapResult,
@@ -17,7 +17,7 @@ pub struct NoopExec {
 
 impl Exec for NoopExec {
     fn exec(
-        self: Box<Self>, _: &mut dyn Context, _: &mut dyn Tracer,
+        self: Box<Self>, _: &mut dyn Context, _: &mut dyn VmObserve,
     ) -> ExecTrapResult<GasLeft> {
         TrapResult::Return(Ok(GasLeft::Known(self.gas)))
     }
@@ -30,7 +30,7 @@ pub struct BuiltinExec<'a> {
 impl<'a> Exec for BuiltinExec<'a> {
     // Copied from exec function of CallCreateExecutive.
     fn exec(
-        self: Box<Self>, _: &mut dyn Context, _: &mut dyn Tracer,
+        self: Box<Self>, _: &mut dyn Context, _: &mut dyn VmObserve,
     ) -> ExecTrapResult<GasLeft> {
         let default = [];
         let data = if let Some(ref d) = self.params.data {
@@ -72,7 +72,7 @@ pub struct InternalContractExec<'a> {
 
 impl<'a> Exec for InternalContractExec<'a> {
     fn exec(
-        self: Box<Self>, context: &mut dyn Context, tracer: &mut dyn Tracer,
+        self: Box<Self>, context: &mut dyn Context, tracer: &mut dyn VmObserve,
     ) -> ExecTrapResult<GasLeft> {
         let result = if self.params.call_type != CallType::Call
             && self.params.call_type != CallType::StaticCall

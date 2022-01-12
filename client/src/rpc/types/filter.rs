@@ -4,7 +4,7 @@
 
 use super::{EpochNumber, RpcAddress};
 use crate::rpc::helpers::{maybe_vec_into, VariadicValue};
-use cfx_types::{H256, U64};
+use cfx_types::{Space, H256, U64};
 use jsonrpc_core::Error as RpcError;
 use primitives::filter::{LogFilter as PrimitiveFilter, LogFilterParams};
 use serde::{Deserialize, Serialize};
@@ -14,7 +14,7 @@ const FILTER_BLOCK_HASH_LIMIT: usize = 128;
 
 #[derive(PartialEq, Debug, Serialize, Deserialize, Eq, Hash, Clone)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct LogFilter {
+pub struct CfxRpcLogFilter {
     /// Search will be applied from this epoch number.
     pub from_epoch: Option<EpochNumber>,
 
@@ -60,7 +60,7 @@ pub struct LogFilter {
     pub limit: Option<U64>,
 }
 
-impl LogFilter {
+impl CfxRpcLogFilter {
     pub fn into_primitive(self) -> Result<PrimitiveFilter, RpcError> {
         // from_epoch, to_epoch
         let from_epoch = self
@@ -135,6 +135,7 @@ impl LogFilter {
             offset,
             limit,
             trusted: false,
+            space: Some(Space::Native),
         };
 
         // choose filter type based on fields
@@ -191,9 +192,11 @@ impl LogFilter {
 
 #[cfg(test)]
 mod tests {
-    use super::{super::RpcAddress, EpochNumber, LogFilter, VariadicValue};
+    use super::{
+        super::RpcAddress, CfxRpcLogFilter, EpochNumber, VariadicValue,
+    };
     use cfx_addr::Network;
-    use cfx_types::{H160, H256, U64};
+    use cfx_types::{Space, H160, H256, U64};
     use primitives::{
         epoch::EpochNumber as PrimitiveEpochNumber,
         filter::{LogFilter as PrimitiveFilter, LogFilterParams},
@@ -203,7 +206,7 @@ mod tests {
 
     #[test]
     fn test_serialize_filter() {
-        let filter = LogFilter {
+        let filter = CfxRpcLogFilter {
             from_epoch: None,
             to_epoch: None,
             from_block: None,
@@ -232,7 +235,7 @@ mod tests {
              }"
         );
 
-        let filter = LogFilter {
+        let filter = CfxRpcLogFilter {
             from_epoch: Some(1000.into()),
             to_epoch: Some(EpochNumber::LatestState),
             from_block: Some(1000.into()),
@@ -281,7 +284,7 @@ mod tests {
     fn test_deserialize_filter() {
         let serialized = "{}";
 
-        let result_filter = LogFilter {
+        let result_filter = CfxRpcLogFilter {
             from_epoch: None,
             to_epoch: None,
             from_block: None,
@@ -293,7 +296,7 @@ mod tests {
             limit: None,
         };
 
-        let deserialized_filter: LogFilter =
+        let deserialized_filter: CfxRpcLogFilter =
             serde_json::from_str(serialized).unwrap();
         assert_eq!(deserialized_filter, result_filter);
 
@@ -312,7 +315,7 @@ mod tests {
              \"limit\":\"0x2\"\
         }";
 
-        let result_filter = LogFilter {
+        let result_filter = CfxRpcLogFilter {
             from_epoch: Some(1000.into()),
             to_epoch: Some(EpochNumber::LatestState),
             from_block: Some(1000.into()),
@@ -336,14 +339,14 @@ mod tests {
             limit: Some(U64::from(2)),
         };
 
-        let deserialized_filter: LogFilter =
+        let deserialized_filter: CfxRpcLogFilter =
             serde_json::from_str(serialized).unwrap();
         assert_eq!(deserialized_filter, result_filter);
     }
 
     #[test]
     fn test_convert_filter() {
-        let epoch_filter = LogFilter {
+        let epoch_filter = CfxRpcLogFilter {
             from_epoch: Some(EpochNumber::Earliest),
             to_epoch: None,
             from_block: None,
@@ -384,6 +387,7 @@ mod tests {
                 offset: Some(1),
                 limit: Some(2),
                 trusted: false,
+                space: Some(Space::Native),
             },
         };
 
@@ -391,7 +395,7 @@ mod tests {
 
         // -------------------------------------
 
-        let block_number_filter = LogFilter {
+        let block_number_filter = CfxRpcLogFilter {
             from_epoch: None,
             to_epoch: None,
             from_block: Some(U64::from(1)),
@@ -432,6 +436,7 @@ mod tests {
                 offset: Some(1),
                 limit: Some(2),
                 trusted: false,
+                space: Some(Space::Native),
             },
         };
 
@@ -442,7 +447,7 @@ mod tests {
 
         // -------------------------------------
 
-        let block_hash_filter = LogFilter {
+        let block_hash_filter = CfxRpcLogFilter {
             from_epoch: None,
             to_epoch: None,
             from_block: None,
@@ -488,6 +493,7 @@ mod tests {
                 offset: Some(1),
                 limit: Some(2),
                 trusted: false,
+                space: Some(Space::Native),
             },
         };
 

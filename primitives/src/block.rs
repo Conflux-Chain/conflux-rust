@@ -4,7 +4,7 @@
 
 use crate::{BlockHeader, SignedTransaction, TransactionWithSignature};
 use byteorder::{ByteOrder, LittleEndian};
-use cfx_types::{H256, U256};
+use cfx_types::{Space, H256, U256};
 use keccak_hash::keccak;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rand::Rng;
@@ -103,11 +103,16 @@ impl Block {
             .fold(0, |accum, tx| accum + tx.rlp_size())
     }
 
-    pub fn transaction_hashes(&self) -> Vec<H256> {
-        self.transactions
-            .iter()
-            .map(|tx| tx.hash())
-            .collect::<Vec<_>>()
+    pub fn transaction_hashes(&self, space_filter: Option<Space>) -> Vec<H256> {
+        if let Some(space) = space_filter {
+            self.transactions
+                .iter()
+                .filter(|tx| tx.space() == space)
+                .map(|tx| tx.hash())
+                .collect()
+        } else {
+            self.transactions.iter().map(|tx| tx.hash()).collect()
+        }
     }
 
     /// Construct a new compact block with random nonce

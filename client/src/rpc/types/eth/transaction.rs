@@ -21,7 +21,7 @@
 use crate::rpc::types::Bytes;
 use cfx_types::{H160, H256, H512, U256, U64};
 use cfxcore::{executive::contract_address, vm::CreateContractAddress};
-use primitives::{Action, SignedTransaction};
+use primitives::{transaction::eip155_signature, Action, SignedTransaction};
 use rlp::Encodable;
 use serde::Serialize;
 
@@ -87,7 +87,11 @@ pub struct Transaction {
 
 impl Transaction {
     /// Convert `SignedTransaction` into RPC Transaction.
-    pub fn from_signed(t: &SignedTransaction) -> Transaction {
+    pub fn from_signed(
+        t: &SignedTransaction,
+        block_info: (Option<H256>, Option<U256>, Option<U256>),
+    ) -> Transaction
+    {
         let signature = t.signature();
         let scheme = CreateContractAddress::FromSenderNonce;
 
@@ -123,9 +127,9 @@ impl Transaction {
         Transaction {
             hash: t.hash(),
             nonce: *t.nonce(),
-            block_hash: None,
-            block_number: None,
-            transaction_index: None,
+            block_hash: block_info.0,
+            block_number: block_info.1,
+            transaction_index: block_info.2,
             from: t.sender().address,
             to: match t.action() {
                 Action::Create => None,
@@ -153,8 +157,12 @@ impl Transaction {
             raw: Bytes::new(t.transaction.transaction.rlp_bytes()),
             public_key: t.public().map(Into::into),
             chain_id: Some(U64::from(t.chain_id() as u64)),
-            standard_v: None, // TODO: I'm not sure what it is.
-            v: signature.v().into(),
+            standard_v: Some(signature.v().into()),
+            v: eip155_signature::add_chain_replay_protection(
+                signature.v(),
+                Some(t.chain_id() as u64),
+            )
+            .into(), /* The protected EIP155 v */
             r: signature.r().into(),
             s: signature.s().into(),
         }

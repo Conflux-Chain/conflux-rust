@@ -44,7 +44,7 @@ use super::{
 use crate::{
     bytes::Bytes,
     hash::keccak,
-    trace::Tracer,
+    observer::VmObserve,
     vm::{
         self, ActionParams, ActionValue, CallType, ContractCreateResult,
         CreateContractAddress, GasLeft, MessageCallResult, ParamsType,
@@ -211,7 +211,7 @@ pub struct Interpreter<Cost: CostType> {
 impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
     fn exec(
         mut self: Box<Self>, context: &mut dyn vm::Context,
-        tracer: &mut dyn Tracer,
+        tracer: &mut dyn VmObserve,
     ) -> vm::ExecTrapResult<GasLeft>
     {
         loop {
@@ -364,7 +364,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     /// Execute a single step on the VM.
     #[inline(always)]
     pub fn step(
-        &mut self, context: &mut dyn vm::Context, tracer: &mut dyn Tracer,
+        &mut self, context: &mut dyn vm::Context, tracer: &mut dyn VmObserve,
     ) -> InterpreterResult {
         if self.done {
             return InterpreterResult::Stopped;
@@ -394,7 +394,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     /// Inner helper function for step.
     #[inline(always)]
     fn step_inner(
-        &mut self, context: &mut dyn vm::Context, tracer: &mut dyn Tracer,
+        &mut self, context: &mut dyn vm::Context, tracer: &mut dyn VmObserve,
     ) -> InterpreterResult {
         let result = match self.resume_result.take() {
             Some(result) => result,
@@ -689,7 +689,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     fn exec_instruction(
         &mut self, gas: Cost, context: &mut dyn vm::Context,
         instruction: Instruction, provided: Option<Cost>,
-        tracer: &mut dyn Tracer,
+        tracer: &mut dyn VmObserve,
     ) -> vm::Result<InstructionResult<Cost>>
     {
         trace!("exec instruction: {:?}", instruction);
@@ -1217,7 +1217,11 @@ impl<Cost: CostType> Interpreter<Cost> {
                 self.stack.push(U256::from(context.env().timestamp));
             }
             instructions::NUMBER => {
-                self.stack.push(U256::from(context.env().number));
+                let block_number = match context.space() {
+                    Space::Native => context.env().number,
+                    Space::Ethereum => context.env().epoch_height,
+                };
+                self.stack.push(U256::from(block_number));
             }
             instructions::DIFFICULTY => {
                 self.stack.push(context.env().difficulty.clone());
@@ -1642,13 +1646,10 @@ fn address_to_u256(value: Address) -> U256 { H256::from(value).into_uint() }
 #[cfg(test)]
 mod tests {
     use super::super::{factory::Factory, vmtype::VMType};
-    use crate::{
-        trace,
-        vm::{
-            self,
-            tests::{test_finalize, MockContext},
-            ActionParams, ActionValue, Exec,
-        },
+    use crate::vm::{
+        self,
+        tests::{test_finalize, MockContext},
+        ActionParams, ActionValue, Exec,
     };
     use cfx_types::Address;
     use rustc_hex::FromHex;
@@ -1675,7 +1676,7 @@ mod tests {
         params.value = ActionValue::Transfer(100_000.into());
         params.code = Some(Arc::new(code));
         let mut context = MockContext::new();
-        let mut tracer = trace::NoopTracer;
+        let mut tracer = ();
         context
             .balances
             .insert(Address::from_low_u64_be(5), 1_000_000_000.into());
@@ -1702,7 +1703,7 @@ mod tests {
         params.gas_price = 1.into();
         params.code = Some(Arc::new(code));
         let mut context = MockContext::new_spec();
-        let mut tracer = trace::NoopTracer;
+        let mut tracer = ();
         context
             .balances
             .insert(Address::from_low_u64_be(5), 1_000_000_000.into());

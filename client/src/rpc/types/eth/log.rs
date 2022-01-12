@@ -41,31 +41,31 @@ pub struct Log {
     /// Transaction Index
     pub transaction_index: Option<U256>,
     /// Log Index in Block
+    // FIXME(thegaram): currently we're using the epoch log index here
     pub log_index: Option<U256>,
     /// Log Index in Transaction
     pub transaction_log_index: Option<U256>,
-    /// Log Type
-    #[serde(rename = "type")]
-    pub log_type: String,
     /// Whether Log Type is Removed (Geth Compatibility Field)
     #[serde(default)]
     pub removed: bool,
 }
 
 impl Log {
-    pub fn try_from_localized(_e: LocalizedLogEntry) -> Result<Log, String> {
-        unimplemented!();
-        // Ok(Log {
-        //     address: RpcAddress::try_from_h160(e.entry.address, network)?,
-        //     topics: e.entry.topics.into_iter().map(Into::into).collect(),
-        //     data: e.entry.data.into(),
-        //     block_hash: Some(e.block_hash.into()),
-        //     epoch_number: Some(e.epoch_number.into()),
-        //     transaction_hash: Some(e.transaction_hash.into()),
-        //     transaction_index: Some(e.transaction_index.into()),
-        //     log_index: Some(e.log_index.into()),
-        //     transaction_log_index: Some(e.transaction_log_index.into()),
-        // })
+    pub fn try_from_localized(e: LocalizedLogEntry) -> Result<Log, String> {
+        Ok(Log {
+            address: e.entry.address,
+            topics: e.entry.topics.into_iter().map(Into::into).collect(),
+            data: e.entry.data.into(),
+            // TODO(thegaram): use pivot hash instead
+            block_hash: Some(e.block_hash.into()),
+            // note: blocks in EVM space RPCs correspond to epochs
+            block_number: Some(e.epoch_number.into()),
+            transaction_hash: Some(e.transaction_hash.into()),
+            transaction_index: Some(e.transaction_index.into()),
+            log_index: Some(e.log_index.into()),
+            transaction_log_index: Some(e.transaction_log_index.into()),
+            removed: false,
+        })
     }
 
     pub fn try_from(_e: LogEntry) -> Result<Log, String> {
@@ -114,7 +114,6 @@ mod tests {
             transaction_index: Some(U256::default()),
             transaction_log_index: Some(1.into()),
             log_index: Some(U256::from(1)),
-            log_type: "mined".to_owned(),
             removed: false,
         };
 

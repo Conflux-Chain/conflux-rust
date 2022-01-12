@@ -97,9 +97,8 @@ build_config! {
         //
         // `dev` mode is for users to run a single node that automatically
         //     generates blocks with fixed intervals
-        //     * Open port 12535 for ws rpc if `jsonrpc_ws_port` is not provided.
-        //     * Open port 12536 for tcp rpc if `jsonrpc_tcp_port` is not provided.
-        //     * Open port 12537 for http rpc if `jsonrpc_http_port` is not provided.
+        //     * You are expected to also set `jsonrpc_ws_port`, `jsonrpc_tcp_port`,
+        //       and `jsonrpc_http_port` if you want RPC functionalities.
         //     * generate blocks automatically without PoW.
         //     * Skip catch-up mode even there is no peer
         //
@@ -117,6 +116,8 @@ build_config! {
         (log_conf, (Option<String>), None)
         (log_file, (Option<String>), None)
         (max_block_size_in_bytes, (usize), MAX_BLOCK_SIZE_IN_BYTES)
+        (evm_transaction_block_ratio,(u64),EVM_TRANSACTION_BLOCK_RATIO)
+        (evm_transaction_gas_ratio,(u64),EVM_TRANSACTION_GAS_RATIO)
         (metrics_enabled, (bool), false)
         (metrics_influxdb_host, (Option<String>), None)
         (metrics_influxdb_db, (String), "conflux".into())
@@ -372,17 +373,6 @@ impl Configuration {
         let mut config = Configuration::default();
         config.raw_conf = RawConfiguration::parse(matches)?;
 
-        if config.is_dev_mode() {
-            if config.raw_conf.jsonrpc_ws_port.is_none() {
-                config.raw_conf.jsonrpc_ws_port = Some(12535);
-            }
-            if config.raw_conf.jsonrpc_tcp_port.is_none() {
-                config.raw_conf.jsonrpc_tcp_port = Some(12536);
-            }
-            if config.raw_conf.jsonrpc_http_port.is_none() {
-                config.raw_conf.jsonrpc_http_port = Some(12537);
-            }
-        };
         if matches.is_present("archive") {
             config.raw_conf.node_type = Some(NodeType::Archive);
         } else if matches.is_present("full") {
@@ -1091,6 +1081,10 @@ impl Configuration {
 
         params.chain_id = self.chain_id_params();
         params.anticone_penalty_ratio = self.raw_conf.anticone_penalty_ratio;
+        params.evm_transaction_block_ratio =
+            self.raw_conf.evm_transaction_block_ratio;
+        params.evm_transaction_gas_ratio =
+            self.raw_conf.evm_transaction_gas_ratio;
 
         params.transition_heights.cip40 =
             self.raw_conf.tanzanite_transition_height;

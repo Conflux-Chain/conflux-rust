@@ -9,7 +9,7 @@ use super::*;
 use diem_config::{config::NodeConfig, utils};
 use diem_types::account_address::HashAccountAddress;
 #[cfg(test)]
-use diemdb::test_helper::arb_blocks_to_commit;
+use pos_ledger_db::test_helper::arb_blocks_to_commit;
 use itertools::zip_eq;
 use proptest::prelude::*;
 use std::{

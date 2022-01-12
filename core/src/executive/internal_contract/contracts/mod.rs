@@ -17,6 +17,8 @@ mod macros {
     #[cfg(test)]
     pub use rustc_hex::FromHex;
 
+    pub use sha3_macro::keccak;
+
     pub use crate::{
         group_impl_is_active, impl_function_type, make_function_table,
         make_solidity_contract, make_solidity_event, make_solidity_function,
@@ -38,10 +40,13 @@ mod macros {
     pub use crate::spec::CommonParams;
 }
 
-pub(super) use self::pos::{IncreaseStakeEvent, RegisterEvent, RetireEvent};
 pub use self::{
     admin::AdminControl, context::Context, cross_space::CrossSpaceCall,
     pos::PoSRegister, sponsor::SponsorWhitelistControl, staking::Staking,
+};
+pub(super) use self::{
+    cross_space::{CallEvent, CreateEvent, WithdrawEvent},
+    pos::{IncreaseStakeEvent, RegisterEvent, RetireEvent},
 };
 
 use super::{

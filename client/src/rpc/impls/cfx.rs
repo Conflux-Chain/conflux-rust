@@ -58,11 +58,12 @@ use crate::{
             pos::Block as PosBlock, sign_call, Account as RpcAccount,
             AccountPendingInfo, AccountPendingTransactions, BlameInfo,
             Block as RpcBlock, BlockHashOrEpochNumber, Bytes, CallRequest,
-            CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
-            EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
-            LogFilter as RpcFilter, PackedOrExecuted, Receipt as RpcReceipt,
-            RewardInfo as RpcRewardInfo, SendTxRequest, Status as RpcStatus,
-            SyncGraphStates, Transaction as RpcTransaction,
+            CfxRpcLogFilter, CheckBalanceAgainstTransactionResponse,
+            ConsensusGraphStates, EpochNumber,
+            EstimateGasAndCollateralResponse, Log as RpcLog, PackedOrExecuted,
+            Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, SendTxRequest,
+            Status as RpcStatus, SyncGraphStates,
+            Transaction as RpcTransaction,
         },
         RpcResult,
     },
@@ -73,10 +74,10 @@ use cfxcore::{
     consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
     executive::revert_reason_decode,
+    observer::ErrorUnwind,
     spec::genesis::{
         genesis_contract_address_four_year, genesis_contract_address_two_year,
     },
-    trace::ErrorUnwind,
 };
 use diem_types::account_address::AccountAddress;
 use lazy_static::lazy_static;
@@ -998,7 +999,7 @@ impl RpcImpl {
         ))
     }
 
-    fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
+    fn get_logs(&self, filter: CfxRpcLogFilter) -> RpcResult<Vec<RpcLog>> {
         // all addresses specified should be for the correct network
         if let Some(addresses) = &filter.address {
             for address in addresses.iter() {
@@ -1211,15 +1212,19 @@ impl RpcImpl {
         // MAX_GAS_CALL_REQUEST, 0.8 is chosen to check if it's close.
         const TOO_MUCH_GAS_USED: u64 =
             (0.8 * (MAX_GAS_CALL_REQUEST as f32)) as u64;
-        if executed.gas_used >= U256::from(TOO_MUCH_GAS_USED) {
+        // TODO: this value should always be Some(..) unless incorrect
+        // implementation. Should return an error for server bugs later.
+        let estimated_gas_limit =
+            executed.estimated_gas_limit.unwrap_or(U256::zero());
+        if estimated_gas_limit >= U256::from(TOO_MUCH_GAS_USED) {
             bail!(call_execution_error(
                 format!(
                     "Gas too high. Most likely there are problems within the contract code. \
                     gas {}, storage_limit {}",
-                    executed.gas_used, storage_collateralized
+                   estimated_gas_limit, storage_collateralized
                 ),
                 format!(
-                    "gas {}, storage_limit {}", executed.gas_used, storage_collateralized
+                    "gas {}, storage_limit {}", estimated_gas_limit, storage_collateralized
                 )
                 .into_bytes(),
             ));
@@ -1233,8 +1238,8 @@ impl RpcImpl {
             // 2. In Conflux, we recommend setting the gas_limit to (gas_used *
             // 4) / 3, because the extra gas will be refunded up to
             // 1/4 of the gas limit.
-            gas_limit: executed.gas_used * 4 / 3,
-            gas_used: executed.gas_used,
+            gas_limit: executed.estimated_gas_limit.unwrap(),
+            gas_used: estimated_gas_limit,
             storage_collateralized,
         };
         Ok(response)
@@ -1596,7 +1601,7 @@ impl Cfx for CfxHandler {
             fn check_balance_against_transaction(
                 &self, account_addr: RpcAddress, contract_addr: RpcAddress, gas_limit: U256, gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>,
             ) -> BoxFuture<CheckBalanceAgainstTransactionResponse>;
-            fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
+            fn get_logs(&self, filter: CfxRpcLogFilter) -> BoxFuture<Vec<RpcLog>>;
             fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
             fn send_raw_transaction(&self, raw: Bytes) -> JsonRpcResult<H256>;
             fn storage_at(&self, addr: RpcAddress, pos: U256, epoch_number: Option<EpochNumber>)

@@ -42,7 +42,7 @@ use crate::{
     },
     consensus::pos_handler::PosVerifier,
     executive::internal_contract::impls::pos::decode_register_info,
-    trace::trace::{BlockExecTraces, TransactionExecTraces},
+    observer::trace::{BlockExecTraces, TransactionExecTraces},
 };
 pub use block_data_types::*;
 use cfx_internal_common::{

@@ -9,7 +9,6 @@ use crate::{
     machine::Machine,
     state::{State, Substate},
     test_helpers::get_state_for_genesis_write,
-    trace::{self, NoopTracer},
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
         Spec,
@@ -133,7 +132,7 @@ fn test_sender_balance() {
     let FinalizationResult { gas_left, .. } = {
         state.checkpoint();
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-        let mut tracer = trace::NoopTracer;
+        let mut tracer = ();
         let res = ex
             .create(params.clone(), &mut substate, &mut tracer)
             .expect("no db error")
@@ -238,7 +237,7 @@ fn test_create_contract_out_of_depth() {
 
     let FinalizationResult { gas_left, .. } = {
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-        let mut tracer = trace::NoopTracer;
+        let mut tracer = ();
         ex.create(params, &mut substate, &mut tracer)
             .expect("no db error")
             .expect("no vm error")
@@ -297,7 +296,7 @@ fn test_suicide_when_creation() {
     let mut substate = Substate::new();
 
     let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     let FinalizationResult {
         gas_left,
         apply_state,
@@ -399,7 +398,7 @@ fn test_call_to_create() {
     let FinalizationResult { gas_left, .. } = {
         state.checkpoint();
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-        let mut tracer = trace::NoopTracer;
+        let mut tracer = ();
         let res = ex
             .call(params.clone(), &mut substate, &mut tracer)
             .expect("no db error")
@@ -481,7 +480,7 @@ fn test_revert() {
         ..
     } = {
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-        let mut tracer = trace::NoopTracer;
+        let mut tracer = ();
         ex.call(params, &mut substate, &mut tracer)
             .expect("no db error")
             .expect("no vm error")
@@ -542,7 +541,7 @@ fn test_keccak() {
         .unwrap();
     let mut substate = Substate::new();
 
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     let result = {
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         ex.create(params, &mut substate, &mut tracer)
@@ -657,7 +656,7 @@ fn test_deposit_withdraw_lock() {
     params.call_type = CallType::CallCode;
 
     // wrong call type
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     let result = Executive::new(&mut state, &env, &machine, &spec)
         .call(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
@@ -680,7 +679,7 @@ fn test_deposit_withdraw_lock() {
     // deposit 10^18 - 1, not enough
     params.call_type = CallType::Call;
     params.data = Some("b6b55f250000000000000000000000000000000000000000000000000de0b6b3a763ffff".from_hex().unwrap());
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     let result = Executive::new(&mut state, &env, &machine, &spec)
         .call(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
@@ -692,7 +691,7 @@ fn test_deposit_withdraw_lock() {
 
     // deposit 10^18, it should work fine
     params.data = Some("b6b55f250000000000000000000000000000000000000000000000000de0b6b3a7640000".from_hex().unwrap());
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     let result = Executive::new(&mut state, &env, &machine, &spec).call(
         params.clone(),
         &mut substate,
@@ -718,7 +717,7 @@ fn test_deposit_withdraw_lock() {
 
     // empty data
     params.data = None;
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     let result = Executive::new(&mut state, &env, &machine, &spec)
         .call(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
@@ -746,7 +745,7 @@ fn test_deposit_withdraw_lock() {
 
     // less data
     params.data = Some("b6b55f25000000000000000000000000000000000000000000000000000000174876e8".from_hex().unwrap());
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     let result = Executive::new(&mut state, &env, &machine, &spec)
         .call(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
@@ -776,7 +775,7 @@ fn test_deposit_withdraw_lock() {
 
     // withdraw
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000000000ba43b7400".from_hex().unwrap());
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     let result = Executive::new(&mut state, &env, &machine, &spec).call(
         params.clone(),
         &mut substate,
@@ -801,7 +800,7 @@ fn test_deposit_withdraw_lock() {
     );
     // withdraw more than staking balance
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000de0b6a803288c01".from_hex().unwrap());
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     let result = Executive::new(&mut state, &env, &machine, &spec)
         .call(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
@@ -831,7 +830,7 @@ fn test_deposit_withdraw_lock() {
 
     // lock until block_number = 0
     params.data = Some("44a51d6d00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap());
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     let result = Executive::new(&mut state, &env, &machine, &spec)
         .call(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
@@ -864,7 +863,7 @@ fn test_deposit_withdraw_lock() {
     );
     // lock 1 until 106751991167301 blocks, should succeed
     params.data = Some("44a51d6d00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000611722833944".from_hex().unwrap());
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     let result = Executive::new(&mut state, &env, &machine, &spec).call(
         params.clone(),
         &mut substate,
@@ -895,7 +894,7 @@ fn test_deposit_withdraw_lock() {
     );
     // lock 2 until block_number=2
     params.data = Some("44a51d6d00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002".from_hex().unwrap());
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     let result = Executive::new(&mut state, &env, &machine, &spec).call(
         params.clone(),
         &mut substate,
@@ -926,7 +925,7 @@ fn test_deposit_withdraw_lock() {
     );
     // withdraw more than withdrawable staking balance
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000de0b6a803288bff".from_hex().unwrap());
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     let result = Executive::new(&mut state, &env, &machine, &spec)
         .call(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
@@ -962,7 +961,7 @@ fn test_deposit_withdraw_lock() {
 
     // withdraw exact withdrawable staking balance
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000de0b6a803288bfe".from_hex().unwrap());
-    let mut tracer = trace::NoopTracer;
+    let mut tracer = ();
     let result = Executive::new(&mut state, &env, &machine, &spec).call(
         params.clone(),
         &mut substate,
@@ -1038,7 +1037,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &Address::default(),
             &0.into(),
             &mut Substate::new(),
-            &mut NoopTracer,
+            &mut (),
             spec.account_start_nonce,
         )
         .unwrap();
@@ -1112,7 +1111,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &Address::default(),
             &0.into(),
             &mut Substate::new(),
-            &mut NoopTracer,
+            &mut (),
             spec.account_start_nonce,
         )
         .unwrap();
@@ -1696,7 +1695,7 @@ fn test_storage_commission_privilege() {
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate,
-                &mut NoopTracer,
+                &mut (),
                 spec.account_start_nonce,
             )
             .unwrap(),
@@ -2031,7 +2030,7 @@ fn test_storage_commission_privilege() {
                 &privilege_control_address,
                 &U256::MAX,
                 &mut substate,
-                &mut NoopTracer,
+                &mut (),
                 spec.account_start_nonce,
             )
             .unwrap(),

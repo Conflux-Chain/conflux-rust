@@ -46,7 +46,7 @@ class SameHeightTest(ConfluxTestFramework):
             target += 1
             cnt = self.nodes[1].getblockcount()
             self.log.info("Honest block count: " + str(cnt))
-            if cnt == target:
+            if cnt >= target:
                 pass_test = True
                 break
             time.sleep(1)

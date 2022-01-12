@@ -25,8 +25,8 @@ use jsonrpc_derive::rpc;
 
 use crate::rpc::types::{
     eth::{
-        Block, BlockNumber, CallRequest, Filter, FilterChanges, Log, Receipt,
-        SyncStatus, Transaction,
+        Block, BlockNumber, CallRequest, EthRpcLogFilter, FilterChanges, Log,
+        Receipt, SyncStatus, Transaction,
     },
     Bytes, Index,
 };
@@ -214,7 +214,7 @@ pub trait Eth {
 
     /// Returns logs matching given filter object.
     #[rpc(name = "eth_getLogs")]
-    fn logs(&self, _: Filter) -> Result<Vec<Log>>;
+    fn logs(&self, _: EthRpcLogFilter) -> Result<Vec<Log>>;
 
     // /// Returns the hash of the current block, the seedHash, and the boundary
     // condition to be met. #[rpc(name = "eth_getWork")]
@@ -235,7 +235,7 @@ pub trait Eth {
 pub trait EthFilter {
     /// Returns id of new filter.
     #[rpc(name = "eth_newFilter")]
-    fn new_filter(&self, _: Filter) -> Result<U256>;
+    fn new_filter(&self, _: EthRpcLogFilter) -> Result<U256>;
 
     /// Returns id of new block filter.
     #[rpc(name = "eth_newBlockFilter")]

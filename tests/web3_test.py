@@ -32,6 +32,7 @@ class Web3Test(ConfluxTestFramework):
         self.num_nodes = 2
         self.conf_parameters = {
             "log_level": "\"debug\"",
+            "evm_transaction_block_ratio": 1,
             # "public_rpc_apis": "\"cfx,evm,debug,test,pubsub,trace\"",
         }
 
