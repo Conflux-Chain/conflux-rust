@@ -18,7 +18,7 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::rpc::types::{eth::Log, EpochNumber as BlockNumber};
+use crate::rpc::types::eth::{BlockNumber, Log};
 use cfx_types::{Space, H160, H256};
 use jsonrpc_core::Error as RpcError;
 use primitives::{
@@ -143,6 +143,7 @@ impl EthRpcLogFilter {
                 from_epoch: self
                     .from_block
                     .map(|n| n.into())
+                    // FIXME(thegaram): this is probably not consistent with eth
                     .unwrap_or(EpochNumber::LatestCheckpoint),
                 to_epoch: self
                     .to_block

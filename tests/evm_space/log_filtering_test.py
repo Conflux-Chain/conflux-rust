@@ -100,7 +100,7 @@ class CrossSpaceLogFilteringTest(ConfluxTestFramework):
 
         # check EVM events
         # we expect two events from #2 and #3
-        filter = { "topics": [TEST_EVENT_TOPIC], "fromBlock": "earliest", "toBlock": "latest_state" }
+        filter = { "topics": [TEST_EVENT_TOPIC], "fromBlock": "earliest", "toBlock": "latest" }
         logs = self.nodes[0].eth_getLogs(filter)
         assert_equal(len(logs), 2)
 
@@ -181,7 +181,6 @@ class CrossSpaceLogFilteringTest(ConfluxTestFramework):
         self.rpc.generate_block(1)
         self.rpc.generate_blocks(20, 1)
         receipt = self.w3.eth.waitForTransactionReceipt(tx_hash)
-        print(receipt)
         assert_equal(receipt["status"], 1)
         addr = receipt["contractAddress"]
         return addr
