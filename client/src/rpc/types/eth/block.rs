@@ -27,7 +27,7 @@ use primitives::Block as PrimitiveBlock;
 use serde::{Serialize, Serializer};
 
 const SHA3_HASH_OF_EMPTY_UNCLE: &str =
-    "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347";
+    "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347";
 
 /// Block Transactions
 #[derive(Debug)]
