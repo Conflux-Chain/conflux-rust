@@ -471,14 +471,14 @@ impl Eth for EthHandler {
         &self, block_num: BlockNumber, include_txs: bool,
     ) -> jsonrpc_core::Result<Option<RpcBlock>> {
         info!("RPC Request: eth_getBlockByNumber block_number={:?} include_txs={:?}", block_num, include_txs);
-        let maybe_block = self.get_block_by_number(block_num)?;
+        let maybe_block = self.get_block_by_number(block_num);
 
         match maybe_block {
-            None => Ok(None),
-            Some(b) => {
+            Ok(Some(b)) => {
                 let inner = self.consensus_graph().inner.read();
                 Ok(Some(RpcBlock::new(&*b, include_txs, &*inner)))
             }
+            _ => Ok(None),
         }
     }
 
@@ -557,12 +557,8 @@ impl Eth for EthHandler {
             .consensus
             .get_data_manager()
             .block_by_hash(&hash, false);
-        match maybe_block {
-            None => Ok(None),
-            Some(b) => {
-                Ok(Some(U256::from(b.block_header.referee_hashes().len())))
-            }
-        }
+
+        Ok(maybe_block.map(|_| 0.into()))
     }
 
     fn block_uncles_count_by_number(
@@ -573,12 +569,7 @@ impl Eth for EthHandler {
             block_num
         );
         let maybe_block = self.get_block_by_number(block_num)?;
-        match maybe_block {
-            None => Ok(None),
-            Some(b) => {
-                Ok(Some(U256::from(b.block_header.referee_hashes().len())))
-            }
-        }
+        Ok(maybe_block.map(|_| 0.into()))
     }
 
     fn code_at(
@@ -871,67 +862,16 @@ impl Eth for EthHandler {
             "RPC Request: eth_getUncleByBlockHashAndIndex hash={:?}, idx={:?}",
             hash, idx
         );
-        let maybe_block = self
-            .consensus
-            .get_data_manager()
-            .block_by_hash(&hash, false);
-        let index = idx.value();
-        match maybe_block {
-            None => return Ok(None),
-            Some(b) => {
-                if b.block_header.referee_hashes().len() <= index {
-                    return Ok(None);
-                } else {
-                    let ref_hash = b.block_header.referee_hashes()[index];
-                    let block = self
-                        .consensus
-                        .get_data_manager()
-                        .block_by_hash(&ref_hash, false);
-                    let inner = self.consensus_graph().inner.read();
-                    match block {
-                        None => return Ok(None), /* This should not happen */
-                        // though
-                        Some(b) => {
-                            return Ok(Some(RpcBlock::new(
-                                &*b, false, &*inner,
-                            )));
-                        }
-                    }
-                }
-            }
-        }
+        // We do not have uncle block
+        Ok(None)
     }
 
     fn uncle_by_block_number_and_index(
         &self, block_num: BlockNumber, idx: Index,
     ) -> jsonrpc_core::Result<Option<RpcBlock>> {
         info!("RPC Request: eth_getUncleByBlockNumberAndIndex block_num={:?}, idx={:?}", block_num, idx);
-        let maybe_block = self.get_block_by_number(block_num)?;
-        let index = idx.value();
-        match maybe_block {
-            None => return Ok(None),
-            Some(b) => {
-                if b.block_header.referee_hashes().len() <= index {
-                    return Ok(None);
-                } else {
-                    let ref_hash = b.block_header.referee_hashes()[index];
-                    let block = self
-                        .consensus
-                        .get_data_manager()
-                        .block_by_hash(&ref_hash, false);
-                    let inner = self.consensus_graph().inner.read();
-                    match block {
-                        None => return Ok(None), /* This should not happen */
-                        // though
-                        Some(b) => {
-                            return Ok(Some(RpcBlock::new(
-                                &*b, false, &*inner,
-                            )));
-                        }
-                    }
-                }
-            }
-        }
+        // We do not have uncle block
+        Ok(None)
     }
 
     fn logs(&self, filter: EthRpcLogFilter) -> jsonrpc_core::Result<Vec<Log>> {

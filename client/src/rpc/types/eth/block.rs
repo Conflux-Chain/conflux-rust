@@ -19,12 +19,15 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::rpc::types::{eth::Transaction, Bytes};
-use cfx_types::{Bloom as H2048, Space, H160, H256, U256};
+use cfx_types::{hexstr_to_h256, Bloom as H2048, Space, H160, H256, U256};
 use cfxcore::{
     block_data_manager::DataVersionTuple, consensus::ConsensusGraphInner,
 };
 use primitives::Block as PrimitiveBlock;
 use serde::{Serialize, Serializer};
+
+const SHA3_HASH_OF_EMPTY_UNCLE: &str =
+    "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347";
 
 /// Block Transactions
 #[derive(Debug)]
@@ -171,13 +174,7 @@ impl Block {
         Block {
             hash: Some(b.block_header.hash()),
             parent_hash: b.block_header.parent_hash().clone(),
-            uncles_hash: if let Some(uncle) =
-                b.block_header.referee_hashes().first()
-            {
-                uncle.clone()
-            } else {
-                H256::zero()
-            },
+            uncles_hash: hexstr_to_h256(SHA3_HASH_OF_EMPTY_UNCLE),
             author: b.block_header.author().clone(),
             miner: b.block_header.author().clone(),
             state_root: b.block_header.deferred_state_root().clone(),
@@ -198,7 +195,7 @@ impl Block {
             total_difficulty: None,
             seal_fields: vec![],
             base_fee_per_gas: None,
-            uncles: b.block_header.referee_hashes().clone(),
+            uncles: vec![],
             transactions: if full {
                 BlockTransactions::Full(
                     b.transactions
