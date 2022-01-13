@@ -224,7 +224,7 @@ class CrossSpaceLogFilteringTest(ConfluxTestFramework):
         # emitBoth: TestEvent(22)
         assert_equal(logs[0]["data"], number_to_topic(22))
         assert_equal(logs[0]["address"], evmContractAddr.lower())
-        # assert_equal(logs[0]["blockHash"], block_e)
+        assert_equal(logs[0]["blockHash"], block_e)
         assert_equal(logs[0]["blockNumber"], epoch_e)
         assert_equal(logs[0]["transactionHash"], cfx_tx_hashes[5]) # TODO: should use phantom tx here
         # assert_equal(logs[0]["logIndex"], '0x0')
@@ -235,7 +235,7 @@ class CrossSpaceLogFilteringTest(ConfluxTestFramework):
         # emitEVM: TestEvent(23)
         assert_equal(logs[1]["data"], number_to_topic(23))
         assert_equal(logs[1]["address"], evmContractAddr.lower())
-        # assert_equal(logs[1]["blockHash"], block_e)
+        assert_equal(logs[1]["blockHash"], block_e)
         assert_equal(logs[1]["blockNumber"], epoch_e)
         assert_equal(logs[1]["transactionHash"], evm_tx_hashes[2].hex())
         # assert_equal(logs[1]["logIndex"], '0x1')
