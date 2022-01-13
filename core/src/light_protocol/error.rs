@@ -7,7 +7,7 @@ use crate::{
     sync::message::Throttled,
     NodeType,
 };
-use cfx_internal_common::ChainIdParamsInner;
+use cfx_internal_common::ChainIdParamsOneChainInner;
 use cfx_types::{H160, H256};
 use error_chain::ChainedError;
 use network::{node_table::NodeId, NetworkContext, UpdateNodeOperation};
@@ -34,7 +34,7 @@ error_chain! {
             display("packet already throttled: {:?}", msg_name),
         }
 
-        ChainIdMismatch{ ours: ChainIdParamsInner, theirs: ChainIdParamsInner } {
+        ChainIdMismatch{ ours: ChainIdParamsOneChainInner, theirs: ChainIdParamsOneChainInner } {
             description("ChainId mismatch"),
             display("ChainId mismatch, ours={:?}, theirs={:?}.", ours, theirs),
         }
@@ -281,7 +281,7 @@ pub fn handle(
             | network::ErrorKind::OversizedPacket
             | network::ErrorKind::Throttling(_) => disconnect = false,
 
-            network::ErrorKind::BadProtocol | network::ErrorKind::Decoder => {
+            network::ErrorKind::BadProtocol | network::ErrorKind::Decoder(_) => {
                 op = Some(UpdateNodeOperation::Remove)
             }
 

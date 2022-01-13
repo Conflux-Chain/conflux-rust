@@ -11,11 +11,13 @@ use std::{
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum Api {
     Cfx,
+    Evm,
     Debug,
     Pubsub,
     Test,
     Trace,
     TxPool,
+    Pos,
 }
 
 impl FromStr for Api {
@@ -25,11 +27,13 @@ impl FromStr for Api {
         use self::Api::*;
         match s {
             "cfx" => Ok(Cfx),
+            "evm" => Ok(Evm),
             "debug" => Ok(Debug),
             "pubsub" => Ok(Pubsub),
             "test" => Ok(Test),
             "trace" => Ok(Trace),
             "txpool" => Ok(TxPool),
+            "pos" => Ok(Pos),
             _ => Err("Unknown api type".into()),
         }
     }
@@ -39,11 +43,13 @@ impl Display for Api {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Api::Cfx => write!(f, "cfx"),
+            Api::Evm => write!(f, "evm"),
             Api::Debug => write!(f, "debug"),
             Api::Pubsub => write!(f, "pubsub"),
             Api::Test => write!(f, "test"),
             Api::Trace => write!(f, "trace"),
             Api::TxPool => write!(f, "txpool"),
+            Api::Pos => write!(f, "pos"),
         }
     }
 }
@@ -61,16 +67,18 @@ impl ApiSet {
             ApiSet::List(ref apis) => apis.clone(),
             ApiSet::All => [
                 Api::Cfx,
+                Api::Evm,
                 Api::Debug,
                 Api::Pubsub,
                 Api::Test,
                 Api::Trace,
+                Api::Pos,
                 Api::TxPool,
             ]
             .iter()
             .cloned()
             .collect(),
-            ApiSet::Safe => [Api::Cfx, Api::Pubsub, Api::TxPool]
+            ApiSet::Safe => [Api::Cfx, Api::Evm, Api::Pubsub, Api::TxPool]
                 .iter()
                 .cloned()
                 .collect(),

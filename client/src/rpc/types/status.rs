@@ -12,6 +12,8 @@ pub struct Status {
     pub best_hash: H256,
     /// The best chain id,
     pub chain_id: U64,
+    /// The best chain id,
+    pub ethereum_space_chain_id: U64,
     /// The network id,
     pub network_id: U64,
     /// The number of epochs
@@ -26,4 +28,6 @@ pub struct Status {
     pub latest_confirmed: U64,
     /// The latest executed epoch.
     pub latest_state: U64,
+    /// The latest finalized epoch.
+    pub latest_finalized: U64,
 }

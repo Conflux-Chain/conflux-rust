@@ -18,7 +18,7 @@ use cfxkey::{Generator, KeyPair, Random};
 use client::{archive::ArchiveClient, configuration::Configuration};
 use criterion::{criterion_group, criterion_main, Criterion};
 use parking_lot::{Condvar, Mutex};
-use primitives::{Action, Transaction};
+use primitives::{Action, NativeTransaction, Transaction};
 use std::{sync::Arc, time::Duration};
 
 fn txexe_benchmark(c: &mut Criterion) {
@@ -34,7 +34,7 @@ fn txexe_benchmark(c: &mut Criterion) {
     .unwrap();
     let receiver_kp = Random.generate().expect("Fail to generate KeyPair.");
 
-    let tx = Transaction {
+    let tx = Transaction::from(NativeTransaction {
         nonce: 0.into(),
         gas_price: U256::from(100u64),
         gas: U256::from(21000u64),
@@ -42,9 +42,9 @@ fn txexe_benchmark(c: &mut Criterion) {
         action: Action::Call(receiver_kp.address()),
         storage_limit: 0,
         epoch_height: 0,
-        chain_id: 0,
+        chain_id: 1,
         data: Bytes::new(),
-    };
+    });
     let tx = tx.sign(kp.secret());
     let machine =
         new_machine_with_builtin(Default::default(), VmFactory::new(1024 * 32));
@@ -54,9 +54,11 @@ fn txexe_benchmark(c: &mut Criterion) {
         timestamp: Default::default(),
         difficulty: Default::default(),
         accumulated_gas_used: U256::zero(),
-        gas_limit: tx.gas.clone(),
+        gas_limit: tx.gas().clone(),
         last_hash: H256::zero(),
         epoch_height: 0,
+        pos_view: None,
+        finalized_epoch: None,
         transaction_epoch_bound: TRANSACTION_DEFAULT_EPOCH_BOUND,
     };
     let mut group = c.benchmark_group("Execute 1 transaction");

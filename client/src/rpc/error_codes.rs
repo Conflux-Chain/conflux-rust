@@ -102,6 +102,9 @@ pub mod codes {
     /// return another error code such as invalid params, or for example
     /// CALL_EXECUTION_ERROR.
     pub const EXCEPTION_ERROR: i64 = -32016;
+    static_assertions::const_assert!(
+        EXCEPTION_ERROR == cfxcore::rpc_errors::EXCEPTION_ERROR
+    );
     /// The error can be given to a request about a previous related request
     /// which we can not associate with.
     ///
@@ -130,6 +133,17 @@ pub mod codes {
     /// Call() execution error. This is clearly an application level error code,
     /// but we keep the error code to be ethereum rpc client compatible.
     pub const CALL_EXECUTION_ERROR: i64 = -32015;
+
+    /* PoS chain is not started */
+    pub const POS_NOT_ENABLED: i64 = -32078;
+}
+
+pub fn build_rpc_server_error(code: i64, message: String) -> Error {
+    Error {
+        code: ErrorCode::ServerError(code),
+        message,
+        data: None,
+    }
 }
 
 pub fn unimplemented(details: Option<String>) -> Error {
@@ -144,6 +158,14 @@ pub fn invalid_params<T: fmt::Debug>(param: &str, details: T) -> Error {
     Error {
         code: ErrorCode::InvalidParams,
         message: format!("Invalid parameters: {}", param),
+        data: Some(Value::String(format!("{:?}", details))),
+    }
+}
+
+pub fn internal_error<T: fmt::Debug>(details: T) -> Error {
+    Error {
+        code: ErrorCode::InternalError,
+        message: "Internal error".into(),
         data: Some(Value::String(format!("{:?}", details))),
     }
 }

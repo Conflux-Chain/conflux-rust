@@ -14,7 +14,6 @@ class TestGetBlockByHash(RpcClient):
         assert_raises_rpc_error(None, None, self.block_by_hash, "0x123", False) # too short
         assert_raises_rpc_error(None, None, self.block_by_hash, self.rand_hash() + "123", True) # too long
         assert_raises_rpc_error(None, None, self.block_by_hash, self.rand_hash()[0:-1] + "G", False) # invalid char
-        assert_raises_rpc_error(None, None, self.block_by_hash, self.rand_hash()[2:], True) # without 0x prefix
 
     def test_block_not_found(self):
         dummy_hash = self.rand_hash()

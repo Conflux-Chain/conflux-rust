@@ -10,13 +10,15 @@ default_config = dict(
     GENESIS_PRI_KEY=decode_hex("46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f"),
     GENESIS_PRI_KEY_2=decode_hex("9a6d3ba2b0c7514b16a006ee605055d71b9edfad183aeb2d9790e9d4ccced471"),
     TOTAL_COIN= 5 * 10**9 * 10**18 * 10**6,
-    GENESIS_STATE_ROOT=decode_hex("0x2a06395749fc38a73ad15a1f2b3b58f54a7f889fff1ad89fa02c5b00d674186b"),
+    GENESIS_STATE_ROOT=decode_hex("0x3a5ce6e6d182784af05d273b069d2a023e93c43a0281a57810d2f4b63a6ad6b1"),
     GENESIS_RECEIPTS_ROOT=trie.EMPTY_EPOCH_RECEIPT_ROOT_BY_NUMBER_OF_BLOCKS[0],
     GENESIS_LOGS_BLOOM_HASH=decode_hex("0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5"), # KECCAK_EMPTY_BLOOM    ~ keccak(b'\0' * 256)
     GENESIS_TRANSACTION_ROOT=decode_hex("0x8208dfdbb409f7a3e41386a8eaaa6412ad4df158fc04a09b499c1a004b53d469"),
     GENESIS_AUTHOR=decode_hex("1949000000000000000000000000000000001001"),
     GENESIS_GAS_LIMIT=30_000_000,
     MAX_BLOCK_SIZE_IN_BYTES=200 * 1024,
+    POS_GENESIS_BLOCK=b'\x00' * 32,
+    POS_VOTE_COUNT=1000,
 )
 
 default_conflux_conf = dict(
@@ -52,4 +54,6 @@ small_local_test_conf = dict(
     persist_block_number_index = "true",
     execute_genesis = "false",
     dev_allow_phase_change_without_peer = "true",
+    check_status_genesis = "false",
+    pos_reference_enable_height = 0,
 )

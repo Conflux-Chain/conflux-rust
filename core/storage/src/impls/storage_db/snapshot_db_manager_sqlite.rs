@@ -78,7 +78,9 @@ impl SnapshotDbManagerSqlite {
 
             // To serialize simultaneous opens.
             let _open_lock = self.open_create_delete_lock.lock();
-            if let Some(already_open) =
+            // If it's not in already_open_snapshots, the sqlite db must have
+            // been closed.
+            while let Some(already_open) =
                 self.already_open_snapshots.read().get(&snapshot_path)
             {
                 match already_open {
@@ -88,7 +90,21 @@ impl SnapshotDbManagerSqlite {
                     }
                     Some(open_shared_weak) => {
                         match Weak::upgrade(open_shared_weak) {
-                            None => {}
+                            None => {
+                                // All `Arc` of the sqlite db have been dropped,
+                                // but the inner
+                                // struct (sqlite db itself) drop is called
+                                // after decreasing
+                                // the strong_ref count, so it may still be open
+                                // at this time,
+                                // and after it's closed it will be removed from
+                                // `already_open_snapshots`.
+                                // Thus, here we wait for it to be removed to
+                                // ensure that when we try
+                                // to open it, it's guaranteed to be closed.
+                                thread::sleep(Duration::from_millis(5));
+                                continue;
+                            }
                             Some(already_open) => {
                                 return Ok(Some(already_open));
                             }
@@ -371,85 +387,59 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             old_snapshot_epoch_id, snapshot_epoch_id
         );
         // FIXME: clean-up when error happens.
-        match &delta_mpt.maybe_root_node {
-            None => {
-                // This is only for the special case for the second delta mpt.
-                // For the first a few blocks, the state is [Empty snapshot,
-                // empty intermediate mpt, delta mpt],
-                // then [Empty snapshot, intermediate mpt, delta mpt].
-                // The merge of Empty snapshot and empty intermediate mpt
-                // resulting into an empty snapshot, falls into this code path,
-                // where we do nothing.
-                in_progress_snapshot_info.merkle_root = MERKLE_NULL_NODE;
-                Ok((
-                    snapshot_info_map_rwlock.write(),
-                    in_progress_snapshot_info,
-                ))
-            }
-            Some(_) => {
-                // Unwrap here is safe because the delta MPT is guaranteed not
-                // empty.
-                let temp_db_path = self.get_merge_temp_snapshot_db_path(
-                    old_snapshot_epoch_id,
-                    &snapshot_epoch_id,
-                );
+        let temp_db_path = self.get_merge_temp_snapshot_db_path(
+            old_snapshot_epoch_id,
+            &snapshot_epoch_id,
+        );
 
-                let mut snapshot_db;
-                let new_snapshot_root = if *old_snapshot_epoch_id == NULL_EPOCH
-                {
-                    // direct merge the first snapshot
-                    snapshot_db = Self::SnapshotDb::create(
-                        temp_db_path.as_path(),
-                        &self.already_open_snapshots,
-                        &self.open_snapshot_semaphore,
-                    )?;
-                    snapshot_db.dump_delta_mpt(&delta_mpt)?;
-                    snapshot_db.direct_merge()?
-                } else {
-                    if self
-                        .try_copy_snapshot(
-                            self.get_snapshot_db_path(old_snapshot_epoch_id)
-                                .as_path(),
-                            temp_db_path.as_path(),
-                        )
-                        .is_ok()
-                    {
-                        // Open the copied database.
-                        snapshot_db = self.open_snapshot_write(
-                            temp_db_path.clone(),
-                            /* create = */ false,
-                        )?;
-
-                        // Drop copied old snapshot delta mpt dump
-                        snapshot_db.drop_delta_mpt_dump()?;
-
-                        // iterate and insert into temp table.
-                        snapshot_db.dump_delta_mpt(&delta_mpt)?;
-                        snapshot_db.direct_merge()?
-                    } else {
-                        snapshot_db = self.open_snapshot_write(
-                            temp_db_path.clone(),
-                            /* create = */ true,
-                        )?;
-                        snapshot_db.dump_delta_mpt(&delta_mpt)?;
-                        self.copy_and_merge(
-                            &mut snapshot_db,
-                            old_snapshot_epoch_id,
-                        )?
-                    }
-                };
-                in_progress_snapshot_info.merkle_root =
-                    new_snapshot_root.clone();
-                drop(snapshot_db);
-                let locked = snapshot_info_map_rwlock.write();
-                Self::rename_snapshot_db(
-                    &temp_db_path,
-                    &self.get_snapshot_db_path(&snapshot_epoch_id),
+        let mut snapshot_db;
+        let new_snapshot_root = if *old_snapshot_epoch_id == NULL_EPOCH {
+            // direct merge the first snapshot
+            snapshot_db = Self::SnapshotDb::create(
+                temp_db_path.as_path(),
+                &self.already_open_snapshots,
+                &self.open_snapshot_semaphore,
+            )?;
+            snapshot_db.dump_delta_mpt(&delta_mpt)?;
+            snapshot_db.direct_merge()?
+        } else {
+            if self
+                .try_copy_snapshot(
+                    self.get_snapshot_db_path(old_snapshot_epoch_id).as_path(),
+                    temp_db_path.as_path(),
+                )
+                .is_ok()
+            {
+                // Open the copied database.
+                snapshot_db = self.open_snapshot_write(
+                    temp_db_path.clone(),
+                    /* create = */ false,
                 )?;
 
-                Ok((locked, in_progress_snapshot_info))
+                // Drop copied old snapshot delta mpt dump
+                snapshot_db.drop_delta_mpt_dump()?;
+
+                // iterate and insert into temp table.
+                snapshot_db.dump_delta_mpt(&delta_mpt)?;
+                snapshot_db.direct_merge()?
+            } else {
+                snapshot_db = self.open_snapshot_write(
+                    temp_db_path.clone(),
+                    /* create = */ true,
+                )?;
+                snapshot_db.dump_delta_mpt(&delta_mpt)?;
+                self.copy_and_merge(&mut snapshot_db, old_snapshot_epoch_id)?
             }
-        }
+        };
+        in_progress_snapshot_info.merkle_root = new_snapshot_root.clone();
+        drop(snapshot_db);
+        let locked = snapshot_info_map_rwlock.write();
+        Self::rename_snapshot_db(
+            &temp_db_path,
+            &self.get_snapshot_db_path(&snapshot_epoch_id),
+        )?;
+
+        Ok((locked, in_progress_snapshot_info))
     }
 
     fn get_snapshot_by_epoch_id(
@@ -465,20 +455,33 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
 
     fn destroy_snapshot(&self, snapshot_epoch_id: &EpochId) -> Result<()> {
         let path = self.get_snapshot_db_path(snapshot_epoch_id);
-        let maybe_snapshot = match self.already_open_snapshots.read().get(&path)
-        {
-            Some(Some(snapshot)) => Weak::upgrade(snapshot),
-            Some(None) => {
-                // This should not happen because Conflux always write on a
-                // snapshot db under a temporary name. All completed snapshots
-                // are readonly.
-                if cfg!(debug_assertions) {
-                    unreachable!("Try to destroy a snapshot being open exclusively for write.")
-                } else {
-                    unsafe { unreachable_unchecked() }
+        let maybe_snapshot = loop {
+            match self.already_open_snapshots.read().get(&path) {
+                Some(Some(snapshot)) => {
+                    match Weak::upgrade(snapshot) {
+                        None => {
+                            // This is transient and we wait for the db to be
+                            // fully closed.
+                            // The assumption is the same as in
+                            // `open_snapshot_readonly`.
+                            thread::sleep(Duration::from_millis(5));
+                            continue;
+                        }
+                        Some(snapshot) => break Some(snapshot),
+                    }
                 }
-            }
-            None => None,
+                Some(None) => {
+                    // This should not happen because Conflux always write on a
+                    // snapshot db under a temporary name. All completed
+                    // snapshots are readonly.
+                    if cfg!(debug_assertions) {
+                        unreachable!("Try to destroy a snapshot being open exclusively for write.")
+                    } else {
+                        unsafe { unreachable_unchecked() }
+                    }
+                }
+                None => break None,
+            };
         };
 
         match maybe_snapshot {
@@ -535,7 +538,7 @@ use crate::{
 use fs_extra::dir::CopyOptions;
 use futures::executor;
 use parking_lot::{Mutex, RwLock, RwLockWriteGuard};
-use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
+use primitives::{EpochId, MerkleHash, NULL_EPOCH};
 use rustc_hex::ToHex;
 use std::{
     collections::HashMap,
@@ -544,5 +547,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
     sync::{Arc, Weak},
+    thread,
+    time::Duration,
 };
 use tokio::sync::Semaphore;

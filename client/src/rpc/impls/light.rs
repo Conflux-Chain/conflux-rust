@@ -3,7 +3,9 @@
 // See http://www.gnu.org/licenses/
 
 use crate::rpc::types::errors::check_rpc_address_network;
-use cfx_types::{BigEndianHash, H160, H256, H520, U128, U256, U64};
+use cfx_types::{
+    AddressSpaceUtil, BigEndianHash, H160, H256, H520, U128, U256, U64,
+};
 use cfxcore::{
     block_data_manager::BlockDataManager,
     consensus_parameters::ONE_GDRIP_IN_DRIP,
@@ -15,6 +17,7 @@ use cfxcore::{
 };
 use cfxcore_accounts::AccountProvider;
 use delegate::delegate;
+use diem_types::transaction::TransactionPayload;
 use futures::future::{self, FutureExt, TryFutureExt};
 use jsonrpc_core::{BoxFuture, Error as RpcError, Result as JsonRpcResult};
 use network::{
@@ -37,15 +40,15 @@ use crate::{
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
+            pos::{Block as PosBlock, PoSEpochReward},
             Account as RpcAccount, AccountPendingInfo,
             AccountPendingTransactions, BlameInfo, Block as RpcBlock,
-            BlockHashOrEpochNumber, Bytes, CallRequest,
+            BlockHashOrEpochNumber, Bytes, CallRequest, CfxRpcLogFilter,
             CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
             EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
-            LogFilter as RpcFilter, Receipt as RpcReceipt,
-            RewardInfo as RpcRewardInfo, RpcAddress, SendTxRequest,
-            SponsorInfo, Status as RpcStatus, SyncGraphStates, TokenSupplyInfo,
-            Transaction as RpcTransaction,
+            PoSEconomics, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
+            RpcAddress, SendTxRequest, SponsorInfo, Status as RpcStatus,
+            SyncGraphStates, TokenSupplyInfo, Transaction as RpcTransaction,
         },
         RpcBoxFuture, RpcResult,
     },
@@ -54,6 +57,7 @@ use cfx_addr::Network;
 use cfxcore::{
     light_protocol::QueryService, rpc_errors::ErrorKind::LightProtocol,
 };
+use diem_types::account_address::AccountAddress;
 
 // macro for reducing boilerplate for unsupported methods
 macro_rules! not_supported {
@@ -146,7 +150,7 @@ impl RpcImpl {
             let account = account.unwrap_or(account_result_to_rpc_result(
                 "address",
                 Ok(Account::new_empty_with_balance(
-                    &address.hex_address,
+                    &address.hex_address.with_native_space(),
                     &U256::zero(), /* balance */
                     &U256::zero(), /* nonce */
                 )),
@@ -415,7 +419,7 @@ impl RpcImpl {
         Box::new(fut.boxed().compat())
     }
 
-    fn get_logs(&self, filter: RpcFilter) -> RpcBoxFuture<Vec<RpcLog>> {
+    fn get_logs(&self, filter: CfxRpcLogFilter) -> RpcBoxFuture<Vec<RpcLog>> {
         info!("RPC Request: cfx_getLogs filter={:?}", filter);
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
@@ -527,8 +531,12 @@ impl RpcImpl {
             let chain_id = light.get_latest_verifiable_chain_id().map_err(|_| {
                 format!("the light client cannot retrieve/verify the latest chain_id.")
             })?;
-            let tx =
-                tx.sign_with(epoch_height, chain_id, password, accounts)?;
+            let tx = tx.sign_with(
+                epoch_height,
+                chain_id.in_native_space(),
+                password,
+                accounts,
+            )?;
 
             Self::send_tx_helper(light, Bytes::new(tx.rlp_bytes()))
         };
@@ -968,6 +976,32 @@ impl RpcImpl {
         Box::new(fut.boxed().compat())
     }
 
+    pub fn pos_economics(
+        &self, epoch: Option<EpochNumber>,
+    ) -> RpcBoxFuture<PoSEconomics> {
+        let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
+
+        info!("RPC Request: cfx_getPoSEconomics epoch={:?}", epoch);
+
+        // clone to avoid lifetime issues due to capturing `self`
+        let light = self.light.clone();
+
+        let fut = async move {
+            Ok(light
+                .get_pos_economics(epoch)
+                .await
+                .map(|ans| PoSEconomics {
+                    total_pos_staking_tokens: ans[0],
+                    distributable_pos_interest: ans[1],
+                    last_distribute_block: ans[2].as_u64(),
+                })
+                .map_err(|e| e.to_string())
+                .map_err(RpcError::invalid_params)?)
+        };
+
+        Box::new(fut.boxed().compat())
+    }
+
     fn check_balance_against_transaction(
         &self, account_addr: RpcAddress, contract_addr: RpcAddress,
         gas_limit: U256, gas_price: U256, storage_limit: U256,
@@ -1056,9 +1090,10 @@ impl Cfx for CfxHandler {
             fn deposit_list(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<Vec<DepositInfo>>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<U256>;
             fn gas_price(&self) -> BoxFuture<U256>;
-            fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
+            fn get_logs(&self, filter: CfxRpcLogFilter) -> BoxFuture<Vec<RpcLog>>;
             fn interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn next_nonce(&self, address: RpcAddress, num: Option<BlockHashOrEpochNumber>) -> BoxFuture<U256>;
+            fn pos_economics(&self, num: Option<EpochNumber>) -> BoxFuture<PoSEconomics>;
             fn send_raw_transaction(&self, raw: Bytes) -> JsonRpcResult<H256>;
             fn sponsor_info(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<SponsorInfo>;
             fn staking_balance(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<U256>;
@@ -1079,6 +1114,7 @@ impl Cfx for CfxHandler {
         fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
         fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
         fn opened_method_groups(&self) -> JsonRpcResult<Vec<String>>;
+        fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
     }
 }
 
@@ -1109,6 +1145,17 @@ impl TestRpc for TestRpcImpl {
             fn save_node_db(&self) -> JsonRpcResult<()>;
             fn say_hello(&self) -> JsonRpcResult<String>;
             fn stop(&self) -> JsonRpcResult<()>;
+            fn pos_register(&self, voting_power: U64) -> JsonRpcResult<(Bytes, AccountAddress)>;
+            fn pos_update_voting_power(
+                &self, pos_account: AccountAddress, increased_voting_power: U64,
+            ) -> JsonRpcResult<()>;
+            fn pos_retire_self(&self) -> JsonRpcResult<()>;
+            fn pos_start(&self) -> JsonRpcResult<()>;
+            fn pos_force_vote_proposal(&self, block_id: H256) -> JsonRpcResult<()>;
+            fn pos_force_propose(&self, round: U64, parent_block_id: H256, payload: Vec<TransactionPayload>) -> JsonRpcResult<()>;
+            fn pos_trigger_timeout(&self, timeout_type: String) -> JsonRpcResult<()>;
+            fn pos_force_sign_pivot_decision(&self, block_hash: H256, height: U64) -> JsonRpcResult<()>;
+            fn pos_get_chosen_proposal(&self) -> JsonRpcResult<Option<PosBlock>>;
         }
     }
 
@@ -1119,7 +1166,7 @@ impl TestRpc for TestRpcImpl {
         fn generate_block_with_nonce_and_timestamp(&self, parent: H256, referees: Vec<H256>, raw: Bytes, nonce: U256, timestamp: u64, adaptive: bool) -> JsonRpcResult<H256>;
         fn generate_custom_block(&self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes, adaptive: Option<bool>) -> JsonRpcResult<H256>;
         fn generate_empty_blocks(&self, num_blocks: usize) -> JsonRpcResult<Vec<H256>>;
-        fn generate_fixed_block(&self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>) -> JsonRpcResult<H256>;
+        fn generate_fixed_block(&self, parent_hash: H256, referee: Vec<H256>, num_txs: usize, adaptive: bool, difficulty: Option<u64>, pos_reference: Option<H256>) -> JsonRpcResult<H256>;
         fn generate_one_block_with_direct_txgen(&self, num_txs: usize, block_size_limit: usize, num_txs_simple: usize, num_txs_erc20: usize) -> JsonRpcResult<H256>;
         fn generate_one_block(&self, num_txs: usize, block_size_limit: usize) -> JsonRpcResult<H256>;
         fn get_block_status(&self, block_hash: H256) -> JsonRpcResult<(u8, bool)>;

@@ -2,15 +2,16 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{super::impls::sponsor::*, macros::*, ExecutionTrait, SolFnTable};
+use super::{
+    super::impls::sponsor::*, macros::*, SimpleExecutionTrait, SolFnTable,
+};
 use crate::{
     evm::{ActionParams, Spec},
     executive::InternalRefContext,
-    trace::{trace::ExecTrace, Tracer},
+    observer::VmObserve,
     vm,
 };
 use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
-use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{Address, U256};
 
 make_solidity_contract! {
@@ -55,11 +56,10 @@ make_solidity_function! {
 }
 impl_function_type!(SetSponsorForGas, "payable_write", gas: |spec: &Spec| 2 * spec.sstore_reset_gas);
 
-impl ExecutionTrait for SetSponsorForGas {
+impl SimpleExecutionTrait for SetSponsorForGas {
     fn execute_inner(
         &self, inputs: (Address, U256), params: &ActionParams,
-        context: &mut InternalRefContext,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
         set_sponsor_for_gas(
@@ -78,11 +78,10 @@ make_solidity_function! {
 }
 impl_function_type!(SetSponsorForCollateral, "payable_write", gas: |spec: &Spec| 2 * spec.sstore_reset_gas);
 
-impl ExecutionTrait for SetSponsorForCollateral {
+impl SimpleExecutionTrait for SetSponsorForCollateral {
     fn execute_inner(
         &self, input: Address, params: &ActionParams,
-        context: &mut InternalRefContext,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
         set_sponsor_for_collateral(
@@ -102,19 +101,18 @@ impl_function_type!(AddPrivilege, "non_payable_write");
 
 impl UpfrontPaymentTrait for AddPrivilege {
     fn upfront_gas_payment(
-        &self, input: &Vec<Address>, _: &ActionParams, spec: &Spec,
-        _: &dyn StateOpsTrait,
-    ) -> U256
+        &self, input: &Vec<Address>, _: &ActionParams,
+        context: &InternalRefContext,
+    ) -> DbResult<U256>
     {
-        U256::from(spec.sstore_reset_gas) * input.len()
+        Ok(U256::from(context.spec.sstore_reset_gas) * input.len())
     }
 }
 
-impl ExecutionTrait for AddPrivilege {
+impl SimpleExecutionTrait for AddPrivilege {
     fn execute_inner(
         &self, addresses: Vec<Address>, params: &ActionParams,
-        context: &mut InternalRefContext,
-        _: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, _: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
         if !context.is_contract_address(&params.sender)? {
@@ -134,19 +132,18 @@ impl_function_type!(RemovePrivilege, "non_payable_write");
 
 impl UpfrontPaymentTrait for RemovePrivilege {
     fn upfront_gas_payment(
-        &self, input: &Vec<Address>, _: &ActionParams, spec: &Spec,
-        _: &dyn StateOpsTrait,
-    ) -> U256
+        &self, input: &Vec<Address>, _: &ActionParams,
+        context: &InternalRefContext,
+    ) -> DbResult<U256>
     {
-        U256::from(spec.sstore_reset_gas) * input.len()
+        Ok(U256::from(context.spec.sstore_reset_gas) * input.len())
     }
 }
 
-impl ExecutionTrait for RemovePrivilege {
+impl SimpleExecutionTrait for RemovePrivilege {
     fn execute_inner(
         &self, addresses: Vec<Address>, params: &ActionParams,
-        context: &mut InternalRefContext,
-        _: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, _: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
         if !context.is_contract_address(&params.sender)? {
@@ -165,11 +162,10 @@ make_solidity_function! {
 }
 impl_function_type!(GetSponsorForGas, "query_with_default_gas");
 
-impl ExecutionTrait for GetSponsorForGas {
+impl SimpleExecutionTrait for GetSponsorForGas {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
-        context: &mut InternalRefContext,
-        _: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, _: &mut dyn VmObserve,
     ) -> vm::Result<Address>
     {
         Ok(context.state.sponsor_for_gas(&input)?.unwrap_or_default())
@@ -181,11 +177,10 @@ make_solidity_function! {
 }
 impl_function_type!(GetSponsoredBalanceForGas, "query_with_default_gas");
 
-impl ExecutionTrait for GetSponsoredBalanceForGas {
+impl SimpleExecutionTrait for GetSponsoredBalanceForGas {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
-        context: &mut InternalRefContext,
-        _: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, _: &mut dyn VmObserve,
     ) -> vm::Result<U256>
     {
         Ok(context.state.sponsor_balance_for_gas(&input)?)
@@ -197,11 +192,10 @@ make_solidity_function! {
 }
 impl_function_type!(GetSponsoredGasFeeUpperBound, "query_with_default_gas");
 
-impl ExecutionTrait for GetSponsoredGasFeeUpperBound {
+impl SimpleExecutionTrait for GetSponsoredGasFeeUpperBound {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
-        context: &mut InternalRefContext,
-        _: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, _: &mut dyn VmObserve,
     ) -> vm::Result<U256>
     {
         Ok(context.state.sponsor_gas_bound(&input)?)
@@ -213,11 +207,10 @@ make_solidity_function! {
 }
 impl_function_type!(GetSponsorForCollateral, "query_with_default_gas");
 
-impl ExecutionTrait for GetSponsorForCollateral {
+impl SimpleExecutionTrait for GetSponsorForCollateral {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
-        context: &mut InternalRefContext,
-        _: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, _: &mut dyn VmObserve,
     ) -> vm::Result<Address>
     {
         Ok(context
@@ -232,11 +225,10 @@ make_solidity_function! {
 }
 impl_function_type!(GetSponsoredBalanceForCollateral, "query_with_default_gas");
 
-impl ExecutionTrait for GetSponsoredBalanceForCollateral {
+impl SimpleExecutionTrait for GetSponsoredBalanceForCollateral {
     fn execute_inner(
         &self, input: Address, _: &ActionParams,
-        context: &mut InternalRefContext,
-        _: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, _: &mut dyn VmObserve,
     ) -> vm::Result<U256>
     {
         Ok(context.state.sponsor_balance_for_collateral(&input)?)
@@ -248,11 +240,10 @@ make_solidity_function! {
 }
 impl_function_type!(IsWhitelisted, "query", gas: |spec: &Spec| spec.sload_gas);
 
-impl ExecutionTrait for IsWhitelisted {
+impl SimpleExecutionTrait for IsWhitelisted {
     fn execute_inner(
         &self, (contract, user): (Address, Address), _: &ActionParams,
-        context: &mut InternalRefContext,
-        _: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, _: &mut dyn VmObserve,
     ) -> vm::Result<bool>
     {
         if context.is_contract_address(&contract)? {
@@ -268,11 +259,10 @@ make_solidity_function! {
 }
 impl_function_type!(IsAllWhitelisted, "query", gas: |spec: &Spec| spec.sload_gas);
 
-impl ExecutionTrait for IsAllWhitelisted {
+impl SimpleExecutionTrait for IsAllWhitelisted {
     fn execute_inner(
         &self, contract: Address, _: &ActionParams,
-        context: &mut InternalRefContext,
-        _: &mut dyn Tracer<Output = ExecTrace>,
+        context: &mut InternalRefContext, _: &mut dyn VmObserve,
     ) -> vm::Result<bool>
     {
         if context.is_contract_address(&contract)? {
@@ -293,18 +283,18 @@ impl_function_type!(AddPrivilegeByAdmin, "non_payable_write");
 impl UpfrontPaymentTrait for AddPrivilegeByAdmin {
     fn upfront_gas_payment(
         &self, (_contract, addresses): &(Address, Vec<Address>),
-        _: &ActionParams, spec: &Spec, _: &dyn StateOpsTrait,
-    ) -> U256
+        _: &ActionParams, context: &InternalRefContext,
+    ) -> DbResult<U256>
     {
-        U256::from(spec.sstore_reset_gas) * addresses.len()
+        Ok(U256::from(context.spec.sstore_reset_gas) * addresses.len())
     }
 }
 
-impl ExecutionTrait for AddPrivilegeByAdmin {
+impl SimpleExecutionTrait for AddPrivilegeByAdmin {
     fn execute_inner(
         &self, (contract, addresses): (Address, Vec<Address>),
         params: &ActionParams, context: &mut InternalRefContext,
-        _: &mut dyn Tracer<Output = ExecTrace>,
+        _: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
         if context.is_contract_address(&contract)?
@@ -324,18 +314,18 @@ impl_function_type!(RemovePrivilegeByAdmin, "non_payable_write");
 impl UpfrontPaymentTrait for RemovePrivilegeByAdmin {
     fn upfront_gas_payment(
         &self, (_contract, addresses): &(Address, Vec<Address>),
-        _: &ActionParams, spec: &Spec, _: &dyn StateOpsTrait,
-    ) -> U256
+        _: &ActionParams, context: &InternalRefContext,
+    ) -> DbResult<U256>
     {
-        U256::from(spec.sstore_reset_gas) * addresses.len()
+        Ok(U256::from(context.spec.sstore_reset_gas) * addresses.len())
     }
 }
 
-impl ExecutionTrait for RemovePrivilegeByAdmin {
+impl SimpleExecutionTrait for RemovePrivilegeByAdmin {
     fn execute_inner(
         &self, (contract, addresses): (Address, Vec<Address>),
         params: &ActionParams, context: &mut InternalRefContext,
-        _: &mut dyn Tracer<Output = ExecTrace>,
+        _: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
         if context.is_contract_address(&contract)?

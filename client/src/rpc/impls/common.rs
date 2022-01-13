@@ -2,47 +2,61 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::{
-    types::{
-        errors::check_rpc_address_network, AccountPendingInfo,
-        AccountPendingTransactions, Block as RpcBlock, BlockHashOrEpochNumber,
-        Bytes, CheckBalanceAgainstTransactionResponse, EpochNumber, RpcAddress,
-        Status as RpcStatus, Transaction as RpcTransaction,
-        TxPoolPendingNonceRange, TxPoolStatus, TxWithPoolInfo,
-    },
-    RpcResult,
-};
-use bigdecimal::BigDecimal;
-use cfx_addr::Network;
-use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-use cfx_types::{Address, H160, H256, H520, U128, U256, U512, U64};
-use cfxcore::{
-    rpc_errors::invalid_params_check, BlockDataManager, ConsensusGraph,
-    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
-};
-use cfxcore_accounts::AccountProvider;
-use cfxkey::Password;
-use clap::crate_version;
-use jsonrpc_core::{
-    Error as RpcError, Result as JsonRpcResult, Value as RpcValue,
-};
-use keccak_hash::keccak;
-use network::{
-    node_table::{Node, NodeEndpoint, NodeEntry, NodeId},
-    throttling::{self, THROTTLING_SERVICE},
-    NetworkService, SessionDetails, UpdateNodeOperation,
-};
-use num_bigint::{BigInt, ToBigInt};
-use parking_lot::{Condvar, Mutex};
-use primitives::{
-    transaction::TransactionType, Account, Action, SignedTransaction,
-};
 use std::{
     collections::{BTreeMap, HashSet},
     net::SocketAddr,
     sync::Arc,
     time::Duration,
 };
+
+use crate::rpc::{
+    impls::pos::hash_value_to_h256,
+    types::{
+        errors::check_rpc_address_network, pos::PoSEpochReward,
+        AccountPendingInfo, AccountPendingTransactions, Block as RpcBlock,
+        BlockHashOrEpochNumber, Bytes, CheckBalanceAgainstTransactionResponse,
+        EpochNumber, RpcAddress, Status as RpcStatus,
+        Transaction as RpcTransaction, TxPoolPendingNonceRange, TxPoolStatus,
+        TxWithPoolInfo,
+    },
+    RpcResult,
+};
+
+use bigdecimal::BigDecimal;
+use clap::crate_version;
+use jsonrpc_core::{
+    Error as RpcError, Result as JsonRpcResult, Value as RpcValue,
+};
+use keccak_hash::keccak;
+use num_bigint::{BigInt, ToBigInt};
+use parking_lot::{Condvar, Mutex};
+
+use crate::rpc::types::pos::{Block as RpcPosBlock, Decision};
+use cfx_addr::Network;
+use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+use cfx_types::{
+    Address, AddressSpaceUtil, Space, H160, H256, H520, U128, U256, U512, U64,
+};
+use cfxcore::{
+    consensus::pos_handler::PosVerifier, rpc_errors::invalid_params_check,
+    spec::genesis::register_transaction, BlockDataManager, ConsensusGraph,
+    ConsensusGraphTrait, PeerInfo, SharedConsensusGraph, SharedTransactionPool,
+};
+use cfxcore_accounts::AccountProvider;
+use cfxkey::Password;
+use diem_crypto::hash::HashValue;
+use diem_types::{
+    account_address::{from_consensus_public_key, AccountAddress},
+    block_info::PivotBlockDecision,
+    transaction::TransactionPayload,
+};
+use network::{
+    node_table::{Node, NodeEndpoint, NodeEntry, NodeId},
+    throttling::{self, THROTTLING_SERVICE},
+    NetworkService, SessionDetails, UpdateNodeOperation,
+};
+use primitives::{Account, Action, Block, SignedTransaction, Transaction};
+use storage_interface::DBReaderForPoW;
 
 fn grouped_txs<T, F>(
     txs: Vec<Arc<SignedTransaction>>, converter: F,
@@ -139,13 +153,14 @@ pub struct RpcImpl {
     network: Arc<NetworkService>,
     tx_pool: SharedTransactionPool,
     accounts: Arc<AccountProvider>,
+    pub pos_handler: Arc<PosVerifier>,
 }
 
 impl RpcImpl {
     pub fn new(
         exit: Arc<(Mutex<bool>, Condvar)>, consensus: SharedConsensusGraph,
         network: Arc<NetworkService>, tx_pool: SharedTransactionPool,
-        accounts: Arc<AccountProvider>,
+        accounts: Arc<AccountProvider>, pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         let data_man = consensus.get_data_manager().clone();
@@ -157,6 +172,7 @@ impl RpcImpl {
             network,
             tx_pool,
             accounts,
+            pos_handler: pos_verifier,
         }
     }
 
@@ -209,9 +225,9 @@ impl RpcImpl {
     pub fn block_by_epoch_number(
         &self, epoch_num: EpochNumber, include_txs: bool,
     ) -> RpcResult<Option<RpcBlock>> {
+        info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
         let consensus_graph = self.consensus_graph();
         let inner = &*consensus_graph.inner.read();
-        info!("RPC Request: cfx_getBlockByEpochNumber epoch_number={:?} include_txs={:?}", epoch_num, include_txs);
 
         let epoch_height = consensus_graph
             .get_height_from_epoch_number(epoch_num.into())
@@ -224,7 +240,6 @@ impl RpcImpl {
         let maybe_block = self
             .data_man
             .block_by_hash(&pivot_hash, false /* update_cache */);
-
         match maybe_block {
             None => Ok(None),
             Some(b) => Ok(Some(RpcBlock::new(
@@ -235,6 +250,78 @@ impl RpcImpl {
                 &self.data_man,
                 include_txs,
             )?)),
+        }
+    }
+
+    fn primitive_block_by_epoch_number(
+        &self, epoch_num: EpochNumber,
+    ) -> Option<Arc<Block>> {
+        let consensus_graph = self.consensus_graph();
+        let inner = &*consensus_graph.inner.read();
+        let epoch_height = consensus_graph
+            .get_height_from_epoch_number(epoch_num.into())
+            .ok()?;
+
+        let pivot_hash =
+            inner.get_pivot_hash_from_epoch_number(epoch_height).ok()?;
+
+        self.data_man
+            .block_by_hash(&pivot_hash, false /* update_cache */)
+    }
+
+    pub fn get_pos_reward_by_epoch(
+        &self, epoch: EpochNumber,
+    ) -> JsonRpcResult<Option<PoSEpochReward>> {
+        let maybe_block = self.primitive_block_by_epoch_number(epoch);
+        if maybe_block.is_none() {
+            return Ok(None);
+        }
+        let block = maybe_block.unwrap();
+        if block.block_header.pos_reference().is_none() {
+            return Ok(None);
+        }
+        match self
+            .data_man
+            .block_by_hash(block.block_header.parent_hash(), false)
+        {
+            None => Ok(None),
+            Some(parent_block) => {
+                if parent_block.block_header.pos_reference().is_none() {
+                    return Ok(None);
+                }
+                let block_pos_ref = block.block_header.pos_reference().unwrap();
+                let parent_pos_ref =
+                    parent_block.block_header.pos_reference().unwrap();
+
+                if block_pos_ref == parent_pos_ref {
+                    return Ok(None);
+                }
+
+                let hash = HashValue::from_slice(parent_pos_ref.as_bytes())
+                    .map_err(|_| RpcError::internal_error())?;
+                let pos_block = self
+                    .pos_handler
+                    .pos_ledger_db()
+                    .get_committed_block_by_hash(&hash)
+                    .map_err(|_| RpcError::internal_error())?;
+                let maybe_epoch_rewards =
+                    self.data_man.pos_reward_by_pos_epoch(pos_block.epoch);
+                if maybe_epoch_rewards.is_none() {
+                    return Ok(None);
+                }
+                let epoch_rewards = maybe_epoch_rewards.unwrap();
+                if epoch_rewards.execution_epoch_hash
+                    != block.block_header.hash()
+                {
+                    return Ok(None);
+                }
+                let reward_info: PoSEpochReward = PoSEpochReward::try_from(
+                    epoch_rewards,
+                    *self.network.get_network_type(),
+                )
+                .map_err(|_| RpcError::internal_error())?;
+                Ok(Some(reward_info))
+            }
         }
     }
 
@@ -424,7 +511,11 @@ impl RpcImpl {
         // TODO: check if address is not in reserved address space.
         // We pass "num" into next_nonce() function for the error reporting
         // rpc_param_name because the user passed epoch number could be invalid.
-        consensus_graph.next_nonce(address.hex_address, num.into(), "num")
+        consensus_graph.next_nonce(
+            address.hex_address.with_native_space(),
+            num.into(),
+            "num",
+        )
     }
 }
 
@@ -623,13 +714,22 @@ impl RpcImpl {
             .get_height_from_epoch_number(EpochNumber::LatestState.into())?
             .into();
 
+        let latest_finalized = consensus_graph
+            .get_height_from_epoch_number(EpochNumber::LatestFinalized.into())?
+            .into();
+
         Ok(RpcStatus {
             best_hash: best_info.best_block_hash.into(),
             block_number: block_number.into(),
-            chain_id: best_info.chain_id.into(),
+            chain_id: best_info.chain_id.in_native_space().into(),
+            ethereum_space_chain_id: best_info
+                .chain_id
+                .in_space(Space::Ethereum)
+                .into(),
             epoch_number: best_info.best_epoch_number.into(),
             latest_checkpoint,
             latest_confirmed,
+            latest_finalized,
             latest_state,
             network_id: self.network.network_id().into(),
             pending_tx_number: tx_count.into(),
@@ -645,6 +745,153 @@ impl RpcImpl {
         self.exit.1.notify_all();
 
         Ok(())
+    }
+
+    pub fn pos_register(
+        &self, voting_power: U64,
+    ) -> JsonRpcResult<(Bytes, AccountAddress)> {
+        let tx = register_transaction(
+            self.pos_handler.config().bls_key.private_key(),
+            self.pos_handler.config().vrf_key.public_key(),
+            voting_power.as_u64(),
+            0,
+        );
+        let tx = if let Transaction::Native(tx) = tx {
+            tx
+        } else {
+            unreachable!("register transaction must be native space");
+        };
+        let identifier = from_consensus_public_key(
+            &self.pos_handler.config().bls_key.public_key(),
+            &self.pos_handler.config().vrf_key.public_key(),
+        );
+        Ok((tx.data.into(), identifier))
+    }
+
+    pub fn pos_update_voting_power(
+        &self, _pos_account: AccountAddress, _increased_voting_power: U64,
+    ) -> JsonRpcResult<()> {
+        unimplemented!()
+    }
+
+    pub fn pos_retire_self(&self) -> JsonRpcResult<()> { unimplemented!() }
+
+    pub fn pos_start(&self) -> RpcResult<()> {
+        self.pos_handler
+            .initialize(self.consensus.clone().to_arc_consensus())?;
+        Ok(())
+    }
+
+    pub fn pos_force_vote_proposal(&self, block_id: H256) -> RpcResult<()> {
+        if !self.network.is_test_mode() {
+            // Reject force vote if test RPCs are enabled in a mainnet node,
+            // because this may cause staked CFXs locked
+            // permanently.
+            bail!(RpcError::internal_error())
+        }
+        self.pos_handler.force_vote_proposal(block_id).map_err(|e| {
+            warn!("force_vote_proposal: err={:?}", e);
+            RpcError::internal_error().into()
+        })
+    }
+
+    pub fn pos_force_propose(
+        &self, round: U64, parent_block_id: H256,
+        payload: Vec<TransactionPayload>,
+    ) -> RpcResult<()>
+    {
+        if !self.network.is_test_mode() {
+            // Reject force vote if test RPCs are enabled in a mainnet node,
+            // because this may cause staked CFXs locked
+            // permanently.
+            bail!(RpcError::internal_error())
+        }
+        self.pos_handler
+            .force_propose(round, parent_block_id, payload)
+            .map_err(|e| {
+                warn!("pos_force_propose: err={:?}", e);
+                RpcError::internal_error().into()
+            })
+    }
+
+    pub fn pos_trigger_timeout(&self, timeout_type: String) -> RpcResult<()> {
+        if !self.network.is_test_mode() {
+            // Reject force vote if test RPCs are enabled in a mainnet node,
+            // because this may cause staked CFXs locked
+            // permanently.
+            bail!(RpcError::internal_error())
+        }
+        debug!("pos_trigger_timeout: type={}", timeout_type);
+        self.pos_handler.trigger_timeout(timeout_type).map_err(|e| {
+            warn!("pos_trigger_timeout: err={:?}", e);
+            RpcError::internal_error().into()
+        })
+    }
+
+    pub fn pos_force_sign_pivot_decision(
+        &self, block_hash: H256, height: U64,
+    ) -> RpcResult<()> {
+        if !self.network.is_test_mode() {
+            // Reject force vote if test RPCs are enabled in a mainnet node,
+            // because this may cause staked CFXs locked
+            // permanently.
+            bail!(RpcError::internal_error())
+        }
+        self.pos_handler
+            .force_sign_pivot_decision(PivotBlockDecision {
+                block_hash,
+                height: height.as_u64(),
+            })
+            .map_err(|e| {
+                warn!("pos_trigger_timeout: err={:?}", e);
+                RpcError::internal_error().into()
+            })
+    }
+
+    pub fn pos_get_chosen_proposal(&self) -> RpcResult<Option<RpcPosBlock>> {
+        let maybe_block = self
+            .pos_handler
+            .get_chosen_proposal()
+            .map_err(|e| {
+                warn!("pos_get_chosen_proposal: err={:?}", e);
+                RpcError::internal_error()
+            })?
+            .and_then(|b| {
+                let block_hash = b.id();
+                self.pos_handler
+                    .cached_db()
+                    .get_block(&block_hash)
+                    .ok()
+                    .map(|executed_block| {
+                        let executed_block = executed_block.lock();
+                        RpcPosBlock {
+                            hash: hash_value_to_h256(b.id()),
+                            epoch: U64::from(b.epoch()),
+                            round: U64::from(b.round()),
+                            last_tx_number: executed_block
+                                .output()
+                                .version()
+                                .unwrap_or_default()
+                                .into(),
+                            miner: b.author().map(|a| H256::from(a.to_u8())),
+                            parent_hash: hash_value_to_h256(b.parent_id()),
+                            timestamp: U64::from(b.timestamp_usecs()),
+                            pivot_decision: executed_block
+                                .output()
+                                .pivot_block()
+                                .as_ref()
+                                .map(|d| Decision::from(d)),
+                            height: executed_block
+                                .output()
+                                .executed_trees()
+                                .pos_state()
+                                .current_view()
+                                .into(),
+                            signatures: vec![],
+                        }
+                    })
+            });
+        Ok(maybe_block)
     }
 }
 
@@ -689,6 +936,7 @@ impl RpcImpl {
         Ok(THROTTLING_SERVICE.read().clone())
     }
 
+    // MARK: Conflux space rpc supports EVM space transaction
     pub fn txpool_tx_with_pool_info(
         &self, hash: H256,
     ) -> JsonRpcResult<TxWithPoolInfo> {
@@ -710,15 +958,15 @@ impl RpcImpl {
                     rpc_error
                 })?;
             let required_storage_collateral =
-                if tx.transaction.transaction_type() == TransactionType::Normal
-                {
+                if let Transaction::Native(ref tx) = tx.unsigned {
                     U256::from(tx.storage_limit)
                         * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
                 } else {
                     U256::zero()
                 };
-            let required_balance =
-                tx.value + tx.gas * tx.gas_price + required_storage_collateral;
+            let required_balance = tx.value()
+                + tx.gas() * tx.gas_price()
+                + required_storage_collateral;
             ret.local_balance_enough = local_balance > required_balance;
             ret.state_balance_enough = state_balance > required_balance;
             ret.local_balance = local_balance;
@@ -733,8 +981,9 @@ impl RpcImpl {
         &self, address: RpcAddress,
     ) -> RpcResult<Vec<RpcTransaction>> {
         self.check_address_network(address.network)?;
-        let (ready_txs, deferred_txs) =
-            self.tx_pool.content(Some(address.into()));
+        let (ready_txs, deferred_txs) = self
+            .tx_pool
+            .content(Some(Address::from(address).with_native_space()));
         let converter =
             |tx: &Arc<SignedTransaction>| -> Result<RpcTransaction, String> {
                 RpcTransaction::from_signed(
@@ -756,7 +1005,10 @@ impl RpcImpl {
     ) -> RpcResult<Option<RpcTransaction>> {
         let tx = self
             .tx_pool
-            .get_transaction_by_address2nonce(address.into(), nonce)
+            .get_transaction_by_address2nonce(
+                Address::from(address).with_native_space(),
+                nonce,
+            )
             .map(|tx| {
                 RpcTransaction::from_signed(
                     &tx,
@@ -784,7 +1036,9 @@ impl RpcImpl {
             }
         };
 
-        let (ready_txs, deferred_txs) = self.tx_pool.content(address);
+        let (ready_txs, deferred_txs) = self
+            .tx_pool
+            .content(address.map(AddressSpaceUtil::with_native_space));
         let converter = |tx: Arc<SignedTransaction>| -> RpcTransaction {
             RpcTransaction::from_signed(&tx, None, *self.network.get_network_type())
                 .expect("transaction conversion with correct network id should not fail")
@@ -813,16 +1067,21 @@ impl RpcImpl {
             }
         };
 
-        let (ready_txs, deferred_txs) = self.tx_pool.content(address);
+        let (ready_txs, deferred_txs) = self
+            .tx_pool
+            .content(address.map(AddressSpaceUtil::with_native_space));
         let converter = |tx: Arc<SignedTransaction>| -> String {
-            let to = match tx.action {
+            let to = match tx.action() {
                 Action::Create => "<Create contract>".into(),
                 Action::Call(addr) => format!("{:?}", addr),
             };
 
             format!(
                 "{}: {:?} drip + {:?} gas * {:?} drip",
-                to, tx.value, tx.gas, tx.gas_price
+                to,
+                tx.value(),
+                tx.gas(),
+                tx.gas_price()
             )
         };
 
@@ -964,17 +1223,20 @@ impl RpcImpl {
         self.check_address_network(address.network)?;
 
         let mut ret = TxPoolPendingNonceRange::default();
-        let (pending_txs, _, _) = self
-            .tx_pool
-            .get_account_pending_transactions(&address.hex_address, None, None);
+        let (pending_txs, _, _) =
+            self.tx_pool.get_account_pending_transactions(
+                &address.hex_address.with_native_space(),
+                None,
+                None,
+            );
         let mut max_nonce: U256 = U256::from(0);
         let mut min_nonce: U256 = U256::max_value();
         for tx in pending_txs.iter() {
-            if tx.nonce > max_nonce {
-                max_nonce = tx.nonce;
+            if *tx.nonce() > max_nonce {
+                max_nonce = *tx.nonce();
             }
-            if tx.nonce < min_nonce {
-                min_nonce = tx.nonce;
+            if *tx.nonce() < min_nonce {
+                min_nonce = *tx.nonce();
             }
         }
         ret.min_nonce = min_nonce;
@@ -983,7 +1245,9 @@ impl RpcImpl {
     }
 
     pub fn txpool_next_nonce(&self, address: RpcAddress) -> RpcResult<U256> {
-        Ok(self.tx_pool.get_next_nonce(&address.hex_address))
+        Ok(self
+            .tx_pool
+            .get_next_nonce(&address.hex_address.with_native_space()))
     }
 
     pub fn account_pending_info(
@@ -992,7 +1256,9 @@ impl RpcImpl {
         info!("RPC Request: cfx_getAccountPendingInfo({:?})", address);
         self.check_address_network(address.network)?;
 
-        match self.tx_pool.get_account_pending_info(&(address.into())) {
+        match self.tx_pool.get_account_pending_info(
+            &Address::from(address).with_native_space(),
+        ) {
             None => Ok(None),
             Some((
                 local_nonce,
@@ -1019,7 +1285,7 @@ impl RpcImpl {
 
         let (pending_txs, tx_status, pending_count) =
             self.tx_pool.get_account_pending_transactions(
-                &(address.into()),
+                &Address::from(address).with_native_space(),
                 maybe_start_nonce,
                 maybe_limit.map(|limit| limit.as_usize()),
             );

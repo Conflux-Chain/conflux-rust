@@ -43,7 +43,7 @@ pub struct FullClient {}
 impl FullClient {
     // Start all key components of Conflux and pass out their handles
     pub fn start(
-        conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
+        mut conf: Configuration, exit: Arc<(Mutex<bool>, Condvar)>,
     ) -> Result<
         Box<ClientComponents<BlockGenerator, FullClientExtraComponents>>,
         String,
@@ -61,11 +61,13 @@ impl FullClient {
             rpc_tcp_server,
             debug_rpc_ws_server,
             rpc_ws_server,
+            pos_handler,
             runtime,
-        ) = initialize_not_light_node_modules(&conf, exit, NodeType::Full)?;
+        ) = initialize_not_light_node_modules(&mut conf, exit, NodeType::Full)?;
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
             blockgen: Some(blockgen),
+            pos_handler: Some(pos_handler),
             other_components: FullClientExtraComponents {
                 consensus,
                 debug_rpc_http_server,

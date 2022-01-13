@@ -4,12 +4,13 @@
 
 use cfx_types::H256;
 use keccak_hash::KECCAK_EMPTY;
+use serde_derive::{Deserialize, Serialize};
 
 pub type EpochId = H256;
 pub const NULL_EPOCH: EpochId = KECCAK_EMPTY;
 
 /// Uniquely identifies epoch.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum EpochNumber {
     /// Epoch number within canon blockchain.
     Number(u64),
@@ -17,6 +18,8 @@ pub enum EpochNumber {
     Earliest,
     /// The latest checkpoint (cur_era_genesis)
     LatestCheckpoint,
+    /// The latest finalized (confirmed by PoS) block
+    LatestFinalized,
     /// The latest confirmed block (based on the estimation of the confirmation
     /// meter)
     LatestConfirmed,

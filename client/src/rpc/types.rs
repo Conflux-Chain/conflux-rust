@@ -11,9 +11,12 @@ pub mod call_request;
 mod consensus_graph_states;
 mod epoch_number;
 pub mod errors;
+pub mod eth;
 mod filter;
 mod index;
 mod log;
+pub mod pos;
+mod pos_economics;
 mod provenance;
 pub mod pubsub;
 mod receipt;
@@ -39,9 +42,10 @@ pub use self::{
     },
     consensus_graph_states::ConsensusGraphStates,
     epoch_number::{BlockHashOrEpochNumber, EpochNumber},
-    filter::LogFilter,
+    filter::CfxRpcLogFilter,
     index::Index,
     log::Log,
+    pos_economics::PoSEconomics,
     provenance::Origin,
     receipt::Receipt,
     reward_info::RewardInfo,

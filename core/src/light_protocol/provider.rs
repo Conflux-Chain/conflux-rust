@@ -45,6 +45,7 @@ use cfx_parameters::light::{
     MAX_TXS_TO_SEND, MAX_WITNESSES_TO_SEND,
 };
 use cfx_types::H256;
+use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 use io::TimerToken;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{
@@ -370,7 +371,7 @@ impl Provider {
         } else {
             msg = Box::new(StatusPongV2 {
                 chain_id: ChainIdParamsDeprecated {
-                    chain_id: self.consensus.best_chain_id(),
+                    chain_id: self.consensus.best_chain_id().in_native_space(),
                 },
                 best_epoch: best_info.best_epoch_number,
                 genesis_hash,
@@ -412,7 +413,12 @@ impl Provider {
         self.validate_peer_type(status.node_type)?;
         self.validate_genesis_hash(status.genesis_hash)?;
         validate_chain_id(
-            &self.consensus.get_config().chain_id.read(),
+            &self
+                .consensus
+                .get_config()
+                .chain_id
+                .read()
+                .to_native_space_params(),
             status.chain_id.into(),
             /* peer_height = */ 0,
         )?;
@@ -440,7 +446,7 @@ impl Provider {
                 genesis_hash: status.genesis_hash,
                 node_type: status.node_type,
                 chain_id: ChainIdParamsDeprecated {
-                    chain_id: self.consensus.best_chain_id(),
+                    chain_id: self.consensus.best_chain_id().in_native_space(),
                 },
             },
         )
@@ -1004,22 +1010,23 @@ impl NetworkProtocolHandler for Provider {
     }
 
     fn on_peer_connected(
-        &self, _io: &dyn NetworkContext, peer: &NodeId,
+        &self, _io: &dyn NetworkContext, node_id: &NodeId,
         peer_protocol_version: ProtocolVersion,
+        _pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     )
     {
         debug!(
             "on_peer_connected: peer={:?} version={}",
-            peer, peer_protocol_version
+            node_id, peer_protocol_version
         );
 
         // insert handshaking peer, wait for StatusPing
-        self.peers.insert(*peer);
-        self.peers.get(peer).unwrap().write().protocol_version =
+        self.peers.insert(*node_id);
+        self.peers.get(node_id).unwrap().write().protocol_version =
             peer_protocol_version;
 
         if let Some(ref file) = self.throttling_config_file {
-            let peer = self.peers.get(peer).expect("peer not found");
+            let peer = self.peers.get(node_id).expect("peer not found");
             peer.write().throttling =
                 TokenBucketManager::load(file, Some("light_protocol"))
                     .expect("invalid throttling configuration file");

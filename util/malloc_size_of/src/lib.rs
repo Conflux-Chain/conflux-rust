@@ -20,11 +20,12 @@ use jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 use cfg_if::cfg_if;
-use cfx_types::{H160, H256, H512, U256, U512};
+use cfx_types::{AddressWithSpace, AllChainID, H160, H256, H512, U256, U512};
 use hashbrown::HashMap as FastHashMap;
 use parking_lot;
 use slab::Slab;
 use std::{
+    cmp::Reverse,
     collections::{BinaryHeap, HashSet, VecDeque},
     hash::{BuildHasher, Hash},
     mem::{self, size_of},
@@ -32,6 +33,7 @@ use std::{
     os::raw::c_void,
     sync::Arc,
 };
+
 /// A C function that takes a pointer to a heap allocation and returns its size.
 type VoidPtrToSizeFn = unsafe extern "C" fn(ptr: *const c_void) -> usize;
 
@@ -427,6 +429,12 @@ impl<T: MallocSizeOf> MallocSizeOf for parking_lot::RwLock<T> {
     }
 }
 
+impl<T: MallocSizeOf> MallocSizeOf for Reverse<T> {
+    fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
+        self.0.size_of(ops)
+    }
+}
+
 macro_rules! impl_smallvec {
     ($size:expr) => {
         impl<T> MallocSizeOf for smallvec::SmallVec<[T; $size]>
@@ -506,7 +514,15 @@ malloc_size_of_is_0!(
 );
 malloc_size_of_is_0!(Range<f32>, Range<f64>);
 
-malloc_size_of_is_0!(H256, U256, H512, H160, U512);
+malloc_size_of_is_0!(
+    H256,
+    U256,
+    H512,
+    H160,
+    U512,
+    AddressWithSpace,
+    AllChainID
+);
 
 mod usable_size {
 

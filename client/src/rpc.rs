@@ -47,12 +47,13 @@ use self::{
             RpcImpl as LightImpl, TestRpcImpl as LightTestRpcImpl,
         },
         pool::TransactionPoolHandler,
+        pos::{PoSInterceptor, PosHandler},
         pubsub::PubSubClient,
         trace::TraceHandler,
     },
     traits::{
-        cfx::Cfx, debug::LocalRpc, pool::TransactionPool, pubsub::PubSub,
-        test::TestRpc, trace::Trace,
+        cfx::Cfx, debug::LocalRpc, eth::Eth, pool::TransactionPool, pos::Pos,
+        pubsub::PubSub, test::TestRpc, trace::Trace,
     },
 };
 
@@ -61,6 +62,7 @@ use crate::{
     configuration::Configuration,
     rpc::{
         error_codes::request_rejected_too_many_request_error,
+        impls::eth::EthHandler,
         interceptor::{RpcInterceptor, RpcProxy},
         rpc_apis::{Api, ApiSet},
     },
@@ -203,6 +205,21 @@ fn setup_rpc_apis(
                 );
                 handler.extend_with(RpcProxy::new(cfx, interceptor));
             }
+            Api::Evm => {
+                info!("Add EVM RPC");
+                let evm = EthHandler::new(
+                    rpc.config.clone(),
+                    rpc.consensus.clone(),
+                    rpc.sync.clone(),
+                    rpc.tx_pool.clone(),
+                )
+                .to_delegate();
+                let interceptor = ThrottleInterceptor::new(
+                    throttling_conf,
+                    throttling_section,
+                );
+                handler.extend_with(RpcProxy::new(evm, interceptor))
+            }
             Api::Debug => {
                 handler.extend_with(
                     LocalRpcImpl::new(common.clone(), rpc.clone())
@@ -232,6 +249,17 @@ fn setup_rpc_apis(
                 let txpool =
                     TransactionPoolHandler::new(common.clone()).to_delegate();
                 handler.extend_with(txpool);
+            }
+            Api::Pos => {
+                let pos = PosHandler::new(
+                    common.pos_handler.clone(),
+                    rpc.consensus.get_data_manager().clone(),
+                    *rpc.sync.network.get_network_type(),
+                )
+                .to_delegate();
+                let pos_interceptor =
+                    PoSInterceptor::new(common.pos_handler.clone());
+                handler.extend_with(RpcProxy::new(pos, pos_interceptor));
             }
         }
     }
@@ -288,6 +316,9 @@ fn setup_rpc_apis_light(
                 );
                 handler.extend_with(RpcProxy::new(cfx, interceptor));
             }
+            Api::Evm => {
+                warn!("Light nodes do not support evm ports.");
+            }
             Api::Debug => {
                 handler.extend_with(
                     LightDebugRpcImpl::new(common.clone(), rpc.clone())
@@ -306,6 +337,9 @@ fn setup_rpc_apis_light(
             }
             Api::TxPool => {
                 warn!("Light nodes do not support txpool RPC");
+            }
+            Api::Pos => {
+                warn!("Light nodes do not support PoS RPC");
             }
         }
     }

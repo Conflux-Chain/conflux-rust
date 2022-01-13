@@ -4,7 +4,10 @@
 
 mod admin;
 mod context;
+mod cross_space;
 mod future;
+#[allow(unused)]
+mod pos;
 mod sponsor;
 mod staking;
 
@@ -14,6 +17,8 @@ mod macros {
     #[cfg(test)]
     pub use rustc_hex::FromHex;
 
+    pub use sha3_macro::keccak;
+
     pub use crate::{
         group_impl_is_active, impl_function_type, make_function_table,
         make_solidity_contract, make_solidity_event, make_solidity_function,
@@ -21,30 +26,35 @@ mod macros {
     pub use cfx_types::H256;
     pub use keccak_hash::keccak;
 
-    pub(super) use super::SolFnTable;
-
     pub use super::super::{
         activate_at::{BlockNumber, IsActive},
         function::{
             ExecutionTrait, InterfaceTrait, PreExecCheckConfTrait,
-            UpfrontPaymentTrait,
+            SimpleExecutionTrait, UpfrontPaymentTrait,
         },
         InternalContractTrait, SolidityEventTrait, SolidityFunctionTrait,
     };
+
+    pub use cfx_statedb::Result as DbResult;
 
     pub use crate::spec::CommonParams;
 }
 
 pub use self::{
-    admin::AdminControl, context::Context, sponsor::SponsorWhitelistControl,
-    staking::Staking,
+    admin::AdminControl, context::Context, cross_space::CrossSpaceCall,
+    pos::PoSRegister, sponsor::SponsorWhitelistControl, staking::Staking,
+};
+pub(super) use self::{
+    cross_space::{CallEvent, CreateEvent, WithdrawEvent},
+    pos::{IncreaseStakeEvent, RegisterEvent, RetireEvent},
 };
 
 use super::{
-    function::ExecutionTrait, InternalContractTrait, SolidityFunctionTrait,
+    function::SimpleExecutionTrait, InternalContractTrait,
+    SolidityFunctionTrait,
 };
 use crate::{evm::Spec, spec::CommonParams};
-use cfx_types::Address;
+use cfx_types::{Address, AddressWithSpace, Space};
 use primitives::BlockNumber;
 use std::collections::{BTreeMap, HashMap};
 
@@ -176,10 +186,13 @@ impl InternalContractMap {
     }
 
     pub fn contract(
-        &self, address: &Address, spec: &Spec,
+        &self, address: &AddressWithSpace, spec: &Spec,
     ) -> Option<&Box<dyn InternalContractTrait>> {
+        if address.space != Space::Native {
+            return None;
+        }
         self.builtin
-            .get(address)
+            .get(&address.address)
             .filter(|&func| func.is_active(spec))
     }
 }
@@ -193,6 +206,12 @@ pub fn all_internal_contracts() -> Vec<Box<dyn InternalContractTrait>> {
         Box::new(SponsorWhitelistControl::instance()),
         Box::new(future::AntiReentrancyConfig::instance()),
         Box::new(Context::instance()),
-        Box::new(future::PoS::instance()),
+        Box::new(PoSRegister::instance()),
+        Box::new(CrossSpaceCall::instance()),
+        Box::new(future::Reserved7::instance()),
+        Box::new(future::Reserved8::instance()),
+        Box::new(future::Reserved9::instance()),
+        Box::new(future::Reserved10::instance()),
+        Box::new(future::Reserved11::instance()),
     ]
 }

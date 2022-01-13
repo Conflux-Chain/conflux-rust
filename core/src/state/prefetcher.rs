@@ -98,7 +98,7 @@ impl PrefetcherThreadWorker {
                 }
                 self.cancel_task_id.store(0, Ordering::Relaxed);
             }
-            state.try_load(address)?;
+            state.try_load(&address.with_native_space())?;
         }
 
         Ok(())
@@ -346,7 +346,7 @@ impl CancelByKey for PrefetchTaskKey {
 
 use crate::state::State;
 use cfx_statedb::Result as DbResult;
-use cfx_types::Address;
+use cfx_types::{Address, AddressSpaceUtil};
 use cfx_utils::cancellable_task_channel::*;
 use parking_lot::{Mutex, RwLock};
 use primitives::EpochId;

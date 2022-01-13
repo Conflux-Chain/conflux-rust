@@ -3,20 +3,23 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    block_data_manager::{BlockDataManager, BlockRewardResult},
+    block_data_manager::{BlockDataManager, BlockRewardResult, PosRewardInfo},
     consensus::{
         consensus_inner::{
             consensus_new_block_handler::ConsensusNewBlockHandler,
             StateBlameInfo,
         },
+        pos_handler::PosVerifier,
         ConsensusGraphInner,
     },
     evm::Spec,
     executive::{
+        internal_contract::impls::pos::decode_register_info,
         revert_reason_decode, ExecutionError, ExecutionOutcome, Executive,
         TransactOptions,
     },
     machine::Machine,
+    observer::trace::{ExecTrace, TransactionExecTraces},
     rpc_errors::{invalid_params_check, Result as RpcResult},
     spec::genesis::initialize_internal_contract_accounts,
     state::{
@@ -25,7 +28,6 @@ use crate::{
         },
         State,
     },
-    trace::trace::{ExecTrace, TransactionExecTraces},
     verification::{
         compute_receipts_root, VerificationConfig, VerifyTxLocalMode,
         VerifyTxMode,
@@ -38,14 +40,14 @@ use cfx_internal_common::{
 };
 use cfx_parameters::consensus::*;
 use cfx_state::{state_trait::*, CleanupMode};
-use cfx_statedb::{Result as DbResult, StateDb};
+use cfx_statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb};
 use cfx_storage::{
     defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
     StorageManagerTrait,
 };
 use cfx_types::{
-    address_util::AddressUtil, BigEndianHash, H160, H256, KECCAK_EMPTY_BLOOM,
-    U256, U512,
+    address_util::AddressUtil, AddressSpaceUtil, AllChainID, BigEndianHash,
+    Space, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
 };
 use core::convert::TryFrom;
 use hash::KECCAK_EMPTY_LIST_RLP;
@@ -191,6 +193,7 @@ impl ConsensusExecutor {
         consensus_inner: Arc<RwLock<ConsensusGraphInner>>,
         config: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, bench_mode: bool,
+        pos_verifier: Arc<PosVerifier>,
     ) -> Arc<Self>
     {
         let machine = tx_pool.machine();
@@ -200,6 +203,7 @@ impl ConsensusExecutor {
             config,
             verification_config,
             machine,
+            pos_verifier,
         ));
         let (sender, receiver) = channel();
 
@@ -393,7 +397,7 @@ impl ConsensusExecutor {
                         pivot_arena_index,
                         inner,
                     )
-                    .unwrap();
+                        .unwrap();
                 }
 
                 let epoch_blocks =
@@ -800,6 +804,7 @@ pub struct ConsensusExecutionHandler {
     config: ConsensusExecutionConfiguration,
     verification_config: VerificationConfig,
     machine: Arc<Machine>,
+    pos_verifier: Arc<PosVerifier>,
     execution_state_prefetcher: Option<Arc<ExecutionStatePrefetcher>>,
 }
 
@@ -808,6 +813,7 @@ impl ConsensusExecutionHandler {
         tx_pool: SharedTransactionPool, data_man: Arc<BlockDataManager>,
         config: ConsensusExecutionConfiguration,
         verification_config: VerificationConfig, machine: Arc<Machine>,
+        pos_verifier: Arc<PosVerifier>,
     ) -> Self
     {
         ConsensusExecutionHandler {
@@ -816,6 +822,7 @@ impl ConsensusExecutionHandler {
             config,
             verification_config,
             machine,
+            pos_verifier,
             execution_state_prefetcher: if DEFAULT_EXECUTION_PREFETCH_THREADS
                 > 0
             {
@@ -926,6 +933,7 @@ impl ConsensusExecutionHandler {
                 on_local_pivot,
                 self.config.executive_trace,
                 reward_execution_info,
+                self.pos_verifier.as_ref(),
             )
         {
             let pivot_block_header = self
@@ -1023,6 +1031,9 @@ impl ConsensusExecutionHandler {
             // program may restart by itself.
             .expect("Can not handle db error in consensus, crashing.");
 
+        let current_block_number =
+            start_block_number + epoch_receipts.len() as u64 - 1;
+
         if let Some(reward_execution_info) = reward_execution_info {
             // Calculate the block reward for blocks inside the epoch
             // All transaction fees are shared among blocks inside one epoch
@@ -1032,8 +1043,61 @@ impl ConsensusExecutionHandler {
                 epoch_hash,
                 on_local_pivot,
                 debug_record.as_deref_mut(),
-                self.machine.spec(start_block_number),
+                self.machine.spec(current_block_number),
             );
+        }
+
+        // TODO(peilun): Specify if we unlock before or after executing the
+        // transactions.
+        let maybe_parent_pos_ref = self
+            .data_man
+            .block_header_by_hash(&pivot_block.block_header.parent_hash()) // `None` only for genesis.
+            .and_then(|parent| parent.pos_reference().clone());
+        if self
+            .pos_verifier
+            .is_enabled_at_height(pivot_block.block_header.height())
+            && maybe_parent_pos_ref.is_some()
+            && *pivot_block.block_header.pos_reference() != maybe_parent_pos_ref
+        {
+            let current_pos_ref = pivot_block
+                .block_header
+                .pos_reference()
+                .as_ref()
+                .expect("checked before sync graph insertion");
+            let parent_pos_ref = &maybe_parent_pos_ref.expect("checked");
+            // The pos_reference is continuous, so after seeing a new
+            // pos_reference, we only need to process the new
+            // unlock_txs in it.
+            for (unlock_node_id, votes) in self
+                .pos_verifier
+                .get_unlock_nodes(current_pos_ref, parent_pos_ref)
+            {
+                debug!("unlock node: {:?} {}", unlock_node_id, votes);
+                state
+                    .update_pos_status(unlock_node_id, votes)
+                    .expect("db error");
+            }
+            if let Some((pos_epoch, reward_event)) = self
+                .pos_verifier
+                .get_reward_distribution_event(current_pos_ref, parent_pos_ref)
+                .as_ref()
+                .and_then(|x| x.first())
+            {
+                debug!("distribute_pos_interest: {:?}", reward_event);
+                let account_rewards = state
+                    .distribute_pos_interest(
+                        Box::new(reward_event.rewards()),
+                        self.machine
+                            .spec(current_block_number)
+                            .account_start_nonce,
+                        current_block_number,
+                    )
+                    .expect("db error");
+                self.data_man.insert_pos_reward(
+                    *pos_epoch,
+                    &PosRewardInfo::new(account_rewards, *epoch_hash),
+                )
+            }
         }
 
         // FIXME: We may want to propagate the error up.
@@ -1097,7 +1161,7 @@ impl ConsensusExecutionHandler {
                 for block in epoch_blocks.iter() {
                     for transaction in block.transactions.iter() {
                         accounts.push(&transaction.sender);
-                        match transaction.action {
+                        match transaction.action() {
                             Action::Call(ref address) => accounts.push(address),
                             _ => {}
                         }
@@ -1122,11 +1186,16 @@ impl ConsensusExecutionHandler {
         drop(prefetch_join_handles);
 
         let pivot_block = epoch_blocks.last().expect("Epoch not empty");
+
         let mut epoch_receipts = Vec::with_capacity(epoch_blocks.len());
+        let mut epoch_staking_events = Vec::new();
         let mut to_pending = Vec::new();
         let mut block_number = start_block_number;
         let mut last_block_hash =
             pivot_block.block_header.parent_hash().clone();
+        let last_block_header =
+            &self.data_man.block_header_by_hash(&last_block_hash);
+
         for block in epoch_blocks.iter() {
             let mut tx_exec_error_messages =
                 Vec::with_capacity(block.transactions.len());
@@ -1136,6 +1205,17 @@ impl ConsensusExecutionHandler {
                 block.hash(),
                 block.transactions.len()
             );
+
+            let pos_id = last_block_header
+                .as_ref()
+                .and_then(|header| header.pos_reference().as_ref());
+            let pos_view_number =
+                pos_id.and_then(|id| self.pos_verifier.get_pos_view(id));
+            let pivot_decision_epoch = pos_id
+                .and_then(|id| self.pos_verifier.get_pivot_decision(id))
+                .and_then(|hash| self.data_man.block_header_by_hash(&hash))
+                .map(|header| header.height());
+
             let mut env = Env {
                 number: block_number,
                 author: block.block_header.author().clone(),
@@ -1145,13 +1225,18 @@ impl ConsensusExecutionHandler {
                 last_hash: last_block_hash,
                 gas_limit: U256::from(block.block_header.gas_limit()),
                 epoch_height: pivot_block.block_header.height(),
+                pos_view: pos_view_number,
+                finalized_epoch: pivot_decision_epoch,
                 transaction_epoch_bound: self
                     .verification_config
                     .transaction_epoch_bound,
             };
             let spec = self.machine.spec(env.number);
-            let secondary_reward =
+            if !spec.cip43_contract {
                 state.bump_block_number_accumulate_interest();
+            }
+            let secondary_reward = state.secondary_reward();
+            state.inc_distributable_pos_interest(env.number)?;
             initialize_internal_contract_accounts(
                 state,
                 self.machine.internal_contracts().initialized_at(env.number),
@@ -1168,15 +1253,14 @@ impl ConsensusExecutionHandler {
                 let mut storage_released = Vec::new();
                 let mut storage_collateralized = Vec::new();
 
-                let r = if self.config.executive_trace {
-                    let options = TransactOptions::with_tracing();
-                    Executive::new(state, &env, self.machine.as_ref(), &spec)
-                        .transact(transaction, options)?
+                let options = if self.config.executive_trace {
+                    TransactOptions::with_tracing()
                 } else {
-                    let options = TransactOptions::with_no_tracing();
-                    Executive::new(state, &env, self.machine.as_ref(), &spec)
-                        .transact(transaction, options)?
+                    TransactOptions::with_no_tracing()
                 };
+                let r =
+                    Executive::new(state, &env, self.machine.as_ref(), &spec)
+                        .transact(transaction, options)?;
 
                 let gas_fee;
                 let mut gas_sponsor_paid = false;
@@ -1242,7 +1326,7 @@ impl ConsensusExecutionHandler {
                         if self.config.executive_trace {
                             block_traces.push(executed.trace.into());
                         }
-                        if spec.cip78 {
+                        if spec.cip78a {
                             gas_sponsor_paid = executed.gas_sponsor_paid;
                             storage_sponsor_paid =
                                 executed.storage_sponsor_paid;
@@ -1271,6 +1355,18 @@ impl ConsensusExecutionHandler {
 
                         if self.config.executive_trace {
                             block_traces.push(executed.trace.into());
+                        }
+
+                        if self.pos_verifier.pos_option().is_some() {
+                            trace!("Check {} events", transaction_logs.len());
+                            for log in &transaction_logs {
+                                if let Some(staking_event) =
+                                    decode_register_info(log)
+                                {
+                                    epoch_staking_events.push(staking_event);
+                                }
+                            }
+                            trace!("Check events ends");
                         }
                     }
                 }
@@ -1326,6 +1422,26 @@ impl ConsensusExecutionHandler {
             );
 
             epoch_receipts.push(block_receipts);
+        }
+        if self.pos_verifier.pos_option().is_some() {
+            debug!(
+                "put_staking_events: {:?} height={} len={}",
+                pivot_block.hash(),
+                pivot_block.block_header.height(),
+                epoch_staking_events.len()
+            );
+            self.pos_verifier
+                .consensus_db()
+                .put_staking_events(
+                    pivot_block.block_header.height(),
+                    pivot_block.hash(),
+                    epoch_staking_events,
+                )
+                .map_err(|e| {
+                    cfx_statedb::Error::from(DbErrorKind::PosDatabaseError(
+                        format!("{:?}", e),
+                    ))
+                })?;
         }
 
         if on_local_pivot {
@@ -1619,7 +1735,7 @@ impl ConsensusExecutionHandler {
             if spec.is_valid_address(&address) {
                 state
                     .add_balance(
-                        &address,
+                        &address.with_native_space(),
                         &reward,
                         CleanupMode::ForceCreate,
                         spec.account_start_nonce,
@@ -1700,6 +1816,15 @@ impl ConsensusExecutionHandler {
         }
         let best_block_header = best_block_header.unwrap();
         let block_height = best_block_header.height() + 1;
+
+        let pos_id = best_block_header.pos_reference().as_ref();
+        let pos_view_number =
+            pos_id.and_then(|id| self.pos_verifier.get_pos_view(id));
+        let pivot_decision_epoch = pos_id
+            .and_then(|id| self.pos_verifier.get_pivot_decision(id))
+            .and_then(|hash| self.data_man.block_header_by_hash(&hash))
+            .map(|header| header.height());
+
         let start_block_number = match self.data_man.get_epoch_execution_context(epoch_id) {
             Some(v) => v.start_block_number + epoch_size as u64,
             None => bail!("cannot obtain the execution context. Database is potentially corrupted!"),
@@ -1711,7 +1836,7 @@ impl ConsensusExecutionHandler {
             "tx",
             self.verification_config.verify_transaction_common(
                 tx,
-                tx.chain_id,
+                AllChainID::fake_for_virtual(tx.chain_id()),
                 block_height,
                 transitions,
                 VerifyTxMode::Local(VerifyTxLocalMode::Full, &spec),
@@ -1743,7 +1868,9 @@ impl ConsensusExecutionHandler {
 
         let author = {
             let mut address = H160::random();
-            address.set_user_account_type_bits();
+            if tx.space() == Space::Native {
+                address.set_user_account_type_bits();
+            }
             address
         };
 
@@ -1754,8 +1881,10 @@ impl ConsensusExecutionHandler {
             difficulty: Default::default(),
             accumulated_gas_used: U256::zero(),
             last_hash: epoch_id.clone(),
-            gas_limit: tx.gas.clone(),
+            gas_limit: tx.gas().clone(),
             epoch_height: block_height,
+            pos_view: pos_view_number,
+            finalized_epoch: pivot_decision_epoch,
             transaction_epoch_bound: self
                 .verification_config
                 .transaction_epoch_bound,

@@ -40,6 +40,7 @@ def run_single_test(py, script, test_dir, index, port_min, port_max):
     except subprocess.CalledProcessError as err:
         color = RED
         glyph = CROSS
+        print(color[1] + glyph + " Testcase " + script + color[0])
         print("Output of " + script + "\n" + err.output.decode("utf-8"))
         raise err
     print(color[1] + glyph + " Testcase " + script + color[0])
@@ -76,7 +77,9 @@ def run():
             "full_node_tests",
             "light",
             "network_tests",
+            "pos",
             "pubsub",
+            "evm_space",
             ]
     slow_tests = {"full_node_tests/p2p_era_test.py"}
 

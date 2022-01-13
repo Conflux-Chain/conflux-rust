@@ -104,7 +104,7 @@ impl StateManager {
             None => {
                 // TODO: maybe we can move the calculation to a central place
                 // and cache the result?
-                StorageKey::delta_mpt_padding(
+                StorageKeyWithSpace::delta_mpt_padding(
                     &snapshot_merkle_root,
                     &intermediate_trie_root_merkle,
                 )
@@ -201,7 +201,7 @@ impl StateManager {
             .get_root_node_ref_by_epoch(&state_index.epoch_id)?
         {
             None => {
-                warn!(
+                debug!(
                     "get_state_trees, \
                     delta_root not found for epoch {:?}. mpt_id {}, StateIndex: {:?}.",
                     state_index.epoch_id, delta_mpt.get_mpt_id(), state_index,
@@ -633,7 +633,7 @@ use crate::{
 };
 use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
 use primitives::{
-    DeltaMptKeyPadding, EpochId, MerkleHash, StorageKey,
+    DeltaMptKeyPadding, EpochId, MerkleHash, StorageKeyWithSpace,
     GENESIS_DELTA_MPT_KEY_PADDING, MERKLE_NULL_NODE, NULL_EPOCH,
 };
 use std::sync::{

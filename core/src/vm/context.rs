@@ -21,19 +21,16 @@
 //! Interface for Evm externalities.
 
 use super::{
-    call_type::CallType,
+    call_create_type::CallType,
     env::Env,
     error::{Result, TrapKind},
     return_data::ReturnData,
     spec::Spec,
     Error,
 };
-use crate::{
-    executive::InternalRefContext,
-    trace::{trace::ExecTrace, Tracer},
-};
+use crate::{executive::InternalRefContext, observer::VmObserve};
 use cfx_bytes::Bytes;
-use cfx_types::{Address, H256, U256};
+use cfx_types::{Address, AddressWithSpace, Space, H256, U256};
 use std::sync::Arc;
 
 #[derive(Debug)]
@@ -41,7 +38,7 @@ use std::sync::Arc;
 pub enum ContractCreateResult {
     /// Returned when creation was successful.
     /// Contains an address of newly created contract and gas left.
-    Created(Address, U256),
+    Created(AddressWithSpace, U256),
     /// Returned when contract creation failed.
     /// Returns the reason so block trace can record it.
     Failed(Error),
@@ -66,14 +63,17 @@ pub enum MessageCallResult {
 /// Specifies how an address is calculated for a new contract.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum CreateContractAddress {
+    /// Address is calculated from sender and nonce. Ethereum
+    /// `create` scheme.
+    FromSenderNonce,
     /// Address is calculated from sender, nonce, and code hash. Conflux
     /// `create` scheme.
     FromSenderNonceAndCodeHash,
     /// Address is calculated from block_hash, sender, nonce and code_hash.
     /// Potential new Conflux `create` scheme when kill_dust is enabled.
     FromBlockNumberSenderNonceAndCodeHash,
-    /// Address is calculated from sender, salt and code hash. pWASM `create2`
-    /// scheme.
+    /// Address is calculated from sender, salt and code hash. Conflux and
+    /// Ethereum `create2` scheme.
     FromSenderSaltAndCodeHash(H256),
 }
 
@@ -144,8 +144,8 @@ pub trait Context {
     /// Should be called when contract commits suicide.
     /// Address to which funds should be refunded.
     fn suicide(
-        &mut self, refund_address: &Address,
-        tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
+        &mut self, refund_address: &Address, tracer: &mut dyn VmObserve,
+        account_start_nonce: U256,
     ) -> Result<()>;
 
     /// Returns specification.
@@ -156,6 +156,9 @@ pub trait Context {
 
     /// Returns the chain ID of the blockchain
     fn chain_id(&self) -> u64;
+
+    /// Returns the space of the blockchain
+    fn space(&self) -> Space;
 
     /// Returns current depth of execution.
     ///

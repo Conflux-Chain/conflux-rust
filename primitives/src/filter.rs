@@ -21,7 +21,7 @@
 //! Blockchain filter
 
 use crate::{epoch::EpochNumber, log_entry::LogEntry};
-use cfx_types::{Address, Bloom, BloomInput, H256};
+use cfx_types::{Address, Bloom, BloomInput, Space, H256};
 use std::{
     error, fmt,
     ops::{Deref, DerefMut},
@@ -208,6 +208,19 @@ pub struct LogFilterParams {
     /// If specified, should only return *last* `n` logs
     /// after the offset has been applied.
     pub limit: Option<usize>,
+
+    /// Indicate if the log filter can be trusted, so we do not need to check
+    /// other fields.
+    ///
+    /// It is `false` if the Filter is constructed from RPCs,
+    /// and `true` if it is generated within the process with trusted logics.
+    pub trusted: bool,
+
+    /// Space: Conflux or Ethereum.
+    ///
+    /// If None, match all.
+    /// If specified, log must be produced in this space.
+    pub space: Option<Space>,
 }
 
 impl Default for LogFilterParams {
@@ -217,6 +230,8 @@ impl Default for LogFilterParams {
             topics: vec![None, None, None, None],
             offset: None,
             limit: None,
+            trusted: false,
+            space: Some(Space::Native),
         }
     }
 }
@@ -286,6 +301,12 @@ impl LogFilterParams {
 
     /// Returns true if given log entry matches filter.
     pub fn matches(&self, log: &LogEntry) -> bool {
+        if let Some(filter_space) = self.space {
+            if log.space != filter_space {
+                return false;
+            }
+        }
+
         let matches = match self.address {
             Some(ref addresses) if !addresses.is_empty() => {
                 addresses.iter().any(|address| &log.address == address)

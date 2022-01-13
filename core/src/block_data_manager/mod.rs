@@ -40,7 +40,9 @@ use crate::{
     block_data_manager::{
         db_manager::DBManager, tx_data_manager::TransactionDataManager,
     },
-    trace::trace::{BlockExecTraces, TransactionExecTraces},
+    consensus::pos_handler::PosVerifier,
+    executive::internal_contract::impls::pos::decode_register_info,
+    observer::trace::{BlockExecTraces, TransactionExecTraces},
 };
 pub use block_data_types::*;
 use cfx_internal_common::{
@@ -48,6 +50,7 @@ use cfx_internal_common::{
 };
 use db_gc_manager::GCProgress;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
+use primitives::pos::PosBlockId;
 use std::{hash::Hash, path::Path, time::Duration};
 
 lazy_static! {
@@ -531,6 +534,7 @@ impl BlockDataManager {
         persistent: bool,
     )
     {
+        trace! {"insert_block_traces start pivot={:?}", pivot_hash};
         self.insert_version(
             hash,
             &pivot_hash,
@@ -542,6 +546,7 @@ impl BlockDataManager {
             CacheId::BlockTraces(hash),
             persistent,
         );
+        trace! {"insert_block_traces ends pivot={:?}", pivot_hash};
     }
 
     /// remove block traces in memory cache and db
@@ -589,6 +594,16 @@ impl BlockDataManager {
     pub fn block_height_by_hash(&self, hash: &H256) -> Option<u64> {
         let result = self.block_header_by_hash(hash)?;
         Some(result.height())
+    }
+
+    /// Return `None` if the header does not exist.
+    /// Return `Some(None)` if the header exist but it does not have a PoS
+    /// reference field.
+    pub fn pos_reference_by_hash(
+        &self, hash: &H256,
+    ) -> Option<Option<PosBlockId>> {
+        self.block_header_by_hash(hash)
+            .map(|header| header.pos_reference().clone())
     }
 
     pub fn compact_block_by_hash(&self, hash: &H256) -> Option<CompactBlock> {
@@ -662,6 +677,7 @@ impl BlockDataManager {
         persistent: bool,
     )
     {
+        trace! {"insert_block_traces start pivot={:?}", epoch};
         let bloom =
             block_receipts
                 .receipts
@@ -685,6 +701,7 @@ impl BlockDataManager {
             CacheId::BlockReceipts(hash),
             persistent,
         );
+        trace! {"insert_block_traces end pivot={:?}", epoch};
     }
 
     pub fn insert_block_reward_result(
@@ -1167,6 +1184,18 @@ impl BlockDataManager {
         )
     }
 
+    pub fn insert_pos_reward(
+        &self, pos_epoch: u64, pos_reward: &PosRewardInfo,
+    ) {
+        self.db_manager.insert_pos_reward(pos_epoch, pos_reward)
+    }
+
+    pub fn pos_reward_by_pos_epoch(
+        &self, pos_epoch: u64,
+    ) -> Option<PosRewardInfo> {
+        self.db_manager.pos_reward_by_pos_epoch(pos_epoch)
+    }
+
     pub fn remove_epoch_execution_commitment(&self, block_hash: &H256) {
         self.epoch_execution_commitments.write().remove(block_hash);
     }
@@ -1195,6 +1224,7 @@ impl BlockDataManager {
         &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
         on_local_pivot: bool, update_trace: bool,
         reward_execution_info: &Option<RewardExecutionInfo>,
+        pos_verifier: &PosVerifier,
     ) -> bool
     {
         if !self.epoch_executed(epoch_hash) {
@@ -1204,6 +1234,7 @@ impl BlockDataManager {
         if on_local_pivot {
             // Check if all blocks receipts and traces are from this epoch
             let mut epoch_receipts = Vec::new();
+            let mut epoch_staking_events = Vec::new();
             for h in epoch_block_hashes {
                 if let Some(r) = self.block_execution_result_by_hash_with_epoch(
                     h, epoch_hash, true, /* update_pivot_assumption */
@@ -1248,7 +1279,17 @@ impl BlockDataManager {
                                     block_hash: *block_hash,
                                     index: tx_idx,
                                 },
-                            )
+                            );
+                            for log in &epoch_receipts[block_idx]
+                                .receipts
+                                .get(tx_idx)
+                                .unwrap()
+                                .logs
+                            {
+                                if let Some(event) = decode_register_info(log) {
+                                    epoch_staking_events.push(event);
+                                }
+                            }
                         }
                         _ => {}
                     }
@@ -1265,6 +1306,22 @@ impl BlockDataManager {
                     {
                         return false;
                     }
+                }
+            }
+            let me_height = self.block_height_by_hash(epoch_hash).unwrap();
+            if pos_verifier.pos_option().is_some() && me_height != 0 {
+                trace!(
+                    "staking events update: height={}, new={}",
+                    me_height,
+                    epoch_hash,
+                );
+                if let Err(e) = pos_verifier.consensus_db().put_staking_events(
+                    me_height,
+                    *epoch_hash,
+                    epoch_staking_events,
+                ) {
+                    error!("epoch_executed err={:?}", e);
+                    return false;
                 }
             }
         }
@@ -1451,7 +1508,9 @@ impl BlockDataManager {
         &self, transactions: &Vec<TransactionWithSignature>,
     ) -> Result<Vec<Arc<SignedTransaction>>, DecoderError> {
         let _timer = MeterTimer::time_func(TX_POOL_RECOVER_TIMER.as_ref());
-        self.tx_data_manager.recover_unsigned_tx(transactions)
+        // Return all transactions without checking if it's cached.
+        self.tx_data_manager
+            .recover_unsigned_tx_with_order(transactions)
     }
 
     pub fn recover_block(&self, block: &mut Block) -> Result<(), DecoderError> {

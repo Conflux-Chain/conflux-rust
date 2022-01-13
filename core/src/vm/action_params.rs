@@ -19,9 +19,9 @@
 // See http://www.gnu.org/licenses/
 
 //! Evm input params.
-use super::call_type::CallType;
+use super::call_create_type::{CallType, CreateType};
 use crate::bytes::Bytes;
-use cfx_types::{Address, H256, U256};
+use cfx_types::{Address, Space, H256, U256};
 use std::sync::Arc;
 
 #[cfg(test)]
@@ -70,6 +70,8 @@ impl ActionValue {
 /// Externalities.
 #[derive(Clone, Debug)]
 pub struct ActionParams {
+    /// Space
+    pub space: Space,
     /// Address of currently executed code.
     pub code_address: Address,
     /// Hash of currently executed code.
@@ -96,6 +98,8 @@ pub struct ActionParams {
     pub data: Option<Bytes>,
     /// Type of call
     pub call_type: CallType,
+    /// Type of create
+    pub create_type: CreateType,
     /// Param types encoding
     pub params_type: ParamsType,
 }
@@ -105,6 +109,7 @@ impl Default for ActionParams {
     /// Returns default ActionParams initialized with zeros
     fn default() -> ActionParams {
         ActionParams {
+            space: Space::Native,
             code_address: Address::default(),
             code_hash: Some(KECCAK_EMPTY),
             address: Address::default(),
@@ -117,6 +122,7 @@ impl Default for ActionParams {
             code: None,
             data: None,
             call_type: CallType::Call,
+            create_type: CreateType::None,
             params_type: ParamsType::Separate,
         }
     }

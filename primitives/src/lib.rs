@@ -23,6 +23,7 @@ pub mod epoch;
 pub mod filter;
 pub mod is_default;
 pub mod log_entry;
+pub mod pos;
 pub mod receipt;
 pub mod state_root;
 pub mod static_bool;
@@ -49,7 +50,8 @@ pub use crate::{
     },
     storage_key::*,
     transaction::{
-        Action, SignedTransaction, Transaction, TransactionWithSignature,
+        Action, Eip155Transaction, NativeTransaction, SignedTransaction,
+        Transaction, TransactionWithSignature,
         TransactionWithSignatureSerializePart, TxPropagateId,
     },
     transaction_index::TransactionIndex,

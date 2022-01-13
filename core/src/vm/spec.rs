@@ -77,6 +77,8 @@ pub struct Spec {
     pub quad_coeff_div: usize,
     /// Cost for contract length when executing `CREATE`
     pub create_data_gas: usize,
+    /// Cost for contract length when executing `CREATE`
+    pub evm_space_create_data_gas: usize,
     /// Maximum code size when creating a contract.
     pub create_data_limit: usize,
     /// Transaction cost
@@ -99,6 +101,8 @@ pub struct Spec {
     pub extcodehash_gas: usize,
     /// Price of SUICIDE
     pub suicide_gas: usize,
+    /// Price for retiring PoS node.
+    pub retire_gas: usize,
     /// Amount of additional gas to pay when SUICIDE credits a non-existant
     /// account
     pub suicide_to_new_account_cost: usize,
@@ -128,18 +132,21 @@ pub struct Spec {
     pub contract_start_nonce: U256,
     /// Start nonce for a new account
     pub account_start_nonce: U256,
+    /// CIP-43: Introduce Finality via Voting Among Staked
+    pub cip43_init: bool,
+    pub cip43_contract: bool,
     /// CIP-62: Enable EC-related builtin contract
     pub cip62: bool,
     /// CIP-64: Get current epoch number through internal contract
     pub cip64: bool,
-    /// CIP-71: Configurable anti-reentrancy: if configuration enabled
+    /// CIP-71: Disable anti-reentrancy
     pub cip71: bool,
-    /// CIP-72: Accept Ethereum transaction signature
-    pub cip72: bool,
     /// CIP-78: Correct `is_sponsored` fields in receipt
-    pub cip78: bool,
-    /// CIP-80: Ethereum compatible signature recover
-    pub cip80: bool,
+    pub cip78a: bool,
+    /// CIP-78: Correct `is_sponsored` fields in receipt
+    pub cip78b: bool,
+    /// CIP-90: A Space that Fully EVM Compatible
+    pub cip90: bool,
 }
 
 /// Wasm cost table
@@ -224,7 +231,7 @@ impl Spec {
             sha3_gas: 30,
             sha3_word_gas: 6,
             sload_gas: 200,
-            sstore_set_gas: 20000,
+            sstore_set_gas: 40000,
             sstore_reset_gas: 5000,
             sstore_refund_gas: 15000,
             jumpdest_gas: 1,
@@ -240,6 +247,7 @@ impl Spec {
             memory_gas: 3,
             quad_coeff_div: 512,
             create_data_gas: 200,
+            evm_space_create_data_gas: 400,
             create_data_limit: 49152,
             tx_gas: 21000,
             tx_create_gas: 53000,
@@ -251,6 +259,7 @@ impl Spec {
             extcodehash_gas: 400,
             balance_gas: 400,
             suicide_gas: 5000,
+            retire_gas: 5_000_000,
             suicide_to_new_account_cost: 25000,
             sub_gas_cap_divisor: Some(64),
             no_empty: true,
@@ -263,12 +272,14 @@ impl Spec {
             kill_dust: CleanDustMode::Off,
             keep_unsigned_nonce: false,
             wasm: None,
+            cip43_init: false,
+            cip43_contract: false,
             cip62: false,
             cip64: false,
             cip71: false,
-            cip72: false,
-            cip78: false,
-            cip80: false,
+            cip90: false,
+            cip78a: false,
+            cip78b: false,
         }
     }
 
@@ -276,12 +287,14 @@ impl Spec {
         params: &CommonParams, number: BlockNumber,
     ) -> Spec {
         let mut spec = Self::genesis_spec();
+        spec.cip43_contract = number >= params.transition_numbers.cip43a;
+        spec.cip43_init = number >= params.transition_numbers.cip43a
+            && number < params.transition_numbers.cip43b;
         spec.cip62 = number >= params.transition_numbers.cip62;
         spec.cip64 = number >= params.transition_numbers.cip64;
         spec.cip71 = number >= params.transition_numbers.cip71;
-        spec.cip72 = number >= params.transition_numbers.cip72b;
-        spec.cip78 = number >= params.transition_numbers.cip78;
-        spec.cip80 = number >= params.transition_numbers.cip80;
+        spec.cip90 = number >= params.transition_numbers.cip90b;
+        spec.cip78a = number >= params.transition_numbers.cip78a;
         spec
     }
 
@@ -297,11 +310,7 @@ impl Spec {
     }
 
     pub fn is_valid_address(&self, address: &Address) -> bool {
-        if self.cip80 {
-            address.is_cip80_valid_address()
-        } else {
-            address.is_genesis_valid_address()
-        }
+        address.is_genesis_valid_address()
     }
 }
 

@@ -43,13 +43,14 @@ impl NodeMerkleProof {
         let intermediate_root = &state_root.intermediate_delta_root;
         let snapshot_root = &state_root.snapshot_root;
 
-        let storage_key = match StorageKey::from_key_bytes::<CheckInput>(&key) {
-            Ok(k) => k,
-            Err(e) => {
-                warn!("Checking proof with invalid key: {:?}", e);
-                return false;
-            }
-        };
+        let storage_key =
+            match StorageKeyWithSpace::from_key_bytes::<CheckInput>(&key) {
+                Ok(k) => k,
+                Err(e) => {
+                    warn!("Checking proof with invalid key: {:?}", e);
+                    return false;
+                }
+            };
 
         match self.delta_proof {
             None => {
@@ -66,7 +67,7 @@ impl NodeMerkleProof {
 
             Some(ref proof) => {
                 // convert storage key into delta mpt key
-                let padding = StorageKey::delta_mpt_padding(
+                let padding = StorageKeyWithSpace::delta_mpt_padding(
                     &snapshot_root,
                     &intermediate_root,
                 );
@@ -146,7 +147,7 @@ impl NodeMerkleProof {
 
 use super::merkle_patricia_trie::TrieProof;
 use primitives::{
-    CheckInput, DeltaMptKeyPadding, MptValue, StateRoot, StorageKey,
+    CheckInput, DeltaMptKeyPadding, MptValue, StateRoot, StorageKeyWithSpace,
     StorageRoot, MERKLE_NULL_NODE,
 };
 use rlp_derive::{RlpDecodable, RlpEncodable};

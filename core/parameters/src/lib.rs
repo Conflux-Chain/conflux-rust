@@ -196,6 +196,18 @@ pub mod block {
     // FIXME: a block generator parameter only. We should remove this later
     pub const MAX_TRANSACTION_COUNT_PER_BLOCK: usize = 20000;
     pub const DEFAULT_TARGET_BLOCK_GAS_LIMIT: u64 = GENESIS_GAS_LIMIT;
+    // The following parameter controls how many blocks are allowed to
+    // contain EVM Space transactions. Setting it to N means that one block
+    // must has a height of the multiple of N to contain EVM transactions.
+    pub const EVM_TRANSACTION_BLOCK_RATIO: u64 = 5;
+    // The following parameter controls the ratio of gas limit allowed for
+    // EVM space transactions. Setting it to N means that only 1/N of th
+    // block gas limit can be used for EVM transaction enabled blocks.
+    pub const EVM_TRANSACTION_GAS_RATIO: u64 = 2;
+    // The following parameter controls the ratio of gas can be passed to EVM
+    // space in the cross space call. Setting it to N means that only 1/N of gas
+    // left can be passed to the cross space call.
+    pub const CROSS_SPACE_GAS_RATIO: u64 = 10;
 }
 
 pub mod staking {
@@ -206,10 +218,14 @@ pub mod staking {
     /// This is the number of blocks per second.
     pub const BLOCKS_PER_SECOND: u64 =
         1000000 / TARGET_AVERAGE_BLOCK_GENERATION_PERIOD;
+    /// This is the number of blocks per hour.
+    pub const BLOCKS_PER_HOUR: u64 = BLOCKS_PER_SECOND * 60 * 60;
     /// This is the number of blocks per day.
     pub const BLOCKS_PER_DAY: u64 = BLOCKS_PER_SECOND * 60 * 60 * 24;
     /// This is the number of blocks per year.
     pub const BLOCKS_PER_YEAR: u64 = BLOCKS_PER_DAY * 365;
+    /// The inverse of interest rate
+    pub const INVERSE_INTEREST_RATE: u64 = 25;
 
     /// This is the storage collateral units for each KiB of code, amount in
     /// COLLATERAL_UNITs. Code collateral is calculated by each whole KiB
@@ -249,6 +265,8 @@ pub mod staking {
         /// SERVICE_CHARGE_RATE_SCALE = 0.05%`
         pub static ref SERVICE_CHARGE_RATE: U256 = U256::from(5);
         pub static ref SERVICE_CHARGE_RATE_SCALE: U256 = U256::from(10000);
+        /// This controls the tokens required for one PoS vote
+        pub static ref POS_VOTE_PRICE: U256 = U256::from(1000)*ONE_CFX_IN_DRIP;
     }
 
     pub fn code_collateral_units(len: usize) -> u64 {

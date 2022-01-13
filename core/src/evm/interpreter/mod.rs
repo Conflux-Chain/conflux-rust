@@ -44,7 +44,7 @@ use super::{
 use crate::{
     bytes::Bytes,
     hash::keccak,
-    trace::{trace::ExecTrace, Tracer},
+    observer::VmObserve,
     vm::{
         self, ActionParams, ActionValue, CallType, ContractCreateResult,
         CreateContractAddress, GasLeft, MessageCallResult, ParamsType,
@@ -52,7 +52,7 @@ use crate::{
     },
 };
 use bit_set::BitSet;
-use cfx_types::{Address, BigEndianHash, H256, U256, U512};
+use cfx_types::{Address, BigEndianHash, Space, H256, U256, U512};
 use std::{cmp, convert::TryFrom, marker::PhantomData, mem, sync::Arc};
 
 const GASOMETER_PROOF: &str = "If gasometer is None, Err is immediately returned in step; this function is only called by step; qed";
@@ -118,6 +118,8 @@ enum InstructionResult<Gas> {
 /// ActionParams without code, so that it can be feed into CodeReader.
 #[derive(Debug)]
 struct InterpreterParams {
+    /// Space
+    pub space: Space,
     /// Address of currently executed code.
     pub code_address: Address,
     /// Hash of currently executed code.
@@ -149,6 +151,7 @@ struct InterpreterParams {
 impl From<ActionParams> for InterpreterParams {
     fn from(params: ActionParams) -> Self {
         InterpreterParams {
+            space: params.space,
             code_address: params.code_address,
             code_hash: params.code_hash,
             address: params.address,
@@ -185,6 +188,7 @@ impl From<vm::Error> for InterpreterResult {
 
 /// Interpreter EVM implementation
 pub struct Interpreter<Cost: CostType> {
+    pub space: Space,
     mem: Vec<u8>,
     cache: Arc<SharedCache>,
     params: InterpreterParams,
@@ -207,7 +211,7 @@ pub struct Interpreter<Cost: CostType> {
 impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
     fn exec(
         mut self: Box<Self>, context: &mut dyn vm::Context,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        tracer: &mut dyn VmObserve,
     ) -> vm::ExecTrapResult<GasLeft>
     {
         loop {
@@ -223,7 +227,7 @@ impl<Cost: 'static + CostType> vm::Exec for Interpreter<Cost> {
                             params, self,
                         ));
                     }
-                    TrapKind::Create(params, _) => {
+                    TrapKind::Create(params) => {
                         return vm::TrapResult::SubCallCreate(
                             TrapError::Create(params, self),
                         );
@@ -288,7 +292,11 @@ impl<Cost: 'static + CostType> vm::ResumeCreate for Interpreter<Cost> {
     ) -> Box<dyn vm::Exec> {
         match result {
             ContractCreateResult::Created(address, gas_left) => {
-                self.stack.push(address_to_u256(address));
+                // The internal contract may create contract to evm space from
+                // cfx space. However, it should not be processed by
+                // interpreter.
+                assert_eq!(address.space, self.space);
+                self.stack.push(address_to_u256(address.address));
                 self.resume_result = Some(InstructionResult::UnusedGas(
                     Cost::from_u256(gas_left)
                         .expect("Gas left cannot be greater."),
@@ -332,6 +340,7 @@ impl<Cost: CostType> Interpreter<Cost> {
         let return_stack = Vec::with_capacity(MAX_SUB_STACK_SIZE);
 
         Interpreter {
+            space: params.space,
             cache,
             params,
             reader,
@@ -355,10 +364,8 @@ impl<Cost: CostType> Interpreter<Cost> {
     /// Execute a single step on the VM.
     #[inline(always)]
     pub fn step(
-        &mut self, context: &mut dyn vm::Context,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> InterpreterResult
-    {
+        &mut self, context: &mut dyn vm::Context, tracer: &mut dyn VmObserve,
+    ) -> InterpreterResult {
         if self.done {
             return InterpreterResult::Stopped;
         }
@@ -387,10 +394,8 @@ impl<Cost: CostType> Interpreter<Cost> {
     /// Inner helper function for step.
     #[inline(always)]
     fn step_inner(
-        &mut self, context: &mut dyn vm::Context,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
-    ) -> InterpreterResult
-    {
+        &mut self, context: &mut dyn vm::Context, tracer: &mut dyn VmObserve,
+    ) -> InterpreterResult {
         let result = match self.resume_result.take() {
             Some(result) => result,
             None => {
@@ -684,7 +689,7 @@ impl<Cost: CostType> Interpreter<Cost> {
     fn exec_instruction(
         &mut self, gas: Cost, context: &mut dyn vm::Context,
         instruction: Instruction, provided: Option<Cost>,
-        tracer: &mut dyn Tracer<Output = ExecTrace>,
+        tracer: &mut dyn VmObserve,
     ) -> vm::Result<InstructionResult<Cost>>
     {
         trace!("exec instruction: {:?}", instruction);
@@ -735,7 +740,8 @@ impl<Cost: CostType> Interpreter<Cost> {
                 let init_off = self.stack.pop_back();
                 let init_size = self.stack.pop_back();
                 let address_scheme = match instruction {
-					instructions::CREATE => CreateContractAddress::FromSenderNonceAndCodeHash,
+					instructions::CREATE if context.space() == Space::Native => CreateContractAddress::FromSenderNonceAndCodeHash,
+                    instructions::CREATE if context.space() == Space::Ethereum => CreateContractAddress::FromSenderNonce,
 					instructions::CREATE2 => {
                         let h: H256 = BigEndianHash::from_uint(&self.stack.pop_back());
                         CreateContractAddress::FromSenderSaltAndCodeHash(h)
@@ -770,7 +776,9 @@ impl<Cost: CostType> Interpreter<Cost> {
                 )?;
                 return match create_result {
                     Ok(ContractCreateResult::Created(address, gas_left)) => {
-                        self.stack.push(address_to_u256(address));
+                        // Only reachable in Mocktest
+                        assert_eq!(address.space, Space::Native);
+                        self.stack.push(address_to_u256(address.address));
                         Ok(InstructionResult::UnusedGas(
                             Cost::from_u256(gas_left)
                                 .expect("Gas left cannot be greater."),
@@ -890,8 +898,11 @@ impl<Cost: CostType> Interpreter<Cost> {
                 // clear return data buffer before creating new call frame.
                 self.return_data = ReturnData::empty();
 
-                let valid_code_address =
-                    context.spec().is_valid_address(&code_address);
+                let valid_code_address = if context.space() == Space::Native {
+                    context.spec().is_valid_address(&code_address)
+                } else {
+                    true
+                };
 
                 let can_call = has_balance
                     && context.depth() < context.spec().max_depth
@@ -1206,7 +1217,11 @@ impl<Cost: CostType> Interpreter<Cost> {
                 self.stack.push(U256::from(context.env().timestamp));
             }
             instructions::NUMBER => {
-                self.stack.push(U256::from(context.env().number));
+                let block_number = match context.space() {
+                    Space::Native => context.env().number,
+                    Space::Ethereum => context.env().epoch_height,
+                };
+                self.stack.push(U256::from(block_number));
             }
             instructions::DIFFICULTY => {
                 self.stack.push(context.env().difficulty.clone());
@@ -1631,13 +1646,10 @@ fn address_to_u256(value: Address) -> U256 { H256::from(value).into_uint() }
 #[cfg(test)]
 mod tests {
     use super::super::{factory::Factory, vmtype::VMType};
-    use crate::{
-        trace,
-        vm::{
-            self,
-            tests::{test_finalize, MockContext},
-            ActionParams, ActionValue, Exec,
-        },
+    use crate::vm::{
+        self,
+        tests::{test_finalize, MockContext},
+        ActionParams, ActionValue, Exec,
     };
     use cfx_types::Address;
     use rustc_hex::FromHex;
@@ -1664,7 +1676,7 @@ mod tests {
         params.value = ActionValue::Transfer(100_000.into());
         params.code = Some(Arc::new(code));
         let mut context = MockContext::new();
-        let mut tracer = trace::NoopTracer;
+        let mut tracer = ();
         context
             .balances
             .insert(Address::from_low_u64_be(5), 1_000_000_000.into());
@@ -1691,7 +1703,7 @@ mod tests {
         params.gas_price = 1.into();
         params.code = Some(Arc::new(code));
         let mut context = MockContext::new_spec();
-        let mut tracer = trace::NoopTracer;
+        let mut tracer = ();
         context
             .balances
             .insert(Address::from_low_u64_be(5), 1_000_000_000.into());

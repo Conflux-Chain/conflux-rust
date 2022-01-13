@@ -19,6 +19,8 @@ extern crate db as ext_db;
 extern crate lazy_static;
 #[macro_use]
 extern crate static_assertions;
+extern crate sha3_macro;
+extern crate substrate_bn as bn;
 
 #[macro_use]
 pub mod message;
@@ -37,6 +39,8 @@ pub mod executive;
 pub mod light_protocol;
 pub mod machine;
 pub mod node_type;
+pub mod observer;
+pub mod pos;
 pub mod pow;
 pub mod rpc_errors;
 pub mod spec;
@@ -44,7 +48,6 @@ pub mod state;
 pub mod state_exposer;
 pub mod statistics;
 pub mod sync;
-pub mod trace;
 pub mod transaction_pool;
 pub mod unique_id;
 pub mod verification;

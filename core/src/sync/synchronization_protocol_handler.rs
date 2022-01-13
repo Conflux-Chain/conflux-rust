@@ -24,11 +24,12 @@ use crate::{
         SYNCHRONIZATION_PROTOCOL_OLD_VERSIONS_TO_SUPPORT,
         SYNCHRONIZATION_PROTOCOL_VERSION, SYNC_PROTO_V1, SYNC_PROTO_V2,
     },
-    NodeType,
+    ConsensusGraph, NodeType,
 };
 use cfx_internal_common::ChainIdParamsDeprecated;
 use cfx_parameters::{block::MAX_BLOCK_SIZE_IN_BYTES, sync::*};
 use cfx_types::H256;
+use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 use io::TimerToken;
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -78,7 +79,13 @@ pub const CHECK_RPC_REQUEST_TIMER: TimerToken = 11;
 const MAX_TXS_BYTES_TO_PROPAGATE: usize = 1024 * 1024; // 1MB
 
 /// The maximum allowed gap between `best_epoch` and `latest_epoch_requested`.
-const EPOCH_SYNC_MAX_GAP: u64 = 20000;
+const EPOCH_SYNC_MAX_GAP_START: u64 = 20000;
+/// The max gap is increased if our best_epoch does not change after timeout.
+const EPOCH_SYNC_MAX_GAP_INCREASE: u64 = 5000;
+/// After 20 retries, the gap becomes 120000 epochs = 6 eras. This is usually
+/// larger than the number of epochs after a checkpoint and gives a bound
+/// of the memory usage to maintain downloaded blocks in Sync/Consensus Graph.
+const EPOCH_SYNC_MAX_RETRY_COUNT: u64 = 20;
 /// If not future epochs can be requested because of `EPOCH_SYNC_MAX_GAP`,
 /// after waiting this timeout we'll request from `best_epoch` again.
 const EPOCH_SYNC_RESTART_TIMEOUT_S: u64 = 60 * 10;
@@ -351,8 +358,9 @@ pub struct SynchronizationProtocolHandler {
     pub graph: SharedSynchronizationGraph,
     pub syn: Arc<SynchronizationState>,
     pub request_manager: Arc<RequestManager>,
-    /// The latest `(requested_epoch_number, request_time)`
-    pub latest_epoch_requested: Mutex<(u64, Instant)>,
+    /// The latest `(requested_epoch_number, request_time, old_best_epoch,
+    /// retry_count)`
+    pub latest_epoch_requested: Mutex<(u64, Instant, u64, u64)>,
     #[ignore_malloc_size_of = "only stores reference to others"]
     pub phase_manager: SynchronizationPhaseManager,
     pub phase_manager_lock: Mutex<u32>,
@@ -377,7 +385,7 @@ pub struct SynchronizationProtocolHandler {
     light_provider: Arc<LightProvider>,
 }
 
-#[derive(Clone, DeriveMallocSizeOf)]
+#[derive(Clone, Default, DeriveMallocSizeOf)]
 pub struct ProtocolConfiguration {
     pub is_consortium: bool,
     pub send_tx_period: Duration,
@@ -413,6 +421,8 @@ pub struct ProtocolConfiguration {
     pub max_unprocessed_block_size: usize,
     pub max_chunk_number_in_manifest: usize,
     pub allow_phase_change_without_peer: bool,
+    pub pos_genesis_pivot_decision: H256,
+    pub check_status_genesis: bool,
 }
 
 impl SynchronizationProtocolHandler {
@@ -421,7 +431,7 @@ impl SynchronizationProtocolHandler {
         state_sync_config: StateSyncConfiguration,
         initial_sync_phase: SyncPhaseType,
         sync_graph: SharedSynchronizationGraph,
-        light_provider: Arc<LightProvider>,
+        light_provider: Arc<LightProvider>, consensus: Arc<ConsensusGraph>,
     ) -> Self
     {
         let sync_state = Arc::new(SynchronizationState::new(
@@ -447,12 +457,13 @@ impl SynchronizationProtocolHandler {
             graph: sync_graph.clone(),
             syn: sync_state.clone(),
             request_manager,
-            latest_epoch_requested: Mutex::new((0, Instant::now())),
+            latest_epoch_requested: Mutex::new((0, Instant::now(), 0, 0)),
             phase_manager: SynchronizationPhaseManager::new(
                 initial_sync_phase,
                 sync_state.clone(),
                 sync_graph.clone(),
                 state_sync.clone(),
+                consensus,
             ),
             phase_manager_lock: Mutex::new(0),
             recover_public_queue,
@@ -663,7 +674,7 @@ impl SynchronizationProtocolHandler {
                     op = Some(UpdateNodeOperation::Remove)
                 }
                 network::ErrorKind::BadAddr => disconnect = false,
-                network::ErrorKind::Decoder => {
+                network::ErrorKind::Decoder(_) => {
                     op = Some(UpdateNodeOperation::Remove)
                 }
                 network::ErrorKind::Expired => disconnect = false,
@@ -827,14 +838,31 @@ impl SynchronizationProtocolHandler {
         let median_peer_epoch =
             self.syn.median_epoch_from_normal_peers().unwrap_or(0);
         let my_best_epoch = self.graph.consensus.best_epoch_number();
-        let (mut latest_requested_epoch, latest_request_time) =
-            *latest_requested;
+        let (
+            mut latest_requested_epoch,
+            latest_request_time,
+            old_best_epoch,
+            mut retry_count,
+        ) = *latest_requested;
+        // We have switched to the correct pivot chain, so we can reset epoch
+        // sync.
+        if old_best_epoch != my_best_epoch {
+            retry_count = 0;
+        }
 
+        // It's possible that there is a malicious heavy subtree that is heavier
+        // than the pivot chain within the next EPOCH_SYNC_MAX_GAP_START epochs.
+        // In this case, if we do not try to download more epochs, our
+        // best_epoch will the tip of the malicious subtree and will remain
+        // unchanged, meaning the syncing process will be blocked forever.
+        // Increase the syncing gap if our pivot chain remain unchanged.
+        let sync_max_gap = EPOCH_SYNC_MAX_GAP_START
+            + EPOCH_SYNC_MAX_GAP_INCREASE * retry_count;
         // If the gap is too large, it means that the next epoch of
         // `my_best_epoch` is missing, either because received
         // epoch_set is wrong or we have too many epochs with
         // blocks not received.
-        if latest_requested_epoch >= my_best_epoch + EPOCH_SYNC_MAX_GAP {
+        if latest_requested_epoch >= my_best_epoch + sync_max_gap {
             if latest_request_time.elapsed()
                 < Duration::from_secs(EPOCH_SYNC_RESTART_TIMEOUT_S)
             {
@@ -842,12 +870,15 @@ impl SynchronizationProtocolHandler {
             } else {
                 // Restart from `my_best_epoch` to fix possible problems.
                 latest_requested_epoch = my_best_epoch;
+                if retry_count < EPOCH_SYNC_MAX_RETRY_COUNT {
+                    retry_count += 1;
+                }
             }
         }
 
         while self.request_manager.num_epochs_in_flight()
             < EPOCH_SYNC_MAX_INFLIGHT
-            && latest_requested_epoch < my_best_epoch + EPOCH_SYNC_MAX_GAP
+            && latest_requested_epoch < my_best_epoch + sync_max_gap
             && (latest_requested_epoch < median_peer_epoch
                 || median_peer_epoch == 0)
         {
@@ -919,7 +950,12 @@ impl SynchronizationProtocolHandler {
                 .request_epoch_hashes(io, peer, epochs, None);
             latest_requested_epoch = until - 1;
         }
-        *latest_requested = (latest_requested_epoch, Instant::now());
+        *latest_requested = (
+            latest_requested_epoch,
+            Instant::now(),
+            my_best_epoch,
+            retry_count,
+        );
     }
 
     pub fn request_block_headers(
@@ -1073,9 +1109,14 @@ impl SynchronizationProtocolHandler {
                 need_to_relay.push(hash);
             }
         }
-        let chosen_peer = PeerFilter::new(msgid::GET_BLOCKS)
-            .exclude(task.failed_peer)
-            .select(&self.syn);
+        let mut filter =
+            PeerFilter::new(msgid::GET_BLOCKS).exclude(task.failed_peer);
+        if let Some(preferred_note_type) =
+            self.preferred_peer_node_type_for_get_block()
+        {
+            filter = filter.with_preferred_node_type(preferred_note_type);
+        }
+        let chosen_peer = filter.select(&self.syn);
         self.blocks_received(
             io,
             task.requested,
@@ -1188,7 +1229,7 @@ impl SynchronizationProtocolHandler {
     fn produce_status_message_v2(&self) -> StatusV2 {
         let best_info = self.graph.consensus.best_info();
         let chain_id = ChainIdParamsDeprecated {
-            chain_id: best_info.best_chain_id(),
+            chain_id: best_info.best_chain_id().in_native_space(),
         };
         let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
 
@@ -1203,7 +1244,7 @@ impl SynchronizationProtocolHandler {
     fn produce_status_message_v3(&self) -> StatusV3 {
         let best_info = self.graph.consensus.best_info();
         let chain_id = ChainIdParamsDeprecated {
-            chain_id: best_info.best_chain_id(),
+            chain_id: best_info.best_chain_id().in_native_space(),
         };
         let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
 
@@ -1524,9 +1565,11 @@ impl SynchronizationProtocolHandler {
 
     pub fn remove_expired_flying_request(&self, io: &dyn NetworkContext) {
         self.request_manager.resend_timeout_requests(io);
-        let cancelled_requests = self
-            .request_manager
-            .resend_waiting_requests(io, !self.catch_up_mode());
+        let cancelled_requests = self.request_manager.resend_waiting_requests(
+            io,
+            !self.catch_up_mode(),
+            self.need_block_from_archive_node(),
+        );
         self.handle_cancelled_requests(cancelled_requests);
     }
 
@@ -1835,18 +1878,19 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
     }
 
     fn on_peer_connected(
-        &self, io: &dyn NetworkContext, peer: &NodeId,
+        &self, io: &dyn NetworkContext, node_id: &NodeId,
         peer_protocol_version: ProtocolVersion,
+        _pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     )
     {
         debug!(
             "Peer connected: peer={:?}, version={}",
-            peer, peer_protocol_version
+            node_id, peer_protocol_version
         );
-        if let Err(e) = self.send_status(io, peer, peer_protocol_version) {
+        if let Err(e) = self.send_status(io, node_id, peer_protocol_version) {
             debug!("Error sending status message: {:?}", e);
             io.disconnect_peer(
-                peer,
+                node_id,
                 Some(UpdateNodeOperation::Failure),
                 "send status failed", /* reason */
             );
@@ -1854,7 +1898,7 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             self.syn
                 .handshaking_peers
                 .write()
-                .insert(*peer, (peer_protocol_version, Instant::now()));
+                .insert(*node_id, (peer_protocol_version, Instant::now()));
         }
     }
 
@@ -1874,6 +1918,9 @@ impl NetworkProtocolHandler for SynchronizationProtocolHandler {
             }
             CHECK_FUTURE_BLOCK_TIMER => {
                 self.check_future_blocks(io);
+                self.graph.check_not_ready_frontier(
+                    self.insert_header_to_consensus(),
+                );
             }
             CHECK_REQUEST_TIMER => {
                 self.remove_expired_flying_request(io);

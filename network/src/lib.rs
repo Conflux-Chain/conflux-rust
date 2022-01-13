@@ -69,6 +69,7 @@ use crate::{
     },
 };
 use cfx_addr::Network;
+use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 use ipnetwork::{IpNetwork, IpNetworkError};
 use keylib::Secret;
 use priority_send_queue::SendQueuePriority;
@@ -201,7 +202,7 @@ impl NetworkConfiguration {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct DiscoveryConfiguration {
     pub discover_node_count: u32,
     pub expire_time: Duration,
@@ -238,6 +239,7 @@ pub enum NetworkIoMessage {
         handler: Arc<dyn NetworkProtocolHandler + Sync>,
         protocol: ProtocolId,
         version: ProtocolVersion,
+        callback: std::sync::mpsc::SyncSender<()>,
     },
     /// Register a new protocol timer
     AddTimer {
@@ -274,6 +276,7 @@ pub trait NetworkProtocolHandler: Sync + Send {
     fn on_peer_connected(
         &self, io: &dyn NetworkContext, node_id: &NodeId,
         peer_protocol_version: ProtocolVersion,
+        pos_public_key: Option<(ConsensusPublicKey, ConsensusVRFPublicKey)>,
     );
 
     fn on_peer_disconnected(&self, io: &dyn NetworkContext, node_id: &NodeId);

@@ -11,6 +11,7 @@ use crate::{
     },
 };
 use network::service::ProtocolVersion;
+use rlp::Encodable;
 use rlp_derive::{RlpDecodable, RlpEncodable};
 
 #[derive(RlpDecodable, RlpEncodable)]

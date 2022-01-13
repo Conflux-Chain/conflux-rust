@@ -41,8 +41,10 @@ pub const COL_BLAMED_HEADER_VERIFIED_ROOTS: u32 = 4;
 pub const COL_BLOCK_TRACES: u32 = 5;
 /// Column for block number index
 pub const COL_HASH_BY_BLOCK_NUMBER: u32 = 6;
+/// Column for PoS interest reward info.
+pub const COL_REWARD_BY_POS_EPOCH: u32 = 7;
 /// Number of columns in DB
-pub const NUM_COLUMNS: u32 = 7;
+pub const NUM_COLUMNS: u32 = 8;
 
 /// Modes for updating caches.
 #[derive(Clone, Copy)]

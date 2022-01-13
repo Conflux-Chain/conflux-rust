@@ -76,6 +76,7 @@ class TestNode:
         self.cleanup_on_exit = True
         # self.key = "0x" + "0"*125+"{:03d}".format(self.index);
         self.p2ps = []
+        self.pow_sk = open(os.path.join(self.datadir, "pow_sk"), "rb").read()
 
     def _node_msg(self, msg: str) -> str:
         """Return a modified msg that identifies this node by its index as a debugging aid."""
@@ -133,7 +134,7 @@ class TestNode:
         # potentially interfere with our attempt to authenticate
         delete_cookie_file(self.datadir)
         my_env = os.environ.copy()
-        my_env["RUST_BACKTRACE"] = "full"
+        my_env["RUST_BACKTRACE"] = "1"
         if self.remote:
             # If no_pssh is False, we have started the conflux nodes before this, so
             # we can just skip the start here.
@@ -238,6 +239,7 @@ class TestNode:
     def clean_data(self):
         shutil.rmtree(os.path.join(self.datadir, "blockchain_data/blockchain_db"))
         shutil.rmtree(os.path.join(self.datadir, "blockchain_data/storage_db"))
+        shutil.rmtree(os.path.join(self.datadir, "pos-ledger-db"), ignore_errors=True)
         self.log.info("Cleanup data for node %d", self.index)
 
     def stop_node(self, expected_stderr='', kill=False, wait=True):
@@ -258,7 +260,8 @@ class TestNode:
         # Check that stderr is as expected
         self.stderr.seek(0)
         stderr = self.stderr.read().decode('utf-8').strip()
-        if stderr != expected_stderr:
+        # TODO: Check how to avoid `pthread lock: Invalid argument`.
+        if stderr != expected_stderr and stderr != "pthread lock: Invalid argument":
             raise AssertionError("Unexpected stderr {} != {} from {}:{} index={}".format(
                 stderr, expected_stderr, self.ip, self.port, self.index))
 

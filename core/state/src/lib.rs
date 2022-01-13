@@ -10,6 +10,7 @@ pub mod state;
 pub(self) mod state_object_cache;
 pub mod state_trait;
 pub mod substate_trait;
+pub mod tracer;
 
 pub use state_trait::StateTrait;
 pub use substate_trait::{SubstateMngTrait, SubstateTrait};
@@ -31,7 +32,7 @@ pub enum CleanupMode<'a> {
     /// Mark all touched accounts.
     /// TODO: We have not implemented the correct behavior of TrackTouched for
     /// internal Contracts.
-    TrackTouched(&'a mut HashSet<Address>),
+    TrackTouched(&'a mut HashSet<AddressWithSpace>),
 }
 
 pub fn maybe_address(address: &Address) -> Option<Address> {
@@ -44,20 +45,20 @@ pub fn maybe_address(address: &Address) -> Option<Address> {
 
 // TODO: Deprecate the StateDbExt in StateDb and replace it with StateDbOps.
 pub trait StateDbOps {
-    fn get_raw(&self, key: StorageKey) -> Result<Option<Arc<[u8]>>>;
+    fn get_raw(&self, key: StorageKeyWithSpace) -> Result<Option<Arc<[u8]>>>;
 
-    fn get<T>(&self, key: StorageKey) -> Result<Option<T>>
+    fn get<T>(&self, key: StorageKeyWithSpace) -> Result<Option<T>>
     where T: ::rlp::Decodable;
 
     fn set<T>(
-        &mut self, key: StorageKey, value: &T,
+        &mut self, key: StorageKeyWithSpace, value: &T,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>
     where
         T: ::rlp::Encodable + IsDefault;
 
     fn delete(
-        &mut self, key: StorageKey,
+        &mut self, key: StorageKeyWithSpace,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>;
 }
@@ -65,17 +66,17 @@ pub trait StateDbOps {
 impl<StateDbStorage: StorageStateTrait> StateDbOps
     for StateDbGeneric<StateDbStorage>
 {
-    fn get_raw(&self, key: StorageKey) -> Result<Option<Arc<[u8]>>> {
+    fn get_raw(&self, key: StorageKeyWithSpace) -> Result<Option<Arc<[u8]>>> {
         Self::get_raw(self, key)
     }
 
-    fn get<T>(&self, key: StorageKey) -> Result<Option<T>>
+    fn get<T>(&self, key: StorageKeyWithSpace) -> Result<Option<T>>
     where T: ::rlp::Decodable {
         <Self as StateDbExt>::get(self, key)
     }
 
     fn set<T>(
-        &mut self, key: StorageKey, value: &T,
+        &mut self, key: StorageKeyWithSpace, value: &T,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>
     where
@@ -85,7 +86,7 @@ impl<StateDbStorage: StorageStateTrait> StateDbOps
     }
 
     fn delete(
-        &mut self, key: StorageKey,
+        &mut self, key: StorageKeyWithSpace,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>
     {
@@ -96,6 +97,6 @@ impl<StateDbStorage: StorageStateTrait> StateDbOps
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_statedb::{Result, StateDbExt, StateDbGeneric};
 use cfx_storage::StorageStateTrait;
-use cfx_types::{Address, U256};
-use primitives::{is_default::IsDefault, StorageKey};
+use cfx_types::{Address, AddressWithSpace, U256};
+use primitives::{is_default::IsDefault, StorageKeyWithSpace};
 use std::{collections::HashSet, sync::Arc};

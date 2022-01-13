@@ -4,24 +4,26 @@
 
 use crate::{
     executive::InternalRefContext,
+    observer::{AddressPocket, VmObserve},
     state::cleanup_mode,
-    trace::{trace::ExecTrace, Tracer},
     vm::{self, ActionParams, Spec},
 };
-use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
-use cfx_types::{Address, U256};
+use cfx_types::{Address, AddressSpaceUtil, U256};
 
 /// Implementation of `set_sponsor_for_gas(address,uint256)`.
 pub fn set_sponsor_for_gas(
     contract_address: Address, upper_bound: U256, params: &ActionParams,
-    context: &mut InternalRefContext,
-    tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
+    context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
+    account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
 
-    if !context.state.exists(&contract_address)? {
+    if !context
+        .state
+        .exists(&contract_address.with_native_space())?
+    {
         return Err(vm::Error::InternalContract(
             "contract address not exist".into(),
         ));
@@ -39,7 +41,7 @@ pub fn set_sponsor_for_gas(
         &mut dyn SubstateTrait,
     ) = (context.spec, context.state, context.substate);
 
-    let sponsor_balance = state.balance(&params.address)?;
+    let sponsor_balance = state.balance(&params.address.with_native_space())?;
 
     if sponsor_balance / U256::from(1000) < upper_bound {
         return Err(vm::Error::InternalContract(
@@ -77,20 +79,27 @@ pub fn set_sponsor_for_gas(
         }
         // refund to previous sponsor
         if prev_sponsor.is_some() {
-            tracer.prepare_internal_transfer_action(
-                *SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-                prev_sponsor.unwrap(),
+            tracer.trace_internal_transfer(
+                AddressPocket::SponsorBalanceForGas(contract_address),
+                AddressPocket::Balance(
+                    prev_sponsor.unwrap().with_native_space(),
+                ),
                 prev_sponsor_balance,
             );
             state.add_balance(
-                prev_sponsor.as_ref().unwrap(),
+                &prev_sponsor.as_ref().unwrap().with_native_space(),
                 &prev_sponsor_balance,
                 cleanup_mode(substate, &spec),
                 account_start_nonce,
             )?;
         }
+        tracer.trace_internal_transfer(
+            AddressPocket::Balance(params.address.with_space(params.space)),
+            AddressPocket::SponsorBalanceForGas(contract_address),
+            sponsor_balance,
+        );
         state.sub_balance(
-            &params.address,
+            &params.address.with_native_space(),
             &sponsor_balance,
             &mut cleanup_mode(substate, &spec),
         )?;
@@ -111,8 +120,14 @@ pub fn set_sponsor_for_gas(
                 "cannot change upper_bound to a smaller one".into(),
             ));
         }
+
+        tracer.trace_internal_transfer(
+            AddressPocket::Balance(params.address.with_space(params.space)),
+            AddressPocket::SponsorBalanceForGas(contract_address),
+            sponsor_balance,
+        );
         state.sub_balance(
-            &params.address,
+            &params.address.with_native_space(),
             &sponsor_balance,
             &mut cleanup_mode(substate, &spec),
         )?;
@@ -130,13 +145,16 @@ pub fn set_sponsor_for_gas(
 /// Implementation of `set_sponsor_for_collateral(address)`.
 pub fn set_sponsor_for_collateral(
     contract_address: Address, params: &ActionParams,
-    context: &mut InternalRefContext,
-    tracer: &mut dyn Tracer<Output = ExecTrace>, account_start_nonce: U256,
+    context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
+    account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
 
-    if !context.state.exists(&contract_address)? {
+    if !context
+        .state
+        .exists(&contract_address.with_native_space())?
+    {
         return Err(vm::Error::InternalContract(
             "contract address not exist".into(),
         ));
@@ -154,7 +172,7 @@ pub fn set_sponsor_for_collateral(
         &mut dyn SubstateTrait,
     ) = (context.spec, context.state, context.substate);
 
-    let sponsor_balance = state.balance(&params.address)?;
+    let sponsor_balance = state.balance(&params.address.with_native_space())?;
 
     if sponsor_balance.is_zero() {
         return Err(vm::Error::InternalContract(
@@ -178,25 +196,37 @@ pub fn set_sponsor_for_collateral(
         // `sponsor_balance` + `collateral_for_storage`.
         if sponsor_balance <= prev_sponsor_balance + collateral_for_storage {
             return Err(vm::Error::InternalContract(
-                    "sponsor_balance is not enough to cover previous sponsor's sponsor_balance and collateral_for_storage".into()
-                ));
+                "sponsor_balance is not enough to cover previous sponsor's sponsor_balance and collateral_for_storage".into()
+            ));
         }
         // refund to previous sponsor
-        if prev_sponsor.is_some() {
-            tracer.prepare_internal_transfer_action(
-                *SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-                prev_sponsor.unwrap(),
-                prev_sponsor_balance + collateral_for_storage,
+        if let Some(ref prev_sponsor) = prev_sponsor {
+            tracer.trace_internal_transfer(
+                AddressPocket::SponsorBalanceForStorage(contract_address),
+                AddressPocket::Balance(prev_sponsor.with_native_space()),
+                prev_sponsor_balance,
+            );
+            tracer.trace_internal_transfer(
+                AddressPocket::Balance(params.address.with_space(params.space)),
+                AddressPocket::Balance(prev_sponsor.with_native_space()),
+                collateral_for_storage,
             );
             state.add_balance(
-                prev_sponsor.as_ref().unwrap(),
+                &prev_sponsor.with_native_space(),
                 &(prev_sponsor_balance + collateral_for_storage),
                 cleanup_mode(substate, &spec),
                 account_start_nonce,
             )?;
+        } else {
+            assert_eq!(collateral_for_storage, U256::zero());
         }
+        tracer.trace_internal_transfer(
+            AddressPocket::Balance(params.address.with_space(params.space)),
+            AddressPocket::SponsorBalanceForStorage(contract_address),
+            sponsor_balance - collateral_for_storage,
+        );
         state.sub_balance(
-            &params.address,
+            &params.address.with_native_space(),
             &sponsor_balance,
             &mut cleanup_mode(substate, &spec),
         )?;
@@ -206,8 +236,13 @@ pub fn set_sponsor_for_collateral(
             &(sponsor_balance - collateral_for_storage),
         )?;
     } else {
+        tracer.trace_internal_transfer(
+            AddressPocket::Balance(params.address.with_space(params.space)),
+            AddressPocket::SponsorBalanceForStorage(contract_address),
+            sponsor_balance,
+        );
         state.sub_balance(
-            &params.address,
+            &params.address.with_native_space(),
             &sponsor_balance,
             &mut cleanup_mode(substate, &spec),
         )?;

@@ -23,12 +23,9 @@ use super::{
     CreateContractAddress, Env, Error, GasLeft, MessageCallResult, Result,
     ReturnData, Spec,
 };
-use crate::{
-    executive::InternalRefContext,
-    trace::{trace::ExecTrace, Tracer},
-};
+use crate::{executive::InternalRefContext, observer::VmObserve};
 use cfx_bytes::Bytes;
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use cfx_types::{address_util::AddressUtil, Address, Space, H256, U256};
 use hash::keccak;
 use std::{
     collections::{HashMap, HashSet},
@@ -215,8 +212,8 @@ impl Context for MockContext {
     }
 
     fn suicide(
-        &mut self, refund_address: &Address,
-        _: &mut dyn Tracer<Output = ExecTrace>, _account_start_nonce: U256,
+        &mut self, refund_address: &Address, _: &mut dyn VmObserve,
+        _account_start_nonce: U256,
     ) -> Result<()>
     {
         if !refund_address.is_genesis_valid_address() {
@@ -249,4 +246,6 @@ impl Context for MockContext {
     }
 
     fn internal_ref(&mut self) -> InternalRefContext { unimplemented!() }
+
+    fn space(&self) -> Space { Space::Native }
 }

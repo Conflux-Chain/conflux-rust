@@ -2,12 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::sync::{
-    message::DynamicCapability,
-    state::{SnapshotChunkSync, Status},
-    synchronization_protocol_handler::SynchronizationProtocolHandler,
-    synchronization_state::SynchronizationState,
-    SharedSynchronizationGraph,
+use crate::{
+    sync::{
+        message::DynamicCapability,
+        state::{SnapshotChunkSync, Status},
+        synchronization_protocol_handler::SynchronizationProtocolHandler,
+        synchronization_state::SynchronizationState,
+        SharedSynchronizationGraph,
+    },
+    ConsensusGraph,
 };
 use cfx_internal_common::StateAvailabilityBoundary;
 use cfx_parameters::sync::CATCH_UP_EPOCH_LAG_THRESHOLD;
@@ -109,7 +112,7 @@ impl SynchronizationPhaseManager {
         initial_phase_type: SyncPhaseType,
         sync_state: Arc<SynchronizationState>,
         sync_graph: SharedSynchronizationGraph,
-        state_sync: Arc<SnapshotChunkSync>,
+        state_sync: Arc<SnapshotChunkSync>, consensus: Arc<ConsensusGraph>,
     ) -> Self
     {
         let sync_manager = SynchronizationPhaseManager {
@@ -136,7 +139,7 @@ impl SynchronizationPhaseManager {
             sync_state.clone(),
             sync_graph.clone(),
         )));
-        sync_manager.register_phase(Arc::new(NormalSyncPhase::new()));
+        sync_manager.register_phase(Arc::new(NormalSyncPhase::new(consensus)));
 
         sync_manager
     }
@@ -287,7 +290,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
         let (_, cur_era_genesis_height) =
             self.graph.get_genesis_hash_and_height_in_current_era();
         *sync_handler.latest_epoch_requested.lock() =
-            (cur_era_genesis_height, Instant::now());
+            (cur_era_genesis_height, Instant::now(), 0, 0);
 
         sync_handler.request_epochs(io);
     }
@@ -531,16 +534,22 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
         let (_, cur_era_genesis_height) =
             self.graph.get_genesis_hash_and_height_in_current_era();
         *sync_handler.latest_epoch_requested.lock() =
-            (cur_era_genesis_height, Instant::now());
+            (cur_era_genesis_height, Instant::now(), 0, 0);
 
         sync_handler.request_epochs(io);
     }
 }
 
-pub struct NormalSyncPhase {}
+pub struct NormalSyncPhase {
+    _consensus: Arc<ConsensusGraph>,
+}
 
 impl NormalSyncPhase {
-    pub fn new() -> Self { NormalSyncPhase {} }
+    pub fn new(consensus: Arc<ConsensusGraph>) -> Self {
+        NormalSyncPhase {
+            _consensus: consensus,
+        }
+    }
 }
 
 impl SynchronizationPhaseTrait for NormalSyncPhase {
