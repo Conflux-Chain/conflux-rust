@@ -50,7 +50,7 @@ pub fn call_gas(
 ) -> DbResult<U256>
 {
     let new_account_gas = if !is_static
-        && context
+        && !context
             .state
             .exists_and_not_null(&receiver.with_evm_space())?
     {

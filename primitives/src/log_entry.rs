@@ -7,13 +7,12 @@
 use crate::{block::BlockNumber, bytes::Bytes};
 use cfx_types::{Address, Bloom, BloomInput, Space, H256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use rlp::RlpStream;
 use serde_derive::{Deserialize, Serialize};
 use std::ops::Deref;
 
 /// A record of execution for a `LOG` operation.
-#[derive(
-    Default, Debug, Clone, PartialEq, Eq, RlpEncodable, Serialize, Deserialize,
-)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LogEntry {
     /// The address of the contract executing at the point of the `LOG`
     /// operation.
@@ -26,23 +25,46 @@ pub struct LogEntry {
     pub space: Space,
 }
 
+impl rlp::Encodable for LogEntry {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        match self.space {
+            Space::Native => {
+                s.begin_list(3);
+                s.append(&self.address);
+                s.append_list(&self.topics);
+                s.append(&self.data);
+            }
+            Space::Ethereum => {
+                s.begin_list(4);
+                s.append(&self.address);
+                s.append_list(&self.topics);
+                s.append(&self.data);
+                s.append(&self.space);
+            }
+        }
+    }
+}
+
 // We want to remain backward-compatible with pre-CIP90 entries in the DB.
 // However, rlp_derive::RlpDecodable is not backward-compatible when adding new
 // fields, so we implement backward-compatible decoding manually.
 impl rlp::Decodable for LogEntry {
     fn decode(rlp: &rlp::Rlp) -> Result<Self, rlp::DecoderError> {
-        let space = match rlp.val_at(3) {
-            Ok(space) => space,
-            Err(rlp::DecoderError::RlpIsTooShort) => Space::Native,
-            Err(e) => return Err(e),
-        };
-
-        Ok(LogEntry {
-            address: rlp.val_at(0)?,
-            topics: rlp.list_at(1)?,
-            data: rlp.val_at(2)?,
-            space,
-        })
+        match rlp.item_count()? {
+            3 => Ok(LogEntry {
+                address: rlp.val_at(0)?,
+                topics: rlp.list_at(1)?,
+                data: rlp.val_at(2)?,
+                space: Space::Native,
+            }),
+            4 => Ok(LogEntry {
+                address: rlp.val_at(0)?,
+                topics: rlp.list_at(1)?,
+                data: rlp.val_at(2)?,
+                space: rlp.val_at(3)?,
+            }),
+            _ => Err(rlp::DecoderError::RlpInvalidLength),
+        }
     }
 }
 
@@ -95,6 +117,7 @@ mod tests {
     use super::LogEntry;
     use crate::bytes::Bytes;
     use cfx_types::{Address, Bloom, Space, H256};
+    use rlp_derive::RlpEncodable;
 
     #[derive(PartialEq, Eq, RlpEncodable)]
     pub struct LogEntryOld {
