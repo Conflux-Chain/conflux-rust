@@ -3,12 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 extern crate cfx_bytes as bytes;
-extern crate keccak_hash as hash;
-extern crate rlp;
-#[macro_use]
-extern crate rlp_derive;
 extern crate cfxkey as keylib;
+extern crate keccak_hash as hash;
 extern crate log;
+extern crate rlp;
+extern crate rlp_derive;
 extern crate unexpected;
 #[macro_use]
 extern crate lazy_static;
