@@ -4,7 +4,7 @@
 
 use super::RpcAddress;
 use cfx_addr::Network;
-use cfx_types::{H160, H256, U256, U64};
+use cfx_types::{Space, H160, H256, U256, U64};
 use cfxcore::{
     block_data_manager::{BlockDataManager, DataVersionTuple},
     consensus::{ConsensusConfig, ConsensusGraphInner},
@@ -150,10 +150,7 @@ impl Block {
     {
         let transactions = match include_txs {
             false => BlockTransactions::Hashes(
-                b.transactions
-                    .iter()
-                    .map(|x| H256::from(x.hash()))
-                    .collect(),
+                b.transaction_hashes(Some(Space::Native)),
             ),
             true => {
                 let tx_vec = match consensus_inner
@@ -170,6 +167,7 @@ impl Block {
 
                         b.transactions
                         .iter()
+                        .filter(|tx| tx.space() == Space::Native)
                         .enumerate()
                         .map(|(idx, tx)| {
                             let receipt = execution_result.block_receipts.receipts.get(idx).unwrap();
@@ -219,6 +217,7 @@ impl Block {
                     None => b
                         .transactions
                         .iter()
+                        .filter(|tx| tx.space() == Space::Native)
                         .map(|x| Transaction::from_signed(x, None, network))
                         .collect::<Result<_, _>>()?,
                 };
