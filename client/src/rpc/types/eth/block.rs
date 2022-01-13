@@ -55,7 +55,7 @@ impl Serialize for BlockTransactions {
 #[serde(rename_all = "camelCase")]
 pub struct Block {
     /// Hash of the block
-    pub hash: Option<H256>,
+    pub hash: H256,
     /// Hash of the parent
     pub parent_hash: H256,
     /// Hash of the uncles
@@ -105,7 +105,7 @@ pub struct Block {
 #[serde(rename_all = "camelCase")]
 pub struct Header {
     /// Hash of the block
-    pub hash: Option<H256>,
+    pub hash: H256,
     /// Hash of the parent
     pub parent_hash: H256,
     /// Hash of the uncles
@@ -172,7 +172,7 @@ impl Block {
         };
 
         Block {
-            hash: Some(b.block_header.hash()),
+            hash: b.block_header.hash(),
             parent_hash: b.block_header.parent_hash().clone(),
             uncles_hash: hexstr_to_h256(SHA3_HASH_OF_EMPTY_UNCLE),
             author: b.block_header.author().clone(),
