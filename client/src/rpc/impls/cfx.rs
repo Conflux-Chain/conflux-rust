@@ -946,30 +946,30 @@ impl RpcImpl {
         let mut transactions = Vec::new();
 
         for tx in txs {
-            match tx.recover_public() {
-                Ok(public) => {
-                    let mut signed_tx = SignedTransaction::new(public, tx);
-                    let unsigned = if let Transaction::Native(
-                        ref mut unsigned,
-                    ) =
-                        signed_tx.transaction.transaction.unsigned
-                    {
-                        unsigned
-                    } else {
-                        bail!(invalid_params(&format!("raw_txs, tx {:?}", signed_tx), format!("Does not support EIP-155 transaction in cfx RPC.")));
-                    };
-                    if tx_data_len > 0 {
-                        unsigned.data = vec![0; tx_data_len];
-                    }
-                    transactions.push(Arc::new(signed_tx));
-                }
+            let public = match tx.recover_public() {
+                Ok(public) => public,
                 Err(e) => {
                     bail!(invalid_params(
                         &format!("raw_txs, tx {:?}", tx),
                         format!("Recover public error: {:?}", e),
                     ));
                 }
-            }
+            };
+
+            let mut signed_tx = SignedTransaction::new(public, tx);
+
+            // set fake data for latency tests
+            match signed_tx.transaction.transaction.unsigned {
+                Transaction::Native(ref mut unsigned) if tx_data_len > 0 => {
+                    unsigned.data = vec![0; tx_data_len];
+                }
+                Transaction::Ethereum(ref mut unsigned) if tx_data_len > 0 => {
+                    unsigned.data = vec![0; tx_data_len];
+                }
+                _ => {}
+            };
+
+            transactions.push(Arc::new(signed_tx));
         }
 
         Ok(transactions)
