@@ -18,8 +18,12 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::rpc::types::{eth::Log, EpochNumber as BlockNumber};
+use crate::rpc::{
+    error_codes::{internal_error, invalid_params},
+    types::eth::{BlockNumber, Log},
+};
 use cfx_types::{Space, H160, H256};
+use cfxcore::SharedConsensusGraph;
 use jsonrpc_core::Error as RpcError;
 use primitives::{
     filter::{LogFilter as PrimitiveFilter, LogFilterParams},
@@ -112,7 +116,9 @@ pub struct EthRpcLogFilter {
 }
 
 impl EthRpcLogFilter {
-    pub fn into_primitive(self) -> Result<PrimitiveFilter, RpcError> {
+    pub fn into_primitive(
+        self, consensus: SharedConsensusGraph,
+    ) -> Result<PrimitiveFilter, RpcError> {
         let params = LogFilterParams {
             address: self.address.map(|v| v.to_vec()),
             topics: self
@@ -130,9 +136,29 @@ impl EthRpcLogFilter {
         match (&self.from_block, &self.to_block, &self.block_hash) {
             // block hash filter
             (None, None, Some(block_hash)) => {
-                Ok(PrimitiveFilter::BlockHashLogFilter {
-                    // TODO(thegaram): include all block hashes from epoch
-                    block_hashes: vec![*block_hash],
+                // check if `block_hash` is a valid pivot hash
+                let epoch = consensus
+                    .get_block_epoch_number(block_hash)
+                    .ok_or(invalid_params("blockHash", "Unknown block"))?;
+
+                let hashes = consensus
+                    .get_block_hashes_by_epoch(EpochNumber::Number(epoch))
+                    .map_err(|_| {
+                        invalid_params("blockHash", "Unknown block")
+                    })?;
+
+                let pivot_hash = hashes
+                    .last()
+                    .ok_or(internal_error("Inconsistent state"))?;
+
+                if block_hash != pivot_hash {
+                    bail!(invalid_params("blockHash", "Unknown block"));
+                }
+
+                // filter based on a single epoch
+                Ok(PrimitiveFilter::EpochLogFilter {
+                    from_epoch: EpochNumber::Number(epoch),
+                    to_epoch: EpochNumber::Number(epoch),
                     params,
                 })
             }
@@ -143,6 +169,7 @@ impl EthRpcLogFilter {
                 from_epoch: self
                     .from_block
                     .map(|n| n.into())
+                    // FIXME(thegaram): this is probably not consistent with eth
                     .unwrap_or(EpochNumber::LatestCheckpoint),
                 to_epoch: self
                     .to_block
