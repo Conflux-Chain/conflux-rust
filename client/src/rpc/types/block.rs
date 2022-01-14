@@ -169,33 +169,41 @@ impl Block {
                     false, /* update_cache */
                 );
 
-            // calculate block gasUsed according block.execution_result and tx_space_filter
+            // calculate block gasUsed according block.execution_result and
+            // tx_space_filter
             let gas_used_sum = match maybe_results.clone() {
-                Some(DataVersionTuple(_, execution_result)) => match tx_space_filter {
-                    Some(space_filter) => {
-                        let mut total_gas_used = U256::zero();
-                        let mut prev_acc_gas_used = U256::zero();
-                        for (idx, tx) in b.transactions.iter().enumerate() {
-                            let receipt =
-                                execution_result.block_receipts.receipts[idx]
+                Some(DataVersionTuple(_, execution_result)) => {
+                    match tx_space_filter {
+                        Some(space_filter) => {
+                            let mut total_gas_used = U256::zero();
+                            let mut prev_acc_gas_used = U256::zero();
+                            for (idx, tx) in b.transactions.iter().enumerate() {
+                                let receipt = execution_result
+                                    .block_receipts
+                                    .receipts[idx]
                                     .clone();
-                            if tx.space() == space_filter {
-                                total_gas_used += receipt.accumulated_gas_used
-                                    - prev_acc_gas_used;
+                                if tx.space() == space_filter {
+                                    total_gas_used += receipt
+                                        .accumulated_gas_used
+                                        - prev_acc_gas_used;
+                                }
+                                prev_acc_gas_used =
+                                    receipt.accumulated_gas_used;
                             }
-                            prev_acc_gas_used = receipt.accumulated_gas_used;
+                            Some(total_gas_used)
                         }
-                        Some(total_gas_used)
+                        None => Some(
+                            execution_result.block_receipts.receipts
+                                [tx_len - 1]
+                                .accumulated_gas_used,
+                        ),
                     }
-                    None => Some(
-                        execution_result.block_receipts.receipts[tx_len - 1]
-                            .accumulated_gas_used,
-                    ),
-                },
+                }
                 None => None,
             };
 
-            // prepare the transaction array according include_txs, execution_result, tx_space_filter
+            // prepare the transaction array according include_txs,
+            // execution_result, tx_space_filter
             let transactions = match include_txs {
                 false => BlockTransactions::Hashes(
                     b.transaction_hashes(Some(Space::Native)),
@@ -259,7 +267,8 @@ impl Block {
                             .transactions
                             .iter()
                             .filter(|tx| {
-                                tx_space_filter.is_none() || tx.space() == tx_space_filter.unwrap()
+                                tx_space_filter.is_none()
+                                    || tx.space() == tx_space_filter.unwrap()
                             })
                             .map(|x| Transaction::from_signed(x, None, network))
                             .collect::<Result<_, _>>()?,
