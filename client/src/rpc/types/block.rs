@@ -146,6 +146,7 @@ impl Block {
         consensus: &dyn ConsensusGraphTrait<ConsensusConfig = ConsensusConfig>,
         consensus_inner: &ConsensusGraphInner,
         data_man: &Arc<BlockDataManager>, include_txs: bool,
+        space: Option<Space>,
     ) -> Result<Self, String>
     {
         let block_hash = b.block_header.hash();
@@ -169,21 +170,27 @@ impl Block {
                 );
 
             let gas_used_sum = match maybe_results.clone() {
-                Some(DataVersionTuple(_, execution_result)) => {
-                    let mut total_gas_used = U256::zero();
-                    let mut prev_acc_gas_used = U256::zero();
-                    for (idx, tx) in b.transactions.iter().enumerate() {
-                        let receipt = execution_result.block_receipts.receipts
-                            [idx]
-                            .clone();
-                        if tx.space() == Space::Native {
-                            total_gas_used += receipt.accumulated_gas_used
-                                - prev_acc_gas_used;
+                Some(DataVersionTuple(_, execution_result)) => match space {
+                    Some(space_filter) => {
+                        let mut total_gas_used = U256::zero();
+                        let mut prev_acc_gas_used = U256::zero();
+                        for (idx, tx) in b.transactions.iter().enumerate() {
+                            let receipt =
+                                execution_result.block_receipts.receipts[idx]
+                                    .clone();
+                            if tx.space() == space_filter {
+                                total_gas_used += receipt.accumulated_gas_used
+                                    - prev_acc_gas_used;
+                            }
+                            prev_acc_gas_used = receipt.accumulated_gas_used;
                         }
-                        prev_acc_gas_used = receipt.accumulated_gas_used;
+                        Some(total_gas_used)
                     }
-                    Some(total_gas_used)
-                }
+                    None => Some(
+                        execution_result.block_receipts.receipts[tx_len - 1]
+                            .accumulated_gas_used,
+                    ),
+                },
                 None => None,
             };
 
@@ -200,8 +207,7 @@ impl Block {
                             b.transactions
                                 .iter()
                                 .enumerate()
-                                // .map(|(idx, tx)| (idx, tx))
-                                .filter(|(_idx, tx)| tx.space() == Space::Native)
+                                .filter(|(_idx, tx)| space.is_none() || tx.space() == space.unwrap())
                                 .map(|(idx, tx)| {
                                     let receipt = execution_result.block_receipts.receipts.get(idx).unwrap();
                                     let prior_gas_used = if idx == 0 {
@@ -250,7 +256,9 @@ impl Block {
                         None => b
                             .transactions
                             .iter()
-                            .filter(|tx| tx.space() == Space::Native)
+                            .filter(|tx| {
+                                space.is_none() || tx.space() == space.unwrap()
+                            })
                             .map(|x| Transaction::from_signed(x, None, network))
                             .collect::<Result<_, _>>()?,
                     };
