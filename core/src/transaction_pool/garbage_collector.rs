@@ -111,8 +111,7 @@ impl GarbageCollector {
     #[inline]
     pub fn gc_size(&self) -> usize { self.gc_size }
 
-    #[cfg(test)]
-    fn top(&self) -> Option<(&AddressWithSpace, &GarbageCollectorValue)> {
+    pub fn top(&self) -> Option<(&AddressWithSpace, &GarbageCollectorValue)> {
         self.heap_map.top()
     }
 }
