@@ -39,7 +39,8 @@ use cfx_types::{
 };
 use primitives::{
     receipt::StorageChange, storage::STORAGE_LAYOUT_REGULAR_V0,
-    transaction::Action, SignedTransaction, StorageLayout, Transaction,
+    transaction::Action, NativeTransaction, SignedTransaction, StorageLayout,
+    Transaction,
 };
 use rlp::RlpStream;
 use std::{
@@ -955,6 +956,60 @@ impl<
         Ok(result)
     }
 
+    /// For the same transaction, the storage limit paid by user and the storage
+    /// limit paid by the sponsor are different values. So this function will
+    ///
+    /// 1. Assuming the sponsor pays for storage collateral, check if the
+    /// transaction will fail for NotEnoughBalanceForStorage.
+    ///
+    /// 2. If it does, executes the transaction again assuming the user pays for
+    /// the storage collateral. The resultant storage limit must be larger than
+    /// the maximum storage limit can be afford by the sponsor, to guarantee the
+    /// user pays for the storage limit.
+    pub fn transact_virtual_two_pass(
+        &mut self, tx: &SignedTransaction, sponsor_balance_for_collateral: U256,
+    ) -> DbResult<ExecutionOutcome> {
+        let mut first_pass_tx = tx.clone();
+        let sponsor_storage_limit = (sponsor_balance_for_collateral
+            / *DRIPS_PER_STORAGE_COLLATERAL_UNIT)
+            .as_u64();
+
+        if let Transaction::Native(NativeTransaction {
+            ref mut storage_limit,
+            ..
+        }) = first_pass_tx.transaction.transaction.unsigned
+        {
+            *storage_limit = sponsor_storage_limit;
+        } else {
+            unreachable!(
+                "Only the native transaction needs two pass estimation"
+            );
+        }
+        let first_pass_result = self.transact_virtual(&first_pass_tx)?;
+        let fail_for_storage_balance = matches!(
+            first_pass_result,
+            ExecutionOutcome::ExecutionErrorBumpNonce(
+                ExecutionError::VmError(
+                    vm::Error::NotEnoughBalanceForStorage { .. },
+                ),
+                _,
+            )
+        );
+        return if fail_for_storage_balance {
+            let mut second_pass_result = self.transact_virtual(&tx)?;
+            if let ExecutionOutcome::Finished(Executed {
+                ref mut minimum_storage_limit,
+                ..
+            }) = second_pass_result
+            {
+                *minimum_storage_limit = sponsor_storage_limit + 64
+            }
+            Ok(second_pass_result)
+        } else {
+            Ok(first_pass_result)
+        };
+    }
+
     pub fn transact_virtual(
         &mut self, tx: &SignedTransaction,
     ) -> DbResult<ExecutionOutcome> {
@@ -1702,6 +1757,7 @@ impl<
                     output,
                     trace,
                     estimated_gas_limit,
+                    minimum_storage_limit: 0,
                 };
 
                 if r.apply_state {
