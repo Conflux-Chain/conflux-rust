@@ -146,7 +146,7 @@ impl Block {
         consensus: &dyn ConsensusGraphTrait<ConsensusConfig = ConsensusConfig>,
         consensus_inner: &ConsensusGraphInner,
         data_man: &Arc<BlockDataManager>, include_txs: bool,
-        space: Option<Space>,
+        tx_space_filter: Option<Space>,
     ) -> Result<Self, String>
     {
         let block_hash = b.block_header.hash();
@@ -169,8 +169,9 @@ impl Block {
                     false, /* update_cache */
                 );
 
+            // calculate block gasUsed according block.execution_result and tx_space_filter
             let gas_used_sum = match maybe_results.clone() {
-                Some(DataVersionTuple(_, execution_result)) => match space {
+                Some(DataVersionTuple(_, execution_result)) => match tx_space_filter {
                     Some(space_filter) => {
                         let mut total_gas_used = U256::zero();
                         let mut prev_acc_gas_used = U256::zero();
@@ -194,6 +195,7 @@ impl Block {
                 None => None,
             };
 
+            // prepare the transaction array according include_txs, execution_result, tx_space_filter
             let transactions = match include_txs {
                 false => BlockTransactions::Hashes(
                     b.transaction_hashes(Some(Space::Native)),
@@ -207,7 +209,7 @@ impl Block {
                             b.transactions
                                 .iter()
                                 .enumerate()
-                                .filter(|(_idx, tx)| space.is_none() || tx.space() == space.unwrap())
+                                .filter(|(_idx, tx)| tx_space_filter.is_none() || tx.space() == tx_space_filter.unwrap())
                                 .map(|(idx, tx)| {
                                     let receipt = execution_result.block_receipts.receipts.get(idx).unwrap();
                                     let prior_gas_used = if idx == 0 {
@@ -257,7 +259,7 @@ impl Block {
                             .transactions
                             .iter()
                             .filter(|tx| {
-                                space.is_none() || tx.space() == space.unwrap()
+                                tx_space_filter.is_none() || tx.space() == tx_space_filter.unwrap()
                             })
                             .map(|x| Transaction::from_signed(x, None, network))
                             .collect::<Result<_, _>>()?,
