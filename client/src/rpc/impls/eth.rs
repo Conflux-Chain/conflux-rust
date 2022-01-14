@@ -889,15 +889,16 @@ impl Eth for EthHandler {
         let filter: LogFilter =
             filter.into_primitive(self.consensus.clone())?;
 
-        Ok(self
+        let logs = self
             .consensus_graph()
             .logs(filter)
-            .map_err(|err| CfxRpcError::from(err))?
+            .map_err(|err| CfxRpcError::from(err))?;
+
+        Ok(logs
             .iter()
             .cloned()
-            .map(|l| Log::try_from_localized(l))
-            .collect::<Result<_, _>>()
-            .map_err(|err| CfxRpcError::from(err))?)
+            .map(|l| Log::try_from_localized(l, self.consensus.clone()))
+            .collect::<Result<_, _>>()?)
     }
 
     fn submit_hashrate(&self, _: U256, _: H256) -> jsonrpc_core::Result<bool> {

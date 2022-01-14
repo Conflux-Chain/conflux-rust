@@ -18,9 +18,17 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::rpc::types::Bytes;
+use crate::rpc::{
+    error_codes::{internal_error, invalid_params},
+    types::Bytes,
+};
 use cfx_types::{H160, H256, U256};
-use primitives::log_entry::{LocalizedLogEntry, LogEntry};
+use cfxcore::SharedConsensusGraph;
+use jsonrpc_core::Error as RpcError;
+use primitives::{
+    log_entry::{LocalizedLogEntry, LogEntry},
+    EpochNumber,
+};
 
 /// Log
 #[derive(Debug, Serialize, PartialEq, Eq, Hash, Clone)]
@@ -51,13 +59,27 @@ pub struct Log {
 }
 
 impl Log {
-    pub fn try_from_localized(e: LocalizedLogEntry) -> Result<Log, String> {
+    pub fn try_from_localized(
+        e: LocalizedLogEntry, consensus: SharedConsensusGraph,
+    ) -> Result<Log, RpcError> {
+        // find pivot hash
+        let epoch = consensus
+            .get_block_epoch_number(&e.block_hash)
+            .ok_or(invalid_params("blockHash", "Unknown block"))?;
+
+        let hashes = consensus
+            .get_block_hashes_by_epoch(EpochNumber::Number(epoch))
+            .map_err(|_| invalid_params("blockHash", "Unknown block"))?;
+
+        let pivot_hash =
+            hashes.last().ok_or(internal_error("Inconsistent state"))?;
+
+        // construct RPC log
         Ok(Log {
             address: e.entry.address,
             topics: e.entry.topics.into_iter().map(Into::into).collect(),
             data: e.entry.data.into(),
-            // TODO(thegaram): use pivot hash instead
-            block_hash: Some(e.block_hash.into()),
+            block_hash: Some(*pivot_hash),
             // note: blocks in EVM space RPCs correspond to epochs
             block_number: Some(e.epoch_number.into()),
             transaction_hash: Some(e.transaction_hash.into()),

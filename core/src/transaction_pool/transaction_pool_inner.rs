@@ -727,10 +727,11 @@ impl TransactionPoolInner {
         while self.is_full() && !self.garbage_collector.is_empty() {
             let current_timestamp = self.get_current_timestamp();
             let (victim_address, victim) =
-                self.garbage_collector.pop().unwrap();
+                self.garbage_collector.top().unwrap();
             // Accounts which are not in `deferred_pool` may be inserted
             // into `garbage_collector`, we can just ignore them.
-            if !self.deferred_pool.contain_address(&victim_address) {
+            if !self.deferred_pool.contain_address(victim_address) {
+                self.garbage_collector.pop();
                 continue;
             }
 
@@ -738,9 +739,11 @@ impl TransactionPoolInner {
             // no unconditional garbage collection to conduct and we need to
             // check if we should replace one unexecuted tx.
             if victim.count == 0 {
-                if victim_address == new_tx.sender() {
+                if *victim_address == new_tx.sender() {
                     // We do not GC a not-executed transaction from the same
-                    // sender.
+                    // sender, so save it and try another account.
+                    let (victim_address, victim) =
+                        self.garbage_collector.pop().unwrap();
                     skipped_self_node = Some((victim_address, victim));
                     continue;
                 } else if victim.has_ready_tx
@@ -752,9 +755,15 @@ impl TransactionPoolInner {
                     // garbage_collector). If all accounts
                     // are ready, we check if the new tx has larger gas price
                     // than some.
+                    trace!("txpool::collect_garbage fails, victim={:?} new_tx={:?} \
+                    new_tx_gas_price={:?}", victim, new_tx.hash(), new_tx.gas_price());
                     return;
                 }
             }
+
+            // victim is now chosen to be evicted.
+            let (victim_address, victim) =
+                self.garbage_collector.pop().unwrap();
 
             let (ready_nonce, _) = self
                 .get_local_nonce_and_balance(&victim_address)

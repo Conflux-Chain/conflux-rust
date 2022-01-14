@@ -55,7 +55,7 @@ impl Serialize for BlockTransactions {
 #[serde(rename_all = "camelCase")]
 pub struct Block {
     /// Hash of the block
-    pub hash: Option<H256>,
+    pub hash: H256,
     /// Hash of the parent
     pub parent_hash: H256,
     /// Hash of the uncles
@@ -80,7 +80,7 @@ pub struct Block {
     /// Extra data
     pub extra_data: Bytes,
     /// Logs bloom
-    pub logs_bloom: Option<H2048>,
+    pub logs_bloom: H2048,
     /// Timestamp
     pub timestamp: U256,
     /// Difficulty
@@ -105,7 +105,7 @@ pub struct Block {
 #[serde(rename_all = "camelCase")]
 pub struct Header {
     /// Hash of the block
-    pub hash: Option<H256>,
+    pub hash: H256,
     /// Hash of the parent
     pub parent_hash: H256,
     /// Hash of the uncles
@@ -150,8 +150,8 @@ impl Block {
     ) -> Self {
         // get the block.gas_used
         let tx_len = b.transactions.len();
-        let gas_used = if tx_len == 0 {
-            Some(U256::from(0))
+        let (gas_used, logs_bloom) = if tx_len == 0 {
+            (Some(U256::from(0)), H2048::zero())
         } else {
             let maybe_results = consensus_inner
                 .block_execution_results_by_hash(
@@ -165,14 +165,14 @@ impl Block {
                         .receipts
                         .get(tx_len - 1)
                         .unwrap();
-                    Some(receipt.accumulated_gas_used)
+                    (Some(receipt.accumulated_gas_used), execution_result.bloom)
                 }
-                None => None,
+                None => (None, H2048::zero()),
             }
         };
 
         Block {
-            hash: Some(b.block_header.hash()),
+            hash: b.block_header.hash(),
             parent_hash: b.block_header.parent_hash().clone(),
             uncles_hash: hexstr_to_h256(SHA3_HASH_OF_EMPTY_UNCLE),
             author: b.block_header.author().clone(),
@@ -187,9 +187,7 @@ impl Block {
             gas_used: gas_used.unwrap_or(U256::zero()),
             gas_limit: b.block_header.gas_limit().into(),
             extra_data: Default::default(),
-            logs_bloom: Some(H2048::zero()), /* TODO: We cannot provide a
-                                              * proper bloom for
-                                              * ETH interface now */
+            logs_bloom,
             timestamp: b.block_header.timestamp().into(),
             difficulty: b.block_header.difficulty().into(),
             total_difficulty: None,
