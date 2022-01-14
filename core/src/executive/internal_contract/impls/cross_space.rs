@@ -54,7 +54,7 @@ pub fn call_gas(
             .state
             .exists_and_not_null(&receiver.with_evm_space())?
     {
-        context.spec.call_new_account_gas
+        context.spec.call_new_account_gas * context.spec.evm_gas_ratio
     } else {
         0
     };
