@@ -91,12 +91,6 @@ pub fn default(_dev_or_test_mode: bool) -> HashMap<AddressWithSpace, U256> {
         balance,
     );
     accounts
-        .insert(DEV_GENESIS_KEY_PAIR.evm_address().with_evm_space(), balance);
-    accounts.insert(
-        DEV_GENESIS_KEY_PAIR_2.evm_address().with_evm_space(),
-        balance,
-    );
-    accounts
 }
 
 pub fn load_secrets_file(
