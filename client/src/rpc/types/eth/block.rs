@@ -86,7 +86,7 @@ pub struct Block {
     /// Difficulty
     pub difficulty: U256,
     /// Total difficulty
-    pub total_difficulty: Option<U256>,
+    pub total_difficulty: U256,
     /// Seal fields
     pub seal_fields: Vec<Bytes>,
     /// Base fee
@@ -190,7 +190,7 @@ impl Block {
             logs_bloom,
             timestamp: b.block_header.timestamp().into(),
             difficulty: b.block_header.difficulty().into(),
-            total_difficulty: None,
+            total_difficulty: 0.into(),
             seal_fields: vec![],
             base_fee_per_gas: None,
             uncles: vec![],
