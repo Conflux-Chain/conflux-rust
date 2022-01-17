@@ -11,7 +11,7 @@ use std::{
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum Api {
     Cfx,
-    Evm,
+    Eth,
     Debug,
     Pubsub,
     Test,
@@ -27,7 +27,7 @@ impl FromStr for Api {
         use self::Api::*;
         match s {
             "cfx" => Ok(Cfx),
-            "evm" => Ok(Evm),
+            "eth" => Ok(Eth),
             "debug" => Ok(Debug),
             "pubsub" => Ok(Pubsub),
             "test" => Ok(Test),
@@ -43,7 +43,7 @@ impl Display for Api {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Api::Cfx => write!(f, "cfx"),
-            Api::Evm => write!(f, "evm"),
+            Api::Eth => write!(f, "eth"),
             Api::Debug => write!(f, "debug"),
             Api::Pubsub => write!(f, "pubsub"),
             Api::Test => write!(f, "test"),
@@ -58,6 +58,7 @@ impl Display for Api {
 pub enum ApiSet {
     All,
     Safe,
+    Evm, // Ethereum api set
     List(HashSet<Api>),
 }
 
@@ -67,7 +68,7 @@ impl ApiSet {
             ApiSet::List(ref apis) => apis.clone(),
             ApiSet::All => [
                 Api::Cfx,
-                Api::Evm,
+                Api::Eth,
                 Api::Debug,
                 Api::Pubsub,
                 Api::Test,
@@ -78,10 +79,11 @@ impl ApiSet {
             .iter()
             .cloned()
             .collect(),
-            ApiSet::Safe => [Api::Cfx, Api::Evm, Api::Pubsub, Api::TxPool]
+            ApiSet::Safe => [Api::Cfx, Api::Pubsub, Api::TxPool]
                 .iter()
                 .cloned()
                 .collect(),
+            ApiSet::Evm => [Api::Eth].iter().cloned().collect(),
         }
     }
 }
@@ -104,6 +106,9 @@ impl FromStr for ApiSet {
                 "safe" => {
                     // Safe APIs are those that are safe even in UnsafeContext.
                     apis.extend(ApiSet::Safe.list_apis());
+                }
+                "evm" => {
+                    apis.extend(ApiSet::Evm.list_apis());
                 }
                 // Remove the API
                 api if api.starts_with("-") => {
