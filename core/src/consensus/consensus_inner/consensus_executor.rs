@@ -1836,7 +1836,7 @@ impl ConsensusExecutionHandler {
             "tx",
             self.verification_config.verify_transaction_common(
                 tx,
-                AllChainID::fake_for_virtual(tx.chain_id()),
+                AllChainID::fake_for_virtual(tx.chain_id().unwrap_or(1)),
                 block_height,
                 transitions,
                 VerifyTxMode::Local(VerifyTxLocalMode::Full, &spec),
