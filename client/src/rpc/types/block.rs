@@ -162,7 +162,9 @@ impl Block {
         // get the block.gas_used
         let tx_len = b.transactions.len();
 
-        let (gas_used, transactions) = if tx_len > 0 {
+        let (gas_used, transactions) = if tx_len == 0 {
+            (Some(U256::from(0)), BlockTransactions::Hashes(vec![]))
+        } else {
             let maybe_results = consensus_inner
                 .block_execution_results_by_hash(
                     &b.hash(),
@@ -171,17 +173,16 @@ impl Block {
 
             // calculate block gasUsed according block.execution_result and
             // tx_space_filter
-            let gas_used_sum = match maybe_results.clone() {
-                Some(DataVersionTuple(_, execution_result)) => {
+            let gas_used_sum = match maybe_results {
+                Some(DataVersionTuple(_, ref execution_result)) => {
                     match tx_space_filter {
                         Some(space_filter) => {
                             let mut total_gas_used = U256::zero();
                             let mut prev_acc_gas_used = U256::zero();
                             for (idx, tx) in b.transactions.iter().enumerate() {
-                                let receipt = execution_result
+                                let ref receipt = execution_result
                                     .block_receipts
-                                    .receipts[idx]
-                                    .clone();
+                                    .receipts[idx];
                                 if tx.space() == space_filter {
                                     total_gas_used += receipt
                                         .accumulated_gas_used
@@ -210,7 +211,7 @@ impl Block {
                 ),
                 true => {
                     let tx_vec = match maybe_results {
-                        Some(DataVersionTuple(_, execution_result)) => {
+                        Some(DataVersionTuple(_, ref execution_result)) => {
                             let maybe_state_root =
                                 data_man.get_executed_state_root(&b.hash());
 
@@ -278,8 +279,6 @@ impl Block {
             };
 
             (gas_used_sum, transactions)
-        } else {
-            (Some(U256::from(0)), BlockTransactions::Hashes(vec![]))
         };
 
         Ok(Block {
