@@ -263,13 +263,15 @@ pub fn call_to_evmcore(
     let mapped_sender = evm_map(params.sender);
     let mapped_origin = evm_map(params.original_sender);
 
+    let value = params.value.value();
     context.state.transfer_balance(
         &params.address.with_native_space(),
         &mapped_sender,
-        &params.value.value(),
+        &value,
         cleanup_mode(context.substate, context.spec),
         context.spec.account_start_nonce,
     )?;
+    context.state.add_total_evm_tokens(value.clone())?;
 
     let address = receiver.with_evm_space();
 
@@ -280,7 +282,7 @@ pub fn call_to_evmcore(
         space: Space::Ethereum,
         sender: mapped_sender.address,
         address: address.address,
-        value: ActionValue::Transfer(params.value.value()),
+        value: ActionValue::Transfer(value),
         code_address: address.address,
         original_sender: mapped_origin.address,
         storage_owner: mapped_sender.address,
@@ -302,7 +304,7 @@ pub fn call_to_evmcore(
     if call_type == CallType::Call {
         CallEvent::log(
             &(mapped_sender.address.0, address.address.0),
-            &(params.value.value(), nonce, call_gas, data),
+            &(value, nonce, call_gas, data),
             params,
             context,
         )?;
@@ -337,13 +339,15 @@ pub fn create_to_evmcore(
     let mapped_sender = evm_map(params.sender);
     let mapped_origin = evm_map(params.original_sender);
 
+    let value = params.value.value();
     context.state.transfer_balance(
         &params.address.with_native_space(),
         &mapped_sender,
-        &params.value.value(),
+        &value,
         cleanup_mode(context.substate, context.spec),
         context.spec.account_start_nonce,
     )?;
+    context.state.add_total_evm_tokens(value);
 
     let (address_scheme, create_type) = match salt {
         None => (CreateContractAddress::FromSenderNonce, CreateType::CREATE),
@@ -370,7 +374,7 @@ pub fn create_to_evmcore(
         storage_owner: Address::zero(),
         gas: call_gas,
         gas_price: params.gas_price,
-        value: ActionValue::Transfer(params.value.value()),
+        value: ActionValue::Transfer(value),
         code: Some(Arc::new(init.clone())),
         code_hash,
         data: None,
@@ -385,7 +389,7 @@ pub fn create_to_evmcore(
         .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
     CreateEvent::log(
         &(mapped_sender.address.0, address.0),
-        &(params.value.value(), nonce, call_gas, init),
+        &(value, nonce, call_gas, init),
         params,
         context,
     )?;
@@ -418,6 +422,7 @@ pub fn withdraw_from_evmcore(
         cleanup_mode(context.substate, context.spec),
         context.spec.account_start_nonce,
     )?;
+    context.state.subtract_total_evm_tokens(value);
     let nonce = context.state.nonce(&mapped_address)?;
     context
         .state
@@ -487,94 +492,87 @@ pub fn recover_phantom(
     for log in logs.iter() {
         if log.address == *CROSS_SPACE_CONTRACT_ADDRESS {
             let event_sig = log.topics.first().unwrap();
-            match event_sig {
-                _ if event_sig == &CallEvent::EVENT_SIG
-                    || event_sig == &CreateEvent::EVENT_SIG =>
-                {
-                    assert!(maybe_working_tx.is_none());
-                    let (value, nonce, gas_limit, data): (
-                        U256,
-                        U256,
-                        U256,
-                        Vec<u8>,
-                    ) = ABIDecodable::abi_decode(&log.data).unwrap();
+            if event_sig == &CallEvent::EVENT_SIG
+                || event_sig == &CreateEvent::EVENT_SIG
+            {
+                assert!(maybe_working_tx.is_none());
 
-                    let from = Address::from(
-                        Bytes20::abi_decode(&log.topics[1].as_ref()).unwrap(),
-                    );
-                    let to = Address::from(
-                        Bytes20::abi_decode(&log.topics[2].as_ref()).unwrap(),
-                    );
+                let from = Address::from(
+                    Bytes20::abi_decode(&log.topics[1].as_ref()).unwrap(),
+                );
+                let to = Address::from(
+                    Bytes20::abi_decode(&log.topics[2].as_ref()).unwrap(),
+                );
+                let (value, nonce, gas_limit, data): (_, _, U256, Vec<u8>) =
+                    ABIDecodable::abi_decode(&log.data).unwrap();
 
-                    let is_create = event_sig == &CreateEvent::EVENT_SIG;
-                    let gas_limit: U256 =
-                        gas_limit + gas_required_for(is_create, &data, spec);
-                    let action = if is_create {
-                        Action::Create
-                    } else {
-                        Action::Call(to)
-                    };
-                    phantom_txs.push(PhantomTransaction::simple_transfer(
-                        Address::zero(),
-                        from,
-                        U256::zero(),
-                        value + gas_limit * gas_price,
-                        spec,
-                    ));
-                    maybe_working_tx = Some(PhantomTransaction {
-                        from,
-                        nonce,
-                        action,
-                        value,
-                        gas_limit,
-                        data,
-                        ..Default::default()
-                    });
-                }
-                _ if event_sig == &WithdrawEvent::EVENT_SIG => {
-                    let from = Address::from(
-                        Bytes20::abi_decode(&log.topics[1].as_ref()).unwrap(),
-                    );
-                    let (value, nonce) =
-                        ABIDecodable::abi_decode(&log.data).unwrap();
-                    phantom_txs.push(PhantomTransaction::simple_transfer(
-                        from,
-                        Address::zero(),
-                        nonce,
-                        value,
-                        spec,
-                    ));
-                }
-                _ if event_sig == &ReturnEvent::EVENT_SIG => {
-                    let (nonce, gas_left, success): (U256, U256, bool) =
-                        ABIDecodable::abi_decode(&log.data).unwrap();
+                let is_create = event_sig == &CreateEvent::EVENT_SIG;
+                let gas_limit: U256 =
+                    gas_limit + gas_required_for(is_create, &data, spec);
+                let action = if is_create {
+                    Action::Create
+                } else {
+                    Action::Call(to)
+                };
+                // A transaction transfer balance zero address to mapped sender.
+                phantom_txs.push(PhantomTransaction::simple_transfer(
+                    /* from */Address::zero(),
+                    /* to */ from,
+                    /* nonce */ U256::zero(), // TODO: get nonce of zero address
+                    /* value */ value + gas_limit * gas_price,
+                    spec,
+                ));
+                // A transaction call from mapped sender to receiver.
+                maybe_working_tx = Some(PhantomTransaction {
+                    from,
+                    nonce,
+                    action,
+                    value,
+                    gas_limit,
+                    data,
+                    ..Default::default()
+                });
+            } else if event_sig == &WithdrawEvent::EVENT_SIG {
+                let from = Address::from(
+                    Bytes20::abi_decode(&log.topics[1].as_ref()).unwrap(),
+                );
+                let (value, nonce) =
+                    ABIDecodable::abi_decode(&log.data).unwrap();
+                phantom_txs.push(PhantomTransaction::simple_transfer(
+                    from,
+                    Address::zero(),
+                    nonce,
+                    value,
+                    spec,
+                ));
+            } else if event_sig == &ReturnEvent::EVENT_SIG {
+                let (nonce, gas_left, success): (U256, U256, bool) =
+                    ABIDecodable::abi_decode(&log.data).unwrap();
 
-                    let mut working_tx =
-                        std::mem::take(&mut maybe_working_tx).unwrap();
-                    working_tx.gas_used = working_tx.gas_limit - gas_left;
-                    working_tx.outcome_status = if success {
-                        TRANSACTION_OUTCOME_SUCCESS
-                    } else {
-                        TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING
-                    };
-                    working_tx.log_bloom = working_tx.logs.iter().fold(
-                        Bloom::default(),
-                        |mut b, l| {
-                            b.accrue_bloom(&l.bloom());
-                            b
-                        },
-                    );
-                    let from = working_tx.from;
-                    phantom_txs.push(working_tx);
-                    phantom_txs.push(PhantomTransaction::simple_transfer(
-                        from,
-                        Address::zero(),
-                        nonce,
-                        gas_left * gas_price,
-                        spec,
-                    ));
-                }
-                _ => {}
+                let mut working_tx =
+                    std::mem::take(&mut maybe_working_tx).unwrap();
+                working_tx.gas_used = working_tx.gas_limit - gas_left;
+                working_tx.outcome_status = if success {
+                    TRANSACTION_OUTCOME_SUCCESS
+                } else {
+                    TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING
+                };
+                working_tx.log_bloom = working_tx.logs.iter().fold(
+                    Bloom::default(),
+                    |mut b, l| {
+                        b.accrue_bloom(&l.bloom());
+                        b
+                    },
+                );
+                let from = working_tx.from;
+                phantom_txs.push(working_tx);
+                phantom_txs.push(PhantomTransaction::simple_transfer(
+                    from,
+                    Address::zero(),
+                    nonce,
+                    gas_left * gas_price,
+                    spec,
+                ));
             }
         } else if log.space == Space::Ethereum {
             if let Some(ref mut working_tx) = maybe_working_tx {

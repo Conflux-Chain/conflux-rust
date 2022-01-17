@@ -96,6 +96,8 @@ struct WorldStatistics {
     distributable_pos_interest: U256,
     // This is the block number of last .
     last_distribute_block: u64,
+    // This is the tokens in the EVM space.
+    total_evm_tokens: U256,
 }
 
 pub type State = StateGeneric<StorageState>;
@@ -349,6 +351,15 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     fn add_total_pos_staking(&mut self, v: U256) {
         self.world_statistics.total_pos_staking_tokens += v;
     }
+
+    fn add_total_evm_tokens(&mut self, v: U256) {
+        self.world_statistics.total_evm_tokens += v;
+    }
+
+    fn subtract_total_evm_tokens(&mut self, v: U256) {
+        self.world_statistics.total_evm_tokens -= v;
+    }
+
 
     fn inc_distributable_pos_interest(
         &mut self, current_block_number: u64,
@@ -1194,6 +1205,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         let total_pos_staking_tokens = db.get_total_pos_staking_tokens()?;
         let distributable_pos_interest = db.get_distributable_pos_interest()?;
         let last_distribute_block = db.get_last_distribute_block()?;
+        let total_evm_tokens = db.get_total_evm_tokens()?;
 
         let world_stat = if db.is_initialized()? {
             WorldStatistics {
@@ -1206,6 +1218,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 total_pos_staking_tokens,
                 distributable_pos_interest,
                 last_distribute_block,
+                total_evm_tokens,
             }
         } else {
             // If db is not initialized, all the loaded value should be zero.
@@ -1251,6 +1264,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 total_pos_staking_tokens: U256::default(),
                 distributable_pos_interest: U256::default(),
                 last_distribute_block: u64::default(),
+                total_evm_tokens: U256::default(),
             }
         };
 
@@ -1469,6 +1483,10 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         )?;
         self.db.set_last_distribute_block(
             self.world_statistics.last_distribute_block,
+            debug_record.as_deref_mut(),
+        )?;
+        self.db.set_total_evm_tokens(
+            &self.world_statistics.total_evm_tokens,
             debug_record,
         )?;
         Ok(())
@@ -1957,6 +1975,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             .expect("no db error");
         self.world_statistics.last_distribute_block =
             self.db.get_last_distribute_block().expect("no db error");
+        self.world_statistics.total_evm_tokens = self.db.get_total_evm_tokens().expect("no db error");
     }
 }
 
