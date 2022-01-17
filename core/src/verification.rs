@@ -5,7 +5,7 @@
 use crate::{
     consensus::pos_handler::PosVerifier,
     error::{BlockError, Error},
-    executive::Executive,
+    executive::gas_required_for,
     machine::Machine,
     pow::{self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem},
     spec::TransitionsEpochHeight,
@@ -671,7 +671,7 @@ impl VerificationConfig {
         };
 
         if let Some(spec) = maybe_spec {
-            let tx_intrinsic_gas = Executive::gas_required_for(
+            let tx_intrinsic_gas = gas_required_for(
                 *tx.action() == Action::Create,
                 &tx.data(),
                 &spec,

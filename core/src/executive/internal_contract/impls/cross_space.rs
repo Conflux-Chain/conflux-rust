@@ -5,23 +5,36 @@ use crate::{
     },
     executive::{
         contract_address,
-        internal_contract::contracts::{CallEvent, CreateEvent, WithdrawEvent},
+        executive::gas_required_for,
+        internal_contract::contracts::{
+            CallEvent, CreateEvent, ReturnEvent, WithdrawEvent,
+        },
         InternalRefContext, SolidityEventTrait,
     },
     observer::VmObserve,
     state::cleanup_mode,
     vm::{
         self, ActionValue, CreateType, Exec, ExecTrapError as ExecTrap,
-        ExecTrapResult, ParamsType, ResumeCall, ResumeCreate, TrapResult,
+        ExecTrapResult, ParamsType, ResumeCall, ResumeCreate, Spec, TrapResult,
     },
 };
-use cfx_parameters::block::CROSS_SPACE_GAS_RATIO;
+use cfx_parameters::{
+    block::CROSS_SPACE_GAS_RATIO,
+    internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS,
+};
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
-    Address, AddressSpaceUtil, AddressWithSpace, Space, H256, U256,
+    Address, AddressSpaceUtil, AddressWithSpace, Bloom, Space, H256, U256,
 };
 use keccak_hash::keccak;
-use solidity_abi::ABIEncodable;
+use primitives::{
+    receipt::{
+        TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
+        TRANSACTION_OUTCOME_SUCCESS,
+    },
+    Action, LogEntry,
+};
+use solidity_abi::{ABIDecodable, ABIEncodable};
 use std::{marker::PhantomData, sync::Arc};
 
 pub fn create_gas(
@@ -33,7 +46,7 @@ pub fn create_gas(
     let keccak_code_gas =
         context.spec.sha3_gas + context.spec.sha3_word_gas * hash_words;
 
-    let address_mapping_gas = context.spec.sha3_gas * 2;
+    let address_mapping_gas = context.spec.sha3_gas * 3;
 
     let log_data_length = H256::len_bytes() * 4 + code_length;
 
@@ -68,7 +81,7 @@ pub fn call_gas(
     let call_gas =
         U256::from(context.spec.call_gas) + new_account_gas + transfer_gas;
 
-    let address_mapping_gas = context.spec.sha3_gas * 3;
+    let address_mapping_gas = context.spec.sha3_gas * 4;
 
     let log_data_length = H256::len_bytes() * 4 + data_length;
 
@@ -83,7 +96,11 @@ pub fn call_gas(
     Ok(call_gas + address_mapping_gas + log_gas)
 }
 
-pub struct Resume(pub U256);
+#[derive(Clone)]
+pub struct Resume {
+    pub params: ActionParams,
+    pub gas_retained: U256,
+}
 
 impl ResumeCreate for Resume {
     fn resume_create(
@@ -95,18 +112,21 @@ impl ResumeCreate for Resume {
                 let length = encoded_output.len();
                 let return_data = ReturnData::new(encoded_output, 0, length);
                 PassResult {
-                    gas_left: gas_left + self.0,
+                    resume: *self,
+                    gas_left,
                     return_data: Ok(return_data),
                     apply_state: true,
                 }
             }
             ContractCreateResult::Failed(err) => PassResult {
+                resume: *self,
                 gas_left: U256::zero(),
                 return_data: Err(err),
                 apply_state: false,
             },
             ContractCreateResult::Reverted(gas_left, data) => PassResult {
-                gas_left: gas_left + self.0,
+                resume: *self,
+                gas_left,
                 return_data: Ok(data),
                 apply_state: false,
             },
@@ -125,18 +145,21 @@ impl ResumeCall for Resume {
                 let length = encoded_output.len();
                 let return_data = ReturnData::new(encoded_output, 0, length);
                 PassResult {
-                    gas_left: gas_left + self.0,
+                    resume: *self,
+                    gas_left,
                     return_data: Ok(return_data),
                     apply_state: true,
                 }
             }
             MessageCallResult::Failed(err) => PassResult {
+                resume: *self,
                 gas_left: U256::zero(),
                 return_data: Err(err),
                 apply_state: false,
             },
             MessageCallResult::Reverted(gas_left, data) => PassResult {
-                gas_left: gas_left + self.0,
+                resume: *self,
+                gas_left,
                 return_data: Ok(data),
                 apply_state: false,
             },
@@ -146,6 +169,7 @@ impl ResumeCall for Resume {
 }
 
 pub struct PassResult {
+    resume: Resume,
     gas_left: U256,
     return_data: Result<ReturnData, vm::Error>,
     apply_state: bool,
@@ -157,22 +181,46 @@ impl Exec for PassResult {
         _tracer: &mut dyn VmObserve,
     ) -> ExecTrapResult<GasLeft>
     {
+        let context = &mut context.internal_ref();
+        let params = &self.resume.params;
+
+        let mut log_return = || {
+            let mapped_sender = evm_map(params.sender);
+            let nonce = context.state.nonce(&mapped_sender)?;
+            context
+                .state
+                .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
+            ReturnEvent::log(
+                &(),
+                &(nonce, self.gas_left, self.apply_state),
+                &self.resume.params,
+                context,
+            )?;
+            Ok(())
+        };
+
+        if let Err(e) = log_return() {
+            return TrapResult::Return(Err(e));
+        }
+
+        let mut gas_returned = U256::zero();
         if let Ok(ref data) = self.return_data {
             let length = data.len();
             let return_cost =
-                U256::from((length + 31) / 32 * context.spec().memory_gas);
-            if self.gas_left < return_cost {
-                self.gas_left = U256::zero();
+                U256::from((length + 31) / 32 * context.spec.memory_gas);
+            let gas_left = self.gas_left + self.resume.gas_retained;
+            if gas_left < return_cost {
+                gas_returned = U256::zero();
                 self.return_data = Err(vm::Error::OutOfGas);
                 self.apply_state = false;
             } else {
-                self.gas_left -= return_cost;
+                gas_returned = gas_left - return_cost;
             }
         }
 
         let result = match self.return_data {
             Ok(data) => Ok(GasLeft::NeedsReturn {
-                gas_left: self.gas_left,
+                gas_left: gas_returned,
                 data,
                 apply_state: self.apply_state,
             }),
@@ -254,13 +302,19 @@ pub fn call_to_evmcore(
     if call_type == CallType::Call {
         CallEvent::log(
             &(mapped_sender.address.0, address.address.0),
-            &(params.value.value(), nonce, data),
+            &(params.value.value(), nonce, call_gas, data),
             params,
             context,
         )?;
     }
 
-    return Ok(ExecTrap::Call(next_params, Box::new(Resume(reserved_gas))));
+    return Ok(ExecTrap::Call(
+        next_params,
+        Box::new(Resume {
+            params: params.clone(),
+            gas_retained: reserved_gas,
+        }),
+    ));
 }
 
 pub fn create_to_evmcore(
@@ -331,14 +385,17 @@ pub fn create_to_evmcore(
         .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
     CreateEvent::log(
         &(mapped_sender.address.0, address.0),
-        &(params.value.value(), nonce, init),
+        &(params.value.value(), nonce, call_gas, init),
         params,
         context,
     )?;
 
     return Ok(ExecTrap::Create(
         next_params,
-        Box::new(Resume(reserved_gas)),
+        Box::new(Resume {
+            params: params.clone(),
+            gas_retained: reserved_gas,
+        }),
     ));
 }
 
@@ -361,12 +418,13 @@ pub fn withdraw_from_evmcore(
         cleanup_mode(context.substate, context.spec),
         context.spec.account_start_nonce,
     )?;
+    let nonce = context.state.nonce(&mapped_address)?;
     context
         .state
         .inc_nonce(&mapped_address, &context.spec.account_start_nonce)?;
     WithdrawEvent::log(
         &(mapped_address.address.0, sender),
-        &params.value.value(),
+        &(params.value.value(), nonce),
         params,
         context,
     )?;
@@ -384,4 +442,145 @@ pub fn mapped_nonce(
     address: Address, context: &mut InternalRefContext,
 ) -> vm::Result<U256> {
     Ok(context.state.nonce(&evm_map(address))?)
+}
+
+#[derive(Default)]
+pub struct PhantomTransaction {
+    pub from: Address,
+    pub nonce: U256,
+    pub action: Action,
+    pub gas_limit: U256,
+    pub value: U256,
+    pub data: Vec<u8>,
+
+    pub gas_used: U256,
+    pub log_bloom: Bloom,
+    pub logs: Vec<LogEntry>,
+    pub outcome_status: u8,
+}
+
+impl PhantomTransaction {
+    fn simple_transfer(
+        from: Address, to: Address, nonce: U256, value: U256, spec: &Spec,
+    ) -> PhantomTransaction {
+        PhantomTransaction {
+            from,
+            nonce,
+            action: Action::Call(to),
+            gas_limit: spec.tx_gas.into(),
+            value,
+            data: vec![],
+            gas_used: spec.tx_gas.into(),
+            outcome_status: TRANSACTION_OUTCOME_SUCCESS,
+            ..Default::default()
+        }
+    }
+}
+
+type Bytes20 = [u8; 20];
+
+pub fn recover_phantom(
+    logs: &[LogEntry], spec: &Spec, gas_price: U256,
+) -> Vec<PhantomTransaction> {
+    let mut phantom_txs: Vec<PhantomTransaction> = Default::default();
+    let mut maybe_working_tx: Option<PhantomTransaction> = None;
+    for log in logs.iter() {
+        if log.address == *CROSS_SPACE_CONTRACT_ADDRESS {
+            let event_sig = log.topics.first().unwrap();
+            match event_sig {
+                _ if event_sig == &CallEvent::EVENT_SIG
+                    || event_sig == &CreateEvent::EVENT_SIG =>
+                {
+                    assert!(maybe_working_tx.is_none());
+                    let (value, nonce, gas_limit, data): (
+                        U256,
+                        U256,
+                        U256,
+                        Vec<u8>,
+                    ) = ABIDecodable::abi_decode(&log.data).unwrap();
+
+                    let from = Address::from(
+                        Bytes20::abi_decode(&log.topics[1].as_ref()).unwrap(),
+                    );
+                    let to = Address::from(
+                        Bytes20::abi_decode(&log.topics[2].as_ref()).unwrap(),
+                    );
+
+                    let is_create = event_sig == &CreateEvent::EVENT_SIG;
+                    let gas_limit: U256 =
+                        gas_limit + gas_required_for(is_create, &data, spec);
+                    let action = if is_create {
+                        Action::Create
+                    } else {
+                        Action::Call(to)
+                    };
+                    phantom_txs.push(PhantomTransaction::simple_transfer(
+                        Address::zero(),
+                        from,
+                        U256::zero(),
+                        value + gas_limit * gas_price,
+                        spec,
+                    ));
+                    maybe_working_tx = Some(PhantomTransaction {
+                        from,
+                        nonce,
+                        action,
+                        value,
+                        gas_limit,
+                        data,
+                        ..Default::default()
+                    });
+                }
+                _ if event_sig == &WithdrawEvent::EVENT_SIG => {
+                    let from = Address::from(
+                        Bytes20::abi_decode(&log.topics[1].as_ref()).unwrap(),
+                    );
+                    let (value, nonce) =
+                        ABIDecodable::abi_decode(&log.data).unwrap();
+                    phantom_txs.push(PhantomTransaction::simple_transfer(
+                        from,
+                        Address::zero(),
+                        nonce,
+                        value,
+                        spec,
+                    ));
+                }
+                _ if event_sig == &ReturnEvent::EVENT_SIG => {
+                    let (nonce, gas_left, success): (U256, U256, bool) =
+                        ABIDecodable::abi_decode(&log.data).unwrap();
+
+                    let mut working_tx =
+                        std::mem::take(&mut maybe_working_tx).unwrap();
+                    working_tx.gas_used = working_tx.gas_limit - gas_left;
+                    working_tx.outcome_status = if success {
+                        TRANSACTION_OUTCOME_SUCCESS
+                    } else {
+                        TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING
+                    };
+                    working_tx.log_bloom = working_tx.logs.iter().fold(
+                        Bloom::default(),
+                        |mut b, l| {
+                            b.accrue_bloom(&l.bloom());
+                            b
+                        },
+                    );
+                    let from = working_tx.from;
+                    phantom_txs.push(working_tx);
+                    phantom_txs.push(PhantomTransaction::simple_transfer(
+                        from,
+                        Address::zero(),
+                        nonce,
+                        gas_left * gas_price,
+                        spec,
+                    ));
+                }
+                _ => {}
+            }
+        } else if log.space == Space::Ethereum {
+            if let Some(ref mut working_tx) = maybe_working_tx {
+                working_tx.logs.push(log.clone());
+            }
+        }
+    }
+    return phantom_txs;
 }

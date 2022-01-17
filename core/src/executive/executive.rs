@@ -877,6 +877,22 @@ struct SponsorCheckOutput {
     storage_sponsor_eligible: bool,
 }
 
+pub fn gas_required_for(is_create: bool, data: &[u8], spec: &Spec) -> u64 {
+    data.iter().fold(
+        (if is_create {
+            spec.tx_create_gas
+        } else {
+            spec.tx_gas
+        }) as u64,
+        |g, b| {
+            g + (match *b {
+                0 => spec.tx_data_zero_gas,
+                _ => spec.tx_data_non_zero_gas,
+            }) as u64
+        },
+    )
+}
+
 impl<
         'a,
         Substate: SubstateMngTrait,
@@ -897,22 +913,6 @@ impl<
             depth: 0,
             static_flag: false,
         }
-    }
-
-    pub fn gas_required_for(is_create: bool, data: &[u8], spec: &Spec) -> u64 {
-        data.iter().fold(
-            (if is_create {
-                spec.tx_create_gas
-            } else {
-                spec.tx_gas
-            }) as u64,
-            |g, b| {
-                g + (match *b {
-                    0 => spec.tx_data_zero_gas,
-                    _ => spec.tx_data_non_zero_gas,
-                }) as u64
-            },
-        )
     }
 
     pub fn create(
@@ -1131,11 +1131,8 @@ impl<
             }
         }
 
-        let base_gas_required = Self::gas_required_for(
-            tx.action() == &Action::Create,
-            &tx.data(),
-            spec,
-        );
+        let base_gas_required =
+            gas_required_for(tx.action() == &Action::Create, &tx.data(), spec);
         assert!(
             *tx.gas() >= base_gas_required.into(),
             "We have already checked the base gas requirement when we received the block."
