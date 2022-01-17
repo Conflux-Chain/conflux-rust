@@ -68,7 +68,6 @@ impl ApiSet {
             ApiSet::List(ref apis) => apis.clone(),
             ApiSet::All => [
                 Api::Cfx,
-                Api::Eth,
                 Api::Debug,
                 Api::Pubsub,
                 Api::Test,

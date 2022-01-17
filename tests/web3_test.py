@@ -33,7 +33,7 @@ class Web3Test(ConfluxTestFramework):
         self.conf_parameters = {
             "log_level": "\"debug\"",
             "evm_transaction_block_ratio": 1,
-            # "public_rpc_apis": "\"cfx,evm,debug,test,pubsub,trace\"",
+            # "public_rpc_apis": "\"cfx,debug,test,pubsub,trace\"",
         }
 
     def setup_network(self):
