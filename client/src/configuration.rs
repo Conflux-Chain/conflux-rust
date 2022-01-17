@@ -1117,7 +1117,10 @@ impl Configuration {
             .raw_conf
             .unnamed_21autumn_transition_number
             .unwrap_or(default_transition_time);
-        params.transition_numbers.cip78a = BlockNumber::MAX;
+        params.transition_numbers.cip78a = self
+            .raw_conf
+            .unnamed_21autumn_transition_number
+            .unwrap_or(default_transition_time);
         params.transition_numbers.cip78b = self
             .raw_conf
             .cip78_patch_transition_number
@@ -1131,7 +1134,10 @@ impl Configuration {
             .raw_conf
             .unnamed_21autumn_transition_height
             .unwrap_or(default_transition_time);
-        params.transition_heights.cip86 = BlockHeight::MAX;
+        params.transition_heights.cip86 = self
+            .raw_conf
+            .unnamed_21autumn_transition_height
+            .unwrap_or(default_transition_time);
         params.transition_heights.cip90a = self
             .raw_conf
             .unnamed_21autumn_transition_height
@@ -1144,6 +1150,13 @@ impl Configuration {
             MINING_REWARD_TANZANITE_IN_UCFX.into(),
         );
         params.base_block_rewards = base_block_rewards;
+
+        // `unnamed_21autumn_transition` has been set in the testnet.
+        // Hardcode to disable CIP78 and CIP90.
+        params.transition_heights.cip90a = BlockHeight::MAX;
+        params.transition_numbers.cip78a = BlockNumber::MAX;
+        params.transition_numbers.cip78b = BlockNumber::MAX;
+        params.transition_numbers.cip90b = BlockNumber::MAX;
 
         params
     }
