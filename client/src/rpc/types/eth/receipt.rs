@@ -25,9 +25,6 @@ use cfx_types::{Bloom as H2048, H160, H256, U256, U64};
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Receipt {
-    /// Transaction Type
-    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub transaction_type: Option<U64>,
     /// Transaction Hash
     pub transaction_hash: Option<H256>,
     /// Transaction index
@@ -48,18 +45,11 @@ pub struct Receipt {
     pub contract_address: Option<H160>,
     /// Logs
     pub logs: Vec<Log>,
-    /// State Root
-    // NOTE(niklasad1): EIP98 makes this optional field, if it's missing then
-    // skip serializing it
-    #[serde(skip_serializing_if = "Option::is_none", rename = "root")]
-    pub state_root: Option<H256>,
     /// Logs bloom
     pub logs_bloom: H2048,
     /// Status code
-    // NOTE(niklasad1): Unknown after EIP98 rules, if it's missing then skip
-    // serializing it
-    #[serde(skip_serializing_if = "Option::is_none", rename = "status")]
-    pub status_code: Option<U64>,
+    #[serde(rename = "status")]
+    pub status_code: U64,
     /// Effective gas price
     pub effective_gas_price: U256,
 }
