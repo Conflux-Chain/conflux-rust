@@ -130,6 +130,8 @@ pub struct Spec {
     pub contract_start_nonce: U256,
     /// Start nonce for a new account
     pub account_start_nonce: U256,
+    /// The magnification of gas storage occupying related operaions.
+    pub evm_gas_ratio: usize,
     /// CIP-43: Introduce Finality via Voting Among Staked
     pub cip43_init: bool,
     pub cip43_contract: bool,
@@ -137,14 +139,14 @@ pub struct Spec {
     pub cip62: bool,
     /// CIP-64: Get current epoch number through internal contract
     pub cip64: bool,
-    /// CIP-71: Configurable anti-reentrancy: if configuration enabled
+    /// CIP-71: Disable anti-reentrancy
     pub cip71: bool,
-    /// CIP-72: Accept Ethereum transaction signature
-    pub cip72: bool,
     /// CIP-78: Correct `is_sponsored` fields in receipt
-    pub cip78: bool,
-    /// CIP-80: Ethereum compatible signature recover
-    pub cip80: bool,
+    pub cip78a: bool,
+    /// CIP-78: Correct `is_sponsored` fields in receipt
+    pub cip78b: bool,
+    /// CIP-90: A Space that Fully EVM Compatible
+    pub cip90: bool,
 }
 
 /// Wasm cost table
@@ -274,9 +276,10 @@ impl Spec {
             cip62: false,
             cip64: false,
             cip71: false,
-            cip72: false,
-            cip78: false,
-            cip80: false,
+            cip90: false,
+            cip78a: false,
+            cip78b: false,
+            evm_gas_ratio: 2,
         }
     }
 
@@ -290,9 +293,9 @@ impl Spec {
         spec.cip62 = number >= params.transition_numbers.cip62;
         spec.cip64 = number >= params.transition_numbers.cip64;
         spec.cip71 = number >= params.transition_numbers.cip71;
-        spec.cip72 = number >= params.transition_numbers.cip72b;
-        spec.cip78 = number >= params.transition_numbers.cip78;
-        spec.cip80 = number >= params.transition_numbers.cip80;
+        spec.cip90 = number >= params.transition_numbers.cip90b;
+        spec.cip78a = number >= params.transition_numbers.cip78a;
+        spec.cip78b = number >= params.transition_numbers.cip78b;
         spec
     }
 
@@ -308,11 +311,7 @@ impl Spec {
     }
 
     pub fn is_valid_address(&self, address: &Address) -> bool {
-        if self.cip80 {
-            address.is_cip80_valid_address()
-        } else {
-            address.is_genesis_valid_address()
-        }
+        address.is_genesis_valid_address()
     }
 }
 

@@ -29,7 +29,7 @@ use account_cache::AccountCache;
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_statedb::{Result as StateDbResult, StateDb};
 use cfx_storage::{StateIndex, StorageManagerTrait};
-use cfx_types::{Address, H256, U256};
+use cfx_types::{AddressWithSpace as Address, AllChainID, H256, U256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Lock, Meter, MeterTimer,
@@ -88,6 +88,7 @@ pub struct TxPoolConfig {
     pub max_tx_gas: RwLock<U256>,
     pub tx_weight_scaling: u64,
     pub tx_weight_exp: u8,
+    pub packing_gas_limit_block_count: u64,
     pub target_block_gas_limit: u64,
 }
 
@@ -107,6 +108,7 @@ impl Default for TxPoolConfig {
             // weight.
             tx_weight_scaling: 1,
             tx_weight_exp: 1,
+            packing_gas_limit_block_count: 10,
             target_block_gas_limit: DEFAULT_TARGET_BLOCK_GAS_LIMIT,
         }
     }
@@ -163,6 +165,9 @@ impl TransactionPool {
             config.capacity,
             config.tx_weight_scaling,
             config.tx_weight_exp,
+            (config.packing_gas_limit_block_count
+                * config.target_block_gas_limit)
+                .into(),
         );
         let best_executed_state = Mutex::new(
             Self::best_executed_state(
@@ -331,25 +336,29 @@ impl TransactionPool {
                 let mut to_prop = self.to_propagate_trans.write();
 
                 for tx in signed_trans {
-                    if let Err(e) = self.add_transaction_with_readiness_check(
-                        &mut *inner,
-                        &account_cache,
-                        tx.clone(),
-                        false,
-                        false,
-                    ) {
-                        debug!(
+                    if inner.get(&tx.hash).is_none() {
+                        if let Err(e) = self
+                            .add_transaction_with_readiness_check(
+                                &mut *inner,
+                                &account_cache,
+                                tx.clone(),
+                                false,
+                                false,
+                            )
+                        {
+                            debug!(
                             "tx {:?} fails to be inserted to pool, err={:?}",
                             &tx.hash, e
                         );
-                        failure.insert(tx.hash(), e);
-                        continue;
-                    }
-                    passed_transactions.push(tx.clone());
-                    if !to_prop.contains_key(&tx.hash)
-                        && to_prop.len() < inner.capacity()
-                    {
-                        to_prop.insert(tx.hash, tx);
+                            failure.insert(tx.hash(), e);
+                            continue;
+                        }
+                        passed_transactions.push(tx.clone());
+                        if !to_prop.contains_key(&tx.hash)
+                            && to_prop.len() < inner.capacity()
+                        {
+                            to_prop.insert(tx.hash, tx);
+                        }
                     }
                 }
             }
@@ -485,8 +494,8 @@ impl TransactionPool {
     /// readiness
     fn verify_transaction_tx_pool(
         &self, transaction: &TransactionWithSignature, basic_check: bool,
-        chain_id: u32, best_height: u64, transitions: &TransitionsEpochHeight,
-        spec: &Spec,
+        chain_id: AllChainID, best_height: u64,
+        transitions: &TransitionsEpochHeight, spec: &Spec,
     ) -> Result<(), String>
     {
         let _timer = MeterTimer::time_func(TX_POOL_VERIFY_TIMER.as_ref());
@@ -512,23 +521,25 @@ impl TransactionPool {
 
         // check transaction gas limit
         let max_tx_gas = *self.config.max_tx_gas.read();
-        if transaction.gas > max_tx_gas {
+        if *transaction.gas() > max_tx_gas {
             warn!(
                 "Transaction discarded due to above gas limit: {} > {:?}",
-                transaction.gas, max_tx_gas
+                transaction.gas(),
+                max_tx_gas
             );
             return Err(format!(
                 "transaction gas {} exceeds the maximum value {:?}, the half of pivot block gas limit",
-                transaction.gas, max_tx_gas
+                transaction.gas(), max_tx_gas
             ));
         }
 
         // check transaction gas price
-        if transaction.gas_price < self.config.min_tx_price.into() {
-            trace!("Transaction {} discarded due to below minimal gas price: price {}", transaction.hash(), transaction.gas_price);
+        if *transaction.gas_price() < self.config.min_tx_price.into() {
+            trace!("Transaction {} discarded due to below minimal gas price: price {}", transaction.hash(), transaction.gas_price());
             return Err(format!(
                 "transaction gas price {} less than the minimum value {}",
-                transaction.gas_price, self.config.min_tx_price
+                transaction.gas_price(),
+                self.config.min_tx_price
             ));
         }
 
@@ -600,8 +611,9 @@ impl TransactionPool {
     }
 
     pub fn pack_transactions<'a>(
-        &self, num_txs: usize, block_gas_limit: U256, block_size_limit: usize,
-        mut best_epoch_height: u64, mut best_block_number: u64,
+        &self, num_txs: usize, block_gas_limit: U256, evm_gas_limit: U256,
+        block_size_limit: usize, mut best_epoch_height: u64,
+        mut best_block_number: u64,
     ) -> Vec<Arc<SignedTransaction>>
     {
         let mut inner = self.inner.write_with_metric(&PACK_TRANSACTION_LOCK);
@@ -611,6 +623,7 @@ impl TransactionPool {
         inner.pack_transactions(
             num_txs,
             block_gas_limit,
+            evm_gas_limit,
             block_size_limit,
             best_epoch_height,
             best_block_number,
@@ -712,8 +725,8 @@ impl TransactionPool {
             debug!(
                 "should not trigger recycle transaction, nonce = {}, sender = {:?}, \
                 account nonce = {}, hash = {:?} .",
-                &tx.nonce, &tx.sender,
-                account_cache.get_nonce(&tx.sender)?, tx.hash);
+                &tx.nonce(), &tx.sender(),
+                account_cache.get_nonce(&tx.sender())?, tx.hash);
 
             if let Err(e) = self.verify_transaction_tx_pool(
                 &tx,
@@ -781,10 +794,19 @@ impl TransactionPool {
 
         let target_gas_limit = self.config.target_block_gas_limit.into();
         let self_gas_limit = min(max(target_gas_limit, gas_lower), gas_upper);
+        let evm_gas_limit = if (consensus_best_info_clone.best_epoch_number + 1)
+            % self.machine.params().evm_transaction_block_ratio
+            == 0
+        {
+            self_gas_limit / self.machine.params().evm_transaction_gas_ratio
+        } else {
+            U256::zero()
+        };
 
         let transactions_from_pool = self.pack_transactions(
             num_txs,
             self_gas_limit.clone(),
+            evm_gas_limit,
             block_size_limit,
             consensus_best_info_clone.best_epoch_number,
             consensus_best_info_clone.best_block_number,

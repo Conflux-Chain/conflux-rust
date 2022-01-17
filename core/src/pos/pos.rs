@@ -29,10 +29,10 @@ use crate::{
     spec::genesis::GenesisPosState,
     sync::ProtocolConfiguration,
 };
-use cached_diemdb::CachedDiemDB;
+use cached_pos_ledger_db::CachedPosLedgerDB;
 use consensus_types::db::FakeLedgerBlockDB;
 use diem_config::{config::NodeConfig, utils::get_genesis_txn};
-use diem_logger::prelude::*;
+use diem_logger::{prelude::*, Writer};
 use diem_types::{
     account_address::{from_consensus_public_key, AccountAddress},
     block_info::PivotBlockDecision,
@@ -41,7 +41,6 @@ use diem_types::{
     validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
     PeerId,
 };
-use diemdb::DiemDB;
 use executor::{db_bootstrapper::maybe_bootstrap, vm::FakeVM, Executor};
 use executor_types::ChunkExecutor;
 use futures::{
@@ -52,6 +51,7 @@ use futures::{
     executor::block_on,
 };
 use network::NetworkService;
+use pos_ledger_db::PosLedgerDB;
 use pow_types::FakePowHandler;
 use std::{
     boxed::Box,
@@ -67,11 +67,11 @@ use tokio::runtime::Runtime;
 const AC_SMP_CHANNEL_BUFFER_SIZE: usize = 1_024;
 const INTRA_NODE_CHANNEL_BUFFER_SIZE: usize = 1;
 
-pub struct DiemHandle {
+pub struct PosDropHandle {
     // pow handler
     pub pow_handler: Arc<PowHandler>,
-    pub diem_db: Arc<DiemDB>,
-    pub cached_db: Arc<CachedDiemDB>,
+    pub pos_ledger_db: Arc<PosLedgerDB>,
+    pub cached_db: Arc<CachedPosLedgerDB>,
     pub consensus_db: Arc<ConsensusDB>,
     pub tx_sender: mpsc::Sender<(
         SignedTransaction,
@@ -92,7 +92,7 @@ pub fn start_pos_consensus(
     mempool_network_receiver: MemPoolNetworkReceivers,
     test_command_receiver: channel::Receiver<TestCommand>,
     hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
-) -> DiemHandle
+) -> PosDropHandle
 {
     crash_handler::setup_panic_handler();
 
@@ -103,12 +103,22 @@ pub fn start_pos_consensus(
         .level(config.logger.level)
         .read_env();
     if let Some(log_file) = config.logger.file.clone() {
-        logger.printer(Box::new(FileWriter::new(log_file)));
+        let writer = match config.logger.rotation_count {
+            Some(count) => Box::new(RollingFileWriter::new(
+                log_file,
+                count,
+                config.logger.rotation_file_size_mb.unwrap_or(500),
+            ))
+                as Box<dyn Writer + Send + Sync + 'static>,
+            None => Box::new(FileWriter::new(log_file))
+                as Box<dyn Writer + Send + Sync + 'static>,
+        };
+        logger.printer(writer);
     }
     let _logger = Some(logger.build());
 
     // Let's now log some important information, since the logger is set up
-    diem_info!(config = config, "Loaded DiemNode config");
+    diem_info!(config = config, "Loaded Pos config");
 
     /*if config.metrics.enabled {
         for network in &config.full_node_networks {
@@ -157,7 +167,7 @@ fn setup_metrics(peer_id: PeerId, config: &NodeConfig) {
 
 fn setup_chunk_executor(db: DbReaderWriter) -> Box<dyn ChunkExecutor> {
     Box::new(Executor::<FakeVM>::new(
-        Arc::new(CachedDiemDB::new(db)),
+        Arc::new(CachedPosLedgerDB::new(db)),
         Arc::new(FakePowHandler {}),
         Arc::new(FakeLedgerBlockDB {}),
     ))
@@ -172,7 +182,7 @@ pub fn setup_pos_environment(
     mempool_network_receiver: MemPoolNetworkReceivers,
     test_command_receiver: channel::Receiver<TestCommand>,
     hsb_protocol: Arc<HotStuffSynchronizationProtocol>,
-) -> DiemHandle
+) -> PosDropHandle
 {
     // TODO(lpl): Handle port conflict.
     // let metrics_port = node_config.debug_interface.metrics_server_port;
@@ -192,8 +202,8 @@ pub fn setup_pos_environment(
     // });
 
     let mut instant = Instant::now();
-    let (diem_db, db_rw) = DbReaderWriter::wrap(
-        DiemDB::open(
+    let (pos_ledger_db, db_rw) = DbReaderWriter::wrap(
+        PosLedgerDB::open(
             &node_config.storage.dir(),
             false, /* readonly */
             node_config.storage.prune_window,
@@ -277,11 +287,7 @@ pub fn setup_pos_environment(
     let (mp_client_sender, mp_client_events) =
         channel(AC_SMP_CHANNEL_BUFFER_SIZE);
 
-    let db_with_cache = Arc::new(CachedDiemDB::new(db_rw));
-
-    // TODO (linxi): pos rpc
-    //let rpc_runtime = bootstrap_rpc(&node_config, chain_id, diem_db.clone(),
-    // mp_client_sender);
+    let db_with_cache = Arc::new(CachedPosLedgerDB::new(db_rw));
 
     instant = Instant::now();
     let mempool = diem_mempool::bootstrap(
@@ -316,7 +322,7 @@ pub fn setup_pos_environment(
             consensus_network_receiver,
             consensus_to_mempool_sender,
             state_sync_client,
-            diem_db.clone(),
+            pos_ledger_db.clone(),
             db_with_cache.clone(),
             consensus_reconfig_events,
             own_pos_public_key.map_or_else(
@@ -330,22 +336,22 @@ pub fn setup_pos_environment(
         );
     debug!("Consensus started in {} ms", instant.elapsed().as_millis());
 
-    DiemHandle {
+    PosDropHandle {
         pow_handler,
         _consensus_runtime: consensus_runtime,
         stopped,
         _state_sync_bootstrapper: state_sync_bootstrapper,
         _mempool: mempool,
-        diem_db,
+        pos_ledger_db,
         cached_db: db_with_cache,
         consensus_db,
         tx_sender: mp_client_sender,
     }
 }
 
-impl Drop for DiemHandle {
+impl Drop for PosDropHandle {
     fn drop(&mut self) {
-        debug!("Drop DiemHandle");
+        debug!("Drop PosDropHandle");
         self.stopped.store(true, Ordering::SeqCst);
         self.pow_handler.stop();
     }

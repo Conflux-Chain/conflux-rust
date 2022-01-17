@@ -19,6 +19,12 @@ pub struct LoggerConfig {
     // The default logging level for slog.
     pub level: Level,
     pub file: Option<PathBuf>,
+    // If this is None, we will not enable file rotation and
+    // `rotation_file_size_mb` will not be used.
+    pub rotation_count: Option<usize>,
+    // The maximal file size before rotation.
+    // The default value is set to 500MB.
+    pub rotation_file_size_mb: Option<usize>,
 }
 
 impl Default for LoggerConfig {
@@ -28,6 +34,8 @@ impl Default for LoggerConfig {
             is_async: true,
             level: Level::Info,
             file: None,
+            rotation_count: None,
+            rotation_file_size_mb: None,
         }
     }
 }

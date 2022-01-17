@@ -19,6 +19,7 @@ use crate::{
         TransactOptions,
     },
     machine::Machine,
+    observer::trace::{ExecTrace, TransactionExecTraces},
     rpc_errors::{invalid_params_check, Result as RpcResult},
     spec::genesis::initialize_internal_contract_accounts,
     state::{
@@ -27,7 +28,6 @@ use crate::{
         },
         State,
     },
-    trace::trace::{ExecTrace, TransactionExecTraces},
     verification::{
         compute_receipts_root, VerificationConfig, VerifyTxLocalMode,
         VerifyTxMode,
@@ -46,8 +46,8 @@ use cfx_storage::{
     StorageManagerTrait,
 };
 use cfx_types::{
-    address_util::AddressUtil, BigEndianHash, H160, H256, KECCAK_EMPTY_BLOOM,
-    U256, U512,
+    address_util::AddressUtil, AddressSpaceUtil, AllChainID, BigEndianHash,
+    Space, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
 };
 use core::convert::TryFrom;
 use hash::KECCAK_EMPTY_LIST_RLP;
@@ -1161,7 +1161,7 @@ impl ConsensusExecutionHandler {
                 for block in epoch_blocks.iter() {
                     for transaction in block.transactions.iter() {
                         accounts.push(&transaction.sender);
-                        match transaction.action {
+                        match transaction.action() {
                             Action::Call(ref address) => accounts.push(address),
                             _ => {}
                         }
@@ -1253,15 +1253,14 @@ impl ConsensusExecutionHandler {
                 let mut storage_released = Vec::new();
                 let mut storage_collateralized = Vec::new();
 
-                let r = if self.config.executive_trace {
-                    let options = TransactOptions::with_tracing();
-                    Executive::new(state, &env, self.machine.as_ref(), &spec)
-                        .transact(transaction, options)?
+                let options = if self.config.executive_trace {
+                    TransactOptions::with_tracing()
                 } else {
-                    let options = TransactOptions::with_no_tracing();
-                    Executive::new(state, &env, self.machine.as_ref(), &spec)
-                        .transact(transaction, options)?
+                    TransactOptions::with_no_tracing()
                 };
+                let r =
+                    Executive::new(state, &env, self.machine.as_ref(), &spec)
+                        .transact(transaction, options)?;
 
                 let gas_fee;
                 let mut gas_sponsor_paid = false;
@@ -1327,7 +1326,7 @@ impl ConsensusExecutionHandler {
                         if self.config.executive_trace {
                             block_traces.push(executed.trace.into());
                         }
-                        if spec.cip78 {
+                        if spec.cip78a {
                             gas_sponsor_paid = executed.gas_sponsor_paid;
                             storage_sponsor_paid =
                                 executed.storage_sponsor_paid;
@@ -1359,7 +1358,7 @@ impl ConsensusExecutionHandler {
                         }
 
                         if self.pos_verifier.pos_option().is_some() {
-                            debug!("Check {} events", transaction_logs.len());
+                            trace!("Check {} events", transaction_logs.len());
                             for log in &transaction_logs {
                                 if let Some(staking_event) =
                                     decode_register_info(log)
@@ -1367,6 +1366,7 @@ impl ConsensusExecutionHandler {
                                     epoch_staking_events.push(staking_event);
                                 }
                             }
+                            trace!("Check events ends");
                         }
                     }
                 }
@@ -1735,7 +1735,7 @@ impl ConsensusExecutionHandler {
             if spec.is_valid_address(&address) {
                 state
                     .add_balance(
-                        &address,
+                        &address.with_native_space(),
                         &reward,
                         CleanupMode::ForceCreate,
                         spec.account_start_nonce,
@@ -1836,7 +1836,7 @@ impl ConsensusExecutionHandler {
             "tx",
             self.verification_config.verify_transaction_common(
                 tx,
-                tx.chain_id,
+                AllChainID::fake_for_virtual(tx.chain_id()),
                 block_height,
                 transitions,
                 VerifyTxMode::Local(VerifyTxLocalMode::Full, &spec),
@@ -1868,7 +1868,9 @@ impl ConsensusExecutionHandler {
 
         let author = {
             let mut address = H160::random();
-            address.set_user_account_type_bits();
+            if tx.space() == Space::Native {
+                address.set_user_account_type_bits();
+            }
             address
         };
 
@@ -1879,7 +1881,7 @@ impl ConsensusExecutionHandler {
             difficulty: Default::default(),
             accumulated_gas_used: U256::zero(),
             last_hash: epoch_id.clone(),
-            gas_limit: tx.gas.clone(),
+            gas_limit: tx.gas().clone(),
             epoch_height: block_height,
             pos_view: pos_view_number,
             finalized_epoch: pivot_decision_epoch,

@@ -393,7 +393,7 @@ impl RoundManager {
     ) -> anyhow::Result<()>
     {
         diem_debug!("broadcast_election starts");
-        let pos_state = self.storage.diem_db().get_latest_pos_state();
+        let pos_state = self.storage.pos_ledger_db().get_latest_pos_state();
         if let Some(target_term) = pos_state.next_elect_term(&author) {
             let epoch_vrf_seed = pos_state.target_term_seed(target_term);
             let election_payload = ElectionPayload {

@@ -43,7 +43,7 @@ diem-secure-push-metrics = { path = "../../../secure/push-metrics" }
 diem-temppath = { path = "../../../common/temppath" }
 diem-types = { path = "../../../types" }
 diem-vm = { path = "../../../language/diem-vm" }
-diemdb = { path = "../../diemdb" }
+pos-ledger-db = { path = "../../pos-ledger-db" }
 storage-interface = { path = "../../storage-interface" }
 
 [dev-dependencies]
@@ -52,7 +52,7 @@ warp = "0.3.0"
 
 backup-service = { path = "../backup-service" }
 executor-test-helpers = { path = "../../../execution/executor-test-helpers" }
-diemdb = { path = "../../diemdb", features = ["fuzzing"] }
+pos-ledger-db = { path = "../../pos-ledger-db", features = ["fuzzing"] }
 diem-config = { path = "../../../config" }
 diem-proptest-helpers = { path = "../../../common/proptest-helpers" }
 storage-interface = { path = "../../storage-interface" }

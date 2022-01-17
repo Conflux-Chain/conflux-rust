@@ -46,7 +46,7 @@ impl Default for ConsensusConfig {
             mempool_txn_pull_timeout_ms: 5000,
             mempool_executed_txn_timeout_ms: 1000,
             // TODO(lpl): Decide value.
-            // 60 epochs should have be generated in 4 minutes.
+            // 60 epochs should have been generated in 4 minutes.
             round_initial_timeout_ms: 240_000,
             proposer_type: ConsensusProposerType::VrfProposer,
             safety_rules: SafetyRulesConfig::default(),

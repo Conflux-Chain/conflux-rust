@@ -19,7 +19,7 @@
 
 use super::LEDGER_BLOCK_CF_NAME;
 use anyhow::Result;
-use consensus_types::block::Block;
+use consensus_types::block::{Block, BlockUnchecked};
 use diem_crypto::hash::HashValue;
 use schemadb::{
     define_schema,
@@ -47,7 +47,9 @@ impl ValueCodec<LedgerBlockSchema> for Block {
     }
 
     fn decode_value(data: &[u8]) -> Result<Self> {
-        bcs::from_bytes(data).map_err(Into::into)
+        bcs::from_bytes::<BlockUnchecked>(data)
+            .map(Into::into)
+            .map_err(Into::into)
     }
 }
 

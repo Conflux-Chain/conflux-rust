@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{bytes::Bytes, vm};
-use cfx_types::{Address, U256, U512};
+use cfx_types::{Address, AddressWithSpace, U256, U512};
 use primitives::{receipt::StorageChange, LogEntry, TransactionWithSignature};
 use solidity_abi::{ABIDecodable, ABIDecodeError};
 
@@ -39,11 +39,13 @@ pub struct Executed {
     /// eg. sender creates contract A and A in constructor creates contract B
     ///
     /// B creation ends first, and it will be the first element of the vector.
-    pub contracts_created: Vec<Address>,
+    pub contracts_created: Vec<AddressWithSpace>,
     /// Transaction output.
     pub output: Bytes,
     /// The trace of this transaction.
     pub trace: Vec<ExecTrace>,
+    /// An accurate gas estimation for gas usage, used in rpc
+    pub estimated_gas_limit: Option<U256>,
 }
 
 #[derive(Debug)]
@@ -129,43 +131,57 @@ impl ExecutionOutcome {
 
 impl Executed {
     pub fn not_enough_balance_fee_charged(
-        tx: &TransactionWithSignature, fee: &U256,
-    ) -> Self {
-        let gas_charged = if tx.gas_price == U256::zero() {
+        tx: &TransactionWithSignature, fee: &U256, mut gas_sponsor_paid: bool,
+        mut storage_sponsor_paid: bool, trace: Vec<ExecTrace>, spec: &Spec,
+    ) -> Self
+    {
+        let gas_charged = if *tx.gas_price() == U256::zero() {
             U256::zero()
         } else {
-            fee / tx.gas_price
+            fee / tx.gas_price()
         };
+        if !spec.cip78b {
+            gas_sponsor_paid = false;
+            storage_sponsor_paid = false;
+        }
         Self {
-            gas_used: tx.gas,
+            gas_used: *tx.gas(),
             gas_charged,
             fee: fee.clone(),
-            gas_sponsor_paid: false,
+            gas_sponsor_paid,
             logs: vec![],
             contracts_created: vec![],
-            storage_sponsor_paid: false,
+            storage_sponsor_paid,
             storage_collateralized: Vec::new(),
             storage_released: Vec::new(),
             output: Default::default(),
-            trace: Default::default(),
+            trace,
+            estimated_gas_limit: None,
         }
     }
 
     pub fn execution_error_fully_charged(
-        tx: &TransactionWithSignature,
-    ) -> Self {
+        tx: &TransactionWithSignature, mut gas_sponsor_paid: bool,
+        mut storage_sponsor_paid: bool, trace: Vec<ExecTrace>, spec: &Spec,
+    ) -> Self
+    {
+        if !spec.cip78b {
+            gas_sponsor_paid = false;
+            storage_sponsor_paid = false;
+        }
         Self {
-            gas_used: tx.gas,
-            gas_charged: tx.gas,
-            fee: tx.gas * tx.gas_price,
-            gas_sponsor_paid: false,
+            gas_used: *tx.gas(),
+            gas_charged: *tx.gas(),
+            fee: tx.gas() * tx.gas_price(),
+            gas_sponsor_paid,
             logs: vec![],
             contracts_created: vec![],
-            storage_sponsor_paid: false,
+            storage_sponsor_paid,
             storage_collateralized: Vec::new(),
             storage_released: Vec::new(),
             output: Default::default(),
-            trace: Default::default(),
+            trace,
+            estimated_gas_limit: None,
         }
     }
 }
@@ -194,7 +210,7 @@ pub fn revert_reason_decode(output: &Bytes) -> String {
     }
 }
 
-use crate::trace::trace::ExecTrace;
+use crate::{observer::trace::ExecTrace, vm::Spec};
 #[cfg(test)]
 use rustc_hex::FromHex;
 

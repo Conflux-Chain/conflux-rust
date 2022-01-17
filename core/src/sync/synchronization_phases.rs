@@ -290,7 +290,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
         let (_, cur_era_genesis_height) =
             self.graph.get_genesis_hash_and_height_in_current_era();
         *sync_handler.latest_epoch_requested.lock() =
-            (cur_era_genesis_height, Instant::now());
+            (cur_era_genesis_height, Instant::now(), 0, 0);
 
         sync_handler.request_epochs(io);
     }
@@ -534,7 +534,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockPhase {
         let (_, cur_era_genesis_height) =
             self.graph.get_genesis_hash_and_height_in_current_era();
         *sync_handler.latest_epoch_requested.lock() =
-            (cur_era_genesis_height, Instant::now());
+            (cur_era_genesis_height, Instant::now(), 0, 0);
 
         sync_handler.request_epochs(io);
     }

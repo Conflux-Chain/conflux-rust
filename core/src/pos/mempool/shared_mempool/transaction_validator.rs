@@ -13,6 +13,8 @@ pub struct TransactionValidator {}
 impl TransactionValidator {
     pub fn new() -> Self { Self {} }
 
+    // TODO: `score` and `governance_role` in `VMValidatorResult` are not
+    // needed now.
     pub fn validate_transaction(
         &self, tx: &SignedTransaction, pos_state: Arc<PosState>,
     ) -> Option<VMValidatorResult> {
@@ -27,6 +29,13 @@ impl TransactionValidator {
             }
             _ => None,
         };
+        if result.is_some() {
+            return Some(VMValidatorResult::new(
+                result,
+                0,
+                GovernanceRole::Validator,
+            ));
+        }
 
         match tx.authenticator() {
             TransactionAuthenticator::BLS { .. } => {}

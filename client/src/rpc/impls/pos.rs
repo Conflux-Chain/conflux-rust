@@ -7,20 +7,17 @@ use crate::{
     rpc::{
         error_codes::{build_rpc_server_error, codes::POS_NOT_ENABLED},
         traits::pos::Pos,
-        types::{
-            pos::{
-                tx_type, Account, Block, BlockNumber, CommitteeState, Decision,
-                EpochReward, NodeLockStatus, Reward, RpcCommittee, RpcTermData,
-                RpcTransactionStatus, RpcTransactionType, Signature, Status,
-                Transaction, VotePowerState,
-            },
-            RpcAddress,
+        types::pos::{
+            tx_type, Account, Block, BlockNumber, CommitteeState, Decision,
+            NodeLockStatus, PoSEpochReward, RpcCommittee, RpcTermData,
+            RpcTransactionStatus, RpcTransactionType, Signature, Status,
+            Transaction, VotePowerState,
         },
         RpcInterceptor, RpcResult,
     },
 };
 use cfx_addr::Network;
-use cfx_types::{hexstr_to_h256, H256, U256, U64};
+use cfx_types::{hexstr_to_h256, H256, U64};
 use cfxcore::{consensus::pos_handler::PosVerifier, BlockDataManager};
 use consensus_types::block::Block as ConsensusBlock;
 use diem_crypto::hash::HashValue;
@@ -32,8 +29,8 @@ use diem_types::{
     transaction::Transaction as CoreTransaction,
 };
 use itertools::Itertools;
-use jsonrpc_core::{Error, ErrorCode, Result as JsonRpcResult};
-use std::{collections::HashMap, sync::Arc};
+use jsonrpc_core::Result as JsonRpcResult;
+use std::sync::Arc;
 use storage_interface::{DBReaderForPoW, DbReader};
 
 pub struct PoSInterceptor {
@@ -79,29 +76,29 @@ impl PosHandler {
 
     fn current_height(&self) -> u64 {
         self.pos_handler
-            .diem_db()
+            .pos_ledger_db()
             .get_latest_pos_state()
             .current_view()
     }
 
     fn current_epoch(&self) -> u64 {
         self.pos_handler
-            .diem_db()
+            .pos_ledger_db()
             .get_latest_pos_state()
             .epoch_state()
             .epoch
     }
 
     fn status_impl(&self) -> Status {
-        let state = self.pos_handler.diem_db().get_latest_pos_state();
+        let state = self.pos_handler.pos_ledger_db().get_latest_pos_state();
         let decision = state.pivot_decision();
         let epoch_state = state.epoch_state();
         let block_number = state.current_view();
         let latest_voted = self.latest_voted().map(|b| U64::from(b.height));
         let latest_tx_number = self
             .block_by_number(BlockNumber::Num(U64::from(block_number)))
-            .and_then(|b| b.next_tx_number.checked_sub(1.into()))
-            .unwrap_or(U64::default());
+            .map(|b| b.last_tx_number.into())
+            .unwrap_or_default();
         Status {
             epoch: U64::from(epoch_state.epoch),
             latest_committed: U64::from(block_number),
@@ -153,7 +150,8 @@ impl PosHandler {
     fn pos_state_by_view(
         &self, view: Option<U64>,
     ) -> Result<Arc<PosState>, String> {
-        let latest_state = self.pos_handler.diem_db().get_latest_pos_state();
+        let latest_state =
+            self.pos_handler.pos_ledger_db().get_latest_pos_state();
         let state = match view {
             None => latest_state,
             Some(v) => {
@@ -165,10 +163,12 @@ impl PosHandler {
 
                 let state = self
                     .pos_handler
-                    .diem_db()
+                    .pos_ledger_db()
                     .get_committed_block_hash_by_view(v)
                     .and_then(|block_hash| {
-                        self.pos_handler.diem_db().get_pos_state(&block_hash)
+                        self.pos_handler
+                            .pos_ledger_db()
+                            .get_pos_state(&block_hash)
                     })
                     .map_err(|_| format!("PoS state of {} not found", v))?;
                 Arc::new(state)
@@ -203,7 +203,7 @@ impl PosHandler {
         &self, epoch: u64,
     ) -> Option<LedgerInfoWithSignatures> {
         self.pos_handler
-            .diem_db()
+            .pos_ledger_db()
             .get_epoch_ending_ledger_infos(epoch, epoch + 1)
             .ok()?
             .get_all_ledger_infos()
@@ -215,7 +215,7 @@ impl PosHandler {
         &self, start_epoch: u64, end_epoch: u64,
     ) -> Vec<LedgerInfoWithSignatures> {
         self.pos_handler
-            .diem_db()
+            .pos_ledger_db()
             .get_epoch_ending_ledger_infos(start_epoch, end_epoch)
             .ok()
             .map(|proof| proof.get_all_ledger_infos())
@@ -230,7 +230,7 @@ impl PosHandler {
         if epoch == self.current_epoch() {
             return Some(
                 self.pos_handler
-                    .diem_db()
+                    .pos_ledger_db()
                     .get_latest_pos_state()
                     .epoch_state()
                     .clone(),
@@ -247,7 +247,7 @@ impl PosHandler {
         let hash_value = HashValue::from_slice(hash.as_bytes()).ok()?;
         let block = self
             .pos_handler
-            .diem_db()
+            .pos_ledger_db()
             .get_committed_block_by_hash(&hash_value);
         match block {
             Ok(b) => {
@@ -256,7 +256,7 @@ impl PosHandler {
                     height: U64::from(b.view),
                     epoch: U64::from(b.epoch),
                     round: U64::from(b.round),
-                    next_tx_number: U64::from(b.version),
+                    last_tx_number: U64::from(b.version),
                     miner: b.miner.map(|m| H256::from(m.to_u8())),
                     parent_hash: hash_value_to_h256(b.parent_hash),
                     timestamp: U64::from(b.timestamp),
@@ -269,7 +269,7 @@ impl PosHandler {
                 {
                     if let Ok(ledger_info) = self
                         .pos_handler
-                        .diem_db()
+                        .pos_ledger_db()
                         .get_ledger_info_by_voted_block(&b.hash)
                     {
                         block.signatures = ledger_info
@@ -301,7 +301,7 @@ impl PosHandler {
                 if num.as_u64() <= self.current_height() {
                     let hash = self
                         .pos_handler
-                        .diem_db()
+                        .pos_ledger_db()
                         .get_committed_block_hash_by_view(num.as_u64())
                         .ok()?;
                     self.block_by_hash(hash_value_to_h256(hash))
@@ -316,7 +316,7 @@ impl PosHandler {
             BlockNumber::Earliest => {
                 let hash = self
                     .pos_handler
-                    .diem_db()
+                    .pos_ledger_db()
                     .get_committed_block_hash_by_view(1)
                     .ok()?;
                 self.block_by_hash(hash_value_to_h256(hash))
@@ -347,7 +347,7 @@ impl PosHandler {
             .collect();
         let latest_epoch_state = self
             .pos_handler
-            .diem_db()
+            .pos_ledger_db()
             .get_latest_pos_state()
             .epoch_state()
             .clone();
@@ -360,7 +360,7 @@ impl PosHandler {
                     hash: hash_value_to_h256(b.id()),
                     epoch: U64::from(b.epoch()),
                     round: U64::from(b.round()),
-                    next_tx_number: Default::default(),
+                    last_tx_number: Default::default(),
                     miner: b.author().map(|a| H256::from(a.to_u8())),
                     parent_hash: hash_value_to_h256(b.parent_id()),
                     timestamp: U64::from(b.timestamp_usecs()),
@@ -379,7 +379,7 @@ impl PosHandler {
                 {
                     let executed = executed_block.lock();
                     if let Some(version) = executed.output().version() {
-                        rpc_block.next_tx_number = U64::from(version);
+                        rpc_block.last_tx_number = U64::from(version);
                     }
                     rpc_block.pivot_decision = executed
                         .output()
@@ -395,10 +395,10 @@ impl PosHandler {
                     );
                 } else if let Ok(committed_block) = self
                     .pos_handler
-                    .diem_db()
+                    .pos_ledger_db()
                     .get_committed_block_by_hash(&b.id())
                 {
-                    rpc_block.next_tx_number = committed_block.version.into();
+                    rpc_block.last_tx_number = committed_block.version.into();
                     rpc_block.pivot_decision =
                         Some(Decision::from(&committed_block.pivot_decision));
                     rpc_block.height = U64::from(committed_block.view);
@@ -453,14 +453,15 @@ impl PosHandler {
     }
 
     fn tx_by_version(&self, version: u64) -> Option<Transaction> {
-        let diem_db = self.pos_handler.diem_db();
-        match diem_db.get_transaction(version).ok()? {
+        let pos_ledger_db = self.pos_handler.pos_ledger_db();
+        match pos_ledger_db.get_transaction(version).ok()? {
             CoreTransaction::UserTransaction(signed_tx) => {
                 let mut block_hash: Option<H256> = None;
                 let mut block_number: Option<U64> = None;
                 let mut timestamp: Option<U64> = None;
-                let block_meta =
-                    diem_db.get_transaction_block_meta(version).unwrap_or(None);
+                let block_meta = pos_ledger_db
+                    .get_transaction_block_meta(version)
+                    .unwrap_or(None);
                 if let Some((_, bm)) = block_meta {
                     block_hash = Some(hash_value_to_h256(bm.id()));
                     timestamp = Some(U64::from(bm.timestamp_usec()));
@@ -468,7 +469,7 @@ impl PosHandler {
                         block_number = Some(block.height);
                     }
                 }
-                let status = diem_db
+                let status = pos_ledger_db
                     .get_transaction_info(version)
                     .ok()
                     .map(|tx| RpcTransactionStatus::from(tx.status().clone()));
@@ -501,7 +502,7 @@ impl PosHandler {
                     tx_type: RpcTransactionType::BlockMetadata,
                 };
                 if let Some(tx_info) =
-                    diem_db.get_transaction_info(version).ok()
+                    pos_ledger_db.get_transaction_info(version).ok()
                 {
                     let status =
                         RpcTransactionStatus::from(tx_info.status().clone());
@@ -589,44 +590,14 @@ impl Pos for PosHandler {
 
     fn pos_get_rewards_by_epoch(
         &self, epoch: U64,
-    ) -> JsonRpcResult<Option<EpochReward>> {
-        let mut epoch_reward = None;
-        if let Some(reward) = self
+    ) -> JsonRpcResult<Option<PoSEpochReward>> {
+        let reward = self
             .pow_data_manager
             .pos_reward_by_pos_epoch(epoch.as_u64())
-        {
-            let default_value = U256::from(0);
-            let mut account_reward_map = HashMap::new();
-            let mut account_address_map = HashMap::new();
-            for r in reward.account_rewards.iter() {
-                let key = r.pos_identifier;
-                let r1 = account_reward_map.get(&key).unwrap_or(&default_value);
-                let merged_reward = r.reward + r1;
-                account_reward_map.insert(key, merged_reward);
-
-                let rpc_address =
-                    RpcAddress::try_from_h160(r.address, self.network_type)
-                        .map_err(|e| Error {
-                            code: ErrorCode::InternalError,
-                            message: e,
-                            data: None,
-                        })?;
-                account_address_map.insert(key, rpc_address);
-            }
-            let account_rewards = account_reward_map
-                .iter()
-                .map(|(k, v)| Reward {
-                    pos_address: *k,
-                    pow_address: account_address_map.get(k).unwrap().clone(),
-                    reward: *v,
-                })
-                .filter(|r| r.reward > U256::from(0))
-                .collect();
-            epoch_reward = Some(EpochReward {
-                pow_epoch_hash: reward.execution_epoch_hash,
-                account_rewards,
+            .map(|reward_info| {
+                PoSEpochReward::try_from(reward_info, self.network_type).ok()
             })
-        };
-        Ok(epoch_reward)
+            .unwrap_or(None);
+        Ok(reward)
     }
 }

@@ -75,8 +75,8 @@ cfx-parameters = { path = "../core/parameters" }
 strum = "0.20"
 strum_macros = "0.20"
 crash-handler = { path = "../core/src/pos/common/crash-handler" }
-cached-diemdb = { path = "../core/src/pos/storage/cached-diemdb" }
-diemdb = { path = "../core/src/pos/storage/diemdb" }
+cached-pos-ledger-db = { path = "../core/src/pos/storage/cached-pos-ledger-db" }
+pos-ledger-db = { path = "../core/src/pos/storage/pos-ledger-db" }
 diem-channel = {path = "../core/src/pos/common/channel", package = "channel"}
 diem-config = { path = "../core/src/pos/config" }
 diem-crypto = { path = "../core/src/pos/crypto/crypto" }
@@ -94,6 +94,7 @@ storage-interface = { path = "../core/src/pos/storage/storage-interface" }
 consensus-types = {path = "../core/src/pos/consensus/consensus-types"}
 anyhow = "1.0.38"
 rpassword = "5.0.1"
+static_assertions = "1.1.0"
 
 [dev-dependencies]
 criterion = "0.3"

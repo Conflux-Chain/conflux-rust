@@ -11,6 +11,7 @@ use std::{
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum Api {
     Cfx,
+    Evm,
     Debug,
     Pubsub,
     Test,
@@ -26,6 +27,7 @@ impl FromStr for Api {
         use self::Api::*;
         match s {
             "cfx" => Ok(Cfx),
+            "evm" => Ok(Evm),
             "debug" => Ok(Debug),
             "pubsub" => Ok(Pubsub),
             "test" => Ok(Test),
@@ -41,6 +43,7 @@ impl Display for Api {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Api::Cfx => write!(f, "cfx"),
+            Api::Evm => write!(f, "evm"),
             Api::Debug => write!(f, "debug"),
             Api::Pubsub => write!(f, "pubsub"),
             Api::Test => write!(f, "test"),
@@ -64,6 +67,7 @@ impl ApiSet {
             ApiSet::List(ref apis) => apis.clone(),
             ApiSet::All => [
                 Api::Cfx,
+                Api::Evm,
                 Api::Debug,
                 Api::Pubsub,
                 Api::Test,
@@ -74,7 +78,7 @@ impl ApiSet {
             .iter()
             .cloned()
             .collect(),
-            ApiSet::Safe => [Api::Cfx, Api::Pubsub, Api::TxPool]
+            ApiSet::Safe => [Api::Cfx, Api::Evm, Api::Pubsub, Api::TxPool]
                 .iter()
                 .cloned()
                 .collect(),

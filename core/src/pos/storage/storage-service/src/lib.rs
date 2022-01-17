@@ -19,7 +19,7 @@ use diem_secure_net::NetworkServer;
 use diem_types::{
     account_state_blob::AccountStateBlob, proof::SparseMerkleProof,
 };
-use diemdb::DiemDB;
+use pos_ledger_db::DiemDB;
 use std::{
     sync::Arc,
     thread::{self, JoinHandle},
@@ -28,9 +28,9 @@ use storage_interface::{DbReader, DbWriter, Error, StartupInfo};
 
 /// Starts storage service with a given DiemDB
 pub fn start_storage_service_with_db(
-    config: &NodeConfig, diem_db: Arc<DiemDB>,
+    config: &NodeConfig, pos_ledger_db: Arc<DiemDB>,
 ) -> JoinHandle<()> {
-    let storage_service = StorageService { db: diem_db };
+    let storage_service = StorageService { db: pos_ledger_db };
     storage_service.run(config)
 }
 

@@ -9,3 +9,19 @@ use cfx_types::Address;
 make_solidity_contract! {
     pub(super) struct AntiReentrancyConfig(ANTI_REENTRANCY_CONTRACT_ADDRESS, "placeholder");
 }
+
+make_solidity_contract! {
+    pub(super) struct Reserved7(RESERVED7, "placeholder");
+}
+make_solidity_contract! {
+    pub(super) struct Reserved8(RESERVED8, "placeholder");
+}
+make_solidity_contract! {
+    pub(super) struct Reserved9(RESERVED9, "placeholder");
+}
+make_solidity_contract! {
+    pub(super) struct Reserved10(RESERVED10, "placeholder");
+}
+make_solidity_contract! {
+    pub(super) struct Reserved11(RESERVED11, "placeholder");
+}

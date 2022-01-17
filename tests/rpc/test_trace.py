@@ -7,6 +7,7 @@ sys.path.append("..")
 from conflux.rpc import RpcClient
 from test_framework.util import assert_equal, assert_raises_rpc_error
 
+
 class TestTrace(RpcClient):
     def test_trace_after_reorg(self):
         genesis = self.best_block_hash()
@@ -20,24 +21,52 @@ class TestTrace(RpcClient):
             'epochHash': b1,
             'epochNumber': receipt["epochNumber"],
             'transactionTraces': [{
-                'traces': [{
-                    'action': {
-                        'callType': 'call',
-                        'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
-                        'gas': '0x0',
-                        'input': '0x',
-                        'to': 'NET10:TYPE.USER:AAJBAEAUCAJBAEAUCAJBAEAUCAJBAEAUCA902UEXYP',
-                        'value': '0x64'
-                    },
-                    'type': 'call'
-                },{
-                    "action": {
-                        "gasLeft": "0x0",
-                        "outcome": "success",
-                        "returnData": "0x"
-                    },
-                    "type": "call_result"
-                }],
+                'traces': [
+                    {
+                        'action': {
+                            'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
+                            'fromPocket': 'balance',
+                            'fromSpace': 'native',
+                            'to': 'NET10:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFDGG0RTY',
+                            'toPocket': 'gas_payment',
+                            'toSpace': 'none',
+                            'value': '0x5208'
+                        },
+                        'type': 'internal_transfer_action',
+                        'valid': True,
+                    }, {
+                        'action': {
+                            'callType': 'call',
+                            'space': 'native',
+                            'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
+                            'gas': '0x0',
+                            'input': '0x',
+                            'to': 'NET10:TYPE.USER:AAJBAEAUCAJBAEAUCAJBAEAUCAJBAEAUCA902UEXYP',
+                            'value': '0x64'
+                        },
+                        'type': 'call',
+                        'valid': True,
+                    }, {
+                        "action": {
+                            "gasLeft": "0x0",
+                            "outcome": "success",
+                            "returnData": "0x"
+                        },
+                        "type": "call_result",
+                        'valid': True,
+                    }, {
+                        'action': {
+                            'from': 'NET10:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFDGG0RTY',
+                            'fromPocket': 'gas_payment',
+                            'fromSpace': 'none',
+                            'to': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
+                            'toPocket': 'balance',
+                            'toSpace': 'native',
+                            'value': '0x0'
+                        },
+                        'type': 'internal_transfer_action',
+                        'valid': True,
+                    }],
                 'transactionHash': tx.hash_hex(),
                 'transactionPosition': '0x0'
             }]
@@ -55,7 +84,7 @@ class TestTrace(RpcClient):
 
         trace3 = self.get_block_trace(b2)
         assert_equal(len(trace3["transactionTraces"]), 1)
-        assert_equal(len(trace3["transactionTraces"][0]["traces"]), 2)
+        assert_equal(len(trace3["transactionTraces"][0]["traces"]), 4)
         trace2 = self.get_block_trace(b1)
         assert_equal(len(trace2["transactionTraces"]), 1)
         assert_equal(len(trace2["transactionTraces"][0]["traces"]), 0)
@@ -67,7 +96,7 @@ class TestTrace(RpcClient):
 
         trace4 = self.get_block_trace(b1)
         assert_equal(len(trace4["transactionTraces"]), 1)
-        assert_equal(len(trace4["transactionTraces"][0]["traces"]), 2)
+        assert_equal(len(trace4["transactionTraces"][0]["traces"]), 4)
         trace5 = self.get_block_trace(b2)
         assert_equal(len(trace5["transactionTraces"]), 1)
         assert_equal(len(trace5["transactionTraces"][0]["traces"]), 0)
@@ -77,34 +106,73 @@ class TestTrace(RpcClient):
         tx_hash = self.send_tx(tx)
         self.wait_for_receipt(tx_hash)
         receipt = self.get_transaction_receipt(tx_hash)
-        expected_trace = [{
-            'type': 'call',
-            'action': {
-                'callType': 'call',
-                'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
-                'gas': '0x0',
-                'input': '0x',
-                'to': 'NET10:TYPE.USER:AAJBAEAUCAJBAEAUCAJBAEAUCAJBAEAUCA902UEXYP',
-                'value': '0x64'
+        expected_trace = [
+            {
+                'action': {
+                    'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
+                    'fromPocket': 'balance',
+                    'fromSpace': 'native',
+                    'to': 'NET10:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFDGG0RTY',
+                    'toPocket': 'gas_payment',
+                    'toSpace': 'none',
+                    'value': '0x5208'
+
+                },
+                'valid': True,
+                'blockHash': receipt["blockHash"],
+                'epochHash': receipt["blockHash"],
+                'epochNumber': receipt["epochNumber"],
+                'transactionHash': tx_hash,
+                'transactionPosition': '0x0', 'type': 'internal_transfer_action'
             },
-            'blockHash': receipt["blockHash"],
-            'epochHash': receipt["blockHash"],
-            'epochNumber': receipt["epochNumber"],
-            'transactionHash': tx_hash,
-            'transactionPosition': '0x0',
-        },{
-            "action": {
-                "gasLeft": "0x0",
-                "outcome": "success",
-                "returnData": "0x"
-            },
-            "blockHash": receipt["blockHash"],
-            "epochHash": receipt["blockHash"],
-            "epochNumber": receipt["epochNumber"],
-            "transactionHash": tx_hash,
-            "transactionPosition": "0x0",
-            "type": "call_result"
-        }]
+            {
+                'type': 'call',
+                'action': {
+                    'callType': 'call',
+                    'space': 'native',
+                    'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
+                    'gas': '0x0',
+                    'input': '0x',
+                    'to': 'NET10:TYPE.USER:AAJBAEAUCAJBAEAUCAJBAEAUCAJBAEAUCA902UEXYP',
+                    'value': '0x64'
+                },
+                'valid': True,
+                'blockHash': receipt["blockHash"],
+                'epochHash': receipt["blockHash"],
+                'epochNumber': receipt["epochNumber"],
+                'transactionHash': tx_hash,
+                'transactionPosition': '0x0',
+            }, {
+                "action": {
+                    "gasLeft": "0x0",
+                    "outcome": "success",
+                    "returnData": "0x"
+                },
+                'valid': True,
+                "blockHash": receipt["blockHash"],
+                "epochHash": receipt["blockHash"],
+                "epochNumber": receipt["epochNumber"],
+                "transactionHash": tx_hash,
+                "transactionPosition": "0x0",
+                "type": "call_result"
+            }, {
+                'action': {
+                    'from': 'NET10:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFDGG0RTY',
+                    'fromPocket': 'gas_payment',
+                    'fromSpace': 'none',
+                    'to': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
+                    'toPocket': 'balance',
+                    'toSpace': 'native',
+                    'value': '0x0'
+                },
+                'valid': True,
+                'blockHash': receipt["blockHash"],
+                'epochHash': receipt["blockHash"],
+                'epochNumber': receipt["epochNumber"],
+                'transactionHash': tx_hash,
+                'transactionPosition': '0x0',
+                'type': 'internal_transfer_action'
+            }]
         assert_equal(self.get_transaction_trace(tx_hash), expected_trace)
 
     def test_filter_trace(self):
@@ -114,32 +182,70 @@ class TestTrace(RpcClient):
         receipt = self.get_transaction_receipt(tx_hash)
         block_hash = receipt["blockHash"]
         trace = self.filter_trace({"blockHashes": [block_hash]})
-        expected_trace = [{
-            'action': {
-                'callType': 'call',
-                'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
-                'gas': '0x0',
-                'input': '0x',
-                'to': 'NET10:TYPE.USER:AAJBAEAUCAJBAEAUCAJBAEAUCAJBAEAUCA902UEXYP',
-                'value': '0x64'
-            },
-            'blockHash': block_hash,
-            'epochHash': block_hash,
-            'epochNumber': receipt["epochNumber"],
-            'transactionHash': tx_hash,
-            'transactionPosition': '0x0',
-            'type': 'call'
-        },{
-            "action": {
-                "gasLeft": "0x0",
-                "outcome": "success",
-                "returnData": "0x"
-            },
-            "blockHash": block_hash,
-            "epochHash": block_hash,
-            "epochNumber": receipt["epochNumber"],
-            "transactionHash": tx_hash,
-            "transactionPosition": "0x0",
-            "type": "call_result"
-        }]
+        expected_trace = [
+            {
+                'action': {
+                    'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
+                    'fromPocket': 'balance',
+                    'fromSpace': 'native',
+                    'to': 'NET10:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFDGG0RTY',
+                    'toPocket': 'gas_payment',
+                    'toSpace': 'none',
+                    'value': '0x5208'
+                },
+                'valid': True,
+                'blockHash': block_hash,
+                'epochHash': block_hash,
+                'epochNumber': receipt["epochNumber"],
+                'transactionHash': tx_hash,
+                'transactionPosition': '0x0',
+                'type': 'internal_transfer_action'
+            }, {
+                'action': {
+                    'callType': 'call',
+                    'space': 'native',
+                    'from': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
+                    'gas': '0x0',
+                    'input': '0x',
+                    'to': 'NET10:TYPE.USER:AAJBAEAUCAJBAEAUCAJBAEAUCAJBAEAUCA902UEXYP',
+                    'value': '0x64'
+                },
+                'valid': True,
+                'blockHash': block_hash,
+                'epochHash': block_hash,
+                'epochNumber': receipt["epochNumber"],
+                'transactionHash': tx_hash,
+                'transactionPosition': '0x0',
+                'type': 'call'
+            }, {
+                "action": {
+                    "gasLeft": "0x0",
+                    "outcome": "success",
+                    "returnData": "0x"
+                },
+                'valid': True,
+                "blockHash": block_hash,
+                "epochHash": block_hash,
+                "epochNumber": receipt["epochNumber"],
+                "transactionHash": tx_hash,
+                "transactionPosition": "0x0",
+                "type": "call_result"
+            }, {
+                'action': {
+                    'from': 'NET10:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFDGG0RTY',
+                    'fromPocket': 'gas_payment',
+                    'fromSpace': 'none',
+                    'to': 'NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH',
+                    'toPocket': 'balance',
+                    'toSpace': 'native',
+                    'value': '0x0'
+                },
+                'valid': True,
+                'blockHash': block_hash,
+                'epochHash': block_hash,
+                'epochNumber': receipt["epochNumber"],
+                'transactionHash': tx_hash,
+                'transactionPosition': '0x0',
+                'type': 'internal_transfer_action'
+            }]
         assert_equal(trace, expected_trace)

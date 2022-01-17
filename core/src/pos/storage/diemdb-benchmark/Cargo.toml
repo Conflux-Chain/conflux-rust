@@ -17,7 +17,7 @@ itertools = { version = "0.10.0", default-features = false }
 rand = "0.8.3"
 structopt = "0.3.21"
 
-diemdb = { path = "../diemdb" }
+pos-ledger-db = { path = "../pos-ledger-db" }
 diem-jellyfish-merkle = { path = "../jellyfish-merkle" }
 diem-config = { path = "../../config" }
 diem-types = { path = "../../types" }

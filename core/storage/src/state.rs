@@ -19,16 +19,19 @@ pub type NoProof = primitives::static_bool::No;
 // anticipated to be too complex to present in the same file of the API.
 pub trait StateTrait {
     // Actions.
-    fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>>;
-    fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()>;
-    fn delete(&mut self, access_key: StorageKey) -> Result<()>;
+    fn get(&self, access_key: StorageKeyWithSpace)
+        -> Result<Option<Box<[u8]>>>;
+    fn set(
+        &mut self, access_key: StorageKeyWithSpace, value: Box<[u8]>,
+    ) -> Result<()>;
+    fn delete(&mut self, access_key: StorageKeyWithSpace) -> Result<()>;
     fn delete_test_only(
-        &mut self, access_key: StorageKey,
+        &mut self, access_key: StorageKeyWithSpace,
     ) -> Result<Option<Box<[u8]>>>;
     // Delete everything prefixed by access_key and return deleted key value
     // pairs.
     fn delete_all<AM: access_mode::AccessMode>(
-        &mut self, access_key_prefix: StorageKey,
+        &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> Result<Option<Vec<MptKeyValue>>>;
 
     // Finalize
@@ -41,14 +44,14 @@ pub trait StateTrait {
 
 pub trait StateTraitExt {
     fn get_with_proof(
-        &self, access_key: StorageKey,
+        &self, access_key: StorageKeyWithSpace,
     ) -> Result<(Option<Box<[u8]>>, StateProof)>;
 
     /// Compute the merkle of the node under `access_key` in all tries.
     /// Node merkle is computed on the value and children hashes, ignoring the
     /// compressed path.
     fn get_node_merkle_all_versions<WithProof: StaticBool>(
-        &self, access_key: StorageKey,
+        &self, access_key: StorageKeyWithSpace,
     ) -> Result<(NodeMerkleTriplet, NodeMerkleProof)>;
 }
 
@@ -59,4 +62,4 @@ use super::{
     utils::access_mode,
     MptKeyValue, StateRootWithAuxInfo,
 };
-use primitives::{EpochId, NodeMerkleTriplet, StaticBool, StorageKey};
+use primitives::{EpochId, NodeMerkleTriplet, StaticBool, StorageKeyWithSpace};

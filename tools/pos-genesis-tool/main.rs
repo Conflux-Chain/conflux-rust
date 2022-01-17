@@ -54,8 +54,8 @@ use diem_types::{
     waypoint::Waypoint,
     write_set::WriteSet,
 };
-use diemdb::DiemDB;
 use executor::{db_bootstrapper::generate_waypoint, vm::FakeVM};
+use pos_ledger_db::PosLedgerDB;
 use std::{
     collections::{BTreeMap, BinaryHeap, HashMap},
     path::Path,
@@ -154,7 +154,7 @@ fn main() {
 fn execute_genesis_transaction(genesis_txn: Transaction) -> Waypoint {
     let tmp_dir = TempDir::new("example").unwrap();
     let (_, db) = DbReaderWriter::wrap(
-        DiemDB::open(
+        PosLedgerDB::open(
             tmp_dir.path(),
             false, /* readonly */
             Some(1_000_000),

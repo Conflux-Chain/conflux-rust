@@ -16,7 +16,9 @@ use diem_types::{
     contract_event::ContractEvent,
     epoch_change::EpochChangeProof,
     epoch_state::EpochState,
-    ledger_info::LedgerInfoWithSignatures,
+    ledger_info::{
+        deserialize_ledger_info_unchecked, LedgerInfoWithSignatures,
+    },
     move_resource::MoveStorage,
     proof::{
         definition::LeafCount, AccumulatorConsistencyProof, SparseMerkleProof,
@@ -44,6 +46,8 @@ pub mod state_view;
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct StartupInfo {
     /// The latest ledger info.
+    /// This struct is only used locally, so loaded signatures must be valid.
+    #[serde(deserialize_with = "deserialize_ledger_info_unchecked")]
     pub latest_ledger_info: LedgerInfoWithSignatures,
     /// If the above ledger info doesn't carry a validator set, the latest
     /// validator set. Otherwise `None`.
@@ -184,7 +188,7 @@ pub trait DbReader: Send + Sync {
     /// See [`DiemDB::get_epoch_ending_ledger_infos`].
     ///
     /// [`DiemDB::get_epoch_ending_ledger_infos`]:
-    /// ../diemdb/struct.DiemDB.html#method.get_epoch_ending_ledger_infos
+    /// ../pos-ledger-db/struct.DiemDB.html#method.get_epoch_ending_ledger_infos
     fn get_epoch_ending_ledger_infos(
         &self, start_epoch: u64, end_epoch: u64,
     ) -> Result<EpochChangeProof>;
@@ -192,7 +196,7 @@ pub trait DbReader: Send + Sync {
     /// See [`DiemDB::get_transactions`].
     ///
     /// [`DiemDB::get_transactions`]:
-    /// ../diemdb/struct.DiemDB.html#method.get_transactions
+    /// ../pos-ledger-db/struct.DiemDB.html#method.get_transactions
     fn get_transactions(
         &self, start_version: Version, batch_size: u64,
         ledger_version: Version, fetch_events: bool,
@@ -201,7 +205,7 @@ pub trait DbReader: Send + Sync {
     /// See [`DiemDB::get_block_timestamp`].
     ///
     /// [`DiemDB::get_block_timestamp`]:
-    /// ../diemdb/struct.DiemDB.html#method.get_block_timestamp
+    /// ../pos-ledger-db/struct.DiemDB.html#method.get_block_timestamp
     fn get_block_timestamp(&self, version: u64) -> Result<u64>;
 
     /// Gets the version of the last transaction committed before timestamp,
@@ -217,7 +221,7 @@ pub trait DbReader: Send + Sync {
     /// See [`DiemDB::get_latest_account_state`].
     ///
     /// [`DiemDB::get_latest_account_state`]:
-    /// ../diemdb/struct.DiemDB.html#method.get_latest_account_state
+    /// ../pos-ledger-db/struct.DiemDB.html#method.get_latest_account_state
     fn get_latest_account_state(
         &self, address: AccountAddress,
     ) -> Result<Option<AccountStateBlob>>;
@@ -241,7 +245,7 @@ pub trait DbReader: Send + Sync {
     /// See [`DiemDB::get_startup_info`].
     ///
     /// [`DiemDB::get_startup_info`]:
-    /// ../diemdb/struct.DiemDB.html#method.get_startup_info
+    /// ../pos-ledger-db/struct.DiemDB.html#method.get_startup_info
     fn get_startup_info(
         &self, need_pos_state: bool,
     ) -> Result<Option<StartupInfo>>;
@@ -279,7 +283,7 @@ pub trait DbReader: Send + Sync {
     // get_account_state_with_proof_by_version`].
     //
     // [`DiemDB::get_account_state_with_proof_by_version`]:
-    // ../diemdb/struct.DiemDB.html#method.
+    // ../pos-ledger-db/struct.DiemDB.html#method.
     // get_account_state_with_proof_by_version
     //
     // This is used by diem core (executor) internally.
@@ -293,7 +297,7 @@ pub trait DbReader: Send + Sync {
     /// See [`DiemDB::get_latest_state_root`].
     ///
     /// [`DiemDB::get_latest_state_root`]:
-    /// ../diemdb/struct.DiemDB.html#method.get_latest_state_root
+    /// ../pos-ledger-db/struct.DiemDB.html#method.get_latest_state_root
     fn get_latest_state_root(&self) -> Result<(Version, HashValue)>;
 
     /// Gets the latest TreeState no matter if db has been bootstrapped.
@@ -412,7 +416,7 @@ pub trait DbWriter: Send + Sync {
     /// See [`DiemDB::save_transactions`].
     ///
     /// [`DiemDB::save_transactions`]:
-    /// ../diemdb/struct.DiemDB.html#method.save_transactions
+    /// ../pos-ledger-db/struct.DiemDB.html#method.save_transactions
     fn save_transactions(
         &self, txns_to_commit: &[TransactionToCommit], first_version: Version,
         ledger_info_with_sigs: Option<&LedgerInfoWithSignatures>,

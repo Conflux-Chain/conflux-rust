@@ -17,7 +17,7 @@ use std::{
 use anyhow::{anyhow, bail, ensure, format_err, Result};
 use fail::fail_point;
 
-use cached_diemdb::CachedDiemDB;
+use cached_pos_ledger_db::CachedPosLedgerDB;
 use cfx_types::H256;
 use consensus_types::db::LedgerBlockRW;
 use diem_crypto::{
@@ -83,7 +83,7 @@ type SparseMerkleProof = diem_types::proof::SparseMerkleProof<AccountStateBlob>;
 /// `Executor` implements all functionalities the execution module needs to
 /// provide.
 pub struct Executor<V> {
-    db_with_cache: Arc<CachedDiemDB>,
+    db_with_cache: Arc<CachedPosLedgerDB>,
     consensus_db: Arc<dyn LedgerBlockRW>,
     phantom: PhantomData<V>,
     pow_handler: Arc<dyn PowInterface>,
@@ -98,7 +98,8 @@ where V: VMExecutor
 
     /// Constructs an `Executor`.
     pub fn new(
-        db_with_cache: Arc<CachedDiemDB>, pow_handler: Arc<dyn PowInterface>,
+        db_with_cache: Arc<CachedPosLedgerDB>,
+        pow_handler: Arc<dyn PowInterface>,
         consensus_db: Arc<dyn LedgerBlockRW>,
     ) -> Self
     {

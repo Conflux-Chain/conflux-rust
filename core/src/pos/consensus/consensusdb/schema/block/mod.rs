@@ -15,7 +15,7 @@
 
 use super::BLOCK_CF_NAME;
 use anyhow::Result;
-use consensus_types::block::Block;
+use consensus_types::block::{Block, BlockUnchecked};
 use diem_crypto::HashValue;
 use schemadb::schema::{KeyCodec, Schema, ValueCodec};
 
@@ -39,7 +39,9 @@ impl KeyCodec<BlockSchema> for HashValue {
 impl ValueCodec<BlockSchema> for Block {
     fn encode_value(&self) -> Result<Vec<u8>> { Ok(bcs::to_bytes(&self)?) }
 
-    fn decode_value(data: &[u8]) -> Result<Self> { Ok(bcs::from_bytes(data)?) }
+    fn decode_value(data: &[u8]) -> Result<Self> {
+        Ok(bcs::from_bytes::<BlockUnchecked>(data).map(Into::into)?)
+    }
 }
 
 #[cfg(test)]

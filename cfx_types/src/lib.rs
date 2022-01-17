@@ -3,11 +3,141 @@
 // See http://www.gnu.org/licenses/
 
 extern crate ethereum_types;
+extern crate rlp;
+extern crate rlp_derive;
+extern crate serde;
+extern crate serde_derive;
 
 pub use ethereum_types::{
     Address, BigEndianHash, Bloom, BloomInput, Public, Secret, Signature, H128,
     H160, H256, H512, H520, H64, U128, U256, U512, U64,
 };
+use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
+use rlp_derive::{RlpDecodable, RlpEncodable};
+use serde_derive::{Deserialize, Serialize};
+
+pub use self::space_util::AddressSpaceUtil;
+
+#[derive(
+    Eq,
+    PartialEq,
+    Hash,
+    Copy,
+    Clone,
+    Debug,
+    Ord,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+)]
+pub enum Space {
+    Native,
+    Ethereum,
+}
+
+impl From<Space> for String {
+    fn from(space: Space) -> Self {
+        let str: &'static str = space.into();
+        str.into()
+    }
+}
+
+impl From<Space> for &'static str {
+    fn from(space: Space) -> Self {
+        match space {
+            Space::Native => "native",
+            Space::Ethereum => "evm",
+        }
+    }
+}
+
+impl Encodable for Space {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        let type_int: u8 = match self {
+            Space::Native => 1,
+            Space::Ethereum => 2,
+        };
+        type_int.rlp_append(s)
+    }
+}
+
+impl Decodable for Space {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        match u8::decode(rlp)? {
+            1u8 => Ok(Space::Native),
+            2u8 => Ok(Space::Ethereum),
+            _ => Err(DecoderError::Custom("Unrecognized space byte.")),
+        }
+    }
+}
+
+#[derive(
+    Default, Copy, Clone, Debug, Eq, PartialEq, RlpEncodable, RlpDecodable,
+)]
+pub struct AllChainID {
+    native: u32,
+    ethereum: u32,
+}
+
+impl AllChainID {
+    pub fn new(native: u32, ethereum: u32) -> Self { Self { native, ethereum } }
+
+    pub fn fake_for_virtual(chain_id: u32) -> Self {
+        Self {
+            native: chain_id,
+            ethereum: chain_id,
+        }
+    }
+
+    pub fn in_space(&self, space: Space) -> u32 {
+        match space {
+            Space::Native => self.native,
+            Space::Ethereum => self.ethereum,
+        }
+    }
+
+    pub fn in_native_space(&self) -> u32 { self.in_space(Space::Native) }
+
+    pub fn in_evm_space(&self) -> u32 { self.in_space(Space::Ethereum) }
+}
+
+impl Default for Space {
+    fn default() -> Self { Space::Native }
+}
+
+#[derive(Default, Eq, PartialEq, Hash, Copy, Clone, Debug, Ord, PartialOrd)]
+pub struct AddressWithSpace {
+    pub address: Address,
+    pub space: Space,
+}
+
+impl AddressWithSpace {
+    #[inline]
+    pub fn assert_native(&self) { assert_eq!(self.space, Space::Native) }
+}
+
+pub mod space_util {
+    use super::{Address, AddressWithSpace, Space};
+
+    pub trait AddressSpaceUtil: Sized {
+        fn with_space(self, space: Space) -> AddressWithSpace;
+        fn with_native_space(self) -> AddressWithSpace {
+            self.with_space(Space::Native)
+        }
+        fn with_evm_space(self) -> AddressWithSpace {
+            self.with_space(Space::Ethereum)
+        }
+    }
+
+    impl AddressSpaceUtil for Address {
+        fn with_space(self, space: Space) -> AddressWithSpace {
+            AddressWithSpace {
+                address: self,
+                space,
+            }
+        }
+    }
+}
 
 /// The KECCAK hash of an empty bloom filter (0x00 * 256)
 pub const KECCAK_EMPTY_BLOOM: H256 = H256([
@@ -64,15 +194,8 @@ pub mod address_util {
                 || self.is_null_address()
         }
 
-        fn is_cip80_valid_address(&self) -> bool { true }
-
         #[inline]
         fn is_contract_address(&self) -> bool {
-            self.address_type_bits() == TYPE_BITS_CONTRACT
-        }
-
-        #[inline]
-        fn maybe_contract_address(&self) -> bool {
             self.address_type_bits() == TYPE_BITS_CONTRACT
         }
 

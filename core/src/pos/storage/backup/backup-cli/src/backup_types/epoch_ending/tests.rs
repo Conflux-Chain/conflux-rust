@@ -26,7 +26,7 @@ use diem_types::{
     proptest_types::{AccountInfoUniverse, LedgerInfoWithSignaturesGen},
     waypoint::Waypoint,
 };
-use diemdb::DiemDB;
+use pos_ledger_db::DiemDB;
 use proptest::{collection::vec, prelude::*, std_facade::BTreeMap};
 use std::{
     convert::TryInto,

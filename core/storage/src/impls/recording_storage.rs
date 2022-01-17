@@ -33,9 +33,9 @@ impl<Storage: StateTrait + StateTraitExt> StateTrait
 {
     delegate! {
         to self.storage {
-            fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()>;
-            fn delete(&mut self, access_key: StorageKey) -> Result<()>;
-            fn delete_test_only(&mut self, access_key: StorageKey) -> Result<Option<Box<[u8]>>>;
+            fn set(&mut self, access_key: StorageKeyWithSpace, value: Box<[u8]>) -> Result<()>;
+            fn delete(&mut self, access_key: StorageKeyWithSpace) -> Result<()>;
+            fn delete_test_only(&mut self, access_key: StorageKeyWithSpace) -> Result<Option<Box<[u8]>>>;
             fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo>;
             fn get_state_root(&self) -> Result<StateRootWithAuxInfo>;
             fn commit(&mut self, epoch_id: EpochId) -> Result<StateRootWithAuxInfo>;
@@ -43,7 +43,9 @@ impl<Storage: StateTrait + StateTraitExt> StateTrait
     }
 
     // we need to record `get` operations
-    fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
+    fn get(
+        &self, access_key: StorageKeyWithSpace,
+    ) -> Result<Option<Box<[u8]>>> {
         let (val, proof) = self.storage.get_with_proof(access_key)?;
         self.proof_merger.lock().merge(proof);
         Ok(val)
@@ -51,7 +53,7 @@ impl<Storage: StateTrait + StateTraitExt> StateTrait
 
     // `delete_all<Read>` is a kind of read operation so we need to record it
     fn delete_all<AM: access_mode::AccessMode>(
-        &mut self, access_key_prefix: StorageKey,
+        &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> Result<Option<Vec<MptKeyValue>>> {
         let kvs = match self.storage.delete_all::<AM>(access_key_prefix)? {
             None => return Ok(None),
@@ -61,7 +63,8 @@ impl<Storage: StateTrait + StateTraitExt> StateTrait
         let mut proof_merger = self.proof_merger.lock();
 
         for (k, _) in &kvs {
-            let access_key = StorageKey::from_key_bytes::<CheckInput>(k)?;
+            let access_key =
+                StorageKeyWithSpace::from_key_bytes::<CheckInput>(k)?;
             let (_, proof) = self.storage.get_with_proof(access_key)?;
             proof_merger.merge(proof);
         }
@@ -81,4 +84,4 @@ use crate::{
 use cfx_internal_common::StateRootWithAuxInfo;
 use delegate::delegate;
 use parking_lot::Mutex;
-use primitives::{CheckInput, EpochId, StorageKey};
+use primitives::{CheckInput, EpochId, StorageKeyWithSpace};

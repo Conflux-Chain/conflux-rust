@@ -22,6 +22,8 @@ use backtrace::Backtrace;
 use chrono::{SecondsFormat, Utc};
 use diem_infallible::RwLock;
 use once_cell::sync::Lazy;
+use parking_lot::Mutex;
+use pipe_logger_lib::{PipeLogger, PipeLoggerBuilder, RotateMethod};
 use serde::Serialize;
 use std::{
     collections::BTreeMap,
@@ -516,6 +518,36 @@ impl Writer for FileWriter {
     fn write(&self, log: String) {
         if let Err(err) = writeln!(self.log_file.write(), "{}", log) {
             eprintln!("Unable to write to log file: {}", err.to_string());
+        }
+    }
+}
+
+pub struct RollingFileWriter {
+    log_file: Mutex<PipeLogger>,
+}
+
+impl RollingFileWriter {
+    pub fn new(
+        log_path: std::path::PathBuf, count: usize, size_mb: usize,
+    ) -> Self {
+        let mut builder = PipeLoggerBuilder::new(log_path);
+        builder
+            .set_compress(true)
+            .set_rotate(Some(RotateMethod::FileSize(
+                size_mb as u64 * 1_000_000,
+            )))
+            .set_count(Some(count));
+        let log_file = builder.build().unwrap();
+        Self {
+            log_file: Mutex::new(log_file),
+        }
+    }
+}
+
+impl Writer for RollingFileWriter {
+    fn write(&self, log: String) {
+        if let Err(e) = self.log_file.lock().write_line(&log) {
+            eprintln!("Unable to write to log file: {}", e.to_string());
         }
     }
 }

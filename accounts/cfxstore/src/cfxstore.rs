@@ -633,7 +633,7 @@ impl SimpleSecretStore for CfxMultiStore {
         if let Some(account) = accounts.first() {
             let extended =
                 self.generate(account.crypto.secret(password)?, derivation)?;
-            Ok(cfxkey::public_to_address(extended.public().public()))
+            Ok(cfxkey::public_to_address(extended.public().public(), true))
         } else {
             Err(Error::InvalidPassword)
         }

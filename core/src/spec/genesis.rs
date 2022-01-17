@@ -25,7 +25,10 @@ use cfx_parameters::{
 use cfx_state::{state_trait::*, CleanupMode};
 use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{StorageManager, StorageManagerTrait};
-use cfx_types::{address_util::AddressUtil, Address, H256, U256};
+use cfx_types::{
+    address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
+    H256, U256,
+};
 use diem_crypto::{
     bls::BLSPrivateKey, ec_vrf::EcVrfPublicKey, PrivateKey, ValidCryptoMaterial,
 };
@@ -47,6 +50,7 @@ use crate::{
     vm::{CreateContractAddress, Env},
 };
 use diem_types::account_address::AccountAddress;
+use primitives::transaction::NativeTransaction;
 
 pub const DEV_GENESIS_PRI_KEY: &'static str =
     "46b9e861b63d3509c88b7817275a30d22d62c8cd8fa6486ddee35ef0d8e0495f";
@@ -75,24 +79,34 @@ lazy_static! {
         KeyPair::from_secret(DEV_GENESIS_PRI_KEY_2.parse().unwrap()).unwrap();
 }
 
-pub fn default(_dev_or_test_mode: bool) -> HashMap<Address, U256> {
-    let mut accounts: HashMap<Address, U256> = HashMap::new();
+pub fn default(_dev_or_test_mode: bool) -> HashMap<AddressWithSpace, U256> {
+    let mut accounts: HashMap<AddressWithSpace, U256> = HashMap::new();
     // FIXME: Decide the genesis initialization for mainnet.
     let balance = U256::from_dec_str("5000000000000000000000000000000000")
         .expect("Not overflow"); // 5*10^33
-    accounts.insert(DEV_GENESIS_KEY_PAIR.address(), balance);
-    accounts.insert(DEV_GENESIS_KEY_PAIR_2.address(), balance);
+    accounts
+        .insert(DEV_GENESIS_KEY_PAIR.address().with_native_space(), balance);
+    accounts.insert(
+        DEV_GENESIS_KEY_PAIR_2.address().with_native_space(),
+        balance,
+    );
+    accounts
+        .insert(DEV_GENESIS_KEY_PAIR.evm_address().with_evm_space(), balance);
+    accounts.insert(
+        DEV_GENESIS_KEY_PAIR_2.evm_address().with_evm_space(),
+        balance,
+    );
     accounts
 }
 
 pub fn load_secrets_file(
     path: &String, secret_store: &SecretStore,
-) -> Result<HashMap<Address, U256>, String> {
+) -> Result<HashMap<AddressWithSpace, U256>, String> {
     let file = File::open(path)
         .map_err(|e| format!("failed to open file: {:?}", e))?;
     let buffered = BufReader::new(file);
 
-    let mut accounts: HashMap<Address, U256> = HashMap::new();
+    let mut accounts: HashMap<AddressWithSpace, U256> = HashMap::new();
     let balance =
         U256::from_dec_str("10000000000000000000000").map_err(|e| {
             format!(
@@ -103,7 +117,7 @@ pub fn load_secrets_file(
     for line in buffered.lines() {
         let keypair =
             KeyPair::from_secret(line.unwrap().parse().unwrap()).unwrap();
-        accounts.insert(keypair.address(), balance.clone());
+        accounts.insert(keypair.address().with_native_space(), balance.clone());
         secret_store.insert(keypair);
     }
     Ok(accounts)
@@ -118,7 +132,7 @@ pub fn initialize_internal_contract_accounts(
         {
             for address in addresses {
                 state.new_contract_with_admin(
-                    address,
+                    &address.with_native_space(),
                     /* No admin; admin = */ &Address::zero(),
                     /* balance = */ U256::zero(),
                     contract_start_nonce,
@@ -131,20 +145,20 @@ pub fn initialize_internal_contract_accounts(
     .expect(&concat!(file!(), ":", line!(), ":", column!()));
 }
 
-fn genesis_contract_address_impl(idx: usize, code: &Bytes) -> Address {
+fn genesis_contract_address_impl(idx: usize, code: &Bytes) -> AddressWithSpace {
     let genesis_account_address =
         GENESIS_ACCOUNT_ADDRESS_STR.parse::<Address>().unwrap();
     let (address, _) = contract_address(
         CreateContractAddress::FromSenderNonceAndCodeHash,
         0.into(),
-        &genesis_account_address,
+        &genesis_account_address.with_native_space(),
         &U256::from(idx),
         code,
     );
     address
 }
 
-pub fn genesis_contract_address_four_year() -> Address {
+pub fn genesis_contract_address_four_year() -> AddressWithSpace {
     genesis_contract_address_impl(
         2,
         &GENESIS_TRANSACTION_CREATE_GENESIS_TOKEN_MANAGER_FOUR_YEAR_UNLOCK
@@ -153,7 +167,7 @@ pub fn genesis_contract_address_four_year() -> Address {
     )
 }
 
-pub fn genesis_contract_address_two_year() -> Address {
+pub fn genesis_contract_address_two_year() -> AddressWithSpace {
     genesis_contract_address_impl(
         1,
         &GENESIS_TRANSACTION_CREATE_GENESIS_TOKEN_MANAGER_TWO_YEAR_UNLOCK
@@ -166,9 +180,10 @@ pub fn genesis_contract_address_two_year() -> Address {
 /// resetting, the chain of the older version will be discarded
 pub fn genesis_block(
     storage_manager: &Arc<StorageManager>,
-    genesis_accounts: HashMap<Address, U256>, test_net_version: Address,
-    initial_difficulty: U256, machine: Arc<Machine>, need_to_execute: bool,
-    genesis_chain_id: Option<u32>, initial_nodes: &Option<GenesisPosState>,
+    genesis_accounts: HashMap<AddressWithSpace, U256>,
+    test_net_version: Address, initial_difficulty: U256, machine: Arc<Machine>,
+    need_to_execute: bool, genesis_chain_id: Option<u32>,
+    initial_nodes: &Option<GenesisPosState>,
 ) -> Block
 {
     let mut state =
@@ -197,8 +212,10 @@ pub fn genesis_block(
     }
     state.add_total_issued(total_balance);
 
-    let genesis_account_address =
-        GENESIS_ACCOUNT_ADDRESS_STR.parse::<Address>().unwrap();
+    let genesis_account_address = GENESIS_ACCOUNT_ADDRESS_STR
+        .parse::<Address>()
+        .unwrap()
+        .with_native_space();
 
     let genesis_token_count =
         U256::from(GENESIS_TOKEN_COUNT_IN_CFX) * U256::from(ONE_CFX_IN_DRIP);
@@ -223,12 +240,12 @@ pub fn genesis_block(
     let mut debug_record = Some(ComputeEpochDebugRecord::default());
 
     let genesis_chain_id = genesis_chain_id.unwrap_or(0);
-    let mut genesis_transaction = Transaction::default();
+    let mut genesis_transaction = NativeTransaction::default();
     genesis_transaction.data = GENESIS_TRANSACTION_DATA_STR.as_bytes().into();
     genesis_transaction.action = Action::Call(Default::default());
     genesis_transaction.chain_id = genesis_chain_id;
 
-    let mut create_create2factory_transaction = Transaction::default();
+    let mut create_create2factory_transaction = NativeTransaction::default();
     create_create2factory_transaction.nonce = 0.into();
     create_create2factory_transaction.data =
         GENESIS_TRANSACTION_CREATE_CREATE2FACTORY
@@ -241,7 +258,7 @@ pub fn genesis_block(
     create_create2factory_transaction.storage_limit = 512;
 
     let mut create_genesis_token_manager_two_year_unlock_transaction =
-        Transaction::default();
+        NativeTransaction::default();
     create_genesis_token_manager_two_year_unlock_transaction.nonce = 1.into();
     create_genesis_token_manager_two_year_unlock_transaction.data =
         GENESIS_TRANSACTION_CREATE_GENESIS_TOKEN_MANAGER_TWO_YEAR_UNLOCK
@@ -261,7 +278,7 @@ pub fn genesis_block(
         16000;
 
     let mut create_genesis_token_manager_four_year_unlock_transaction =
-        Transaction::default();
+        NativeTransaction::default();
     create_genesis_token_manager_four_year_unlock_transaction.nonce = 2.into();
     create_genesis_token_manager_four_year_unlock_transaction.data =
         GENESIS_TRANSACTION_CREATE_GENESIS_TOKEN_MANAGER_FOUR_YEAR_UNLOCK
@@ -280,7 +297,8 @@ pub fn genesis_block(
     create_genesis_token_manager_four_year_unlock_transaction.storage_limit =
         32000;
 
-    let mut create_genesis_investor_fund_transaction = Transaction::default();
+    let mut create_genesis_investor_fund_transaction =
+        NativeTransaction::default();
     create_genesis_investor_fund_transaction.nonce = 3.into();
     create_genesis_investor_fund_transaction.data =
         GENESIS_TRANSACTION_CREATE_FUND_POOL.from_hex().unwrap();
@@ -290,7 +308,7 @@ pub fn genesis_block(
     create_genesis_investor_fund_transaction.gas_price = 1.into();
     create_genesis_investor_fund_transaction.storage_limit = 1000;
 
-    let mut create_genesis_team_fund_transaction = Transaction::default();
+    let mut create_genesis_team_fund_transaction = NativeTransaction::default();
     create_genesis_team_fund_transaction.nonce = 4.into();
     create_genesis_team_fund_transaction.data =
         GENESIS_TRANSACTION_CREATE_FUND_POOL.from_hex().unwrap();
@@ -300,7 +318,7 @@ pub fn genesis_block(
     create_genesis_team_fund_transaction.gas_price = 1.into();
     create_genesis_team_fund_transaction.storage_limit = 1000;
 
-    let mut create_genesis_eco_fund_transaction = Transaction::default();
+    let mut create_genesis_eco_fund_transaction = NativeTransaction::default();
     create_genesis_eco_fund_transaction.nonce = 5.into();
     create_genesis_eco_fund_transaction.data =
         GENESIS_TRANSACTION_CREATE_FUND_POOL.from_hex().unwrap();
@@ -310,7 +328,8 @@ pub fn genesis_block(
     create_genesis_eco_fund_transaction.gas_price = 1.into();
     create_genesis_eco_fund_transaction.storage_limit = 1000;
 
-    let mut create_genesis_community_fund_transaction = Transaction::default();
+    let mut create_genesis_community_fund_transaction =
+        NativeTransaction::default();
     create_genesis_community_fund_transaction.nonce = 6.into();
     create_genesis_community_fund_transaction.data =
         GENESIS_TRANSACTION_CREATE_FUND_POOL.from_hex().unwrap();
@@ -384,11 +403,11 @@ pub fn genesis_block(
                 0.into(),
                 &genesis_account_address,
                 &(i - 1).into(),
-                &genesis_transactions[i].as_ref().data,
+                genesis_transactions[i].as_ref().data(),
             );
 
             state
-                .set_admin(&contract_address, &Address::zero())
+                .set_admin(&contract_address.address, &Address::zero())
                 .expect("");
             info!(
                 "Genesis {:?} addresses: {:?}",
@@ -404,7 +423,7 @@ pub fn genesis_block(
             // TODO(lpl): Pass in signed tx so they can be retired.
             state
                 .add_balance(
-                    &node.address,
+                    &node.address.with_native_space(),
                     &(stake_balance
                         + U256::from(ONE_CFX_IN_DRIP) * U256::from(20)),
                     CleanupMode::NoEmpty,
@@ -412,7 +431,15 @@ pub fn genesis_block(
                 )
                 .unwrap();
             state.deposit(&node.address, &stake_balance, 0).unwrap();
-            let signed_tx = node.register_tx.clone().fake_sign(node.address);
+            let tx = if let Transaction::Native(ref tx) = node.register_tx {
+                tx
+            } else {
+                unreachable!(
+                    "Genesis block should not have Ethereum transaction"
+                );
+            };
+            let signed_tx =
+                tx.clone().fake_sign(node.address.with_native_space());
             execute_genesis_transaction(
                 &signed_tx,
                 &mut state,
@@ -422,7 +449,7 @@ pub fn genesis_block(
     }
 
     state
-        .genesis_special_clean_account(&genesis_account_address)
+        .genesis_special_clean_account(&genesis_account_address.address)
         .expect("Clean account failed");
 
     let state_root = state
@@ -521,7 +548,7 @@ pub fn register_transaction(
     let mut call_data: Vec<u8> = "e335b451".from_hex().unwrap();
     call_data.extend_from_slice(&params.abi_encode());
 
-    let mut tx = Transaction::default();
+    let mut tx = NativeTransaction::default();
     tx.nonce = 0.into();
     tx.data = call_data;
     tx.value = U256::zero();
@@ -530,7 +557,7 @@ pub fn register_transaction(
     tx.gas = 200000.into();
     tx.gas_price = 1.into();
     tx.storage_limit = 16000;
-    tx
+    Transaction::Native(tx)
 }
 
 fn execute_genesis_transaction(
@@ -555,7 +582,7 @@ fn execute_genesis_transaction(
 
 pub fn load_file(
     path: &String, address_parser: impl Fn(&str) -> Result<Address, String>,
-) -> Result<HashMap<Address, U256>, String> {
+) -> Result<HashMap<AddressWithSpace, U256>, String> {
     let mut content = String::new();
     let mut file = File::open(path)
         .map_err(|e| format!("failed to open file: {:?}", e))?;
@@ -565,7 +592,7 @@ pub fn load_file(
         .parse::<toml::Value>()
         .map_err(|e| format!("failed to parse toml file: {:?}", e))?;
 
-    let mut accounts: HashMap<Address, U256> = HashMap::new();
+    let mut accounts: HashMap<AddressWithSpace, U256> = HashMap::new();
     match account_values {
         Value::Table(table) => {
             for (key, value) in table {
@@ -579,7 +606,7 @@ pub fn load_file(
                 match value {
                     Value::String(balance) => {
                         let balance = U256::from_dec_str(&balance).map_err(|e| format!("failed to parse balance: value = {}, error = {:?}", balance, e))?;
-                        accounts.insert(addr, balance);
+                        accounts.insert(addr.with_native_space(), balance);
                     }
                     _ => {
                         return Err(
