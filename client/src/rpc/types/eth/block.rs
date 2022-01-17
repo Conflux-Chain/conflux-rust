@@ -199,13 +199,14 @@ impl Block {
                     b.transactions
                         .iter()
                         .filter(|tx| tx.space() == Space::Ethereum)
-                        .map(|t| {
+                        .enumerate()
+                        .map(|(idx, t)| {
                             Transaction::from_signed(
                                 t,
                                 (
                                     Some(b.block_header.hash()),
                                     Some(b.block_header.height().into()),
-                                    None,
+                                    Some(idx.into()),
                                 ),
                             )
                         })
