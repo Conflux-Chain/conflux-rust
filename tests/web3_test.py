@@ -69,7 +69,7 @@ class Web3Test(ConfluxTestFramework):
         time.sleep(3)
 
         ip = self.nodes[0].ip
-        port = self.nodes[0].rpcport
+        port = self.nodes[0].ethrpcport
         self.w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/'))
 
         assert_equal(self.w3.isConnected(), True)
