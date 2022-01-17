@@ -88,7 +88,7 @@ pub fn sign_call(
         gas,
         gas_price: request.gas_price.unwrap_or(1.into()),
         value: request.value.unwrap_or_default(),
-        chain_id,
+        chain_id: Some(chain_id),
         data: request.data.unwrap_or_default().into_vec(),
     }
     .fake_sign(from.with_evm_space()))

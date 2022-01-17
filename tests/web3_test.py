@@ -83,7 +83,7 @@ class Web3Test(ConfluxTestFramework):
 
         receiver = Web3.toChecksumAddress("10000000000000000000000000000000000000aa")
         signed = account.signTransaction(
-            {"to": receiver, "value": 5 * 10 ** 17, "gasPrice": 1, "gas": 21000, "nonce": 0, "chainId": 10})
+            {"to": receiver, "value": 1 * 10 ** 17, "gasPrice": 1, "gas": 21000, "nonce": 0, "chainId": 10})
         tx_hash = signed["hash"]
         return_tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
         assert_equal(tx_hash, return_tx_hash)
@@ -94,8 +94,19 @@ class Web3Test(ConfluxTestFramework):
         receipt = self.w3.eth.waitForTransactionReceipt(tx_hash)
         assert_equal(receipt["status"], 1)
 
-        assert_equal(5 * 10 ** 17, self.w3.eth.get_balance(receiver))
-        assert_equal(5 * 10 ** 17 - 21000, self.w3.eth.get_balance(sender))
+        signed = account.signTransaction(
+            {"to": receiver, "value": 1 * 10 ** 17, "gasPrice": 1, "gas": 21000, "nonce": 1})
+        tx_hash = signed["hash"]
+        return_tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+        assert_equal(tx_hash, return_tx_hash)
+
+        client.generate_block(1)
+        client.generate_blocks(10)
+        receipt = self.w3.eth.waitForTransactionReceipt(tx_hash)
+        assert_equal(receipt["status"], 1)
+
+        assert_equal(2 * 10 ** 17, self.w3.eth.get_balance(receiver))
+        assert_equal(8 * 10 ** 17 - 42000, self.w3.eth.get_balance(sender))
 
         self.nodes[0].stop()
 

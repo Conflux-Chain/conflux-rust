@@ -30,7 +30,7 @@ pub struct Transaction {
     pub data: Bytes,
     pub storage_limit: U256,
     pub epoch_height: U256,
-    pub chain_id: U256,
+    pub chain_id: Option<U256>,
     pub status: Option<U64>,
     /// The standardised V field of the signature.
     pub v: U256,
@@ -62,7 +62,7 @@ impl Transaction {
             data: Default::default(),
             storage_limit: Default::default(),
             epoch_height: Default::default(),
-            chain_id: U256::one(),
+            chain_id: Some(U256::one()),
             status: Default::default(),
             v: Default::default(),
             r: Default::default(),
@@ -125,7 +125,7 @@ impl Transaction {
             data: t.data().clone().into(),
             storage_limit: storage_limit.into(),
             epoch_height: epoch_height.into(),
-            chain_id: t.chain_id().into(),
+            chain_id: t.chain_id().map(|x| U256::from(x as u64)),
             v: t.transaction.v.into(),
             r: t.transaction.r.into(),
             s: t.transaction.s.into(),
@@ -145,7 +145,7 @@ impl Transaction {
                             Some(address) => Action::Call(address.into()),
                         },
                         value: self.value.into(),
-                        chain_id: self.chain_id.as_u32(),
+                        chain_id: self.chain_id.map(|x| x.as_u32()),
                         data: self.data.into(),
                     }
                     .into()
@@ -161,7 +161,12 @@ impl Transaction {
                         value: self.value.into(),
                         storage_limit: self.storage_limit.as_u64(),
                         epoch_height: self.epoch_height.as_u64(),
-                        chain_id: self.chain_id.as_u32(),
+                        chain_id: self
+                            .chain_id
+                            .ok_or(Error::Custom(
+                                "Native transaction must have chain_id".into(),
+                            ))?
+                            .as_u32(),
                         data: self.data.into(),
                     }
                     .into()
