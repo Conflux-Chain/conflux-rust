@@ -86,7 +86,7 @@ pub struct Block {
     /// Difficulty
     pub difficulty: U256,
     /// Total difficulty
-    pub total_difficulty: Option<U256>,
+    pub total_difficulty: U256,
     /// Base fee
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_fee_per_gas: Option<U256>,
@@ -192,7 +192,7 @@ impl Block {
             logs_bloom,
             timestamp: b.block_header.timestamp().into(),
             difficulty: b.block_header.difficulty().into(),
-            total_difficulty: None,
+            total_difficulty: 0.into(),
             base_fee_per_gas: None,
             uncles: vec![],
             // Note: we allow U256 nonce in Stratum and in the block.
@@ -359,7 +359,7 @@ mod tests {
             logs_bloom: H2048::default(),
             timestamp: U256::default(),
             difficulty: U256::default(),
-            total_difficulty: Some(U256::default()),
+            total_difficulty: 0.into(),
             base_fee_per_gas: None,
             uncles: vec![],
             transactions: BlockTransactions::Hashes(vec![].into()),

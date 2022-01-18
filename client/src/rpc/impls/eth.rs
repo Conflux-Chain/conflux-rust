@@ -285,7 +285,6 @@ impl EthHandler {
             .collect();
 
         let receipt = Receipt {
-            transaction_type: None,
             transaction_hash,
             transaction_index,
             block_hash,
@@ -300,9 +299,8 @@ impl EthHandler {
                 .into(),
             contract_address,
             logs,
-            state_root: exec_info.maybe_state_root.clone(),
             logs_bloom: primitive_receipt.log_bloom,
-            status_code: Some(status_code.into()),
+            status_code: status_code.into(),
             effective_gas_price: *tx.gas_price(),
         };
 
