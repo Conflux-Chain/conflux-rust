@@ -19,7 +19,7 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::rpc::types::{eth::Transaction, Bytes};
-use cfx_types::{hexstr_to_h256, Bloom as H2048, Space, H160, H256, U256};
+use cfx_types::{hexstr_to_h256, Bloom as H2048, Space, H160, H256, H64, U256};
 use cfxcore::{
     block_data_manager::DataVersionTuple, consensus::ConsensusGraphInner,
 };
@@ -87,8 +87,6 @@ pub struct Block {
     pub difficulty: U256,
     /// Total difficulty
     pub total_difficulty: Option<U256>,
-    /// Seal fields
-    pub seal_fields: Vec<Bytes>,
     /// Base fee
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_fee_per_gas: Option<U256>,
@@ -98,6 +96,10 @@ pub struct Block {
     pub transactions: BlockTransactions,
     /// Size in bytes
     pub size: Option<U256>,
+    /// Nonce
+    pub nonce: H64,
+    /// Mix hash
+    pub mix_hash: H256,
 }
 
 /// Block header representation.
@@ -191,9 +193,13 @@ impl Block {
             timestamp: b.block_header.timestamp().into(),
             difficulty: b.block_header.difficulty().into(),
             total_difficulty: None,
-            seal_fields: vec![],
             base_fee_per_gas: None,
             uncles: vec![],
+            // Note: we allow U256 nonce in Stratum and in the block.
+            // However, most mining clients use U64. Here we truncate
+            // to U64 to maintain compatibility with eth.
+            nonce: b.block_header.nonce().low_u64().to_be_bytes().into(),
+            mix_hash: H256::default(),
             transactions: if full {
                 BlockTransactions::Full(
                     b.transactions
@@ -300,269 +306,227 @@ impl Block {
 //     }
 // }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::{Block, BlockTransactions, Header, RichBlock, RichHeader};
-//     use ethereum_types::{Bloom as H2048, H160, H256, H64, U256};
-//     use serde_json;
-//     use std::collections::BTreeMap;
-//     use v1::types::{Bytes, Transaction};
-//
-//     #[test]
-//     fn test_serialize_block_transactions() {
-//         let t = BlockTransactions::Full(vec![Transaction::default()]);
-//         let serialized = serde_json::to_string(&t).unwrap();
-//         assert_eq!(
-//             serialized,
-//
-// r#"[{"hash":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"
-// 0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"
-// 0x0000000000000000000000000000000000000000","to":null,"value":"0x0","
-// gasPrice":"0x0","gas":"0x0","input":"0x","creates":null,"raw":"0x","
-// publicKey":null,"chainId":null,"v":"0x0","r":"0x0","s":"0x0","condition":
-// null}]"#         );
-//
-//         let t = BlockTransactions::Hashes(vec![H256::default().into()]);
-//         let serialized = serde_json::to_string(&t).unwrap();
-//         assert_eq!(
-//             serialized,
-//
-// r#"["0x0000000000000000000000000000000000000000000000000000000000000000"]"#
-//         );
-//     }
-//
-//     #[test]
-//     fn test_serialize_block() {
-//         let block = Block {
-//             hash: Some(H256::default()),
-//             parent_hash: H256::default(),
-//             uncles_hash: H256::default(),
-//             author: H160::default(),
-//             miner: H160::default(),
-//             state_root: H256::default(),
-//             transactions_root: H256::default(),
-//             receipts_root: H256::default(),
-//             number: Some(U256::default()),
-//             gas_used: U256::default(),
-//             gas_limit: U256::default(),
-//             extra_data: Bytes::default(),
-//             logs_bloom: Some(H2048::default()),
-//             timestamp: U256::default(),
-//             difficulty: U256::default(),
-//             total_difficulty: Some(U256::default()),
-//             seal_fields: vec![Bytes::default(), Bytes::default()],
-//             base_fee_per_gas: None,
-//             uncles: vec![],
-//             transactions: BlockTransactions::Hashes(vec![].into()),
-//             size: Some(69.into()),
-//         };
-//         let serialized_block = serde_json::to_string(&block).unwrap();
-//         let rich_block = RichBlock {
-//             inner: block,
-//             extra_info: map![
-//                 "mixHash".into() => format!("{:?}", H256::default()),
-//                 "nonce".into() => format!("{:?}", H64::default())
-//             ],
-//         };
-//         let serialized_rich_block =
-// serde_json::to_string(&rich_block).unwrap();
-//
-//         assert_eq!(
-//             serialized_block,
-//
-// r#"{"hash":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// parentHash":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// sha3Uncles":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","author":
-// "0x0000000000000000000000000000000000000000","miner":"
-// 0x0000000000000000000000000000000000000000","stateRoot":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// transactionsRoot":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// receiptsRoot":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","number":
-// "0x0","gasUsed":"0x0","gasLimit":"0x0","extraData":"0x","logsBloom":"
-// 0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-// ,"timestamp":"0x0","difficulty":"0x0","totalDifficulty":"0x0","sealFields":["
-// 0x","0x"],"uncles":[],"transactions":[],"size":"0x45"}"#         );
-//         assert_eq!(
-//             serialized_rich_block,
-//
-// r#"{"author":"0x0000000000000000000000000000000000000000","difficulty":"0x0",
-// "extraData":"0x","gasLimit":"0x0","gasUsed":"0x0","hash":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// logsBloom":"
-// 0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-// ,"miner":"0x0000000000000000000000000000000000000000","mixHash":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"
-// 0x0000000000000000","number":"0x0","parentHash":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// receiptsRoot":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// sealFields":["0x","0x"],"sha3Uncles":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","size":"
-// 0x45","stateRoot":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// timestamp":"0x0","totalDifficulty":"0x0","transactions":[],"transactionsRoot"
-// :"0x0000000000000000000000000000000000000000000000000000000000000000","
-// uncles":[]}"#         );
-//     }
-//
-//     #[test]
-//     fn none_size_null() {
-//         let block = Block {
-//             hash: Some(H256::default()),
-//             parent_hash: H256::default(),
-//             uncles_hash: H256::default(),
-//             author: H160::default(),
-//             miner: H160::default(),
-//             state_root: H256::default(),
-//             transactions_root: H256::default(),
-//             receipts_root: H256::default(),
-//             number: Some(U256::default()),
-//             gas_used: U256::default(),
-//             gas_limit: U256::default(),
-//             extra_data: Bytes::default(),
-//             logs_bloom: Some(H2048::default()),
-//             timestamp: U256::default(),
-//             difficulty: U256::default(),
-//             total_difficulty: Some(U256::default()),
-//             seal_fields: vec![Bytes::default(), Bytes::default()],
-//             base_fee_per_gas: None,
-//             uncles: vec![],
-//             transactions: BlockTransactions::Hashes(vec![].into()),
-//             size: None,
-//         };
-//         let serialized_block = serde_json::to_string(&block).unwrap();
-//         let rich_block = RichBlock {
-//             inner: block,
-//             extra_info: map![
-//                 "mixHash".into() => format!("{:?}", H256::default()),
-//                 "nonce".into() => format!("{:?}", H64::default())
-//             ],
-//         };
-//         let serialized_rich_block =
-// serde_json::to_string(&rich_block).unwrap();
-//
-//         assert_eq!(
-//             serialized_block,
-//
-// r#"{"hash":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// parentHash":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// sha3Uncles":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","author":
-// "0x0000000000000000000000000000000000000000","miner":"
-// 0x0000000000000000000000000000000000000000","stateRoot":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// transactionsRoot":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// receiptsRoot":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","number":
-// "0x0","gasUsed":"0x0","gasLimit":"0x0","extraData":"0x","logsBloom":"
-// 0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-// ,"timestamp":"0x0","difficulty":"0x0","totalDifficulty":"0x0","sealFields":["
-// 0x","0x"],"uncles":[],"transactions":[],"size":null}"#         );
-//         assert_eq!(
-//             serialized_rich_block,
-//
-// r#"{"author":"0x0000000000000000000000000000000000000000","difficulty":"0x0",
-// "extraData":"0x","gasLimit":"0x0","gasUsed":"0x0","hash":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// logsBloom":"
-// 0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-// ,"miner":"0x0000000000000000000000000000000000000000","mixHash":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"
-// 0x0000000000000000","number":"0x0","parentHash":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// receiptsRoot":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// sealFields":["0x","0x"],"sha3Uncles":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","size":
-// null,"stateRoot":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// timestamp":"0x0","totalDifficulty":"0x0","transactions":[],"transactionsRoot"
-// :"0x0000000000000000000000000000000000000000000000000000000000000000","
-// uncles":[]}"#         );
-//     }
-//
-//     #[test]
-//     fn test_serialize_header() {
-//         let header = Header {
-//             hash: Some(H256::default()),
-//             parent_hash: H256::default(),
-//             uncles_hash: H256::default(),
-//             author: H160::default(),
-//             miner: H160::default(),
-//             state_root: H256::default(),
-//             transactions_root: H256::default(),
-//             receipts_root: H256::default(),
-//             number: Some(U256::default()),
-//             gas_used: U256::default(),
-//             gas_limit: U256::default(),
-//             extra_data: Bytes::default(),
-//             logs_bloom: H2048::default(),
-//             timestamp: U256::default(),
-//             difficulty: U256::default(),
-//             seal_fields: vec![Bytes::default(), Bytes::default()],
-//             base_fee_per_gas: None,
-//             size: Some(69.into()),
-//         };
-//         let serialized_header = serde_json::to_string(&header).unwrap();
-//         let rich_header = RichHeader {
-//             inner: header,
-//             extra_info: map![
-//                 "mixHash".into() => format!("{:?}", H256::default()),
-//                 "nonce".into() => format!("{:?}", H64::default())
-//             ],
-//         };
-//         let serialized_rich_header =
-// serde_json::to_string(&rich_header).unwrap();
-//
-//         assert_eq!(
-//             serialized_header,
-//
-// r#"{"hash":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// parentHash":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// sha3Uncles":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","author":
-// "0x0000000000000000000000000000000000000000","miner":"
-// 0x0000000000000000000000000000000000000000","stateRoot":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// transactionsRoot":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// receiptsRoot":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","number":
-// "0x0","gasUsed":"0x0","gasLimit":"0x0","extraData":"0x","logsBloom":"
-// 0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-// ,"timestamp":"0x0","difficulty":"0x0","sealFields":["0x","0x"],"size":"0x45"
-// }"#         );
-//         assert_eq!(
-//             serialized_rich_header,
-//
-// r#"{"author":"0x0000000000000000000000000000000000000000","difficulty":"0x0",
-// "extraData":"0x","gasLimit":"0x0","gasUsed":"0x0","hash":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// logsBloom":"
-// 0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-// ,"miner":"0x0000000000000000000000000000000000000000","mixHash":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"
-// 0x0000000000000000","number":"0x0","parentHash":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// receiptsRoot":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// sealFields":["0x","0x"],"sha3Uncles":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","size":"
-// 0x45","stateRoot":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000","
-// timestamp":"0x0","transactionsRoot":"
-// 0x0000000000000000000000000000000000000000000000000000000000000000"}"#
-//         );
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use super::{Block, BlockTransactions};
+    use crate::rpc::types::Bytes;
+    use cfx_types::{Bloom as H2048, H160, H256, H64, U256};
+    //     use super::{Block, BlockTransactions, Header, RichBlock, RichHeader};
+    //     use ethereum_types::{Bloom as H2048, H160, H256, H64, U256};
+    //     use serde_json;
+    //     use std::collections::BTreeMap;
+    //     use v1::types::{Bytes, Transaction};
+    //
+    //     #[test]
+    //     fn test_serialize_block_transactions() {
+    //         let t = BlockTransactions::Full(vec![Transaction::default()]);
+    //         let serialized = serde_json::to_string(&t).unwrap();
+    //         assert_eq!(
+    //             serialized,
+    //
+    // r#"[{"hash":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // nonce":" 0x0","blockHash":null,"blockNumber":null,"transactionIndex":
+    // null,"from":" 0x0000000000000000000000000000000000000000","to":null,"
+    // value":"0x0"," gasPrice":"0x0","gas":"0x0","input":"0x","creates":
+    // null,"raw":"0x"," publicKey":null,"chainId":null,"v":"0x0","r":"0x0",
+    // "s":"0x0","condition": null}]"#         );
+    //
+    //         let t = BlockTransactions::Hashes(vec![H256::default().into()]);
+    //         let serialized = serde_json::to_string(&t).unwrap();
+    //         assert_eq!(
+    //             serialized,
+    //
+    // r#"["0x0000000000000000000000000000000000000000000000000000000000000000"
+    // ]"#         );
+    //     }
+    //
+    #[test]
+    fn test_serialize_block() {
+        let block = Block {
+            hash: H256::default(),
+            parent_hash: H256::default(),
+            uncles_hash: H256::default(),
+            author: H160::default(),
+            miner: H160::default(),
+            state_root: H256::default(),
+            transactions_root: H256::default(),
+            receipts_root: H256::default(),
+            number: Some(U256::default()),
+            gas_used: U256::default(),
+            gas_limit: U256::default(),
+            extra_data: Bytes::default(),
+            logs_bloom: H2048::default(),
+            timestamp: U256::default(),
+            difficulty: U256::default(),
+            total_difficulty: Some(U256::default()),
+            base_fee_per_gas: None,
+            uncles: vec![],
+            transactions: BlockTransactions::Hashes(vec![].into()),
+            size: Some(69.into()),
+            nonce: H64::default(),
+            mix_hash: H256::default(),
+        };
+        let serialized_block = serde_json::to_string(&block).unwrap();
+
+        assert_eq!(serialized_block, r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","sha3Uncles":"0x0000000000000000000000000000000000000000000000000000000000000000","author":"0x0000000000000000000000000000000000000000","miner":"0x0000000000000000000000000000000000000000","stateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","number":"0x0","gasUsed":"0x0","gasLimit":"0x0","extraData":"0x","logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","timestamp":"0x0","difficulty":"0x0","totalDifficulty":"0x0","uncles":[],"transactions":[],"size":"0x45","nonce":"0x0000000000000000","mixHash":"0x0000000000000000000000000000000000000000000000000000000000000000"}"#);
+    }
+    //
+    //     #[test]
+    //     fn none_size_null() {
+    //         let block = Block {
+    //             hash: Some(H256::default()),
+    //             parent_hash: H256::default(),
+    //             uncles_hash: H256::default(),
+    //             author: H160::default(),
+    //             miner: H160::default(),
+    //             state_root: H256::default(),
+    //             transactions_root: H256::default(),
+    //             receipts_root: H256::default(),
+    //             number: Some(U256::default()),
+    //             gas_used: U256::default(),
+    //             gas_limit: U256::default(),
+    //             extra_data: Bytes::default(),
+    //             logs_bloom: Some(H2048::default()),
+    //             timestamp: U256::default(),
+    //             difficulty: U256::default(),
+    //             total_difficulty: Some(U256::default()),
+    //             seal_fields: vec![Bytes::default(), Bytes::default()],
+    //             base_fee_per_gas: None,
+    //             uncles: vec![],
+    //             transactions: BlockTransactions::Hashes(vec![].into()),
+    //             size: None,
+    //         };
+    //         let serialized_block = serde_json::to_string(&block).unwrap();
+    //         let rich_block = RichBlock {
+    //             inner: block,
+    //             extra_info: map![
+    //                 "mixHash".into() => format!("{:?}", H256::default()),
+    //                 "nonce".into() => format!("{:?}", H64::default())
+    //             ],
+    //         };
+    //         let serialized_rich_block =
+    // serde_json::to_string(&rich_block).unwrap();
+    //
+    //         assert_eq!(
+    //             serialized_block,
+    //
+    // r#"{"hash":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // parentHash":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // sha3Uncles":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // author": "0x0000000000000000000000000000000000000000","miner":"
+    // 0x0000000000000000000000000000000000000000","stateRoot":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // transactionsRoot":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // receiptsRoot":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // number": "0x0","gasUsed":"0x0","gasLimit":"0x0","extraData":"0x","
+    // logsBloom":"
+    // 0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    // ,"timestamp":"0x0","difficulty":"0x0","totalDifficulty":"0x0","
+    // sealFields":[" 0x","0x"],"uncles":[],"transactions":[],"size":null}"#
+    // );         assert_eq!(
+    //             serialized_rich_block,
+    //
+    // r#"{"author":"0x0000000000000000000000000000000000000000","difficulty":"
+    // 0x0", "extraData":"0x","gasLimit":"0x0","gasUsed":"0x0","hash":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // logsBloom":"
+    // 0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    // ,"miner":"0x0000000000000000000000000000000000000000","mixHash":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // nonce":" 0x0000000000000000","number":"0x0","parentHash":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // receiptsRoot":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // sealFields":["0x","0x"],"sha3Uncles":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // size": null,"stateRoot":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // timestamp":"0x0","totalDifficulty":"0x0","transactions":[],"
+    // transactionsRoot"
+    // :"0x0000000000000000000000000000000000000000000000000000000000000000","
+    // uncles":[]}"#         );
+    //     }
+    //
+    //     #[test]
+    //     fn test_serialize_header() {
+    //         let header = Header {
+    //             hash: Some(H256::default()),
+    //             parent_hash: H256::default(),
+    //             uncles_hash: H256::default(),
+    //             author: H160::default(),
+    //             miner: H160::default(),
+    //             state_root: H256::default(),
+    //             transactions_root: H256::default(),
+    //             receipts_root: H256::default(),
+    //             number: Some(U256::default()),
+    //             gas_used: U256::default(),
+    //             gas_limit: U256::default(),
+    //             extra_data: Bytes::default(),
+    //             logs_bloom: H2048::default(),
+    //             timestamp: U256::default(),
+    //             difficulty: U256::default(),
+    //             seal_fields: vec![Bytes::default(), Bytes::default()],
+    //             base_fee_per_gas: None,
+    //             size: Some(69.into()),
+    //         };
+    //         let serialized_header = serde_json::to_string(&header).unwrap();
+    //         let rich_header = RichHeader {
+    //             inner: header,
+    //             extra_info: map![
+    //                 "mixHash".into() => format!("{:?}", H256::default()),
+    //                 "nonce".into() => format!("{:?}", H64::default())
+    //             ],
+    //         };
+    //         let serialized_rich_header =
+    // serde_json::to_string(&rich_header).unwrap();
+    //
+    //         assert_eq!(
+    //             serialized_header,
+    //
+    // r#"{"hash":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // parentHash":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // sha3Uncles":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // author": "0x0000000000000000000000000000000000000000","miner":"
+    // 0x0000000000000000000000000000000000000000","stateRoot":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // transactionsRoot":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // receiptsRoot":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // number": "0x0","gasUsed":"0x0","gasLimit":"0x0","extraData":"0x","
+    // logsBloom":"
+    // 0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    // ,"timestamp":"0x0","difficulty":"0x0","sealFields":["0x","0x"],"size":"
+    // 0x45" }"#         );
+    //         assert_eq!(
+    //             serialized_rich_header,
+    //
+    // r#"{"author":"0x0000000000000000000000000000000000000000","difficulty":"
+    // 0x0", "extraData":"0x","gasLimit":"0x0","gasUsed":"0x0","hash":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // logsBloom":"
+    // 0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    // ,"miner":"0x0000000000000000000000000000000000000000","mixHash":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // nonce":" 0x0000000000000000","number":"0x0","parentHash":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // receiptsRoot":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // sealFields":["0x","0x"],"sha3Uncles":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // size":" 0x45","stateRoot":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000","
+    // timestamp":"0x0","transactionsRoot":"
+    // 0x0000000000000000000000000000000000000000000000000000000000000000"}"#
+    //         );
+    //     }
+}
