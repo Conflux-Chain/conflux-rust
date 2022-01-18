@@ -148,70 +148,77 @@ pub struct Header {
 
 impl Block {
     pub fn new(
-        b: &PrimitiveBlock, full: bool, consensus_inner: &ConsensusGraphInner,
-    ) -> Self {
-        // get the block.gas_used
-        let tx_len = b.transactions.len();
-        let (gas_used, logs_bloom) = if tx_len == 0 {
-            (Some(U256::from(0)), H2048::zero())
-        } else {
-            let maybe_results = consensus_inner
+        blocks: Vec<&PrimitiveBlock>, full: bool,
+        consensus_inner: &ConsensusGraphInner,
+    ) -> Self
+    {
+        let mut gas_used = U256::zero();
+        let mut logs_bloom = H2048::zero();
+
+        for b in &blocks {
+            if let Some(DataVersionTuple(_, execution_result)) = consensus_inner
                 .block_execution_results_by_hash(
                     &b.hash(),
                     false, /* update_cache */
-                );
-            match maybe_results {
-                Some(DataVersionTuple(_, execution_result)) => {
-                    let receipt = execution_result
-                        .block_receipts
-                        .receipts
-                        .get(tx_len - 1)
-                        .unwrap();
-                    (Some(receipt.accumulated_gas_used), execution_result.bloom)
-                }
-                None => (None, H2048::zero()),
+                )
+            {
+                gas_used += execution_result
+                    .block_receipts
+                    .receipts
+                    .last()
+                    .map(|r| r.accumulated_gas_used)
+                    .unwrap_or_default();
+
+                logs_bloom.accrue_bloom(&execution_result.bloom);
             }
-        };
+        }
+
+        let pivot = blocks.last().expect("Inconsistent state");
 
         Block {
-            hash: b.block_header.hash(),
-            parent_hash: b.block_header.parent_hash().clone(),
+            hash: pivot.block_header.hash(),
+            parent_hash: pivot.block_header.parent_hash().clone(),
             uncles_hash: hexstr_to_h256(SHA3_HASH_OF_EMPTY_UNCLE),
-            author: b.block_header.author().clone(),
-            miner: b.block_header.author().clone(),
-            state_root: b.block_header.deferred_state_root().clone(),
-            transactions_root: b.block_header.transactions_root().clone(),
-            receipts_root: b.block_header.deferred_receipts_root().clone(),
-            number: Some(b.block_header.height().into()), /* We use height to
-                                                           * replace block
-                                                           * number for ETH
-                                                           * interface */
-            gas_used: gas_used.unwrap_or(U256::zero()),
-            gas_limit: b.block_header.gas_limit().into(),
+            author: pivot.block_header.author().clone(),
+            miner: pivot.block_header.author().clone(),
+            state_root: pivot.block_header.deferred_state_root().clone(),
+            transactions_root: pivot.block_header.transactions_root().clone(),
+            receipts_root: pivot.block_header.deferred_receipts_root().clone(),
+            number: Some(pivot.block_header.height().into()), /* We use height to
+                                                               * replace block
+                                                               * number for
+                                                               * ETH
+                                                               * interface */
+            gas_used,
+            // FIXME(thegaram): should ensure limit larger than `gas_used`?
+            gas_limit: pivot.block_header.gas_limit().into(),
             extra_data: Default::default(),
             logs_bloom,
-            timestamp: b.block_header.timestamp().into(),
-            difficulty: b.block_header.difficulty().into(),
+            timestamp: pivot.block_header.timestamp().into(),
+            difficulty: pivot.block_header.difficulty().into(),
             total_difficulty: None,
             base_fee_per_gas: None,
             uncles: vec![],
             // Note: we allow U256 nonce in Stratum and in the block.
             // However, most mining clients use U64. Here we truncate
             // to U64 to maintain compatibility with eth.
-            nonce: b.block_header.nonce().low_u64().to_be_bytes().into(),
+            nonce: pivot.block_header.nonce().low_u64().to_be_bytes().into(),
             mix_hash: H256::default(),
+            // TODO(thegaram): include phantom txs
             transactions: if full {
                 BlockTransactions::Full(
-                    b.transactions
+                    blocks
                         .iter()
+                        .map(|b| &b.transactions)
+                        .flatten()
                         .filter(|tx| tx.space() == Space::Ethereum)
                         .enumerate()
                         .map(|(idx, t)| {
                             Transaction::from_signed(
-                                t,
+                                &**t,
                                 (
-                                    Some(b.block_header.hash()),
-                                    Some(b.block_header.height().into()),
+                                    Some(pivot.block_header.hash()),
+                                    Some(pivot.block_header.height().into()),
                                     Some(idx.into()),
                                 ),
                             )
@@ -220,10 +227,18 @@ impl Block {
                 )
             } else {
                 BlockTransactions::Hashes(
-                    b.transaction_hashes(Some(Space::Ethereum)),
+                    blocks
+                        .iter()
+                        .map(|b| {
+                            b.transaction_hashes(Some(Space::Ethereum))
+                                .into_iter()
+                        })
+                        .flatten()
+                        .collect(),
                 )
             },
-            size: Some(U256::from(b.size())),
+            // FIXME(thegaram): should we recalculate size?
+            size: Some(blocks.iter().map(|b| b.size()).sum::<usize>().into()),
         }
     }
 }
