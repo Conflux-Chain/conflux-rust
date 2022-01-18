@@ -95,7 +95,7 @@ pub struct Block {
     /// Transactions
     pub transactions: BlockTransactions,
     /// Size in bytes
-    pub size: Option<U256>,
+    pub size: U256,
     /// Nonce
     pub nonce: H64,
     /// Mix hash
@@ -124,7 +124,7 @@ pub struct Header {
     /// Transactions receipts root hash
     pub receipts_root: H256,
     /// Block number
-    pub number: Option<U256>,
+    pub number: U256,
     /// Gas Used
     pub gas_used: U256,
     /// Gas Limit
@@ -137,13 +137,11 @@ pub struct Header {
     pub timestamp: U256,
     /// Difficulty
     pub difficulty: U256,
-    /// Seal fields
-    pub seal_fields: Vec<Bytes>,
     /// Base fee
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_fee_per_gas: Option<U256>,
     /// Size in bytes
-    pub size: Option<U256>,
+    pub size: U256,
 }
 
 impl Block {
@@ -222,7 +220,7 @@ impl Block {
                     b.transaction_hashes(Some(Space::Ethereum)),
                 )
             },
-            size: Some(U256::from(b.size())),
+            size: U256::from(b.size()),
         }
     }
 }
@@ -362,7 +360,7 @@ mod tests {
             base_fee_per_gas: None,
             uncles: vec![],
             transactions: BlockTransactions::Hashes(vec![].into()),
-            size: Some(69.into()),
+            size: 69.into(),
             nonce: H64::default(),
             mix_hash: H256::default(),
         };
