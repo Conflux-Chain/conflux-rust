@@ -13,7 +13,9 @@ use super::{
 use crate::{
     evm::{ActionParams, CallType, Spec},
     executive::{
-        internal_contract::impls::cross_space::{mapped_balance, mapped_nonce},
+        internal_contract::impls::cross_space::{
+            mapped_balance, mapped_nonce, static_call_gas,
+        },
         InternalRefContext,
     },
     impl_function_type, make_function_table, make_solidity_contract,
@@ -85,7 +87,7 @@ impl UpfrontPaymentTrait for CreateToEVM {
         context: &InternalRefContext,
     ) -> DbResult<U256>
     {
-        create_gas(context, init.len(), 0)
+        create_gas(context, init.as_ref())
     }
 }
 
@@ -140,7 +142,7 @@ impl UpfrontPaymentTrait for TransferToEVM {
         context: &InternalRefContext,
     ) -> DbResult<U256>
     {
-        call_gas(H160(*receiver), params, context, 0, false)
+        call_gas(H160(*receiver), params, context, &vec![])
     }
 }
 
@@ -170,11 +172,11 @@ impl_function_type!(CallToEVM, "payable_write");
 
 impl UpfrontPaymentTrait for CallToEVM {
     fn upfront_gas_payment(
-        &self, (ref receiver, data): &(Bytes20, Bytes), params: &ActionParams,
-        context: &InternalRefContext,
+        &self, (ref receiver, ref data): &(Bytes20, Bytes),
+        params: &ActionParams, context: &InternalRefContext,
     ) -> DbResult<U256>
     {
-        call_gas(H160(*receiver), params, context, data.len(), false)
+        call_gas(H160(*receiver), params, context, data)
     }
 }
 
@@ -205,11 +207,11 @@ impl_function_type!(StaticCallToEVM, "query");
 
 impl UpfrontPaymentTrait for StaticCallToEVM {
     fn upfront_gas_payment(
-        &self, (ref receiver, data): &(Bytes20, Bytes), params: &ActionParams,
+        &self, _: &(Bytes20, Bytes), _params: &ActionParams,
         context: &InternalRefContext,
     ) -> DbResult<U256>
     {
-        call_gas(H160(*receiver), params, context, data.len(), true)
+        Ok(static_call_gas(context.spec))
     }
 }
 
