@@ -593,12 +593,14 @@ impl VerificationConfig {
             ));
         }
 
-        if tx.chain_id() != chain_id.in_space(tx.space()) {
-            bail!(TransactionError::ChainIdMismatch {
-                expected: chain_id.in_space(tx.space()),
-                got: tx.chain_id(),
-                space: tx.space(),
-            });
+        if let Some(tx_chain_id) = tx.chain_id() {
+            if tx_chain_id != chain_id.in_space(tx.space()) {
+                bail!(TransactionError::ChainIdMismatch {
+                    expected: chain_id.in_space(tx.space()),
+                    got: tx_chain_id,
+                    space: tx.space(),
+                });
+            }
         }
 
         // Forbid zero-gas-price tx
