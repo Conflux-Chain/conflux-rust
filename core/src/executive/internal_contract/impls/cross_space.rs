@@ -50,11 +50,11 @@ pub fn call_gas(
 ) -> DbResult<U256>
 {
     let new_account_gas = if !is_static
-        && context
+        && !context
             .state
             .exists_and_not_null(&receiver.with_evm_space())?
     {
-        context.spec.call_new_account_gas
+        context.spec.call_new_account_gas * context.spec.evm_gas_ratio
     } else {
         0
     };

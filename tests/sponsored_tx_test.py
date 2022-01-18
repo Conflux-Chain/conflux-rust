@@ -233,6 +233,8 @@ class SponsoredTxTest(ConfluxTestFramework):
         assert_equal(tx_info['local_balance_enough'], False)
         assert_equal(tx_info['packed'], False)
 
+        # Wait for 2 seconds so previous asynchronous `txpool.notify_modified_accounts()` calls can finish.
+        time.sleep(2)
         # send 1025 * 10 ** 18 // 1024 CFX to addr1
         tx = client.new_tx(
             sender=genesis_addr,

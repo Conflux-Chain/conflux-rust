@@ -88,7 +88,7 @@ pub fn sign_call(
         gas,
         gas_price: request.gas_price.unwrap_or(1.into()),
         value: request.value.unwrap_or_default(),
-        chain_id,
+        chain_id: Some(chain_id),
         data: request.data.unwrap_or_default().into_vec(),
     }
     .fake_sign(from.with_evm_space()))
@@ -223,6 +223,16 @@ impl EthHandler {
             }
         };
 
+        let mut prior_log_count = 0;
+        for n in 0..id {
+            let log_count = exec_info.block_receipts.receipts[n]
+                .logs
+                .iter()
+                .filter(|log| log.space == Space::Ethereum)
+                .count();
+            prior_log_count += log_count;
+        }
+
         let tx = &exec_info.block.transactions[id];
         let primitive_receipt = &exec_info.block_receipts.receipts[id];
 
@@ -259,7 +269,8 @@ impl EthHandler {
             .iter()
             .filter(|l| l.space == Space::Ethereum)
             .cloned()
-            .map(|log| Log {
+            .enumerate()
+            .map(|(idx, log)| Log {
                 address: log.address,
                 topics: log.topics,
                 data: Bytes(log.data),
@@ -267,8 +278,8 @@ impl EthHandler {
                 block_number,
                 transaction_hash,
                 transaction_index,
-                log_index: None, // TODO: EVM core: count log_index
-                transaction_log_index: None,
+                log_index: Some((prior_log_count + idx).into()), // TODO: EVM core: count log_index
+                transaction_log_index: Some(idx.into()),
                 removed: false,
             })
             .collect();
@@ -889,15 +900,16 @@ impl Eth for EthHandler {
         let filter: LogFilter =
             filter.into_primitive(self.consensus.clone())?;
 
-        Ok(self
+        let logs = self
             .consensus_graph()
             .logs(filter)
-            .map_err(|err| CfxRpcError::from(err))?
+            .map_err(|err| CfxRpcError::from(err))?;
+
+        Ok(logs
             .iter()
             .cloned()
-            .map(|l| Log::try_from_localized(l))
-            .collect::<Result<_, _>>()
-            .map_err(|err| CfxRpcError::from(err))?)
+            .map(|l| Log::try_from_localized(l, self.consensus.clone()))
+            .collect::<Result<_, _>>()?)
     }
 
     fn submit_hashrate(&self, _: U256, _: H256) -> jsonrpc_core::Result<bool> {
