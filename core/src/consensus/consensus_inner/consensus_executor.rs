@@ -61,8 +61,8 @@ use primitives::{
         TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
-    Action, Block, BlockHeaderBuilder, EpochId, SignedTransaction,
-    TransactionIndex, MERKLE_NULL_NODE,
+    Action, Block, BlockHeaderBuilder, EpochId, NativeTransaction,
+    SignedTransaction, Transaction, TransactionIndex, MERKLE_NULL_NODE,
 };
 use rustc_hex::ToHex;
 use std::{
@@ -1892,6 +1892,33 @@ impl ConsensusExecutionHandler {
         let spec = self.machine.spec(env.number);
         let mut ex =
             Executive::new(&mut state, &env, self.machine.as_ref(), &spec);
+
+        // If the transaction may be sponsored for collateral when calling a
+        // contract with storage sponsor, we needs a special method to estimate
+        // it.
+        if let Transaction::Native(NativeTransaction {
+            action: Action::Call(ref to),
+            ..
+        }) = tx.unsigned
+        {
+            if to.is_contract_address() {
+                let sponsor_balance_for_collateral =
+                    ex.state.sponsor_balance_for_collateral(&to)?;
+                if !sponsor_balance_for_collateral.is_zero()
+                    && ex
+                        .state
+                        .check_commission_privilege(&to, &tx.sender().address)?
+                {
+                    let r = ex.transact_virtual_two_pass(
+                        &tx,
+                        sponsor_balance_for_collateral,
+                    );
+                    trace!("Execution result {:?}", r);
+                    return Ok(r?);
+                }
+            }
+        }
+
         let r = ex.transact_virtual(tx);
         trace!("Execution result {:?}", r);
         Ok(r?)
