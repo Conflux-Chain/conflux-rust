@@ -29,6 +29,7 @@ use cfx_types::{
 use keccak_hash::keccak;
 use primitives::{
     receipt::{
+        EVM_SPACE_FAIL, EVM_SPACE_SUCCESS,
         TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
@@ -199,8 +200,11 @@ impl Exec for PassResult {
             Ok(())
         };
 
-        if let Err(e) = log_return() {
-            return TrapResult::Return(Err(e));
+        if !context.static_flag {
+            let res = log_return();
+            if let Err(e) = res {
+                return TrapResult::Return(Err(e));
+            }
         }
 
         let mut gas_returned = U256::zero();
@@ -294,12 +298,11 @@ pub fn call_to_evmcore(
         params_type: vm::ParamsType::Separate,
     };
 
-    let nonce = context.state.nonce(&mapped_sender)?;
-    context
-        .state
-        .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
-
     if call_type == CallType::Call {
+        let nonce = context.state.nonce(&mapped_sender)?;
+        context
+            .state
+            .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
         CallEvent::log(
             &(mapped_sender.address.0, address.address.0),
             &(params.value.value(), nonce, call_gas, data),
@@ -456,7 +459,7 @@ pub struct PhantomTransaction {
     pub gas_used: U256,
     pub log_bloom: Bloom,
     pub logs: Vec<LogEntry>,
-    pub outcome_status: u8,
+    pub outcome_status_in_evm: u8,
 }
 
 impl PhantomTransaction {
@@ -471,7 +474,7 @@ impl PhantomTransaction {
             value,
             data: vec![],
             gas_used: spec.tx_gas.into(),
-            outcome_status: TRANSACTION_OUTCOME_SUCCESS,
+            outcome_status_in_evm: EVM_SPACE_SUCCESS,
             ..Default::default()
         }
     }
@@ -515,9 +518,10 @@ pub fn recover_phantom(
                         Action::Call(to)
                     };
                     phantom_txs.push(PhantomTransaction::simple_transfer(
-                        Address::zero(),
-                        from,
-                        U256::zero(),
+                        /* from */ Address::zero(),
+                        /* to */ from,         // transfer to mapped_sender
+                        U256::zero(), /* TODO: should we maintain nonce for
+                                       * the zero address? */
                         value + gas_limit * gas_price,
                         spec,
                     ));
@@ -552,10 +556,10 @@ pub fn recover_phantom(
                     let mut working_tx =
                         std::mem::take(&mut maybe_working_tx).unwrap();
                     working_tx.gas_used = working_tx.gas_limit - gas_left;
-                    working_tx.outcome_status = if success {
-                        TRANSACTION_OUTCOME_SUCCESS
+                    working_tx.outcome_status_in_evm = if success {
+                        EVM_SPACE_SUCCESS
                     } else {
-                        TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING
+                        EVM_SPACE_FAIL
                     };
                     working_tx.log_bloom = working_tx.logs.iter().fold(
                         Bloom::default(),
@@ -568,7 +572,7 @@ pub fn recover_phantom(
                     phantom_txs.push(working_tx);
                     phantom_txs.push(PhantomTransaction::simple_transfer(
                         from,
-                        Address::zero(),
+                        /* to */ Address::zero(),
                         nonce,
                         gas_left * gas_price,
                         spec,
