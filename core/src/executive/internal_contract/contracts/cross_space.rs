@@ -14,7 +14,7 @@ use crate::{
     evm::{ActionParams, CallType, Spec},
     executive::{
         internal_contract::impls::cross_space::{
-            mapped_balance, mapped_nonce, static_call_gas,
+            mapped_balance, mapped_nonce, static_call_gas, withdraw_gas,
         },
         InternalRefContext,
     },
@@ -238,7 +238,15 @@ make_solidity_function! {
     struct Withdraw(U256, "withdrawFromMapped(uint256)");
 }
 
-impl_function_type!(Withdraw, "non_payable_write", gas: |spec: &Spec| spec.call_value_transfer_gas+spec.log_gas+spec.log_topic_gas*3+spec.log_data_gas*H256::len_bytes());
+impl_function_type!(Withdraw, "non_payable_write");
+
+impl UpfrontPaymentTrait for Withdraw {
+    fn upfront_gas_payment(
+        &self, _: &U256, _params: &ActionParams, context: &InternalRefContext,
+    ) -> DbResult<U256> {
+        Ok(withdraw_gas(context.spec))
+    }
+}
 
 impl SimpleExecutionTrait for Withdraw {
     fn execute_inner(
