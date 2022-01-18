@@ -72,7 +72,7 @@ pub struct Block {
     /// Transactions receipts root hash
     pub receipts_root: H256,
     /// Block number
-    pub number: Option<U256>,
+    pub number: U256,
     /// Gas Used
     pub gas_used: U256,
     /// Gas Limit
@@ -182,10 +182,9 @@ impl Block {
             state_root: b.block_header.deferred_state_root().clone(),
             transactions_root: b.block_header.transactions_root().clone(),
             receipts_root: b.block_header.deferred_receipts_root().clone(),
-            number: Some(b.block_header.height().into()), /* We use height to
-                                                           * replace block
-                                                           * number for ETH
-                                                           * interface */
+            // We use height to replace block number for ETH interface.
+            // Note: this will correspond to the epoch number.
+            number: b.block_header.height().into(),
             gas_used: gas_used.unwrap_or(U256::zero()),
             gas_limit: b.block_header.gas_limit().into(),
             extra_data: Default::default(),
@@ -352,7 +351,7 @@ mod tests {
             state_root: H256::default(),
             transactions_root: H256::default(),
             receipts_root: H256::default(),
-            number: Some(U256::default()),
+            number: U256::default(),
             gas_used: U256::default(),
             gas_limit: U256::default(),
             extra_data: Bytes::default(),
