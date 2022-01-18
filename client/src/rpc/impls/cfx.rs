@@ -1203,10 +1203,14 @@ impl RpcImpl {
             }
             ExecutionOutcome::Finished(executed) => executed,
         };
-        let mut storage_collateralized = U64::from(0);
+        let mut storage_collateralized = 0;
         for storage_change in &executed.storage_collateralized {
-            storage_collateralized += storage_change.collaterals;
+            storage_collateralized += storage_change.collaterals.as_u64();
         }
+        if executed.minimum_storage_limit > storage_collateralized {
+            storage_collateralized = executed.minimum_storage_limit;
+        }
+        let storage_collateralized = U64::from(storage_collateralized);
         // In case of unlimited full gas charge at some VM call, or if there are
         // infinite loops, the total estimated gas used is very close to
         // MAX_GAS_CALL_REQUEST, 0.8 is chosen to check if it's close.
