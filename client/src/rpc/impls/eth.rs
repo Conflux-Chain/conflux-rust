@@ -258,11 +258,11 @@ impl EthHandler {
             None
         };
 
-        let block_hash = Some(exec_info.pivot_hash);
-        let block_number = Some(exec_info.epoch_number.into());
+        let block_hash = exec_info.pivot_hash;
+        let block_number = exec_info.epoch_number.into();
         /* TODO: EVM core: Compute a correct index */
-        let transaction_index = Some(tx_index.index.into());
-        let transaction_hash = Some(tx.hash());
+        let transaction_index = tx_index.index.into();
+        let transaction_hash = tx.hash();
 
         let logs = primitive_receipt
             .logs
@@ -289,15 +289,14 @@ impl EthHandler {
             transaction_hash,
             transaction_index,
             block_hash,
-            from: Some(tx.sender().address),
+            from: tx.sender().address,
             to: match tx.action() {
                 Action::Create => None,
                 Action::Call(addr) => Some(*addr),
             },
-            block_number: Some(exec_info.epoch_number.into()),
+            block_number,
             cumulative_gas_used: primitive_receipt.accumulated_gas_used,
-            gas_used: (primitive_receipt.accumulated_gas_used - prior_gas_used)
-                .into(),
+            gas_used: primitive_receipt.accumulated_gas_used - prior_gas_used,
             contract_address,
             logs,
             state_root: exec_info.maybe_state_root.clone(),
