@@ -359,7 +359,7 @@ mod tests {
             logs_bloom: H2048::default(),
             timestamp: U256::default(),
             difficulty: U256::default(),
-            total_difficulty: Some(U256::default()),
+            total_difficulty: 0.into(),
             base_fee_per_gas: None,
             uncles: vec![],
             transactions: BlockTransactions::Hashes(vec![].into()),
