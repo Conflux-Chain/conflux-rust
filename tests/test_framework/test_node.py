@@ -73,6 +73,8 @@ class TestNode:
         self.process = None
         self.rpc_connected = False
         self.rpc = None
+        self.ethrpc = None
+        self.ethrpc_connected = False
         self.log = logging.getLogger('TestFramework.node%d' % index)
         self.cleanup_on_exit = True
         # self.key = "0x" + "0"*125+"{:03d}".format(self.index);
@@ -191,6 +193,12 @@ class TestNode:
                 self.rpc_connected = True
                 self.url = self.rpc.url
                 self.log.debug("RPC successfully started")
+                # setup ethrpc
+                self.ethrpc = get_simple_rpc_proxy(
+                    rpc_url(self.index, self.rpchost, self.ethrpcport),
+                    node=self,
+                    timeout=self.rpc_timeout)
+                self.ethrpc_connected = True
                 return
             except requests.exceptions.ConnectionError as e:
                 # TODO check if it's ECONNREFUSED`

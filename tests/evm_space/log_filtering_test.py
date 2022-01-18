@@ -43,7 +43,7 @@ class CrossSpaceLogFilteringTest(ConfluxTestFramework):
         self.rpc = RpcClient(self.nodes[0])
 
         ip = self.nodes[0].ip
-        port = self.nodes[0].rpcport
+        port = self.nodes[0].ethrpcport
         self.w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/'))
         assert_equal(self.w3.isConnected(), True)
 
@@ -57,7 +57,7 @@ class CrossSpaceLogFilteringTest(ConfluxTestFramework):
         self.evmAccount = self.w3.eth.account.privateKeyToAccount('0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef')
         print(f'Using EVM account {self.evmAccount.address}')
         self.cross_space_transfer(self.evmAccount.address, 1 * 10 ** 18)
-        assert_equal(self.nodes[0].eth_getBalance(self.evmAccount.address), hex(1 * 10 ** 18))
+        assert_equal(self.nodes[0].ethrpc.eth_getBalance(self.evmAccount.address), hex(1 * 10 ** 18))
 
         # deploy Conflux space contract
         confluxContractAddr = self.deploy_conflux_space(CONFLUX_CONTRACT_PATH)
@@ -166,7 +166,7 @@ class CrossSpaceLogFilteringTest(ConfluxTestFramework):
         # check EVM events
         # we expect 4 events: #12, #13, #15, #16
         filter = { "topics": [TEST_EVENT_TOPIC], "fromBlock": epoch_a, "toBlock": epoch_b }
-        logs = self.nodes[0].eth_getLogs(filter)
+        logs = self.nodes[0].ethrpc.eth_getLogs(filter)
         assert_equal(len(logs), 4)
 
         # emitBoth: TestEvent(12)
@@ -218,7 +218,7 @@ class CrossSpaceLogFilteringTest(ConfluxTestFramework):
         # check EVM events
         # we expect 4 events: #22, #23, #25, #26
         filter = { "topics": [TEST_EVENT_TOPIC], "fromBlock": epoch_e, "toBlock": epoch_e }
-        logs = self.nodes[0].eth_getLogs(filter)
+        logs = self.nodes[0].ethrpc.eth_getLogs(filter)
         assert_equal(len(logs), 4)
 
         # emitBoth: TestEvent(22)
@@ -269,37 +269,37 @@ class CrossSpaceLogFilteringTest(ConfluxTestFramework):
         # --------------- other fields ---------------
         # filter by block hash
         filter = { "topics": [TEST_EVENT_TOPIC], "blockHash": block_c }
-        logs_2 = self.nodes[0].eth_getLogs(filter)
+        logs_2 = self.nodes[0].ethrpc.eth_getLogs(filter)
         assert_equal(logs_2, [])
 
         filter = { "topics": [TEST_EVENT_TOPIC], "blockHash": block_d } # from EVM perspective, D does not exist
         assert_raises_rpc_error(None, None, self.nodes[0].eth_getLogs, filter)
 
         filter = { "topics": [TEST_EVENT_TOPIC], "blockHash": block_e }
-        logs_2 = self.nodes[0].eth_getLogs(filter)
+        logs_2 = self.nodes[0].ethrpc.eth_getLogs(filter)
         assert_equal(logs_2, logs)
 
         # filter limit
         filter = { "topics": [TEST_EVENT_TOPIC], "blockHash": block_e, "limit": 1 }
-        logs_2 = self.nodes[0].eth_getLogs(filter)
+        logs_2 = self.nodes[0].ethrpc.eth_getLogs(filter)
         assert_equal(logs_2, [logs[-1]])
 
         # "earliest", "latest"
         filter = { "topics": [TEST_EVENT_TOPIC], "fromBlock": "earliest", "toBlock": "latest" }
-        logs_2 = self.nodes[0].eth_getLogs(filter)
+        logs_2 = self.nodes[0].ethrpc.eth_getLogs(filter)
         assert_equal(len(logs_2), 8)
 
         filter = { "topics": [TEST_EVENT_TOPIC], "fromBlock": "earliest", "toBlock": "latest", "limit": 4 }
-        logs_2 = self.nodes[0].eth_getLogs(filter)
+        logs_2 = self.nodes[0].ethrpc.eth_getLogs(filter)
         assert_equal(logs_2, logs)
 
         # address
         filter = { "address": confluxContractAddr }
-        logs_2 = self.nodes[0].eth_getLogs(filter)
+        logs_2 = self.nodes[0].ethrpc.eth_getLogs(filter)
         assert_equal(logs_2, [])
 
         filter = { "address": evmContractAddr}
-        logs_2 = self.nodes[0].eth_getLogs(filter)
+        logs_2 = self.nodes[0].ethrpc.eth_getLogs(filter)
         assert_equal(len(logs_2), 8)
 
         self.log.info("Pass")
