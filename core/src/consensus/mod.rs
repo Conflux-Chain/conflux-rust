@@ -794,6 +794,13 @@ impl ConsensusGraph {
             }
         };
 
+        // TODO(thegaram): transform `receipts` so that it includes phantom
+        // receipts for cross-space calls. This is necessary for these fields:
+        // - transactionHash
+        // - transaction_index
+        // - transaction_log_index
+        // - log_index
+
         Ok(Either::Right(self.filter_block_receipts(
             &filter,
             epoch,

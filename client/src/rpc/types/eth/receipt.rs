@@ -26,21 +26,21 @@ use cfx_types::{Bloom as H2048, H160, H256, U256, U64};
 #[serde(rename_all = "camelCase")]
 pub struct Receipt {
     /// Transaction Hash
-    pub transaction_hash: Option<H256>,
+    pub transaction_hash: H256,
     /// Transaction index
-    pub transaction_index: Option<U256>,
+    pub transaction_index: U256,
     /// Block hash
-    pub block_hash: Option<H256>,
+    pub block_hash: H256,
     /// Sender
-    pub from: Option<H160>,
+    pub from: H160,
     /// Recipient
     pub to: Option<H160>,
     /// Block number
-    pub block_number: Option<U256>,
+    pub block_number: U256,
     /// Cumulative gas used
     pub cumulative_gas_used: U256,
     /// Gas used
-    pub gas_used: Option<U256>,
+    pub gas_used: U256,
     /// Contract address
     pub contract_address: Option<H160>,
     /// Logs
