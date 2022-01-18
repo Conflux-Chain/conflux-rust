@@ -1559,7 +1559,10 @@ impl ConsensusGraphTrait for ConsensusGraph {
     }
 
     fn latest_finalized_epoch_number(&self) -> u64 {
-        self.inner.read().latest_epoch_confirmed_by_pos().1
+        self.inner
+            .read_recursive()
+            .latest_epoch_confirmed_by_pos()
+            .1
     }
 
     fn best_chain_id(&self) -> AllChainID {
