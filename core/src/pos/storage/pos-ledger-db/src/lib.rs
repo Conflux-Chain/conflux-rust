@@ -288,7 +288,12 @@ impl PosLedgerDB {
             "Do not set prune_window when opening readonly.",
         );
 
-        let path = db_root_path.as_ref().join("pos-ledger-db");
+        let old_path = db_root_path.as_ref().join("diemdb");
+        let path = if old_path.exists() {
+            old_path
+        } else {
+            db_root_path.as_ref().join("pos-ledger-db")
+        };
         let instant = Instant::now();
 
         let mut rocksdb_opts = gen_rocksdb_options(&rocksdb_config);
