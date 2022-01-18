@@ -118,10 +118,18 @@ pub fn call_gas(
 
 pub fn static_call_gas(spec: &Spec) -> U256 {
     let call_gas = U256::from(spec.call_gas);
-
     let address_mapping_gas = spec.sha3_gas * 4;
 
     call_gas + address_mapping_gas
+}
+
+pub fn withdraw_gas(spec: &Spec) -> U256 {
+    let call_gas = U256::from(spec.call_value_transfer_gas);
+    let transaction_gas = spec.tx_gas;
+    let address_mapping_gas = spec.sha3_gas;
+    let log_gas = spec.log_gas + spec.log_topic_gas * 3 + spec.log_data_gas * H256::len_bytes();
+
+    call_gas + transaction_gas + address_mapping_gas + log_gas
 }
 
 #[derive(Clone)]
@@ -286,10 +294,10 @@ pub fn call_to_evmcore(
 
     let call_gas = gas_left / CROSS_SPACE_GAS_RATIO
         + if params.value.value() > U256::zero() {
-            U256::from(context.spec.call_stipend)
-        } else {
-            U256::zero()
-        };
+        U256::from(context.spec.call_stipend)
+    } else {
+        U256::zero()
+    };
     let reserved_gas = gas_left - gas_left / CROSS_SPACE_GAS_RATIO;
 
     let mapped_sender = evm_map(params.sender);
@@ -359,10 +367,10 @@ pub fn create_to_evmcore(
 
     let call_gas = gas_left / CROSS_SPACE_GAS_RATIO
         + if params.value.value() > U256::zero() {
-            U256::from(context.spec.call_stipend)
-        } else {
-            U256::zero()
-        };
+        U256::from(context.spec.call_stipend)
+    } else {
+        U256::zero()
+    };
     let reserved_gas = gas_left - gas_left / CROSS_SPACE_GAS_RATIO;
 
     let mapped_sender = evm_map(params.sender);
