@@ -72,7 +72,7 @@ pub struct Block {
     /// Transactions receipts root hash
     pub receipts_root: H256,
     /// Block number
-    pub number: Option<U256>,
+    pub number: U256,
     /// Gas Used
     pub gas_used: U256,
     /// Gas Limit
@@ -86,7 +86,7 @@ pub struct Block {
     /// Difficulty
     pub difficulty: U256,
     /// Total difficulty
-    pub total_difficulty: Option<U256>,
+    pub total_difficulty: U256,
     /// Base fee
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_fee_per_gas: Option<U256>,
@@ -95,7 +95,7 @@ pub struct Block {
     /// Transactions
     pub transactions: BlockTransactions,
     /// Size in bytes
-    pub size: Option<U256>,
+    pub size: U256,
     /// Nonce
     pub nonce: H64,
     /// Mix hash
@@ -124,7 +124,7 @@ pub struct Header {
     /// Transactions receipts root hash
     pub receipts_root: H256,
     /// Block number
-    pub number: Option<U256>,
+    pub number: U256,
     /// Gas Used
     pub gas_used: U256,
     /// Gas Limit
@@ -137,13 +137,11 @@ pub struct Header {
     pub timestamp: U256,
     /// Difficulty
     pub difficulty: U256,
-    /// Seal fields
-    pub seal_fields: Vec<Bytes>,
     /// Base fee
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_fee_per_gas: Option<U256>,
     /// Size in bytes
-    pub size: Option<U256>,
+    pub size: U256,
 }
 
 impl Block {
@@ -184,19 +182,16 @@ impl Block {
             state_root: pivot.block_header.deferred_state_root().clone(),
             transactions_root: pivot.block_header.transactions_root().clone(),
             receipts_root: pivot.block_header.deferred_receipts_root().clone(),
-            number: Some(pivot.block_header.height().into()), /* We use height to
-                                                               * replace block
-                                                               * number for
-                                                               * ETH
-                                                               * interface */
+            // We use height to replace block number for ETH interface.
+            // Note: this will correspond to the epoch number.
+            number: pivot.block_header.height().into(),
             gas_used,
-            // FIXME(thegaram): should ensure limit larger than `gas_used`?
             gas_limit: pivot.block_header.gas_limit().into(),
             extra_data: Default::default(),
             logs_bloom,
             timestamp: pivot.block_header.timestamp().into(),
             difficulty: pivot.block_header.difficulty().into(),
-            total_difficulty: None,
+            total_difficulty: 0.into(),
             base_fee_per_gas: None,
             uncles: vec![],
             // Note: we allow U256 nonce in Stratum and in the block.
@@ -238,7 +233,7 @@ impl Block {
                 )
             },
             // FIXME(thegaram): should we recalculate size?
-            size: Some(blocks.iter().map(|b| b.size()).sum::<usize>().into()),
+            size: blocks.iter().map(|b| b.size()).sum::<usize>().into(),
         }
     }
 }
@@ -367,18 +362,18 @@ mod tests {
             state_root: H256::default(),
             transactions_root: H256::default(),
             receipts_root: H256::default(),
-            number: Some(U256::default()),
+            number: U256::default(),
             gas_used: U256::default(),
             gas_limit: U256::default(),
             extra_data: Bytes::default(),
             logs_bloom: H2048::default(),
             timestamp: U256::default(),
             difficulty: U256::default(),
-            total_difficulty: Some(U256::default()),
+            total_difficulty: 0.into(),
             base_fee_per_gas: None,
             uncles: vec![],
             transactions: BlockTransactions::Hashes(vec![].into()),
-            size: Some(69.into()),
+            size: 69.into(),
             nonce: H64::default(),
             mix_hash: H256::default(),
         };
