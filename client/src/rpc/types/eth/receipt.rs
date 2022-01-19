@@ -52,6 +52,10 @@ pub struct Receipt {
     pub status_code: U64,
     /// Effective gas price
     pub effective_gas_price: U256,
+    /// Detailed error message if tx execution is unsuccessful. Error message
+    /// is None if tx execution is successful or it can not be offered.
+    /// Error message can not be offered by light client.
+    pub tx_exec_error_msg: Option<String>,
 }
 
 // impl Receipt {

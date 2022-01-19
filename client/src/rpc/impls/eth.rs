@@ -216,25 +216,30 @@ impl EthHandler {
             bail!("Inconsistent state");
         }
 
-        let prior_gas_used = match id {
-            0 => U256::zero(),
-            id => {
-                exec_info.block_receipts.receipts[id - 1].accumulated_gas_used
-            }
-        };
-
         let mut prior_log_count = 0;
+        let mut prior_gas_used = U256::zero();
+        let mut transaction_index = U256::zero();
         for n in 0..id {
+            // log count
             let log_count = exec_info.block_receipts.receipts[n]
                 .logs
                 .iter()
                 .filter(|log| log.space == Space::Ethereum)
                 .count();
             prior_log_count += log_count;
+            // gas used
+            prior_gas_used += exec_info.block_receipts.receipts[n].gas_fee
+                / exec_info.block.transactions[id].gas_price();
+            // tx index
+            if exec_info.block.transactions[id].space() == Space::Ethereum {
+                transaction_index += U256::one();
+            }
         }
 
         let tx = &exec_info.block.transactions[id];
         let primitive_receipt = &exec_info.block_receipts.receipts[id];
+
+        let gas_used = primitive_receipt.gas_fee / tx.gas_price();
 
         let status_code = if primitive_receipt.outcome_status
             == TRANSACTION_OUTCOME_SUCCESS
@@ -244,24 +249,25 @@ impl EthHandler {
             0
         };
 
-        let contract_address = if let Action::Create = tx.action() {
-            // TODO(thegaram): do not return address if failed
-            let (contract_address, _) = contract_address(
-                CreateContractAddress::FromSenderNonce,
-                0.into(),
-                &tx.sender(),
-                tx.nonce(),
-                tx.data(),
-            );
-            Some(contract_address.address)
-        } else {
-            None
+        let contract_address = match (
+            tx.action(),
+            primitive_receipt.outcome_status == TRANSACTION_OUTCOME_SUCCESS,
+        ) {
+            (Action::Create, true) => {
+                let (contract_address, _) = contract_address(
+                    CreateContractAddress::FromSenderNonce,
+                    0.into(),
+                    &tx.sender(),
+                    tx.nonce(),
+                    tx.data(),
+                );
+                Some(contract_address.address)
+            }
+            (_, _) => None,
         };
 
         let block_hash = exec_info.pivot_hash;
         let block_number = exec_info.epoch_number.into();
-        /* TODO: EVM core: Compute a correct index */
-        let transaction_index = tx_index.index.into();
         let transaction_hash = tx.hash();
 
         let logs = primitive_receipt
@@ -278,11 +284,17 @@ impl EthHandler {
                 block_number,
                 transaction_hash,
                 transaction_index,
-                log_index: Some((prior_log_count + idx).into()), // TODO: EVM core: count log_index
+                log_index: Some((prior_log_count + idx).into()),
                 transaction_log_index: Some(idx.into()),
                 removed: false,
             })
             .collect();
+
+        let tx_exec_error_msg =
+            match &exec_info.block_receipts.tx_execution_error_messages[id] {
+                msg if msg.is_empty() => None,
+                msg => Some(msg.clone()),
+            };
 
         let receipt = Receipt {
             transaction_hash,
@@ -294,13 +306,14 @@ impl EthHandler {
                 Action::Call(addr) => Some(*addr),
             },
             block_number,
-            cumulative_gas_used: primitive_receipt.accumulated_gas_used,
-            gas_used: primitive_receipt.accumulated_gas_used - prior_gas_used,
+            cumulative_gas_used: prior_gas_used + gas_used,
+            gas_used,
             contract_address,
             logs,
             logs_bloom: primitive_receipt.log_bloom,
             status_code: status_code.into(),
             effective_gas_price: *tx.gas_price(),
+            tx_exec_error_msg,
         };
 
         Ok(receipt)
