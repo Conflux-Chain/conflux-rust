@@ -32,6 +32,7 @@ pub struct ArchiveClientExtraComponents {
     pub sync: Arc<SynchronizationService>,
     pub txpool: Arc<TransactionPool>,
     pub pow: Arc<PowComputer>,
+    pub eth_rpc_http_server: Option<HttpServer>,
 }
 
 impl MallocSizeOf for ArchiveClientExtraComponents {
@@ -70,6 +71,7 @@ impl ArchiveClient {
             rpc_ws_server,
             pos_handler,
             runtime,
+            eth_rpc_http_server,
         ) = initialize_not_light_node_modules(
             &mut conf,
             exit,
@@ -91,6 +93,7 @@ impl ArchiveClient {
                 sync,
                 txpool,
                 pow,
+                eth_rpc_http_server,
             },
         }))
     }

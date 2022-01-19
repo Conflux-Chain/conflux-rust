@@ -172,6 +172,21 @@ pub fn setup_public_rpc_apis(
     )
 }
 
+pub fn setup_public_eth_rpc_apis(
+    common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
+    conf: &Configuration,
+) -> MetaIoHandler<Metadata>
+{
+    setup_rpc_apis(
+        common,
+        rpc,
+        pubsub,
+        &conf.raw_conf.throttling_conf,
+        "rpc",
+        conf.raw_conf.public_evm_rpc_apis.list_apis(),
+    )
+}
+
 pub fn setup_debug_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
     conf: &Configuration,
@@ -205,7 +220,7 @@ fn setup_rpc_apis(
                 );
                 handler.extend_with(RpcProxy::new(cfx, interceptor));
             }
-            Api::Evm => {
+            Api::Eth => {
                 info!("Add EVM RPC");
                 let evm = EthHandler::new(
                     rpc.config.clone(),
@@ -316,7 +331,7 @@ fn setup_rpc_apis_light(
                 );
                 handler.extend_with(RpcProxy::new(cfx, interceptor));
             }
-            Api::Evm => {
+            Api::Eth => {
                 warn!("Light nodes do not support evm ports.");
             }
             Api::Debug => {
