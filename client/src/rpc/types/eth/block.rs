@@ -218,6 +218,7 @@ impl Block {
                                     Some(b.block_header.height().into()),
                                     Some(idx.into()),
                                 ),
+                                (None, None),
                             )
                         })
                         .collect(),

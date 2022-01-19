@@ -75,6 +75,10 @@ pub struct Transaction {
     pub r: U256,
     /// The S field of the signature.
     pub s: U256,
+    // The created contract address
+    pub contract_created: Option<H160>,
+    // Whether tx is success
+    pub status: Option<U64>,
     /* /// Transaction activates at specified block.
      * pub condition: Option<TransactionCondition>,
      * /// optional access list
@@ -90,6 +94,7 @@ impl Transaction {
     pub fn from_signed(
         t: &SignedTransaction,
         block_info: (Option<H256>, Option<U256>, Option<U256>),
+        exec_info: (Option<U64>, Option<H160>),
     ) -> Transaction
     {
         let signature = t.signature();
@@ -165,6 +170,8 @@ impl Transaction {
             .into(), /* The protected EIP155 v */
             r: signature.r().into(),
             s: signature.s().into(),
+            status: exec_info.0,
+            contract_created: exec_info.1,
         }
     }
 }

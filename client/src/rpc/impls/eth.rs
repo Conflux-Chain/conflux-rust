@@ -804,28 +804,71 @@ impl Eth for EthHandler {
         if let Some((tx, tx_info)) =
             self.consensus.get_transaction_info_by_hash(&hash)
         {
-            return if tx.space() == Space::Ethereum {
-                let maybe_block_number: Option<U256> = match self
+            if tx.space() != Space::Ethereum {
+                return Ok(None);
+            }
+            // prepare block_number, status, contract_address if tx is executed
+            let (maybe_block_number, maybe_status, maybe_contract_address) =
+                match self
                     .get_block_execution_info(&tx_info.tx_index.block_hash)?
                 {
-                    None => None,
-                    Some(res) => Some(res.epoch_number.into()),
+                    None => (None, None, None),
+                    Some(exec_info) => {
+                        let status = exec_info.block_receipts.receipts
+                            [tx_info.tx_index.index]
+                            .outcome_status;
+                        let status_code =
+                            if status == TRANSACTION_OUTCOME_SUCCESS {
+                                1u32
+                            } else {
+                                0
+                            };
+
+                        let contract_address = match (
+                            tx.action(),
+                            status == TRANSACTION_OUTCOME_SUCCESS,
+                        ) {
+                            (Action::Create, true) => {
+                                let (contract_address, _) = contract_address(
+                                    CreateContractAddress::FromSenderNonce,
+                                    0.into(),
+                                    &tx.sender(),
+                                    tx.nonce(),
+                                    tx.data(),
+                                );
+                                Some(contract_address.address)
+                            }
+                            (_, _) => None,
+                        };
+
+                        (
+                            Some(exec_info.epoch_number.into()),
+                            Some(status_code.into()),
+                            contract_address,
+                        )
+                    }
                 };
-                let block_info = (
-                    Some(tx_info.tx_index.block_hash),
-                    maybe_block_number,
-                    Some(tx_info.tx_index.index.into()),
-                );
-                let tx = Transaction::from_signed(&tx, block_info);
-                Ok(Some(tx))
-            } else {
-                Ok(None)
-            };
+
+            let block_info = (
+                Some(tx_info.tx_index.block_hash),
+                maybe_block_number,
+                Some(tx_info.tx_index.index.into()),
+            );
+            let tx = Transaction::from_signed(
+                &tx,
+                block_info,
+                (maybe_status, maybe_contract_address),
+            );
+            return Ok(Some(tx));
         }
 
         if let Some(tx) = self.tx_pool.get_transaction(&hash) {
             return if tx.space() == Space::Ethereum {
-                Ok(Some(Transaction::from_signed(&tx, (None, None, None))))
+                Ok(Some(Transaction::from_signed(
+                    &tx,
+                    (None, None, None),
+                    (None, None),
+                )))
             } else {
                 Ok(None)
             };
