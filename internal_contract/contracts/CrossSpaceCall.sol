@@ -21,6 +21,8 @@ interface CrossSpaceCall {
 
     function staticCallEVM(bytes20 to, bytes calldata data) external view returns (bytes memory output);
 
+    function deployEip1820() external;
+
     function withdrawFromMapped(uint256 value) external;
 
     function mappedBalance(address addr) external view returns (uint256);
