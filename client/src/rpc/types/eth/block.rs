@@ -20,9 +20,7 @@
 
 use crate::rpc::types::{eth::Transaction, Bytes};
 use cfx_types::{hexstr_to_h256, Bloom as H2048, Space, H160, H256, H64, U256};
-use cfxcore::{
-    block_data_manager::DataVersionTuple, consensus::ConsensusGraphInner,
-};
+use cfxcore::consensus::ConsensusGraphInner;
 use primitives::Block as PrimitiveBlock;
 use serde::{Serialize, Serializer};
 
@@ -153,25 +151,38 @@ impl Block {
         let mut gas_used = U256::zero();
         let mut logs_bloom = H2048::zero();
 
-        for b in &blocks {
-            if let Some(DataVersionTuple(_, execution_result)) = consensus_inner
-                .block_execution_results_by_hash(
-                    &b.hash(),
-                    false, /* update_cache */
-                )
-            {
-                gas_used += execution_result
-                    .block_receipts
-                    .receipts
-                    .last()
-                    .map(|r| r.accumulated_gas_used)
-                    .unwrap_or_default();
+        let pivot = blocks.last().expect("Inconsistent state");
 
-                logs_bloom.accrue_bloom(&execution_result.bloom);
+        for b in &blocks {
+            let maybe_exec_res = consensus_inner
+                .data_man
+                .block_execution_result_by_hash_with_epoch(
+                    &b.hash(),
+                    &pivot.hash(),
+                    false, // update_pivot_assumption
+                    false, // update_cache
+                );
+
+            match maybe_exec_res {
+                // we keep a lock on `inner` so pivot chain reorg should not
+                // happen here, but it's possible the block is not executed yet
+                None => {
+                    gas_used = U256::zero();
+                    logs_bloom = H2048::zero();
+                    break;
+                }
+                Some(res) => {
+                    gas_used += res
+                        .block_receipts
+                        .receipts
+                        .last()
+                        .map(|r| r.accumulated_gas_used)
+                        .unwrap_or_default();
+
+                    logs_bloom.accrue_bloom(&res.bloom);
+                }
             }
         }
-
-        let pivot = blocks.last().expect("Inconsistent state");
 
         Block {
             hash: pivot.block_header.hash(),

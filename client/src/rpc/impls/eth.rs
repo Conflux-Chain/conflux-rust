@@ -98,11 +98,6 @@ impl EthHandler {
     fn get_blocks_by_number(
         &self, block_num: BlockNumber,
     ) -> jsonrpc_core::Result<Option<Vec<Arc<Block>>>> {
-        let consensus_graph = self.consensus_graph();
-
-        // TODO: is this necessary?
-        let _ = &*consensus_graph.inner.read();
-
         let epoch_hashes = self
             .consensus
             .get_block_hashes_by_epoch(block_num.into())
@@ -119,11 +114,6 @@ impl EthHandler {
     fn get_blocks_by_hash(
         &self, hash: &H256,
     ) -> jsonrpc_core::Result<Option<Vec<Arc<Block>>>> {
-        let consensus_graph = self.consensus_graph();
-
-        // TODO: is this necessary?
-        let _ = &*consensus_graph.inner.read();
-
         let epoch_num = match self.consensus.get_block_epoch_number(hash) {
             None => return Ok(None),
             Some(n) => n,
@@ -492,11 +482,13 @@ impl Eth for EthHandler {
             hash, include_txs
         );
 
+        // keep read lock to ensure consistent view
+        let inner = self.consensus_graph().inner.read();
+
         match self.get_blocks_by_hash(&hash)? {
             None => Ok(None),
             Some(blocks) => {
                 let block_refs = blocks.iter().map(|b| &**b).collect();
-                let inner = self.consensus_graph().inner.read();
                 Ok(Some(RpcBlock::new(block_refs, include_txs, &*inner)))
             }
         }
@@ -507,11 +499,13 @@ impl Eth for EthHandler {
     ) -> jsonrpc_core::Result<Option<RpcBlock>> {
         info!("RPC Request: eth_getBlockByNumber block_number={:?} include_txs={:?}", block_num, include_txs);
 
+        // keep read lock to ensure consistent view
+        let inner = self.consensus_graph().inner.read();
+
         match self.get_blocks_by_number(block_num)? {
             None => Ok(None),
             Some(blocks) => {
                 let block_refs = blocks.iter().map(|b| &**b).collect();
-                let inner = self.consensus_graph().inner.read();
                 Ok(Some(RpcBlock::new(block_refs, include_txs, &*inner)))
             }
         }
