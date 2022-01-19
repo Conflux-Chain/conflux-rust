@@ -79,7 +79,7 @@ class Web3Test(ConfluxTestFramework):
         eip1820 = Web3.toChecksumAddress("1820a4b7618bde71dce8cdc73aab6c95905fad24")
         receipt = client.get_transaction_receipt(tx.hash.hex())
         assert_greater_than(int(receipt['gasUsed'],16), 1_500_000 + 21_000)
-        assert_equal(len(self.w3.eth.get_code(eip1820)), 2501)
+        assert_equal(len(self.w3.eth.getCode(eip1820)), 2501)
 
     def run_test(self):
         time.sleep(3)
