@@ -160,12 +160,19 @@ impl Block {
                 );
             match maybe_results {
                 Some(DataVersionTuple(_, execution_result)) => {
-                    let receipt = execution_result
-                        .block_receipts
-                        .receipts
-                        .get(tx_len - 1)
-                        .unwrap();
-                    (Some(receipt.accumulated_gas_used), execution_result.bloom)
+                    let acc_gas_used: u64 = b
+                        .transactions
+                        .iter()
+                        .filter(|tx| tx.space() == Space::Ethereum)
+                        .enumerate()
+                        .map(|(idx, tx)| {
+                            (execution_result.block_receipts.receipts[idx]
+                                .gas_fee
+                                / tx.gas_price())
+                            .as_u64()
+                        })
+                        .sum();
+                    (Some(acc_gas_used.into()), execution_result.bloom)
                 }
                 None => (None, H2048::zero()),
             }
