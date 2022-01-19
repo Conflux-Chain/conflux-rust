@@ -584,6 +584,7 @@ impl VerificationConfig {
         mode: VerifyTxMode,
     ) -> Result<(), TransactionError>
     {
+        self.check_tx_size(tx)?;
         tx.check_low_s()?;
 
         // Disallow unsigned transactions
@@ -639,7 +640,6 @@ impl VerificationConfig {
         }
 
         Self::check_gas_limit(tx, cip76, &mode)?;
-        self.check_tx_size(tx)?;
         Ok(())
     }
 
@@ -693,13 +693,7 @@ impl VerificationConfig {
     fn check_tx_size(
         &self, tx: &TransactionWithSignature,
     ) -> Result<(), TransactionError> {
-        // We only check the size of `data` here to avoid encoding again.
-        // Not all oversize transactions will be rejected here, but since we
-        // strictly check block size, so this should be OK and is able
-        // to prevent oversize transactions from occupying memory
-        // spaces.
-        if tx.transaction.unsigned.data().len() >= self.max_block_size_in_bytes
-        {
+        if tx.rlp_size() > self.max_block_size_in_bytes {
             bail!(TransactionError::TooBig)
         } else {
             Ok(())
