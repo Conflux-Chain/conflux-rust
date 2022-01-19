@@ -688,6 +688,16 @@ impl VerificationConfig {
 
         Ok(())
     }
+
+    pub fn check_tx_size(
+        &self, tx: &TransactionWithSignature,
+    ) -> Result<(), TransactionError> {
+        if tx.rlp_size() > self.max_block_size_in_bytes {
+            bail!(TransactionError::TooBig)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
