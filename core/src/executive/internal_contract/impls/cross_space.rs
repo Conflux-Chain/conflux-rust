@@ -11,7 +11,7 @@ use crate::{
         },
         InternalRefContext, SolidityEventTrait,
     },
-    observer::VmObserve,
+    observer::{AddressPocket, VmObserve},
     state::cleanup_mode,
     vm::{
         self, ActionValue, CreateType, Exec, ExecTrapError as ExecTrap,
@@ -290,6 +290,7 @@ pub fn process_trap<T>(
 pub fn call_to_evmcore(
     receiver: Address, data: Vec<u8>, call_type: CallType,
     params: &ActionParams, gas_left: U256, context: &mut InternalRefContext,
+    tracer: &mut dyn VmObserve,
 ) -> Result<ExecTrap, vm::Error>
 {
     if context.depth >= context.spec.max_depth {
@@ -314,6 +315,11 @@ pub fn call_to_evmcore(
         cleanup_mode(context.substate, context.spec),
         context.spec.account_start_nonce,
     )?;
+    tracer.trace_internal_transfer(
+        AddressPocket::Balance(params.address.with_native_space()),
+        AddressPocket::Balance(mapped_sender),
+        params.value.value(),
+    );
 
     let address = receiver.with_evm_space();
 
@@ -362,7 +368,7 @@ pub fn call_to_evmcore(
 
 pub fn create_to_evmcore(
     init: Vec<u8>, salt: Option<H256>, params: &ActionParams, gas_left: U256,
-    context: &mut InternalRefContext,
+    context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
 ) -> Result<ExecTrap, vm::Error>
 {
     if context.depth >= context.spec.max_depth {
@@ -387,6 +393,11 @@ pub fn create_to_evmcore(
         cleanup_mode(context.substate, context.spec),
         context.spec.account_start_nonce,
     )?;
+    tracer.trace_internal_transfer(
+        AddressPocket::Balance(params.address.with_native_space()),
+        AddressPocket::Balance(mapped_sender),
+        params.value.value(),
+    );
 
     let (address_scheme, create_type) = match salt {
         None => (CreateContractAddress::FromSenderNonce, CreateType::CREATE),
@@ -444,7 +455,7 @@ pub fn create_to_evmcore(
 
 pub fn withdraw_from_evmcore(
     sender: Address, value: U256, params: &ActionParams,
-    context: &mut InternalRefContext,
+    context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
 ) -> vm::Result<()>
 {
     let mapped_address = evm_map(sender);
@@ -461,6 +472,12 @@ pub fn withdraw_from_evmcore(
         cleanup_mode(context.substate, context.spec),
         context.spec.account_start_nonce,
     )?;
+    tracer.trace_internal_transfer(
+        AddressPocket::Balance(mapped_address),
+        AddressPocket::Balance(sender.with_native_space()),
+        value,
+    );
+
     let nonce = context.state.nonce(&mapped_address)?;
     context
         .state
