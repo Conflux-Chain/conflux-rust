@@ -223,9 +223,9 @@ impl Block {
                             Transaction::from_signed(
                                 &**t,
                                 (
-                                    Some(pivot.block_header.hash()),
-                                    Some(pivot.block_header.height().into()),
-                                    Some(idx.into()),
+                                    Some(pivot.block_header.hash()), // block_hash
+                                    Some(pivot.block_header.height().into()), // block_number
+                                    Some(idx.into()), // transaction_index
                                 ),
                             )
                         })
