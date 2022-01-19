@@ -545,19 +545,21 @@ impl Eth for EthHandler {
             hash,
         );
 
-        // TODO: EVM core: filter out Conflux space tx and add EVM space virtual
-        // tx (tx created by cross-space call).
+        // keep read lock to ensure consistent view
+        let _ = self.consensus_graph().inner.read();
 
-        let block_op = self
-            .consensus
-            .get_data_manager()
-            .block_by_hash(&hash, false);
-        if let Some(block) = block_op {
-            Ok(Some(U256::from(
-                block.transaction_hashes(Some(Space::Ethereum)).len(),
-            )))
-        } else {
-            Ok(None)
+        match self.get_blocks_by_hash(&hash)? {
+            None => Ok(None),
+            Some(blocks) => {
+                let count: U256 = blocks
+                    .into_iter()
+                    // TODO(thegaram): consider phantom transactions
+                    .map(|b| b.transaction_hashes(Some(Space::Ethereum)).len())
+                    .sum::<usize>()
+                    .into();
+
+                Ok(Some(count))
+            }
         }
     }
 
@@ -569,11 +571,15 @@ impl Eth for EthHandler {
             block_num
         );
 
+        // keep read lock to ensure consistent view
+        let _ = self.consensus_graph().inner.read();
+
         match self.get_blocks_by_number(block_num)? {
             None => Ok(None),
             Some(blocks) => {
                 let count: U256 = blocks
                     .into_iter()
+                    // TODO(thegaram): consider phantom transactions
                     .map(|b| b.transaction_hashes(Some(Space::Ethereum)).len())
                     .sum::<usize>()
                     .into();
