@@ -584,7 +584,6 @@ impl VerificationConfig {
         mode: VerifyTxMode,
     ) -> Result<(), TransactionError>
     {
-        self.check_tx_size(tx)?;
         tx.check_low_s()?;
 
         // Disallow unsigned transactions
@@ -690,7 +689,7 @@ impl VerificationConfig {
         Ok(())
     }
 
-    fn check_tx_size(
+    pub fn check_tx_size(
         &self, tx: &TransactionWithSignature,
     ) -> Result<(), TransactionError> {
         if tx.rlp_size() > self.max_block_size_in_bytes {
