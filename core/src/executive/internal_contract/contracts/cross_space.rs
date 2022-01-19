@@ -13,7 +13,9 @@ use super::{
 use crate::{
     evm::{ActionParams, CallType, Spec},
     executive::{
-        internal_contract::impls::cross_space::{mapped_balance, mapped_nonce},
+        internal_contract::impls::cross_space::{
+            mapped_balance, mapped_nonce, static_call_gas, withdraw_gas,
+        },
         InternalRefContext,
     },
     impl_function_type, make_function_table, make_solidity_contract,
@@ -58,15 +60,19 @@ group_impl_is_active!(
 );
 
 make_solidity_event! {
-    pub struct CallEvent("Call(bytes20,bytes20,uint256,uint256,bytes)", indexed: (Bytes20, Bytes20), non_indexed: (U256,U256, Bytes));
+    pub struct CallEvent("Call(bytes20,bytes20,uint256,uint256,uint256,bytes)", indexed: (Bytes20, Bytes20), non_indexed: (U256, U256, U256, Bytes));
 }
 
 make_solidity_event! {
-    pub struct CreateEvent("Create(bytes20,bytes20,uint256,uint256,bytes)", indexed: (Bytes20, Bytes20), non_indexed: (U256, U256, Bytes));
+    pub struct CreateEvent("Create(bytes20,bytes20,uint256,uint256,uint256,bytes)", indexed: (Bytes20, Bytes20), non_indexed: (U256, U256, U256, Bytes));
 }
 
 make_solidity_event! {
-    pub struct WithdrawEvent("Withdraw(bytes20,address,uint256)", indexed: (Bytes20, Address), non_indexed: U256);
+    pub struct WithdrawEvent("Withdraw(bytes20,address,uint256,uint256)", indexed: (Bytes20, Address), non_indexed: (U256,U256));
+}
+
+make_solidity_event! {
+    pub struct ReturnEvent("Outcome(uint256,uint256,bool)", indexed: (), non_indexed: (U256,U256, bool));
 }
 
 make_solidity_function! {
@@ -81,7 +87,7 @@ impl UpfrontPaymentTrait for CreateToEVM {
         context: &InternalRefContext,
     ) -> DbResult<U256>
     {
-        create_gas(context, init.len(), 0)
+        create_gas(context, init.as_ref())
     }
 }
 
@@ -136,7 +142,7 @@ impl UpfrontPaymentTrait for TransferToEVM {
         context: &InternalRefContext,
     ) -> DbResult<U256>
     {
-        call_gas(H160(*receiver), params, context, 0, false)
+        call_gas(H160(*receiver), params, context, &vec![])
     }
 }
 
@@ -166,11 +172,11 @@ impl_function_type!(CallToEVM, "payable_write");
 
 impl UpfrontPaymentTrait for CallToEVM {
     fn upfront_gas_payment(
-        &self, (ref receiver, data): &(Bytes20, Bytes), params: &ActionParams,
-        context: &InternalRefContext,
+        &self, (ref receiver, ref data): &(Bytes20, Bytes),
+        params: &ActionParams, context: &InternalRefContext,
     ) -> DbResult<U256>
     {
-        call_gas(H160(*receiver), params, context, data.len(), false)
+        call_gas(H160(*receiver), params, context, data)
     }
 }
 
@@ -201,11 +207,11 @@ impl_function_type!(StaticCallToEVM, "query");
 
 impl UpfrontPaymentTrait for StaticCallToEVM {
     fn upfront_gas_payment(
-        &self, (ref receiver, data): &(Bytes20, Bytes), params: &ActionParams,
+        &self, _: &(Bytes20, Bytes), _params: &ActionParams,
         context: &InternalRefContext,
     ) -> DbResult<U256>
     {
-        call_gas(H160(*receiver), params, context, data.len(), true)
+        Ok(static_call_gas(context.spec))
     }
 }
 
@@ -232,7 +238,15 @@ make_solidity_function! {
     struct Withdraw(U256, "withdrawFromMapped(uint256)");
 }
 
-impl_function_type!(Withdraw, "non_payable_write", gas: |spec: &Spec| spec.call_value_transfer_gas+spec.log_gas+spec.log_topic_gas*3+spec.log_data_gas*H256::len_bytes());
+impl_function_type!(Withdraw, "non_payable_write");
+
+impl UpfrontPaymentTrait for Withdraw {
+    fn upfront_gas_payment(
+        &self, _: &U256, _params: &ActionParams, context: &InternalRefContext,
+    ) -> DbResult<U256> {
+        Ok(withdraw_gas(context.spec))
+    }
+}
 
 impl SimpleExecutionTrait for Withdraw {
     fn execute_inner(

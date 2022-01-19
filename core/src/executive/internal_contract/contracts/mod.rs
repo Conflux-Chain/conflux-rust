@@ -45,7 +45,7 @@ pub use self::{
     pos::PoSRegister, sponsor::SponsorWhitelistControl, staking::Staking,
 };
 pub(super) use self::{
-    cross_space::{CallEvent, CreateEvent, WithdrawEvent},
+    cross_space::{CallEvent, CreateEvent, ReturnEvent, WithdrawEvent},
     pos::{IncreaseStakeEvent, RegisterEvent, RetireEvent},
 };
 

@@ -95,25 +95,46 @@ pub fn sign_call(
 }
 
 impl EthHandler {
-    fn get_block_by_number(
+    fn get_blocks_by_number(
         &self, block_num: BlockNumber,
-    ) -> jsonrpc_core::Result<Option<Arc<Block>>> {
-        let consensus_graph = self.consensus_graph();
-        let inner = &*consensus_graph.inner.read();
-
-        let epoch_height = consensus_graph
-            .get_height_from_epoch_number(block_num.into())
+    ) -> jsonrpc_core::Result<Option<Vec<Arc<Block>>>> {
+        let epoch_hashes = self
+            .consensus
+            .get_block_hashes_by_epoch(block_num.into())
             .map_err(RpcError::invalid_params)?;
 
-        let pivot_hash = inner
-            .get_pivot_hash_from_epoch_number(epoch_height)
-            .map_err(RpcError::invalid_params)?;
-
-        // TODO: combine all blocks from epoch
-        Ok(self
+        let epoch_blocks = self
             .consensus
             .get_data_manager()
-            .block_by_hash(&pivot_hash, false /* update_cache */))
+            .blocks_by_hash_list(&epoch_hashes, false /* update_cache */);
+
+        Ok(epoch_blocks)
+    }
+
+    fn get_blocks_by_hash(
+        &self, hash: &H256,
+    ) -> jsonrpc_core::Result<Option<Vec<Arc<Block>>>> {
+        let epoch_num = match self.consensus.get_block_epoch_number(hash) {
+            None => return Ok(None),
+            Some(n) => n,
+        };
+
+        let epoch_hashes = self
+            .consensus
+            .get_block_hashes_by_epoch(EpochNumber::Number(epoch_num))
+            .map_err(RpcError::invalid_params)?;
+
+        // do not allow retrieving an epoch using a non-pivot hash
+        if epoch_hashes.last() != Some(hash) {
+            return Ok(None);
+        }
+
+        let epoch_blocks = self
+            .consensus
+            .get_data_manager()
+            .blocks_by_hash_list(&epoch_hashes, false /* update_cache */);
+
+        Ok(epoch_blocks)
     }
 
     fn exec_transaction(
@@ -460,17 +481,16 @@ impl Eth for EthHandler {
             "RPC Request: eth_getBlockByHash hash={:?} include_txs={:?}",
             hash, include_txs
         );
-        // TODO: EVM core: discussion: return one block or the whole epoch
-        // (pivot header + epoch transactions.)
-        let block_op = self
-            .consensus
-            .get_data_manager()
-            .block_by_hash(&hash, false);
-        if let Some(block) = block_op {
-            let inner = self.consensus_graph().inner.read();
-            Ok(Some(RpcBlock::new(&*block, include_txs, &*inner)))
-        } else {
-            Ok(None)
+
+        // keep read lock to ensure consistent view
+        let inner = self.consensus_graph().inner.read();
+
+        match self.get_blocks_by_hash(&hash)? {
+            None => Ok(None),
+            Some(blocks) => {
+                let block_refs = blocks.iter().map(|b| &**b).collect();
+                Ok(Some(RpcBlock::new(block_refs, include_txs, &*inner)))
+            }
         }
     }
 
@@ -478,14 +498,16 @@ impl Eth for EthHandler {
         &self, block_num: BlockNumber, include_txs: bool,
     ) -> jsonrpc_core::Result<Option<RpcBlock>> {
         info!("RPC Request: eth_getBlockByNumber block_number={:?} include_txs={:?}", block_num, include_txs);
-        let maybe_block = self.get_block_by_number(block_num);
 
-        match maybe_block {
-            Ok(Some(b)) => {
-                let inner = self.consensus_graph().inner.read();
-                Ok(Some(RpcBlock::new(&*b, include_txs, &*inner)))
+        // keep read lock to ensure consistent view
+        let inner = self.consensus_graph().inner.read();
+
+        match self.get_blocks_by_number(block_num)? {
+            None => Ok(None),
+            Some(blocks) => {
+                let block_refs = blocks.iter().map(|b| &**b).collect();
+                Ok(Some(RpcBlock::new(block_refs, include_txs, &*inner)))
             }
-            _ => Ok(None),
         }
     }
 
@@ -523,19 +545,21 @@ impl Eth for EthHandler {
             hash,
         );
 
-        // TODO: EVM core: filter out Conflux space tx and add EVM space virtual
-        // tx (tx created by cross-space call).
+        // keep read lock to ensure consistent view
+        let _ = self.consensus_graph().inner.read();
 
-        let block_op = self
-            .consensus
-            .get_data_manager()
-            .block_by_hash(&hash, false);
-        if let Some(block) = block_op {
-            Ok(Some(U256::from(
-                block.transaction_hashes(Some(Space::Ethereum)).len(),
-            )))
-        } else {
-            Ok(None)
+        match self.get_blocks_by_hash(&hash)? {
+            None => Ok(None),
+            Some(blocks) => {
+                let count: U256 = blocks
+                    .into_iter()
+                    // TODO(thegaram): consider phantom transactions
+                    .map(|b| b.transaction_hashes(Some(Space::Ethereum)).len())
+                    .sum::<usize>()
+                    .into();
+
+                Ok(Some(count))
+            }
         }
     }
 
@@ -546,20 +570,31 @@ impl Eth for EthHandler {
             "RPC Request: eth_getBlockTransactionCountByNumber block_number={:?}",
             block_num
         );
-        let maybe_block = self.get_block_by_number(block_num)?;
 
-        match maybe_block {
+        // keep read lock to ensure consistent view
+        let _ = self.consensus_graph().inner.read();
+
+        match self.get_blocks_by_number(block_num)? {
             None => Ok(None),
-            Some(b) => Ok(Some(U256::from(
-                b.transaction_hashes(Some(Space::Ethereum)).len(),
-            ))),
+            Some(blocks) => {
+                let count: U256 = blocks
+                    .into_iter()
+                    // TODO(thegaram): consider phantom transactions
+                    .map(|b| b.transaction_hashes(Some(Space::Ethereum)).len())
+                    .sum::<usize>()
+                    .into();
+
+                Ok(Some(count))
+            }
         }
     }
 
     fn block_uncles_count_by_hash(
         &self, hash: H256,
     ) -> jsonrpc_core::Result<Option<U256>> {
-        info!("RPC Request: eth_getUncleCountByBlockHash hash={:?}", hash,);
+        info!("RPC Request: eth_getUncleCountByBlockHash hash={:?}", hash);
+
+        // TODO(thegaram): only return Some(_) for pivot block
         let maybe_block = self
             .consensus
             .get_data_manager()
@@ -575,7 +610,9 @@ impl Eth for EthHandler {
             "RPC Request: eth_getUncleCountByBlockNumber block_number={:?}",
             block_num
         );
-        let maybe_block = self.get_block_by_number(block_num)?;
+
+        // TODO(thegaram): enough to just check if pivot exists
+        let maybe_block = self.get_blocks_by_number(block_num)?;
         Ok(maybe_block.map(|_| 0.into()))
     }
 

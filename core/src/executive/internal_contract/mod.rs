@@ -11,6 +11,7 @@ mod internal_context;
 pub use self::{
     contracts::InternalContractMap,
     impls::{
+        cross_space::{recover_phantom, PhantomTransaction},
         pos::{entries as pos_internal_entries, IndexStatus},
         suicide,
     },

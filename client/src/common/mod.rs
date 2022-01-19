@@ -63,7 +63,7 @@ use crate::{
             cfx::RpcImpl, common::RpcImpl as CommonRpcImpl,
             pubsub::PubSubClient,
         },
-        setup_debug_rpc_apis, setup_public_rpc_apis,
+        setup_debug_rpc_apis, setup_public_eth_rpc_apis, setup_public_rpc_apis,
     },
     GENESIS_VERSION,
 };
@@ -533,6 +533,7 @@ pub fn initialize_not_light_node_modules(
         Option<WSServer>,
         Arc<PosVerifier>,
         Runtime,
+        Option<HttpServer>,
     ),
     String,
 >
@@ -738,6 +739,16 @@ pub fn initialize_not_light_node_modules(
         RpcExtractor,
     )?;
 
+    let eth_rpc_http_server = super::rpc::start_http(
+        conf.eth_http_config(),
+        setup_public_eth_rpc_apis(
+            common_impl.clone(),
+            rpc_impl.clone(),
+            pubsub.clone(),
+            &conf,
+        ),
+    )?;
+
     let rpc_http_server = super::rpc::start_http(
         conf.http_config(),
         setup_public_rpc_apis(common_impl, rpc_impl, pubsub, &conf),
@@ -760,6 +771,7 @@ pub fn initialize_not_light_node_modules(
         rpc_ws_server,
         pos_verifier,
         runtime,
+        eth_rpc_http_server,
     ))
 }
 
