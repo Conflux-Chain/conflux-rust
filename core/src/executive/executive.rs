@@ -1263,6 +1263,9 @@ impl<
                 AddressPocket::GasPayment,
                 actual_gas_cost,
             );
+            if tx.space() == Space::Ethereum {
+                self.state.subtract_total_evm_tokens(actual_gas_cost);
+            }
 
             return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::NotEnoughCash {
@@ -1670,6 +1673,10 @@ impl<
                 self.spec.account_start_nonce,
             )?;
         };
+
+        if tx.space() == Space::Ethereum {
+            self.state.subtract_total_evm_tokens(fees_value);
+        }
 
         // perform suicides
 
