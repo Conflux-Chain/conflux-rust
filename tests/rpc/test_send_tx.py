@@ -311,3 +311,8 @@ class TestSendTx(RpcClient):
         tx_status = r["firstTxStatus"]
         assert_equal(len(pending_txs), 1)
         assert_equal(tx_status, {'pending': 'notEnoughCash'})
+
+    def test_reject_oversize_transactions(self):
+        # A tx with size over `MAX_BLOCK_SIZE_IN_BYTES` should be rejected.
+        tx = self.new_tx(data=b'0' * default_config["MAX_BLOCK_SIZE_IN_BYTES"], gas=14000000)
+        assert_raises_rpc_error(None, None, self.send_tx, tx)

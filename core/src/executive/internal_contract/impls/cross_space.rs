@@ -45,7 +45,8 @@ pub fn create_gas(context: &InternalRefContext, code: &[u8]) -> DbResult<U256> {
     let address_mapping_gas = context.spec.sha3_gas * 3;
 
     let create_log_gas = {
-        let log_data_length = H256::len_bytes() * 5 + code_length;
+        let log_data_length =
+            H256::len_bytes() * 5 + (code_length + 31) / 32 * 32;
         context.spec.log_gas
             + 3 * context.spec.log_topic_gas
             + context.spec.log_data_gas * log_data_length
@@ -93,10 +94,11 @@ pub fn call_gas(
     let call_gas =
         U256::from(context.spec.call_gas) + new_account_gas + transfer_gas;
 
-    let address_mapping_gas = context.spec.sha3_gas * 4;
+    let address_mapping_gas = context.spec.sha3_gas * 3;
 
     let call_log_gas = {
-        let log_data_length = H256::len_bytes() * 5 + data_length;
+        let log_data_length =
+            H256::len_bytes() * 5 + (data_length + 31) / 32 * 32;
         context.spec.log_gas
             + 3 * context.spec.log_topic_gas
             + context.spec.log_data_gas * log_data_length
@@ -118,7 +120,7 @@ pub fn call_gas(
 
 pub fn static_call_gas(spec: &Spec) -> U256 {
     let call_gas = U256::from(spec.call_gas);
-    let address_mapping_gas = spec.sha3_gas * 4;
+    let address_mapping_gas = spec.sha3_gas * 2;
 
     call_gas + address_mapping_gas
 }

@@ -11,7 +11,8 @@ use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
 use cfx_types::{
-    Address, AddressSpaceUtil, BigEndianHash, H256, H520, U128, U256, U64,
+    Address, AddressSpaceUtil, BigEndianHash, Space, H256, H520, U128, U256,
+    U64,
 };
 use cfxcore::{
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
@@ -625,6 +626,10 @@ impl RpcImpl {
             },
         )) = self.consensus.get_transaction_info_by_hash(&hash)
         {
+            if tx.space() == Space::Ethereum {
+                return Ok(None);
+            }
+
             let packed_or_executed = match maybe_executed_extra_info {
                 None => PackedOrExecuted::Packed(tx_index),
                 Some(MaybeExecutedTxExtraInfo {
@@ -665,6 +670,10 @@ impl RpcImpl {
         }
 
         if let Some(tx) = self.tx_pool.get_transaction(&hash) {
+            if tx.space() == Space::Ethereum {
+                return Ok(None);
+            }
+
             let rpc_tx = RpcTransaction::from_signed(
                 &tx,
                 None,
@@ -724,7 +733,7 @@ impl RpcImpl {
 
     fn construct_rpc_receipt(
         &self, tx_index: TransactionIndex, exec_info: &BlockExecInfo,
-    ) -> RpcResult<RpcReceipt> {
+    ) -> RpcResult<Option<RpcReceipt>> {
         let id = tx_index.index;
 
         if id >= exec_info.block.transactions.len()
@@ -732,6 +741,12 @@ impl RpcImpl {
             || id >= exec_info.block_receipts.tx_execution_error_messages.len()
         {
             bail!("Inconsistent state");
+        }
+
+        let tx = &exec_info.block.transactions[id];
+
+        if tx.space() == Space::Ethereum {
+            return Ok(None);
         }
 
         let prior_gas_used = match id {
@@ -748,7 +763,7 @@ impl RpcImpl {
             };
 
         let receipt = RpcReceipt::new(
-            (*exec_info.block.transactions[id]).clone(),
+            (**tx).clone(),
             exec_info.block_receipts.receipts[id].clone(),
             tx_index,
             prior_gas_used,
@@ -759,7 +774,7 @@ impl RpcImpl {
             *self.sync.network.get_network_type(),
         )?;
 
-        Ok(receipt)
+        Ok(Some(receipt))
     }
 
     fn prepare_receipt(&self, tx_hash: H256) -> RpcResult<Option<RpcReceipt>> {
@@ -783,8 +798,7 @@ impl RpcImpl {
                 Some(res) => res,
             };
 
-        let receipt = self.construct_rpc_receipt(tx_index, &exec_info)?;
-        Ok(Some(receipt))
+        self.construct_rpc_receipt(tx_index, &exec_info)
     }
 
     fn prepare_block_receipts(
@@ -806,10 +820,12 @@ impl RpcImpl {
         let mut rpc_receipts = vec![];
 
         for index in 0..exec_info.block.transactions.len() {
-            rpc_receipts.push(self.construct_rpc_receipt(
+            if let Some(receipt) = self.construct_rpc_receipt(
                 TransactionIndex { block_hash, index },
                 &exec_info,
-            )?);
+            )? {
+                rpc_receipts.push(receipt);
+            }
         }
 
         Ok(Some(rpc_receipts))
@@ -1203,10 +1219,14 @@ impl RpcImpl {
             }
             ExecutionOutcome::Finished(executed) => executed,
         };
-        let mut storage_collateralized = U64::from(0);
+        let mut storage_collateralized = 0;
         for storage_change in &executed.storage_collateralized {
-            storage_collateralized += storage_change.collaterals;
+            storage_collateralized += storage_change.collaterals.as_u64();
         }
+        if executed.minimum_storage_limit > storage_collateralized {
+            storage_collateralized = executed.minimum_storage_limit;
+        }
+        let storage_collateralized = U64::from(storage_collateralized);
         // In case of unlimited full gas charge at some VM call, or if there are
         // infinite loops, the total estimated gas used is very close to
         // MAX_GAS_CALL_REQUEST, 0.8 is chosen to check if it's close.

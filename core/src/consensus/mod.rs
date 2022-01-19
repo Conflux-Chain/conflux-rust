@@ -794,6 +794,13 @@ impl ConsensusGraph {
             }
         };
 
+        // TODO(thegaram): transform `receipts` so that it includes phantom
+        // receipts for cross-space calls. This is necessary for these fields:
+        // - transactionHash
+        // - transaction_index
+        // - transaction_log_index
+        // - log_index
+
         Ok(Either::Right(self.filter_block_receipts(
             &filter,
             epoch,
@@ -1559,7 +1566,10 @@ impl ConsensusGraphTrait for ConsensusGraph {
     }
 
     fn latest_finalized_epoch_number(&self) -> u64 {
-        self.inner.read().latest_epoch_confirmed_by_pos().1
+        self.inner
+            .read_recursive()
+            .latest_epoch_confirmed_by_pos()
+            .1
     }
 
     fn best_chain_id(&self) -> AllChainID {

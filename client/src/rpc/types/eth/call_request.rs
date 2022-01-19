@@ -18,17 +18,14 @@
 // You should have received a copy of the GNU General Public License
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::rpc::types::{eth::transaction_access_list::AccessList, Bytes};
-use cfx_types::{H160, U256, U64};
+use crate::rpc::types::Bytes;
+use cfx_types::{H160, U256};
 
 /// Call request
 #[derive(Debug, Default, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct CallRequest {
-    /// transaction type. Defaults to legacy type.
-    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
-    pub transaction_type: Option<U64>,
     /// From
     pub from: Option<H160>,
     /// To
@@ -47,9 +44,6 @@ pub struct CallRequest {
     pub data: Option<Bytes>,
     /// Nonce
     pub nonce: Option<U256>,
-    /// Access list
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub access_list: Option<AccessList>,
     /// Miner bribe
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_priority_fee_per_gas: Option<U256>,
