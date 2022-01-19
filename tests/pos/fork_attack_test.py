@@ -42,7 +42,8 @@ class PosForkAttackTest(DefaultConfluxTestFramework):
         # generate pos blocks to confirm the pivot decision
         for client in clients:
             client.pos_local_timeout()
-        time.sleep(1)
+        # Wait for force signed transactions to be received by each other
+        time.sleep(3)
         for client in clients:
             client.pos_new_round_timeout()
         time.sleep(1)
