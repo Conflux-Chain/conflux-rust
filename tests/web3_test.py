@@ -33,7 +33,7 @@ class Web3Test(ConfluxTestFramework):
         self.conf_parameters = {
             "log_level": "\"debug\"",
             "evm_transaction_block_ratio": 1,
-            # "public_rpc_apis": "\"cfx,evm,debug,test,pubsub,trace\"",
+            # "public_rpc_apis": "\"cfx,debug,test,pubsub,trace\"",
         }
 
     def setup_network(self):
@@ -69,7 +69,7 @@ class Web3Test(ConfluxTestFramework):
         time.sleep(3)
 
         ip = self.nodes[0].ip
-        port = self.nodes[0].rpcport
+        port = self.nodes[0].ethrpcport
         self.w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/'))
 
         assert_equal(self.w3.isConnected(), True)
