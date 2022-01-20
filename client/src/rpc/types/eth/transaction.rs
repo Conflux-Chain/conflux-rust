@@ -20,7 +20,6 @@
 
 use crate::rpc::types::Bytes;
 use cfx_types::{H160, H256, H512, U256, U64};
-use cfxcore::{executive::contract_address, vm::CreateContractAddress};
 use primitives::{transaction::eip155_signature, Action, SignedTransaction};
 use rlp::Encodable;
 use serde::Serialize;
@@ -75,8 +74,6 @@ pub struct Transaction {
     pub r: U256,
     /// The S field of the signature.
     pub s: U256,
-    // The created contract address
-    pub contract_created: Option<H160>,
     // Whether tx is success
     pub status: Option<U64>,
     /* /// Transaction activates at specified block.
@@ -98,8 +95,6 @@ impl Transaction {
     ) -> Transaction
     {
         let signature = t.signature();
-        let scheme = CreateContractAddress::FromSenderNonce;
-
         // We only support EIP-155
         // let access_list = match t.as_unsigned() {
         //     TypedTransaction::AccessList(tx) => {
@@ -116,19 +111,6 @@ impl Transaction {
         //     TypedTransaction::Legacy(_) => None,
         // };
 
-        // let (max_fee_per_gas, max_priority_fee_per_gas) =
-        //     if let TypedTransaction::EIP1559Transaction(tx) = t.as_unsigned()
-        // {         (Some(tx.tx().gas_price),
-        // Some(tx.max_priority_fee_per_gas))     } else {
-        //         (None, None)
-        //     };
-
-        // let standard_v = if t.tx_type() == TypedTxId::Legacy {
-        //     Some(t.standard_v())
-        // } else {
-        //     None
-        // };
-
         Transaction {
             hash: t.hash(),
             nonce: *t.nonce(),
@@ -142,23 +124,10 @@ impl Transaction {
             },
             value: *t.value(),
             gas_price: *t.gas_price(),
-            max_fee_per_gas: None, // TODO: I'm not sure what it is.
+            max_fee_per_gas: None,
             gas: *t.gas(),
             input: Bytes::new(t.data().clone()),
-            creates: match t.action() {
-                Action::Create => Some(
-                    contract_address(
-                        scheme,
-                        U64::zero(),
-                        &t.sender(),
-                        t.nonce(),
-                        t.data(),
-                    )
-                    .0
-                    .address,
-                ),
-                Action::Call(_) => None,
-            },
+            creates: exec_info.1,
             raw: Bytes::new(t.transaction.transaction.rlp_bytes()),
             public_key: t.public().map(Into::into),
             chain_id: t.chain_id().map(|x| U64::from(x as u64)),
@@ -171,7 +140,6 @@ impl Transaction {
             r: signature.r().into(),
             s: signature.s().into(),
             status: exec_info.0,
-            contract_created: exec_info.1,
         }
     }
 }
