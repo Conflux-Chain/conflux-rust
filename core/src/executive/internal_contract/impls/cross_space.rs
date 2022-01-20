@@ -545,12 +545,15 @@ impl PhantomTransaction {
 
 type Bytes20 = [u8; 20];
 
-pub fn recover_phantom(
+pub fn build_bloom_and_recover_phantom(
     logs: &[LogEntry], spec: &Spec, gas_price: U256,
-) -> Vec<PhantomTransaction> {
+) -> (Vec<PhantomTransaction>, Bloom) {
     let mut phantom_txs: Vec<PhantomTransaction> = Default::default();
     let mut maybe_working_tx: Option<PhantomTransaction> = None;
+    let mut all_bloom = Bloom::default();
     for log in logs.iter() {
+        let log_bloom = log.bloom();
+        all_bloom.accrue_bloom(&log_bloom);
         if log.address == *CROSS_SPACE_CONTRACT_ADDRESS {
             let event_sig = log.topics.first().unwrap();
             if event_sig == &CallEvent::EVENT_SIG
@@ -624,13 +627,6 @@ pub fn recover_phantom(
                 } else {
                     EVM_SPACE_FAIL
                 };
-                working_tx.log_bloom = working_tx.logs.iter().fold(
-                    Bloom::default(),
-                    |mut b, l| {
-                        b.accrue_bloom(&l.bloom());
-                        b
-                    },
-                );
                 let from = working_tx.from;
                 // Complete the second transaction for cross-space call.
                 phantom_txs.push(working_tx);
@@ -647,9 +643,14 @@ pub fn recover_phantom(
             }
         } else if log.space == Space::Ethereum {
             if let Some(ref mut working_tx) = maybe_working_tx {
+                // The receipt is generated in cross-space call
                 working_tx.logs.push(log.clone());
+                working_tx.log_bloom.accrue_bloom(&log_bloom);
+            } else {
+                // The receipt is generated in evm-space transaction. Does
+                // nothing.
             }
         }
     }
-    return phantom_txs;
+    return (phantom_txs, all_bloom);
 }
