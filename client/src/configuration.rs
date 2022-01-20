@@ -1154,7 +1154,6 @@ impl Configuration {
         // `unnamed_21autumn_transition` has been set in the testnet.
         // Hardcode to disable CIP78 and CIP90.
         params.transition_heights.cip90a = BlockHeight::MAX;
-        params.transition_numbers.cip78a = BlockNumber::MAX;
         params.transition_numbers.cip78b = BlockNumber::MAX;
         params.transition_numbers.cip90b = BlockNumber::MAX;
 
