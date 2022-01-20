@@ -29,6 +29,7 @@ use crate::{
         },
         pos_handler::PosVerifier,
     },
+    evm::Spec,
     executive::ExecutionOutcome,
     observer::{
         trace::{ActionType, BlockExecTraces, LocalizedTrace},
@@ -1487,6 +1488,10 @@ impl ConsensusGraph {
             }
         }
         Ok(traces)
+    }
+
+    pub fn get_spec_at(&self, block_number: u64) -> Spec {
+        self.executor.handler.get_spec_at(block_number)
     }
 }
 

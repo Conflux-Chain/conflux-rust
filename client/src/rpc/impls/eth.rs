@@ -13,8 +13,8 @@ use cfx_types::{
 };
 use cfxcore::{
     executive::{
-        contract_address, revert_reason_decode, ExecutionError,
-        ExecutionOutcome, TxDropError,
+        contract_address, internal_contract::recover_phantom,
+        revert_reason_decode, ExecutionError, ExecutionOutcome, TxDropError,
     },
     observer::ErrorUnwind,
     rpc_errors::{
@@ -40,7 +40,8 @@ use crate::rpc::{
     types::{
         eth::{
             Block as RpcBlock, BlockNumber, CallRequest, EthRpcLogFilter,
-            FilterChanges, Log, Receipt, SyncInfo, SyncStatus, Transaction,
+            FilterChanges, Log, PhantomBlock, Receipt, SyncInfo, SyncStatus,
+            Transaction,
         },
         Bytes, Index, MAX_GAS_CALL_REQUEST,
     },
@@ -109,6 +110,98 @@ impl EthHandler {
             .blocks_by_hash_list(&epoch_hashes, false /* update_cache */);
 
         Ok(epoch_blocks)
+    }
+
+    fn get_phantom_block_by_number(
+        &self, block_num: BlockNumber,
+    ) -> jsonrpc_core::Result<Option<PhantomBlock>> {
+        let hashes = self
+            .consensus
+            .get_block_hashes_by_epoch(block_num.into())
+            .map_err(RpcError::invalid_params)?;
+
+        let blocks = match self
+            .consensus
+            .get_data_manager()
+            .blocks_by_hash_list(&hashes, false /* update_cache */)
+        {
+            None => return Ok(None),
+            Some(b) => b,
+        };
+
+        let pivot = blocks.last().expect("Inconsistent state");
+
+        let mut phantom_block = PhantomBlock {
+            pivot_header: pivot.block_header.clone(),
+            transactions: vec![],
+            receipts: vec![],
+        };
+
+        let mut gas_used = U256::from(0);
+
+        for b in &blocks {
+            // note: we need the receipts reconstruct a phantom block. as a
+            // result, we cannot return unexecuted blocks in eth_* RPCs.
+            let exec_info = match self
+                .consensus
+                .get_data_manager()
+                .block_execution_result_by_hash_with_epoch(
+                    &b.hash(),
+                    &pivot.hash(),
+                    false, // update_pivot_assumption
+                    false, // update_cache
+                ) {
+                None => return Ok(None),
+                Some(r) => r,
+            };
+
+            let spec = self
+                .consensus_graph()
+                .get_spec_at(exec_info.block_receipts.block_number);
+
+            for (id, tx) in b.transactions.iter().enumerate() {
+                match tx.space() {
+                    Space::Ethereum => {
+                        phantom_block.transactions.push(tx.clone());
+
+                        // TODO
+                        gas_used += exec_info.block_receipts.receipts[id]
+                            .accumulated_gas_used
+                            - exec_info.block_receipts.receipts[id - 1]
+                                .accumulated_gas_used;
+
+                        phantom_block.receipts.push(
+                            // TODO: rewrite `accumulated_gas_used`,
+                            // `outcome_status`
+                            exec_info.block_receipts.receipts[id].clone(),
+                        );
+                    }
+                    Space::Native => {
+                        let phantoms = recover_phantom(
+                            &exec_info.block_receipts.receipts[id].logs[..],
+                            &spec,
+                            *tx.gas_price(),
+                        );
+
+                        for p in phantoms {
+                            phantom_block
+                                .transactions
+                                .push(Arc::new(p.clone().into()));
+
+                            let mut phantom_receipt: primitives::Receipt =
+                                p.into();
+
+                            gas_used += phantom_receipt.gas_fee;
+                            phantom_receipt.accumulated_gas_used = gas_used;
+
+                            phantom_block.receipts.push(phantom_receipt);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(Some(phantom_block))
     }
 
     fn get_blocks_by_hash(
@@ -500,14 +593,12 @@ impl Eth for EthHandler {
         info!("RPC Request: eth_getBlockByNumber block_number={:?} include_txs={:?}", block_num, include_txs);
 
         // keep read lock to ensure consistent view
-        let inner = self.consensus_graph().inner.read();
+        // TODO(thegaram): do not keep lock
+        let _inner = self.consensus_graph().inner.read();
 
-        match self.get_blocks_by_number(block_num)? {
+        match self.get_phantom_block_by_number(block_num)? {
             None => Ok(None),
-            Some(blocks) => {
-                let block_refs = blocks.iter().map(|b| &**b).collect();
-                Ok(Some(RpcBlock::new(block_refs, include_txs, &*inner)))
-            }
+            Some(pb) => Ok(Some(RpcBlock::from_phantom(&pb, include_txs))),
         }
     }
 

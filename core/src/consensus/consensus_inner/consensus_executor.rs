@@ -1923,6 +1923,10 @@ impl ConsensusExecutionHandler {
         trace!("Execution result {:?}", r);
         Ok(r?)
     }
+
+    pub fn get_spec_at(&self, block_number: u64) -> Spec {
+        self.machine.spec(block_number)
+    }
 }
 
 pub struct ConsensusExecutionConfiguration {

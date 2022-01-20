@@ -29,7 +29,7 @@ use cfx_types::{
 use keccak_hash::keccak;
 use primitives::{
     receipt::{EVM_SPACE_FAIL, EVM_SPACE_SUCCESS},
-    Action, LogEntry,
+    Action, Eip155Transaction, LogEntry, Receipt, SignedTransaction,
 };
 use solidity_abi::{ABIDecodable, ABIEncodable};
 use std::{marker::PhantomData, sync::Arc};
@@ -510,11 +510,12 @@ pub fn mapped_nonce(
     Ok(context.state.nonce(&evm_map(address))?)
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct PhantomTransaction {
     pub from: Address,
     pub nonce: U256,
     pub action: Action,
+    pub gas_price: U256,
     pub gas_limit: U256,
     pub value: U256,
     pub data: Vec<u8>,
@@ -528,17 +529,52 @@ pub struct PhantomTransaction {
 impl PhantomTransaction {
     fn simple_transfer(
         from: Address, to: Address, nonce: U256, value: U256, spec: &Spec,
-    ) -> PhantomTransaction {
+        gas_price: U256,
+    ) -> PhantomTransaction
+    {
         PhantomTransaction {
             from,
             nonce,
             action: Action::Call(to),
+            gas_price,
             gas_limit: spec.tx_gas.into(),
             value,
             data: vec![],
             gas_used: spec.tx_gas.into(),
             outcome_status_in_evm: EVM_SPACE_SUCCESS,
             ..Default::default()
+        }
+    }
+}
+
+impl Into<SignedTransaction> for PhantomTransaction {
+    fn into(self) -> SignedTransaction {
+        let tx = Eip155Transaction {
+            action: self.action,
+            chain_id: 0.into(), // TODO
+            data: self.data,
+            gas_price: self.gas_price,
+            gas: self.gas_limit,
+            nonce: self.nonce,
+            value: self.value,
+        };
+
+        tx.fake_sign(self.from.with_space(Space::Ethereum))
+    }
+}
+
+impl Into<Receipt> for PhantomTransaction {
+    fn into(self) -> Receipt {
+        Receipt {
+            accumulated_gas_used: 0.into(), // TODO
+            gas_fee: self.gas_used,
+            gas_sponsor_paid: false,
+            log_bloom: self.log_bloom,
+            logs: self.logs,
+            outcome_status: self.outcome_status_in_evm,
+            storage_collateralized: vec![],
+            storage_released: vec![],
+            storage_sponsor_paid: false,
         }
     }
 }
@@ -585,6 +621,7 @@ pub fn recover_phantom(
                                    * address. */
                     value + gas_limit * gas_price,
                     spec,
+                    gas_price,
                 ));
                 // The second phantom transaction for cross-space call, transfer
                 // balance and gas fee from the zero address to the mapped
@@ -594,6 +631,7 @@ pub fn recover_phantom(
                     nonce,
                     action,
                     value,
+                    gas_price,
                     gas_limit,
                     data,
                     ..Default::default()
@@ -611,6 +649,7 @@ pub fn recover_phantom(
                     nonce,
                     value,
                     spec,
+                    gas_price,
                 ));
             } else if event_sig == &ReturnEvent::EVENT_SIG {
                 let (nonce, gas_left, success): (U256, U256, bool) =
@@ -643,6 +682,7 @@ pub fn recover_phantom(
                     nonce,
                     gas_left * gas_price,
                     spec,
+                    gas_price,
                 ));
             }
         } else if log.space == Space::Ethereum {

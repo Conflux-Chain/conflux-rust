@@ -246,7 +246,6 @@ impl NativeTransaction {
     /// Specify the sender; this won't survive the serialize/deserialize
     /// process, but can be cloned.
     pub fn fake_sign(self, from: AddressWithSpace) -> SignedTransaction {
-        // TODO: EVM core: for EVM tx
         SignedTransaction {
             transaction: TransactionWithSignature {
                 transaction: TransactionWithSignatureSerializePart {
