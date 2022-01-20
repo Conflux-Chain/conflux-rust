@@ -248,11 +248,12 @@ impl EthHandler {
                 .filter(|log| log.space == Space::Ethereum)
                 .count();
             prior_log_count += log_count;
-            // gas used
-            prior_gas_used += exec_info.block_receipts.receipts[n].gas_fee
-                / exec_info.block.transactions[id].gas_price();
-            // tx index
+
             if exec_info.block.transactions[id].space() == Space::Ethereum {
+                // gas used
+                prior_gas_used += exec_info.block_receipts.receipts[n].gas_fee
+                    / exec_info.block.transactions[id].gas_price();
+                // tx index
                 transaction_index += U256::one();
             }
         }
