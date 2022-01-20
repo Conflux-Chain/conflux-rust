@@ -65,6 +65,22 @@ class Web3Test(ConfluxTestFramework):
         client.send_tx(tx, True)
         self.wait_for_tx([tx], True)
 
+    def test_deploy_1820(self):
+        client = RpcClient(self.nodes[0])
+        cross_space = "0x0888000000000000000000000000000000000006"
+
+        data = decode_hex(f"0x36201722")
+        genesis_addr = self.genesis_addr
+        tx = client.new_tx(value=0, receiver=cross_space, data=data, nonce=self.get_nonce(genesis_addr),
+                           gas=10000000)
+        client.send_tx(tx, True)
+        self.wait_for_tx([tx], True)
+
+        eip1820 = Web3.toChecksumAddress("1820a4b7618bde71dce8cdc73aab6c95905fad24")
+        receipt = client.get_transaction_receipt(tx.hash.hex())
+        assert_greater_than(int(receipt['gasUsed'],16), 1_500_000 + 21_000)
+        assert_equal(len(self.w3.eth.getCode(eip1820)), 2501)
+
     def run_test(self):
         time.sleep(3)
 
@@ -80,6 +96,8 @@ class Web3Test(ConfluxTestFramework):
 
         self.cross_space_transfer(sender, 1 * 10 ** 18)
         assert_equal(1 * 10 ** 18, self.w3.eth.get_balance(sender))
+
+        self.test_deploy_1820()
 
         # Send eip-155 transaction
         receiver = Web3.toChecksumAddress("10000000000000000000000000000000000000aa")

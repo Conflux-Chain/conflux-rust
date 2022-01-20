@@ -59,6 +59,10 @@ pub trait StateOpsTrait {
 
     fn add_total_pos_staking(&mut self, v: U256);
 
+    fn add_total_evm_tokens(&mut self, v: U256);
+
+    fn subtract_total_evm_tokens(&mut self, v: U256);
+
     fn inc_distributable_pos_interest(
         &mut self, current_block_number: u64,
     ) -> DbResult<()>;

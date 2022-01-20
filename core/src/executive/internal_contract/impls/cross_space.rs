@@ -297,8 +297,10 @@ pub fn call_to_evmcore(
         return Err(vm::Error::InternalContract("Exceed Depth".into()));
     }
 
+    let value = params.value.value();
+
     let call_gas = gas_left / CROSS_SPACE_GAS_RATIO
-        + if params.value.value() > U256::zero() {
+        + if value > U256::zero() {
             U256::from(context.spec.call_stipend)
         } else {
             U256::zero()
@@ -311,10 +313,11 @@ pub fn call_to_evmcore(
     context.state.transfer_balance(
         &params.address.with_native_space(),
         &mapped_sender,
-        &params.value.value(),
+        &value,
         cleanup_mode(context.substate, context.spec),
         context.spec.account_start_nonce,
     )?;
+    context.state.add_total_evm_tokens(value);
     tracer.trace_internal_transfer(
         AddressPocket::Balance(params.address.with_native_space()),
         AddressPocket::Balance(mapped_sender),
@@ -330,7 +333,7 @@ pub fn call_to_evmcore(
         space: Space::Ethereum,
         sender: mapped_sender.address,
         address: address.address,
-        value: ActionValue::Transfer(params.value.value()),
+        value: ActionValue::Transfer(value),
         code_address: address.address,
         original_sender: mapped_origin.address,
         storage_owner: mapped_sender.address,
@@ -351,7 +354,7 @@ pub fn call_to_evmcore(
             .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
         CallEvent::log(
             &(mapped_sender.address.0, address.address.0),
-            &(params.value.value(), nonce, call_gas, data),
+            &(value, nonce, call_gas, data),
             params,
             context,
         )?;
@@ -386,13 +389,15 @@ pub fn create_to_evmcore(
     let mapped_sender = evm_map(params.sender);
     let mapped_origin = evm_map(params.original_sender);
 
+    let value = params.value.value();
     context.state.transfer_balance(
         &params.address.with_native_space(),
         &mapped_sender,
-        &params.value.value(),
+        &value,
         cleanup_mode(context.substate, context.spec),
         context.spec.account_start_nonce,
     )?;
+    context.state.add_total_evm_tokens(value);
     tracer.trace_internal_transfer(
         AddressPocket::Balance(params.address.with_native_space()),
         AddressPocket::Balance(mapped_sender),
@@ -424,7 +429,7 @@ pub fn create_to_evmcore(
         storage_owner: Address::zero(),
         gas: call_gas,
         gas_price: params.gas_price,
-        value: ActionValue::Transfer(params.value.value()),
+        value: ActionValue::Transfer(value),
         code: Some(Arc::new(init.clone())),
         code_hash,
         data: None,
@@ -439,7 +444,7 @@ pub fn create_to_evmcore(
         .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
     CreateEvent::log(
         &(mapped_sender.address.0, address.0),
-        &(params.value.value(), nonce, call_gas, init),
+        &(value, nonce, call_gas, init),
         params,
         context,
     )?;
@@ -472,6 +477,7 @@ pub fn withdraw_from_evmcore(
         cleanup_mode(context.substate, context.spec),
         context.spec.account_start_nonce,
     )?;
+    context.state.subtract_total_evm_tokens(value);
     tracer.trace_internal_transfer(
         AddressPocket::Balance(mapped_address),
         AddressPocket::Balance(sender.with_native_space()),
