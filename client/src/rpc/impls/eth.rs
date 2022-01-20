@@ -19,8 +19,7 @@ use cfxcore::{
     rpc_errors::{
         invalid_params_check, Error as CfxRpcError, Result as CfxRpcResult,
     },
-    vm::self,
-    ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
+    vm, ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
 use primitives::{
