@@ -108,7 +108,10 @@ class TestNode:
         """Dispatches any unrecognised messages to the RPC connection."""
         assert self.rpc_connected and self.rpc is not None, self._node_msg(
             "Error: no RPC connection")
-        return getattr(self.rpc, name)
+        if name.startswith("eth_"):
+            return getattr(self.ethrpc, name)
+        else:
+            return getattr(self.rpc, name)
 
     def best_block_hash(self) -> str:
         return self.cfx_getBestBlockHash()

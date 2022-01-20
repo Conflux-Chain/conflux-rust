@@ -143,7 +143,7 @@ mark_msg_version_bound!(
     HSB_PROTOCOL_VERSION,
     HSB_PROTOCOL_VERSION
 );
-build_msg_impl_with_serde_serialization! {MempoolSyncMsg, msgid::MEMPOOL_SYNC_MSG, "ConsensusMsg"}
+build_msg_impl_with_serde_serialization! {MempoolSyncMsg, msgid::MEMPOOL_SYNC_MSG, "MempoolSyncMsg"}
 mark_msg_version_bound!(
     MempoolSyncMsg,
     HSB_PROTOCOL_VERSION,

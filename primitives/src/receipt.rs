@@ -13,6 +13,9 @@ pub const TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING: u8 = 2; // no gas
 pub const EVM_TX_OUTCOME_SUCCESS: u8 = 1;
 pub const EVM_TX_OUTCOME_FAILED: u8 = 0;
 
+pub const EVM_SPACE_FAIL: u8 = 0;
+pub const EVM_SPACE_SUCCESS: u8 = 1;
+
 #[derive(Debug, Clone, PartialEq, Eq, RlpDecodable, RlpEncodable)]
 pub struct StorageChange {
     pub address: Address,
