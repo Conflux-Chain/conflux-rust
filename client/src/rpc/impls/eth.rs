@@ -13,14 +13,13 @@ use cfx_types::{
 };
 use cfxcore::{
     executive::{
-        contract_address, revert_reason_decode, ExecutionError,
-        ExecutionOutcome, TxDropError,
+        revert_reason_decode, ExecutionError, ExecutionOutcome, TxDropError,
     },
     observer::ErrorUnwind,
     rpc_errors::{
         invalid_params_check, Error as CfxRpcError, Result as CfxRpcResult,
     },
-    vm::{self, CreateContractAddress},
+    vm::self,
     ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
@@ -265,20 +264,10 @@ impl EthHandler {
 
         let status_code = primitive_receipt.evm_space_status();
 
-        let contract_address =
-            match (tx.action(), status_code == EVM_TX_OUTCOME_SUCCESS) {
-                (Action::Create, true) => {
-                    let (contract_address, _) = contract_address(
-                        CreateContractAddress::FromSenderNonce,
-                        0.into(),
-                        &tx.sender(),
-                        tx.nonce(),
-                        tx.data(),
-                    );
-                    Some(contract_address.address)
-                }
-                (_, _) => None,
-            };
+        let contract_address = match status_code == EVM_TX_OUTCOME_SUCCESS {
+            true => Transaction::deployed_contract_address(tx),
+            false => None,
+        };
 
         let block_hash = exec_info.pivot_hash;
         let block_number = exec_info.epoch_number.into();
@@ -848,21 +837,11 @@ impl Eth for EthHandler {
                             [tx_info.tx_index.index]
                             .evm_space_status();
 
-                        let contract_address = match (
-                            tx.action(),
-                            status_code == EVM_TX_OUTCOME_SUCCESS,
-                        ) {
-                            (Action::Create, true) => {
-                                let (contract_address, _) = contract_address(
-                                    CreateContractAddress::FromSenderNonce,
-                                    0.into(),
-                                    &tx.sender(),
-                                    tx.nonce(),
-                                    tx.data(),
-                                );
-                                Some(contract_address.address)
-                            }
-                            (_, _) => None,
+                        let contract_address = match status_code
+                            == EVM_TX_OUTCOME_SUCCESS
+                        {
+                            true => Transaction::deployed_contract_address(&tx),
+                            false => None,
                         };
 
                         (
