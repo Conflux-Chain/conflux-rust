@@ -39,7 +39,7 @@ pub fn create_gas(context: &InternalRefContext, code: &[u8]) -> DbResult<U256> {
 
     let transaction_gas =
         gas_required_for(/* is_create */ true, code, context.spec)
-            + 2 * context.spec.tx_gas;
+            + context.spec.tx_gas as u64 * 2;
 
     let create_gas = U256::from(context.spec.create_gas);
 
@@ -76,7 +76,7 @@ pub fn call_gas(
 
     let transaction_gas =
         gas_required_for(/* is_create */ false, data, context.spec)
-            + 2 * context.spec.tx_gas;
+            + context.spec.tx_gas as u64 * 2;
 
     let new_account = !context
         .state
@@ -499,13 +499,13 @@ pub fn withdraw_from_evmcore(
         value,
     );
 
-    let sender_nonce = context.state.nonce(&mapped_sender)?;
+    let sender_nonce = context.state.nonce(&mapped_address)?;
 
     let zero_address = Address::zero().with_evm_space();
     let zero_nonce = context.state.nonce(&zero_address)?;
     context
         .state
-        .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
+        .inc_nonce(&mapped_address, &context.spec.account_start_nonce)?;
     context
         .state
         .inc_nonce(&zero_address, &context.spec.account_start_nonce)?;
