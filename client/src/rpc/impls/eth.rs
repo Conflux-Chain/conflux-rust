@@ -25,7 +25,7 @@ use cfxcore::{
     SharedTransactionPool,
 };
 use primitives::{
-    filter::LogFilter, receipt::TRANSACTION_OUTCOME_SUCCESS, Action, Block,
+    filter::LogFilter, receipt::EVM_TX_OUTCOME_SUCCESS, Action, Block,
     BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, SignedTransaction,
     StorageKey, StorageValue, TransactionIndex, TransactionWithSignature,
 };
@@ -262,30 +262,22 @@ impl EthHandler {
 
         let gas_used = primitive_receipt.gas_fee / tx.gas_price();
 
-        let status_code = if primitive_receipt.outcome_status
-            == TRANSACTION_OUTCOME_SUCCESS
-        {
-            1u32
-        } else {
-            0
-        };
+        let status_code = primitive_receipt.evm_space_status();
 
-        let contract_address = match (
-            tx.action(),
-            primitive_receipt.outcome_status == TRANSACTION_OUTCOME_SUCCESS,
-        ) {
-            (Action::Create, true) => {
-                let (contract_address, _) = contract_address(
-                    CreateContractAddress::FromSenderNonce,
-                    0.into(),
-                    &tx.sender(),
-                    tx.nonce(),
-                    tx.data(),
-                );
-                Some(contract_address.address)
-            }
-            (_, _) => None,
-        };
+        let contract_address =
+            match (tx.action(), status_code == EVM_TX_OUTCOME_SUCCESS) {
+                (Action::Create, true) => {
+                    let (contract_address, _) = contract_address(
+                        CreateContractAddress::FromSenderNonce,
+                        0.into(),
+                        &tx.sender(),
+                        tx.nonce(),
+                        tx.data(),
+                    );
+                    Some(contract_address.address)
+                }
+                (_, _) => None,
+            };
 
         let block_hash = exec_info.pivot_hash;
         let block_number = exec_info.epoch_number.into();
@@ -851,19 +843,13 @@ impl Eth for EthHandler {
                 {
                     None => (None, None, None),
                     Some(exec_info) => {
-                        let status = exec_info.block_receipts.receipts
+                        let status_code = exec_info.block_receipts.receipts
                             [tx_info.tx_index.index]
-                            .outcome_status;
-                        let status_code =
-                            if status == TRANSACTION_OUTCOME_SUCCESS {
-                                1u32
-                            } else {
-                                0
-                            };
+                            .evm_space_status();
 
                         let contract_address = match (
                             tx.action(),
-                            status == TRANSACTION_OUTCOME_SUCCESS,
+                            status_code == EVM_TX_OUTCOME_SUCCESS,
                         ) {
                             (Action::Create, true) => {
                                 let (contract_address, _) = contract_address(

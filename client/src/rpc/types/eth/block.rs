@@ -19,10 +19,18 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::rpc::types::{eth::Transaction, Bytes};
-use cfx_types::{hexstr_to_h256, Bloom as H2048, Space, H160, H256, H64, U256};
-use cfxcore::consensus::ConsensusGraphInner;
-use primitives::Block as PrimitiveBlock;
+use cfx_types::{
+    hexstr_to_h256, Bloom as H2048, Space, H160, H256, H64, U256, U64,
+};
+use cfxcore::{
+    consensus::ConsensusGraphInner, executive::contract_address,
+    vm::CreateContractAddress,
+};
+use primitives::{
+    receipt::EVM_TX_OUTCOME_SUCCESS, Action, Block as PrimitiveBlock,
+};
 use serde::{Serialize, Serializer};
+use std::collections::HashMap;
 
 const SHA3_HASH_OF_EMPTY_UNCLE: &str =
     "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347";
@@ -150,6 +158,8 @@ impl Block {
     {
         let mut gas_used = U256::zero();
         let mut logs_bloom = H2048::zero();
+        let mut tx_statuses = HashMap::new();
+        let mut tx_created_addresses = HashMap::new();
 
         let pivot = blocks.last().expect("Inconsistent state");
 
@@ -178,6 +188,30 @@ impl Block {
                         .enumerate()
                         .filter(|(_, tx)| tx.space() == Space::Ethereum)
                         .map(|(idx, tx)| {
+                            let status = res.block_receipts.receipts[idx].evm_space_status();
+                            // save tx contract_address to address_map
+                            let contract_address = match (status == EVM_TX_OUTCOME_SUCCESS, tx.action()) {
+                                (true, Action::Create) => {
+                                    let (contract_address, _) = contract_address(
+                                        CreateContractAddress::FromSenderNonce,
+                                        0.into(),
+                                        &tx.sender(),
+                                        tx.nonce(),
+                                        tx.data(),
+                                    );
+                                    Some(contract_address.address)
+                                },
+                                (_, _) => None,
+                            };
+                            if contract_address.is_some() {
+                                tx_created_addresses.insert(tx.hash, contract_address.unwrap());
+                            }
+                            // set tx status to status_map
+                            tx_statuses.insert(
+                                tx.hash,
+                                U64::from(status),
+                            );
+                            // return gas_changed
                             (res.block_receipts.receipts[idx].gas_fee
                                 / tx.gas_price())
                             .as_u64()
@@ -225,6 +259,8 @@ impl Block {
                         .filter(|tx| tx.space() == Space::Ethereum)
                         .enumerate()
                         .map(|(idx, t)| {
+                            let status = tx_statuses.get(&t.hash).map(|s| *s);
+                            let contract_address = tx_created_addresses.get(&t.hash).map(|a| *a);
                             Transaction::from_signed(
                                 &**t,
                                 (
@@ -232,7 +268,7 @@ impl Block {
                                     Some(pivot.block_header.height().into()), // block_number
                                     Some(idx.into()),
                                 ),
-                                (None, None), // TODO return tx status and contract_address
+                                (status, contract_address),
                             )
                         })
                         .collect(),

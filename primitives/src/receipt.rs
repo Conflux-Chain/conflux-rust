@@ -10,6 +10,8 @@ use rlp_derive::{RlpDecodable, RlpEncodable};
 pub const TRANSACTION_OUTCOME_SUCCESS: u8 = 0;
 pub const TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING: u8 = 1; // gas fee charged
 pub const TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING: u8 = 2; // no gas fee charged
+pub const EVM_TX_OUTCOME_SUCCESS: u8 = 1;
+pub const EVM_TX_OUTCOME_FAILED: u8 = 0;
 
 #[derive(Debug, Clone, PartialEq, Eq, RlpDecodable, RlpEncodable)]
 pub struct StorageChange {
@@ -62,6 +64,15 @@ impl Receipt {
             storage_sponsor_paid,
             storage_collateralized,
             storage_released,
+        }
+    }
+
+    // conflux receipt status code is different with EVM
+    pub fn evm_space_status(&self) -> u8 {
+        if self.outcome_status == TRANSACTION_OUTCOME_SUCCESS {
+            EVM_TX_OUTCOME_SUCCESS
+        } else {
+            EVM_TX_OUTCOME_FAILED
         }
     }
 }
