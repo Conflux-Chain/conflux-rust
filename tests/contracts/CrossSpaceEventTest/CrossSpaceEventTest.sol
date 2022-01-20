@@ -18,6 +18,14 @@ contract CrossSpaceEventTestConfluxSide {
         emit TestEvent(n);
         CROSS_SPACE.callEVM(addr, abi.encodeWithSelector(CrossSpaceEventTestEVMSide.emitEVM.selector, n));
     }
+
+    function emitComplex(uint256 n, bytes20 addr) external {
+        emit TestEvent(n);
+        CROSS_SPACE.callEVM(addr, abi.encodeWithSelector(CrossSpaceEventTestEVMSide.emitEVM.selector, n));
+        emit TestEvent(n);
+        CROSS_SPACE.callEVM(addr, abi.encodeWithSelector(CrossSpaceEventTestEVMSide.emitMultipleEVM.selector, n, 2));
+        emit TestEvent(n);
+    }
 }
 
 contract CrossSpaceEventTestEVMSide {
@@ -25,5 +33,11 @@ contract CrossSpaceEventTestEVMSide {
 
     function emitEVM(uint256 n) external {
         emit TestEvent(n);
+    }
+
+    function emitMultipleEVM(uint256 n, uint256 times) external {
+        for (uint256 ii = 0; ii < times; ++ii) {
+            emit TestEvent(n);
+        }
     }
 }

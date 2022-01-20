@@ -113,7 +113,7 @@ impl EthHandler {
     }
 
     fn get_phantom_block_by_number(
-        &self, block_num: BlockNumber,
+        &self, block_num: BlockNumber, pivot_assumption: Option<H256>,
     ) -> jsonrpc_core::Result<Option<PhantomBlock>> {
         let hashes = self
             .consensus
@@ -130,6 +130,10 @@ impl EthHandler {
         };
 
         let pivot = blocks.last().expect("Inconsistent state");
+
+        if matches!(pivot_assumption, Some(h) if h != pivot.hash()) {
+            return Ok(None);
+        }
 
         let mut phantom_block = PhantomBlock {
             pivot_header: pivot.block_header.clone(),
@@ -202,6 +206,20 @@ impl EthHandler {
         }
 
         Ok(Some(phantom_block))
+    }
+
+    fn get_phantom_block_by_hash(
+        &self, hash: &H256,
+    ) -> jsonrpc_core::Result<Option<PhantomBlock>> {
+        let epoch_num = match self.consensus.get_block_epoch_number(hash) {
+            None => return Ok(None),
+            Some(n) => n,
+        };
+
+        self.get_phantom_block_by_number(
+            BlockNumber::Num(epoch_num),
+            Some(*hash),
+        )
     }
 
     fn get_blocks_by_hash(
@@ -576,14 +594,12 @@ impl Eth for EthHandler {
         );
 
         // keep read lock to ensure consistent view
-        let inner = self.consensus_graph().inner.read();
+        // TODO(thegaram): do not keep lock
+        let _inner = self.consensus_graph().inner.read();
 
-        match self.get_blocks_by_hash(&hash)? {
+        match self.get_phantom_block_by_hash(&hash)? {
             None => Ok(None),
-            Some(blocks) => {
-                let block_refs = blocks.iter().map(|b| &**b).collect();
-                Ok(Some(RpcBlock::new(block_refs, include_txs, &*inner)))
-            }
+            Some(pb) => Ok(Some(RpcBlock::from_phantom(&pb, include_txs))),
         }
     }
 
@@ -596,7 +612,7 @@ impl Eth for EthHandler {
         // TODO(thegaram): do not keep lock
         let _inner = self.consensus_graph().inner.read();
 
-        match self.get_phantom_block_by_number(block_num)? {
+        match self.get_phantom_block_by_number(block_num, None)? {
             None => Ok(None),
             Some(pb) => Ok(Some(RpcBlock::from_phantom(&pb, include_txs))),
         }

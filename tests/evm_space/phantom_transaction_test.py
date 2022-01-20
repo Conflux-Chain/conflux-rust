@@ -31,7 +31,7 @@ def encode_bytes20(hex):
 def number_to_topic(number):
     return "0x" + encode_u256(number)
 
-class CrossSpaceLogFilteringTest(ConfluxTestFramework):
+class PhantomTransactionTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
         self.conf_parameters["evm_chain_id"] = str(10)
@@ -92,9 +92,9 @@ class CrossSpaceLogFilteringTest(ConfluxTestFramework):
             cfx_tx_hashes.append(tx.hash_hex())
             return tx
 
-        def emitBoth(n):
+        def emitComplex(n):
             nonlocal cfx_next_nonce, cfx_tx_hashes
-            data_hex = encode_hex_0x(keccak(b"emitBoth(uint256,bytes20)"))[:10] + encode_u256(n) + encode_bytes20(evmContractAddr.replace('0x', ''))
+            data_hex = encode_hex_0x(keccak(b"emitComplex(uint256,bytes20)"))[:10] + encode_u256(n) + encode_bytes20(evmContractAddr.replace('0x', ''))
             tx = self.rpc.new_contract_tx(receiver=confluxContractAddr, data_hex=data_hex, nonce = cfx_next_nonce, sender=self.cfxAccount, priv_key=self.cfxPrivkey)
             cfx_next_nonce += 1
             cfx_tx_hashes.append(tx.hash_hex())
@@ -113,33 +113,34 @@ class CrossSpaceLogFilteringTest(ConfluxTestFramework):
 
         block_a = self.rpc.generate_custom_block(parent_hash = block_0, referee = [], txs = [
             emitConflux(11),
-            emitBoth(12),
-            emitEVM(13),
+            emitEVM(12),
+            emitComplex(13),
         ])
 
         block_b = self.rpc.generate_custom_block(parent_hash = block_a, referee = [], txs = [
             emitConflux(14),
-            emitBoth(15),
-            emitEVM(16),
+            emitEVM(15),
+            emitComplex(16),
         ])
 
         block_c = self.rpc.generate_custom_block(parent_hash = block_b, referee = [], txs = [])
 
         block_d = self.rpc.generate_custom_block(parent_hash = block_a, referee = [], txs = [
             emitConflux(21),
-            emitBoth(22),
-            emitEVM(23),
+            emitEVM(22),
+            emitComplex(23),
         ])
 
         block_e = self.rpc.generate_custom_block(parent_hash = block_c, referee = [block_d], txs = [
             emitConflux(24),
-            emitBoth(25),
-            emitEVM(26),
+            emitEVM(25),
+            emitComplex(26),
         ])
 
-        epoch_a = self.rpc.block_by_hash(block_a)['epochNumber']
-        epoch_b = self.rpc.block_by_hash(block_b)['epochNumber']
-        epoch_e = self.rpc.block_by_hash(block_e)['epochNumber']
+        [epoch_a, block_number_a] = [self.rpc.block_by_hash(block_a)[key] for key in ['epochNumber', 'blockNumber']]
+        [epoch_b, block_number_b] = [self.rpc.block_by_hash(block_b)[key] for key in ['epochNumber', 'blockNumber']]
+        [epoch_d, block_number_d] = [self.rpc.block_by_hash(block_d)[key] for key in ['epochNumber', 'blockNumber']]
+        [epoch_e, block_number_e] = [self.rpc.block_by_hash(block_e)[key] for key in ['epochNumber', 'blockNumber']]
 
         # make sure transactions have been executed
         parent_hash = block_e
@@ -156,151 +157,110 @@ class CrossSpaceLogFilteringTest(ConfluxTestFramework):
             receipt = self.w3.eth.waitForTransactionReceipt(h)
             assert_equal(receipt["status"], 1)
 
-        # check Conflux events
-        filter = Filter(topics=[TEST_EVENT_TOPIC], from_epoch=epoch_a, to_epoch=epoch_e)
-        logs = self.rpc.get_logs(filter)
-        assert_equal(len(logs), 8)
+        # TODO: add failing tx
 
+        # ---------------------------------------------------------------------
 
-        # --------------- 1 block per epoch ---------------
-        # check EVM events
-        # we expect 4 events: #12, #13, #15, #16
-        filter = { "topics": [TEST_EVENT_TOPIC], "fromBlock": epoch_a, "toBlock": epoch_b }
-        logs = self.nodes[0].eth_getLogs(filter)
-        assert_equal(len(logs), 4)
+        # Conflux perspective:
+        # A: 2 txs (events: [11], [13, X, X, 13, X, X, 13])  X ~ internal contract event
+        # B: 2 txs (events: [14], [16, X, X, 16, X, X, 16])
+        # C: /
+        # D: 2 txs (events: [21], [23, X, X, 23, X, X, 23])
+        # E: 2 txs (events: [24], [26, X, X, 26, X, X, 26])
 
-        # emitBoth: TestEvent(12)
-        assert_equal(logs[0]["data"], number_to_topic(12))
-        assert_equal(logs[0]["address"], evmContractAddr.lower())
-        assert_equal(logs[0]["blockHash"], block_a)
-        assert_equal(logs[0]["blockNumber"], epoch_a)
-        assert_equal(logs[0]["transactionHash"], cfx_tx_hashes[1]) # TODO: should use phantom tx here
-        # assert_equal(logs[0]["logIndex"], '0x0')
-        # assert_equal(logs[0]["transactionIndex"], '0x0')
-        # assert_equal(logs[0]["transactionLogIndex"], '0x0')
-        assert_equal(logs[0]["removed"], False)
+        # block #A
+        block = self.nodes[0].cfx_getBlockByHash(block_a, True)
+        assert_equal(len(block["transactions"]), 2)
 
-        # emitEVM: TestEvent(13)
-        assert_equal(logs[1]["data"], number_to_topic(13))
-        assert_equal(logs[1]["address"], evmContractAddr.lower())
-        assert_equal(logs[1]["blockHash"], block_a)
-        assert_equal(logs[1]["blockNumber"], epoch_a)
-        assert_equal(logs[1]["transactionHash"], evm_tx_hashes[0].hex())
-        # assert_equal(logs[1]["logIndex"], '0x1')
-        # assert_equal(logs[1]["transactionIndex"], '0x1')
-        assert_equal(logs[1]["transactionLogIndex"], '0x0')
-        assert_equal(logs[1]["removed"], False)
+        block2 = self.nodes[0].cfx_getBlockByBlockNumber(block_number_a, True)
+        assert_equal(block2, block)
 
-        # emitBoth: TestEvent(15)
-        assert_equal(logs[2]["data"], number_to_topic(15))
-        assert_equal(logs[2]["address"], evmContractAddr.lower())
-        assert_equal(logs[2]["blockHash"], block_b)
-        assert_equal(logs[2]["blockNumber"], epoch_b)
-        assert_equal(logs[2]["transactionHash"], cfx_tx_hashes[3]) # TODO: should use phantom tx here
-        # assert_equal(logs[2]["logIndex"], '0x0')
-        # assert_equal(logs[2]["transactionIndex"], '0x0')
-        # assert_equal(logs[2]["transactionLogIndex"], '0x0')
-        assert_equal(logs[2]["removed"], False)
+        tx_hashes = self.nodes[0].cfx_getBlockByHash(block_a, False)["transactions"]
+        assert_equal(len(tx_hashes), 2)
 
-        # emitEVM: TestEvent(16)
-        assert_equal(logs[3]["data"], number_to_topic(16))
-        assert_equal(logs[3]["address"], evmContractAddr.lower())
-        assert_equal(logs[3]["blockHash"], block_b)
-        assert_equal(logs[3]["blockNumber"], epoch_b)
-        assert_equal(logs[3]["transactionHash"], evm_tx_hashes[1].hex())
-        # assert_equal(logs[3]["logIndex"], '0x1')
-        # assert_equal(logs[3]["transactionIndex"], '0x1')
-        assert_equal(logs[3]["transactionLogIndex"], '0x0')
-        assert_equal(logs[3]["removed"], False)
+        for idx, tx in enumerate(block["transactions"]):
+            # check returned hash
+            assert_equal(tx["hash"], tx_hashes[idx])
 
+            # check indexing
+            # assert_equal(tx["transactionIndex"], hex(idx))
 
-        # --------------- 2 blocks per epoch ---------------
-        # check EVM events
-        # we expect 4 events: #22, #23, #25, #26
-        filter = { "topics": [TEST_EVENT_TOPIC], "fromBlock": epoch_e, "toBlock": epoch_e }
-        logs = self.nodes[0].eth_getLogs(filter)
-        assert_equal(len(logs), 4)
+            # check cfx_getTransactionByHash
+            assert_equal(tx, self.nodes[0].cfx_getTransactionByHash(tx["hash"]))
 
-        # emitBoth: TestEvent(22)
-        assert_equal(logs[0]["data"], number_to_topic(22))
-        assert_equal(logs[0]["address"], evmContractAddr.lower())
-        assert_equal(logs[0]["blockHash"], block_e)
-        assert_equal(logs[0]["blockNumber"], epoch_e)
-        assert_equal(logs[0]["transactionHash"], cfx_tx_hashes[5]) # TODO: should use phantom tx here
-        # assert_equal(logs[0]["logIndex"], '0x0')
-        # assert_equal(logs[0]["transactionIndex"], '0x0')
-        # assert_equal(logs[0]["transactionLogIndex"], '0x0')
-        assert_equal(logs[0]["removed"], False)
+        receipts = self.nodes[0].cfx_getEpochReceipts(epoch_a)
+        assert_equal(len(receipts), 1)    # 1 block
+        assert_equal(len(receipts[0]), 2) # 2 receipts
 
-        # emitEVM: TestEvent(23)
-        assert_equal(logs[1]["data"], number_to_topic(23))
-        assert_equal(logs[1]["address"], evmContractAddr.lower())
-        assert_equal(logs[1]["blockHash"], block_e)
-        assert_equal(logs[1]["blockNumber"], epoch_e)
-        assert_equal(logs[1]["transactionHash"], evm_tx_hashes[2].hex())
-        # assert_equal(logs[1]["logIndex"], '0x1')
-        # assert_equal(logs[1]["transactionIndex"], '0x1')
-        assert_equal(logs[1]["transactionLogIndex"], '0x0')
-        assert_equal(logs[1]["removed"], False)
+        receipts2 = self.nodes[0].cfx_getEpochReceipts(f'hash:{block_a}')
+        assert_equal(receipts2, receipts)
 
-        # emitBoth: TestEvent(25)
-        assert_equal(logs[2]["data"], number_to_topic(25))
-        assert_equal(logs[2]["address"], evmContractAddr.lower())
-        assert_equal(logs[2]["blockHash"], block_e)
-        assert_equal(logs[2]["blockNumber"], epoch_e)
-        assert_equal(logs[2]["transactionHash"], cfx_tx_hashes[7]) # TODO: should use phantom tx here
-        # assert_equal(logs[2]["logIndex"], '0x2')
-        # assert_equal(logs[2]["transactionIndex"], '0x2')
-        # assert_equal(logs[2]["transactionLogIndex"], '0x0')
-        assert_equal(logs[2]["removed"], False)
+        assert_equal(len(receipts[0][0]["logs"]), 1)
+        assert_equal(receipts[0][0]["logs"][0]["data"], number_to_topic(11))
 
-        # emitEVM: TestEvent(26)
-        assert_equal(logs[3]["data"], number_to_topic(26))
-        assert_equal(logs[3]["address"], evmContractAddr.lower())
-        assert_equal(logs[3]["blockHash"], block_e)
-        assert_equal(logs[3]["blockNumber"], epoch_e)
-        assert_equal(logs[3]["transactionHash"], evm_tx_hashes[3].hex())
-        # assert_equal(logs[3]["logIndex"], '0x3')
-        # assert_equal(logs[3]["transactionIndex"], '0x3')
-        assert_equal(logs[3]["transactionLogIndex"], '0x0')
-        assert_equal(logs[3]["removed"], False)
+        assert_equal(len(receipts[0][1]["logs"]), 7)
+        assert_equal(receipts[0][1]["logs"][0]["data"], number_to_topic(13))
+        # Call, Outcome, ...
+        assert_equal(receipts[0][1]["logs"][3]["data"], number_to_topic(13))
+        # Call, Outcome, ...
+        assert_equal(receipts[0][1]["logs"][6]["data"], number_to_topic(13))
 
+        # TODO....
 
-        # --------------- other fields ---------------
-        # filter by block hash
-        filter = { "topics": [TEST_EVENT_TOPIC], "blockHash": block_c }
-        logs_2 = self.nodes[0].eth_getLogs(filter)
-        assert_equal(logs_2, [])
+        # ---------------------------------------------------------------------
 
-        filter = { "topics": [TEST_EVENT_TOPIC], "blockHash": block_d } # from EVM perspective, D does not exist
-        assert_raises_rpc_error(None, None, self.nodes[0].eth_getLogs, filter)
+        # EVM perspective:
+        # A: 7 txs (events: [12], [], [], [13, 13], [], [], [13, 13])
+        # B: 7 txs (events: [15], [], [], [16, 16], [], [], [16, 16])
+        # C: /
+        # E: 14 txs (events: [22], [], [], [23, 23], [], [], [23, 23], [25], [], [], [26, 26], [], [], [26, 26])
 
-        filter = { "topics": [TEST_EVENT_TOPIC], "blockHash": block_e }
-        logs_2 = self.nodes[0].eth_getLogs(filter)
-        assert_equal(logs_2, logs)
+        # block #A
+        block = self.nodes[0].eth_getBlockByNumber(epoch_a, True)
+        assert_equal(len(block["transactions"]), 7)
 
-        # filter limit
-        filter = { "topics": [TEST_EVENT_TOPIC], "blockHash": block_e, "limit": 1 }
-        logs_2 = self.nodes[0].eth_getLogs(filter)
-        assert_equal(logs_2, [logs[-1]])
+        block2 = self.nodes[0].eth_getBlockByHash(block_a, True)
+        assert_equal(block2, block)
 
-        # "earliest", "latest"
-        filter = { "topics": [TEST_EVENT_TOPIC], "fromBlock": "earliest", "toBlock": "latest" }
-        logs_2 = self.nodes[0].eth_getLogs(filter)
-        assert_equal(len(logs_2), 8)
+        tx_hashes = self.nodes[0].eth_getBlockByNumber(epoch_a, False)["transactions"]
+        assert_equal(len(tx_hashes), 7)
 
-        filter = { "topics": [TEST_EVENT_TOPIC], "fromBlock": "earliest", "toBlock": "latest", "limit": 4 }
-        logs_2 = self.nodes[0].eth_getLogs(filter)
-        assert_equal(logs_2, logs)
+        for idx, tx in enumerate(block["transactions"]):
+            # check returned hash
+            assert_equal(tx["hash"], tx_hashes[idx])
 
-        # address
-        filter = { "address": confluxContractAddr }
-        logs_2 = self.nodes[0].eth_getLogs(filter)
-        assert_equal(logs_2, [])
+            # check indexing
+            assert_equal(tx["transactionIndex"], hex(idx))
 
-        filter = { "address": evmContractAddr}
-        logs_2 = self.nodes[0].eth_getLogs(filter)
-        assert_equal(len(logs_2), 8)
+            # check eth_getTransactionByHash
+            # assert_equal(tx, self.nodes[0].eth_getTransactionByHash(tx["hash"]))
+
+        # TODO: check transaction details
+        # TODO: check receipts
+
+        # block #D
+        block = self.nodes[0].eth_getBlockByHash(block_d, True)
+        assert_equal(block, None)
+
+        # block #E
+        block = self.nodes[0].eth_getBlockByNumber(epoch_e, True)
+        assert_equal(len(block["transactions"]), 14)
+
+        block2 = self.nodes[0].eth_getBlockByHash(block_e, True)
+        assert_equal(block2, block)
+
+        tx_hashes = self.nodes[0].eth_getBlockByNumber(epoch_e, False)["transactions"]
+        assert_equal(len(tx_hashes), 14)
+
+        for idx, tx in enumerate(block["transactions"]):
+            # check returned hash
+            assert_equal(tx["hash"], tx_hashes[idx])
+
+            # check indexing
+            assert_equal(tx["transactionIndex"], hex(idx))
+
+            # check eth_getTransactionByHash
+            # assert_equal(tx, self.nodes[0].eth_getTransactionByHash(tx["hash"]))
 
         self.log.info("Pass")
 
@@ -372,4 +332,4 @@ class CrossSpaceLogFilteringTest(ConfluxTestFramework):
         return tx, signed["hash"]
 
 if __name__ == "__main__":
-    CrossSpaceLogFilteringTest().main()
+    PhantomTransactionTest().main()
