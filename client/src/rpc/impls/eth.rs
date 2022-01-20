@@ -297,7 +297,7 @@ impl EthHandler {
                 block_number,
                 transaction_hash,
                 transaction_index,
-                log_index: Some((prior_log_count + idx).into()),
+                log_index: Some((prior_log_count + idx).into()),  // TODO count the right index in whole block
                 transaction_log_index: Some(idx.into()),
                 removed: false,
             })
