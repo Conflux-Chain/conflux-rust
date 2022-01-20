@@ -47,7 +47,7 @@ pub struct Receipt {
 impl Receipt {
     pub fn new(
         outcome: u8, accumulated_gas_used: U256, gas_fee: U256,
-        gas_sponsor_paid: bool, logs: Vec<LogEntry>,
+        gas_sponsor_paid: bool, logs: Vec<LogEntry>, log_bloom: Bloom,
         storage_sponsor_paid: bool, storage_collateralized: Vec<StorageChange>,
         storage_released: Vec<StorageChange>,
     ) -> Self
@@ -56,10 +56,7 @@ impl Receipt {
             accumulated_gas_used,
             gas_fee,
             gas_sponsor_paid,
-            log_bloom: logs.iter().fold(Bloom::default(), |mut b, l| {
-                b.accrue_bloom(&l.bloom());
-                b
-            }),
+            log_bloom,
             logs,
             outcome_status: outcome,
             storage_sponsor_paid,
