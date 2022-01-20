@@ -2,22 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-// Copyright 2015-2020 Parity Technologies (UK) Ltd.
-// This file is part of OpenEthereum.
-
-// OpenEthereum is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-
-// OpenEthereum is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-
-// You should have received a copy of the GNU General Public License
-// along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
-
 use crate::rpc::types::Bytes;
 use cfx_types::{H160, H256, H512, U256, U64};
 use cfxcore::{executive::contract_address, vm::CreateContractAddress};
@@ -95,35 +79,6 @@ impl Transaction {
         let signature = t.signature();
         let scheme = CreateContractAddress::FromSenderNonce;
 
-        // We only support EIP-155
-        // let access_list = match t.as_unsigned() {
-        //     TypedTransaction::AccessList(tx) => {
-        //         Some(tx.access_list.clone().into_iter().map(Into::into).
-        // collect())     }
-        //     TypedTransaction::EIP1559Transaction(tx) => Some(
-        //         tx.transaction
-        //             .access_list
-        //             .clone()
-        //             .into_iter()
-        //             .map(Into::into)
-        //             .collect(),
-        //     ),
-        //     TypedTransaction::Legacy(_) => None,
-        // };
-
-        // let (max_fee_per_gas, max_priority_fee_per_gas) =
-        //     if let TypedTransaction::EIP1559Transaction(tx) = t.as_unsigned()
-        // {         (Some(tx.tx().gas_price),
-        // Some(tx.max_priority_fee_per_gas))     } else {
-        //         (None, None)
-        //     };
-
-        // let standard_v = if t.tx_type() == TypedTxId::Legacy {
-        //     Some(t.standard_v())
-        // } else {
-        //     None
-        // };
-
         Transaction {
             hash: t.hash(),
             nonce: *t.nonce(),
@@ -137,7 +92,7 @@ impl Transaction {
             },
             value: *t.value(),
             gas_price: *t.gas_price(),
-            max_fee_per_gas: None, // TODO: I'm not sure what it is.
+            max_fee_per_gas: None,
             gas: *t.gas(),
             input: Bytes::new(t.data().clone()),
             creates: match t.action() {
@@ -168,74 +123,3 @@ impl Transaction {
         }
     }
 }
-
-/*#[cfg(test)]
-mod tests {
-    use super::{LocalTransactionStatus, Transaction};
-    use ethereum_types::H256;
-    use serde_json;
-    use types::transaction::TypedTxId;
-    use v1::types::AccessListItem;
-
-    #[test]
-    fn test_transaction_serialize() {
-        let mut t = Transaction::default();
-        t.transaction_type = TypedTxId::AccessList.to_U64_option_id();
-        t.access_list = Some(vec![AccessListItem::default()]);
-        let serialized = serde_json::to_string(&t).unwrap();
-        assert_eq!(
-            serialized,
-            r#"{"type":"0x1","hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"0x0000000000000000000000000000000000000000","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","input":"0x","creates":null,"raw":"0x","publicKey":null,"chainId":null,"v":"0x0","r":"0x0","s":"0x0","condition":null,"accessList":[{"address":"0x0000000000000000000000000000000000000000","storageKeys":[]}]}"#
-        );
-    }
-
-    #[test]
-    fn test_local_transaction_status_serialize() {
-        let tx_ser = serde_json::to_string(&Transaction::default()).unwrap();
-        let status1 = LocalTransactionStatus::Pending;
-        let status2 = LocalTransactionStatus::Future;
-        let status3 = LocalTransactionStatus::Mined(Transaction::default());
-        let status4 = LocalTransactionStatus::Dropped(Transaction::default());
-        let status5 = LocalTransactionStatus::Invalid(Transaction::default());
-        let status6 =
-            LocalTransactionStatus::Rejected(Transaction::default(), "Just because".into());
-        let status7 = LocalTransactionStatus::Replaced(
-            Transaction::default(),
-            5.into(),
-            H256::from_low_u64_be(10),
-        );
-
-        assert_eq!(
-            serde_json::to_string(&status1).unwrap(),
-            r#"{"status":"pending"}"#
-        );
-        assert_eq!(
-            serde_json::to_string(&status2).unwrap(),
-            r#"{"status":"future"}"#
-        );
-        assert_eq!(
-            serde_json::to_string(&status3).unwrap(),
-            r#"{"status":"mined","transaction":"#.to_owned() + &format!("{}", tx_ser) + r#"}"#
-        );
-        assert_eq!(
-            serde_json::to_string(&status4).unwrap(),
-            r#"{"status":"dropped","transaction":"#.to_owned() + &format!("{}", tx_ser) + r#"}"#
-        );
-        assert_eq!(
-            serde_json::to_string(&status5).unwrap(),
-            r#"{"status":"invalid","transaction":"#.to_owned() + &format!("{}", tx_ser) + r#"}"#
-        );
-        assert_eq!(
-            serde_json::to_string(&status6).unwrap(),
-            r#"{"status":"rejected","transaction":"#.to_owned()
-                + &format!("{}", tx_ser)
-                + r#","error":"Just because"}"#
-        );
-        assert_eq!(
-            serde_json::to_string(&status7).unwrap(),
-            r#"{"status":"replaced","transaction":"#.to_owned()
-                + &format!("{}", tx_ser)
-                + r#","hash":"0x000000000000000000000000000000000000000000000000000000000000000a","gasPrice":"0x5"}"#
-        );
-    }
-}*/
