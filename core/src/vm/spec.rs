@@ -101,6 +101,8 @@ pub struct Spec {
     pub suicide_gas: usize,
     /// Price for retiring PoS node.
     pub retire_gas: usize,
+    /// Price for deploying Eip-1820 contract.
+    pub eip1820_gas: usize,
     /// Amount of additional gas to pay when SUICIDE credits a non-existant
     /// account
     pub suicide_to_new_account_cost: usize,
@@ -259,6 +261,7 @@ impl Spec {
             balance_gas: 400,
             suicide_gas: 5000,
             retire_gas: 5_000_000,
+            eip1820_gas: 1_500_000,
             suicide_to_new_account_cost: 25000,
             sub_gas_cap_divisor: Some(64),
             no_empty: true,
