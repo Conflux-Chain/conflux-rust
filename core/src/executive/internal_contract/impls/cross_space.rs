@@ -38,7 +38,8 @@ pub fn create_gas(context: &InternalRefContext, code: &[u8]) -> DbResult<U256> {
     let code_length = code.len();
 
     let transaction_gas =
-        gas_required_for(/* is_create */ true, code, context.spec);
+        gas_required_for(/* is_create */ true, code, context.spec)
+            + 2 * context.spec.tx_gas;
 
     let create_gas = U256::from(context.spec.create_gas);
 
@@ -46,7 +47,7 @@ pub fn create_gas(context: &InternalRefContext, code: &[u8]) -> DbResult<U256> {
 
     let create_log_gas = {
         let log_data_length =
-            H256::len_bytes() * 5 + (code_length + 31) / 32 * 32;
+            H256::len_bytes() * 6 + (code_length + 31) / 32 * 32;
         context.spec.log_gas
             + 3 * context.spec.log_topic_gas
             + context.spec.log_data_gas * log_data_length
@@ -74,7 +75,8 @@ pub fn call_gas(
     let data_length = data.len();
 
     let transaction_gas =
-        gas_required_for(/* is_create */ false, data, context.spec);
+        gas_required_for(/* is_create */ false, data, context.spec)
+            + 2 * context.spec.tx_gas;
 
     let new_account = !context
         .state
@@ -98,7 +100,7 @@ pub fn call_gas(
 
     let call_log_gas = {
         let log_data_length =
-            H256::len_bytes() * 5 + (data_length + 31) / 32 * 32;
+            H256::len_bytes() * 6 + (data_length + 31) / 32 * 32;
         context.spec.log_gas
             + 3 * context.spec.log_topic_gas
             + context.spec.log_data_gas * log_data_length
@@ -127,11 +129,11 @@ pub fn static_call_gas(spec: &Spec) -> U256 {
 
 pub fn withdraw_gas(spec: &Spec) -> U256 {
     let call_gas = U256::from(spec.call_value_transfer_gas);
-    let transaction_gas = spec.tx_gas;
+    let transaction_gas = spec.tx_gas * 2;
     let address_mapping_gas = spec.sha3_gas;
     let log_gas = spec.log_gas
         + spec.log_topic_gas * 3
-        + spec.log_data_gas * H256::len_bytes();
+        + spec.log_data_gas * H256::len_bytes() * 3;
 
     call_gas + transaction_gas + address_mapping_gas + log_gas
 }
@@ -348,13 +350,20 @@ pub fn call_to_evmcore(
     };
 
     if call_type == CallType::Call {
-        let nonce = context.state.nonce(&mapped_sender)?;
+        let sender_nonce = context.state.nonce(&mapped_sender)?;
+
+        let zero_address = Address::zero().with_evm_space();
+        let zero_nonce = context.state.nonce(&zero_address)?;
         context
             .state
             .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
+        context
+            .state
+            .inc_nonce(&zero_address, &context.spec.account_start_nonce)?;
+
         CallEvent::log(
             &(mapped_sender.address.0, address.address.0),
-            &(value, nonce, call_gas, data),
+            &(value, sender_nonce, zero_nonce, call_gas, data),
             params,
             context,
         )?;
@@ -438,13 +447,19 @@ pub fn create_to_evmcore(
         params_type: ParamsType::Embedded,
     };
 
-    let nonce = context.state.nonce(&mapped_sender)?;
+    let sender_nonce = context.state.nonce(&mapped_sender)?;
+
+    let zero_address = Address::zero().with_evm_space();
+    let zero_nonce = context.state.nonce(&zero_address)?;
     context
         .state
         .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
+    context
+        .state
+        .inc_nonce(&zero_address, &context.spec.account_start_nonce)?;
     CreateEvent::log(
         &(mapped_sender.address.0, address.0),
-        &(value, nonce, call_gas, init),
+        &(value, sender_nonce, zero_nonce, call_gas, init),
         params,
         context,
     )?;
@@ -484,13 +499,19 @@ pub fn withdraw_from_evmcore(
         value,
     );
 
-    let nonce = context.state.nonce(&mapped_address)?;
+    let sender_nonce = context.state.nonce(&mapped_sender)?;
+
+    let zero_address = Address::zero().with_evm_space();
+    let zero_nonce = context.state.nonce(&zero_address)?;
     context
         .state
-        .inc_nonce(&mapped_address, &context.spec.account_start_nonce)?;
+        .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
+    context
+        .state
+        .inc_nonce(&zero_address, &context.spec.account_start_nonce)?;
     WithdrawEvent::log(
         &(mapped_address.address.0, sender),
-        &(params.value.value(), nonce),
+        &(value, sender_nonce, zero_nonce),
         params,
         context,
     )?;
@@ -564,12 +585,18 @@ pub fn recover_phantom(
                 let to = Address::from(
                     Bytes20::abi_decode(&log.topics[2].as_ref()).unwrap(),
                 );
-                let (value, nonce, gas_limit, data): (_, _, U256, Vec<u8>) =
-                    ABIDecodable::abi_decode(&log.data).unwrap();
+                let (value, sender_nonce, zero_nonce, gas_limit, data): (
+                    _,
+                    _,
+                    _,
+                    U256,
+                    Vec<u8>,
+                ) = ABIDecodable::abi_decode(&log.data).unwrap();
 
                 let is_create = event_sig == &CreateEvent::EVENT_SIG;
-                let gas_limit: U256 =
-                    gas_limit + gas_required_for(is_create, &data, spec);
+                let gas_limit: U256 = gas_limit
+                    + gas_required_for(is_create, &data, spec)
+                    + spec.tx_gas;
                 let action = if is_create {
                     Action::Create
                 } else {
@@ -581,8 +608,7 @@ pub fn recover_phantom(
                 phantom_txs.push(PhantomTransaction::simple_transfer(
                     /* from */ Address::zero(),
                     /* to */ from,
-                    U256::zero(), /* TODO: maintain nonce for the zero
-                                   * address. */
+                    zero_nonce,
                     value + gas_limit * gas_price,
                     spec,
                 ));
@@ -591,7 +617,7 @@ pub fn recover_phantom(
                 // sender
                 maybe_working_tx = Some(PhantomTransaction {
                     from,
-                    nonce,
+                    nonce: sender_nonce,
                     action,
                     value,
                     gas_limit,
@@ -602,13 +628,20 @@ pub fn recover_phantom(
                 let from = Address::from(
                     Bytes20::abi_decode(&log.topics[1].as_ref()).unwrap(),
                 );
-                let (value, nonce) =
+                let (value, sender_nonce, zero_nonce) =
                     ABIDecodable::abi_decode(&log.data).unwrap();
                 // The only one transaction for the withdraw
                 phantom_txs.push(PhantomTransaction::simple_transfer(
+                    /* from */ Address::zero(),
+                    /* to */ from,
+                    zero_nonce,
+                    gas_price * spec.tx_gas,
+                    spec,
+                ));
+                phantom_txs.push(PhantomTransaction::simple_transfer(
                     from,
                     Address::zero(),
-                    nonce,
+                    sender_nonce,
                     value,
                     spec,
                 ));

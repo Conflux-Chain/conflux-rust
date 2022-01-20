@@ -61,15 +61,15 @@ group_impl_is_active!(
 );
 
 make_solidity_event! {
-    pub struct CallEvent("Call(bytes20,bytes20,uint256,uint256,uint256,bytes)", indexed: (Bytes20, Bytes20), non_indexed: (U256, U256, U256, Bytes));
+    pub struct CallEvent("Call(bytes20,bytes20,uint256,uint256,uint256,uint256,bytes)", indexed: (Bytes20, Bytes20), non_indexed: (U256, U256, U256, U256,Bytes));
 }
 
 make_solidity_event! {
-    pub struct CreateEvent("Create(bytes20,bytes20,uint256,uint256,uint256,bytes)", indexed: (Bytes20, Bytes20), non_indexed: (U256, U256, U256, Bytes));
+    pub struct CreateEvent("Create(bytes20,bytes20,uint256,uint256,uint256,uint256,bytes)", indexed: (Bytes20, Bytes20), non_indexed: (U256, U256, U256, U256,Bytes));
 }
 
 make_solidity_event! {
-    pub struct WithdrawEvent("Withdraw(bytes20,address,uint256,uint256)", indexed: (Bytes20, Address), non_indexed: (U256,U256));
+    pub struct WithdrawEvent("Withdraw(bytes20,address,uint256,uint256,uint256)", indexed: (Bytes20, Address), non_indexed: (U256,U256,U256));
 }
 
 make_solidity_event! {
