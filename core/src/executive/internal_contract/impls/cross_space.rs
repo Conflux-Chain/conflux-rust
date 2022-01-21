@@ -514,14 +514,14 @@ pub struct PhantomTransaction {
 
 impl PhantomTransaction {
     fn simple_transfer(
-        from: Address, to: Address, nonce: U256, value: U256,
+        from: Address, to: Address, nonce: U256, value: U256, data: Vec<u8>,
     ) -> PhantomTransaction {
         PhantomTransaction {
             from,
             nonce,
             action: Action::Call(to),
             value,
-            data: vec![],
+            data,
             outcome_status_in_evm: EVM_SPACE_SUCCESS,
             ..Default::default()
         }
@@ -531,11 +531,12 @@ impl PhantomTransaction {
 type Bytes20 = [u8; 20];
 
 pub fn build_bloom_and_recover_phantom(
-    logs: &[LogEntry],
+    logs: &[LogEntry], tx_hash: H256,
 ) -> (Vec<PhantomTransaction>, Bloom) {
     let mut phantom_txs: Vec<PhantomTransaction> = Default::default();
     let mut maybe_working_tx: Option<PhantomTransaction> = None;
     let mut all_bloom = Bloom::default();
+    let mut cross_space_nonce = 0u32;
     for log in logs.iter() {
         let log_bloom = log.bloom();
         all_bloom.accrue_bloom(&log_bloom);
@@ -569,7 +570,10 @@ pub fn build_bloom_and_recover_phantom(
                     /* to */ from,
                     U256::zero(), // Zero address always has nonce 0.
                     value,
+                    /* data */
+                    (tx_hash, U256::from(cross_space_nonce)).abi_encode(),
                 ));
+                cross_space_nonce += 1;
                 // The second phantom transaction for cross-space call, transfer
                 // balance and gas fee from the zero address to the mapped
                 // sender
@@ -593,6 +597,7 @@ pub fn build_bloom_and_recover_phantom(
                     Address::zero(),
                     nonce,
                     value,
+                    /* data */ vec![],
                 ));
             } else if event_sig == &ReturnEvent::EVENT_SIG {
                 let success: bool =
