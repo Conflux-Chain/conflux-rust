@@ -14,7 +14,9 @@ use crate::{
     },
     evm::Spec,
     executive::{
-        internal_contract::impls::pos::decode_register_info,
+        internal_contract::{
+            build_bloom_and_recover_phantom, impls::pos::decode_register_info,
+        },
         revert_reason_decode, ExecutionError, ExecutionOutcome, Executive,
         TransactOptions,
     },
@@ -47,7 +49,7 @@ use cfx_storage::{
 };
 use cfx_types::{
     address_util::AddressUtil, AddressSpaceUtil, AllChainID, BigEndianHash,
-    Space, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
+    Bloom, Space, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
 };
 use core::convert::TryFrom;
 use hash::KECCAK_EMPTY_LIST_RLP;
@@ -1252,6 +1254,7 @@ impl ConsensusExecutionHandler {
                 let mut transaction_logs = Vec::new();
                 let mut storage_released = Vec::new();
                 let mut storage_collateralized = Vec::new();
+                let mut log_bloom = Bloom::default();
 
                 let options = if self.config.executive_trace {
                     TransactOptions::with_tracing()
@@ -1351,6 +1354,12 @@ impl ConsensusExecutionHandler {
                         gas_sponsor_paid = executed.gas_sponsor_paid;
                         storage_sponsor_paid = executed.storage_sponsor_paid;
 
+                        let (phantom_txs, bloom) =
+                            build_bloom_and_recover_phantom(&transaction_logs);
+                        log_bloom = bloom;
+                        // TODO: Store the phantom transactions properly.
+                        let _ = phantom_txs;
+
                         trace!("tx executed successfully: result={:?}, transaction={:?}, in block {:?}", executed, transaction, block.hash());
 
                         if self.config.executive_trace {
@@ -1377,6 +1386,7 @@ impl ConsensusExecutionHandler {
                     gas_fee,
                     gas_sponsor_paid,
                     transaction_logs,
+                    log_bloom,
                     storage_sponsor_paid,
                     storage_collateralized,
                     storage_released,

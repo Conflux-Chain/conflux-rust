@@ -61,11 +61,11 @@ group_impl_is_active!(
 );
 
 make_solidity_event! {
-    pub struct CallEvent("Call(bytes20,bytes20,uint256,uint256,uint256,bytes)", indexed: (Bytes20, Bytes20), non_indexed: (U256, U256, U256, Bytes));
+    pub struct CallEvent("Call(bytes20,bytes20,uint256,uint256,bytes)", indexed: (Bytes20, Bytes20), non_indexed: (U256, U256, Bytes));
 }
 
 make_solidity_event! {
-    pub struct CreateEvent("Create(bytes20,bytes20,uint256,uint256,uint256,bytes)", indexed: (Bytes20, Bytes20), non_indexed: (U256, U256, U256, Bytes));
+    pub struct CreateEvent("Create(bytes20,bytes20,uint256,uint256,bytes)", indexed: (Bytes20, Bytes20), non_indexed: (U256, U256, Bytes));
 }
 
 make_solidity_event! {
@@ -73,7 +73,7 @@ make_solidity_event! {
 }
 
 make_solidity_event! {
-    pub struct ReturnEvent("Outcome(uint256,uint256,bool)", indexed: (), non_indexed: (U256,U256, bool));
+    pub struct ReturnEvent("Outcome(bool)", indexed: (), non_indexed: bool);
 }
 
 make_solidity_function! {
@@ -325,6 +325,7 @@ impl SimpleExecutionTrait for DeployEip1820 {
             eip_1820::BYTE_CODE.clone(),
             Address::zero(),
         )?;
+        context.substate.contracts_created_mut().push(address);
         Ok(())
     }
 }
