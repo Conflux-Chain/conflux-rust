@@ -23,7 +23,7 @@ use cfxcore::{
     SharedTransactionPool,
 };
 use primitives::{
-    filter::LogFilter, receipt::EVM_TX_OUTCOME_SUCCESS, Action, Block,
+    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action, Block,
     BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, SignedTransaction,
     StorageKey, StorageValue, TransactionIndex, TransactionWithSignature,
 };
@@ -263,7 +263,7 @@ impl EthHandler {
 
         let status_code = primitive_receipt.evm_space_status();
 
-        let contract_address = match status_code == EVM_TX_OUTCOME_SUCCESS {
+        let contract_address = match status_code == EVM_SPACE_SUCCESS {
             true => Transaction::deployed_contract_address(tx),
             false => None,
         };
@@ -282,10 +282,10 @@ impl EthHandler {
                 address: log.address,
                 topics: log.topics,
                 data: Bytes(log.data),
-                block_hash,
+                block_hash,  // TODO use pivot hash here
                 block_number,
                 transaction_hash,
-                transaction_index,
+                transaction_index, // TODO use right tx index
                 log_index: Some((prior_log_count + idx).into()),  // TODO count the right index in whole block
                 transaction_log_index: Some(idx.into()),
                 removed: false,
@@ -837,7 +837,7 @@ impl Eth for EthHandler {
                             .evm_space_status();
 
                         let contract_address = match status_code
-                            == EVM_TX_OUTCOME_SUCCESS
+                            == EVM_SPACE_SUCCESS
                         {
                             true => Transaction::deployed_contract_address(&tx),
                             false => None,
@@ -852,9 +852,9 @@ impl Eth for EthHandler {
                 };
 
             let block_info = (
-                Some(tx_info.tx_index.block_hash),
+                Some(tx_info.tx_index.block_hash),  // TODO use pivot hash
                 maybe_block_number,
-                Some(tx_info.tx_index.index.into()),
+                Some(tx_info.tx_index.index.into()), // TODO also update tx_index here
             );
             let tx = Transaction::from_signed(
                 &tx,

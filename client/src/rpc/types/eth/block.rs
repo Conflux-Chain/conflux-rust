@@ -23,7 +23,7 @@ use cfx_types::{
     hexstr_to_h256, Bloom as H2048, Space, H160, H256, H64, U256, U64,
 };
 use cfxcore::consensus::ConsensusGraphInner;
-use primitives::{receipt::EVM_TX_OUTCOME_SUCCESS, Block as PrimitiveBlock};
+use primitives::{receipt::EVM_SPACE_SUCCESS, Block as PrimitiveBlock};
 use serde::{Serialize, Serializer};
 use std::collections::HashMap;
 
@@ -189,7 +189,7 @@ impl Block {
                             let contract_address =
                                 Transaction::deployed_contract_address(tx);
                             if contract_address.is_some()
-                                && status == EVM_TX_OUTCOME_SUCCESS
+                                && status == EVM_SPACE_SUCCESS
                             {
                                 tx_created_addresses
                                     .insert(tx.hash, contract_address.unwrap());
