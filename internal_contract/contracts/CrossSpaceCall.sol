@@ -3,18 +3,16 @@ pragma solidity >=0.5.0;
 
 interface CrossSpaceCall {
 
-    event Call(bytes20 indexed sender, bytes20 indexed receiver, uint256 value, uint256 nonce, uint256 gas, bytes data);
+    event Call(bytes20 indexed sender, bytes20 indexed receiver, uint256 value, uint256 nonce, bytes data);
 
-    event Create(bytes20 indexed sender, bytes20 indexed contract_address, uint256 value, uint256 nonce, uint256 gas, bytes init);
+    event Create(bytes20 indexed sender, bytes20 indexed contract_address, uint256 value, uint256 nonce, bytes init);
 
-    event Withdraw(bytes20 indexed sender, address indexed receiver, uint256 value);
+    event Withdraw(bytes20 indexed sender, address indexed receiver, uint256 value, uint256 nonce);
 
-    event Outcome(uint256 nonce, uint256 gas_left, bool success);
+    event Outcome(bool success);
 
     function createEVM(bytes calldata init) external payable returns (bytes20);
-
-    function create2EVM(bytes calldata init, bytes32 salt) external payable returns (bytes20);
-
+    
     function transferEVM(bytes20 to) external payable returns (bytes memory output);
 
     function callEVM(bytes20 to, bytes calldata data) external payable returns (bytes memory output);
