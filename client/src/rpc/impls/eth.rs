@@ -13,19 +13,17 @@ use cfx_types::{
 };
 use cfxcore::{
     executive::{
-        contract_address, revert_reason_decode, ExecutionError,
-        ExecutionOutcome, TxDropError,
+        revert_reason_decode, ExecutionError, ExecutionOutcome, TxDropError,
     },
     observer::ErrorUnwind,
     rpc_errors::{
         invalid_params_check, Error as CfxRpcError, Result as CfxRpcResult,
     },
-    vm::{self, CreateContractAddress},
-    ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
+    vm, ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
 use primitives::{
-    filter::LogFilter, receipt::TRANSACTION_OUTCOME_SUCCESS, Action, Block,
+    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action, Block,
     BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, SignedTransaction,
     StorageKey, StorageValue, TransactionIndex, TransactionWithSignature,
 };
@@ -237,52 +235,41 @@ impl EthHandler {
             bail!("Inconsistent state");
         }
 
-        let prior_gas_used = match id {
-            0 => U256::zero(),
-            id => {
-                exec_info.block_receipts.receipts[id - 1].accumulated_gas_used
-            }
-        };
-
         let mut prior_log_count = 0;
+        let mut prior_gas_used = U256::zero();
+        let mut transaction_index = U256::zero();
         for n in 0..id {
+            // log count
             let log_count = exec_info.block_receipts.receipts[n]
                 .logs
                 .iter()
                 .filter(|log| log.space == Space::Ethereum)
                 .count();
             prior_log_count += log_count;
+
+            if exec_info.block.transactions[id].space() == Space::Ethereum {
+                // gas used
+                prior_gas_used += exec_info.block_receipts.receipts[n].gas_fee
+                    / exec_info.block.transactions[id].gas_price(); // TODO phantom's gas_price maybe 0
+                                                                    // tx index
+                transaction_index += U256::one();
+            }
         }
 
         let tx = &exec_info.block.transactions[id];
         let primitive_receipt = &exec_info.block_receipts.receipts[id];
 
-        let status_code = if primitive_receipt.outcome_status
-            == TRANSACTION_OUTCOME_SUCCESS
-        {
-            1u32
-        } else {
-            0
-        };
+        let gas_used = primitive_receipt.gas_fee / tx.gas_price();
 
-        let contract_address = if let Action::Create = tx.action() {
-            // TODO(thegaram): do not return address if failed
-            let (contract_address, _) = contract_address(
-                CreateContractAddress::FromSenderNonce,
-                0.into(),
-                &tx.sender(),
-                tx.nonce(),
-                tx.data(),
-            );
-            Some(contract_address.address)
-        } else {
-            None
+        let status_code = primitive_receipt.evm_space_status();
+
+        let contract_address = match status_code == EVM_SPACE_SUCCESS {
+            true => Transaction::deployed_contract_address(tx),
+            false => None,
         };
 
         let block_hash = exec_info.pivot_hash;
         let block_number = exec_info.epoch_number.into();
-        /* TODO: EVM core: Compute a correct index */
-        let transaction_index = tx_index.index.into();
         let transaction_hash = tx.hash();
 
         let logs = primitive_receipt
@@ -295,15 +282,21 @@ impl EthHandler {
                 address: log.address,
                 topics: log.topics,
                 data: Bytes(log.data),
-                block_hash,
+                block_hash,  // TODO use pivot hash here
                 block_number,
                 transaction_hash,
-                transaction_index,
-                log_index: Some((prior_log_count + idx).into()), // TODO: EVM core: count log_index
+                transaction_index, // TODO use right tx index
+                log_index: Some((prior_log_count + idx).into()),  // TODO count the right index in whole block
                 transaction_log_index: Some(idx.into()),
                 removed: false,
             })
             .collect();
+
+        let tx_exec_error_msg =
+            match &exec_info.block_receipts.tx_execution_error_messages[id] {
+                msg if msg.is_empty() => None,
+                msg => Some(msg.clone()),
+            };
 
         let receipt = Receipt {
             transaction_hash,
@@ -315,13 +308,14 @@ impl EthHandler {
                 Action::Call(addr) => Some(*addr),
             },
             block_number,
-            cumulative_gas_used: primitive_receipt.accumulated_gas_used,
-            gas_used: primitive_receipt.accumulated_gas_used - prior_gas_used,
+            cumulative_gas_used: prior_gas_used + gas_used,
+            gas_used,
             contract_address,
             logs,
             logs_bloom: primitive_receipt.log_bloom,
             status_code: status_code.into(),
             effective_gas_price: *tx.gas_price(),
+            tx_exec_error_msg,
         };
 
         Ok(receipt)
@@ -828,28 +822,56 @@ impl Eth for EthHandler {
         if let Some((tx, tx_info)) =
             self.consensus.get_transaction_info_by_hash(&hash)
         {
-            return if tx.space() == Space::Ethereum {
-                let maybe_block_number: Option<U256> = match self
+            if tx.space() != Space::Ethereum {
+                return Ok(None);
+            }
+            // prepare block_number, status, contract_address if tx is executed
+            let (maybe_block_number, maybe_status, maybe_contract_address) =
+                match self
                     .get_block_execution_info(&tx_info.tx_index.block_hash)?
                 {
-                    None => None,
-                    Some(res) => Some(res.epoch_number.into()),
+                    None => (None, None, None),
+                    Some(exec_info) => {
+                        let status_code = exec_info.block_receipts.receipts
+                            [tx_info.tx_index.index]
+                            .evm_space_status();
+
+                        let contract_address = match status_code
+                            == EVM_SPACE_SUCCESS
+                        {
+                            true => Transaction::deployed_contract_address(&tx),
+                            false => None,
+                        };
+
+                        (
+                            Some(exec_info.epoch_number.into()),
+                            Some(status_code.into()),
+                            contract_address,
+                        )
+                    }
                 };
-                let block_info = (
-                    Some(tx_info.tx_index.block_hash),
-                    maybe_block_number,
-                    Some(tx_info.tx_index.index.into()),
-                );
-                let tx = Transaction::from_signed(&tx, block_info);
-                Ok(Some(tx))
-            } else {
-                Ok(None)
-            };
+
+            let block_info = (
+                Some(tx_info.tx_index.block_hash), // TODO use pivot hash
+                maybe_block_number,
+                Some(tx_info.tx_index.index.into()), /* TODO also update
+                                                      * tx_index here */
+            );
+            let tx = Transaction::from_signed(
+                &tx,
+                block_info,
+                (maybe_status, maybe_contract_address),
+            );
+            return Ok(Some(tx));
         }
 
         if let Some(tx) = self.tx_pool.get_transaction(&hash) {
             return if tx.space() == Space::Ethereum {
-                Ok(Some(Transaction::from_signed(&tx, (None, None, None))))
+                Ok(Some(Transaction::from_signed(
+                    &tx,
+                    (None, None, None),
+                    (None, None),
+                )))
             } else {
                 Ok(None)
             };
