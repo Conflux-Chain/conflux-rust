@@ -1119,7 +1119,7 @@ dependencies = [
 
 [[package]]
 name = "client"
-version = "2.0.0-rc-3-net8888"
+version = "2.0.0-rc--net8888"
 dependencies = [
  "anyhow",
  "app_dirs",
