@@ -212,3 +212,26 @@ impl SimpleExecutionTrait for AddressToIdentifier {
         address_to_identifier(inputs, params, context)
     }
 }
+
+#[test]
+fn test_pos_contract_sig() {
+    check_func_signature!(Register, "e335b451");
+    check_func_signature!(IncreaseStake, "09fecf7f");
+    check_func_signature!(Retire, "f49d0638");
+    check_func_signature!(GetStatus, "4c051100");
+    check_func_signature!(IdentifierToAddress, "e9e4aa46");
+    check_func_signature!(AddressToIdentifier, "6a06ea96");
+
+    check_event_signature!(
+        RegisterEvent,
+        "fa22f8d384b83c1eb6b054363e69a87aeee49f73a75b227582b42faeed33330f"
+    );
+    check_event_signature!(
+        IncreaseStakeEvent,
+        "f3c864b056b7be307e1c31ecda0d1009a81237a041d4c0aa86dd746b3d95e5fa"
+    );
+    check_event_signature!(
+        RetireEvent,
+        "cacdde07b9b8b72ddf74a509c278044aaf2dfcfa4e3822a35a122e8e961f3a7c"
+    );
+}

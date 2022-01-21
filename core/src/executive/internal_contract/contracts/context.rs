@@ -4,7 +4,7 @@
 
 use super::{macros::*, SimpleExecutionTrait, SolFnTable};
 #[cfg(test)]
-use crate::check_signature;
+use crate::check_func_signature;
 use crate::{
     evm::{ActionParams, GasPriceTier, Spec},
     executive::InternalRefContext,
@@ -86,5 +86,5 @@ impl SimpleExecutionTrait for FinalizedEpoch {
 
 #[test]
 fn test_context_contract_sig() {
-    check_signature!(EpochNumber, "f4145a83");
+    check_func_signature!(EpochNumber, "f4145a83");
 }
