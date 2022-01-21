@@ -250,8 +250,8 @@ impl EthHandler {
             if exec_info.block.transactions[id].space() == Space::Ethereum {
                 // gas used
                 prior_gas_used += exec_info.block_receipts.receipts[n].gas_fee
-                    / exec_info.block.transactions[id].gas_price();  // TODO phantom's gas_price maybe 0
-                // tx index
+                    / exec_info.block.transactions[id].gas_price(); // TODO phantom's gas_price maybe 0
+                                                                    // tx index
                 transaction_index += U256::one();
             }
         }
@@ -852,9 +852,10 @@ impl Eth for EthHandler {
                 };
 
             let block_info = (
-                Some(tx_info.tx_index.block_hash),  // TODO use pivot hash
+                Some(tx_info.tx_index.block_hash), // TODO use pivot hash
                 maybe_block_number,
-                Some(tx_info.tx_index.index.into()), // TODO also update tx_index here
+                Some(tx_info.tx_index.index.into()), /* TODO also update
+                                                      * tx_index here */
             );
             let tx = Transaction::from_signed(
                 &tx,
