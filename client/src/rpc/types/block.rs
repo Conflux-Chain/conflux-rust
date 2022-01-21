@@ -4,7 +4,7 @@
 
 use super::RpcAddress;
 use cfx_addr::Network;
-use cfx_types::{H160, H256, U256, U64};
+use cfx_types::{Space, H160, H256, U256, U64};
 use cfxcore::{
     block_data_manager::{BlockDataManager, DataVersionTuple},
     consensus::{ConsensusConfig, ConsensusGraphInner},
@@ -146,86 +146,9 @@ impl Block {
         consensus: &dyn ConsensusGraphTrait<ConsensusConfig = ConsensusConfig>,
         consensus_inner: &ConsensusGraphInner,
         data_man: &Arc<BlockDataManager>, include_txs: bool,
+        tx_space_filter: Option<Space>,
     ) -> Result<Self, String>
     {
-        let transactions = match include_txs {
-            false => BlockTransactions::Hashes(
-                b.transactions
-                    .iter()
-                    .map(|x| H256::from(x.hash()))
-                    .collect(),
-            ),
-            true => {
-                let tx_vec = match consensus_inner
-                    .block_execution_results_by_hash(
-                        &b.hash(),
-                        false, /* update_cache */
-                    ) {
-                    Some(DataVersionTuple(_, execution_result)) => {
-                        let epoch_number =
-                            consensus_inner.get_block_epoch_number(&b.hash());
-
-                        let maybe_state_root =
-                            data_man.get_executed_state_root(&b.hash());
-
-                        b.transactions
-                        .iter()
-                        .enumerate()
-                        .map(|(idx, tx)| {
-                            let receipt = execution_result.block_receipts.receipts.get(idx).unwrap();
-                            let prior_gas_used = if idx == 0 {
-                                 U256::zero()
-                            } else {
-                                execution_result.block_receipts.receipts[idx - 1].accumulated_gas_used
-                            };
-                            match receipt.outcome_status {
-                                TRANSACTION_OUTCOME_SUCCESS
-                                | TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING => {
-                                    let tx_index = TransactionIndex {
-                                        block_hash: b.hash(),
-                                        index: idx,
-                                    };
-                                    let tx_exec_error_msg = &execution_result.block_receipts.tx_execution_error_messages[idx];
-                                    Transaction::from_signed(
-                                        tx,
-                                        Some(PackedOrExecuted::Executed(Receipt::new(
-                                            (**tx).clone(),
-                                            receipt.clone(),
-                                            tx_index,
-                                            prior_gas_used,
-                                            epoch_number,
-                                            execution_result.block_receipts.block_number,
-                                            maybe_state_root,
-                                            if tx_exec_error_msg.is_empty() {
-                                                None
-                                            } else {
-                                                Some(tx_exec_error_msg.clone())
-                                            },
-                                            network,
-                                        )?)),
-                                        network,
-                                    )
-                                }
-                                TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING => {
-                                    Transaction::from_signed(tx, None, network)
-                                }
-                                _ => {
-                                    unreachable!();
-                                }
-                            }
-                        })
-                        .collect::<Result<_, _>>()?
-                    }
-                    None => b
-                        .transactions
-                        .iter()
-                        .map(|x| Transaction::from_signed(x, None, network))
-                        .collect::<Result<_, _>>()?,
-                };
-                BlockTransactions::Full(tx_vec)
-            }
-        };
-
         let block_hash = b.block_header.hash();
 
         let epoch_number = consensus_inner
@@ -238,25 +161,124 @@ impl Block {
 
         // get the block.gas_used
         let tx_len = b.transactions.len();
-        let gas_used = if tx_len == 0 {
-            Some(U256::from(0))
+
+        let (gas_used, transactions) = if tx_len == 0 {
+            (Some(U256::from(0)), BlockTransactions::Hashes(vec![]))
         } else {
             let maybe_results = consensus_inner
                 .block_execution_results_by_hash(
                     &b.hash(),
                     false, /* update_cache */
                 );
-            match maybe_results {
-                Some(DataVersionTuple(_, execution_result)) => {
-                    let receipt = execution_result
-                        .block_receipts
-                        .receipts
-                        .get(tx_len - 1)
-                        .unwrap();
-                    Some(receipt.accumulated_gas_used)
+
+            // calculate block gasUsed according block.execution_result and
+            // tx_space_filter
+            let gas_used_sum = match maybe_results {
+                Some(DataVersionTuple(_, ref execution_result)) => {
+                    match tx_space_filter {
+                        Some(space_filter) => {
+                            let mut total_gas_used = U256::zero();
+                            let mut prev_acc_gas_used = U256::zero();
+                            for (idx, tx) in b.transactions.iter().enumerate() {
+                                let ref receipt = execution_result
+                                    .block_receipts
+                                    .receipts[idx];
+                                if tx.space() == space_filter {
+                                    total_gas_used += receipt
+                                        .accumulated_gas_used
+                                        - prev_acc_gas_used;
+                                }
+                                prev_acc_gas_used =
+                                    receipt.accumulated_gas_used;
+                            }
+                            Some(total_gas_used)
+                        }
+                        None => Some(
+                            execution_result.block_receipts.receipts
+                                [tx_len - 1]
+                                .accumulated_gas_used,
+                        ),
+                    }
                 }
                 None => None,
-            }
+            };
+
+            // prepare the transaction array according include_txs,
+            // execution_result, tx_space_filter
+            let transactions = match include_txs {
+                false => BlockTransactions::Hashes(
+                    b.transaction_hashes(Some(Space::Native)),
+                ),
+                true => {
+                    let tx_vec = match maybe_results {
+                        Some(DataVersionTuple(_, ref execution_result)) => {
+                            let maybe_state_root =
+                                data_man.get_executed_state_root(&b.hash());
+
+                            b.transactions
+                                .iter()
+                                .enumerate()
+                                .filter(|(_idx, tx)| tx_space_filter.is_none() || tx.space() == tx_space_filter.unwrap())
+                                .map(|(idx, tx)| {
+                                    let receipt = execution_result.block_receipts.receipts.get(idx).unwrap();
+                                    let prior_gas_used = if idx == 0 {
+                                        U256::zero()
+                                    } else {
+                                        execution_result.block_receipts.receipts[idx - 1].accumulated_gas_used
+                                    };
+                                    match receipt.outcome_status {
+                                        TRANSACTION_OUTCOME_SUCCESS
+                                        | TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING => {
+                                            let tx_index = TransactionIndex {
+                                                block_hash: b.hash(),
+                                                index: idx,
+                                            };
+                                            let tx_exec_error_msg = &execution_result.block_receipts.tx_execution_error_messages[idx];
+                                            Transaction::from_signed(
+                                                tx,
+                                                Some(PackedOrExecuted::Executed(Receipt::new(
+                                                    (**tx).clone(),
+                                                    receipt.clone(),
+                                                    tx_index,
+                                                    prior_gas_used,
+                                                    epoch_number,
+                                                    execution_result.block_receipts.block_number,
+                                                    maybe_state_root,
+                                                    if tx_exec_error_msg.is_empty() {
+                                                        None
+                                                    } else {
+                                                        Some(tx_exec_error_msg.clone())
+                                                    },
+                                                    network,
+                                                )?)),
+                                                network,
+                                            )
+                                        }
+                                        TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING => {
+                                            Transaction::from_signed(tx, None, network)
+                                        }
+                                        _ => {
+                                            unreachable!();
+                                        }
+                                    }
+                                })
+                                .collect::<Result<_, _>>()?
+                        }
+                        None => b
+                            .transactions
+                            .iter()
+                            .filter(|tx| {
+                                tx_space_filter.is_none()
+                                    || tx.space() == tx_space_filter.unwrap()
+                            })
+                            .map(|x| Transaction::from_signed(x, None, network))
+                            .collect::<Result<_, _>>()?,
+                    };
+                    BlockTransactions::Full(tx_vec)
+                }
+            };
+
+            (gas_used_sum, transactions)
         };
 
         Ok(Block {
@@ -281,7 +303,7 @@ impl Block {
                 b.block_header.transactions_root().clone(),
             ),
             // PrimitiveBlock does not contain this information
-            epoch_number,
+            epoch_number: epoch_number.map(|e| U256::from(e)),
             block_number,
             // fee system
             gas_used,
@@ -468,7 +490,7 @@ mod tests {
         let serialized = serde_json::to_string(&t).unwrap();
         assert_eq!(
             serialized,
-            r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"transactionIndex":null,"from":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","contractCreated":null,"data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x0","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#
+            r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"transactionIndex":null,"from":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","contractCreated":null,"data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x1","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#
         );
 
         let t = BlockTransactions::Hashes(vec![H256::default()]);
@@ -491,7 +513,7 @@ mod tests {
         let result_block_transactions = BlockTransactions::Full(vec![
             Transaction::default(Network::Main).unwrap(),
         ]);
-        let serialized = r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x0","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#;
+        let serialized = r#"[{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","nonce":"0x0","blockHash":null,"blockNumber":null,"transactionIndex":null,"from":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","to":null,"value":"0x0","gasPrice":"0x0","gas":"0x0","data":"0x","storageLimit":"0x0","epochHeight":"0x0","chainId":"0x1","status":null,"v":"0x0","r":"0x0","s":"0x0"}]"#;
         let deserialized_block_transactions: BlockTransactions =
             serde_json::from_str(serialized).unwrap();
         assert_eq!(result_block_transactions, deserialized_block_transactions);
@@ -534,7 +556,7 @@ mod tests {
 
     #[test]
     fn test_deserialize_block() {
-        let serialized = r#"{"hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":"0x0","blockNumber":"0x0","gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"stable":null,"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45","custom":[],"posReference":null}"#;
+        let serialized = r#"{"space":"Native","hash":"0x0000000000000000000000000000000000000000000000000000000000000000","parentHash":"0x0000000000000000000000000000000000000000000000000000000000000000","height":"0x0","miner":"CFX:TYPE.NULL:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA0SFBNJM2","deferredStateRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","deferredReceiptsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","deferredLogsBloomHash":"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5","blame":"0x0","transactionsRoot":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","epochNumber":"0x0","blockNumber":"0x0","gasLimit":"0x0","timestamp":"0x0","difficulty":"0x0","refereeHashes":[],"stable":null,"adaptive":false,"nonce":"0x0","transactions":[],"size":"0x45","custom":[],"posReference":null}"#;
         let result_block = Block {
             hash: H256::default(),
             parent_hash: H256::default(),

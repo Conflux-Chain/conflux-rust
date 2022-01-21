@@ -155,7 +155,7 @@ impl State {
     }
 
     fn get_from_all_tries<WithProof: StaticBool>(
-        &self, access_key: StorageKey,
+        &self, access_key: StorageKeyWithSpace,
     ) -> Result<(Option<Box<[u8]>>, StateProof)> {
         let mut proof = StateProof::default();
 
@@ -227,14 +227,18 @@ impl Drop for State {
 }
 
 impl StateTrait for State {
-    fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>> {
+    fn get(
+        &self, access_key: StorageKeyWithSpace,
+    ) -> Result<Option<Box<[u8]>>> {
         self.ensure_temp_slab_for_db_load();
 
         self.get_from_all_tries::<NoProof>(access_key)
             .map(|(value, _)| value)
     }
 
-    fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()> {
+    fn set(
+        &mut self, access_key: StorageKeyWithSpace, value: Box<[u8]>,
+    ) -> Result<()> {
         self.pre_modification();
 
         let root_node = self.get_or_create_delta_root_node()?;
@@ -252,13 +256,13 @@ impl StateTrait for State {
         Ok(())
     }
 
-    fn delete(&mut self, access_key: StorageKey) -> Result<()> {
+    fn delete(&mut self, access_key: StorageKeyWithSpace) -> Result<()> {
         self.set(access_key, MptValue::<Box<[u8]>>::TombStone.unwrap())?;
         Ok(())
     }
 
     fn delete_test_only(
-        &mut self, access_key: StorageKey,
+        &mut self, access_key: StorageKeyWithSpace,
     ) -> Result<Option<Box<[u8]>>> {
         self.pre_modification();
 
@@ -292,7 +296,7 @@ impl StateTrait for State {
     ///
     /// When AM is Read, only calculate the key values to be deleted.
     fn delete_all<AM: access_mode::AccessMode>(
-        &mut self, access_key_prefix: StorageKey,
+        &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> Result<Option<Vec<MptKeyValue>>> {
         if AM::is_read_only() {
             self.ensure_temp_slab_for_db_load();
@@ -381,7 +385,7 @@ impl StateTrait for State {
         let mut deleted_keys = HashSet::new();
         if let Some(kvs) = delta_trie_kvs {
             for (k, v) in kvs {
-                let storage_key = StorageKey::from_delta_mpt_key(&k);
+                let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
                 let k = storage_key.to_key_bytes();
                 deleted_keys.insert(k.clone());
                 if v.len() > 0 {
@@ -392,7 +396,7 @@ impl StateTrait for State {
 
         if let Some(kvs) = intermediate_trie_kvs {
             for (k, v) in kvs {
-                let storage_key = StorageKey::from_delta_mpt_key(&k);
+                let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
                 // Only delete non-empty keys.
                 if v.len() > 0 && !AM::is_read_only() {
                     self.delete(storage_key)?;
@@ -410,7 +414,8 @@ impl StateTrait for State {
         // No need to check v.len() because there are no tombStone values in
         // snapshot.
         for (k, v) in snapshot_kvs {
-            let storage_key = StorageKey::from_key_bytes::<SkipInputCheck>(&k);
+            let storage_key =
+                StorageKeyWithSpace::from_key_bytes::<SkipInputCheck>(&k);
             if !AM::is_read_only() {
                 self.delete(storage_key)?;
             }
@@ -493,7 +498,7 @@ impl StateTrait for State {
 
 impl StateTraitExt for State {
     fn get_with_proof(
-        &self, access_key: StorageKey,
+        &self, access_key: StorageKeyWithSpace,
     ) -> Result<(Option<Box<[u8]>>, StateProof)> {
         self.ensure_temp_slab_for_db_load();
 
@@ -502,7 +507,7 @@ impl StateTraitExt for State {
     }
 
     fn get_node_merkle_all_versions<WithProof: StaticBool>(
-        &self, access_key: StorageKey,
+        &self, access_key: StorageKeyWithSpace,
     ) -> Result<(NodeMerkleTriplet, NodeMerkleProof)> {
         self.check_freshly_synced_snapshot("proof")?;
         let mut proof = NodeMerkleProof::default();
@@ -912,8 +917,8 @@ use cfx_internal_common::{StateRootAuxInfo, StateRootWithAuxInfo};
 use fallible_iterator::FallibleIterator;
 use primitives::{
     DeltaMptKeyPadding, EpochId, MerkleHash, MptValue, NodeMerkleTriplet,
-    SkipInputCheck, StateRoot, StaticBool, StorageKey, MERKLE_NULL_NODE,
-    NULL_EPOCH,
+    SkipInputCheck, StateRoot, StaticBool, StorageKeyWithSpace,
+    MERKLE_NULL_NODE, NULL_EPOCH,
 };
 use rustc_hex::ToHex;
 use std::{

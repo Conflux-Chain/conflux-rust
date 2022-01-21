@@ -36,7 +36,8 @@ class TestSendTx(RpcClient):
         assert_equal(self.send_tx(tx, True), tx.hash_hex())
         # call address starts with 0x30
         tx = self.new_tx(receiver="0x30e45681ac6c53d5a40475f7526bac1fe7590fb8")
-        assert_equal(self.send_tx(tx, True), tx.hash_hex())
+        encoded = eth_utils.encode_hex(rlp.encode(tx))
+        assert_raises_rpc_error(None, None, self.send_raw_tx, encoded)
         # call address starts with 0x10
         tx = self.new_tx(receiver="0x10e45681ac6c53d5a40475f7526bac1fe7590fb8")
         assert_equal(self.send_tx(tx, True), tx.hash_hex())
@@ -310,3 +311,8 @@ class TestSendTx(RpcClient):
         tx_status = r["firstTxStatus"]
         assert_equal(len(pending_txs), 1)
         assert_equal(tx_status, {'pending': 'notEnoughCash'})
+
+    def test_reject_oversize_transactions(self):
+        # A tx with size over `MAX_BLOCK_SIZE_IN_BYTES` should be rejected.
+        tx = self.new_tx(data=b'0' * default_config["MAX_BLOCK_SIZE_IN_BYTES"], gas=14000000)
+        assert_raises_rpc_error(None, None, self.send_tx, tx)

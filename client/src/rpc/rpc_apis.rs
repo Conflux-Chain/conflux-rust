@@ -11,6 +11,7 @@ use std::{
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum Api {
     Cfx,
+    Eth,
     Debug,
     Pubsub,
     Test,
@@ -26,6 +27,7 @@ impl FromStr for Api {
         use self::Api::*;
         match s {
             "cfx" => Ok(Cfx),
+            "eth" => Ok(Eth),
             "debug" => Ok(Debug),
             "pubsub" => Ok(Pubsub),
             "test" => Ok(Test),
@@ -41,6 +43,7 @@ impl Display for Api {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Api::Cfx => write!(f, "cfx"),
+            Api::Eth => write!(f, "eth"),
             Api::Debug => write!(f, "debug"),
             Api::Pubsub => write!(f, "pubsub"),
             Api::Test => write!(f, "test"),
@@ -55,6 +58,7 @@ impl Display for Api {
 pub enum ApiSet {
     All,
     Safe,
+    Evm, // Ethereum api set
     List(HashSet<Api>),
 }
 
@@ -78,6 +82,7 @@ impl ApiSet {
                 .iter()
                 .cloned()
                 .collect(),
+            ApiSet::Evm => [Api::Eth].iter().cloned().collect(),
         }
     }
 }
@@ -100,6 +105,9 @@ impl FromStr for ApiSet {
                 "safe" => {
                     // Safe APIs are those that are safe even in UnsafeContext.
                     apis.extend(ApiSet::Safe.list_apis());
+                }
+                "evm" => {
+                    apis.extend(ApiSet::Evm.list_apis());
                 }
                 // Remove the API
                 api if api.starts_with("-") => {

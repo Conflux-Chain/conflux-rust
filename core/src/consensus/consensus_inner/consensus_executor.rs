@@ -19,6 +19,7 @@ use crate::{
         TransactOptions,
     },
     machine::Machine,
+    observer::trace::{ExecTrace, TransactionExecTraces},
     rpc_errors::{invalid_params_check, Result as RpcResult},
     spec::genesis::initialize_internal_contract_accounts,
     state::{
@@ -27,7 +28,6 @@ use crate::{
         },
         State,
     },
-    trace::trace::{ExecTrace, TransactionExecTraces},
     verification::{
         compute_receipts_root, VerificationConfig, VerifyTxLocalMode,
         VerifyTxMode,
@@ -46,8 +46,8 @@ use cfx_storage::{
     StorageManagerTrait,
 };
 use cfx_types::{
-    address_util::AddressUtil, BigEndianHash, H160, H256, KECCAK_EMPTY_BLOOM,
-    U256, U512,
+    address_util::AddressUtil, AddressSpaceUtil, AllChainID, BigEndianHash,
+    Space, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
 };
 use core::convert::TryFrom;
 use hash::KECCAK_EMPTY_LIST_RLP;
@@ -61,8 +61,8 @@ use primitives::{
         TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
-    Action, Block, BlockHeaderBuilder, EpochId, SignedTransaction,
-    TransactionIndex, MERKLE_NULL_NODE,
+    Action, Block, BlockHeaderBuilder, EpochId, NativeTransaction,
+    SignedTransaction, Transaction, TransactionIndex, MERKLE_NULL_NODE,
 };
 use rustc_hex::ToHex;
 use std::{
@@ -1161,7 +1161,7 @@ impl ConsensusExecutionHandler {
                 for block in epoch_blocks.iter() {
                     for transaction in block.transactions.iter() {
                         accounts.push(&transaction.sender);
-                        match transaction.action {
+                        match transaction.action() {
                             Action::Call(ref address) => accounts.push(address),
                             _ => {}
                         }
@@ -1253,15 +1253,14 @@ impl ConsensusExecutionHandler {
                 let mut storage_released = Vec::new();
                 let mut storage_collateralized = Vec::new();
 
-                let r = if self.config.executive_trace {
-                    let options = TransactOptions::with_tracing();
-                    Executive::new(state, &env, self.machine.as_ref(), &spec)
-                        .transact(transaction, options)?
+                let options = if self.config.executive_trace {
+                    TransactOptions::with_tracing()
                 } else {
-                    let options = TransactOptions::with_no_tracing();
-                    Executive::new(state, &env, self.machine.as_ref(), &spec)
-                        .transact(transaction, options)?
+                    TransactOptions::with_no_tracing()
                 };
+                let r =
+                    Executive::new(state, &env, self.machine.as_ref(), &spec)
+                        .transact(transaction, options)?;
 
                 let gas_fee;
                 let mut gas_sponsor_paid = false;
@@ -1736,7 +1735,7 @@ impl ConsensusExecutionHandler {
             if spec.is_valid_address(&address) {
                 state
                     .add_balance(
-                        &address,
+                        &address.with_native_space(),
                         &reward,
                         CleanupMode::ForceCreate,
                         spec.account_start_nonce,
@@ -1837,7 +1836,7 @@ impl ConsensusExecutionHandler {
             "tx",
             self.verification_config.verify_transaction_common(
                 tx,
-                tx.chain_id,
+                AllChainID::fake_for_virtual(tx.chain_id().unwrap_or(1)),
                 block_height,
                 transitions,
                 VerifyTxMode::Local(VerifyTxLocalMode::Full, &spec),
@@ -1869,7 +1868,9 @@ impl ConsensusExecutionHandler {
 
         let author = {
             let mut address = H160::random();
-            address.set_user_account_type_bits();
+            if tx.space() == Space::Native {
+                address.set_user_account_type_bits();
+            }
             address
         };
 
@@ -1880,7 +1881,7 @@ impl ConsensusExecutionHandler {
             difficulty: Default::default(),
             accumulated_gas_used: U256::zero(),
             last_hash: epoch_id.clone(),
-            gas_limit: tx.gas.clone(),
+            gas_limit: tx.gas().clone(),
             epoch_height: block_height,
             pos_view: pos_view_number,
             finalized_epoch: pivot_decision_epoch,
@@ -1891,6 +1892,33 @@ impl ConsensusExecutionHandler {
         let spec = self.machine.spec(env.number);
         let mut ex =
             Executive::new(&mut state, &env, self.machine.as_ref(), &spec);
+
+        // If the transaction may be sponsored for collateral when calling a
+        // contract with storage sponsor, we needs a special method to estimate
+        // it.
+        if let Transaction::Native(NativeTransaction {
+            action: Action::Call(ref to),
+            ..
+        }) = tx.unsigned
+        {
+            if to.is_contract_address() {
+                let sponsor_balance_for_collateral =
+                    ex.state.sponsor_balance_for_collateral(&to)?;
+                if !sponsor_balance_for_collateral.is_zero()
+                    && ex
+                        .state
+                        .check_commission_privilege(&to, &tx.sender().address)?
+                {
+                    let r = ex.transact_virtual_two_pass(
+                        &tx,
+                        sponsor_balance_for_collateral,
+                    );
+                    trace!("Execution result {:?}", r);
+                    return Ok(r?);
+                }
+            }
+        }
+
         let r = ex.transact_virtual(tx);
         trace!("Execution result {:?}", r);
         Ok(r?)

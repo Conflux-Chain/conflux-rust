@@ -52,7 +52,7 @@ use self::{
         trace::TraceHandler,
     },
     traits::{
-        cfx::Cfx, debug::LocalRpc, pool::TransactionPool, pos::Pos,
+        cfx::Cfx, debug::LocalRpc, eth::Eth, pool::TransactionPool, pos::Pos,
         pubsub::PubSub, test::TestRpc, trace::Trace,
     },
 };
@@ -62,6 +62,7 @@ use crate::{
     configuration::Configuration,
     rpc::{
         error_codes::request_rejected_too_many_request_error,
+        impls::eth::EthHandler,
         interceptor::{RpcInterceptor, RpcProxy},
         rpc_apis::{Api, ApiSet},
     },
@@ -171,6 +172,21 @@ pub fn setup_public_rpc_apis(
     )
 }
 
+pub fn setup_public_eth_rpc_apis(
+    common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
+    conf: &Configuration,
+) -> MetaIoHandler<Metadata>
+{
+    setup_rpc_apis(
+        common,
+        rpc,
+        pubsub,
+        &conf.raw_conf.throttling_conf,
+        "rpc",
+        conf.raw_conf.public_evm_rpc_apis.list_apis(),
+    )
+}
+
 pub fn setup_debug_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
     conf: &Configuration,
@@ -203,6 +219,21 @@ fn setup_rpc_apis(
                     throttling_section,
                 );
                 handler.extend_with(RpcProxy::new(cfx, interceptor));
+            }
+            Api::Eth => {
+                info!("Add EVM RPC");
+                let evm = EthHandler::new(
+                    rpc.config.clone(),
+                    rpc.consensus.clone(),
+                    rpc.sync.clone(),
+                    rpc.tx_pool.clone(),
+                )
+                .to_delegate();
+                let interceptor = ThrottleInterceptor::new(
+                    throttling_conf,
+                    throttling_section,
+                );
+                handler.extend_with(RpcProxy::new(evm, interceptor))
             }
             Api::Debug => {
                 handler.extend_with(
@@ -299,6 +330,9 @@ fn setup_rpc_apis_light(
                     throttling_section,
                 );
                 handler.extend_with(RpcProxy::new(cfx, interceptor));
+            }
+            Api::Eth => {
+                warn!("Light nodes do not support evm ports.");
             }
             Api::Debug => {
                 handler.extend_with(

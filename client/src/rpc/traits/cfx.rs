@@ -4,13 +4,14 @@
 
 use super::super::types::{
     Account as RpcAccount, AccountPendingInfo, Block, Bytes, CallRequest,
-    CheckBalanceAgainstTransactionResponse, EpochNumber,
-    EstimateGasAndCollateralResponse, Log as RpcLog, LogFilter as RpcFilter,
-    PoSEconomics, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
-    SponsorInfo, Status as RpcStatus, TokenSupplyInfo, Transaction,
+    CfxRpcLogFilter, CheckBalanceAgainstTransactionResponse, EpochNumber,
+    EstimateGasAndCollateralResponse, Log as RpcLog, PoSEconomics,
+    Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, SponsorInfo,
+    Status as RpcStatus, TokenSupplyInfo, Transaction,
 };
 use crate::rpc::types::{
-    AccountPendingTransactions, BlockHashOrEpochNumber, RpcAddress,
+    pos::PoSEpochReward, AccountPendingTransactions, BlockHashOrEpochNumber,
+    RpcAddress,
 };
 use cfx_types::{H256, U256, U64};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
@@ -166,7 +167,7 @@ pub trait Cfx {
 
     /// Returns logs matching the filter provided.
     #[rpc(name = "cfx_getLogs")]
-    fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
+    fn get_logs(&self, filter: CfxRpcLogFilter) -> BoxFuture<Vec<RpcLog>>;
 
     /// Get transaction by its hash.
     #[rpc(name = "cfx_getTransactionByHash")]
@@ -266,6 +267,11 @@ pub trait Cfx {
 
     #[rpc(name = "cfx_openedMethodGroups")]
     fn opened_method_groups(&self) -> JsonRpcResult<Vec<String>>;
+
+    #[rpc(name = "cfx_getPoSRewardByEpoch")]
+    fn get_pos_reward_by_epoch(
+        &self, epoch: EpochNumber,
+    ) -> JsonRpcResult<Option<PoSEpochReward>>;
 
     //        /// Returns transaction at given block hash and index.
     //        #[rpc(name = "cfx_getTransactionByBlockHashAndIndex")]

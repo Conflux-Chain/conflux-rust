@@ -27,9 +27,8 @@ bootnodes="cfxnode://c3039e5965c6878f2fc3de4e87b486c36e0bd3b10c322733aeb12ea34d8
 #
 # `dev` mode is for users to run a single node that automatically
 #     generates blocks with fixed intervals
-#     * Open port 12535 for ws rpc if `jsonrpc_ws_port` is not provided.
-#     * Open port 12536 for tcp rpc if `jsonrpc_tcp_port` is not provided.
-#     * Open port 12537 for http rpc if `jsonrpc_http_port` is not provided.
+#     * You are expected to also set `jsonrpc_ws_port`, `jsonrpc_tcp_port`,
+#       and `jsonrpc_http_port` if you want RPC functionalities.
 #     * generate blocks without PoW (either after receiving a transaction or
 #       in fixed period, see ``dev_block_interval_ms'')
 #     * Skip catch-up mode even there is no peer
@@ -151,6 +150,8 @@ log_conf="log.yaml"
 # jsonrpc_local_tcp_port=12538
 jsonrpc_local_http_port=12539
 # jsonrpc_local_ws_port=12540
+# jsonrpc_http_eth_port=8545
+# jsonrpc_ws_eth_port=8546
 
 # Specify the APIs available through the public JSON-RPC interfaces (HTTP, TCP, WebSocket)
 # using a comma-delimited list of API names.
@@ -158,6 +159,7 @@ jsonrpc_local_http_port=12539
 # `safe` only includes `cfx` and `pubsub`, `txpool`.
 #
 # public_rpc_apis = "safe"
+# public_evm_rpc_apis = "evm"
 
 # --------------- Performance-related Network Parameters ----------------------
 
@@ -533,7 +535,7 @@ jsonrpc_local_http_port=12539
 #
 # max_trans_count_received_in_catch_up = 60_000
 
-# The chain_id of conflux network
+# The chain ID of Conflux Network (Conflux space)
 # 1 for testnet
 # 1029 for Tethys
 #
@@ -548,3 +550,8 @@ pos_reference_enable_height=6000
 cip78_patch_transition_number=5880000
 # Set to 2 ** 256 / 300 * 20. The probability that a round has no proposer is about 1e-9.
 vrf_proposal_threshold = "0x1111111111111100000000000000000000000000000000000000000000000000"
+
+# The EVM chain ID of Conflux Network (EVM space)
+# 1030 for Tethys
+#
+evm_chain_id = 1030

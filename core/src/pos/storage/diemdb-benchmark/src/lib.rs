@@ -18,7 +18,7 @@ use diem_types::{
     vm_status::KeptVMStatus,
     write_set::WriteSetMut,
 };
-use diemdb::{
+use pos_ledger_db::{
     metrics::DIEM_STORAGE_ROCKSDB_PROPERTIES, schema::JELLYFISH_MERKLE_NODE_CF_NAME, DiemDB,
 };
 use indicatif::{ProgressBar, ProgressStyle};
@@ -77,7 +77,7 @@ pub fn run_benchmark(
     prune_window: Option<u64>,
 ) {
     if db_dir.exists() {
-        fs::remove_dir_all(db_dir.join("diemdb")).unwrap();
+        fs::remove_dir_all(db_dir.join("pos-ledger-db")).unwrap();
     }
     // create if not exists
     fs::create_dir_all(db_dir.clone()).unwrap();

@@ -31,13 +31,13 @@ impl CollateralCheckResultToVmResult for CollateralCheckResult {
 pub use self::{
     executed::*,
     executive::{
-        contract_address, Executive, ExecutiveGeneric, ExecutiveResult,
-        TransactOptions,
+        contract_address, gas_required_for, Executive, ExecutiveGeneric,
+        ExecutiveResult, TransactOptions,
     },
     internal_contract::{
         function, pos_internal_entries, suicide, ABIDecodeError, IndexStatus,
         InternalContractMap, InternalContractTrait, InternalRefContext,
-        SolidityFunctionTrait,
+        SolidityEventTrait, SolidityFunctionTrait,
     },
 };
 use crate::vm::Error as vmError;

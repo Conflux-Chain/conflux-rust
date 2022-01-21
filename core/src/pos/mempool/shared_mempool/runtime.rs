@@ -20,7 +20,7 @@ use crate::pos::{
     protocol::network_sender::NetworkSender,
 };
 use anyhow::Result;
-use cached_diemdb::CachedDiemDB;
+use cached_pos_ledger_db::CachedPosLedgerDB;
 use channel::diem_channel;
 use diem_config::config::NodeConfig;
 use diem_infallible::{Mutex, RwLock};
@@ -52,7 +52,7 @@ pub(crate) fn start_shared_mempool(
     consensus_requests: mpsc::Receiver<ConsensusRequest>,
     state_sync_requests: mpsc::Receiver<CommitNotification>,
     mempool_reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
-    db_with_cache: Arc<CachedDiemDB>,
+    db_with_cache: Arc<CachedPosLedgerDB>,
     validator: Arc<RwLock<TransactionValidator>>,
     subscribers: Vec<UnboundedSender<SharedMempoolNotification>>,
 )
@@ -88,7 +88,7 @@ pub(crate) fn start_shared_mempool(
 }
 
 pub fn bootstrap(
-    config: &NodeConfig, db_with_cache: Arc<CachedDiemDB>,
+    config: &NodeConfig, db_with_cache: Arc<CachedPosLedgerDB>,
     network_sender: NetworkSender, network_receivers: NetworkReceivers,
     client_events: Receiver<(
         SignedTransaction,

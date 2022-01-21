@@ -74,6 +74,7 @@ serde_json = "1.0"
 siphasher = "0.3"
 slab = "0.4"
 solidity-abi = {path="../util/solidity-abi"}
+sha3-macro = {path="../util/sha3-macro"}
 sqlite = "0.25"
 sqlite3-sys = "0.12"
 static_assertions = "1.1.0"
@@ -112,8 +113,8 @@ executor-types = { path = "./src/pos/types/executor-types" }
 executor = {path = "./src/pos/consensus/executor"}
 consensus-types = { path = "./src/pos/consensus/consensus-types" }
 safety-rules = { path = "./src/pos/consensus/safety-rules" }
-diemdb = { path = "./src/pos/storage/diemdb" }
-cached-diemdb = { path = "./src/pos/storage/cached-diemdb" }
+pos-ledger-db = { path = "src/pos/storage/pos-ledger-db" }
+cached-pos-ledger-db = { path = "src/pos/storage/cached-pos-ledger-db" }
 schemadb = { path = "./src/pos/storage/schemadb" }
 storage-interface = { path = "./src/pos/storage/storage-interface" }
 short-hex-str = { path = "./src/pos/common/short-hex-str" }
@@ -128,6 +129,7 @@ proptest = { version = "1.0.0", optional = true }
 proptest-derive = { version = "0.3.0", optional = true }
 diem-temppath = { path = "./src/pos/common/temppath" }
 crash-handler = { path = "../core/src/pos/common/crash-handler" }
+heap-map = {path = "../util/heap-map" }
 
 [dev-dependencies]
 criterion = "0.3"

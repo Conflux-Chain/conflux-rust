@@ -21,8 +21,8 @@ use threadpool::ThreadPool;
 
 use blockgen::BlockGenerator;
 use cfx_storage::StorageManager;
-use cfx_types::{address_util::AddressUtil, Address, U256};
-pub use cfxcore::pos::pos::DiemHandle;
+use cfx_types::{address_util::AddressUtil, Address, Space, U256};
+pub use cfxcore::pos::pos::PosDropHandle;
 use cfxcore::{
     block_data_manager::BlockDataManager,
     consensus::pos_handler::{PosConfiguration, PosVerifier},
@@ -63,7 +63,7 @@ use crate::{
             cfx::RpcImpl, common::RpcImpl as CommonRpcImpl,
             pubsub::PubSubClient,
         },
-        setup_debug_rpc_apis, setup_public_rpc_apis,
+        setup_debug_rpc_apis, setup_public_eth_rpc_apis, setup_public_rpc_apis,
     },
     GENESIS_VERSION,
 };
@@ -177,9 +177,9 @@ pub mod client_methods {
         let mut graceful = true;
         graceful &= check_graceful_shutdown(ledger_db);
         debug!("ledger_db drop: graceful = {}", graceful);
-        if let Some((diem_db, consensus_db)) = maybe_pos_db {
-            graceful &= check_graceful_shutdown(diem_db);
-            debug!("diem_db drop: graceful = {}", graceful);
+        if let Some((pos_ledger_db, consensus_db)) = maybe_pos_db {
+            graceful &= check_graceful_shutdown(pos_ledger_db);
+            debug!("pos_ledger_db drop: graceful = {}", graceful);
             graceful &= check_graceful_shutdown(consensus_db);
             debug!("consensus_db drop: graceful = {}", graceful);
         }
@@ -366,6 +366,12 @@ pub fn initialize_common_modules(
         conf.raw_conf.chain_id,
         &initial_nodes,
     );
+    let mut genesis_accounts = genesis_accounts;
+    let genesis_accounts = genesis_accounts
+        .drain()
+        .filter(|(addr, _)| addr.space == Space::Native)
+        .map(|(addr, x)| (addr.address, x))
+        .collect();
     debug!("Initialize genesis_block={:?}", genesis_block);
     if conf.raw_conf.pos_genesis_pivot_decision.is_none() {
         conf.raw_conf.pos_genesis_pivot_decision = Some(genesis_block.hash());
@@ -527,6 +533,7 @@ pub fn initialize_not_light_node_modules(
         Option<WSServer>,
         Arc<PosVerifier>,
         Runtime,
+        Option<HttpServer>,
     ),
     String,
 >
@@ -732,6 +739,16 @@ pub fn initialize_not_light_node_modules(
         RpcExtractor,
     )?;
 
+    let eth_rpc_http_server = super::rpc::start_http(
+        conf.eth_http_config(),
+        setup_public_eth_rpc_apis(
+            common_impl.clone(),
+            rpc_impl.clone(),
+            pubsub.clone(),
+            &conf,
+        ),
+    )?;
+
     let rpc_http_server = super::rpc::start_http(
         conf.http_config(),
         setup_public_rpc_apis(common_impl, rpc_impl, pubsub, &conf),
@@ -754,6 +771,7 @@ pub fn initialize_not_light_node_modules(
         rpc_ws_server,
         pos_verifier,
         runtime,
+        eth_rpc_http_server,
     ))
 }
 
@@ -772,7 +790,7 @@ pub fn initialize_txgens(
     let maybe_direct_txgen_with_contract = if conf.is_test_or_dev_mode() {
         Some(Arc::new(Mutex::new(DirectTransactionGenerator::new(
             network_key_pair,
-            &public_to_address(DEV_GENESIS_KEY_PAIR_2.public()),
+            &public_to_address(DEV_GENESIS_KEY_PAIR_2.public(), true),
             U256::from_dec_str("10000000000000000").unwrap(),
             U256::from_dec_str("10000000000000000").unwrap(),
         ))))
@@ -815,17 +833,14 @@ pub fn initialize_txgens(
 }
 
 pub mod delegate_convert {
-    use std::hint::unreachable_unchecked;
+    use std::convert::Into as StdInto;
 
     use jsonrpc_core::{
         futures::{future::IntoFuture, Future},
         BoxFuture, Error as JsonRpcError, Result as JsonRpcResult,
     };
 
-    use crate::rpc::{
-        error_codes::{codes::EXCEPTION_ERROR, invalid_params},
-        JsonRpcErrorKind, RpcBoxFuture, RpcError, RpcErrorKind, RpcResult,
-    };
+    use crate::rpc::{RpcBoxFuture, RpcError, RpcResult};
 
     pub trait Into<T> {
         fn into(x: Self) -> T;
@@ -846,33 +861,7 @@ pub mod delegate_convert {
     }
 
     impl Into<JsonRpcError> for RpcError {
-        fn into(e: Self) -> JsonRpcError {
-            match e.0 {
-                JsonRpcErrorKind(j) => j,
-                RpcErrorKind::InvalidParam(param, details) => {
-                    invalid_params(&param, details)
-                }
-                RpcErrorKind::Msg(_)
-                | RpcErrorKind::Decoder(_)
-
-                // TODO(thegaram): consider returning InvalidParams instead
-                | RpcErrorKind::FilterError(_)
-
-                // TODO(thegaram): make error conversion more fine-grained here
-                | RpcErrorKind::LightProtocol(_)
-                | RpcErrorKind::StateDb(_)
-                | RpcErrorKind::Storage(_) => JsonRpcError {
-                    code: jsonrpc_core::ErrorCode::ServerError(EXCEPTION_ERROR),
-                    message: format!("Error processing request: {}", e),
-                    data: None,
-                },
-                // We exhausted all possible ErrorKinds here, however
-                // https://stackoverflow.com/questions/36440021/whats-purpose-of-errorkind-nonexhaustive
-                RpcErrorKind::__Nonexhaustive {} => unsafe {
-                    unreachable_unchecked()
-                },
-            }
-        }
+        fn into(e: Self) -> JsonRpcError { e.into() }
     }
 
     pub fn into_jsonrpc_result<T>(r: RpcResult<T>) -> JsonRpcResult<T> {

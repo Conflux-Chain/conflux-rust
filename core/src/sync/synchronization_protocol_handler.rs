@@ -1229,7 +1229,7 @@ impl SynchronizationProtocolHandler {
     fn produce_status_message_v2(&self) -> StatusV2 {
         let best_info = self.graph.consensus.best_info();
         let chain_id = ChainIdParamsDeprecated {
-            chain_id: best_info.best_chain_id(),
+            chain_id: best_info.best_chain_id().in_native_space(),
         };
         let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
 
@@ -1244,7 +1244,7 @@ impl SynchronizationProtocolHandler {
     fn produce_status_message_v3(&self) -> StatusV3 {
         let best_info = self.graph.consensus.best_info();
         let chain_id = ChainIdParamsDeprecated {
-            chain_id: best_info.best_chain_id(),
+            chain_id: best_info.best_chain_id().in_native_space(),
         };
         let terminal_hashes = best_info.bounded_terminal_block_hashes.clone();
 

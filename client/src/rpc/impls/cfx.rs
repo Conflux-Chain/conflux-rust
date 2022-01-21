@@ -4,13 +4,16 @@
 
 use crate::rpc::types::{
     call_request::rpc_call_request_network, errors::check_rpc_address_network,
-    PoSEconomics, RpcAddress, SponsorInfo, TokenSupplyInfo,
-    MAX_GAS_CALL_REQUEST,
+    pos::PoSEpochReward, PoSEconomics, RpcAddress, SponsorInfo,
+    TokenSupplyInfo, MAX_GAS_CALL_REQUEST,
 };
 use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
-use cfx_types::{BigEndianHash, H256, H520, U128, U256, U64};
+use cfx_types::{
+    Address, AddressSpaceUtil, BigEndianHash, Space, H256, H520, U128, U256,
+    U64,
+};
 use cfxcore::{
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
@@ -29,8 +32,8 @@ use network::{
 use parking_lot::Mutex;
 use primitives::{
     filter::LogFilter, Account, Block, BlockReceipts, DepositInfo,
-    SignedTransaction, StorageKey, StorageRoot, StorageValue, TransactionIndex,
-    TransactionWithSignature, VoteStakeInfo,
+    SignedTransaction, StorageKey, StorageRoot, StorageValue, Transaction,
+    TransactionIndex, TransactionWithSignature, VoteStakeInfo,
 };
 use random_crash::*;
 use rlp::Rlp;
@@ -56,11 +59,12 @@ use crate::{
             pos::Block as PosBlock, sign_call, Account as RpcAccount,
             AccountPendingInfo, AccountPendingTransactions, BlameInfo,
             Block as RpcBlock, BlockHashOrEpochNumber, Bytes, CallRequest,
-            CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
-            EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
-            LogFilter as RpcFilter, PackedOrExecuted, Receipt as RpcReceipt,
-            RewardInfo as RpcRewardInfo, SendTxRequest, Status as RpcStatus,
-            SyncGraphStates, Transaction as RpcTransaction,
+            CfxRpcLogFilter, CheckBalanceAgainstTransactionResponse,
+            ConsensusGraphStates, EpochNumber,
+            EstimateGasAndCollateralResponse, Log as RpcLog, PackedOrExecuted,
+            Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, SendTxRequest,
+            Status as RpcStatus, SyncGraphStates,
+            Transaction as RpcTransaction,
         },
         RpcResult,
     },
@@ -71,10 +75,10 @@ use cfxcore::{
     consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
     executive::revert_reason_decode,
+    observer::ErrorUnwind,
     spec::genesis::{
         genesis_contract_address_four_year, genesis_contract_address_two_year,
     },
-    trace::ErrorUnwind,
 };
 use diem_types::account_address::AccountAddress;
 use lazy_static::lazy_static;
@@ -89,20 +93,20 @@ lazy_static! {
 }
 
 #[derive(Debug)]
-struct BlockExecInfo {
-    block_receipts: Arc<BlockReceipts>,
-    block: Arc<Block>,
-    epoch_number: u64,
-    maybe_state_root: Option<H256>,
-    pivot_hash: H256,
+pub(crate) struct BlockExecInfo {
+    pub(crate) block_receipts: Arc<BlockReceipts>,
+    pub(crate) block: Arc<Block>,
+    pub(crate) epoch_number: u64,
+    pub(crate) maybe_state_root: Option<H256>,
+    pub(crate) pivot_hash: H256,
 }
 
 pub struct RpcImpl {
-    config: RpcImplConfiguration,
+    pub config: RpcImplConfiguration,
     pub consensus: SharedConsensusGraph,
     pub sync: SharedSynchronizationService,
     block_gen: Arc<BlockGenerator>,
-    tx_pool: SharedTransactionPool,
+    pub tx_pool: SharedTransactionPool,
     maybe_txgen: Option<Arc<TransactionGenerator>>,
     maybe_direct_txgen: Option<Arc<Mutex<DirectTransactionGenerator>>>,
     accounts: Arc<AccountProvider>,
@@ -161,10 +165,10 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
 
-        let address = &address.hex_address;
+        let address = address.hex_address.with_native_space();
 
-        let code = match state_db.get_account(address)? {
-            Some(acc) => match state_db.get_code(address, &acc.code_hash)? {
+        let code = match state_db.get_account(&address)? {
+            Some(acc) => match state_db.get_code(&address, &acc.code_hash)? {
                 Some(code) => (*code.code).clone(),
                 _ => vec![],
             },
@@ -188,7 +192,8 @@ impl RpcImpl {
         let state_db = self
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
-        let acc = state_db.get_account(&address.hex_address)?;
+        let acc =
+            state_db.get_account(&address.hex_address.with_native_space())?;
 
         Ok(acc.map_or(U256::zero(), |acc| acc.balance).into())
     }
@@ -209,7 +214,7 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
 
-        match state_db.get_account(&address.hex_address)? {
+        match state_db.get_account(&address.hex_address.with_native_space())? {
             None => Ok(None),
             Some(acc) => {
                 Ok(Some(RpcAddress::try_from_h160(acc.admin, network)?))
@@ -233,7 +238,7 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
 
-        match state_db.get_account(&address.hex_address)? {
+        match state_db.get_account(&address.hex_address.with_native_space())? {
             None => Ok(SponsorInfo::default(network)?),
             Some(acc) => Ok(SponsorInfo::try_from(acc.sponsor_info, network)?),
         }
@@ -253,7 +258,8 @@ impl RpcImpl {
         let state_db = self
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
-        let acc = state_db.get_account(&address.hex_address)?;
+        let acc =
+            state_db.get_account(&address.hex_address.with_native_space())?;
 
         Ok(acc.map_or(U256::zero(), |acc| acc.staking_balance).into())
     }
@@ -273,7 +279,9 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
 
-        match state_db.get_deposit_list(&address.hex_address)? {
+        match state_db
+            .get_deposit_list(&address.hex_address.with_native_space())?
+        {
             None => Ok(vec![]),
             Some(deposit_list) => Ok(deposit_list.0),
         }
@@ -294,7 +302,9 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
 
-        match state_db.get_vote_list(&address.hex_address)? {
+        match state_db
+            .get_vote_list(&address.hex_address.with_native_space())?
+        {
             None => Ok(vec![]),
             Some(vote_list) => Ok(vote_list.0),
         }
@@ -314,7 +324,8 @@ impl RpcImpl {
         let state_db = self
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "num")?;
-        let acc = state_db.get_account(&address.hex_address)?;
+        let acc =
+            state_db.get_account(&address.hex_address.with_native_space())?;
 
         Ok(acc
             .map_or(U256::zero(), |acc| acc.collateral_for_storage)
@@ -340,17 +351,18 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
 
-        let account = match state_db.get_account(address)? {
-            Some(t) => t,
-            None => account_result_to_rpc_result(
-                "address",
-                Ok(Account::new_empty_with_balance(
-                    address,
-                    &U256::zero(), /* balance */
-                    &U256::zero(), /* nonce */
-                )),
-            )?,
-        };
+        let account =
+            match state_db.get_account(&address.with_native_space())? {
+                Some(t) => t,
+                None => account_result_to_rpc_result(
+                    "address",
+                    Ok(Account::new_empty_with_balance(
+                        &address.with_native_space(),
+                        &U256::zero(), /* balance */
+                        &U256::zero(), /* nonce */
+                    )),
+                )?,
+            };
 
         Ok(RpcAccount::try_from(account, network)?)
     }
@@ -458,7 +470,8 @@ impl RpcImpl {
         let key = StorageKey::new_storage_key(
             &address.hex_address,
             position.as_ref(),
-        );
+        )
+        .with_native_space();
 
         Ok(match state_db.get::<StorageValue>(key)? {
             Some(entry) => Some(H256::from_uint(&entry.value).into()),
@@ -516,7 +529,7 @@ impl RpcImpl {
             // the check.
 
             let nonce = consensus_graph.next_nonce(
-                tx.from.clone().into(),
+                Address::from(tx.from.clone()).with_native_space(),
                 BlockHashOrEpochNumber::EpochNumber(EpochNumber::LatestState)
                     .into_primitive(),
                 // For an invalid_params error, the name of the params should
@@ -530,7 +543,12 @@ impl RpcImpl {
 
         let epoch_height = consensus_graph.best_epoch_number();
         let chain_id = consensus_graph.best_chain_id();
-        tx.sign_with(epoch_height, chain_id, password, self.accounts.clone())
+        tx.sign_with(
+            epoch_height,
+            chain_id.in_native_space(),
+            password,
+            self.accounts.clone(),
+        )
     }
 
     fn send_transaction(
@@ -566,7 +584,9 @@ impl RpcImpl {
         let root = self
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "epoch_num")?
-            .get_original_storage_root(&address.hex_address)?;
+            .get_original_storage_root(
+                &address.hex_address.with_native_space(),
+            )?;
 
         Ok(Some(root))
     }
@@ -606,6 +626,10 @@ impl RpcImpl {
             },
         )) = self.consensus.get_transaction_info_by_hash(&hash)
         {
+            if tx.space() == Space::Ethereum {
+                return Ok(None);
+            }
+
             let packed_or_executed = match maybe_executed_extra_info {
                 None => PackedOrExecuted::Packed(tx_index),
                 Some(MaybeExecutedTxExtraInfo {
@@ -646,6 +670,10 @@ impl RpcImpl {
         }
 
         if let Some(tx) = self.tx_pool.get_transaction(&hash) {
+            if tx.space() == Space::Ethereum {
+                return Ok(None);
+            }
+
             let rpc_tx = RpcTransaction::from_signed(
                 &tx,
                 None,
@@ -705,7 +733,7 @@ impl RpcImpl {
 
     fn construct_rpc_receipt(
         &self, tx_index: TransactionIndex, exec_info: &BlockExecInfo,
-    ) -> RpcResult<RpcReceipt> {
+    ) -> RpcResult<Option<RpcReceipt>> {
         let id = tx_index.index;
 
         if id >= exec_info.block.transactions.len()
@@ -713,6 +741,12 @@ impl RpcImpl {
             || id >= exec_info.block_receipts.tx_execution_error_messages.len()
         {
             bail!("Inconsistent state");
+        }
+
+        let tx = &exec_info.block.transactions[id];
+
+        if tx.space() == Space::Ethereum {
+            return Ok(None);
         }
 
         let prior_gas_used = match id {
@@ -729,7 +763,7 @@ impl RpcImpl {
             };
 
         let receipt = RpcReceipt::new(
-            (*exec_info.block.transactions[id]).clone(),
+            (**tx).clone(),
             exec_info.block_receipts.receipts[id].clone(),
             tx_index,
             prior_gas_used,
@@ -740,7 +774,7 @@ impl RpcImpl {
             *self.sync.network.get_network_type(),
         )?;
 
-        Ok(receipt)
+        Ok(Some(receipt))
     }
 
     fn prepare_receipt(&self, tx_hash: H256) -> RpcResult<Option<RpcReceipt>> {
@@ -764,8 +798,7 @@ impl RpcImpl {
                 Some(res) => res,
             };
 
-        let receipt = self.construct_rpc_receipt(tx_index, &exec_info)?;
-        Ok(Some(receipt))
+        self.construct_rpc_receipt(tx_index, &exec_info)
     }
 
     fn prepare_block_receipts(
@@ -787,10 +820,12 @@ impl RpcImpl {
         let mut rpc_receipts = vec![];
 
         for index in 0..exec_info.block.transactions.len() {
-            rpc_receipts.push(self.construct_rpc_receipt(
+            if let Some(receipt) = self.construct_rpc_receipt(
                 TransactionIndex { block_hash, index },
                 &exec_info,
-            )?);
+            )? {
+                rpc_receipts.push(receipt);
+            }
         }
 
         Ok(Some(rpc_receipts))
@@ -871,7 +906,7 @@ impl RpcImpl {
                         &mut block_size_limit,
                         num_txs_simple,
                         num_txs_erc20,
-                        self.consensus.best_chain_id(),
+                        self.consensus.best_chain_id().in_native_space(),
                     );
 
                 Ok(block_gen.generate_block(
@@ -927,22 +962,30 @@ impl RpcImpl {
         let mut transactions = Vec::new();
 
         for tx in txs {
-            match tx.recover_public() {
-                Ok(public) => {
-                    let mut signed_tx = SignedTransaction::new(public, tx);
-                    if tx_data_len > 0 {
-                        signed_tx.transaction.transaction.unsigned.data =
-                            vec![0; tx_data_len];
-                    }
-                    transactions.push(Arc::new(signed_tx));
-                }
+            let public = match tx.recover_public() {
+                Ok(public) => public,
                 Err(e) => {
                     bail!(invalid_params(
                         &format!("raw_txs, tx {:?}", tx),
                         format!("Recover public error: {:?}", e),
                     ));
                 }
-            }
+            };
+
+            let mut signed_tx = SignedTransaction::new(public, tx);
+
+            // set fake data for latency tests
+            match signed_tx.transaction.transaction.unsigned {
+                Transaction::Native(ref mut unsigned) if tx_data_len > 0 => {
+                    unsigned.data = vec![0; tx_data_len];
+                }
+                Transaction::Ethereum(ref mut unsigned) if tx_data_len > 0 => {
+                    unsigned.data = vec![0; tx_data_len];
+                }
+                _ => {}
+            };
+
+            transactions.push(Arc::new(signed_tx));
         }
 
         Ok(transactions)
@@ -972,7 +1015,7 @@ impl RpcImpl {
         ))
     }
 
-    fn get_logs(&self, filter: RpcFilter) -> RpcResult<Vec<RpcLog>> {
+    fn get_logs(&self, filter: CfxRpcLogFilter) -> RpcResult<Vec<RpcLog>> {
         // all addresses specified should be for the correct network
         if let Some(addresses) = &filter.address {
             for address in addresses.iter() {
@@ -1176,24 +1219,32 @@ impl RpcImpl {
             }
             ExecutionOutcome::Finished(executed) => executed,
         };
-        let mut storage_collateralized = U64::from(0);
+        let mut storage_collateralized = 0;
         for storage_change in &executed.storage_collateralized {
-            storage_collateralized += storage_change.collaterals;
+            storage_collateralized += storage_change.collaterals.as_u64();
         }
+        if executed.minimum_storage_limit > storage_collateralized {
+            storage_collateralized = executed.minimum_storage_limit;
+        }
+        let storage_collateralized = U64::from(storage_collateralized);
         // In case of unlimited full gas charge at some VM call, or if there are
         // infinite loops, the total estimated gas used is very close to
         // MAX_GAS_CALL_REQUEST, 0.8 is chosen to check if it's close.
         const TOO_MUCH_GAS_USED: u64 =
             (0.8 * (MAX_GAS_CALL_REQUEST as f32)) as u64;
-        if executed.gas_used >= U256::from(TOO_MUCH_GAS_USED) {
+        // TODO: this value should always be Some(..) unless incorrect
+        // implementation. Should return an error for server bugs later.
+        let estimated_gas_limit =
+            executed.estimated_gas_limit.unwrap_or(U256::zero());
+        if estimated_gas_limit >= U256::from(TOO_MUCH_GAS_USED) {
             bail!(call_execution_error(
                 format!(
                     "Gas too high. Most likely there are problems within the contract code. \
                     gas {}, storage_limit {}",
-                    executed.gas_used, storage_collateralized
+                   estimated_gas_limit, storage_collateralized
                 ),
                 format!(
-                    "gas {}, storage_limit {}", executed.gas_used, storage_collateralized
+                    "gas {}, storage_limit {}", estimated_gas_limit, storage_collateralized
                 )
                 .into_bytes(),
             ));
@@ -1207,8 +1258,8 @@ impl RpcImpl {
             // 2. In Conflux, we recommend setting the gas_limit to (gas_used *
             // 4) / 3, because the extra gas will be refunded up to
             // 1/4 of the gas limit.
-            gas_limit: executed.gas_used * 4 / 3,
-            gas_used: executed.gas_used,
+            gas_limit: executed.estimated_gas_limit.unwrap(),
+            gas_used: estimated_gas_limit,
             storage_collateralized,
         };
         Ok(response)
@@ -1231,8 +1282,8 @@ impl RpcImpl {
             account_addr, contract_addr, gas_limit, gas_price, storage_limit, epoch
         );
 
-        let account_addr = &account_addr.hex_address;
-        let contract_addr = &contract_addr.hex_address;
+        let account_addr = account_addr.hex_address.with_native_space();
+        let contract_addr = contract_addr.hex_address.with_native_space();
 
         if storage_limit > U256::from(std::u64::MAX) {
             bail!(JsonRpcError::invalid_params(format!("storage_limit has to be within the range of u64 but {} supplied!", storage_limit)));
@@ -1247,8 +1298,10 @@ impl RpcImpl {
 
         let user_account = state_db.get_account(&account_addr)?;
         let contract_account = state_db.get_account(&contract_addr)?;
-        let is_sponsored =
-            state.check_commission_privilege(&contract_addr, &account_addr)?;
+        let is_sponsored = state.check_commission_privilege(
+            &contract_addr.address,
+            &account_addr.address,
+        )?;
 
         Ok(common::check_balance_against_transaction(
             user_account,
@@ -1283,7 +1336,8 @@ impl RpcImpl {
 
         let best_epoch_height = consensus_graph.best_epoch_number();
         let chain_id = consensus_graph.best_chain_id();
-        let signed_tx = sign_call(best_epoch_height, chain_id, request)?;
+        let signed_tx =
+            sign_call(best_epoch_height, chain_id.in_native_space(), request)?;
         trace!("call tx {:?}", signed_tx);
         consensus_graph.call_virtual(&signed_tx, epoch.into())
     }
@@ -1539,6 +1593,7 @@ impl Cfx for CfxHandler {
             fn get_client_version(&self) -> JsonRpcResult<String>;
             fn account_pending_info(&self, addr: RpcAddress) -> BoxFuture<Option<AccountPendingInfo>>;
             fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
+            fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
         }
 
         to self.rpc_impl {
@@ -1566,7 +1621,7 @@ impl Cfx for CfxHandler {
             fn check_balance_against_transaction(
                 &self, account_addr: RpcAddress, contract_addr: RpcAddress, gas_limit: U256, gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>,
             ) -> BoxFuture<CheckBalanceAgainstTransactionResponse>;
-            fn get_logs(&self, filter: RpcFilter) -> BoxFuture<Vec<RpcLog>>;
+            fn get_logs(&self, filter: CfxRpcLogFilter) -> BoxFuture<Vec<RpcLog>>;
             fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
             fn send_raw_transaction(&self, raw: Bytes) -> JsonRpcResult<H256>;
             fn storage_at(&self, addr: RpcAddress, pos: U256, epoch_number: Option<EpochNumber>)

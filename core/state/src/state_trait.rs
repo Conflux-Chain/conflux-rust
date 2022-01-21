@@ -17,14 +17,14 @@ pub trait StateTrait: CheckpointTrait {
     /// checked out. This function should only be called in post-processing
     /// of a transaction.
     fn settle_collateral_for_all(
-        &mut self, substate: &Self::Substate,
-        tracer: &mut dyn InternalTransferTracer, account_start_nonce: U256,
+        &mut self, substate: &Self::Substate, tracer: &mut dyn StateTracer,
+        account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult>;
 
     // FIXME: add doc string.
     fn collect_and_settle_collateral(
         &mut self, original_sender: &Address, storage_limit: &U256,
-        substate: &mut Self::Substate, tracer: &mut dyn InternalTransferTracer,
+        substate: &mut Self::Substate, tracer: &mut dyn StateTracer,
         account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult>;
 
@@ -59,6 +59,10 @@ pub trait StateOpsTrait {
 
     fn add_total_pos_staking(&mut self, v: U256);
 
+    fn add_total_evm_tokens(&mut self, v: U256);
+
+    fn subtract_total_evm_tokens(&mut self, v: U256);
+
     fn inc_distributable_pos_interest(
         &mut self, current_block_number: u64,
     ) -> DbResult<()>;
@@ -69,13 +73,15 @@ pub trait StateOpsTrait {
     ) -> DbResult<Vec<(Address, H256, U256)>>;
 
     fn new_contract_with_admin(
-        &mut self, contract: &Address, admin: &Address, balance: U256,
+        &mut self, contract: &AddressWithSpace, admin: &Address, balance: U256,
         nonce: U256, storage_layout: Option<StorageLayout>,
     ) -> DbResult<()>;
 
-    fn balance(&self, address: &Address) -> DbResult<U256>;
+    fn balance(&self, address: &AddressWithSpace) -> DbResult<U256>;
 
-    fn is_contract_with_code(&self, address: &Address) -> DbResult<bool>;
+    fn is_contract_with_code(
+        &self, address: &AddressWithSpace,
+    ) -> DbResult<bool>;
 
     fn sponsor_for_gas(&self, address: &Address) -> DbResult<Option<Address>>;
 
@@ -136,19 +142,23 @@ pub trait StateOpsTrait {
         user: Address,
     ) -> DbResult<()>;
 
-    fn nonce(&self, address: &Address) -> DbResult<U256>;
+    fn nonce(&self, address: &AddressWithSpace) -> DbResult<U256>;
 
     fn init_code(
-        &mut self, address: &Address, code: Vec<u8>, owner: Address,
+        &mut self, address: &AddressWithSpace, code: Vec<u8>, owner: Address,
     ) -> DbResult<()>;
 
-    fn code_hash(&self, address: &Address) -> DbResult<Option<H256>>;
+    fn code_hash(&self, address: &AddressWithSpace) -> DbResult<Option<H256>>;
 
-    fn code_size(&self, address: &Address) -> DbResult<Option<usize>>;
+    fn code_size(&self, address: &AddressWithSpace) -> DbResult<Option<usize>>;
 
-    fn code_owner(&self, address: &Address) -> DbResult<Option<Address>>;
+    fn code_owner(
+        &self, address: &AddressWithSpace,
+    ) -> DbResult<Option<Address>>;
 
-    fn code(&self, address: &Address) -> DbResult<Option<Arc<Vec<u8>>>>;
+    fn code(
+        &self, address: &AddressWithSpace,
+    ) -> DbResult<Option<Arc<Vec<u8>>>>;
 
     fn staking_balance(&self, address: &Address) -> DbResult<U256>;
 
@@ -172,28 +182,31 @@ pub trait StateOpsTrait {
         &mut self, address: &Address,
     ) -> DbResult<()>;
 
-    fn clean_account(&mut self, address: &Address) -> DbResult<()>;
+    fn clean_account(&mut self, address: &AddressWithSpace) -> DbResult<()>;
 
     fn inc_nonce(
-        &mut self, address: &Address, account_start_nonce: &U256,
+        &mut self, address: &AddressWithSpace, account_start_nonce: &U256,
     ) -> DbResult<()>;
 
-    fn set_nonce(&mut self, address: &Address, nonce: &U256) -> DbResult<()>;
+    fn set_nonce(
+        &mut self, address: &AddressWithSpace, nonce: &U256,
+    ) -> DbResult<()>;
 
     fn sub_balance(
-        &mut self, address: &Address, by: &U256, cleanup_mode: &mut CleanupMode,
+        &mut self, address: &AddressWithSpace, by: &U256,
+        cleanup_mode: &mut CleanupMode,
     ) -> DbResult<()>;
 
     fn add_balance(
-        &mut self, address: &Address, by: &U256, cleanup_mode: CleanupMode,
-        account_start_nonce: U256,
+        &mut self, address: &AddressWithSpace, by: &U256,
+        cleanup_mode: CleanupMode, account_start_nonce: U256,
     ) -> DbResult<()>;
     fn add_pos_interest(
         &mut self, address: &Address, by: &U256, cleanup_mode: CleanupMode,
         account_start_nonce: U256,
     ) -> DbResult<()>;
     fn transfer_balance(
-        &mut self, from: &Address, to: &Address, by: &U256,
+        &mut self, from: &AddressWithSpace, to: &AddressWithSpace, by: &U256,
         cleanup_mode: CleanupMode, account_start_nonce: U256,
     ) -> DbResult<()>;
 
@@ -223,16 +236,20 @@ pub trait StateOpsTrait {
 
     fn last_distribute_block(&self) -> u64;
 
-    fn remove_contract(&mut self, address: &Address) -> DbResult<()>;
+    fn remove_contract(&mut self, address: &AddressWithSpace) -> DbResult<()>;
 
-    fn exists(&self, address: &Address) -> DbResult<bool>;
+    fn exists(&self, address: &AddressWithSpace) -> DbResult<bool>;
 
-    fn exists_and_not_null(&self, address: &Address) -> DbResult<bool>;
+    fn exists_and_not_null(&self, address: &AddressWithSpace)
+        -> DbResult<bool>;
 
-    fn storage_at(&self, address: &Address, key: &[u8]) -> DbResult<U256>;
+    fn storage_at(
+        &self, address: &AddressWithSpace, key: &[u8],
+    ) -> DbResult<U256>;
 
     fn set_storage(
-        &mut self, address: &Address, key: Vec<u8>, value: U256, owner: Address,
+        &mut self, address: &AddressWithSpace, key: Vec<u8>, value: U256,
+        owner: Address,
     ) -> DbResult<()>;
 
     fn update_pos_status(
@@ -260,11 +277,11 @@ pub trait CheckpointTrait: StateOpsTrait {
 }
 
 use super::{CleanupMode, CollateralCheckResult};
-use crate::{substate_trait::SubstateTrait, tracer::InternalTransferTracer};
+use crate::{substate_trait::SubstateTrait, tracer::StateTracer};
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };
 use cfx_statedb::Result as DbResult;
-use cfx_types::{Address, H256, U256};
+use cfx_types::{Address, AddressWithSpace, H256, U256};
 use primitives::{EpochId, SponsorInfo, StorageLayout};
 use std::sync::Arc;

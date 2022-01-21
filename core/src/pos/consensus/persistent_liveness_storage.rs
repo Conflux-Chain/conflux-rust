@@ -76,8 +76,8 @@ pub trait PersistentLivenessStorage: Send + Sync {
         unimplemented!()
     }
 
-    /// Returns a handle of the diemdb.
-    fn diem_db(&self) -> Arc<dyn DbReader>;
+    /// Returns a handle of the pos-ledger-db.
+    fn pos_ledger_db(&self) -> Arc<dyn DbReader>;
 }
 
 #[derive(Clone)]
@@ -312,13 +312,13 @@ impl RecoveryData {
 /// The proxy we use to persist data in diem db storage service via grpc.
 pub struct StorageWriteProxy {
     db: Arc<ConsensusDB>,
-    diem_db: Arc<dyn DbReader>,
+    pos_ledger_db: Arc<dyn DbReader>,
 }
 
 impl StorageWriteProxy {
-    pub fn new(config: &NodeConfig, diem_db: Arc<dyn DbReader>) -> Self {
+    pub fn new(config: &NodeConfig, pos_ledger_db: Arc<dyn DbReader>) -> Self {
         let db = Arc::new(ConsensusDB::new(config.storage.dir()));
-        StorageWriteProxy { db, diem_db }
+        StorageWriteProxy { db, pos_ledger_db }
     }
 
     pub fn consensus_db(&self) -> Arc<ConsensusDB> { self.db.clone() }
@@ -347,7 +347,7 @@ impl PersistentLivenessStorage for StorageWriteProxy {
 
     fn recover_from_ledger(&self) -> LedgerRecoveryData {
         let startup_info = self
-            .diem_db
+            .pos_ledger_db
             .get_startup_info(true)
             .expect("unable to read ledger info from storage")
             .expect("startup info is None");
@@ -392,7 +392,7 @@ impl PersistentLivenessStorage for StorageWriteProxy {
 
         // find the block corresponding to storage latest ledger info
         let startup_info = self
-            .diem_db
+            .pos_ledger_db
             .get_startup_info(true)
             .expect("unable to read ledger info from storage")
             .expect("startup info is None");
@@ -466,13 +466,13 @@ impl PersistentLivenessStorage for StorageWriteProxy {
         &self, version: u64,
     ) -> Result<EpochChangeProof> {
         let (_, proofs, _) = self
-            .diem_db
+            .pos_ledger_db
             .get_state_proof(version)
             .map_err(DbError::from)?;
         Ok(proofs)
     }
 
-    fn diem_db(&self) -> Arc<dyn DbReader> { self.diem_db.clone() }
+    fn pos_ledger_db(&self) -> Arc<dyn DbReader> { self.pos_ledger_db.clone() }
 
     fn save_ledger_blocks(&self, blocks: Vec<Block>) -> Result<()> {
         Ok(self.db.save_ledger_blocks(blocks)?)

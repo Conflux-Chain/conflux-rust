@@ -2,11 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{super::impls::pos::*, macros::*, ExecutionTrait, SolFnTable};
+use super::{
+    super::impls::pos::*, macros::*, SimpleExecutionTrait, SolFnTable,
+};
 use crate::{
     evm::{ActionParams, Spec},
     executive::InternalRefContext,
-    trace::Tracer,
+    observer::VmObserve,
     vm,
 };
 use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
@@ -61,7 +63,7 @@ impl UpfrontPaymentTrait for Register {
     fn upfront_gas_payment(
         &self, inputs: &(H256, u64, BlsPubKey, VrfPubKey, BlsProof),
         _params: &ActionParams, context: &InternalRefContext,
-    ) -> U256
+    ) -> DbResult<U256>
     {
         let (_identifier, _vote_power, bls_pubkey, vrf_pubkey, _bls_proof) =
             inputs;
@@ -79,20 +81,20 @@ impl UpfrontPaymentTrait for Register {
             (bls_pubkey.len() + vrf_pubkey.len() + 31) / 32 * spec.sha3_gas;
         let pubkey_verify_gas = 50_000;
 
-        return U256::from(
+        return Ok(U256::from(
             io_gas
                 + register_log_gas
                 + increase_stake_log_gas
                 + pubkey_hash_gas
                 + pubkey_verify_gas,
-        );
+        ));
     }
 }
-impl ExecutionTrait for Register {
+impl SimpleExecutionTrait for Register {
     fn execute_inner(
         &self, inputs: (H256, u64, BlsPubKey, VrfPubKey, BlsProof),
         params: &ActionParams, context: &mut InternalRefContext,
-        _tracer: &mut dyn Tracer,
+        _tracer: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
         if !context.spec.cip43_init && context.env.pos_view.is_none() {
@@ -123,7 +125,7 @@ impl UpfrontPaymentTrait for IncreaseStake {
     fn upfront_gas_payment(
         &self, _: &Self::Input, _params: &ActionParams,
         context: &InternalRefContext,
-    ) -> U256
+    ) -> DbResult<U256>
     {
         let spec = context.spec;
         let log_gas =
@@ -131,13 +133,13 @@ impl UpfrontPaymentTrait for IncreaseStake {
         let io_gas =
             2 * spec.sstore_reset_gas + 3 * spec.sload_gas + 3 * spec.sha3_gas;
 
-        return U256::from(log_gas + io_gas);
+        return Ok(U256::from(log_gas + io_gas));
     }
 }
-impl ExecutionTrait for IncreaseStake {
+impl SimpleExecutionTrait for IncreaseStake {
     fn execute_inner(
         &self, inputs: u64, params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
         if !context.spec.cip43_init && context.env.pos_view.is_none() {
@@ -153,10 +155,10 @@ make_solidity_function! {
     struct Retire(u64, "retire(uint64)");
 }
 impl_function_type!(Retire, "non_payable_write", gas: |spec: &Spec| spec.retire_gas);
-impl ExecutionTrait for Retire {
+impl SimpleExecutionTrait for Retire {
     fn execute_inner(
         &self, votes: u64, params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
         if context.env.pos_view.is_none() {
@@ -172,10 +174,10 @@ make_solidity_function! {
     struct GetStatus(H256, "getVotes(bytes32)", (u64,u64));
 }
 impl_function_type!(GetStatus, "query", gas: |spec: &Spec| spec.sload_gas + spec.sha3_gas);
-impl ExecutionTrait for GetStatus {
+impl SimpleExecutionTrait for GetStatus {
     fn execute_inner(
         &self, inputs: H256, params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<(u64, u64)>
     {
         let status = get_status(inputs, params, context)?;
@@ -187,10 +189,10 @@ make_solidity_function! {
     struct IdentifierToAddress(H256, "identifierToAddress(bytes32)", Address);
 }
 impl_function_type!(IdentifierToAddress, "query", gas: |spec: &Spec| spec.sload_gas + spec.sha3_gas);
-impl ExecutionTrait for IdentifierToAddress {
+impl SimpleExecutionTrait for IdentifierToAddress {
     fn execute_inner(
         &self, inputs: H256, params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<Address>
     {
         identifier_to_address(inputs, params, context)
@@ -201,10 +203,10 @@ make_solidity_function! {
     struct AddressToIdentifier(Address, "addressToIdentifier(address)", H256);
 }
 impl_function_type!(AddressToIdentifier, "query", gas: |spec: &Spec| spec.sload_gas + spec.sha3_gas);
-impl ExecutionTrait for AddressToIdentifier {
+impl SimpleExecutionTrait for AddressToIdentifier {
     fn execute_inner(
         &self, inputs: Address, params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<H256>
     {
         address_to_identifier(inputs, params, context)

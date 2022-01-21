@@ -583,7 +583,7 @@ impl<'a> KVInserter<MptKeyValue> for DeltaMptMergeDumperSqlite<'a> {
         // TODO: what about multi-threading put?
         let (mpt_key, value) = x;
         let snapshot_key =
-            StorageKey::from_delta_mpt_key(&mpt_key).to_key_bytes();
+            StorageKeyWithSpace::from_delta_mpt_key(&mpt_key).to_key_bytes();
         if value.len() > 0 {
             DeltaMptDumperSetDb {
                 connections: *&mut self.connections,
@@ -630,7 +630,7 @@ use crate::{
     KVInserter, SnapshotDbManagerSqlite, SqliteConnection,
 };
 use fallible_iterator::FallibleIterator;
-use primitives::{MerkleHash, StorageKey};
+use primitives::{MerkleHash, StorageKeyWithSpace};
 use std::{
     fs,
     path::{Path, PathBuf},

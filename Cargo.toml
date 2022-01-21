@@ -54,7 +54,7 @@ env_logger = "0.5"
 malloc_size_of = {path="util/malloc_size_of"}
 diem-crypto = { path="core/src/pos/crypto/crypto" }
 diem-types = { path="core/src/pos/types" }
-diemdb = { path = "core/src/pos/storage/diemdb" }
+pos-ledger-db = { path = "core/src/pos/storage/pos-ledger-db" }
 executor-types = { path = "core/src/pos/types/executor-types" }
 executor = { path = "core/src/pos/consensus/executor" }
 storage-interface = { path = "core/src/pos/storage/storage-interface" }

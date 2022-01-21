@@ -19,7 +19,7 @@
 // See http://www.gnu.org/licenses/
 
 use super::u256_to_address;
-use cfx_types::U256;
+use cfx_types::{Space, U256};
 use std::cmp;
 
 use super::{
@@ -130,7 +130,23 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
         let cost = match instruction {
             instructions::JUMPDEST => Request::Gas(Gas::from(1)),
             instructions::SSTORE => {
-                Request::Gas(Gas::from(spec.sstore_reset_gas))
+                let gas = if context.space() == Space::Native {
+                    spec.sstore_reset_gas
+                } else {
+                    let mut key = vec![0; 32];
+                    stack.peek(0).to_big_endian(key.as_mut());
+
+                    let newval = stack.peek(1);
+                    let val = context.storage_at(&key.to_vec())?;
+
+                    if val.is_zero() && !newval.is_zero() {
+                        spec.sstore_set_gas * spec.evm_gas_ratio
+                    } else {
+                        spec.sstore_reset_gas
+                    }
+                };
+
+                Request::Gas(Gas::from(gas))
             }
             instructions::SLOAD => Request::Gas(Gas::from(spec.sload_gas)),
             instructions::BALANCE => Request::Gas(Gas::from(spec.balance_gas)),
@@ -150,8 +166,14 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
                         && is_value_transfer
                         && !context.exists_and_not_null(&address)?)
                 {
-                    gas = overflowing!(gas
-                        .overflow_add(spec.suicide_to_new_account_cost.into()));
+                    let ratio = if context.space() == Space::Ethereum {
+                        spec.evm_gas_ratio
+                    } else {
+                        1
+                    };
+                    gas = overflowing!(gas.overflow_add(
+                        (spec.suicide_to_new_account_cost * ratio).into()
+                    ));
                 }
 
                 Request::Gas(gas)
@@ -222,9 +244,14 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
                             && is_value_transfer
                             && !context.exists_and_not_null(&address)?))
                 {
-                    gas = overflowing!(
-                        gas.overflow_add(spec.call_new_account_gas.into())
-                    );
+                    let ratio = if context.space() == Space::Ethereum {
+                        spec.evm_gas_ratio
+                    } else {
+                        1
+                    };
+                    gas = overflowing!(gas.overflow_add(
+                        (spec.call_new_account_gas * ratio).into()
+                    ));
                 }
 
                 if is_value_transfer {
@@ -252,9 +279,14 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
                 let len = stack.peek(2);
                 let base = Gas::from(spec.create_gas);
                 let word = overflowing!(to_word_size(Gas::from_u256(*len)?));
-                let word_gas = overflowing!(
+                let mut word_gas = overflowing!(
                     Gas::from(spec.sha3_word_gas).overflow_mul(word)
                 );
+                if instruction == instructions::CREATE
+                    && context.space() == Space::Ethereum
+                {
+                    word_gas = Gas::from(0);
+                }
                 let gas = overflowing!(base.overflow_add(word_gas));
                 let mem = mem_needed(start, len)?;
 

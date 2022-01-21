@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{macros::*, ExecutionTrait, SolFnTable};
+use super::{macros::*, SimpleExecutionTrait, SolFnTable};
 #[cfg(test)]
 use crate::check_signature;
 use crate::{
@@ -10,7 +10,7 @@ use crate::{
     executive::InternalRefContext,
     impl_function_type, make_function_table, make_solidity_contract,
     make_solidity_function,
-    trace::Tracer,
+    observer::VmObserve,
     vm,
 };
 use cfx_parameters::internal_contract_addresses::CONTEXT_CONTRACT_ADDRESS;
@@ -40,10 +40,10 @@ make_solidity_function! {
 // same gas cost as the `NUMBER` opcode
 impl_function_type!(EpochNumber, "query", gas: |spec: &Spec| spec.tier_step_gas[(GasPriceTier::Base).idx()]);
 
-impl ExecutionTrait for EpochNumber {
+impl SimpleExecutionTrait for EpochNumber {
     fn execute_inner(
         &self, _input: (), _params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<U256>
     {
         Ok(U256::from(context.env.epoch_height))
@@ -57,10 +57,10 @@ make_solidity_function! {
 // same gas cost as the `NUMBER` opcode
 impl_function_type!(PoSHeight, "query", gas: |spec: &Spec| spec.tier_step_gas[(GasPriceTier::Base).idx()]);
 
-impl ExecutionTrait for PoSHeight {
+impl SimpleExecutionTrait for PoSHeight {
     fn execute_inner(
         &self, _input: (), _params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<U256>
     {
         Ok(context.env.pos_view.unwrap_or(0).into())
@@ -74,10 +74,10 @@ make_solidity_function! {
 // same gas cost as the `NUMBER` opcode
 impl_function_type!(FinalizedEpoch, "query", gas: |spec: &Spec| spec.tier_step_gas[(GasPriceTier::Base).idx()]);
 
-impl ExecutionTrait for FinalizedEpoch {
+impl SimpleExecutionTrait for FinalizedEpoch {
     fn execute_inner(
         &self, _input: (), _params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn Tracer,
+        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<U256>
     {
         Ok(context.env.finalized_epoch.unwrap_or(0).into())

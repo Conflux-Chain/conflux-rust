@@ -9,7 +9,7 @@ mod handlers;
 
 use crate::handlers::get_routes;
 use diem_logger::prelude::*;
-use diemdb::DiemDB;
+use pos_ledger_db::DiemDB;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::runtime::{Builder, Runtime};
 

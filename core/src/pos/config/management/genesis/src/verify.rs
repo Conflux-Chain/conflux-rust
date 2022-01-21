@@ -21,7 +21,7 @@ use diem_types::{
     validator_config::ValidatorConfig, waypoint::Waypoint,
 };
 use diem_vm::DiemVM;
-use diemdb::DiemDB;
+use pos_ledger_db::DiemDB;
 use executor::db_bootstrapper;
 use std::{
     convert::TryFrom,

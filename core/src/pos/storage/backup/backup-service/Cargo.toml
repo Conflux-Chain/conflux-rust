@@ -23,11 +23,11 @@ diem-crypto = { path = "../../../crypto/crypto" }
 diem-logger = { path = "../../../common/logger" }
 diem-metrics = { path = "../../../common/metrics" }
 diem-types = { path = "../../../types" }
-diemdb = { path = "../../diemdb" }
+pos-ledger-db = { path = "../../pos-ledger-db" }
 storage-interface = { path = "../../storage-interface" }
 
 [dev-dependencies]
-diemdb = { path = "../../diemdb", features = ["fuzzing"] }
+pos-ledger-db = { path = "../../pos-ledger-db", features = ["fuzzing"] }
 diem-config = { path = "../../../config" }
 diem-temppath = { path = "../../../common/temppath" }
 

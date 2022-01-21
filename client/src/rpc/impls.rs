@@ -4,7 +4,7 @@
 
 use crate::rpc::rpc_apis::ApiSet;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct RpcImplConfiguration {
     pub get_logs_filter_max_limit: Option<usize>,
     /// If it's `true`, `DEFERRED_STATE_EPOCH_COUNT` blocks are generated after
@@ -22,6 +22,7 @@ pub struct RpcImplConfiguration {
 
 pub mod cfx;
 pub mod common;
+pub mod eth;
 pub mod light;
 pub mod pool;
 pub mod pos;

@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{bytes::Bytes, vm};
-use cfx_types::{Address, U256, U512};
+use cfx_types::{Address, AddressWithSpace, U256, U512};
 use primitives::{receipt::StorageChange, LogEntry, TransactionWithSignature};
 use solidity_abi::{ABIDecodable, ABIDecodeError};
 
@@ -39,11 +39,16 @@ pub struct Executed {
     /// eg. sender creates contract A and A in constructor creates contract B
     ///
     /// B creation ends first, and it will be the first element of the vector.
-    pub contracts_created: Vec<Address>,
+    pub contracts_created: Vec<AddressWithSpace>,
     /// Transaction output.
     pub output: Bytes,
     /// The trace of this transaction.
     pub trace: Vec<ExecTrace>,
+    /// Only for the virtual call, an accurate gas estimation for gas usage,
+    pub estimated_gas_limit: Option<U256>,
+    /// Only for the virtual call, the minimum storage limit should returned in
+    /// estimate gas and collateral.
+    pub minimum_storage_limit: u64,
 }
 
 #[derive(Debug)]
@@ -133,17 +138,17 @@ impl Executed {
         mut storage_sponsor_paid: bool, trace: Vec<ExecTrace>, spec: &Spec,
     ) -> Self
     {
-        let gas_charged = if tx.gas_price == U256::zero() {
+        let gas_charged = if *tx.gas_price() == U256::zero() {
             U256::zero()
         } else {
-            fee / tx.gas_price
+            fee / tx.gas_price()
         };
         if !spec.cip78b {
             gas_sponsor_paid = false;
             storage_sponsor_paid = false;
         }
         Self {
-            gas_used: tx.gas,
+            gas_used: *tx.gas(),
             gas_charged,
             fee: fee.clone(),
             gas_sponsor_paid,
@@ -154,6 +159,8 @@ impl Executed {
             storage_released: Vec::new(),
             output: Default::default(),
             trace,
+            estimated_gas_limit: None,
+            minimum_storage_limit: 0,
         }
     }
 
@@ -167,9 +174,9 @@ impl Executed {
             storage_sponsor_paid = false;
         }
         Self {
-            gas_used: tx.gas,
-            gas_charged: tx.gas,
-            fee: tx.gas * tx.gas_price,
+            gas_used: *tx.gas(),
+            gas_charged: *tx.gas(),
+            fee: tx.gas() * tx.gas_price(),
             gas_sponsor_paid,
             logs: vec![],
             contracts_created: vec![],
@@ -178,6 +185,8 @@ impl Executed {
             storage_released: Vec::new(),
             output: Default::default(),
             trace,
+            estimated_gas_limit: None,
+            minimum_storage_limit: 0,
         }
     }
 }
@@ -206,7 +215,7 @@ pub fn revert_reason_decode(output: &Bytes) -> String {
     }
 }
 
-use crate::{trace::trace::ExecTrace, vm::Spec};
+use crate::{observer::trace::ExecTrace, vm::Spec};
 #[cfg(test)]
 use rustc_hex::FromHex;
 

@@ -29,14 +29,14 @@ use crate::{
             NetworkReceivers as MemPoolNetworkReceivers,
             NetworkTask as MempoolNetworkTask,
         },
-        pos::{start_pos_consensus, DiemHandle},
+        pos::{start_pos_consensus, PosDropHandle},
         protocol::sync_protocol::HotStuffSynchronizationProtocol,
     },
     spec::genesis::GenesisPosState,
     sync::ProtocolConfiguration,
     ConsensusGraph,
 };
-use cached_diemdb::CachedDiemDB;
+use cached_pos_ledger_db::CachedPosLedgerDB;
 use consensus_types::block::Block;
 use diem_config::config::SafetyRulesTestConfig;
 use diem_types::{
@@ -46,9 +46,9 @@ use diem_types::{
     term_state::pos_state_config::{PosStateConfig, POS_STATE_CONFIG},
     transaction::TransactionPayload,
 };
-use diemdb::DiemDB;
 use network::NetworkService;
 use parking_lot::Mutex;
+use pos_ledger_db::PosLedgerDB;
 use std::{fs, io::Read, path::PathBuf};
 
 pub type PosVerifier = PosHandler;
@@ -84,11 +84,11 @@ pub trait PosInterface: Send + Sync {
 
     fn get_epoch_state(&self, block_id: &PosBlockId) -> EpochState;
 
-    fn diem_db(&self) -> &Arc<DiemDB>;
+    fn pos_ledger_db(&self) -> &Arc<PosLedgerDB>;
 
     fn consensus_db(&self) -> &Arc<ConsensusDB>;
 
-    fn cached_db(&self) -> &Arc<CachedDiemDB>;
+    fn cached_db(&self) -> &Arc<CachedPosLedgerDB>;
 }
 
 #[allow(unused)]
@@ -108,7 +108,7 @@ pub struct PosHandler {
     pos: OnceCell<Box<dyn PosInterface>>,
     network: Mutex<Option<Arc<NetworkService>>>,
     // Keep all tokio Runtime so they will not be dropped directly.
-    diem_handler: Mutex<Option<DiemHandle>>,
+    drop_handle: Mutex<Option<PosDropHandle>>,
     consensus_network_receiver: Mutex<Option<ConsensusNetworkReceivers>>,
     mempool_network_receiver: Mutex<Option<MemPoolNetworkReceivers>>,
     test_command_sender: Mutex<Option<channel::Sender<TestCommand>>>,
@@ -126,7 +126,7 @@ impl PosHandler {
         let mut pos = Self {
             pos: OnceCell::new(),
             network: Mutex::new(network.clone()),
-            diem_handler: Mutex::new(None),
+            drop_handle: Mutex::new(None),
             consensus_network_receiver: Mutex::new(None),
             mempool_network_receiver: Mutex::new(None),
             test_command_sender: Mutex::new(None),
@@ -203,7 +203,7 @@ impl PosHandler {
             self.conf.vrf_proposal_threshold;
         pos_config.consensus.chain_id = ChainId::new(network.network_id());
 
-        let diem_handler = start_pos_consensus(
+        let pos_drop_handle = start_pos_consensus(
             &pos_config,
             network,
             self.conf.protocol_conf.clone(),
@@ -225,16 +225,16 @@ impl PosHandler {
         );
         debug!("PoS initialized");
         let pos_connection = PosConnection::new(
-            diem_handler.diem_db.clone(),
-            diem_handler.consensus_db.clone(),
-            diem_handler.cached_db.clone(),
+            pos_drop_handle.pos_ledger_db.clone(),
+            pos_drop_handle.consensus_db.clone(),
+            pos_drop_handle.cached_db.clone(),
         );
-        diem_handler.pow_handler.initialize(consensus);
+        pos_drop_handle.pow_handler.initialize(consensus);
         if self.pos.set(Box::new(pos_connection)).is_err() {
             bail!("PoS initialized twice!");
         }
         *self.test_command_sender.lock() = Some(test_command_sender);
-        *self.diem_handler.lock() = Some(diem_handler);
+        *self.drop_handle.lock() = Some(pos_drop_handle);
         Ok(())
     }
 
@@ -355,22 +355,29 @@ impl PosHandler {
         Some(events)
     }
 
-    pub fn diem_db(&self) -> &Arc<DiemDB> { self.pos().diem_db() }
+    pub fn pos_ledger_db(&self) -> &Arc<PosLedgerDB> {
+        self.pos().pos_ledger_db()
+    }
 
     pub fn consensus_db(&self) -> &Arc<ConsensusDB> {
         self.pos().consensus_db()
     }
 
-    pub fn cached_db(&self) -> &Arc<CachedDiemDB> { self.pos().cached_db() }
+    pub fn cached_db(&self) -> &Arc<CachedPosLedgerDB> {
+        self.pos().cached_db()
+    }
 
-    pub fn stop(&self) -> Option<(Weak<DiemDB>, Weak<ConsensusDB>)> {
+    pub fn stop(&self) -> Option<(Weak<PosLedgerDB>, Weak<ConsensusDB>)> {
         self.network.lock().take();
         self.consensus_network_receiver.lock().take();
         self.mempool_network_receiver.lock().take();
-        self.diem_handler.lock().take().map(|diem_handler| {
-            let diem_db = diem_handler.diem_db.clone();
-            let consensus_db = diem_handler.consensus_db.clone();
-            (Arc::downgrade(&diem_db), Arc::downgrade(&consensus_db))
+        self.drop_handle.lock().take().map(|pos_drop_handle| {
+            let pos_ledger_db = pos_drop_handle.pos_ledger_db.clone();
+            let consensus_db = pos_drop_handle.consensus_db.clone();
+            (
+                Arc::downgrade(&pos_ledger_db),
+                Arc::downgrade(&consensus_db),
+            )
         })
     }
 }
@@ -444,15 +451,15 @@ impl PosHandler {
 }
 
 pub struct PosConnection {
-    pos_storage: Arc<DiemDB>,
+    pos_storage: Arc<PosLedgerDB>,
     consensus_db: Arc<ConsensusDB>,
-    pos_cache_db: Arc<CachedDiemDB>,
+    pos_cache_db: Arc<CachedPosLedgerDB>,
 }
 
 impl PosConnection {
     pub fn new(
-        pos_storage: Arc<DiemDB>, consensus_db: Arc<ConsensusDB>,
-        pos_cache_db: Arc<CachedDiemDB>,
+        pos_storage: Arc<PosLedgerDB>, consensus_db: Arc<ConsensusDB>,
+        pos_cache_db: Arc<CachedPosLedgerDB>,
     ) -> Self
     {
         Self {
@@ -566,11 +573,11 @@ impl PosInterface for PosConnection {
             .clone()
     }
 
-    fn diem_db(&self) -> &Arc<DiemDB> { &self.pos_storage }
+    fn pos_ledger_db(&self) -> &Arc<PosLedgerDB> { &self.pos_storage }
 
     fn consensus_db(&self) -> &Arc<ConsensusDB> { &self.consensus_db }
 
-    fn cached_db(&self) -> &Arc<CachedDiemDB> { &self.pos_cache_db }
+    fn cached_db(&self) -> &Arc<CachedPosLedgerDB> { &self.pos_cache_db }
 }
 
 pub struct PosConfiguration {

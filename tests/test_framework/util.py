@@ -283,17 +283,16 @@ def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="
     private_keys_dir = os.path.join(dirname, "private_keys")
     if start_index is None:
         start_index = 0
-    print(start_index, nodes)
     for n in range(start_index, start_index + nodes):
         datadir = get_datadir_path(dirname, n)
         if not os.path.isdir(datadir):
             os.makedirs(datadir)
         net_config_dir = os.path.join(datadir, 'blockchain_data', 'net_config')
         os.makedirs(net_config_dir, exist_ok = True)
-        os.makedirs(os.path.join(datadir, 'diemdb'), exist_ok = True)
+        os.makedirs(os.path.join(datadir, 'pos-ledger-db'), exist_ok = True)
         validator_config = {}
         validator_config['base'] = {
-            'data_dir': os.path.join(datadir, 'diemdb'),
+            'data_dir': os.path.join(datadir, 'pos-ledger-db'),
             'role': 'validator',
             'waypoint': {
                 'from_config': waypoint,
@@ -303,7 +302,7 @@ def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="
             'genesis_file_location': genesis_path,
         }
         validator_config['storage'] = {
-            'dir': os.path.join(datadir, 'diemdb', 'db'),
+            'dir': os.path.join(datadir, 'pos-ledger-db', 'db'),
         }
         validator_config['consensus'] = {
             'safety_rules': {
@@ -315,7 +314,7 @@ def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="
         }
         validator_config['logger'] = {
             'level': "TRACE",
-            'file': os.path.join(datadir, "diem.log")
+            'file': os.path.join(datadir, "pos.log")
         }
         validator_config['mempool'] = {
             "shared_mempool_tick_interval_ms": 200,
@@ -337,6 +336,7 @@ def initialize_datadir(dirname, n, port_min, conf_parameters, extra_files: dict 
             "jsonrpc_local_http_port": str(rpc_port(n)),
             "jsonrpc_ws_port": str(pubsub_port(n)),
             "jsonrpc_http_port": str(remote_rpc_port(n)),
+            "jsonrpc_http_eth_port": str(evm_rpc_port(n)),
             "pos_config_path": "\'{}\'".format(os.path.join(datadir, "validator_full_node.yaml")),
             "pos_initial_nodes_path": "\'{}\'".format(os.path.join(dirname, "initial_nodes.json")),
             "pos_private_key_path": "'{}'".format(os.path.join(datadir, "blockchain_data", "net_config", "pos_key"))
@@ -562,7 +562,7 @@ def p2p_port(n):
     return PortMin.n + n
 
 def rpc_port(n):
-    return PortMin.n + MAX_NODES + n*3
+    return PortMin.n + MAX_NODES + n*4
 
 def remote_rpc_port(n):
     return rpc_port(n) + 1
@@ -570,6 +570,8 @@ def remote_rpc_port(n):
 def pubsub_port(n):
     return rpc_port(n) + 2
 
+def evm_rpc_port(n):
+    return rpc_port(n) + 3
 
 def rpc_url(i, rpchost=None, rpcport=None):
     if rpchost is None:

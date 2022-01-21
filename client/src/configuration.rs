@@ -9,13 +9,15 @@ use parking_lot::RwLock;
 use rand::Rng;
 
 use cfx_addr::{cfx_addr_decode, Network};
-use cfx_internal_common::{ChainIdParams, ChainIdParamsInner};
+use cfx_internal_common::{
+    ChainIdParams, ChainIdParamsInner, ChainIdParamsOneChainInner,
+};
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
 };
-use cfx_types::{Address, H256, U256};
+use cfx_types::{Address, AllChainID, H256, U256};
 use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
     block_parameters::*,
@@ -95,9 +97,8 @@ build_config! {
         //
         // `dev` mode is for users to run a single node that automatically
         //     generates blocks with fixed intervals
-        //     * Open port 12535 for ws rpc if `jsonrpc_ws_port` is not provided.
-        //     * Open port 12536 for tcp rpc if `jsonrpc_tcp_port` is not provided.
-        //     * Open port 12537 for http rpc if `jsonrpc_http_port` is not provided.
+        //     * You are expected to also set `jsonrpc_ws_port`, `jsonrpc_tcp_port`,
+        //       and `jsonrpc_http_port` if you want RPC functionalities.
         //     * generate blocks automatically without PoW.
         //     * Skip catch-up mode even there is no peer
         //
@@ -115,6 +116,8 @@ build_config! {
         (log_conf, (Option<String>), None)
         (log_file, (Option<String>), None)
         (max_block_size_in_bytes, (usize), MAX_BLOCK_SIZE_IN_BYTES)
+        (evm_transaction_block_ratio,(u64),EVM_TRANSACTION_BLOCK_RATIO)
+        (evm_transaction_gas_ratio,(u64),EVM_TRANSACTION_GAS_RATIO)
         (metrics_enabled, (bool), false)
         (metrics_influxdb_host, (Option<String>), None)
         (metrics_influxdb_db, (String), "conflux".into())
@@ -130,6 +133,7 @@ build_config! {
         (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
         (anticone_penalty_ratio, (u64), ANTICONE_PENALTY_RATIO)
         (chain_id, (Option<u32>), None)
+        (evm_chain_id, (Option<u32>), None)
         (execute_genesis, (bool), true)
         (default_transition_time, (Option<u64>), None)
         // Snapshot Epoch Count is a consensus parameter. This flag overrides
@@ -171,6 +175,8 @@ build_config! {
         (jsonrpc_cors, (Option<String>), None)
         (jsonrpc_http_keep_alive, (bool), false)
         (jsonrpc_ws_max_payload_bytes, (usize), 30 * 1024 * 1024)
+        (jsonrpc_http_eth_port, (Option<u16>), Some(8545))
+        (jsonrpc_ws_eth_port, (Option<u16>), Some(8546))
         // The network_id, if unset, defaults to the chain_id.
         // Only override the network_id for local experiments,
         // when user would like to keep the existing blockchain data
@@ -291,6 +297,7 @@ build_config! {
         (target_block_gas_limit, (u64), DEFAULT_TARGET_BLOCK_GAS_LIMIT)
         (executive_trace, (bool), false)
         (check_status_genesis, (bool), true)
+        (packing_gas_limit_block_count, (u64), 10)
 
         // TreeGraph Section.
         (is_consortium, (bool), false)
@@ -338,8 +345,8 @@ build_config! {
         // Genesis Section
         // chain_id_params describes a complex setup where chain id can change over epochs.
         // Usually this is needed to describe forks. This config overrides chain_id.
-        (chain_id_params, (Option<ChainIdParamsInner>), None,
-            ChainIdParamsInner::parse_config_str)
+        (chain_id_params, (Option<ChainIdParamsOneChainInner>), None,
+            ChainIdParamsOneChainInner::parse_config_str)
 
         // Storage section.
         (provide_more_snapshot_for_sync,
@@ -348,6 +355,7 @@ build_config! {
             ProvideExtraSnapshotSyncConfig::parse_config_list)
         (node_type, (Option<NodeType>), None, NodeType::from_str)
         (public_rpc_apis, (ApiSet), ApiSet::Safe, ApiSet::from_str)
+        (public_evm_rpc_apis, (ApiSet), ApiSet::Evm, ApiSet::from_str)
     }
 }
 
@@ -368,17 +376,6 @@ impl Configuration {
         let mut config = Configuration::default();
         config.raw_conf = RawConfiguration::parse(matches)?;
 
-        if config.is_dev_mode() {
-            if config.raw_conf.jsonrpc_ws_port.is_none() {
-                config.raw_conf.jsonrpc_ws_port = Some(12535);
-            }
-            if config.raw_conf.jsonrpc_tcp_port.is_none() {
-                config.raw_conf.jsonrpc_tcp_port = Some(12536);
-            }
-            if config.raw_conf.jsonrpc_http_port.is_none() {
-                config.raw_conf.jsonrpc_http_port = Some(12537);
-            }
-        };
         if matches.is_present("archive") {
             config.raw_conf.node_type = Some(NodeType::Archive);
         } else if matches.is_present("full") {
@@ -393,11 +390,13 @@ impl Configuration {
     fn network_id(&self) -> u64 {
         match self.raw_conf.network_id {
             Some(x) => x,
-            // If undefined, the network id is set to the chain_id at genesis.
+            // If undefined, the network id is set to the native space chain_id
+            // at genesis.
             None => {
                 self.chain_id_params()
                     .read()
-                    .get_chain_id(/* epoch_number = */ 0) as u64
+                    .get_chain_id(/* epoch_number = */ 0)
+                    .in_native_space() as u64
             }
         }
     }
@@ -511,15 +510,20 @@ impl Configuration {
         if CHAIN_ID.read().is_none() {
             let mut to_init = CHAIN_ID.write();
             if to_init.is_none() {
-                if let Some(chain_id_params) = &self.raw_conf.chain_id_params {
-                    *to_init = Some(ChainIdParamsInner::new_from_inner(
-                        chain_id_params,
-                    ))
+                if let Some(_chain_id_params) = &self.raw_conf.chain_id_params {
+                    unreachable!("Upgradable ChainId is not ready.")
+                // *to_init = Some(ChainIdParamsInner::new_from_inner(
+                //     chain_id_params,
+                // ))
                 } else {
+                    let chain_id = self
+                        .raw_conf
+                        .chain_id
+                        .unwrap_or_else(|| rand::thread_rng().gen());
+                    let evm_chain_id =
+                        self.raw_conf.evm_chain_id.unwrap_or(chain_id);
                     *to_init = Some(ChainIdParamsInner::new_simple(
-                        self.raw_conf
-                            .chain_id
-                            .unwrap_or_else(|| rand::thread_rng().gen()),
+                        AllChainID::new(chain_id, evm_chain_id),
                     ));
                 }
             }
@@ -919,6 +923,9 @@ impl Configuration {
             min_tx_price: self.raw_conf.tx_pool_min_tx_gas_price,
             tx_weight_scaling: self.raw_conf.tx_weight_scaling,
             tx_weight_exp: self.raw_conf.tx_weight_exp,
+            packing_gas_limit_block_count: self
+                .raw_conf
+                .packing_gas_limit_block_count,
             target_block_gas_limit: self.raw_conf.target_block_gas_limit,
         }
     }
@@ -947,6 +954,16 @@ impl Configuration {
         HttpConfiguration::new(
             None,
             self.raw_conf.jsonrpc_http_port,
+            self.raw_conf.jsonrpc_cors.clone(),
+            self.raw_conf.jsonrpc_http_keep_alive,
+            self.raw_conf.jsonrpc_http_threads,
+        )
+    }
+
+    pub fn eth_http_config(&self) -> HttpConfiguration {
+        HttpConfiguration::new(
+            None,
+            self.raw_conf.jsonrpc_http_eth_port,
             self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,
@@ -1077,6 +1094,10 @@ impl Configuration {
 
         params.chain_id = self.chain_id_params();
         params.anticone_penalty_ratio = self.raw_conf.anticone_penalty_ratio;
+        params.evm_transaction_block_ratio =
+            self.raw_conf.evm_transaction_block_ratio;
+        params.evm_transaction_gas_ratio =
+            self.raw_conf.evm_transaction_gas_ratio;
 
         params.transition_heights.cip40 =
             self.raw_conf.tanzanite_transition_height;
@@ -1108,10 +1129,6 @@ impl Configuration {
             .raw_conf
             .unnamed_21autumn_transition_number
             .unwrap_or(default_transition_time);
-        params.transition_numbers.cip72b = self
-            .raw_conf
-            .unnamed_21autumn_transition_number
-            .unwrap_or(default_transition_time);
         params.transition_numbers.cip78a = self
             .raw_conf
             .unnamed_21autumn_transition_number
@@ -1120,7 +1137,7 @@ impl Configuration {
             .raw_conf
             .cip78_patch_transition_number
             .unwrap_or(params.transition_numbers.cip78a);
-        params.transition_numbers.cip80 = self
+        params.transition_numbers.cip90b = self
             .raw_conf
             .unnamed_21autumn_transition_number
             .unwrap_or(default_transition_time);
@@ -1129,11 +1146,11 @@ impl Configuration {
             .raw_conf
             .unnamed_21autumn_transition_height
             .unwrap_or(default_transition_time);
-        params.transition_heights.cip72a = self
+        params.transition_heights.cip86 = self
             .raw_conf
             .unnamed_21autumn_transition_height
             .unwrap_or(default_transition_time);
-        params.transition_heights.cip86 = self
+        params.transition_heights.cip90a = self
             .raw_conf
             .unnamed_21autumn_transition_height
             .unwrap_or(default_transition_time);
