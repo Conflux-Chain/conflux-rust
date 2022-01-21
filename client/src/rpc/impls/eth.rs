@@ -250,7 +250,7 @@ impl EthHandler {
             if exec_info.block.transactions[id].space() == Space::Ethereum {
                 // gas used
                 prior_gas_used += exec_info.block_receipts.receipts[n].gas_fee
-                    / exec_info.block.transactions[id].gas_price();
+                    / exec_info.block.transactions[id].gas_price();  // TODO phantom's gas_price maybe 0
                 // tx index
                 transaction_index += U256::one();
             }
