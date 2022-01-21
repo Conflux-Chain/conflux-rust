@@ -148,7 +148,7 @@ build_config! {
         (unnamed_21autumn_transition_number, (Option<u64>), Some(100))
         (unnamed_21autumn_transition_height, (Option<u64>), Some(5000))
         (unnamed_21autumn_cip43_init_end, (Option<u64>), Some(3000))
-        (cip78_patch_transition_number,(Option<u64>), Some(5880000))
+        (cip78_patch_transition_number,(Option<u64>), None)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
