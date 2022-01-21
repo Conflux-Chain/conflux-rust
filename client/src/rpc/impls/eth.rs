@@ -32,7 +32,7 @@ use primitives::{
 
 use crate::rpc::{
     error_codes::{
-        call_execution_error, invalid_params,
+        call_execution_error, internal_error, invalid_params,
         request_rejected_in_catch_up_mode, unimplemented,
     },
     impls::{cfx::BlockExecInfo, RpcImplConfiguration},
@@ -129,7 +129,10 @@ impl EthHandler {
             Some(b) => b,
         };
 
-        let pivot = blocks.last().expect("Inconsistent state");
+        let pivot = match blocks.last() {
+            Some(p) => p,
+            None => return Err(internal_error("Inconsistent state")),
+        };
 
         if matches!(pivot_assumption, Some(h) if h != pivot.hash()) {
             return Ok(None);
@@ -144,8 +147,8 @@ impl EthHandler {
         let mut gas_used = U256::from(0);
 
         for b in &blocks {
-            // note: we need the receipts reconstruct a phantom block. as a
-            // result, we cannot return unexecuted blocks in eth_* RPCs.
+            // note: we need the receipts to reconstruct a phantom block.
+            // as a result, we cannot return unexecuted blocks in eth_* RPCs.
             let exec_info = match self
                 .consensus
                 .get_data_manager()
@@ -162,6 +165,10 @@ impl EthHandler {
             let spec = self
                 .consensus_graph()
                 .get_spec_at(exec_info.block_receipts.block_number);
+
+            if b.transactions.len() != exec_info.block_receipts.receipts.len() {
+                return Err(internal_error("Inconsistent state"));
+            }
 
             for (id, tx) in b.transactions.iter().enumerate() {
                 match tx.space() {
@@ -220,32 +227,6 @@ impl EthHandler {
             BlockNumber::Num(epoch_num),
             Some(*hash),
         )
-    }
-
-    fn get_blocks_by_hash(
-        &self, hash: &H256,
-    ) -> jsonrpc_core::Result<Option<Vec<Arc<Block>>>> {
-        let epoch_num = match self.consensus.get_block_epoch_number(hash) {
-            None => return Ok(None),
-            Some(n) => n,
-        };
-
-        let epoch_hashes = self
-            .consensus
-            .get_block_hashes_by_epoch(EpochNumber::Number(epoch_num))
-            .map_err(RpcError::invalid_params)?;
-
-        // do not allow retrieving an epoch using a non-pivot hash
-        if epoch_hashes.last() != Some(hash) {
-            return Ok(None);
-        }
-
-        let epoch_blocks = self
-            .consensus
-            .get_data_manager()
-            .blocks_by_hash_list(&epoch_hashes, false /* update_cache */);
-
-        Ok(epoch_blocks)
     }
 
     fn exec_transaction(
@@ -653,20 +634,12 @@ impl Eth for EthHandler {
         );
 
         // keep read lock to ensure consistent view
-        let _ = self.consensus_graph().inner.read();
+        // TODO(thegaram): do not keep lock
+        let _inner = self.consensus_graph().inner.read();
 
-        match self.get_blocks_by_hash(&hash)? {
+        match self.get_phantom_block_by_hash(&hash)? {
             None => Ok(None),
-            Some(blocks) => {
-                let count: U256 = blocks
-                    .into_iter()
-                    // TODO(thegaram): consider phantom transactions
-                    .map(|b| b.transaction_hashes(Some(Space::Ethereum)).len())
-                    .sum::<usize>()
-                    .into();
-
-                Ok(Some(count))
-            }
+            Some(pb) => Ok(Some(pb.transactions.len().into())),
         }
     }
 
@@ -679,20 +652,12 @@ impl Eth for EthHandler {
         );
 
         // keep read lock to ensure consistent view
-        let _ = self.consensus_graph().inner.read();
+        // TODO(thegaram): do not keep lock
+        let _inner = self.consensus_graph().inner.read();
 
-        match self.get_blocks_by_number(block_num)? {
+        match self.get_phantom_block_by_number(block_num, None)? {
             None => Ok(None),
-            Some(blocks) => {
-                let count: U256 = blocks
-                    .into_iter()
-                    // TODO(thegaram): consider phantom transactions
-                    .map(|b| b.transaction_hashes(Some(Space::Ethereum)).len())
-                    .sum::<usize>()
-                    .into();
-
-                Ok(Some(count))
-            }
+            Some(pb) => Ok(Some(pb.transactions.len().into())),
         }
     }
 

@@ -222,6 +222,12 @@ class PhantomTransactionTest(ConfluxTestFramework):
         block2 = self.nodes[0].eth_getBlockByHash(block_a, True)
         assert_equal(block2, block)
 
+        count = int(self.nodes[0].eth_getBlockTransactionCountByNumber(epoch_a), 16)
+        assert_equal(count, len(block["transactions"]))
+
+        count = int(self.nodes[0].eth_getBlockTransactionCountByHash(block_a), 16)
+        assert_equal(count, len(block["transactions"]))
+
         tx_hashes = self.nodes[0].eth_getBlockByNumber(epoch_a, False)["transactions"]
         assert_equal(len(tx_hashes), 7)
 
@@ -242,12 +248,21 @@ class PhantomTransactionTest(ConfluxTestFramework):
         block = self.nodes[0].eth_getBlockByHash(block_d, True)
         assert_equal(block, None)
 
+        count = self.nodes[0].eth_getBlockTransactionCountByHash(block_d)
+        assert_equal(count, None)
+
         # block #E
         block = self.nodes[0].eth_getBlockByNumber(epoch_e, True)
         assert_equal(len(block["transactions"]), 14)
 
         block2 = self.nodes[0].eth_getBlockByHash(block_e, True)
         assert_equal(block2, block)
+
+        count = int(self.nodes[0].eth_getBlockTransactionCountByNumber(epoch_e), 16)
+        assert_equal(count, len(block["transactions"]))
+
+        count = int(self.nodes[0].eth_getBlockTransactionCountByHash(block_e), 16)
+        assert_equal(count, len(block["transactions"]))
 
         tx_hashes = self.nodes[0].eth_getBlockByNumber(epoch_e, False)["transactions"]
         assert_equal(len(tx_hashes), 14)
@@ -261,6 +276,8 @@ class PhantomTransactionTest(ConfluxTestFramework):
 
             # check eth_getTransactionByHash
             # assert_equal(tx, self.nodes[0].eth_getTransactionByHash(tx["hash"]))
+
+        # ---------------------------------------------------------------------
 
         self.log.info("Pass")
 
