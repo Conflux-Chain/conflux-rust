@@ -1355,11 +1355,7 @@ impl ConsensusExecutionHandler {
                         storage_sponsor_paid = executed.storage_sponsor_paid;
 
                         let (phantom_txs, bloom) =
-                            build_bloom_and_recover_phantom(
-                                &transaction_logs,
-                                &spec,
-                                *transaction.gas_price(),
-                            );
+                            build_bloom_and_recover_phantom(&transaction_logs);
                         log_bloom = bloom;
                         // TODO: Store the phantom transactions properly.
                         let _ = phantom_txs;
