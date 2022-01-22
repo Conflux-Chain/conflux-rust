@@ -64,6 +64,15 @@ impl Receipt {
             storage_released,
         }
     }
+
+    // conflux receipt status code is different with EVM
+    pub fn evm_space_status(&self) -> u8 {
+        if self.outcome_status == TRANSACTION_OUTCOME_SUCCESS {
+            EVM_SPACE_SUCCESS
+        } else {
+            EVM_SPACE_FAIL
+        }
+    }
 }
 
 impl MallocSizeOf for StorageChange {
