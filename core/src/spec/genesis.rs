@@ -27,7 +27,7 @@ use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{StorageManager, StorageManagerTrait};
 use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
-    H256, U256,
+    Space, H256, U256,
 };
 use diem_crypto::{
     bls::BLSPrivateKey, ec_vrf::EcVrfPublicKey, PrivateKey, ValidCryptoMaterial,
@@ -194,7 +194,6 @@ pub fn genesis_block(
     let mut genesis_block_author = test_net_version;
     genesis_block_author.set_user_account_type_bits();
 
-    let mut total_balance = U256::from(0);
     initialize_internal_contract_accounts(
         &mut state,
         machine.internal_contracts().initialized_at_genesis(),
@@ -209,10 +208,11 @@ pub fn genesis_block(
                 /* account_start_nonce = */ U256::zero(),
             )
             .unwrap();
-        total_balance += balance;
+        match addr.space {
+            Space::Native => state.add_total_issued(balance),
+            Space::Ethereum => state.add_total_evm_tokens(balance),
+        }
     }
-    state.add_total_issued(total_balance);
-
     let genesis_account_address = GENESIS_ACCOUNT_ADDRESS_STR
         .parse::<Address>()
         .unwrap()
