@@ -1314,6 +1314,8 @@ impl<
                 &U256::try_from(gas_cost).unwrap(),
                 &mut cleanup_mode(&mut tx_substate, &spec),
             )?;
+        // Don't subtract total_evm_balance here. It is maintained properly in
+        // `finalize`.
         } else {
             options.observer.as_state_tracer().trace_internal_transfer(
                 AddressPocket::SponsorBalanceForGas(code_address),
@@ -1614,6 +1616,9 @@ impl<
 
             self.state.remove_contract(contract_address)?;
             self.state.subtract_total_issued(contract_balance);
+            if contract_address.space == Space::Ethereum {
+                self.state.subtract_total_evm_tokens(contract_balance);
+            }
         }
 
         Ok(substate)
