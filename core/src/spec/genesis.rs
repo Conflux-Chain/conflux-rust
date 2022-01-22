@@ -208,9 +208,9 @@ pub fn genesis_block(
                 /* account_start_nonce = */ U256::zero(),
             )
             .unwrap();
-        match addr.space {
-            Space::Native => state.add_total_issued(balance),
-            Space::Ethereum => state.add_total_evm_tokens(balance),
+        state.add_total_issued(balance);
+        if addr.space == Space::Ethereum {
+            state.add_total_evm_tokens(balance);
         }
     }
     let genesis_account_address = GENESIS_ACCOUNT_ADDRESS_STR
