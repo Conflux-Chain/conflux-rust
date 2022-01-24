@@ -577,11 +577,13 @@ impl Eth for EthHandler {
             hash, include_txs
         );
 
-        // keep read lock to ensure consistent view
-        // TODO(thegaram): do not keep lock
-        let _inner = self.consensus_graph().inner.read();
+        let phantom_block = {
+            // keep read lock to ensure consistent view
+            let _inner = self.consensus_graph().inner.read();
+            self.get_phantom_block_by_hash(&hash)?
+        };
 
-        match self.get_phantom_block_by_hash(&hash)? {
+        match phantom_block {
             None => Ok(None),
             Some(pb) => Ok(Some(RpcBlock::from_phantom(&pb, include_txs))),
         }
@@ -592,11 +594,13 @@ impl Eth for EthHandler {
     ) -> jsonrpc_core::Result<Option<RpcBlock>> {
         info!("RPC Request: eth_getBlockByNumber block_number={:?} include_txs={:?}", block_num, include_txs);
 
-        // keep read lock to ensure consistent view
-        // TODO(thegaram): do not keep lock
-        let _inner = self.consensus_graph().inner.read();
+        let phantom_block = {
+            // keep read lock to ensure consistent view
+            let _inner = self.consensus_graph().inner.read();
+            self.get_phantom_block_by_number(block_num, None)?
+        };
 
-        match self.get_phantom_block_by_number(block_num, None)? {
+        match phantom_block {
             None => Ok(None),
             Some(pb) => Ok(Some(RpcBlock::from_phantom(&pb, include_txs))),
         }
@@ -636,11 +640,13 @@ impl Eth for EthHandler {
             hash,
         );
 
-        // keep read lock to ensure consistent view
-        // TODO(thegaram): do not keep lock
-        let _inner = self.consensus_graph().inner.read();
+        let phantom_block = {
+            // keep read lock to ensure consistent view
+            let _inner = self.consensus_graph().inner.read();
+            self.get_phantom_block_by_hash(&hash)?
+        };
 
-        match self.get_phantom_block_by_hash(&hash)? {
+        match phantom_block {
             None => Ok(None),
             Some(pb) => Ok(Some(pb.transactions.len().into())),
         }
@@ -654,11 +660,13 @@ impl Eth for EthHandler {
             block_num
         );
 
-        // keep read lock to ensure consistent view
-        // TODO(thegaram): do not keep lock
-        let _inner = self.consensus_graph().inner.read();
+        let phantom_block = {
+            // keep read lock to ensure consistent view
+            let _inner = self.consensus_graph().inner.read();
+            self.get_phantom_block_by_number(block_num, None)?
+        };
 
-        match self.get_phantom_block_by_number(block_num, None)? {
+        match phantom_block {
             None => Ok(None),
             Some(pb) => Ok(Some(pb.transactions.len().into())),
         }
