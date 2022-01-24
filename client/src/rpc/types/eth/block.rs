@@ -19,13 +19,16 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::rpc::types::{eth::Transaction, Bytes};
-use cfx_types::{hexstr_to_h256, Bloom as H2048, Space, H160, H256, H64, U256};
+use cfx_types::{
+    hexstr_to_h256, Bloom as H2048, Space, H160, H256, H64, U256, U64,
+};
 use cfxcore::consensus::ConsensusGraphInner;
 use primitives::{
-    Block as PrimitiveBlock, BlockHeader, Receipt, SignedTransaction,
+    receipt::EVM_SPACE_SUCCESS, Block as PrimitiveBlock, BlockHeader, Receipt,
+    SignedTransaction,
 };
 use serde::{Serialize, Serializer};
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 const SHA3_HASH_OF_EMPTY_UNCLE: &str =
     "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347";
@@ -167,6 +170,7 @@ impl Block {
                                 Some(pb.pivot_header.height().into()), // block_number
                                 Some(idx.into()), // transaction_index
                             ),
+                            (None, None), // TODO
                         )
                     })
                     .collect(),
@@ -224,6 +228,8 @@ impl Block {
     {
         let mut gas_used = U256::zero();
         let mut logs_bloom = H2048::zero();
+        let mut tx_statuses = HashMap::new();
+        let mut tx_created_addresses = HashMap::new();
 
         let pivot = blocks.last().expect("Inconsistent state");
 
@@ -246,13 +252,32 @@ impl Block {
                     break;
                 }
                 Some(res) => {
-                    gas_used += res
-                        .block_receipts
-                        .receipts
-                        .last()
-                        .map(|r| r.accumulated_gas_used)
-                        .unwrap_or_default();
-
+                    let acc_gas_used: u64 = b
+                        .transactions
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, tx)| tx.space() == Space::Ethereum)
+                        .map(|(idx, tx)| {
+                            let status = res.block_receipts.receipts[idx]
+                                .evm_space_status();
+                            // save tx contract_address to address_map
+                            let contract_address =
+                                Transaction::deployed_contract_address(tx);
+                            if contract_address.is_some()
+                                && status == EVM_SPACE_SUCCESS
+                            {
+                                tx_created_addresses
+                                    .insert(tx.hash, contract_address.unwrap());
+                            }
+                            // set tx status to status_map
+                            tx_statuses.insert(tx.hash, U64::from(status));
+                            // return gas_changed
+                            (res.block_receipts.receipts[idx].gas_fee
+                                / tx.gas_price())
+                            .as_u64()
+                        })
+                        .sum();
+                    gas_used += U256::from(acc_gas_used);
                     logs_bloom.accrue_bloom(&res.bloom);
                 }
             }
@@ -294,13 +319,16 @@ impl Block {
                         .filter(|tx| tx.space() == Space::Ethereum)
                         .enumerate()
                         .map(|(idx, t)| {
+                            let status = tx_statuses.get(&t.hash).map(|s| *s);
+                            let contract_address = tx_created_addresses.get(&t.hash).map(|a| *a);
                             Transaction::from_signed(
                                 &**t,
                                 (
                                     Some(pivot.block_header.hash()), // block_hash
                                     Some(pivot.block_header.height().into()), // block_number
-                                    Some(idx.into()), // transaction_index
+                                    Some(idx.into()),
                                 ),
+                                (status, contract_address),
                             )
                         })
                         .collect(),

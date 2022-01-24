@@ -210,14 +210,14 @@ class PhantomTransactionTest(ConfluxTestFramework):
         # ---------------------------------------------------------------------
 
         # EVM perspective:
-        # A: 7 txs (events: [12], [], [], [13, 13], [], [], [13, 13])
-        # B: 7 txs (events: [15], [], [], [16, 16], [], [], [16, 16])
+        # A: 5 txs (events: [12], [], [13, 13], [], [13, 13])
+        # B: 5 txs (events: [15], [], [16, 16], [], [16, 16])
         # C: /
-        # E: 14 txs (events: [22], [], [], [23, 23], [], [], [23, 23], [25], [], [], [26, 26], [], [], [26, 26])
+        # E: 10 txs (events: [22], [], [23, 23], [], [23, 23], [25], [], [26, 26], [], [26, 26])
 
         # block #A
         block = self.nodes[0].eth_getBlockByNumber(epoch_a, True)
-        assert_equal(len(block["transactions"]), 7)
+        assert_equal(len(block["transactions"]), 5)
 
         block2 = self.nodes[0].eth_getBlockByHash(block_a, True)
         assert_equal(block2, block)
@@ -229,7 +229,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
         assert_equal(count, len(block["transactions"]))
 
         tx_hashes = self.nodes[0].eth_getBlockByNumber(epoch_a, False)["transactions"]
-        assert_equal(len(tx_hashes), 7)
+        assert_equal(len(tx_hashes), 5)
 
         for idx, tx in enumerate(block["transactions"]):
             # check returned hash
@@ -253,7 +253,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
 
         # block #E
         block = self.nodes[0].eth_getBlockByNumber(epoch_e, True)
-        assert_equal(len(block["transactions"]), 14)
+        assert_equal(len(block["transactions"]), 10)
 
         block2 = self.nodes[0].eth_getBlockByHash(block_e, True)
         assert_equal(block2, block)
@@ -265,7 +265,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
         assert_equal(count, len(block["transactions"]))
 
         tx_hashes = self.nodes[0].eth_getBlockByNumber(epoch_e, False)["transactions"]
-        assert_equal(len(tx_hashes), 14)
+        assert_equal(len(tx_hashes), 10)
 
         for idx, tx in enumerate(block["transactions"]):
             # check returned hash

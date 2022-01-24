@@ -38,22 +38,23 @@ pub fn create_gas(context: &InternalRefContext, code: &[u8]) -> DbResult<U256> {
     let code_length = code.len();
 
     let transaction_gas =
-        gas_required_for(/* is_create */ true, code, context.spec);
+        gas_required_for(/* is_create */ true, code, context.spec)
+            + context.spec.tx_gas as u64;
 
     let create_gas = U256::from(context.spec.create_gas);
 
-    let address_mapping_gas = context.spec.sha3_gas * 3;
+    let address_mapping_gas = context.spec.sha3_gas * 2;
 
     let create_log_gas = {
         let log_data_length =
-            H256::len_bytes() * 5 + (code_length + 31) / 32 * 32;
+            H256::len_bytes() * 4 + (code_length + 31) / 32 * 32;
         context.spec.log_gas
             + 3 * context.spec.log_topic_gas
             + context.spec.log_data_gas * log_data_length
     };
 
     let return_log_gas = {
-        let log_data_length = H256::len_bytes() * 3;
+        let log_data_length = H256::len_bytes();
         context.spec.log_gas
             + context.spec.log_topic_gas
             + context.spec.log_data_gas * log_data_length
@@ -74,7 +75,8 @@ pub fn call_gas(
     let data_length = data.len();
 
     let transaction_gas =
-        gas_required_for(/* is_create */ false, data, context.spec);
+        gas_required_for(/* is_create */ false, data, context.spec)
+            + context.spec.tx_gas as u64;
 
     let new_account = !context
         .state
@@ -94,18 +96,18 @@ pub fn call_gas(
     let call_gas =
         U256::from(context.spec.call_gas) + new_account_gas + transfer_gas;
 
-    let address_mapping_gas = context.spec.sha3_gas * 3;
+    let address_mapping_gas = context.spec.sha3_gas * 2;
 
     let call_log_gas = {
         let log_data_length =
-            H256::len_bytes() * 5 + (data_length + 31) / 32 * 32;
+            H256::len_bytes() * 4 + (data_length + 31) / 32 * 32;
         context.spec.log_gas
             + 3 * context.spec.log_topic_gas
             + context.spec.log_data_gas * log_data_length
     };
 
     let return_log_gas = {
-        let log_data_length = H256::len_bytes() * 3;
+        let log_data_length = H256::len_bytes();
         context.spec.log_gas
             + context.spec.log_topic_gas
             + context.spec.log_data_gas * log_data_length
@@ -131,7 +133,7 @@ pub fn withdraw_gas(spec: &Spec) -> U256 {
     let address_mapping_gas = spec.sha3_gas;
     let log_gas = spec.log_gas
         + spec.log_topic_gas * 3
-        + spec.log_data_gas * H256::len_bytes();
+        + spec.log_data_gas * H256::len_bytes() * 2;
 
     call_gas + transaction_gas + address_mapping_gas + log_gas
 }
@@ -222,29 +224,16 @@ impl Exec for PassResult {
     ) -> ExecTrapResult<GasLeft>
     {
         let context = &mut context.internal_ref();
-        let params = &self.resume.params;
         let static_flag = context.static_flag;
 
-        let mut log_return = || {
-            let mapped_sender = evm_map(params.sender);
-            let nonce = context.state.nonce(&mapped_sender)?;
-            context
-                .state
-                .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
+        if !static_flag {
             ReturnEvent::log(
                 &(),
-                &(nonce, self.gas_left, self.apply_state),
+                &self.apply_state,
                 &self.resume.params,
                 context,
-            )?;
-            Ok(())
-        };
-
-        if !static_flag {
-            let res = log_return();
-            if let Err(e) = res {
-                return TrapResult::Return(Err(e));
-            }
+            )
+            .expect("Must have no static flag");
         }
 
         let mut gas_returned = U256::zero();
@@ -354,7 +343,7 @@ pub fn call_to_evmcore(
             .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
         CallEvent::log(
             &(mapped_sender.address.0, address.address.0),
-            &(value, nonce, call_gas, data),
+            &(value, nonce, data),
             params,
             context,
         )?;
@@ -444,7 +433,7 @@ pub fn create_to_evmcore(
         .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
     CreateEvent::log(
         &(mapped_sender.address.0, address.0),
-        &(value, nonce, call_gas, init),
+        &(value, nonce, init),
         params,
         context,
     )?;
@@ -490,7 +479,7 @@ pub fn withdraw_from_evmcore(
         .inc_nonce(&mapped_address, &context.spec.account_start_nonce)?;
     WithdrawEvent::log(
         &(mapped_address.address.0, sender),
-        &(params.value.value(), nonce),
+        &(value, nonce),
         params,
         context,
     )?;
@@ -515,12 +504,9 @@ pub struct PhantomTransaction {
     pub from: Address,
     pub nonce: U256,
     pub action: Action,
-    pub gas_price: U256,
-    pub gas_limit: U256,
     pub value: U256,
     pub data: Vec<u8>,
 
-    pub gas_used: U256,
     pub log_bloom: Bloom,
     pub logs: Vec<LogEntry>,
     pub outcome_status_in_evm: u8,
@@ -528,19 +514,14 @@ pub struct PhantomTransaction {
 
 impl PhantomTransaction {
     fn simple_transfer(
-        from: Address, to: Address, nonce: U256, value: U256, spec: &Spec,
-        gas_price: U256,
-    ) -> PhantomTransaction
-    {
+        from: Address, to: Address, nonce: U256, value: U256, data: Vec<u8>,
+    ) -> PhantomTransaction {
         PhantomTransaction {
             from,
             nonce,
             action: Action::Call(to),
-            gas_price,
-            gas_limit: spec.tx_gas.into(),
             value,
-            data: vec![],
-            gas_used: spec.tx_gas.into(),
+            data,
             outcome_status_in_evm: EVM_SPACE_SUCCESS,
             ..Default::default()
         }
@@ -553,8 +534,8 @@ impl Into<SignedTransaction> for PhantomTransaction {
             action: self.action,
             chain_id: 0.into(), // TODO
             data: self.data,
-            gas_price: self.gas_price,
-            gas: self.gas_limit,
+            gas_price: 0.into(), // TODO
+            gas: 0.into(),       // TODO
             nonce: self.nonce,
             value: self.value,
         };
@@ -567,7 +548,7 @@ impl Into<Receipt> for PhantomTransaction {
     fn into(self) -> Receipt {
         Receipt {
             accumulated_gas_used: 0.into(), // TODO
-            gas_fee: self.gas_used,
+            gas_fee: 0.into(),              // TODO
             gas_sponsor_paid: false,
             log_bloom: self.log_bloom,
             logs: self.logs,
@@ -581,12 +562,16 @@ impl Into<Receipt> for PhantomTransaction {
 
 type Bytes20 = [u8; 20];
 
-pub fn recover_phantom(
-    logs: &[LogEntry], spec: &Spec, gas_price: U256,
-) -> Vec<PhantomTransaction> {
+pub fn build_bloom_and_recover_phantom(
+    logs: &[LogEntry], tx_hash: H256,
+) -> (Vec<PhantomTransaction>, Bloom) {
     let mut phantom_txs: Vec<PhantomTransaction> = Default::default();
     let mut maybe_working_tx: Option<PhantomTransaction> = None;
+    let mut all_bloom = Bloom::default();
+    let mut cross_space_nonce = 0u32;
     for log in logs.iter() {
+        let log_bloom = log.bloom();
+        all_bloom.accrue_bloom(&log_bloom);
         if log.address == *CROSS_SPACE_CONTRACT_ADDRESS {
             let event_sig = log.topics.first().unwrap();
             if event_sig == &CallEvent::EVENT_SIG
@@ -600,12 +585,10 @@ pub fn recover_phantom(
                 let to = Address::from(
                     Bytes20::abi_decode(&log.topics[2].as_ref()).unwrap(),
                 );
-                let (value, nonce, gas_limit, data): (_, _, U256, Vec<u8>) =
+                let (value, nonce, data): (_, _, Vec<u8>) =
                     ABIDecodable::abi_decode(&log.data).unwrap();
 
                 let is_create = event_sig == &CreateEvent::EVENT_SIG;
-                let gas_limit: U256 =
-                    gas_limit + gas_required_for(is_create, &data, spec);
                 let action = if is_create {
                     Action::Create
                 } else {
@@ -617,12 +600,12 @@ pub fn recover_phantom(
                 phantom_txs.push(PhantomTransaction::simple_transfer(
                     /* from */ Address::zero(),
                     /* to */ from,
-                    U256::zero(), /* TODO: maintain nonce for the zero
-                                   * address. */
-                    value + gas_limit * gas_price,
-                    spec,
-                    gas_price,
+                    U256::zero(), // Zero address always has nonce 0.
+                    value,
+                    /* data */
+                    (tx_hash, U256::from(cross_space_nonce)).abi_encode(),
                 ));
+                cross_space_nonce += 1;
                 // The second phantom transaction for cross-space call, transfer
                 // balance and gas fee from the zero address to the mapped
                 // sender
@@ -631,8 +614,6 @@ pub fn recover_phantom(
                     nonce,
                     action,
                     value,
-                    gas_price,
-                    gas_limit,
                     data,
                     ..Default::default()
                 });
@@ -648,48 +629,32 @@ pub fn recover_phantom(
                     Address::zero(),
                     nonce,
                     value,
-                    spec,
-                    gas_price,
+                    /* data */ vec![],
                 ));
             } else if event_sig == &ReturnEvent::EVENT_SIG {
-                let (nonce, gas_left, success): (U256, U256, bool) =
+                let success: bool =
                     ABIDecodable::abi_decode(&log.data).unwrap();
 
                 let mut working_tx =
                     std::mem::take(&mut maybe_working_tx).unwrap();
-                working_tx.gas_used = working_tx.gas_limit - gas_left;
                 working_tx.outcome_status_in_evm = if success {
                     EVM_SPACE_SUCCESS
                 } else {
                     EVM_SPACE_FAIL
                 };
-                working_tx.log_bloom = working_tx.logs.iter().fold(
-                    Bloom::default(),
-                    |mut b, l| {
-                        b.accrue_bloom(&l.bloom());
-                        b
-                    },
-                );
-                let from = working_tx.from;
                 // Complete the second transaction for cross-space call.
                 phantom_txs.push(working_tx);
-                // The third phantom transaction for cross-space call, transfer
-                // unused gas fee to the zero address. To indicate it is
-                // returned to the native space.
-                phantom_txs.push(PhantomTransaction::simple_transfer(
-                    from,
-                    /* to */ Address::zero(),
-                    nonce,
-                    gas_left * gas_price,
-                    spec,
-                    gas_price,
-                ));
             }
         } else if log.space == Space::Ethereum {
             if let Some(ref mut working_tx) = maybe_working_tx {
+                // The receipt is generated in cross-space call
                 working_tx.logs.push(log.clone());
+                working_tx.log_bloom.accrue_bloom(&log_bloom);
+            } else {
+                // The receipt is generated in evm-space transaction. Does
+                // nothing.
             }
         }
     }
-    return phantom_txs;
+    return (phantom_txs, all_bloom);
 }
