@@ -37,6 +37,7 @@ pub struct Receipt {
     /// The logs stemming from this transaction.
     pub logs: Vec<LogEntry>,
     /// Transaction outcome.
+    // TODO: use enum variants for Conflux / Ethereum
     pub outcome_status: u8,
     /// The designated account to bear the storage fee, if any.
     pub storage_sponsor_paid: bool,

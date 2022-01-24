@@ -528,27 +528,25 @@ impl PhantomTransaction {
     }
 }
 
-impl Into<SignedTransaction> for PhantomTransaction {
-    fn into(self) -> SignedTransaction {
+impl PhantomTransaction {
+    pub fn into_eip155(self, chain_id: Option<u32>) -> SignedTransaction {
         let tx = Eip155Transaction {
             action: self.action,
-            chain_id: 0.into(), // TODO
+            chain_id,
             data: self.data,
-            gas_price: 0.into(), // TODO
-            gas: 0.into(),       // TODO
+            gas_price: 0.into(),
+            gas: 0.into(),
             nonce: self.nonce,
             value: self.value,
         };
 
         tx.fake_sign(self.from.with_space(Space::Ethereum))
     }
-}
 
-impl Into<Receipt> for PhantomTransaction {
-    fn into(self) -> Receipt {
+    pub fn into_receipt(self, accumulated_gas_used: U256) -> Receipt {
         Receipt {
-            accumulated_gas_used: 0.into(), // TODO
-            gas_fee: 0.into(),              // TODO
+            accumulated_gas_used,
+            gas_fee: 0.into(),
             gas_sponsor_paid: false,
             log_bloom: self.log_bloom,
             logs: self.logs,

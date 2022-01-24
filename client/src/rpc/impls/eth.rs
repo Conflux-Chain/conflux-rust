@@ -24,9 +24,13 @@ use cfxcore::{
     SharedTransactionPool,
 };
 use primitives::{
-    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action, Block,
-    BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, SignedTransaction,
-    StorageKey, StorageValue, TransactionIndex, TransactionWithSignature,
+    filter::LogFilter,
+    receipt::{
+        EVM_SPACE_SUCCESS, TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
+    },
+    Action, Block, BlockHashOrEpochNumber, Eip155Transaction, EpochNumber,
+    Receipt as PrimitiveReceipt, SignedTransaction, StorageKey, StorageValue,
+    TransactionIndex, TransactionWithSignature,
 };
 
 use crate::rpc::{
@@ -128,6 +132,7 @@ impl EthHandler {
             Some(b) => b,
         };
 
+        // sanity check: epoch is not empty
         let pivot = match blocks.last() {
             Some(p) => p,
             None => return Err(internal_error("Inconsistent state")),
@@ -161,44 +166,52 @@ impl EthHandler {
                 Some(r) => r,
             };
 
-            if b.transactions.len() != exec_info.block_receipts.receipts.len() {
+            let block_receipts = &exec_info.block_receipts.receipts;
+
+            // sanity check: transaction and
+            if b.transactions.len() != block_receipts.len() {
                 return Err(internal_error("Inconsistent state"));
             }
 
             for (id, tx) in b.transactions.iter().enumerate() {
                 match tx.space() {
                     Space::Ethereum => {
+                        let receipt = &block_receipts[id];
+
+                        // we do not return non-executed transaction
+                        if receipt.outcome_status == TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING {
+                            continue;
+                        }
+
                         phantom_block.transactions.push(tx.clone());
 
-                        // TODO
-                        gas_used += exec_info.block_receipts.receipts[id]
-                            .accumulated_gas_used
-                            - exec_info.block_receipts.receipts[id - 1]
-                                .accumulated_gas_used;
+                        // sanity check: gas price must be positive
+                        if *tx.gas_price() == 0.into() {
+                            return Err(internal_error("Inconsistent state"));
+                        }
 
-                        phantom_block.receipts.push(
-                            // TODO: rewrite `accumulated_gas_used`,
-                            // `outcome_status`
-                            exec_info.block_receipts.receipts[id].clone(),
-                        );
+                        // FIXME(thegaram): is this correct?
+                        gas_used += receipt.gas_fee / tx.gas_price();
+
+                        phantom_block.receipts.push(PrimitiveReceipt {
+                            accumulated_gas_used: gas_used,
+                            outcome_status: receipt.evm_space_status(),
+                            ..receipt.clone()
+                        });
                     }
                     Space::Native => {
-                        let (phantoms, _) = build_bloom_and_recover_phantom(
-                            &exec_info.block_receipts.receipts[id].logs[..],
+                        let (phantom_txs, _) = build_bloom_and_recover_phantom(
+                            &block_receipts[id].logs[..],
                             tx.hash(),
                         );
 
-                        for p in phantoms {
-                            phantom_block
-                                .transactions
-                                .push(Arc::new(p.clone().into()));
+                        for p in phantom_txs {
+                            phantom_block.transactions.push(Arc::new(
+                                p.clone().into_eip155(tx.chain_id()),
+                            ));
 
-                            let mut phantom_receipt: primitives::Receipt =
-                                p.into();
-
-                            gas_used += phantom_receipt.gas_fee;
-                            phantom_receipt.accumulated_gas_used = gas_used;
-
+                            // note: phantom txs consume no gas
+                            let phantom_receipt = p.into_receipt(gas_used);
                             phantom_block.receipts.push(phantom_receipt);
                         }
                     }
