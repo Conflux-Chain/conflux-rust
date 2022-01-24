@@ -434,8 +434,15 @@ class LightRPCTest(ConfluxTestFramework):
             txs.append(tx)
 
         block_hash = self.rpc[FULLNODE0].generate_block_with_fake_txs(txs)
-        self.rpc[FULLNODE0].generate_blocks(BLAME_CHECK_OFFSET) # make sure txs are executed
+
+        # make sure txs are executed
+        parent_hash = block_hash
+
+        for _ in range(BLAME_CHECK_OFFSET + 10):
+            parent_hash = self.rpc[FULLNODE0].generate_block_with_parent(parent_hash=parent_hash)
+
         sync_blocks(self.nodes)
+        time.sleep(1)
 
         # --------------------------
 

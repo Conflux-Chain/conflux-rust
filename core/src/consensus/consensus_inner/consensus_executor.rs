@@ -14,7 +14,9 @@ use crate::{
     },
     evm::Spec,
     executive::{
-        internal_contract::impls::pos::decode_register_info,
+        internal_contract::{
+            build_bloom_and_recover_phantom, impls::pos::decode_register_info,
+        },
         revert_reason_decode, ExecutionError, ExecutionOutcome, Executive,
         TransactOptions,
     },
@@ -47,7 +49,7 @@ use cfx_storage::{
 };
 use cfx_types::{
     address_util::AddressUtil, AddressSpaceUtil, AllChainID, BigEndianHash,
-    Space, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
+    Bloom, Space, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
 };
 use core::convert::TryFrom;
 use hash::KECCAK_EMPTY_LIST_RLP;
@@ -61,8 +63,8 @@ use primitives::{
         TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
         TRANSACTION_OUTCOME_SUCCESS,
     },
-    Action, Block, BlockHeaderBuilder, EpochId, SignedTransaction,
-    TransactionIndex, MERKLE_NULL_NODE,
+    Action, Block, BlockHeaderBuilder, EpochId, NativeTransaction,
+    SignedTransaction, Transaction, TransactionIndex, MERKLE_NULL_NODE,
 };
 use rustc_hex::ToHex;
 use std::{
@@ -1252,6 +1254,7 @@ impl ConsensusExecutionHandler {
                 let mut transaction_logs = Vec::new();
                 let mut storage_released = Vec::new();
                 let mut storage_collateralized = Vec::new();
+                let mut log_bloom = Bloom::default();
 
                 let options = if self.config.executive_trace {
                     TransactOptions::with_tracing()
@@ -1351,6 +1354,15 @@ impl ConsensusExecutionHandler {
                         gas_sponsor_paid = executed.gas_sponsor_paid;
                         storage_sponsor_paid = executed.storage_sponsor_paid;
 
+                        let (phantom_txs, bloom) =
+                            build_bloom_and_recover_phantom(
+                                &transaction_logs,
+                                transaction.hash,
+                            );
+                        log_bloom = bloom;
+                        // TODO: Store the phantom transactions properly.
+                        let _ = phantom_txs;
+
                         trace!("tx executed successfully: result={:?}, transaction={:?}, in block {:?}", executed, transaction, block.hash());
 
                         if self.config.executive_trace {
@@ -1377,6 +1389,7 @@ impl ConsensusExecutionHandler {
                     gas_fee,
                     gas_sponsor_paid,
                     transaction_logs,
+                    log_bloom,
                     storage_sponsor_paid,
                     storage_collateralized,
                     storage_released,
@@ -1836,7 +1849,7 @@ impl ConsensusExecutionHandler {
             "tx",
             self.verification_config.verify_transaction_common(
                 tx,
-                AllChainID::fake_for_virtual(tx.chain_id()),
+                AllChainID::fake_for_virtual(tx.chain_id().unwrap_or(1)),
                 block_height,
                 transitions,
                 VerifyTxMode::Local(VerifyTxLocalMode::Full, &spec),
@@ -1892,6 +1905,33 @@ impl ConsensusExecutionHandler {
         let spec = self.machine.spec(env.number);
         let mut ex =
             Executive::new(&mut state, &env, self.machine.as_ref(), &spec);
+
+        // If the transaction may be sponsored for collateral when calling a
+        // contract with storage sponsor, we needs a special method to estimate
+        // it.
+        if let Transaction::Native(NativeTransaction {
+            action: Action::Call(ref to),
+            ..
+        }) = tx.unsigned
+        {
+            if to.is_contract_address() {
+                let sponsor_balance_for_collateral =
+                    ex.state.sponsor_balance_for_collateral(&to)?;
+                if !sponsor_balance_for_collateral.is_zero()
+                    && ex
+                        .state
+                        .check_commission_privilege(&to, &tx.sender().address)?
+                {
+                    let r = ex.transact_virtual_two_pass(
+                        &tx,
+                        sponsor_balance_for_collateral,
+                    );
+                    trace!("Execution result {:?}", r);
+                    return Ok(r?);
+                }
+            }
+        }
+
         let r = ex.transact_virtual(tx);
         trace!("Execution result {:?}", r);
         Ok(r?)

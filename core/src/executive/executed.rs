@@ -44,8 +44,11 @@ pub struct Executed {
     pub output: Bytes,
     /// The trace of this transaction.
     pub trace: Vec<ExecTrace>,
-    /// An accurate gas estimation for gas usage, used in rpc
+    /// Only for the virtual call, an accurate gas estimation for gas usage,
     pub estimated_gas_limit: Option<U256>,
+    /// Only for the virtual call, the minimum storage limit should returned in
+    /// estimate gas and collateral.
+    pub minimum_storage_limit: u64,
 }
 
 #[derive(Debug)]
@@ -157,6 +160,7 @@ impl Executed {
             output: Default::default(),
             trace,
             estimated_gas_limit: None,
+            minimum_storage_limit: 0,
         }
     }
 
@@ -182,6 +186,7 @@ impl Executed {
             output: Default::default(),
             trace,
             estimated_gas_limit: None,
+            minimum_storage_limit: 0,
         }
     }
 }

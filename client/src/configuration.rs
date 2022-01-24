@@ -176,6 +176,8 @@ build_config! {
         (jsonrpc_cors, (Option<String>), None)
         (jsonrpc_http_keep_alive, (bool), false)
         (jsonrpc_ws_max_payload_bytes, (usize), 30 * 1024 * 1024)
+        (jsonrpc_http_eth_port, (Option<u16>), Some(8545))
+        (jsonrpc_ws_eth_port, (Option<u16>), Some(8546))
         // The network_id, if unset, defaults to the chain_id.
         // Only override the network_id for local experiments,
         // when user would like to keep the existing blockchain data
@@ -354,6 +356,7 @@ build_config! {
             ProvideExtraSnapshotSyncConfig::parse_config_list)
         (node_type, (Option<NodeType>), None, NodeType::from_str)
         (public_rpc_apis, (ApiSet), ApiSet::Safe, ApiSet::from_str)
+        (public_evm_rpc_apis, (ApiSet), ApiSet::Evm, ApiSet::from_str)
     }
 }
 
@@ -952,6 +955,16 @@ impl Configuration {
         HttpConfiguration::new(
             None,
             self.raw_conf.jsonrpc_http_port,
+            self.raw_conf.jsonrpc_cors.clone(),
+            self.raw_conf.jsonrpc_http_keep_alive,
+            self.raw_conf.jsonrpc_http_threads,
+        )
+    }
+
+    pub fn eth_http_config(&self) -> HttpConfiguration {
+        HttpConfiguration::new(
+            None,
+            self.raw_conf.jsonrpc_http_eth_port,
             self.raw_conf.jsonrpc_cors.clone(),
             self.raw_conf.jsonrpc_http_keep_alive,
             self.raw_conf.jsonrpc_http_threads,

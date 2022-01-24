@@ -249,6 +249,7 @@ impl RpcImpl {
                 inner,
                 &self.data_man,
                 include_txs,
+                Some(Space::Native),
             )?)),
         }
     }
@@ -375,6 +376,7 @@ impl RpcImpl {
                 inner,
                 &self.data_man,
                 include_txs,
+                Some(Space::Native),
             )?)),
         }
     }
@@ -427,6 +429,7 @@ impl RpcImpl {
             inner,
             &self.data_man,
             true,
+            Some(Space::Native),
         )?)
     }
 
@@ -464,6 +467,7 @@ impl RpcImpl {
                 inner,
                 &self.data_man,
                 include_txs,
+                Some(Space::Native),
             )?)),
         }
     }
@@ -565,6 +569,7 @@ impl RpcImpl {
                 inner,
                 &self.data_man,
                 true,
+                Some(Space::Native),
             )
         };
 

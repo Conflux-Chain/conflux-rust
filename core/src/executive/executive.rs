@@ -39,7 +39,8 @@ use cfx_types::{
 };
 use primitives::{
     receipt::StorageChange, storage::STORAGE_LAYOUT_REGULAR_V0,
-    transaction::Action, SignedTransaction, StorageLayout, Transaction,
+    transaction::Action, NativeTransaction, SignedTransaction, StorageLayout,
+    Transaction,
 };
 use rlp::RlpStream;
 use std::{
@@ -877,6 +878,22 @@ struct SponsorCheckOutput {
     storage_sponsor_eligible: bool,
 }
 
+pub fn gas_required_for(is_create: bool, data: &[u8], spec: &Spec) -> u64 {
+    data.iter().fold(
+        (if is_create {
+            spec.tx_create_gas
+        } else {
+            spec.tx_gas
+        }) as u64,
+        |g, b| {
+            g + (match *b {
+                0 => spec.tx_data_zero_gas,
+                _ => spec.tx_data_non_zero_gas,
+            }) as u64
+        },
+    )
+}
+
 impl<
         'a,
         Substate: SubstateMngTrait,
@@ -897,22 +914,6 @@ impl<
             depth: 0,
             static_flag: false,
         }
-    }
-
-    pub fn gas_required_for(is_create: bool, data: &[u8], spec: &Spec) -> u64 {
-        data.iter().fold(
-            (if is_create {
-                spec.tx_create_gas
-            } else {
-                spec.tx_gas
-            }) as u64,
-            |g, b| {
-                g + (match *b {
-                    0 => spec.tx_data_zero_gas,
-                    _ => spec.tx_data_non_zero_gas,
-                }) as u64
-            },
-        )
     }
 
     pub fn create(
@@ -953,6 +954,60 @@ impl<
         .consume(self.state, substate, tracer)?;
 
         Ok(result)
+    }
+
+    /// For the same transaction, the storage limit paid by user and the storage
+    /// limit paid by the sponsor are different values. So this function will
+    ///
+    /// 1. Assuming the sponsor pays for storage collateral, check if the
+    /// transaction will fail for NotEnoughBalanceForStorage.
+    ///
+    /// 2. If it does, executes the transaction again assuming the user pays for
+    /// the storage collateral. The resultant storage limit must be larger than
+    /// the maximum storage limit can be afford by the sponsor, to guarantee the
+    /// user pays for the storage limit.
+    pub fn transact_virtual_two_pass(
+        &mut self, tx: &SignedTransaction, sponsor_balance_for_collateral: U256,
+    ) -> DbResult<ExecutionOutcome> {
+        let mut first_pass_tx = tx.clone();
+        let sponsor_storage_limit = (sponsor_balance_for_collateral
+            / *DRIPS_PER_STORAGE_COLLATERAL_UNIT)
+            .as_u64();
+
+        if let Transaction::Native(NativeTransaction {
+            ref mut storage_limit,
+            ..
+        }) = first_pass_tx.transaction.transaction.unsigned
+        {
+            *storage_limit = sponsor_storage_limit;
+        } else {
+            unreachable!(
+                "Only the native transaction needs two pass estimation"
+            );
+        }
+        let first_pass_result = self.transact_virtual(&first_pass_tx)?;
+        let fail_for_storage_balance = matches!(
+            first_pass_result,
+            ExecutionOutcome::ExecutionErrorBumpNonce(
+                ExecutionError::VmError(
+                    vm::Error::NotEnoughBalanceForStorage { .. },
+                ),
+                _,
+            )
+        );
+        return if fail_for_storage_balance {
+            let mut second_pass_result = self.transact_virtual(&tx)?;
+            if let ExecutionOutcome::Finished(Executed {
+                ref mut minimum_storage_limit,
+                ..
+            }) = second_pass_result
+            {
+                *minimum_storage_limit = sponsor_storage_limit + 64
+            }
+            Ok(second_pass_result)
+        } else {
+            Ok(first_pass_result)
+        };
     }
 
     pub fn transact_virtual(
@@ -1131,11 +1186,8 @@ impl<
             }
         }
 
-        let base_gas_required = Self::gas_required_for(
-            tx.action() == &Action::Create,
-            &tx.data(),
-            spec,
-        );
+        let base_gas_required =
+            gas_required_for(tx.action() == &Action::Create, &tx.data(), spec);
         assert!(
             *tx.gas() >= base_gas_required.into(),
             "We have already checked the base gas requirement when we received the block."
@@ -1211,6 +1263,9 @@ impl<
                 AddressPocket::GasPayment,
                 actual_gas_cost,
             );
+            if tx.space() == Space::Ethereum {
+                self.state.subtract_total_evm_tokens(actual_gas_cost);
+            }
 
             return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::NotEnoughCash {
@@ -1259,6 +1314,8 @@ impl<
                 &U256::try_from(gas_cost).unwrap(),
                 &mut cleanup_mode(&mut tx_substate, &spec),
             )?;
+        // Don't subtract total_evm_balance here. It is maintained properly in
+        // `finalize`.
         } else {
             options.observer.as_state_tracer().trace_internal_transfer(
                 AddressPocket::SponsorBalanceForGas(code_address),
@@ -1559,6 +1616,9 @@ impl<
 
             self.state.remove_contract(contract_address)?;
             self.state.subtract_total_issued(contract_balance);
+            if contract_address.space == Space::Ethereum {
+                self.state.subtract_total_evm_tokens(contract_balance);
+            }
         }
 
         Ok(substate)
@@ -1618,6 +1678,10 @@ impl<
                 self.spec.account_start_nonce,
             )?;
         };
+
+        if tx.space() == Space::Ethereum {
+            self.state.subtract_total_evm_tokens(fees_value);
+        }
 
         // perform suicides
 
@@ -1702,6 +1766,7 @@ impl<
                     output,
                     trace,
                     estimated_gas_limit,
+                    minimum_storage_limit: 0,
                 };
 
                 if r.apply_state {

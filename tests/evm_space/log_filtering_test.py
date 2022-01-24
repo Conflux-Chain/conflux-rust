@@ -9,13 +9,11 @@ import eth_utils
 import rlp
 
 from conflux.filter import Filter
-from conflux.rpc import RpcClient
 from conflux.utils import sha3 as keccak, priv_to_addr
 from test_framework.blocktools import encode_hex_0x, wait_for_initial_nonce_for_address
-from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import *
 from test_framework.mininode import *
-from web3 import Web3
+from base import Web3Base
 
 CONFLUX_CONTRACT_PATH = "../contracts/CrossSpaceEventTest/CrossSpaceEventTestConfluxSide.bytecode"
 EVM_CONTRACT_PATH = "../contracts/CrossSpaceEventTest/CrossSpaceEventTestEVMSide.bytecode"
@@ -31,22 +29,7 @@ def encode_bytes20(hex):
 def number_to_topic(number):
     return "0x" + encode_u256(number)
 
-class CrossSpaceLogFilteringTest(ConfluxTestFramework):
-    def set_test_params(self):
-        self.num_nodes = 1
-        self.conf_parameters["evm_chain_id"] = str(10)
-        self.conf_parameters["evm_transaction_block_ratio"] = str(1)
-
-    def setup_network(self):
-        self.add_nodes(self.num_nodes)
-        self.start_node(0, ["--archive"])
-        self.rpc = RpcClient(self.nodes[0])
-
-        ip = self.nodes[0].ip
-        port = self.nodes[0].rpcport
-        self.w3 = Web3(Web3.HTTPProvider(f'http://{ip}:{port}/'))
-        assert_equal(self.w3.isConnected(), True)
-
+class CrossSpaceLogFilteringTest(Web3Base):
     def run_test(self):
         # initialize Conflux account
         self.cfxPrivkey = default_config['GENESIS_PRI_KEY']
@@ -304,19 +287,6 @@ class CrossSpaceLogFilteringTest(ConfluxTestFramework):
 
         self.log.info("Pass")
 
-    def cross_space_transfer(self, to, value):
-        to = to.replace('0x', '')
-
-        tx = self.rpc.new_tx(
-            value=value,
-            receiver="0x0888000000000000000000000000000000000006",
-            data=decode_hex(f"0xda8d5daf{to}000000000000000000000000"),
-            nonce=self.rpc.get_nonce(self.cfxAccount),
-            gas=1000000,
-        )
-
-        self.rpc.send_tx(tx, True)
-
     def deploy_conflux_space(self, bytecode_path):
         bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), bytecode_path)
         assert(os.path.isfile(bytecode_file))
@@ -356,20 +326,6 @@ class CrossSpaceLogFilteringTest(ConfluxTestFramework):
         assert_equal(receipt["status"], 1)
         addr = receipt["contractAddress"]
         return addr
-
-    def construct_evm_tx(self, receiver, data_hex, nonce):
-        signed = self.evmAccount.signTransaction({
-            "to": receiver,
-            "value": 0,
-            "gasPrice": 1,
-            "gas": 150000,
-            "nonce": nonce,
-            "chainId": 10,
-            "data": data_hex,
-        })
-
-        tx = [nonce, 1, 150000, bytes.fromhex(receiver.replace('0x', '')), 0, bytes.fromhex(data_hex.replace('0x', '')), signed["v"], signed["r"], signed["s"]]
-        return tx, signed["hash"]
 
 if __name__ == "__main__":
     CrossSpaceLogFilteringTest().main()

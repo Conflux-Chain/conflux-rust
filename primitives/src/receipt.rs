@@ -11,6 +11,9 @@ pub const TRANSACTION_OUTCOME_SUCCESS: u8 = 0;
 pub const TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING: u8 = 1; // gas fee charged
 pub const TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING: u8 = 2; // no gas fee charged
 
+pub const EVM_SPACE_FAIL: u8 = 0;
+pub const EVM_SPACE_SUCCESS: u8 = 1;
+
 #[derive(Debug, Clone, PartialEq, Eq, RlpDecodable, RlpEncodable)]
 pub struct StorageChange {
     pub address: Address,
@@ -44,7 +47,7 @@ pub struct Receipt {
 impl Receipt {
     pub fn new(
         outcome: u8, accumulated_gas_used: U256, gas_fee: U256,
-        gas_sponsor_paid: bool, logs: Vec<LogEntry>,
+        gas_sponsor_paid: bool, logs: Vec<LogEntry>, log_bloom: Bloom,
         storage_sponsor_paid: bool, storage_collateralized: Vec<StorageChange>,
         storage_released: Vec<StorageChange>,
     ) -> Self
@@ -53,15 +56,21 @@ impl Receipt {
             accumulated_gas_used,
             gas_fee,
             gas_sponsor_paid,
-            log_bloom: logs.iter().fold(Bloom::default(), |mut b, l| {
-                b.accrue_bloom(&l.bloom());
-                b
-            }),
+            log_bloom,
             logs,
             outcome_status: outcome,
             storage_sponsor_paid,
             storage_collateralized,
             storage_released,
+        }
+    }
+
+    // conflux receipt status code is different with EVM
+    pub fn evm_space_status(&self) -> u8 {
+        if self.outcome_status == TRANSACTION_OUTCOME_SUCCESS {
+            EVM_SPACE_SUCCESS
+        } else {
+            EVM_SPACE_FAIL
         }
     }
 }

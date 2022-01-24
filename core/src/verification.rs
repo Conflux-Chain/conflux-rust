@@ -5,7 +5,7 @@
 use crate::{
     consensus::pos_handler::PosVerifier,
     error::{BlockError, Error},
-    executive::Executive,
+    executive::gas_required_for,
     machine::Machine,
     pow::{self, nonce_to_lower_bound, PowComputer, ProofOfWorkProblem},
     spec::TransitionsEpochHeight,
@@ -593,12 +593,14 @@ impl VerificationConfig {
             ));
         }
 
-        if tx.chain_id() != chain_id.in_space(tx.space()) {
-            bail!(TransactionError::ChainIdMismatch {
-                expected: chain_id.in_space(tx.space()),
-                got: tx.chain_id(),
-                space: tx.space(),
-            });
+        if let Some(tx_chain_id) = tx.chain_id() {
+            if tx_chain_id != chain_id.in_space(tx.space()) {
+                bail!(TransactionError::ChainIdMismatch {
+                    expected: chain_id.in_space(tx.space()),
+                    got: tx_chain_id,
+                    space: tx.space(),
+                });
+            }
         }
 
         // Forbid zero-gas-price tx
@@ -671,7 +673,7 @@ impl VerificationConfig {
         };
 
         if let Some(spec) = maybe_spec {
-            let tx_intrinsic_gas = Executive::gas_required_for(
+            let tx_intrinsic_gas = gas_required_for(
                 *tx.action() == Action::Create,
                 &tx.data(),
                 &spec,
@@ -685,6 +687,16 @@ impl VerificationConfig {
         }
 
         Ok(())
+    }
+
+    pub fn check_tx_size(
+        &self, tx: &TransactionWithSignature,
+    ) -> Result<(), TransactionError> {
+        if tx.rlp_size() > self.max_block_size_in_bytes {
+            bail!(TransactionError::TooBig)
+        } else {
+            Ok(())
+        }
     }
 }
 

@@ -13,19 +13,17 @@ use cfx_types::{
 };
 use cfxcore::{
     executive::{
-        contract_address, revert_reason_decode, ExecutionError,
-        ExecutionOutcome, TxDropError,
+        revert_reason_decode, ExecutionError, ExecutionOutcome, TxDropError,
     },
     observer::ErrorUnwind,
     rpc_errors::{
         invalid_params_check, Error as CfxRpcError, Result as CfxRpcResult,
     },
-    vm::{self, CreateContractAddress},
-    ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
+    vm, ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
     SharedTransactionPool,
 };
 use primitives::{
-    filter::LogFilter, receipt::TRANSACTION_OUTCOME_SUCCESS, Action, Block,
+    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action, Block,
     BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, SignedTransaction,
     StorageKey, StorageValue, TransactionIndex, TransactionWithSignature,
 };
@@ -88,32 +86,53 @@ pub fn sign_call(
         gas,
         gas_price: request.gas_price.unwrap_or(1.into()),
         value: request.value.unwrap_or_default(),
-        chain_id,
+        chain_id: Some(chain_id),
         data: request.data.unwrap_or_default().into_vec(),
     }
     .fake_sign(from.with_evm_space()))
 }
 
 impl EthHandler {
-    fn get_block_by_number(
+    fn get_blocks_by_number(
         &self, block_num: BlockNumber,
-    ) -> jsonrpc_core::Result<Option<Arc<Block>>> {
-        let consensus_graph = self.consensus_graph();
-        let inner = &*consensus_graph.inner.read();
-
-        let epoch_height = consensus_graph
-            .get_height_from_epoch_number(block_num.into())
+    ) -> jsonrpc_core::Result<Option<Vec<Arc<Block>>>> {
+        let epoch_hashes = self
+            .consensus
+            .get_block_hashes_by_epoch(block_num.into())
             .map_err(RpcError::invalid_params)?;
 
-        let pivot_hash = inner
-            .get_pivot_hash_from_epoch_number(epoch_height)
-            .map_err(RpcError::invalid_params)?;
-
-        // TODO: combine all blocks from epoch
-        Ok(self
+        let epoch_blocks = self
             .consensus
             .get_data_manager()
-            .block_by_hash(&pivot_hash, false /* update_cache */))
+            .blocks_by_hash_list(&epoch_hashes, false /* update_cache */);
+
+        Ok(epoch_blocks)
+    }
+
+    fn get_blocks_by_hash(
+        &self, hash: &H256,
+    ) -> jsonrpc_core::Result<Option<Vec<Arc<Block>>>> {
+        let epoch_num = match self.consensus.get_block_epoch_number(hash) {
+            None => return Ok(None),
+            Some(n) => n,
+        };
+
+        let epoch_hashes = self
+            .consensus
+            .get_block_hashes_by_epoch(EpochNumber::Number(epoch_num))
+            .map_err(RpcError::invalid_params)?;
+
+        // do not allow retrieving an epoch using a non-pivot hash
+        if epoch_hashes.last() != Some(hash) {
+            return Ok(None);
+        }
+
+        let epoch_blocks = self
+            .consensus
+            .get_data_manager()
+            .blocks_by_hash_list(&epoch_hashes, false /* update_cache */);
+
+        Ok(epoch_blocks)
     }
 
     fn exec_transaction(
@@ -216,53 +235,42 @@ impl EthHandler {
             bail!("Inconsistent state");
         }
 
-        let prior_gas_used = match id {
-            0 => U256::zero(),
-            id => {
-                exec_info.block_receipts.receipts[id - 1].accumulated_gas_used
-            }
-        };
-
         let mut prior_log_count = 0;
+        let mut prior_gas_used = U256::zero();
+        let mut transaction_index = U256::zero();
         for n in 0..id {
+            // log count
             let log_count = exec_info.block_receipts.receipts[n]
                 .logs
                 .iter()
                 .filter(|log| log.space == Space::Ethereum)
                 .count();
             prior_log_count += log_count;
+
+            if exec_info.block.transactions[id].space() == Space::Ethereum {
+                // gas used
+                prior_gas_used += exec_info.block_receipts.receipts[n].gas_fee
+                    / exec_info.block.transactions[id].gas_price(); // TODO phantom's gas_price maybe 0
+                                                                    // tx index
+                transaction_index += U256::one();
+            }
         }
 
         let tx = &exec_info.block.transactions[id];
         let primitive_receipt = &exec_info.block_receipts.receipts[id];
 
-        let status_code = if primitive_receipt.outcome_status
-            == TRANSACTION_OUTCOME_SUCCESS
-        {
-            1u32
-        } else {
-            0
+        let gas_used = primitive_receipt.gas_fee / tx.gas_price();
+
+        let status_code = primitive_receipt.evm_space_status();
+
+        let contract_address = match status_code == EVM_SPACE_SUCCESS {
+            true => Transaction::deployed_contract_address(tx),
+            false => None,
         };
 
-        let contract_address = if let Action::Create = tx.action() {
-            // TODO(thegaram): do not return address if failed
-            let (contract_address, _) = contract_address(
-                CreateContractAddress::FromSenderNonce,
-                0.into(),
-                &tx.sender(),
-                tx.nonce(),
-                tx.data(),
-            );
-            Some(contract_address.address)
-        } else {
-            None
-        };
-
-        let block_hash = Some(exec_info.pivot_hash);
-        let block_number = Some(exec_info.epoch_number.into());
-        /* TODO: EVM core: Compute a correct index */
-        let transaction_index = Some(tx_index.index.into());
-        let transaction_hash = Some(tx.hash());
+        let block_hash = exec_info.pivot_hash;
+        let block_number = exec_info.epoch_number.into();
+        let transaction_hash = tx.hash();
 
         let logs = primitive_receipt
             .logs
@@ -274,36 +282,40 @@ impl EthHandler {
                 address: log.address,
                 topics: log.topics,
                 data: Bytes(log.data),
-                block_hash,
+                block_hash,  // TODO use pivot hash here
                 block_number,
                 transaction_hash,
-                transaction_index,
-                log_index: Some((prior_log_count + idx).into()), // TODO: EVM core: count log_index
+                transaction_index, // TODO use right tx index
+                log_index: Some((prior_log_count + idx).into()),  // TODO count the right index in whole block
                 transaction_log_index: Some(idx.into()),
                 removed: false,
             })
             .collect();
 
+        let tx_exec_error_msg =
+            match &exec_info.block_receipts.tx_execution_error_messages[id] {
+                msg if msg.is_empty() => None,
+                msg => Some(msg.clone()),
+            };
+
         let receipt = Receipt {
-            transaction_type: None,
             transaction_hash,
             transaction_index,
             block_hash,
-            from: Some(tx.sender().address),
+            from: tx.sender().address,
             to: match tx.action() {
                 Action::Create => None,
                 Action::Call(addr) => Some(*addr),
             },
-            block_number: Some(exec_info.epoch_number.into()),
-            cumulative_gas_used: primitive_receipt.accumulated_gas_used,
-            gas_used: (primitive_receipt.accumulated_gas_used - prior_gas_used)
-                .into(),
+            block_number,
+            cumulative_gas_used: prior_gas_used + gas_used,
+            gas_used,
             contract_address,
             logs,
-            state_root: exec_info.maybe_state_root.clone(),
             logs_bloom: primitive_receipt.log_bloom,
-            status_code: Some(status_code.into()),
+            status_code: status_code.into(),
             effective_gas_price: *tx.gas_price(),
+            tx_exec_error_msg,
         };
 
         Ok(receipt)
@@ -463,17 +475,16 @@ impl Eth for EthHandler {
             "RPC Request: eth_getBlockByHash hash={:?} include_txs={:?}",
             hash, include_txs
         );
-        // TODO: EVM core: discussion: return one block or the whole epoch
-        // (pivot header + epoch transactions.)
-        let block_op = self
-            .consensus
-            .get_data_manager()
-            .block_by_hash(&hash, false);
-        if let Some(block) = block_op {
-            let inner = self.consensus_graph().inner.read();
-            Ok(Some(RpcBlock::new(&*block, include_txs, &*inner)))
-        } else {
-            Ok(None)
+
+        // keep read lock to ensure consistent view
+        let inner = self.consensus_graph().inner.read();
+
+        match self.get_blocks_by_hash(&hash)? {
+            None => Ok(None),
+            Some(blocks) => {
+                let block_refs = blocks.iter().map(|b| &**b).collect();
+                Ok(Some(RpcBlock::new(block_refs, include_txs, &*inner)))
+            }
         }
     }
 
@@ -481,14 +492,16 @@ impl Eth for EthHandler {
         &self, block_num: BlockNumber, include_txs: bool,
     ) -> jsonrpc_core::Result<Option<RpcBlock>> {
         info!("RPC Request: eth_getBlockByNumber block_number={:?} include_txs={:?}", block_num, include_txs);
-        let maybe_block = self.get_block_by_number(block_num);
 
-        match maybe_block {
-            Ok(Some(b)) => {
-                let inner = self.consensus_graph().inner.read();
-                Ok(Some(RpcBlock::new(&*b, include_txs, &*inner)))
+        // keep read lock to ensure consistent view
+        let inner = self.consensus_graph().inner.read();
+
+        match self.get_blocks_by_number(block_num)? {
+            None => Ok(None),
+            Some(blocks) => {
+                let block_refs = blocks.iter().map(|b| &**b).collect();
+                Ok(Some(RpcBlock::new(block_refs, include_txs, &*inner)))
             }
-            _ => Ok(None),
         }
     }
 
@@ -526,19 +539,21 @@ impl Eth for EthHandler {
             hash,
         );
 
-        // TODO: EVM core: filter out Conflux space tx and add EVM space virtual
-        // tx (tx created by cross-space call).
+        // keep read lock to ensure consistent view
+        let _ = self.consensus_graph().inner.read();
 
-        let block_op = self
-            .consensus
-            .get_data_manager()
-            .block_by_hash(&hash, false);
-        if let Some(block) = block_op {
-            Ok(Some(U256::from(
-                block.transaction_hashes(Some(Space::Ethereum)).len(),
-            )))
-        } else {
-            Ok(None)
+        match self.get_blocks_by_hash(&hash)? {
+            None => Ok(None),
+            Some(blocks) => {
+                let count: U256 = blocks
+                    .into_iter()
+                    // TODO(thegaram): consider phantom transactions
+                    .map(|b| b.transaction_hashes(Some(Space::Ethereum)).len())
+                    .sum::<usize>()
+                    .into();
+
+                Ok(Some(count))
+            }
         }
     }
 
@@ -549,20 +564,31 @@ impl Eth for EthHandler {
             "RPC Request: eth_getBlockTransactionCountByNumber block_number={:?}",
             block_num
         );
-        let maybe_block = self.get_block_by_number(block_num)?;
 
-        match maybe_block {
+        // keep read lock to ensure consistent view
+        let _ = self.consensus_graph().inner.read();
+
+        match self.get_blocks_by_number(block_num)? {
             None => Ok(None),
-            Some(b) => Ok(Some(U256::from(
-                b.transaction_hashes(Some(Space::Ethereum)).len(),
-            ))),
+            Some(blocks) => {
+                let count: U256 = blocks
+                    .into_iter()
+                    // TODO(thegaram): consider phantom transactions
+                    .map(|b| b.transaction_hashes(Some(Space::Ethereum)).len())
+                    .sum::<usize>()
+                    .into();
+
+                Ok(Some(count))
+            }
         }
     }
 
     fn block_uncles_count_by_hash(
         &self, hash: H256,
     ) -> jsonrpc_core::Result<Option<U256>> {
-        info!("RPC Request: eth_getUncleCountByBlockHash hash={:?}", hash,);
+        info!("RPC Request: eth_getUncleCountByBlockHash hash={:?}", hash);
+
+        // TODO(thegaram): only return Some(_) for pivot block
         let maybe_block = self
             .consensus
             .get_data_manager()
@@ -578,7 +604,9 @@ impl Eth for EthHandler {
             "RPC Request: eth_getUncleCountByBlockNumber block_number={:?}",
             block_num
         );
-        let maybe_block = self.get_block_by_number(block_num)?;
+
+        // TODO(thegaram): enough to just check if pivot exists
+        let maybe_block = self.get_blocks_by_number(block_num)?;
         Ok(maybe_block.map(|_| 0.into()))
     }
 
@@ -794,28 +822,56 @@ impl Eth for EthHandler {
         if let Some((tx, tx_info)) =
             self.consensus.get_transaction_info_by_hash(&hash)
         {
-            return if tx.space() == Space::Ethereum {
-                let maybe_block_number: Option<U256> = match self
+            if tx.space() != Space::Ethereum {
+                return Ok(None);
+            }
+            // prepare block_number, status, contract_address if tx is executed
+            let (maybe_block_number, maybe_status, maybe_contract_address) =
+                match self
                     .get_block_execution_info(&tx_info.tx_index.block_hash)?
                 {
-                    None => None,
-                    Some(res) => Some(res.epoch_number.into()),
+                    None => (None, None, None),
+                    Some(exec_info) => {
+                        let status_code = exec_info.block_receipts.receipts
+                            [tx_info.tx_index.index]
+                            .evm_space_status();
+
+                        let contract_address = match status_code
+                            == EVM_SPACE_SUCCESS
+                        {
+                            true => Transaction::deployed_contract_address(&tx),
+                            false => None,
+                        };
+
+                        (
+                            Some(exec_info.epoch_number.into()),
+                            Some(status_code.into()),
+                            contract_address,
+                        )
+                    }
                 };
-                let block_info = (
-                    Some(tx_info.tx_index.block_hash),
-                    maybe_block_number,
-                    Some(tx_info.tx_index.index.into()),
-                );
-                let tx = Transaction::from_signed(&tx, block_info);
-                Ok(Some(tx))
-            } else {
-                Ok(None)
-            };
+
+            let block_info = (
+                Some(tx_info.tx_index.block_hash), // TODO use pivot hash
+                maybe_block_number,
+                Some(tx_info.tx_index.index.into()), /* TODO also update
+                                                      * tx_index here */
+            );
+            let tx = Transaction::from_signed(
+                &tx,
+                block_info,
+                (maybe_status, maybe_contract_address),
+            );
+            return Ok(Some(tx));
         }
 
         if let Some(tx) = self.tx_pool.get_transaction(&hash) {
             return if tx.space() == Space::Ethereum {
-                Ok(Some(Transaction::from_signed(&tx, (None, None, None))))
+                Ok(Some(Transaction::from_signed(
+                    &tx,
+                    (None, None, None),
+                    (None, None),
+                )))
             } else {
                 Ok(None)
             };
