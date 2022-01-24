@@ -135,6 +135,20 @@ impl EthHandler {
         Ok(epoch_blocks)
     }
 
+    // Get pivot block hash by epoch number
+    #[allow(dead_code)]
+    fn get_block_hash_by_number(
+        &self, block_number: BlockNumber,
+    ) -> Option<H256> {
+        match self.get_blocks_by_number(block_number) {
+            Ok(Some(blocks)) => match blocks.last() {
+                None => None,
+                Some(b) => Some(b.hash()),
+            },
+            _ => None,
+        }
+    }
+
     fn exec_transaction(
         &self, request: CallRequest, epoch: Option<BlockNumber>,
     ) -> CfxRpcResult<ExecutionOutcome> {
@@ -282,7 +296,7 @@ impl EthHandler {
                 address: log.address,
                 topics: log.topics,
                 data: Bytes(log.data),
-                block_hash,  // TODO use pivot hash here
+                block_hash: exec_info.pivot_hash,
                 block_number,
                 transaction_hash,
                 transaction_index, // TODO use right tx index
@@ -826,33 +840,37 @@ impl Eth for EthHandler {
                 return Ok(None);
             }
             // prepare block_number, status, contract_address if tx is executed
-            let (maybe_block_number, maybe_status, maybe_contract_address) =
-                match self
-                    .get_block_execution_info(&tx_info.tx_index.block_hash)?
-                {
-                    None => (None, None, None),
-                    Some(exec_info) => {
-                        let status_code = exec_info.block_receipts.receipts
-                            [tx_info.tx_index.index]
-                            .evm_space_status();
+            let (
+                maybe_block_number,
+                maybe_block_hash,
+                maybe_status,
+                maybe_contract_address,
+            ) = match self
+                .get_block_execution_info(&tx_info.tx_index.block_hash)?
+            {
+                None => (None, None, None, None),
+                Some(exec_info) => {
+                    let status_code = exec_info.block_receipts.receipts
+                        [tx_info.tx_index.index]
+                        .evm_space_status();
 
-                        let contract_address = match status_code
-                            == EVM_SPACE_SUCCESS
-                        {
+                    let contract_address =
+                        match status_code == EVM_SPACE_SUCCESS {
                             true => Transaction::deployed_contract_address(&tx),
                             false => None,
                         };
 
-                        (
-                            Some(exec_info.epoch_number.into()),
-                            Some(status_code.into()),
-                            contract_address,
-                        )
-                    }
-                };
+                    (
+                        Some(U256::from(exec_info.epoch_number)),
+                        Some(exec_info.pivot_hash),
+                        Some(status_code.into()),
+                        contract_address,
+                    )
+                }
+            };
 
             let block_info = (
-                Some(tx_info.tx_index.block_hash), // TODO use pivot hash
+                maybe_block_hash,
                 maybe_block_number,
                 Some(tx_info.tx_index.index.into()), /* TODO also update
                                                       * tx_index here */
