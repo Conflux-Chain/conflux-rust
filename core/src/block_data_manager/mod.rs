@@ -19,10 +19,7 @@ use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
 use primitives::{
     block::CompactBlock,
-    receipt::{
-        BlockReceipts, TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
-        TRANSACTION_OUTCOME_SUCCESS,
-    },
+    receipt::{BlockReceipts, TransactionOutcome},
     Block, BlockHeader, EpochId, SignedTransaction, TransactionIndex,
     TransactionWithSignature, NULL_EPOCH,
 };
@@ -1271,8 +1268,8 @@ impl BlockDataManager {
                         .unwrap()
                         .outcome_status
                     {
-                        TRANSACTION_OUTCOME_SUCCESS
-                        | TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING => {
+                        TransactionOutcome::Success
+                        | TransactionOutcome::Failure => {
                             self.insert_transaction_index(
                                 &tx.hash,
                                 &TransactionIndex {

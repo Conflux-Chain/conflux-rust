@@ -28,8 +28,8 @@ use cfx_types::{
 };
 use keccak_hash::keccak;
 use primitives::{
-    receipt::{EVM_SPACE_FAIL, EVM_SPACE_SUCCESS},
     Action, Eip155Transaction, LogEntry, Receipt, SignedTransaction,
+    TransactionOutcome,
 };
 use solidity_abi::{ABIDecodable, ABIEncodable};
 use std::{marker::PhantomData, sync::Arc};
@@ -509,7 +509,7 @@ pub struct PhantomTransaction {
 
     pub log_bloom: Bloom,
     pub logs: Vec<LogEntry>,
-    pub outcome_status_in_evm: u8,
+    pub outcome_status: TransactionOutcome,
 }
 
 impl PhantomTransaction {
@@ -522,7 +522,7 @@ impl PhantomTransaction {
             action: Action::Call(to),
             value,
             data,
-            outcome_status_in_evm: EVM_SPACE_SUCCESS,
+            outcome_status: TransactionOutcome::Success,
             ..Default::default()
         }
     }
@@ -550,7 +550,7 @@ impl PhantomTransaction {
             gas_sponsor_paid: false,
             log_bloom: self.log_bloom,
             logs: self.logs,
-            outcome_status: self.outcome_status_in_evm,
+            outcome_status: self.outcome_status,
             storage_collateralized: vec![],
             storage_released: vec![],
             storage_sponsor_paid: false,
@@ -635,11 +635,13 @@ pub fn build_bloom_and_recover_phantom(
 
                 let mut working_tx =
                     std::mem::take(&mut maybe_working_tx).unwrap();
-                working_tx.outcome_status_in_evm = if success {
-                    EVM_SPACE_SUCCESS
+
+                working_tx.outcome_status = if success {
+                    TransactionOutcome::Success
                 } else {
-                    EVM_SPACE_FAIL
+                    TransactionOutcome::Failure
                 };
+
                 // Complete the second transaction for cross-space call.
                 phantom_txs.push(working_tx);
             }

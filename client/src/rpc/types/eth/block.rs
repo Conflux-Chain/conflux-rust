@@ -259,7 +259,8 @@ impl Block {
                         .filter(|(_, tx)| tx.space() == Space::Ethereum)
                         .map(|(idx, tx)| {
                             let status = res.block_receipts.receipts[idx]
-                                .evm_space_status();
+                                .outcome_status
+                                .in_space(Space::Ethereum);
                             // save tx contract_address to address_map
                             let contract_address =
                                 Transaction::deployed_contract_address(tx);

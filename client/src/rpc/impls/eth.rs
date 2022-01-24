@@ -24,13 +24,10 @@ use cfxcore::{
     SharedTransactionPool,
 };
 use primitives::{
-    filter::LogFilter,
-    receipt::{
-        EVM_SPACE_SUCCESS, TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
-    },
-    Action, Block, BlockHashOrEpochNumber, Eip155Transaction, EpochNumber,
+    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action, Block,
+    BlockHashOrEpochNumber, Eip155Transaction, EpochNumber,
     Receipt as PrimitiveReceipt, SignedTransaction, StorageKey, StorageValue,
-    TransactionIndex, TransactionWithSignature,
+    TransactionIndex, TransactionOutcome, TransactionWithSignature,
 };
 
 use crate::rpc::{
@@ -179,7 +176,8 @@ impl EthHandler {
                         let receipt = &block_receipts[id];
 
                         // we do not return non-executed transaction
-                        if receipt.outcome_status == TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING {
+                        if receipt.outcome_status == TransactionOutcome::Skipped
+                        {
                             continue;
                         }
 
@@ -195,7 +193,7 @@ impl EthHandler {
 
                         phantom_block.receipts.push(PrimitiveReceipt {
                             accumulated_gas_used: gas_used,
-                            outcome_status: receipt.evm_space_status(),
+                            outcome_status: receipt.outcome_status,
                             ..receipt.clone()
                         });
                     }
@@ -376,11 +374,14 @@ impl EthHandler {
 
         let gas_used = primitive_receipt.gas_fee / tx.gas_price();
 
-        let status_code = primitive_receipt.evm_space_status();
+        let status_code =
+            primitive_receipt.outcome_status.in_space(Space::Ethereum);
 
-        let contract_address = match status_code == EVM_SPACE_SUCCESS {
-            true => Transaction::deployed_contract_address(tx),
-            false => None,
+        let contract_address = match primitive_receipt.outcome_status {
+            TransactionOutcome::Success => {
+                Transaction::deployed_contract_address(tx)
+            }
+            _ => None,
         };
 
         let block_hash = exec_info.pivot_hash;
@@ -941,7 +942,8 @@ impl Eth for EthHandler {
                 Some(exec_info) => {
                     let status_code = exec_info.block_receipts.receipts
                         [tx_info.tx_index.index]
-                        .evm_space_status();
+                        .outcome_status
+                        .in_space(Space::Ethereum);
 
                     let contract_address =
                         match status_code == EVM_SPACE_SUCCESS {
