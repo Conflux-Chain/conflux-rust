@@ -29,6 +29,7 @@ use primitives::{
     Receipt as PrimitiveReceipt, SignedTransaction, StorageKey, StorageValue,
     TransactionIndex, TransactionOutcome, TransactionWithSignature,
 };
+use std::convert::TryInto;
 
 use crate::rpc::{
     error_codes::{
@@ -101,7 +102,7 @@ impl EthHandler {
     ) -> jsonrpc_core::Result<Option<Vec<Arc<Block>>>> {
         let epoch_hashes = self
             .consensus
-            .get_block_hashes_by_epoch(block_num.into())
+            .get_block_hashes_by_epoch(block_num.try_into()?)
             .map_err(RpcError::invalid_params)?;
 
         let epoch_blocks = self
@@ -117,7 +118,7 @@ impl EthHandler {
     ) -> jsonrpc_core::Result<Option<PhantomBlock>> {
         let hashes = self
             .consensus
-            .get_block_hashes_by_epoch(block_num.into())
+            .get_block_hashes_by_epoch(block_num.try_into()?)
             .map_err(RpcError::invalid_params)?;
 
         let blocks = match self
@@ -252,12 +253,12 @@ impl EthHandler {
         &self, request: CallRequest, epoch: Option<BlockNumber>,
     ) -> CfxRpcResult<ExecutionOutcome> {
         let consensus_graph = self.consensus_graph();
-        let epoch = epoch.map(Into::into).unwrap_or(EpochNumber::LatestState);
+        let epoch = epoch.unwrap_or_default().try_into()?;
 
         let chain_id = self.consensus.best_chain_id();
         let signed_tx = sign_call(chain_id.in_evm_space(), request)?;
         trace!("call tx {:?}", signed_tx);
-        consensus_graph.call_virtual(&signed_tx, epoch.into())
+        consensus_graph.call_virtual(&signed_tx, epoch)
     }
 
     fn send_transaction_with_signature(
@@ -532,10 +533,7 @@ impl Eth for EthHandler {
     fn balance(
         &self, address: H160, num: Option<BlockNumber>,
     ) -> jsonrpc_core::Result<U256> {
-        let epoch_num = num
-            .map(Into::into)
-            .unwrap_or(EpochNumber::LatestState)
-            .into();
+        let epoch_num = num.unwrap_or_default().try_into()?;
 
         info!(
             "RPC Request: eth_getBalance address={:?} epoch_num={:?}",
@@ -555,9 +553,7 @@ impl Eth for EthHandler {
     fn storage_at(
         &self, address: H160, position: U256, block_num: Option<BlockNumber>,
     ) -> jsonrpc_core::Result<H256> {
-        let epoch_num = block_num
-            .map(Into::into)
-            .unwrap_or(EpochNumber::LatestState);
+        let epoch_num = block_num.unwrap_or_default().try_into()?;
 
         info!(
             "RPC Request: eth_getStorageAt address={:?}, position={:?}, block_num={:?})",
@@ -634,8 +630,8 @@ impl Eth for EthHandler {
                 self.tx_pool.get_next_nonce(&address.with_evm_space())
             }
             _ => {
-                let num =
-                    num.map(Into::into).unwrap_or(EpochNumber::LatestState);
+                let num = num.unwrap_or_default().try_into()?;
+
                 self.consensus_graph().next_nonce(
                     address.with_evm_space(),
                     BlockHashOrEpochNumber::EpochNumber(num),
@@ -717,9 +713,7 @@ impl Eth for EthHandler {
     fn code_at(
         &self, address: H160, epoch_num: Option<BlockNumber>,
     ) -> jsonrpc_core::Result<Bytes> {
-        let epoch_num = epoch_num
-            .map(Into::into)
-            .unwrap_or(EpochNumber::LatestState);
+        let epoch_num = epoch_num.unwrap_or_default().try_into()?;
 
         info!(
             "RPC Request: eth_getCode address={:?} epoch_num={:?}",
@@ -1086,13 +1080,25 @@ impl Eth for EthHandler {
     fn block_receipts(
         &self, block_num: Option<BlockNumber>,
     ) -> jsonrpc_core::Result<Vec<Receipt>> {
-        let block_num = block_num.unwrap_or(BlockNumber::Latest);
+        info!(
+            "RPC Request: parity_getBlockReceipts block_number={:?}",
+            block_num
+        );
+
+        let block_num = block_num.unwrap_or_default();
 
         let b = {
             // keep read lock to ensure consistent view
             let _inner = self.consensus_graph().inner.read();
 
-            match self.get_phantom_block_by_number(block_num, None)? {
+            let phantom_block = match block_num {
+                BlockNumber::Hash { hash } => {
+                    self.get_phantom_block_by_hash(&hash)?
+                }
+                _ => self.get_phantom_block_by_number(block_num, None)?,
+            };
+
+            match phantom_block {
                 None => return Err(unknown_block()),
                 Some(b) => b,
             }
