@@ -360,6 +360,7 @@ impl TxInfos {
         let tx_index = TransactionIndex {
             block_hash,
             index: tx_index_in_block,
+            is_phantom: false,
         };
 
         self.verified

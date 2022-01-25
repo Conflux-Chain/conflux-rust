@@ -339,6 +339,8 @@ impl EthHandler {
     fn construct_rpc_receipt(
         &self, tx_index: TransactionIndex, exec_info: &BlockExecInfo,
     ) -> CfxRpcResult<Receipt> {
+        // TODO: handle tx_index.is_phantom
+
         let id = tx_index.index;
 
         if id >= exec_info.block.transactions.len()

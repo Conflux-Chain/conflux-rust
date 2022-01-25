@@ -734,6 +734,10 @@ impl RpcImpl {
     fn construct_rpc_receipt(
         &self, tx_index: TransactionIndex, exec_info: &BlockExecInfo,
     ) -> RpcResult<Option<RpcReceipt>> {
+        if tx_index.is_phantom {
+            return Ok(None);
+        }
+
         let id = tx_index.index;
 
         if id >= exec_info.block.transactions.len()
@@ -821,7 +825,11 @@ impl RpcImpl {
 
         for index in 0..exec_info.block.transactions.len() {
             if let Some(receipt) = self.construct_rpc_receipt(
-                TransactionIndex { block_hash, index },
+                TransactionIndex {
+                    block_hash,
+                    index,
+                    is_phantom: false,
+                },
                 &exec_info,
             )? {
                 rpc_receipts.push(receipt);
