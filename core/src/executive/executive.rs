@@ -1516,9 +1516,11 @@ impl<
                 // Only refund the code collateral when code exists.
                 // If a contract suicides during creation, the code will be
                 // empty.
-                let code_owner =
-                    self.state.code_owner(address)?.expect("code owner exists");
                 if address.space == Space::Native {
+                    let code_owner = self
+                        .state
+                        .code_owner(address)?
+                        .expect("code owner exists");
                     substate.record_storage_release(
                         &code_owner,
                         code_collateral_units(code_size),

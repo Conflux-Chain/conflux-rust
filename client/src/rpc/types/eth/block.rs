@@ -23,12 +23,21 @@ use cfx_types::{
     hexstr_to_h256, Bloom as H2048, Space, H160, H256, H64, U256, U64,
 };
 use cfxcore::consensus::ConsensusGraphInner;
-use primitives::{receipt::EVM_SPACE_SUCCESS, Block as PrimitiveBlock};
+use primitives::{
+    receipt::EVM_SPACE_SUCCESS, Block as PrimitiveBlock, BlockHeader, Receipt,
+    SignedTransaction,
+};
 use serde::{Serialize, Serializer};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 const SHA3_HASH_OF_EMPTY_UNCLE: &str =
     "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347";
+
+pub struct PhantomBlock {
+    pub pivot_header: BlockHeader,
+    pub transactions: Vec<Arc<SignedTransaction>>,
+    pub receipts: Vec<Receipt>,
+}
 
 /// Block Transactions
 #[derive(Debug)]
@@ -146,6 +155,72 @@ pub struct Header {
 }
 
 impl Block {
+    pub fn from_phantom(pb: &PhantomBlock, full: bool) -> Self {
+        let transactions = if full {
+            BlockTransactions::Full(
+                pb
+                    .transactions
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, t)| {
+                        Transaction::from_signed(
+                            &**t,
+                            (
+                                Some(pb.pivot_header.hash()), // block_hash
+                                Some(pb.pivot_header.height().into()), // block_number
+                                Some(idx.into()), // transaction_index
+                            ),
+                            (None, None), // TODO
+                        )
+                    })
+                    .collect(),
+            )
+        } else {
+            BlockTransactions::Hashes(
+                pb.transactions.iter().map(|t| t.hash()).collect(),
+            )
+        };
+
+        Block {
+            hash: pb.pivot_header.hash(),
+            parent_hash: pb.pivot_header.parent_hash().clone(),
+            uncles_hash: hexstr_to_h256(SHA3_HASH_OF_EMPTY_UNCLE),
+            author: pb.pivot_header.author().clone(),
+            miner: pb.pivot_header.author().clone(),
+            state_root: pb.pivot_header.deferred_state_root().clone(),
+            transactions_root: pb.pivot_header.transactions_root().clone(),
+            receipts_root: pb.pivot_header.deferred_receipts_root().clone(),
+            // We use height to replace block number for ETH interface.
+            // Note: this will correspond to the epoch number.
+            number: pb.pivot_header.height().into(),
+            gas_used: pb
+                .receipts
+                .last()
+                .map(|r| r.accumulated_gas_used)
+                .unwrap_or_default(),
+            gas_limit: pb.pivot_header.gas_limit().into(),
+            extra_data: Default::default(),
+            logs_bloom: pb.receipts.iter().fold(H2048::zero(), |mut acc, r| {
+                acc.accrue_bloom(&r.log_bloom);
+                acc
+            }),
+            timestamp: pb.pivot_header.timestamp().into(),
+            difficulty: pb.pivot_header.difficulty().into(),
+            total_difficulty: 0.into(),
+            base_fee_per_gas: None,
+            uncles: vec![],
+            // Note: we allow U256 nonce in Stratum and in the block.
+            // However, most mining clients use U64. Here we truncate
+            // to U64 to maintain compatibility with eth.
+            nonce: pb.pivot_header.nonce().low_u64().to_be_bytes().into(),
+            mix_hash: H256::default(),
+            transactions,
+            // FIXME(thegaram): should we recalculate size?
+            // size: blocks.iter().map(|b| b.size()).sum::<usize>().into(),
+            size: 0.into(),
+        }
+    }
+
     pub fn new(
         blocks: Vec<&PrimitiveBlock>, full: bool,
         consensus_inner: &ConsensusGraphInner,
@@ -184,7 +259,8 @@ impl Block {
                         .filter(|(_, tx)| tx.space() == Space::Ethereum)
                         .map(|(idx, tx)| {
                             let status = res.block_receipts.receipts[idx]
-                                .evm_space_status();
+                                .outcome_status
+                                .in_space(Space::Ethereum);
                             // save tx contract_address to address_map
                             let contract_address =
                                 Transaction::deployed_contract_address(tx);

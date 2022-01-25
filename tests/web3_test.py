@@ -6,6 +6,8 @@ import types
 import shutil
 from eth_utils import decode_hex
 from conflux.rpc import RpcClient
+from sha3 import keccak_256
+
 
 from conflux.messages import GetBlockHeaders, GET_BLOCK_HEADERS_RESPONSE
 from test_framework.mininode import start_p2p_connection
@@ -20,6 +22,11 @@ from conflux.utils import encode_hex, priv_to_addr, parse_as_int
 
 from web3 import Web3
 
+def hex256(value):
+    if type(value) is int:
+        return value.to_bytes(32,'big').hex()
+
+    raise Exception("unrecognized type")
 
 class Web3Test(ConfluxTestFramework):
     def __init__(self):
@@ -64,6 +71,37 @@ class Web3Test(ConfluxTestFramework):
                            gas=1000000)
         client.send_tx(tx, True)
         self.wait_for_tx([tx], True)
+
+        receipt = client.get_transaction_receipt(tx.hash.hex())
+
+        call_log = receipt['logs'][0]
+        mapped_sender = keccak_256(self.genesis_addr).digest()[-20:].hex()
+        assert_equal(mapped_sender, call_log['topics'][1][2:42])
+        assert_equal(to, call_log['topics'][2][2:42])
+        assert_equal(f"{hex256(value)}{hex256(0)}{hex256(96)}{hex256(0)}",call_log['data'][2:])
+
+        return_log = receipt['logs'][1]
+        assert_equal(f"{hex256(1)}",return_log['data'][2:])
+
+
+    def cross_space_withdraw(self, value):
+        client = RpcClient(self.nodes[0])
+        cross_space = "0x0888000000000000000000000000000000000006"
+
+        data = decode_hex(f"0xc23ef031{hex256(value)}")
+        genesis_addr = self.genesis_addr
+        tx = client.new_tx(value=0, receiver=cross_space, data=data, nonce=self.get_nonce(genesis_addr),
+                           gas=1000000)
+        client.send_tx(tx, True)
+        self.wait_for_tx([tx], True)
+
+        receipt = client.get_transaction_receipt(tx.hash.hex())
+        log = receipt['logs'][0]
+        mapped_sender = keccak_256(self.genesis_addr).digest()[-20:].hex()
+        assert_equal(mapped_sender, log['topics'][1][2:42])
+        assert_equal(genesis_addr.hex(),log['topics'][2][-40:])
+        assert_equal(f"{hex256(value)}{hex256(1)}", log['data'][2:])
+
 
     def test_deploy_1820(self):
         client = RpcClient(self.nodes[0])
@@ -128,9 +166,29 @@ class Web3Test(ConfluxTestFramework):
         assert_equal(2 * 10 ** 17, self.w3.eth.get_balance(receiver))
         assert_equal(8 * 10 ** 17 - 42000, self.w3.eth.get_balance(sender))
 
+        # Send to transaction
+        mapped_sender = keccak_256(self.genesis_addr).digest()[-20:]
+        receiver = Web3.toChecksumAddress(mapped_sender.hex())
+        signed = account.signTransaction(
+            {"to": receiver, "value": 2 * 10 ** 17, "gasPrice": 1, "gas": 21000, "nonce": 2})
+        self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+
+        client = RpcClient(self.nodes[0])
+        client.generate_block(1)
+        client.generate_blocks(10)
+        receipt = self.w3.eth.waitForTransactionReceipt(tx_hash)
+        assert_equal(receipt["status"], 1)
+
+        assert_equal(2 * 10 ** 17, self.w3.eth.get_balance(mapped_sender))
+
+        # Withdraw transaction
+        self.cross_space_withdraw(1 * 10 ** 17)
+
+        assert_equal(1 * 10 ** 17, self.w3.eth.get_balance(mapped_sender))
+
         # Send transaction with large chain-id, should not panic. 
         signed = account.signTransaction(
-            {"to": receiver, "value": 1 * 10 ** 17, "gasPrice": 1, "gas": 21000, "nonce": 2, "chainId": 2**33})
+            {"to": receiver, "value": 1 * 10 ** 17, "gasPrice": 1, "gas": 21000, "nonce": 3, "chainId": 2**33})
         assert_raises(ValueError, self.w3.eth.sendRawTransaction,signed["rawTransaction"])
 
         self.nodes[0].stop()
