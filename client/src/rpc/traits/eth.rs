@@ -229,9 +229,7 @@ pub trait Eth {
     fn submit_hashrate(&self, _: U256, _: H256) -> Result<bool>;
 
     #[rpc(name = "parity_getBlockReceipts")]
-    fn block_receipts(
-        &self, _: Option<BlockNumber>,
-    ) -> Result<Option<Vec<Receipt>>>;
+    fn block_receipts(&self, _: Option<BlockNumber>) -> Result<Vec<Receipt>>;
 }
 
 /// Eth filters rpc api (polling).

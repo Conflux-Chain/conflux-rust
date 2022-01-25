@@ -162,6 +162,14 @@ pub fn invalid_params<T: fmt::Debug>(param: &str, details: T) -> Error {
     }
 }
 
+pub fn unknown_block() -> Error {
+    Error {
+        code: ErrorCode::InvalidParams,
+        message: "Unknown block number".into(),
+        data: None,
+    }
+}
+
 pub fn internal_error<T: fmt::Debug>(details: T) -> Error {
     Error {
         code: ErrorCode::InternalError,

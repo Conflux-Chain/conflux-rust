@@ -33,7 +33,7 @@ use primitives::{
 use crate::rpc::{
     error_codes::{
         call_execution_error, internal_error, invalid_params,
-        request_rejected_in_catch_up_mode, unimplemented,
+        request_rejected_in_catch_up_mode, unimplemented, unknown_block,
     },
     impls::{cfx::BlockExecInfo, RpcImplConfiguration},
     traits::eth::{Eth, EthFilter},
@@ -1085,7 +1085,7 @@ impl Eth for EthHandler {
 
     fn block_receipts(
         &self, block_num: Option<BlockNumber>,
-    ) -> jsonrpc_core::Result<Option<Vec<Receipt>>> {
+    ) -> jsonrpc_core::Result<Vec<Receipt>> {
         let block_num = block_num.unwrap_or(BlockNumber::Latest);
 
         let b = {
@@ -1093,7 +1093,7 @@ impl Eth for EthHandler {
             let _inner = self.consensus_graph().inner.read();
 
             match self.get_phantom_block_by_number(block_num, None)? {
-                None => return Ok(None),
+                None => return Err(unknown_block()),
                 Some(b) => b,
             }
         };
@@ -1177,7 +1177,7 @@ impl Eth for EthHandler {
             });
         }
 
-        Ok(Some(block_receipts))
+        Ok(block_receipts)
     }
 }
 
