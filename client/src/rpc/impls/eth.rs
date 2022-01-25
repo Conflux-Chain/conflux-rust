@@ -95,6 +95,31 @@ pub fn sign_call(
     .fake_sign(from.with_evm_space()))
 }
 
+fn block_tx_by_index(
+    phantom_block: Option<PhantomBlock>, idx: Index,
+) -> Option<Transaction> {
+    match phantom_block {
+        None => None,
+        Some(pb) => match pb.transactions.get(idx.value()) {
+            None => None,
+            Some(tx) => {
+                let block_number = Some(pb.pivot_header.height().into());
+                let receipt = pb.receipts.get(idx.value()).unwrap();
+                let status = receipt.outcome_status.in_space(Space::Ethereum);
+                let contract_address = match status == EVM_SPACE_SUCCESS {
+                    true => Transaction::deployed_contract_address(&tx),
+                    false => None,
+                };
+                Some(Transaction::from_signed(
+                    &tx,
+                    (Some(tx.hash), block_number, Some(idx.value().into())),
+                    (Some(status.into()), contract_address),
+                ))
+            }
+        },
+    }
+}
+
 impl EthHandler {
     fn get_blocks_by_number(
         &self, block_num: BlockNumber,
@@ -992,17 +1017,29 @@ impl Eth for EthHandler {
     fn transaction_by_block_hash_and_index(
         &self, hash: H256, idx: Index,
     ) -> jsonrpc_core::Result<Option<Transaction>> {
-        warn!("RPC Request (Not Supported!): eth_getTransactionByBlockHashAndIndex hash={:?}, idx={:?}", hash, idx);
-        // TODO: Conflux space doesn't support this method either.
-        Err(RpcError::method_not_found())
+        info!("RPC Request (Not Supported!): eth_getTransactionByBlockHashAndIndex hash={:?}, idx={:?}", hash, idx);
+
+        let phantom_block = {
+            // keep read lock to ensure consistent view
+            let _inner = self.consensus_graph().inner.read();
+            self.get_phantom_block_by_hash(&hash)?
+        };
+
+        Ok(block_tx_by_index(phantom_block, idx))
     }
 
     fn transaction_by_block_number_and_index(
         &self, block_num: BlockNumber, idx: Index,
     ) -> jsonrpc_core::Result<Option<Transaction>> {
-        warn!("RPC Request (Not Supported!): eth_getTransactionByBlockNumberAndIndex block_num={:?}, idx={:?}", block_num, idx);
-        // TODO: Conflux space doesn't support this method either.
-        Err(RpcError::method_not_found())
+        info!("RPC Request (Not Supported!): eth_getTransactionByBlockNumberAndIndex block_num={:?}, idx={:?}", block_num, idx);
+
+        let phantom_block = {
+            // keep read lock to ensure consistent view
+            let _inner = self.consensus_graph().inner.read();
+            self.get_phantom_block_by_number(block_num, None)?
+        };
+
+        Ok(block_tx_by_index(phantom_block, idx))
     }
 
     fn transaction_receipt(
