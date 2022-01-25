@@ -545,4 +545,4 @@ node_table_promotion_timeout_s = 9600
 # The EVM chain ID of Conflux Network (EVM space)
 # 1030 for Tethys
 #
-evm_chain_id = 1030
+evm_chain_id = 71

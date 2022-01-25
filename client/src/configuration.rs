@@ -134,7 +134,7 @@ build_config! {
         (adaptive_weight_beta, (u64), ADAPTIVE_WEIGHT_DEFAULT_BETA)
         (anticone_penalty_ratio, (u64), ANTICONE_PENALTY_RATIO)
         (chain_id, (Option<u32>), None)
-        (evm_chain_id, (Option<u32>), None)
+        (evm_chain_id, (Option<u32>), Some(71))
         (execute_genesis, (bool), true)
         (default_transition_time, (Option<u64>), None)
         // Snapshot Epoch Count is a consensus parameter. This flag overrides
