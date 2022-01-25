@@ -1092,7 +1092,7 @@ impl Eth for EthHandler {
             let _inner = self.consensus_graph().inner.read();
 
             let phantom_block = match block_num {
-                BlockNumber::Hash { hash } => {
+                BlockNumber::Hash { hash, .. } => {
                     self.get_phantom_block_by_hash(&hash)?
                 }
                 _ => self.get_phantom_block_by_number(block_num, None)?,

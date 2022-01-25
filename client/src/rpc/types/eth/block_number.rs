@@ -31,7 +31,13 @@ use std::{convert::TryFrom, fmt};
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum BlockNumber {
     /// Hash
-    Hash { hash: H256 },
+    Hash {
+        /// block hash
+        hash: H256,
+        /// only return blocks part of the canon chain
+        // note: we only keep this for compatibility
+        require_canonical: bool,
+    },
     /// Number
     Num(u64),
     /// Latest block
@@ -67,9 +73,13 @@ impl Serialize for BlockNumber {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
         match *self {
-            BlockNumber::Hash { hash } => {
-                serializer.serialize_str(&format!("{{ 'hash': '{}' }}", hash))
-            }
+            BlockNumber::Hash {
+                hash,
+                require_canonical,
+            } => serializer.serialize_str(&format!(
+                "{{ 'hash': '{}', 'requireCanonical': '{}'  }}",
+                hash, require_canonical
+            )),
             BlockNumber::Num(ref x) => {
                 serializer.serialize_str(&format!("0x{:x}", x))
             }
@@ -94,7 +104,8 @@ impl<'a> Visitor<'a> for BlockNumberVisitor {
 
     fn visit_map<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
     where V: MapAccess<'a> {
-        let (mut block_number, mut block_hash) = (None::<u64>, None::<H256>);
+        let (mut require_canonical, mut block_number, mut block_hash) =
+            (false, None::<u64>, None::<H256>);
 
         loop {
             let key_str: Option<String> = visitor.next_key()?;
@@ -124,6 +135,9 @@ impl<'a> Visitor<'a> for BlockNumberVisitor {
                     "blockHash" => {
                         block_hash = Some(visitor.next_value()?);
                     }
+                    "requireCanonical" => {
+                        require_canonical = visitor.next_value()?;
+                    }
                     key => {
                         return Err(Error::custom(format!(
                             "Unknown key: {}",
@@ -140,7 +154,10 @@ impl<'a> Visitor<'a> for BlockNumberVisitor {
         }
 
         if let Some(hash) = block_hash {
-            return Ok(BlockNumber::Hash { hash });
+            return Ok(BlockNumber::Hash {
+                hash,
+                require_canonical,
+            });
         }
 
         return Err(Error::custom("Invalid input"));
@@ -203,7 +220,7 @@ mod tests {
 			"pending",
 			{"blockNumber": "0xa"},
 			{"blockHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"},
-			{"blockHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"}
+			{"blockHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347", "requireCanonical": true}
 		]"#;
         let deserialized: Vec<BlockNumber> = serde_json::from_str(s).unwrap();
 
@@ -220,12 +237,14 @@ mod tests {
                         "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
                     )
                     .unwrap(),
+                    require_canonical: false
                 },
                 BlockNumber::Hash {
                     hash: H256::from_str(
                         "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
                     )
                     .unwrap(),
+                    require_canonical: true
                 }
             ]
         )

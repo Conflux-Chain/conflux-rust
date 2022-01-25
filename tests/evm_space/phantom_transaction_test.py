@@ -249,6 +249,12 @@ class PhantomTransactionTest(ConfluxTestFramework):
         receipts2 = self.nodes[0].parity_getBlockReceipts({ "blockHash": block_a })
         assert_equal(receipts2, receipts)
 
+        receipts2 = self.nodes[0].parity_getBlockReceipts({ "blockHash": block_a, "requireCanonical": True })
+        assert_equal(receipts2, receipts)
+
+        receipts2 = self.nodes[0].parity_getBlockReceipts({ "blockHash": block_a, "requireCanonical": False })
+        assert_equal(receipts2, receipts)
+
         logIndex = 0
 
         for idx, receipt in enumerate(receipts):
