@@ -1082,6 +1082,103 @@ impl Eth for EthHandler {
         // We do not care mining
         Ok(false)
     }
+
+    fn block_receipts(
+        &self, block_num: Option<BlockNumber>,
+    ) -> jsonrpc_core::Result<Option<Vec<Receipt>>> {
+        let block_num = block_num.unwrap_or(BlockNumber::Latest);
+
+        let b = {
+            // keep read lock to ensure consistent view
+            let _inner = self.consensus_graph().inner.read();
+
+            match self.get_phantom_block_by_number(block_num, None)? {
+                None => return Ok(None),
+                Some(b) => b,
+            }
+        };
+
+        if b.transactions.len() != b.receipts.len() {
+            return Err(internal_error("Inconsistent state"));
+        }
+
+        let mut block_receipts = vec![];
+        let mut prior_log_index = 0;
+
+        for (idx, receipt) in b.receipts.iter().enumerate() {
+            if receipt.logs.iter().any(|l| l.space != Space::Ethereum) {
+                return Err(internal_error("Inconsistent state"));
+            }
+
+            let tx = &b.transactions[idx];
+
+            let contract_address = match receipt.outcome_status {
+                TransactionOutcome::Success => {
+                    Transaction::deployed_contract_address(tx)
+                }
+                _ => None,
+            };
+
+            let transaction_hash = tx.hash();
+            let transaction_index: U256 = idx.into();
+            let block_hash = b.pivot_header.hash();
+            let block_number: U256 = b.pivot_header.height().into();
+
+            let logs: Vec<_> = receipt
+                .logs
+                .iter()
+                .cloned()
+                .enumerate()
+                .map(|(idx, log)| Log {
+                    address: log.address,
+                    topics: log.topics,
+                    data: Bytes(log.data),
+                    block_hash,
+                    block_number,
+                    transaction_hash,
+                    transaction_index,
+                    log_index: Some((prior_log_index + idx).into()),
+                    transaction_log_index: Some(idx.into()),
+                    removed: false,
+                })
+                .collect();
+
+            prior_log_index += logs.len();
+
+            let gas_used = match idx {
+                0 => receipt.accumulated_gas_used,
+                idx => {
+                    receipt.accumulated_gas_used
+                        - b.receipts[idx - 1].accumulated_gas_used
+                }
+            };
+
+            block_receipts.push(Receipt {
+                transaction_hash,
+                transaction_index,
+                block_hash,
+                from: tx.sender().address,
+                to: match tx.action() {
+                    Action::Create => None,
+                    Action::Call(addr) => Some(*addr),
+                },
+                block_number,
+                cumulative_gas_used: receipt.accumulated_gas_used,
+                gas_used,
+                contract_address,
+                logs,
+                logs_bloom: receipt.log_bloom,
+                status_code: receipt
+                    .outcome_status
+                    .in_space(Space::Ethereum)
+                    .into(),
+                effective_gas_price: *tx.gas_price(),
+                tx_exec_error_msg: None, // TODO
+            });
+        }
+
+        Ok(Some(block_receipts))
+    }
 }
 
 impl EthFilter for EthHandler {
