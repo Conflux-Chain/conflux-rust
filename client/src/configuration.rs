@@ -149,6 +149,8 @@ build_config! {
         (unnamed_21autumn_transition_height, (Option<u64>), None)
         (unnamed_21autumn_cip43_init_end, (Option<u64>), None)
         (cip78_patch_transition_number,(Option<u64>),None)
+        (cip90_transition_height,(Option<u64>),None)
+        (cip90_transition_number,(Option<u64>),None)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
@@ -1139,7 +1141,8 @@ impl Configuration {
             .unwrap_or(params.transition_numbers.cip78a);
         params.transition_numbers.cip90b = self
             .raw_conf
-            .unnamed_21autumn_transition_number
+            .cip90_transition_number
+            .or(self.raw_conf.unnamed_21autumn_transition_number)
             .unwrap_or(default_transition_time);
 
         params.transition_heights.cip76 = self
@@ -1152,7 +1155,8 @@ impl Configuration {
             .unwrap_or(default_transition_time);
         params.transition_heights.cip90a = self
             .raw_conf
-            .unnamed_21autumn_transition_height
+            .cip90_transition_height
+            .or(self.raw_conf.unnamed_21autumn_transition_height)
             .unwrap_or(default_transition_time);
 
         let mut base_block_rewards = BTreeMap::new();
