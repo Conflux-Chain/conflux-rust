@@ -11,10 +11,7 @@
 use backtrace::Backtrace;
 use diem_logger::prelude::*;
 use serde::Serialize;
-use std::{
-    panic::{self, PanicInfo},
-    process,
-};
+use std::panic::{self, PanicInfo};
 
 #[derive(Debug, Serialize)]
 pub struct CrashInfo {
@@ -46,7 +43,4 @@ fn handle_panic(panic_info: &PanicInfo<'_>) {
 
     // Wait till the logs have been flushed
     diem_logger::flush();
-
-    // Kill the process
-    process::exit(12);
 }
