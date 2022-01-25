@@ -30,7 +30,9 @@ use futures::future::FutureExt;
 use lru_time_cache::LruCache;
 use network::{node_table::NodeId, NetworkContext};
 use parking_lot::RwLock;
-use primitives::{Receipt, SignedTransaction, TransactionIndex};
+use primitives::{
+    Receipt, SignedTransaction, TransactionIndex, TransactionOutcome,
+};
 use std::{future::Future, sync::Arc};
 
 #[derive(Debug)]
@@ -214,10 +216,12 @@ impl TxInfos {
 
         // only executed instances of the transaction are acceptable;
         // receipts belonging to non-executed instances should not be sent
-        if receipt.outcome_status != 0 && receipt.outcome_status != 1 {
+        if receipt.outcome_status != TransactionOutcome::Success
+            && receipt.outcome_status != TransactionOutcome::Failure
+        {
             bail!(ErrorKind::InvalidTxInfo {
                 reason: format!(
-                    "Unexpected outcome status in tx info: {}",
+                    "Unexpected outcome status in tx info: {:?}",
                     receipt.outcome_status
                 )
             });

@@ -57,12 +57,7 @@ use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     compute_block_number,
-    receipt::{
-        BlockReceipts, Receipt,
-        TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
-        TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
-        TRANSACTION_OUTCOME_SUCCESS,
-    },
+    receipt::{BlockReceipts, Receipt, TransactionOutcome},
     Action, Block, BlockHeaderBuilder, EpochId, NativeTransaction,
     SignedTransaction, Transaction, TransactionIndex, MERKLE_NULL_NODE,
 };
@@ -1271,8 +1266,7 @@ impl ConsensusExecutionHandler {
                 let tx_exec_error_msg: String;
                 match r {
                     ExecutionOutcome::NotExecutedDrop(e) => {
-                        tx_outcome_status =
-                            TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING;
+                        tx_outcome_status = TransactionOutcome::Skipped;
                         tx_exec_error_msg = "tx not executed".into();
                         trace!(
                             "tx not executed, not to reconsider packing: \
@@ -1286,8 +1280,7 @@ impl ConsensusExecutionHandler {
                         }
                     }
                     ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
-                        tx_outcome_status =
-                            TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING;
+                        tx_outcome_status = TransactionOutcome::Skipped;
                         tx_exec_error_msg = "tx not executed".into();
                         trace!(
                             "tx not executed, to reconsider packing: \
@@ -1312,8 +1305,7 @@ impl ConsensusExecutionHandler {
                         error,
                         executed,
                     ) => {
-                        tx_outcome_status =
-                            TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING;
+                        tx_outcome_status = TransactionOutcome::Failure;
                         tx_exec_error_msg = if error
                             == ExecutionError::VmError(VmErr::Reverted)
                         {
@@ -1340,7 +1332,7 @@ impl ConsensusExecutionHandler {
                         );
                     }
                     ExecutionOutcome::Finished(executed) => {
-                        tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
+                        tx_outcome_status = TransactionOutcome::Success;
                         tx_exec_error_msg = String::default();
                         GOOD_TPS_METER.mark(1);
 
@@ -1403,9 +1395,7 @@ impl ConsensusExecutionHandler {
                         block_hash: block.hash(),
                         index: idx,
                     };
-                    if tx_outcome_status
-                        != TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING
-                    {
+                    if tx_outcome_status != TransactionOutcome::Skipped {
                         self.data_man
                             .insert_transaction_index(&hash, &tx_index);
                     }

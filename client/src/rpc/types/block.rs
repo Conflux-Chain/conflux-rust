@@ -12,13 +12,8 @@ use cfxcore::{
 };
 use jsonrpc_core::Error as RpcError;
 use primitives::{
-    receipt::{
-        TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
-        TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
-        TRANSACTION_OUTCOME_SUCCESS,
-    },
     Block as PrimitiveBlock, BlockHeader as PrimitiveBlockHeader,
-    BlockHeaderBuilder, TransactionIndex,
+    BlockHeaderBuilder, TransactionIndex, TransactionOutcome,
 };
 use serde::{
     de::{Deserialize, Deserializer, Error, Unexpected},
@@ -227,8 +222,7 @@ impl Block {
                                         execution_result.block_receipts.receipts[idx - 1].accumulated_gas_used
                                     };
                                     match receipt.outcome_status {
-                                        TRANSACTION_OUTCOME_SUCCESS
-                                        | TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING => {
+                                        TransactionOutcome::Success | TransactionOutcome::Failure => {
                                             let tx_index = TransactionIndex {
                                                 block_hash: b.hash(),
                                                 index: idx,
@@ -254,11 +248,8 @@ impl Block {
                                                 network,
                                             )
                                         }
-                                        TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING => {
+                                        TransactionOutcome::Skipped => {
                                             Transaction::from_signed(tx, None, network)
-                                        }
-                                        _ => {
-                                            unreachable!();
                                         }
                                     }
                                 })

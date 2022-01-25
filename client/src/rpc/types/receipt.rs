@@ -12,6 +12,7 @@ use primitives::{
     },
     transaction::Action,
     SignedTransaction as PrimitiveTransaction, Transaction, TransactionIndex,
+    TransactionOutcome,
 };
 use serde_derive::Serialize;
 
@@ -106,7 +107,9 @@ impl Receipt {
         } else {
             bail!(format!("Does not support EIP-155 transaction in Conflux space RPC. get_receipt for tx: {:?}",transaction));
         };
-        if Action::Create == unsigned.action && outcome_status == 0 {
+        if Action::Create == unsigned.action
+            && outcome_status == TransactionOutcome::Success
+        {
             let (created_address, _) = contract_address(
                 CreateContractAddress::FromSenderNonceAndCodeHash,
                 block_number.into(),
@@ -141,7 +144,7 @@ impl Receipt {
                     Some(RpcAddress::try_from_h160(address.clone(), network)?)
                 }
             },
-            outcome_status: U64::from(outcome_status),
+            outcome_status: U64::from(outcome_status.in_space(Space::Native)),
             contract_created: address,
             logs: logs
                 .into_iter()

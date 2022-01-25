@@ -330,6 +330,35 @@ impl SimpleExecutionTrait for DeployEip1820 {
     }
 }
 
+#[test]
+fn test_cross_space_contract_sig() {
+    check_func_signature!(CreateToEVM, "ff311601");
+    check_func_signature!(TransferToEVM, "da8d5daf");
+    check_func_signature!(CallToEVM, "bea05ee3");
+    check_func_signature!(StaticCallToEVM, "30b4ef7d");
+    check_func_signature!(Withdraw, "c23ef031");
+    check_func_signature!(MappedBalance, "142b37c7");
+    check_func_signature!(MappedNonce, "b5914944");
+    check_func_signature!(DeployEip1820, "36201722");
+
+    check_event_signature!(
+        CallEvent,
+        "124d1efd3ac32fa6aadb7a06e066c113471e0411fb56a5079cedbc3cdf7796e4"
+    );
+    check_event_signature!(
+        CreateEvent,
+        "d4f6dc315981682d51417b7092f1a151bfc6ebc3f637532f97ac479b86c4076d"
+    );
+    check_event_signature!(
+        WithdrawEvent,
+        "31328e08abcc622b23d8be96d45b371b10e42989dafc8ac56c85b33bb3584b92"
+    );
+    check_event_signature!(
+        ReturnEvent,
+        "bc11eabb6efd378a0a489b58a574c6e0d0403060e8a8c7b8eab45db47900edfe"
+    );
+}
+
 mod eip_1820 {
     use super::Address;
     pub use rustc_hex::FromHex;

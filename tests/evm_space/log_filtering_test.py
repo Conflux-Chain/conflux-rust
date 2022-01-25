@@ -310,7 +310,7 @@ class CrossSpaceLogFilteringTest(Web3Base):
             "to": None,
             "value": 0,
             "gasPrice": 1,
-            "gas": 210000,
+            "gas": 500000,
             "nonce": nonce,
             "chainId": 10,
             "data": bytecode,
