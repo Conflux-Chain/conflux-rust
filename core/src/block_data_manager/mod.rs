@@ -265,6 +265,7 @@ impl BlockDataManager {
                     &TransactionIndex {
                         block_hash: cur_era_genesis_hash,
                         index,
+                        is_phantom: false,
                     },
                 );
             }
@@ -1275,6 +1276,7 @@ impl BlockDataManager {
                                 &TransactionIndex {
                                     block_hash: *block_hash,
                                     index: tx_idx,
+                                    is_phantom: false,
                                 },
                             );
                             for log in &epoch_receipts[block_idx]

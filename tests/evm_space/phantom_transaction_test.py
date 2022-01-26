@@ -34,7 +34,8 @@ def number_to_topic(number):
 class PhantomTransactionTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
-        self.conf_parameters["evm_chain_id"] = str(10)
+        self.conf_parameters["chain_id"] = str(10)
+        self.conf_parameters["evm_chain_id"] = str(11)
         self.conf_parameters["evm_transaction_block_ratio"] = str(1)
 
     def setup_network(self):
@@ -239,7 +240,9 @@ class PhantomTransactionTest(ConfluxTestFramework):
             assert_equal(tx["transactionIndex"], hex(idx))
 
             # check eth_getTransactionByHash
-            # assert_equal(tx, self.nodes[0].eth_getTransactionByHash(tx["hash"]))
+            tx2 = self.nodes[0].eth_getTransactionByHash(tx["hash"])
+            tx2["status"] = None # TODO: fix status in eth_getBlockByNumber
+            assert_equal(tx, tx2)
 
         # TODO: check transaction details
 
@@ -268,7 +271,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
             # TODO: check logs bloom, cumulative gas used
 
             # check eth_getTransactionReceipt
-            # assert_equal(tx, self.nodes[0].eth_getTransactionReceipt(tx["hash"]))
+            assert_equal(receipt, self.nodes[0].eth_getTransactionReceipt(receipt["transactionHash"]))
 
             for idx2, log in enumerate(receipt["logs"]):
                 assert_equal(log["address"], evmContractAddr.lower())
@@ -324,7 +327,9 @@ class PhantomTransactionTest(ConfluxTestFramework):
             assert_equal(tx["transactionIndex"], hex(idx))
 
             # check eth_getTransactionByHash
-            # assert_equal(tx, self.nodes[0].eth_getTransactionByHash(tx["hash"]))
+            tx2 = self.nodes[0].eth_getTransactionByHash(tx["hash"])
+            tx2["status"] = None # TODO: fix status in eth_getBlockByNumber
+            assert_equal(tx, tx2)
 
         receipts = self.nodes[0].parity_getBlockReceipts(epoch_e)
         assert_equal(len(receipts), 10)
@@ -345,7 +350,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
             # TODO: check logs bloom, cumulative gas used
 
             # check eth_getTransactionReceipt
-            # assert_equal(tx, self.nodes[0].eth_getTransactionReceipt(tx["hash"]))
+            assert_equal(receipt, self.nodes[0].eth_getTransactionReceipt(receipt["transactionHash"]))
 
             for idx2, log in enumerate(receipt["logs"]):
                 assert_equal(log["address"], evmContractAddr.lower())
@@ -424,7 +429,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
             "gasPrice": 1,
             "gas": 500000,
             "nonce": nonce,
-            "chainId": 10,
+            "chainId": 11,
             "data": bytecode,
         })
 
@@ -446,7 +451,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
             "gasPrice": 1,
             "gas": 150000,
             "nonce": nonce,
-            "chainId": 10,
+            "chainId": 11,
             "data": data_hex,
         })
 
