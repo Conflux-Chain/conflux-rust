@@ -4,7 +4,10 @@
 
 use super::builtin::Builtin;
 use crate::{
-    builtin::{builtin_factory, AltBn128PairingPricer, Linear, ModexpPricer},
+    builtin::{
+        builtin_factory, AltBn128PairingPricer, Blake2FPricer, Linear,
+        ModexpPricer,
+    },
     executive::InternalContractMap,
     spec::CommonParams,
     vm::Spec,
@@ -155,6 +158,14 @@ fn new_builtin_map(
             Box::new(AltBn128PairingPricer::new(100_000, 80_000)),
             builtin_factory("alt_bn128_pairing"),
             params.transition_numbers.cip62,
+        ),
+    );
+    btree.insert(
+        Address::from(H256::from_low_u64_be(9)),
+        Builtin::new(
+            Box::new(Blake2FPricer::new(1)),
+            builtin_factory("blake2_f"),
+            params.transition_numbers.cip92,
         ),
     );
     btree

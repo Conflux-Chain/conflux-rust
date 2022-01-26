@@ -20,16 +20,21 @@
 
 //! Standard built-in contracts.
 
+mod blake2f;
+
 use std::{
     cmp::{max, min},
-    io::{self, Read},
+    convert::TryInto,
+    io::{self, Cursor, Read},
+    mem::size_of,
 };
 
-use byteorder::{BigEndian, ByteOrder};
+use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
 use num::{BigUint, One, Zero};
 use parity_crypto::digest;
 
 use crate::bytes::BytesRef;
+use blake2f::compress;
 use cfx_types::{Space, H256, U256};
 use cfxkey::{public_to_address, Address};
 use keylib::{recover as ec_recover, Signature};
@@ -188,6 +193,32 @@ impl ModexpPricer {
     }
 }
 
+/// Pricing for Blake2 compression function: each call costs the same amount per
+/// round.
+pub(crate) struct Blake2FPricer {
+    /// Price per round of Blake2 compression function.
+    gas_per_round: u64,
+}
+
+impl Blake2FPricer {
+    pub fn new(gas_per_round: u64) -> Self { Self { gas_per_round } }
+}
+
+impl Pricer for Blake2FPricer {
+    fn cost(&self, input: &[u8]) -> U256 {
+        const FOUR: usize = std::mem::size_of::<u32>();
+        // Returning zero if the conversion fails is fine because `execute()`
+        // will check the length and bail with the appropriate error.
+        if input.len() < FOUR {
+            return U256::zero();
+        }
+        let (rounds_bytes, _) = input.split_at(FOUR);
+        let rounds =
+            u32::from_be_bytes(rounds_bytes.try_into().unwrap_or([0u8; 4]));
+        U256::from(self.gas_per_round * rounds as u64)
+    }
+}
+
 /// Pricing scheme, execution definition, and activation block for a built-in
 /// contract.
 ///
@@ -241,6 +272,7 @@ pub fn builtin_factory(name: &str) -> Box<dyn Impl> {
         "alt_bn128_add" => Box::new(Bn128AddImpl) as Box<dyn Impl>,
         "alt_bn128_mul" => Box::new(Bn128MulImpl) as Box<dyn Impl>,
         "alt_bn128_pairing" => Box::new(Bn128PairingImpl) as Box<dyn Impl>,
+        "blake2_f" => Box::new(Blake2FImpl) as Box<dyn Impl>,
         _ => panic!("invalid builtin name: {}", name),
     }
 }
@@ -284,6 +316,10 @@ struct Bn128MulImpl;
 #[derive(Debug)]
 #[allow(dead_code)]
 struct Bn128PairingImpl;
+
+#[derive(Debug)]
+#[allow(dead_code)]
+struct Blake2FImpl;
 
 impl Impl for Identity {
     fn execute(
@@ -673,12 +709,70 @@ impl Bn128PairingImpl {
     }
 }
 
+impl Impl for Blake2FImpl {
+    /// Format of `input`:
+    /// [4 bytes for rounds][64 bytes for h][128 bytes for m][8 bytes for t_0][8
+    /// bytes for t_1][1 byte for f]
+    fn execute(
+        &self, input: &[u8], output: &mut BytesRef,
+    ) -> Result<(), Error> {
+        const BLAKE2_F_ARG_LEN: usize = 213;
+        const PROOF: &str = "Checked the length of the input above; qed";
+
+        if input.len() != BLAKE2_F_ARG_LEN {
+            trace!(target: "builtin", "input length for Blake2 F precompile should be exactly 213 bytes, was {}", input.len());
+            return Err("input length for Blake2 F precompile should be exactly 213 bytes".into());
+        }
+
+        let mut cursor = Cursor::new(input);
+        let rounds = cursor.read_u32::<BigEndian>().expect(PROOF);
+
+        // state vector, h
+        let mut h = [0u64; 8];
+        for state_word in &mut h {
+            *state_word = cursor.read_u64::<LittleEndian>().expect(PROOF);
+        }
+
+        // message block vector, m
+        let mut m = [0u64; 16];
+        for msg_word in &mut m {
+            *msg_word = cursor.read_u64::<LittleEndian>().expect(PROOF);
+        }
+
+        // 2w-bit offset counter, t
+        let t = [
+            cursor.read_u64::<LittleEndian>().expect(PROOF),
+            cursor.read_u64::<LittleEndian>().expect(PROOF),
+        ];
+
+        // final block indicator flag, "f"
+        let f = match input.last() {
+            Some(1) => true,
+            Some(0) => false,
+            _ => {
+                trace!(target: "builtin", "incorrect final block indicator flag, was: {:?}", input.last());
+                return Err("incorrect final block indicator flag".into());
+            }
+        };
+
+        compress(&mut h, m, t, f, rounds as usize);
+
+        let mut output_buf = [0u8; 8 * size_of::<u64>()];
+        for (i, state_word) in h.iter().enumerate() {
+            output_buf[i * 8..(i + 1) * 8]
+                .copy_from_slice(&state_word.to_le_bytes());
+        }
+        output.write(0, &output_buf[..]);
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         builtin_factory, modexp as me, Builtin, Linear, ModexpPricer, Pricer,
     };
-    use crate::bytes::BytesRef;
+    use crate::{builtin::Blake2FPricer, bytes::BytesRef};
     use cfx_types::U256;
     use num::{BigUint, One, Zero};
     use rustc_hex::FromHex;
@@ -1225,5 +1319,149 @@ mod tests {
         b.execute(&i[..], &mut BytesRef::Fixed(&mut o[..]))
             .expect("Builtin should not fail");
         assert_eq!(i, o);
+    }
+
+    fn blake2f_builtin() -> Builtin {
+        Builtin {
+            pricer: Box::new(Blake2FPricer::new(123)) as Box<dyn Pricer>,
+            native: builtin_factory("blake2_f"),
+            activate_at: 0,
+        }
+    }
+
+    #[test]
+    fn blake2f_cost() {
+        let f = blake2f_builtin();
+        // 5 rounds
+        let input : Vec<u8> = FromHex::from_hex("0000000548c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001").unwrap();
+        let mut output = [0u8; 64];
+        f.execute(&input[..], &mut BytesRef::Fixed(&mut output[..]))
+            .unwrap();
+
+        assert_eq!(f.cost(&input[..]), U256::from(123 * 5));
+    }
+
+    #[test]
+    fn blake2f_cost_on_invalid_length() {
+        let f = blake2f_builtin();
+        // invalid input (too short)
+        let input: Vec<u8> = FromHex::from_hex("00").unwrap();
+
+        assert_eq!(f.cost(&input[..]), U256::from(0));
+    }
+
+    #[test]
+    fn blake2_f_is_err_on_invalid_length() {
+        let blake2 = blake2f_builtin();
+        // Test vector 1 and expected output from https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md#test-vector-1
+        let input : Vec<u8> = FromHex::from_hex("00000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001").unwrap();
+        let mut out = [0u8; 64];
+
+        let result =
+            blake2.execute(&input[..], &mut BytesRef::Fixed(&mut out[..]));
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().0,
+            "input length for Blake2 F precompile should be exactly 213 bytes"
+        );
+    }
+
+    #[test]
+    fn blake2_f_is_err_on_invalid_length_2() {
+        let blake2 = blake2f_builtin();
+        // Test vector 2 and expected output from https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md#test-vector-2
+        let input : Vec<u8> = FromHex::from_hex("000000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001").unwrap();
+        let mut out = [0u8; 64];
+
+        let result =
+            blake2.execute(&input[..], &mut BytesRef::Fixed(&mut out[..]));
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().0,
+            "input length for Blake2 F precompile should be exactly 213 bytes"
+        );
+    }
+
+    #[test]
+    fn blake2_f_is_err_on_bad_finalization_flag() {
+        let blake2 = blake2f_builtin();
+        // Test vector 3 and expected output from https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md#test-vector-3
+        let input : Vec<u8> = FromHex::from_hex("0000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000002").unwrap();
+        let mut out = [0u8; 64];
+
+        let result =
+            blake2.execute(&input[..], &mut BytesRef::Fixed(&mut out[..]));
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().0,
+            "incorrect final block indicator flag"
+        );
+    }
+
+    #[test]
+    fn blake2_f_zero_rounds_is_ok_test_vector_4() {
+        let blake2 = blake2f_builtin();
+        // Test vector 4 and expected output from https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md#test-vector-4
+        let input : Vec<u8> = FromHex::from_hex("0000000048c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001").unwrap();
+        let expected : Vec<u8> = FromHex::from_hex("08c9bcf367e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d282e6ad7f520e511f6c3e2b8c68059b9442be0454267ce079217e1319cde05b").unwrap();
+        let mut output = [0u8; 64];
+        blake2
+            .execute(&input[..], &mut BytesRef::Fixed(&mut output[..]))
+            .unwrap();
+        assert_eq!(&output[..], &expected[..]);
+    }
+
+    #[test]
+    fn blake2_f_test_vector_5() {
+        let blake2 = blake2f_builtin();
+        // Test vector 5 and expected output from https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md#test-vector-5
+        let input : Vec<u8> = FromHex::from_hex("0000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001").unwrap();
+        let expected : Vec<u8> = FromHex::from_hex("ba80a53f981c4d0d6a2797b69f12f6e94c212f14685ac4b74b12bb6fdbffa2d17d87c5392aab792dc252d5de4533cc9518d38aa8dbf1925ab92386edd4009923").unwrap();
+        let mut out = [0u8; 64];
+        blake2
+            .execute(&input[..], &mut BytesRef::Fixed(&mut out[..]))
+            .unwrap();
+        assert_eq!(&out[..], &expected[..]);
+    }
+
+    #[test]
+    fn blake2_f_test_vector_6() {
+        let blake2 = blake2f_builtin();
+        // Test vector 6 and expected output from https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md#test-vector-6
+        let input : Vec<u8> = FromHex::from_hex("0000000c48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000000").unwrap();
+        let expected : Vec<u8> = FromHex::from_hex("75ab69d3190a562c51aef8d88f1c2775876944407270c42c9844252c26d2875298743e7f6d5ea2f2d3e8d226039cd31b4e426ac4f2d3d666a610c2116fde4735").unwrap();
+        let mut out = [0u8; 64];
+        blake2
+            .execute(&input[..], &mut BytesRef::Fixed(&mut out[..]))
+            .unwrap();
+        assert_eq!(&out[..], &expected[..]);
+    }
+
+    #[test]
+    fn blake2_f_test_vector_7() {
+        let blake2 = blake2f_builtin();
+        // Test vector 7 and expected output from https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md#test-vector-7
+        let input : Vec<u8> = FromHex::from_hex("0000000148c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001").unwrap();
+        let expected : Vec<u8> = FromHex::from_hex("b63a380cb2897d521994a85234ee2c181b5f844d2c624c002677e9703449d2fba551b3a8333bcdf5f2f7e08993d53923de3d64fcc68c034e717b9293fed7a421").unwrap();
+        let mut out = [0u8; 64];
+        blake2
+            .execute(&input[..], &mut BytesRef::Fixed(&mut out[..]))
+            .unwrap();
+        assert_eq!(&out[..], &expected[..]);
+    }
+
+    #[ignore]
+    #[test]
+    fn blake2_f_test_vector_8() {
+        let blake2 = blake2f_builtin();
+        // Test vector 8 and expected output from https://github.com/ethereum/EIPs/blob/master/EIPS/eip-152.md#test-vector-8
+        // Note this test is slow, 4294967295/0xffffffff rounds take a while.
+        let input : Vec<u8> = FromHex::from_hex("ffffffff48c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b61626300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000300000000000000000000000000000001").unwrap();
+        let expected:Vec<u8> =  FromHex::from_hex("fc59093aafa9ab43daae0e914c57635c5402d8e3d2130eb9b3cc181de7f0ecf9b22bf99a7815ce16419e200e01846e6b5df8cc7703041bbceb571de6631d2615").unwrap();
+        let mut out = [0u8; 64];
+        blake2
+            .execute(&input[..], &mut BytesRef::Fixed(&mut out[..]))
+            .unwrap();
+        assert_eq!(&out[..], &expected[..]);
     }
 }
