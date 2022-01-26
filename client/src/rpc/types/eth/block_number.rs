@@ -1,23 +1,43 @@
-#![allow(unused)]
+// Copyright 2015-2020 Parity Technologies (UK) Ltd.
+// This file is part of OpenEthereum.
 
+// OpenEthereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// OpenEthereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
+
+// Copyright 2022 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
+use crate::rpc::error_codes::invalid_params;
 use cfx_types::H256;
 use primitives::EpochNumber;
 use serde::{
     de::{Error, MapAccess, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use std::fmt;
+use std::{convert::TryFrom, fmt};
 
 /// Represents rpc api block number param.
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum BlockNumber {
     /// Hash
-    // Hash {
-    //     /// block hash
-    //     hash: H256,
-    //     /// only return blocks part of the canon chain
-    //     require_canonical: bool,
-    // },
+    Hash {
+        /// block hash
+        hash: H256,
+        /// only return blocks part of the canon chain
+        // note: we only keep this for compatibility
+        require_canonical: bool,
+    },
     /// Number
     Num(u64),
     /// Latest block
@@ -53,13 +73,13 @@ impl Serialize for BlockNumber {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
         match *self {
-            // BlockNumber::Hash {
-            //     hash,
-            //     require_canonical,
-            // } => serializer.serialize_str(&format!(
-            //     "{{ 'hash': '{}', 'requireCanonical': '{}'  }}",
-            //     hash, require_canonical
-            // )),
+            BlockNumber::Hash {
+                hash,
+                require_canonical,
+            } => serializer.serialize_str(&format!(
+                "{{ 'hash': '{}', 'requireCanonical': '{}'  }}",
+                hash, require_canonical
+            )),
             BlockNumber::Num(ref x) => {
                 serializer.serialize_str(&format!("0x{:x}", x))
             }
@@ -133,12 +153,12 @@ impl<'a> Visitor<'a> for BlockNumberVisitor {
             return Ok(BlockNumber::Num(number));
         }
 
-        // if let Some(hash) = block_hash {
-        //     return Ok(BlockNumber::Hash {
-        //         hash,
-        //         require_canonical,
-        //     });
-        // }
+        if let Some(hash) = block_hash {
+            return Ok(BlockNumber::Hash {
+                hash,
+                require_canonical,
+            });
+        }
 
         return Err(Error::custom("Invalid input"));
     }
@@ -168,13 +188,71 @@ impl<'a> Visitor<'a> for BlockNumberVisitor {
     }
 }
 
-impl From<BlockNumber> for EpochNumber {
-    fn from(x: BlockNumber) -> EpochNumber {
+impl TryFrom<BlockNumber> for EpochNumber {
+    type Error = jsonrpc_core::Error;
+
+    fn try_from(x: BlockNumber) -> jsonrpc_core::Result<EpochNumber> {
         match x {
-            BlockNumber::Num(num) => EpochNumber::Number(num),
-            BlockNumber::Latest => EpochNumber::LatestState,
-            BlockNumber::Earliest => EpochNumber::Earliest,
-            BlockNumber::Pending => EpochNumber::LatestMined,
+            BlockNumber::Num(num) => Ok(EpochNumber::Number(num)),
+            BlockNumber::Latest => Ok(EpochNumber::LatestState),
+            BlockNumber::Earliest => Ok(EpochNumber::Earliest),
+            BlockNumber::Pending => Ok(EpochNumber::LatestMined),
+            BlockNumber::Hash { .. } => Err(invalid_params(
+                "block_num",
+                "Expected block number, found block hash",
+            )),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json;
+    use std::str::FromStr;
+
+    #[test]
+    fn block_number_deserialization() {
+        let s = r#"[
+			"0xa",
+			"latest",
+			"earliest",
+			"pending",
+			{"blockNumber": "0xa"},
+			{"blockHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"},
+			{"blockHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347", "requireCanonical": true}
+		]"#;
+        let deserialized: Vec<BlockNumber> = serde_json::from_str(s).unwrap();
+
+        assert_eq!(
+            deserialized,
+            vec![
+                BlockNumber::Num(10),
+                BlockNumber::Latest,
+                BlockNumber::Earliest,
+                BlockNumber::Pending,
+                BlockNumber::Num(10),
+                BlockNumber::Hash {
+                    hash: H256::from_str(
+                        "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+                    )
+                    .unwrap(),
+                    require_canonical: false
+                },
+                BlockNumber::Hash {
+                    hash: H256::from_str(
+                        "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+                    )
+                    .unwrap(),
+                    require_canonical: true
+                }
+            ]
+        )
+    }
+
+    #[test]
+    fn should_not_deserialize() {
+        let s = r#"[{}, "10"]"#;
+        assert!(serde_json::from_str::<Vec<BlockNumber>>(s).is_err());
     }
 }
