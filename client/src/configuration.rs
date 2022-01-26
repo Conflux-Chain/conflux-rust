@@ -46,6 +46,7 @@ use diem_types::term_state::{
 };
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
+use primitives::BlockNumber;
 use txgen::TransactionGeneratorConfig;
 
 use crate::rpc::{
@@ -1170,6 +1171,8 @@ impl Configuration {
             MINING_REWARD_TANZANITE_IN_UCFX.into(),
         );
         params.base_block_rewards = base_block_rewards;
+
+        params.transition_numbers.cip92 = BlockNumber::MAX;
 
         params
     }
