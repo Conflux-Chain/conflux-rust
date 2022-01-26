@@ -54,7 +54,9 @@ use network::{
     NetworkService,
 };
 use parking_lot::RwLock;
-use primitives::{SignedTransaction, TransactionWithSignature};
+use primitives::{
+    SignedTransaction, TransactionIndex, TransactionWithSignature,
+};
 use rand::prelude::SliceRandom;
 use rlp::Rlp;
 use std::sync::{Arc, Weak};
@@ -235,6 +237,23 @@ impl Provider {
                 )) => {
                     bail!(ErrorKind::UnableToProduceTxInfo {
                         reason: format!("Unable to get receipt for {:?}", hash)
+                    });
+                }
+                Some((
+                    _,
+                    TransactionInfo {
+                        tx_index:
+                            TransactionIndex {
+                                is_phantom: true, ..
+                            },
+                        ..
+                    },
+                )) => {
+                    bail!(ErrorKind::UnableToProduceTxInfo {
+                        reason: format!(
+                            "Phantom tx not supported (hash: {:?})",
+                            hash
+                        )
                     });
                 }
                 Some((

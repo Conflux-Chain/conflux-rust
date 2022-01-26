@@ -665,7 +665,7 @@ impl RpcImpl {
                 prior_gas_used,
             } = tx_info;
 
-            if maybe_block_number.is_none() {
+            if maybe_block_number.is_none() || tx_index.is_phantom {
                 return Ok(None);
             }
 

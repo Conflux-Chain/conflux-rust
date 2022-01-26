@@ -108,7 +108,7 @@ class TestNode:
         """Dispatches any unrecognised messages to the RPC connection."""
         assert self.rpc_connected and self.rpc is not None, self._node_msg(
             "Error: no RPC connection")
-        if name.startswith("eth_"):
+        if name.startswith("eth_") or name.startswith("parity_"):
             return getattr(self.ethrpc, name)
         else:
             return getattr(self.rpc, name)
