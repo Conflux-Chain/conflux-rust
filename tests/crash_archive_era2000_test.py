@@ -25,6 +25,7 @@ class CrashArchiveNodeTest(ConfluxTestFramework):
         self.conf_parameters["anticone_penalty_ratio"] = "8"
         self.conf_parameters["dev_allow_phase_change_without_peer"] = "false"
         self.conf_parameters["heartbeat_period_interval_ms"] = "2000"
+        self.rpc_timewait = 120
 
     def setup_nodes(self):
         self.add_nodes(self.num_nodes)

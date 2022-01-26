@@ -210,10 +210,10 @@ class PhantomTransactionTest(ConfluxTestFramework):
         # ---------------------------------------------------------------------
 
         # EVM perspective:
-        # A: 5 txs (events: [12], [], [13, 13], [], [13, 13])
-        # B: 5 txs (events: [15], [], [16, 16], [], [16, 16])
+        # A: 5 txs (events: [12], [], [13], [], [13, 13])
+        # B: 5 txs (events: [15], [], [16], [], [16, 16])
         # C: /
-        # E: 10 txs (events: [22], [], [23, 23], [], [23, 23], [25], [], [26, 26], [], [26, 26])
+        # E: 10 txs (events: [22], [], [23], [], [23, 23], [25], [], [26], [], [26, 26])
 
         # block #A
         block = self.nodes[0].eth_getBlockByNumber(epoch_a, True)
@@ -242,7 +242,56 @@ class PhantomTransactionTest(ConfluxTestFramework):
             # assert_equal(tx, self.nodes[0].eth_getTransactionByHash(tx["hash"]))
 
         # TODO: check transaction details
-        # TODO: check receipts
+
+        receipts = self.nodes[0].parity_getBlockReceipts(epoch_a)
+        assert_equal(len(receipts), 5)
+
+        receipts2 = self.nodes[0].parity_getBlockReceipts({ "blockHash": block_a })
+        assert_equal(receipts2, receipts)
+
+        receipts2 = self.nodes[0].parity_getBlockReceipts({ "blockHash": block_a, "requireCanonical": True })
+        assert_equal(receipts2, receipts)
+
+        receipts2 = self.nodes[0].parity_getBlockReceipts({ "blockHash": block_a, "requireCanonical": False })
+        assert_equal(receipts2, receipts)
+
+        logIndex = 0
+
+        for idx, receipt in enumerate(receipts):
+            assert_equal(receipt["blockHash"], block_a)
+            assert_equal(receipt["blockNumber"], epoch_a)
+            assert_equal(receipt["contractAddress"], None)
+            assert_equal(receipt["status"], "0x1")
+            assert_equal(receipt["transactionHash"], tx_hashes[idx])
+            assert_equal(receipt["transactionIndex"], hex(idx))
+
+            # TODO: check logs bloom, cumulative gas used
+
+            # check eth_getTransactionReceipt
+            # assert_equal(tx, self.nodes[0].eth_getTransactionReceipt(tx["hash"]))
+
+            for idx2, log in enumerate(receipt["logs"]):
+                assert_equal(log["address"], evmContractAddr.lower())
+                assert_equal(log["blockHash"], block_a)
+                assert_equal(log["blockNumber"], epoch_a)
+                assert_equal(log["transactionHash"], tx_hashes[idx])
+                assert_equal(log["transactionIndex"], hex(idx))
+                assert_equal(log["logIndex"], hex(logIndex))
+                assert_equal(log["transactionLogIndex"], hex(idx2))
+                assert_equal(log["removed"], False)
+                logIndex += 1
+
+        assert_equal(len(receipts[0]["logs"]), 1)
+        assert_equal(receipts[0]["logs"][0]["data"], number_to_topic(12))
+
+        assert_equal(len(receipts[1]["logs"]), 0)
+        assert_equal(len(receipts[2]["logs"]), 1)
+        assert_equal(receipts[2]["logs"][0]["data"], number_to_topic(13))
+
+        assert_equal(len(receipts[3]["logs"]), 0)
+        assert_equal(len(receipts[4]["logs"]), 2)
+        assert_equal(receipts[4]["logs"][0]["data"], number_to_topic(13))
+        assert_equal(receipts[4]["logs"][1]["data"], number_to_topic(13))
 
         # block #D
         block = self.nodes[0].eth_getBlockByHash(block_d, True)
@@ -276,6 +325,62 @@ class PhantomTransactionTest(ConfluxTestFramework):
 
             # check eth_getTransactionByHash
             # assert_equal(tx, self.nodes[0].eth_getTransactionByHash(tx["hash"]))
+
+        receipts = self.nodes[0].parity_getBlockReceipts(epoch_e)
+        assert_equal(len(receipts), 10)
+
+        receipts2 = self.nodes[0].parity_getBlockReceipts({ "blockHash": block_e })
+        assert_equal(receipts2, receipts)
+
+        logIndex = 0
+
+        for idx, receipt in enumerate(receipts):
+            assert_equal(receipt["blockHash"], block_e)
+            assert_equal(receipt["blockNumber"], epoch_e)
+            assert_equal(receipt["contractAddress"], None)
+            assert_equal(receipt["status"], "0x1")
+            assert_equal(receipt["transactionHash"], tx_hashes[idx])
+            assert_equal(receipt["transactionIndex"], hex(idx))
+
+            # TODO: check logs bloom, cumulative gas used
+
+            # check eth_getTransactionReceipt
+            # assert_equal(tx, self.nodes[0].eth_getTransactionReceipt(tx["hash"]))
+
+            for idx2, log in enumerate(receipt["logs"]):
+                assert_equal(log["address"], evmContractAddr.lower())
+                assert_equal(log["blockHash"], block_e)
+                assert_equal(log["blockNumber"], epoch_e)
+                assert_equal(log["transactionHash"], tx_hashes[idx])
+                assert_equal(log["transactionIndex"], hex(idx))
+                assert_equal(log["logIndex"], hex(logIndex))
+                assert_equal(log["transactionLogIndex"], hex(idx2))
+                assert_equal(log["removed"], False)
+                logIndex += 1
+
+        assert_equal(len(receipts[0]["logs"]), 1)
+        assert_equal(receipts[0]["logs"][0]["data"], number_to_topic(22))
+
+        assert_equal(len(receipts[1]["logs"]), 0)
+        assert_equal(len(receipts[2]["logs"]), 1)
+        assert_equal(receipts[2]["logs"][0]["data"], number_to_topic(23))
+
+        assert_equal(len(receipts[3]["logs"]), 0)
+        assert_equal(len(receipts[4]["logs"]), 2)
+        assert_equal(receipts[4]["logs"][0]["data"], number_to_topic(23))
+        assert_equal(receipts[4]["logs"][0]["data"], number_to_topic(23))
+
+        assert_equal(len(receipts[5]["logs"]), 1)
+        assert_equal(receipts[5]["logs"][0]["data"], number_to_topic(25))
+
+        assert_equal(len(receipts[6]["logs"]), 0)
+        assert_equal(len(receipts[7]["logs"]), 1)
+        assert_equal(receipts[7]["logs"][0]["data"], number_to_topic(26))
+
+        assert_equal(len(receipts[8]["logs"]), 0)
+        assert_equal(len(receipts[9]["logs"]), 2)
+        assert_equal(receipts[9]["logs"][0]["data"], number_to_topic(26))
+        assert_equal(receipts[9]["logs"][0]["data"], number_to_topic(26))
 
         # ---------------------------------------------------------------------
 
