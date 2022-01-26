@@ -1146,7 +1146,9 @@ impl Configuration {
             .unwrap_or(default_transition_time);
         params.transition_numbers.cip92 = self
             .raw_conf
-            .unnamed_21autumn_transition_number
+            // cip92 and cip90 are enabled at the same height for Testnet.
+            .cip90_transition_number
+            .or(self.raw_conf.unnamed_21autumn_transition_number)
             .unwrap_or(default_transition_time);
 
         params.transition_heights.cip76 = self
