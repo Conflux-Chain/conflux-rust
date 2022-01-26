@@ -626,7 +626,7 @@ impl RpcImpl {
             },
         )) = self.consensus.get_transaction_info_by_hash(&hash)
         {
-            if tx.space() == Space::Ethereum && tx_index.is_phantom {
+            if tx.space() == Space::Ethereum || tx_index.is_phantom {
                 return Ok(None);
             }
 

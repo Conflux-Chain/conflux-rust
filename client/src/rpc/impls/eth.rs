@@ -919,7 +919,7 @@ impl Eth for EthHandler {
     fn transaction_by_block_hash_and_index(
         &self, hash: H256, idx: Index,
     ) -> jsonrpc_core::Result<Option<Transaction>> {
-        info!("RPC Request (Not Supported!): eth_getTransactionByBlockHashAndIndex hash={:?}, idx={:?}", hash, idx);
+        info!("RPC Request: eth_getTransactionByBlockHashAndIndex hash={:?}, idx={:?}", hash, idx);
 
         let phantom_block = {
             // keep read lock to ensure consistent view
@@ -933,7 +933,7 @@ impl Eth for EthHandler {
     fn transaction_by_block_number_and_index(
         &self, block_num: BlockNumber, idx: Index,
     ) -> jsonrpc_core::Result<Option<Transaction>> {
-        info!("RPC Request (Not Supported!): eth_getTransactionByBlockNumberAndIndex block_num={:?}, idx={:?}", block_num, idx);
+        info!("RPC Request: eth_getTransactionByBlockNumberAndIndex block_num={:?}, idx={:?}", block_num, idx);
 
         let phantom_block = {
             // keep read lock to ensure consistent view
