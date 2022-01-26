@@ -626,7 +626,7 @@ impl RpcImpl {
             },
         )) = self.consensus.get_transaction_info_by_hash(&hash)
         {
-            if tx.space() == Space::Ethereum {
+            if tx.space() == Space::Ethereum && tx_index.is_phantom {
                 return Ok(None);
             }
 
@@ -734,10 +734,6 @@ impl RpcImpl {
     fn construct_rpc_receipt(
         &self, tx_index: TransactionIndex, exec_info: &BlockExecInfo,
     ) -> RpcResult<Option<RpcReceipt>> {
-        if tx_index.is_phantom {
-            return Ok(None);
-        }
-
         let id = tx_index.index;
 
         if id >= exec_info.block.transactions.len()
@@ -749,7 +745,7 @@ impl RpcImpl {
 
         let tx = &exec_info.block.transactions[id];
 
-        if tx.space() == Space::Ethereum {
+        if tx.space() == Space::Ethereum || tx_index.is_phantom {
             return Ok(None);
         }
 
@@ -795,6 +791,10 @@ impl RpcImpl {
                 None => return Ok(None),
                 Some(tx_index) => tx_index,
             };
+
+        if tx_index.is_phantom {
+            return Ok(None);
+        }
 
         let exec_info =
             match self.get_block_execution_info(&tx_index.block_hash)? {

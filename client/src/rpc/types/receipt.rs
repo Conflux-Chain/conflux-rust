@@ -86,8 +86,6 @@ impl Receipt {
         network: Network,
     ) -> Result<Receipt, String>
     {
-        // TODO: handle transaction_index.is_phantom
-
         let PrimitiveReceipt {
             accumulated_gas_used,
             gas_fee,
