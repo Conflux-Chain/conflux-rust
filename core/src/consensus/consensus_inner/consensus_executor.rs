@@ -49,7 +49,7 @@ use cfx_storage::{
 };
 use cfx_types::{
     address_util::AddressUtil, AddressSpaceUtil, AllChainID, BigEndianHash,
-    Bloom, Space, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
+    Space, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
 };
 use core::convert::TryFrom;
 use hash::KECCAK_EMPTY_LIST_RLP;
@@ -1249,7 +1249,6 @@ impl ConsensusExecutionHandler {
                 let mut transaction_logs = Vec::new();
                 let mut storage_released = Vec::new();
                 let mut storage_collateralized = Vec::new();
-                let mut log_bloom = Bloom::default();
 
                 let options = if self.config.executive_trace {
                     TransactOptions::with_tracing()
@@ -1346,15 +1345,6 @@ impl ConsensusExecutionHandler {
                         gas_sponsor_paid = executed.gas_sponsor_paid;
                         storage_sponsor_paid = executed.storage_sponsor_paid;
 
-                        let (phantom_txs, bloom) =
-                            build_bloom_and_recover_phantom(
-                                &transaction_logs,
-                                transaction.hash,
-                            );
-                        log_bloom = bloom;
-                        // TODO: Store the phantom transactions properly.
-                        let _ = phantom_txs;
-
                         trace!("tx executed successfully: result={:?}, transaction={:?}, in block {:?}", executed, transaction, block.hash());
 
                         if self.config.executive_trace {
@@ -1375,6 +1365,11 @@ impl ConsensusExecutionHandler {
                     }
                 }
 
+                let (phantom_txs, log_bloom) = build_bloom_and_recover_phantom(
+                    &transaction_logs,
+                    transaction.hash,
+                );
+
                 let receipt = Receipt::new(
                     tx_outcome_status,
                     env.accumulated_gas_used,
@@ -1389,15 +1384,44 @@ impl ConsensusExecutionHandler {
                 receipts.push(receipt);
                 tx_exec_error_messages.push(tx_exec_error_msg);
 
-                if on_local_pivot {
+                if on_local_pivot
+                    && tx_outcome_status != TransactionOutcome::Skipped
+                {
                     let hash = transaction.hash();
-                    let tx_index = TransactionIndex {
-                        block_hash: block.hash(),
-                        index: idx,
-                    };
-                    if tx_outcome_status != TransactionOutcome::Skipped {
-                        self.data_man
-                            .insert_transaction_index(&hash, &tx_index);
+
+                    self.data_man.insert_transaction_index(
+                        &hash,
+                        &TransactionIndex {
+                            block_hash: block.hash(),
+                            index: idx,
+                            is_phantom: false,
+                        },
+                    );
+
+                    // FIXME(thegaram): is it safe to lock here?
+                    let evm_chain_id = self
+                        .machine
+                        .params()
+                        .chain_id
+                        .read()
+                        .get_chain_id(env.epoch_height)
+                        .in_evm_space();
+
+                    // persist tx index for phantom transactions.
+                    // note: in some cases, pivot chain reorgs will result in
+                    // different phantom txs (with different hashes) for the
+                    // same Conflux space tx. we do not remove invalidated
+                    // hashes here, but leave it up to the RPC layer to handle
+                    // this instead.
+                    for ptx in phantom_txs {
+                        self.data_man.insert_transaction_index(
+                            &ptx.into_eip155(evm_chain_id).hash(),
+                            &TransactionIndex {
+                                block_hash: block.hash(),
+                                index: idx,
+                                is_phantom: true,
+                            },
+                        );
                     }
                 }
             }

@@ -226,6 +226,7 @@ impl Block {
                                             let tx_index = TransactionIndex {
                                                 block_hash: b.hash(),
                                                 index: idx,
+                                                is_phantom: false,
                                             };
                                             let tx_exec_error_msg = &execution_result.block_receipts.tx_execution_error_messages[idx];
                                             Transaction::from_signed(

@@ -71,6 +71,8 @@ pub struct TransitionsBlockNumber {
     pub cip78b: BlockNumber,
     /// CIP90: Two Space for Transaction Execution
     pub cip90b: BlockNumber,
+    /// CIP92: Enable Blake2F builtin function
+    pub cip92: BlockNumber,
 }
 
 #[derive(Default, Debug, Clone)]
