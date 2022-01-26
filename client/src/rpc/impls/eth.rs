@@ -27,7 +27,7 @@ use primitives::{
     filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action, Block,
     BlockHashOrEpochNumber, Eip155Transaction, EpochNumber,
     Receipt as PrimitiveReceipt, SignedTransaction, StorageKey, StorageValue,
-    TransactionIndex, TransactionOutcome, TransactionWithSignature,
+    TransactionOutcome, TransactionWithSignature,
 };
 use std::convert::TryInto;
 
@@ -36,7 +36,7 @@ use crate::rpc::{
         call_execution_error, internal_error, invalid_params,
         request_rejected_in_catch_up_mode, unimplemented, unknown_block,
     },
-    impls::{cfx::BlockExecInfo, RpcImplConfiguration},
+    impls::RpcImplConfiguration,
     traits::eth::{Eth, EthFilter},
     types::{
         eth::{
@@ -97,15 +97,15 @@ pub fn sign_call(
 }
 
 fn block_tx_by_index(
-    phantom_block: Option<PhantomBlock>, idx: Index,
+    phantom_block: Option<PhantomBlock>, idx: usize,
 ) -> Option<Transaction> {
     match phantom_block {
         None => None,
-        Some(pb) => match pb.transactions.get(idx.value()) {
+        Some(pb) => match pb.transactions.get(idx) {
             None => None,
             Some(tx) => {
                 let block_number = Some(pb.pivot_header.height().into());
-                let receipt = pb.receipts.get(idx.value()).unwrap();
+                let receipt = pb.receipts.get(idx).unwrap();
                 let status = receipt.outcome_status.in_space(Space::Ethereum);
                 let contract_address = match status == EVM_SPACE_SUCCESS {
                     true => Transaction::deployed_contract_address(&tx),
@@ -113,7 +113,11 @@ fn block_tx_by_index(
                 };
                 Some(Transaction::from_signed(
                     &tx,
-                    (Some(tx.hash), block_number, Some(idx.value().into())),
+                    (
+                        Some(pb.pivot_header.hash()),
+                        block_number,
+                        Some(idx.into()),
+                    ),
                     (Some(status.into()), contract_address),
                 ))
             }
@@ -231,6 +235,7 @@ impl EthHandler {
 
                         for p in phantom_txs {
                             phantom_block.transactions.push(Arc::new(
+                                // TODO(thegaram): use EVM chain id
                                 p.clone().into_eip155(tx.chain_id()),
                             ));
 
@@ -316,133 +321,66 @@ impl EthHandler {
         }
     }
 
-    fn get_block_execution_info(
-        &self, block_hash: &H256,
-    ) -> CfxRpcResult<Option<BlockExecInfo>> {
-        let consensus_graph = self.consensus_graph();
-
-        let (pivot_hash, block_receipts, maybe_state_root) =
-            match consensus_graph.get_block_execution_info(block_hash) {
-                None => return Ok(None),
-                Some((exec_res, maybe_state_root)) => {
-                    (exec_res.0, exec_res.1.block_receipts, maybe_state_root)
-                }
-            };
-
-        let epoch_number = self
-            .consensus
-            .get_data_manager()
-            .block_header_by_hash(&pivot_hash)
-            // FIXME: server error, client should request another server.
-            .ok_or("Inconsistent state")?
-            .height();
-
-        if epoch_number > consensus_graph.best_executed_state_epoch_number() {
-            // The receipt is only visible to optimistic execution.
-            return Ok(None);
-        }
-
-        let block = self
-            .consensus
-            .get_data_manager()
-            .block_by_hash(&block_hash, false /* update_cache */)
-            // FIXME: server error, client should request another server.
-            .ok_or("Inconsistent state")?;
-
-        if block_receipts.receipts.len() != block.transactions.len() {
-            bail!("Inconsistent state");
-        }
-
-        Ok(Some(BlockExecInfo {
-            block_receipts,
-            block,
-            epoch_number,
-            maybe_state_root,
-            pivot_hash,
-        }))
-    }
-
     fn construct_rpc_receipt(
-        &self, tx_index: TransactionIndex, exec_info: &BlockExecInfo,
-    ) -> CfxRpcResult<Receipt> {
-        // TODO: handle tx_index.is_phantom
-
-        let id = tx_index.index;
-
-        if id >= exec_info.block.transactions.len()
-            || id >= exec_info.block_receipts.receipts.len()
-            || id >= exec_info.block_receipts.tx_execution_error_messages.len()
-        {
-            bail!("Inconsistent state");
+        &self, b: &PhantomBlock, idx: usize, prior_log_index: &mut usize,
+    ) -> jsonrpc_core::Result<Receipt> {
+        if b.transactions.len() != b.receipts.len() {
+            return Err(internal_error("Inconsistent state"));
         }
 
-        let mut prior_log_count = 0;
-        let mut prior_gas_used = U256::zero();
-        let mut transaction_index = U256::zero();
-        for n in 0..id {
-            // log count
-            let log_count = exec_info.block_receipts.receipts[n]
-                .logs
-                .iter()
-                .filter(|log| log.space == Space::Ethereum)
-                .count();
-            prior_log_count += log_count;
-
-            if exec_info.block.transactions[id].space() == Space::Ethereum {
-                // gas used
-                prior_gas_used += exec_info.block_receipts.receipts[n].gas_fee
-                    / exec_info.block.transactions[id].gas_price(); // TODO phantom's gas_price maybe 0
-                                                                    // tx index
-                transaction_index += U256::one();
-            }
+        if idx >= b.transactions.len() {
+            return Err(internal_error("Inconsistent state"));
         }
 
-        let tx = &exec_info.block.transactions[id];
-        let primitive_receipt = &exec_info.block_receipts.receipts[id];
+        let tx = &b.transactions[idx];
+        let receipt = &b.receipts[idx];
 
-        let gas_used = primitive_receipt.gas_fee / tx.gas_price();
+        if receipt.logs.iter().any(|l| l.space != Space::Ethereum) {
+            return Err(internal_error("Inconsistent state"));
+        }
 
-        let status_code =
-            primitive_receipt.outcome_status.in_space(Space::Ethereum);
-
-        let contract_address = match primitive_receipt.outcome_status {
+        let contract_address = match receipt.outcome_status {
             TransactionOutcome::Success => {
                 Transaction::deployed_contract_address(tx)
             }
             _ => None,
         };
 
-        let block_hash = exec_info.pivot_hash;
-        let block_number = exec_info.epoch_number.into();
         let transaction_hash = tx.hash();
+        let transaction_index: U256 = idx.into();
+        let block_hash = b.pivot_header.hash();
+        let block_number: U256 = b.pivot_header.height().into();
 
-        let logs = primitive_receipt
+        let logs: Vec<_> = receipt
             .logs
             .iter()
-            .filter(|l| l.space == Space::Ethereum)
             .cloned()
             .enumerate()
             .map(|(idx, log)| Log {
                 address: log.address,
                 topics: log.topics,
                 data: Bytes(log.data),
-                block_hash: exec_info.pivot_hash,
+                block_hash,
                 block_number,
                 transaction_hash,
-                transaction_index, // TODO use right tx index
-                log_index: Some((prior_log_count + idx).into()),  // TODO count the right index in whole block
+                transaction_index,
+                log_index: Some((*prior_log_index + idx).into()),
                 transaction_log_index: Some(idx.into()),
                 removed: false,
             })
             .collect();
 
-        let tx_exec_error_msg =
-            match &exec_info.block_receipts.tx_execution_error_messages[id] {
-                msg if msg.is_empty() => None,
-                msg => Some(msg.clone()),
-            };
+        *prior_log_index += logs.len();
 
-        let receipt = Receipt {
+        let gas_used = match idx {
+            0 => receipt.accumulated_gas_used,
+            idx => {
+                receipt.accumulated_gas_used
+                    - b.receipts[idx - 1].accumulated_gas_used
+            }
+        };
+
+        Ok(Receipt {
             transaction_hash,
             transaction_index,
             block_hash,
@@ -452,17 +390,18 @@ impl EthHandler {
                 Action::Call(addr) => Some(*addr),
             },
             block_number,
-            cumulative_gas_used: prior_gas_used + gas_used,
+            cumulative_gas_used: receipt.accumulated_gas_used,
             gas_used,
             contract_address,
             logs,
-            logs_bloom: primitive_receipt.log_bloom,
-            status_code: status_code.into(),
+            logs_bloom: receipt.log_bloom,
+            status_code: receipt
+                .outcome_status
+                .in_space(Space::Ethereum)
+                .into(),
             effective_gas_price: *tx.gas_price(),
-            tx_exec_error_msg,
-        };
-
-        Ok(receipt)
+            tx_exec_error_msg: None, // TODO
+        })
     }
 }
 
@@ -944,67 +883,33 @@ impl Eth for EthHandler {
     ) -> jsonrpc_core::Result<Option<Transaction>> {
         info!("RPC Request: eth_getTransactionByHash({:?})", hash);
 
-        if let Some((tx, tx_info)) =
-            self.consensus.get_transaction_info_by_hash(&hash)
+        let tx_index = match self
+            .consensus
+            .get_data_manager()
+            .transaction_index_by_hash(&hash, false /* update_cache */)
         {
-            if tx.space() != Space::Ethereum {
-                return Ok(None);
+            None => return Ok(None),
+            Some(tx_index) => tx_index,
+        };
+
+        let epoch_num =
+            match self.consensus.get_block_epoch_number(&tx_index.block_hash) {
+                None => return Ok(None),
+                Some(n) => n,
+            };
+
+        let phantom_block = match self
+            .get_phantom_block_by_number(BlockNumber::Num(epoch_num), None)?
+        {
+            None => return Ok(None),
+            Some(b) => b,
+        };
+
+        for (idx, tx) in phantom_block.transactions.iter().enumerate() {
+            if tx.hash() == hash {
+                let tx = block_tx_by_index(Some(phantom_block), idx);
+                return Ok(tx);
             }
-            // prepare block_number, status, contract_address if tx is executed
-            let (
-                maybe_block_number,
-                maybe_block_hash,
-                maybe_status,
-                maybe_contract_address,
-            ) = match self
-                .get_block_execution_info(&tx_info.tx_index.block_hash)?
-            {
-                None => (None, None, None, None),
-                Some(exec_info) => {
-                    let status_code = exec_info.block_receipts.receipts
-                        [tx_info.tx_index.index]
-                        .outcome_status
-                        .in_space(Space::Ethereum);
-
-                    let contract_address =
-                        match status_code == EVM_SPACE_SUCCESS {
-                            true => Transaction::deployed_contract_address(&tx),
-                            false => None,
-                        };
-
-                    (
-                        Some(U256::from(exec_info.epoch_number)),
-                        Some(exec_info.pivot_hash),
-                        Some(status_code.into()),
-                        contract_address,
-                    )
-                }
-            };
-
-            let block_info = (
-                maybe_block_hash,
-                maybe_block_number,
-                Some(tx_info.tx_index.index.into()), /* TODO also update
-                                                      * tx_index here */
-            );
-            let tx = Transaction::from_signed(
-                &tx,
-                block_info,
-                (maybe_status, maybe_contract_address),
-            );
-            return Ok(Some(tx));
-        }
-
-        if let Some(tx) = self.tx_pool.get_transaction(&hash) {
-            return if tx.space() == Space::Ethereum {
-                Ok(Some(Transaction::from_signed(
-                    &tx,
-                    (None, None, None),
-                    (None, None),
-                )))
-            } else {
-                Ok(None)
-            };
         }
 
         Ok(None)
@@ -1021,7 +926,7 @@ impl Eth for EthHandler {
             self.get_phantom_block_by_hash(&hash)?
         };
 
-        Ok(block_tx_by_index(phantom_block, idx))
+        Ok(block_tx_by_index(phantom_block, idx.value()))
     }
 
     fn transaction_by_block_number_and_index(
@@ -1035,7 +940,7 @@ impl Eth for EthHandler {
             self.get_phantom_block_by_number(block_num, None)?
         };
 
-        Ok(block_tx_by_index(phantom_block, idx))
+        Ok(block_tx_by_index(phantom_block, idx.value()))
     }
 
     fn transaction_receipt(
@@ -1045,6 +950,7 @@ impl Eth for EthHandler {
             "RPC Request: eth_getTransactionReceipt tx_hash={:?}",
             tx_hash
         );
+
         let tx_index =
             match self.consensus.get_data_manager().transaction_index_by_hash(
                 &tx_hash, false, /* update_cache */
@@ -1053,14 +959,36 @@ impl Eth for EthHandler {
                 Some(tx_index) => tx_index,
             };
 
-        let exec_info =
-            match self.get_block_execution_info(&tx_index.block_hash)? {
+        let epoch_num =
+            match self.consensus.get_block_epoch_number(&tx_index.block_hash) {
                 None => return Ok(None),
-                Some(res) => res,
+                Some(n) => n,
             };
 
-        let receipt = self.construct_rpc_receipt(tx_index, &exec_info)?;
-        Ok(Some(receipt))
+        let phantom_block = match self
+            .get_phantom_block_by_number(BlockNumber::Num(epoch_num), None)?
+        {
+            None => return Ok(None),
+            Some(b) => b,
+        };
+
+        let mut prior_log_index = 0;
+
+        for (idx, tx) in phantom_block.transactions.iter().enumerate() {
+            if tx.hash() == tx_hash {
+                let receipt = self.construct_rpc_receipt(
+                    &phantom_block,
+                    idx,
+                    &mut prior_log_index,
+                )?;
+
+                return Ok(Some(receipt));
+            }
+
+            prior_log_index += phantom_block.receipts[idx].logs.len();
+        }
+
+        Ok(None)
     }
 
     fn uncle_by_block_hash_and_index(
@@ -1143,83 +1071,15 @@ impl Eth for EthHandler {
             }
         };
 
-        if b.transactions.len() != b.receipts.len() {
-            return Err(internal_error("Inconsistent state"));
-        }
-
         let mut block_receipts = vec![];
         let mut prior_log_index = 0;
 
-        for (idx, receipt) in b.receipts.iter().enumerate() {
-            if receipt.logs.iter().any(|l| l.space != Space::Ethereum) {
-                return Err(internal_error("Inconsistent state"));
-            }
-
-            let tx = &b.transactions[idx];
-
-            let contract_address = match receipt.outcome_status {
-                TransactionOutcome::Success => {
-                    Transaction::deployed_contract_address(tx)
-                }
-                _ => None,
-            };
-
-            let transaction_hash = tx.hash();
-            let transaction_index: U256 = idx.into();
-            let block_hash = b.pivot_header.hash();
-            let block_number: U256 = b.pivot_header.height().into();
-
-            let logs: Vec<_> = receipt
-                .logs
-                .iter()
-                .cloned()
-                .enumerate()
-                .map(|(idx, log)| Log {
-                    address: log.address,
-                    topics: log.topics,
-                    data: Bytes(log.data),
-                    block_hash,
-                    block_number,
-                    transaction_hash,
-                    transaction_index,
-                    log_index: Some((prior_log_index + idx).into()),
-                    transaction_log_index: Some(idx.into()),
-                    removed: false,
-                })
-                .collect();
-
-            prior_log_index += logs.len();
-
-            let gas_used = match idx {
-                0 => receipt.accumulated_gas_used,
-                idx => {
-                    receipt.accumulated_gas_used
-                        - b.receipts[idx - 1].accumulated_gas_used
-                }
-            };
-
-            block_receipts.push(Receipt {
-                transaction_hash,
-                transaction_index,
-                block_hash,
-                from: tx.sender().address,
-                to: match tx.action() {
-                    Action::Create => None,
-                    Action::Call(addr) => Some(*addr),
-                },
-                block_number,
-                cumulative_gas_used: receipt.accumulated_gas_used,
-                gas_used,
-                contract_address,
-                logs,
-                logs_bloom: receipt.log_bloom,
-                status_code: receipt
-                    .outcome_status
-                    .in_space(Space::Ethereum)
-                    .into(),
-                effective_gas_price: *tx.gas_price(),
-                tx_exec_error_msg: None, // TODO
-            });
+        for idx in 0..b.receipts.len() {
+            block_receipts.push(self.construct_rpc_receipt(
+                &b,
+                idx,
+                &mut prior_log_index,
+            )?);
         }
 
         Ok(block_receipts)

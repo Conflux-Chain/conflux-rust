@@ -1406,6 +1406,7 @@ impl ConsensusExecutionHandler {
                     // this instead.
                     for ptx in phantom_txs {
                         self.data_man.insert_transaction_index(
+                            // TODO(thegaram): use EVM chain id
                             &ptx.into_eip155(transaction.chain_id()).hash(),
                             &TransactionIndex {
                                 block_hash: block.hash(),
