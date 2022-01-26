@@ -34,7 +34,8 @@ def number_to_topic(number):
 class PhantomTransactionTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
-        self.conf_parameters["evm_chain_id"] = str(10)
+        self.conf_parameters["chain_id"] = str(10)
+        self.conf_parameters["evm_chain_id"] = str(11)
         self.conf_parameters["evm_transaction_block_ratio"] = str(1)
 
     def setup_network(self):
@@ -428,7 +429,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
             "gasPrice": 1,
             "gas": 500000,
             "nonce": nonce,
-            "chainId": 10,
+            "chainId": 11,
             "data": bytecode,
         })
 
@@ -450,7 +451,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
             "gasPrice": 1,
             "gas": 150000,
             "nonce": nonce,
-            "chainId": 10,
+            "chainId": 11,
             "data": data_hex,
         })
 

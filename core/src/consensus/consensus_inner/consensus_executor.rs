@@ -1398,6 +1398,15 @@ impl ConsensusExecutionHandler {
                         },
                     );
 
+                    // FIXME(thegaram): is it safe to lock here?
+                    let evm_chain_id = self
+                        .machine
+                        .params()
+                        .chain_id
+                        .read()
+                        .get_chain_id(env.epoch_height)
+                        .in_evm_space();
+
                     // persist tx index for phantom transactions.
                     // note: in some cases, pivot chain reorgs will result in
                     // different phantom txs (with different hashes) for the
@@ -1406,8 +1415,7 @@ impl ConsensusExecutionHandler {
                     // this instead.
                     for ptx in phantom_txs {
                         self.data_man.insert_transaction_index(
-                            // TODO(thegaram): use EVM chain id
-                            &ptx.into_eip155(transaction.chain_id()).hash(),
+                            &ptx.into_eip155(evm_chain_id).hash(),
                             &TransactionIndex {
                                 block_hash: block.hash(),
                                 index: idx,

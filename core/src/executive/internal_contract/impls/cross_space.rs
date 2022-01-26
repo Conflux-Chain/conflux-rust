@@ -529,10 +529,10 @@ impl PhantomTransaction {
 }
 
 impl PhantomTransaction {
-    pub fn into_eip155(self, chain_id: Option<u32>) -> SignedTransaction {
+    pub fn into_eip155(self, chain_id: u32) -> SignedTransaction {
         let tx = Eip155Transaction {
             action: self.action,
-            chain_id,
+            chain_id: Some(chain_id),
             data: self.data,
             gas_price: 0.into(),
             gas: 0.into(),

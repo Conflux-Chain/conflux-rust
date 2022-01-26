@@ -200,6 +200,8 @@ impl EthHandler {
                 return Err(internal_error("Inconsistent state"));
             }
 
+            let evm_chain_id = self.consensus.best_chain_id().in_evm_space();
+
             for (id, tx) in b.transactions.iter().enumerate() {
                 match tx.space() {
                     Space::Ethereum => {
@@ -235,8 +237,7 @@ impl EthHandler {
 
                         for p in phantom_txs {
                             phantom_block.transactions.push(Arc::new(
-                                // TODO(thegaram): use EVM chain id
-                                p.clone().into_eip155(tx.chain_id()),
+                                p.clone().into_eip155(evm_chain_id),
                             ));
 
                             // note: phantom txs consume no gas
