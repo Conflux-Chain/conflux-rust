@@ -46,7 +46,6 @@ use diem_types::term_state::{
 };
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
-use primitives::{block::BlockHeight, BlockNumber};
 use txgen::TransactionGeneratorConfig;
 
 use crate::rpc::{
