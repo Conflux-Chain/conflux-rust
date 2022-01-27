@@ -37,6 +37,7 @@ pub struct PhantomBlock {
     pub pivot_header: BlockHeader,
     pub transactions: Vec<Arc<SignedTransaction>>,
     pub receipts: Vec<Receipt>,
+    pub errors: Vec<String>,
 }
 
 /// Block Transactions
@@ -163,6 +164,15 @@ impl Block {
                     .iter()
                     .enumerate()
                     .map(|(idx, t)| {
+                        let status = pb.receipts[idx]
+                            .outcome_status
+                            .in_space(Space::Ethereum);
+
+                        let contract_address = match Transaction::deployed_contract_address(&**t) {
+                            Some(a) if status == EVM_SPACE_SUCCESS => Some(a),
+                            _ => None,
+                        };
+
                         Transaction::from_signed(
                             &**t,
                             (
@@ -170,10 +180,10 @@ impl Block {
                                 Some(pb.pivot_header.height().into()), // block_number
                                 Some(idx.into()), // transaction_index
                             ),
-                            (None, None), // TODO
-                        )
-                    })
-                    .collect(),
+                            (Some(status.into()), contract_address),
+                            )
+                        })
+                        .collect(),
             )
         } else {
             BlockTransactions::Hashes(
