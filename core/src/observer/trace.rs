@@ -18,7 +18,7 @@ use strum_macros::EnumDiscriminants;
 
 /// Description of a _call_ action, either a `CALL` operation or a message
 /// transaction.
-#[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable, Serialize)]
+#[derive(Debug, Clone, PartialEq, RlpEncodable, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Call {
     /// The space
@@ -35,6 +35,32 @@ pub struct Call {
     pub input: Bytes,
     /// The type of the call.
     pub call_type: CallType,
+}
+
+impl Decodable for Call {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        match rlp.item_count()? {
+            5 => Ok(Call {
+                space: Space::Native,
+                from: rlp.val_at(0)?,
+                to: rlp.val_at(1)?,
+                value: rlp.val_at(2)?,
+                gas: rlp.val_at(3)?,
+                input: rlp.val_at(4)?,
+                call_type: rlp.val_at(5)?,
+            }),
+            6 => Ok(Call {
+                space: rlp.val_at(0)?,
+                from: rlp.val_at(1)?,
+                to: rlp.val_at(2)?,
+                value: rlp.val_at(3)?,
+                gas: rlp.val_at(4)?,
+                input: rlp.val_at(5)?,
+                call_type: rlp.val_at(6)?,
+            }),
+            _ => Err(DecoderError::RlpInvalidLength),
+        }
+    }
 }
 
 impl From<ActionParams> for Call {
@@ -156,7 +182,7 @@ impl From<&vmResult<ExecutiveResult>> for CallResult {
 
 /// Description of a _create_ action, either a `CREATE` operation or a create
 /// transaction.
-#[derive(Debug, Clone, PartialEq, RlpEncodable, RlpDecodable, Serialize)]
+#[derive(Debug, Clone, PartialEq, RlpEncodable, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Create {
     /// Space
@@ -171,6 +197,30 @@ pub struct Create {
     pub init: Bytes,
     /// The create type `CREATE` or `CREATE2`
     pub create_type: CreateType,
+}
+
+impl Decodable for Create {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        match rlp.item_count()? {
+            5 => Ok(Create {
+                space: Space::Native,
+                from: rlp.val_at(0)?,
+                value: rlp.val_at(1)?,
+                gas: rlp.val_at(2)?,
+                init: rlp.val_at(3)?,
+                create_type: rlp.val_at(4)?,
+            }),
+            6 => Ok(Create {
+                space: rlp.val_at(0)?,
+                from: rlp.val_at(1)?,
+                value: rlp.val_at(2)?,
+                gas: rlp.val_at(3)?,
+                init: rlp.val_at(4)?,
+                create_type: rlp.val_at(5)?,
+            }),
+            _ => Err(DecoderError::RlpInvalidLength),
+        }
+    }
 }
 
 impl From<ActionParams> for Create {
