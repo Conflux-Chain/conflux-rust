@@ -40,7 +40,7 @@ pub struct Call {
 impl Decodable for Call {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         match rlp.item_count()? {
-            5 => Ok(Call {
+            6 => Ok(Call {
                 space: Space::Native,
                 from: rlp.val_at(0)?,
                 to: rlp.val_at(1)?,
@@ -49,7 +49,7 @@ impl Decodable for Call {
                 input: rlp.val_at(4)?,
                 call_type: rlp.val_at(5)?,
             }),
-            6 => Ok(Call {
+            7 => Ok(Call {
                 space: rlp.val_at(0)?,
                 from: rlp.val_at(1)?,
                 to: rlp.val_at(2)?,
