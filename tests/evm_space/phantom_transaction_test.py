@@ -389,6 +389,23 @@ class PhantomTransactionTest(ConfluxTestFramework):
 
         # ---------------------------------------------------------------------
 
+        # make sure pending transactions can be retrieved even before execution
+        evm_next_nonce += 1
+
+        signed = self.evmAccount.signTransaction({
+            "to": evmContractAddr,
+            "value": 0,
+            "gasPrice": 1,
+            "gas": 150000,
+            "nonce": evm_next_nonce,
+            "chainId": 11,
+            "data": "0x",
+        })
+
+        tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+        tx = self.nodes[0].eth_getTransactionByHash(tx_hash.hex())
+        assert_ne(tx, None)
+
         self.log.info("Pass")
 
     def cross_space_transfer(self, to, value):

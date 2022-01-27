@@ -404,6 +404,20 @@ impl EthHandler {
             tx_exec_error_msg: None, // TODO
         })
     }
+
+    fn get_tx_from_txpool(&self, hash: H256) -> Option<Transaction> {
+        let tx = self.tx_pool.get_transaction(&hash)?;
+
+        if tx.space() == Space::Ethereum {
+            Some(Transaction::from_signed(
+                &tx,
+                (None, None, None),
+                (None, None),
+            ))
+        } else {
+            None
+        }
+    }
 }
 
 impl Eth for EthHandler {
@@ -889,20 +903,20 @@ impl Eth for EthHandler {
             .get_data_manager()
             .transaction_index_by_hash(&hash, false /* update_cache */)
         {
-            None => return Ok(None),
+            None => return Ok(self.get_tx_from_txpool(hash)),
             Some(tx_index) => tx_index,
         };
 
         let epoch_num =
             match self.consensus.get_block_epoch_number(&tx_index.block_hash) {
-                None => return Ok(None),
+                None => return Ok(self.get_tx_from_txpool(hash)),
                 Some(n) => n,
             };
 
         let phantom_block = match self
             .get_phantom_block_by_number(BlockNumber::Num(epoch_num), None)?
         {
-            None => return Ok(None),
+            None => return Ok(self.get_tx_from_txpool(hash)),
             Some(b) => b,
         };
 
@@ -913,7 +927,7 @@ impl Eth for EthHandler {
             }
         }
 
-        Ok(None)
+        Ok(self.get_tx_from_txpool(hash))
     }
 
     fn transaction_by_block_hash_and_index(
