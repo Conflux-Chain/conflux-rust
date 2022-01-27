@@ -447,7 +447,7 @@ impl ConsensusGraph {
             // blame_info if needed.
             *blame_info = self
                 .force_compute_blame_and_deferred_state_for_generation(
-                    parent_hash,
+                    &correct_parent_hash,
                 )
                 .expect("blame info computation error");
             *parent_hash = correct_parent_hash;
