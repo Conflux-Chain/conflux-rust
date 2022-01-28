@@ -173,6 +173,7 @@ impl EthHandler {
             pivot_header: pivot.block_header.clone(),
             transactions: vec![],
             receipts: vec![],
+            errors: vec![],
         };
 
         let mut gas_used = U256::from(0);
@@ -194,6 +195,7 @@ impl EthHandler {
             };
 
             let block_receipts = &exec_info.block_receipts.receipts;
+            let errors = &exec_info.block_receipts.tx_execution_error_messages;
 
             // sanity check: transaction and
             if b.transactions.len() != block_receipts.len() {
@@ -228,6 +230,8 @@ impl EthHandler {
                             outcome_status: receipt.outcome_status,
                             ..receipt.clone()
                         });
+
+                        phantom_block.errors.push(errors[id].clone());
                     }
                     Space::Native => {
                         let (phantom_txs, _) = build_bloom_and_recover_phantom(
@@ -243,6 +247,9 @@ impl EthHandler {
                             // note: phantom txs consume no gas
                             let phantom_receipt = p.into_receipt(gas_used);
                             phantom_block.receipts.push(phantom_receipt);
+
+                            // FIXME(thegaram): handle errors for phantom txs
+                            phantom_block.errors.push("".into());
                         }
                     }
                 }
@@ -329,6 +336,10 @@ impl EthHandler {
             return Err(internal_error("Inconsistent state"));
         }
 
+        if b.transactions.len() != b.errors.len() {
+            return Err(internal_error("Inconsistent state"));
+        }
+
         if idx >= b.transactions.len() {
             return Err(internal_error("Inconsistent state"));
         }
@@ -381,6 +392,12 @@ impl EthHandler {
             }
         };
 
+        let tx_exec_error_msg = if b.errors[idx].is_empty() {
+            None
+        } else {
+            Some(b.errors[idx].clone())
+        };
+
         Ok(Receipt {
             transaction_hash,
             transaction_index,
@@ -401,7 +418,7 @@ impl EthHandler {
                 .in_space(Space::Ethereum)
                 .into(),
             effective_gas_price: *tx.gas_price(),
-            tx_exec_error_msg: None, // TODO
+            tx_exec_error_msg,
         })
     }
 
