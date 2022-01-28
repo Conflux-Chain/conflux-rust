@@ -19,6 +19,8 @@ CONFLUX_CONTRACT_PATH = "../contracts/CrossSpaceEventTest/CrossSpaceEventTestCon
 EVM_CONTRACT_PATH = "../contracts/CrossSpaceEventTest/CrossSpaceEventTestEVMSide.bytecode"
 
 TEST_EVENT_TOPIC = encode_hex_0x(keccak(b"TestEvent(uint256)"))
+CALL_EVENT_TOPIC = encode_hex_0x(keccak(b"Call(bytes20,bytes20,uint256,uint256,bytes)"))
+OUTCOME_EVENT_TOPIC = encode_hex_0x(keccak(b"Outcome(bool)"))
 
 def encode_u256(number):
     return ("%x" % number).zfill(64)
@@ -144,6 +146,14 @@ class CrossSpaceLogFilteringTest(Web3Base):
         filter = Filter(from_epoch=epoch_a, to_epoch=epoch_e)
         logs = self.rpc.get_logs(filter)
         assert_equal(len(logs), 16)
+
+        filter = Filter(topics=[CALL_EVENT_TOPIC], from_epoch=epoch_a, to_epoch=epoch_e)
+        logs = self.rpc.get_logs(filter)
+        assert_equal(len(logs), 4)
+
+        filter = Filter(topics=[OUTCOME_EVENT_TOPIC], from_epoch=epoch_a, to_epoch=epoch_e)
+        logs = self.rpc.get_logs(filter)
+        assert_equal(len(logs), 4)
 
         filter = Filter(topics=[TEST_EVENT_TOPIC], from_epoch=epoch_a, to_epoch=epoch_e)
         logs = self.rpc.get_logs(filter)

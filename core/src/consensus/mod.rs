@@ -1650,9 +1650,11 @@ impl ConsensusGraph {
 
                             // note: phantom txs consume no gas
                             let phantom_receipt = p.into_receipt(gas_used);
+
                             phantom_block
                                 .bloom
                                 .accrue_bloom(&phantom_receipt.log_bloom);
+
                             phantom_block.receipts.push(phantom_receipt);
 
                             // FIXME(thegaram): handle errors for phantom txs
