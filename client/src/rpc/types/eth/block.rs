@@ -181,9 +181,9 @@ impl Block {
                                 Some(idx.into()), // transaction_index
                             ),
                             (Some(status.into()), contract_address),
-                            )
-                        })
-                        .collect(),
+                        )
+                    })
+                    .collect(),
             )
         } else {
             BlockTransactions::Hashes(
