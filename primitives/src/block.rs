@@ -6,7 +6,7 @@ use crate::{
     BlockHeader, Receipt, SignedTransaction, TransactionWithSignature,
 };
 use byteorder::{ByteOrder, LittleEndian};
-use cfx_types::{Space, H256, U256};
+use cfx_types::{Bloom, Space, H256, U256};
 use keccak_hash::keccak;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rand::Rng;
@@ -367,4 +367,5 @@ pub struct PhantomBlock {
     pub transactions: Vec<Arc<SignedTransaction>>,
     pub receipts: Vec<Receipt>,
     pub errors: Vec<String>,
+    pub bloom: Bloom,
 }

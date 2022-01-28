@@ -131,7 +131,7 @@ impl EthRpcLogFilter {
             offset: None,
             limit: self.limit,
             trusted: false,
-            space: Some(Space::Ethereum),
+            space: Space::Ethereum,
         };
 
         match (&self.from_block, &self.to_block, &self.block_hash) {

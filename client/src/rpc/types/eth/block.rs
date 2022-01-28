@@ -202,10 +202,7 @@ impl Block {
                 .unwrap_or_default(),
             gas_limit: pb.pivot_header.gas_limit().into(),
             extra_data: Default::default(),
-            logs_bloom: pb.receipts.iter().fold(H2048::zero(), |mut acc, r| {
-                acc.accrue_bloom(&r.log_bloom);
-                acc
-            }),
+            logs_bloom: pb.bloom,
             timestamp: pb.pivot_header.timestamp().into(),
             difficulty: pb.pivot_header.difficulty().into(),
             total_difficulty: 0.into(),
@@ -217,9 +214,11 @@ impl Block {
             nonce: pb.pivot_header.nonce().low_u64().to_be_bytes().into(),
             mix_hash: H256::default(),
             transactions,
-            // FIXME(thegaram): should we recalculate size?
-            // size: blocks.iter().map(|b| b.size()).sum::<usize>().into(),
-            size: 0.into(),
+            size: pb
+                .transactions
+                .iter()
+                .fold(0, |acc, tx| acc + tx.rlp_size())
+                .into(),
         }
     }
 

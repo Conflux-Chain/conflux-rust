@@ -710,7 +710,9 @@ impl ConsensusGraph {
 
         let mut log_index = receipts
             .iter()
-            .fold(0, |sum, receipt| sum + receipt.logs.len());
+            .flat_map(|r| r.logs.iter())
+            .filter(|l| l.space == filter.space)
+            .count();
 
         let receipts_len = receipts.len();
 
@@ -719,7 +721,12 @@ impl ConsensusGraph {
             .map(|receipt| receipt.logs)
             .zip(tx_hashes)
             .enumerate()
-            .flat_map(move |(index, (mut logs, transaction_hash))| {
+            .flat_map(move |(index, (logs, transaction_hash))| {
+                let mut logs: Vec<_> = logs
+                    .into_iter()
+                    .filter(|l| l.space == filter.space)
+                    .collect();
+
                 let current_log_index = log_index;
                 let no_of_logs = logs.len();
                 log_index -= no_of_logs;
@@ -796,19 +803,59 @@ impl ConsensusGraph {
             }
         };
 
-        // TODO(thegaram): transform `receipts` so that it includes phantom
-        // receipts for cross-space calls. This is necessary for these fields:
-        // - transactionHash
-        // - transaction_index
-        // - transaction_log_index
-        // - log_index
-
         Ok(Either::Right(self.filter_block_receipts(
             &filter,
             epoch,
             block_hash,
             receipts,
             block.transaction_hashes(/* space filter */ None),
+        )))
+    }
+
+    fn filter_phantom_block<'a>(
+        &self, filter: &'a LogFilter, bloom_possibilities: &'a Vec<Bloom>,
+        epoch: u64, pivot_hash: H256,
+    ) -> Result<impl Iterator<Item = LocalizedLogEntry> + 'a, FilterError>
+    {
+        // special case for genesis (for now, genesis has no logs)
+        if epoch == 0 {
+            return Ok(Either::Left(std::iter::empty()));
+        }
+
+        // check if epoch is still available
+        let min = self.earliest_epoch_for_log_filter();
+
+        if epoch < min {
+            return Err(FilterError::EpochAlreadyPruned { epoch, min });
+        }
+
+        // construct phantom block
+        let pb = match self.get_phantom_block_by_number(
+            EpochNumber::Number(epoch),
+            Some(pivot_hash),
+        )? {
+            Some(b) => b,
+            None => {
+                return Err(FilterError::BlockNotExecutedYet {
+                    block_hash: pivot_hash,
+                })
+            }
+        };
+
+        // filter block
+        if !bloom_possibilities
+            .iter()
+            .any(|bloom| pb.bloom.contains_bloom(bloom))
+        {
+            return Ok(Either::Left(std::iter::empty()));
+        }
+
+        Ok(Either::Right(self.filter_block_receipts(
+            &filter,
+            epoch,
+            pivot_hash,
+            pb.receipts,
+            pb.transactions.iter().map(|t| t.hash()).collect(),
         )))
     }
 
@@ -826,24 +873,35 @@ impl ConsensusGraph {
         // process hashes in reverse order
         epoch_hashes.reverse();
 
-        epoch_hashes
-            .into_iter()
-            .map(move |block_hash| {
-                self.filter_block(
+        if filter.space == Space::Ethereum {
+            Ok(self
+                .filter_phantom_block(
                     &filter,
                     &bloom_possibilities,
                     epoch,
                     pivot_hash,
-                    block_hash,
-                )
-            })
-            // flatten results
-            // Iterator<Result<Iterator<_>>> -> Iterator<Result<_>>
-            .flat_map(|res| match res {
-                Ok(it) => Either::Left(it.map(Ok)),
-                Err(e) => Either::Right(std::iter::once(Err(e))),
-            })
-            .collect()
+                )?
+                .collect())
+        } else {
+            epoch_hashes
+                .into_iter()
+                .map(move |block_hash| {
+                    self.filter_block(
+                        &filter,
+                        &bloom_possibilities,
+                        epoch,
+                        pivot_hash,
+                        block_hash,
+                    )
+                })
+                // flatten results
+                // Iterator<Result<Iterator<_>>> -> Iterator<Result<_>>
+                .flat_map(|res| match res {
+                    Ok(it) => Either::Left(it.map(Ok)),
+                    Err(e) => Either::Right(std::iter::once(Err(e))),
+                })
+                .collect()
+        }
     }
 
     fn filter_epoch_batch(
@@ -1519,6 +1577,7 @@ impl ConsensusGraph {
             transactions: vec![],
             receipts: vec![],
             errors: vec![],
+            bloom: Default::default(),
         };
 
         let mut gas_used = U256::from(0);
@@ -1576,6 +1635,7 @@ impl ConsensusGraph {
                         });
 
                         phantom_block.errors.push(errors[id].clone());
+                        phantom_block.bloom.accrue_bloom(&receipt.log_bloom);
                     }
                     Space::Native => {
                         let (phantom_txs, _) = build_bloom_and_recover_phantom(
@@ -1590,6 +1650,9 @@ impl ConsensusGraph {
 
                             // note: phantom txs consume no gas
                             let phantom_receipt = p.into_receipt(gas_used);
+                            phantom_block
+                                .bloom
+                                .accrue_bloom(&phantom_receipt.log_bloom);
                             phantom_block.receipts.push(phantom_receipt);
 
                             // FIXME(thegaram): handle errors for phantom txs
