@@ -247,10 +247,10 @@ impl EthHandler {
                             // note: phantom txs consume no gas
                             let phantom_receipt = p.into_receipt(gas_used);
                             phantom_block.receipts.push(phantom_receipt);
-                        }
 
-                        // FIXME(thegaram): handle errors for phantom txs
-                        phantom_block.errors.push("".into());
+                            // FIXME(thegaram): handle errors for phantom txs
+                            phantom_block.errors.push("".into());
+                        }
                     }
                 }
             }
@@ -333,6 +333,10 @@ impl EthHandler {
         &self, b: &PhantomBlock, idx: usize, prior_log_index: &mut usize,
     ) -> jsonrpc_core::Result<Receipt> {
         if b.transactions.len() != b.receipts.len() {
+            return Err(internal_error("Inconsistent state"));
+        }
+
+        if b.transactions.len() != b.errors.len() {
             return Err(internal_error("Inconsistent state"));
         }
 

@@ -240,9 +240,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
             assert_equal(tx["transactionIndex"], hex(idx))
 
             # check eth_getTransactionByHash
-            tx2 = self.nodes[0].eth_getTransactionByHash(tx["hash"])
-            tx2["status"] = None # TODO: fix status in eth_getBlockByNumber
-            assert_equal(tx, tx2)
+            assert_equal(tx, self.nodes[0].eth_getTransactionByHash(tx["hash"]))
 
         # TODO: check transaction details
 
@@ -327,9 +325,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
             assert_equal(tx["transactionIndex"], hex(idx))
 
             # check eth_getTransactionByHash
-            tx2 = self.nodes[0].eth_getTransactionByHash(tx["hash"])
-            tx2["status"] = None # TODO: fix status in eth_getBlockByNumber
-            assert_equal(tx, tx2)
+            assert_equal(tx, self.nodes[0].eth_getTransactionByHash(tx["hash"]))
 
         receipts = self.nodes[0].parity_getBlockReceipts(epoch_e)
         assert_equal(len(receipts), 10)
