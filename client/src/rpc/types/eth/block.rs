@@ -24,21 +24,13 @@ use cfx_types::{
 };
 use cfxcore::consensus::ConsensusGraphInner;
 use primitives::{
-    receipt::EVM_SPACE_SUCCESS, Block as PrimitiveBlock, BlockHeader, Receipt,
-    SignedTransaction,
+    receipt::EVM_SPACE_SUCCESS, Block as PrimitiveBlock, PhantomBlock,
 };
 use serde::{Serialize, Serializer};
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 const SHA3_HASH_OF_EMPTY_UNCLE: &str =
     "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347";
-
-pub struct PhantomBlock {
-    pub pivot_header: BlockHeader,
-    pub transactions: Vec<Arc<SignedTransaction>>,
-    pub receipts: Vec<Receipt>,
-    pub errors: Vec<String>,
-}
 
 /// Block Transactions
 #[derive(Debug)]

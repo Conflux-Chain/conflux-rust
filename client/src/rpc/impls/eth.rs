@@ -13,7 +13,6 @@ use cfx_types::{
 };
 use cfxcore::{
     executive::{
-        internal_contract::build_bloom_and_recover_phantom,
         revert_reason_decode, ExecutionError, ExecutionOutcome, TxDropError,
     },
     observer::ErrorUnwind,
@@ -25,9 +24,9 @@ use cfxcore::{
 };
 use primitives::{
     filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action, Block,
-    BlockHashOrEpochNumber, Eip155Transaction, EpochNumber,
-    Receipt as PrimitiveReceipt, SignedTransaction, StorageKey, StorageValue,
-    TransactionOutcome, TransactionWithSignature,
+    BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, PhantomBlock,
+    SignedTransaction, StorageKey, StorageValue, TransactionOutcome,
+    TransactionWithSignature,
 };
 use std::convert::TryInto;
 
@@ -41,8 +40,7 @@ use crate::rpc::{
     types::{
         eth::{
             Block as RpcBlock, BlockNumber, CallRequest, EthRpcLogFilter,
-            FilterChanges, Log, PhantomBlock, Receipt, SyncInfo, SyncStatus,
-            Transaction,
+            FilterChanges, Log, Receipt, SyncInfo, SyncStatus, Transaction,
         },
         Bytes, Index, MAX_GAS_CALL_REQUEST,
     },
@@ -140,137 +138,6 @@ impl EthHandler {
             .blocks_by_hash_list(&epoch_hashes, false /* update_cache */);
 
         Ok(epoch_blocks)
-    }
-
-    fn get_phantom_block_by_number(
-        &self, block_num: BlockNumber, pivot_assumption: Option<H256>,
-    ) -> jsonrpc_core::Result<Option<PhantomBlock>> {
-        let hashes = self
-            .consensus
-            .get_block_hashes_by_epoch(block_num.try_into()?)
-            .map_err(RpcError::invalid_params)?;
-
-        let blocks = match self
-            .consensus
-            .get_data_manager()
-            .blocks_by_hash_list(&hashes, false /* update_cache */)
-        {
-            None => return Ok(None),
-            Some(b) => b,
-        };
-
-        // sanity check: epoch is not empty
-        let pivot = match blocks.last() {
-            Some(p) => p,
-            None => return Err(internal_error("Inconsistent state")),
-        };
-
-        if matches!(pivot_assumption, Some(h) if h != pivot.hash()) {
-            return Ok(None);
-        }
-
-        let mut phantom_block = PhantomBlock {
-            pivot_header: pivot.block_header.clone(),
-            transactions: vec![],
-            receipts: vec![],
-            errors: vec![],
-        };
-
-        let mut gas_used = U256::from(0);
-
-        for b in &blocks {
-            // note: we need the receipts to reconstruct a phantom block.
-            // as a result, we cannot return unexecuted blocks in eth_* RPCs.
-            let exec_info = match self
-                .consensus
-                .get_data_manager()
-                .block_execution_result_by_hash_with_epoch(
-                    &b.hash(),
-                    &pivot.hash(),
-                    false, // update_pivot_assumption
-                    false, // update_cache
-                ) {
-                None => return Ok(None),
-                Some(r) => r,
-            };
-
-            let block_receipts = &exec_info.block_receipts.receipts;
-            let errors = &exec_info.block_receipts.tx_execution_error_messages;
-
-            // sanity check: transaction and
-            if b.transactions.len() != block_receipts.len() {
-                return Err(internal_error("Inconsistent state"));
-            }
-
-            let evm_chain_id = self.consensus.best_chain_id().in_evm_space();
-
-            for (id, tx) in b.transactions.iter().enumerate() {
-                match tx.space() {
-                    Space::Ethereum => {
-                        let receipt = &block_receipts[id];
-
-                        // we do not return non-executed transaction
-                        if receipt.outcome_status == TransactionOutcome::Skipped
-                        {
-                            continue;
-                        }
-
-                        phantom_block.transactions.push(tx.clone());
-
-                        // sanity check: gas price must be positive
-                        if *tx.gas_price() == 0.into() {
-                            return Err(internal_error("Inconsistent state"));
-                        }
-
-                        // FIXME(thegaram): is this correct?
-                        gas_used += receipt.gas_fee / tx.gas_price();
-
-                        phantom_block.receipts.push(PrimitiveReceipt {
-                            accumulated_gas_used: gas_used,
-                            outcome_status: receipt.outcome_status,
-                            ..receipt.clone()
-                        });
-
-                        phantom_block.errors.push(errors[id].clone());
-                    }
-                    Space::Native => {
-                        let (phantom_txs, _) = build_bloom_and_recover_phantom(
-                            &block_receipts[id].logs[..],
-                            tx.hash(),
-                        );
-
-                        for p in phantom_txs {
-                            phantom_block.transactions.push(Arc::new(
-                                p.clone().into_eip155(evm_chain_id),
-                            ));
-
-                            // note: phantom txs consume no gas
-                            let phantom_receipt = p.into_receipt(gas_used);
-                            phantom_block.receipts.push(phantom_receipt);
-
-                            // FIXME(thegaram): handle errors for phantom txs
-                            phantom_block.errors.push("".into());
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(Some(phantom_block))
-    }
-
-    fn get_phantom_block_by_hash(
-        &self, hash: &H256,
-    ) -> jsonrpc_core::Result<Option<PhantomBlock>> {
-        let epoch_num = match self.consensus.get_block_epoch_number(hash) {
-            None => return Ok(None),
-            Some(n) => n,
-        };
-
-        self.get_phantom_block_by_number(
-            BlockNumber::Num(epoch_num),
-            Some(*hash),
-        )
     }
 
     // Get pivot block hash by epoch number
@@ -440,6 +307,7 @@ impl EthHandler {
 impl Eth for EthHandler {
     fn client_version(&self) -> jsonrpc_core::Result<String> {
         info!("RPC Request: web3_clientVersion");
+        // TODO
         Ok(format!("Conflux"))
     }
 
@@ -589,7 +457,10 @@ impl Eth for EthHandler {
         let phantom_block = {
             // keep read lock to ensure consistent view
             let _inner = self.consensus_graph().inner.read();
-            self.get_phantom_block_by_hash(&hash)?
+
+            self.consensus_graph()
+                .get_phantom_block_by_hash(&hash)
+                .map_err(RpcError::invalid_params)?
         };
 
         match phantom_block {
@@ -606,7 +477,10 @@ impl Eth for EthHandler {
         let phantom_block = {
             // keep read lock to ensure consistent view
             let _inner = self.consensus_graph().inner.read();
-            self.get_phantom_block_by_number(block_num, None)?
+
+            self.consensus_graph()
+                .get_phantom_block_by_number(block_num.try_into()?, None)
+                .map_err(RpcError::invalid_params)?
         };
 
         match phantom_block {
@@ -652,7 +526,10 @@ impl Eth for EthHandler {
         let phantom_block = {
             // keep read lock to ensure consistent view
             let _inner = self.consensus_graph().inner.read();
-            self.get_phantom_block_by_hash(&hash)?
+
+            self.consensus_graph()
+                .get_phantom_block_by_hash(&hash)
+                .map_err(RpcError::invalid_params)?
         };
 
         match phantom_block {
@@ -672,7 +549,10 @@ impl Eth for EthHandler {
         let phantom_block = {
             // keep read lock to ensure consistent view
             let _inner = self.consensus_graph().inner.read();
-            self.get_phantom_block_by_number(block_num, None)?
+
+            self.consensus_graph()
+                .get_phantom_block_by_number(block_num.try_into()?, None)
+                .map_err(RpcError::invalid_params)?
         };
 
         match phantom_block {
@@ -930,9 +810,12 @@ impl Eth for EthHandler {
                 Some(n) => n,
             };
 
-        let phantom_block = match self
-            .get_phantom_block_by_number(BlockNumber::Num(epoch_num), None)?
-        {
+        let maybe_block = self
+            .consensus_graph()
+            .get_phantom_block_by_number(EpochNumber::Number(epoch_num), None)
+            .map_err(RpcError::invalid_params)?;
+
+        let phantom_block = match maybe_block {
             None => return Ok(self.get_tx_from_txpool(hash)),
             Some(b) => b,
         };
@@ -955,7 +838,10 @@ impl Eth for EthHandler {
         let phantom_block = {
             // keep read lock to ensure consistent view
             let _inner = self.consensus_graph().inner.read();
-            self.get_phantom_block_by_hash(&hash)?
+
+            self.consensus_graph()
+                .get_phantom_block_by_hash(&hash)
+                .map_err(RpcError::invalid_params)?
         };
 
         Ok(block_tx_by_index(phantom_block, idx.value()))
@@ -969,7 +855,10 @@ impl Eth for EthHandler {
         let phantom_block = {
             // keep read lock to ensure consistent view
             let _inner = self.consensus_graph().inner.read();
-            self.get_phantom_block_by_number(block_num, None)?
+
+            self.consensus_graph()
+                .get_phantom_block_by_number(block_num.try_into()?, None)
+                .map_err(RpcError::invalid_params)?
         };
 
         Ok(block_tx_by_index(phantom_block, idx.value()))
@@ -997,9 +886,12 @@ impl Eth for EthHandler {
                 Some(n) => n,
             };
 
-        let phantom_block = match self
-            .get_phantom_block_by_number(BlockNumber::Num(epoch_num), None)?
-        {
+        let maybe_block = self
+            .consensus_graph()
+            .get_phantom_block_by_number(EpochNumber::Number(epoch_num), None)
+            .map_err(RpcError::invalid_params)?;
+
+        let phantom_block = match maybe_block {
             None => return Ok(None),
             Some(b) => b,
         };
@@ -1091,10 +983,14 @@ impl Eth for EthHandler {
             let _inner = self.consensus_graph().inner.read();
 
             let phantom_block = match block_num {
-                BlockNumber::Hash { hash, .. } => {
-                    self.get_phantom_block_by_hash(&hash)?
-                }
-                _ => self.get_phantom_block_by_number(block_num, None)?,
+                BlockNumber::Hash { hash, .. } => self
+                    .consensus_graph()
+                    .get_phantom_block_by_hash(&hash)
+                    .map_err(RpcError::invalid_params)?,
+                _ => self
+                    .consensus_graph()
+                    .get_phantom_block_by_number(block_num.try_into()?, None)
+                    .map_err(RpcError::invalid_params)?,
             };
 
             match phantom_block {

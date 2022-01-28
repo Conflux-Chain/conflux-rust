@@ -2,7 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{BlockHeader, SignedTransaction, TransactionWithSignature};
+use crate::{
+    BlockHeader, Receipt, SignedTransaction, TransactionWithSignature,
+};
 use byteorder::{ByteOrder, LittleEndian};
 use cfx_types::{Space, H256, U256};
 use keccak_hash::keccak;
@@ -358,4 +360,11 @@ impl Decodable for CompactBlock {
             reconstructed_txns: Vec::new(),
         })
     }
+}
+
+pub struct PhantomBlock {
+    pub pivot_header: BlockHeader,
+    pub transactions: Vec<Arc<SignedTransaction>>,
+    pub receipts: Vec<Receipt>,
+    pub errors: Vec<String>,
 }
