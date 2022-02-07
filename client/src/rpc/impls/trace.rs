@@ -178,3 +178,7 @@ impl Trace for TraceHandler {
         into_jsonrpc_result(self.transaction_trace_impl(&tx_hash))
     }
 }
+
+pub struct EthTraceHandler {
+    trace_handler: TraceHandler,
+}
