@@ -52,8 +52,8 @@ use self::{
         trace::TraceHandler,
     },
     traits::{
-        cfx::Cfx, debug::LocalRpc, eth::Eth, pool::TransactionPool, pos::Pos,
-        pubsub::PubSub, test::TestRpc, trace::Trace,
+        cfx::Cfx, debug::LocalRpc, eth_space::eth::Eth, pool::TransactionPool,
+        pos::Pos, pubsub::PubSub, test::TestRpc, trace::Trace,
     },
 };
 

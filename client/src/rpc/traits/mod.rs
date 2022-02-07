@@ -2,19 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub use cfx::Cfx;
-pub use debug::LocalRpc;
-pub use pool::TransactionPool;
-pub use pos::Pos;
-pub use pubsub::PubSub;
-pub use test::TestRpc;
-pub use trace::Trace;
+pub use cfx_space::{cfx, debug, pool, pos, pubsub, test, trace};
 
-pub mod cfx;
-pub mod debug;
-pub mod eth;
-pub mod pool;
-pub mod pos;
-pub mod pubsub;
-pub mod test;
-pub mod trace;
+pub mod cfx_space;
+pub mod eth_space;
