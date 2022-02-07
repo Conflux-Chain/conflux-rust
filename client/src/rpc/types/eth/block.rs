@@ -24,21 +24,13 @@ use cfx_types::{
 };
 use cfxcore::consensus::ConsensusGraphInner;
 use primitives::{
-    receipt::EVM_SPACE_SUCCESS, Block as PrimitiveBlock, BlockHeader, Receipt,
-    SignedTransaction,
+    receipt::EVM_SPACE_SUCCESS, Block as PrimitiveBlock, PhantomBlock,
 };
 use serde::{Serialize, Serializer};
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 const SHA3_HASH_OF_EMPTY_UNCLE: &str =
     "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347";
-
-pub struct PhantomBlock {
-    pub pivot_header: BlockHeader,
-    pub transactions: Vec<Arc<SignedTransaction>>,
-    pub receipts: Vec<Receipt>,
-    pub errors: Vec<String>,
-}
 
 /// Block Transactions
 #[derive(Debug)]
@@ -210,10 +202,7 @@ impl Block {
                 .unwrap_or_default(),
             gas_limit: pb.pivot_header.gas_limit().into(),
             extra_data: Default::default(),
-            logs_bloom: pb.receipts.iter().fold(H2048::zero(), |mut acc, r| {
-                acc.accrue_bloom(&r.log_bloom);
-                acc
-            }),
+            logs_bloom: pb.bloom,
             timestamp: pb.pivot_header.timestamp().into(),
             difficulty: pb.pivot_header.difficulty().into(),
             total_difficulty: 0.into(),
@@ -225,9 +214,11 @@ impl Block {
             nonce: pb.pivot_header.nonce().low_u64().to_be_bytes().into(),
             mix_hash: H256::default(),
             transactions,
-            // FIXME(thegaram): should we recalculate size?
-            // size: blocks.iter().map(|b| b.size()).sum::<usize>().into(),
-            size: 0.into(),
+            size: pb
+                .transactions
+                .iter()
+                .fold(0, |acc, tx| acc + tx.rlp_size())
+                .into(),
         }
     }
 
