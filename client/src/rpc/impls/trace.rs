@@ -6,10 +6,14 @@ use super::super::types::LocalizedBlockTrace;
 use crate::{
     common::delegate_convert::into_jsonrpc_result,
     rpc::{
-        traits::trace::Trace,
+        traits::{eth_space::trace::Trace as EthTrace, trace::Trace},
         types::{
+            eth::{
+                BlockNumber, LocalizedTrace as EthLocalizedTrace,
+                TraceFilter as EthTraceFilter,
+            },
             Action as RpcAction, LocalizedTrace as RpcLocalizedTrace,
-            LocalizedTrace, TraceFilter as RpcTraceFilter, TraceFilter,
+            LocalizedTrace, TraceFilter as RpcTraceFilter,
         },
         RpcResult,
     },
@@ -17,11 +21,14 @@ use crate::{
 use cfx_addr::Network;
 use cfx_types::H256;
 use cfxcore::{
-    block_data_manager::DataVersionTuple, observer::trace::ExecTrace,
+    block_data_manager::DataVersionTuple,
+    observer::{
+        trace::ExecTrace, trace_filter::TraceFilter as PrimitiveTraceFilter,
+    },
     BlockDataManager, ConsensusGraph, SharedConsensusGraph,
 };
-use jsonrpc_core::Result as JsonRpcResult;
-use std::sync::Arc;
+use jsonrpc_core::{Error as JsonRpcError, Result as JsonRpcResult};
+use std::{convert::TryInto, sync::Arc};
 
 pub struct TraceHandler {
     data_man: Arc<BlockDataManager>,
@@ -89,9 +96,8 @@ impl TraceHandler {
     }
 
     fn filter_traces_impl(
-        &self, rpc_filter: RpcTraceFilter,
+        &self, filter: PrimitiveTraceFilter,
     ) -> RpcResult<Option<Vec<RpcLocalizedTrace>>> {
-        let filter = rpc_filter.into_primitive()?;
         let consensus_graph = self.consensus_graph();
         let traces: Vec<_> = consensus_graph
             .filter_traces(filter)?
@@ -167,9 +173,10 @@ impl Trace for TraceHandler {
     }
 
     fn filter_traces(
-        &self, filter: TraceFilter,
+        &self, filter: RpcTraceFilter,
     ) -> JsonRpcResult<Option<Vec<LocalizedTrace>>> {
-        into_jsonrpc_result(self.filter_traces_impl(filter))
+        let primitive_filter = filter.into_primitive()?;
+        into_jsonrpc_result(self.filter_traces_impl(primitive_filter))
     }
 
     fn transaction_traces(
@@ -181,4 +188,54 @@ impl Trace for TraceHandler {
 
 pub struct EthTraceHandler {
     trace_handler: TraceHandler,
+}
+
+impl EthTrace for EthTraceHandler {
+    fn block_traces(
+        &self, _block_number: BlockNumber,
+    ) -> JsonRpcResult<Option<Vec<EthLocalizedTrace>>> {
+        todo!()
+    }
+
+    fn filter_traces(
+        &self, filter: EthTraceFilter,
+    ) -> JsonRpcResult<Option<Vec<EthLocalizedTrace>>> {
+        let primitive_filter = filter.into_primitive()?;
+        let traces =
+            match self.trace_handler.filter_traces_impl(primitive_filter)? {
+                None => return Ok(None),
+                Some(traces) => traces,
+            };
+        let mut eth_traces: Vec<EthLocalizedTrace> = Vec::new();
+        let mut stack_index = Vec::new();
+        for trace in traces {
+            match &trace.action {
+                RpcAction::Call(_) | RpcAction::Create(_) => {
+                    stack_index.push(eth_traces.len());
+                    eth_traces.push(trace.try_into().map_err(|e| {
+                        error!("eth trace conversion error: {:?}", e);
+                        JsonRpcError::internal_error()
+                    })?);
+                }
+                RpcAction::CallResult(_) | RpcAction::CreateResult(_) => {
+                    let index = stack_index
+                        .pop()
+                        .ok_or(JsonRpcError::internal_error())?;
+                    eth_traces[index].set_result(trace.action)?;
+                }
+                RpcAction::InternalTransferAction(_) => {}
+            }
+        }
+        if !stack_index.is_empty() {
+            error!("eth::filter_traces: actions left unmatched");
+            bail!(JsonRpcError::internal_error());
+        }
+        Ok(Some(eth_traces))
+    }
+
+    fn transaction_traces(
+        &self, _tx_hash: H256,
+    ) -> JsonRpcResult<Option<Vec<EthLocalizedTrace>>> {
+        todo!()
+    }
 }

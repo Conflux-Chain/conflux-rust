@@ -4,7 +4,7 @@
 
 use super::{trace::ActionType, EpochNumber};
 use crate::rpc::helpers::{maybe_vec_into, VariadicValue};
-use cfx_types::{H256, U64};
+use cfx_types::{Space, H256, U64};
 use cfxcore::observer::trace_filter::TraceFilter as PrimitiveTraceFilter;
 use jsonrpc_core::Error as RpcError;
 use serde::{Deserialize, Serialize};
@@ -74,6 +74,7 @@ impl TraceFilter {
             action_types,
             after: self.after.map(|n| n.as_usize()),
             count: self.count.map(|n| n.as_usize()),
+            space: Space::Native,
         })
     }
 }

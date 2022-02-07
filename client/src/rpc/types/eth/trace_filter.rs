@@ -17,7 +17,7 @@
 //! Trace filter deserialization.
 
 use crate::rpc::types::eth::BlockNumber;
-use cfx_types::H160;
+use cfx_types::{Space, H160};
 use cfxcore::observer::trace_filter::TraceFilter as PrimitiveTraceFilter;
 use jsonrpc_core::Error as RpcError;
 use primitives::EpochNumber;
@@ -63,6 +63,7 @@ impl TraceFilter {
             action_types: None,
             after: self.after,
             count: self.count,
+            space: Space::Ethereum,
         })
     }
 }

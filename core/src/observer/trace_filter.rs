@@ -1,5 +1,5 @@
 use crate::observer::trace::ActionType;
-use cfx_types::H256;
+use cfx_types::{Space, H256};
 use primitives::EpochNumber;
 
 /// Log event Filter.
@@ -26,4 +26,8 @@ pub struct TraceFilter {
 
     /// The number of traces to display in a batch.
     pub count: Option<usize>,
+
+    /// The space to filter. This field is set according to RPC endpoints and
+    /// cannot be set by RPC parameters.
+    pub space: Space,
 }

@@ -1,7 +1,14 @@
-use crate::rpc::types::Bytes;
+use crate::rpc::types::{
+    Action as RpcCfxAction, Bytes, LocalizedTrace as RpcCfxLocalizedTrace,
+};
 use cfx_types::{H160, H256, U256};
+use cfxcore::{observer::trace::Outcome, vm::CallType as CfxCallType};
+use jsonrpc_core::Error as JsonRpcError;
 use serde::{ser::SerializeStruct, Serialize, Serializer};
-use std::fmt;
+use std::{
+    convert::{TryFrom, TryInto},
+    fmt,
+};
 
 /// Create response
 #[derive(Debug, Serialize)]
@@ -32,6 +39,18 @@ pub enum CallType {
     StaticCall,
 }
 
+impl From<CfxCallType> for CallType {
+    fn from(cfx_call_type: CfxCallType) -> Self {
+        match cfx_call_type {
+            CfxCallType::None => CallType::None,
+            CfxCallType::Call => CallType::Call,
+            CfxCallType::CallCode => CallType::CallCode,
+            CfxCallType::DelegateCall => CallType::DelegateCall,
+            CfxCallType::StaticCall => CallType::StaticCall,
+        }
+    }
+}
+
 /// Call response
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -59,6 +78,32 @@ pub enum Action {
     Create(Create),
     /* TODO: Support Suicide
      * TODO: Support Reward */
+}
+
+impl TryFrom<RpcCfxAction> for Action {
+    type Error = String;
+
+    fn try_from(cfx_action: RpcCfxAction) -> Result<Self, String> {
+        match cfx_action {
+            RpcCfxAction::Call(call) => Ok(Action::Call(Call {
+                from: call.from.hex_address,
+                to: call.to.hex_address,
+                value: call.value,
+                gas: call.gas,
+                input: call.input,
+                call_type: call.call_type.into(),
+            })),
+            RpcCfxAction::Create(create) => Ok(Action::Create(Create {
+                from: create.from.hex_address,
+                value: create.value,
+                gas: create.gas,
+                init: create.init,
+            })),
+            action => {
+                bail!("unsupported action in eth space: {:?}", action);
+            }
+        }
+    }
 }
 
 /// Call Result
@@ -161,6 +206,90 @@ impl Serialize for LocalizedTrace {
         struc.serialize_field("blockHash", &self.block_hash)?;
 
         struc.end()
+    }
+}
+
+impl TryFrom<RpcCfxLocalizedTrace> for LocalizedTrace {
+    type Error = String;
+
+    fn try_from(cfx_trace: RpcCfxLocalizedTrace) -> Result<Self, String> {
+        // TODO(lpl): Support phantom tx?
+        Ok(Self {
+            action: cfx_trace.action.try_into()?,
+            result: Res::None,
+            trace_address: vec![],
+            subtraces: 0,
+            transaction_position: cfx_trace
+                .transaction_position
+                .map(|p| p.as_usize()),
+            transaction_hash: cfx_trace.transaction_hash,
+            block_number: cfx_trace
+                .epoch_number
+                .map(|en| en.as_u64())
+                .unwrap_or(0),
+            block_hash: cfx_trace.epoch_hash.unwrap_or_default(),
+        })
+    }
+}
+
+impl LocalizedTrace {
+    pub fn set_result(
+        &mut self, result: RpcCfxAction,
+    ) -> Result<(), JsonRpcError> {
+        if !matches!(self.result, Res::None) {
+            // One action matches exactly one result.
+            bail!(JsonRpcError::internal_error());
+        }
+        match result {
+            RpcCfxAction::CallResult(call_result) => {
+                if !matches!(self.action, Action::Call(_)) {
+                    bail!(JsonRpcError::internal_error());
+                }
+                match call_result.outcome {
+                    Outcome::Success => {
+                        // FIXME(lpl): Convert gas_left to gas_used.
+                        self.result = Res::Call(CallResult {
+                            gas_used: call_result.gas_left,
+                            output: call_result.return_data,
+                        })
+                    }
+                    Outcome::Reverted => {
+                        self.result = Res::FailedCall(TraceError::Reverted);
+                    }
+                    Outcome::Fail => {
+                        self.result = Res::FailedCall(TraceError::Error(
+                            call_result.return_data,
+                        ));
+                    }
+                }
+            }
+            RpcCfxAction::CreateResult(create_result) => {
+                if !matches!(self.action, Action::Create(_)) {
+                    bail!(JsonRpcError::internal_error());
+                }
+                match create_result.outcome {
+                    Outcome::Success => {
+                        // FIXME(lpl): Convert gas_left to gas_used.
+                        // FIXME(lpl): Check if `return_data` is `code`.
+                        self.result = Res::Create(CreateResult {
+                            gas_used: create_result.gas_left,
+                            code: create_result.return_data,
+                            address: create_result.addr.hex_address,
+                        })
+                    }
+                    Outcome::Reverted => {
+                        self.result = Res::FailedCreate(TraceError::Reverted);
+                    }
+                    Outcome::Fail => {
+                        self.result = Res::FailedCreate(TraceError::Error(
+                            create_result.return_data,
+                        ));
+                    }
+                }
+            }
+            _ => bail!(JsonRpcError::internal_error()),
+        }
+        Ok(())
     }
 }
 
