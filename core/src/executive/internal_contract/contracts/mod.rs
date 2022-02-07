@@ -13,7 +13,7 @@ mod staking;
 
 mod macros {
     #[cfg(test)]
-    pub use crate::check_signature;
+    pub use crate::{check_event_signature, check_func_signature};
     #[cfg(test)]
     pub use rustc_hex::FromHex;
 
@@ -45,7 +45,7 @@ pub use self::{
     pos::PoSRegister, sponsor::SponsorWhitelistControl, staking::Staking,
 };
 pub(super) use self::{
-    cross_space::{CallEvent, CreateEvent, WithdrawEvent},
+    cross_space::{CallEvent, CreateEvent, ReturnEvent, WithdrawEvent},
     pos::{IncreaseStakeEvent, RegisterEvent, RetireEvent},
 };
 
@@ -111,14 +111,24 @@ macro_rules! make_function_table {
 }
 
 #[macro_export]
-macro_rules! check_signature {
+macro_rules! check_func_signature {
     ($interface:ident, $signature:expr) => {
-        let f = $interface::instance();
         assert_eq!(
-            f.function_sig().to_vec(),
+            $interface::FUNC_SIG.to_vec(),
             $signature.from_hex::<Vec<u8>>().unwrap(),
             "Test solidity signature for {}",
-            f.name()
+            $interface::NAME_AND_PARAMS
+        );
+    };
+}
+
+#[macro_export]
+macro_rules! check_event_signature {
+    ($interface:ident, $signature:expr) => {
+        assert_eq!(
+            $interface::EVENT_SIG.0.to_vec(),
+            $signature.from_hex::<Vec<u8>>().unwrap(),
+            "Test solidity event signature"
         );
     };
 }

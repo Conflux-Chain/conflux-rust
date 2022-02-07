@@ -77,8 +77,6 @@ pub struct Spec {
     pub quad_coeff_div: usize,
     /// Cost for contract length when executing `CREATE`
     pub create_data_gas: usize,
-    /// Cost for contract length when executing `CREATE`
-    pub evm_space_create_data_gas: usize,
     /// Maximum code size when creating a contract.
     pub create_data_limit: usize,
     /// Transaction cost
@@ -103,6 +101,8 @@ pub struct Spec {
     pub suicide_gas: usize,
     /// Price for retiring PoS node.
     pub retire_gas: usize,
+    /// Price for deploying Eip-1820 contract.
+    pub eip1820_gas: usize,
     /// Amount of additional gas to pay when SUICIDE credits a non-existant
     /// account
     pub suicide_to_new_account_cost: usize,
@@ -132,6 +132,8 @@ pub struct Spec {
     pub contract_start_nonce: U256,
     /// Start nonce for a new account
     pub account_start_nonce: U256,
+    /// The magnification of gas storage occupying related operaions.
+    pub evm_gas_ratio: usize,
     /// CIP-43: Introduce Finality via Voting Among Staked
     pub cip43_init: bool,
     pub cip43_contract: bool,
@@ -231,7 +233,7 @@ impl Spec {
             sha3_gas: 30,
             sha3_word_gas: 6,
             sload_gas: 200,
-            sstore_set_gas: 40000,
+            sstore_set_gas: 20000,
             sstore_reset_gas: 5000,
             sstore_refund_gas: 15000,
             jumpdest_gas: 1,
@@ -247,7 +249,6 @@ impl Spec {
             memory_gas: 3,
             quad_coeff_div: 512,
             create_data_gas: 200,
-            evm_space_create_data_gas: 400,
             create_data_limit: 49152,
             tx_gas: 21000,
             tx_create_gas: 53000,
@@ -260,6 +261,7 @@ impl Spec {
             balance_gas: 400,
             suicide_gas: 5000,
             retire_gas: 5_000_000,
+            eip1820_gas: 1_500_000,
             suicide_to_new_account_cost: 25000,
             sub_gas_cap_divisor: Some(64),
             no_empty: true,
@@ -280,6 +282,7 @@ impl Spec {
             cip90: false,
             cip78a: false,
             cip78b: false,
+            evm_gas_ratio: 2,
         }
     }
 

@@ -246,7 +246,6 @@ impl NativeTransaction {
     /// Specify the sender; this won't survive the serialize/deserialize
     /// process, but can be cloned.
     pub fn fake_sign(self, from: AddressWithSpace) -> SignedTransaction {
-        // TODO: EVM core: for EVM tx
         SignedTransaction {
             transaction: TransactionWithSignature {
                 transaction: TransactionWithSignatureSerializePart {
@@ -333,23 +332,36 @@ pub struct Eip155Transaction {
     /// Transferred value.
     pub value: U256,
     /// The chain id of the transaction
-    pub chain_id: u32,
+    pub chain_id: Option<u32>,
     /// Transaction data.
     pub data: Bytes,
 }
 
 impl Encodable for Eip155Transaction {
     fn rlp_append(&self, s: &mut RlpStream) {
-        s.begin_list(9);
-        s.append(&self.nonce);
-        s.append(&self.gas_price);
-        s.append(&self.gas);
-        s.append(&self.action);
-        s.append(&self.value);
-        s.append(&self.data);
-        s.append(&self.chain_id);
-        s.append(&0u8);
-        s.append(&0u8);
+        match self.chain_id {
+            Some(chain_id) => {
+                s.begin_list(9);
+                s.append(&self.nonce);
+                s.append(&self.gas_price);
+                s.append(&self.gas);
+                s.append(&self.action);
+                s.append(&self.value);
+                s.append(&self.data);
+                s.append(&chain_id);
+                s.append(&0u8);
+                s.append(&0u8);
+            }
+            None => {
+                s.begin_list(6);
+                s.append(&self.nonce);
+                s.append(&self.gas_price);
+                s.append(&self.gas);
+                s.append(&self.action);
+                s.append(&self.value);
+                s.append(&self.data);
+            }
+        }
     }
 }
 
@@ -401,6 +413,7 @@ macro_rules! access_common_ref {
     };
 }
 
+#[allow(unused)]
 macro_rules! access_common {
     ($field: ident, $ty: ident) => {
         pub fn $field(&self) -> $ty{
@@ -424,7 +437,12 @@ impl Transaction {
 
     access_common_ref!(value, U256);
 
-    access_common!(chain_id, u32);
+    pub fn chain_id(&self) -> Option<u32> {
+        match self {
+            Transaction::Native(tx) => Some(tx.chain_id),
+            Transaction::Ethereum(tx) => tx.chain_id,
+        }
+    }
 }
 
 impl Transaction {
@@ -519,7 +537,7 @@ impl Encodable for TransactionWithSignatureSerializePart {
                 } = tx;
                 let legacy_v = eip155_signature::add_chain_replay_protection(
                     self.v,
-                    Some(*chain_id as u64),
+                    chain_id.map(|x| x as u64),
                 );
                 s.begin_list(9);
                 s.append(nonce);
@@ -563,15 +581,17 @@ impl Decodable for TransactionWithSignatureSerializePart {
                 let s: U256 = rlp.val_at(8)?;
 
                 let v = eip155_signature::extract_standard_v(legacy_v);
-                let chain_id = if let Some(chain_id) =
-                    eip155_signature::extract_chain_id_from_legacy_v(legacy_v)
-                {
-                    chain_id as u32
-                } else {
-                    return Err(DecoderError::Custom(
-                        "ChainId is not specified",
-                    ));
-                };
+                let chain_id =
+                    match eip155_signature::extract_chain_id_from_legacy_v(
+                        legacy_v,
+                    ) {
+                        Some(chain_id) if chain_id > (u32::MAX as u64) => {
+                            return Err(DecoderError::Custom(
+                                "Does not support chain_id >= 2^32",
+                            ));
+                        }
+                        chain_id => chain_id.map(|x| x as u32),
+                    };
 
                 Ok(TransactionWithSignatureSerializePart {
                     unsigned: Transaction::Ethereum(Eip155Transaction {

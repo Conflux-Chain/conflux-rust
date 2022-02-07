@@ -249,6 +249,7 @@ impl RpcImpl {
                 inner,
                 &self.data_man,
                 include_txs,
+                Some(Space::Native),
             )?)),
         }
     }
@@ -375,6 +376,7 @@ impl RpcImpl {
                 inner,
                 &self.data_man,
                 include_txs,
+                Some(Space::Native),
             )?)),
         }
     }
@@ -427,6 +429,7 @@ impl RpcImpl {
             inner,
             &self.data_man,
             true,
+            Some(Space::Native),
         )?)
     }
 
@@ -464,6 +467,7 @@ impl RpcImpl {
                 inner,
                 &self.data_man,
                 include_txs,
+                Some(Space::Native),
             )?)),
         }
     }
@@ -565,6 +569,7 @@ impl RpcImpl {
                 inner,
                 &self.data_man,
                 true,
+                Some(Space::Native),
             )
         };
 
@@ -756,11 +761,6 @@ impl RpcImpl {
             voting_power.as_u64(),
             0,
         );
-        let tx = if let Transaction::Native(tx) = tx {
-            tx
-        } else {
-            unreachable!("register transaction must be native space");
-        };
         let identifier = from_consensus_public_key(
             &self.pos_handler.config().bls_key.public_key(),
             &self.pos_handler.config().vrf_key.public_key(),

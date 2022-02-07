@@ -34,6 +34,7 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use serde_json::{from_value, Value};
+use std::convert::TryInto;
 
 /// Variadic value
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
@@ -130,7 +131,7 @@ impl EthRpcLogFilter {
             offset: None,
             limit: self.limit,
             trusted: false,
-            space: Some(Space::Ethereum),
+            space: Space::Ethereum,
         };
 
         match (&self.from_block, &self.to_block, &self.block_hash) {
@@ -165,18 +166,24 @@ impl EthRpcLogFilter {
 
             // block number range filter
             // note: blocks in EVM space RPCs correspond to epochs
-            (_, _, None) => Ok(PrimitiveFilter::EpochLogFilter {
-                from_epoch: self
-                    .from_block
-                    .map(|n| n.into())
+            (_, _, None) => {
+                let from_epoch = match self.from_block {
                     // FIXME(thegaram): this is probably not consistent with eth
-                    .unwrap_or(EpochNumber::LatestCheckpoint),
-                to_epoch: self
-                    .to_block
-                    .map(|n| n.into())
-                    .unwrap_or(EpochNumber::LatestState),
-                params,
-            }),
+                    None => EpochNumber::LatestCheckpoint,
+                    Some(bn) => bn.try_into()?,
+                };
+
+                let to_epoch = match self.to_block {
+                    None => EpochNumber::LatestState,
+                    Some(bn) => bn.try_into()?,
+                };
+
+                Ok(PrimitiveFilter::EpochLogFilter {
+                    from_epoch,
+                    to_epoch,
+                    params,
+                })
+            }
 
             // any other case is considered an error
             _ => {

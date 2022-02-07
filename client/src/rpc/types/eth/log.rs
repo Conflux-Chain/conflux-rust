@@ -41,13 +41,13 @@ pub struct Log {
     /// Data
     pub data: Bytes,
     /// Block Hash
-    pub block_hash: Option<H256>,
+    pub block_hash: H256,
     /// Block Number
-    pub block_number: Option<U256>,
+    pub block_number: U256,
     /// Transaction Hash
-    pub transaction_hash: Option<H256>,
+    pub transaction_hash: H256,
     /// Transaction Index
-    pub transaction_index: Option<U256>,
+    pub transaction_index: U256,
     /// Log Index in Block
     // FIXME(thegaram): currently we're using the epoch log index here
     pub log_index: Option<U256>,
@@ -79,11 +79,11 @@ impl Log {
             address: e.entry.address,
             topics: e.entry.topics.into_iter().map(Into::into).collect(),
             data: e.entry.data.into(),
-            block_hash: Some(*pivot_hash),
+            block_hash: *pivot_hash,
             // note: blocks in EVM space RPCs correspond to epochs
-            block_number: Some(e.epoch_number.into()),
-            transaction_hash: Some(e.transaction_hash.into()),
-            transaction_index: Some(e.transaction_index.into()),
+            block_number: e.epoch_number.into(),
+            transaction_hash: e.transaction_hash.into(),
+            transaction_index: e.transaction_index.into(),
             log_index: Some(e.log_index.into()),
             transaction_log_index: Some(e.transaction_log_index.into()),
             removed: false,

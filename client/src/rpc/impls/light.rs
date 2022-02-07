@@ -4,7 +4,7 @@
 
 use crate::rpc::types::errors::check_rpc_address_network;
 use cfx_types::{
-    AddressSpaceUtil, BigEndianHash, H160, H256, H520, U128, U256, U64,
+    AddressSpaceUtil, BigEndianHash, Space, H160, H256, H520, U128, U256, U64,
 };
 use cfxcore::{
     block_data_manager::BlockDataManager,
@@ -665,7 +665,7 @@ impl RpcImpl {
                 prior_gas_used,
             } = tx_info;
 
-            if maybe_block_number.is_none() {
+            if maybe_block_number.is_none() || tx_index.is_phantom {
                 return Ok(None);
             }
 
@@ -776,6 +776,7 @@ impl RpcImpl {
                 &*inner,
                 &data_man,
                 include_txs,
+                Some(Space::Native),
             )?))
         };
 
@@ -831,6 +832,7 @@ impl RpcImpl {
                 &*inner,
                 &data_man,
                 true,
+                Some(Space::Native),
             )?)
         };
 
@@ -886,6 +888,7 @@ impl RpcImpl {
                 &*inner,
                 &data_man,
                 include_txs,
+                Some(Space::Native),
             )?))
         };
 

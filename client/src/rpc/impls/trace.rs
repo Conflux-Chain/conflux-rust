@@ -115,6 +115,11 @@ impl TraceHandler {
             .data_man
             .transaction_index_by_hash(tx_hash, true /* update_cache */)
             .and_then(|tx_index| {
+                // FIXME(thegaram): do we support traces for phantom txs?
+                if tx_index.is_phantom {
+                    return None;
+                }
+
                 self.data_man
                     .transactions_traces_by_block_hash(&tx_index.block_hash)
                     .and_then(|(pivot_hash, traces)| {

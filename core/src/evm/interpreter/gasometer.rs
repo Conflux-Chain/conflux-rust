@@ -140,7 +140,7 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
                     let val = context.storage_at(&key.to_vec())?;
 
                     if val.is_zero() && !newval.is_zero() {
-                        spec.sstore_set_gas
+                        spec.sstore_set_gas * spec.evm_gas_ratio
                     } else {
                         spec.sstore_reset_gas
                     }
@@ -166,8 +166,14 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
                         && is_value_transfer
                         && !context.exists_and_not_null(&address)?)
                 {
-                    gas = overflowing!(gas
-                        .overflow_add(spec.suicide_to_new_account_cost.into()));
+                    let ratio = if context.space() == Space::Ethereum {
+                        spec.evm_gas_ratio
+                    } else {
+                        1
+                    };
+                    gas = overflowing!(gas.overflow_add(
+                        (spec.suicide_to_new_account_cost * ratio).into()
+                    ));
                 }
 
                 Request::Gas(gas)
@@ -238,9 +244,14 @@ impl<Gas: evm::CostType> Gasometer<Gas> {
                             && is_value_transfer
                             && !context.exists_and_not_null(&address)?))
                 {
-                    gas = overflowing!(
-                        gas.overflow_add(spec.call_new_account_gas.into())
-                    );
+                    let ratio = if context.space() == Space::Ethereum {
+                        spec.evm_gas_ratio
+                    } else {
+                        1
+                    };
+                    gas = overflowing!(gas.overflow_add(
+                        (spec.call_new_account_gas * ratio).into()
+                    ));
                 }
 
                 if is_value_transfer {

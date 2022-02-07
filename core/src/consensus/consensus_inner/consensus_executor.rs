@@ -14,7 +14,9 @@ use crate::{
     },
     evm::Spec,
     executive::{
-        internal_contract::impls::pos::decode_register_info,
+        internal_contract::{
+            build_bloom_and_recover_phantom, impls::pos::decode_register_info,
+        },
         revert_reason_decode, ExecutionError, ExecutionOutcome, Executive,
         TransactOptions,
     },
@@ -55,14 +57,9 @@ use metrics::{register_meter_with_group, Meter, MeterTimer};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
     compute_block_number,
-    receipt::{
-        BlockReceipts, Receipt,
-        TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING,
-        TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING,
-        TRANSACTION_OUTCOME_SUCCESS,
-    },
-    Action, Block, BlockHeaderBuilder, EpochId, SignedTransaction,
-    TransactionIndex, MERKLE_NULL_NODE,
+    receipt::{BlockReceipts, Receipt, TransactionOutcome},
+    Action, Block, BlockHeaderBuilder, EpochId, NativeTransaction,
+    SignedTransaction, Transaction, TransactionIndex, MERKLE_NULL_NODE,
 };
 use rustc_hex::ToHex;
 use std::{
@@ -1268,8 +1265,7 @@ impl ConsensusExecutionHandler {
                 let tx_exec_error_msg: String;
                 match r {
                     ExecutionOutcome::NotExecutedDrop(e) => {
-                        tx_outcome_status =
-                            TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING;
+                        tx_outcome_status = TransactionOutcome::Skipped;
                         tx_exec_error_msg = "tx not executed".into();
                         trace!(
                             "tx not executed, not to reconsider packing: \
@@ -1283,8 +1279,7 @@ impl ConsensusExecutionHandler {
                         }
                     }
                     ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
-                        tx_outcome_status =
-                            TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING;
+                        tx_outcome_status = TransactionOutcome::Skipped;
                         tx_exec_error_msg = "tx not executed".into();
                         trace!(
                             "tx not executed, to reconsider packing: \
@@ -1309,8 +1304,7 @@ impl ConsensusExecutionHandler {
                         error,
                         executed,
                     ) => {
-                        tx_outcome_status =
-                            TRANSACTION_OUTCOME_EXCEPTION_WITH_NONCE_BUMPING;
+                        tx_outcome_status = TransactionOutcome::Failure;
                         tx_exec_error_msg = if error
                             == ExecutionError::VmError(VmErr::Reverted)
                         {
@@ -1337,7 +1331,7 @@ impl ConsensusExecutionHandler {
                         );
                     }
                     ExecutionOutcome::Finished(executed) => {
-                        tx_outcome_status = TRANSACTION_OUTCOME_SUCCESS;
+                        tx_outcome_status = TransactionOutcome::Success;
                         tx_exec_error_msg = String::default();
                         GOOD_TPS_METER.mark(1);
 
@@ -1371,12 +1365,18 @@ impl ConsensusExecutionHandler {
                     }
                 }
 
+                let (phantom_txs, log_bloom) = build_bloom_and_recover_phantom(
+                    &transaction_logs,
+                    transaction.hash,
+                );
+
                 let receipt = Receipt::new(
                     tx_outcome_status,
                     env.accumulated_gas_used,
                     gas_fee,
                     gas_sponsor_paid,
                     transaction_logs,
+                    log_bloom,
                     storage_sponsor_paid,
                     storage_collateralized,
                     storage_released,
@@ -1384,17 +1384,44 @@ impl ConsensusExecutionHandler {
                 receipts.push(receipt);
                 tx_exec_error_messages.push(tx_exec_error_msg);
 
-                if on_local_pivot {
+                if on_local_pivot
+                    && tx_outcome_status != TransactionOutcome::Skipped
+                {
                     let hash = transaction.hash();
-                    let tx_index = TransactionIndex {
-                        block_hash: block.hash(),
-                        index: idx,
-                    };
-                    if tx_outcome_status
-                        != TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING
-                    {
-                        self.data_man
-                            .insert_transaction_index(&hash, &tx_index);
+
+                    self.data_man.insert_transaction_index(
+                        &hash,
+                        &TransactionIndex {
+                            block_hash: block.hash(),
+                            index: idx,
+                            is_phantom: false,
+                        },
+                    );
+
+                    // FIXME(thegaram): is it safe to lock here?
+                    let evm_chain_id = self
+                        .machine
+                        .params()
+                        .chain_id
+                        .read()
+                        .get_chain_id(env.epoch_height)
+                        .in_evm_space();
+
+                    // persist tx index for phantom transactions.
+                    // note: in some cases, pivot chain reorgs will result in
+                    // different phantom txs (with different hashes) for the
+                    // same Conflux space tx. we do not remove invalidated
+                    // hashes here, but leave it up to the RPC layer to handle
+                    // this instead.
+                    for ptx in phantom_txs {
+                        self.data_man.insert_transaction_index(
+                            &ptx.into_eip155(evm_chain_id).hash(),
+                            &TransactionIndex {
+                                block_hash: block.hash(),
+                                index: idx,
+                                is_phantom: true,
+                            },
+                        );
                     }
                 }
             }
@@ -1836,7 +1863,7 @@ impl ConsensusExecutionHandler {
             "tx",
             self.verification_config.verify_transaction_common(
                 tx,
-                AllChainID::fake_for_virtual(tx.chain_id()),
+                AllChainID::fake_for_virtual(tx.chain_id().unwrap_or(1)),
                 block_height,
                 transitions,
                 VerifyTxMode::Local(VerifyTxLocalMode::Full, &spec),
@@ -1892,6 +1919,33 @@ impl ConsensusExecutionHandler {
         let spec = self.machine.spec(env.number);
         let mut ex =
             Executive::new(&mut state, &env, self.machine.as_ref(), &spec);
+
+        // If the transaction may be sponsored for collateral when calling a
+        // contract with storage sponsor, we needs a special method to estimate
+        // it.
+        if let Transaction::Native(NativeTransaction {
+            action: Action::Call(ref to),
+            ..
+        }) = tx.unsigned
+        {
+            if to.is_contract_address() {
+                let sponsor_balance_for_collateral =
+                    ex.state.sponsor_balance_for_collateral(&to)?;
+                if !sponsor_balance_for_collateral.is_zero()
+                    && ex
+                        .state
+                        .check_commission_privilege(&to, &tx.sender().address)?
+                {
+                    let r = ex.transact_virtual_two_pass(
+                        &tx,
+                        sponsor_balance_for_collateral,
+                    );
+                    trace!("Execution result {:?}", r);
+                    return Ok(r?);
+                }
+            }
+        }
+
         let r = ex.transact_virtual(tx);
         trace!("Execution result {:?}", r);
         Ok(r?)

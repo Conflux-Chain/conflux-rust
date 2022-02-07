@@ -47,6 +47,13 @@ pub trait StateDbExt {
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>;
 
+    fn get_total_evm_tokens(&self) -> Result<U256>;
+
+    fn set_total_evm_tokens(
+        &mut self, total_staking_tokens: &U256,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> Result<()>;
+
     fn get_total_staking_tokens(&self) -> Result<U256>;
     fn set_total_staking_tokens(
         &mut self, total_staking_tokens: &U256,
@@ -94,6 +101,7 @@ pub const TOTAL_POS_STAKING_TOKENS_KEY: &'static [u8] =
 pub const DISTRIBUTABLE_POS_INTEREST_KEY: &'static [u8] =
     b"distributable_pos_interest";
 pub const LAST_DISTRIBUTE_BLOCK_KEY: &'static [u8] = b"last_distribute_block";
+pub const TOTAL_EVM_TOKENS_KEY: &'static [u8] = b"total_evm_tokens";
 
 impl<StateDbStorage: StorageStateTrait> StateDbExt
     for StateDbGeneric<StateDbStorage>
@@ -245,6 +253,29 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
             total_issued_tokens,
             debug_record,
         )
+    }
+
+    fn get_total_evm_tokens(&self) -> Result<U256> {
+        let total_evm_tokens_key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            TOTAL_EVM_TOKENS_KEY,
+        )
+        .with_native_space();
+        let total_evm_tokens_opt = self.get::<U256>(total_evm_tokens_key)?;
+        Ok(total_evm_tokens_opt.unwrap_or_default())
+    }
+
+    fn set_total_evm_tokens(
+        &mut self, total_evm_tokens: &U256,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> Result<()>
+    {
+        let total_evm_tokens_key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            TOTAL_EVM_TOKENS_KEY,
+        )
+        .with_native_space();
+        self.set::<U256>(total_evm_tokens_key, total_evm_tokens, debug_record)
     }
 
     fn get_total_staking_tokens(&self) -> Result<U256> {

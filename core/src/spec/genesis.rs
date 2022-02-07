@@ -27,7 +27,7 @@ use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{StorageManager, StorageManagerTrait};
 use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
-    H256, U256,
+    Space, H256, U256,
 };
 use diem_crypto::{
     bls::BLSPrivateKey, ec_vrf::EcVrfPublicKey, PrivateKey, ValidCryptoMaterial,
@@ -36,7 +36,7 @@ use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
 use keylib::KeyPair;
 use primitives::{
     storage::STORAGE_LAYOUT_REGULAR_V0, Action, Block, BlockHeaderBuilder,
-    BlockReceipts, SignedTransaction, Transaction,
+    BlockReceipts, SignedTransaction,
 };
 use secret_store::SecretStore;
 
@@ -194,7 +194,6 @@ pub fn genesis_block(
     let mut genesis_block_author = test_net_version;
     genesis_block_author.set_user_account_type_bits();
 
-    let mut total_balance = U256::from(0);
     initialize_internal_contract_accounts(
         &mut state,
         machine.internal_contracts().initialized_at_genesis(),
@@ -209,10 +208,11 @@ pub fn genesis_block(
                 /* account_start_nonce = */ U256::zero(),
             )
             .unwrap();
-        total_balance += balance;
+        state.add_total_issued(balance);
+        if addr.space == Space::Ethereum {
+            state.add_total_evm_tokens(balance);
+        }
     }
-    state.add_total_issued(total_balance);
-
     let genesis_account_address = GENESIS_ACCOUNT_ADDRESS_STR
         .parse::<Address>()
         .unwrap()
@@ -432,15 +432,10 @@ pub fn genesis_block(
                 )
                 .unwrap();
             state.deposit(&node.address, &stake_balance, 0).unwrap();
-            let tx = if let Transaction::Native(ref tx) = node.register_tx {
-                tx
-            } else {
-                unreachable!(
-                    "Genesis block should not have Ethereum transaction"
-                );
-            };
-            let signed_tx =
-                tx.clone().fake_sign(node.address.with_native_space());
+            let signed_tx = node
+                .register_tx
+                .clone()
+                .fake_sign(node.address.with_native_space());
             execute_genesis_transaction(
                 &signed_tx,
                 &mut state,
@@ -500,7 +495,7 @@ pub fn genesis_block(
 pub fn register_transaction(
     bls_priv_key: BLSPrivateKey, vrf_pub_key: EcVrfPublicKey, power: u64,
     genesis_chain_id: u32,
-) -> Transaction
+) -> NativeTransaction
 {
     /// TODO: test this function with new internal contracts.
     use bls_signatures::{
@@ -558,7 +553,7 @@ pub fn register_transaction(
     tx.gas = 200000.into();
     tx.gas_price = 1.into();
     tx.storage_limit = 16000;
-    Transaction::Native(tx)
+    tx
 }
 
 fn execute_genesis_transaction(
@@ -634,7 +629,7 @@ pub struct GenesisPosNodeInfo {
     pub bls_key: ConsensusPublicKey,
     pub vrf_key: ConsensusVRFPublicKey,
     pub voting_power: u64,
-    pub register_tx: Transaction,
+    pub register_tx: NativeTransaction,
 }
 
 #[derive(Serialize, Deserialize)]

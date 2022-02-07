@@ -57,6 +57,7 @@ class TestNode:
         else:
             self.ip = "127.0.0.1"
             self.rpcport = rpc_port(self.index)
+            self.ethrpcport = evm_rpc_port(self.index)
             self.pubsubport = pubsub_port(self.index)
         self.port = str(p2p_port(index))
         if self.rpchost is None:
@@ -72,6 +73,8 @@ class TestNode:
         self.process = None
         self.rpc_connected = False
         self.rpc = None
+        self.ethrpc = None
+        self.ethrpc_connected = False
         self.log = logging.getLogger('TestFramework.node%d' % index)
         self.cleanup_on_exit = True
         # self.key = "0x" + "0"*125+"{:03d}".format(self.index);
@@ -105,7 +108,10 @@ class TestNode:
         """Dispatches any unrecognised messages to the RPC connection."""
         assert self.rpc_connected and self.rpc is not None, self._node_msg(
             "Error: no RPC connection")
-        return getattr(self.rpc, name)
+        if name.startswith("eth_") or name.startswith("parity_"):
+            return getattr(self.ethrpc, name)
+        else:
+            return getattr(self.rpc, name)
 
     def best_block_hash(self) -> str:
         return self.cfx_getBestBlockHash()
@@ -190,6 +196,12 @@ class TestNode:
                 self.rpc_connected = True
                 self.url = self.rpc.url
                 self.log.debug("RPC successfully started")
+                # setup ethrpc
+                self.ethrpc = get_simple_rpc_proxy(
+                    rpc_url(self.index, self.rpchost, self.ethrpcport),
+                    node=self,
+                    timeout=self.rpc_timeout)
+                self.ethrpc_connected = True
                 return
             except requests.exceptions.ConnectionError as e:
                 # TODO check if it's ECONNREFUSED`

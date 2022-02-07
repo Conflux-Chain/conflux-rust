@@ -10,7 +10,6 @@ mod log;
 mod receipt;
 mod sync;
 mod transaction;
-mod transaction_access_list;
 
 pub use self::{
     block::Block,
