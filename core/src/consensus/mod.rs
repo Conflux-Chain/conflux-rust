@@ -1437,14 +1437,12 @@ impl ConsensusGraph {
     {
         let mut traces = Vec::new();
         for (pivot_hash, block_hash, block_trace) in block_traces {
-            let tx_hashes: Vec<H256> = self
+            let block = self
                 .data_man
                 .block_by_hash(&block_hash, true /* update_cache */)
-                .ok_or(FilterError::BlockAlreadyPruned { block_hash })?
-                .transactions
-                .iter()
-                .map(|tx| tx.hash())
-                .collect();
+                .ok_or(FilterError::BlockAlreadyPruned { block_hash })?;
+            let tx_hashes: Vec<H256> =
+                block.transactions.iter().map(|tx| tx.hash()).collect();
             if tx_hashes.len() != block_trace.0.len() {
                 bail!(format!(
                     "tx list and trace length unmatch: block_hash={:?}",
@@ -1472,6 +1470,11 @@ impl ConsensusGraph {
                         {
                             continue;
                         }
+                    }
+                    if block.transactions[tx_position].space() != filter.space {
+                        // TODO(lpl): Filter based on trace space instead of
+                        // transaction space.
+                        continue;
                     }
                     let trace = LocalizedTrace {
                         action: trace.action,
