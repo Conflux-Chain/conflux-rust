@@ -87,6 +87,8 @@ class PosForceProposeTest(DefaultConfluxTestFramework):
         wait_until(lambda: int(clients[0].pos_status()["pivotDecision"]["height"], 0) > 0)
         # Make new pos block referred and processed
         assert_equal(clients[0].block_by_epoch(int_to_hex(pivot_decision_height))["hash"], chosen_decision)
+        b = clients[0].generate_empty_blocks(1)
+        assert_equal(int(clients[0].block_by_hash(b[0])["blame"], 0), 0)
 
 
 if __name__ == '__main__':
