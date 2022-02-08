@@ -209,17 +209,6 @@ impl EthTrace for EthTraceHandler {
             .unwrap();
         let mut eth_traces = Vec::new();
         for block_hash in epoch_hashes {
-            let transaction_hashes: Vec<_> = match self
-                .trace_handler
-                .data_man
-                .block_by_hash(&block_hash, true /* update_cache */)
-            {
-                None => return Ok(None),
-                Some(block) => {
-                    block.transactions.iter().map(|tx| tx.hash()).collect()
-                }
-            };
-
             match self
                 .trace_handler
                 .data_man
@@ -230,10 +219,7 @@ impl EthTrace for EthTraceHandler {
                     if eth_block_hash != pivot_hash_for_trace {
                         return Ok(None);
                     }
-                    if traces.0.len() != transaction_hashes.len() {
-                        bail!(JsonRpcError::internal_error());
-                    }
-                    for (index, tx_traces) in traces.0.into_iter().enumerate() {
+                    for tx_traces in traces.0 {
                         for paired_trace in tx_traces
                             .filter_trace_pairs(
                                 &PrimitiveTraceFilter::space_filter(
@@ -253,11 +239,9 @@ impl EthTrace for EthTraceHandler {
                                 result: EthRes::None,
                                 trace_address: vec![],
                                 subtraces: 0,
-                                // FIXME(lpl): phantom tx?
-                                transaction_position: Some(index),
-                                transaction_hash: Some(
-                                    transaction_hashes[index],
-                                ),
+                                // FIXME(lpl): follow the value of tx index?
+                                transaction_position: None,
+                                transaction_hash: None,
                                 block_number: eth_block_number,
                                 block_hash: eth_block_hash,
                             };
@@ -316,8 +300,75 @@ impl EthTrace for EthTraceHandler {
     }
 
     fn transaction_traces(
-        &self, _tx_hash: H256,
+        &self, tx_hash: H256,
     ) -> JsonRpcResult<Option<Vec<EthLocalizedTrace>>> {
-        todo!()
+        Ok(self
+            .trace_handler
+            .data_man
+            .transaction_index_by_hash(&tx_hash, true /* update_cache */)
+            .and_then(|tx_index| {
+                // FIXME(thegaram): do we support traces for phantom txs?
+                if tx_index.is_phantom {
+                    return None;
+                }
+
+                self.trace_handler
+                    .data_man
+                    .transactions_traces_by_block_hash(&tx_index.block_hash)
+                    .and_then(|(pivot_hash, traces)| {
+                        let pivot_epoch_number = self
+                            .trace_handler
+                            .data_man
+                            .block_height_by_hash(&pivot_hash)
+                            .unwrap();
+                        traces
+                            .into_iter()
+                            .nth(tx_index.index)
+                            .and_then(|tx_trace| {
+                                tx_trace
+                                    .filter_trace_pairs(
+                                        &PrimitiveTraceFilter::space_filter(
+                                            Space::Ethereum,
+                                        ),
+                                    )
+                                    .ok()
+                            })
+                            .map(|traces| {
+                                traces
+                                    .into_iter()
+                                    .map(|paired_trace| {
+                                        let mut eth_trace = EthLocalizedTrace {
+                                            action: RpcAction::try_from(
+                                                paired_trace.0.action,
+                                                self.trace_handler.network,
+                                            )
+                                            .unwrap()
+                                            .try_into()
+                                            .unwrap(),
+                                            result: EthRes::None,
+                                            trace_address: vec![],
+                                            subtraces: 0,
+                                            // FIXME(lpl): follow the value of
+                                            // tx index?
+                                            transaction_position: None,
+                                            transaction_hash: None,
+                                            block_number: pivot_epoch_number,
+                                            block_hash: pivot_hash,
+                                        };
+                                        eth_trace
+                                            .set_result(
+                                                RpcAction::try_from(
+                                                    paired_trace.1.action,
+                                                    self.trace_handler.network,
+                                                )
+                                                .unwrap(),
+                                            )
+                                            .unwrap();
+                                        eth_trace
+                                    })
+                                    .collect()
+                            })
+                    })
+            }))
     }
 }
