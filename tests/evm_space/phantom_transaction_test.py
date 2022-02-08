@@ -258,6 +258,10 @@ class PhantomTransactionTest(ConfluxTestFramework):
 
         logIndex = 0
 
+        filter = { "fromBlock": epoch_a, "toBlock": epoch_a }
+        logsFiltered = self.nodes[0].eth_getLogs(filter)
+        assert_equal(len(logsFiltered), 4)
+
         for idx, receipt in enumerate(receipts):
             assert_equal(receipt["blockHash"], block_a)
             assert_equal(receipt["blockNumber"], epoch_a)
@@ -280,6 +284,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
                 assert_equal(log["logIndex"], hex(logIndex))
                 assert_equal(log["transactionLogIndex"], hex(idx2))
                 assert_equal(log["removed"], False)
+                assert_equal(log, logsFiltered[logIndex])
                 logIndex += 1
 
         assert_equal(len(receipts[0]["logs"]), 1)
@@ -335,6 +340,10 @@ class PhantomTransactionTest(ConfluxTestFramework):
 
         logIndex = 0
 
+        filter = { "fromBlock": epoch_e, "toBlock": epoch_e }
+        logsFiltered = self.nodes[0].eth_getLogs(filter)
+        assert_equal(len(logsFiltered), 8)
+
         for idx, receipt in enumerate(receipts):
             assert_equal(receipt["blockHash"], block_e)
             assert_equal(receipt["blockNumber"], epoch_e)
@@ -357,6 +366,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
                 assert_equal(log["logIndex"], hex(logIndex))
                 assert_equal(log["transactionLogIndex"], hex(idx2))
                 assert_equal(log["removed"], False)
+                assert_equal(log, logsFiltered[logIndex])
                 logIndex += 1
 
         assert_equal(len(receipts[0]["logs"]), 1)

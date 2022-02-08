@@ -14,7 +14,7 @@ mod trace_filter;
 mod transaction;
 
 pub use self::{
-    block::{Block, PhantomBlock},
+    block::Block,
     block_number::BlockNumber,
     call_request::CallRequest,
     filter::{EthRpcLogFilter, FilterChanges},
