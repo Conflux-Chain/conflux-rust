@@ -187,7 +187,7 @@ impl Trace for TraceHandler {
 }
 
 pub struct EthTraceHandler {
-    trace_handler: TraceHandler,
+    pub trace_handler: TraceHandler,
 }
 
 impl EthTrace for EthTraceHandler {

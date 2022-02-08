@@ -1482,6 +1482,7 @@ impl ConsensusGraph {
                         epoch_hash: pivot_hash,
                         epoch_number: epoch_number.into(),
                         block_hash,
+                        // FIXME(lpl)
                         transaction_position: tx_position.into(),
                         transaction_hash: tx_hashes[tx_position],
                     };
