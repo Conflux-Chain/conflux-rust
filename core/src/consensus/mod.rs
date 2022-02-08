@@ -1523,7 +1523,10 @@ impl ConsensusGraph {
                 })?;
             for (tx_position, tx_trace) in block_trace.0.into_iter().enumerate()
             {
-                for trace in tx_trace.0 {
+                for trace in tx_trace
+                    .filter_traces(&filter)
+                    .map_err(|e| FilterError::Custom(e))?
+                {
                     if let Some(action_types) = &filter.action_types {
                         if !action_types
                             .contains(&ActionType::from(&trace.action))
@@ -1531,18 +1534,13 @@ impl ConsensusGraph {
                             continue;
                         }
                     }
-                    if block.transactions[tx_position].space() != filter.space {
-                        // TODO(lpl): Filter based on trace space instead of
-                        // transaction space.
-                        continue;
-                    }
                     let trace = LocalizedTrace {
                         action: trace.action,
                         valid: trace.valid,
                         epoch_hash: pivot_hash,
                         epoch_number: epoch_number.into(),
                         block_hash,
-                        // FIXME(lpl)
+                        // FIXME(lpl): Use correct tx index.
                         transaction_position: tx_position.into(),
                         transaction_hash: tx_hashes[tx_position],
                     };

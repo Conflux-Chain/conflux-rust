@@ -61,6 +61,8 @@ impl TraceFilter {
             to_epoch,
             block_hashes: None,
             action_types: None,
+            from_address: self.from_address,
+            to_address: self.to_address,
             after: self.after,
             count: self.count,
             space: Space::Ethereum,

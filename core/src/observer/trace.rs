@@ -6,6 +6,7 @@ use super::AddressPocket;
 use crate::{
     bytes::Bytes,
     executive::ExecutiveResult,
+    observer::trace_filter::TraceFilter,
     vm::{ActionParams, CallType, CreateType, Result as vmResult},
 };
 use cfx_internal_common::{DatabaseDecodable, DatabaseEncodable};
@@ -484,6 +485,152 @@ impl TransactionExecTraces {
         self.0
             .iter()
             .fold(Default::default(), |bloom, trace| bloom | trace.bloom())
+    }
+
+    /// Return pairs of (action, result).
+    /// Return `Err` if actions and results do not match.
+    ///
+    /// `from_address`, `to_address`, `action_types`, and `space` in `filter`
+    /// are applied.
+    pub fn filter_trace_pairs(
+        self, filter: &TraceFilter,
+    ) -> Result<Vec<(ExecTrace, ExecTrace)>, String> {
+        let mut trace_pairs: Vec<(ExecTrace, Option<ExecTrace>)> = Vec::new();
+        let mut stack_index = Vec::new();
+        for trace in self.0 {
+            match &trace.action {
+                Action::Call(call) => {
+                    if call.space == filter.space
+                        && filter
+                            .from_address
+                            .as_ref()
+                            .map(|f| f.contains(&call.from))
+                            .unwrap_or(true)
+                        && filter
+                            .to_address
+                            .as_ref()
+                            .map(|f| f.contains(&call.to))
+                            .unwrap_or(true)
+                        && filter
+                            .action_types
+                            .as_ref()
+                            .map(|f| f.contains(&ActionType::Call))
+                            .unwrap_or(true)
+                    {
+                        stack_index.push(Some(trace_pairs.len()));
+                        trace_pairs.push((trace, None));
+                    } else {
+                        // The corresponding result should be ignored.
+                        stack_index.push(None);
+                    }
+                }
+                Action::Create(create) => {
+                    if create.space == filter.space
+                        && filter.from_address.as_ref().map(|f| f.contains(&create.from)).unwrap_or(true)
+                        // TODO(lpl): Should we allow `Address::zero()` as `to_address` for `Create`?
+                        && filter.to_address.is_none()
+                        && filter.action_types.as_ref().map(|f| f.contains(&ActionType::Create)).unwrap_or(true)
+                    {
+                        stack_index.push(Some(trace_pairs.len()));
+                        trace_pairs.push((trace, None));
+                    } else {
+                        // The corresponding result should be ignored.
+                        stack_index.push(None);
+                    }
+                }
+                Action::CallResult(_) | Action::CreateResult(_) => {
+                    if let Some(index) = stack_index
+                        .pop()
+                        .ok_or("result left unmatched!".to_string())?
+                    {
+                        // Since we know that traces should be paired correctly,
+                        // we do not check if the type
+                        // is correct here.
+                        trace_pairs[index].1 = Some(trace);
+                    }
+                }
+                Action::InternalTransferAction(_) => {}
+            }
+        }
+        if !stack_index.is_empty() {
+            bail!("actions left unmatched!".to_string());
+        }
+        Ok(trace_pairs
+            .into_iter()
+            .map(|pair| (pair.0, pair.1.expect("all actions matched")))
+            .collect())
+    }
+
+    /// Return filtered Native actions with their orders kept.
+    ///
+    /// `from_address`, `to_address`, `action_types`, and `space` in `filter`
+    /// are applied.
+    pub fn filter_traces(
+        self, filter: &TraceFilter,
+    ) -> Result<Vec<ExecTrace>, String> {
+        let mut traces = Vec::new();
+        let mut stack = Vec::new();
+        for trace in self.0 {
+            match &trace.action {
+                Action::Call(call) => {
+                    if call.space == filter.space
+                        && filter
+                            .from_address
+                            .as_ref()
+                            .map(|f| f.contains(&call.from))
+                            .unwrap_or(true)
+                        && filter
+                            .to_address
+                            .as_ref()
+                            .map(|f| f.contains(&call.to))
+                            .unwrap_or(true)
+                        && filter
+                            .action_types
+                            .as_ref()
+                            .map(|f| f.contains(&ActionType::Call))
+                            .unwrap_or(true)
+                    {
+                        stack.push(true);
+                        traces.push(trace);
+                    } else {
+                        // The corresponding result should be ignored.
+                        stack.push(false);
+                    }
+                }
+                Action::Create(create) => {
+                    if create.space == filter.space
+                        && filter.from_address.as_ref().map(|f| f.contains(&create.from)).unwrap_or(true)
+                        // TODO(lpl): Should we allow `Address::zero()` as `to_address` for `Create`?
+                        && filter.to_address.is_none()
+                        && filter.action_types.as_ref().map(|f| f.contains(&ActionType::Create)).unwrap_or(true)
+                    {
+                        stack.push(true);
+                        traces.push(trace);
+                    } else {
+                        // The corresponding result should be ignored.
+                        stack.push(false);
+                    }
+                }
+                Action::CallResult(_) | Action::CreateResult(_) => {
+                    if stack
+                        .pop()
+                        .ok_or("result left unmatched!".to_string())?
+                    {
+                        // Since we know that traces should be paired correctly,
+                        // we do not check if the type
+                        // is correct here.
+                        traces.push(trace);
+                    }
+                }
+                Action::InternalTransferAction(_) => {
+                    traces.push(trace);
+                }
+            }
+        }
+        if !stack.is_empty() {
+            bail!("actions left unmatched!".to_string());
+        }
+        Ok(traces)
     }
 }
 

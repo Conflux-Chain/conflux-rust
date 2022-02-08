@@ -1,5 +1,5 @@
 use crate::observer::trace::ActionType;
-use cfx_types::{Space, H256};
+use cfx_types::{Address, Space, H256};
 use primitives::EpochNumber;
 
 /// Log event Filter.
@@ -14,6 +14,12 @@ pub struct TraceFilter {
     /// Search will be applied in these blocks if given.
     /// This will override from/to_epoch fields.
     pub block_hashes: Option<Vec<H256>>,
+
+    /// Search from_address.
+    pub from_address: Option<Vec<Address>>,
+
+    /// Search to_address.
+    pub to_address: Option<Vec<Address>>,
 
     /// Search action.
     ///
