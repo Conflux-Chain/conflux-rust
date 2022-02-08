@@ -84,7 +84,7 @@ mod tests {
     use super::{
         super::trace::ActionType, EpochNumber, TraceFilter, VariadicValue,
     };
-    use cfx_types::{H256, U64};
+    use cfx_types::{Space, H256, U64};
     use cfxcore::observer::{
         trace::ActionType as PrimitiveActionType,
         trace_filter::TraceFilter as PrimitiveTraceFilter,
@@ -220,7 +220,8 @@ mod tests {
             ]),
             action_types: Some(vec![PrimitiveActionType::Call, PrimitiveActionType::CreateResult]),
             after: Some(2),
-            count:Some(3)
+            count:Some(3),
+            space: Space::Native
         };
 
         assert_eq!(filter.into_primitive(), Ok(primitive_filter));

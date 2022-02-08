@@ -219,6 +219,7 @@ impl TryFrom<RpcCfxLocalizedTrace> for LocalizedTrace {
             result: Res::None,
             trace_address: vec![],
             subtraces: 0,
+            // FIXME(lpl): Use the correct index in cfx/eth space.
             transaction_position: cfx_trace
                 .transaction_position
                 .map(|p| p.as_usize()),
