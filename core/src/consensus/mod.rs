@@ -1842,7 +1842,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
                 false, /* update_cache */
             )?;
             let transaction =
-                (*block.transactions[tx_info.tx_index.index]).clone();
+                (*block.transactions[tx_info.tx_index.real_index]).clone();
             Some((transaction, tx_info))
         } else {
             None
