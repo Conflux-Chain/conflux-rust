@@ -473,7 +473,7 @@ pub struct LocalizedTrace {
 
 /// Represents all traces produced by a single transaction.
 #[derive(Debug, PartialEq, Clone, RlpEncodable, RlpDecodable, MallocSizeOf)]
-pub struct TransactionExecTraces(pub(crate) Vec<ExecTrace>);
+pub struct TransactionExecTraces(pub Vec<ExecTrace>);
 
 impl From<Vec<ExecTrace>> for TransactionExecTraces {
     fn from(v: Vec<ExecTrace>) -> Self { TransactionExecTraces(v) }
@@ -632,6 +632,15 @@ impl TransactionExecTraces {
         }
         Ok(traces)
     }
+
+    pub fn filter_space(self, space: Space) -> Self {
+        // `unwrap` here should always succeed.
+        // `vec![]` is just added in case.
+        Self(
+            self.filter_traces(&TraceFilter::space_filter(space))
+                .unwrap_or(vec![]),
+        )
+    }
 }
 
 impl Into<Vec<ExecTrace>> for TransactionExecTraces {
@@ -642,7 +651,7 @@ impl Into<Vec<ExecTrace>> for TransactionExecTraces {
 #[derive(
     Debug, PartialEq, Clone, Default, RlpEncodable, RlpDecodable, MallocSizeOf,
 )]
-pub struct BlockExecTraces(pub(crate) Vec<TransactionExecTraces>);
+pub struct BlockExecTraces(pub Vec<TransactionExecTraces>);
 
 impl From<Vec<TransactionExecTraces>> for BlockExecTraces {
     fn from(v: Vec<TransactionExecTraces>) -> Self { BlockExecTraces(v) }
@@ -654,6 +663,15 @@ impl BlockExecTraces {
         self.0.iter().fold(Default::default(), |bloom, tx_traces| {
             bloom | tx_traces.bloom()
         })
+    }
+
+    pub fn filter_space(self, space: Space) -> Self {
+        Self(
+            self.0
+                .into_iter()
+                .map(|tx_trace| tx_trace.filter_space(space))
+                .collect(),
+        )
     }
 }
 

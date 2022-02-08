@@ -147,21 +147,21 @@ pub enum Res {
 #[derive(Debug)]
 pub struct LocalizedTrace {
     /// Action
-    action: Action,
+    pub action: Action,
     /// Result
-    result: Res,
+    pub result: Res,
     /// Trace address
-    trace_address: Vec<usize>,
+    pub trace_address: Vec<usize>,
     /// Subtraces
-    subtraces: usize,
+    pub subtraces: usize,
     /// Transaction position
-    transaction_position: Option<usize>,
+    pub transaction_position: Option<usize>,
     /// Transaction hash
-    transaction_hash: Option<H256>,
+    pub transaction_hash: Option<H256>,
     /// Block Number
-    block_number: u64,
+    pub block_number: u64,
     /// Block Hash
-    block_hash: H256,
+    pub block_hash: H256,
 }
 
 impl Serialize for LocalizedTrace {

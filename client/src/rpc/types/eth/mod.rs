@@ -21,7 +21,7 @@ pub use self::{
     log::Log,
     receipt::Receipt,
     sync::{SyncInfo, SyncStatus},
-    trace::LocalizedTrace,
+    trace::{LocalizedTrace, Res},
     trace_filter::TraceFilter,
     transaction::Transaction,
 };

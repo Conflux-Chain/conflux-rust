@@ -37,3 +37,19 @@ pub struct TraceFilter {
     /// cannot be set by RPC parameters.
     pub space: Space,
 }
+
+impl TraceFilter {
+    pub fn space_filter(space: Space) -> TraceFilter {
+        TraceFilter {
+            from_epoch: EpochNumber::Earliest,
+            to_epoch: EpochNumber::LatestState,
+            block_hashes: None,
+            from_address: None,
+            to_address: None,
+            action_types: None,
+            after: None,
+            count: None,
+            space,
+        }
+    }
+}
