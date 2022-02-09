@@ -215,21 +215,23 @@ impl Block {
                                 .iter()
                                 .enumerate()
                                 .filter(|(_idx, tx)| tx_space_filter.is_none() || tx.space() == tx_space_filter.unwrap())
-                                .map(|(idx, tx)| {
-                                    let receipt = execution_result.block_receipts.receipts.get(idx).unwrap();
-                                    let prior_gas_used = if idx == 0 {
+                                .enumerate()
+                                .map(|(new_index, (original_index, tx))| {
+                                    let receipt = execution_result.block_receipts.receipts.get(original_index).unwrap();
+                                    let prior_gas_used = if original_index == 0 {
                                         U256::zero()
                                     } else {
-                                        execution_result.block_receipts.receipts[idx - 1].accumulated_gas_used
+                                        execution_result.block_receipts.receipts[original_index - 1].accumulated_gas_used
                                     };
                                     match receipt.outcome_status {
                                         TransactionOutcome::Success | TransactionOutcome::Failure => {
                                             let tx_index = TransactionIndex {
                                                 block_hash: b.hash(),
-                                                index: idx,
+                                                real_index: original_index,
                                                 is_phantom: false,
+                                                rpc_index: Some(new_index),
                                             };
-                                            let tx_exec_error_msg = &execution_result.block_receipts.tx_execution_error_messages[idx];
+                                            let tx_exec_error_msg = &execution_result.block_receipts.tx_execution_error_messages[original_index];
                                             Transaction::from_signed(
                                                 tx,
                                                 Some(PackedOrExecuted::Executed(Receipt::new(

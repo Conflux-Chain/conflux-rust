@@ -734,7 +734,7 @@ impl RpcImpl {
     fn construct_rpc_receipt(
         &self, tx_index: TransactionIndex, exec_info: &BlockExecInfo,
     ) -> RpcResult<Option<RpcReceipt>> {
-        let id = tx_index.index;
+        let id = tx_index.real_index;
 
         if id >= exec_info.block.transactions.len()
             || id >= exec_info.block_receipts.receipts.len()
@@ -823,12 +823,21 @@ impl RpcImpl {
 
         let mut rpc_receipts = vec![];
 
-        for index in 0..exec_info.block.transactions.len() {
+        let iter = exec_info
+            .block
+            .transactions
+            .iter()
+            .enumerate()
+            .filter(|(_, tx)| tx.space() == Space::Native)
+            .enumerate();
+
+        for (new_index, (original_index, _)) in iter {
             if let Some(receipt) = self.construct_rpc_receipt(
                 TransactionIndex {
                     block_hash,
-                    index,
+                    real_index: original_index,
                     is_phantom: false,
+                    rpc_index: Some(new_index),
                 },
                 &exec_info,
             )? {

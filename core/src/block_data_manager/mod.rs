@@ -13,14 +13,14 @@ use cfx_storage::{
     state_manager::StateIndex, utils::guarded_value::*, StorageManager,
     StorageManagerTrait, StorageStateTrait,
 };
-use cfx_types::{Bloom, H256};
+use cfx_types::{Bloom, Space, H256};
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
 use primitives::{
     block::CompactBlock,
     receipt::{BlockReceipts, TransactionOutcome},
-    Block, BlockHeader, EpochId, SignedTransaction, TransactionIndex,
+    Block, BlockHeader, EpochId, Receipt, SignedTransaction, TransactionIndex,
     TransactionWithSignature, NULL_EPOCH,
 };
 use rlp::DecoderError;
@@ -38,7 +38,9 @@ use crate::{
         db_manager::DBManager, tx_data_manager::TransactionDataManager,
     },
     consensus::pos_handler::PosVerifier,
-    executive::internal_contract::impls::pos::decode_register_info,
+    executive::internal_contract::{
+        build_bloom_and_recover_phantom, impls::pos::decode_register_info,
+    },
     observer::trace::{BlockExecTraces, TransactionExecTraces},
 };
 pub use block_data_types::*;
@@ -264,8 +266,10 @@ impl BlockDataManager {
                     &tx.hash,
                     &TransactionIndex {
                         block_hash: cur_era_genesis_hash,
-                        index,
+                        real_index: index,
                         is_phantom: false,
+                        // FIXME(thegaram): do we allow EVM txs in genesis?
+                        rpc_index: Some(index),
                     },
                 );
             }
@@ -382,8 +386,8 @@ impl BlockDataManager {
             &tx_index.block_hash,
             false, /* update_cache */
         )?;
-        assert!(tx_index.index < block.transactions.len());
-        Some(block.transactions[tx_index.index].clone())
+        assert!(tx_index.real_index < block.transactions.len());
+        Some(block.transactions[tx_index.real_index].clone())
     }
 
     /// insert block body in memory cache and db
@@ -1222,7 +1226,7 @@ impl BlockDataManager {
         &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
         on_local_pivot: bool, update_trace: bool,
         reward_execution_info: &Option<RewardExecutionInfo>,
-        pos_verifier: &PosVerifier,
+        pos_verifier: &PosVerifier, evm_chain_id: u32,
     ) -> bool
     {
         if !self.epoch_executed(epoch_hash) {
@@ -1256,35 +1260,73 @@ impl BlockDataManager {
                     }
                 }
             }
+
+            let mut evm_tx_index = 0;
+
             // Recover tx address if we will skip pivot chain execution
             for (block_idx, block_hash) in epoch_block_hashes.iter().enumerate()
             {
+                let mut cfx_tx_index = 0;
+
                 let block = self
                     .block_by_hash(block_hash, true /* update_cache */)
                     .expect("block exists");
+
                 for (tx_idx, tx) in block.transactions.iter().enumerate() {
-                    match epoch_receipts[block_idx]
-                        .receipts
-                        .get(tx_idx)
-                        .unwrap()
-                        .outcome_status
-                    {
+                    let Receipt {
+                        outcome_status,
+                        logs,
+                        ..
+                    } = epoch_receipts[block_idx].receipts.get(tx_idx).unwrap();
+
+                    let rpc_index = match tx.space() {
+                        Space::Native => {
+                            let rpc_index = cfx_tx_index;
+                            cfx_tx_index += 1;
+                            rpc_index
+                        }
+                        Space::Ethereum
+                            if *outcome_status
+                                != TransactionOutcome::Skipped =>
+                        {
+                            let rpc_index = evm_tx_index;
+                            evm_tx_index += 1;
+                            rpc_index
+                        }
+                        _ => usize::MAX, // this will not be used
+                    };
+
+                    let (phantom_txs, _) =
+                        build_bloom_and_recover_phantom(logs, tx.hash());
+
+                    match outcome_status {
                         TransactionOutcome::Success
                         | TransactionOutcome::Failure => {
                             self.insert_transaction_index(
                                 &tx.hash,
                                 &TransactionIndex {
                                     block_hash: *block_hash,
-                                    index: tx_idx,
+                                    real_index: tx_idx,
                                     is_phantom: false,
+                                    rpc_index: Some(rpc_index),
                                 },
                             );
-                            for log in &epoch_receipts[block_idx]
-                                .receipts
-                                .get(tx_idx)
-                                .unwrap()
-                                .logs
-                            {
+
+                            for ptx in phantom_txs {
+                                self.insert_transaction_index(
+                                    &ptx.into_eip155(evm_chain_id).hash(),
+                                    &TransactionIndex {
+                                        block_hash: *block_hash,
+                                        real_index: tx_idx,
+                                        is_phantom: true,
+                                        rpc_index: Some(evm_tx_index),
+                                    },
+                                );
+
+                                evm_tx_index += 1;
+                            }
+
+                            for log in logs {
                                 if let Some(event) = decode_register_info(log) {
                                     epoch_staking_events.push(event);
                                 }

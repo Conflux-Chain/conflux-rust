@@ -184,7 +184,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
             assert_equal(tx["hash"], tx_hashes[idx])
 
             # check indexing
-            # assert_equal(tx["transactionIndex"], hex(idx))
+            assert_equal(tx["transactionIndex"], hex(idx))
 
             # check cfx_getTransactionByHash
             assert_equal(tx, self.nodes[0].cfx_getTransactionByHash(tx["hash"]))
@@ -206,7 +206,11 @@ class PhantomTransactionTest(ConfluxTestFramework):
         # Call, Outcome, ...
         assert_equal(receipts[0][1]["logs"][6]["data"], number_to_topic(13))
 
-        # TODO....
+        # check index
+        for block_receipts in receipts:
+            for idx, receipt in enumerate(block_receipts):
+                assert_equal(receipt["index"], hex(idx))
+
 
         # ---------------------------------------------------------------------
 

@@ -271,7 +271,7 @@ impl Provider {
 
         let block_hash = tx_index.block_hash;
         let block = self.ledger.block(block_hash)?;
-        let tx_index_in_block = tx_index.index;
+        let tx_index_in_block = tx_index.real_index;
         let num_txs_in_block = block.transactions.len();
 
         let tx_proof =
