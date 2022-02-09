@@ -323,7 +323,7 @@ impl EthTrace for EthTraceHandler {
                             .unwrap();
                         traces
                             .into_iter()
-                            .nth(tx_index.index)
+                            .nth(tx_index.real_index)
                             .and_then(|tx_trace| {
                                 tx_trace
                                     .filter_trace_pairs(
@@ -350,7 +350,8 @@ impl EthTrace for EthTraceHandler {
                                             subtraces: 0,
                                             // FIXME(lpl): follow the value of
                                             // tx index?
-                                            transaction_position: None,
+                                            transaction_position: tx_index
+                                                .rpc_index,
                                             transaction_hash: None,
                                             block_number: pivot_epoch_number,
                                             block_hash: pivot_hash,
