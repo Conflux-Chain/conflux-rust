@@ -244,13 +244,13 @@ mod tests {
         let primitive_filter = PrimitiveTraceFilter {
             from_epoch: PrimitiveEpochNumber::LatestCheckpoint,
             to_epoch: PrimitiveEpochNumber::LatestState,
-            from_address: Some(vec![Address::zero()].into()),
-            to_address: Some(vec![Address::zero()].into()),
+            from_address: vec![Address::zero()].into(),
+            to_address: vec![Address::zero()].into(),
             block_hashes: Some(vec![
                 H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
             ]),
-            action_types: Some(vec![PrimitiveActionType::Call, PrimitiveActionType::CreateResult]),
+            action_types: vec![PrimitiveActionType::Call, PrimitiveActionType::CreateResult].into(),
             after: Some(2),
             count:Some(3),
             space: Space::Native
