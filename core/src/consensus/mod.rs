@@ -1527,12 +1527,11 @@ impl ConsensusGraph {
                     .filter_traces(&filter)
                     .map_err(|e| FilterError::Custom(e))?
                 {
-                    if let Some(action_types) = &filter.action_types {
-                        if !action_types
-                            .contains(&ActionType::from(&trace.action))
-                        {
-                            continue;
-                        }
+                    if !filter
+                        .action_types
+                        .matches(&ActionType::from(&trace.action))
+                    {
+                        continue;
                     }
                     let trace = LocalizedTrace {
                         action: trace.action,

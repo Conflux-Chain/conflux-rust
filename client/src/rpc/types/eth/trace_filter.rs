@@ -60,9 +60,13 @@ impl TraceFilter {
             from_epoch,
             to_epoch,
             block_hashes: None,
-            action_types: None,
-            from_address: self.from_address,
-            to_address: self.to_address,
+            action_types: Default::default(),
+            from_address: self
+                .from_address
+                .map_or_else(Default::default, Into::into),
+            to_address: self
+                .to_address
+                .map_or_else(Default::default, Into::into),
             after: self.after,
             count: self.count,
             space: Space::Ethereum,

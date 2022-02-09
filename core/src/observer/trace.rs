@@ -501,21 +501,9 @@ impl TransactionExecTraces {
             match &trace.action {
                 Action::Call(call) => {
                     if call.space == filter.space
-                        && filter
-                            .from_address
-                            .as_ref()
-                            .map(|f| f.contains(&call.from))
-                            .unwrap_or(true)
-                        && filter
-                            .to_address
-                            .as_ref()
-                            .map(|f| f.contains(&call.to))
-                            .unwrap_or(true)
-                        && filter
-                            .action_types
-                            .as_ref()
-                            .map(|f| f.contains(&ActionType::Call))
-                            .unwrap_or(true)
+                        && filter.from_address.matches(&call.from)
+                        && filter.to_address.matches(&call.to)
+                        && filter.action_types.matches(&ActionType::Call)
                     {
                         stack_index.push(Some(trace_pairs.len()));
                         trace_pairs.push((trace, None));
@@ -526,10 +514,9 @@ impl TransactionExecTraces {
                 }
                 Action::Create(create) => {
                     if create.space == filter.space
-                        && filter.from_address.as_ref().map(|f| f.contains(&create.from)).unwrap_or(true)
-                        // TODO(lpl): Should we allow `Address::zero()` as `to_address` for `Create`?
-                        && filter.to_address.is_none()
-                        && filter.action_types.as_ref().map(|f| f.contains(&ActionType::Create)).unwrap_or(true)
+                        && filter.from_address.matches(&create.from)
+                        // TODO(lpl): openethereum uses `to_address` to filter the contract address.
+                        && filter.action_types.matches(&ActionType::Create)
                     {
                         stack_index.push(Some(trace_pairs.len()));
                         trace_pairs.push((trace, None));
@@ -574,21 +561,9 @@ impl TransactionExecTraces {
             match &trace.action {
                 Action::Call(call) => {
                     if call.space == filter.space
-                        && filter
-                            .from_address
-                            .as_ref()
-                            .map(|f| f.contains(&call.from))
-                            .unwrap_or(true)
-                        && filter
-                            .to_address
-                            .as_ref()
-                            .map(|f| f.contains(&call.to))
-                            .unwrap_or(true)
-                        && filter
-                            .action_types
-                            .as_ref()
-                            .map(|f| f.contains(&ActionType::Call))
-                            .unwrap_or(true)
+                        && filter.from_address.matches(&call.from)
+                        && filter.to_address.matches(&call.to)
+                        && filter.action_types.matches(&ActionType::Call)
                     {
                         stack.push(true);
                         traces.push(trace);
@@ -599,10 +574,9 @@ impl TransactionExecTraces {
                 }
                 Action::Create(create) => {
                     if create.space == filter.space
-                        && filter.from_address.as_ref().map(|f| f.contains(&create.from)).unwrap_or(true)
-                        // TODO(lpl): Should we allow `Address::zero()` as `to_address` for `Create`?
-                        && filter.to_address.is_none()
-                        && filter.action_types.as_ref().map(|f| f.contains(&ActionType::Create)).unwrap_or(true)
+                        && filter.from_address.matches(&create.from)
+                        // TODO(lpl): openethereum uses `to_address` to filter the contract address.
+                        && filter.action_types.matches(&ActionType::Create)
                     {
                         stack.push(true);
                         traces.push(trace);

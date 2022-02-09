@@ -64,11 +64,10 @@ impl TraceFilter {
 
         // address, limit
         let action_types = match self.action_types {
-            None => None,
-            Some(VariadicValue::Null) => None,
-            Some(VariadicValue::Single(x)) => Some(vec![x.into()]),
+            None | Some(VariadicValue::Null) => vec![],
+            Some(VariadicValue::Single(x)) => vec![x.into()],
             Some(VariadicValue::Multiple(xs)) => {
-                Some(xs.into_iter().map(|x| x.into()).collect())
+                xs.into_iter().map(|x| x.into()).collect()
             }
         };
 
@@ -76,9 +75,17 @@ impl TraceFilter {
             from_epoch,
             to_epoch,
             block_hashes,
-            from_address: self.from_address.and_then(Into::into),
-            to_address: self.to_address.and_then(Into::into),
-            action_types,
+            from_address: self
+                .from_address
+                .and_then(Into::into)
+                .unwrap_or_else(Vec::new)
+                .into(),
+            to_address: self
+                .to_address
+                .and_then(Into::into)
+                .unwrap_or_else(Vec::new)
+                .into(),
+            action_types: action_types.into(),
             after: self.after.map(|n| n.as_usize()),
             count: self.count.map(|n| n.as_usize()),
             space: Space::Native,

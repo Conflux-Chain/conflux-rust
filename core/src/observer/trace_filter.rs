@@ -16,16 +16,18 @@ pub struct TraceFilter {
     pub block_hashes: Option<Vec<H256>>,
 
     /// Search from_address.
-    pub from_address: Option<Vec<Address>>,
+    /// An empty vector matches all addresses.
+    pub from_address: ListFilter<Address>,
 
     /// Search to_address.
-    pub to_address: Option<Vec<Address>>,
+    /// An empty vector matches all addresses.
+    pub to_address: ListFilter<Address>,
 
     /// Search action.
     ///
     /// If None, match all.
     /// If specified, trace must match one of these action types.
-    pub action_types: Option<Vec<ActionType>>,
+    pub action_types: ListFilter<ActionType>,
 
     /// The offset trace number.
     pub after: Option<usize>,
@@ -44,12 +46,35 @@ impl TraceFilter {
             from_epoch: EpochNumber::Earliest,
             to_epoch: EpochNumber::LatestState,
             block_hashes: None,
-            from_address: None,
-            to_address: None,
-            action_types: None,
+            from_address: Default::default(),
+            to_address: Default::default(),
+            action_types: Default::default(),
             after: None,
             count: None,
             space,
         }
     }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ListFilter<T: PartialEq> {
+    list: Vec<T>,
+}
+
+impl<T: PartialEq> Default for ListFilter<T> {
+    fn default() -> Self { ListFilter { list: Vec::new() } }
+}
+
+impl<T: PartialEq> From<Vec<T>> for ListFilter<T> {
+    fn from(addresses: Vec<T>) -> Self { ListFilter { list: addresses } }
+}
+
+impl<T: PartialEq> ListFilter<T> {
+    /// Returns true if address matches one of the searched addresses.
+    pub fn matches(&self, address: &T) -> bool {
+        self.matches_all() || self.list.contains(address)
+    }
+
+    /// Returns true if this address filter matches everything.
+    pub fn matches_all(&self) -> bool { self.list.is_empty() }
 }
