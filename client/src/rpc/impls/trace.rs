@@ -348,8 +348,7 @@ impl EthTrace for EthTraceHandler {
                                             subtraces: 0,
                                             // FIXME(lpl): follow the value of
                                             // tx index?
-                                            transaction_position: tx_index
-                                                .rpc_index,
+                                            transaction_position: None,
                                             transaction_hash: None,
                                             block_number: pivot_epoch_number,
                                             block_hash: pivot_hash,
