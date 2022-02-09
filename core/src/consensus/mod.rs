@@ -1501,9 +1501,7 @@ impl ConsensusGraph {
                 .data_man
                 .block_by_hash(&block_hash, true /* update_cache */)
                 .ok_or(FilterError::BlockAlreadyPruned { block_hash })?;
-            let tx_hashes: Vec<H256> =
-                block.transactions.iter().map(|tx| tx.hash()).collect();
-            if tx_hashes.len() != block_trace.0.len() {
+            if block.transactions.len() != block_trace.0.len() {
                 bail!(format!(
                     "tx list and trace length unmatch: block_hash={:?}",
                     block_hash
@@ -1521,8 +1519,13 @@ impl ConsensusGraph {
                         .into(),
                     )
                 })?;
-            for (tx_position, tx_trace) in block_trace.0.into_iter().enumerate()
-            {
+            let mut rpc_tx_index = 0;
+            for (tx_pos, tx_trace) in block_trace.0.into_iter().enumerate() {
+                if filter.space == Space::Native
+                    && block.transactions[tx_pos].space() == Space::Ethereum
+                {
+                    continue;
+                }
                 for trace in tx_trace
                     .filter_traces(&filter)
                     .map_err(|e| FilterError::Custom(e))?
@@ -1540,11 +1543,12 @@ impl ConsensusGraph {
                         epoch_number: epoch_number.into(),
                         block_hash,
                         // FIXME(lpl): Use correct tx index.
-                        transaction_position: tx_position.into(),
-                        transaction_hash: tx_hashes[tx_position],
+                        transaction_position: rpc_tx_index.into(),
+                        transaction_hash: block.transactions[tx_pos].hash(),
                     };
                     traces.push(trace);
                 }
+                rpc_tx_index += 1;
             }
         }
         Ok(traces)
