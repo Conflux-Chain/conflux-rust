@@ -133,7 +133,14 @@ impl Receipt {
 
         Ok(Receipt {
             transaction_hash: transaction.hash.into(),
-            index: U64::from(transaction_index.index),
+            index: U64::from(
+                transaction_index
+                    .rpc_index
+                    // FIXME(thegaram): this is triggered on light nodes, and
+                    // maybe in some other cases as well.
+                    // is there a better way to handle this?
+                    .unwrap_or(transaction_index.real_index),
+            ),
             block_hash: transaction_index.block_hash.into(),
             gas_used: (accumulated_gas_used - prior_gas_used).into(),
             gas_fee: gas_fee.into(),

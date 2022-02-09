@@ -130,7 +130,7 @@ impl TraceHandler {
                     .and_then(|(pivot_hash, traces)| {
                         traces
                             .into_iter()
-                            .nth(tx_index.index)
+                            .nth(tx_index.real_index)
                             .map(|tx_trace| {
                                 tx_trace.filter_space(Space::Native).0
                             })
@@ -155,7 +155,7 @@ impl TraceHandler {
                                         ),
                                         block_hash: Some(tx_index.block_hash),
                                         transaction_position: Some(
-                                            tx_index.index.into(),
+                                            tx_index.real_index.into(),
                                         ),
                                         transaction_hash: Some(*tx_hash),
                                     })

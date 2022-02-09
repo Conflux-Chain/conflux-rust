@@ -681,7 +681,7 @@ impl Eth for EthHandler {
                 ExecutionError::VmError(vm::Error::Reverted),
                 executed,
             ) => bail!(call_execution_error(
-                "Transaction reverted".into(),
+                format!("execution reverted: {}", revert_reason_decode(&executed.output)),
                 executed.output
             )),
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {

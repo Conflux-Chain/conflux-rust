@@ -12,9 +12,11 @@ pub struct TransactionIndex {
     /// Block hash
     pub block_hash: H256,
     /// Transaction index within the block
-    pub index: usize,
+    pub real_index: usize,
     /// true when this index belongs to a phantom transaction
     pub is_phantom: bool,
+    /// Transaction index to be used in RPC responses
+    pub rpc_index: Option<usize>,
 }
 
 impl MallocSizeOf for TransactionIndex {
@@ -23,16 +25,11 @@ impl MallocSizeOf for TransactionIndex {
 
 impl Encodable for TransactionIndex {
     fn rlp_append(&self, s: &mut RlpStream) {
-        if self.is_phantom {
-            s.begin_list(3);
-            s.append(&self.block_hash);
-            s.append(&self.index);
-            s.append(&self.is_phantom);
-        } else {
-            s.begin_list(2);
-            s.append(&self.block_hash);
-            s.append(&self.index);
-        }
+        s.begin_list(4);
+        s.append(&self.block_hash);
+        s.append(&self.real_index);
+        s.append(&self.is_phantom);
+        s.append(&self.rpc_index);
     }
 }
 
@@ -41,13 +38,21 @@ impl Decodable for TransactionIndex {
         match rlp.item_count()? {
             2 => Ok(TransactionIndex {
                 block_hash: rlp.val_at(0)?,
-                index: rlp.val_at(1)?,
+                real_index: rlp.val_at(1)?,
                 is_phantom: false,
+                rpc_index: None,
             }),
             3 => Ok(TransactionIndex {
                 block_hash: rlp.val_at(0)?,
-                index: rlp.val_at(1)?,
+                real_index: rlp.val_at(1)?,
                 is_phantom: rlp.val_at(2)?,
+                rpc_index: None,
+            }),
+            4 => Ok(TransactionIndex {
+                block_hash: rlp.val_at(0)?,
+                real_index: rlp.val_at(1)?,
+                is_phantom: rlp.val_at(2)?,
+                rpc_index: rlp.val_at(3)?,
             }),
             _ => Err(DecoderError::RlpInvalidLength),
         }
