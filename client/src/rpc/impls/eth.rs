@@ -886,6 +886,12 @@ impl Eth for EthHandler {
                 Some(n) => n,
             };
 
+        if epoch_num > self.consensus_graph().best_executed_state_epoch_number()
+        {
+            // The receipt is only visible to optimistic execution.
+            return Ok(None);
+        }
+
         let maybe_block = self
             .consensus_graph()
             .get_phantom_block_by_number(EpochNumber::Number(epoch_num), None)
