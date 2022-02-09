@@ -6,7 +6,7 @@ use crate::rpc::{
     error_codes,
     helpers::{EpochQueue, SubscriberId, Subscribers},
     metadata::Metadata,
-    traits::PubSub,
+    traits::pubsub::PubSub,
     types::{
         pubsub::{self, SubscriptionEpoch},
         Header as RpcHeader, Log as RpcLog,

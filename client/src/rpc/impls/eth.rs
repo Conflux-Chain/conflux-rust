@@ -36,7 +36,7 @@ use crate::rpc::{
         request_rejected_in_catch_up_mode, unimplemented, unknown_block,
     },
     impls::RpcImplConfiguration,
-    traits::eth::{Eth, EthFilter},
+    traits::eth_space::eth::{Eth, EthFilter},
     types::{
         eth::{
             Block as RpcBlock, BlockNumber, CallRequest, EthRpcLogFilter,

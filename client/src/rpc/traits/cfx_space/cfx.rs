@@ -2,16 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::super::types::{
-    Account as RpcAccount, AccountPendingInfo, Block, Bytes, CallRequest,
-    CfxRpcLogFilter, CheckBalanceAgainstTransactionResponse, EpochNumber,
-    EstimateGasAndCollateralResponse, Log as RpcLog, PoSEconomics,
-    Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, SponsorInfo,
-    Status as RpcStatus, TokenSupplyInfo, Transaction,
-};
 use crate::rpc::types::{
-    pos::PoSEpochReward, AccountPendingTransactions, BlockHashOrEpochNumber,
-    RpcAddress,
+    pos::PoSEpochReward, Account as RpcAccount, AccountPendingInfo,
+    AccountPendingTransactions, Block, BlockHashOrEpochNumber, Bytes,
+    CallRequest, CfxRpcLogFilter, CheckBalanceAgainstTransactionResponse,
+    EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog, PoSEconomics,
+    Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, RpcAddress,
+    SponsorInfo, Status as RpcStatus, TokenSupplyInfo, Transaction,
 };
 use cfx_types::{H256, U256, U64};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};

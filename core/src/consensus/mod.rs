@@ -1497,14 +1497,12 @@ impl ConsensusGraph {
     {
         let mut traces = Vec::new();
         for (pivot_hash, block_hash, block_trace) in block_traces {
-            let tx_hashes: Vec<H256> = self
+            let block = self
                 .data_man
                 .block_by_hash(&block_hash, true /* update_cache */)
-                .ok_or(FilterError::BlockAlreadyPruned { block_hash })?
-                .transactions
-                .iter()
-                .map(|tx| tx.hash())
-                .collect();
+                .ok_or(FilterError::BlockAlreadyPruned { block_hash })?;
+            let tx_hashes: Vec<H256> =
+                block.transactions.iter().map(|tx| tx.hash()).collect();
             if tx_hashes.len() != block_trace.0.len() {
                 bail!(format!(
                     "tx list and trace length unmatch: block_hash={:?}",
@@ -1525,13 +1523,15 @@ impl ConsensusGraph {
                 })?;
             for (tx_position, tx_trace) in block_trace.0.into_iter().enumerate()
             {
-                for trace in tx_trace.0 {
-                    if let Some(action_types) = &filter.action_types {
-                        if !action_types
-                            .contains(&ActionType::from(&trace.action))
-                        {
-                            continue;
-                        }
+                for trace in tx_trace
+                    .filter_traces(&filter)
+                    .map_err(|e| FilterError::Custom(e))?
+                {
+                    if !filter
+                        .action_types
+                        .matches(&ActionType::from(&trace.action))
+                    {
+                        continue;
                     }
                     let trace = LocalizedTrace {
                         action: trace.action,
@@ -1539,6 +1539,7 @@ impl ConsensusGraph {
                         epoch_hash: pivot_hash,
                         epoch_number: epoch_number.into(),
                         block_hash,
+                        // FIXME(lpl): Use correct tx index.
                         transaction_position: tx_position.into(),
                         transaction_hash: tx_hashes[tx_position],
                     };

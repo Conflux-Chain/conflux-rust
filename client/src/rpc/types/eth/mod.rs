@@ -9,6 +9,8 @@ mod filter;
 mod log;
 mod receipt;
 mod sync;
+mod trace;
+mod trace_filter;
 mod transaction;
 
 pub use self::{
@@ -19,5 +21,7 @@ pub use self::{
     log::Log,
     receipt::Receipt,
     sync::{SyncInfo, SyncStatus},
+    trace::{LocalizedTrace, Res},
+    trace_filter::TraceFilter,
     transaction::Transaction,
 };
