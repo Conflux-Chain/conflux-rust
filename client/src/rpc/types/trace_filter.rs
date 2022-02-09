@@ -153,8 +153,8 @@ mod tests {
             "{\
              \"fromEpoch\":\"0x3e8\",\
              \"toEpoch\":\"latest_state\",\
-             \"fromAddress\":\"[\"0x0000000000000000000000000000000000000000\"]\",\
-             \"toAddress\":\"[\"0x0000000000000000000000000000000000000000\"]\",\
+             \"fromAddress\":[\"0x0000000000000000000000000000000000000000\"],\
+             \"toAddress\":[\"0x0000000000000000000000000000000000000000\"],\
              \"blockHashes\":[\"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
              \"actionTypes\":[\"call\",\"create_result\"],\
              \"after\":\"0x2\",\
@@ -185,8 +185,8 @@ mod tests {
         let serialized = "{\
              \"fromEpoch\":\"0x3e8\",\
              \"toEpoch\":\"latest_state\",\
-             \"fromAddress\":\"[\"0x0000000000000000000000000000000000000000\"]\",\
-             \"toAddress\":\"[\"0x0000000000000000000000000000000000000000\"]\",\
+             \"fromAddress\":[\"0x0000000000000000000000000000000000000000\"],\
+             \"toAddress\":[\"0x0000000000000000000000000000000000000000\"],\
              \"blockHashes\":[\"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
              \"actionTypes\":[\"call\",\"create_result\"],\
              \"after\":\"0x2\",\
