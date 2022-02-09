@@ -1293,7 +1293,7 @@ impl BlockDataManager {
                             evm_tx_index += 1;
                             rpc_index
                         }
-                        _ => 0xff, // this will not be used
+                        _ => usize::MAX, // this will not be used
                     };
 
                     let (phantom_txs, _) =

@@ -921,14 +921,12 @@ impl ConsensusExecutionHandler {
             );
         }
 
-        // Check if the state has been computed
-        // FIXME(thegaram): is the perf impact of db read here acceptable?
         let pivot_block_header = self
             .data_man
             .block_header_by_hash(epoch_hash)
             .expect("must exists");
 
-        // FIXME(thegaram): is it safe to lock here?
+        // note: the lock on chain_id is never held so this should be OK.
         let evm_chain_id = self
             .machine
             .params()
@@ -937,6 +935,7 @@ impl ConsensusExecutionHandler {
             .get_chain_id(pivot_block_header.height())
             .in_evm_space();
 
+        // Check if the state has been computed
         if !force_recompute
             && debug_record.is_none()
             && self.data_man.epoch_executed_and_recovered(
@@ -1412,7 +1411,7 @@ impl ConsensusExecutionHandler {
                         evm_tx_index += 1;
                         rpc_index
                     }
-                    _ => 0xff, // this will not be used
+                    _ => usize::MAX, // this will not be used
                 };
 
                 if on_local_pivot
@@ -1430,7 +1429,8 @@ impl ConsensusExecutionHandler {
                         },
                     );
 
-                    // FIXME(thegaram): is it safe to lock here?
+                    // note: the lock on chain_id is never held
+                    // so this should be OK.
                     let evm_chain_id = self
                         .machine
                         .params()
