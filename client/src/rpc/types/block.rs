@@ -22,8 +22,9 @@ use serde::{
 use serde_json::Value;
 use std::{convert::TryInto, sync::Arc};
 
-use crate::rpc::types::{transaction::PackedOrExecuted, Receipt, Transaction};
-use cfx_bytes::Bytes;
+use crate::rpc::types::{
+    transaction::PackedOrExecuted, Bytes, Receipt, Transaction,
+};
 use primitives::pos::PosBlockId;
 
 #[derive(PartialEq, Debug)]
@@ -317,7 +318,13 @@ impl Block {
                 .collect(),
             nonce: b.block_header.nonce().into(),
             transactions,
-            custom: b.block_header.custom().clone(),
+            custom: b
+                .block_header
+                .custom()
+                .clone()
+                .into_iter()
+                .map(Into::into)
+                .collect(),
             size: Some(b.size().into()),
             pos_reference: b.block_header.pos_reference().clone(),
         })
