@@ -354,9 +354,7 @@ impl Eth for EthHandler {
 
     fn accounts(&self) -> jsonrpc_core::Result<Vec<H160>> {
         info!("RPC Request: eth_accounts");
-        // TODO: EVM core: discussion: do we really need this? Maybe not,
-        // because EVM has enough dev tools and don't need dev mode.
-        // We do not expect people to use the ETH rpc to manage accounts
+        // Conflux eSpace does not manage accounts
         Ok(vec![])
     }
 
