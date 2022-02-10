@@ -359,8 +359,9 @@ impl TxInfos {
         // store
         let tx_index = TransactionIndex {
             block_hash,
-            index: tx_index_in_block,
+            real_index: tx_index_in_block,
             is_phantom: false,
+            rpc_index: None,
         };
 
         self.verified

@@ -184,7 +184,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
             assert_equal(tx["hash"], tx_hashes[idx])
 
             # check indexing
-            # assert_equal(tx["transactionIndex"], hex(idx))
+            assert_equal(tx["transactionIndex"], hex(idx))
 
             # check cfx_getTransactionByHash
             assert_equal(tx, self.nodes[0].cfx_getTransactionByHash(tx["hash"]))
@@ -206,7 +206,11 @@ class PhantomTransactionTest(ConfluxTestFramework):
         # Call, Outcome, ...
         assert_equal(receipts[0][1]["logs"][6]["data"], number_to_topic(13))
 
-        # TODO....
+        # check index
+        for block_receipts in receipts:
+            for idx, receipt in enumerate(block_receipts):
+                assert_equal(receipt["index"], hex(idx))
+
 
         # ---------------------------------------------------------------------
 
@@ -240,9 +244,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
             assert_equal(tx["transactionIndex"], hex(idx))
 
             # check eth_getTransactionByHash
-            tx2 = self.nodes[0].eth_getTransactionByHash(tx["hash"])
-            tx2["status"] = None # TODO: fix status in eth_getBlockByNumber
-            assert_equal(tx, tx2)
+            assert_equal(tx, self.nodes[0].eth_getTransactionByHash(tx["hash"]))
 
         # TODO: check transaction details
 
@@ -259,6 +261,10 @@ class PhantomTransactionTest(ConfluxTestFramework):
         assert_equal(receipts2, receipts)
 
         logIndex = 0
+
+        filter = { "fromBlock": epoch_a, "toBlock": epoch_a }
+        logsFiltered = self.nodes[0].eth_getLogs(filter)
+        assert_equal(len(logsFiltered), 4)
 
         for idx, receipt in enumerate(receipts):
             assert_equal(receipt["blockHash"], block_a)
@@ -282,6 +288,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
                 assert_equal(log["logIndex"], hex(logIndex))
                 assert_equal(log["transactionLogIndex"], hex(idx2))
                 assert_equal(log["removed"], False)
+                assert_equal(log, logsFiltered[logIndex])
                 logIndex += 1
 
         assert_equal(len(receipts[0]["logs"]), 1)
@@ -327,9 +334,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
             assert_equal(tx["transactionIndex"], hex(idx))
 
             # check eth_getTransactionByHash
-            tx2 = self.nodes[0].eth_getTransactionByHash(tx["hash"])
-            tx2["status"] = None # TODO: fix status in eth_getBlockByNumber
-            assert_equal(tx, tx2)
+            assert_equal(tx, self.nodes[0].eth_getTransactionByHash(tx["hash"]))
 
         receipts = self.nodes[0].parity_getBlockReceipts(epoch_e)
         assert_equal(len(receipts), 10)
@@ -338,6 +343,10 @@ class PhantomTransactionTest(ConfluxTestFramework):
         assert_equal(receipts2, receipts)
 
         logIndex = 0
+
+        filter = { "fromBlock": epoch_e, "toBlock": epoch_e }
+        logsFiltered = self.nodes[0].eth_getLogs(filter)
+        assert_equal(len(logsFiltered), 8)
 
         for idx, receipt in enumerate(receipts):
             assert_equal(receipt["blockHash"], block_e)
@@ -361,6 +370,7 @@ class PhantomTransactionTest(ConfluxTestFramework):
                 assert_equal(log["logIndex"], hex(logIndex))
                 assert_equal(log["transactionLogIndex"], hex(idx2))
                 assert_equal(log["removed"], False)
+                assert_equal(log, logsFiltered[logIndex])
                 logIndex += 1
 
         assert_equal(len(receipts[0]["logs"]), 1)
@@ -388,6 +398,23 @@ class PhantomTransactionTest(ConfluxTestFramework):
         assert_equal(receipts[9]["logs"][0]["data"], number_to_topic(26))
 
         # ---------------------------------------------------------------------
+
+        # make sure pending transactions can be retrieved even before execution
+        evm_next_nonce += 1
+
+        signed = self.evmAccount.signTransaction({
+            "to": evmContractAddr,
+            "value": 0,
+            "gasPrice": 1,
+            "gas": 150000,
+            "nonce": evm_next_nonce,
+            "chainId": 11,
+            "data": "0x",
+        })
+
+        tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+        tx = self.nodes[0].eth_getTransactionByHash(tx_hash.hex())
+        assert_ne(tx, None)
 
         self.log.info("Pass")
 

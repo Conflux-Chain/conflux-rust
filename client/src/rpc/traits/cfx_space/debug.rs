@@ -2,12 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::super::types::{
+use crate::rpc::types::{
     BlockHashOrEpochNumber, Bytes as RpcBytes, ConsensusGraphStates,
-    Receipt as RpcReceipt, RpcAddress, SyncGraphStates,
+    Receipt as RpcReceipt, RpcAddress, SendTxRequest, SyncGraphStates,
     Transaction as RpcTransaction,
 };
-use crate::rpc::types::SendTxRequest;
 use cfx_types::{H256, H520, U128};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
 use jsonrpc_derive::rpc;

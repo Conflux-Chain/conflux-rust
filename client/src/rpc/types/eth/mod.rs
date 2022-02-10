@@ -9,15 +9,19 @@ mod filter;
 mod log;
 mod receipt;
 mod sync;
+mod trace;
+mod trace_filter;
 mod transaction;
 
 pub use self::{
-    block::{Block, PhantomBlock},
+    block::Block,
     block_number::BlockNumber,
     call_request::CallRequest,
     filter::{EthRpcLogFilter, FilterChanges},
     log::Log,
     receipt::Receipt,
     sync::{SyncInfo, SyncStatus},
+    trace::{LocalizedTrace, Res},
+    trace_filter::TraceFilter,
     transaction::Transaction,
 };

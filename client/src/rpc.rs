@@ -52,8 +52,14 @@ use self::{
         trace::TraceHandler,
     },
     traits::{
-        cfx::Cfx, debug::LocalRpc, eth::Eth, pool::TransactionPool, pos::Pos,
-        pubsub::PubSub, test::TestRpc, trace::Trace,
+        cfx::Cfx,
+        debug::LocalRpc,
+        eth_space::{eth::Eth, trace::Trace as EthTrace},
+        pool::TransactionPool,
+        pos::Pos,
+        pubsub::PubSub,
+        test::TestRpc,
+        trace::Trace,
     },
 };
 
@@ -62,7 +68,7 @@ use crate::{
     configuration::Configuration,
     rpc::{
         error_codes::request_rejected_too_many_request_error,
-        impls::eth::EthHandler,
+        impls::{eth::EthHandler, trace::EthTraceHandler},
         interceptor::{RpcInterceptor, RpcProxy},
         rpc_apis::{Api, ApiSet},
     },
@@ -229,11 +235,21 @@ fn setup_rpc_apis(
                     rpc.tx_pool.clone(),
                 )
                 .to_delegate();
+                let evm_trace_handler = EthTraceHandler {
+                    trace_handler: TraceHandler::new(
+                        rpc.consensus.get_data_manager().clone(),
+                        *rpc.sync.network.get_network_type(),
+                        rpc.consensus.clone(),
+                    ),
+                }
+                .to_delegate();
                 let interceptor = ThrottleInterceptor::new(
                     throttling_conf,
                     throttling_section,
                 );
-                handler.extend_with(RpcProxy::new(evm, interceptor))
+                handler.extend_with(RpcProxy::new(evm, interceptor));
+                // TODO(lpl): Set this separately.
+                handler.extend_with(evm_trace_handler);
             }
             Api::Debug => {
                 handler.extend_with(
