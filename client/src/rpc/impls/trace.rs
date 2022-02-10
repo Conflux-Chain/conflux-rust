@@ -58,14 +58,12 @@ impl TraceHandler {
         &self, block_hash: H256,
     ) -> RpcResult<Option<LocalizedBlockTrace>> {
         // Note: an alternative to `into_jsonrpc_result` is the delegate! macro.
-        let transaction_hashes = match self
+        let block = match self
             .data_man
             .block_by_hash(&block_hash, true /* update_cache */)
         {
             None => return Ok(None),
-            Some(block) => {
-                block.transactions.iter().map(|tx| tx.hash()).collect()
-            }
+            Some(block) => block,
         };
 
         match self.data_man.block_traces_by_hash(&block_hash) {
@@ -81,7 +79,7 @@ impl TraceHandler {
                     block_hash,
                     pivot_hash,
                     epoch_number,
-                    transaction_hashes,
+                    &block.transactions,
                     self.network,
                 ) {
                     Ok(t) => Ok(Some(t)),
@@ -154,9 +152,9 @@ impl TraceHandler {
                                                 .into(),
                                         ),
                                         block_hash: Some(tx_index.block_hash),
-                                        transaction_position: Some(
-                                            tx_index.real_index.into(),
-                                        ),
+                                        transaction_position: tx_index
+                                            .rpc_index
+                                            .map(Into::into),
                                         transaction_hash: Some(*tx_hash),
                                     })
                                     .collect()
@@ -350,8 +348,7 @@ impl EthTrace for EthTraceHandler {
                                             subtraces: 0,
                                             // FIXME(lpl): follow the value of
                                             // tx index?
-                                            transaction_position: tx_index
-                                                .rpc_index,
+                                            transaction_position: None,
                                             transaction_hash: None,
                                             block_number: pivot_epoch_number,
                                             block_hash: pivot_hash,

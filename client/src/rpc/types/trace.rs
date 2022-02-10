@@ -5,7 +5,7 @@
 use super::RpcAddress;
 use crate::rpc::types::Bytes;
 use cfx_addr::Network;
-use cfx_types::{H256, U256, U64};
+use cfx_types::{Space, H256, U256, U64};
 use cfxcore::{
     observer::trace::{
         Action as VmAction, ActionType as VmActionType, BlockExecTraces,
@@ -17,7 +17,9 @@ use cfxcore::{
     },
     vm::{CallType, CreateType},
 };
+use primitives::SignedTransaction;
 use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
+use std::sync::Arc;
 use strum_macros::EnumDiscriminants;
 
 #[derive(Debug, Clone, PartialEq, EnumDiscriminants)]
@@ -341,27 +343,29 @@ impl LocalizedTransactionTrace {
 impl LocalizedBlockTrace {
     pub fn from(
         traces: BlockExecTraces, block_hash: H256, epoch_hash: H256,
-        epoch_number: u64, transaction_hashes: Vec<H256>, network: Network,
+        epoch_number: u64, transactions: &Vec<Arc<SignedTransaction>>,
+        network: Network,
     ) -> Result<Self, String>
     {
         let traces: Vec<TransactionExecTraces> = traces.into();
-        if traces.len() != transaction_hashes.len() {
+        if traces.len() != transactions.len() {
             bail!("trace and tx hash list length unmatch!");
         }
+        let transaction_traces = traces
+            .into_iter()
+            .enumerate()
+            .filter_map(|(tx_pos, t)| match transactions[tx_pos].space() {
+                Space::Native => Some((transactions[tx_pos].hash(), t)),
+                Space::Ethereum => None,
+            })
+            .enumerate()
+            .map(|(rpc_index, (tx_hash, t))| {
+                LocalizedTransactionTrace::from(t, tx_hash, rpc_index, network)
+            })
+            .collect::<Result<_, _>>()?;
 
         Ok(LocalizedBlockTrace {
-            transaction_traces: traces
-                .into_iter()
-                .enumerate()
-                .map(|(tx_pos, t)| {
-                    LocalizedTransactionTrace::from(
-                        t,
-                        transaction_hashes[tx_pos],
-                        tx_pos,
-                        network,
-                    )
-                })
-                .collect::<Result<_, _>>()?,
+            transaction_traces,
             epoch_hash,
             epoch_number: epoch_number.into(),
             block_hash,
