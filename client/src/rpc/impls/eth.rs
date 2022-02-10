@@ -543,12 +543,16 @@ impl Eth for EthHandler {
             Some(n) => n,
         };
 
-        let maybe_epoch = self
+        let maybe_pivot_hash = self
             .consensus
             .get_block_hashes_by_epoch(epoch_num.into())
-            .ok();
+            .ok()
+            .and_then(|hs| hs.last().cloned());
 
-        Ok(maybe_epoch.map(|_| 0.into()))
+        match maybe_pivot_hash {
+            Some(h) if h == hash => Ok(Some(0.into())),
+            _ => Ok(None),
+        }
     }
 
     fn block_uncles_count_by_number(
