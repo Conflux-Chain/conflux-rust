@@ -122,6 +122,24 @@ impl TraceHandler {
                 if tx_index.is_phantom {
                     return None;
                 }
+                let block = match self
+                    .data_man
+                    .block_by_hash(&tx_index.block_hash, false)
+                {
+                    None => return None,
+                    Some(block) => block,
+                };
+                if block
+                    .transactions
+                    .get(tx_index.real_index)
+                    .map(|tx| tx.space() == Space::Ethereum)
+                    // This default value is just added in case.
+                    .unwrap_or(true)
+                {
+                    // If it's a Ethereum space tx, we return `Ok(None)` here
+                    // instead of returning `Ok(Some(vec![]))` later.
+                    return None;
+                }
 
                 self.data_man
                     .transactions_traces_by_block_hash(&tx_index.block_hash)
@@ -152,9 +170,12 @@ impl TraceHandler {
                                                 .into(),
                                         ),
                                         block_hash: Some(tx_index.block_hash),
-                                        transaction_position: tx_index
-                                            .rpc_index
-                                            .map(Into::into),
+                                        transaction_position: Some(
+                                            tx_index
+                                                .rpc_index
+                                                .unwrap_or(tx_index.real_index)
+                                                .into(),
+                                        ),
                                         transaction_hash: Some(*tx_hash),
                                     })
                                     .collect()
