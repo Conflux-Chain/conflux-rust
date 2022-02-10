@@ -135,7 +135,7 @@ impl CfxRpcLogFilter {
             offset,
             limit,
             trusted: false,
-            space: Some(Space::Native),
+            space: Space::Native,
         };
 
         // choose filter type based on fields
@@ -387,7 +387,7 @@ mod tests {
                 offset: Some(1),
                 limit: Some(2),
                 trusted: false,
-                space: Some(Space::Native),
+                space: Space::Native,
             },
         };
 
@@ -436,7 +436,7 @@ mod tests {
                 offset: Some(1),
                 limit: Some(2),
                 trusted: false,
-                space: Some(Space::Native),
+                space: Space::Native,
             },
         };
 
@@ -493,7 +493,7 @@ mod tests {
                 offset: Some(1),
                 limit: Some(2),
                 trusted: false,
-                space: Some(Space::Native),
+                space: Space::Native,
             },
         };
 

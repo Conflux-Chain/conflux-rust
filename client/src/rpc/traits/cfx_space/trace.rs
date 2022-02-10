@@ -2,8 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::super::types::{LocalizedBlockTrace, LocalizedTrace};
-use crate::rpc::types::TraceFilter;
+use crate::rpc::types::{LocalizedBlockTrace, LocalizedTrace, TraceFilter};
 use cfx_types::H256;
 use jsonrpc_core::Result as JsonRpcResult;
 use jsonrpc_derive::rpc;

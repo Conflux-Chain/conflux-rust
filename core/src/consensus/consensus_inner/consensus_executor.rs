@@ -921,6 +921,20 @@ impl ConsensusExecutionHandler {
             );
         }
 
+        let pivot_block_header = self
+            .data_man
+            .block_header_by_hash(epoch_hash)
+            .expect("must exists");
+
+        // note: the lock on chain_id is never held so this should be OK.
+        let evm_chain_id = self
+            .machine
+            .params()
+            .chain_id
+            .read()
+            .get_chain_id(pivot_block_header.height())
+            .in_evm_space();
+
         // Check if the state has been computed
         if !force_recompute
             && debug_record.is_none()
@@ -931,13 +945,9 @@ impl ConsensusExecutionHandler {
                 self.config.executive_trace,
                 reward_execution_info,
                 self.pos_verifier.as_ref(),
+                evm_chain_id,
             )
         {
-            let pivot_block_header = self
-                .data_man
-                .block_header_by_hash(epoch_hash)
-                .expect("must exists");
-
             if on_local_pivot {
                 // Unwrap is safe here because it's guaranteed by outer if.
                 let state_root = &self
@@ -1193,7 +1203,11 @@ impl ConsensusExecutionHandler {
         let last_block_header =
             &self.data_man.block_header_by_hash(&last_block_hash);
 
+        let mut evm_tx_index = 0;
+
         for block in epoch_blocks.iter() {
+            let mut cfx_tx_index = 0;
+
             let mut tx_exec_error_messages =
                 Vec::with_capacity(block.transactions.len());
             let mut receipts = Vec::new();
@@ -1384,6 +1398,22 @@ impl ConsensusExecutionHandler {
                 receipts.push(receipt);
                 tx_exec_error_messages.push(tx_exec_error_msg);
 
+                let rpc_index = match transaction.space() {
+                    Space::Native => {
+                        let rpc_index = cfx_tx_index;
+                        cfx_tx_index += 1;
+                        rpc_index
+                    }
+                    Space::Ethereum
+                        if tx_outcome_status != TransactionOutcome::Skipped =>
+                    {
+                        let rpc_index = evm_tx_index;
+                        evm_tx_index += 1;
+                        rpc_index
+                    }
+                    _ => usize::MAX, // this will not be used
+                };
+
                 if on_local_pivot
                     && tx_outcome_status != TransactionOutcome::Skipped
                 {
@@ -1393,12 +1423,14 @@ impl ConsensusExecutionHandler {
                         &hash,
                         &TransactionIndex {
                             block_hash: block.hash(),
-                            index: idx,
+                            real_index: idx,
                             is_phantom: false,
+                            rpc_index: Some(rpc_index),
                         },
                     );
 
-                    // FIXME(thegaram): is it safe to lock here?
+                    // note: the lock on chain_id is never held
+                    // so this should be OK.
                     let evm_chain_id = self
                         .machine
                         .params()
@@ -1418,10 +1450,13 @@ impl ConsensusExecutionHandler {
                             &ptx.into_eip155(evm_chain_id).hash(),
                             &TransactionIndex {
                                 block_hash: block.hash(),
-                                index: idx,
+                                real_index: idx,
                                 is_phantom: true,
+                                rpc_index: Some(evm_tx_index),
                             },
                         );
+
+                        evm_tx_index += 1;
                     }
                 }
             }

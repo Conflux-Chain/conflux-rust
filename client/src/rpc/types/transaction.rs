@@ -83,7 +83,9 @@ impl Transaction {
             None => {}
             Some(PackedOrExecuted::Packed(tx_index)) => {
                 block_hash = Some(tx_index.block_hash);
-                transaction_index = Some(tx_index.index.into());
+                transaction_index = Some(
+                    tx_index.rpc_index.unwrap_or(tx_index.real_index).into(),
+                );
             }
             Some(PackedOrExecuted::Executed(receipt)) => {
                 block_hash = Some(receipt.block_hash);

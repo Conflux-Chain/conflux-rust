@@ -4,7 +4,7 @@
 
 use super::{trace::ActionType, EpochNumber};
 use crate::rpc::helpers::{maybe_vec_into, VariadicValue};
-use cfx_types::{H256, U64};
+use cfx_types::{Address, Space, H256, U64};
 use cfxcore::observer::trace_filter::TraceFilter as PrimitiveTraceFilter;
 use jsonrpc_core::Error as RpcError;
 use serde::{Deserialize, Serialize};
@@ -19,6 +19,11 @@ pub struct TraceFilter {
 
     /// Till this epoch number.
     pub to_epoch: Option<EpochNumber>,
+
+    /// Search from_address.
+    pub from_address: Option<VariadicValue<Address>>,
+    /// Search to_address.
+    pub to_address: Option<VariadicValue<Address>>,
 
     /// Search will be applied in these blocks if given.
     /// This will override from/to_epoch fields.
@@ -59,11 +64,10 @@ impl TraceFilter {
 
         // address, limit
         let action_types = match self.action_types {
-            None => None,
-            Some(VariadicValue::Null) => None,
-            Some(VariadicValue::Single(x)) => Some(vec![x.into()]),
+            None | Some(VariadicValue::Null) => vec![],
+            Some(VariadicValue::Single(x)) => vec![x.into()],
             Some(VariadicValue::Multiple(xs)) => {
-                Some(xs.into_iter().map(|x| x.into()).collect())
+                xs.into_iter().map(|x| x.into()).collect()
             }
         };
 
@@ -71,9 +75,20 @@ impl TraceFilter {
             from_epoch,
             to_epoch,
             block_hashes,
-            action_types,
+            from_address: self
+                .from_address
+                .and_then(Into::into)
+                .unwrap_or_else(Vec::new)
+                .into(),
+            to_address: self
+                .to_address
+                .and_then(Into::into)
+                .unwrap_or_else(Vec::new)
+                .into(),
+            action_types: action_types.into(),
             after: self.after.map(|n| n.as_usize()),
             count: self.count.map(|n| n.as_usize()),
+            space: Space::Native,
         })
     }
 }
@@ -83,7 +98,7 @@ mod tests {
     use super::{
         super::trace::ActionType, EpochNumber, TraceFilter, VariadicValue,
     };
-    use cfx_types::{H256, U64};
+    use cfx_types::{Address, Space, H256, U64};
     use cfxcore::observer::{
         trace::ActionType as PrimitiveActionType,
         trace_filter::TraceFilter as PrimitiveTraceFilter,
@@ -97,6 +112,8 @@ mod tests {
         let filter = TraceFilter {
             from_epoch: None,
             to_epoch: None,
+            from_address: None,
+            to_address: None,
             block_hashes: None,
             action_types: None,
             after: None,
@@ -110,6 +127,8 @@ mod tests {
             "{\
              \"fromEpoch\":null,\
              \"toEpoch\":null,\
+             \"fromAddress\":null,\
+             \"toAddress\":null,\
              \"blockHashes\":null,\
              \"actionTypes\":null,\
              \"after\":null,\
@@ -120,6 +139,8 @@ mod tests {
         let filter = TraceFilter {
             from_epoch: Some(1000.into()),
             to_epoch: Some(EpochNumber::LatestState),
+            from_address: Some(VariadicValue::Multiple(vec![Address::zero()].into())),
+            to_address: Some(VariadicValue::Multiple(vec![Address::zero()].into())),
             block_hashes: Some(vec![
                 H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
@@ -139,6 +160,8 @@ mod tests {
             "{\
              \"fromEpoch\":\"0x3e8\",\
              \"toEpoch\":\"latest_state\",\
+             \"fromAddress\":[\"0x0000000000000000000000000000000000000000\"],\
+             \"toAddress\":[\"0x0000000000000000000000000000000000000000\"],\
              \"blockHashes\":[\"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
              \"actionTypes\":[\"call\",\"create_result\"],\
              \"after\":\"0x2\",\
@@ -154,6 +177,8 @@ mod tests {
         let result_filter = TraceFilter {
             from_epoch: None,
             to_epoch: None,
+            from_address: None,
+            to_address: None,
             block_hashes: None,
             action_types: None,
             after: None,
@@ -167,6 +192,8 @@ mod tests {
         let serialized = "{\
              \"fromEpoch\":\"0x3e8\",\
              \"toEpoch\":\"latest_state\",\
+             \"fromAddress\":[\"0x0000000000000000000000000000000000000000\"],\
+             \"toAddress\":[\"0x0000000000000000000000000000000000000000\"],\
              \"blockHashes\":[\"0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470\",\"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"],\
              \"actionTypes\":[\"call\",\"create_result\"],\
              \"after\":\"0x2\",\
@@ -176,6 +203,8 @@ mod tests {
         let result_filter = TraceFilter {
             from_epoch: Some(1000.into()),
             to_epoch: Some(EpochNumber::LatestState),
+            from_address: Some(VariadicValue::Multiple(vec![Address::zero()].into())),
+            to_address: Some(VariadicValue::Multiple(vec![Address::zero()].into())),
             block_hashes: Some(vec![
                 H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
@@ -198,6 +227,8 @@ mod tests {
         let filter = TraceFilter {
             from_epoch: None,
             to_epoch: None,
+            from_address: Some(VariadicValue::Multiple(vec![Address::zero()].into())),
+            to_address: Some(VariadicValue::Multiple(vec![Address::zero()].into())),
             block_hashes: Some(vec![
                 H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
@@ -213,13 +244,16 @@ mod tests {
         let primitive_filter = PrimitiveTraceFilter {
             from_epoch: PrimitiveEpochNumber::LatestCheckpoint,
             to_epoch: PrimitiveEpochNumber::LatestState,
+            from_address: vec![Address::zero()].into(),
+            to_address: vec![Address::zero()].into(),
             block_hashes: Some(vec![
                 H256::from_str("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470").unwrap(),
                 H256::from_str("1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347").unwrap()
             ]),
-            action_types: Some(vec![PrimitiveActionType::Call, PrimitiveActionType::CreateResult]),
+            action_types: vec![PrimitiveActionType::Call, PrimitiveActionType::CreateResult].into(),
             after: Some(2),
-            count:Some(3)
+            count:Some(3),
+            space: Space::Native
         };
 
         assert_eq!(filter.into_primitive(), Ok(primitive_filter));

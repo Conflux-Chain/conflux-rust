@@ -19,6 +19,8 @@ CONFLUX_CONTRACT_PATH = "../contracts/CrossSpaceEventTest/CrossSpaceEventTestCon
 EVM_CONTRACT_PATH = "../contracts/CrossSpaceEventTest/CrossSpaceEventTestEVMSide.bytecode"
 
 TEST_EVENT_TOPIC = encode_hex_0x(keccak(b"TestEvent(uint256)"))
+CALL_EVENT_TOPIC = encode_hex_0x(keccak(b"Call(bytes20,bytes20,uint256,uint256,bytes)"))
+OUTCOME_EVENT_TOPIC = encode_hex_0x(keccak(b"Outcome(bool)"))
 
 def encode_u256(number):
     return ("%x" % number).zfill(64)
@@ -140,27 +142,96 @@ class CrossSpaceLogFilteringTest(Web3Base):
             assert_equal(receipt["status"], 1)
 
         # check Conflux events
+        # 11, 12, X, X, 14, 15, X, X, 21, 22, X, X, 24, 25, X, X   (X ~ internal contract event)
+        filter = Filter(from_epoch=epoch_a, to_epoch=epoch_e)
+        logs = self.rpc.get_logs(filter)
+        assert_equal(len(logs), 16)
+
+        filter = Filter(topics=[CALL_EVENT_TOPIC], from_epoch=epoch_a, to_epoch=epoch_e)
+        logs = self.rpc.get_logs(filter)
+        assert_equal(len(logs), 4)
+
+        filter = Filter(topics=[OUTCOME_EVENT_TOPIC], from_epoch=epoch_a, to_epoch=epoch_e)
+        logs = self.rpc.get_logs(filter)
+        assert_equal(len(logs), 4)
+
         filter = Filter(topics=[TEST_EVENT_TOPIC], from_epoch=epoch_a, to_epoch=epoch_e)
         logs = self.rpc.get_logs(filter)
         assert_equal(len(logs), 8)
 
+        assert_equal(logs[0]["data"], number_to_topic(11))
+        assert_equal(logs[0]["blockHash"], block_a)
+        assert_equal(logs[0]["logIndex"], '0x0')
+        assert_equal(logs[0]["transactionIndex"], '0x0')
+        assert_equal(logs[0]["transactionLogIndex"], '0x0')
+
+        assert_equal(logs[1]["data"], number_to_topic(12))
+        assert_equal(logs[1]["blockHash"], block_a)
+        assert_equal(logs[1]["logIndex"], '0x1')
+        assert_equal(logs[1]["transactionIndex"], '0x1')
+        assert_equal(logs[1]["transactionLogIndex"], '0x0')
+
+        assert_equal(logs[2]["data"], number_to_topic(14))
+        assert_equal(logs[2]["blockHash"], block_b)
+        assert_equal(logs[2]["logIndex"], '0x0')
+        assert_equal(logs[2]["transactionIndex"], '0x0')
+        assert_equal(logs[2]["transactionLogIndex"], '0x0')
+
+        assert_equal(logs[3]["data"], number_to_topic(15))
+        assert_equal(logs[3]["blockHash"], block_b)
+        assert_equal(logs[3]["logIndex"], '0x1')
+        assert_equal(logs[3]["transactionIndex"], '0x1')
+        assert_equal(logs[3]["transactionLogIndex"], '0x0')
+
+        assert_equal(logs[4]["data"], number_to_topic(21))
+        assert_equal(logs[4]["blockHash"], block_d)
+        assert_equal(logs[4]["logIndex"], '0x0')
+        assert_equal(logs[4]["transactionIndex"], '0x0')
+        assert_equal(logs[4]["transactionLogIndex"], '0x0')
+
+        assert_equal(logs[5]["data"], number_to_topic(22))
+        assert_equal(logs[5]["blockHash"], block_d)
+        assert_equal(logs[5]["logIndex"], '0x1')
+        assert_equal(logs[5]["transactionIndex"], '0x1')
+        assert_equal(logs[5]["transactionLogIndex"], '0x0')
+
+        assert_equal(logs[6]["data"], number_to_topic(24))
+        assert_equal(logs[6]["blockHash"], block_e)
+        assert_equal(logs[6]["logIndex"], '0x0')
+        assert_equal(logs[6]["transactionIndex"], '0x0')
+        assert_equal(logs[6]["transactionLogIndex"], '0x0')
+
+        assert_equal(logs[7]["data"], number_to_topic(25))
+        assert_equal(logs[7]["blockHash"], block_e)
+        assert_equal(logs[7]["logIndex"], '0x1')
+        assert_equal(logs[7]["transactionIndex"], '0x1')
+        assert_equal(logs[7]["transactionLogIndex"], '0x0')
+
 
         # --------------- 1 block per epoch ---------------
         # check EVM events
-        # we expect 4 events: #12, #13, #15, #16
+        # block A
+        #   3 transactions: phantom (balance), phantom (cross-call), evm
+        #   2 events: #12, #13
+        # block B
+        #   3 transactions: phantom (balance), phantom (cross-call), evm
+        #   2 events: #15, #16
         filter = { "topics": [TEST_EVENT_TOPIC], "fromBlock": epoch_a, "toBlock": epoch_b }
         logs = self.nodes[0].eth_getLogs(filter)
         assert_equal(len(logs), 4)
+
+        block_a_txs_evm = self.nodes[0].eth_getBlockByHash(block_a, False)["transactions"]
+        block_b_txs_evm = self.nodes[0].eth_getBlockByHash(block_b, False)["transactions"]
 
         # emitBoth: TestEvent(12)
         assert_equal(logs[0]["data"], number_to_topic(12))
         assert_equal(logs[0]["address"], evmContractAddr.lower())
         assert_equal(logs[0]["blockHash"], block_a)
         assert_equal(logs[0]["blockNumber"], epoch_a)
-        assert_equal(logs[0]["transactionHash"], cfx_tx_hashes[1]) # TODO: should use phantom tx here
-        # assert_equal(logs[0]["logIndex"], '0x0')
-        # assert_equal(logs[0]["transactionIndex"], '0x0')
-        # assert_equal(logs[0]["transactionLogIndex"], '0x0')
+        assert_equal(logs[0]["transactionHash"], block_a_txs_evm[1]) # NOTE: #0 is balance transfer
+        assert_equal(logs[0]["logIndex"], '0x0')
+        assert_equal(logs[0]["transactionIndex"], '0x1')
+        assert_equal(logs[0]["transactionLogIndex"], '0x0')
         assert_equal(logs[0]["removed"], False)
 
         # emitEVM: TestEvent(13)
@@ -168,9 +239,9 @@ class CrossSpaceLogFilteringTest(Web3Base):
         assert_equal(logs[1]["address"], evmContractAddr.lower())
         assert_equal(logs[1]["blockHash"], block_a)
         assert_equal(logs[1]["blockNumber"], epoch_a)
-        assert_equal(logs[1]["transactionHash"], evm_tx_hashes[0].hex())
-        # assert_equal(logs[1]["logIndex"], '0x1')
-        # assert_equal(logs[1]["transactionIndex"], '0x1')
+        assert_equal(logs[1]["transactionHash"], block_a_txs_evm[2])
+        assert_equal(logs[1]["logIndex"], '0x1')
+        assert_equal(logs[1]["transactionIndex"], '0x2')
         assert_equal(logs[1]["transactionLogIndex"], '0x0')
         assert_equal(logs[1]["removed"], False)
 
@@ -179,10 +250,10 @@ class CrossSpaceLogFilteringTest(Web3Base):
         assert_equal(logs[2]["address"], evmContractAddr.lower())
         assert_equal(logs[2]["blockHash"], block_b)
         assert_equal(logs[2]["blockNumber"], epoch_b)
-        assert_equal(logs[2]["transactionHash"], cfx_tx_hashes[3]) # TODO: should use phantom tx here
-        # assert_equal(logs[2]["logIndex"], '0x0')
-        # assert_equal(logs[2]["transactionIndex"], '0x0')
-        # assert_equal(logs[2]["transactionLogIndex"], '0x0')
+        assert_equal(logs[2]["transactionHash"], block_b_txs_evm[1])
+        assert_equal(logs[2]["logIndex"], '0x0')
+        assert_equal(logs[2]["transactionIndex"], '0x1')
+        assert_equal(logs[2]["transactionLogIndex"], '0x0')
         assert_equal(logs[2]["removed"], False)
 
         # emitEVM: TestEvent(16)
@@ -190,29 +261,33 @@ class CrossSpaceLogFilteringTest(Web3Base):
         assert_equal(logs[3]["address"], evmContractAddr.lower())
         assert_equal(logs[3]["blockHash"], block_b)
         assert_equal(logs[3]["blockNumber"], epoch_b)
-        assert_equal(logs[3]["transactionHash"], evm_tx_hashes[1].hex())
-        # assert_equal(logs[3]["logIndex"], '0x1')
-        # assert_equal(logs[3]["transactionIndex"], '0x1')
+        assert_equal(logs[3]["transactionHash"], block_b_txs_evm[2])
+        assert_equal(logs[3]["logIndex"], '0x1')
+        assert_equal(logs[3]["transactionIndex"], '0x2')
         assert_equal(logs[3]["transactionLogIndex"], '0x0')
         assert_equal(logs[3]["removed"], False)
 
 
         # --------------- 2 blocks per epoch ---------------
         # check EVM events
-        # we expect 4 events: #22, #23, #25, #26
+        # block E
+        #   6 transactions: phantom (balance), phantom (cross-call), evm, phantom (balance), phantom (cross-call), evm
+        #   4 events: #22, #23, #25, #26
         filter = { "topics": [TEST_EVENT_TOPIC], "fromBlock": epoch_e, "toBlock": epoch_e }
         logs = self.nodes[0].eth_getLogs(filter)
         assert_equal(len(logs), 4)
+
+        block_e_txs_evm = self.nodes[0].eth_getBlockByHash(block_e, False)["transactions"]
 
         # emitBoth: TestEvent(22)
         assert_equal(logs[0]["data"], number_to_topic(22))
         assert_equal(logs[0]["address"], evmContractAddr.lower())
         assert_equal(logs[0]["blockHash"], block_e)
         assert_equal(logs[0]["blockNumber"], epoch_e)
-        assert_equal(logs[0]["transactionHash"], cfx_tx_hashes[5]) # TODO: should use phantom tx here
-        # assert_equal(logs[0]["logIndex"], '0x0')
-        # assert_equal(logs[0]["transactionIndex"], '0x0')
-        # assert_equal(logs[0]["transactionLogIndex"], '0x0')
+        assert_equal(logs[0]["transactionHash"], block_e_txs_evm[1]) # NOTE: #0 is balance transfer
+        assert_equal(logs[0]["logIndex"], '0x0')
+        assert_equal(logs[0]["transactionIndex"], '0x1')
+        assert_equal(logs[0]["transactionLogIndex"], '0x0')
         assert_equal(logs[0]["removed"], False)
 
         # emitEVM: TestEvent(23)
@@ -220,9 +295,9 @@ class CrossSpaceLogFilteringTest(Web3Base):
         assert_equal(logs[1]["address"], evmContractAddr.lower())
         assert_equal(logs[1]["blockHash"], block_e)
         assert_equal(logs[1]["blockNumber"], epoch_e)
-        assert_equal(logs[1]["transactionHash"], evm_tx_hashes[2].hex())
-        # assert_equal(logs[1]["logIndex"], '0x1')
-        # assert_equal(logs[1]["transactionIndex"], '0x1')
+        assert_equal(logs[1]["transactionHash"], block_e_txs_evm[2])
+        assert_equal(logs[1]["logIndex"], '0x1')
+        assert_equal(logs[1]["transactionIndex"], '0x2')
         assert_equal(logs[1]["transactionLogIndex"], '0x0')
         assert_equal(logs[1]["removed"], False)
 
@@ -231,10 +306,10 @@ class CrossSpaceLogFilteringTest(Web3Base):
         assert_equal(logs[2]["address"], evmContractAddr.lower())
         assert_equal(logs[2]["blockHash"], block_e)
         assert_equal(logs[2]["blockNumber"], epoch_e)
-        assert_equal(logs[2]["transactionHash"], cfx_tx_hashes[7]) # TODO: should use phantom tx here
-        # assert_equal(logs[2]["logIndex"], '0x2')
-        # assert_equal(logs[2]["transactionIndex"], '0x2')
-        # assert_equal(logs[2]["transactionLogIndex"], '0x0')
+        assert_equal(logs[2]["transactionHash"], block_e_txs_evm[4]) # NOTE: #3 is balance transfer
+        assert_equal(logs[2]["logIndex"], '0x2')
+        assert_equal(logs[2]["transactionIndex"], '0x4')
+        assert_equal(logs[2]["transactionLogIndex"], '0x0')
         assert_equal(logs[2]["removed"], False)
 
         # emitEVM: TestEvent(26)
@@ -242,9 +317,9 @@ class CrossSpaceLogFilteringTest(Web3Base):
         assert_equal(logs[3]["address"], evmContractAddr.lower())
         assert_equal(logs[3]["blockHash"], block_e)
         assert_equal(logs[3]["blockNumber"], epoch_e)
-        assert_equal(logs[3]["transactionHash"], evm_tx_hashes[3].hex())
-        # assert_equal(logs[3]["logIndex"], '0x3')
-        # assert_equal(logs[3]["transactionIndex"], '0x3')
+        assert_equal(logs[3]["transactionHash"], block_e_txs_evm[5])
+        assert_equal(logs[3]["logIndex"], '0x3')
+        assert_equal(logs[3]["transactionIndex"], '0x5')
         assert_equal(logs[3]["transactionLogIndex"], '0x0')
         assert_equal(logs[3]["removed"], False)
 

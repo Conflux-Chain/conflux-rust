@@ -2,10 +2,10 @@
 
 Conflux-rust is a Rust-based implementation of the Conflux protocol. It is fast and
 reliable. Please follow the [Conflux
-Documentation](https://developer.conflux-chain.org/) to
-[build](https://developer.conflux-chain.org/docs/conflux-doc/docs/installation)
+Documentation](https://developer.confluxnetwork.org/) to
+[build](https://developer.confluxnetwork.org/conflux-doc/docs/installation)
 and
-[run](https://developer.conflux-chain.org/docs/conflux-doc/docs/get_started)
+[run](https://developer.confluxnetwork.org/conflux-doc/docs/get_started)
 Conflux.
 
 ## Contribution
@@ -19,20 +19,19 @@ significant changes to the Conflux protocol, please submit a
 
 ## Unit Tests and Integration Tests
 
-Unit tests come together with the Rust code. They can be invoked via `cargo test
---release --all`. See the
-[Getting Started](https://developer.conflux-chain.org/docs/conflux-doc/docs/get_started)
+Unit tests come together with the Rust code. They can be invoked via `cargo test --release --all`. See the
+[Getting Started](https://developer.confluxnetwork.org/conflux-doc/docs/get_started)
 page for more information. Integration tests are Python test scripts with the
 `_test.py` suffix in the `tests` directory. To run these tests, first compile Conflux
-in *release* mode using `cargo build --release`. Then, you can run all
+in _release_ mode using `cargo build --release`. Then, you can run all
 integration tests using the script `tests/test_all.py`.
 
 ## Resources
 
-* [Conflux Website](https://www.conflux-chain.org/)
-* [Conflux Scan](https://www.confluxscan.io/)
-* [Conflux Paper](https://arxiv.org/abs/1805.03870)
-* [Medium](https://medium.com/@ConfluxNetwork)
+- [Conflux Website](https://www.confluxnetwork.org/)
+- [Conflux Scan](https://www.confluxscan.io/)
+- [Conflux Paper](https://arxiv.org/abs/1805.03870)
+- [Medium](https://medium.com/@ConfluxNetwork)
 
 ## License
 
