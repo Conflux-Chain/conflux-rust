@@ -282,8 +282,7 @@ impl EthHandler {
 impl Eth for EthHandler {
     fn client_version(&self) -> jsonrpc_core::Result<String> {
         info!("RPC Request: web3_clientVersion");
-        // TODO
-        Ok(format!("Conflux"))
+        Ok(parity_version::version(crate_version!()))
     }
 
     fn net_version(&self) -> jsonrpc_core::Result<String> {
