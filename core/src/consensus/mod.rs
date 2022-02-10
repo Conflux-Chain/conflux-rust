@@ -1570,7 +1570,7 @@ impl ConsensusGraph {
         // sanity check: epoch is not empty
         let pivot = match blocks.last() {
             Some(p) => p,
-            None => return Err("Inconsistent state".into()),
+            None => return Err("Inconsistent state: empty epoch".into()),
         };
 
         if matches!(pivot_assumption, Some(h) if h != pivot.hash()) {
@@ -1607,7 +1607,7 @@ impl ConsensusGraph {
 
             // sanity check: transaction and
             if b.transactions.len() != block_receipts.len() {
-                return Err("Inconsistent state".into());
+                return Err("Inconsistent state: transactions and receipts length mismatch".into());
             }
 
             let evm_chain_id = self.best_chain_id().in_evm_space();
@@ -1627,7 +1627,7 @@ impl ConsensusGraph {
 
                         // sanity check: gas price must be positive
                         if *tx.gas_price() == 0.into() {
-                            return Err("Inconsistent state".into());
+                            return Err("Inconsistent state: zero transaction gas price".into());
                         }
 
                         // FIXME(thegaram): is this correct?
@@ -1662,7 +1662,7 @@ impl ConsensusGraph {
 
                             phantom_block.receipts.push(phantom_receipt);
 
-                            // FIXME(thegaram): handle errors for phantom txs
+                            // note: phantom txs never fails
                             phantom_block.errors.push("".into());
                         }
                     }

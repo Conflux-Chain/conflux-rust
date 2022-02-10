@@ -19,15 +19,9 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::rpc::types::{eth::Transaction, Bytes};
-use cfx_types::{
-    hexstr_to_h256, Bloom as H2048, Space, H160, H256, H64, U256, U64,
-};
-use cfxcore::consensus::ConsensusGraphInner;
-use primitives::{
-    receipt::EVM_SPACE_SUCCESS, Block as PrimitiveBlock, PhantomBlock,
-};
+use cfx_types::{hexstr_to_h256, Bloom as H2048, Space, H160, H256, H64, U256};
+use primitives::{receipt::EVM_SPACE_SUCCESS, PhantomBlock};
 use serde::{Serialize, Serializer};
-use std::collections::HashMap;
 
 const SHA3_HASH_OF_EMPTY_UNCLE: &str =
     "1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347";
@@ -219,136 +213,6 @@ impl Block {
                 .iter()
                 .fold(0, |acc, tx| acc + tx.rlp_size())
                 .into(),
-        }
-    }
-
-    pub fn new(
-        blocks: Vec<&PrimitiveBlock>, full: bool,
-        consensus_inner: &ConsensusGraphInner,
-    ) -> Self
-    {
-        let mut gas_used = U256::zero();
-        let mut logs_bloom = H2048::zero();
-        let mut tx_statuses = HashMap::new();
-        let mut tx_created_addresses = HashMap::new();
-
-        let pivot = blocks.last().expect("Inconsistent state");
-
-        for b in &blocks {
-            let maybe_exec_res = consensus_inner
-                .data_man
-                .block_execution_result_by_hash_with_epoch(
-                    &b.hash(),
-                    &pivot.hash(),
-                    false, // update_pivot_assumption
-                    false, // update_cache
-                );
-
-            match maybe_exec_res {
-                // we keep a lock on `inner` so pivot chain reorg should not
-                // happen here, but it's possible the block is not executed yet
-                None => {
-                    gas_used = U256::zero();
-                    logs_bloom = H2048::zero();
-                    break;
-                }
-                Some(res) => {
-                    let acc_gas_used: u64 = b
-                        .transactions
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, tx)| tx.space() == Space::Ethereum)
-                        .map(|(idx, tx)| {
-                            let status = res.block_receipts.receipts[idx]
-                                .outcome_status
-                                .in_space(Space::Ethereum);
-                            // save tx contract_address to address_map
-                            let contract_address =
-                                Transaction::deployed_contract_address(tx);
-                            if contract_address.is_some()
-                                && status == EVM_SPACE_SUCCESS
-                            {
-                                tx_created_addresses
-                                    .insert(tx.hash, contract_address.unwrap());
-                            }
-                            // set tx status to status_map
-                            tx_statuses.insert(tx.hash, U64::from(status));
-                            // return gas_changed
-                            (res.block_receipts.receipts[idx].gas_fee
-                                / tx.gas_price())
-                            .as_u64()
-                        })
-                        .sum();
-                    gas_used += U256::from(acc_gas_used);
-                    logs_bloom.accrue_bloom(&res.bloom);
-                }
-            }
-        }
-
-        Block {
-            hash: pivot.block_header.hash(),
-            parent_hash: pivot.block_header.parent_hash().clone(),
-            uncles_hash: hexstr_to_h256(SHA3_HASH_OF_EMPTY_UNCLE),
-            author: pivot.block_header.author().clone(),
-            miner: pivot.block_header.author().clone(),
-            state_root: pivot.block_header.deferred_state_root().clone(),
-            transactions_root: pivot.block_header.transactions_root().clone(),
-            receipts_root: pivot.block_header.deferred_receipts_root().clone(),
-            // We use height to replace block number for ETH interface.
-            // Note: this will correspond to the epoch number.
-            number: pivot.block_header.height().into(),
-            gas_used,
-            gas_limit: pivot.block_header.gas_limit().into(),
-            extra_data: Default::default(),
-            logs_bloom,
-            timestamp: pivot.block_header.timestamp().into(),
-            difficulty: pivot.block_header.difficulty().into(),
-            total_difficulty: 0.into(),
-            base_fee_per_gas: None,
-            uncles: vec![],
-            // Note: we allow U256 nonce in Stratum and in the block.
-            // However, most mining clients use U64. Here we truncate
-            // to U64 to maintain compatibility with eth.
-            nonce: pivot.block_header.nonce().low_u64().to_be_bytes().into(),
-            mix_hash: H256::default(),
-            // TODO(thegaram): include phantom txs
-            transactions: if full {
-                BlockTransactions::Full(
-                    blocks
-                        .iter()
-                        .map(|b| &b.transactions)
-                        .flatten()
-                        .filter(|tx| tx.space() == Space::Ethereum)
-                        .enumerate()
-                        .map(|(idx, t)| {
-                            let status = tx_statuses.get(&t.hash).map(|s| *s);
-                            let contract_address = tx_created_addresses.get(&t.hash).map(|a| *a);
-                            Transaction::from_signed(
-                                &**t,
-                                (
-                                    Some(pivot.block_header.hash()), // block_hash
-                                    Some(pivot.block_header.height().into()), // block_number
-                                    Some(idx.into()),
-                                ),
-                                (status, contract_address),
-                            )
-                        })
-                        .collect(),
-                )
-            } else {
-                BlockTransactions::Hashes(
-                    blocks
-                        .iter()
-                        .map(|b| {
-                            b.transaction_hashes(Some(Space::Ethereum))
-                                .into_iter()
-                        })
-                        .flatten()
-                        .collect(),
-                )
-            },
-            // FIXME(thegaram): should we recalculate size?
-            size: blocks.iter().map(|b| b.size()).sum::<usize>().into(),
         }
     }
 }

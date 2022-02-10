@@ -2,34 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::{cmp::min, sync::Arc};
-
-use jsonrpc_core::{Error as RpcError, Result as RpcResult};
-use rlp::Rlp;
-
-use cfx_statedb::StateDbExt;
-use cfx_types::{
-    Address, AddressSpaceUtil, BigEndianHash, Space, H160, H256, U256, U64,
-};
-use cfxcore::{
-    executive::{
-        revert_reason_decode, ExecutionError, ExecutionOutcome, TxDropError,
-    },
-    observer::ErrorUnwind,
-    rpc_errors::{
-        invalid_params_check, Error as CfxRpcError, Result as CfxRpcResult,
-    },
-    vm, ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
-    SharedTransactionPool,
-};
-use primitives::{
-    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action, Block,
-    BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, PhantomBlock,
-    SignedTransaction, StorageKey, StorageValue, TransactionOutcome,
-    TransactionWithSignature,
-};
-use std::convert::TryInto;
-
 use crate::rpc::{
     error_codes::{
         call_execution_error, internal_error, invalid_params,
@@ -45,6 +17,31 @@ use crate::rpc::{
         Bytes, Index, MAX_GAS_CALL_REQUEST,
     },
 };
+use cfx_statedb::StateDbExt;
+use cfx_types::{
+    Address, AddressSpaceUtil, BigEndianHash, Space, H160, H256, U256, U64,
+};
+use cfxcore::{
+    executive::{
+        revert_reason_decode, ExecutionError, ExecutionOutcome, TxDropError,
+    },
+    observer::ErrorUnwind,
+    rpc_errors::{
+        invalid_params_check, Error as CfxRpcError, Result as CfxRpcResult,
+    },
+    vm, ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
+    SharedTransactionPool,
+};
+use clap::crate_version;
+use jsonrpc_core::{Error as RpcError, Result as RpcResult};
+use primitives::{
+    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action,
+    BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, PhantomBlock,
+    SignedTransaction, StorageKey, StorageValue, TransactionOutcome,
+    TransactionWithSignature,
+};
+use rlp::Rlp;
+use std::{cmp::min, convert::TryInto};
 
 pub struct EthHandler {
     config: RpcImplConfiguration,
@@ -124,36 +121,6 @@ fn block_tx_by_index(
 }
 
 impl EthHandler {
-    fn get_blocks_by_number(
-        &self, block_num: BlockNumber,
-    ) -> jsonrpc_core::Result<Option<Vec<Arc<Block>>>> {
-        let epoch_hashes = self
-            .consensus
-            .get_block_hashes_by_epoch(block_num.try_into()?)
-            .map_err(RpcError::invalid_params)?;
-
-        let epoch_blocks = self
-            .consensus
-            .get_data_manager()
-            .blocks_by_hash_list(&epoch_hashes, false /* update_cache */);
-
-        Ok(epoch_blocks)
-    }
-
-    // Get pivot block hash by epoch number
-    #[allow(dead_code)]
-    fn get_block_hash_by_number(
-        &self, block_number: BlockNumber,
-    ) -> Option<H256> {
-        match self.get_blocks_by_number(block_number) {
-            Ok(Some(blocks)) => match blocks.last() {
-                None => None,
-                Some(b) => Some(b.hash()),
-            },
-            _ => None,
-        }
-    }
-
     fn exec_transaction(
         &self, request: CallRequest, epoch: Option<BlockNumber>,
     ) -> CfxRpcResult<ExecutionOutcome> {
@@ -200,22 +167,30 @@ impl EthHandler {
         &self, b: &PhantomBlock, idx: usize, prior_log_index: &mut usize,
     ) -> jsonrpc_core::Result<Receipt> {
         if b.transactions.len() != b.receipts.len() {
-            return Err(internal_error("Inconsistent state"));
+            return Err(internal_error(
+                "Inconsistent state: transactions and receipts length mismatch",
+            ));
         }
 
         if b.transactions.len() != b.errors.len() {
-            return Err(internal_error("Inconsistent state"));
+            return Err(internal_error(
+                "Inconsistent state: transactions and errors length mismatch",
+            ));
         }
 
         if idx >= b.transactions.len() {
-            return Err(internal_error("Inconsistent state"));
+            return Err(internal_error(
+                "Inconsistent state: tx index out of bound",
+            ));
         }
 
         let tx = &b.transactions[idx];
         let receipt = &b.receipts[idx];
 
         if receipt.logs.iter().any(|l| l.space != Space::Ethereum) {
-            return Err(internal_error("Inconsistent state"));
+            return Err(internal_error(
+                "Inconsistent state: native tx in phantom block",
+            ));
         }
 
         let contract_address = match receipt.outcome_status {
@@ -307,8 +282,7 @@ impl EthHandler {
 impl Eth for EthHandler {
     fn client_version(&self) -> jsonrpc_core::Result<String> {
         info!("RPC Request: web3_clientVersion");
-        // TODO
-        Ok(format!("Conflux"))
+        Ok(parity_version::version(crate_version!()))
     }
 
     fn net_version(&self) -> jsonrpc_core::Result<String> {
@@ -380,9 +354,7 @@ impl Eth for EthHandler {
 
     fn accounts(&self) -> jsonrpc_core::Result<Vec<H160>> {
         info!("RPC Request: eth_accounts");
-        // TODO: EVM core: discussion: do we really need this? Maybe not,
-        // because EVM has enough dev tools and don't need dev mode.
-        // We do not expect people to use the ETH rpc to manage accounts
+        // Conflux eSpace does not manage accounts
         Ok(vec![])
     }
 
@@ -566,13 +538,21 @@ impl Eth for EthHandler {
     ) -> jsonrpc_core::Result<Option<U256>> {
         info!("RPC Request: eth_getUncleCountByBlockHash hash={:?}", hash);
 
-        // TODO(thegaram): only return Some(_) for pivot block
-        let maybe_block = self
-            .consensus
-            .get_data_manager()
-            .block_by_hash(&hash, false);
+        let epoch_num = match self.consensus.get_block_epoch_number(&hash) {
+            None => return Ok(None),
+            Some(n) => n,
+        };
 
-        Ok(maybe_block.map(|_| 0.into()))
+        let maybe_pivot_hash = self
+            .consensus
+            .get_block_hashes_by_epoch(epoch_num.into())
+            .ok()
+            .and_then(|hs| hs.last().cloned());
+
+        match maybe_pivot_hash {
+            Some(h) if h == hash => Ok(Some(0.into())),
+            _ => Ok(None),
+        }
     }
 
     fn block_uncles_count_by_number(
@@ -583,9 +563,12 @@ impl Eth for EthHandler {
             block_num
         );
 
-        // TODO(thegaram): enough to just check if pivot exists
-        let maybe_block = self.get_blocks_by_number(block_num)?;
-        Ok(maybe_block.map(|_| 0.into()))
+        let maybe_epoch = self
+            .consensus
+            .get_block_hashes_by_epoch(block_num.try_into()?)
+            .ok();
+
+        Ok(maybe_epoch.map(|_| 0.into()))
     }
 
     fn code_at(
@@ -915,6 +898,7 @@ impl Eth for EthHandler {
                 return Ok(Some(receipt));
             }
 
+            // if the if-branch was not entered, we do the bookeeping here
             prior_log_index += phantom_block.receipts[idx].logs.len();
         }
 
