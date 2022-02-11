@@ -177,8 +177,8 @@ build_config! {
         (jsonrpc_cors, (Option<String>), None)
         (jsonrpc_http_keep_alive, (bool), false)
         (jsonrpc_ws_max_payload_bytes, (usize), 30 * 1024 * 1024)
-        (jsonrpc_http_eth_port, (Option<u16>), Some(8545))
-        (jsonrpc_ws_eth_port, (Option<u16>), Some(8546))
+        (jsonrpc_http_eth_port, (Option<u16>), None)
+        (jsonrpc_ws_eth_port, (Option<u16>), None)
         // The network_id, if unset, defaults to the chain_id.
         // Only override the network_id for local experiments,
         // when user would like to keep the existing blockchain data
