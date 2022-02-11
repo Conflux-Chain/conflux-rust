@@ -95,6 +95,7 @@ consensus-types = {path = "../core/src/pos/consensus/consensus-types"}
 anyhow = "1.0.38"
 rpassword = "5.0.1"
 static_assertions = "1.1.0"
+parity-version = {path = "../util/version"}
 
 [dev-dependencies]
 criterion = "0.3"

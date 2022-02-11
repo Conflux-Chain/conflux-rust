@@ -124,8 +124,8 @@ pub trait TestRpc {
         &self, pos_account: AccountAddress, increased_voting_power: U64,
     ) -> RpcResult<()>;
 
-    #[rpc(name = "pos_retire_self")]
-    fn pos_retire_self(&self) -> RpcResult<()>;
+    #[rpc(name = "pos_stop_election")]
+    fn pos_stop_election(&self) -> RpcResult<Option<u64>>;
 
     #[rpc(name = "pos_start")]
     fn pos_start(&self) -> RpcResult<()>;

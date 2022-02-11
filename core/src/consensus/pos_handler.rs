@@ -41,7 +41,7 @@ use consensus_types::block::Block;
 use diem_config::config::SafetyRulesTestConfig;
 use diem_types::{
     account_address::from_consensus_public_key,
-    block_info::PivotBlockDecision,
+    block_info::{PivotBlockDecision, Round},
     chain_id::ChainId,
     term_state::pos_state_config::{PosStateConfig, POS_STATE_CONFIG},
     transaction::TransactionPayload,
@@ -445,6 +445,17 @@ impl PosHandler {
             .as_mut()
             .ok_or(anyhow::anyhow!("Pos not initialized!"))?
             .try_send(TestCommand::GetChosenProposal(tx))
+            .map_err(|e| anyhow::anyhow!("try_send: err={:?}", e))?;
+        rx.recv().map_err(|e| anyhow::anyhow!("recv: err={:?}", e))
+    }
+
+    pub fn stop_election(&self) -> anyhow::Result<Option<Round>> {
+        let (tx, rx) = mpsc::sync_channel(1);
+        self.test_command_sender
+            .lock()
+            .as_mut()
+            .ok_or(anyhow::anyhow!("Pos not initialized!"))?
+            .try_send(TestCommand::StopElection(tx))
             .map_err(|e| anyhow::anyhow!("try_send: err={:?}", e))?;
         rx.recv().map_err(|e| anyhow::anyhow!("recv: err={:?}", e))
     }
