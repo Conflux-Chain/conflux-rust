@@ -64,9 +64,11 @@ class ExampleTest(ConfluxTestFramework):
         client = RpcClient(self.nodes[self.num_nodes - 1])
         client.generate_empty_blocks(300)
         sync_blocks(self.nodes)
-        for node in self.nodes[:-1]:
-            client = RpcClient(node)
+        node_pos_identifier_list = []
+        for i in range(self.num_nodes - 1):
+            client = RpcClient(self.nodes[i])
             pos_identifier, _ = client.wait_for_pos_register()
+            node_pos_identifier_list.append(pos_identifier)
             sync_blocks(self.nodes)
         client = RpcClient(self.nodes[self.num_nodes - 1])
 
@@ -99,8 +101,21 @@ class ExampleTest(ConfluxTestFramework):
         sync_blocks(self.nodes)
         time.sleep(2)
 
+        # Check if stopped node will be retired
+        STOP_INDEX = 0
+        final_serving_round = self.nodes[0].pos_stop_election()
+        stopped = False
+        print("final_serving_round", final_serving_round)
+
         latest_pos_ref = self.latest_pos_ref()
         for i in range(55):
+            if not stopped and int(client.pos_status()["latestCommitted"], 0) >= final_serving_round:
+                print("stop node 0")
+                self.stop_node(STOP_INDEX)
+                stopped = True
+            print(node_pos_identifier_list[STOP_INDEX])
+            assert_ne(client.pos_get_account(node_pos_identifier_list[STOP_INDEX])["status"]["availableVotes"], 0)
+            assert_equal(client.pos_get_account(node_pos_identifier_list[STOP_INDEX])["status"]["forceRetired"], None)
             print(i)
             if i == 10:
                 self.stop_node(5, clean=True)
@@ -115,10 +130,10 @@ class ExampleTest(ConfluxTestFramework):
                 self.maybe_restart_node(5, 1, 1)
             # Retire node 3 after 5 min.
             # Generate enough PoW block for PoS to progress
-            self.nodes[0].generate_empty_blocks(60)
+            client.generate_empty_blocks(60)
             # Leave some time for PoS to reach consensus
             time.sleep(3)
-            self.nodes[0].generate_empty_blocks(1)
+            client.generate_empty_blocks(1)
             new_pos_ref = self.latest_pos_ref()
             if i >= 10:
                 assert_ne(latest_pos_ref, new_pos_ref)
@@ -128,8 +143,8 @@ class ExampleTest(ConfluxTestFramework):
         assert_equal(int(client.pos_get_account(pos_identifier)["status"]["availableVotes"], 0), 0)
 
     def latest_pos_ref(self):
-        best_hash = self.nodes[0].best_block_hash()
-        block = self.nodes[0].cfx_getBlockByHash(best_hash, False)
+        best_hash = self.nodes[6].best_block_hash()
+        block = self.nodes[6].cfx_getBlockByHash(best_hash, False)
         return block["posReference"]
 
 if __name__ == '__main__':

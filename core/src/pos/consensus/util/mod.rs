@@ -45,6 +45,9 @@ pub enum TestCommand {
     BroadcastPivotDecision(PivotBlockDecision),
     /// Sign and broadcast an election transaction with a target term
     BroadcastElection(u64),
+    /// Stop broadcasting elections to prepare for a restart
+    /// Return the round when the node is safe to be stopped without retiring.
+    StopElection(mpsc::SyncSender<Option<Round>>),
 
     /// Read-only command
     /// Get the chosen to-vote proposal

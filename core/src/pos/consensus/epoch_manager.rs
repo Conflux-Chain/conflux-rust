@@ -116,6 +116,7 @@ pub struct EpochManager {
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
     // Conflux PoW handler
     pow_handler: Arc<dyn PowInterface>,
+    election_control: AtomicBool,
     tx_sender: mpsc::Sender<(
         SignedTransaction,
         oneshot::Sender<anyhow::Result<SubmissionStatus>>,
@@ -163,6 +164,7 @@ impl EpochManager {
             processor: None,
             reconfig_events,
             pow_handler,
+            election_control: AtomicBool::new(true),
             tx_sender,
         }
     }
@@ -474,22 +476,26 @@ impl EpochManager {
             self.config.chain_id,
         );
         // Only check if we should send election after entering an new epoch.
-        if let Err(e) = processor
-            .broadcast_election(
-                self.author,
-                self.config
-                    .safety_rules
-                    .test
-                    .as_ref()
-                    .expect("test config set")
-                    .consensus_key
-                    .as_ref()
-                    .expect("private key set in pos"),
-                self.config.safety_rules.vrf_private_key.as_ref().unwrap(),
-            )
-            .await
-        {
-            diem_error!("error in broadcasting election tx: {:?}", e);
+        if self.election_control.load(AtomicOrdering::Relaxed) {
+            if let Err(e) = processor
+                .broadcast_election(
+                    self.author,
+                    self.config
+                        .safety_rules
+                        .test
+                        .as_ref()
+                        .expect("test config set")
+                        .consensus_key
+                        .as_ref()
+                        .expect("private key set in pos"),
+                    self.config.safety_rules.vrf_private_key.as_ref().unwrap(),
+                )
+                .await
+            {
+                diem_error!("error in broadcasting election tx: {:?}", e);
+            }
+        } else {
+            diem_info!("Skip election in epoch {}", epoch);
         }
         processor.start(last_vote).await;
         self.processor = Some(RoundProcessor::Normal(processor));
@@ -878,6 +884,15 @@ impl EpochManager {
                 self.force_sign_pivot_decision(decision).await
             }
             TestCommand::BroadcastElection(_) => todo!(),
+            TestCommand::StopElection(tx) => {
+                self.election_control.store(false, AtomicOrdering::Relaxed);
+                let pos_state =
+                    self.storage.pos_ledger_db().get_latest_pos_state();
+                let final_serving_round =
+                    pos_state.final_serving_view(&self.author);
+                tx.send(final_serving_round)
+                    .map_err(|e| anyhow!("send: err={:?}", e))
+            }
             TestCommand::GetChosenProposal(tx) => match self.processor_mut() {
                 RoundProcessor::Normal(p) => {
                     let chosen = p.get_chosen_proposal()?;

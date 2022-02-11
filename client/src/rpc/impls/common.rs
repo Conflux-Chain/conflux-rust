@@ -774,7 +774,12 @@ impl RpcImpl {
         unimplemented!()
     }
 
-    pub fn pos_retire_self(&self) -> JsonRpcResult<()> { unimplemented!() }
+    pub fn pos_stop_election(&self) -> JsonRpcResult<Option<u64>> {
+        self.pos_handler.stop_election().map_err(|e| {
+            warn!("stop_election: err={:?}", e);
+            RpcError::internal_error().into()
+        })
+    }
 
     pub fn pos_start(&self) -> RpcResult<()> {
         self.pos_handler
