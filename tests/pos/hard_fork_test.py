@@ -33,9 +33,9 @@ class ExampleTest(ConfluxTestFramework):
         self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = '120'
         # self.conf_parameters["log_level"] = '"trace"'
         self.conf_parameters["dev_allow_phase_change_without_peer"] = "false"
-        self.conf_parameters["unnamed_21autumn_transition_height"] = 300
-        self.conf_parameters["unnamed_21autumn_transition_number"] = 300
-        self.conf_parameters["unnamed_21autumn_cip43_init_end"] = 500
+        self.conf_parameters["hydra_transition_height"] = 300
+        self.conf_parameters["hydra_transition_number"] = 300
+        self.conf_parameters["cip43_init_end_number"] = 500
         self.conf_parameters["pos_reference_enable_height"] = 1000
         self.conf_parameters["era_epoch_count"] = 200
         self.conf_parameters["pos_round_per_term"] = 10
