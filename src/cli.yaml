@@ -882,3 +882,9 @@ subcommands:
                                       - rpc-method:
                                             default_value: pos_retire_self
                                             hidden: true
+                            - stop_election:
+                                  about: Stop sending PoS election transactions.
+                                  args:
+                                      - rpc-method:
+                                            default_value: pos_stop_election
+                                            hidden: true

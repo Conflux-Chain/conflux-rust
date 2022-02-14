@@ -2,8 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::super::types::{BlameInfo, Block, Bytes};
-use crate::rpc::types::pos::Block as PosBlock;
+use crate::rpc::types::{pos::Block as PosBlock, BlameInfo, Block, Bytes};
 use cfx_types::{H256, U256, U64};
 use cfxcore::PeerInfo;
 use diem_types::{
@@ -125,8 +124,8 @@ pub trait TestRpc {
         &self, pos_account: AccountAddress, increased_voting_power: U64,
     ) -> RpcResult<()>;
 
-    #[rpc(name = "pos_retire_self")]
-    fn pos_retire_self(&self) -> RpcResult<()>;
+    #[rpc(name = "pos_stop_election")]
+    fn pos_stop_election(&self) -> RpcResult<Option<u64>>;
 
     #[rpc(name = "pos_start")]
     fn pos_start(&self) -> RpcResult<()>;

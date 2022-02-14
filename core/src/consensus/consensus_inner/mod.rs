@@ -2369,20 +2369,20 @@ impl ConsensusGraphInner {
             .map(|receipt| {
                 let block_receipts = receipt.1.block_receipts;
 
-                let prior_gas_used = if tx_index.index == 0 {
+                let prior_gas_used = if tx_index.real_index == 0 {
                     U256::zero()
                 } else {
-                    block_receipts.receipts[tx_index.index - 1]
+                    block_receipts.receipts[tx_index.real_index - 1]
                         .accumulated_gas_used
                 };
                 let tx_exec_error_msg = block_receipts
-                    .tx_execution_error_messages[tx_index.index]
+                    .tx_execution_error_messages[tx_index.real_index]
                     .clone();
 
                 MaybeExecutedTxExtraInfo {
                     receipt: block_receipts
                         .receipts
-                        .get(tx_index.index)
+                        .get(tx_index.real_index)
                         .expect("Error: can't get receipt by tx_index ")
                         .clone(),
                     block_number: block_receipts.block_number,

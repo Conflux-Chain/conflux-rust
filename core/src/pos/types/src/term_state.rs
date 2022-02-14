@@ -859,6 +859,29 @@ impl PosState {
         None
     }
 
+    pub fn final_serving_view(&self, author: &AccountAddress) -> Option<Round> {
+        let mut final_elected_view = None;
+        for term in self.term_list.term_list.iter().rev() {
+            match &term.node_list {
+                NodeList::Electing(heap) => {
+                    if heap.1.contains(author) {
+                        final_elected_view = Some(term.start_view);
+                        break;
+                    }
+                }
+                NodeList::Elected(map) => {
+                    if map.0.contains_key(author) {
+                        final_elected_view = Some(term.start_view);
+                        break;
+                    }
+                }
+            }
+        }
+        final_elected_view.map(|v| {
+            v + TERM_LIST_LEN as u64 * POS_STATE_CONFIG.round_per_term() + 1
+        })
+    }
+
     pub fn get_unlock_events(&self) -> Vec<ContractEvent> {
         let mut unlocked_nodes = Vec::new();
         for addr in &self.unlock_event_hint {

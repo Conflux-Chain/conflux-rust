@@ -1,0 +1,19 @@
+[package]
+name = "parity-version"
+# NOTE: this value is used for OpenEthereum version string (via env CARGO_PKG_VERSION)
+version = "3.3.3"
+authors = ["Parity Technologies <admin@parity.io>"]
+build = "build.rs"
+
+[package.metadata]
+
+[dependencies]
+target_info = "0.1"
+
+[build-dependencies]
+vergen = "0.1"
+rustc_version = "0.2"
+toml = "0.4"
+
+[features]
+final = []

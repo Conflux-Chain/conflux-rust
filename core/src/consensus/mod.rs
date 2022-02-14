@@ -1497,15 +1497,11 @@ impl ConsensusGraph {
     {
         let mut traces = Vec::new();
         for (pivot_hash, block_hash, block_trace) in block_traces {
-            let tx_hashes: Vec<H256> = self
+            let block = self
                 .data_man
                 .block_by_hash(&block_hash, true /* update_cache */)
-                .ok_or(FilterError::BlockAlreadyPruned { block_hash })?
-                .transactions
-                .iter()
-                .map(|tx| tx.hash())
-                .collect();
-            if tx_hashes.len() != block_trace.0.len() {
+                .ok_or(FilterError::BlockAlreadyPruned { block_hash })?;
+            if block.transactions.len() != block_trace.0.len() {
                 bail!(format!(
                     "tx list and trace length unmatch: block_hash={:?}",
                     block_hash
@@ -1523,15 +1519,22 @@ impl ConsensusGraph {
                         .into(),
                     )
                 })?;
-            for (tx_position, tx_trace) in block_trace.0.into_iter().enumerate()
-            {
-                for trace in tx_trace.0 {
-                    if let Some(action_types) = &filter.action_types {
-                        if !action_types
-                            .contains(&ActionType::from(&trace.action))
-                        {
-                            continue;
-                        }
+            let mut rpc_tx_index = 0;
+            for (tx_pos, tx_trace) in block_trace.0.into_iter().enumerate() {
+                if filter.space == Space::Native
+                    && block.transactions[tx_pos].space() == Space::Ethereum
+                {
+                    continue;
+                }
+                for trace in tx_trace
+                    .filter_traces(&filter)
+                    .map_err(|e| FilterError::Custom(e))?
+                {
+                    if !filter
+                        .action_types
+                        .matches(&ActionType::from(&trace.action))
+                    {
+                        continue;
                     }
                     let trace = LocalizedTrace {
                         action: trace.action,
@@ -1539,11 +1542,13 @@ impl ConsensusGraph {
                         epoch_hash: pivot_hash,
                         epoch_number: epoch_number.into(),
                         block_hash,
-                        transaction_position: tx_position.into(),
-                        transaction_hash: tx_hashes[tx_position],
+                        // FIXME(lpl): Use correct tx index.
+                        transaction_position: rpc_tx_index.into(),
+                        transaction_hash: block.transactions[tx_pos].hash(),
                     };
                     traces.push(trace);
                 }
+                rpc_tx_index += 1;
             }
         }
         Ok(traces)
@@ -1565,7 +1570,7 @@ impl ConsensusGraph {
         // sanity check: epoch is not empty
         let pivot = match blocks.last() {
             Some(p) => p,
-            None => return Err("Inconsistent state".into()),
+            None => return Err("Inconsistent state: empty epoch".into()),
         };
 
         if matches!(pivot_assumption, Some(h) if h != pivot.hash()) {
@@ -1602,7 +1607,7 @@ impl ConsensusGraph {
 
             // sanity check: transaction and
             if b.transactions.len() != block_receipts.len() {
-                return Err("Inconsistent state".into());
+                return Err("Inconsistent state: transactions and receipts length mismatch".into());
             }
 
             let evm_chain_id = self.best_chain_id().in_evm_space();
@@ -1622,7 +1627,7 @@ impl ConsensusGraph {
 
                         // sanity check: gas price must be positive
                         if *tx.gas_price() == 0.into() {
-                            return Err("Inconsistent state".into());
+                            return Err("Inconsistent state: zero transaction gas price".into());
                         }
 
                         // FIXME(thegaram): is this correct?
@@ -1657,7 +1662,7 @@ impl ConsensusGraph {
 
                             phantom_block.receipts.push(phantom_receipt);
 
-                            // FIXME(thegaram): handle errors for phantom txs
+                            // note: phantom txs never fails
                             phantom_block.errors.push("".into());
                         }
                     }
@@ -1842,7 +1847,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
                 false, /* update_cache */
             )?;
             let transaction =
-                (*block.transactions[tx_info.tx_index.index]).clone();
+                (*block.transactions[tx_info.tx_index.real_index]).clone();
             Some((transaction, tx_info))
         } else {
             None

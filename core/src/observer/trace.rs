@@ -6,6 +6,7 @@ use super::AddressPocket;
 use crate::{
     bytes::Bytes,
     executive::ExecutiveResult,
+    observer::trace_filter::TraceFilter,
     vm::{ActionParams, CallType, CreateType, Result as vmResult},
 };
 use cfx_internal_common::{DatabaseDecodable, DatabaseEncodable};
@@ -472,7 +473,7 @@ pub struct LocalizedTrace {
 
 /// Represents all traces produced by a single transaction.
 #[derive(Debug, PartialEq, Clone, RlpEncodable, RlpDecodable, MallocSizeOf)]
-pub struct TransactionExecTraces(pub(crate) Vec<ExecTrace>);
+pub struct TransactionExecTraces(pub Vec<ExecTrace>);
 
 impl From<Vec<ExecTrace>> for TransactionExecTraces {
     fn from(v: Vec<ExecTrace>) -> Self { TransactionExecTraces(v) }
@@ -485,6 +486,135 @@ impl TransactionExecTraces {
             .iter()
             .fold(Default::default(), |bloom, trace| bloom | trace.bloom())
     }
+
+    /// Return pairs of (action, result).
+    /// Return `Err` if actions and results do not match.
+    ///
+    /// `from_address`, `to_address`, `action_types`, and `space` in `filter`
+    /// are applied.
+    pub fn filter_trace_pairs(
+        self, filter: &TraceFilter,
+    ) -> Result<Vec<(ExecTrace, ExecTrace)>, String> {
+        let mut trace_pairs: Vec<(ExecTrace, Option<ExecTrace>)> = Vec::new();
+        let mut stack_index = Vec::new();
+        for trace in self.0 {
+            match &trace.action {
+                Action::Call(call) => {
+                    if call.space == filter.space
+                        && filter.from_address.matches(&call.from)
+                        && filter.to_address.matches(&call.to)
+                        && filter.action_types.matches(&ActionType::Call)
+                    {
+                        stack_index.push(Some(trace_pairs.len()));
+                        trace_pairs.push((trace, None));
+                    } else {
+                        // The corresponding result should be ignored.
+                        stack_index.push(None);
+                    }
+                }
+                Action::Create(create) => {
+                    if create.space == filter.space
+                        && filter.from_address.matches(&create.from)
+                        // TODO(lpl): openethereum uses `to_address` to filter the contract address.
+                        && filter.action_types.matches(&ActionType::Create)
+                    {
+                        stack_index.push(Some(trace_pairs.len()));
+                        trace_pairs.push((trace, None));
+                    } else {
+                        // The corresponding result should be ignored.
+                        stack_index.push(None);
+                    }
+                }
+                Action::CallResult(_) | Action::CreateResult(_) => {
+                    if let Some(index) = stack_index
+                        .pop()
+                        .ok_or("result left unmatched!".to_string())?
+                    {
+                        // Since we know that traces should be paired correctly,
+                        // we do not check if the type
+                        // is correct here.
+                        trace_pairs[index].1 = Some(trace);
+                    }
+                }
+                Action::InternalTransferAction(_) => {}
+            }
+        }
+        if !stack_index.is_empty() {
+            bail!("actions left unmatched!".to_string());
+        }
+        Ok(trace_pairs
+            .into_iter()
+            .map(|pair| (pair.0, pair.1.expect("all actions matched")))
+            .collect())
+    }
+
+    /// Return filtered Native actions with their orders kept.
+    ///
+    /// `from_address`, `to_address`, `action_types`, and `space` in `filter`
+    /// are applied.
+    pub fn filter_traces(
+        self, filter: &TraceFilter,
+    ) -> Result<Vec<ExecTrace>, String> {
+        let mut traces = Vec::new();
+        let mut stack = Vec::new();
+        for trace in self.0 {
+            match &trace.action {
+                Action::Call(call) => {
+                    if call.space == filter.space
+                        && filter.from_address.matches(&call.from)
+                        && filter.to_address.matches(&call.to)
+                        && filter.action_types.matches(&ActionType::Call)
+                    {
+                        stack.push(true);
+                        traces.push(trace);
+                    } else {
+                        // The corresponding result should be ignored.
+                        stack.push(false);
+                    }
+                }
+                Action::Create(create) => {
+                    if create.space == filter.space
+                        && filter.from_address.matches(&create.from)
+                        // TODO(lpl): openethereum uses `to_address` to filter the contract address.
+                        && filter.action_types.matches(&ActionType::Create)
+                    {
+                        stack.push(true);
+                        traces.push(trace);
+                    } else {
+                        // The corresponding result should be ignored.
+                        stack.push(false);
+                    }
+                }
+                Action::CallResult(_) | Action::CreateResult(_) => {
+                    if stack
+                        .pop()
+                        .ok_or("result left unmatched!".to_string())?
+                    {
+                        // Since we know that traces should be paired correctly,
+                        // we do not check if the type
+                        // is correct here.
+                        traces.push(trace);
+                    }
+                }
+                Action::InternalTransferAction(_) => {
+                    traces.push(trace);
+                }
+            }
+        }
+        if !stack.is_empty() {
+            bail!("actions left unmatched!".to_string());
+        }
+        Ok(traces)
+    }
+
+    pub fn filter_space(self, space: Space) -> Self {
+        // `unwrap` here should always succeed.
+        // `vec![]` is just added in case.
+        Self(
+            self.filter_traces(&TraceFilter::space_filter(space))
+                .unwrap_or(vec![]),
+        )
+    }
 }
 
 impl Into<Vec<ExecTrace>> for TransactionExecTraces {
@@ -495,7 +625,7 @@ impl Into<Vec<ExecTrace>> for TransactionExecTraces {
 #[derive(
     Debug, PartialEq, Clone, Default, RlpEncodable, RlpDecodable, MallocSizeOf,
 )]
-pub struct BlockExecTraces(pub(crate) Vec<TransactionExecTraces>);
+pub struct BlockExecTraces(pub Vec<TransactionExecTraces>);
 
 impl From<Vec<TransactionExecTraces>> for BlockExecTraces {
     fn from(v: Vec<TransactionExecTraces>) -> Self { BlockExecTraces(v) }
@@ -507,6 +637,15 @@ impl BlockExecTraces {
         self.0.iter().fold(Default::default(), |bloom, tx_traces| {
             bloom | tx_traces.bloom()
         })
+    }
+
+    pub fn filter_space(self, space: Space) -> Self {
+        Self(
+            self.0
+                .into_iter()
+                .map(|tx_trace| tx_trace.filter_space(space))
+                .collect(),
+        )
     }
 }
 
