@@ -427,6 +427,8 @@ pub struct Header {
     pub adaptive: bool,
     /// Nonce of the block
     pub nonce: U256,
+    /// PoS reference.
+    pub pos_reference: Option<PosBlockId>,
 }
 
 impl Header {
@@ -469,6 +471,7 @@ impl Header {
                 pow::pow_hash_to_quality(&pow_hash, &h.nonce())
             }), /* TODO(thegaram):
                  * include custom */
+            pos_reference: *h.pos_reference(),
         })
     }
 }
