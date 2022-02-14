@@ -1,4 +1,4 @@
-use cfx_types::U256;
+use cfx_types::{U256, U64};
 
 #[derive(Debug, Serialize, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -8,5 +8,5 @@ pub struct PoSEconomics {
     // This is the total distributable interest.
     pub distributable_pos_interest: U256,
     // This is the block number of last .
-    pub last_distribute_block: u64,
+    pub last_distribute_block: U64,
 }
