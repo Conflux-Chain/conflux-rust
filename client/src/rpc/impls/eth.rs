@@ -732,7 +732,7 @@ impl Eth for EthHandler {
                 };
 
                 bail!(call_execution_error(
-                    format!("Estimation isn't accurate: transaction is reverted{}{}",
+                    format!("execution reverted: {}{}",
                         revert_error, innermost_error),
                     errors.join("\n").into_bytes(),
                 ))

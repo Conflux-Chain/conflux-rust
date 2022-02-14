@@ -403,7 +403,9 @@ impl RpcImpl {
                 .get_total_pos_staking_tokens()?,
             distributable_pos_interest: state_db
                 .get_distributable_pos_interest()?,
-            last_distribute_block: state_db.get_last_distribute_block()?,
+            last_distribute_block: U64::from(
+                state_db.get_last_distribute_block()?,
+            ),
         })
     }
 
