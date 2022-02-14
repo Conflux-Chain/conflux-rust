@@ -612,6 +612,7 @@ mod tests {
             referee_hashes: Vec::new(),
             adaptive: false,
             nonce: 0.into(),
+            pos_reference: None,
         };
         let serialized_header = serde_json::to_string(&header).unwrap();
 
