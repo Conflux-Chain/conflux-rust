@@ -88,7 +88,7 @@
 - Change the default node type to `full` node instead of `archive` node. And allow setting the node type in the
   configuration file with the entry `node_type`.
 - Add parameters to independently configure the garbage collection time of different kinds of data (like receipts,
-  transactions, block traces, state, e.t.c.). Check the `additional_maintained_*` entries in `run/tethys.toml`.
+  transactions, block traces, state, e.t.c.). Check the `additional_maintained_*` entries in `run/hydra.toml`.
 - If `block_db_dir` or `netconf_dir` is not set, put the default directory in the one configured with `conflux_data_dir`.
   The old behavior is to be put in the hard-coded `./blockchain_data`.
 - Add a parameter `public_rpc_apis` to control the publicly available RPC interface sets. 

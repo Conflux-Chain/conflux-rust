@@ -56,4 +56,7 @@ small_local_test_conf = dict(
     dev_allow_phase_change_without_peer = "true",
     check_status_genesis = "false",
     pos_reference_enable_height = 0,
+    hydra_transition_height = 0,
+    hydra_transition_number = 0,
+    cip43_init_end_number = 2 ** 32 - 1,
 )
