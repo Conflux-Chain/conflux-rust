@@ -996,7 +996,7 @@ impl RpcImpl {
                 .map(|ans| PoSEconomics {
                     total_pos_staking_tokens: ans[0],
                     distributable_pos_interest: ans[1],
-                    last_distribute_block: ans[2].as_u64(),
+                    last_distribute_block: ans[2].as_u64().into(),
                 })
                 .map_err(|e| e.to_string())
                 .map_err(RpcError::invalid_params)?)
