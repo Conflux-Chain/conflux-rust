@@ -145,9 +145,9 @@ build_config! {
         (genesis_secrets, (Option<String>), None)
         (initial_difficulty, (Option<u64>), None)
         (tanzanite_transition_height, (u64), TANZANITE_HEIGHT)
-        (unnamed_21autumn_transition_number, (Option<u64>), None)
-        (unnamed_21autumn_transition_height, (Option<u64>), None)
-        (unnamed_21autumn_cip43_init_end, (Option<u64>), None)
+        (hydra_transition_number, (Option<u64>), Some(92060600))
+        (hydra_transition_height, (Option<u64>), Some(36935000))
+        (cip43_init_end_number, (Option<u64>), Some(92406200))
         (cip78_patch_transition_number,(Option<u64>),None)
         (cip90_transition_height,(Option<u64>),None)
         (cip90_transition_number,(Option<u64>),None)
@@ -305,10 +305,10 @@ build_config! {
         (is_consortium, (bool), false)
         (pos_config_path, (Option<String>), Some("./pos_config/pos_config.yaml".to_string()))
         (pos_genesis_pivot_decision, (Option<H256>), None)
-        (vrf_proposal_threshold, (U256), U256::MAX)
+        (vrf_proposal_threshold, (U256), U256::from_str("1111111111111100000000000000000000000000000000000000000000000000").unwrap())
         // Deferred epoch count before a confirmed epoch.
         (pos_pivot_decision_defer_epoch_count, (u64), 50)
-        (pos_reference_enable_height, (u64), u64::MAX)
+        (pos_reference_enable_height, (u64), 37230000)
         (pos_initial_nodes_path, (String), "./pos_config/initial_nodes.json".to_string())
         (pos_private_key_path, (String), "./pos_config/pos_key".to_string())
         (pos_round_per_term, (u64), ROUND_PER_TERM)
@@ -1105,17 +1105,15 @@ impl Configuration {
             self.raw_conf.tanzanite_transition_height;
         params.transition_numbers.cip43a = self
             .raw_conf
-            .unnamed_21autumn_transition_number
+            .hydra_transition_number
             .unwrap_or(default_transition_time);
         if self.is_test_or_dev_mode() {
-            params.transition_numbers.cip43b = self
-                .raw_conf
-                .unnamed_21autumn_cip43_init_end
-                .unwrap_or(u64::MAX);
+            params.transition_numbers.cip43b =
+                self.raw_conf.cip43_init_end_number.unwrap_or(u64::MAX);
         } else {
             params.transition_numbers.cip43b = self
                 .raw_conf
-                .unnamed_21autumn_cip43_init_end
+                .cip43_init_end_number
                 .unwrap_or(params.transition_numbers.cip43a);
         }
         params.transition_numbers.cip62 = if self.is_test_or_dev_mode() {
@@ -1125,15 +1123,15 @@ impl Configuration {
         };
         params.transition_numbers.cip64 = self
             .raw_conf
-            .unnamed_21autumn_transition_number
+            .hydra_transition_number
             .unwrap_or(default_transition_time);
         params.transition_numbers.cip71 = self
             .raw_conf
-            .unnamed_21autumn_transition_number
+            .hydra_transition_number
             .unwrap_or(default_transition_time);
         params.transition_numbers.cip78a = self
             .raw_conf
-            .unnamed_21autumn_transition_number
+            .hydra_transition_number
             .unwrap_or(default_transition_time);
         params.transition_numbers.cip78b = self
             .raw_conf
@@ -1142,25 +1140,25 @@ impl Configuration {
         params.transition_numbers.cip90b = self
             .raw_conf
             .cip90_transition_number
-            .or(self.raw_conf.unnamed_21autumn_transition_number)
+            .or(self.raw_conf.hydra_transition_number)
             .unwrap_or(default_transition_time);
         params.transition_numbers.cip92 = self
             .raw_conf
-            .unnamed_21autumn_transition_number
+            .hydra_transition_number
             .unwrap_or(default_transition_time);
 
         params.transition_heights.cip76 = self
             .raw_conf
-            .unnamed_21autumn_transition_height
+            .hydra_transition_height
             .unwrap_or(default_transition_time);
         params.transition_heights.cip86 = self
             .raw_conf
-            .unnamed_21autumn_transition_height
+            .hydra_transition_height
             .unwrap_or(default_transition_time);
         params.transition_heights.cip90a = self
             .raw_conf
             .cip90_transition_height
-            .or(self.raw_conf.unnamed_21autumn_transition_height)
+            .or(self.raw_conf.hydra_transition_height)
             .unwrap_or(default_transition_time);
 
         let mut base_block_rewards = BTreeMap::new();
