@@ -1,5 +1,8 @@
 use crate::transaction_pool::transaction_pool_inner::PendingReason;
-use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+use cfx_parameters::{
+    consensus::TRANSACTION_DEFAULT_EPOCH_BOUND,
+    staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
+};
 use cfx_types::{U128, U256, U512};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
@@ -33,7 +36,22 @@ impl TxWithReadyInfo {
         }
         let higher_epoch_height =
             if let Transaction::Native(ref tx) = self.unsigned {
-                if let Transaction::Native(ref other) = self.unsigned {
+                if let Transaction::Native(ref other) = x.unsigned {
+                    // FIXME: Use epoch_bound in spec. It's still a part of
+                    // normal config.
+                    if tx.epoch_height
+                        > other.epoch_height.saturating_add(
+                            TRANSACTION_DEFAULT_EPOCH_BOUND.saturating_mul(2),
+                        )
+                    {
+                        // the epoch_height between `self` and `other` has been
+                        // more than
+                        // twice `TRANSACTION_DEFAULT_EPOCH_BOUND`. Since `self`
+                        // has passed epoch height
+                        // verification, it's sure that `other` cannot pass this
+                        // verification anymore and should be dropped.
+                        return true;
+                    }
                     tx.epoch_height > other.epoch_height
                 } else {
                     // Should be unreachable. But I'm not very sure about this.

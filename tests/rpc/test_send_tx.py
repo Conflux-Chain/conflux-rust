@@ -316,3 +316,53 @@ class TestSendTx(RpcClient):
         # A tx with size over `MAX_BLOCK_SIZE_IN_BYTES` should be rejected.
         tx = self.new_tx(data=b'0' * default_config["MAX_BLOCK_SIZE_IN_BYTES"], gas=14000000)
         assert_raises_rpc_error(None, None, self.send_tx, tx)
+
+    def test_replace_higher_epoch_height(self):
+        self.clear_tx_pool()
+        cur_nonce = self.get_nonce(self.GENESIS_ADDR)
+        tx = self.new_tx(nonce=cur_nonce, gas_price=10)
+        assert_equal(self.send_tx(tx), tx.hash_hex())
+        assert_equal(self.txpool_status(), (1, 1))
+
+        # replace with lower gas price and higher epoch height
+        new_tx = self.new_tx(nonce=cur_nonce, gas_price=7, epoch_height=1)
+        assert_raises_rpc_error(None, None, self.send_tx, new_tx)
+        assert_equal(self.txpool_status(), (1, 1))
+
+        # replace with equal gas price and higher epoch height
+        new_tx = self.new_tx(nonce=cur_nonce, gas_price=10, epoch_height=1)
+        assert_equal(self.send_tx(new_tx), new_tx.hash_hex())
+        assert_equal(self.txpool_status(), (1, 1))
+
+        # cannot get the old tx anymore
+        assert_equal(self.get_tx(tx.hash_hex()), None)
+
+        self.wait_for_receipt(new_tx.hash_hex())
+
+    def test_replace_old_epoch_height(self):
+        self.clear_tx_pool()
+        cur_nonce = self.get_nonce(self.GENESIS_ADDR)
+        tx = self.new_tx(nonce=cur_nonce + 1, gas_price=10)
+        assert_equal(self.send_tx(tx), tx.hash_hex())
+        assert_equal(self.txpool_status(), (1, 0))
+        for i in range(100):
+            print(i)
+            self.generate_empty_blocks(2000)
+
+        # replace with lower gas price and epoch gap being 2*epoch_height_bound
+        new_tx = self.new_tx(nonce=cur_nonce + 1, gas_price=7, epoch_height=200000)
+        assert_raises_rpc_error(None, None, self.send_tx, new_tx)
+        assert_equal(self.txpool_status(), (1, 0))
+
+        # replace with lower gas price and epoch gap being 2*epoch_height_bound + 1
+        new_tx = self.new_tx(nonce=cur_nonce + 1, gas_price=7, epoch_height=200001)
+        assert_equal(self.send_tx(new_tx), new_tx.hash_hex())
+        assert_equal(self.txpool_status(), (1, 0))
+
+        # cannot get the old tx anymore
+        assert_equal(self.get_tx(tx.hash_hex()), None)
+
+        # cleanup
+        missed_tx = self.new_tx(nonce=cur_nonce, epoch_height=self.epoch_number())
+        self.send_tx(missed_tx, True)
+        self.wait_for_receipt(new_tx.hash_hex())
