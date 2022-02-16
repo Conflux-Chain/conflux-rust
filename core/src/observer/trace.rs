@@ -448,11 +448,17 @@ impl Encodable for ExecTrace {
 
 impl Decodable for ExecTrace {
     fn decode(d: &Rlp) -> Result<Self, DecoderError> {
-        let res = ExecTrace {
-            action: d.val_at(0)?,
-            valid: d.val_at(1)?,
-        };
-        Ok(res)
+        match d.item_count()? {
+            1 => Ok(ExecTrace {
+                action: d.val_at(0)?,
+                valid: true,
+            }),
+            2 => Ok(ExecTrace {
+                action: d.val_at(0)?,
+                valid: d.val_at(1)?,
+            }),
+            _ => Err(DecoderError::RlpInvalidLength),
+        }
     }
 }
 
