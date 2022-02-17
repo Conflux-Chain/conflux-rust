@@ -26,6 +26,11 @@ error_chain! {
             description("Error as jsonrpc error InvalidParam.")
             display("Jsonrpc error InvalidParam {}: {}.", param, details)
         }
+
+        Custom(details: String) {
+            description("Server custom error")
+            display("error detail: {}", details)
+        }
     }
 }
 

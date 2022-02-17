@@ -121,6 +121,7 @@ pub struct EpochManager {
         SignedTransaction,
         oneshot::Sender<anyhow::Result<SubmissionStatus>>,
     )>,
+    is_voting: bool,
 }
 
 impl EpochManager {
@@ -142,6 +143,7 @@ impl EpochManager {
             SignedTransaction,
             oneshot::Sender<anyhow::Result<SubmissionStatus>>,
         )>,
+        started_as_voter: bool,
     ) -> Self
     {
         let config = node_config.consensus.clone();
@@ -166,6 +168,7 @@ impl EpochManager {
             pow_handler,
             election_control: AtomicBool::new(true),
             tx_sender,
+            is_voting: started_as_voter,
         }
     }
 
@@ -900,6 +903,8 @@ impl EpochManager {
                 }
                 _ => anyhow::bail!("RoundManager not started yet"),
             },
+            TestCommand::StartVoting(tx) => Ok(()),
+            TestCommand::StopVoting(tx) => Ok(()),
         }
     }
 
@@ -956,6 +961,16 @@ impl EpochManager {
         match self.processor_mut() {
             RoundProcessor::Normal(p) => {
                 p.force_sign_pivot_decision(pivot_decision).await
+            }
+            _ => anyhow::bail!("RoundManager not started yet"),
+        }
+    }
+
+    async fn start_voting(&mut self) -> anyhow::Result<()> {
+        self.is_voting = true;
+        match self.processor_mut() {
+            RoundProcessor::Normal(p) => {
+                p.start
             }
             _ => anyhow::bail!("RoundManager not started yet"),
         }

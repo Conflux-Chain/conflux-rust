@@ -19,7 +19,7 @@ use crate::rpc::{
         Transaction as RpcTransaction, TxPoolPendingNonceRange, TxPoolStatus,
         TxWithPoolInfo,
     },
-    RpcResult,
+    RpcErrorKind, RpcResult,
 };
 
 use bigdecimal::BigDecimal;
@@ -778,6 +778,20 @@ impl RpcImpl {
         self.pos_handler.stop_election().map_err(|e| {
             warn!("stop_election: err={:?}", e);
             RpcError::internal_error().into()
+        })
+    }
+
+    pub fn pos_start_voting(&self) -> RpcResult<()> {
+        self.pos_handler.start_voting().map_err(|e| {
+            warn!("start_voting: err={:?}", e);
+            RpcErrorKind::Custom(e.to_string()).into()
+        })
+    }
+
+    pub fn pos_stop_voting(&self) -> RpcResult<()> {
+        self.pos_handler.stop_voting().map_err(|e| {
+            warn!("stop_voting: err={:?}", e);
+            RpcErrorKind::Custom(e.to_string()).into()
         })
     }
 

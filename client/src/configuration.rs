@@ -317,6 +317,7 @@ build_config! {
         (pos_in_queue_locked_views, (u64), IN_QUEUE_LOCKED_VIEWS)
         (pos_out_queue_locked_views, (u64), OUT_QUEUE_LOCKED_VIEWS)
         (dev_pos_private_key_encryption_password, (Option<String>), None)
+        (pos_started_as_voter, (bool), true)
 
         // Light node section
         (ln_epoch_request_batch_size, (Option<usize>), None)
@@ -794,6 +795,7 @@ impl Configuration {
                 .pos_genesis_pivot_decision
                 .expect("set to genesis if none"),
             check_status_genesis: self.raw_conf.check_status_genesis,
+            pos_started_as_voter: self.raw_conf.pos_started_as_voter,
         }
     }
 

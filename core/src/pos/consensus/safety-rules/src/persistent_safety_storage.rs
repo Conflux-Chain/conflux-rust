@@ -71,6 +71,8 @@ impl PersistentSafetyStorage {
         }
     }
 
+    pub fn replace_with(&mut self, new_disk_storage_path: )
+
     fn initialize_(
         internal_store: &mut Storage, safety_data: SafetyData, author: Author,
         waypoint: Waypoint,

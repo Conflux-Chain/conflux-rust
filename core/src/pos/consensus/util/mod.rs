@@ -48,6 +48,8 @@ pub enum TestCommand {
     /// Stop broadcasting elections to prepare for a restart
     /// Return the round when the node is safe to be stopped without retiring.
     StopElection(mpsc::SyncSender<Option<Round>>),
+    StartVoting(mpsc::SyncSender<anyhow::Result<()>>),
+    StopVoting(mpsc::SyncSender<anyhow::Result<()>>),
 
     /// Read-only command
     /// Get the chosen to-vote proposal
