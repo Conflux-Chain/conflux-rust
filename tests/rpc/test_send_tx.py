@@ -1,3 +1,5 @@
+import time
+
 import eth_utils
 import rlp
 import sys
@@ -291,7 +293,9 @@ class TestSendTx(RpcClient):
 
         # generate a block to pack above txs.
         self.generate_blocks_to_state(num_txs=4)
-
+        # wait for txpool to be updated async
+        time.sleep(0.5)
+        
         pending_info = self.node.cfx_getAccountPendingInfo(addr)
         assert_equal(pending_info["localNonce"], hex(cur_nonce+4))
         assert_equal(pending_info["pendingCount"], hex(0))
