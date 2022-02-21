@@ -238,7 +238,25 @@ impl EthTrace for EthTraceHandler {
                     if eth_block_hash != pivot_hash_for_trace {
                         return Ok(None);
                     }
-                    for tx_traces in traces.0 {
+                    let block = self
+                        .trace_handler
+                        .data_man
+                        .block_by_hash(&block_hash, false)
+                        .ok_or(JsonRpcError::internal_error())?;
+                    if block.transactions.len() != traces.0.len() {
+                        bail!(JsonRpcError::internal_error());
+                    }
+                    for (tx_index, tx_traces) in
+                        traces.0.into_iter().enumerate()
+                    {
+                        // FIXME: Process phantom tx.
+                        let transaction_hash =
+                            match block.transactions[tx_index].space() {
+                                Space::Native => None,
+                                Space::Ethereum => {
+                                    Some(block.transactions[tx_index].hash())
+                                }
+                            };
                         for paired_trace in tx_traces
                             .filter_trace_pairs(
                                 &PrimitiveTraceFilter::space_filter(
@@ -260,7 +278,7 @@ impl EthTrace for EthTraceHandler {
                                 subtraces: 0,
                                 // FIXME(lpl): follow the value of tx index?
                                 transaction_position: None,
-                                transaction_hash: None,
+                                transaction_hash,
                                 block_number: eth_block_number,
                                 block_hash: eth_block_hash,
                             };
@@ -330,7 +348,18 @@ impl EthTrace for EthTraceHandler {
                 if tx_index.is_phantom {
                     return None;
                 }
-
+                // FIXME: Process phantom tx.
+                let block = self
+                    .trace_handler
+                    .data_man
+                    .block_by_hash(&tx_index.block_hash, false)?;
+                let transaction_hash =
+                    match block.transactions[tx_index.real_index].space() {
+                        Space::Native => None,
+                        Space::Ethereum => {
+                            Some(block.transactions[tx_index.real_index].hash())
+                        }
+                    };
                 self.trace_handler
                     .data_man
                     .transactions_traces_by_block_hash(&tx_index.block_hash)
@@ -370,7 +399,7 @@ impl EthTrace for EthTraceHandler {
                                             // FIXME(lpl): follow the value of
                                             // tx index?
                                             transaction_position: None,
-                                            transaction_hash: None,
+                                            transaction_hash,
                                             block_number: pivot_epoch_number,
                                             block_hash: pivot_hash,
                                         };

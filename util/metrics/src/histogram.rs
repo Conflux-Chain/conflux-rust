@@ -27,7 +27,11 @@ pub trait Histogram: Send + Sync {
     fn update(&self, _v: u64) {}
     fn variance(&self) -> f64 { 0.0 }
     fn update_since(&self, start_time: Instant) {
-        self.update(start_time.elapsed().as_nanos() as u64);
+        self.update(
+            Instant::now()
+                .saturating_duration_since(start_time)
+                .as_nanos() as u64,
+        );
     }
 }
 
