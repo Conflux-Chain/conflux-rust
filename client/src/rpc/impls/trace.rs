@@ -26,6 +26,7 @@ use cfxcore::{
     BlockDataManager, ConsensusGraph, SharedConsensusGraph,
 };
 use jsonrpc_core::{Error as JsonRpcError, Result as JsonRpcResult};
+use primitives::EpochNumber;
 use std::{convert::TryInto, sync::Arc};
 
 pub struct TraceHandler {
@@ -214,12 +215,30 @@ impl EthTrace for EthTraceHandler {
     fn block_traces(
         &self, block_number: BlockNumber,
     ) -> JsonRpcResult<Option<Vec<EthLocalizedTrace>>> {
+        let (epoch_number, hash_requested) = match block_number {
+            BlockNumber::Hash { hash, .. } => {
+                match self.trace_handler.consensus.get_block_epoch_number(&hash)
+                {
+                    Some(e) => (EpochNumber::Number(e), Some(hash)),
+                    None => return Ok(None),
+                }
+            }
+            _ => (block_number.try_into()?, None),
+        };
+
         let epoch_hashes = self
             .trace_handler
             .consensus
-            .get_block_hashes_by_epoch(block_number.try_into()?)
+            .get_block_hashes_by_epoch(epoch_number)
             .map_err(JsonRpcError::invalid_params)?;
+
         let eth_block_hash = *epoch_hashes.last().unwrap();
+
+        // cannot use non-pivot hash
+        if matches!(hash_requested, Some(h) if h != eth_block_hash) {
+            return Ok(None);
+        }
+
         let eth_block_number = self
             .trace_handler
             .consensus

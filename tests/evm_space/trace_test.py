@@ -81,11 +81,16 @@ class TraceTest(Web3Base):
         assert_ne(traces[0]["result"], None)
         assert_equal(traces[0]["transactionHash"], None)
         assert_equal(traces[0]["transactionPosition"], None)
+
         traces = self.nodes[0].ethrpc.trace_block(epoch_a)
         assert_equal(len(traces), 1)
         assert_ne(traces[0]["result"], None)
         assert_equal(traces[0]["transactionHash"], encode_hex_0x(evm_tx_hashes[0]))
         assert_equal(traces[0]["transactionPosition"], None)
+
+        traces2 = self.nodes[0].ethrpc.trace_block({ "blockHash": block_a })
+        assert_equal(traces2, traces)
+
         block_a_txs_evm = self.nodes[0].eth_getBlockByHash(block_a, False)["transactions"]
         traces = self.nodes[0].ethrpc.trace_transaction(block_a_txs_evm[0])
         assert_equal(len(traces), 1)
