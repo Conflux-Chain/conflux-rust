@@ -16,7 +16,7 @@ pub trait Timer: Send + Sync {
     fn update(&self, _d: Duration) {}
 
     fn update_since(&self, start_time: Instant) {
-        self.update(start_time.elapsed());
+        self.update(Instant::now().saturating_duration_since(start_time));
     }
 }
 
