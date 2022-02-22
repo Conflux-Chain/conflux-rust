@@ -317,7 +317,7 @@ impl TransactionPool {
                 }
             }
         }
-        
+
         if transactions.is_empty() {
             INSERT_TXS_SUCCESS_TPS.mark(passed_transactions.len());
             INSERT_TXS_FAILURE_TPS.mark(failure.len());

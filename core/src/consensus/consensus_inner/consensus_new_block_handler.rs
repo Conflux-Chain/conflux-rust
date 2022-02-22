@@ -31,6 +31,7 @@ use std::{
     cmp::{max, min},
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     slice::Iter,
+    str::FromStr,
     sync::Arc,
 };
 
@@ -1715,10 +1716,14 @@ impl ConsensusNewBlockHandler {
             "insert new block into consensus: header_only={:?} block={:?}",
             inner.header_only, &block_header
         );
+
         let parent_hash = block_header.parent_hash();
         let parent_index = inner.hash_to_arena_indices.get(&parent_hash);
         let me = if parent_index.is_none()
             || inner.arena[*parent_index.unwrap()].era_block == NULL
+            || hash == &H256::from_str(
+            "89482e0038106aa1d47cf6b656e03bc2af1fa3af9b9d74c679f9033835e9a75c",
+        ).unwrap()
         {
             // current block is outside of the current era.
             debug!(
