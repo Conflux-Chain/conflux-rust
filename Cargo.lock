@@ -859,7 +859,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "2.0.0"
+version = "2.0.0-fix"
 dependencies = [
  "anyhow",
  "async-oneshot",
@@ -1125,7 +1125,7 @@ dependencies = [
 
 [[package]]
 name = "client"
-version = "2.0.0"
+version = "2.0.0-fix"
 dependencies = [
  "anyhow",
  "app_dirs",
@@ -1243,7 +1243,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "2.0.0"
+version = "2.0.0-fix"
 dependencies = [
  "app_dirs",
  "base64ct",
