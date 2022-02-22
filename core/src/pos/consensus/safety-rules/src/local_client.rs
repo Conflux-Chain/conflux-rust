@@ -52,4 +52,12 @@ impl TSafetyRules for LocalClient {
     ) -> Result<ConsensusSignature, Error> {
         self.internal.write().sign_timeout(timeout)
     }
+
+    fn start_voting(&mut self) -> Result<(), Error> {
+        self.internal.write().start_voting()
+    }
+
+    fn stop_voting(&mut self) -> Result<(), Error> {
+        self.internal.write().stop_voting()
+    }
 }

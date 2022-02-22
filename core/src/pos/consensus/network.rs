@@ -229,6 +229,9 @@ impl ConsensusNetworkSender {
         }
     }
 
+    // This is unused because we always broadcast votes now.
+    // It may be needed when non-voter nodes do not receive votes anymore.
+    #[allow(unused)]
     /// Sends the vote to the chosen recipients (typically that would be the
     /// recipients that we believe could serve as proposers in the next
     /// round). The recipients on the receiving end are going to be notified

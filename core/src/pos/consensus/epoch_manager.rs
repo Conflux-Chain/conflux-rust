@@ -477,6 +477,7 @@ impl EpochManager {
             self.config.sync_only,
             self.tx_sender.clone(),
             self.config.chain_id,
+            self.is_voting,
         );
         // Only check if we should send election after entering an new epoch.
         if self.election_control.load(AtomicOrdering::Relaxed) {
@@ -903,8 +904,14 @@ impl EpochManager {
                 }
                 _ => anyhow::bail!("RoundManager not started yet"),
             },
-            TestCommand::StartVoting(tx) => Ok(()),
-            TestCommand::StopVoting(tx) => Ok(()),
+            TestCommand::StartVoting(tx) => {
+                let r = self.start_voting().await;
+                tx.send(r).map_err(|e| anyhow!("send: err={:?}", e))
+            }
+            TestCommand::StopVoting(tx) => {
+                let r = self.stop_voting().await;
+                tx.send(r).map_err(|e| anyhow!("send: err={:?}", e))
+            }
         }
     }
 
@@ -969,9 +976,15 @@ impl EpochManager {
     async fn start_voting(&mut self) -> anyhow::Result<()> {
         self.is_voting = true;
         match self.processor_mut() {
-            RoundProcessor::Normal(p) => {
-                p.start
-            }
+            RoundProcessor::Normal(p) => p.start_voting(),
+            _ => anyhow::bail!("RoundManager not started yet"),
+        }
+    }
+
+    async fn stop_voting(&mut self) -> anyhow::Result<()> {
+        self.is_voting = false;
+        match self.processor_mut() {
+            RoundProcessor::Normal(p) => p.stop_voting(),
             _ => anyhow::bail!("RoundManager not started yet"),
         }
     }

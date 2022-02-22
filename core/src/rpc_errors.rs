@@ -58,7 +58,8 @@ impl From<Error> for JsonRpcError {
             // TODO(thegaram): make error conversion more fine-grained here
             | ErrorKind::LightProtocol(_)
             | ErrorKind::StateDb(_)
-            | ErrorKind::Storage(_) => JsonRpcError {
+            | ErrorKind::Storage(_)
+            | ErrorKind::Custom(_) => JsonRpcError {
                 code: jsonrpc_core::ErrorCode::ServerError(EXCEPTION_ERROR),
                 message: format!("Error processing request: {}", e),
                 data: None,

@@ -74,6 +74,8 @@ impl OnDiskStorage {
         fs::rename(&self.temp_path, &self.file_path)?;
         Ok(())
     }
+
+    pub fn file_path(&self) -> &PathBuf { &self.file_path }
 }
 
 impl KVStorage for OnDiskStorage {

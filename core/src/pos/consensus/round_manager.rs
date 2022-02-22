@@ -6,9 +6,8 @@
 // See http://www.gnu.org/licenses/
 
 use std::{sync::Arc, time::Duration};
-use std::sync::atomic::AtomicBool;
 
-use anyhow::{anyhow, bail, ensure, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use fail::fail_point;
 use futures::{
     channel::{mpsc, oneshot},
@@ -246,8 +245,7 @@ impl RoundManager {
             SignedTransaction,
             oneshot::Sender<anyhow::Result<SubmissionStatus>>,
         )>,
-        chain_id: ChainId,
-        is_voting: bool,
+        chain_id: ChainId, is_voting: bool,
     ) -> Self
     {
         counters::OP_COUNTERS
@@ -1030,8 +1028,6 @@ impl RoundManager {
     ///
     /// Return `Ok(true)` if the vote should be relayed.
     async fn process_vote(&mut self, vote: &Vote) -> anyhow::Result<bool> {
-        let round = vote.vote_data().proposed().round();
-
         diem_info!(
             self.new_log(LogEvent::ReceiveVote)
                 .remote_peer(vote.author()),
@@ -1376,6 +1372,11 @@ impl RoundManager {
 
     pub fn start_voting(&mut self) -> anyhow::Result<()> {
         self.is_voting = true;
-        self.safety_rules
+        self.safety_rules.start_voting().map_err(Into::into)
+    }
+
+    pub fn stop_voting(&mut self) -> anyhow::Result<()> {
+        self.is_voting = false;
+        self.safety_rules.stop_voting().map_err(Into::into)
     }
 }

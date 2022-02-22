@@ -99,4 +99,12 @@ impl TSafetyRules for MetricsSafetyRules {
         }
         result
     }
+
+    fn start_voting(&mut self) -> Result<(), Error> {
+        monitor!("safety_rules", self.inner.start_voting())
+    }
+
+    fn stop_voting(&mut self) -> Result<(), Error> {
+        monitor!("safety_rules", self.inner.stop_voting())
+    }
 }
