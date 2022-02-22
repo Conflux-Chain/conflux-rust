@@ -147,7 +147,7 @@ build_config! {
         (tanzanite_transition_height, (u64), TANZANITE_HEIGHT)
         (hydra_transition_number, (Option<u64>), Some(92060600))
         (hydra_transition_height, (Option<u64>), Some(36935000))
-        (cip43_init_end_number, (Option<u64>), Some(92406200))
+        (cip43_init_end_number, (Option<u64>), Some(92751800))
         (cip78_patch_transition_number,(Option<u64>),None)
         (cip90_transition_height,(Option<u64>),None)
         (cip90_transition_number,(Option<u64>),None)
@@ -308,7 +308,7 @@ build_config! {
         (vrf_proposal_threshold, (U256), U256::from_str("1111111111111100000000000000000000000000000000000000000000000000").unwrap())
         // Deferred epoch count before a confirmed epoch.
         (pos_pivot_decision_defer_epoch_count, (u64), 50)
-        (pos_reference_enable_height, (u64), 37230000)
+        (pos_reference_enable_height, (u64), 37400000)
         (pos_initial_nodes_path, (String), "./pos_config/initial_nodes.json".to_string())
         (pos_private_key_path, (String), "./pos_config/pos_key".to_string())
         (pos_round_per_term, (u64), ROUND_PER_TERM)
