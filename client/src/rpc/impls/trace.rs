@@ -29,6 +29,15 @@ use jsonrpc_core::{Error as JsonRpcError, Result as JsonRpcResult};
 use primitives::EpochNumber;
 use std::{convert::TryInto, sync::Arc};
 
+macro_rules! unwrap_or_return {
+    ($e:ident) => {
+        let $e = match $e {
+            Some(x) => x,
+            None => return Ok(None),
+        };
+    };
+}
+
 pub struct TraceHandler {
     data_man: Arc<BlockDataManager>,
     consensus: SharedConsensusGraph,
@@ -358,84 +367,82 @@ impl EthTrace for EthTraceHandler {
     fn transaction_traces(
         &self, tx_hash: H256,
     ) -> JsonRpcResult<Option<Vec<EthLocalizedTrace>>> {
-        Ok(self
+        let tx_index = self
             .trace_handler
             .data_man
-            .transaction_index_by_hash(&tx_hash, true /* update_cache */)
-            .and_then(|tx_index| {
-                // FIXME(thegaram): do we support traces for phantom txs?
-                if tx_index.is_phantom {
-                    return None;
-                }
-                // FIXME: Process phantom tx.
-                let block = self
-                    .trace_handler
-                    .data_man
-                    .block_by_hash(&tx_index.block_hash, false)?;
-                let transaction_hash =
-                    match block.transactions[tx_index.real_index].space() {
-                        Space::Native => None,
-                        Space::Ethereum => {
-                            Some(block.transactions[tx_index.real_index].hash())
-                        }
-                    };
-                self.trace_handler
-                    .data_man
-                    .transactions_traces_by_block_hash(&tx_index.block_hash)
-                    .and_then(|(pivot_hash, traces)| {
-                        let pivot_epoch_number = self
-                            .trace_handler
-                            .data_man
-                            .block_height_by_hash(&pivot_hash)
-                            .unwrap();
-                        traces
-                            .into_iter()
-                            .nth(tx_index.real_index)
-                            .and_then(|tx_trace| {
-                                tx_trace
-                                    .filter_trace_pairs(
-                                        &PrimitiveTraceFilter::space_filter(
-                                            Space::Ethereum,
-                                        ),
-                                    )
-                                    .ok()
-                            })
-                            .map(|traces| {
-                                traces
-                                    .into_iter()
-                                    .map(|paired_trace| {
-                                        let mut eth_trace = EthLocalizedTrace {
-                                            action: RpcAction::try_from(
-                                                paired_trace.0.action,
-                                                self.trace_handler.network,
-                                            )
-                                            .unwrap()
-                                            .try_into()
-                                            .unwrap(),
-                                            result: EthRes::None,
-                                            trace_address: vec![],
-                                            subtraces: 0,
-                                            // FIXME(lpl): follow the value of
-                                            // tx index?
-                                            transaction_position: None,
-                                            transaction_hash,
-                                            block_number: pivot_epoch_number,
-                                            block_hash: pivot_hash,
-                                        };
-                                        eth_trace
-                                            .set_result(
-                                                RpcAction::try_from(
-                                                    paired_trace.1.action,
-                                                    self.trace_handler.network,
-                                                )
-                                                .unwrap(),
-                                            )
-                                            .unwrap();
-                                        eth_trace
-                                    })
-                                    .collect()
-                            })
-                    })
-            }))
+            .transaction_index_by_hash(&tx_hash, false /* update_cache */);
+
+        unwrap_or_return!(tx_index);
+
+        let epoch_num = self
+            .trace_handler
+            .consensus
+            .get_block_epoch_number(&tx_index.block_hash);
+
+        unwrap_or_return!(epoch_num);
+
+        let phantom_block = self
+            .trace_handler
+            .consensus_graph()
+            .get_phantom_block_by_number(
+                EpochNumber::Number(epoch_num),
+                None,
+                true, /* include_traces */
+            )
+            .map_err(JsonRpcError::invalid_params)?;
+
+        unwrap_or_return!(phantom_block);
+
+        // find tx corresponding to `tx_hash`
+        let id = phantom_block
+            .transactions
+            .iter()
+            .position(|tx| tx.hash() == tx_hash);
+
+        unwrap_or_return!(id);
+
+        let tx = &phantom_block.transactions[id];
+        let tx_traces = phantom_block.traces[id].clone();
+
+        // convert traces
+        let trace_pairs = tx_traces
+            .filter_trace_pairs(&PrimitiveTraceFilter::space_filter(
+                Space::Ethereum,
+            ))
+            .map_err(JsonRpcError::invalid_params)?;
+
+        let result = trace_pairs
+            .into_iter()
+            .map(|paired_trace| {
+                let mut eth_trace = EthLocalizedTrace {
+                    action: RpcAction::try_from(
+                        paired_trace.0.action,
+                        self.trace_handler.network,
+                    )
+                    .unwrap()
+                    .try_into()
+                    .unwrap(),
+                    result: EthRes::None,
+                    trace_address: vec![],
+                    subtraces: 0,
+                    transaction_position: Some(id),
+                    transaction_hash: Some(tx.hash()),
+                    block_number: epoch_num,
+                    block_hash: phantom_block.pivot_header.hash(),
+                };
+                eth_trace
+                    .set_result(
+                        RpcAction::try_from(
+                            paired_trace.1.action,
+                            self.trace_handler.network,
+                        )
+                        .unwrap(),
+                    )
+                    .unwrap();
+                eth_trace
+            })
+            .collect();
+
+        Ok(Some(result))
     }
 }

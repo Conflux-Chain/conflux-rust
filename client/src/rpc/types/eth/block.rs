@@ -20,7 +20,8 @@
 
 use crate::rpc::types::{eth::Transaction, Bytes};
 use cfx_types::{hexstr_to_h256, Bloom as H2048, Space, H160, H256, H64, U256};
-use primitives::{receipt::EVM_SPACE_SUCCESS, PhantomBlock};
+use cfxcore::consensus::PhantomBlock;
+use primitives::receipt::EVM_SPACE_SUCCESS;
 use serde::{Serialize, Serializer};
 
 const SHA3_HASH_OF_EMPTY_UNCLE: &str =
