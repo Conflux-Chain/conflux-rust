@@ -53,6 +53,34 @@ class Web3Base(ConfluxTestFramework):
         tx = [nonce, 1, 150000, bytes.fromhex(receiver.replace('0x', '')), 0, bytes.fromhex(data_hex.replace('0x', '')), signed["v"], signed["r"], signed["s"]]
         return tx, signed["hash"]
 
+    def deploy_evm_space(self, bytecode_path):
+        bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), bytecode_path)
+        assert(os.path.isfile(bytecode_file))
+        bytecode = open(bytecode_file).read()
+
+        nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
+
+        signed = self.evmAccount.signTransaction({
+            "to": None,
+            "value": 0,
+            "gasPrice": 1,
+            "gas": 500000,
+            "nonce": nonce,
+            "chainId": int(self.conf_parameters["evm_chain_id"], 10),
+            "data": bytecode,
+        })
+
+        tx_hash = signed["hash"]
+        return_tx_hash = self.w3.eth.sendRawTransaction(signed["rawTransaction"])
+        assert_equal(tx_hash, return_tx_hash)
+
+        self.rpc.generate_block(1)
+        self.rpc.generate_blocks(20, 1)
+        receipt = self.w3.eth.waitForTransactionReceipt(tx_hash)
+        assert_equal(receipt["status"], 1)
+        addr = receipt["contractAddress"]
+        return addr
+
     def run_test(self):
         self.cfxPrivkey = default_config['GENESIS_PRI_KEY']
         self.cfxAccount = self.rpc.GENESIS_ADDR
