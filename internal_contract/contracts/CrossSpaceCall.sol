@@ -12,7 +12,7 @@ interface CrossSpaceCall {
     event Outcome(bool success);
 
     function createEVM(bytes calldata init) external payable returns (bytes20);
-    
+
     function transferEVM(bytes20 to) external payable returns (bytes memory output);
 
     function callEVM(bytes20 to, bytes calldata data) external payable returns (bytes memory output);
