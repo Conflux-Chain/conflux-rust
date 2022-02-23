@@ -305,8 +305,11 @@ impl Eip155Transaction {
             transaction: TransactionWithSignature {
                 transaction: TransactionWithSignatureSerializePart {
                     unsigned: Transaction::Ethereum(self),
-                    r: U256::one(),
-                    s: U256::one(),
+                    // we use sender address for `r` and `s` so that phantom
+                    // transactions with matching fields from different senders
+                    // will have different hashes
+                    r: U256::from(from.address.as_ref()),
+                    s: U256::from(from.address.as_ref()),
                     v: 0,
                 },
                 hash: H256::zero(),
