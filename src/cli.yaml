@@ -893,3 +893,15 @@ subcommands:
                                       - rpc-method:
                                             default_value: pos_stop_election
                                             hidden: true
+                            - start_voting:
+                                  about: Start PoS voting.
+                                  args:
+                                      - rpc-method:
+                                            default_value: pos_start_voting
+                                            hidden: true
+                            - stop_voting:
+                                  about: Stop PoS voting.
+                                  args:
+                                      - rpc-method:
+                                            default_value: pos_stop_voting
+                                            hidden: true
