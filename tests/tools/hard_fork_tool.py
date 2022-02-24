@@ -22,11 +22,11 @@ from test_framework.util import *
 from test_framework.blocktools import encode_hex_0x
 
 
-# rpc_url = "https://main.confluxrpc.com"
-rpc_url = "https://test.confluxrpc.com"
+rpc_url = "https://main.confluxrpc.com"
+# set to bitcoin block hash after block number 92751800
 bitcoin_block_hash = "00000000000000000005e306896781cf5169a8bdff8aed8dce19c084adf4cc0d"
-start_block_number = 68845000
-end_block_number = 69245000
+start_block_number = 92060600
+end_block_number = 92751800
 
 REGISTER_TOPIC = encode_hex_0x(keccak(b"Register(bytes32,bytes,bytes)"))
 INCREASE_STAKE_TOPIC = encode_hex_0x(keccak(b"IncreaseStake(bytes32,uint64)"))
@@ -39,7 +39,7 @@ for i in range(start_block_number, end_block_number + 1, 1000):
     start = i
     end = min(i + 999, end_block_number + 1)
     print(start, end)
-    logs = client.get_logs(filter=Filter(from_block=hex(start), to_block=hex(end), address=["0x0888000000000000000000000000000000000005"], networkid=1))
+    logs = client.get_logs(filter=Filter(from_block=hex(start), to_block=hex(end), address=["0x0888000000000000000000000000000000000005"], networkid=1029))
     print("logs=", logs)
     for log in logs:
         pos_identifier = log["topics"][1]
