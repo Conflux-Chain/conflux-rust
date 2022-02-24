@@ -38,6 +38,18 @@ contract CrossSpaceTraceTestConfluxSide {
     function withdrawFromMapped(uint256 value) external {
         CROSS_SPACE.withdrawFromMapped(value);
     }
+
+    function fail(bytes20 addr) external {
+        CROSS_SPACE.callEVM(addr, abi.encodeCall(CrossSpaceTraceTestEVMSide.fail, ()));
+    }
+
+    function subcallFail(bytes20 addr) external {
+        try CROSS_SPACE.callEVM(addr, abi.encodeCall(CrossSpaceTraceTestEVMSide.fail, ())) {
+            revert("Should fail");
+        } catch Error (string memory /*reason*/) {
+            // EMPTY
+        }
+    }
 }
 
 contract CrossSpaceTraceTestEVMSide {
@@ -45,5 +57,9 @@ contract CrossSpaceTraceTestEVMSide {
         if (depth == 0) return 0;
         this.call(depth - 1);
         return depth;
+    }
+
+    function fail() external pure {
+        revert("Oh no!");
     }
 }

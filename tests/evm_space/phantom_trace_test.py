@@ -63,6 +63,7 @@ class PhantomTransactionTest(Web3Base):
         self.test_createEVM()
         self.test_transferEVM()
         self.test_withdrawFromMapped()
+        self.test_fail()
 
         self.log.info("Pass")
 
@@ -136,11 +137,11 @@ class PhantomTransactionTest(Web3Base):
                 "from": phantom1["from"],
                 "to": phantom1["to"],
                 "input": phantom1["input"],
-                "gas": "0x4656c", # TODO: should this be 0?
+                "gas": "0x46569", # TODO: should this be 0?
                 "value": phantom1["value"],
             },
             "result": {
-                "gasUsed": "0x45b03",
+                "gasUsed": "0x45b00",
                 "output": number_to_topic(1),
             },
             "subtraces": 0,
@@ -156,11 +157,11 @@ class PhantomTransactionTest(Web3Base):
                 "from": self.evmContractAddr.lower(),
                 "to": self.evmContractAddr.lower(),
                 "input": self.evmContract.encodeABI(fn_name="call", args=[0]),
-                "gas": "0x44dfb",
+                "gas": "0x44df8",
                 "value": "0x0",
             },
             "result": {
-                "gasUsed": "0x44b92",
+                "gasUsed": "0x44b8f",
                 "output": number_to_topic(0),
             },
             "subtraces": 0,
@@ -190,7 +191,7 @@ class PhantomTransactionTest(Web3Base):
         bytecode = open(bytecode_file).read()
 
         data_hex = self.confluxContract.encodeABI(fn_name="createEVM", args=[bytecode])
-        tx = self.rpc.new_contract_tx(receiver=self.confluxContractAddr, data_hex=data_hex)
+        tx = self.rpc.new_contract_tx(receiver=self.confluxContractAddr, data_hex=data_hex, gas=3_700_000)
         cfxTxHash = tx.hash_hex()
         assert_equal(self.rpc.send_tx(tx, True), cfxTxHash)
         receipt = self.rpc.get_transaction_receipt(cfxTxHash)
@@ -260,12 +261,12 @@ class PhantomTransactionTest(Web3Base):
             "action": {
                 "from": phantom1["from"],
                 "init": phantom1["input"],
-                "gas": "0x42c6e", # TODO: should this be 0?
+                "gas": "0x5311f", # TODO: should this be 0?
                 "value": phantom1["value"],
             },
             "result": {
                 "address": newContractAddr,
-                "gasUsed": "0x59a3",
+                "gasUsed": "0x1ddf",
                 "code": "0x" + bytecode[64:],
             },
             "subtraces": 0,
@@ -448,6 +449,33 @@ class PhantomTransactionTest(Web3Base):
             "transactionHash": phantom0["hash"],
             "transactionPosition": int(phantom0["transactionIndex"], 16),
         }])
+
+    def test_fail(self):
+        data_hex = self.confluxContract.encodeABI(fn_name="fail", args=[self.evmContractAddr])
+        tx = self.rpc.new_contract_tx(receiver=self.confluxContractAddr, data_hex=data_hex)
+        cfxTxHash = tx.hash_hex()
+        assert_equal(self.rpc.send_tx(tx, True), cfxTxHash)
+        receipt = self.rpc.get_transaction_receipt(cfxTxHash)
+        assert_equal(receipt["outcomeStatus"], "0x1")
+
+        block = self.nodes[0].eth_getBlockByHash(receipt["blockHash"], True)
+        phantom_txs = block["transactions"]
+        assert_equal(len(phantom_txs), 0)
+
+        # TODO: test block traces, should contain 0 phantom traces
+
+        data_hex = self.confluxContract.encodeABI(fn_name="subcallFail", args=[self.evmContractAddr])
+        tx = self.rpc.new_contract_tx(receiver=self.confluxContractAddr, data_hex=data_hex)
+        cfxTxHash = tx.hash_hex()
+        assert_equal(self.rpc.send_tx(tx, True), cfxTxHash)
+        receipt = self.rpc.get_transaction_receipt(cfxTxHash)
+        assert_equal(receipt["outcomeStatus"], "0x0")
+
+        block = self.nodes[0].eth_getBlockByHash(receipt["blockHash"], True)
+        phantom_txs = block["transactions"]
+        assert_equal(len(phantom_txs), 0)
+
+        # TODO: test block traces, should contain 0 phantom traces
 
 if __name__ == "__main__":
     PhantomTransactionTest().main()

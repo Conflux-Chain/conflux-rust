@@ -36,6 +36,19 @@
 				"internalType": "bytes20",
 				"name": "addr",
 				"type": "bytes20"
+			}
+		],
+		"name": "fail",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes20",
+				"name": "addr",
+				"type": "bytes20"
 			},
 			{
 				"internalType": "uint256",
@@ -46,6 +59,19 @@
 		"name": "staticCallEVM",
 		"outputs": [],
 		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "bytes20",
+				"name": "addr",
+				"type": "bytes20"
+			}
+		],
+		"name": "subcallFail",
+		"outputs": [],
+		"stateMutability": "nonpayable",
 		"type": "function"
 	},
 	{

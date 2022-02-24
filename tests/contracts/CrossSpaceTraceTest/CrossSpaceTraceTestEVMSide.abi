@@ -17,5 +17,12 @@
 		],
 		"stateMutability": "nonpayable",
 		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "fail",
+		"outputs": [],
+		"stateMutability": "pure",
+		"type": "function"
 	}
 ]
