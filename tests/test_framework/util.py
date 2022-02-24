@@ -293,10 +293,10 @@ def set_node_pos_config(dirname, n, setup_keys=True, pos_round_time_ms=1000):
         os.makedirs(datadir)
     net_config_dir = os.path.join(datadir, 'blockchain_data', 'net_config')
     os.makedirs(net_config_dir, exist_ok = True)
-    os.makedirs(os.path.join(datadir, 'pos-ledger-db'), exist_ok = True)
+    os.makedirs(os.path.join(datadir, 'pos_db'), exist_ok = True)
     validator_config = {}
     validator_config['base'] = {
-        'data_dir': os.path.join(datadir, 'pos-ledger-db'),
+        'data_dir': os.path.join(datadir, 'pos_db'),
         'role': 'validator',
         'waypoint': {
             'from_config': waypoint,
@@ -306,7 +306,7 @@ def set_node_pos_config(dirname, n, setup_keys=True, pos_round_time_ms=1000):
         'genesis_file_location': genesis_path,
     }
     validator_config['storage'] = {
-        'dir': os.path.join(datadir, 'pos-ledger-db', 'db'),
+        'dir': os.path.join(datadir, 'pos_db', 'db'),
     }
     validator_config['consensus'] = {
         'safety_rules': {

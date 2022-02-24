@@ -77,7 +77,7 @@ impl PersistentSafetyStorage {
         match &mut self.internal_store {
             Storage::OnDiskStorage(disk_storage) => {
                 let new_path =
-                    disk_storage.file_path().join(new_storage_suffix);
+                    disk_storage.file_path().with_extension(new_storage_suffix);
                 if !new_path.exists() {
                     return Err(Error::SecureStorageUnexpectedError(format!(
                         "new secure storage path incorrect: {:?}",
@@ -118,7 +118,7 @@ impl PersistentSafetyStorage {
         match &self.internal_store {
             Storage::OnDiskStorage(disk_storage) => {
                 let new_path =
-                    disk_storage.file_path().join(new_storage_suffix);
+                    disk_storage.file_path().with_extension(new_storage_suffix);
                 fs::rename(disk_storage.file_path(), &new_path)
                     .map_err(|e| Error::InternalError(e.to_string()))?;
                 Ok(())

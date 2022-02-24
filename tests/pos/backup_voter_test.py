@@ -68,9 +68,8 @@ class BackupVoterTest(DefaultConfluxTestFramework):
         # Ensure PRIME node actually does not vote
         assert_equal(old_committed_round, new_committed_round)
         assert not os.path.exists(prime_node_safety_data_path)
-        assert not os.path.exists(backup_node_safety_data_path)
         shutil.copyfile(prime_node_safety_data_path + SAVE_SUFFIX, backup_node_safety_data_path + SAVE_SUFFIX)
-        self.nodes[BACKUP].start_voting()
+        self.nodes[BACKUP].pos_start_voting()
         assert os.path.exists(backup_node_safety_data_path)
         time.sleep(10)
         new_committed_round = client.pos_status()["latestCommitted"]

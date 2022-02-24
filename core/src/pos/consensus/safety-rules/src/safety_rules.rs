@@ -43,7 +43,7 @@ use diem_types::{
 };
 use serde::Serialize;
 use std::cmp::Ordering;
-const SAFETY_STORAGE_SAVE_SUFFIX: &str = ".save";
+const SAFETY_STORAGE_SAVE_SUFFIX: &str = "json.save";
 
 /// @TODO consider a cache of verified QCs to cut down on verification costs
 pub struct SafetyRules {
