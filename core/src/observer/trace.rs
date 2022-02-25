@@ -846,6 +846,7 @@ pub fn recover_phantom_traces(
                 input,
                 ..
             }) if to == *CROSS_SPACE_CONTRACT_ADDRESS
+                && trace.valid
                 && (input[0..4] == cross_space::TransferToEVM::FUNC_SIG
                     || input[0..4] == cross_space::CreateToEVM::FUNC_SIG
                     || input[0..4] == cross_space::CallToEVM::FUNC_SIG) =>
@@ -866,6 +867,7 @@ pub fn recover_phantom_traces(
                 input,
                 ..
             }) if to == *CROSS_SPACE_CONTRACT_ADDRESS
+                && trace.valid
                 && input[0..4] == cross_space::Withdraw::FUNC_SIG =>
             {
                 let phantom_traces =

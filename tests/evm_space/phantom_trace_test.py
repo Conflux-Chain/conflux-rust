@@ -172,6 +172,13 @@ class PhantomTransactionTest(Web3Base):
             "transactionPosition": int(phantom1["transactionIndex"], 16),
         }])
 
+        # test trace_block
+        block_traces = self.nodes[0].ethrpc.trace_block(receipt["epochNumber"])
+        assert_equal(block_traces, trace0 + trace1)
+
+        block_traces = self.nodes[0].ethrpc.trace_block({ "blockHash": receipt["blockHash"] })
+        assert_equal(block_traces, trace0 + trace1)
+
     def test_staticCallEVM(self):
         data_hex = self.confluxContract.encodeABI(fn_name="staticCallEVM", args=[self.evmContractAddr, 1])
         tx = self.rpc.new_contract_tx(receiver=self.confluxContractAddr, data_hex=data_hex)
@@ -183,7 +190,12 @@ class PhantomTransactionTest(Web3Base):
         phantom_txs = block["transactions"]
         assert_equal(len(phantom_txs), 0)
 
-        # TODO: test trace_block
+        # test trace_block
+        block_traces = self.nodes[0].ethrpc.trace_block(receipt["epochNumber"])
+        assert_equal(block_traces, [])
+
+        block_traces = self.nodes[0].ethrpc.trace_block({ "blockHash": receipt["blockHash"] })
+        assert_equal(block_traces, [])
 
     def test_createEVM(self):
         bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), EVM_CONTRACT_PATH + ".bytecode")
@@ -276,6 +288,13 @@ class PhantomTransactionTest(Web3Base):
             "transactionHash": phantom1["hash"],
             "transactionPosition": int(phantom1["transactionIndex"], 16),
         }])
+
+        # test trace_block
+        block_traces = self.nodes[0].ethrpc.trace_block(receipt["epochNumber"])
+        assert_equal(block_traces, trace0 + trace1)
+
+        block_traces = self.nodes[0].ethrpc.trace_block({ "blockHash": receipt["blockHash"] })
+        assert_equal(block_traces, trace0 + trace1)
 
     def test_transferEVM(self):
         data_hex = self.confluxContract.encodeABI(fn_name="transferEVM", args=[self.evmAccount.address])
@@ -371,6 +390,16 @@ class PhantomTransactionTest(Web3Base):
         trace2 = self.nodes[0].ethrpc.trace_transaction(phantom2["hash"])
         assert_equal(trace2[0]["action"]["input"], phantom2["input"])
 
+        # test trace_block
+        trace2 = self.nodes[0].ethrpc.trace_transaction(phantom_txs[2]["hash"])
+        trace3 = self.nodes[0].ethrpc.trace_transaction(phantom_txs[3]["hash"])
+
+        block_traces = self.nodes[0].ethrpc.trace_block(receipt["epochNumber"])
+        assert_equal(block_traces, trace0 + trace1 + trace2 + trace3)
+
+        block_traces = self.nodes[0].ethrpc.trace_block({ "blockHash": receipt["blockHash"] })
+        assert_equal(block_traces, trace0 + trace1 + trace2 + trace3)
+
     def test_withdrawFromMapped(self):
         # withdraw with insufficient funds should fail
         data_hex = self.confluxContract.encodeABI(fn_name="withdrawFromMapped", args=[0x123])
@@ -450,7 +479,15 @@ class PhantomTransactionTest(Web3Base):
             "transactionPosition": int(phantom0["transactionIndex"], 16),
         }])
 
+        # test trace_block
+        block_traces = self.nodes[0].ethrpc.trace_block(receipt["epochNumber"])
+        assert_equal(block_traces, trace0)
+
+        block_traces = self.nodes[0].ethrpc.trace_block({ "blockHash": receipt["blockHash"] })
+        assert_equal(block_traces, trace0)
+
     def test_fail(self):
+        # test failing tx
         data_hex = self.confluxContract.encodeABI(fn_name="fail", args=[self.evmContractAddr])
         tx = self.rpc.new_contract_tx(receiver=self.confluxContractAddr, data_hex=data_hex)
         cfxTxHash = tx.hash_hex()
@@ -462,8 +499,14 @@ class PhantomTransactionTest(Web3Base):
         phantom_txs = block["transactions"]
         assert_equal(len(phantom_txs), 0)
 
-        # TODO: test block traces, should contain 0 phantom traces
+        # test trace_block
+        block_traces = self.nodes[0].ethrpc.trace_block(receipt["epochNumber"])
+        assert_equal(len(block_traces), 0)
 
+        block_traces = self.nodes[0].ethrpc.trace_block(receipt["epochNumber"])
+        assert_equal(len(block_traces), 0)
+
+        # test failing subcall
         data_hex = self.confluxContract.encodeABI(fn_name="subcallFail", args=[self.evmContractAddr])
         tx = self.rpc.new_contract_tx(receiver=self.confluxContractAddr, data_hex=data_hex)
         cfxTxHash = tx.hash_hex()
@@ -475,7 +518,12 @@ class PhantomTransactionTest(Web3Base):
         phantom_txs = block["transactions"]
         assert_equal(len(phantom_txs), 0)
 
-        # TODO: test block traces, should contain 0 phantom traces
+        # test trace_block
+        block_traces = self.nodes[0].ethrpc.trace_block(receipt["epochNumber"])
+        assert_equal(len(block_traces), 0)
+
+        block_traces = self.nodes[0].ethrpc.trace_block(receipt["epochNumber"])
+        assert_equal(len(block_traces), 0)
 
 if __name__ == "__main__":
     PhantomTransactionTest().main()
