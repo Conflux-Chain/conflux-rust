@@ -125,6 +125,7 @@ class PhantomTransactionTest(Web3Base):
             "blockNumber": int(phantom0["blockNumber"], 16),
             "transactionHash": phantom0["hash"],
             "transactionPosition": int(phantom0["transactionIndex"], 16),
+            "valid": True,
         }])
 
         # phantom #1: contract call from mapped account
@@ -160,6 +161,7 @@ class PhantomTransactionTest(Web3Base):
             "blockNumber": int(phantom1["blockNumber"], 16),
             "transactionHash": phantom1["hash"],
             "transactionPosition": int(phantom1["transactionIndex"], 16),
+            "valid": True,
         }, {
             "type": "call",
             "action": {
@@ -180,6 +182,7 @@ class PhantomTransactionTest(Web3Base):
             "blockNumber": int(block["number"], 16),
             "transactionHash": phantom_txs[1]["hash"],
             "transactionPosition": int(phantom1["transactionIndex"], 16),
+            "valid": True,
         }])
 
         # test trace_block
@@ -259,6 +262,7 @@ class PhantomTransactionTest(Web3Base):
             "blockNumber": int(phantom0["blockNumber"], 16),
             "transactionHash": phantom0["hash"],
             "transactionPosition": int(phantom0["transactionIndex"], 16),
+            "valid": True,
         }])
 
         # phantom #1: contract creation from mapped account
@@ -281,6 +285,7 @@ class PhantomTransactionTest(Web3Base):
         assert_equal(trace1, [{
             "type": "create",
             "action": {
+                "createType": "create",
                 "from": phantom1["from"],
                 "init": phantom1["input"],
                 "gas": "0x0",
@@ -297,6 +302,7 @@ class PhantomTransactionTest(Web3Base):
             "blockNumber": int(phantom1["blockNumber"], 16),
             "transactionHash": phantom1["hash"],
             "transactionPosition": int(phantom1["transactionIndex"], 16),
+            "valid": True,
         }])
 
         # test trace_block
@@ -355,6 +361,7 @@ class PhantomTransactionTest(Web3Base):
             "blockNumber": int(phantom0["blockNumber"], 16),
             "transactionHash": phantom0["hash"],
             "transactionPosition": int(phantom0["transactionIndex"], 16),
+            "valid": True,
         }])
 
         # phantom #1: contract call from mapped account
@@ -391,6 +398,7 @@ class PhantomTransactionTest(Web3Base):
             "blockNumber": int(phantom1["blockNumber"], 16),
             "transactionHash": phantom1["hash"],
             "transactionPosition": int(phantom1["transactionIndex"], 16),
+            "valid": True,
         }])
 
         # phantom #2: balance transfer to mapped account
@@ -487,6 +495,7 @@ class PhantomTransactionTest(Web3Base):
             "blockNumber": int(phantom0["blockNumber"], 16),
             "transactionHash": phantom0["hash"],
             "transactionPosition": int(phantom0["transactionIndex"], 16),
+            "valid": True,
         }])
 
         # test trace_block
