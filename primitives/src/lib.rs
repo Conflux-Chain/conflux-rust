@@ -36,7 +36,7 @@ pub use crate::{
         Account, CodeInfo, DepositInfo, DepositList, SponsorInfo,
         VoteStakeInfo, VoteStakeList,
     },
-    block::{Block, BlockNumber, PhantomBlock},
+    block::{Block, BlockNumber},
     block_header::{BlockHeader, BlockHeaderBuilder},
     block_number::compute_block_number,
     epoch::{BlockHashOrEpochNumber, EpochId, EpochNumber, NULL_EPOCH},
