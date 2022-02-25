@@ -500,39 +500,49 @@ impl TransactionExecTraces {
             .fold(Default::default(), |bloom, trace| bloom | trace.bloom())
     }
 
-    /// Return pairs of (action, result).
+    /// Return pairs of (action, result, subtrace_len).
     /// Return `Err` if actions and results do not match.
     ///
     /// `from_address`, `to_address`, `action_types`, and `space` in `filter`
     /// are applied.
     pub fn filter_trace_pairs(
         self, filter: &TraceFilter,
-    ) -> Result<Vec<(ExecTrace, ExecTrace)>, String> {
-        let mut trace_pairs: Vec<(ExecTrace, Option<ExecTrace>)> = Vec::new();
+    ) -> Result<Vec<(ExecTrace, ExecTrace, usize)>, String> {
+        let mut trace_pairs: Vec<(ExecTrace, Option<ExecTrace>, usize)> =
+            Vec::new();
         let mut stack_index = Vec::new();
+        let mut sublen_stack = Vec::new();
         for trace in self.0 {
             match &trace.action {
                 Action::Call(call) => {
+                    if let Some(parent_subtraces) = sublen_stack.last_mut() {
+                        *parent_subtraces += 1;
+                    }
+                    sublen_stack.push(0);
                     if call.space == filter.space
                         && filter.from_address.matches(&call.from)
                         && filter.to_address.matches(&call.to)
                         && filter.action_types.matches(&ActionType::Call)
                     {
                         stack_index.push(Some(trace_pairs.len()));
-                        trace_pairs.push((trace, None));
+                        trace_pairs.push((trace, None, 0));
                     } else {
                         // The corresponding result should be ignored.
                         stack_index.push(None);
                     }
                 }
                 Action::Create(create) => {
+                    if let Some(parent_subtraces) = sublen_stack.last_mut() {
+                        *parent_subtraces += 1;
+                    }
+                    sublen_stack.push(0);
                     if create.space == filter.space
                         && filter.from_address.matches(&create.from)
                         // TODO(lpl): openethereum uses `to_address` to filter the contract address.
                         && filter.action_types.matches(&ActionType::Create)
                     {
                         stack_index.push(Some(trace_pairs.len()));
-                        trace_pairs.push((trace, None));
+                        trace_pairs.push((trace, None, 0));
                     } else {
                         // The corresponding result should be ignored.
                         stack_index.push(None);
@@ -547,6 +557,9 @@ impl TransactionExecTraces {
                         // we do not check if the type
                         // is correct here.
                         trace_pairs[index].1 = Some(trace);
+                        let subtraces =
+                            sublen_stack.pop().expect("stack_index matches");
+                        trace_pairs[index].2 = subtraces;
                     }
                 }
                 Action::InternalTransferAction(_) => {}
@@ -557,7 +570,7 @@ impl TransactionExecTraces {
         }
         Ok(trace_pairs
             .into_iter()
-            .map(|pair| (pair.0, pair.1.expect("all actions matched")))
+            .map(|pair| (pair.0, pair.1.expect("all actions matched"), pair.2))
             .collect())
     }
 
