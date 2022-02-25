@@ -155,7 +155,7 @@ class PhantomTransactionTest(Web3Base):
                 "gasUsed": "0x0",
                 "output": number_to_topic(1),
             },
-            "subtraces": 0,
+            "subtraces": 1,
             "traceAddress": [],
             "blockHash": phantom1["blockHash"],
             "blockNumber": int(phantom1["blockNumber"], 16),

@@ -515,8 +515,11 @@ impl TransactionExecTraces {
         for trace in self.0 {
             match &trace.action {
                 Action::Call(call) => {
-                    if let Some(parent_subtraces) = sublen_stack.last_mut() {
-                        *parent_subtraces += 1;
+                    if call.space == filter.space {
+                        if let Some(parent_subtraces) = sublen_stack.last_mut()
+                        {
+                            *parent_subtraces += 1;
+                        }
                     }
                     sublen_stack.push(0);
                     if call.space == filter.space
@@ -532,8 +535,11 @@ impl TransactionExecTraces {
                     }
                 }
                 Action::Create(create) => {
-                    if let Some(parent_subtraces) = sublen_stack.last_mut() {
-                        *parent_subtraces += 1;
+                    if create.space == filter.space {
+                        if let Some(parent_subtraces) = sublen_stack.last_mut()
+                        {
+                            *parent_subtraces += 1;
+                        }
                     }
                     sublen_stack.push(0);
                     if create.space == filter.space
@@ -560,6 +566,8 @@ impl TransactionExecTraces {
                         let subtraces =
                             sublen_stack.pop().expect("stack_index matches");
                         trace_pairs[index].2 = subtraces;
+                    } else {
+                        sublen_stack.pop();
                     }
                 }
                 Action::InternalTransferAction(_) => {}
