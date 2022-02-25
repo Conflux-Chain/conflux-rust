@@ -22,6 +22,7 @@ use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H160, H256, U256, U64,
 };
 use cfxcore::{
+    consensus::PhantomBlock,
     executive::{
         revert_reason_decode, ExecutionError, ExecutionOutcome, TxDropError,
     },
@@ -36,9 +37,8 @@ use clap::crate_version;
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
 use primitives::{
     filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Action,
-    BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, PhantomBlock,
-    SignedTransaction, StorageKey, StorageValue, TransactionOutcome,
-    TransactionWithSignature,
+    BlockHashOrEpochNumber, Eip155Transaction, EpochNumber, SignedTransaction,
+    StorageKey, StorageValue, TransactionOutcome, TransactionWithSignature,
 };
 use rlp::Rlp;
 use std::{cmp::min, convert::TryInto};
@@ -431,7 +431,9 @@ impl Eth for EthHandler {
             let _inner = self.consensus_graph().inner.read();
 
             self.consensus_graph()
-                .get_phantom_block_by_hash(&hash)
+                .get_phantom_block_by_hash(
+                    &hash, false, /* include_traces */
+                )
                 .map_err(RpcError::invalid_params)?
         };
 
@@ -451,7 +453,11 @@ impl Eth for EthHandler {
             let _inner = self.consensus_graph().inner.read();
 
             self.consensus_graph()
-                .get_phantom_block_by_number(block_num.try_into()?, None)
+                .get_phantom_block_by_number(
+                    block_num.try_into()?,
+                    None,
+                    false, /* include_traces */
+                )
                 .map_err(RpcError::invalid_params)?
         };
 
@@ -500,7 +506,9 @@ impl Eth for EthHandler {
             let _inner = self.consensus_graph().inner.read();
 
             self.consensus_graph()
-                .get_phantom_block_by_hash(&hash)
+                .get_phantom_block_by_hash(
+                    &hash, false, /* include_traces */
+                )
                 .map_err(RpcError::invalid_params)?
         };
 
@@ -523,7 +531,11 @@ impl Eth for EthHandler {
             let _inner = self.consensus_graph().inner.read();
 
             self.consensus_graph()
-                .get_phantom_block_by_number(block_num.try_into()?, None)
+                .get_phantom_block_by_number(
+                    block_num.try_into()?,
+                    None,
+                    false, /* include_traces */
+                )
                 .map_err(RpcError::invalid_params)?
         };
 
@@ -795,7 +807,11 @@ impl Eth for EthHandler {
 
         let maybe_block = self
             .consensus_graph()
-            .get_phantom_block_by_number(EpochNumber::Number(epoch_num), None)
+            .get_phantom_block_by_number(
+                EpochNumber::Number(epoch_num),
+                None,
+                false, /* include_traces */
+            )
             .map_err(RpcError::invalid_params)?;
 
         let phantom_block = match maybe_block {
@@ -823,7 +839,9 @@ impl Eth for EthHandler {
             let _inner = self.consensus_graph().inner.read();
 
             self.consensus_graph()
-                .get_phantom_block_by_hash(&hash)
+                .get_phantom_block_by_hash(
+                    &hash, false, /* include_traces */
+                )
                 .map_err(RpcError::invalid_params)?
         };
 
@@ -840,7 +858,11 @@ impl Eth for EthHandler {
             let _inner = self.consensus_graph().inner.read();
 
             self.consensus_graph()
-                .get_phantom_block_by_number(block_num.try_into()?, None)
+                .get_phantom_block_by_number(
+                    block_num.try_into()?,
+                    None,
+                    false, /* include_traces */
+                )
                 .map_err(RpcError::invalid_params)?
         };
 
@@ -877,7 +899,11 @@ impl Eth for EthHandler {
 
         let maybe_block = self
             .consensus_graph()
-            .get_phantom_block_by_number(EpochNumber::Number(epoch_num), None)
+            .get_phantom_block_by_number(
+                EpochNumber::Number(epoch_num),
+                None,
+                false, /* include_traces */
+            )
             .map_err(RpcError::invalid_params)?;
 
         let phantom_block = match maybe_block {
@@ -975,11 +1001,17 @@ impl Eth for EthHandler {
             let phantom_block = match block_num {
                 BlockNumber::Hash { hash, .. } => self
                     .consensus_graph()
-                    .get_phantom_block_by_hash(&hash)
+                    .get_phantom_block_by_hash(
+                        &hash, false, /* include_traces */
+                    )
                     .map_err(RpcError::invalid_params)?,
                 _ => self
                     .consensus_graph()
-                    .get_phantom_block_by_number(block_num.try_into()?, None)
+                    .get_phantom_block_by_number(
+                        block_num.try_into()?,
+                        None,
+                        false, /* include_traces */
+                    )
                     .map_err(RpcError::invalid_params)?,
             };
 

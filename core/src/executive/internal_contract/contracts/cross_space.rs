@@ -77,7 +77,7 @@ make_solidity_event! {
 }
 
 make_solidity_function! {
-    struct CreateToEVM(Bytes, "createEVM(bytes)", Bytes20);
+    pub struct CreateToEVM(Bytes, "createEVM(bytes)", Bytes20);
 }
 
 impl_function_type!(CreateToEVM, "payable_write");
@@ -133,7 +133,7 @@ impl ExecutionTrait for CreateToEVM {
 // }
 
 make_solidity_function! {
-    struct TransferToEVM(Bytes20, "transferEVM(bytes20)", Bytes);
+    pub struct TransferToEVM(Bytes20, "transferEVM(bytes20)", Bytes);
 }
 
 impl_function_type!(TransferToEVM, "payable_write");
@@ -168,7 +168,7 @@ impl ExecutionTrait for TransferToEVM {
 }
 
 make_solidity_function! {
-    struct CallToEVM((Bytes20,Bytes), "callEVM(bytes20,bytes)", Bytes);
+    pub struct CallToEVM((Bytes20,Bytes), "callEVM(bytes20,bytes)", Bytes);
 }
 
 impl_function_type!(CallToEVM, "payable_write");
@@ -240,7 +240,7 @@ impl ExecutionTrait for StaticCallToEVM {
 }
 
 make_solidity_function! {
-    struct Withdraw(U256, "withdrawFromMapped(uint256)");
+    pub struct Withdraw(U256, "withdrawFromMapped(uint256)");
 }
 
 impl_function_type!(Withdraw, "non_payable_write");
