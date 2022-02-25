@@ -794,13 +794,36 @@ pub fn recover_phantom_trace_for_call(
     let mut phantom_traces = vec![];
 
     loop {
-        let trace = match tx_traces.next() {
+        let mut trace = match tx_traces.next() {
             Some(t) => t,
             None => {
                 error!("Unable to recover phantom trace: no more traces (expected eSpace trace entry) hash={:?}, nonce={:?}", original_tx_hash, cross_space_nonce);
                 return Err("Unable to recover phantom trace: no more traces (expected eSpace trace entry)".into());
             }
         };
+
+        // phantom traces have 0 gas
+        match trace.action {
+            Action::Call(Call { ref mut gas, .. }) => {
+                *gas = 0.into();
+            }
+            Action::Create(Create { ref mut gas, .. }) => {
+                *gas = 0.into();
+            }
+            Action::CallResult(CallResult {
+                ref mut gas_left, ..
+            }) => {
+                *gas_left = 0.into();
+            }
+            Action::CreateResult(CreateResult {
+                ref mut gas_left, ..
+            }) => {
+                *gas_left = 0.into();
+            }
+            Action::InternalTransferAction(InternalTransferAction {
+                ..
+            }) => {}
+        }
 
         phantom_traces.push(trace);
 

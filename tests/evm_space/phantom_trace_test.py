@@ -112,7 +112,7 @@ class PhantomTransactionTest(Web3Base):
                 "from": phantom0["from"],
                 "to": phantom0["to"],
                 "input": phantom0["input"],
-                "gas": phantom0["gas"],
+                "gas": "0x0",
                 "value": phantom0["value"],
             },
             "result": {
@@ -147,11 +147,11 @@ class PhantomTransactionTest(Web3Base):
                 "from": phantom1["from"],
                 "to": phantom1["to"],
                 "input": phantom1["input"],
-                "gas": "0x46569", # TODO: should this be 0?
+                "gas": "0x0",
                 "value": phantom1["value"],
             },
             "result": {
-                "gasUsed": "0x45b00",
+                "gasUsed": "0x0",
                 "output": number_to_topic(1),
             },
             "subtraces": 0,
@@ -167,11 +167,11 @@ class PhantomTransactionTest(Web3Base):
                 "from": self.evmContractAddr.lower(),
                 "to": self.evmContractAddr.lower(),
                 "input": self.evmContract.encodeABI(fn_name="call", args=[0]),
-                "gas": "0x44df8",
+                "gas": "0x0",
                 "value": "0x0",
             },
             "result": {
-                "gasUsed": "0x44b8f",
+                "gasUsed": "0x0",
                 "output": number_to_topic(0),
             },
             "subtraces": 0,
@@ -246,7 +246,7 @@ class PhantomTransactionTest(Web3Base):
                 "from": phantom0["from"],
                 "to": phantom0["to"],
                 "input": phantom0["input"],
-                "gas": phantom0["gas"],
+                "gas": "0x0",
                 "value": phantom0["value"],
             },
             "result": {
@@ -283,12 +283,12 @@ class PhantomTransactionTest(Web3Base):
             "action": {
                 "from": phantom1["from"],
                 "init": phantom1["input"],
-                "gas": "0x5311f", # TODO: should this be 0?
+                "gas": "0x0",
                 "value": phantom1["value"],
             },
             "result": {
                 "address": newContractAddr,
-                "gasUsed": "0x1ddf",
+                "gasUsed": "0x0",
                 "code": "0x" + bytecode[64:],
             },
             "subtraces": 0,
@@ -342,7 +342,7 @@ class PhantomTransactionTest(Web3Base):
                 "from": phantom0["from"],
                 "to": phantom0["to"],
                 "input": phantom0["input"],
-                "gas": phantom0["gas"],
+                "gas": "0x0",
                 "value": phantom0["value"],
             },
             "result": {
@@ -378,11 +378,11 @@ class PhantomTransactionTest(Web3Base):
                 "from": phantom1["from"],
                 "to": phantom1["to"],
                 "input": phantom1["input"],
-                "gas": "0x46913", # TODO: should this be 0?
+                "gas": "0x0",
                 "value": phantom1["value"],
             },
             "result": {
-                "gasUsed": "0x46913",
+                "gasUsed": "0x0",
                 "output": '0x',
             },
             "subtraces": 0,
@@ -474,7 +474,7 @@ class PhantomTransactionTest(Web3Base):
                 "from": phantom0["from"],
                 "to": phantom0["to"],
                 "input": phantom0["input"],
-                "gas": phantom0["gas"],
+                "gas": "0x0",
                 "value": phantom0["value"],
             },
             "result": {
