@@ -273,6 +273,8 @@ impl EthTrace for EthTraceHandler {
                     transaction_hash: Some(tx_hash),
                     block_number,
                     block_hash,
+                    // action and its result should have the same `valid`.
+                    valid: paired_trace.0.valid,
                 };
 
                 eth_trace.set_result(
@@ -393,6 +395,8 @@ impl EthTrace for EthTraceHandler {
                 transaction_hash: Some(tx.hash()),
                 block_number: epoch_num,
                 block_hash: phantom_block.pivot_header.hash(),
+                // action and its result should have the same `valid`.
+                valid: paired_trace.0.valid,
             };
 
             eth_trace.set_result(
