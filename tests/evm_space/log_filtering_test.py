@@ -362,18 +362,6 @@ class CrossSpaceLogFilteringTest(Web3Base):
 
         self.log.info("Pass")
 
-    def deploy_conflux_space(self, bytecode_path):
-        bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), bytecode_path)
-        assert(os.path.isfile(bytecode_file))
-        bytecode = open(bytecode_file).read()
-        tx = self.rpc.new_contract_tx(receiver="", data_hex=bytecode, sender=self.cfxAccount, priv_key=self.cfxPrivkey, storage_limit=20000)
-        assert_equal(self.rpc.send_tx(tx, True), tx.hash_hex())
-        receipt = self.rpc.get_transaction_receipt(tx.hash_hex())
-        assert_equal(receipt["outcomeStatus"], "0x0")
-        addr = receipt["contractCreated"]
-        assert_is_hex_string(addr)
-        return addr
-
     def deploy_evm_space(self, bytecode_path):
         bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), bytecode_path)
         assert(os.path.isfile(bytecode_file))

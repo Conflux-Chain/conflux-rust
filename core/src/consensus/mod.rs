@@ -32,7 +32,10 @@ use crate::{
         internal_contract::build_bloom_and_recover_phantom, ExecutionOutcome,
     },
     observer::{
-        trace::{ActionType, BlockExecTraces, LocalizedTrace},
+        trace::{
+            recover_phantom_traces, ActionType, BlockExecTraces,
+            LocalizedTrace, TransactionExecTraces,
+        },
         trace_filter::TraceFilter,
     },
     pow::{PowComputer, ProofOfWorkConfig},
@@ -68,7 +71,7 @@ use primitives::{
     log_entry::LocalizedLogEntry,
     pos::PosBlockId,
     receipt::Receipt,
-    EpochId, EpochNumber, PhantomBlock, SignedTransaction, TransactionIndex,
+    BlockHeader, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
     TransactionOutcome,
 };
 use rayon::prelude::*;
@@ -101,6 +104,15 @@ pub struct MaybeExecutedTxExtraInfo {
 pub struct TransactionInfo {
     pub tx_index: TransactionIndex,
     pub maybe_executed_extra_info: Option<MaybeExecutedTxExtraInfo>,
+}
+
+pub struct PhantomBlock {
+    pub pivot_header: BlockHeader,
+    pub transactions: Vec<Arc<SignedTransaction>>,
+    pub receipts: Vec<Receipt>,
+    pub errors: Vec<String>,
+    pub bloom: Bloom,
+    pub traces: Vec<TransactionExecTraces>,
 }
 
 #[derive(Clone)]
@@ -833,6 +845,7 @@ impl ConsensusGraph {
         let pb = match self.get_phantom_block_by_number(
             EpochNumber::Number(epoch),
             Some(pivot_hash),
+            false, /* include_traces */
         )? {
             Some(b) => b,
             None => {
@@ -1556,7 +1569,9 @@ impl ConsensusGraph {
 
     pub fn get_phantom_block_by_number(
         &self, block_num: EpochNumber, pivot_assumption: Option<H256>,
-    ) -> Result<Option<PhantomBlock>, String> {
+        include_traces: bool,
+    ) -> Result<Option<PhantomBlock>, String>
+    {
         let hashes = self.get_block_hashes_by_epoch(block_num)?;
 
         let blocks = match self
@@ -1583,6 +1598,7 @@ impl ConsensusGraph {
             receipts: vec![],
             errors: vec![],
             bloom: Default::default(),
+            traces: vec![],
         };
 
         let mut gas_used = U256::from(0);
@@ -1605,7 +1621,36 @@ impl ConsensusGraph {
             let block_receipts = &exec_info.block_receipts.receipts;
             let errors = &exec_info.block_receipts.tx_execution_error_messages;
 
-            // sanity check: transaction and
+            let block_traces = if include_traces {
+                match self
+                    .get_data_manager()
+                    .transactions_traces_by_block_hash(&b.hash())
+                {
+                    None => {
+                        return Err("Error while creating phantom block: state is ready but traces not found, did you enable 'executive_trace'?".into());
+                    }
+                    Some((pivot_hash, block_traces)) => {
+                        // sanity check: transaction and trace length
+                        if b.transactions.len() != block_traces.len() {
+                            return Err("Inconsistent state: transactions and traces length mismatch".into());
+                        }
+
+                        // sanity check: no pivot reorg during processing
+                        if pivot_hash != pivot.hash() {
+                            return Err(
+                                "Inconsistent state: pivot hash mismatch"
+                                    .into(),
+                            );
+                        }
+
+                        block_traces
+                    }
+                }
+            } else {
+                vec![]
+            };
+
+            // sanity check: transaction and receipt length
             if b.transactions.len() != block_receipts.len() {
                 return Err("Inconsistent state: transactions and receipts length mismatch".into());
             }
@@ -1641,12 +1686,31 @@ impl ConsensusGraph {
 
                         phantom_block.errors.push(errors[id].clone());
                         phantom_block.bloom.accrue_bloom(&receipt.log_bloom);
+
+                        if include_traces {
+                            phantom_block.traces.push(block_traces[id].clone());
+                        }
                     }
                     Space::Native => {
                         let (phantom_txs, _) = build_bloom_and_recover_phantom(
                             &block_receipts[id].logs[..],
                             tx.hash(),
                         );
+
+                        if include_traces {
+                            let tx_traces = block_traces[id].clone();
+
+                            let phantom_traces =
+                                recover_phantom_traces(tx_traces, tx.hash())?;
+
+                            // sanity check: one trace for each phantom tx
+                            if phantom_txs.len() != phantom_traces.len() {
+                                error!("Inconsistent state: phantom tx and trace length mismatch, txs.len = {:?}, traces.len = {:?}", phantom_txs.len(), phantom_traces.len());
+                                return Err("Inconsistent state: phantom tx and trace length mismatch".into());
+                            }
+
+                            phantom_block.traces.extend(phantom_traces);
+                        }
 
                         for p in phantom_txs {
                             phantom_block.transactions.push(Arc::new(
@@ -1662,7 +1726,7 @@ impl ConsensusGraph {
 
                             phantom_block.receipts.push(phantom_receipt);
 
-                            // note: phantom txs never fails
+                            // note: phantom txs never fail
                             phantom_block.errors.push("".into());
                         }
                     }
@@ -1674,7 +1738,7 @@ impl ConsensusGraph {
     }
 
     pub fn get_phantom_block_by_hash(
-        &self, hash: &H256,
+        &self, hash: &H256, include_traces: bool,
     ) -> Result<Option<PhantomBlock>, String> {
         let epoch_num = match self.get_block_epoch_number(hash) {
             None => return Ok(None),
@@ -1684,6 +1748,7 @@ impl ConsensusGraph {
         self.get_phantom_block_by_number(
             EpochNumber::Number(epoch_num),
             Some(*hash),
+            include_traces,
         )
     }
 }
