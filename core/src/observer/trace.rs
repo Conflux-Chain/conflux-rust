@@ -836,8 +836,6 @@ pub fn recover_phantom_traces(
             None => break,
         };
 
-        // TODO: handle 1820?
-
         match trace.action {
             Action::Call(Call {
                 space: Space::Native,

@@ -14,6 +14,9 @@ from test_framework.mininode import *
 from web3 import Web3
 from base import Web3Base
 
+CROSS_SPACE_CALL_PATH = "../contracts/CrossSpaceCall"
+CROSS_SPACE_CALL_ADDRESS = "0x0888000000000000000000000000000000000006"
+
 CONFLUX_CONTRACT_PATH = "../contracts/CrossSpaceTraceTest/CrossSpaceTraceTestConfluxSide"
 EVM_CONTRACT_PATH = "../contracts/CrossSpaceTraceTest/CrossSpaceTraceTestEVMSide"
 
@@ -57,6 +60,12 @@ class PhantomTransactionTest(Web3Base):
         abi = open(abi_file).read()
         self.evmContract = self.w3.eth.contract(abi=abi)
 
+        # import CrossSpaceCall abi
+        abi_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), CROSS_SPACE_CALL_PATH + ".abi")
+        assert(os.path.isfile(abi_file))
+        abi = open(abi_file).read()
+        self.crossSpaceContract = self.w3.eth.contract(abi=abi)
+
         # test traces
         self.test_callEVM()
         self.test_staticCallEVM()
@@ -64,6 +73,7 @@ class PhantomTransactionTest(Web3Base):
         self.test_transferEVM()
         self.test_withdrawFromMapped()
         self.test_fail()
+        self.test_deployEip1820()
 
         self.log.info("Pass")
 
@@ -519,6 +529,24 @@ class PhantomTransactionTest(Web3Base):
         assert_equal(len(phantom_txs), 0)
 
         # test trace_block
+        block_traces = self.nodes[0].ethrpc.trace_block(receipt["epochNumber"])
+        assert_equal(len(block_traces), 0)
+
+        block_traces = self.nodes[0].ethrpc.trace_block(receipt["epochNumber"])
+        assert_equal(len(block_traces), 0)
+
+    def test_deployEip1820(self):
+        data_hex = self.crossSpaceContract.encodeABI(fn_name="deployEip1820", args=[])
+        tx = self.rpc.new_contract_tx(receiver=CROSS_SPACE_CALL_ADDRESS, data_hex=data_hex)
+        cfxTxHash = tx.hash_hex()
+        assert_equal(self.rpc.send_tx(tx, True), cfxTxHash)
+        receipt = self.rpc.get_transaction_receipt(cfxTxHash)
+        assert_equal(receipt["outcomeStatus"], "0x0")
+
+        block = self.nodes[0].eth_getBlockByHash(receipt["blockHash"], True)
+        phantom_txs = block["transactions"]
+        assert_equal(len(phantom_txs), 0)
+
         block_traces = self.nodes[0].ethrpc.trace_block(receipt["epochNumber"])
         assert_equal(len(block_traces), 0)
 
