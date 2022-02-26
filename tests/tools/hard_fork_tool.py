@@ -24,7 +24,7 @@ from test_framework.blocktools import encode_hex_0x
 
 rpc_url = "https://main.confluxrpc.com"
 # set to bitcoin block hash after block number 92751800
-bitcoin_block_hash = "00000000000000000005e306896781cf5169a8bdff8aed8dce19c084adf4cc0d"
+bitcoin_block_hash = "000000000000000000075ae6d38f9b2eeab602c61c30d506b480ef1ac7c94033"
 start_block_number = 92060600
 end_block_number = 92751800
 
