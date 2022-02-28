@@ -245,15 +245,17 @@ impl TryFrom<RpcCfxLocalizedTrace> for LocalizedTrace {
     type Error = String;
 
     fn try_from(cfx_trace: RpcCfxLocalizedTrace) -> Result<Self, String> {
-        // TODO(lpl): Support phantom tx?
         Ok(Self {
             action: cfx_trace.action.try_into()?,
             result: Res::None,
             trace_address: vec![],
             subtraces: 0,
-            // FIXME(lpl): Use the correct index in cfx/eth space.
-            transaction_position: None,
-            transaction_hash: None,
+            // note: `as_usize` will panic on overflow,
+            // however, this should not happen for tx position
+            transaction_position: cfx_trace
+                .transaction_position
+                .map(|x| x.as_usize()),
+            transaction_hash: cfx_trace.transaction_hash,
             block_number: cfx_trace
                 .epoch_number
                 .map(|en| en.as_u64())
