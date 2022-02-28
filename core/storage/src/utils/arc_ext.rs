@@ -45,12 +45,17 @@ impl<OriginT: ?Sized, T: ?Sized> Deref for ArcMapped<OriginT, T> {
     fn deref(&self) -> &Self::Target { unsafe { &*self.ptr } }
 }
 
-/// Only use this function on object which is already managed by an Arc.
-pub unsafe fn shared_from_this<T: ?Sized>(t: *const T) -> Arc<T> {
+// This function will leak memory. So it should not be a generic function.
+// Since the `StorageManager` is Singleton, it is acceptable to take it as
+// input.
+pub unsafe fn shared_from_this(
+    t: *const StorageManager,
+) -> Arc<StorageManager> {
     let temp = Arc::from_raw(t);
     let cloned = temp.clone();
-    Arc::into_raw(temp);
+    let _ = Arc::into_raw(temp);
     cloned
 }
 
+use crate::impls::storage_manager::storage_manager::StorageManager;
 use std::{ops::Deref, sync::Arc};
