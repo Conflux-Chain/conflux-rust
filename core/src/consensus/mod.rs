@@ -1437,22 +1437,50 @@ impl ConsensusGraph {
             }
             epochs_and_pivot_hash
         };
+
         let block_traces = epochs_and_pivot_hash
             .into_par_iter()
             .map(|(epoch_number, assumed_pivot)| {
-                self.filter_traces_single_epoch(epoch_number, assumed_pivot)
+                self.collect_traces_single_epoch(
+                    filter,
+                    epoch_number,
+                    assumed_pivot,
+                )
             })
             .collect::<Result<Vec<Vec<_>>, FilterError>>()?
             .into_iter()
             .flatten()
             .collect();
+
         self.filter_block_traces(filter, block_traces)
     }
 
-    /// Return `Vec<(pivot_hash, block_hash, block_trace)>`
-    fn filter_traces_single_epoch(
-        &self, epoch_number: u64, assumed_pivot: H256,
-    ) -> Result<Vec<(H256, H256, BlockExecTraces)>, FilterError> {
+    /// Return `Vec<(pivot_hash, block_hash, block_traces, block_txs)>`
+    fn collect_traces_single_epoch(
+        &self, filter: &TraceFilter, epoch_number: u64, assumed_pivot: H256,
+    ) -> Result<
+        Vec<(H256, H256, BlockExecTraces, Vec<Arc<SignedTransaction>>)>,
+        FilterError,
+    > {
+        if filter.space == Space::Ethereum {
+            let phantom_block = self
+                .get_phantom_block_by_number(
+                    EpochNumber::Number(epoch_number),
+                    Some(assumed_pivot),
+                    true, /* include_traces */
+                )?
+                .ok_or(FilterError::UnknownBlock {
+                    hash: assumed_pivot,
+                })?;
+
+            return Ok(vec![(
+                assumed_pivot,
+                assumed_pivot,
+                BlockExecTraces(phantom_block.traces),
+                phantom_block.transactions,
+            )]);
+        }
+
         let block_hashes = self
             .inner
             .read_recursive()
@@ -1466,6 +1494,11 @@ impl ConsensusGraph {
         }
         let mut traces = Vec::new();
         for block_hash in block_hashes {
+            let block = self
+                .data_man
+                .block_by_hash(&block_hash, false /* update_cache */)
+                .ok_or(FilterError::BlockAlreadyPruned { block_hash })?;
+
             traces.push(
                 self.data_man
                     .block_traces_by_hash_with_epoch(
@@ -1474,7 +1507,14 @@ impl ConsensusGraph {
                         false,
                         true,
                     )
-                    .map(|trace| (assumed_pivot, block_hash, trace))
+                    .map(|trace| {
+                        (
+                            assumed_pivot,
+                            block_hash,
+                            trace,
+                            block.transactions.clone(),
+                        )
+                    })
                     .ok_or(FilterError::UnknownBlock { hash: block_hash })?,
             );
         }
@@ -1488,10 +1528,15 @@ impl ConsensusGraph {
         let block_traces = block_hashes
             .into_par_iter()
             .map(|h| {
+                let block = self
+                    .data_man
+                    .block_by_hash(&h, false /* update_cache */)
+                    .ok_or(FilterError::BlockAlreadyPruned { block_hash: h })?;
+
                 self.data_man
                     .block_traces_by_hash(&h)
                     .map(|DataVersionTuple(pivot_hash, trace)| {
-                        (pivot_hash, h, trace)
+                        (pivot_hash, h, trace, block.transactions.clone())
                     })
                     .ok_or_else(|| FilterError::BlockNotExecutedYet {
                         block_hash: h,
@@ -1505,16 +1550,17 @@ impl ConsensusGraph {
     /// block_trace)`.
     fn filter_block_traces(
         &self, filter: &TraceFilter,
-        block_traces: Vec<(H256, H256, BlockExecTraces)>,
+        block_traces: Vec<(
+            H256,
+            H256,
+            BlockExecTraces,
+            Vec<Arc<SignedTransaction>>,
+        )>,
     ) -> Result<Vec<LocalizedTrace>, FilterError>
     {
         let mut traces = Vec::new();
-        for (pivot_hash, block_hash, block_trace) in block_traces {
-            let block = self
-                .data_man
-                .block_by_hash(&block_hash, true /* update_cache */)
-                .ok_or(FilterError::BlockAlreadyPruned { block_hash })?;
-            if block.transactions.len() != block_trace.0.len() {
+        for (pivot_hash, block_hash, block_trace, block_txs) in block_traces {
+            if block_txs.len() != block_trace.0.len() {
                 bail!(format!(
                     "tx list and trace length unmatch: block_hash={:?}",
                     block_hash
@@ -1535,7 +1581,7 @@ impl ConsensusGraph {
             let mut rpc_tx_index = 0;
             for (tx_pos, tx_trace) in block_trace.0.into_iter().enumerate() {
                 if filter.space == Space::Native
-                    && block.transactions[tx_pos].space() == Space::Ethereum
+                    && block_txs[tx_pos].space() == Space::Ethereum
                 {
                     continue;
                 }
@@ -1555,9 +1601,8 @@ impl ConsensusGraph {
                         epoch_hash: pivot_hash,
                         epoch_number: epoch_number.into(),
                         block_hash,
-                        // FIXME(lpl): Use correct tx index.
                         transaction_position: rpc_tx_index.into(),
-                        transaction_hash: block.transactions[tx_pos].hash(),
+                        transaction_hash: block_txs[tx_pos].hash(),
                     };
                     traces.push(trace);
                 }
@@ -1573,6 +1618,20 @@ impl ConsensusGraph {
     ) -> Result<Option<PhantomBlock>, String>
     {
         let hashes = self.get_block_hashes_by_epoch(block_num)?;
+
+        // special handling for genesis block
+        let genesis = self.get_data_manager().true_genesis.clone();
+
+        if hashes.last() == Some(&genesis.hash()) {
+            return Ok(Some(PhantomBlock {
+                pivot_header: genesis.block_header.clone(),
+                transactions: vec![],
+                receipts: vec![],
+                errors: vec![],
+                bloom: Bloom::zero(),
+                traces: vec![],
+            }));
+        }
 
         let blocks = match self
             .get_data_manager()
