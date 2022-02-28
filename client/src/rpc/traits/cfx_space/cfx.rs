@@ -270,23 +270,13 @@ pub trait Cfx {
         &self, epoch: EpochNumber,
     ) -> JsonRpcResult<Option<PoSEpochReward>>;
 
-    //        /// Returns transaction at given block hash and index.
-    //        #[rpc(name = "cfx_getTransactionByBlockHashAndIndex")]
-    //        fn transaction_by_block_hash_and_index(&self, H256, Index) ->
-    // BoxFuture<Option<Transaction>>;
+    #[rpc(name = "cfx_getPhantomHashesByCoreSpaceHash")]
+    fn get_phantom_hashes_by_core_space_hash(
+        &self, core_space_tx_hash: H256,
+    ) -> JsonRpcResult<Option<Vec<H256>>>;
 
-    //        /// Returns transaction by given block number and index.
-    //        #[rpc(name = "cfx_getTransactionByBlockNumberAndIndex")]
-    //        fn transaction_by_block_number_and_index(&self, BlockNumber,
-    // Index) -> BoxFuture<Option<Transaction>>;
-
-    //        /// Returns uncles at given block and index.
-    //        #[rpc(name = "cfx_getUnclesByBlockHashAndIndex")]
-    //        fn uncles_by_block_hash_and_index(&self, H256, Index) ->
-    // BoxFuture<Option<Block>>;
-
-    //        /// Returns uncles at given block and index.
-    //        #[rpc(name = "cfx_getUnclesByBlockNumberAndIndex")]
-    //        fn uncles_by_block_number_and_index(&self, BlockNumber, Index) ->
-    // BoxFuture<Option<Block>>;
+    #[rpc(name = "cfx_getCoreSpaceHashByPhantomHash")]
+    fn get_core_space_hash_by_phantom_hash(
+        &self, phantom_tx_hash: H256,
+    ) -> JsonRpcResult<Option<H256>>;
 }

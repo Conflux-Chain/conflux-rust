@@ -15,7 +15,10 @@ use cfx_types::{
     U64,
 };
 use cfxcore::{
-    executive::{ExecutionError, ExecutionOutcome, TxDropError},
+    executive::{
+        internal_contract::build_bloom_and_recover_phantom, ExecutionError,
+        ExecutionOutcome, TxDropError,
+    },
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     state_exposer::STATE_EXPOSER,
     vm, ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
@@ -1575,6 +1578,74 @@ impl RpcImpl {
             .map(|item| format!("{}", item))
             .collect::<Vec<String>>())
     }
+
+    pub fn get_phantom_hashes_by_core_space_hash(
+        &self, core_space_tx_hash: H256,
+    ) -> RpcResult<Option<Vec<H256>>> {
+        let (
+            tx,
+            TransactionInfo {
+                tx_index,
+                maybe_executed_extra_info,
+            },
+        ) = match self
+            .consensus
+            .get_transaction_info_by_hash(&core_space_tx_hash)
+        {
+            Some(info) => info,
+            None => return Ok(None),
+        };
+
+        if tx.space() == Space::Ethereum || tx_index.is_phantom {
+            return Ok(None);
+        }
+
+        let receipt = match maybe_executed_extra_info {
+            Some(MaybeExecutedTxExtraInfo { receipt, .. }) => receipt,
+            None => return Ok(None),
+        };
+
+        let (phantom_txs, _) =
+            build_bloom_and_recover_phantom(&receipt.logs[..], tx.hash());
+
+        // FIXME(thegaram): we should get chain id at the corresponding epoch
+        let evm_chain_id = self.consensus.best_chain_id().in_evm_space();
+
+        let hashes = phantom_txs
+            .into_iter()
+            .map(|t| t.into_eip155(evm_chain_id).hash())
+            .collect();
+
+        return Ok(Some(hashes));
+    }
+
+    fn get_core_space_hash_by_phantom_hash(
+        &self, phantom_tx_hash: H256,
+    ) -> RpcResult<Option<H256>> {
+        let tx_index =
+            match self.consensus.get_data_manager().transaction_index_by_hash(
+                &phantom_tx_hash,
+                false, /* update_cache */
+            ) {
+                Some(tx_index) => tx_index,
+                None => return Ok(None),
+            };
+
+        if !tx_index.is_phantom {
+            return Ok(None);
+        }
+
+        let block = match self
+            .consensus
+            .get_data_manager()
+            .block_by_hash(&tx_index.block_hash, false /* update_cache */)
+        {
+            Some(b) => b,
+            None => return Ok(None),
+        };
+
+        Ok(Some(block.transactions[tx_index.real_index].hash()))
+    }
 }
 
 #[allow(dead_code)]
@@ -1650,6 +1721,8 @@ impl Cfx for CfxHandler {
             fn storage_root(&self, address: RpcAddress, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
             fn opened_method_groups(&self) -> JsonRpcResult<Vec<String>>;
+            fn get_phantom_hashes_by_core_space_hash(&self, core_space_tx_hash: H256) -> JsonRpcResult<Option<Vec<H256>>>;
+            fn get_core_space_hash_by_phantom_hash(&self, phantom_tx_hash: H256) -> JsonRpcResult<Option<H256>>;
         }
     }
 }

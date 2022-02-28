@@ -1115,9 +1115,11 @@ impl Cfx for CfxHandler {
         fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> JsonRpcResult<Bytes>;
         fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> JsonRpcResult<EstimateGasAndCollateralResponse>;
         fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
+        fn get_core_space_hash_by_phantom_hash(&self, phantom_tx_hash: H256) -> JsonRpcResult<Option<H256>>;
+        fn get_phantom_hashes_by_core_space_hash(&self, core_space_tx_hash: H256) -> JsonRpcResult<Option<Vec<H256>>>;
+        fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
         fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
         fn opened_method_groups(&self) -> JsonRpcResult<Vec<String>>;
-        fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
     }
 }
 

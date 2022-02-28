@@ -192,6 +192,16 @@ class PhantomTransactionTest(Web3Base):
         block_traces = self.nodes[0].ethrpc.trace_block({ "blockHash": receipt["blockHash"] })
         assert_equal(block_traces, trace0 + trace1)
 
+        # test cfx_getPhantomHashesByCoreSpaceHash
+        phantom_hashes = self.nodes[0].cfx_getPhantomHashesByCoreSpaceHash(cfxTxHash)
+        assert_equal(phantom_hashes, [phantom0["hash"], phantom1["hash"]])
+
+        h = self.nodes[0].cfx_getCoreSpaceHashByPhantomHash(phantom0["hash"])
+        assert_equal(h, cfxTxHash)
+
+        h = self.nodes[0].cfx_getCoreSpaceHashByPhantomHash(phantom1["hash"])
+        assert_equal(h, cfxTxHash)
+
     def test_staticCallEVM(self):
         data_hex = self.confluxContract.encodeABI(fn_name="staticCallEVM", args=[self.evmContractAddr, 1])
         tx = self.rpc.new_contract_tx(receiver=self.confluxContractAddr, data_hex=data_hex)

@@ -1655,6 +1655,8 @@ impl ConsensusGraph {
                 return Err("Inconsistent state: transactions and receipts length mismatch".into());
             }
 
+            // FIXME(thegaram): we should get chain id at the corresponding
+            // epoch
             let evm_chain_id = self.best_chain_id().in_evm_space();
 
             for (id, tx) in b.transactions.iter().enumerate() {
