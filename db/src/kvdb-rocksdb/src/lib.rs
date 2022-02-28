@@ -222,7 +222,7 @@ impl DBAndColumns {
         match self.db.get_property_int_cf(self.get_cf(col), prop) {
             Some(v) => Some(v as usize),
             None => {
-                println!("Cannot read expected static property of RocksDb database: {}", prop);
+                eprintln!("Cannot read expected static property of RocksDb database: {}", prop);
                 None
             }
         }
