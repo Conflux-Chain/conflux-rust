@@ -230,6 +230,8 @@ pub trait StateOpsTrait {
 
     fn total_storage_tokens(&self) -> U256;
 
+    fn total_espace_tokens(&self) -> U256;
+
     fn total_pos_staking_tokens(&self) -> U256;
 
     fn distributable_pos_interest(&self) -> U256;
