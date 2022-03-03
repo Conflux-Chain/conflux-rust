@@ -360,6 +360,15 @@ class CrossSpaceLogFilteringTest(Web3Base):
         logs_2 = self.nodes[0].eth_getLogs(filter)
         assert_equal(len(logs_2), 8)
 
+        # get-logs-filter-max-epoch-range should limit the number of epochs queried.
+        self.stop_node(0)
+        self.start_node(0, ["--get-logs-filter-max-epoch-range", "16"])
+        filter = { "fromBlock": "0x00", "toBlock": "0x0f", "topics": [TEST_EVENT_TOPIC] }
+        # should not raise error
+        self.nodes[0].eth_getLogs(filter)
+        filter = { "fromBlock": "0x00", "toBlock": "0x10", "topics": [TEST_EVENT_TOPIC] }
+        assert_raises_rpc_error(None, None, self.nodes[0].eth_getLogs, filter)
+
         self.log.info("Pass")
 
     def deploy_evm_space(self, bytecode_path):

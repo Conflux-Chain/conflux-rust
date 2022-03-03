@@ -137,7 +137,10 @@ pub struct ConsensusConfig {
     /// Larger batch sizes may improve performance but might also prevent
     /// consensus from making progress under high RPC load.
     pub get_logs_epoch_batch_size: usize,
+
+    /// Limits on epoch and block number ranges during log filtering.
     pub get_logs_filter_max_epoch_range: Option<u64>,
+    pub get_logs_filter_max_block_number_range: Option<u64>,
 
     /// TODO: These parameters are only utilized in catch-up now.
     /// TODO: They should be used in data garbage collection, too.
@@ -1027,7 +1030,7 @@ impl ConsensusGraph {
 
     fn filter_logs_by_epochs(
         &self, from_epoch: EpochNumber, to_epoch: EpochNumber,
-        filter: LogFilter, blocks_to_skip: HashSet<H256>,
+        filter: &LogFilter, blocks_to_skip: HashSet<H256>, check_range: bool,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError>
     {
         let bloom_possibilities = filter.bloom_possibilities();
@@ -1041,7 +1044,7 @@ impl ConsensusGraph {
 
         let mut logs = self
             // iterate over epochs in reverse order
-            .get_log_filter_epoch_range(from_epoch, to_epoch, !filter.trusted)?
+            .get_log_filter_epoch_range(from_epoch, to_epoch, check_range)?
             // we process epochs in each batch in parallel
             // but batches are processed one-by-one
             .chunks(self.config.get_logs_epoch_batch_size)
@@ -1195,6 +1198,19 @@ impl ConsensusGraph {
             });
         }
 
+        if let Some(max_gap) =
+            self.config.get_logs_filter_max_block_number_range
+        {
+            // The range includes both ends.
+            if to_block - from_block + 1 > max_gap {
+                return Err(FilterError::BlockNumberGapTooLarge {
+                    from_block,
+                    to_block,
+                    max_gap,
+                });
+            }
+        }
+
         // collect info from db
         let from_hash = match self
             .data_man
@@ -1254,8 +1270,9 @@ impl ConsensusGraph {
         let epoch_range_logs = self.filter_logs_by_epochs(
             EpochNumber::Number(from_epoch),
             EpochNumber::Number(to_epoch),
-            filter,
+            &filter,
             skip_from_end,
+            false, /* check_range */
         )?;
 
         // remove out-of-range blocks from the _start_ of the range
@@ -1282,8 +1299,9 @@ impl ConsensusGraph {
             } => self.filter_logs_by_epochs(
                 from_epoch.clone(),
                 to_epoch.clone(),
-                filter,
+                &filter,
                 Default::default(),
+                !filter.trusted, /* check_range */
             ),
 
             // filter by block hashes
