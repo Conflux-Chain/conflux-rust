@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use jsonrpc_core::{MetaIoHandler, Result as JsonRpcResult};
+use jsonrpc_core::{MetaIoHandler, Result as JsonRpcResult, Value};
 use jsonrpc_http_server::{
     AccessControlAllowOrigin, DomainsValidation, Server as HttpServer,
     ServerBuilder as HttpServerBuilder,
@@ -294,6 +294,19 @@ fn setup_rpc_apis(
             }
         }
     }
+
+    // Add a method to return all available methods
+    let methods: Vec<String> =
+        handler.iter().map(|(method, _)| method).cloned().collect();
+    handler.add_method("rpc_methods", move |_| {
+        let method_list = methods
+            .clone()
+            .iter()
+            .map(|m| Value::String(m.to_string()))
+            .collect();
+        Ok(Value::Array(method_list))
+    });
+
     handler
 }
 
