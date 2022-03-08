@@ -41,7 +41,7 @@ use cfxkey::public_to_address;
 use diem_config::keys::ConfigKey;
 use diem_crypto::{
     key_file::{load_pri_key, save_pri_key},
-    Uniform,
+    PrivateKey, Uniform,
 };
 use diem_types::validator_config::{
     ConsensusPrivateKey, ConsensusVRFPrivateKey,
@@ -391,11 +391,14 @@ pub fn initialize_common_modules(
     ));
 
     let network = {
+        let mut rng = StdRng::from_rng(OsRng).unwrap();
+        let private_key = ConsensusPrivateKey::generate(&mut rng);
+        let vrf_private_key = ConsensusVRFPrivateKey::generate(&mut rng);
         let mut network = NetworkService::new(network_config.clone());
         network
             .initialize((
-                self_pos_private_key.public_key(),
-                self_vrf_private_key.public_key(),
+                private_key.public_key(),
+                vrf_private_key.public_key(),
             ))
             .unwrap();
         Arc::new(network)
