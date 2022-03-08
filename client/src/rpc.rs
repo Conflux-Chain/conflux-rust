@@ -215,7 +215,7 @@ fn setup_rpc_apis(
 ) -> MetaIoHandler<Metadata>
 {
     let mut handler = MetaIoHandler::default();
-    for api in apis {
+    for api in &apis {
         match api {
             Api::Cfx => {
                 let cfx =
@@ -295,7 +295,13 @@ fn setup_rpc_apis(
         }
     }
 
-    // Add a method to return all available methods
+    add_meta_rpc_methods(handler, apis)
+}
+
+fn add_meta_rpc_methods(
+    mut handler: MetaIoHandler<Metadata>, apis: HashSet<Api>,
+) -> MetaIoHandler<Metadata> {
+    // rpc_methods to return all available methods
     let methods: Vec<String> =
         handler.iter().map(|(method, _)| method).cloned().collect();
     handler.add_method("rpc_methods", move |_| {
@@ -305,6 +311,18 @@ fn setup_rpc_apis(
             .map(|m| Value::String(m.to_string()))
             .collect();
         Ok(Value::Array(method_list))
+    });
+
+    // rpc_modules
+    let namespaces: Vec<String> =
+        apis.into_iter().map(|item| format!("{}", item)).collect();
+    handler.add_method("rpc_modules", move |_| {
+        let ns = namespaces
+            .clone()
+            .iter()
+            .map(|m| Value::String(m.to_string()))
+            .collect();
+        Ok(Value::Array(ns))
     });
 
     handler
