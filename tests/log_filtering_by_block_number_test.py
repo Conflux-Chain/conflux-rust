@@ -104,6 +104,15 @@ class LogFilteringTest(ConfluxTestFramework):
 
         self.check_logs(block_number_a, block_number_i, sender)
 
+        # get-logs-filter-max-block-number-range should limit the number of blocks queried.
+        self.stop_node(0)
+        self.start_node(0, ["--get-logs-filter-max-block-number-range", "16"])
+        filter = Filter(from_block="0x1", to_block="0x10", topics=[FOO_TOPIC])
+        # should not raise error
+        self.rpc.get_logs(filter)
+        filter = Filter(from_block="0x01", to_block="0x11", topics=[FOO_TOPIC])
+        assert_raises_rpc_error(None, None, self.rpc.get_logs, filter)
+
         self.log.info("Pass")
 
     def check_logs(self, first_block_number, last_block_number, sender):

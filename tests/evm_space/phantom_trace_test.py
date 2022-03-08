@@ -20,6 +20,8 @@ CROSS_SPACE_CALL_ADDRESS = "0x0888000000000000000000000000000000000006"
 CONFLUX_CONTRACT_PATH = "../contracts/CrossSpaceTraceTest/CrossSpaceTraceTestConfluxSide"
 EVM_CONTRACT_PATH = "../contracts/CrossSpaceTraceTest/CrossSpaceTraceTestEVMSide"
 
+NULL_ADDRESS = "0x0000000000000000000000000000000000000000"
+
 def encode_u256(number):
     return ("%x" % number).zfill(64)
 
@@ -92,7 +94,7 @@ class PhantomTransactionTest(Web3Base):
         # phantom #0: balance transfer to mapped account
         phantom0 = phantom_txs[0]
 
-        assert_equal(phantom0["from"], "0x0000000000000000000000000000000000000000")
+        assert_equal(phantom0["from"], NULL_ADDRESS)
         assert_equal(phantom0["to"], mapped_address(self.confluxContractAddr))
         assert_equal(phantom0["input"], cfxTxHash + encode_u256(0))
         assert_equal(phantom0["gas"], "0x0")
@@ -155,7 +157,7 @@ class PhantomTransactionTest(Web3Base):
                 "gasUsed": "0x0",
                 "output": number_to_topic(1),
             },
-            "subtraces": 0,
+            "subtraces": 1,
             "traceAddress": [],
             "blockHash": phantom1["blockHash"],
             "blockNumber": int(phantom1["blockNumber"], 16),
@@ -192,6 +194,17 @@ class PhantomTransactionTest(Web3Base):
         block_traces = self.nodes[0].ethrpc.trace_block({ "blockHash": receipt["blockHash"] })
         assert_equal(block_traces, trace0 + trace1)
 
+        # test trace_filter
+        filtered = self.nodes[0].ethrpc.trace_filter({ "fromBlock": receipt["epochNumber"], "toBlock": receipt["epochNumber"] })
+        assert_equal(filtered, block_traces)
+
+        filtered = self.nodes[0].ethrpc.trace_filter({
+            "fromAddress": [mapped_address(self.confluxContractAddr), self.evmContractAddr, NULL_ADDRESS],
+            "toAddress":   [mapped_address(self.confluxContractAddr), self.evmContractAddr],
+        })
+
+        assert_equal(filtered, block_traces)
+
     def test_staticCallEVM(self):
         data_hex = self.confluxContract.encodeABI(fn_name="staticCallEVM", args=[self.evmContractAddr, 1])
         tx = self.rpc.new_contract_tx(receiver=self.confluxContractAddr, data_hex=data_hex)
@@ -209,6 +222,10 @@ class PhantomTransactionTest(Web3Base):
 
         block_traces = self.nodes[0].ethrpc.trace_block({ "blockHash": receipt["blockHash"] })
         assert_equal(block_traces, [])
+
+        # test trace_filter
+        filtered = self.nodes[0].ethrpc.trace_filter({ "fromBlock": receipt["epochNumber"], "toBlock": receipt["epochNumber"] })
+        assert_equal(filtered, None) # we return `null` instead of `[]`
 
     def test_createEVM(self):
         bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), EVM_CONTRACT_PATH + ".bytecode")
@@ -229,7 +246,7 @@ class PhantomTransactionTest(Web3Base):
         # phantom #0: balance transfer to mapped account
         phantom0 = phantom_txs[0]
 
-        assert_equal(phantom0["from"], "0x0000000000000000000000000000000000000000")
+        assert_equal(phantom0["from"], NULL_ADDRESS)
         assert_equal(phantom0["to"], mapped_address(self.confluxContractAddr))
         assert_equal(phantom0["input"], cfxTxHash + encode_u256(0))
         assert_equal(phantom0["gas"], "0x0")
@@ -312,6 +329,10 @@ class PhantomTransactionTest(Web3Base):
         block_traces = self.nodes[0].ethrpc.trace_block({ "blockHash": receipt["blockHash"] })
         assert_equal(block_traces, trace0 + trace1)
 
+        # test trace_filter
+        filtered = self.nodes[0].ethrpc.trace_filter({ "fromBlock": receipt["epochNumber"], "toBlock": receipt["epochNumber"] })
+        assert_equal(filtered, block_traces)
+
     def test_transferEVM(self):
         data_hex = self.confluxContract.encodeABI(fn_name="transferEVM", args=[self.evmAccount.address])
         tx = self.rpc.new_contract_tx(receiver=self.confluxContractAddr, data_hex=data_hex, value=0x222)
@@ -327,7 +348,7 @@ class PhantomTransactionTest(Web3Base):
         # phantom #0: balance transfer to mapped account
         phantom0 = phantom_txs[0]
 
-        assert_equal(phantom0["from"], "0x0000000000000000000000000000000000000000")
+        assert_equal(phantom0["from"], NULL_ADDRESS)
         assert_equal(phantom0["to"], mapped_address(self.confluxContractAddr))
         assert_equal(phantom0["input"], cfxTxHash + encode_u256(0))
         assert_equal(phantom0["gas"], "0x0")
@@ -418,6 +439,10 @@ class PhantomTransactionTest(Web3Base):
         block_traces = self.nodes[0].ethrpc.trace_block({ "blockHash": receipt["blockHash"] })
         assert_equal(block_traces, trace0 + trace1 + trace2 + trace3)
 
+        # test trace_filter
+        filtered = self.nodes[0].ethrpc.trace_filter({ "fromBlock": receipt["epochNumber"], "toBlock": receipt["epochNumber"] })
+        assert_equal(filtered, block_traces)
+
     def test_withdrawFromMapped(self):
         # withdraw with insufficient funds should fail
         data_hex = self.confluxContract.encodeABI(fn_name="withdrawFromMapped", args=[0x123])
@@ -461,7 +486,7 @@ class PhantomTransactionTest(Web3Base):
         phantom0 = phantom_txs[0]
 
         assert_equal(phantom0["from"], mapped_address(self.confluxContractAddr))
-        assert_equal(phantom0["to"], "0x0000000000000000000000000000000000000000")
+        assert_equal(phantom0["to"], NULL_ADDRESS)
         assert_equal(phantom0["input"], "0x")
         assert_equal(phantom0["gas"], "0x0")
         assert_equal(phantom0["gasPrice"], "0x0")
@@ -505,6 +530,10 @@ class PhantomTransactionTest(Web3Base):
         block_traces = self.nodes[0].ethrpc.trace_block({ "blockHash": receipt["blockHash"] })
         assert_equal(block_traces, trace0)
 
+        # test trace_filter
+        filtered = self.nodes[0].ethrpc.trace_filter({ "fromBlock": receipt["epochNumber"], "toBlock": receipt["epochNumber"] })
+        assert_equal(filtered, block_traces)
+
     def test_fail(self):
         # test failing tx
         data_hex = self.confluxContract.encodeABI(fn_name="fail", args=[self.evmContractAddr])
@@ -544,6 +573,10 @@ class PhantomTransactionTest(Web3Base):
         block_traces = self.nodes[0].ethrpc.trace_block(receipt["epochNumber"])
         assert_equal(len(block_traces), 0)
 
+        # test trace_filter
+        filtered = self.nodes[0].ethrpc.trace_filter({ "fromBlock": receipt["epochNumber"], "toBlock": receipt["epochNumber"] })
+        assert_equal(filtered, None)
+
     def test_deployEip1820(self):
         data_hex = self.crossSpaceContract.encodeABI(fn_name="deployEip1820", args=[])
         tx = self.rpc.new_contract_tx(receiver=CROSS_SPACE_CALL_ADDRESS, data_hex=data_hex)
@@ -561,6 +594,9 @@ class PhantomTransactionTest(Web3Base):
 
         block_traces = self.nodes[0].ethrpc.trace_block(receipt["epochNumber"])
         assert_equal(len(block_traces), 0)
+
+        filtered = self.nodes[0].ethrpc.trace_filter({ "fromBlock": receipt["epochNumber"], "toBlock": receipt["epochNumber"] })
+        assert_equal(filtered, None)
 
 if __name__ == "__main__":
     PhantomTransactionTest().main()

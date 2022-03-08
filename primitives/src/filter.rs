@@ -53,6 +53,12 @@ pub enum FilterError {
         max_gap: u64,
     },
 
+    BlockNumberGapTooLarge {
+        from_block: u64,
+        to_block: u64,
+        max_gap: u64,
+    },
+
     /// Roots for verifying the requested epochs are unavailable.
     UnableToVerify {
         epoch: u64,
@@ -126,6 +132,17 @@ impl fmt::Display for FilterError {
                     "The gap between from_epoch and to_epoch is larger than max_gap \
                     (from: {}, to: {}, max_gap: {})",
                     from_epoch, to_epoch, max_gap
+                }
+            }
+            BlockNumberGapTooLarge {
+                from_block,
+                to_block,
+                max_gap,
+            } => {
+                format! {
+                    "The gap between from_block and to_block is larger than max_gap \
+                    (from: {}, to: {}, max_gap: {})",
+                    from_block, to_block, max_gap
                 }
             }
             UnableToVerify {

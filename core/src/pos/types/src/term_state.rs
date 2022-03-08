@@ -990,7 +990,7 @@ impl PosState {
         // `status_start_view`.
         self.current_view += 1;
 
-        println!("current view {}", self.current_view);
+        diem_debug!("current view {}", self.current_view);
 
         // Update the status for the all.
         self.unlock_event_hint.clear();
