@@ -96,7 +96,7 @@ impl SnapshotMptNode {
             ) != CompressedPathRaw::NO_MISSING_NIBBLE,
         );
         if self.get_merkle().ne(&merkle_hash) {
-            println!(
+            error!(
                 "merkle hash mismatch, expected {:?}, got {:?}, path_to_node {:?}",
                 merkle_hash, self.get_merkle(), path_to_node,
             );
@@ -106,7 +106,7 @@ impl SnapshotMptNode {
             v.iter().filter(|&x| x.ne(&MERKLE_NULL_NODE)).count()
         });
         if self.get_children_count() as usize != actual_children_count {
-            println!(
+            error!(
                 "children count is wrong: expected {} got {}",
                 actual_children_count,
                 self.get_children_count(),
@@ -117,7 +117,7 @@ impl SnapshotMptNode {
             && !self.has_value()
             && self.get_children_count() <= 1
         {
-            println!(
+            error!(
                 "node should not exists due to path compressing rule, path_to_node {:?}, {:?}",
                 path_to_node, self
             );

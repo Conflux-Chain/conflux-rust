@@ -252,7 +252,7 @@ impl EthTrace for EthTraceHandler {
         for (idx, tx_traces) in phantom_block.traces.into_iter().enumerate() {
             let tx_hash = phantom_block.transactions[idx].hash();
 
-            for paired_trace in tx_traces
+            for (action, result, subtraces) in tx_traces
                 .filter_trace_pairs(&PrimitiveTraceFilter::space_filter(
                     Space::Ethereum,
                 ))
@@ -260,7 +260,7 @@ impl EthTrace for EthTraceHandler {
             {
                 let mut eth_trace = EthLocalizedTrace {
                     action: RpcAction::try_from(
-                        paired_trace.0.action,
+                        action.action,
                         self.trace_handler.network,
                     )
                     .map_err(|_| JsonRpcError::internal_error())?
@@ -268,18 +268,18 @@ impl EthTrace for EthTraceHandler {
                     .map_err(|_| JsonRpcError::internal_error())?,
                     result: EthRes::None,
                     trace_address: vec![],
-                    subtraces: 0,
+                    subtraces,
                     transaction_position: Some(idx),
                     transaction_hash: Some(tx_hash),
                     block_number,
                     block_hash,
                     // action and its result should have the same `valid`.
-                    valid: paired_trace.0.valid,
+                    valid: action.valid,
                 };
 
                 eth_trace.set_result(
                     RpcAction::try_from(
-                        paired_trace.1.action,
+                        result.action,
                         self.trace_handler.network,
                     )
                     .map_err(|_| JsonRpcError::internal_error())?,
@@ -379,10 +379,10 @@ impl EthTrace for EthTraceHandler {
 
         let mut eth_traces = Vec::new();
 
-        for paired_trace in trace_pairs {
+        for (action, result, subtraces) in trace_pairs {
             let mut eth_trace = EthLocalizedTrace {
                 action: RpcAction::try_from(
-                    paired_trace.0.action,
+                    action.action,
                     self.trace_handler.network,
                 )
                 .map_err(|_| JsonRpcError::internal_error())?
@@ -390,21 +390,18 @@ impl EthTrace for EthTraceHandler {
                 .map_err(|_| JsonRpcError::internal_error())?,
                 result: EthRes::None,
                 trace_address: vec![],
-                subtraces: 0,
+                subtraces,
                 transaction_position: Some(id),
                 transaction_hash: Some(tx.hash()),
                 block_number: epoch_num,
                 block_hash: phantom_block.pivot_header.hash(),
                 // action and its result should have the same `valid`.
-                valid: paired_trace.0.valid,
+                valid: action.valid,
             };
 
             eth_trace.set_result(
-                RpcAction::try_from(
-                    paired_trace.1.action,
-                    self.trace_handler.network,
-                )
-                .map_err(|_| JsonRpcError::internal_error())?,
+                RpcAction::try_from(result.action, self.trace_handler.network)
+                    .map_err(|_| JsonRpcError::internal_error())?,
             )?;
 
             eth_traces.push(eth_trace);

@@ -79,8 +79,8 @@ class TraceTest(Web3Base):
         traces = self.nodes[0].ethrpc.trace_filter(filter)
         assert_equal(len(traces), 1)
         assert_ne(traces[0]["result"], None)
-        assert_equal(traces[0]["transactionHash"], None)
-        assert_equal(traces[0]["transactionPosition"], None)
+        assert_equal(traces[0]["transactionHash"], encode_hex_0x(evm_tx_hashes[0]))
+        assert_equal(traces[0]["transactionPosition"], 0)
         assert_equal(traces[0]["valid"], True)
 
         traces = self.nodes[0].ethrpc.trace_block(epoch_a)

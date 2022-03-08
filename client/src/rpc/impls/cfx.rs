@@ -1452,11 +1452,13 @@ impl RpcImpl {
             .unwrap_or(U256::zero());
         let total_circulating =
             total_issued - two_year_locked - four_year_locked;
+        let total_espace_tokens = state.total_espace_tokens();
         Ok(TokenSupplyInfo {
             total_circulating,
             total_issued,
             total_staking,
             total_collateral,
+            total_espace_tokens,
         })
     }
 
