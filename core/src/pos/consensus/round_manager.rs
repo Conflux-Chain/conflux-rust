@@ -397,7 +397,7 @@ impl RoundManager {
     ) -> anyhow::Result<()>
     {
         if !self.is_voting {
-            // This node do not participate in any signing or voting.
+            // This node does not participate in any signing or voting.
             return Ok(());
         }
         diem_debug!("broadcast_election starts");

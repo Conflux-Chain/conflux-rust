@@ -905,3 +905,9 @@ subcommands:
                                       - rpc-method:
                                             default_value: pos_stop_voting
                                             hidden: true
+                            - voting_status:
+                                  about: Show if the node is voting.
+                                  args:
+                                      - rpc-method:
+                                            default_value: pos_voting_status
+                                            hidden: true
