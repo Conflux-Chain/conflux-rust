@@ -1153,7 +1153,7 @@ impl TestRpc for TestRpcImpl {
                 &self, pos_account: AccountAddress, increased_voting_power: U64,
             ) -> JsonRpcResult<()>;
             fn pos_stop_election(&self) -> JsonRpcResult<Option<u64>>;
-            fn pos_start_voting(&self) -> JsonRpcResult<()>;
+            fn pos_start_voting(&self, initialize: bool) -> JsonRpcResult<()>;
             fn pos_stop_voting(&self) -> JsonRpcResult<()>;
             fn pos_voting_status(&self) -> JsonRpcResult<bool>;
             fn pos_start(&self) -> JsonRpcResult<()>;

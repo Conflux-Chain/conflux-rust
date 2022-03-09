@@ -46,7 +46,7 @@ pub trait TSafetyRules {
 
     /// Allow the safety rule to start voting with saved secure data from
     /// another node.
-    fn start_voting(&mut self) -> Result<(), Error> {
+    fn start_voting(&mut self, _initialize: bool) -> Result<(), Error> {
         Err(Error::SecureStorageUnexpectedError(
             "unsupported safety rule type".to_string(),
         ))

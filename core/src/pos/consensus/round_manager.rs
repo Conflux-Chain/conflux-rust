@@ -1370,10 +1370,12 @@ impl RoundManager {
         Ok(chosen)
     }
 
-    pub fn start_voting(&mut self) -> anyhow::Result<()> {
-        self.safety_rules
-            .start_voting()
-            .map_err(anyhow::Error::from)?;
+    pub fn start_voting(&mut self, initialize: bool) -> anyhow::Result<()> {
+        if !initialize {
+            self.safety_rules
+                .start_voting(initialize)
+                .map_err(anyhow::Error::from)?;
+        }
         self.is_voting = true;
         Ok(())
     }

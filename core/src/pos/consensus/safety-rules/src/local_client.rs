@@ -53,8 +53,8 @@ impl TSafetyRules for LocalClient {
         self.internal.write().sign_timeout(timeout)
     }
 
-    fn start_voting(&mut self) -> Result<(), Error> {
-        self.internal.write().start_voting()
+    fn start_voting(&mut self, initialize: bool) -> Result<(), Error> {
+        self.internal.write().start_voting(initialize)
     }
 
     fn stop_voting(&mut self) -> Result<(), Error> {

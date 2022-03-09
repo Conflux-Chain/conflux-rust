@@ -100,8 +100,8 @@ impl TSafetyRules for MetricsSafetyRules {
         result
     }
 
-    fn start_voting(&mut self) -> Result<(), Error> {
-        monitor!("safety_rules", self.inner.start_voting())
+    fn start_voting(&mut self, initialize: bool) -> Result<(), Error> {
+        monitor!("safety_rules", self.inner.start_voting(initialize))
     }
 
     fn stop_voting(&mut self) -> Result<(), Error> {
