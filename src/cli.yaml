@@ -885,13 +885,6 @@ subcommands:
                                         long: power
                                         required: true
                                         takes_value: true
-
-                            - retire:
-                                  about: Send a PoS transaction to retire this Conflux node.
-                                  args:
-                                      - rpc-method:
-                                            default_value: pos_retire_self
-                                            hidden: true
                             - stop_election:
                                   about: Stop sending PoS election transactions.
                                   args:
