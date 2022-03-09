@@ -1236,7 +1236,7 @@ impl RoundManager {
 
     fn is_validator(&self) -> bool {
         let r = self.proposal_generator.is_some();
-        diem_debug!("Check validator: r={}", r);
+        diem_debug!("Check validator: r={} is_voting={}", r, self.is_voting);
         r && self.is_voting
     }
 
@@ -1371,12 +1371,18 @@ impl RoundManager {
     }
 
     pub fn start_voting(&mut self) -> anyhow::Result<()> {
+        self.safety_rules
+            .start_voting()
+            .map_err(anyhow::Error::from)?;
         self.is_voting = true;
-        self.safety_rules.start_voting().map_err(Into::into)
+        Ok(())
     }
 
     pub fn stop_voting(&mut self) -> anyhow::Result<()> {
+        self.safety_rules
+            .stop_voting()
+            .map_err(anyhow::Error::from)?;
         self.is_voting = false;
-        self.safety_rules.stop_voting().map_err(Into::into)
+        Ok(())
     }
 }

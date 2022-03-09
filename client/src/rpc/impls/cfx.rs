@@ -1687,6 +1687,7 @@ impl TestRpc for TestRpcImpl {
             fn pos_stop_election(&self) -> JsonRpcResult<Option<u64>>;
             fn pos_start_voting(&self) -> JsonRpcResult<()>;
             fn pos_stop_voting(&self) -> JsonRpcResult<()>;
+            fn pos_voting_status(&self) -> JsonRpcResult<bool>;
             fn pos_start(&self) -> JsonRpcResult<()>;
             fn pos_force_vote_proposal(&self, block_id: H256) -> JsonRpcResult<()>;
             fn pos_force_propose(&self, round: U64, parent_block_id: H256, payload: Vec<TransactionPayload>) -> JsonRpcResult<()>;

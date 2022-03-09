@@ -795,6 +795,13 @@ impl RpcImpl {
         })
     }
 
+    pub fn pos_voting_status(&self) -> RpcResult<bool> {
+        self.pos_handler.voting_status().map_err(|e| {
+            warn!("voting_status: err={:?}", e);
+            RpcErrorKind::Custom(e.to_string()).into()
+        })
+    }
+
     pub fn pos_start(&self) -> RpcResult<()> {
         self.pos_handler
             .initialize(self.consensus.clone().to_arc_consensus())?;

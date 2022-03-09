@@ -912,6 +912,10 @@ impl EpochManager {
                 let r = self.stop_voting().await;
                 tx.send(r).map_err(|e| anyhow!("send: err={:?}", e))
             }
+            TestCommand::GetVotingStatus(tx) => {
+                let r = self.voting_status().await;
+                tx.send(r).map_err(|e| anyhow!("send: err={:?}", e))
+            }
         }
     }
 
@@ -974,18 +978,22 @@ impl EpochManager {
     }
 
     async fn start_voting(&mut self) -> anyhow::Result<()> {
-        self.is_voting = true;
         match self.processor_mut() {
-            RoundProcessor::Normal(p) => p.start_voting(),
+            RoundProcessor::Normal(p) => p.start_voting()?,
             _ => anyhow::bail!("RoundManager not started yet"),
-        }
+        };
+        self.is_voting = true;
+        Ok(())
     }
 
     async fn stop_voting(&mut self) -> anyhow::Result<()> {
-        self.is_voting = false;
         match self.processor_mut() {
-            RoundProcessor::Normal(p) => p.stop_voting(),
+            RoundProcessor::Normal(p) => p.stop_voting()?,
             _ => anyhow::bail!("RoundManager not started yet"),
         }
+        self.is_voting = false;
+        Ok(())
     }
+
+    async fn voting_status(&self) -> bool { self.is_voting }
 }

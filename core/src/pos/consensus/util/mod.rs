@@ -52,6 +52,8 @@ pub enum TestCommand {
     StartVoting(mpsc::SyncSender<anyhow::Result<()>>),
     /// Stop voting and return errors if it fails.
     StopVoting(mpsc::SyncSender<anyhow::Result<()>>),
+    /// Return if the node is voting.
+    GetVotingStatus(mpsc::SyncSender<bool>),
 
     /// Read-only command
     /// Get the chosen to-vote proposal

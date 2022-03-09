@@ -133,6 +133,9 @@ pub trait TestRpc {
     #[rpc(name = "pos_stop_voting")]
     fn pos_stop_voting(&self) -> RpcResult<()>;
 
+    #[rpc(name = "pos_stop_voting")]
+    fn pos_voting_status(&self) -> RpcResult<bool>;
+
     #[rpc(name = "pos_start")]
     fn pos_start(&self) -> RpcResult<()>;
 
