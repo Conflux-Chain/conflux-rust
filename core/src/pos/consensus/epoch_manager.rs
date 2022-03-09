@@ -845,6 +845,7 @@ impl EpochManager {
     async fn process_test_command(
         &mut self, command: TestCommand,
     ) -> anyhow::Result<()> {
+        diem_info!("process_test_command, command={:?}", command);
         match command {
             TestCommand::ForceVoteProposal(block_id) => {
                 self.force_vote_proposal(block_id).await

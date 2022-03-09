@@ -782,6 +782,7 @@ impl RpcImpl {
     }
 
     pub fn pos_start_voting(&self, initialize: bool) -> RpcResult<()> {
+        info!("RPC Request: pos_start_voting, initialize={}", initialize);
         self.pos_handler.start_voting(initialize).map_err(|e| {
             warn!("start_voting: err={:?}", e);
             RpcErrorKind::Custom(e.to_string()).into()
@@ -789,6 +790,7 @@ impl RpcImpl {
     }
 
     pub fn pos_stop_voting(&self) -> RpcResult<()> {
+        info!("RPC Request: pos_stop_voting");
         self.pos_handler.stop_voting().map_err(|e| {
             warn!("stop_voting: err={:?}", e);
             RpcErrorKind::Custom(e.to_string()).into()

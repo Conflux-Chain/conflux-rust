@@ -900,13 +900,11 @@ subcommands:
                                             default_value: pos_start_voting
                                             hidden: true
                                       - rpc-args:
-                                            default_value: initialize
+                                            default_value: initialize:bool
                                             hidden: true
                                       - initialize:
-                                            default_value: false
                                             help: set this means the node uses its local safety data instead of a saved data file from another primary node
                                             long: initialize
-                                            required: false
                                             takes_value: false
                             - stop_voting:
                                   about: Stop PoS voting.
