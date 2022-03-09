@@ -356,9 +356,18 @@ class CrossSpaceLogFilteringTest(Web3Base):
         logs_2 = self.nodes[0].eth_getLogs(filter)
         assert_equal(logs_2, [])
 
-        filter = { "address": evmContractAddr}
+        filter = { "address": evmContractAddr }
         logs_2 = self.nodes[0].eth_getLogs(filter)
         assert_equal(len(logs_2), 8)
+
+        # get-logs-filter-max-limit should limit the number of logs returned.
+        self.stop_node(0)
+        self.start_node(0, ["--get-logs-filter-max-limit", str(7)])
+        # should not raise error
+        filter = { "address": evmContractAddr, "limit": 7 }
+        logs = self.nodes[0].eth_getLogs(filter)
+        filter = { "address": evmContractAddr }
+        assert_raises_rpc_error(None, None, self.nodes[0].eth_getLogs, filter)
 
         # get-logs-filter-max-epoch-range should limit the number of epochs queried.
         self.stop_node(0)

@@ -1058,6 +1058,10 @@ impl RpcImpl {
         // satisfy this limitation to avoid loading too many blocks
         if let Some(max_limit) = self.config.get_logs_filter_max_limit {
             if filter.limit.is_none() || filter.limit.unwrap() > max_limit {
+                // Use `max_limit + 1` so that we can detect when the query
+                // results in more than `max_limit` logs.
+                // Note: it is possible that processing `max_limit + 1` takes
+                // much more time than `max_limit`, however, this is rare.
                 filter.limit = Some(max_limit + 1);
             }
         }
