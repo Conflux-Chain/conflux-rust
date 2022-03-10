@@ -499,7 +499,7 @@ pub fn mapped_nonce(
     Ok(context.state.nonce(&evm_map(address))?)
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct PhantomTransaction {
     pub from: Address,
     pub nonce: U256,

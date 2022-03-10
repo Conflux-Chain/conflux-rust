@@ -4,7 +4,7 @@
 
 mod admin;
 mod context;
-mod cross_space;
+pub mod cross_space;
 mod future;
 #[allow(unused)]
 mod pos;

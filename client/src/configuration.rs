@@ -291,6 +291,7 @@ build_config! {
         (future_block_buffer_capacity, (usize), 32768)
         (get_logs_filter_max_limit, (Option<usize>), None)
         (get_logs_filter_max_epoch_range, (Option<u64>), None)
+        (get_logs_filter_max_block_number_range, (Option<u64>), None)
         (get_logs_epoch_batch_size, (usize), 32)
         (max_trans_count_received_in_catch_up, (u64), 60_000)
         (persist_tx_index, (bool), false)
@@ -581,6 +582,7 @@ impl Configuration {
             referee_bound: self.raw_conf.referee_bound,
             get_logs_epoch_batch_size: self.raw_conf.get_logs_epoch_batch_size,
             get_logs_filter_max_epoch_range: self.raw_conf.get_logs_filter_max_epoch_range,
+            get_logs_filter_max_block_number_range: self.raw_conf.get_logs_filter_max_block_number_range,
             sync_state_starting_epoch: self.raw_conf.sync_state_starting_epoch,
             sync_state_epoch_gap: self.raw_conf.sync_state_epoch_gap,
         };
@@ -940,7 +942,6 @@ impl Configuration {
             dev_pack_tx_immediately: self.is_dev_mode()
                 && self.raw_conf.dev_block_interval_ms.is_none(),
             max_payload_bytes: self.raw_conf.jsonrpc_ws_max_payload_bytes,
-            public_rpc_apis: self.raw_conf.public_rpc_apis.clone(),
         }
     }
 

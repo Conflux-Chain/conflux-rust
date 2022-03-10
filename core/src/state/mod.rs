@@ -1006,6 +1006,10 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         self.world_statistics.total_issued_tokens
     }
 
+    fn total_espace_tokens(&self) -> U256 {
+        self.world_statistics.total_evm_tokens
+    }
+
     fn total_staking_tokens(&self) -> U256 {
         self.world_statistics.total_staking_tokens
     }

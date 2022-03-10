@@ -32,7 +32,10 @@ use crate::{
         internal_contract::build_bloom_and_recover_phantom, ExecutionOutcome,
     },
     observer::{
-        trace::{ActionType, BlockExecTraces, LocalizedTrace},
+        trace::{
+            recover_phantom_traces, ActionType, BlockExecTraces,
+            LocalizedTrace, TransactionExecTraces,
+        },
         trace_filter::TraceFilter,
     },
     pow::{PowComputer, ProofOfWorkConfig},
@@ -68,7 +71,7 @@ use primitives::{
     log_entry::LocalizedLogEntry,
     pos::PosBlockId,
     receipt::Receipt,
-    EpochId, EpochNumber, PhantomBlock, SignedTransaction, TransactionIndex,
+    BlockHeader, EpochId, EpochNumber, SignedTransaction, TransactionIndex,
     TransactionOutcome,
 };
 use rayon::prelude::*;
@@ -103,6 +106,15 @@ pub struct TransactionInfo {
     pub maybe_executed_extra_info: Option<MaybeExecutedTxExtraInfo>,
 }
 
+pub struct PhantomBlock {
+    pub pivot_header: BlockHeader,
+    pub transactions: Vec<Arc<SignedTransaction>>,
+    pub receipts: Vec<Receipt>,
+    pub errors: Vec<String>,
+    pub bloom: Bloom,
+    pub traces: Vec<TransactionExecTraces>,
+}
+
 #[derive(Clone)]
 pub struct ConsensusConfig {
     /// Chain id configs.
@@ -125,7 +137,10 @@ pub struct ConsensusConfig {
     /// Larger batch sizes may improve performance but might also prevent
     /// consensus from making progress under high RPC load.
     pub get_logs_epoch_batch_size: usize,
+
+    /// Limits on epoch and block number ranges during log filtering.
     pub get_logs_filter_max_epoch_range: Option<u64>,
+    pub get_logs_filter_max_block_number_range: Option<u64>,
 
     /// TODO: These parameters are only utilized in catch-up now.
     /// TODO: They should be used in data garbage collection, too.
@@ -833,6 +848,7 @@ impl ConsensusGraph {
         let pb = match self.get_phantom_block_by_number(
             EpochNumber::Number(epoch),
             Some(pivot_hash),
+            false, /* include_traces */
         )? {
             Some(b) => b,
             None => {
@@ -1014,7 +1030,7 @@ impl ConsensusGraph {
 
     fn filter_logs_by_epochs(
         &self, from_epoch: EpochNumber, to_epoch: EpochNumber,
-        filter: LogFilter, blocks_to_skip: HashSet<H256>,
+        filter: &LogFilter, blocks_to_skip: HashSet<H256>, check_range: bool,
     ) -> Result<Vec<LocalizedLogEntry>, FilterError>
     {
         let bloom_possibilities = filter.bloom_possibilities();
@@ -1028,7 +1044,7 @@ impl ConsensusGraph {
 
         let mut logs = self
             // iterate over epochs in reverse order
-            .get_log_filter_epoch_range(from_epoch, to_epoch, !filter.trusted)?
+            .get_log_filter_epoch_range(from_epoch, to_epoch, check_range)?
             // we process epochs in each batch in parallel
             // but batches are processed one-by-one
             .chunks(self.config.get_logs_epoch_batch_size)
@@ -1182,6 +1198,19 @@ impl ConsensusGraph {
             });
         }
 
+        if let Some(max_gap) =
+            self.config.get_logs_filter_max_block_number_range
+        {
+            // The range includes both ends.
+            if to_block - from_block + 1 > max_gap {
+                return Err(FilterError::BlockNumberGapTooLarge {
+                    from_block,
+                    to_block,
+                    max_gap,
+                });
+            }
+        }
+
         // collect info from db
         let from_hash = match self
             .data_man
@@ -1241,8 +1270,9 @@ impl ConsensusGraph {
         let epoch_range_logs = self.filter_logs_by_epochs(
             EpochNumber::Number(from_epoch),
             EpochNumber::Number(to_epoch),
-            filter,
+            &filter,
             skip_from_end,
+            false, /* check_range */
         )?;
 
         // remove out-of-range blocks from the _start_ of the range
@@ -1269,8 +1299,9 @@ impl ConsensusGraph {
             } => self.filter_logs_by_epochs(
                 from_epoch.clone(),
                 to_epoch.clone(),
-                filter,
+                &filter,
                 Default::default(),
+                !filter.trusted, /* check_range */
             ),
 
             // filter by block hashes
@@ -1424,22 +1455,50 @@ impl ConsensusGraph {
             }
             epochs_and_pivot_hash
         };
+
         let block_traces = epochs_and_pivot_hash
             .into_par_iter()
             .map(|(epoch_number, assumed_pivot)| {
-                self.filter_traces_single_epoch(epoch_number, assumed_pivot)
+                self.collect_traces_single_epoch(
+                    filter,
+                    epoch_number,
+                    assumed_pivot,
+                )
             })
             .collect::<Result<Vec<Vec<_>>, FilterError>>()?
             .into_iter()
             .flatten()
             .collect();
+
         self.filter_block_traces(filter, block_traces)
     }
 
-    /// Return `Vec<(pivot_hash, block_hash, block_trace)>`
-    fn filter_traces_single_epoch(
-        &self, epoch_number: u64, assumed_pivot: H256,
-    ) -> Result<Vec<(H256, H256, BlockExecTraces)>, FilterError> {
+    /// Return `Vec<(pivot_hash, block_hash, block_traces, block_txs)>`
+    fn collect_traces_single_epoch(
+        &self, filter: &TraceFilter, epoch_number: u64, assumed_pivot: H256,
+    ) -> Result<
+        Vec<(H256, H256, BlockExecTraces, Vec<Arc<SignedTransaction>>)>,
+        FilterError,
+    > {
+        if filter.space == Space::Ethereum {
+            let phantom_block = self
+                .get_phantom_block_by_number(
+                    EpochNumber::Number(epoch_number),
+                    Some(assumed_pivot),
+                    true, /* include_traces */
+                )?
+                .ok_or(FilterError::UnknownBlock {
+                    hash: assumed_pivot,
+                })?;
+
+            return Ok(vec![(
+                assumed_pivot,
+                assumed_pivot,
+                BlockExecTraces(phantom_block.traces),
+                phantom_block.transactions,
+            )]);
+        }
+
         let block_hashes = self
             .inner
             .read_recursive()
@@ -1453,6 +1512,11 @@ impl ConsensusGraph {
         }
         let mut traces = Vec::new();
         for block_hash in block_hashes {
+            let block = self
+                .data_man
+                .block_by_hash(&block_hash, false /* update_cache */)
+                .ok_or(FilterError::BlockAlreadyPruned { block_hash })?;
+
             traces.push(
                 self.data_man
                     .block_traces_by_hash_with_epoch(
@@ -1461,7 +1525,14 @@ impl ConsensusGraph {
                         false,
                         true,
                     )
-                    .map(|trace| (assumed_pivot, block_hash, trace))
+                    .map(|trace| {
+                        (
+                            assumed_pivot,
+                            block_hash,
+                            trace,
+                            block.transactions.clone(),
+                        )
+                    })
                     .ok_or(FilterError::UnknownBlock { hash: block_hash })?,
             );
         }
@@ -1475,10 +1546,15 @@ impl ConsensusGraph {
         let block_traces = block_hashes
             .into_par_iter()
             .map(|h| {
+                let block = self
+                    .data_man
+                    .block_by_hash(&h, false /* update_cache */)
+                    .ok_or(FilterError::BlockAlreadyPruned { block_hash: h })?;
+
                 self.data_man
                     .block_traces_by_hash(&h)
                     .map(|DataVersionTuple(pivot_hash, trace)| {
-                        (pivot_hash, h, trace)
+                        (pivot_hash, h, trace, block.transactions.clone())
                     })
                     .ok_or_else(|| FilterError::BlockNotExecutedYet {
                         block_hash: h,
@@ -1492,16 +1568,17 @@ impl ConsensusGraph {
     /// block_trace)`.
     fn filter_block_traces(
         &self, filter: &TraceFilter,
-        block_traces: Vec<(H256, H256, BlockExecTraces)>,
+        block_traces: Vec<(
+            H256,
+            H256,
+            BlockExecTraces,
+            Vec<Arc<SignedTransaction>>,
+        )>,
     ) -> Result<Vec<LocalizedTrace>, FilterError>
     {
         let mut traces = Vec::new();
-        for (pivot_hash, block_hash, block_trace) in block_traces {
-            let block = self
-                .data_man
-                .block_by_hash(&block_hash, true /* update_cache */)
-                .ok_or(FilterError::BlockAlreadyPruned { block_hash })?;
-            if block.transactions.len() != block_trace.0.len() {
+        for (pivot_hash, block_hash, block_trace, block_txs) in block_traces {
+            if block_txs.len() != block_trace.0.len() {
                 bail!(format!(
                     "tx list and trace length unmatch: block_hash={:?}",
                     block_hash
@@ -1522,7 +1599,7 @@ impl ConsensusGraph {
             let mut rpc_tx_index = 0;
             for (tx_pos, tx_trace) in block_trace.0.into_iter().enumerate() {
                 if filter.space == Space::Native
-                    && block.transactions[tx_pos].space() == Space::Ethereum
+                    && block_txs[tx_pos].space() == Space::Ethereum
                 {
                     continue;
                 }
@@ -1542,9 +1619,8 @@ impl ConsensusGraph {
                         epoch_hash: pivot_hash,
                         epoch_number: epoch_number.into(),
                         block_hash,
-                        // FIXME(lpl): Use correct tx index.
                         transaction_position: rpc_tx_index.into(),
-                        transaction_hash: block.transactions[tx_pos].hash(),
+                        transaction_hash: block_txs[tx_pos].hash(),
                     };
                     traces.push(trace);
                 }
@@ -1556,8 +1632,24 @@ impl ConsensusGraph {
 
     pub fn get_phantom_block_by_number(
         &self, block_num: EpochNumber, pivot_assumption: Option<H256>,
-    ) -> Result<Option<PhantomBlock>, String> {
+        include_traces: bool,
+    ) -> Result<Option<PhantomBlock>, String>
+    {
         let hashes = self.get_block_hashes_by_epoch(block_num)?;
+
+        // special handling for genesis block
+        let genesis = self.get_data_manager().true_genesis.clone();
+
+        if hashes.last() == Some(&genesis.hash()) {
+            return Ok(Some(PhantomBlock {
+                pivot_header: genesis.block_header.clone(),
+                transactions: vec![],
+                receipts: vec![],
+                errors: vec![],
+                bloom: Bloom::zero(),
+                traces: vec![],
+            }));
+        }
 
         let blocks = match self
             .get_data_manager()
@@ -1583,6 +1675,7 @@ impl ConsensusGraph {
             receipts: vec![],
             errors: vec![],
             bloom: Default::default(),
+            traces: vec![],
         };
 
         let mut gas_used = U256::from(0);
@@ -1605,7 +1698,36 @@ impl ConsensusGraph {
             let block_receipts = &exec_info.block_receipts.receipts;
             let errors = &exec_info.block_receipts.tx_execution_error_messages;
 
-            // sanity check: transaction and
+            let block_traces = if include_traces {
+                match self
+                    .get_data_manager()
+                    .transactions_traces_by_block_hash(&b.hash())
+                {
+                    None => {
+                        return Err("Error while creating phantom block: state is ready but traces not found, did you enable 'executive_trace'?".into());
+                    }
+                    Some((pivot_hash, block_traces)) => {
+                        // sanity check: transaction and trace length
+                        if b.transactions.len() != block_traces.len() {
+                            return Err("Inconsistent state: transactions and traces length mismatch".into());
+                        }
+
+                        // sanity check: no pivot reorg during processing
+                        if pivot_hash != pivot.hash() {
+                            return Err(
+                                "Inconsistent state: pivot hash mismatch"
+                                    .into(),
+                            );
+                        }
+
+                        block_traces
+                    }
+                }
+            } else {
+                vec![]
+            };
+
+            // sanity check: transaction and receipt length
             if b.transactions.len() != block_receipts.len() {
                 return Err("Inconsistent state: transactions and receipts length mismatch".into());
             }
@@ -1641,12 +1763,31 @@ impl ConsensusGraph {
 
                         phantom_block.errors.push(errors[id].clone());
                         phantom_block.bloom.accrue_bloom(&receipt.log_bloom);
+
+                        if include_traces {
+                            phantom_block.traces.push(block_traces[id].clone());
+                        }
                     }
                     Space::Native => {
                         let (phantom_txs, _) = build_bloom_and_recover_phantom(
                             &block_receipts[id].logs[..],
                             tx.hash(),
                         );
+
+                        if include_traces {
+                            let tx_traces = block_traces[id].clone();
+
+                            let phantom_traces =
+                                recover_phantom_traces(tx_traces, tx.hash())?;
+
+                            // sanity check: one trace for each phantom tx
+                            if phantom_txs.len() != phantom_traces.len() {
+                                error!("Inconsistent state: phantom tx and trace length mismatch, txs.len = {:?}, traces.len = {:?}", phantom_txs.len(), phantom_traces.len());
+                                return Err("Inconsistent state: phantom tx and trace length mismatch".into());
+                            }
+
+                            phantom_block.traces.extend(phantom_traces);
+                        }
 
                         for p in phantom_txs {
                             phantom_block.transactions.push(Arc::new(
@@ -1662,7 +1803,7 @@ impl ConsensusGraph {
 
                             phantom_block.receipts.push(phantom_receipt);
 
-                            // note: phantom txs never fails
+                            // note: phantom txs never fail
                             phantom_block.errors.push("".into());
                         }
                     }
@@ -1674,7 +1815,7 @@ impl ConsensusGraph {
     }
 
     pub fn get_phantom_block_by_hash(
-        &self, hash: &H256,
+        &self, hash: &H256, include_traces: bool,
     ) -> Result<Option<PhantomBlock>, String> {
         let epoch_num = match self.get_block_epoch_number(hash) {
             None => return Ok(None),
@@ -1684,6 +1825,7 @@ impl ConsensusGraph {
         self.get_phantom_block_by_number(
             EpochNumber::Number(epoch_num),
             Some(*hash),
+            include_traces,
         )
     }
 }

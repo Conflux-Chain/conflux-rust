@@ -2,7 +2,10 @@ use crate::rpc::types::{
     Action as RpcCfxAction, Bytes, LocalizedTrace as RpcCfxLocalizedTrace,
 };
 use cfx_types::{H160, H256, U256};
-use cfxcore::{observer::trace::Outcome, vm::CallType as CfxCallType};
+use cfxcore::{
+    observer::trace::Outcome,
+    vm::{CallType as CfxCallType, CreateType as CfxCreateType},
+};
 use jsonrpc_core::Error as JsonRpcError;
 use serde::{ser::SerializeStruct, Serialize, Serializer};
 use std::{
@@ -12,6 +15,7 @@ use std::{
 
 /// Create response
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Create {
     /// Sender
     from: H160,
@@ -21,6 +25,30 @@ pub struct Create {
     gas: U256,
     /// Initialization code
     init: Bytes,
+    /// The create type `CREATE` or `CREATE2`
+    create_type: CreateType,
+}
+
+/// The type of the create-like instruction.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CreateType {
+    /// Not a create
+    None,
+    /// CREATE
+    CREATE,
+    /// CREATE2
+    CREATE2,
+}
+
+impl From<CfxCreateType> for CreateType {
+    fn from(cfx_create_type: CfxCreateType) -> Self {
+        match cfx_create_type {
+            CfxCreateType::None => CreateType::None,
+            CfxCreateType::CREATE => CreateType::CREATE,
+            CfxCreateType::CREATE2 => CreateType::CREATE2,
+        }
+    }
 }
 
 /// Call type.
@@ -98,6 +126,7 @@ impl TryFrom<RpcCfxAction> for Action {
                 value: create.value,
                 gas: create.gas,
                 init: create.init,
+                create_type: create.create_type.into(),
             })),
             action => {
                 bail!("unsupported action in eth space: {:?}", action);
@@ -162,6 +191,8 @@ pub struct LocalizedTrace {
     pub block_number: u64,
     /// Block Hash
     pub block_hash: H256,
+    /// Valid
+    pub valid: bool,
 }
 
 impl Serialize for LocalizedTrace {
@@ -204,6 +235,7 @@ impl Serialize for LocalizedTrace {
         struc.serialize_field("transactionHash", &self.transaction_hash)?;
         struc.serialize_field("blockNumber", &self.block_number)?;
         struc.serialize_field("blockHash", &self.block_hash)?;
+        struc.serialize_field("valid", &self.valid)?;
 
         struc.end()
     }
@@ -213,20 +245,23 @@ impl TryFrom<RpcCfxLocalizedTrace> for LocalizedTrace {
     type Error = String;
 
     fn try_from(cfx_trace: RpcCfxLocalizedTrace) -> Result<Self, String> {
-        // TODO(lpl): Support phantom tx?
         Ok(Self {
             action: cfx_trace.action.try_into()?,
             result: Res::None,
             trace_address: vec![],
             subtraces: 0,
-            // FIXME(lpl): Use the correct index in cfx/eth space.
-            transaction_position: None,
-            transaction_hash: None,
+            // note: `as_usize` will panic on overflow,
+            // however, this should not happen for tx position
+            transaction_position: cfx_trace
+                .transaction_position
+                .map(|x| x.as_usize()),
+            transaction_hash: cfx_trace.transaction_hash,
             block_number: cfx_trace
                 .epoch_number
                 .map(|en| en.as_u64())
                 .unwrap_or(0),
             block_hash: cfx_trace.epoch_hash.unwrap_or_default(),
+            valid: cfx_trace.valid,
         })
     }
 }

@@ -55,6 +55,7 @@ use pos_ledger_db::PosLedgerDB;
 use pow_types::FakePowHandler;
 use std::{
     boxed::Box,
+    fs,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -103,6 +104,12 @@ pub fn start_pos_consensus(
         .level(config.logger.level)
         .read_env();
     if let Some(log_file) = config.logger.file.clone() {
+        if let Some(parent) = log_file.parent() {
+            fs::create_dir_all(parent).expect(&format!(
+                "error creating PoS log file directory: parent={:?}",
+                parent
+            ));
+        }
         let writer = match config.logger.rotation_count {
             Some(count) => Box::new(RollingFileWriter::new(
                 log_file,

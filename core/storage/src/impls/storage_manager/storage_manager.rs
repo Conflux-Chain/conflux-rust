@@ -201,7 +201,7 @@ impl StorageManager {
     ) -> Result<Arc<Self>>
     {
         let storage_dir = storage_conf.path_storage_dir.as_path();
-        println!(
+        debug!(
             "new StorageManager within storage_dir {}",
             storage_dir.display()
         );

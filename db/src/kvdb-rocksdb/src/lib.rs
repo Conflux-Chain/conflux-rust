@@ -28,7 +28,7 @@ use rocksdb::{
 
 use fs_swap::{swap, swap_nonatomic};
 use kvdb::{DBKey, DBOp, DBTransaction, DBValue, KeyValueDB};
-use log::{debug, warn};
+use log::warn;
 
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
@@ -222,7 +222,7 @@ impl DBAndColumns {
         match self.db.get_property_int_cf(self.get_cf(col), prop) {
             Some(v) => Some(v as usize),
             None => {
-                println!("Cannot read expected static property of RocksDb database: {}", prop);
+                warn!("Cannot read expected static property of RocksDb database: {}", prop);
                 None
             }
         }
@@ -619,7 +619,7 @@ impl Database {
                 let _ = fs::remove_dir_all(new_db);
             }
             Err(err) => {
-                debug!("DB atomic swap failed: {}", err);
+                warn!("DB atomic swap failed: {}", err);
                 match swap_nonatomic(new_db, &self.path) {
                     Ok(_) => {
                         // ignore errors

@@ -2,8 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::rpc_apis::ApiSet;
-
 #[derive(Clone, Default)]
 pub struct RpcImplConfiguration {
     pub get_logs_filter_max_limit: Option<usize>,
@@ -16,8 +14,6 @@ pub struct RpcImplConfiguration {
     // note: currently we only handle this for `cfx_getEpochReceipts`,
     // other APIs will disconnect on oversized response
     pub max_payload_bytes: usize,
-    ///
-    pub public_rpc_apis: ApiSet,
 }
 
 pub mod cfx;

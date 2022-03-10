@@ -1452,11 +1452,13 @@ impl RpcImpl {
             .unwrap_or(U256::zero());
         let total_circulating =
             total_issued - two_year_locked - four_year_locked;
+        let total_espace_tokens = state.total_espace_tokens();
         Ok(TokenSupplyInfo {
             total_circulating,
             total_issued,
             total_staking,
             total_collateral,
+            total_espace_tokens,
         })
     }
 
@@ -1565,16 +1567,6 @@ impl RpcImpl {
 
         Ok(Some(epoch_receipts))
     }
-
-    fn opened_method_groups(&self) -> RpcResult<Vec<String>> {
-        Ok(self
-            .config
-            .public_rpc_apis
-            .list_apis()
-            .into_iter()
-            .map(|item| format!("{}", item))
-            .collect::<Vec<String>>())
-    }
 }
 
 #[allow(dead_code)]
@@ -1649,7 +1641,6 @@ impl Cfx for CfxHandler {
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
             fn storage_root(&self, address: RpcAddress, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
-            fn opened_method_groups(&self) -> JsonRpcResult<Vec<String>>;
         }
     }
 }
