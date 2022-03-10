@@ -22,11 +22,13 @@ class BackupVoterTest(DefaultConfluxTestFramework):
         self.conf_parameters["vrf_proposal_threshold"] = '"{}"'.format(int_to_hex(int(2 ** 256 - 1)))
         self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = '120'
         self.conf_parameters["pos_round_per_term"] = '10'
+        self.conf_parameters["pos_started_as_voter"] = "false"
 
     def setup_nodes(self):
         self.add_nodes(self.num_nodes - 1)
-        for i in range(self.num_nodes - 1):
-            self.start_node(i, phase_to_wait=None)
+        self.start_node(0, phase_to_wait=None, extra_args=["--pos-started-as-voter", "true"])
+        self.start_node(PRIME)
+        self.nodes[PRIME].pos_start_voting(True)
 
         prime_node_pos_key_path = os.path.join(get_datadir_path(self.options.tmpdir, PRIME), 'blockchain_data', 'net_config', 'pos_key')
         backup_node_pos_key_path = os.path.join(get_datadir_path(self.options.tmpdir, BACKUP), 'blockchain_data', 'net_config', 'pos_key')
@@ -60,7 +62,10 @@ class BackupVoterTest(DefaultConfluxTestFramework):
         wait_until(lambda: int(client.pos_status()["latestCommitted"], 0) >= 2)
         old_committed_round = client.pos_status()["latestCommitted"]
         assert os.path.exists(prime_node_safety_data_path)
+        assert self.nodes[PRIME].pos_voting_status()
+        assert not self.nodes[BACKUP].pos_voting_status()
         self.nodes[PRIME].pos_stop_voting()
+        assert not self.nodes[PRIME].pos_voting_status()
         assert not os.path.exists(prime_node_safety_data_path)
         assert os.path.exists(prime_node_safety_data_path + SAVE_SUFFIX)
         time.sleep(5)
@@ -69,7 +74,8 @@ class BackupVoterTest(DefaultConfluxTestFramework):
         assert_equal(old_committed_round, new_committed_round)
         assert not os.path.exists(prime_node_safety_data_path)
         shutil.copyfile(prime_node_safety_data_path + SAVE_SUFFIX, backup_node_safety_data_path + SAVE_SUFFIX)
-        self.nodes[BACKUP].pos_start_voting()
+        self.nodes[BACKUP].pos_start_voting(False)
+        assert self.nodes[BACKUP].pos_voting_status()
         assert os.path.exists(backup_node_safety_data_path)
         time.sleep(10)
         new_committed_round = client.pos_status()["latestCommitted"]
