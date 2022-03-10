@@ -976,7 +976,7 @@ impl Eth for EthHandler {
         // If the results does not fit into `max_limit`, report an error
         if let Some(max_limit) = self.config.get_logs_filter_max_limit {
             if logs.len() > max_limit {
-                bail!(invalid_params("filter", format!("This query results in too many logs, please set filter.limit to {} or lower", max_limit)));
+                bail!(invalid_params("filter", format!("This query results in too many logs, please use a smaller block range or set filter.limit to {} or lower", max_limit)));
             }
         }
 

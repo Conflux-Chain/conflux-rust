@@ -363,9 +363,16 @@ class CrossSpaceLogFilteringTest(Web3Base):
         # get-logs-filter-max-limit should limit the number of logs returned.
         self.stop_node(0)
         self.start_node(0, ["--get-logs-filter-max-limit", str(7)])
-        # should not raise error
+
+        # limit <= max_limit: should not raise error
         filter = { "address": evmContractAddr, "limit": 7 }
         logs = self.nodes[0].eth_getLogs(filter)
+
+        # limit > max_limit but len(res) <= max_limit: should not raise error
+        filter = { "address": confluxContractAddr, "limit": 9 }
+        logs = self.nodes[0].eth_getLogs(filter)
+
+        # len(res) > max_limit: raise error
         filter = { "address": evmContractAddr }
         assert_raises_rpc_error(None, None, self.nodes[0].eth_getLogs, filter)
 
