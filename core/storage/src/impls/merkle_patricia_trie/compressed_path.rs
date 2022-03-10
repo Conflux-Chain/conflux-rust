@@ -278,6 +278,8 @@ impl CompressedPathRaw {
         let mut path;
         {
             let slice;
+            // TODO: resolve warnings in unsafe code.
+            #[allow(clippy::uninit_vec)]
             unsafe {
                 if size > MaybeInPlaceByteArray::MAX_INPLACE_SIZE {
                     // Create uninitialized vector.

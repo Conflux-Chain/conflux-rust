@@ -128,7 +128,9 @@ struct AccountInfo {
     address: AccountAddress,
     private_key: ConsensusPrivateKey,
     public_key: ConsensusPublicKey,
+    #[allow(dead_code)]
     vrf_private_key: ConsensusVRFPrivateKey,
+    #[allow(dead_code)]
     vrf_public_key: ConsensusVRFPublicKey,
     sequence_number: u64,
     sent_event_handle: EventHandle,
@@ -290,6 +292,7 @@ impl Arbitrary for AccountInfoUniverse {
 }
 
 #[derive(Arbitrary, Debug)]
+#[allow(dead_code)]
 pub struct RawTransactionGen {
     payload: TransactionPayload,
     max_gas_amount: u64,
