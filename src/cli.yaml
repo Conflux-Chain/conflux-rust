@@ -168,6 +168,11 @@ args:
           long: get-logs-filter-max-epoch-range
           value_name: SIZE
           takes_value: true
+    - get-logs-filter-max-limit:
+          help: Sets the maximum number of log entries returned during log filtering.
+          long: get-logs-filter-max-limit
+          value_name: SIZE
+          takes_value: true
     - get-logs-filter-max-block-number-range:
           help: Sets the maximum number of allowed blocks during log filtering.
           long: get-logs-filter-max-block-number-range

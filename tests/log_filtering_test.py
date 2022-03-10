@@ -256,6 +256,17 @@ class LogFilteringTest(ConfluxTestFramework):
 
         assert_equal(collected_logs, all_logs)
 
+        # get-logs-filter-max-limit should limit the number of logs returned.
+        self.stop_node(0)
+        self.start_node(0, ["--get-logs-filter-max-limit", str(2 * NUM_CALLS)])
+        # should not raise error
+        filter = Filter(from_epoch="earliest", to_epoch="latest_state", topics=[BAR_TOPIC], limit=hex(2 * NUM_CALLS))
+        logs = self.rpc.get_logs(filter)
+        filter = Filter(from_epoch="earliest", to_epoch="latest_state", topics=[BAR_TOPIC], limit=hex(2 * NUM_CALLS + 1))
+        assert_raises_rpc_error(None, None, self.rpc.get_logs, filter)
+        filter = Filter(from_epoch="earliest", to_epoch="latest_state", topics=[BAR_TOPIC])
+        assert_raises_rpc_error(None, None, self.rpc.get_logs, filter)
+
         # get-logs-filter-max-epoch-range should limit the number of epochs queried.
         self.stop_node(0)
         self.start_node(0, ["--get-logs-filter-max-epoch-range", "16"])
