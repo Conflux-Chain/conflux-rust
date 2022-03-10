@@ -797,10 +797,9 @@ impl TransactionPool {
 
         let target_gas_limit = self.config.target_block_gas_limit.into();
         let self_gas_limit = min(max(target_gas_limit, gas_lower), gas_upper);
-        let evm_gas_limit = if (consensus_best_info_clone.best_epoch_number + 1)
-            % self.machine.params().evm_transaction_block_ratio
-            == 0
-        {
+        let evm_gas_limit = if self.machine.params().can_pack_evm_transaction(
+            consensus_best_info_clone.best_epoch_number + 1,
+        ) {
             self_gas_limit / self.machine.params().evm_transaction_gas_ratio
         } else {
             U256::zero()

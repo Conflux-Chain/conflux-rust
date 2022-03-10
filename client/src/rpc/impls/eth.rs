@@ -342,8 +342,10 @@ impl Eth for EthHandler {
 
     fn gas_price(&self) -> jsonrpc_core::Result<U256> {
         info!("RPC Request: eth_gasPrice");
-        // TODO: Change this
-        Ok(U256::from(5000000000u64))
+        Ok(self
+            .consensus_graph()
+            .gas_price(Space::Ethereum)
+            .unwrap_or(5000000000u64.into()))
     }
 
     fn max_priority_fee_per_gas(&self) -> jsonrpc_core::Result<U256> {
