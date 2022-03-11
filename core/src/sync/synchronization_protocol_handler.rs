@@ -423,6 +423,8 @@ pub struct ProtocolConfiguration {
     pub allow_phase_change_without_peer: bool,
     pub pos_genesis_pivot_decision: H256,
     pub check_status_genesis: bool,
+
+    pub pos_started_as_voter: bool,
 }
 
 impl SynchronizationProtocolHandler {

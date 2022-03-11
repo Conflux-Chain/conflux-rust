@@ -188,6 +188,11 @@ args:
         long: dev-pos-private-key-encryption-password
         value_name: PASSWD
         takes_value: true
+    - pos-started-as-voter:
+        help: If true, the node will start PoS election and voting if it's available.
+        long: pos-started-as-voter
+        value_name: BOOL
+        takes_value: true
     - light:
         long: light
     - archive:
@@ -890,4 +895,29 @@ subcommands:
                                   args:
                                       - rpc-method:
                                             default_value: pos_stop_election
+                                            hidden: true
+                            - start_voting:
+                                  about: Start PoS voting.
+                                  args:
+                                      - rpc-method:
+                                            default_value: pos_start_voting
+                                            hidden: true
+                                      - rpc-args:
+                                            default_value: initialize:bool
+                                            hidden: true
+                                      - initialize:
+                                            help: set this means the node uses its local safety data instead of a saved data file from another primary node
+                                            long: initialize
+                                            takes_value: false
+                            - stop_voting:
+                                  about: Stop PoS voting.
+                                  args:
+                                      - rpc-method:
+                                            default_value: pos_stop_voting
+                                            hidden: true
+                            - voting_status:
+                                  about: Show if the node is voting.
+                                  args:
+                                      - rpc-method:
+                                            default_value: pos_voting_status
                                             hidden: true

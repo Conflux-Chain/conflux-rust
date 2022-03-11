@@ -340,6 +340,7 @@ pub fn setup_pos_environment(
             ),
             mp_client_sender.clone(),
             test_command_receiver,
+            protocol_config.pos_started_as_voter,
         );
     debug!("Consensus started in {} ms", instant.elapsed().as_millis());
 

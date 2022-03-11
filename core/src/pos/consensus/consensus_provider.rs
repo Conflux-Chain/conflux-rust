@@ -52,6 +52,7 @@ pub fn start_consensus(
         oneshot::Sender<anyhow::Result<SubmissionStatus>>,
     )>,
     test_command_receiver: channel::Receiver<TestCommand>,
+    started_as_voter: bool,
 ) -> (Runtime, Arc<PowHandler>, Arc<AtomicBool>, Arc<ConsensusDB>)
 {
     let stopped = Arc::new(AtomicBool::new(false));
@@ -105,6 +106,7 @@ pub fn start_consensus(
         pow_handler.clone(),
         author,
         tx_sender,
+        started_as_voter,
     );
 
     runtime.spawn(epoch_mgr.start(

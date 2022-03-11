@@ -459,6 +459,39 @@ impl PosHandler {
             .map_err(|e| anyhow::anyhow!("try_send: err={:?}", e))?;
         rx.recv().map_err(|e| anyhow::anyhow!("recv: err={:?}", e))
     }
+
+    pub fn start_voting(&self, initialize: bool) -> anyhow::Result<()> {
+        let (tx, rx) = mpsc::sync_channel(1);
+        self.test_command_sender
+            .lock()
+            .as_mut()
+            .ok_or(anyhow::anyhow!("Pos not initialized!"))?
+            .try_send(TestCommand::StartVoting((initialize, tx)))
+            .map_err(|e| anyhow::anyhow!("try_send: err={:?}", e))?;
+        rx.recv()?
+    }
+
+    pub fn stop_voting(&self) -> anyhow::Result<()> {
+        let (tx, rx) = mpsc::sync_channel(1);
+        self.test_command_sender
+            .lock()
+            .as_mut()
+            .ok_or(anyhow::anyhow!("Pos not initialized!"))?
+            .try_send(TestCommand::StopVoting(tx))
+            .map_err(|e| anyhow::anyhow!("try_send: err={:?}", e))?;
+        rx.recv()?
+    }
+
+    pub fn voting_status(&self) -> anyhow::Result<bool> {
+        let (tx, rx) = mpsc::sync_channel(1);
+        self.test_command_sender
+            .lock()
+            .as_mut()
+            .ok_or(anyhow::anyhow!("Pos not initialized!"))?
+            .try_send(TestCommand::GetVotingStatus(tx))
+            .map_err(|e| anyhow::anyhow!("try_send: err={:?}", e))?;
+        Ok(rx.recv()?)
+    }
 }
 
 pub struct PosConnection {
