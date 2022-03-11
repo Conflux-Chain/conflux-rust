@@ -50,7 +50,10 @@ use cfx_internal_common::ChainIdParams;
 use cfx_parameters::{
     consensus::*,
     consensus_internal::REWARD_EPOCH_COUNT,
-    rpc::{GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_TRANSACTION_SAMPLE_SIZE},
+    rpc::{
+        EVM_GAS_PRICE_BLOCK_SAMPLE_SIZE, EVM_GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
+        GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
+    },
 };
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::StateDb;
@@ -500,10 +503,25 @@ impl ConsensusGraph {
 
     /// Get the average gas price of the last GAS_PRICE_TRANSACTION_SAMPLE_SIZE
     /// blocks
-    pub fn gas_price(&self) -> Option<U256> {
+    pub fn gas_price(&self, space: Space) -> Option<U256> {
         let inner = self.inner.read();
         let mut last_epoch_number = inner.best_epoch_number();
-        let mut number_of_blocks_to_sample = GAS_PRICE_BLOCK_SAMPLE_SIZE;
+        let (
+            number_of_tx_to_sample,
+            mut number_of_blocks_to_sample,
+            block_gas_ratio,
+        ) = match space {
+            Space::Native => (
+                GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
+                GAS_PRICE_BLOCK_SAMPLE_SIZE,
+                1,
+            ),
+            Space::Ethereum => (
+                EVM_GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
+                EVM_GAS_PRICE_BLOCK_SAMPLE_SIZE,
+                self.txpool.machine().params().evm_transaction_gas_ratio,
+            ),
+        };
         let mut prices = Vec::new();
         let mut total_block_gas_limit: u64 = 0;
         let mut total_tx_gas_limit: u64 = 0;
@@ -512,7 +530,7 @@ impl ConsensusGraph {
             if number_of_blocks_to_sample == 0 || last_epoch_number == 0 {
                 break;
             }
-            if prices.len() == GAS_PRICE_TRANSACTION_SAMPLE_SIZE {
+            if prices.len() == number_of_tx_to_sample {
                 break;
             }
             let mut hashes = inner
@@ -526,21 +544,38 @@ impl ConsensusGraph {
                     .data_man
                     .block_by_hash(&hash, false /* update_cache */)
                     .unwrap();
+                if space == Space::Ethereum
+                    && !self
+                        .txpool
+                        .machine()
+                        .params()
+                        .can_pack_evm_transaction(block.block_header.height())
+                {
+                    // This block cannot pack Ethereum transactions, so we do
+                    // not need to check every transaction.
+                    continue;
+                }
                 total_block_gas_limit +=
-                    block.block_header.gas_limit().as_u64();
+                    block.block_header.gas_limit().as_u64() * block_gas_ratio;
                 for tx in block.transactions.iter() {
+                    if space == Space::Ethereum && tx.space() != Space::Ethereum
+                    {
+                        // For eth_gasPrice, we only count Ethereum
+                        // transactions.
+                        continue;
+                    }
                     // add the tx.gas() to total_tx_gas_limit even it is packed
                     // multiple times because these tx all
                     // will occupy block's gas space
                     total_tx_gas_limit += tx.transaction.gas().as_u64();
                     prices.push(tx.gas_price().clone());
-                    if prices.len() == GAS_PRICE_TRANSACTION_SAMPLE_SIZE {
+                    if prices.len() == number_of_tx_to_sample {
                         break;
                     }
                 }
                 number_of_blocks_to_sample -= 1;
                 if number_of_blocks_to_sample == 0
-                    || prices.len() == GAS_PRICE_TRANSACTION_SAMPLE_SIZE
+                    || prices.len() == number_of_tx_to_sample
                 {
                     break;
                 }

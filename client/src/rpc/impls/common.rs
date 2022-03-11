@@ -205,7 +205,7 @@ impl RpcImpl {
         let consensus_graph = self.consensus_graph();
         info!("RPC Request: cfx_gasPrice()");
         Ok(consensus_graph
-            .gas_price()
+            .gas_price(Space::Native)
             .unwrap_or(cfxcore::consensus_parameters::ONE_GDRIP_IN_DRIP.into())
             .into())
     }
