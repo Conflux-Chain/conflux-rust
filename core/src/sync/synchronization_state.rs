@@ -94,6 +94,7 @@ pub struct SynchronizationState {
     is_consortium: bool,
     node_type: NodeType,
     allow_phase_change_without_peer: bool,
+    min_phase_change_normal_peer_count: usize,
     pub peers: RwLock<SynchronizationPeers>,
     pub handshaking_peers: RwLock<HashMap<NodeId, (ProtocolVersion, Instant)>>,
     pub last_sent_transaction_hashes: RwLock<HashSet<H256>>,
@@ -103,12 +104,14 @@ impl SynchronizationState {
     pub fn new(
         is_consortium: bool, node_type: NodeType,
         allow_phase_change_without_peer: bool,
+        min_phase_change_normal_peer_count: usize,
     ) -> Self
     {
         SynchronizationState {
             is_consortium,
             node_type,
             allow_phase_change_without_peer,
+            min_phase_change_normal_peer_count,
             peers: Default::default(),
             handshaking_peers: Default::default(),
             last_sent_transaction_hashes: Default::default(),
@@ -234,13 +237,14 @@ impl SynchronizationState {
             }
         };
 
-        if peer_best_epoches.is_empty() {
+        if peer_best_epoches.len() < self.min_phase_change_normal_peer_count {
             return if fresh_start {
                 debug!("median_epoch_from_normal_peers: fresh start");
                 Some(0)
             } else {
                 debug!(
-                    "median_epoch_from_normal_peers: no peer in normal phase"
+                    "median_epoch_from_normal_peers: no enough peers in normal phase, have {}, require {}",
+                    peer_best_epoches.len(), self.min_phase_change_normal_peer_count
                 );
                 None
             };
