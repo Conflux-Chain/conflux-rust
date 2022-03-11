@@ -245,6 +245,9 @@ pub fn initialize_common_modules(
             conf.raw_conf
                 .dev_pos_private_key_encryption_password
                 .clone()
+                // If the password is not set in the config file, read it from
+                // the environment variable.
+                .or(std::env::var("CFX_POS_KEY_ENCRYPTION_PASSWORD").ok())
                 .map(|s| s.into_bytes())
         };
         if key_path.exists() {
