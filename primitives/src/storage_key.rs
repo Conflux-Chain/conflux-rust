@@ -446,7 +446,9 @@ mod delta_mpt_storage_key {
         vec![0; uninitialized_size]
 
         // The previous implementation make this function unsafe.
-        // However, the performance gain (avoid initializing a buffer of 32 bytes) is negligible since calling this function is followed by a hash computation.
+        // However, the performance gain (avoid initializing a buffer of 32
+        // bytes) is negligible since calling this function is followed by a
+        // hash computation.
         //
         // let mut buffer = Vec::with_capacity(uninitialized_size);
         // unsafe { buffer.set_len(uninitialized_size) }
