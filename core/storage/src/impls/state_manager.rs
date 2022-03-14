@@ -67,6 +67,10 @@ impl StateManager {
         &*self.storage_manager
     }
 
+    pub fn get_storage_manager_arc(&self) -> &Arc<StorageManager> {
+        &self.storage_manager
+    }
+
     /// delta_mpt_key_padding is required. When None is passed,
     /// it's calculated for the state_trees.
     #[inline]
