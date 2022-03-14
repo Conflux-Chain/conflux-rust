@@ -1,6 +1,6 @@
 [package]
 name = "client"
-version = "2.0.0-rc-8-net8888"
+version = "2.0.1-net8888"
 edition = "2018"
 
 [dependencies]
