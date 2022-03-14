@@ -117,6 +117,7 @@ enum InstructionResult<Gas> {
 
 /// ActionParams without code, so that it can be feed into CodeReader.
 #[derive(Debug)]
+#[allow(dead_code)]
 struct InterpreterParams {
     /// Space
     pub space: Space,

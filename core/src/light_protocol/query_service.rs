@@ -701,7 +701,7 @@ impl QueryService {
                 success
             },
         ) {
-            Err(e) => unreachable!(e),
+            Err(e) => unreachable!("{}", e),
             Ok(success) => success,
         }
     }

@@ -214,6 +214,7 @@ build_config! {
         (max_peers_tx_propagation, (usize), 128)
         (max_unprocessed_block_size_mb, (usize), (128))
         (min_peers_tx_propagation, (usize), 8)
+        (min_phase_change_normal_peer_count, (usize), 3)
         (received_tx_index_maintain_timeout_ms, (u64), 300_000)
         (request_block_with_public, (bool), false)
         (send_tx_period_ms, (u64), 1300)
@@ -318,6 +319,7 @@ build_config! {
         (pos_in_queue_locked_views, (u64), IN_QUEUE_LOCKED_VIEWS)
         (pos_out_queue_locked_views, (u64), OUT_QUEUE_LOCKED_VIEWS)
         (dev_pos_private_key_encryption_password, (Option<String>), None)
+        (pos_started_as_voter, (bool), true)
 
         // Light node section
         (ln_epoch_request_batch_size, (Option<usize>), None)
@@ -791,11 +793,15 @@ impl Configuration {
             } else {
                 self.raw_conf.dev_allow_phase_change_without_peer
             },
+            min_phase_change_normal_peer_count: self
+                .raw_conf
+                .min_phase_change_normal_peer_count,
             pos_genesis_pivot_decision: self
                 .raw_conf
                 .pos_genesis_pivot_decision
                 .expect("set to genesis if none"),
             check_status_genesis: self.raw_conf.check_status_genesis,
+            pos_started_as_voter: self.raw_conf.pos_started_as_voter,
         }
     }
 
@@ -940,7 +946,6 @@ impl Configuration {
             dev_pack_tx_immediately: self.is_dev_mode()
                 && self.raw_conf.dev_block_interval_ms.is_none(),
             max_payload_bytes: self.raw_conf.jsonrpc_ws_max_payload_bytes,
-            public_rpc_apis: self.raw_conf.public_rpc_apis.clone(),
         }
     }
 

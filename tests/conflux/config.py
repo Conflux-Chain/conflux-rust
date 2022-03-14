@@ -59,4 +59,5 @@ small_local_test_conf = dict(
     hydra_transition_height = 0,
     hydra_transition_number = 0,
     cip43_init_end_number = 2 ** 32 - 1,
+    min_phase_change_normal_peer_count = 1,
 )

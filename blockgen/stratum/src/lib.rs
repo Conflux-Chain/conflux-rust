@@ -252,6 +252,7 @@ pub struct SocketMetadata {
     // with the new version of jsonrpc-core, SocketMetadata
     // won't have to implement default, so this field will not
     // have to be an Option
+    #[allow(dead_code)]
     tcp_dispatcher: Option<Dispatcher>,
 }
 

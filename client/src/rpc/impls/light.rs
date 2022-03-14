@@ -1116,7 +1116,6 @@ impl Cfx for CfxHandler {
         fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> JsonRpcResult<EstimateGasAndCollateralResponse>;
         fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
         fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
-        fn opened_method_groups(&self) -> JsonRpcResult<Vec<String>>;
         fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
     }
 }
@@ -1153,6 +1152,9 @@ impl TestRpc for TestRpcImpl {
                 &self, pos_account: AccountAddress, increased_voting_power: U64,
             ) -> JsonRpcResult<()>;
             fn pos_stop_election(&self) -> JsonRpcResult<Option<u64>>;
+            fn pos_start_voting(&self, initialize: bool) -> JsonRpcResult<()>;
+            fn pos_stop_voting(&self) -> JsonRpcResult<()>;
+            fn pos_voting_status(&self) -> JsonRpcResult<bool>;
             fn pos_start(&self) -> JsonRpcResult<()>;
             fn pos_force_vote_proposal(&self, block_id: H256) -> JsonRpcResult<()>;
             fn pos_force_propose(&self, round: U64, parent_block_id: H256, payload: Vec<TransactionPayload>) -> JsonRpcResult<()>;

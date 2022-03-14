@@ -219,6 +219,7 @@ pub struct RoundManager {
     proposer_election: Box<dyn ProposerElection + Send + Sync>,
     // None if this is not a validator.
     proposal_generator: Option<ProposalGenerator>,
+    is_voting: bool,
     safety_rules: MetricsSafetyRules,
     network: ConsensusNetworkSender,
     txn_manager: Arc<dyn TxnManager>,
@@ -244,7 +245,7 @@ impl RoundManager {
             SignedTransaction,
             oneshot::Sender<anyhow::Result<SubmissionStatus>>,
         )>,
-        chain_id: ChainId,
+        chain_id: ChainId, is_voting: bool,
     ) -> Self
     {
         counters::OP_COUNTERS
@@ -256,6 +257,7 @@ impl RoundManager {
             round_state,
             proposer_election,
             proposal_generator,
+            is_voting,
             safety_rules,
             txn_manager,
             network,
@@ -313,24 +315,26 @@ impl RoundManager {
         if let Err(e) = self.broadcast_pivot_decision().await {
             diem_error!("error in broadcasting pivot decision tx: {:?}", e);
         }
-        if let Some(ref proposal_generator) = self.proposal_generator {
-            if self.proposer_election.is_valid_proposer(
-                proposal_generator.author(),
-                new_round_event.round,
-            ) {
-                let proposal_msg = ConsensusMsg::ProposalMsg(Box::new(
-                    self.generate_proposal(new_round_event).await?,
-                ));
-                let mut network = self.network.clone();
-                network.broadcast(proposal_msg, vec![]).await;
-                counters::PROPOSALS_COUNT.inc();
+        if self.is_validator() {
+            if let Some(ref proposal_generator) = self.proposal_generator {
+                if self.proposer_election.is_valid_proposer(
+                    proposal_generator.author(),
+                    new_round_event.round,
+                ) {
+                    let proposal_msg = ConsensusMsg::ProposalMsg(Box::new(
+                        self.generate_proposal(new_round_event).await?,
+                    ));
+                    let mut network = self.network.clone();
+                    network.broadcast(proposal_msg, vec![]).await;
+                    counters::PROPOSALS_COUNT.inc();
+                }
             }
         }
         Ok(())
     }
 
     pub async fn broadcast_pivot_decision(&mut self) -> anyhow::Result<()> {
-        if self.proposal_generator.is_none() {
+        if !self.is_validator() {
             // Not an active validator, so do not need to sign pivot decision.
             return Ok(());
         }
@@ -392,6 +396,10 @@ impl RoundManager {
         vrf_private_key: &ConfigKey<ConsensusVRFPrivateKey>,
     ) -> anyhow::Result<()>
     {
+        if !self.is_voting {
+            // This node does not participate in any signing or voting.
+            return Ok(());
+        }
         diem_debug!("broadcast_election starts");
         let pos_state = self.storage.pos_ledger_db().get_latest_pos_state();
         if let Some(target_term) = pos_state.next_elect_term(&author) {
@@ -908,24 +916,7 @@ impl RoundManager {
                 Ok(false)
             }
         } else {
-            let proposal_round = proposal.round();
-            let vote = self
-                .execute_and_vote(proposal)
-                .await
-                .context("[RoundManager] Process proposal")?;
-            diem_debug!(
-                self.new_log(LogEvent::Vote).remote_peer(author),
-                "{}",
-                vote
-            );
-
-            self.round_state.record_vote(vote.clone());
-            let vote_msg = VoteMsg::new(vote, self.block_store.sync_info());
-            let recipients = self
-                .proposer_election
-                .get_valid_proposer(proposal_round + 1);
-            self.network.send_vote(vote_msg, vec![recipients]).await;
-            Ok(false)
+            bail!("unsupported election rules")
         }
     }
 
@@ -1037,8 +1028,6 @@ impl RoundManager {
     ///
     /// Return `Ok(true)` if the vote should be relayed.
     async fn process_vote(&mut self, vote: &Vote) -> anyhow::Result<bool> {
-        let round = vote.vote_data().proposed().round();
-
         diem_info!(
             self.new_log(LogEvent::ReceiveVote)
                 .remote_peer(vote.author()),
@@ -1049,22 +1038,6 @@ impl RoundManager {
             vote_state = vote.vote_data().proposed().executed_state_id(),
         );
 
-        if !vote.is_timeout() {
-            if let Some(ref proposal_generator) = self.proposal_generator {
-                if !self.proposer_election.is_random_election() {
-                    // Unlike timeout votes regular votes are sent to the
-                    // leaders of the next round only.
-                    let next_round = round + 1;
-                    ensure!(
-                self.proposer_election
-                    .is_valid_proposer(proposal_generator.author(), next_round),
-                "[RoundManager] Received {}, but I am not a valid proposer for round {}, ignore.",
-                vote,
-                next_round
-            );
-                }
-            }
-        }
         // Add the vote and check whether it completes a new QC or a TC
         let mut relay = true;
         match self
@@ -1263,8 +1236,8 @@ impl RoundManager {
 
     fn is_validator(&self) -> bool {
         let r = self.proposal_generator.is_some();
-        diem_debug!("Check validator: r={}", r);
-        r
+        diem_debug!("Check validator: r={} is_voting={}", r, self.is_voting);
+        r && self.is_voting
     }
 
     /// Return true for blocks that we need to process
@@ -1395,5 +1368,23 @@ impl RoundManager {
             self.proposer_election.set_proposal_candidate(chosen);
         }
         Ok(chosen)
+    }
+
+    pub fn start_voting(&mut self, initialize: bool) -> anyhow::Result<()> {
+        if !initialize {
+            self.safety_rules
+                .start_voting(initialize)
+                .map_err(anyhow::Error::from)?;
+        }
+        self.is_voting = true;
+        Ok(())
+    }
+
+    pub fn stop_voting(&mut self) -> anyhow::Result<()> {
+        self.safety_rules
+            .stop_voting()
+            .map_err(anyhow::Error::from)?;
+        self.is_voting = false;
+        Ok(())
     }
 }

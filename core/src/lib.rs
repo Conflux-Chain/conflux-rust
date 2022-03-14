@@ -65,7 +65,8 @@ pub use crate::{
         SharedConsensusGraph,
     },
     light_protocol::{
-        Provider as LightProvider, QueryService as LightQueryService,
+        Handler as LightHandler, Provider as LightProvider,
+        QueryService as LightQueryService,
     },
     node_type::NodeType,
     sync::{

@@ -79,7 +79,10 @@ class TestNode:
         self.cleanup_on_exit = True
         # self.key = "0x" + "0"*125+"{:03d}".format(self.index);
         self.p2ps = []
-        self.pow_sk = open(os.path.join(self.datadir, "pow_sk"), "rb").read()
+        if os.path.exists(os.path.join(self.datadir, "pow_sk")):
+            self.pow_sk = open(os.path.join(self.datadir, "pow_sk"), "rb").read()
+        else:
+            self.pow_sk = None
 
     def _node_msg(self, msg: str) -> str:
         """Return a modified msg that identifies this node by its index as a debugging aid."""
@@ -251,7 +254,7 @@ class TestNode:
     def clean_data(self):
         shutil.rmtree(os.path.join(self.datadir, "blockchain_data/blockchain_db"))
         shutil.rmtree(os.path.join(self.datadir, "blockchain_data/storage_db"))
-        shutil.rmtree(os.path.join(self.datadir, "pos-ledger-db"), ignore_errors=True)
+        shutil.rmtree(os.path.join(self.datadir, "pos_db"), ignore_errors=True)
         self.log.info("Cleanup data for node %d", self.index)
 
     def stop_node(self, expected_stderr='', kill=False, wait=True):

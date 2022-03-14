@@ -100,7 +100,9 @@ pub mod consensus_internal {
 
 pub mod rpc {
     pub const GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 100;
+    pub const EVM_GAS_PRICE_BLOCK_SAMPLE_SIZE: usize = 20;
     pub const GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 10000;
+    pub const EVM_GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 1000;
     pub const TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW: usize = 100;
     pub const TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM: usize = 600;
 }

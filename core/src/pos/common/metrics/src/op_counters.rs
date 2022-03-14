@@ -43,6 +43,7 @@ impl DurationHistogram {
 
 #[derive(Clone)]
 pub struct OpMetrics {
+    #[allow(dead_code)]
     module: String,
     counters: IntCounterVec,
     gauges: IntGaugeVec,

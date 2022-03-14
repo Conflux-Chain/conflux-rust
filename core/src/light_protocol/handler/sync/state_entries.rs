@@ -34,6 +34,7 @@ use std::{future::Future, sync::Arc};
 pub type StateEntry = Option<Vec<u8>>;
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct Statistics {
     cached: usize,
     in_flight: usize,
