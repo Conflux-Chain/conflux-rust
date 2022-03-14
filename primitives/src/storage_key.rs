@@ -443,10 +443,17 @@ mod delta_mpt_storage_key {
     pub const KEY_PADDING_BYTES: usize = 32;
 
     fn new_buffer(uninitialized_size: usize) -> Vec<u8> {
-        let mut buffer = Vec::with_capacity(uninitialized_size);
-        unsafe { buffer.set_len(uninitialized_size) }
+        vec![0; uninitialized_size]
 
-        buffer
+        // The previous implementation make this function unsafe.
+        // However, the performance gain (avoid initializing a buffer of 32
+        // bytes) is negligible since calling this function is followed by a
+        // hash computation.
+        //
+        // let mut buffer = Vec::with_capacity(uninitialized_size);
+        // unsafe { buffer.set_len(uninitialized_size) }
+        //
+        // buffer
     }
 
     fn compute_address_keypart(

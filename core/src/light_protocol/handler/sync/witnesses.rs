@@ -29,6 +29,7 @@ use parking_lot::RwLock;
 use std::{collections::HashSet, sync::Arc};
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct Statistics {
     in_flight: usize,
     verified: u64,
