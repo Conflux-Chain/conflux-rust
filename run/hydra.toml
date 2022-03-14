@@ -515,10 +515,10 @@ jsonrpc_local_http_port=12539
 #
 # future_block_buffer_capacity = 32768
 
-# Maximum number of log entries returned from cfx_getLogs.
-# If not set, cfx_getLogs will not limit the number of logs returned.
+# Maximum number of log entries returned from cfx_getLogs and eth_getLogs.
+# If not set, cfx_getLogs and eth_getLogs will not limit the number of logs returned.
 #
-# get_logs_filter_max_limit = 10
+get_logs_filter_max_limit = 5000
 
 # Epoch batch size used in log filtering.
 # Larger batch sizes may improve performance but might also prevent consensus from making progress under high RPC load.
