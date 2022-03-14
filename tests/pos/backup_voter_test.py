@@ -60,7 +60,6 @@ class BackupVoterTest(DefaultConfluxTestFramework):
         # wait for the first block to be committed
         print(client.pos_status())
         wait_until(lambda: int(client.pos_status()["latestCommitted"], 0) >= 2)
-        old_committed_round = client.pos_status()["latestCommitted"]
         assert os.path.exists(prime_node_safety_data_path)
         assert self.nodes[PRIME].pos_voting_status()
         assert not self.nodes[BACKUP].pos_voting_status()
@@ -68,18 +67,22 @@ class BackupVoterTest(DefaultConfluxTestFramework):
         assert not self.nodes[PRIME].pos_voting_status()
         assert not os.path.exists(prime_node_safety_data_path)
         assert os.path.exists(prime_node_safety_data_path + SAVE_SUFFIX)
+        old_committed_round = client.pos_status()["latestCommitted"]
+        old_voted_round = client.pos_status()["latestVoted"]
         time.sleep(5)
-        new_committed_round = client.pos_status()["latestCommitted"]
+        new_voted_round = client.pos_status()["latestVoted"]
         # Ensure PRIME node actually does not vote
-        assert_equal(old_committed_round, new_committed_round)
+        assert_equal(old_voted_round, new_voted_round)
         assert not os.path.exists(prime_node_safety_data_path)
         shutil.copyfile(prime_node_safety_data_path + SAVE_SUFFIX, backup_node_safety_data_path + SAVE_SUFFIX)
         self.nodes[BACKUP].pos_start_voting(False)
         assert self.nodes[BACKUP].pos_voting_status()
         assert os.path.exists(backup_node_safety_data_path)
         time.sleep(10)
+        new_voted_round = client.pos_status()["latestVoted"]
         new_committed_round = client.pos_status()["latestCommitted"]
         # Ensure BACKUP node starts voting and PoS is making progress
+        assert_greater_than(new_voted_round, old_voted_round)
         assert_greater_than(new_committed_round, old_committed_round)
 
 

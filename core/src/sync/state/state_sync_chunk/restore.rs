@@ -69,7 +69,7 @@ impl Restorer {
         // `self.verifier` is never unwrapped, so it's safe to set it to None,
         self.verifier = None;
 
-        let storage_manager = state_manager.get_storage_manager();
+        let storage_manager = state_manager.get_storage_manager_arc();
         let mut snapshot_info_map_locked = storage_manager
             .get_snapshot_manager()
             .get_snapshot_db_manager()

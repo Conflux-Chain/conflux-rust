@@ -400,7 +400,7 @@ impl StorageManager {
     }
 
     pub fn get_delta_mpt(
-        &self, snapshot_epoch_id: &EpochId,
+        self: &Arc<Self>, snapshot_epoch_id: &EpochId,
     ) -> Result<Arc<DeltaMpt>> {
         {
             let snapshot_associated_mpts_locked =
@@ -416,9 +416,7 @@ impl StorageManager {
         }
 
         StorageManager::new_or_get_delta_mpt(
-            // The StorageManager is maintained in Arc so it's fine to call
-            // this unsafe function.
-            unsafe { shared_from_this(self) },
+            self.clone(),
             snapshot_epoch_id,
             &mut *self.snapshot_associated_mpts_by_epoch.write(),
         )
@@ -747,7 +745,7 @@ impl StorageManager {
 
     /// This function is made public only for testing.
     pub fn register_new_snapshot(
-        &self, new_snapshot_info: SnapshotInfo,
+        self: &Arc<Self>, new_snapshot_info: SnapshotInfo,
         snapshot_info_map_locked: &mut PersistedSnapshotInfoMap,
     ) -> Result<()>
     {
@@ -780,10 +778,7 @@ impl StorageManager {
                 );
                 let parent_delta_mpt =
                     Some(StorageManager::new_or_get_delta_mpt(
-                        // The StorageManager is maintained in Arc so it's
-                        // fine to call
-                        // this unsafe function.
-                        unsafe { shared_from_this(self) },
+                        self.clone(),
                         &new_snapshot_info.parent_snapshot_epoch_id,
                         &mut *snapshot_associated_mpts_locked,
                     )?);
@@ -1298,7 +1293,7 @@ impl StorageManager {
         }
     }
 
-    pub fn load_persist_state(&self) -> Result<()> {
+    pub fn load_persist_state(self: &Arc<Self>) -> Result<()> {
         let snapshot_info_map = &mut *self.snapshot_info_map_by_epoch.write();
 
         // Always keep the information for genesis snapshot.
@@ -1356,7 +1351,7 @@ impl StorageManager {
                 Arc::new(DeltaMpt::new(
                     self.delta_mpt_open_db_lru.clone(),
                     snapshot_epoch_id.clone(),
-                    unsafe { shared_from_this(self) },
+                    self.clone(),
                     mpt_id,
                     self.delta_mpts_node_memory_manager.clone(),
                 )?),
@@ -1538,7 +1533,7 @@ use crate::{
         SnapshotInfo, SnapshotKeptToProvideSyncStatus,
     },
     storage_dir,
-    utils::{arc_ext::*, guarded_value::GuardedValue},
+    utils::guarded_value::GuardedValue,
     DeltaMpt, DeltaMptIdGen, DeltaMptIterator, KeyValueDbTrait, KvdbSqlite,
     OpenDeltaDbLru, ProvideExtraSnapshotSyncConfig, StateIndex,
     StateRootWithAuxInfo, StorageConfiguration,
