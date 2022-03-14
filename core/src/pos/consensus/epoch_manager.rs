@@ -121,6 +121,7 @@ pub struct EpochManager {
         SignedTransaction,
         oneshot::Sender<anyhow::Result<SubmissionStatus>>,
     )>,
+    is_voting: bool,
 }
 
 impl EpochManager {
@@ -142,6 +143,7 @@ impl EpochManager {
             SignedTransaction,
             oneshot::Sender<anyhow::Result<SubmissionStatus>>,
         )>,
+        started_as_voter: bool,
     ) -> Self
     {
         let config = node_config.consensus.clone();
@@ -166,6 +168,7 @@ impl EpochManager {
             pow_handler,
             election_control: AtomicBool::new(true),
             tx_sender,
+            is_voting: started_as_voter,
         }
     }
 
@@ -474,6 +477,7 @@ impl EpochManager {
             self.config.sync_only,
             self.tx_sender.clone(),
             self.config.chain_id,
+            self.is_voting,
         );
         // Only check if we should send election after entering an new epoch.
         if self.election_control.load(AtomicOrdering::Relaxed) {
@@ -841,6 +845,7 @@ impl EpochManager {
     async fn process_test_command(
         &mut self, command: TestCommand,
     ) -> anyhow::Result<()> {
+        diem_info!("process_test_command, command={:?}", command);
         match command {
             TestCommand::ForceVoteProposal(block_id) => {
                 self.force_vote_proposal(block_id).await
@@ -900,6 +905,18 @@ impl EpochManager {
                 }
                 _ => anyhow::bail!("RoundManager not started yet"),
             },
+            TestCommand::StartVoting((initialize, tx)) => {
+                let r = self.start_voting(initialize).await;
+                tx.send(r).map_err(|e| anyhow!("send: err={:?}", e))
+            }
+            TestCommand::StopVoting(tx) => {
+                let r = self.stop_voting().await;
+                tx.send(r).map_err(|e| anyhow!("send: err={:?}", e))
+            }
+            TestCommand::GetVotingStatus(tx) => {
+                let r = self.voting_status().await;
+                tx.send(r).map_err(|e| anyhow!("send: err={:?}", e))
+            }
         }
     }
 
@@ -960,4 +977,24 @@ impl EpochManager {
             _ => anyhow::bail!("RoundManager not started yet"),
         }
     }
+
+    async fn start_voting(&mut self, initialize: bool) -> anyhow::Result<()> {
+        match self.processor_mut() {
+            RoundProcessor::Normal(p) => p.start_voting(initialize)?,
+            _ => anyhow::bail!("RoundManager not started yet"),
+        };
+        self.is_voting = true;
+        Ok(())
+    }
+
+    async fn stop_voting(&mut self) -> anyhow::Result<()> {
+        match self.processor_mut() {
+            RoundProcessor::Normal(p) => p.stop_voting()?,
+            _ => anyhow::bail!("RoundManager not started yet"),
+        }
+        self.is_voting = false;
+        Ok(())
+    }
+
+    async fn voting_status(&self) -> bool { self.is_voting }
 }

@@ -170,6 +170,7 @@ mod tests {
         struct MyHandler(atomic::AtomicBool);
 
         #[derive(Clone)]
+        #[allow(dead_code)]
         struct MyMessage {
             data: u32,
         }
@@ -202,6 +203,7 @@ mod tests {
         struct MyHandler(atomic::AtomicUsize);
 
         #[derive(Clone)]
+        #[allow(dead_code)]
         struct MyMessage {
             data: u32,
         }

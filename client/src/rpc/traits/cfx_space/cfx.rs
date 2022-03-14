@@ -262,9 +262,6 @@ pub trait Cfx {
         &self, epoch_number: Option<EpochNumber>,
     ) -> JsonRpcResult<TokenSupplyInfo>;
 
-    #[rpc(name = "cfx_openedMethodGroups")]
-    fn opened_method_groups(&self) -> JsonRpcResult<Vec<String>>;
-
     #[rpc(name = "cfx_getPoSRewardByEpoch")]
     fn get_pos_reward_by_epoch(
         &self, epoch: EpochNumber,

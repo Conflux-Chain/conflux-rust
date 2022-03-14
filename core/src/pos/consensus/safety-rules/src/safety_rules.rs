@@ -43,6 +43,7 @@ use diem_types::{
 };
 use serde::Serialize;
 use std::cmp::Ordering;
+const SAFETY_STORAGE_SAVE_SUFFIX: &str = "json.save";
 
 /// @TODO consider a cache of verified QCs to cut down on verification costs
 pub struct SafetyRules {
@@ -502,6 +503,22 @@ impl SafetyRules {
 
         let signature = self.sign(timeout)?;
         Ok(signature)
+    }
+
+    pub fn start_voting(&mut self, initialize: bool) -> Result<(), Error> {
+        if initialize {
+            // If the node starts voting with its local safety data,
+            // `SafetyRule` just remains the same.
+            Ok(())
+        } else {
+            self.persistent_storage
+                .replace_with_suffix(SAFETY_STORAGE_SAVE_SUFFIX)
+        }
+    }
+
+    pub fn stop_voting(&mut self) -> Result<(), Error> {
+        self.persistent_storage
+            .save_to_suffix(SAFETY_STORAGE_SAVE_SUFFIX)
     }
 }
 

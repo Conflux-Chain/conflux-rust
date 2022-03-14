@@ -29,6 +29,7 @@ use primitives::StateRoot;
 use std::{future::Future, sync::Arc};
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct Statistics {
     cached: usize,
     in_flight: usize,
