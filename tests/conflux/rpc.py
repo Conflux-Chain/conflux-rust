@@ -331,7 +331,7 @@ class RpcClient:
         convert_b32_address_field_to_hex(tx, "contractCreated")
         return tx
 
-    def new_tx(self, sender = None, receiver = None, nonce = None, gas_price=1, gas=21000, value=100, data=b'', sign=True, priv_key=None, storage_limit=None, epoch_height=0, chain_id=DEFAULT_PY_TEST_CHAIN_ID):
+    def new_tx(self, sender = None, receiver = None, nonce = None, gas_price=1, gas=21000, value=100, data=b'', sign=True, priv_key=None, storage_limit=None, epoch_height=None, chain_id=DEFAULT_PY_TEST_CHAIN_ID):
         if priv_key is None:
             priv_key = default_config["GENESIS_PRI_KEY"]
         if sender is None:
@@ -345,6 +345,9 @@ class RpcClient:
 
         if storage_limit is None:
             storage_limit = 0
+
+        if epoch_height is None:
+            epoch_height = self.epoch_number()
 
         action = eth_utils.decode_hex(receiver)
         tx = UnsignedTransaction(nonce, gas_price, gas, action, value, data, storage_limit, epoch_height, chain_id)
