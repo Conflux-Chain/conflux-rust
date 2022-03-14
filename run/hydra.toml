@@ -255,6 +255,10 @@ jsonrpc_local_http_port=12539
 #
 # min_peers_tx_propagation = 8
 
+# Minimum number of normal-phase peers to estimate the current global latest epoch for phase change.
+#
+# min_phase_change_normal_peer_count = 3
+
 # The time to maintain received transactions to avoid duplicated requests.
 #
 # received_tx_index_maintain_timeout_ms = 300_000

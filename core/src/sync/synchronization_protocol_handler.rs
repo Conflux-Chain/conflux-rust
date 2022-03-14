@@ -421,6 +421,7 @@ pub struct ProtocolConfiguration {
     pub max_unprocessed_block_size: usize,
     pub max_chunk_number_in_manifest: usize,
     pub allow_phase_change_without_peer: bool,
+    pub min_phase_change_normal_peer_count: usize,
     pub pos_genesis_pivot_decision: H256,
     pub check_status_genesis: bool,
 
@@ -440,6 +441,7 @@ impl SynchronizationProtocolHandler {
             protocol_config.is_consortium,
             node_type,
             protocol_config.allow_phase_change_without_peer,
+            protocol_config.min_phase_change_normal_peer_count,
         ));
         let recover_public_queue = Arc::new(AsyncTaskQueue::new(
             SyncHandlerWorkType::RecoverPublic,

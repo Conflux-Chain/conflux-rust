@@ -214,6 +214,7 @@ build_config! {
         (max_peers_tx_propagation, (usize), 128)
         (max_unprocessed_block_size_mb, (usize), (128))
         (min_peers_tx_propagation, (usize), 8)
+        (min_phase_change_normal_peer_count, (usize), 3)
         (received_tx_index_maintain_timeout_ms, (u64), 300_000)
         (request_block_with_public, (bool), false)
         (send_tx_period_ms, (u64), 1300)
@@ -792,6 +793,9 @@ impl Configuration {
             } else {
                 self.raw_conf.dev_allow_phase_change_without_peer
             },
+            min_phase_change_normal_peer_count: self
+                .raw_conf
+                .min_phase_change_normal_peer_count,
             pos_genesis_pivot_decision: self
                 .raw_conf
                 .pos_genesis_pivot_decision
