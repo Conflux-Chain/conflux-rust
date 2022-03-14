@@ -31,6 +31,7 @@ use futures::future::FutureExt;
 use network::{node_table::NodeId, NetworkContext};
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct Statistics {
     cached: usize,
     in_flight: usize,

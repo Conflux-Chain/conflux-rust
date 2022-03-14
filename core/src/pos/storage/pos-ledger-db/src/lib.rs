@@ -232,6 +232,7 @@ pub struct PosLedgerDB {
     state_store: Arc<StateStore>,
     event_store: Arc<EventStore>,
     system_store: SystemStore,
+    #[allow(dead_code)]
     rocksdb_property_reporter: RocksdbPropertyReporter,
     pruner: Option<Pruner>,
 }
