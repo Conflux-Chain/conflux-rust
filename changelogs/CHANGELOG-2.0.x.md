@@ -8,7 +8,7 @@
 - Support phantom transactions and return correct fields in eSpace `trace` RPCs.
 - Add fields `valid` and `createType` for eSpace `trace` RPCs.
 - Add RPC `rpc_methods` to return all available methods and `rpc_modules` to return all RPC modules.
-- Add `total_espace_tokens` in the response of `cfx_getSupplyInfo`.
+- Add `totalEspaceTokens` in the response of `cfx_getSupplyInfo`.
 - Add local RPCs `pos_start_voting`, `pos_stop_voting`, and `pos_voting_status`. Check #2438 for details.
 
 ### Configuration Improvements
