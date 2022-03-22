@@ -39,6 +39,9 @@ class EvmTx2ReceiptTest(Web3Base):
         tx = self.w3.eth.get_transaction(return_tx_hash)
         assert_equal(receipt["status"], 1)
 
+        # eth_call with unknown extra fields should work
+        self.nodes[0].eth_call({ "accessList": [] })
+
 
 if __name__ == "__main__":
     EvmTx2ReceiptTest().main()
