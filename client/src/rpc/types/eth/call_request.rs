@@ -23,7 +23,6 @@ use cfx_types::{H160, U256};
 
 /// Call request
 #[derive(Debug, Default, PartialEq, Deserialize)]
-#[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct CallRequest {
     /// From
