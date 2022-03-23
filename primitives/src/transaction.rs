@@ -298,9 +298,13 @@ pub mod eip155_signature {
 }
 
 impl Eip155Transaction {
-    /// Specify the sender; this won't survive the serialize/deserialize
-    /// process, but can be cloned.
-    pub fn fake_sign(self, from: AddressWithSpace) -> SignedTransaction {
+    /// Fake sign phantom transactions.
+    // The signature is part of the hash input. This implementation
+    // ensures that phantom transactions whose fields are identical
+    // will have different hashes.
+    pub fn fake_sign_phantom(
+        self, from: AddressWithSpace,
+    ) -> SignedTransaction {
         SignedTransaction {
             transaction: TransactionWithSignature {
                 transaction: TransactionWithSignatureSerializePart {
@@ -310,6 +314,27 @@ impl Eip155Transaction {
                     // will have different hashes
                     r: U256::from(from.address.as_ref()),
                     s: U256::from(from.address.as_ref()),
+                    v: 0,
+                },
+                hash: H256::zero(),
+                rlp_size: None,
+            }
+            .compute_hash(),
+            sender: from.address,
+            public: None,
+        }
+    }
+
+    /// Fake sign call requests in `eth_call`.
+    // `fake_sign_phantom` will use zero signature when the sender is the
+    // zero address, and that will fail basic signature verification.
+    pub fn fake_sign_rpc(self, from: AddressWithSpace) -> SignedTransaction {
+        SignedTransaction {
+            transaction: TransactionWithSignature {
+                transaction: TransactionWithSignatureSerializePart {
+                    unsigned: Transaction::Ethereum(self),
+                    r: U256::one(),
+                    s: U256::one(),
                     v: 0,
                 },
                 hash: H256::zero(),
