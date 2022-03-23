@@ -540,7 +540,7 @@ impl PhantomTransaction {
             value: self.value,
         };
 
-        tx.fake_sign(self.from.with_space(Space::Ethereum))
+        tx.fake_sign_phantom(self.from.with_space(Space::Ethereum))
     }
 
     pub fn into_receipt(self, accumulated_gas_used: U256) -> Receipt {

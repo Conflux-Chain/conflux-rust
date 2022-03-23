@@ -88,7 +88,7 @@ pub fn sign_call(
         chain_id: Some(chain_id),
         data: request.data.unwrap_or_default().into_vec(),
     }
-    .fake_sign(from.with_evm_space()))
+    .fake_sign_rpc(from.with_evm_space()))
 }
 
 fn block_tx_by_index(
