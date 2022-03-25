@@ -55,7 +55,8 @@ fn main() -> Result<(), String> {
     } // only for #[cfg]
 
     let yaml = load_yaml!("cli.yaml");
-    let matches = App::from_yaml(yaml).version(crate_version!()).get_matches();
+    let version = parity_version::version(crate_version!());
+    let matches = App::from_yaml(yaml).version(version.as_str()).get_matches();
 
     if let Some(output) = handle_sub_command(&matches)? {
         println!("{}", output);
@@ -150,7 +151,7 @@ fn main() -> Result<(), String> {
 :......::::.......:::..::::..::..::::::::........:::.......:::..:::::..::
 Current Version: {}
 ",
-        crate_version!()
+        version
     );
 
     let client_handle: Box<dyn ClientTrait>;

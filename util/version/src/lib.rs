@@ -24,15 +24,6 @@ extern crate target_info;
 
 use target_info::Target;
 
-mod vergen {
-    #![allow(unused)]
-    include!(concat!(env!("OUT_DIR"), "/version.rs"));
-}
-
-mod generated {
-    include!(concat!(env!("OUT_DIR"), "/meta.rs"));
-}
-
 /// Get the platform identifier.
 pub fn platform() -> String {
     let env = Target::env();
@@ -42,9 +33,9 @@ pub fn platform() -> String {
 
 /// Get the standard version string for this software.
 pub fn version(crate_version: &str) -> String {
-    let sha3 = vergen::short_sha();
+    let sha3 = env!("VERGEN_GIT_SHA_SHORT");
     let sha3_dash = if sha3.is_empty() { "" } else { "-" };
-    let commit_date = vergen::commit_date().replace("-", "");
+    let commit_date = env!("VERGEN_GIT_COMMIT_DATE").replace("-", "");
     let date_dash = if commit_date.is_empty() { "" } else { "-" };
     format!(
         "conflux-rust/v{}{}{}{}{}/{}/rustc{}",
@@ -54,6 +45,6 @@ pub fn version(crate_version: &str) -> String {
         date_dash,
         commit_date,
         platform(),
-        generated::rustc_version()
+        env!("VERGEN_RUSTC_SEMVER"),
     )
 }
