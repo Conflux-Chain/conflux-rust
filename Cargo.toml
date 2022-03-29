@@ -63,6 +63,7 @@ bcs = "0.1.3"
 tempdir = "0.3.7"
 hex = "0.3.0"
 base64ct = "=1.1.1"
+parity-version = {path = "./util/version"}
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies.jemallocator]
 version = "0.3.2"
