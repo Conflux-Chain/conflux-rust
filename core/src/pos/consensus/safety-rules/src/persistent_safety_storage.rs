@@ -18,7 +18,7 @@ use diem_global_constants::{
     CONSENSUS_KEY, EXECUTION_KEY, OWNER_ACCOUNT, SAFETY_DATA, WAYPOINT,
 };
 use diem_logger::prelude::*;
-use diem_secure_storage::{CryptoStorage, KVStorage, Storage};
+use diem_secure_storage::{CryptoStorage, KVStorage, OnDiskStorage, Storage};
 use diem_types::{
     validator_config::{
         ConsensusPrivateKey, ConsensusPublicKey, ConsensusSignature,
@@ -26,7 +26,7 @@ use diem_types::{
     waypoint::Waypoint,
 };
 use serde::Serialize;
-use std::convert::TryFrom;
+use std::{convert::TryFrom, fs};
 
 /// SafetyRules needs an abstract storage interface to act as a common utility
 /// for storing persistent data to local disk, cloud, secrets managers, or even
@@ -68,6 +68,64 @@ impl PersistentSafetyStorage {
             cached_safety_data: Some(safety_data),
             internal_store,
             private_key,
+        }
+    }
+
+    pub fn replace_with_suffix(
+        &mut self, new_storage_suffix: &str,
+    ) -> Result<(), Error> {
+        match &mut self.internal_store {
+            Storage::OnDiskStorage(disk_storage) => {
+                let new_path =
+                    disk_storage.file_path().with_extension(new_storage_suffix);
+                if !new_path.exists() {
+                    return Err(Error::SecureStorageUnexpectedError(format!(
+                        "new secure storage path incorrect: {:?}",
+                        new_path
+                    )));
+                }
+                let new_disk_storage = OnDiskStorage::new(new_path.clone());
+                let old_account: Author =
+                    disk_storage.get(OWNER_ACCOUNT)?.value;
+                let new_account: Author =
+                    new_disk_storage.get(OWNER_ACCOUNT)?.value;
+                if old_account != new_account {
+                    return Err(Error::SecureStorageUnexpectedError(format!(
+                        "current: {}, new: {}",
+                        old_account, new_account
+                    )));
+                }
+                // Replace the old secure storage file with the new one.
+                fs::rename(&new_path, disk_storage.file_path())
+                    .map_err(|e| Error::InternalError(e.to_string()))?;
+                // Just replacing file should be sufficient. We create a new
+                // instance here in case we have any cached data
+                // within `OnDiskStorage` in future.
+                *disk_storage =
+                    OnDiskStorage::new(disk_storage.file_path().clone());
+                self.cached_safety_data = disk_storage.get(SAFETY_DATA)?.value;
+                Ok(())
+            }
+            _ => Err(Error::InternalError(
+                "unsupported secure storage type".to_string(),
+            )),
+        }
+    }
+
+    pub fn save_to_suffix(
+        &mut self, new_storage_suffix: &str,
+    ) -> Result<(), Error> {
+        match &self.internal_store {
+            Storage::OnDiskStorage(disk_storage) => {
+                let new_path =
+                    disk_storage.file_path().with_extension(new_storage_suffix);
+                fs::rename(disk_storage.file_path(), &new_path)
+                    .map_err(|e| Error::InternalError(e.to_string()))?;
+                Ok(())
+            }
+            _ => Err(Error::InternalError(
+                "unsupported secure storage type".to_string(),
+            )),
         }
     }
 

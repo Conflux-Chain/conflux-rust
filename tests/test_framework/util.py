@@ -277,50 +277,55 @@ def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="
             check_output([tg_config_gen, "frompub", "--initial-seed={}".format(initial_seed), pkfile], cwd=dirname)
     except CalledProcessError as e:
         print(e.output)
+    if start_index is None:
+        start_index = 0
+    for n in range(start_index, start_index + nodes):
+        set_node_pos_config(dirname, n, pos_round_time_ms=pos_round_time_ms)
+
+
+def set_node_pos_config(dirname, n, setup_keys=True, pos_round_time_ms=1000):
     waypoint_path = os.path.join(dirname, 'waypoint_config')
     genesis_path = os.path.join(dirname, 'genesis_file')
     waypoint = open(waypoint_path, 'r').readlines()[0].strip()
     private_keys_dir = os.path.join(dirname, "private_keys")
-    if start_index is None:
-        start_index = 0
-    for n in range(start_index, start_index + nodes):
-        datadir = get_datadir_path(dirname, n)
-        if not os.path.isdir(datadir):
-            os.makedirs(datadir)
-        net_config_dir = os.path.join(datadir, 'blockchain_data', 'net_config')
-        os.makedirs(net_config_dir, exist_ok = True)
-        os.makedirs(os.path.join(datadir, 'pos-ledger-db'), exist_ok = True)
-        validator_config = {}
-        validator_config['base'] = {
-            'data_dir': os.path.join(datadir, 'pos-ledger-db'),
-            'role': 'validator',
-            'waypoint': {
-                'from_config': waypoint,
+    datadir = get_datadir_path(dirname, n)
+    if not os.path.isdir(datadir):
+        os.makedirs(datadir)
+    net_config_dir = os.path.join(datadir, 'blockchain_data', 'net_config')
+    os.makedirs(net_config_dir, exist_ok = True)
+    os.makedirs(os.path.join(datadir, 'pos_db'), exist_ok = True)
+    validator_config = {}
+    validator_config['base'] = {
+        'data_dir': os.path.join(datadir, 'pos_db'),
+        'role': 'validator',
+        'waypoint': {
+            'from_config': waypoint,
+        }
+    }
+    validator_config['execution'] = {
+        'genesis_file_location': genesis_path,
+    }
+    validator_config['storage'] = {
+        'dir': os.path.join(datadir, 'pos_db', 'db'),
+    }
+    validator_config['consensus'] = {
+        'safety_rules': {
+            'service': {
+                'type': "local",
             }
-        }
-        validator_config['execution'] = {
-            'genesis_file_location': genesis_path,
-        }
-        validator_config['storage'] = {
-            'dir': os.path.join(datadir, 'pos-ledger-db', 'db'),
-        }
-        validator_config['consensus'] = {
-            'safety_rules': {
-                'service': {
-                    'type': "local",
-                }
-            },
-            'round_initial_timeout_ms': pos_round_time_ms,
-        }
-        validator_config['logger'] = {
-            'level': "TRACE",
-            'file': os.path.join(datadir, "pos.log")
-        }
-        validator_config['mempool'] = {
-            "shared_mempool_tick_interval_ms": 200,
-        }
-        with open(os.path.join(datadir, 'validator_full_node.yaml'), 'w') as f:
-            f.write(yaml.dump(validator_config, default_flow_style=False))
+        },
+        'round_initial_timeout_ms': pos_round_time_ms,
+    }
+    validator_config['logger'] = {
+        'level': "TRACE",
+        'file': os.path.join(datadir, "pos.log")
+    }
+    validator_config['mempool'] = {
+        "shared_mempool_tick_interval_ms": 200,
+    }
+    with open(os.path.join(datadir, 'validator_full_node.yaml'), 'w') as f:
+        f.write(yaml.dump(validator_config, default_flow_style=False))
+    if setup_keys:
         shutil.copyfile(os.path.join(private_keys_dir, str(n)), os.path.join(net_config_dir, 'pos_key'))
         shutil.copyfile(os.path.join(private_keys_dir, "pow_sk"+str(n)), os.path.join(datadir, 'pow_sk'))
 

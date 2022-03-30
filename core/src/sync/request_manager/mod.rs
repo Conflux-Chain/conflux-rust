@@ -85,10 +85,16 @@ lazy_static! {
             "request_tx_from_inflight_pending_pool"
         );
 
-    /// Delay is increased by 1 second each time, so it costs at least 90*91/2 = 4095s to reach
+    /// Delay is increased by 1 second each time, so it costs at least 600*601/2 (about 50h) to reach
     /// this upper bound. And requests will be discarded after reaching this upper bound.
+    ///
+    /// This upper bound is set so that a block should have been before the current checkpoint
+    /// in our experience, so it will not be referred to by a new block and will likely not
+    /// affect the sync process.
+    /// TODO: We may want to decrease this dynamically in case some active attackers are
+    /// sending non-existent hashes to better limit the resource exhaustion.
     static ref DEFAULT_REQUEST_DELAY_UPPER_BOUND: Duration =
-        Duration::from_secs(90);
+        Duration::from_secs(600);
     static ref DEFAULT_REQUEST_BATCH_BUCKET_SIZE: Duration =
         Duration::from_secs(2);
 }

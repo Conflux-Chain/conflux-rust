@@ -19,7 +19,7 @@ use crate::rpc::{
         Transaction as RpcTransaction, TxPoolPendingNonceRange, TxPoolStatus,
         TxWithPoolInfo,
     },
-    RpcResult,
+    RpcErrorKind, RpcResult,
 };
 
 use bigdecimal::BigDecimal;
@@ -205,7 +205,7 @@ impl RpcImpl {
         let consensus_graph = self.consensus_graph();
         info!("RPC Request: cfx_gasPrice()");
         Ok(consensus_graph
-            .gas_price()
+            .gas_price(Space::Native)
             .unwrap_or(cfxcore::consensus_parameters::ONE_GDRIP_IN_DRIP.into())
             .into())
     }
@@ -778,6 +778,29 @@ impl RpcImpl {
         self.pos_handler.stop_election().map_err(|e| {
             warn!("stop_election: err={:?}", e);
             RpcError::internal_error().into()
+        })
+    }
+
+    pub fn pos_start_voting(&self, initialize: bool) -> RpcResult<()> {
+        info!("RPC Request: pos_start_voting, initialize={}", initialize);
+        self.pos_handler.start_voting(initialize).map_err(|e| {
+            warn!("start_voting: err={:?}", e);
+            RpcErrorKind::Custom(e.to_string()).into()
+        })
+    }
+
+    pub fn pos_stop_voting(&self) -> RpcResult<()> {
+        info!("RPC Request: pos_stop_voting");
+        self.pos_handler.stop_voting().map_err(|e| {
+            warn!("stop_voting: err={:?}", e);
+            RpcErrorKind::Custom(e.to_string()).into()
+        })
+    }
+
+    pub fn pos_voting_status(&self) -> RpcResult<bool> {
+        self.pos_handler.voting_status().map_err(|e| {
+            warn!("voting_status: err={:?}", e);
+            RpcErrorKind::Custom(e.to_string()).into()
         })
     }
 

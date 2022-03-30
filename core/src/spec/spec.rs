@@ -138,4 +138,8 @@ impl CommonParams {
     pub fn spec(&self, number: BlockNumber) -> vm::Spec {
         vm::Spec::new_spec_from_common_params(&self, number)
     }
+
+    pub fn can_pack_evm_transaction(&self, height: BlockHeight) -> bool {
+        height % self.evm_transaction_block_ratio == 0
+    }
 }

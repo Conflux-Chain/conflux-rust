@@ -46,7 +46,7 @@ fn main() -> Result<(), Error> {
     println!("Setup node 1 ...");
     let state_manager =
         new_state_manager(test_dir.as_path().to_str().unwrap())?;
-    let storage_manager = state_manager.get_storage_manager();
+    let storage_manager = state_manager.get_storage_manager_arc();
     let snapshot_db_manager = state_manager
         .get_storage_manager()
         .get_snapshot_manager()

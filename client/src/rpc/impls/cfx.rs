@@ -1056,14 +1056,17 @@ impl RpcImpl {
 
         // If max_limit is set, the value in `filter` will be modified to
         // satisfy this limitation to avoid loading too many blocks
-        // TODO Should the response indicate that the filter is modified?
         if let Some(max_limit) = self.config.get_logs_filter_max_limit {
             if filter.limit.is_none() || filter.limit.unwrap() > max_limit {
-                filter.limit = Some(max_limit);
+                // Use `max_limit + 1` so that we can detect when the query
+                // results in more than `max_limit` logs.
+                // Note: it is possible that processing `max_limit + 1` takes
+                // much more time than `max_limit`, however, this is rare.
+                filter.limit = Some(max_limit + 1);
             }
         }
 
-        Ok(consensus_graph
+        let logs = consensus_graph
             .logs(filter)?
             .iter()
             .cloned()
@@ -1073,7 +1076,16 @@ impl RpcImpl {
                     *self.sync.network.get_network_type(),
                 )
             })
-            .collect::<Result<_, _>>()?)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // If the results does not fit into `max_limit`, report an error
+        if let Some(max_limit) = self.config.get_logs_filter_max_limit {
+            if logs.len() > max_limit {
+                bail!(invalid_params("filter", format!("This query results in too many logs, please set filter.limit to {} or lower", max_limit)));
+            }
+        }
+
+        Ok(logs)
     }
 
     fn get_block_reward_info(
@@ -1567,16 +1579,6 @@ impl RpcImpl {
 
         Ok(Some(epoch_receipts))
     }
-
-    fn opened_method_groups(&self) -> RpcResult<Vec<String>> {
-        Ok(self
-            .config
-            .public_rpc_apis
-            .list_apis()
-            .into_iter()
-            .map(|item| format!("{}", item))
-            .collect::<Vec<String>>())
-    }
 }
 
 #[allow(dead_code)]
@@ -1651,7 +1653,6 @@ impl Cfx for CfxHandler {
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
             fn storage_root(&self, address: RpcAddress, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
-            fn opened_method_groups(&self) -> JsonRpcResult<Vec<String>>;
         }
     }
 }
@@ -1687,6 +1688,9 @@ impl TestRpc for TestRpcImpl {
                 &self, pos_account: AccountAddress, increased_voting_power: U64,
             ) -> JsonRpcResult<()>;
             fn pos_stop_election(&self) -> JsonRpcResult<Option<u64>>;
+            fn pos_start_voting(&self, initialize: bool) -> JsonRpcResult<()>;
+            fn pos_stop_voting(&self) -> JsonRpcResult<()>;
+            fn pos_voting_status(&self) -> JsonRpcResult<bool>;
             fn pos_start(&self) -> JsonRpcResult<()>;
             fn pos_force_vote_proposal(&self, block_id: H256) -> JsonRpcResult<()>;
             fn pos_force_propose(&self, round: U64, parent_block_id: H256, payload: Vec<TransactionPayload>) -> JsonRpcResult<()>;

@@ -298,17 +298,27 @@ impl EthTrace for EthTraceHandler {
         // TODO(lpl): Use `TransactionExecTraces::filter_trace_pairs` to avoid
         // pairing twice.
         let primitive_filter = filter.into_primitive()?;
+
         let traces =
             match self.trace_handler.filter_traces_impl(primitive_filter)? {
                 None => return Ok(None),
                 Some(traces) => traces,
             };
+
         let mut eth_traces: Vec<EthLocalizedTrace> = Vec::new();
         let mut stack_index = Vec::new();
+        let mut sublen_stack = Vec::new();
+
         for trace in traces {
             match &trace.action {
                 RpcAction::Call(_) | RpcAction::Create(_) => {
+                    if let Some(parent_subtraces) = sublen_stack.last_mut() {
+                        *parent_subtraces += 1;
+                    }
+
+                    sublen_stack.push(0);
                     stack_index.push(eth_traces.len());
+
                     eth_traces.push(trace.try_into().map_err(|e| {
                         error!("eth trace conversion error: {:?}", e);
                         JsonRpcError::internal_error()
@@ -318,15 +328,21 @@ impl EthTrace for EthTraceHandler {
                     let index = stack_index
                         .pop()
                         .ok_or(JsonRpcError::internal_error())?;
+
                     eth_traces[index].set_result(trace.action)?;
+
+                    eth_traces[index].subtraces =
+                        sublen_stack.pop().expect("stack_index matches");
                 }
                 RpcAction::InternalTransferAction(_) => {}
             }
         }
+
         if !stack_index.is_empty() {
             error!("eth::filter_traces: actions left unmatched");
             bail!(JsonRpcError::internal_error());
         }
+
         Ok(Some(eth_traces))
     }
 

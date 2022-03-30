@@ -43,4 +43,19 @@ pub trait TSafetyRules {
     fn sign_timeout(
         &mut self, timeout: &Timeout,
     ) -> Result<ConsensusSignature, Error>;
+
+    /// Allow the safety rule to start voting with saved secure data from
+    /// another node.
+    fn start_voting(&mut self, _initialize: bool) -> Result<(), Error> {
+        Err(Error::SecureStorageUnexpectedError(
+            "unsupported safety rule type".to_string(),
+        ))
+    }
+
+    /// Stop the safety rule from voting and save secure data.
+    fn stop_voting(&mut self) -> Result<(), Error> {
+        Err(Error::SecureStorageUnexpectedError(
+            "unsupported safety rule type".to_string(),
+        ))
+    }
 }

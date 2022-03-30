@@ -6,7 +6,6 @@
 pub mod deref_plus_impl_or_borrow_self;
 #[macro_use]
 pub mod tuple;
-pub mod arc_ext;
 pub mod guarded_value;
 pub mod wrap;
 
