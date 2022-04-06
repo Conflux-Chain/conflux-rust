@@ -11,9 +11,5 @@ build = "build.rs"
 target_info = "0.1"
 
 [build-dependencies]
-vergen = "0.1"
-rustc_version = "0.2"
-toml = "0.4"
-
-[features]
-final = []
+anyhow = "1.0"
+vergen = "7.0.0"
