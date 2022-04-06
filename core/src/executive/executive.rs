@@ -1016,15 +1016,22 @@ impl<
         let sender = tx.sender();
         let balance = self.state.balance(&sender)?;
         // Give the sender a sufficient balance.
-        let needed_balance = U256::MAX / U256::from(2);
+        let needed_balance = U256::MAX / U256::from(2u64);
         self.state.set_nonce(&sender, &tx.nonce())?;
         if balance < needed_balance {
+            let balance_inc = needed_balance - balance;
             self.state.add_balance(
                 &sender,
-                &(needed_balance - balance),
+                &balance_inc,
                 CleanupMode::NoEmpty,
                 self.spec.account_start_nonce,
             )?;
+            // Make sure statistics are also correct and will not violate any
+            // underlying assumptions.
+            self.state.add_total_issued(balance_inc);
+            if tx.sender().space == Space::Ethereum {
+                self.state.add_total_evm_tokens(balance_inc);
+            }
         }
         let options = TransactOptions::virtual_call();
         self.transact(tx, options)
