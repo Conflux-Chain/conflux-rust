@@ -22,8 +22,9 @@
 //!
 //! Basic storing and retrieval.
 //!
-//! # use cfx_storage::Slab;
-//! let mut slab = Slab::with_capacity(10);
+//! ```
+//! use cfx_storage::Slab;
+//! let mut slab: Slab<&str> = Slab::with_capacity(10);
 //!
 //! let hello = slab.insert("hello").unwrap();
 //! let world = slab.insert("world").unwrap();
@@ -31,33 +32,38 @@
 //! assert_eq!(slab[hello], "hello");
 //! assert_eq!(slab[world], "world");
 //!
-//! slab[world] = "earth";
-//! assert_eq!(slab[world], "earth");
+//! // Cannot IndexMut
+//! // slab[world] = "earth";
+//! // assert_eq!(slab[world], "earth");
+//! ```
 //!
 //! Sometimes it is useful to be able to associate the key with the value being
 //! inserted in the slab. This can be done with the `vacant_entry` API as such:
 //!
-//! # use cfx_storage::Slab;
-//! let mut slab = Slab::with_capacity(10);
+//! ```
+//! use cfx_storage::Slab;
+//! let mut slab: Slab<(usize, &str)> = Slab::with_capacity(10);
 //!
 //! let hello = {
-//!     let entry = slab.vacant_entry();
+//!     let entry = slab.vacant_entry().unwrap();
 //!     let key = entry.key();
-//! // this line prevents buggy doc test from triggering.
+//!     // this line prevents buggy doc test from triggering.
 //!     entry.insert((key, "hello"));
 //!     key
 //! };
 //!
 //! assert_eq!(hello, slab[hello].0);
 //! assert_eq!("hello", slab[hello].1);
+//! ```
 //!
 //! It is generally a good idea to specify the desired capacity of a slab at
 //! creation time. Note that `Slab` will grow the internal capacity when
 //! attempting to insert a new value once the existing capacity has been
 //! reached. To avoid this, add a check.
 //!
-//! # use cfx_storage::Slab;
-//! let mut slab = Slab::with_capacity(1024);
+//! ```
+//! use cfx_storage::Slab;
+//! let mut slab: Slab<&str> = Slab::with_capacity(1024);
 //!
 //! // ... use the slab
 //!
@@ -66,6 +72,7 @@
 //! }
 //!
 //! slab.insert("the slab is not at capacity yet");
+//! ```
 //!
 //! # Capacity and reallocation
 //!
@@ -606,6 +613,7 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     ///
     /// # Examples
     ///
+    /// ```
     /// # use cfx_storage::Slab;
     /// let mut slab = Slab::with_capacity(10);
     ///
@@ -620,6 +628,7 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     ///
     /// assert_eq!(slab[key1], 2);
     /// assert_eq!(slab[key2], 1);
+    /// ```
     pub fn iter_mut(&mut self) -> IterMut<T, E> {
         IterMut {
             entries: self.entries
@@ -660,14 +669,16 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     ///
     /// # Examples
     ///
-    /// # use cfx_storage::Slab;
-    /// let mut slab = Slab::with_capacity(10);
-    /// let key = slab.insert("hello");
+    /// ```
+    /// use cfx_storage::Slab;
+    /// let mut slab: Slab<&str> = Slab::with_capacity(10);
+    /// let key = slab.insert("hello").unwrap();
     ///
     /// *slab.get_mut(key).unwrap() = "world";
     ///
     /// assert_eq!(slab[key], "world");
     /// assert_eq!(slab.get_mut(123), None);
+    /// ```
     // This method is unsafe because user may pass the same key to get_mut at
     // the same time.
     pub fn get_mut(&mut self, key: usize) -> Option<&mut T> {
@@ -705,9 +716,10 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     ///
     /// # Examples
     ///
-    /// # use cfx_storage::Slab;
-    /// let mut slab = Slab::with_capacity(10);
-    /// let key = slab.insert(2);
+    /// ```
+    /// use cfx_storage::Slab;
+    /// let mut slab: Slab<u32> = Slab::with_capacity(10);
+    /// let key = slab.insert(2).unwrap();
     ///
     /// unsafe {
     ///     let val = slab.get_unchecked_mut(key);
@@ -715,6 +727,7 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// }
     ///
     /// assert_eq!(slab[key], 13);
+    /// ```
     pub unsafe fn get_unchecked_mut(&mut self, key: usize) -> &mut T {
         self.entries.get_unchecked_mut(key).get_occupied_mut()
     }
@@ -731,11 +744,12 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// Panics if the number of elements in the vector overflows a `usize`.
     ///
     /// # Examples
-    ///
-    /// # use cfx_storage::Slab;
-    /// let mut slab = Slab::with_capacity(10);
-    /// let key = slab.insert("hello");
+    /// ```
+    /// use cfx_storage::Slab;
+    /// let mut slab: Slab<&str> = Slab::with_capacity(10);
+    /// let key = slab.insert("hello").unwrap();
     /// assert_eq!(slab[key], "hello");
+    /// ```
     pub fn insert<U>(&self, val: U) -> Result<usize>
     where E: WrappedCreateFrom<U, E> {
         let key = self.allocate()?;
@@ -783,19 +797,21 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     ///
     /// # Examples
     ///
-    /// # use cfx_storage::Slab;
-    /// let mut slab = Slab::with_capacity(10);
+    /// ```
+    /// use cfx_storage::Slab;
+    /// let mut slab: Slab<(usize, &str)> = Slab::with_capacity(10);
     ///
     /// let hello = {
     ///     let entry = slab.vacant_entry();
     ///     let key = entry.key();
-    /// // this line prevents buggy doc test from triggering.
+    ///     // this line prevents buggy doc test from triggering.
     ///     entry.insert((key, "hello"));
     ///     key
     /// };
     ///
     /// assert_eq!(hello, slab[hello].0);
     /// assert_eq!("hello", slab[hello].1);
+    /// ```
     pub fn vacant_entry(&self) -> Result<VacantEntry<T, E>> {
         Ok(VacantEntry {
             key: self.allocate()?,
