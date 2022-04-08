@@ -616,10 +616,10 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     ///
     /// ```
     /// # use cfx_storage::Slab;
-    /// let mut slab = Slab::with_capacity(10);
+    /// let mut slab: Slab<usize> = Slab::with_capacity(10);
     ///
-    /// let key1 = slab.insert(0);
-    /// let key2 = slab.insert(1);
+    /// let key1 = slab.insert(0).unwrap();
+    /// let key2 = slab.insert(1).unwrap();
     ///
     /// for (key, val) in slab.iter_mut() {
     ///     if key == key1 {
@@ -803,7 +803,7 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// let mut slab: Slab<(usize, &str)> = Slab::with_capacity(10);
     ///
     /// let hello = {
-    ///     let entry = slab.vacant_entry();
+    ///     let entry = slab.vacant_entry().unwrap();
     ///     let key = entry.key();
     ///     // this line prevents buggy doc test from triggering.
     ///     entry.insert((key, "hello"));
