@@ -147,6 +147,7 @@ build_config! {
         (tanzanite_transition_height, (u64), TANZANITE_HEIGHT)
         (hydra_transition_number, (Option<u64>), Some(92060600))
         (hydra_transition_height, (Option<u64>), Some(36935000))
+        (dao_vote_transition_number, (Option<u64>), None)
         (cip43_init_end_number, (Option<u64>), Some(92406200))
         (cip78_patch_transition_number,(Option<u64>),None)
         (cip90_transition_height,(Option<u64>),None)
@@ -1121,6 +1122,10 @@ impl Configuration {
         params.transition_numbers.cip43a = self
             .raw_conf
             .hydra_transition_number
+            .unwrap_or(default_transition_time);
+        params.transition_numbers.cip94 = self
+            .raw_conf
+            .dao_vote_transition_number
             .unwrap_or(default_transition_time);
         if self.is_test_or_dev_mode() {
             params.transition_numbers.cip43b =

@@ -5,6 +5,8 @@
 #[macro_use]
 extern crate lazy_static;
 
+use cfx_types::U256;
+
 pub mod internal_contract_addresses;
 
 pub mod consensus {
@@ -387,3 +389,8 @@ pub mod light {
 }
 
 pub const WORKER_COMPUTATION_PARALLELISM: usize = 8;
+
+pub struct DaoControlParameters {
+    pub pow_base_reward: U256,
+    pub pos_annual_interest_rate: U256,
+}

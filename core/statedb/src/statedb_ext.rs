@@ -84,6 +84,12 @@ pub trait StateDbExt {
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>;
 
+    fn get_pow_base_reward(&self) -> Result<U256>;
+    fn set_pow_base_reward(
+        &mut self, reward: U256,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> Result<()>;
+
     // This function is used to check whether the db has been initialized when
     // create a state. So we can know the loaded `None` represents "not
     // initialized" or "zero value".
@@ -102,6 +108,7 @@ pub const DISTRIBUTABLE_POS_INTEREST_KEY: &'static [u8] =
     b"distributable_pos_interest";
 pub const LAST_DISTRIBUTE_BLOCK_KEY: &'static [u8] = b"last_distribute_block";
 pub const TOTAL_EVM_TOKENS_KEY: &'static [u8] = b"total_evm_tokens";
+pub const POW_BASE_REWARD_KEY: &'static [u8] = b"pow_base_reward";
 
 impl<StateDbStorage: StorageStateTrait> StateDbExt
     for StateDbGeneric<StateDbStorage>
@@ -418,6 +425,30 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         )
     }
 
+    fn get_pow_base_reward(&self) -> Result<U256> {
+        let pow_base_reward_key = StorageKey::new_storage_key(
+            &PARAMS_CONTROL_CONTRACT_ADDRESS,
+            POW_BASE_REWARD_KEY,
+        )
+        .with_native_space();
+        let pow_base_reward_opt = self.get::<U256>(pow_base_reward_key)?;
+        // The default value will not be used
+        Ok(pow_base_reward_opt.unwrap_or_default())
+    }
+
+    fn set_pow_base_reward(
+        &mut self, reward: U256,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> Result<()>
+    {
+        let pow_base_reward_key = StorageKey::new_storage_key(
+            &PARAMS_CONTROL_CONTRACT_ADDRESS,
+            POW_BASE_REWARD_KEY,
+        )
+        .with_native_space();
+        self.set::<U256>(pow_base_reward_key, &reward, debug_record)
+    }
+
     fn is_initialized(&self) -> Result<bool> {
         let interest_rate_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
@@ -431,7 +462,14 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
 
 use super::{Result, StateDbGeneric};
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
-use cfx_parameters::internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS;
+use cfx_parameters::{
+    internal_contract_addresses::{
+        PARAMS_CONTROL_CONTRACT_ADDRESS,
+        STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+    },
+    staking::INITIAL_INTEREST_RATE_PER_BLOCK,
+    DaoControlParameters,
+};
 use cfx_storage::StorageStateTrait;
 use cfx_types::{AddressWithSpace, H256, U256};
 use primitives::{

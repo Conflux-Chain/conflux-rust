@@ -149,6 +149,8 @@ pub struct Spec {
     pub cip78b: bool,
     /// CIP-90: A Space that Fully EVM Compatible
     pub cip90: bool,
+    /// CIP-94: On-chain Parameter DAO Vote
+    pub cip94: bool,
 }
 
 /// Wasm cost table
@@ -282,6 +284,7 @@ impl Spec {
             cip90: false,
             cip78a: false,
             cip78b: false,
+            cip94: false,
             evm_gas_ratio: 2,
         }
     }
@@ -299,6 +302,7 @@ impl Spec {
         spec.cip90 = number >= params.transition_numbers.cip90b;
         spec.cip78a = number >= params.transition_numbers.cip78a;
         spec.cip78b = number >= params.transition_numbers.cip78b;
+        spec.cip94 = number >= params.transition_numbers.cip94;
         spec
     }
 

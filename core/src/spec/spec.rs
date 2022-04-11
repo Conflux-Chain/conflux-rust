@@ -73,6 +73,8 @@ pub struct TransitionsBlockNumber {
     pub cip90b: BlockNumber,
     /// CIP92: Enable Blake2F builtin function
     pub cip92: BlockNumber,
+    /// CIP-94: On-chain Parameter DAO Vote
+    pub cip94: BlockNumber,
 }
 
 #[derive(Default, Debug, Clone)]

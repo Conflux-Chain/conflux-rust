@@ -6,6 +6,7 @@ mod admin;
 mod context;
 pub mod cross_space;
 mod future;
+mod params_control;
 #[allow(unused)]
 mod pos;
 mod sponsor;
@@ -53,7 +54,11 @@ use super::{
     function::SimpleExecutionTrait, InternalContractTrait,
     SolidityFunctionTrait,
 };
-use crate::{evm::Spec, spec::CommonParams};
+use crate::{
+    evm::Spec,
+    executive::internal_contract::contracts::params_control::ParamsControl,
+    spec::CommonParams,
+};
 use cfx_types::{Address, AddressWithSpace, Space};
 use primitives::BlockNumber;
 use std::collections::{BTreeMap, HashMap};
@@ -218,7 +223,7 @@ pub fn all_internal_contracts() -> Vec<Box<dyn InternalContractTrait>> {
         Box::new(Context::instance()),
         Box::new(PoSRegister::instance()),
         Box::new(CrossSpaceCall::instance()),
-        Box::new(future::Reserved7::instance()),
+        Box::new(ParamsControl::instance()),
         Box::new(future::Reserved8::instance()),
         Box::new(future::Reserved9::instance()),
         Box::new(future::Reserved10::instance()),

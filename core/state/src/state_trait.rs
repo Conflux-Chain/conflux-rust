@@ -50,6 +50,8 @@ pub trait StateOpsTrait {
 
     fn secondary_reward(&self) -> U256;
 
+    fn pow_base_reward(&self) -> U256;
+
     /// Maintain `total_issued_tokens`.s
     fn add_total_issued(&mut self, v: U256);
 
@@ -259,6 +261,12 @@ pub trait StateOpsTrait {
     ) -> DbResult<()>;
 
     fn pos_locked_staking(&self, address: &Address) -> DbResult<U256>;
+
+    fn cast_vote(
+        &self, address: &Address, votes: Vec<(u8, u8, U256)>,
+    ) -> DbResult<()>;
+
+    fn read_vote(&self, address: &Address) -> DbResult<Vec<u8>>;
 }
 
 pub trait CheckpointTrait: StateOpsTrait {

@@ -335,6 +335,10 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         secondary_reward
     }
 
+    fn pow_base_reward(&self) -> U256 {
+        self.db.get_pow_base_reward().expect("no db error")
+    }
+
     /// Maintain `total_issued_tokens`.
     fn add_total_issued(&mut self, v: U256) {
         assert!(self.world_statistics_checkpoints.get_mut().is_empty());
@@ -388,9 +392,9 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
 
         // The `interest_amount` exactly equals to the floor of
         // pos_amount * 4% / blocks_per_year / sqrt(pos_amount/total_issued)
-        let interest_amount =
-            sqrt_u256(total_circulating_tokens * total_pos_staking_tokens)
-                / (BLOCKS_PER_YEAR * INVERSE_INTEREST_RATE);
+        let interest_amount = sqrt_u256(total_circulating_tokens * total_pos_staking_tokens)
+                // TODO: Check if this is always compatible with `INVERSE_INTEREST_RATE`.
+                * self.world_statistics.interest_rate_per_block;
         self.world_statistics.distributable_pos_interest += interest_amount;
 
         Ok(())
@@ -1129,6 +1133,14 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
             *POS_VOTE_PRICE * new_unlocked;
         Ok(())
     }
+
+    fn cast_vote(
+        &self, address: &Address, votes: Vec<(u8, u8, U256)>,
+    ) -> DbResult<()> {
+        todo!()
+    }
+
+    fn read_vote(&self, address: &Address) -> DbResult<Vec<u8>> { todo!() }
 }
 
 impl<StateDbStorage: StorageStateTrait> CheckpointTrait
