@@ -30,8 +30,8 @@ use cfxcore::{
     rpc_errors::{
         invalid_params_check, Error as CfxRpcError, Result as CfxRpcResult,
     },
-    vm, ConsensusGraph, SharedConsensusGraph, SharedSynchronizationService,
-    SharedTransactionPool,
+    vm, ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
+    SharedSynchronizationService, SharedTransactionPool,
 };
 use clap::crate_version;
 use jsonrpc_core::{Error as RpcError, Result as RpcResult};
@@ -122,10 +122,19 @@ fn block_tx_by_index(
 
 impl EthHandler {
     fn exec_transaction(
-        &self, request: CallRequest, epoch: Option<BlockNumber>,
+        &self, request: CallRequest, block_number_or_hash: Option<BlockNumber>,
     ) -> CfxRpcResult<ExecutionOutcome> {
         let consensus_graph = self.consensus_graph();
-        let epoch = epoch.unwrap_or_default().try_into()?;
+
+        let epoch = match block_number_or_hash.unwrap_or_default() {
+            BlockNumber::Hash { hash, .. } => {
+                match consensus_graph.get_block_epoch_number(&hash) {
+                    Some(e) => EpochNumber::Number(e),
+                    None => bail!("Block {:?} not found", hash),
+                }
+            }
+            epoch => epoch.try_into()?,
+        };
 
         let chain_id = self.consensus.best_chain_id();
         let signed_tx = sign_call(chain_id.in_evm_space(), request)?;
@@ -646,16 +655,15 @@ impl Eth for EthHandler {
     }
 
     fn call(
-        &self, request: CallRequest, block_num: Option<BlockNumber>,
+        &self, request: CallRequest, block_number_or_hash: Option<BlockNumber>,
     ) -> jsonrpc_core::Result<Bytes> {
         info!(
             "RPC Request: eth_call request={:?}, block_num={:?}",
-            request, block_num
+            request, block_number_or_hash
         );
         // TODO: EVM core: Check the EVM error message. To make the
         // assert_error_eq test case in solidity project compatible.
-        let epoch = block_num.map(Into::into);
-        match self.exec_transaction(request, epoch)? {
+        match self.exec_transaction(request, block_number_or_hash)? {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(expected, got)) => {
                 bail!(call_execution_error(
                     "Transaction can not be executed".into(),
@@ -692,14 +700,14 @@ impl Eth for EthHandler {
     }
 
     fn estimate_gas(
-        &self, request: CallRequest, block_num: Option<BlockNumber>,
+        &self, request: CallRequest, block_number_or_hash: Option<BlockNumber>,
     ) -> jsonrpc_core::Result<U256> {
         info!(
             "RPC Request: eth_estimateGas request={:?}, block_num={:?}",
-            request, block_num
+            request, block_number_or_hash
         );
         // TODO: EVM core: same as call
-        let executed = match self.exec_transaction(request, block_num)? {
+        let executed = match self.exec_transaction(request, block_number_or_hash)? {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(expected, got)) => {
                 bail!(call_execution_error(
                     "Can not estimate: transaction can not be executed".into(),
