@@ -396,7 +396,11 @@ class CrossSpaceLogFilteringTest(Web3Base):
         res2 = self.nodes[0].eth_call(call_request, { "blockHash": block_e })
         assert_equal(res1, res2)
 
+        # should reject nonexistent block
         assert_raises_rpc_error(None, None, self.nodes[0].eth_call, call_request, { "blockHash": "0x0123456789012345678901234567890123456789012345678901234567890123" })
+
+        # should reject non-pivot block
+        assert_raises_rpc_error(None, None, self.nodes[0].eth_call, call_request, { "blockHash": block_d })
 
         self.log.info("Pass")
 

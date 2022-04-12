@@ -129,7 +129,19 @@ impl EthHandler {
         let epoch = match block_number_or_hash.unwrap_or_default() {
             BlockNumber::Hash { hash, .. } => {
                 match consensus_graph.get_block_epoch_number(&hash) {
-                    Some(e) => EpochNumber::Number(e),
+                    Some(e) => {
+                        // do not expose non-pivot blocks in eth RPC
+                        let pivot = consensus_graph
+                            .get_block_hashes_by_epoch(EpochNumber::Number(e))?
+                            .last()
+                            .cloned();
+
+                        if Some(hash) != pivot {
+                            bail!("Block {:?} not found", hash);
+                        }
+
+                        EpochNumber::Number(e)
+                    }
                     None => bail!("Block {:?} not found", hash),
                 }
             }
