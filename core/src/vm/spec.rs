@@ -151,6 +151,7 @@ pub struct Spec {
     pub cip90: bool,
     /// CIP-94: On-chain Parameter DAO Vote
     pub cip94: bool,
+    pub cip94_activation_block_number: u64,
 }
 
 /// Wasm cost table
@@ -286,6 +287,7 @@ impl Spec {
             cip78b: false,
             cip94: false,
             evm_gas_ratio: 2,
+            cip94_activation_block_number: u64::MAX,
         }
     }
 
@@ -303,6 +305,7 @@ impl Spec {
         spec.cip78a = number >= params.transition_numbers.cip78a;
         spec.cip78b = number >= params.transition_numbers.cip78b;
         spec.cip94 = number >= params.transition_numbers.cip94;
+        spec.cip94_activation_block_number = params.transition_numbers.cip94;
         spec
     }
 

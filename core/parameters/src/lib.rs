@@ -212,6 +212,10 @@ pub mod block {
     // space in the cross space call. Setting it to N means that only 1/N of gas
     // left can be passed to the cross space call.
     pub const CROSS_SPACE_GAS_RATIO: u64 = 10;
+    // The number of blocks to settle a DAO parameter vote.
+    // It's set to two months now.
+    pub const DAO_PARAMETER_VOTE_PERIOD: u64 =
+        super::staking::BLOCKS_PER_DAY * 30 * 2;
 }
 
 pub mod staking {

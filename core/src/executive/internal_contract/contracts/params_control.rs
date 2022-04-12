@@ -40,7 +40,7 @@ impl SimpleExecutionTrait for CastVote {
         context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
-        todo!()
+        cast_vote(params.sender, inputs.0, inputs.1, params, context)
     }
 }
 
@@ -52,18 +52,18 @@ impl_function_type!(ReadVote, "query_with_default_gas");
 
 impl SimpleExecutionTrait for ReadVote {
     fn execute_inner(
-        &self, input: Address, _params: &ActionParams,
+        &self, input: Address, params: &ActionParams,
         context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<Vec<Vote>>
     {
-        todo!()
+        read_vote(input, params, context)
     }
 }
 
 pub struct Vote {
-    index: u16,
-    opt_index: u16,
-    votes: U256,
+    pub index: u16,
+    pub opt_index: u16,
+    pub votes: U256,
 }
 
 // FIXME(lpl): Better ABI Serde for struct.

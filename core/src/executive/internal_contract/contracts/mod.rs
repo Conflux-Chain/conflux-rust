@@ -6,7 +6,7 @@ mod admin;
 mod context;
 pub mod cross_space;
 mod future;
-mod params_control;
+pub mod params_control;
 #[allow(unused)]
 mod pos;
 mod sponsor;
