@@ -40,4 +40,8 @@ contract CrossSpaceEventTestEVMSide {
             emit TestEvent(n);
         }
     }
+
+    function getBlockNumber() external view returns (uint256) {
+        return block.number;
+    }
 }

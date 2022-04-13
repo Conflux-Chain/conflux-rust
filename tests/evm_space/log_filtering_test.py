@@ -385,6 +385,23 @@ class CrossSpaceLogFilteringTest(Web3Base):
         filter = { "fromBlock": "0x00", "toBlock": "0x10", "topics": [TEST_EVENT_TOPIC] }
         assert_raises_rpc_error(None, None, self.nodes[0].eth_getLogs, filter)
 
+        # check EIP-1898 support for eth_call: support both block number and block hash param
+        call_request = { "to": evmContractAddr, "data": "0x42cbb15c" } # keccak("getBlockNumber()") = 0x42cbb15c
+
+        res1 = self.nodes[0].eth_call(call_request, epoch_a)
+        res2 = self.nodes[0].eth_call(call_request, { "blockHash": block_a })
+        assert_equal(res1, res2)
+
+        res1 = self.nodes[0].eth_call(call_request, epoch_e)
+        res2 = self.nodes[0].eth_call(call_request, { "blockHash": block_e })
+        assert_equal(res1, res2)
+
+        # should reject nonexistent block
+        assert_raises_rpc_error(None, None, self.nodes[0].eth_call, call_request, { "blockHash": "0x0123456789012345678901234567890123456789012345678901234567890123" })
+
+        # should reject non-pivot block
+        assert_raises_rpc_error(None, None, self.nodes[0].eth_call, call_request, { "blockHash": block_d })
+
         self.log.info("Pass")
 
     def deploy_evm_space(self, bytecode_path):
