@@ -12,6 +12,10 @@ pub use self::{
     contracts::{cross_space, InternalContractMap},
     impls::{
         cross_space::{build_bloom_and_recover_phantom, PhantomTransaction},
+        params_control::{
+            entries as params_control_internal_entries, next_param_vote_count,
+            settle_vote_counts, AllParamsVoteCount, ParamVoteCount,
+        },
         pos::{entries as pos_internal_entries, IndexStatus},
         suicide,
     },

@@ -31,7 +31,7 @@ group_impl_is_active!(|spec: &Spec| spec.cip94, CastVote, ReadVote);
 make_solidity_function! {
     struct CastVote((u64, Vec<Vote>), "castVote(uint64, Votes[])");
 }
-// FIXME(lpl): What's gas?
+// FIXME(lpl): What's the gas cost?
 impl_function_type!(CastVote, "non_payable_write", gas: |spec: &Spec| spec.sstore_reset_gas);
 
 impl SimpleExecutionTrait for CastVote {
@@ -47,7 +47,7 @@ impl SimpleExecutionTrait for CastVote {
 make_solidity_function! {
     struct ReadVote(Address, "readVote(address)", Vec<Vote>);
 }
-// FIXME(lpl): What's gas?
+// FIXME(lpl): What's the gas cost?
 impl_function_type!(ReadVote, "query_with_default_gas");
 
 impl SimpleExecutionTrait for ReadVote {

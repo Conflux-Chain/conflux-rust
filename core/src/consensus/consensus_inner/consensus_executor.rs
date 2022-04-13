@@ -16,6 +16,7 @@ use crate::{
     executive::{
         internal_contract::{
             build_bloom_and_recover_phantom, impls::pos::decode_register_info,
+            next_param_vote_count, settle_vote_counts,
         },
         revert_reason_decode, ExecutionError, ExecutionOutcome, Executive,
         TransactOptions,
@@ -40,7 +41,7 @@ use crate::{
 use cfx_internal_common::{
     debug::*, EpochExecutionCommitment, StateRootWithAuxInfo,
 };
-use cfx_parameters::consensus::*;
+use cfx_parameters::{block::DAO_PARAMETER_VOTE_PERIOD, consensus::*};
 use cfx_state::{state_trait::*, CleanupMode};
 use cfx_statedb::{
     ErrorKind as DbErrorKind, Result as DbResult, StateDb, StateDbExt,
@@ -1042,6 +1043,21 @@ impl ConsensusExecutionHandler {
 
         let current_block_number =
             start_block_number + epoch_receipts.len() as u64 - 1;
+
+        // Update/initialize parameters before processing rewards.
+        {
+            if current_block_number
+                >= self.machine.params().transition_numbers.cip94
+                && current_block_number % DAO_PARAMETER_VOTE_PERIOD == 0
+            {
+                state
+                    .initialize_or_update_dao_voted_params(
+                        &next_param_vote_count(&state).expect("vm error"),
+                    )
+                    .expect("update params error");
+                settle_vote_counts(&mut state).expect("vm error");
+            }
+        }
 
         if let Some(reward_execution_info) = reward_execution_info {
             // Calculate the block reward for blocks inside the epoch

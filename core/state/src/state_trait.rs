@@ -262,10 +262,6 @@ pub trait StateOpsTrait {
 
     fn pos_locked_staking(&self, address: &Address) -> DbResult<U256>;
 
-    fn cast_vote(
-        &self, address: &Address, votes: Vec<(u8, u8, U256)>,
-    ) -> DbResult<()>;
-
     fn read_vote(&self, address: &Address) -> DbResult<Vec<u8>>;
 }
 

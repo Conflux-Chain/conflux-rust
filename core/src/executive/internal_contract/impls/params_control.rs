@@ -8,16 +8,20 @@ use crate::{
             contracts::params_control::Vote,
             impls::{
                 params_control::entries::{
-                    start_entry, storage_key_at_index, OPTION_INDEX_MAX,
-                    PARAMETER_INDEX_MAX, TOTAL_VOTES_ENTRIES,
+                    start_entry, storage_key_at_index, OPTION_DECREASE_INDEX,
+                    OPTION_INCREASE_INDEX, OPTION_INDEX_MAX,
+                    OPTION_UNCHANGE_INDEX, PARAMETER_INDEX_MAX,
+                    POS_REWARD_INTEREST_RATE_INDEX, POW_BASE_REWARD_INDEX,
+                    TOTAL_VOTES_ENTRIES,
                 },
                 staking::get_vote_power,
             },
+            params_control_internal_entries::SETTLED_TOTAL_VOTES_ENTRIES,
         },
         InternalRefContext,
     },
     observer::{AddressPocket, VmObserve},
-    state::cleanup_mode,
+    state::{cleanup_mode, State},
     vm::{self, ActionParams, Error, Spec},
 };
 use cfx_parameters::{
@@ -27,12 +31,10 @@ use cfx_parameters::{
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
-    Space, U256,
+    Space, U256, U512,
 };
+use std::convert::TryFrom;
 
-/// Implementation of `set_admin(address,address)`.
-/// The input should consist of 20 bytes `contract_address` + 20 bytes
-/// `new_admin_address`
 pub fn cast_vote(
     address: Address, version: u64, votes: Vec<Vote>, params: &ActionParams,
     context: &mut InternalRefContext,
@@ -110,10 +112,11 @@ pub fn cast_vote(
                     } else {
                         unreachable!("votes changed")
                     };
-                    context.set_storage(
-                        params,
+                    context.state.set_storage(
+                        &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
                         TOTAL_VOTES_ENTRIES[index][opt_index].to_vec(),
                         new_total_votes,
+                        *PARAMS_CONTROL_CONTRACT_ADDRESS,
                     );
                     context.set_storage(
                         params,
@@ -150,6 +153,114 @@ pub fn read_vote(
     Ok(votes_list)
 }
 
+/// If the vote counts are not initialized, all counts will be zero, and the
+/// parameters will be unchanged.
+pub fn next_param_vote_count(state: &State) -> vm::Result<AllParamsVoteCount> {
+    let pow_base_reward = ParamVoteCount {
+        unchange: state.storage_at(
+            &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
+            &SETTLED_TOTAL_VOTES_ENTRIES[POW_BASE_REWARD_INDEX as usize]
+                [OPTION_UNCHANGE_INDEX as usize],
+        )?,
+        increase: state.storage_at(
+            &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
+            &SETTLED_TOTAL_VOTES_ENTRIES[POW_BASE_REWARD_INDEX as usize]
+                [OPTION_INCREASE_INDEX as usize],
+        )?,
+        decrease: state.storage_at(
+            &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
+            &SETTLED_TOTAL_VOTES_ENTRIES[POW_BASE_REWARD_INDEX as usize]
+                [OPTION_DECREASE_INDEX as usize],
+        )?,
+    };
+    let pos_reward_interest = ParamVoteCount {
+        unchange: state.storage_at(
+            &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
+            &SETTLED_TOTAL_VOTES_ENTRIES
+                [POS_REWARD_INTEREST_RATE_INDEX as usize]
+                [OPTION_UNCHANGE_INDEX as usize],
+        )?,
+        increase: state.storage_at(
+            &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
+            &SETTLED_TOTAL_VOTES_ENTRIES
+                [POS_REWARD_INTEREST_RATE_INDEX as usize]
+                [OPTION_INCREASE_INDEX as usize],
+        )?,
+        decrease: state.storage_at(
+            &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
+            &SETTLED_TOTAL_VOTES_ENTRIES
+                [POS_REWARD_INTEREST_RATE_INDEX as usize]
+                [OPTION_DECREASE_INDEX as usize],
+        )?,
+    };
+    Ok(AllParamsVoteCount {
+        pow_base_reward,
+        pos_reward_interest,
+    })
+}
+
+/// Move TOTAL_VOTES_ENTRIES to the settled ones and reset the counts.
+/// If this is called for the first time, all counts will be initialized with
+/// zeros.
+pub fn settle_vote_counts(state: &mut State) -> vm::Result<()> {
+    for index in 0..PARAMETER_INDEX_MAX {
+        for opt_index in 0..OPTION_INDEX_MAX {
+            let vote = state.storage_at(
+                &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
+                &TOTAL_VOTES_ENTRIES[index][opt_index],
+            )?;
+            state.set_storage(
+                &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
+                SETTLED_TOTAL_VOTES_ENTRIES[index][opt_index].to_vec(),
+                vote,
+                *PARAMS_CONTROL_CONTRACT_ADDRESS,
+            )?;
+            state.set_storage(
+                &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
+                TOTAL_VOTES_ENTRIES[index][opt_index].to_vec(),
+                U256::zero(),
+                *PARAMS_CONTROL_CONTRACT_ADDRESS,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+pub struct ParamVoteCount {
+    unchange: U256,
+    increase: U256,
+    decrease: U256,
+}
+
+impl ParamVoteCount {
+    pub fn new(unchange: U256, increase: U256, decrease: U256) -> Self {
+        Self {
+            unchange,
+            increase,
+            decrease,
+        }
+    }
+
+    pub fn compute_next_params(&self, old_value: U256) -> U256 {
+        // `VoteCount` only counts valid votes, so this will not overflow.
+        let total = self.unchange + self.increase + self.decrease;
+        if total == U256::zero() {
+            // If no one votes, we just keep the value unchanged.
+            return old_value;
+        }
+        let weighted_total =
+            self.unchange + self.increase * 2u64 + self.decrease / 2u64;
+        let new_value = U512::from(old_value) * U512::from(weighted_total)
+            / U512::from(total);
+        U256::try_from(new_value).unwrap()
+    }
+}
+
+pub struct AllParamsVoteCount {
+    pub pow_base_reward: ParamVoteCount,
+    pub pos_reward_interest: ParamVoteCount,
+}
+
 pub mod entries {
     use super::*;
     use cfx_types::H256;
@@ -161,7 +272,7 @@ pub mod entries {
     pub const NEXT_TOTAL_VOTES_KEY: &'static [u8] = b"next_total_votes";
 
     pub const POW_BASE_REWARD_INDEX: u8 = 0;
-    pub const POS_BASE_REWARD_INTEREST_RATE_INDEX: u8 = 1;
+    pub const POS_REWARD_INTEREST_RATE_INDEX: u8 = 1;
     pub const PARAMETER_INDEX_MAX: usize = 2;
 
     pub const OPTION_UNCHANGE_INDEX: u8 = 0;
@@ -172,21 +283,28 @@ pub mod entries {
     lazy_static! {
         pub static ref TOTAL_VOTES_START_ENTRY: U256 =
             start_entry(&*PARAMS_CONTROL_CONTRACT_ADDRESS);
-        pub static ref TOTAL_VOTES_ENTRIES: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] = {
-            let mut vote_entries =
-                [[[0u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX];
-            for index in 0..PARAMETER_INDEX_MAX {
-                for opt_index in 0..OPTION_INDEX_MAX {
-                    let mut entry = [0u8; 32];
-                    vote_entries[index][opt_index] = storage_key_at_index(
-                        &*TOTAL_VOTES_START_ENTRY,
-                        index,
-                        opt_index,
-                    );
-                }
+        pub static ref TOTAL_VOTES_ENTRIES: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] =
+            gen_entry_addresses(0);
+        pub static ref SETTLED_TOTAL_VOTES_ENTRIES: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] =
+            gen_entry_addresses(PARAMETER_INDEX_MAX * OPTION_INDEX_MAX);
+    }
+
+    fn gen_entry_addresses(
+        offset: usize,
+    ) -> [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] {
+        let mut vote_entries =
+            [[[0u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX];
+        for index in 0..PARAMETER_INDEX_MAX {
+            for opt_index in 0..OPTION_INDEX_MAX {
+                let mut entry = [0u8; 32];
+                vote_entries[index][opt_index] = storage_key_at_index(
+                    &(*TOTAL_VOTES_START_ENTRY + offset),
+                    index,
+                    opt_index,
+                );
             }
-            vote_entries
-        };
+        }
+        vote_entries
     }
 
     fn prefix_and_hash(prefix: u64, data: &[u8]) -> [u8; 32] {

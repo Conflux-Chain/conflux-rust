@@ -17,6 +17,7 @@ use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };
 use cfx_parameters::{
+    consensus_internal::MINING_REWARD_TANZANITE_IN_UCFX,
     internal_contract_addresses::{
         POS_REGISTER_CONTRACT_ADDRESS,
         SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
@@ -46,7 +47,13 @@ use primitives::{
 };
 
 use crate::{
-    executive::{pos_internal_entries, IndexStatus},
+    executive::{
+        internal_contract::{
+            next_param_vote_count, settle_vote_counts, AllParamsVoteCount,
+            ParamVoteCount,
+        },
+        pos_internal_entries, IndexStatus,
+    },
     hash::KECCAK_EMPTY,
     observer::{AddressPocket, StateTracer},
     spec::genesis::{
@@ -336,7 +343,10 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn pow_base_reward(&self) -> U256 {
-        self.db.get_pow_base_reward().expect("no db error")
+        self.db
+            .get_pow_base_reward()
+            .expect("no db error")
+            .expect("initialized")
     }
 
     /// Maintain `total_issued_tokens`.
@@ -1134,12 +1144,6 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         Ok(())
     }
 
-    fn cast_vote(
-        &self, address: &Address, votes: Vec<(u8, u8, U256)>,
-    ) -> DbResult<()> {
-        todo!()
-    }
-
     fn read_vote(&self, address: &Address) -> DbResult<Vec<u8>> { todo!() }
 }
 
@@ -1466,6 +1470,34 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 db,
             ),
         }
+    }
+
+    pub fn initialize_or_update_dao_voted_params(
+        &mut self, vote_count: &AllParamsVoteCount,
+    ) -> DbResult<()> {
+        // If the internal contract is just initialized, all votes are zero and
+        // the parameters remain unchanged.
+        self.world_statistics.interest_rate_per_block = vote_count
+            .pos_reward_interest
+            .compute_next_params(self.world_statistics.interest_rate_per_block);
+        match self.db.get_pow_base_reward()? {
+            Some(old_pow_base_reward) => {
+                self.db.set_pow_base_reward(
+                    vote_count
+                        .pow_base_reward
+                        .compute_next_params(old_pow_base_reward),
+                    None,
+                )?;
+            }
+            None => {
+                self.db.set_pow_base_reward(
+                    MINING_REWARD_TANZANITE_IN_UCFX.into(),
+                    None,
+                );
+            }
+        }
+
+        Ok(())
     }
 
     fn commit_world_statistics(

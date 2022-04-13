@@ -10,10 +10,6 @@ lazy_static! {
         Address::from_str("0887000000000000000000000000000000000000").unwrap();
     pub static ref STORAGE_COLLATERAL_TRACER_ADDRESS: Address =
         Address::from_str("0887000000000000000000000000000000000001").unwrap();
-    pub static ref CURRENT_PARAMETER_STORE_START_ADDRESS: Address =
-        Address::from_str("0887000000000000000000000000000000000002").unwrap();
-    pub static ref NEXT_PARAMETER_STORE_START_ADDRESS: Address =
-        Address::from_str("0887000000000000000000000000000000000003").unwrap();
 }
 
 lazy_static! {

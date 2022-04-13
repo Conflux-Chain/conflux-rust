@@ -216,6 +216,8 @@ pub mod block {
     // It's set to two months now.
     pub const DAO_PARAMETER_VOTE_PERIOD: u64 =
         super::staking::BLOCKS_PER_DAY * 30 * 2;
+    pub const DAO_PARAMETER_VOTE_INCREASE_RATIO: u64 = 2;
+    pub const DAO_PARAMETER_VOTE_DECREASE_RATIO: u64 = 2;
 }
 
 pub mod staking {

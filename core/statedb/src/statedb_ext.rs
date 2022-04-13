@@ -84,7 +84,7 @@ pub trait StateDbExt {
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>;
 
-    fn get_pow_base_reward(&self) -> Result<U256>;
+    fn get_pow_base_reward(&self) -> Result<Option<U256>>;
     fn set_pow_base_reward(
         &mut self, reward: U256,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
@@ -425,15 +425,14 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         )
     }
 
-    fn get_pow_base_reward(&self) -> Result<U256> {
+    fn get_pow_base_reward(&self) -> Result<Option<U256>> {
         let pow_base_reward_key = StorageKey::new_storage_key(
             &PARAMS_CONTROL_CONTRACT_ADDRESS,
             POW_BASE_REWARD_KEY,
         )
         .with_native_space();
         let pow_base_reward_opt = self.get::<U256>(pow_base_reward_key)?;
-        // The default value will not be used
-        Ok(pow_base_reward_opt.unwrap_or_default())
+        Ok(pow_base_reward_opt)
     }
 
     fn set_pow_base_reward(
