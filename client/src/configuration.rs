@@ -148,6 +148,7 @@ build_config! {
         (hydra_transition_number, (Option<u64>), Some(92060600))
         (hydra_transition_height, (Option<u64>), Some(36935000))
         (dao_vote_transition_number, (Option<u64>), None)
+        (dao_vote_transition_height, (Option<u64>), None)
         (cip43_init_end_number, (Option<u64>), Some(92406200))
         (cip78_patch_transition_number,(Option<u64>),None)
         (cip90_transition_height,(Option<u64>),None)
@@ -1179,6 +1180,10 @@ impl Configuration {
             .raw_conf
             .cip90_transition_height
             .or(self.raw_conf.hydra_transition_height)
+            .unwrap_or(default_transition_time);
+        params.transition_heights.cip94 = self
+            .raw_conf
+            .dao_vote_transition_height
             .unwrap_or(default_transition_time);
 
         let mut base_block_rewards = BTreeMap::new();

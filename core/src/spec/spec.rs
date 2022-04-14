@@ -6,7 +6,10 @@ use crate::{message::Bytes, vm};
 use cfx_internal_common::{ChainIdParams, ChainIdParamsInner};
 use cfx_parameters::{
     block::{EVM_TRANSACTION_BLOCK_RATIO, EVM_TRANSACTION_GAS_RATIO},
-    consensus::{ONE_UCFX_IN_DRIP, TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT},
+    consensus::{
+        DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT, ONE_UCFX_IN_DRIP,
+        TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT,
+    },
     consensus_internal::{
         ANTICONE_PENALTY_RATIO, INITIAL_BASE_MINING_REWARD_IN_UCFX,
     },
@@ -89,6 +92,8 @@ pub struct TransitionsEpochHeight {
     pub cip86: BlockHeight,
     /// CIP90: Two Space for Transaction Execution
     pub cip90a: BlockHeight,
+    /// CIP94 Hardfork enable heights.
+    pub cip94: BlockHeight,
 }
 
 impl Default for CommonParams {
@@ -130,8 +135,12 @@ impl CommonParams {
     }
 
     pub fn custom_prefix(&self, height: BlockHeight) -> Option<Vec<Bytes>> {
-        if height >= self.transition_heights.cip40 {
+        if height >= self.transition_heights.cip40
+            && height < self.transition_heights.cip94
+        {
             Some(vec![TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
+        } else if height >= self.transition_heights.cip94 {
+            Some(vec![DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
         } else {
             None
         }

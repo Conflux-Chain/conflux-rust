@@ -47,6 +47,7 @@ pub mod consensus {
     pub const BN128_ENABLE_NUMBER: u64 = 7_600_000;
 
     pub const TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [1];
+    pub const DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [2];
 }
 
 pub mod consensus_internal {
