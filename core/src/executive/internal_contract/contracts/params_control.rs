@@ -29,7 +29,7 @@ fn generate_fn_table() -> SolFnTable {
 group_impl_is_active!(|spec: &Spec| spec.cip94, CastVote, ReadVote);
 
 make_solidity_function! {
-    struct CastVote((u64, Vec<Vote>), "castVote(uint64, Votes[])");
+    struct CastVote((u64, Vec<Vote>), "castVote(uint64,(uint16,uint16,uint256)[])");
 }
 // FIXME(lpl): What's the gas cost?
 impl_function_type!(CastVote, "non_payable_write", gas: |spec: &Spec| spec.sstore_reset_gas);
@@ -69,7 +69,7 @@ pub struct Vote {
 // FIXME(lpl): Better ABI Serde for struct.
 impl ABIVariable for Vote {
     const BASIC_TYPE: bool = false;
-    const STATIC_LENGTH: Option<usize> = Some(2 + 2 + 32);
+    const STATIC_LENGTH: Option<usize> = Some(32 * 3);
 
     fn from_abi(data: &[u8]) -> Result<Self, ABIDecodeError> {
         let (index, opt_index, votes) = ABIDecodable::abi_decode(data)?;

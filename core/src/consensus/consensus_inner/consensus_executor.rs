@@ -1048,7 +1048,9 @@ impl ConsensusExecutionHandler {
         {
             if current_block_number
                 >= self.machine.params().transition_numbers.cip94
-                && current_block_number % DAO_PARAMETER_VOTE_PERIOD == 0
+                && current_block_number
+                    % self.machine.params().params_dao_vote_period
+                    == 0
             {
                 state
                     .initialize_or_update_dao_voted_params(

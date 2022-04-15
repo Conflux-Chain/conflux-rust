@@ -579,6 +579,11 @@ def retire_tx_data():
     register_contract = get_contract_instance(contract_dict=register_contract_dict)
     return get_contract_function_data(register_contract, "retire", args=[2_000])
 
+def lock_tx_data(locked_value: int, unlock_block_number: int):
+    staking_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/Staking.json"), "r").read())
+    staking_contract = get_contract_instance(contract_dict=staking_contract_dict)
+    return get_contract_function_data(staking_contract, "voteLock", args=[locked_value * 10 ** 18, unlock_block_number])
+
 def get_contract_function_data(contract, name, args):
     func = getattr(contract.functions, name)
     attrs = {

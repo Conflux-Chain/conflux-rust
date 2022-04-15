@@ -44,7 +44,7 @@ pub fn cast_vote(
     // number.
     let current_voting_version = (context.env.number
         - context.spec.cip94_activation_block_number)
-        / DAO_PARAMETER_VOTE_PERIOD;
+        / context.spec.params_dao_vote_period;
     if version != current_voting_version {
         bail!(Error::InternalContract(format!(
             "vote version unmatch: current={} voted={}",
@@ -112,17 +112,16 @@ pub fn cast_vote(
                     } else {
                         unreachable!("votes changed")
                     };
-                    context.state.set_storage(
-                        &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
-                        TOTAL_VOTES_ENTRIES[index][opt_index].to_vec(),
+                    context.state.update_params_vote_count(
+                        index,
+                        opt_index,
                         new_total_votes,
-                        *PARAMS_CONTROL_CONTRACT_ADDRESS,
-                    );
+                    )?;
                     context.set_storage(
                         params,
                         vote_entry.to_vec(),
                         param_vote[opt_index],
-                    );
+                    )?;
                 }
             }
         }
@@ -209,23 +208,14 @@ pub fn settle_vote_counts(state: &mut State) -> vm::Result<()> {
                 &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
                 &TOTAL_VOTES_ENTRIES[index][opt_index],
             )?;
-            state.set_storage(
-                &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
-                SETTLED_TOTAL_VOTES_ENTRIES[index][opt_index].to_vec(),
-                vote,
-                *PARAMS_CONTROL_CONTRACT_ADDRESS,
-            )?;
-            state.set_storage(
-                &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
-                TOTAL_VOTES_ENTRIES[index][opt_index].to_vec(),
-                U256::zero(),
-                *PARAMS_CONTROL_CONTRACT_ADDRESS,
-            )?;
+            state.update_params_vote_count(index, opt_index, U256::zero())?;
+            state.update_settled_params_vote_count(index, opt_index, vote)?;
         }
     }
     Ok(())
 }
 
+#[derive(Debug)]
 pub struct ParamVoteCount {
     unchange: U256,
     increase: U256,
@@ -256,6 +246,7 @@ impl ParamVoteCount {
     }
 }
 
+#[derive(Debug)]
 pub struct AllParamsVoteCount {
     pub pow_base_reward: ParamVoteCount,
     pub pos_reward_interest: ParamVoteCount,

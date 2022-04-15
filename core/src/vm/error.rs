@@ -97,6 +97,7 @@ pub enum Error {
     /// The state should be reverted to the state from before the
     /// transaction execution.
     NotEnoughBalanceForStorage {
+        addr: Address,
         required: U256,
         got: U256,
     },
@@ -184,9 +185,15 @@ impl fmt::Display for Error {
             OutOfSubStack { wanted, limit } => {
                 write!(f, "Out of subroutine stack {}/{}", wanted, limit)
             }
-            NotEnoughBalanceForStorage { required, got } => {
-                write!(f, "Not enough balance for storage {}/{}", required, got)
-            }
+            NotEnoughBalanceForStorage {
+                addr,
+                required,
+                got,
+            } => write!(
+                f,
+                "Not enough balance for storage {}/{} {}",
+                required, got, addr
+            ),
             ExceedStorageLimit => write!(f, "Exceed storage limit"),
             BuiltIn(name) => write!(f, "Built-in failed: {}", name),
             InternalContract(ref name) => {

@@ -19,7 +19,7 @@ use cfx_internal_common::{
 use cfx_parameters::{
     consensus_internal::MINING_REWARD_TANZANITE_IN_UCFX,
     internal_contract_addresses::{
-        POS_REGISTER_CONTRACT_ADDRESS,
+        PARAMS_CONTROL_CONTRACT_ADDRESS, POS_REGISTER_CONTRACT_ADDRESS,
         SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
     },
     staking::*,
@@ -49,8 +49,12 @@ use primitives::{
 use crate::{
     executive::{
         internal_contract::{
-            next_param_vote_count, settle_vote_counts, AllParamsVoteCount,
-            ParamVoteCount,
+            next_param_vote_count,
+            params_control_internal_entries::{
+                StorageEntryKey, SETTLED_TOTAL_VOTES_ENTRIES,
+                TOTAL_VOTES_ENTRIES,
+            },
+            settle_vote_counts, AllParamsVoteCount, ParamVoteCount,
         },
         pos_internal_entries, IndexStatus,
     },
@@ -1145,6 +1149,28 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn read_vote(&self, address: &Address) -> DbResult<Vec<u8>> { todo!() }
+
+    fn update_params_vote_count(
+        &mut self, index: usize, opt_index: usize, value: U256,
+    ) -> DbResult<()> {
+        let key = StorageKey::new_storage_key(
+            &*PARAMS_CONTROL_CONTRACT_ADDRESS,
+            &TOTAL_VOTES_ENTRIES[index][opt_index],
+        )
+        .with_native_space();
+        self.db.set::<U256>(key, &value, None)
+    }
+
+    fn update_settled_params_vote_count(
+        &mut self, index: usize, opt_index: usize, value: U256,
+    ) -> DbResult<()> {
+        let key = StorageKey::new_storage_key(
+            &*PARAMS_CONTROL_CONTRACT_ADDRESS,
+            &SETTLED_TOTAL_VOTES_ENTRIES[index][opt_index],
+        )
+        .with_native_space();
+        self.db.set::<U256>(key, &value, None)
+    }
 }
 
 impl<StateDbStorage: StorageStateTrait> CheckpointTrait
@@ -1339,6 +1365,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             // sponsor_balance is not enough to cover storage incremental.
             if inc > balance {
                 return Ok(CollateralCheckResult::NotEnoughBalance {
+                    addr: *addr,
                     required: inc,
                     got: balance,
                 });
@@ -1475,6 +1502,10 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     pub fn initialize_or_update_dao_voted_params(
         &mut self, vote_count: &AllParamsVoteCount,
     ) -> DbResult<()> {
+        debug!(
+            "initialize_or_update_dao_voted_params: vote_count={:?}",
+            vote_count
+        );
         // If the internal contract is just initialized, all votes are zero and
         // the parameters remain unchanged.
         self.world_statistics.interest_rate_per_block = vote_count

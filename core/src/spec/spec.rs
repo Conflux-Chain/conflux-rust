@@ -5,7 +5,10 @@
 use crate::{message::Bytes, vm};
 use cfx_internal_common::{ChainIdParams, ChainIdParamsInner};
 use cfx_parameters::{
-    block::{EVM_TRANSACTION_BLOCK_RATIO, EVM_TRANSACTION_GAS_RATIO},
+    block::{
+        DAO_PARAMETER_VOTE_PERIOD, EVM_TRANSACTION_BLOCK_RATIO,
+        EVM_TRANSACTION_GAS_RATIO,
+    },
     consensus::{
         DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT, ONE_UCFX_IN_DRIP,
         TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT,
@@ -47,6 +50,7 @@ pub struct CommonParams {
     /// The gas ratio of evm transactions for the block can pack the EVM
     /// transactions
     pub evm_transaction_gas_ratio: u64,
+    pub params_dao_vote_period: u64,
 
     /// Set the internal contracts to state at the genesis blocks, even if it
     /// is not activated.
@@ -113,6 +117,7 @@ impl Default for CommonParams {
             base_block_rewards,
             evm_transaction_block_ratio: EVM_TRANSACTION_BLOCK_RATIO,
             evm_transaction_gas_ratio: EVM_TRANSACTION_GAS_RATIO,
+            params_dao_vote_period: DAO_PARAMETER_VOTE_PERIOD,
             early_set_internal_contracts_states: false,
             transition_numbers: Default::default(),
             transition_heights: Default::default(),
