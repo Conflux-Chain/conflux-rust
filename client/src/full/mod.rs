@@ -33,6 +33,7 @@ pub struct FullClientExtraComponents {
     pub txpool: Arc<TransactionPool>,
     pub pow: Arc<PowComputer>,
     pub eth_rpc_http_server: Option<HttpServer>,
+    pub eth_rpc_ws_server: Option<WsServer>,
 }
 
 impl MallocSizeOf for FullClientExtraComponents {
@@ -65,6 +66,7 @@ impl FullClient {
             pos_handler,
             runtime,
             eth_rpc_http_server,
+            eth_rpc_ws_server,
         ) = initialize_not_light_node_modules(&mut conf, exit, NodeType::Full)?;
         Ok(Box::new(ClientComponents {
             data_manager_weak_ptr: Arc::downgrade(&data_man),
@@ -83,6 +85,7 @@ impl FullClient {
                 txpool,
                 pow,
                 eth_rpc_http_server,
+                eth_rpc_ws_server,
             },
         }))
     }
