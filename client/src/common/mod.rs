@@ -540,6 +540,7 @@ pub fn initialize_not_light_node_modules(
         Arc<PosVerifier>,
         Runtime,
         Option<HttpServer>,
+        Option<WSServer>,
     ),
     String,
 >
@@ -755,6 +756,17 @@ pub fn initialize_not_light_node_modules(
         ),
     )?;
 
+    let eth_rpc_ws_server = super::rpc::start_ws(
+        conf.eth_ws_config(),
+        setup_public_eth_rpc_apis(
+            common_impl.clone(),
+            rpc_impl.clone(),
+            pubsub.clone(),
+            &conf,
+        ),
+        RpcExtractor,
+    )?;
+
     let rpc_http_server = super::rpc::start_http(
         conf.http_config(),
         setup_public_rpc_apis(common_impl, rpc_impl, pubsub, &conf),
@@ -778,6 +790,7 @@ pub fn initialize_not_light_node_modules(
         pos_verifier,
         runtime,
         eth_rpc_http_server,
+        eth_rpc_ws_server,
     ))
 }
 
