@@ -577,6 +577,17 @@ class PhantomTransactionTest(Web3Base):
         filtered = self.nodes[0].ethrpc.trace_filter({ "fromBlock": receipt["epochNumber"], "toBlock": receipt["epochNumber"] })
         assert_equal(filtered, None)
 
+        # test insufficient storage (issue #2483)
+        data_hex = self.confluxContract.encodeABI(fn_name="callEVMAndSetStorage", args=[self.evmContractAddr, 1])
+        tx = self.rpc.new_contract_tx(receiver=self.confluxContractAddr, data_hex=data_hex)
+        cfxTxHash = tx.hash_hex()
+        assert_equal(self.rpc.send_tx(tx, True), cfxTxHash)
+        receipt = self.rpc.get_transaction_receipt(cfxTxHash)
+        assert_equal(receipt["outcomeStatus"], "0x1")
+
+        block_traces = self.nodes[0].ethrpc.trace_block(receipt["epochNumber"]) # this should not fail
+        assert_equal(len(block_traces), 0)
+
     def test_deployEip1820(self):
         data_hex = self.crossSpaceContract.encodeABI(fn_name="deployEip1820", args=[])
         tx = self.rpc.new_contract_tx(receiver=CROSS_SPACE_CALL_ADDRESS, data_hex=data_hex)
