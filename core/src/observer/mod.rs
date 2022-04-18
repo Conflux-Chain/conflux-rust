@@ -18,6 +18,7 @@ pub use error_unwind::ErrorUnwind;
 pub use gasman::GasMan;
 pub use tracer::ExecutiveTracer;
 
+// FIXME(cx): Can the observer do not rely on the tracer?
 /// This trait is used by executive to build traces.
 pub trait VmObserve: StateTracer {
     /// Prepares call trace for given params.

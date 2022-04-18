@@ -90,6 +90,12 @@ impl StateTracer for GasMan {
         &mut self, _: AddressPocket, _: AddressPocket, _: U256,
     ) {
     }
+
+    fn checkpoint(&mut self) {}
+
+    fn discard_checkpoint(&mut self) {}
+
+    fn revert_to_checkpoint(&mut self) {}
 }
 
 impl VmObserve for GasMan {

@@ -30,6 +30,16 @@ impl StateTracer for ExecutiveTracer {
         self.valid_indices.push(self.traces.len());
         self.traces.push(action);
     }
+
+    fn checkpoint(&mut self) { self.valid_indices.checkpoint(); }
+
+    fn discard_checkpoint(&mut self) {
+        self.valid_indices.discard_checkpoint();
+    }
+
+    fn revert_to_checkpoint(&mut self) {
+        self.valid_indices.revert_checkpoint();
+    }
 }
 
 impl VmObserve for ExecutiveTracer {
