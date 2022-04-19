@@ -1804,6 +1804,14 @@ impl ConsensusGraph {
                         }
                     }
                     Space::Native => {
+                        // note: failing transactions will not produce any
+                        // phantom txs or traces
+                        if block_receipts[id].outcome_status
+                            != TransactionOutcome::Success
+                        {
+                            continue;
+                        }
+
                         let (phantom_txs, _) = build_bloom_and_recover_phantom(
                             &block_receipts[id].logs[..],
                             tx.hash(),
