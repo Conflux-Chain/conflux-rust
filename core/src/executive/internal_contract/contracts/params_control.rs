@@ -2,22 +2,23 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{
-    super::impls::params_control::*, macros::*, SimpleExecutionTrait,
-    SolFnTable,
+use cfx_parameters::internal_contract_addresses::PARAMS_CONTROL_CONTRACT_ADDRESS;
+use cfx_types::{Address, U256};
+use solidity_abi::{
+    ABIDecodable, ABIDecodeError, ABIEncodable, ABIPackedEncodable,
+    ABIVariable, LinkedBytes,
 };
+
 use crate::{
     evm::{ActionParams, Spec},
     executive::InternalRefContext,
     observer::VmObserve,
     vm,
 };
-use cfx_parameters::internal_contract_addresses::PARAMS_CONTROL_CONTRACT_ADDRESS;
-use cfx_types::{Address, U256};
-use serde::{Deserialize, Serialize};
-use solidity_abi::{
-    ABIDecodable, ABIDecodeError, ABIEncodable, ABIPackedEncodable,
-    ABIVariable, LinkedBytes,
+
+use super::{
+    super::impls::params_control::*, macros::*, SimpleExecutionTrait,
+    SolFnTable,
 };
 
 make_solidity_contract! {

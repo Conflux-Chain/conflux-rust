@@ -2,6 +2,21 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use rlp::Rlp;
+
+use cfx_internal_common::debug::ComputeEpochDebugRecord;
+use cfx_parameters::internal_contract_addresses::{
+    PARAMS_CONTROL_CONTRACT_ADDRESS, STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+};
+use cfx_storage::StorageStateTrait;
+use cfx_types::{AddressWithSpace, H256, U256};
+use primitives::{
+    is_default::IsDefault, Account, CodeInfo, DepositList, StorageKey,
+    StorageKeyWithSpace, VoteStakeList,
+};
+
+use super::{Result, StateDbGeneric};
+
 pub trait StateDbExt {
     fn get<T>(&self, key: StorageKeyWithSpace) -> Result<Option<T>>
     where T: ::rlp::Decodable;
@@ -458,21 +473,3 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         Ok(interest_rate_opt.is_some())
     }
 }
-
-use super::{Result, StateDbGeneric};
-use cfx_internal_common::debug::ComputeEpochDebugRecord;
-use cfx_parameters::{
-    internal_contract_addresses::{
-        PARAMS_CONTROL_CONTRACT_ADDRESS,
-        STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-    },
-    staking::INITIAL_INTEREST_RATE_PER_BLOCK,
-    DaoControlParameters,
-};
-use cfx_storage::StorageStateTrait;
-use cfx_types::{AddressWithSpace, H256, U256};
-use primitives::{
-    is_default::IsDefault, Account, CodeInfo, DepositList, StorageKey,
-    StorageKeyWithSpace, VoteStakeList,
-};
-use rlp::Rlp;

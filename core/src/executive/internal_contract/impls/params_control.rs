@@ -2,6 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use std::convert::TryFrom;
+
+use cfx_parameters::internal_contract_addresses::PARAMS_CONTROL_CONTRACT_ADDRESS;
+use cfx_state::state_trait::StateOpsTrait;
+use cfx_types::{Address, U256, U512};
+
 use crate::{
     executive::{
         internal_contract::{
@@ -12,30 +18,16 @@ use crate::{
                     OPTION_INCREASE_INDEX, OPTION_INDEX_MAX,
                     OPTION_UNCHANGE_INDEX, PARAMETER_INDEX_MAX,
                     POS_REWARD_INTEREST_RATE_INDEX, POW_BASE_REWARD_INDEX,
-                    TOTAL_VOTES_ENTRIES,
                 },
                 staking::get_vote_power,
             },
-            params_control_internal_entries::{
-                version_entry_key, SETTLED_TOTAL_VOTES_ENTRIES,
-            },
+            params_control_internal_entries::version_entry_key,
         },
         InternalRefContext,
     },
-    observer::{AddressPocket, VmObserve},
-    state::{cleanup_mode, State},
-    vm::{self, ActionParams, Error, Spec},
+    state::State,
+    vm::{self, ActionParams, Error},
 };
-use cfx_parameters::{
-    block::DAO_PARAMETER_VOTE_PERIOD,
-    internal_contract_addresses::PARAMS_CONTROL_CONTRACT_ADDRESS,
-};
-use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
-use cfx_types::{
-    address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
-    Space, U256, U512,
-};
-use std::convert::TryFrom;
 
 pub fn cast_vote(
     address: Address, version: u64, votes: Vec<Vote>, params: &ActionParams,
@@ -97,7 +89,7 @@ pub fn cast_vote(
                 )));
             }
             for opt_index in 0..OPTION_INDEX_MAX {
-                let mut vote_entry = storage_key_at_index(
+                let vote_entry = storage_key_at_index(
                     &account_start_entry,
                     index,
                     opt_index,
@@ -267,9 +259,9 @@ pub struct AllParamsVoteCount {
 }
 
 pub mod entries {
-    use super::*;
-    use cfx_types::H256;
     use tiny_keccak::{Hasher, Keccak};
+
+    use super::*;
 
     pub type StorageEntryKey = Vec<u8>;
 
@@ -301,7 +293,6 @@ pub mod entries {
             [[[0u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX];
         for index in 0..PARAMETER_INDEX_MAX {
             for opt_index in 0..OPTION_INDEX_MAX {
-                let mut entry = [0u8; 32];
                 vote_entries[index][opt_index] = storage_key_at_index(
                     &(*TOTAL_VOTES_START_ENTRY + offset),
                     index,

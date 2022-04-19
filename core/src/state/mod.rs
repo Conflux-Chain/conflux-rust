@@ -49,12 +49,10 @@ use primitives::{
 use crate::{
     executive::{
         internal_contract::{
-            next_param_vote_count,
             params_control_internal_entries::{
-                StorageEntryKey, SETTLED_TOTAL_VOTES_ENTRIES,
-                TOTAL_VOTES_ENTRIES,
+                SETTLED_TOTAL_VOTES_ENTRIES, TOTAL_VOTES_ENTRIES,
             },
-            settle_vote_counts, AllParamsVoteCount, ParamVoteCount,
+            AllParamsVoteCount,
         },
         pos_internal_entries, IndexStatus,
     },
@@ -1148,7 +1146,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         Ok(())
     }
 
-    fn read_vote(&self, address: &Address) -> DbResult<Vec<u8>> { todo!() }
+    fn read_vote(&self, _address: &Address) -> DbResult<Vec<u8>> { todo!() }
 
     fn update_params_vote_count(
         &mut self, index: usize, opt_index: usize, value: U256,
@@ -1546,7 +1544,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 self.db.set_pow_base_reward(
                     MINING_REWARD_TANZANITE_IN_UCFX.into(),
                     None,
-                );
+                )?;
             }
         }
 

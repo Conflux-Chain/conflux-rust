@@ -2,6 +2,45 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use core::convert::TryFrom;
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    convert::From,
+    fmt::{Debug, Formatter},
+    sync::{
+        atomic::{AtomicBool, Ordering::Relaxed},
+        mpsc::{channel, RecvError, Sender, TryRecvError},
+        Arc,
+    },
+    thread::{self, JoinHandle},
+};
+
+use hash::KECCAK_EMPTY_LIST_RLP;
+use parking_lot::{Mutex, RwLock};
+use rustc_hex::ToHex;
+
+use cfx_internal_common::{
+    debug::*, EpochExecutionCommitment, StateRootWithAuxInfo,
+};
+use cfx_parameters::consensus::*;
+use cfx_state::{state_trait::*, CleanupMode};
+use cfx_statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb};
+use cfx_storage::{
+    defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
+    StorageManagerTrait,
+};
+use cfx_types::{
+    address_util::AddressUtil, AddressSpaceUtil, AllChainID, BigEndianHash,
+    Space, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
+};
+use metrics::{register_meter_with_group, Meter, MeterTimer};
+use primitives::{
+    compute_block_number,
+    receipt::{BlockReceipts, Receipt, TransactionOutcome},
+    Action, Block, BlockHeaderBuilder, EpochId, NativeTransaction,
+    SignedTransaction, Transaction, TransactionIndex, MERKLE_NULL_NODE,
+};
+
 use crate::{
     block_data_manager::{BlockDataManager, BlockRewardResult, PosRewardInfo},
     consensus::{
@@ -37,44 +76,6 @@ use crate::{
     },
     vm::{Env, Error as VmErr},
     SharedTransactionPool,
-};
-use cfx_internal_common::{
-    debug::*, EpochExecutionCommitment, StateRootWithAuxInfo,
-};
-use cfx_parameters::{block::DAO_PARAMETER_VOTE_PERIOD, consensus::*};
-use cfx_state::{state_trait::*, CleanupMode};
-use cfx_statedb::{
-    ErrorKind as DbErrorKind, Result as DbResult, StateDb, StateDbExt,
-};
-use cfx_storage::{
-    defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
-    StorageManagerTrait,
-};
-use cfx_types::{
-    address_util::AddressUtil, AddressSpaceUtil, AllChainID, BigEndianHash,
-    Space, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
-};
-use core::convert::TryFrom;
-use hash::KECCAK_EMPTY_LIST_RLP;
-use metrics::{register_meter_with_group, Meter, MeterTimer};
-use parking_lot::{Mutex, RwLock};
-use primitives::{
-    compute_block_number,
-    receipt::{BlockReceipts, Receipt, TransactionOutcome},
-    Action, Block, BlockHeaderBuilder, EpochId, NativeTransaction,
-    SignedTransaction, Transaction, TransactionIndex, MERKLE_NULL_NODE,
-};
-use rustc_hex::ToHex;
-use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
-    convert::From,
-    fmt::{Debug, Formatter},
-    sync::{
-        atomic::{AtomicBool, Ordering::Relaxed},
-        mpsc::{channel, RecvError, Sender, TryRecvError},
-        Arc,
-    },
-    thread::{self, JoinHandle},
 };
 
 lazy_static! {
