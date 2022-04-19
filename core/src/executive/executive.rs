@@ -1479,7 +1479,7 @@ impl<
                     Vec::new()
                 }
                 Err(_) => {
-                    observer.as_state_tracer().discard_checkpoint();
+                    observer.as_state_tracer().revert_to_checkpoint();
                     self.state.revert_to_checkpoint();
                     Vec::new()
                 }
