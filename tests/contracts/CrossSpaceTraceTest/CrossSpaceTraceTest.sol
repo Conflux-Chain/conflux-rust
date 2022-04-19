@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.12;
+pragma solidity =0.8.12;
 
 interface CrossSpaceCall {
     function createEVM(bytes calldata init) external payable returns (bytes20);
@@ -20,6 +20,14 @@ contract CrossSpaceTraceTestConfluxSide {
 
     function callEVM(bytes20 addr, uint256 depth) external {
         CROSS_SPACE.callEVM(addr, abi.encodeCall(CrossSpaceTraceTestEVMSide.call, depth));
+    }
+
+    function callEVMAndSetStorage(bytes20 addr, uint256 depth) external {
+        callEVM(addr, depth);
+
+        assembly {
+            sstore(0, 1)
+        }
     }
 
     function staticCallEVM(bytes20 addr, uint256 depth) external view {
