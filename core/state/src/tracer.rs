@@ -12,6 +12,15 @@ pub trait StateTracer: Send {
     fn trace_internal_transfer(
         &mut self, from: AddressPocket, to: AddressPocket, value: U256,
     );
+
+    /// Make a checkpoint for validity mark
+    fn checkpoint(&mut self);
+
+    /// Discard the top checkpoint for validity mark
+    fn discard_checkpoint(&mut self);
+
+    /// Mark the traces to the top checkpoint as "valid = false"
+    fn revert_to_checkpoint(&mut self);
 }
 
 impl StateTracer for () {
@@ -19,6 +28,12 @@ impl StateTracer for () {
         &mut self, _: AddressPocket, _: AddressPocket, _: U256,
     ) {
     }
+
+    fn checkpoint(&mut self) {}
+
+    fn discard_checkpoint(&mut self) {}
+
+    fn revert_to_checkpoint(&mut self) {}
 }
 
 impl<T> StateTracer for &mut T
@@ -29,6 +44,12 @@ where T: StateTracer
     ) {
         (*self).trace_internal_transfer(from, to, value);
     }
+
+    fn checkpoint(&mut self) { (*self).checkpoint(); }
+
+    fn discard_checkpoint(&mut self) { (*self).discard_checkpoint(); }
+
+    fn revert_to_checkpoint(&mut self) { (*self).revert_to_checkpoint(); }
 }
 
 impl<S, T> StateTracer for (&mut S, &mut T)
@@ -41,6 +62,21 @@ where
     ) {
         self.0.trace_internal_transfer(from, to, value);
         self.1.trace_internal_transfer(from, to, value);
+    }
+
+    fn checkpoint(&mut self) {
+        self.0.checkpoint();
+        self.1.checkpoint();
+    }
+
+    fn discard_checkpoint(&mut self) {
+        self.0.discard_checkpoint();
+        self.1.discard_checkpoint();
+    }
+
+    fn revert_to_checkpoint(&mut self) {
+        self.0.revert_to_checkpoint();
+        self.1.revert_to_checkpoint();
     }
 }
 
