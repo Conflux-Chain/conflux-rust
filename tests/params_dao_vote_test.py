@@ -135,7 +135,6 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         assert_equal(int(client.get_interest_rate(), 0), initial_interest_rate)
 
         # Two accounts vote
-        lock_value = 20
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 1
         data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, 2, lock_value), (1, 0, lock_value)]])
@@ -151,6 +150,23 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         best_epoch = client.epoch_number()
         assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0), int(initial_base_reward * 1.5))
         assert_equal(int(client.get_interest_rate(), 0), int(initial_interest_rate * 1.5))
+
+        # Replace old votes
+        block_number = int(client.get_status()["blockNumber"], 0)
+        version = int(block_number / vote_period) + 1
+        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, 0, int(lock_value/2)), (0, 1, int(lock_value/2)), (1, 0, int(lock_value/4)), (1, 2, int(lock_value/2))]])
+        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+        next_nonce = tx.nonce + 1
+        client.send_tx(tx)
+        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, 0, int(lock_value/4)), (0, 2, int(lock_value/2))]])
+        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024, nonce=next_nonce)
+        client.send_tx(tx, wait_for_receipt=True)
+        # Generate enough blocks to get pow reward with new parameters.
+        client.generate_empty_blocks(40)
+        best_epoch = client.epoch_number()
+        assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0), initial_base_reward)
+        assert_equal(int(client.get_interest_rate(), 0), initial_interest_rate)
+
 
 
 

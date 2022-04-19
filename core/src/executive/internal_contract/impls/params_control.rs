@@ -4,16 +4,13 @@
 
 use std::convert::TryFrom;
 
-use cfx_statedb::{StateDbExt, params_control_entries::*};
+use cfx_statedb::{params_control_entries::*, StateDbExt};
 use cfx_types::{Address, U256, U512};
 
 use crate::{
     executive::{
         internal_contract::{
-            contracts::params_control::Vote,
-            impls::{
-                staking::get_vote_power,
-            },
+            contracts::params_control::Vote, impls::staking::get_vote_power,
         },
         InternalRefContext,
     },
@@ -72,7 +69,10 @@ pub fn cast_vote(
             .saturating_add(param_vote[2]);
         // TODO: Do we allow cancelling votes by voting with 0 votes?
         // If no vote, we do not need any process.
-        if total_counts != U256::zero() {
+        // If this is the first vote in the version, even for the not-voted
+        // parameters, we still reset the account's votes from previous
+        // versions.
+        if is_new_vote || total_counts != U256::zero() {
             if total_counts > vote_power {
                 bail!(Error::InternalContract(format!(
                     "not enough vote power: power={} votes={}",
@@ -94,9 +94,10 @@ pub fn cast_vote(
                     "index:{}, opt_index{}, old_vote: {}, new_vote: {}",
                     index, opt_index, old_vote, param_vote[opt_index]
                 );
-                if old_vote != param_vote[opt_index] {
+                if is_new_vote || old_vote != param_vote[opt_index] {
                     let old_total_votes =
                         context.state.get_params_vote_count(index, opt_index);
+                    debug!("old_total_vote: {}", old_total_votes,);
                     let new_total_votes = if old_vote > param_vote[opt_index] {
                         let dec = old_vote - param_vote[opt_index];
                         // If total votes are accurate, `old_total_votes` is
@@ -106,12 +107,10 @@ pub fn cast_vote(
                         let inc = param_vote[opt_index] - old_vote;
                         old_total_votes + inc
                     } else {
-                        unreachable!("votes changed")
+                        assert!(is_new_vote);
+                        old_total_votes
                     };
-                    debug!(
-                        "old_total_vote: {}, new_total_vote:{}",
-                        old_total_votes, new_total_votes
-                    );
+                    debug!("new_total_vote:{}", new_total_votes);
                     context.state.update_params_vote_count(
                         index,
                         opt_index,
