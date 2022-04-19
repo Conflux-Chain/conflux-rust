@@ -103,15 +103,27 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         # Vote for both increase
         vote_period = int(self.conf_parameters["params_dao_vote_period"])
         block_number = int(client.get_status()["blockNumber"], 0)
-        version = int(block_number / vote_period)
+        version = int(block_number / vote_period) + 1
         data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, 1, lock_value), (1, 1, lock_value)]])
         tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
         # Generate enough blocks to get pow reward with new parameters.
         client.generate_empty_blocks(40)
-        assert_equal(int(client.get_interest_rate(), 0), initial_interest_rate * 2)
         best_epoch = client.epoch_number()
-        assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 12))[0]["baseReward"], 0), initial_base_reward * 2)
+        assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0), initial_base_reward * 2)
+        assert_equal(int(client.get_interest_rate(), 0), initial_interest_rate * 2)
+
+        # Vote for a single parameter
+        block_number = int(client.get_status()["blockNumber"], 0)
+        version = int(block_number / vote_period) + 1
+        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(1, 2, lock_value)]])
+        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+        client.send_tx(tx, wait_for_receipt=True)
+        # Generate enough blocks to get pow reward with new parameters.
+        client.generate_empty_blocks(40)
+        best_epoch = client.epoch_number()
+        assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0), initial_base_reward * 2)
+        assert_equal(int(client.get_interest_rate(), 0), initial_interest_rate)
 
 
 if __name__ == "__main__":

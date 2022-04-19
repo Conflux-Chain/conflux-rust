@@ -16,7 +16,9 @@ use crate::{
                 },
                 staking::get_vote_power,
             },
-            params_control_internal_entries::SETTLED_TOTAL_VOTES_ENTRIES,
+            params_control_internal_entries::{
+                version_entry_key, SETTLED_TOTAL_VOTES_ENTRIES,
+            },
         },
         InternalRefContext,
     },
@@ -41,16 +43,22 @@ pub fn cast_vote(
 ) -> vm::Result<()>
 {
     // If this is called, `env.number` must be larger than the activation
-    // number.
+    // number. And version starts from 1 to tell if an account has ever voted in
+    // the first version.
     let current_voting_version = (context.env.number
         - context.spec.cip94_activation_block_number)
-        / context.spec.params_dao_vote_period;
+        / context.spec.params_dao_vote_period
+        + 1;
     if version != current_voting_version {
         bail!(Error::InternalContract(format!(
             "vote version unmatch: current={} voted={}",
             current_voting_version, version
         )));
     }
+    let account_start_entry = start_entry(&address);
+    let old_version =
+        context.storage_at(params, &version_entry_key(&account_start_entry))?;
+    let is_new_vote = old_version.as_u64() != version;
 
     let mut vote_counts =
         [[U256::zero(); OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX];
@@ -74,7 +82,6 @@ pub fn cast_vote(
         context.env.number,
         context.state,
     )?;
-    let account_start_entry = start_entry(&address);
     for index in 0..PARAMETER_INDEX_MAX {
         let param_vote = vote_counts[index];
         let total_counts = param_vote[0]
@@ -95,11 +102,19 @@ pub fn cast_vote(
                     index,
                     opt_index,
                 );
-                let old_vote = context.storage_at(params, &vote_entry)?;
+                let old_vote = if is_new_vote {
+                    U256::zero()
+                } else {
+                    context.storage_at(params, &vote_entry)?
+                };
+                debug!(
+                    "index:{}, opt_index{}, old_vote: {}, new_vote: {}",
+                    index, opt_index, old_vote, param_vote[opt_index]
+                );
                 if old_vote != param_vote[opt_index] {
-                    let old_total_votes = context.storage_at(
-                        params,
-                        &TOTAL_VOTES_ENTRIES[index][opt_index],
+                    let old_total_votes = context.state.get_params_vote_count(
+                        POS_REWARD_INTEREST_RATE_INDEX as usize,
+                        OPTION_UNCHANGE_INDEX as usize,
                     )?;
                     let new_total_votes = if old_vote > param_vote[opt_index] {
                         let dec = old_vote - param_vote[opt_index];
@@ -112,6 +127,10 @@ pub fn cast_vote(
                     } else {
                         unreachable!("votes changed")
                     };
+                    debug!(
+                        "old_total_vote: {}, new_total_vote:{}",
+                        old_total_votes, new_total_votes
+                    );
                     context.state.update_params_vote_count(
                         index,
                         opt_index,
@@ -125,6 +144,13 @@ pub fn cast_vote(
                 }
             }
         }
+    }
+    if is_new_vote {
+        context.set_storage(
+            params,
+            version_entry_key(&account_start_entry).to_vec(),
+            U256::from(version),
+        )?;
     }
     Ok(())
 }
@@ -156,40 +182,31 @@ pub fn read_vote(
 /// parameters will be unchanged.
 pub fn next_param_vote_count(state: &State) -> vm::Result<AllParamsVoteCount> {
     let pow_base_reward = ParamVoteCount {
-        unchange: state.storage_at(
-            &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
-            &SETTLED_TOTAL_VOTES_ENTRIES[POW_BASE_REWARD_INDEX as usize]
-                [OPTION_UNCHANGE_INDEX as usize],
+        unchange: state.get_settled_params_vote_count(
+            POW_BASE_REWARD_INDEX as usize,
+            OPTION_UNCHANGE_INDEX as usize,
         )?,
-        increase: state.storage_at(
-            &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
-            &SETTLED_TOTAL_VOTES_ENTRIES[POW_BASE_REWARD_INDEX as usize]
-                [OPTION_INCREASE_INDEX as usize],
+        increase: state.get_settled_params_vote_count(
+            POW_BASE_REWARD_INDEX as usize,
+            OPTION_INCREASE_INDEX as usize,
         )?,
-        decrease: state.storage_at(
-            &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
-            &SETTLED_TOTAL_VOTES_ENTRIES[POW_BASE_REWARD_INDEX as usize]
-                [OPTION_DECREASE_INDEX as usize],
+        decrease: state.get_settled_params_vote_count(
+            POW_BASE_REWARD_INDEX as usize,
+            OPTION_DECREASE_INDEX as usize,
         )?,
     };
     let pos_reward_interest = ParamVoteCount {
-        unchange: state.storage_at(
-            &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
-            &SETTLED_TOTAL_VOTES_ENTRIES
-                [POS_REWARD_INTEREST_RATE_INDEX as usize]
-                [OPTION_UNCHANGE_INDEX as usize],
+        unchange: state.get_settled_params_vote_count(
+            POS_REWARD_INTEREST_RATE_INDEX as usize,
+            OPTION_UNCHANGE_INDEX as usize,
         )?,
-        increase: state.storage_at(
-            &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
-            &SETTLED_TOTAL_VOTES_ENTRIES
-                [POS_REWARD_INTEREST_RATE_INDEX as usize]
-                [OPTION_INCREASE_INDEX as usize],
+        increase: state.get_settled_params_vote_count(
+            POS_REWARD_INTEREST_RATE_INDEX as usize,
+            OPTION_INCREASE_INDEX as usize,
         )?,
-        decrease: state.storage_at(
-            &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
-            &SETTLED_TOTAL_VOTES_ENTRIES
-                [POS_REWARD_INTEREST_RATE_INDEX as usize]
-                [OPTION_DECREASE_INDEX as usize],
+        decrease: state.get_settled_params_vote_count(
+            POS_REWARD_INTEREST_RATE_INDEX as usize,
+            OPTION_DECREASE_INDEX as usize,
         )?,
     };
     Ok(AllParamsVoteCount {
@@ -204,10 +221,7 @@ pub fn next_param_vote_count(state: &State) -> vm::Result<AllParamsVoteCount> {
 pub fn settle_vote_counts(state: &mut State) -> vm::Result<()> {
     for index in 0..PARAMETER_INDEX_MAX {
         for opt_index in 0..OPTION_INDEX_MAX {
-            let vote = state.storage_at(
-                &PARAMS_CONTROL_CONTRACT_ADDRESS.with_native_space(),
-                &TOTAL_VOTES_ENTRIES[index][opt_index],
-            )?;
+            let vote = state.get_params_vote_count(index, opt_index)?;
             state.update_params_vote_count(index, opt_index, U256::zero())?;
             state.update_settled_params_vote_count(index, opt_index, vote)?;
         }
@@ -312,12 +326,18 @@ pub mod entries {
         U256::from_big_endian(&prefix_and_hash(3, address.as_bytes()))
     }
 
+    pub fn version_entry_key(start: &U256) -> [u8; 32] {
+        let mut entry = [0u8; 32];
+        start.to_big_endian(&mut entry);
+        entry
+    }
+
     #[inline]
     pub fn storage_key_at_index(
         start: &U256, index: usize, opt_index: usize,
     ) -> [u8; 32] {
         let mut vote_entry = [0u8; 32];
-        (start + index * OPTION_INDEX_MAX + opt_index)
+        (start + 1 + index * OPTION_INDEX_MAX + opt_index)
             .to_big_endian(&mut vote_entry);
         vote_entry
     }

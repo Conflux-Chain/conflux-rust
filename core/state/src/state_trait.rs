@@ -271,6 +271,14 @@ pub trait StateOpsTrait {
     fn update_settled_params_vote_count(
         &mut self, index: usize, opt_index: usize, value: U256,
     ) -> DbResult<()>;
+
+    fn get_params_vote_count(
+        &self, index: usize, opt_index: usize,
+    ) -> DbResult<U256>;
+
+    fn get_settled_params_vote_count(
+        &self, index: usize, opt_index: usize,
+    ) -> DbResult<U256>;
 }
 
 pub trait CheckpointTrait: StateOpsTrait {

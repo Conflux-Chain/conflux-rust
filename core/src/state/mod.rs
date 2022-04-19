@@ -1171,6 +1171,28 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         .with_native_space();
         self.db.set::<U256>(key, &value, None)
     }
+
+    fn get_params_vote_count(
+        &self, index: usize, opt_index: usize,
+    ) -> DbResult<U256> {
+        let key = StorageKey::new_storage_key(
+            &*PARAMS_CONTROL_CONTRACT_ADDRESS,
+            &TOTAL_VOTES_ENTRIES[index][opt_index],
+        )
+        .with_native_space();
+        self.db.get::<U256>(key).map(|v| v.unwrap_or_default())
+    }
+
+    fn get_settled_params_vote_count(
+        &self, index: usize, opt_index: usize,
+    ) -> DbResult<U256> {
+        let key = StorageKey::new_storage_key(
+            &*PARAMS_CONTROL_CONTRACT_ADDRESS,
+            &SETTLED_TOTAL_VOTES_ENTRIES[index][opt_index],
+        )
+        .with_native_space();
+        self.db.get::<U256>(key).map(|v| v.unwrap_or_default())
+    }
 }
 
 impl<StateDbStorage: StorageStateTrait> CheckpointTrait
