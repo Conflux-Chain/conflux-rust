@@ -979,6 +979,14 @@ impl Configuration {
         )
     }
 
+    pub fn eth_ws_config(&self) -> WsConfiguration {
+        WsConfiguration::new(
+            None,
+            self.raw_conf.jsonrpc_ws_eth_port,
+            self.raw_conf.jsonrpc_ws_max_payload_bytes,
+        )
+    }
+
     pub fn local_tcp_config(&self) -> TcpConfiguration {
         TcpConfiguration::new(
             Some((127, 0, 0, 1)),

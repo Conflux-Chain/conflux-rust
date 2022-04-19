@@ -342,6 +342,7 @@ def initialize_datadir(dirname, n, port_min, conf_parameters, extra_files: dict 
             "jsonrpc_ws_port": str(pubsub_port(n)),
             "jsonrpc_http_port": str(remote_rpc_port(n)),
             "jsonrpc_http_eth_port": str(evm_rpc_port(n)),
+            "jsonrpc_ws_eth_port": str(evm_rpc_ws_port(n)),
             "pos_config_path": "\'{}\'".format(os.path.join(datadir, "validator_full_node.yaml")),
             "pos_initial_nodes_path": "\'{}\'".format(os.path.join(dirname, "initial_nodes.json")),
             "pos_private_key_path": "'{}'".format(os.path.join(datadir, "blockchain_data", "net_config", "pos_key"))
@@ -567,7 +568,7 @@ def p2p_port(n):
     return PortMin.n + n
 
 def rpc_port(n):
-    return PortMin.n + MAX_NODES + n*4
+    return PortMin.n + MAX_NODES + n*5
 
 def remote_rpc_port(n):
     return rpc_port(n) + 1
@@ -577,6 +578,9 @@ def pubsub_port(n):
 
 def evm_rpc_port(n):
     return rpc_port(n) + 3
+
+def evm_rpc_ws_port(n):
+    return rpc_port(n) + 4
 
 def rpc_url(i, rpchost=None, rpcport=None):
     if rpchost is None:
