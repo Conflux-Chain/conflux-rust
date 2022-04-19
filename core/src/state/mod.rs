@@ -30,8 +30,8 @@ use cfx_state::{
     CleanupMode, CollateralCheckResult, StateTrait, SubstateTrait,
 };
 use cfx_statedb::{
-    ErrorKind as DbErrorKind, Result as DbResult, StateDbExt,
-    StateDbGeneric as StateDb,
+    params_control_entries::*, ErrorKind as DbErrorKind, Result as DbResult,
+    StateDbExt, StateDbGeneric as StateDb,
 };
 use cfx_storage::{utils::access_mode, StorageState, StorageStateTrait};
 use cfx_types::{
@@ -48,13 +48,8 @@ use primitives::{
 
 use crate::{
     executive::{
-        internal_contract::{
-            params_control_internal_entries::{
-                SETTLED_TOTAL_VOTES_ENTRIES, TOTAL_VOTES_ENTRIES,
-            },
-            AllParamsVoteCount,
-        },
-        pos_internal_entries, IndexStatus,
+        internal_contract::settled_param_vote_count, pos_internal_entries,
+        IndexStatus,
     },
     hash::KECCAK_EMPTY,
     observer::{AddressPocket, StateTracer},
@@ -107,6 +102,8 @@ struct WorldStatistics {
     last_distribute_block: u64,
     // This is the tokens in the EVM space.
     total_evm_tokens: U256,
+    // This is the count of all ongoing DAO-controlled parameter votes.
+    params_vote_count: [[U256; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX],
 }
 
 pub type State = StateGeneric<StorageState>;
@@ -1150,13 +1147,8 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
 
     fn update_params_vote_count(
         &mut self, index: usize, opt_index: usize, value: U256,
-    ) -> DbResult<()> {
-        let key = StorageKey::new_storage_key(
-            &*PARAMS_CONTROL_CONTRACT_ADDRESS,
-            &TOTAL_VOTES_ENTRIES[index][opt_index],
-        )
-        .with_native_space();
-        self.db.set::<U256>(key, &value, None)
+    ) {
+        self.world_statistics.params_vote_count[index][opt_index] = value;
     }
 
     fn update_settled_params_vote_count(
@@ -1170,15 +1162,8 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         self.db.set::<U256>(key, &value, None)
     }
 
-    fn get_params_vote_count(
-        &self, index: usize, opt_index: usize,
-    ) -> DbResult<U256> {
-        let key = StorageKey::new_storage_key(
-            &*PARAMS_CONTROL_CONTRACT_ADDRESS,
-            &TOTAL_VOTES_ENTRIES[index][opt_index],
-        )
-        .with_native_space();
-        self.db.get::<U256>(key).map(|v| v.unwrap_or_default())
+    fn get_params_vote_count(&self, index: usize, opt_index: usize) -> U256 {
+        self.world_statistics.params_vote_count[index][opt_index]
     }
 
     fn get_settled_params_vote_count(
@@ -1275,6 +1260,14 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         let distributable_pos_interest = db.get_distributable_pos_interest()?;
         let last_distribute_block = db.get_last_distribute_block()?;
         let total_evm_tokens = db.get_total_evm_tokens()?;
+        let mut params_vote_count =
+            [[U256::zero(); OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX];
+        for index in 0..PARAMETER_INDEX_MAX {
+            for opt_index in 0..OPTION_INDEX_MAX {
+                params_vote_count[index][opt_index] =
+                    db.get_params_vote_count(index, opt_index)?;
+            }
+        }
 
         let world_stat = if db.is_initialized()? {
             WorldStatistics {
@@ -1288,6 +1281,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 distributable_pos_interest,
                 last_distribute_block,
                 total_evm_tokens,
+                params_vote_count,
             }
         } else {
             // If db is not initialized, all the loaded value should be zero.
@@ -1334,6 +1328,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 distributable_pos_interest: U256::default(),
                 last_distribute_block: u64::default(),
                 total_evm_tokens: U256::default(),
+                params_vote_count: Default::default(),
             }
         };
 
@@ -1519,9 +1514,8 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         }
     }
 
-    pub fn initialize_or_update_dao_voted_params(
-        &mut self, vote_count: &AllParamsVoteCount,
-    ) -> DbResult<()> {
+    pub fn initialize_or_update_dao_voted_params(&mut self) -> DbResult<()> {
+        let vote_count = settled_param_vote_count(&self.db).expect("db error");
         debug!(
             "initialize_or_update_dao_voted_params: vote_count={:?}",
             vote_count
@@ -1547,6 +1541,18 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 )?;
             }
         }
+
+        // Move the next vote counts into settled and reset the counts.
+        for index in 0..PARAMETER_INDEX_MAX {
+            for opt_index in 0..OPTION_INDEX_MAX {
+                self.db.set_settled_params_vote_count(
+                    index,
+                    opt_index,
+                    self.world_statistics.params_vote_count[index][opt_index],
+                )?;
+            }
+        }
+        self.world_statistics.params_vote_count = Default::default();
 
         Ok(())
     }
@@ -1591,6 +1597,15 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             &self.world_statistics.total_evm_tokens,
             debug_record,
         )?;
+        for index in 0..PARAMETER_INDEX_MAX {
+            for opt_index in 0..OPTION_INDEX_MAX {
+                self.db.set_params_vote_count(
+                    index,
+                    opt_index,
+                    self.world_statistics.params_vote_count[index][opt_index],
+                )?;
+            }
+        }
         Ok(())
     }
 

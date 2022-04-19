@@ -10,6 +10,7 @@ use cfx_parameters::internal_contract_addresses::{
 };
 use cfx_storage::StorageStateTrait;
 use cfx_types::{AddressWithSpace, H256, U256};
+use params_control_entries::*;
 use primitives::{
     is_default::IsDefault, Account, CodeInfo, DepositList, StorageKey,
     StorageKeyWithSpace, VoteStakeList,
@@ -105,6 +106,22 @@ pub trait StateDbExt {
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>;
 
+    fn set_params_vote_count(
+        &mut self, index: usize, opt_index: usize, value: U256,
+    ) -> Result<()>;
+
+    fn set_settled_params_vote_count(
+        &mut self, index: usize, opt_index: usize, value: U256,
+    ) -> Result<()>;
+
+    fn get_params_vote_count(
+        &self, index: usize, opt_index: usize,
+    ) -> Result<U256>;
+
+    fn get_settled_params_vote_count(
+        &self, index: usize, opt_index: usize,
+    ) -> Result<U256>;
+
     // This function is used to check whether the db has been initialized when
     // create a state. So we can know the loaded `None` represents "not
     // initialized" or "zero value".
@@ -124,6 +141,76 @@ pub const DISTRIBUTABLE_POS_INTEREST_KEY: &'static [u8] =
 pub const LAST_DISTRIBUTE_BLOCK_KEY: &'static [u8] = b"last_distribute_block";
 pub const TOTAL_EVM_TOKENS_KEY: &'static [u8] = b"total_evm_tokens";
 pub const POW_BASE_REWARD_KEY: &'static [u8] = b"pow_base_reward";
+
+pub mod params_control_entries {
+    use cfx_parameters::internal_contract_addresses::PARAMS_CONTROL_CONTRACT_ADDRESS;
+    use cfx_types::{Address, U256};
+    use lazy_static::lazy_static;
+    use tiny_keccak::{Hasher, Keccak};
+
+    pub const POW_BASE_REWARD_INDEX: u8 = 0;
+    pub const POS_REWARD_INTEREST_RATE_INDEX: u8 = 1;
+    pub const PARAMETER_INDEX_MAX: usize = 2;
+
+    pub const OPTION_UNCHANGE_INDEX: u8 = 0;
+    pub const OPTION_INCREASE_INDEX: u8 = 1;
+    pub const OPTION_DECREASE_INDEX: u8 = 2;
+    pub const OPTION_INDEX_MAX: usize = 3;
+
+    lazy_static! {
+        pub static ref TOTAL_VOTES_ENTRIES: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] =
+            gen_entry_addresses(&start_entry(&*PARAMS_CONTROL_CONTRACT_ADDRESS));
+        pub static ref SETTLED_TOTAL_VOTES_ENTRIES: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] =
+            gen_entry_addresses(&U256::from_big_endian(&prefix_and_hash(
+                4,
+                PARAMS_CONTROL_CONTRACT_ADDRESS.as_bytes()
+            )));
+    }
+
+    fn gen_entry_addresses(
+        start: &U256,
+    ) -> [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] {
+        let mut vote_entries =
+            [[[0u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX];
+        for index in 0..PARAMETER_INDEX_MAX {
+            for opt_index in 0..OPTION_INDEX_MAX {
+                vote_entries[index][opt_index] =
+                    storage_key_at_index(start, index, opt_index);
+            }
+        }
+        vote_entries
+    }
+
+    fn prefix_and_hash(prefix: u64, data: &[u8]) -> [u8; 32] {
+        let mut hasher = Keccak::v256();
+        hasher.update(&prefix.to_be_bytes());
+        hasher.update(data);
+        let mut hash = [0u8; 32];
+        hasher.finalize(&mut hash);
+        hash
+    }
+
+    #[inline]
+    pub fn start_entry(address: &Address) -> U256 {
+        U256::from_big_endian(&prefix_and_hash(3, address.as_bytes()))
+    }
+
+    pub fn version_entry_key(start: &U256) -> [u8; 32] {
+        let mut entry = [0u8; 32];
+        start.to_big_endian(&mut entry);
+        entry
+    }
+
+    #[inline]
+    pub fn storage_key_at_index(
+        start: &U256, index: usize, opt_index: usize,
+    ) -> [u8; 32] {
+        let mut vote_entry = [0u8; 32];
+        (start + 1 + index * OPTION_INDEX_MAX + opt_index)
+            .to_big_endian(&mut vote_entry);
+        vote_entry
+    }
+}
 
 impl<StateDbStorage: StorageStateTrait> StateDbExt
     for StateDbGeneric<StateDbStorage>
@@ -461,6 +548,50 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         )
         .with_native_space();
         self.set::<U256>(pow_base_reward_key, &reward, debug_record)
+    }
+
+    fn set_params_vote_count(
+        &mut self, index: usize, opt_index: usize, value: U256,
+    ) -> Result<()> {
+        let key = StorageKey::new_storage_key(
+            &*PARAMS_CONTROL_CONTRACT_ADDRESS,
+            &TOTAL_VOTES_ENTRIES[index][opt_index],
+        )
+        .with_native_space();
+        self.set::<U256>(key, &value, None)
+    }
+
+    fn set_settled_params_vote_count(
+        &mut self, index: usize, opt_index: usize, value: U256,
+    ) -> Result<()> {
+        let key = StorageKey::new_storage_key(
+            &*PARAMS_CONTROL_CONTRACT_ADDRESS,
+            &SETTLED_TOTAL_VOTES_ENTRIES[index][opt_index],
+        )
+        .with_native_space();
+        self.set::<U256>(key, &value, None)
+    }
+
+    fn get_params_vote_count(
+        &self, index: usize, opt_index: usize,
+    ) -> Result<U256> {
+        let key = StorageKey::new_storage_key(
+            &*PARAMS_CONTROL_CONTRACT_ADDRESS,
+            &TOTAL_VOTES_ENTRIES[index][opt_index],
+        )
+        .with_native_space();
+        self.get::<U256>(key).map(|v| v.unwrap_or_default())
+    }
+
+    fn get_settled_params_vote_count(
+        &self, index: usize, opt_index: usize,
+    ) -> Result<U256> {
+        let key = StorageKey::new_storage_key(
+            &*PARAMS_CONTROL_CONTRACT_ADDRESS,
+            &SETTLED_TOTAL_VOTES_ENTRIES[index][opt_index],
+        )
+        .with_native_space();
+        self.get::<U256>(key).map(|v| v.unwrap_or_default())
     }
 
     fn is_initialized(&self) -> Result<bool> {

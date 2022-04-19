@@ -135,6 +135,7 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         assert_equal(int(client.get_interest_rate(), 0), initial_interest_rate)
 
         # Two accounts vote
+        lock_value = 20
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 1
         data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, 2, lock_value), (1, 0, lock_value)]])

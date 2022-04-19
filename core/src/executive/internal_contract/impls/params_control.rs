@@ -4,8 +4,7 @@
 
 use std::convert::TryFrom;
 
-use cfx_parameters::internal_contract_addresses::PARAMS_CONTROL_CONTRACT_ADDRESS;
-use cfx_state::state_trait::StateOpsTrait;
+use cfx_statedb::{StateDbExt, params_control_entries::*};
 use cfx_types::{Address, U256, U512};
 
 use crate::{
@@ -13,19 +12,11 @@ use crate::{
         internal_contract::{
             contracts::params_control::Vote,
             impls::{
-                params_control::entries::{
-                    start_entry, storage_key_at_index, OPTION_DECREASE_INDEX,
-                    OPTION_INCREASE_INDEX, OPTION_INDEX_MAX,
-                    OPTION_UNCHANGE_INDEX, PARAMETER_INDEX_MAX,
-                    POS_REWARD_INTEREST_RATE_INDEX, POW_BASE_REWARD_INDEX,
-                },
                 staking::get_vote_power,
             },
-            params_control_internal_entries::version_entry_key,
         },
         InternalRefContext,
     },
-    state::State,
     vm::{self, ActionParams, Error},
 };
 
@@ -104,10 +95,8 @@ pub fn cast_vote(
                     index, opt_index, old_vote, param_vote[opt_index]
                 );
                 if old_vote != param_vote[opt_index] {
-                    let old_total_votes = context.state.get_params_vote_count(
-                        POS_REWARD_INTEREST_RATE_INDEX as usize,
-                        OPTION_UNCHANGE_INDEX as usize,
-                    )?;
+                    let old_total_votes =
+                        context.state.get_params_vote_count(index, opt_index);
                     let new_total_votes = if old_vote > param_vote[opt_index] {
                         let dec = old_vote - param_vote[opt_index];
                         // If total votes are accurate, `old_total_votes` is
@@ -127,7 +116,7 @@ pub fn cast_vote(
                         index,
                         opt_index,
                         new_total_votes,
-                    )?;
+                    );
                     context.set_storage(
                         params,
                         vote_entry.to_vec(),
@@ -172,7 +161,9 @@ pub fn read_vote(
 
 /// If the vote counts are not initialized, all counts will be zero, and the
 /// parameters will be unchanged.
-pub fn next_param_vote_count(state: &State) -> vm::Result<AllParamsVoteCount> {
+pub fn settled_param_vote_count<T: StateDbExt>(
+    state: &T,
+) -> vm::Result<AllParamsVoteCount> {
     let pow_base_reward = ParamVoteCount {
         unchange: state.get_settled_params_vote_count(
             POW_BASE_REWARD_INDEX as usize,
@@ -207,21 +198,7 @@ pub fn next_param_vote_count(state: &State) -> vm::Result<AllParamsVoteCount> {
     })
 }
 
-/// Move TOTAL_VOTES_ENTRIES to the settled ones and reset the counts.
-/// If this is called for the first time, all counts will be initialized with
-/// zeros.
-pub fn settle_vote_counts(state: &mut State) -> vm::Result<()> {
-    for index in 0..PARAMETER_INDEX_MAX {
-        for opt_index in 0..OPTION_INDEX_MAX {
-            let vote = state.get_params_vote_count(index, opt_index)?;
-            state.update_params_vote_count(index, opt_index, U256::zero())?;
-            state.update_settled_params_vote_count(index, opt_index, vote)?;
-        }
-    }
-    Ok(())
-}
-
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct ParamVoteCount {
     unchange: U256,
     increase: U256,
@@ -252,84 +229,8 @@ impl ParamVoteCount {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct AllParamsVoteCount {
     pub pow_base_reward: ParamVoteCount,
     pub pos_reward_interest: ParamVoteCount,
-}
-
-pub mod entries {
-    use tiny_keccak::{Hasher, Keccak};
-
-    use super::*;
-
-    pub type StorageEntryKey = Vec<u8>;
-
-    pub const CURRENT_TOTAL_VOTES_KEY: &'static [u8] = b"current_total_votes";
-    pub const NEXT_TOTAL_VOTES_KEY: &'static [u8] = b"next_total_votes";
-
-    pub const POW_BASE_REWARD_INDEX: u8 = 0;
-    pub const POS_REWARD_INTEREST_RATE_INDEX: u8 = 1;
-    pub const PARAMETER_INDEX_MAX: usize = 2;
-
-    pub const OPTION_UNCHANGE_INDEX: u8 = 0;
-    pub const OPTION_INCREASE_INDEX: u8 = 1;
-    pub const OPTION_DECREASE_INDEX: u8 = 2;
-    pub const OPTION_INDEX_MAX: usize = 3;
-
-    lazy_static! {
-        pub static ref TOTAL_VOTES_START_ENTRY: U256 =
-            start_entry(&*PARAMS_CONTROL_CONTRACT_ADDRESS);
-        pub static ref TOTAL_VOTES_ENTRIES: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] =
-            gen_entry_addresses(0);
-        pub static ref SETTLED_TOTAL_VOTES_ENTRIES: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] =
-            gen_entry_addresses(PARAMETER_INDEX_MAX * OPTION_INDEX_MAX);
-    }
-
-    fn gen_entry_addresses(
-        offset: usize,
-    ) -> [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] {
-        let mut vote_entries =
-            [[[0u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX];
-        for index in 0..PARAMETER_INDEX_MAX {
-            for opt_index in 0..OPTION_INDEX_MAX {
-                vote_entries[index][opt_index] = storage_key_at_index(
-                    &(*TOTAL_VOTES_START_ENTRY + offset),
-                    index,
-                    opt_index,
-                );
-            }
-        }
-        vote_entries
-    }
-
-    fn prefix_and_hash(prefix: u64, data: &[u8]) -> [u8; 32] {
-        let mut hasher = Keccak::v256();
-        hasher.update(&prefix.to_be_bytes());
-        hasher.update(data);
-        let mut hash = [0u8; 32];
-        hasher.finalize(&mut hash);
-        hash
-    }
-
-    #[inline]
-    pub fn start_entry(address: &Address) -> U256 {
-        U256::from_big_endian(&prefix_and_hash(3, address.as_bytes()))
-    }
-
-    pub fn version_entry_key(start: &U256) -> [u8; 32] {
-        let mut entry = [0u8; 32];
-        start.to_big_endian(&mut entry);
-        entry
-    }
-
-    #[inline]
-    pub fn storage_key_at_index(
-        start: &U256, index: usize, opt_index: usize,
-    ) -> [u8; 32] {
-        let mut vote_entry = [0u8; 32];
-        (start + 1 + index * OPTION_INDEX_MAX + opt_index)
-            .to_big_endian(&mut vote_entry);
-        vote_entry
-    }
 }

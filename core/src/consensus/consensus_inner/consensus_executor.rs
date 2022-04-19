@@ -55,7 +55,6 @@ use crate::{
     executive::{
         internal_contract::{
             build_bloom_and_recover_phantom, impls::pos::decode_register_info,
-            next_param_vote_count, settle_vote_counts,
         },
         revert_reason_decode, ExecutionError, ExecutionOutcome, Executive,
         TransactOptions,
@@ -1046,20 +1045,15 @@ impl ConsensusExecutionHandler {
             start_block_number + epoch_receipts.len() as u64 - 1;
 
         // Update/initialize parameters before processing rewards.
+        if current_block_number
+            >= self.machine.params().transition_numbers.cip94
+            && current_block_number
+                % self.machine.params().params_dao_vote_period
+                == 0
         {
-            if current_block_number
-                >= self.machine.params().transition_numbers.cip94
-                && current_block_number
-                    % self.machine.params().params_dao_vote_period
-                    == 0
-            {
-                state
-                    .initialize_or_update_dao_voted_params(
-                        &next_param_vote_count(&state).expect("vm error"),
-                    )
-                    .expect("update params error");
-                settle_vote_counts(&mut state).expect("vm error");
-            }
+            state
+                .initialize_or_update_dao_voted_params()
+                .expect("update params error");
         }
 
         if let Some(reward_execution_info) = reward_execution_info {
