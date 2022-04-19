@@ -62,6 +62,7 @@ pub fn cast_vote(
         context.env.number,
         context.state,
     )?;
+    debug!("vote_power:{}", vote_power);
     for index in 0..PARAMETER_INDEX_MAX {
         let param_vote = vote_counts[index];
         let total_counts = param_vote[0]
