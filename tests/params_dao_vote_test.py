@@ -193,6 +193,18 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, 1, lock_value)]])
         tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
+        # Invalid vote indices
+        block_number = int(client.get_status()["blockNumber"], 0)
+        version = int(block_number / vote_period) + 1
+        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(2, 1, lock_value)]])
+        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+        client.send_tx(tx, wait_for_receipt=True)
+        # Invalid vote option indices
+        block_number = int(client.get_status()["blockNumber"], 0)
+        version = int(block_number / vote_period) + 1
+        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, 3, lock_value)]])
+        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+        client.send_tx(tx, wait_for_receipt=True)
         # Generate enough blocks to get pow reward with new parameters.
         client.generate_empty_blocks(40)
         best_epoch = client.epoch_number()
