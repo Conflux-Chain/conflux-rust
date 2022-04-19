@@ -20,15 +20,9 @@ impl CollateralCheckResultToVmResult for CollateralCheckResult {
             CollateralCheckResult::ExceedStorageLimit { .. } => {
                 Err(vmError::ExceedStorageLimit)
             }
-            CollateralCheckResult::NotEnoughBalance {
-                addr,
-                required,
-                got,
-            } => Err(vmError::NotEnoughBalanceForStorage {
-                addr,
-                required,
-                got,
-            }),
+            CollateralCheckResult::NotEnoughBalance { required, got } => {
+                Err(vmError::NotEnoughBalanceForStorage { required, got })
+            }
             CollateralCheckResult::Valid => Ok(()),
         }
     }

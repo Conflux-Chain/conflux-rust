@@ -1380,7 +1380,6 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             // sponsor_balance is not enough to cover storage incremental.
             if inc > balance {
                 return Ok(CollateralCheckResult::NotEnoughBalance {
-                    addr: *addr,
                     required: inc,
                     got: balance,
                 });

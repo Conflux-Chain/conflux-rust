@@ -1708,7 +1708,6 @@ fn test_automatic_collateral_contract_account() {
             )
             .unwrap(),
         CollateralCheckResult::NotEnoughBalance {
-            addr: contract_account,
             required: *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2),
             got: *COLLATERAL_DRIPS_PER_STORAGE_KEY,
         }

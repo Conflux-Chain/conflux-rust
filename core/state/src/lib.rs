@@ -17,15 +17,8 @@ pub use substate_trait::{SubstateMngTrait, SubstateTrait};
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum CollateralCheckResult {
-    ExceedStorageLimit {
-        limit: U256,
-        required: U256,
-    },
-    NotEnoughBalance {
-        addr: Address,
-        required: U256,
-        got: U256,
-    },
+    ExceedStorageLimit { limit: U256, required: U256 },
+    NotEnoughBalance { required: U256, got: U256 },
     Valid,
 }
 
