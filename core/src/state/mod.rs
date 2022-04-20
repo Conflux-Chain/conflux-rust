@@ -17,6 +17,7 @@ use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };
 use cfx_parameters::{
+    consensus::ONE_UCFX_IN_DRIP,
     consensus_internal::MINING_REWARD_TANZANITE_IN_UCFX,
     internal_contract_addresses::{
         PARAMS_CONTROL_CONTRACT_ADDRESS, POS_REGISTER_CONTRACT_ADDRESS,
@@ -401,9 +402,11 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
 
         // The `interest_amount` exactly equals to the floor of
         // pos_amount * 4% / blocks_per_year / sqrt(pos_amount/total_issued)
-        let interest_amount = sqrt_u256(total_circulating_tokens * total_pos_staking_tokens)
-                // TODO: Check if this is always compatible with `INVERSE_INTEREST_RATE`.
-                * self.world_statistics.interest_rate_per_block;
+        let interest_amount =
+            sqrt_u256(total_circulating_tokens * total_pos_staking_tokens)
+                / (BLOCKS_PER_YEAR * INVERSE_INTEREST_RATE)
+                * self.world_statistics.interest_rate_per_block
+                / *INITIAL_INTEREST_RATE_PER_BLOCK;
         self.world_statistics.distributable_pos_interest += interest_amount;
 
         Ok(())
@@ -1519,6 +1522,11 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             "initialize_or_update_dao_voted_params: vote_count={:?}",
             vote_count
         );
+        debug!(
+            "before pos interest: {} base_reward:{:?}",
+            self.world_statistics.interest_rate_per_block,
+            self.db.get_pow_base_reward()?
+        );
         // If the internal contract is just initialized, all votes are zero and
         // the parameters remain unchanged.
         self.world_statistics.interest_rate_per_block = vote_count
@@ -1535,11 +1543,16 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             }
             None => {
                 self.db.set_pow_base_reward(
-                    MINING_REWARD_TANZANITE_IN_UCFX.into(),
+                    (MINING_REWARD_TANZANITE_IN_UCFX * ONE_UCFX_IN_DRIP).into(),
                     None,
                 )?;
             }
         }
+        debug!(
+            "pos interest: {} base_reward:{:?}",
+            self.world_statistics.interest_rate_per_block,
+            self.db.get_pow_base_reward()?
+        );
 
         // Move the next vote counts into settled and reset the counts.
         for index in 0..PARAMETER_INDEX_MAX {

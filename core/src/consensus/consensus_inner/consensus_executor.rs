@@ -1046,10 +1046,12 @@ impl ConsensusExecutionHandler {
 
         // Update/initialize parameters before processing rewards.
         if current_block_number
-            >= self.machine.params().transition_numbers.cip94
-            && current_block_number
-                % self.machine.params().params_dao_vote_period
-                == 0
+            == self.machine.params().transition_numbers.cip94
+            || (current_block_number
+                > self.machine.params().transition_numbers.cip94
+                && current_block_number
+                    % self.machine.params().params_dao_vote_period
+                    == 0)
         {
             state
                 .initialize_or_update_dao_voted_params()
@@ -1567,6 +1569,7 @@ impl ConsensusExecutionHandler {
                 pivot_block.block_header.height(),
             )
         };
+        debug!("base_reward: {}", base_reward_per_block);
 
         // Base reward and anticone penalties.
         for (enum_idx, block) in epoch_blocks.iter().enumerate() {

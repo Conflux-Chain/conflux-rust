@@ -30,6 +30,8 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
         self.conf_parameters["params_dao_vote_period"] = "10"
+        self.conf_parameters["dao_vote_transition_number"] = "1"
+        self.conf_parameters["dao_vote_transition_height"] = "1"
 
     def get_nonce(self, sender, inc=True):
         if sender not in self.nonce_map:
