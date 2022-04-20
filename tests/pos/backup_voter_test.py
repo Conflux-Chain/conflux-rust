@@ -64,6 +64,7 @@ class BackupVoterTest(DefaultConfluxTestFramework):
         assert self.nodes[PRIME].pos_voting_status()
         assert not self.nodes[BACKUP].pos_voting_status()
         self.nodes[PRIME].pos_stop_voting()
+        time.sleep(2)
         assert not self.nodes[PRIME].pos_voting_status()
         assert not os.path.exists(prime_node_safety_data_path)
         assert os.path.exists(prime_node_safety_data_path + SAVE_SUFFIX)
