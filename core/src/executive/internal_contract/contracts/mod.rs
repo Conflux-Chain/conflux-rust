@@ -221,7 +221,7 @@ pub fn all_internal_contracts() -> Vec<Box<dyn InternalContractTrait>> {
         Box::new(future::Reserved7::instance()),
         Box::new(future::Reserved8::instance()),
         Box::new(future::Reserved9::instance()),
-        Box::new(future::Reserved10::instance()),
+        Box::new(future::SystemStorage::instance()),
         Box::new(future::Reserved11::instance()),
     ]
 }
