@@ -10,6 +10,12 @@ make_solidity_contract! {
     pub(super) struct AntiReentrancyConfig(ANTI_REENTRANCY_CONTRACT_ADDRESS, "placeholder");
 }
 
+// The internal contract for storing system information without storage owner.
+// Instantiation this contract when cip-94 is ready.
+make_solidity_contract! {
+    pub(super) struct SystemStorage(SYSTEM_STORAGE_ADDRESS, "placeholder");
+}
+
 make_solidity_contract! {
     pub(super) struct Reserved7(RESERVED7, "placeholder");
 }
@@ -18,9 +24,6 @@ make_solidity_contract! {
 }
 make_solidity_contract! {
     pub(super) struct Reserved9(RESERVED9, "placeholder");
-}
-make_solidity_contract! {
-    pub(super) struct Reserved10(RESERVED10, "placeholder");
 }
 make_solidity_contract! {
     pub(super) struct Reserved11(RESERVED11, "placeholder");
