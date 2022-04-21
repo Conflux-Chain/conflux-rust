@@ -11,9 +11,7 @@ use crate::rpc::{
     RpcResult,
 };
 use cfx_addr::Network;
-use cfx_types::{
-    address_util::AddressUtil, Address, AddressSpaceUtil, U256, U64,
-};
+use cfx_types::{Address, AddressSpaceUtil, U256, U64};
 use cfxcore::rpc_errors::invalid_params_check;
 use cfxcore_accounts::AccountProvider;
 use cfxkey::Password;
@@ -148,14 +146,9 @@ pub fn sign_call(
 ) -> RpcResult<SignedTransaction> {
     let max_gas = U256::from(MAX_GAS_CALL_REQUEST);
     let gas = min(request.gas.unwrap_or(max_gas), max_gas);
-    let from = request.from.map_or_else(
-        || {
-            let mut address = Address::random();
-            address.set_user_account_type_bits();
-            address
-        },
-        |rpc_addr| rpc_addr.hex_address,
-    );
+    let from = request
+        .from
+        .map_or_else(|| Address::zero(), |rpc_addr| rpc_addr.hex_address);
 
     Ok(PrimitiveTransaction {
         nonce: request.nonce.unwrap_or_default(),

@@ -1013,11 +1013,27 @@ impl<
     pub fn transact_virtual(
         &mut self, tx: &SignedTransaction,
     ) -> DbResult<ExecutionOutcome> {
-        let sender = tx.sender();
+        // If call_requrest.from is passed
+        let options = TransactOptions::virtual_call();
+        if !tx.sender().address.is_zero() {
+            self.state.set_nonce(&tx.sender(), &tx.nonce())?;
+            return self.transact(tx, options);
+        }
+
+        // If not passed use a random one
+        let mut random_hex = Address::random();
+        if tx.space() == Space::Native {
+            random_hex.set_user_account_type_bits();
+        }
+        let sender = random_hex.with_space(tx.space());
+        let tx_with_random_from = &SignedTransaction {
+            transaction: tx.transaction.clone(),
+            sender: sender.address,
+            public: None,
+        };
         let balance = self.state.balance(&sender)?;
         // Give the sender a sufficient balance.
         let needed_balance = U256::MAX / U256::from(2u64);
-        self.state.set_nonce(&sender, &tx.nonce())?;
         if balance < needed_balance {
             let balance_inc = needed_balance - balance;
             self.state.add_balance(
@@ -1033,8 +1049,8 @@ impl<
                 self.state.add_total_evm_tokens(balance_inc);
             }
         }
-        let options = TransactOptions::virtual_call();
-        self.transact(tx, options)
+        self.state.set_nonce(&sender, &tx.nonce())?;
+        self.transact(tx_with_random_from, options)
     }
 
     fn sponsor_check(
