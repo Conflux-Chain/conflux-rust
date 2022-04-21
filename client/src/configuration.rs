@@ -251,7 +251,7 @@ build_config! {
         // Transaction cache/transaction pool section.
         (tx_cache_index_maintain_timeout_ms, (u64), 300_000)
         (tx_pool_size, (usize), 200_000)
-        (tx_pool_min_tx_gas_price, (u64), 1)
+        (tx_pool_min_tx_gas_price, (Option<u64>), None)
         (tx_weight_scaling, (u64), 1)
         (tx_weight_exp, (u8), 1)
 
@@ -925,12 +925,20 @@ impl Configuration {
     }
 
     pub fn txpool_config(&self) -> TxPoolConfig {
+        let min_tx_price_default = if self.is_test_or_dev_mode() {
+            1
+        } else {
+            ONE_GDRIP_IN_DRIP
+        };
         TxPoolConfig {
             capacity: self.raw_conf.tx_pool_size,
             max_tx_gas: RwLock::new(U256::from(
                 DEFAULT_TARGET_BLOCK_GAS_LIMIT / 2,
             )),
-            min_tx_price: self.raw_conf.tx_pool_min_tx_gas_price,
+            min_tx_price: self
+                .raw_conf
+                .tx_pool_min_tx_gas_price
+                .unwrap_or(min_tx_price_default),
             tx_weight_scaling: self.raw_conf.tx_weight_scaling,
             tx_weight_exp: self.raw_conf.tx_weight_exp,
             packing_gas_limit_block_count: self
