@@ -2,10 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_parameters::internal_contract_addresses::SYSTEM_STORAGE_ADDRESS;
+use cfx_state::state_trait::StateOpsTrait;
 use std::convert::TryFrom;
 
-use cfx_statedb::{params_control_entries::*, StateDbExt};
-use cfx_types::{Address, U256, U512};
+use cfx_statedb::params_control_entries::*;
+use cfx_types::{Address, AddressSpaceUtil, U256, U512};
 
 use crate::{
     executive::{
@@ -96,8 +98,10 @@ pub fn cast_vote(
                     index, opt_index, old_vote, param_vote[opt_index]
                 );
                 if is_new_vote || old_vote != param_vote[opt_index] {
-                    let old_total_votes =
-                        context.state.get_params_vote_count(index, opt_index);
+                    let old_total_votes = context.state.storage_at(
+                        &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+                        &TOTAL_VOTES_ENTRIES[index][opt_index],
+                    )?;
                     debug!("old_total_vote: {}", old_total_votes,);
                     let new_total_votes = if old_vote > param_vote[opt_index] {
                         let dec = old_vote - param_vote[opt_index];
@@ -112,11 +116,14 @@ pub fn cast_vote(
                         old_total_votes
                     };
                     debug!("new_total_vote:{}", new_total_votes);
-                    context.state.update_params_vote_count(
-                        index,
-                        opt_index,
+                    context.state.set_storage(
+                        &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+                        TOTAL_VOTES_ENTRIES[index][opt_index].to_vec(),
                         new_total_votes,
-                    );
+                        // `SYSTEM_STORAGE_ADDRESS` does not have storage
+                        // owner.
+                        Default::default(),
+                    )?;
                     context.set_storage(
                         params,
                         vote_entry.to_vec(),
@@ -161,35 +168,44 @@ pub fn read_vote(
 
 /// If the vote counts are not initialized, all counts will be zero, and the
 /// parameters will be unchanged.
-pub fn settled_param_vote_count<T: StateDbExt>(
+pub fn settled_param_vote_count<T: StateOpsTrait>(
     state: &T,
 ) -> vm::Result<AllParamsVoteCount> {
     let pow_base_reward = ParamVoteCount {
-        unchange: state.get_settled_params_vote_count(
-            POW_BASE_REWARD_INDEX as usize,
-            OPTION_UNCHANGE_INDEX as usize,
+        unchange: state.storage_at(
+            &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+            &SETTLED_TOTAL_VOTES_ENTRIES[POW_BASE_REWARD_INDEX as usize]
+                [OPTION_UNCHANGE_INDEX as usize],
         )?,
-        increase: state.get_settled_params_vote_count(
-            POW_BASE_REWARD_INDEX as usize,
-            OPTION_INCREASE_INDEX as usize,
+        increase: state.storage_at(
+            &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+            &SETTLED_TOTAL_VOTES_ENTRIES[POW_BASE_REWARD_INDEX as usize]
+                [OPTION_INCREASE_INDEX as usize],
         )?,
-        decrease: state.get_settled_params_vote_count(
-            POW_BASE_REWARD_INDEX as usize,
-            OPTION_DECREASE_INDEX as usize,
+        decrease: state.storage_at(
+            &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+            &SETTLED_TOTAL_VOTES_ENTRIES[POW_BASE_REWARD_INDEX as usize]
+                [OPTION_DECREASE_INDEX as usize],
         )?,
     };
     let pos_reward_interest = ParamVoteCount {
-        unchange: state.get_settled_params_vote_count(
-            POS_REWARD_INTEREST_RATE_INDEX as usize,
-            OPTION_UNCHANGE_INDEX as usize,
+        unchange: state.storage_at(
+            &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+            &SETTLED_TOTAL_VOTES_ENTRIES
+                [POS_REWARD_INTEREST_RATE_INDEX as usize]
+                [OPTION_UNCHANGE_INDEX as usize],
         )?,
-        increase: state.get_settled_params_vote_count(
-            POS_REWARD_INTEREST_RATE_INDEX as usize,
-            OPTION_INCREASE_INDEX as usize,
+        increase: state.storage_at(
+            &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+            &SETTLED_TOTAL_VOTES_ENTRIES
+                [POS_REWARD_INTEREST_RATE_INDEX as usize]
+                [OPTION_INCREASE_INDEX as usize],
         )?,
-        decrease: state.get_settled_params_vote_count(
-            POS_REWARD_INTEREST_RATE_INDEX as usize,
-            OPTION_DECREASE_INDEX as usize,
+        decrease: state.storage_at(
+            &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+            &SETTLED_TOTAL_VOTES_ENTRIES
+                [POS_REWARD_INTEREST_RATE_INDEX as usize]
+                [OPTION_DECREASE_INDEX as usize],
         )?,
     };
     Ok(AllParamsVoteCount {

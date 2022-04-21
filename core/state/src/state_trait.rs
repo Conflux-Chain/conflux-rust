@@ -263,20 +263,6 @@ pub trait StateOpsTrait {
     fn pos_locked_staking(&self, address: &Address) -> DbResult<U256>;
 
     fn read_vote(&self, address: &Address) -> DbResult<Vec<u8>>;
-
-    fn update_params_vote_count(
-        &mut self, index: usize, opt_index: usize, value: U256,
-    );
-
-    fn update_settled_params_vote_count(
-        &mut self, index: usize, opt_index: usize, value: U256,
-    ) -> DbResult<()>;
-
-    fn get_params_vote_count(&self, index: usize, opt_index: usize) -> U256;
-
-    fn get_settled_params_vote_count(
-        &self, index: usize, opt_index: usize,
-    ) -> DbResult<U256>;
 }
 
 pub trait CheckpointTrait: StateOpsTrait {
