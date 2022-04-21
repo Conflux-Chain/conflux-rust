@@ -13,7 +13,7 @@ class EvmTx2ReceiptTest(Web3Base):
         self.cfxAccount = self.rpc.GENESIS_ADDR
         print(f'Using Conflux account {self.cfxAccount}')
         # initialize EVM account
-        self.evmAccount = self.w3.eth.account.privateKeyToAccount('0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef')
+        self.evmAccount = self.w3.eth.account.privateKeyToAccount(self.DEFAULT_TEST_ACCOUNT_KEY)
         print(f'Using EVM account {self.evmAccount.address}')
         self.cross_space_transfer(self.evmAccount.address, 1 * 10 ** 18)
         assert_equal(self.nodes[0].eth_getBalance(self.evmAccount.address), hex(1 * 10 ** 18))
