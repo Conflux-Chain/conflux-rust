@@ -110,4 +110,4 @@ class Web3Base(ConfluxTestFramework):
 
 
 if __name__ == "__main__":
-    EvmTx2ReceiptTest().main()
+    Web3Base().main()
