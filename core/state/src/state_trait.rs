@@ -263,6 +263,11 @@ pub trait StateOpsTrait {
     fn pos_locked_staking(&self, address: &Address) -> DbResult<U256>;
 
     fn read_vote(&self, address: &Address) -> DbResult<Vec<u8>>;
+
+    fn set_system_storage(&mut self, key: Vec<u8>, value: U256)
+        -> DbResult<()>;
+
+    fn get_system_storage(&self, key: &[u8]) -> DbResult<U256>;
 }
 
 pub trait CheckpointTrait: StateOpsTrait {

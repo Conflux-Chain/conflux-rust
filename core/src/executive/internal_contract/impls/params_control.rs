@@ -2,12 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_parameters::internal_contract_addresses::SYSTEM_STORAGE_ADDRESS;
 use cfx_state::state_trait::StateOpsTrait;
 use std::convert::TryFrom;
 
 use cfx_statedb::params_control_entries::*;
-use cfx_types::{Address, AddressSpaceUtil, U256, U512};
+use cfx_types::{Address, U256, U512};
 
 use crate::{
     executive::{
@@ -42,8 +41,15 @@ pub fn cast_vote(
         context.storage_at(params, &version_entry_key(&account_start_entry))?;
     let is_new_vote = old_version.as_u64() != version;
 
-    let mut vote_counts =
-        [[U256::zero(); OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX];
+    let mut vote_counts: [Option<[U256; OPTION_INDEX_MAX]>;
+        PARAMETER_INDEX_MAX] = if is_new_vote {
+        // If this is the first vote in the version, even for the not-voted
+        // parameters, we still reset the account's votes from previous
+        // versions.
+        [Some([U256::zero(); OPTION_INDEX_MAX]); PARAMETER_INDEX_MAX]
+    } else {
+        [None; PARAMETER_INDEX_MAX]
+    };
     for vote in votes {
         if vote.index >= PARAMETER_INDEX_MAX as u16
             || vote.opt_index >= OPTION_INDEX_MAX as u16
@@ -52,10 +58,17 @@ pub fn cast_vote(
                 "invalid vote index or opt_index".to_string()
             ));
         }
-        // TODO: Do we allow multiple votes for the same index and opt_index?
-        vote_counts[vote.index as usize][vote.opt_index as usize] = vote_counts
-            [vote.index as usize][vote.opt_index as usize]
-            .saturating_add(vote.votes);
+        let entry = &mut vote_counts[vote.index as usize];
+        match entry {
+            None => {
+                *entry = Some([U256::zero(); OPTION_INDEX_MAX]);
+                entry.as_mut().unwrap()[vote.opt_index as usize] = vote.votes;
+            }
+            Some(votes) => {
+                votes[vote.opt_index as usize] =
+                    votes[vote.opt_index as usize].saturating_add(vote.votes);
+            }
+        }
     }
 
     let vote_power = get_vote_power(
@@ -66,70 +79,65 @@ pub fn cast_vote(
     )?;
     debug!("vote_power:{}", vote_power);
     for index in 0..PARAMETER_INDEX_MAX {
-        let param_vote = vote_counts[index];
+        if vote_counts[index].is_none() {
+            continue;
+        }
+        let param_vote = vote_counts[index].unwrap();
         let total_counts = param_vote[0]
             .saturating_add(param_vote[1])
             .saturating_add(param_vote[2]);
-        // TODO: Do we allow cancelling votes by voting with 0 votes?
-        // If no vote, we do not need any process.
-        // If this is the first vote in the version, even for the not-voted
-        // parameters, we still reset the account's votes from previous
-        // versions.
-        if is_new_vote || total_counts != U256::zero() {
-            if total_counts > vote_power {
-                bail!(Error::InternalContract(format!(
-                    "not enough vote power: power={} votes={}",
-                    vote_power, total_counts
-                )));
-            }
-            for opt_index in 0..OPTION_INDEX_MAX {
-                let vote_entry = storage_key_at_index(
-                    &account_start_entry,
-                    index,
-                    opt_index,
-                );
-                let old_vote = if is_new_vote {
-                    U256::zero()
+        if total_counts > vote_power {
+            bail!(Error::InternalContract(format!(
+                "not enough vote power: power={} votes={}",
+                vote_power, total_counts
+            )));
+        }
+        for opt_index in 0..OPTION_INDEX_MAX {
+            let vote_entry =
+                storage_key_at_index(&account_start_entry, index, opt_index);
+            let vote_in_storage = context.storage_at(params, &vote_entry)?;
+            let old_vote = if is_new_vote {
+                U256::zero()
+            } else {
+                vote_in_storage
+            };
+            debug!(
+                "index:{}, opt_index{}, old_vote: {}, new_vote: {}",
+                index, opt_index, old_vote, param_vote[opt_index]
+            );
+
+            // Update the global votes if the account vote changes.
+            if param_vote[opt_index] != old_vote {
+                let old_total_votes = context.state.get_system_storage(
+                    &TOTAL_VOTES_ENTRIES[index][opt_index],
+                )?;
+                debug!("old_total_vote: {}", old_total_votes,);
+                let new_total_votes = if old_vote > param_vote[opt_index] {
+                    let dec = old_vote - param_vote[opt_index];
+                    // If total votes are accurate, `old_total_votes` is
+                    // larger than `old_vote`.
+                    old_total_votes - dec
+                } else if old_vote < param_vote[opt_index] {
+                    let inc = param_vote[opt_index] - old_vote;
+                    old_total_votes + inc
                 } else {
-                    context.storage_at(params, &vote_entry)?
+                    assert!(is_new_vote);
+                    old_total_votes
                 };
-                debug!(
-                    "index:{}, opt_index{}, old_vote: {}, new_vote: {}",
-                    index, opt_index, old_vote, param_vote[opt_index]
-                );
-                if is_new_vote || old_vote != param_vote[opt_index] {
-                    let old_total_votes = context.state.storage_at(
-                        &SYSTEM_STORAGE_ADDRESS.with_native_space(),
-                        &TOTAL_VOTES_ENTRIES[index][opt_index],
-                    )?;
-                    debug!("old_total_vote: {}", old_total_votes,);
-                    let new_total_votes = if old_vote > param_vote[opt_index] {
-                        let dec = old_vote - param_vote[opt_index];
-                        // If total votes are accurate, `old_total_votes` is
-                        // larger than `old_vote`.
-                        old_total_votes - dec
-                    } else if old_vote < param_vote[opt_index] {
-                        let inc = param_vote[opt_index] - old_vote;
-                        old_total_votes + inc
-                    } else {
-                        assert!(is_new_vote);
-                        old_total_votes
-                    };
-                    debug!("new_total_vote:{}", new_total_votes);
-                    context.state.set_storage(
-                        &SYSTEM_STORAGE_ADDRESS.with_native_space(),
-                        TOTAL_VOTES_ENTRIES[index][opt_index].to_vec(),
-                        new_total_votes,
-                        // `SYSTEM_STORAGE_ADDRESS` does not have storage
-                        // owner.
-                        Default::default(),
-                    )?;
-                    context.set_storage(
-                        params,
-                        vote_entry.to_vec(),
-                        param_vote[opt_index],
-                    )?;
-                }
+                debug!("new_total_vote:{}", new_total_votes);
+                context.state.set_system_storage(
+                    TOTAL_VOTES_ENTRIES[index][opt_index].to_vec(),
+                    new_total_votes,
+                )?;
+            }
+
+            // Overwrite the account vote entry if needed.
+            if param_vote[opt_index] != vote_in_storage {
+                context.set_storage(
+                    params,
+                    vote_entry.to_vec(),
+                    param_vote[opt_index],
+                )?;
             }
         }
     }
@@ -172,37 +180,31 @@ pub fn settled_param_vote_count<T: StateOpsTrait>(
     state: &T,
 ) -> vm::Result<AllParamsVoteCount> {
     let pow_base_reward = ParamVoteCount {
-        unchange: state.storage_at(
-            &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+        unchange: state.get_system_storage(
             &SETTLED_TOTAL_VOTES_ENTRIES[POW_BASE_REWARD_INDEX as usize]
                 [OPTION_UNCHANGE_INDEX as usize],
         )?,
-        increase: state.storage_at(
-            &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+        increase: state.get_system_storage(
             &SETTLED_TOTAL_VOTES_ENTRIES[POW_BASE_REWARD_INDEX as usize]
                 [OPTION_INCREASE_INDEX as usize],
         )?,
-        decrease: state.storage_at(
-            &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+        decrease: state.get_system_storage(
             &SETTLED_TOTAL_VOTES_ENTRIES[POW_BASE_REWARD_INDEX as usize]
                 [OPTION_DECREASE_INDEX as usize],
         )?,
     };
     let pos_reward_interest = ParamVoteCount {
-        unchange: state.storage_at(
-            &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+        unchange: state.get_system_storage(
             &SETTLED_TOTAL_VOTES_ENTRIES
                 [POS_REWARD_INTEREST_RATE_INDEX as usize]
                 [OPTION_UNCHANGE_INDEX as usize],
         )?,
-        increase: state.storage_at(
-            &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+        increase: state.get_system_storage(
             &SETTLED_TOTAL_VOTES_ENTRIES
                 [POS_REWARD_INTEREST_RATE_INDEX as usize]
                 [OPTION_INCREASE_INDEX as usize],
         )?,
-        decrease: state.storage_at(
-            &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+        decrease: state.get_system_storage(
             &SETTLED_TOTAL_VOTES_ENTRIES
                 [POS_REWARD_INTEREST_RATE_INDEX as usize]
                 [OPTION_DECREASE_INDEX as usize],

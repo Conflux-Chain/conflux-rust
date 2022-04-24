@@ -400,11 +400,14 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
 
         // The `interest_amount` exactly equals to the floor of
         // pos_amount * 4% / blocks_per_year / sqrt(pos_amount/total_issued)
-        let interest_amount =
-            sqrt_u256(total_circulating_tokens * total_pos_staking_tokens)
-                / (BLOCKS_PER_YEAR * INVERSE_INTEREST_RATE)
+        let interest_amount = sqrt_u256(
+            total_circulating_tokens
+                * total_pos_staking_tokens
                 * self.world_statistics.interest_rate_per_block
-                / *INITIAL_INTEREST_RATE_PER_BLOCK;
+                * self.world_statistics.interest_rate_per_block,
+        ) / (BLOCKS_PER_YEAR
+            * INVERSE_INTEREST_RATE
+            * INITIAL_INTEREST_RATE_PER_BLOCK.as_u64());
         self.world_statistics.distributable_pos_interest += interest_amount;
 
         Ok(())
@@ -1145,6 +1148,23 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 
     fn read_vote(&self, _address: &Address) -> DbResult<Vec<u8>> { todo!() }
+
+    fn set_system_storage(
+        &mut self, key: Vec<u8>, value: U256,
+    ) -> DbResult<()> {
+        self.set_storage(
+            &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+            key,
+            value,
+            // The system storage data have no owner, and this parameter is
+            // ignored.
+            Default::default(),
+        )
+    }
+
+    fn get_system_storage(&self, key: &[u8]) -> DbResult<U256> {
+        self.storage_at(&SYSTEM_STORAGE_ADDRESS.with_native_space(), key)
+    }
 }
 
 impl<StateDbStorage: StorageStateTrait> CheckpointTrait
@@ -1513,21 +1533,16 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         // Move the next vote counts into settled and reset the counts.
         for index in 0..PARAMETER_INDEX_MAX {
             for opt_index in 0..OPTION_INDEX_MAX {
-                let vote_count = self.storage_at(
-                    &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+                let vote_count = self.get_system_storage(
                     &TOTAL_VOTES_ENTRIES[index][opt_index],
                 )?;
-                self.set_storage(
-                    &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+                self.set_system_storage(
                     SETTLED_TOTAL_VOTES_ENTRIES[index][opt_index].to_vec(),
                     vote_count,
-                    Default::default(),
                 )?;
-                self.set_storage(
-                    &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+                self.set_system_storage(
                     TOTAL_VOTES_ENTRIES[index][opt_index].to_vec(),
                     U256::zero(),
-                    Default::default(),
                 )?;
             }
         }
