@@ -1,7 +1,7 @@
 pragma solidity >=0.4.15;
 
 
-contract AdminControl {
+contract ParamsControl {
     struct Vote {
         uint8 index;
         uint256[3] votes;
