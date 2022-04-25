@@ -36,9 +36,8 @@ pub fn cast_vote(
             current_voting_version, version
         )));
     }
-    let account_start_entry = start_entry(&address);
     let old_version =
-        context.storage_at(params, &version_entry_key(&account_start_entry))?;
+        context.storage_at(params, &storage_key::versions(&address))?;
     let is_new_vote = old_version.as_u64() != version;
 
     let mut vote_counts: [Option<[U256; OPTION_INDEX_MAX]>;
@@ -93,9 +92,10 @@ pub fn cast_vote(
             )));
         }
         for opt_index in 0..OPTION_INDEX_MAX {
-            let vote_entry =
-                storage_key_at_index(&account_start_entry, index, opt_index);
-            let vote_in_storage = context.storage_at(params, &vote_entry)?;
+            let vote_in_storage = context.storage_at(
+                params,
+                &storage_key::votes(&address, index, opt_index),
+            )?;
             let old_vote = if is_new_vote {
                 U256::zero()
             } else {
@@ -135,7 +135,7 @@ pub fn cast_vote(
             if param_vote[opt_index] != vote_in_storage {
                 context.set_storage(
                     params,
-                    vote_entry.to_vec(),
+                    storage_key::votes(&address, index, opt_index).to_vec(),
                     param_vote[opt_index],
                 )?;
             }
@@ -144,7 +144,7 @@ pub fn cast_vote(
     if is_new_vote {
         context.set_storage(
             params,
-            version_entry_key(&account_start_entry).to_vec(),
+            storage_key::versions(&address).to_vec(),
             U256::from(version),
         )?;
     }
@@ -155,12 +155,11 @@ pub fn read_vote(
     address: Address, params: &ActionParams, context: &mut InternalRefContext,
 ) -> vm::Result<Vec<Vote>> {
     let mut votes_list = Vec::new();
-    let account_start_entry = start_entry(&address);
     for index in 0..PARAMETER_INDEX_MAX {
         for opt_index in 0..OPTION_INDEX_MAX {
             let votes = context.storage_at(
                 params,
-                &storage_key_at_index(&account_start_entry, index, opt_index),
+                &storage_key::votes(&address, index, opt_index),
             )?;
             if votes != U256::zero() {
                 votes_list.push(Vote {
@@ -251,4 +250,97 @@ impl ParamVoteCount {
 pub struct AllParamsVoteCount {
     pub pow_base_reward: ParamVoteCount,
     pub pos_reward_interest: ParamVoteCount,
+}
+
+/// Solidity variable sequences.
+/// ```solidity
+/// struct VoteInfo {
+///     uint version,
+///     uint[3] pow_base_reward dynamic,
+///     uint[3] pos_interest_rate dynamic,
+/// }
+/// mapping(address => VoteInfo) votes;
+/// ```
+mod storage_key {
+    use super::{Address, U256};
+    use cfx_types::BigEndianHash;
+    use hash::H256;
+    use keccak_hash::keccak;
+
+    const VOTES_SLOT: usize = 0;
+
+    // General function for solidity storage rule
+    fn mapping_slot(base: U256, index: U256) -> U256 {
+        let mut input = [0u8; 64];
+        base.to_big_endian(&mut input[32..]);
+        index.to_big_endian(&mut input[..32]);
+        let hash = keccak(input);
+        U256::from_big_endian(hash.as_ref())
+    }
+
+    #[allow(dead_code)]
+    // General function for solidity storage rule
+    fn vector_slot(base: U256, index: usize, size: usize) -> U256 {
+        let start_slot = dynamic_slot(base);
+        return array_slot(start_slot, index, size);
+    }
+
+    fn dynamic_slot(base: U256) -> U256 {
+        let mut input = [0u8; 32];
+        base.to_big_endian(&mut input);
+        let hash = keccak(input);
+        return U256::from_big_endian(hash.as_ref());
+    }
+
+    // General function for solidity storage rule
+    fn array_slot(base: U256, index: usize, element_size: usize) -> U256 {
+        // Solidity will apply an overflowing add here.
+        // However, if this function is used correctly, the overflowing will
+        // happen with a negligible exception, so we let it panic when
+        // overflowing happen.
+        base + index * element_size
+    }
+
+    fn u256_to_array(input: U256) -> [u8; 32] {
+        let mut answer = [0u8; 32];
+        input.to_big_endian(answer.as_mut());
+        answer
+    }
+
+    // TODO: add cache to avoid duplicated hash computing
+    pub fn versions(address: &Address) -> [u8; 32] {
+        // Position of `votes`
+        let base = U256::from(VOTES_SLOT);
+
+        // Position of `votes[address]`
+        let address_slot = mapping_slot(base, H256::from(*address).into_uint());
+
+        // Position of `votes[address].version`
+        let version_slot = address_slot;
+
+        return u256_to_array(version_slot);
+    }
+
+    pub fn votes(
+        address: &Address, index: usize, opt_index: usize,
+    ) -> [u8; 32] {
+        const TOPIC_OFFSET: [usize; 2] = [1, 2];
+
+        // Position of `votes`
+        let base = U256::from(VOTES_SLOT);
+
+        // Position of `votes[address]`
+        let address_slot = mapping_slot(base, H256::from(*address).into_uint());
+
+        // Position of `votes[address].<topic>` (static slot)
+        let topic_slot = address_slot + TOPIC_OFFSET[index];
+
+        // Position of `votes[address].<topic>` (dynamic slot)
+        let topic_slot = dynamic_slot(topic_slot);
+
+        // Position of `votes[address].<topic>[opt_index]`
+        let opt_slot = array_slot(topic_slot, opt_index, 1);
+
+        return u256_to_array(opt_slot);
+    }
 }
