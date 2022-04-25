@@ -4,8 +4,7 @@ pragma solidity >=0.4.15;
 contract AdminControl {
     struct Vote {
         uint8 index;
-        uint8 opt_index;
-        uint256 votes;
+        uint256[3] votes;
     }
 
     /*** Query Functions ***/

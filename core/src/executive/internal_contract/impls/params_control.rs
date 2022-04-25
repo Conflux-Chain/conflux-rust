@@ -40,19 +40,9 @@ pub fn cast_vote(
         context.storage_at(params, &storage_key::versions(&address))?;
     let is_new_vote = old_version.as_u64() != version;
 
-    let mut vote_counts: [Option<[U256; OPTION_INDEX_MAX]>;
-        PARAMETER_INDEX_MAX] = if is_new_vote {
-        // If this is the first vote in the version, even for the not-voted
-        // parameters, we still reset the account's votes from previous
-        // versions.
-        [Some([U256::zero(); OPTION_INDEX_MAX]); PARAMETER_INDEX_MAX]
-    } else {
-        [None; PARAMETER_INDEX_MAX]
-    };
+    let mut vote_counts = [None; PARAMETER_INDEX_MAX];
     for vote in votes {
-        if vote.index >= PARAMETER_INDEX_MAX as u16
-            || vote.opt_index >= OPTION_INDEX_MAX as u16
-        {
+        if vote.index >= PARAMETER_INDEX_MAX as u16 {
             bail!(Error::InternalContract(
                 "invalid vote index or opt_index".to_string()
             ));
@@ -60,12 +50,21 @@ pub fn cast_vote(
         let entry = &mut vote_counts[vote.index as usize];
         match entry {
             None => {
-                *entry = Some([U256::zero(); OPTION_INDEX_MAX]);
-                entry.as_mut().unwrap()[vote.opt_index as usize] = vote.votes;
+                *entry = Some(vote.votes);
             }
-            Some(votes) => {
-                votes[vote.opt_index as usize] =
-                    votes[vote.opt_index as usize].saturating_add(vote.votes);
+            Some(_) => bail!(Error::InternalContract(format!(
+                "Parameter voted twice: vote.index={}",
+                vote.index
+            ))),
+        }
+    }
+    if is_new_vote {
+        // If this is the first vote in the version, even for the not-voted
+        // parameters, we still reset the account's votes from previous
+        // versions.
+        for index in 0..PARAMETER_INDEX_MAX {
+            if vote_counts[index].is_none() {
+                vote_counts[index] = Some([U256::zero(); OPTION_INDEX_MAX]);
             }
         }
     }
@@ -156,19 +155,18 @@ pub fn read_vote(
 ) -> vm::Result<Vec<Vote>> {
     let mut votes_list = Vec::new();
     for index in 0..PARAMETER_INDEX_MAX {
+        let mut param_vote = [U256::zero(); OPTION_INDEX_MAX];
         for opt_index in 0..OPTION_INDEX_MAX {
             let votes = context.storage_at(
                 params,
                 &storage_key::votes(&address, index, opt_index),
             )?;
-            if votes != U256::zero() {
-                votes_list.push(Vote {
-                    index: index as u16,
-                    opt_index: opt_index as u16,
-                    votes,
-                })
-            }
+            param_vote[opt_index] = votes;
         }
+        votes_list.push(Vote {
+            index: index as u16,
+            votes: param_vote,
+        })
     }
     Ok(votes_list)
 }

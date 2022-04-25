@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_parameters::internal_contract_addresses::PARAMS_CONTROL_CONTRACT_ADDRESS;
+use cfx_statedb::params_control_entries::OPTION_INDEX_MAX;
 use cfx_types::{Address, U256};
 use solidity_abi::{
     ABIDecodable, ABIDecodeError, ABIEncodable, ABIPackedEncodable,
@@ -30,7 +31,7 @@ fn generate_fn_table() -> SolFnTable {
 group_impl_is_active!(|spec: &Spec| spec.cip94, CastVote, ReadVote);
 
 make_solidity_function! {
-    struct CastVote((u64, Vec<Vote>), "castVote(uint64,(uint16,uint16,uint256)[])");
+    struct CastVote((u64, Vec<Vote>), "castVote(uint64,(uint16,uint256[3])[])");
 }
 // FIXME(lpl): What's the gas cost?
 impl_function_type!(CastVote, "non_payable_write", gas: |spec: &Spec| spec.sstore_reset_gas);
@@ -63,33 +64,24 @@ impl SimpleExecutionTrait for ReadVote {
 
 pub struct Vote {
     pub index: u16,
-    pub opt_index: u16,
-    pub votes: U256,
+    pub votes: [U256; OPTION_INDEX_MAX],
 }
 
 // FIXME(lpl): Better ABI Serde for struct.
 impl ABIVariable for Vote {
     const BASIC_TYPE: bool = false;
-    const STATIC_LENGTH: Option<usize> = Some(32 * 3);
+    const STATIC_LENGTH: Option<usize> = Some(32 * (1 + OPTION_INDEX_MAX));
 
     fn from_abi(data: &[u8]) -> Result<Self, ABIDecodeError> {
-        let (index, opt_index, votes) = ABIDecodable::abi_decode(data)?;
-        Ok(Self {
-            index,
-            opt_index,
-            votes,
-        })
+        let (index, votes) = ABIDecodable::abi_decode(data)?;
+        Ok(Self { index, votes })
     }
 
     fn to_abi(&self) -> LinkedBytes {
-        LinkedBytes::from_bytes(
-            (self.index, self.opt_index, self.votes).abi_encode(),
-        )
+        LinkedBytes::from_bytes((self.index, self.votes).abi_encode())
     }
 
     fn to_packed_abi(&self) -> LinkedBytes {
-        LinkedBytes::from_bytes(
-            (self.index, self.opt_index, self.votes).abi_packed_encode(),
-        )
+        LinkedBytes::from_bytes((self.index, self.votes).abi_packed_encode())
     }
 }

@@ -116,7 +116,7 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         vote_period = int(self.conf_parameters["params_dao_vote_period"])
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 1
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, 1, lock_value), (1, 1, lock_value)]])
+        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, [0, lock_value, 0]), (1, [0, lock_value, 0])]])
         tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
         # Generate enough blocks to get pow reward with new parameters.
@@ -128,7 +128,7 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         # Vote for a single parameter
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 1
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(1, 2, lock_value)]])
+        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(1, [0, 0, lock_value])]])
         tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
         # Generate enough blocks to get pow reward with new parameters.
@@ -140,10 +140,10 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         # Two accounts vote
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 1
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, 2, lock_value), (1, 0, lock_value)]])
+        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, [0, 0, lock_value]), (1, [lock_value, 0, 0])]])
         tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         tx_hash1 = client.send_tx(tx)
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, 0, lock_value), (1, 1, lock_value)]])
+        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, [lock_value, 0, 0]), (1, [0, lock_value, 0])]])
         tx = client.new_tx(priv_key=account2_priv, data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         tx_hash2 = client.send_tx(tx)
         client.wait_for_receipt(tx_hash1, state_before_wait=True)
@@ -157,11 +157,11 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         # Replace old votes
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 1
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(1, 0, int(lock_value/4)), (1, 2, int(lock_value/2)), (0, 0, int(lock_value/2)), (0, 1, int(lock_value/2))]])
+        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(1, [int(lock_value/4), 0, int(lock_value/2)]), (0, [int(lock_value/2), int(lock_value/2), 0])]])
         tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         next_nonce = tx.nonce + 1
         client.send_tx(tx)
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, 0, int(lock_value/4)), (0, 2, int(lock_value/2))]])
+        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, [int(lock_value/4), 0, int(lock_value/2)])]])
         tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024, nonce=next_nonce)
         client.send_tx(tx, wait_for_receipt=True)
         # Generate enough blocks to get pow reward with new parameters.
@@ -174,37 +174,37 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 1
         # not enough voting power for a single vote
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, 1, lock_value + 1)]])
+        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, [0, lock_value + 1, 0])]])
         tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 1
         # not enough voting power for the total votes
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, 1, lock_value), (1, 1, lock_value), (1, 0, 1)]])
+        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, [0, lock_value, 0]), (1, [1, lock_value, 0])]])
         tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
         # old version
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period)
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, 1, lock_value)]])
+        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, [0, lock_value, 0])]])
         tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
         # future version
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 2
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, 1, lock_value)]])
+        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, [0, lock_value, 0])]])
         tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
         # Invalid vote indices
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 1
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(2, 1, lock_value)]])
+        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(2, [0, lock_value, 0])]])
         tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
-        # Invalid vote option indices
+        # Duplicate votes
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 1
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, 3, lock_value)]])
+        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, [0, 1, 0]), (0, [1, 0, 0])]])
         tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
         # Generate enough blocks to get pow reward with new parameters.
