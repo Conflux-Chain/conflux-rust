@@ -76,46 +76,47 @@ impl ABIVariable for bool {
     }
 }
 
-impl ABIVariable for u64 {
-    const BASIC_TYPE: bool = true;
-    const STATIC_LENGTH: Option<usize> = Some(32);
+macro_rules! impl_abi_variable_for_primitive {
+    () => {};
+    ($ty: ident) => {impl_abi_variable_for_primitive!($ty,);};
+    ($ty: ident, $($rest: ident),*) => {
+        impl ABIVariable for $ty {
+            const BASIC_TYPE: bool = true;
+            const STATIC_LENGTH: Option<usize> = Some(32);
 
-    fn from_abi(data: &[u8]) -> Result<Self, ABIDecodeError> {
-        abi_require(data.len() == 32, "Invalid call data length")?;
-        let mut bytes = [0u8; 8];
-        bytes.copy_from_slice(&data[32 - 8..]);
-        Ok(u64::from_be_bytes(bytes))
-    }
+            fn from_abi(data: &[u8]) -> Result<Self, ABIDecodeError> {
+                const BYTES: usize = ($ty::BITS/8) as usize;
+                abi_require(data.len() == 32, "Invalid call data length")?;
+                let mut bytes = [0u8; BYTES];
+                bytes.copy_from_slice(&data[32 - BYTES..]);
+                Ok($ty::from_be_bytes(bytes))
+            }
 
-    fn to_abi(&self) -> LinkedBytes {
-        let mut answer = vec![0u8; 32];
-        answer[32 - 8..].copy_from_slice(&self.to_be_bytes());
-        LinkedBytes::from_bytes(answer)
-    }
+            fn to_abi(&self) -> LinkedBytes {
+                const BYTES: usize = ($ty::BITS/8) as usize;
+                let mut answer = vec![0u8; 32];
+                answer[32 - BYTES..].copy_from_slice(&self.to_be_bytes());
+                LinkedBytes::from_bytes(answer)
+            }
 
-    fn to_packed_abi(&self) -> LinkedBytes {
-        LinkedBytes::from_bytes(self.to_be_bytes().to_vec())
+            fn to_packed_abi(&self) -> LinkedBytes {
+                LinkedBytes::from_bytes(self.to_be_bytes().to_vec())
+            }
+        }
+
+        impl_abi_variable_for_primitive!($($rest),*);
     }
 }
 
-impl ABIVariable for u16 {
-    const BASIC_TYPE: bool = true;
-    const STATIC_LENGTH: Option<usize> = Some(32);
+impl_abi_variable_for_primitive!(U8, u16, u32, u64, u128);
 
-    fn from_abi(data: &[u8]) -> Result<Self, ABIDecodeError> {
-        abi_require(data.len() == 32, "Invalid call data length")?;
-        let mut bytes = [0u8; 2];
-        bytes.copy_from_slice(&data[32 - 2..]);
-        Ok(u16::from_be_bytes(bytes))
-    }
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub struct U8(u8);
 
-    fn to_abi(&self) -> LinkedBytes {
-        let mut answer = vec![0u8; 32];
-        answer[32 - 2..].copy_from_slice(&self.to_be_bytes());
-        LinkedBytes::from_bytes(answer)
-    }
+impl U8 {
+    const BITS: usize = 8;
 
-    fn to_packed_abi(&self) -> LinkedBytes {
-        LinkedBytes::from_bytes(self.to_be_bytes().to_vec())
-    }
+    fn to_be_bytes(self) -> [u8; 1] { [self.0] }
+
+    fn from_be_bytes(input: [u8; 1]) -> Self { U8(input[0]) }
 }
