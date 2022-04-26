@@ -15,7 +15,7 @@ mod utils;
 #[macro_use]
 extern crate lazy_static;
 
-use self::utils::{read_abi_list, ABIListWriter, LinkedBytes};
+pub use self::utils::{read_abi_list, ABIListWriter, LinkedBytes};
 use cfx_types::H256;
 use keccak_hash::keccak;
 

@@ -97,3 +97,25 @@ impl ABIVariable for u64 {
         LinkedBytes::from_bytes(self.to_be_bytes().to_vec())
     }
 }
+
+impl ABIVariable for u16 {
+    const BASIC_TYPE: bool = true;
+    const STATIC_LENGTH: Option<usize> = Some(32);
+
+    fn from_abi(data: &[u8]) -> Result<Self, ABIDecodeError> {
+        abi_require(data.len() == 32, "Invalid call data length")?;
+        let mut bytes = [0u8; 2];
+        bytes.copy_from_slice(&data[32 - 2..]);
+        Ok(u16::from_be_bytes(bytes))
+    }
+
+    fn to_abi(&self) -> LinkedBytes {
+        let mut answer = vec![0u8; 32];
+        answer[32 - 2..].copy_from_slice(&self.to_be_bytes());
+        LinkedBytes::from_bytes(answer)
+    }
+
+    fn to_packed_abi(&self) -> LinkedBytes {
+        LinkedBytes::from_bytes(self.to_be_bytes().to_vec())
+    }
+}

@@ -242,7 +242,7 @@ class BlockHeader(rlp.Serializable):
         ("gas_limit", big_endian_int),
         ("referee_hashes", CountableList(binary)),
         ("nonce", big_endian_int),
-        ("pos_reference", CountableList(binary))
+        ("pos_reference", CountableList(binary)),
     ]
 
     def __init__(self,

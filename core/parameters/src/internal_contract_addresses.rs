@@ -20,11 +20,11 @@ lazy_static! {
         Address::from_str("0888000000000000000000000000000000000005").unwrap();
     pub static ref CROSS_SPACE_CONTRACT_ADDRESS: Address =
         Address::from_str("0888000000000000000000000000000000000006").unwrap();
+    pub static ref PARAMS_CONTROL_CONTRACT_ADDRESS: Address =
+        Address::from_str("0888000000000000000000000000000000000007").unwrap();
 
     // We reserve more addresses so we don't need to change the genesis hash
     // in test mode each time adding new internal contracts.
-    pub static ref RESERVED7: Address =
-        Address::from_str("0888000000000000000000000000000000000007").unwrap();
     pub static ref RESERVED8: Address =
         Address::from_str("0888000000000000000000000000000000000008").unwrap();
     pub static ref RESERVED9: Address =

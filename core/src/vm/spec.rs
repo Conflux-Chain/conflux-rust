@@ -21,6 +21,7 @@
 //! Cost spec and other parameterisations for the EVM.
 
 use crate::spec::CommonParams;
+use cfx_parameters::block::DAO_PARAMETER_VOTE_PERIOD;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use primitives::BlockNumber;
 
@@ -149,6 +150,10 @@ pub struct Spec {
     pub cip78b: bool,
     /// CIP-90: A Space that Fully EVM Compatible
     pub cip90: bool,
+    /// CIP-94: On-chain Parameter DAO Vote
+    pub cip94: bool,
+    pub cip94_activation_block_number: u64,
+    pub params_dao_vote_period: u64,
 }
 
 /// Wasm cost table
@@ -282,7 +287,10 @@ impl Spec {
             cip90: false,
             cip78a: false,
             cip78b: false,
+            cip94: false,
             evm_gas_ratio: 2,
+            cip94_activation_block_number: u64::MAX,
+            params_dao_vote_period: DAO_PARAMETER_VOTE_PERIOD,
         }
     }
 
@@ -299,6 +307,9 @@ impl Spec {
         spec.cip90 = number >= params.transition_numbers.cip90b;
         spec.cip78a = number >= params.transition_numbers.cip78a;
         spec.cip78b = number >= params.transition_numbers.cip78b;
+        spec.cip94 = number >= params.transition_numbers.cip94;
+        spec.cip94_activation_block_number = params.transition_numbers.cip94;
+        spec.params_dao_vote_period = params.params_dao_vote_period;
         spec
     }
 

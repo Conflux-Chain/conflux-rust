@@ -147,11 +147,14 @@ build_config! {
         (tanzanite_transition_height, (u64), TANZANITE_HEIGHT)
         (hydra_transition_number, (Option<u64>), Some(92060600))
         (hydra_transition_height, (Option<u64>), Some(36935000))
+        (dao_vote_transition_number, (Option<u64>), None)
+        (dao_vote_transition_height, (Option<u64>), None)
         (cip43_init_end_number, (Option<u64>), Some(92406200))
         (cip78_patch_transition_number,(Option<u64>),None)
         (cip90_transition_height,(Option<u64>),None)
         (cip90_transition_number,(Option<u64>),None)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
+        (params_dao_vote_period, (u64), DAO_PARAMETER_VOTE_PERIOD)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
         // FIXME: this is part of spec.
@@ -1130,6 +1133,10 @@ impl Configuration {
             .raw_conf
             .hydra_transition_number
             .unwrap_or(default_transition_time);
+        params.transition_numbers.cip94 = self
+            .raw_conf
+            .dao_vote_transition_number
+            .unwrap_or(default_transition_time);
         if self.is_test_or_dev_mode() {
             params.transition_numbers.cip43b =
                 self.raw_conf.cip43_init_end_number.unwrap_or(u64::MAX);
@@ -1183,6 +1190,11 @@ impl Configuration {
             .cip90_transition_height
             .or(self.raw_conf.hydra_transition_height)
             .unwrap_or(default_transition_time);
+        params.transition_heights.cip94 = self
+            .raw_conf
+            .dao_vote_transition_height
+            .unwrap_or(default_transition_time);
+        params.params_dao_vote_period = self.raw_conf.params_dao_vote_period;
 
         let mut base_block_rewards = BTreeMap::new();
         base_block_rewards.insert(0, INITIAL_BASE_MINING_REWARD_IN_UCFX.into());
