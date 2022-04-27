@@ -12,6 +12,45 @@ from conflux.utils import int_to_hex, priv_to_addr
 from test_framework.blocktools import create_transaction, wait_for_initial_nonce_for_address
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import get_contract_instance, assert_equal
+import numpy as np
+
+
+def sqrt(n: int):
+    x = int(np.sqrt(float(n)))
+    for _ in range(4):
+        x = (x + n // x) // 2
+    assert (x * x <= n)
+    assert ((x + 1) * (x + 1) > n)
+    return x
+
+
+def power_two_frac(dividend: int, neg: bool):
+    base = 1 << 254
+
+    assert(type(dividend) is int)
+
+    for _ in range(64):
+        if dividend % 2 != 0:
+            if neg:
+                base = base // 2
+            else:
+                base = base * 2
+
+        base = sqrt(base)
+        base <<= 127
+        dividend //= 2
+        # print(base)
+
+    return base >> (254 - 96)
+
+
+def update_value(old: int, votes: int, total_votes: int, neg: bool):
+    assert(type(old) is int)
+    assert(type(votes) is int)
+    assert(type(total_votes) is int)
+    return old * power_two_frac(votes * 2 ** 64 // total_votes, neg) // 2 ** 96
+
+BLOCKS_PER_YEAR = 2 * 60 * 60 * 24 * 365
 
 
 class ParamsDaoVoteTest(ConfluxTestFramework):
@@ -20,6 +59,7 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         'gasPrice': 1,
         'chainId': 1,
     }
+
     def __init__(self):
         super().__init__()
         self.nonce_map = {}
@@ -55,7 +95,7 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
             func = getattr(contract, name)
         attrs = {
             'nonce': self.get_nonce(priv_to_addr(sender_key)),
-            ** ParamsDaoVoteTest.REQUEST_BASE
+            **ParamsDaoVoteTest.REQUEST_BASE
         }
         if contract_addr:
             attrs['receiver'] = decode_hex(contract_addr)
@@ -85,30 +125,33 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         client = RpcClient(self.nodes[0])
         client.generate_empty_blocks(1)[0]
         client.generate_empty_blocks(40)
-        initial_interest_rate = int(client.get_interest_rate("0x1"), 0)
-        initial_base_reward = int(client.get_block_reward_info("0x1")[0]["baseReward"], 0)
-        print(initial_interest_rate, initial_base_reward)
+        current_interest_rate = int(client.get_interest_rate("0x1"), 0) // BLOCKS_PER_YEAR
+        current_base_reward = int(client.get_block_reward_info("0x1")[0]["baseReward"], 0)
 
         # Check if the parameters remain unchanged without vote
-        assert_equal(int(client.get_interest_rate(int_to_hex(20)), 0), initial_interest_rate)
-        assert_equal(int(client.get_block_reward_info(int_to_hex(20))[0]["baseReward"], 0), initial_base_reward)
+        assert_equal(int(client.get_interest_rate(int_to_hex(20)), 0), current_interest_rate * BLOCKS_PER_YEAR)
+        assert_equal(int(client.get_block_reward_info(int_to_hex(20))[0]["baseReward"], 0), current_base_reward)
 
         # stake and lock CFX
         lock_value = 100
-        tx = client.new_tx(data=stake_tx_data(lock_value), value=0, receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
+        tx = client.new_tx(data=stake_tx_data(lock_value), value=0,
+                           receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
         client.send_tx(tx, wait_for_receipt=True)
         current_block_number = int(client.get_status()["blockNumber"], 0)
         locked_time = 5 * 15_768_000  # MINED_BLOCK_COUNT_PER_QUARTER
-        tx = client.new_tx(data=lock_tx_data(lock_value, current_block_number + locked_time), value=0, receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
+        tx = client.new_tx(data=lock_tx_data(lock_value, current_block_number + locked_time), value=0,
+                           receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
         client.send_tx(tx, wait_for_receipt=True)
         account2_addr, account2_priv = client.rand_account()
-        tx = client.new_tx(value=lock_value * 2 * 10**18, receiver=account2_addr)
+        tx = client.new_tx(value=lock_value * 2 * 10 ** 18, receiver=account2_addr)
         client.send_tx(tx, wait_for_receipt=True)
-        tx = client.new_tx(priv_key=account2_priv, data=stake_tx_data(lock_value), value=0, receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
+        tx = client.new_tx(priv_key=account2_priv, data=stake_tx_data(lock_value), value=0,
+                           receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
         client.send_tx(tx, wait_for_receipt=True)
         current_block_number = int(client.get_status()["blockNumber"], 0)
         locked_time = 5 * 15_768_000  # MINED_BLOCK_COUNT_PER_QUARTER
-        tx = client.new_tx(priv_key=account2_priv, data=lock_tx_data(lock_value, current_block_number + locked_time), value=0, receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
+        tx = client.new_tx(priv_key=account2_priv, data=lock_tx_data(lock_value, current_block_number + locked_time),
+                           value=0, receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
         client.send_tx(tx, wait_for_receipt=True)
         lock_value = lock_value * 10 ** 18
 
@@ -116,102 +159,143 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         vote_period = int(self.conf_parameters["params_dao_vote_period"])
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 1
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, [0, lock_value, 0]), (1, [0, lock_value, 0])]])
-        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+        data = get_contract_function_data(params_control_contract, "castVote",
+                                          args=[version, [(0, [0, lock_value, 0]), (1, [0, lock_value, 0])]])
+        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007",
+                           gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+
         client.send_tx(tx, wait_for_receipt=True)
         # Generate enough blocks to get pow reward with new parameters.
         client.generate_empty_blocks(40)
         best_epoch = client.epoch_number()
-        assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0), initial_base_reward * 2)
-        assert_equal(int(client.get_interest_rate(), 0), initial_interest_rate * 2)
+        current_base_reward = current_base_reward * 2
+        current_interest_rate = current_interest_rate * 2
+        assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0),
+                     current_base_reward)
+        assert_equal(int(client.get_interest_rate(), 0), current_interest_rate * BLOCKS_PER_YEAR)
 
         # Vote for a single parameter
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 1
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(1, [0, 0, lock_value])]])
-        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+        data = get_contract_function_data(params_control_contract, "castVote",
+                                          args=[version, [(1, [0, 0, lock_value])]])
+        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007",
+                           gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
         # Generate enough blocks to get pow reward with new parameters.
         client.generate_empty_blocks(40)
         best_epoch = client.epoch_number()
-        assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0), initial_base_reward * 2)
-        assert_equal(int(client.get_interest_rate(), 0), initial_interest_rate)
+        current_interest_rate = current_interest_rate // 2
+        assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0),
+                     current_base_reward)
+        assert_equal(int(client.get_interest_rate(), 0), current_interest_rate * BLOCKS_PER_YEAR)
 
         # Two accounts vote
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 1
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, [0, 0, lock_value]), (1, [lock_value, 0, 0])]])
-        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+        data = get_contract_function_data(params_control_contract, "castVote",
+                                          args=[version, [(0, [0, 0, lock_value]), (1, [lock_value, 0, 0])]])
+        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007",
+                           gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         tx_hash1 = client.send_tx(tx)
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, [lock_value, 0, 0]), (1, [0, lock_value, 0])]])
-        tx = client.new_tx(priv_key=account2_priv, data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+        data = get_contract_function_data(params_control_contract, "castVote",
+                                          args=[version, [(0, [lock_value, 0, 0]), (1, [0, lock_value, 0])]])
+        tx = client.new_tx(priv_key=account2_priv, data=data, value=0,
+                           receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS,
+                           storage_limit=1024)
         tx_hash2 = client.send_tx(tx)
         client.wait_for_receipt(tx_hash1, state_before_wait=True)
         client.wait_for_receipt(tx_hash2)
         # Generate enough blocks to get pow reward with new parameters.
         client.generate_empty_blocks(40)
         best_epoch = client.epoch_number()
-        assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0), int(initial_base_reward * 1.5))
-        assert_equal(int(client.get_interest_rate(), 0), int(initial_interest_rate * 1.5))
+        # half vote for decrease
+        current_base_reward = update_value(current_base_reward, lock_value, lock_value * 2, True)
+        # half vote for increase
+        current_interest_rate = update_value(current_interest_rate, lock_value, lock_value * 2, False)
+        assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0),
+                     current_base_reward)
+        assert_equal(int(client.get_interest_rate(), 0), current_interest_rate * BLOCKS_PER_YEAR)
 
         # Replace old votes
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 1
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(1, [int(lock_value/4), 0, int(lock_value/2)]), (0, [int(lock_value/2), int(lock_value/2), 0])]])
-        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [
+            (1, [int(lock_value / 4), 0, int(lock_value / 2)]), (0, [int(lock_value / 2), int(lock_value / 2), 0])]])
+        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007",
+                           gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         next_nonce = tx.nonce + 1
         client.send_tx(tx)
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, [int(lock_value/4), 0, int(lock_value/2)])]])
-        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024, nonce=next_nonce)
+        data = get_contract_function_data(params_control_contract, "castVote",
+                                          args=[version, [(0, [int(lock_value / 4), 0, int(lock_value / 2)])]])
+        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007",
+                           gas=CONTRACT_DEFAULT_GAS, storage_limit=1024, nonce=next_nonce)
         client.send_tx(tx, wait_for_receipt=True)
         # Generate enough blocks to get pow reward with new parameters.
         client.generate_empty_blocks(40)
         best_epoch = client.epoch_number()
-        assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0), initial_base_reward)
-        assert_equal(int(client.get_interest_rate(), 0), initial_interest_rate)
+        current_base_reward = update_value(current_base_reward, lock_value // 2, lock_value * 3 // 4, True)
+        current_interest_rate = update_value(current_interest_rate, lock_value // 2, lock_value * 3 // 4, True)
+
+        assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0),
+                     current_base_reward)
+        assert_equal(int(client.get_interest_rate(), 0), current_interest_rate * BLOCKS_PER_YEAR)
 
         # Test invalid votes
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 1
         # not enough voting power for a single vote
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, [0, lock_value + 1, 0])]])
-        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+        data = get_contract_function_data(params_control_contract, "castVote",
+                                          args=[version, [(0, [0, lock_value + 1, 0])]])
+        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007",
+                           gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 1
         # not enough voting power for the total votes
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, [0, lock_value, 0]), (1, [1, lock_value, 0])]])
-        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+        data = get_contract_function_data(params_control_contract, "castVote",
+                                          args=[version, [(0, [0, lock_value, 0]), (1, [1, lock_value, 0])]])
+        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007",
+                           gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
         # old version
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period)
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, [0, lock_value, 0])]])
-        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+        data = get_contract_function_data(params_control_contract, "castVote",
+                                          args=[version, [(0, [0, lock_value, 0])]])
+        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007",
+                           gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
         # future version
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 2
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, [0, lock_value, 0])]])
-        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+        data = get_contract_function_data(params_control_contract, "castVote",
+                                          args=[version, [(0, [0, lock_value, 0])]])
+        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007",
+                           gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
         # Invalid vote indices
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 1
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(2, [0, lock_value, 0])]])
-        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+        data = get_contract_function_data(params_control_contract, "castVote",
+                                          args=[version, [(2, [0, lock_value, 0])]])
+        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007",
+                           gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
         # Duplicate votes
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 1
-        data = get_contract_function_data(params_control_contract, "castVote", args=[version, [(0, [0, 1, 0]), (0, [1, 0, 0])]])
-        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+        data = get_contract_function_data(params_control_contract, "castVote",
+                                          args=[version, [(0, [0, 1, 0]), (0, [1, 0, 0])]])
+        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007",
+                           gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
         # Generate enough blocks to get pow reward with new parameters.
         client.generate_empty_blocks(40)
         best_epoch = client.epoch_number()
-        assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0), initial_base_reward)
-        assert_equal(int(client.get_interest_rate(), 0), initial_interest_rate)
+        assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0),
+                     current_base_reward)
+        assert_equal(int(client.get_interest_rate(), 0), current_interest_rate * BLOCKS_PER_YEAR)
 
 
 if __name__ == "__main__":

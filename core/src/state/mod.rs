@@ -2123,3 +2123,25 @@ fn sqrt_u256(input: U256) -> U256 {
 
     root
 }
+
+// TODO: move to a util module.
+pub fn power_two_fractional(ratio: u64, increase: bool) -> U256 {
+    let mut base = U256::one();
+    base <<= 254usize;
+
+    for i in 0..64u64 {
+        if ratio & (1 << i) != 0 {
+            if increase {
+                base <<= 1usize;
+            } else {
+                base >>= 1usize;
+            }
+        }
+        base = sqrt_u256(base);
+        base <<= 127usize;
+    }
+
+    base >>= (254 - 96) as usize;
+    // Computing error < 5.2 * 2 ^ -127
+    base
+}
