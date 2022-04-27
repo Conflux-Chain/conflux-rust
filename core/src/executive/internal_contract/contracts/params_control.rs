@@ -5,9 +5,6 @@
 use cfx_parameters::internal_contract_addresses::PARAMS_CONTROL_CONTRACT_ADDRESS;
 use cfx_statedb::params_control_entries::OPTION_INDEX_MAX;
 use cfx_types::{Address, U256};
-use solidity_abi::{
-    ABIDecodable, ABIDecodeError, ABIEncodable, ABIPackedEncodable, LinkedBytes,
-};
 use solidity_abi_derive::ABIVariable;
 
 use crate::{

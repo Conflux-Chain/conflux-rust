@@ -56,7 +56,7 @@ pub fn keccak(input_stream: TokenStream) -> TokenStream {
     );
 
     let env = quote! {
-        use #abi_crate::{ABIDecodeError, ABIListWriter, ABIVariable, LinkedBytes};
+        use #abi_crate::{ABIDecodeError, ABIListWriter, ABIVariable, LinkedBytes, read_abi_list};
         #(type #dummy_types = #types;)*
     };
 
