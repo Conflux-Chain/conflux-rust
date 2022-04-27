@@ -2,9 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::SolidityFunctionTrait;
+use cfx_statedb::Result as DbResult;
+use cfx_types::U256;
+use solidity_abi::{ABIDecodable, ABIEncodable};
+
 use crate::{
-    executive::{internal_contract::activate_at::IsActive, InternalRefContext},
     observer::VmObserve,
     state::CallStackInfo,
     vm::{
@@ -12,9 +14,22 @@ use crate::{
         Spec, TrapResult,
     },
 };
-use cfx_statedb::Result as DbResult;
-use cfx_types::U256;
-use solidity_abi::{ABIDecodable, ABIEncodable};
+
+use super::{InternalRefContext, IsActive};
+
+/// Native implementation of a solidity-interface function.
+pub trait SolidityFunctionTrait: Send + Sync + IsActive {
+    fn execute(
+        &self, input: &[u8], params: &ActionParams,
+        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
+    ) -> ExecTrapResult<GasLeft>;
+
+    /// The string for function sig
+    fn name(&self) -> &'static str;
+
+    /// The function sig for this function
+    fn function_sig(&self) -> [u8; 4];
+}
 
 pub trait SolidityFunctionConfigTrait:
     InterfaceTrait + PreExecCheckTrait + UpfrontPaymentTrait
@@ -274,21 +289,6 @@ macro_rules! impl_function_type {
             ) -> DbResult<U256> {
                 Ok(U256::from(context.spec.balance_gas))
             }
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! make_solidity_event {
-    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($interface:expr $(, indexed: $indexed:ty)? $(, non_indexed: $non_indexed:ty)?); ) => {
-        $(#[$attr])*
-        #[derive(Copy, Clone)]
-        $visibility struct $name;
-
-        impl SolidityEventTrait for $name {
-            $(type Indexed = $indexed;)?
-            $(type NonIndexed = $non_indexed;)?
-            const EVENT_SIG: H256 = H256(keccak!($interface));
         }
     };
 }

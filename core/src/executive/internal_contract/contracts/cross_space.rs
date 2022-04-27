@@ -2,31 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{
-    super::impls::cross_space::{
-        call_gas, call_to_evmcore, create_gas, create_to_evmcore, process_trap,
-        withdraw_from_evmcore,
-    },
-    macros::*,
-    SolFnTable,
-};
-use crate::{
-    evm::{ActionParams, CallType, Spec},
-    executive::{
-        internal_contract::impls::cross_space::{
-            mapped_balance, mapped_nonce, static_call_gas, withdraw_gas,
-        },
-        InternalRefContext,
-    },
-    impl_function_type, make_function_table, make_solidity_contract,
-    make_solidity_function,
-    observer::VmObserve,
-    vm::{self, ExecTrapResult},
-};
+use std::marker::PhantomData;
+
 use cfx_parameters::internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS;
 use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, H160, U256};
 use primitives::storage::STORAGE_LAYOUT_REGULAR_V0;
-use std::marker::PhantomData;
+
+use crate::{evm::CallType, vm::ExecTrapResult};
+
+use super::{super::impls::cross_space::*, preludes::*};
 
 type Bytes = Vec<u8>;
 type Bytes20 = [u8; 20];
@@ -103,34 +87,6 @@ impl ExecutionTrait for CreateToEVM {
         process_trap(trap, PhantomData)
     }
 }
-
-// make_solidity_function! {
-//     struct Create2ToEVM((Bytes,H256), "create2EVM(bytes,bytes32)", Bytes20);
-// }
-//
-// impl_function_type!(Create2ToEVM, "payable_write");
-//
-// impl UpfrontPaymentTrait for Create2ToEVM {
-//     fn upfront_gas_payment(
-//         &self, (ref init, _): &(Bytes, H256), _params: &ActionParams,
-//         context: &InternalRefContext,
-//     ) -> DbResult<U256>
-//     {
-//         create_gas(context, init.len())
-//     }
-// }
-// impl ExecutionTrait for Create2ToEVM {
-//     fn execute_inner(
-//         &self, (init, salt): (Bytes, H256), params: &ActionParams,
-//         gas_left: U256, context: &mut InternalRefContext,
-//         _tracer: &mut dyn Tracer,
-//     ) -> ExecTrapResult<Bytes20>
-//     {
-//         let trap =
-//             create_to_evmcore(init, Some(salt), params, gas_left, context);
-//         process_trap(trap, PhantomData)
-//     }
-// }
 
 make_solidity_function! {
     pub struct TransferToEVM(Bytes20, "transferEVM(bytes20)", Bytes);
@@ -330,6 +286,14 @@ impl SimpleExecutionTrait for DeployEip1820 {
     }
 }
 
+pub fn is_call_create_sig(data: &[u8]) -> bool {
+    data == TransferToEVM::FUNC_SIG
+        || data == CreateToEVM::FUNC_SIG
+        || data == CallToEVM::FUNC_SIG
+}
+
+pub fn is_withdraw_sig(data: &[u8]) -> bool { data == Withdraw::FUNC_SIG }
+
 #[test]
 fn test_cross_space_contract_sig() {
     check_func_signature!(CreateToEVM, "ff311601");
@@ -360,8 +324,9 @@ fn test_cross_space_contract_sig() {
 }
 
 mod eip_1820 {
-    use super::Address;
     pub use rustc_hex::FromHex;
+
+    use super::Address;
 
     const HEX_ADDRESS: &'static str =
         "1820a4b7618bde71dce8cdc73aab6c95905fad24";

@@ -48,9 +48,8 @@ use primitives::{
 };
 
 use crate::{
-    executive::{
-        internal_contract::settled_param_vote_count, pos_internal_entries,
-        IndexStatus,
+    executive::internal_contract::{
+        pos_internal_entries, settled_param_vote_count, IndexStatus,
     },
     hash::KECCAK_EMPTY,
     observer::{AddressPocket, StateTracer},

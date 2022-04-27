@@ -6,7 +6,7 @@ use super::AddressPocket;
 use crate::{
     bytes::Bytes,
     executive::{
-        function::InterfaceTrait, internal_contract::cross_space,
+        internal_contract::{is_call_create_sig, is_withdraw_sig},
         ExecutiveResult,
     },
     observer::trace_filter::TraceFilter,
@@ -889,9 +889,7 @@ pub fn recover_phantom_traces(
                 ..
             }) if to == *CROSS_SPACE_CONTRACT_ADDRESS
                 && trace.valid
-                && (input[0..4] == cross_space::TransferToEVM::FUNC_SIG
-                    || input[0..4] == cross_space::CreateToEVM::FUNC_SIG
-                    || input[0..4] == cross_space::CallToEVM::FUNC_SIG) =>
+                && is_call_create_sig(&input[0..4]) =>
             {
                 let phantom_traces = recover_phantom_trace_for_call(
                     &mut traces_iter,
@@ -910,7 +908,7 @@ pub fn recover_phantom_traces(
                 ..
             }) if to == *CROSS_SPACE_CONTRACT_ADDRESS
                 && trace.valid
-                && input[0..4] == cross_space::Withdraw::FUNC_SIG =>
+                && is_withdraw_sig(&input[0..4]) =>
             {
                 let phantom_traces =
                     recover_phantom_trace_for_withdraw(&mut traces_iter)?;
