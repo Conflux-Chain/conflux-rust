@@ -1,4 +1,4 @@
-use cfx_types::{ U256};
+use cfx_types::U256;
 use keccak_hash::keccak;
 
 // General function for solidity storage rule

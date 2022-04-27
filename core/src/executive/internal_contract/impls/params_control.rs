@@ -8,9 +8,7 @@ use std::convert::TryFrom;
 use cfx_statedb::params_control_entries::*;
 use cfx_types::{Address, U256, U512};
 
-use crate::{
-    vm::{self, ActionParams, Error},
-};
+use crate::vm::{self, ActionParams, Error};
 
 use super::super::{
     components::InternalRefContext, contracts::params_control::Vote,
@@ -259,8 +257,8 @@ pub struct AllParamsVoteCount {
 /// mapping(address => VoteInfo) votes;
 /// ```
 mod storage_key {
-    use cfx_types::{Address, BigEndianHash, H256, U256};
     use super::super::super::components::storage_layout::*;
+    use cfx_types::{Address, BigEndianHash, H256, U256};
 
     const VOTES_SLOT: usize = 0;
 
