@@ -402,7 +402,7 @@ fn test_static_struct() {
         amount: U256::from(33u64),
     };
     let encoded = input.abi_encode();
-    assert_eq!(StaticStruct::BASIC_TYPE, true);
+    assert_eq!(StaticStruct::BASIC_TYPE, false);
     assert_eq!(StaticStruct::STATIC_LENGTH, Some(64));
     assert_eq!(
         encoded.to_hex::<String>(),
