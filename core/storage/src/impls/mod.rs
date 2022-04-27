@@ -9,6 +9,7 @@ pub(super) mod errors;
 pub(super) mod node_merkle_proof;
 pub(super) mod proof_merger;
 pub(super) mod recording_storage;
+pub(super) mod replicated_state;
 pub(super) mod single_mpt_state;
 pub(super) mod snapshot_sync;
 pub(super) mod state;
