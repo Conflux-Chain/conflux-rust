@@ -36,6 +36,7 @@ pub struct StateTrees {
 #[derive(MallocSizeOfDerive)]
 pub struct StateManager {
     storage_manager: Arc<StorageManager>,
+    single_mpt_storage_manager: Option<Arc<SingleMptStorageManager>>,
     pub number_committed_nodes: AtomicUsize,
 }
 
@@ -47,10 +48,18 @@ impl StateManager {
     pub fn new(conf: StorageConfiguration) -> Result<Self> {
         debug!("Storage conf {:?}", conf);
 
-        let storage_manager = StorageManager::new_arc(conf)?;
+        let single_mpt_storage_manager = if conf.enable_single_mpt_storage {
+            Some(SingleMptStorageManager::new_arc(
+                conf.path_storage_dir.join("single_mpt"),
+            ))
+        } else {
+            None
+        };
 
+        let storage_manager = StorageManager::new_arc(conf)?;
         Ok(Self {
             storage_manager,
+            single_mpt_storage_manager,
             number_committed_nodes: Default::default(),
         })
     }
@@ -619,15 +628,88 @@ impl StateManagerTrait for StateManager {
     }
 }
 
+impl ReplicatedStateManagerTrait for StateManager {
+    fn get_replicated_state_no_commit(
+        self: &Arc<Self>, epoch_id: StateIndex, try_open: bool,
+    ) -> Result<Option<ReplicatedState<State>>> {
+        let epoch = epoch_id.epoch_id;
+        if self.single_mpt_storage_manager.is_none() {
+            return Ok(None);
+        }
+        let state = self.get_state_no_commit(epoch_id, try_open)?;
+        if state.is_none() {
+            return Ok(None);
+        }
+        let single_mpt_state = self
+            .single_mpt_storage_manager
+            .as_ref()
+            .unwrap()
+            .get_state_by_epoch(epoch)?;
+        if single_mpt_state.is_none() {
+            return Ok(None);
+        }
+        Ok(Some(ReplicatedState::new(
+            state.unwrap(),
+            single_mpt_state.unwrap(),
+        )))
+    }
+
+    fn get_replicated_state_for_next_epoch(
+        self: &Arc<Self>, parent_epoch_id: StateIndex,
+    ) -> Result<Option<ReplicatedState<State>>> {
+        let parent_epoch = parent_epoch_id.epoch_id;
+        if self.single_mpt_storage_manager.is_none() {
+            return Ok(None);
+        }
+        let state = self.get_state_for_next_epoch(parent_epoch_id)?;
+        if state.is_none() {
+            return Ok(None);
+        }
+        let single_mpt_state = self
+            .single_mpt_storage_manager
+            .as_ref()
+            .unwrap()
+            .get_state_by_epoch(parent_epoch)?;
+        if single_mpt_state.is_none() {
+            return Ok(None);
+        }
+        Ok(Some(ReplicatedState::new(
+            state.unwrap(),
+            single_mpt_state.unwrap(),
+        )))
+    }
+
+    fn get_replicated_state_for_genesis_write(
+        self: &Arc<Self>,
+    ) -> ReplicatedState<State> {
+        if self.single_mpt_storage_manager.is_none() {
+            todo!()
+        }
+        let state = self.get_state_for_genesis_write();
+        let single_mpt_state = self
+            .single_mpt_storage_manager
+            .as_ref()
+            .unwrap()
+            .get_state_for_genesis()
+            .expect("single_mpt genesis initialize error");
+        ReplicatedState::new(state, single_mpt_state)
+    }
+}
+
 use crate::{
     impls::{
         delta_mpt::*,
         errors::*,
+        replicated_state::ReplicatedState,
+        single_mpt_state::SingleMptState,
         storage_db::{
             delta_db_manager_rocksdb::DeltaDbManagerRocksdb,
             snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
         },
-        storage_manager::storage_manager::StorageManager,
+        storage_manager::{
+            single_mpt_storage_manager::SingleMptStorageManager,
+            storage_manager::StorageManager,
+        },
     },
     state::*,
     state_manager::*,

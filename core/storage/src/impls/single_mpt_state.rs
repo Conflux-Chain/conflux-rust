@@ -10,7 +10,10 @@ use primitives::{
     EpochId, MerkleHash, MptValue, StateRoot, StorageKeyWithSpace,
     MERKLE_NULL_NODE,
 };
-use std::{collections::HashSet, hint::unreachable_unchecked, sync::Arc};
+use std::{
+    cell::UnsafeCell, collections::HashSet, hint::unreachable_unchecked,
+    sync::Arc,
+};
 
 pub struct SingleMptState {
     trie: Arc<DeltaMpt>,
@@ -24,6 +27,40 @@ pub struct SingleMptState {
 }
 
 impl SingleMptState {
+    pub fn new(trie: Arc<DeltaMpt>, trie_root: NodeRefDeltaMpt) -> Self {
+        Self {
+            trie,
+            trie_root,
+            owned_node_set: Some(Default::default()),
+            dirty: false,
+            children_merkle_map: Default::default(),
+        }
+    }
+
+    pub fn new_empty(trie: Arc<DeltaMpt>) -> Self {
+        let mut owned_node_set = Default::default();
+
+        let trie_root = {
+            let allocator = trie.get_node_memory_manager().get_allocator();
+            let (root_cow, entry) = CowNodeRef::new_uninitialized_node(
+                &allocator,
+                &mut owned_node_set,
+                0,
+            )
+            .expect("allocator error");
+            // Insert empty node.
+            entry.insert(UnsafeCell::new(Default::default()));
+            root_cow.into_child().unwrap().into()
+        };
+        Self {
+            trie,
+            trie_root,
+            owned_node_set: Some(owned_node_set),
+            dirty: false,
+            children_merkle_map: Default::default(),
+        }
+    }
+
     fn ensure_temp_slab_for_db_load(&self) {
         self.trie.get_node_memory_manager().enlarge().ok();
     }

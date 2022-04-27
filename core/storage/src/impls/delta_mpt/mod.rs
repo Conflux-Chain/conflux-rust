@@ -80,7 +80,7 @@ pub struct MultiVersionMerklePatriciaTrie {
     // The variable is used in drop. Variable with non-trivial dtor shouldn't
     // trigger the compiler warning.
     #[allow(unused)]
-    delta_mpts_releaser: DeltaDbReleaser,
+    delta_mpts_releaser: Option<DeltaDbReleaser>,
     /// Mutex for row number computation in state commitment.
     commit_lock: Mutex<AtomicCommit>,
 
@@ -123,11 +123,38 @@ impl MultiVersionMerklePatriciaTrie {
             root_node_by_epoch: Default::default(),
             root_node_by_merkle_root: Default::default(),
             node_memory_manager,
-            delta_mpts_releaser: DeltaDbReleaser {
+            delta_mpts_releaser: Some(DeltaDbReleaser {
                 snapshot_epoch_id,
                 storage_manager: Arc::downgrade(&storage_manager),
                 mpt_id,
-            },
+            }),
+            db_manager,
+            commit_lock: Mutex::new(AtomicCommit {
+                row_number: RowNumber { value: row_number },
+            }),
+            parent_epoch_by_epoch: Default::default(),
+        })
+    }
+
+    pub fn new_single_mpt(
+        db_manager: Arc<dyn OpenableOnDemandOpenDeltaDbTrait>,
+        node_memory_manager: Arc<DeltaMptsNodeMemoryManager>,
+    ) -> Result<Self>
+    {
+        let mpt_id = 0;
+        let row_number = Self::parse_row_number(
+            db_manager.open(mpt_id)?.get("last_row_number".as_bytes()),
+        )
+        // unwrap() on new is fine.
+        .unwrap()
+        .unwrap_or_default();
+
+        Ok(Self {
+            mpt_id,
+            root_node_by_epoch: Default::default(),
+            root_node_by_merkle_root: Default::default(),
+            node_memory_manager,
+            delta_mpts_releaser: None,
             db_manager,
             commit_lock: Mutex::new(AtomicCommit {
                 row_number: RowNumber { value: row_number },

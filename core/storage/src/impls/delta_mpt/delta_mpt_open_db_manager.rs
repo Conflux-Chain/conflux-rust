@@ -32,9 +32,9 @@ impl CacheStoreUtil for CacheUtil {
 
 pub struct ArcDeltaDbWrapper {
     // inner will always be Some() before drop
-    inner: Option<Arc<dyn DeltaDbTrait>>,
-    lru: Option<Weak<Mutex<dyn OnDemandOpenDeltaDbInnerTrait>>>,
-    mpt_id: DeltaMptId,
+    pub inner: Option<Arc<dyn DeltaDbTrait>>,
+    pub lru: Option<Weak<Mutex<dyn OnDemandOpenDeltaDbInnerTrait>>>,
+    pub mpt_id: DeltaMptId,
 }
 
 impl ArcDeltaDbWrapper {
@@ -76,7 +76,7 @@ impl KeyValueDbTraitRead for ArcDeltaDbWrapper {
 
 mark_kvdb_multi_reader!(ArcDeltaDbWrapper);
 
-trait OnDemandOpenDeltaDbInnerTrait: Send + Sync {
+pub trait OnDemandOpenDeltaDbInnerTrait: Send + Sync {
     fn open(&mut self, mpt_id: DeltaMptId) -> Result<ArcDeltaDbWrapper>;
     fn create(
         &mut self, snapshot_epoch_id: &EpochId, mpt_id: DeltaMptId,

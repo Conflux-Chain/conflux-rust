@@ -18,7 +18,7 @@ pub struct ReplicatedState<Main> {
 }
 
 impl<Main: StateTrait> ReplicatedState<Main> {
-    fn new<Replicate: StateTrait + Send + 'static>(
+    pub fn new<Replicate: StateTrait + Send + 'static>(
         main_state: Main, replicated_state: Replicate,
     ) -> ReplicatedState<Main> {
         let replication_handler = ReplicationHandler::new(replicated_state);

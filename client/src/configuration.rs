@@ -706,6 +706,7 @@ impl Configuration {
                 .provide_more_snapshot_for_sync
                 .clone(),
             max_open_mpt_count: self.raw_conf.storage_max_open_mpt_count,
+            enable_single_mpt_storage: true,
         }
     }
 

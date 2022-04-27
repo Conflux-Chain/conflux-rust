@@ -39,6 +39,18 @@ pub trait StateManagerTrait {
     fn get_state_for_genesis_write(self: &Arc<Self>) -> State;
 }
 
+pub trait ReplicatedStateManagerTrait {
+    fn get_replicated_state_no_commit(
+        self: &Arc<Self>, epoch_id: StateIndex, try_open: bool,
+    ) -> Result<Option<ReplicatedState<State>>>;
+    fn get_replicated_state_for_next_epoch(
+        self: &Arc<Self>, parent_epoch_id: StateIndex,
+    ) -> Result<Option<ReplicatedState<State>>>;
+    fn get_replicated_state_for_genesis_write(
+        self: &Arc<Self>,
+    ) -> ReplicatedState<State>;
+}
+
 impl StateIndex {
     pub fn height_to_delta_height(
         height: u64, snapshot_epoch_count: u32,
@@ -120,7 +132,14 @@ impl StateIndex {
     }
 }
 
-use crate::{impls::errors::*, state::State, StateRootWithAuxInfo};
+use crate::{
+    impls::{
+        errors::*, replicated_state::ReplicatedState,
+        single_mpt_state::SingleMptState,
+    },
+    state::State,
+    StateRootWithAuxInfo,
+};
 use primitives::{
     DeltaMptKeyPadding, EpochId, MerkleHash, GENESIS_DELTA_MPT_KEY_PADDING,
     MERKLE_NULL_NODE, NULL_EPOCH,
