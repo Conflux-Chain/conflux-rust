@@ -2,19 +2,25 @@ use crate::{
     impls::errors::*,
     state::StateTrait,
     utils::access_mode::{self, AccessMode},
-    MptKeyValue,
+    MptKeyValue, NodeMerkleProof, StateProof, StorageStateTraitExt,
 };
 use cfx_internal_common::StateRootWithAuxInfo;
 use cfx_types::Space;
-use primitives::{EpochId, StorageKey, StorageKeyWithSpace};
+use parking_lot::Mutex;
+use primitives::{
+    EpochId, NodeMerkleTriplet, StaticBool, StorageKey, StorageKeyWithSpace,
+};
 use std::{
-    sync::mpsc::{channel, Sender},
+    sync::{
+        mpsc::{channel, Sender},
+        Arc,
+    },
     thread::{self, JoinHandle},
 };
 
 pub struct ReplicatedState<Main> {
     state: Main,
-    replication_handler: ReplicationHandler,
+    replication_handler: Option<ReplicationHandler>,
 }
 
 impl<Main: StateTrait> ReplicatedState<Main> {
@@ -24,13 +30,22 @@ impl<Main: StateTrait> ReplicatedState<Main> {
         let replication_handler = ReplicationHandler::new(replicated_state);
         Self {
             state: main_state,
-            replication_handler,
+            replication_handler: Some(replication_handler),
         }
     }
+
+    pub fn new_single(main_state: Main) -> ReplicatedState<Main> {
+        Self {
+            state: main_state,
+            replication_handler: None,
+        }
+    }
+
+    pub fn into_main_state(self) -> Main { self.state }
 }
 
 struct ReplicationHandler {
-    op_sender: Sender<StateOperation>,
+    op_sender: Arc<Mutex<Sender<StateOperation>>>,
     thread_handle: JoinHandle<Result<()>>,
 }
 
@@ -65,7 +80,9 @@ impl ReplicationHandler {
                             replicated_state.compute_state_root().err()
                         }
                         StateOperation::Commit { epoch_id } => {
-                            replicated_state.commit(epoch_id).err()
+                            return replicated_state
+                                .commit(epoch_id)
+                                .map(|_| ());
                         }
                     };
                     if let Some(e) = err {
@@ -77,13 +94,13 @@ impl ReplicationHandler {
             })
             .expect("spawn error");
         Self {
-            op_sender: op_tx,
+            op_sender: Arc::new(Mutex::new(op_tx)),
             thread_handle,
         }
     }
 
     fn send_op(&self, op: StateOperation) {
-        if let Err(e) = self.op_sender.send(op) {
+        if let Err(e) = self.op_sender.lock().send(op) {
             error!("send_op: err={:?}", e);
         }
     }
@@ -231,16 +248,20 @@ impl<Main: StateTrait> StateTrait for ReplicatedState<Main> {
     fn set(
         &mut self, access_key: StorageKeyWithSpace, value: Box<[u8]>,
     ) -> Result<()> {
-        self.replication_handler.send_op(StateOperation::Set {
-            access_key: access_key.into(),
-            value: value.clone(),
+        self.replication_handler.as_ref().map(|h| {
+            h.send_op(StateOperation::Set {
+                access_key: access_key.into(),
+                value: value.clone(),
+            })
         });
         self.state.set(access_key, value)
     }
 
     fn delete(&mut self, access_key: StorageKeyWithSpace) -> Result<()> {
-        self.replication_handler.send_op(StateOperation::Delete {
-            access_key: access_key.into(),
+        self.replication_handler.as_ref().map(|h| {
+            h.send_op(StateOperation::Delete {
+                access_key: access_key.into(),
+            })
         });
         self.state.delete(access_key)
     }
@@ -256,8 +277,10 @@ impl<Main: StateTrait> StateTrait for ReplicatedState<Main> {
     ) -> Result<Option<Vec<MptKeyValue>>> {
         if !AM::is_read_only() {
             // Only send op for actual delete.
-            self.replication_handler.send_op(StateOperation::DeleteAll {
-                access_key_prefix: access_key_prefix.into(),
+            self.replication_handler.as_ref().map(|h| {
+                h.send_op(StateOperation::DeleteAll {
+                    access_key_prefix: access_key_prefix.into(),
+                })
             });
         }
         self.state.delete_all::<AM>(access_key_prefix)
@@ -265,7 +288,8 @@ impl<Main: StateTrait> StateTrait for ReplicatedState<Main> {
 
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {
         self.replication_handler
-            .send_op(StateOperation::ComputeStateRoot);
+            .as_ref()
+            .map(|h| h.send_op(StateOperation::ComputeStateRoot));
         self.state.compute_state_root()
     }
 
@@ -274,8 +298,32 @@ impl<Main: StateTrait> StateTrait for ReplicatedState<Main> {
     }
 
     fn commit(&mut self, epoch_id: EpochId) -> Result<StateRootWithAuxInfo> {
+        let r = self.state.commit(epoch_id);
         self.replication_handler
-            .send_op(StateOperation::Commit { epoch_id });
-        self.state.commit(epoch_id)
+            .as_ref()
+            .map(|h| h.send_op(StateOperation::Commit { epoch_id }));
+        if let Some(h) = self.replication_handler.take() {
+            h.thread_handle
+                .join()
+                .expect("ReplicationHandler thread join error")?;
+        }
+        r
+    }
+}
+
+impl<Main: StorageStateTraitExt> StorageStateTraitExt
+    for ReplicatedState<Main>
+{
+    fn get_with_proof(
+        &self, access_key: StorageKeyWithSpace,
+    ) -> Result<(Option<Box<[u8]>>, StateProof)> {
+        self.state.get_with_proof(access_key)
+    }
+
+    fn get_node_merkle_all_versions<WithProof: StaticBool>(
+        &self, access_key: StorageKeyWithSpace,
+    ) -> Result<(NodeMerkleTriplet, NodeMerkleProof)> {
+        self.state
+            .get_node_merkle_all_versions::<WithProof>(access_key)
     }
 }

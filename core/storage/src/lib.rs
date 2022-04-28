@@ -178,6 +178,7 @@ pub use self::{
             sqlite::SqliteConnection,
         },
     },
+    replicated_state::ReplicatedState,
     state::{
         State as StorageState, StateTrait as StorageStateTrait,
         StateTraitExt as StorageStateTraitExt,
@@ -191,5 +192,6 @@ pub use self::{
 
 #[cfg(any(test, feature = "testonly_code"))]
 pub use self::tests::new_state_manager_for_unit_test as new_storage_manager_for_testing;
+use crate::impls::replicated_state;
 use cfx_internal_common::StateRootWithAuxInfo;
 use std::path::{Path, PathBuf};

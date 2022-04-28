@@ -24,7 +24,10 @@ use cfx_parameters::{
 };
 use cfx_state::{state_trait::*, CleanupMode};
 use cfx_statedb::{Result as DbResult, StateDb};
-use cfx_storage::{StorageManager, StorageManagerTrait};
+use cfx_storage::{
+    state_manager::ReplicatedStateManagerTrait, StorageManager,
+    StorageManagerTrait,
+};
 use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
     Space, H256, U256,
@@ -187,9 +190,10 @@ pub fn genesis_block(
     initial_nodes: &Option<GenesisPosState>,
 ) -> Block
 {
-    let mut state =
-        State::new(StateDb::new(storage_manager.get_state_for_genesis_write()))
-            .expect("Failed to initialize state");
+    let mut state = State::new(StateDb::new(
+        storage_manager.get_replicated_state_for_genesis_write(),
+    ))
+    .expect("Failed to initialize state");
 
     let mut genesis_block_author = test_net_version;
     genesis_block_author.set_user_account_type_bits();

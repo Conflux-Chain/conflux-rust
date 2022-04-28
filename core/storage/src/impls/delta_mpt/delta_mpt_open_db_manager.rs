@@ -30,6 +30,7 @@ impl CacheStoreUtil for CacheUtil {
     }
 }
 
+#[derive(Clone)]
 pub struct ArcDeltaDbWrapper {
     // inner will always be Some() before drop
     pub inner: Option<Arc<dyn DeltaDbTrait>>,
@@ -51,6 +52,10 @@ impl Deref for ArcDeltaDbWrapper {
 
 impl Drop for ArcDeltaDbWrapper {
     fn drop(&mut self) {
+        if self.lru.is_none() {
+            // TODO: This is for SingleMptState.
+            return;
+        }
         Weak::upgrade(self.lru.as_ref().unwrap()).map(|lru| {
             let mut lru_lock = lru.lock();
             let maybe_arc_db = self.inner.take();

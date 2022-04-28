@@ -557,18 +557,18 @@ impl StateManager {
 impl StateManagerTrait for StateManager {
     fn get_state_no_commit(
         self: &Arc<Self>, state_index: StateIndex, try_open: bool,
-    ) -> Result<Option<State>> {
+    ) -> Result<Option<ReplicatedState<State>>> {
         let maybe_state_trees = self.get_state_trees(&state_index, try_open)?;
         match maybe_state_trees {
             None => Ok(None),
-            Some(state_trees) => {
-                Ok(Some(State::new(self.clone(), state_trees)))
-            }
+            Some(state_trees) => Ok(Some(ReplicatedState::new_single(
+                State::new(self.clone(), state_trees),
+            ))),
         }
     }
 
-    fn get_state_for_genesis_write(self: &Arc<Self>) -> State {
-        State::new(
+    fn get_state_for_genesis_write(self: &Arc<Self>) -> ReplicatedState<State> {
+        ReplicatedState::new_single(State::new(
             self.clone(),
             StateTrees {
                 snapshot_db: self
@@ -595,7 +595,7 @@ impl StateManagerTrait for StateManager {
                 intermediate_epoch_id: NULL_EPOCH,
                 parent_epoch_id: NULL_EPOCH,
             },
-        )
+        ))
     }
 
     // Currently we use epoch number to decide whether or not to
@@ -614,56 +614,31 @@ impl StateManagerTrait for StateManager {
     // simple approach.
     fn get_state_for_next_epoch(
         self: &Arc<Self>, parent_epoch_id: StateIndex,
-    ) -> Result<Option<State>> {
+    ) -> Result<Option<ReplicatedState<State>>> {
         let maybe_state_trees = self.get_state_trees_for_next_epoch(
             &parent_epoch_id,
             /* try_open = */ false,
         )?;
         match maybe_state_trees {
             None => Ok(None),
-            Some(state_trees) => {
-                Ok(Some(State::new(self.clone(), state_trees)))
-            }
+            Some(state_trees) => Ok(Some(ReplicatedState::new_single(
+                State::new(self.clone(), state_trees),
+            ))),
         }
     }
 }
 
 impl ReplicatedStateManagerTrait for StateManager {
-    fn get_replicated_state_no_commit(
-        self: &Arc<Self>, epoch_id: StateIndex, try_open: bool,
-    ) -> Result<Option<ReplicatedState<State>>> {
-        let epoch = epoch_id.epoch_id;
-        if self.single_mpt_storage_manager.is_none() {
-            return Ok(None);
-        }
-        let state = self.get_state_no_commit(epoch_id, try_open)?;
-        if state.is_none() {
-            return Ok(None);
-        }
-        let single_mpt_state = self
-            .single_mpt_storage_manager
-            .as_ref()
-            .unwrap()
-            .get_state_by_epoch(epoch)?;
-        if single_mpt_state.is_none() {
-            return Ok(None);
-        }
-        Ok(Some(ReplicatedState::new(
-            state.unwrap(),
-            single_mpt_state.unwrap(),
-        )))
-    }
-
     fn get_replicated_state_for_next_epoch(
         self: &Arc<Self>, parent_epoch_id: StateIndex,
     ) -> Result<Option<ReplicatedState<State>>> {
         let parent_epoch = parent_epoch_id.epoch_id;
-        if self.single_mpt_storage_manager.is_none() {
-            return Ok(None);
-        }
         let state = self.get_state_for_next_epoch(parent_epoch_id)?;
         if state.is_none() {
             return Ok(None);
+        }
+        if self.single_mpt_storage_manager.is_none() {
+            return Ok(state);
         }
         let single_mpt_state = self
             .single_mpt_storage_manager
@@ -674,7 +649,7 @@ impl ReplicatedStateManagerTrait for StateManager {
             return Ok(None);
         }
         Ok(Some(ReplicatedState::new(
-            state.unwrap(),
+            state.unwrap().into_main_state(),
             single_mpt_state.unwrap(),
         )))
     }
@@ -682,17 +657,17 @@ impl ReplicatedStateManagerTrait for StateManager {
     fn get_replicated_state_for_genesis_write(
         self: &Arc<Self>,
     ) -> ReplicatedState<State> {
-        if self.single_mpt_storage_manager.is_none() {
-            todo!()
-        }
         let state = self.get_state_for_genesis_write();
+        if self.single_mpt_storage_manager.is_none() {
+            return state;
+        }
         let single_mpt_state = self
             .single_mpt_storage_manager
             .as_ref()
             .unwrap()
             .get_state_for_genesis()
             .expect("single_mpt genesis initialize error");
-        ReplicatedState::new(state, single_mpt_state)
+        ReplicatedState::new(state.into_main_state(), single_mpt_state)
     }
 }
 

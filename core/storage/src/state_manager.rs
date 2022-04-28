@@ -32,17 +32,14 @@ pub trait StateManagerTrait {
     /// snapshot open is reached.
     fn get_state_no_commit(
         self: &Arc<Self>, epoch_id: StateIndex, try_open: bool,
-    ) -> Result<Option<State>>;
+    ) -> Result<Option<ReplicatedState<State>>>;
     fn get_state_for_next_epoch(
         self: &Arc<Self>, parent_epoch_id: StateIndex,
-    ) -> Result<Option<State>>;
-    fn get_state_for_genesis_write(self: &Arc<Self>) -> State;
+    ) -> Result<Option<ReplicatedState<State>>>;
+    fn get_state_for_genesis_write(self: &Arc<Self>) -> ReplicatedState<State>;
 }
 
 pub trait ReplicatedStateManagerTrait {
-    fn get_replicated_state_no_commit(
-        self: &Arc<Self>, epoch_id: StateIndex, try_open: bool,
-    ) -> Result<Option<ReplicatedState<State>>>;
     fn get_replicated_state_for_next_epoch(
         self: &Arc<Self>, parent_epoch_id: StateIndex,
     ) -> Result<Option<ReplicatedState<State>>>;

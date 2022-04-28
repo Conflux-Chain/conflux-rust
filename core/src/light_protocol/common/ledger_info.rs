@@ -12,7 +12,7 @@ use cfx_statedb::{StateDb, StateDbGetOriginalMethods};
 use cfx_storage::{
     state::{State, StateTrait},
     state_manager::StateManagerTrait,
-    StateProof, StorageRootProof,
+    ReplicatedState, StateProof, StorageRootProof,
 };
 use cfx_types::{Address, AddressSpaceUtil, Bloom, H256};
 use primitives::{
@@ -178,7 +178,7 @@ impl LedgerInfo {
         });
 
         match state {
-            Some(Ok(Some(state))) => Ok(state),
+            Some(Ok(Some(state))) => Ok(state.into_main_state()),
             _ => {
                 bail!(ErrorKind::InternalError(format!(
                     "State of epoch {} not found",
@@ -213,8 +213,8 @@ impl LedgerInfo {
 
         let key = StorageKeyWithSpace::from_key_bytes::<CheckInput>(&key)?;
 
-        let (value, proof) =
-            StateDb::new(state).get_original_raw_with_proof(key)?;
+        let (value, proof) = StateDb::new(ReplicatedState::new_single(state))
+            .get_original_raw_with_proof(key)?;
 
         let value = value.map(|x| x.to_vec());
         Ok((value, proof))
@@ -226,9 +226,10 @@ impl LedgerInfo {
         &self, epoch: u64, address: &Address,
     ) -> Result<(StorageRoot, StorageRootProof), Error> {
         let state = self.state_of(epoch)?;
-        Ok(StateDb::new(state).get_original_storage_root_with_proof(
-            &address.with_native_space(),
-        )?)
+        Ok(StateDb::new(ReplicatedState::new_single(state))
+            .get_original_storage_root_with_proof(
+                &address.with_native_space(),
+            )?)
     }
 
     /// Get the epoch receipts corresponding to the execution of `epoch`.

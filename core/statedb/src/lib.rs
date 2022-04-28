@@ -27,7 +27,7 @@ pub use self::{
         TOTAL_TOKENS_KEY,
     },
 };
-pub type StateDb = StateDbGeneric<StorageState>;
+pub type StateDb = StateDbGeneric<ReplicatedState<StorageState>>;
 
 // Put StateDb in mod to make sure that methods from statedb_ext don't access
 // its fields directly.
@@ -675,4 +675,4 @@ mod impls {
     };
 }
 
-use cfx_storage::StorageState;
+use cfx_storage::{ReplicatedState, StorageState};

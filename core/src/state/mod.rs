@@ -34,7 +34,9 @@ use cfx_statedb::{
     params_control_entries::*, ErrorKind as DbErrorKind, Result as DbResult,
     StateDbExt, StateDbGeneric as StateDb,
 };
-use cfx_storage::{utils::access_mode, StorageState, StorageStateTrait};
+use cfx_storage::{
+    utils::access_mode, ReplicatedState, StorageState, StorageStateTrait,
+};
 use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
     BigEndianHash, Space, H256, U256,
@@ -105,7 +107,7 @@ struct WorldStatistics {
     total_evm_tokens: U256,
 }
 
-pub type State = StateGeneric<StorageState>;
+pub type State = StateGeneric<ReplicatedState<StorageState>>;
 
 pub struct StateGeneric<StateDbStorage: StorageStateTrait> {
     db: StateDb<StateDbStorage>,

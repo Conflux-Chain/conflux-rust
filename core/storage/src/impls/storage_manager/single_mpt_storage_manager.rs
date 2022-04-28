@@ -11,22 +11,28 @@ use crate::{
     ArcDeltaDbWrapper, CowNodeRef, DeltaMpt, OpenableOnDemandOpenDeltaDbTrait,
 };
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
+use parking_lot::Mutex;
 use primitives::EpochId;
-use std::{path::PathBuf, sync::Arc};
+use std::{fs, path::PathBuf, sync::Arc};
 
 const DB_NAME: &str = "single_mpt";
 
 pub struct SingleMptStorageManager {
-    db_manager: Arc<DeltaDbManager>,
+    db_manager: Arc<SingleMptDbManager>,
     node_memory_manager: Arc<DeltaMptsNodeMemoryManager>,
     mpt: Arc<DeltaMpt>,
 }
 
 impl SingleMptStorageManager {
     pub fn new_arc(db_path: PathBuf) -> Arc<Self> {
-        let db_manager = Arc::new(
-            DeltaDbManager::new(db_path).expect("DeltaDb initialize error"),
-        );
+        if !db_path.exists() {
+            fs::create_dir_all(&db_path).expect("db path create error");
+        }
+        let db_manager = Arc::new(SingleMptDbManager {
+            db_manager: DeltaDbManager::new(db_path)
+                .expect("DeltaDb initialize error"),
+            opened_mpt: Mutex::new(None),
+        });
         let node_memory_manager = Arc::new(DeltaMptsNodeMemoryManager::new(
             1_000_000,
             10_000_000,
@@ -65,17 +71,29 @@ impl SingleMptStorageManager {
     }
 }
 
-impl OpenableOnDemandOpenDeltaDbTrait for DeltaDbManager {
+struct SingleMptDbManager {
+    db_manager: DeltaDbManager,
+    opened_mpt: Mutex<Option<ArcDeltaDbWrapper>>,
+}
+
+impl OpenableOnDemandOpenDeltaDbTrait for SingleMptDbManager {
     fn open(&self, mpt_id: DeltaMptId) -> Result<ArcDeltaDbWrapper> {
         if mpt_id == 0 {
-            Ok(ArcDeltaDbWrapper {
-                inner: Some(Arc::new(
-                    self.get_delta_db(DB_NAME)?
-                        .ok_or(Error::from(ErrorKind::DbNotExist))?,
-                )),
+            let mut maybe_mpt = self.opened_mpt.lock();
+            if maybe_mpt.is_some() {
+                return Ok(maybe_mpt.as_ref().unwrap().clone());
+            }
+            let db = match self.db_manager.get_delta_db(DB_NAME)? {
+                Some(db) => db,
+                None => self.db_manager.new_empty_delta_db(DB_NAME)?,
+            };
+            let mpt = ArcDeltaDbWrapper {
+                inner: Some(Arc::new(db)),
                 lru: None,
                 mpt_id,
-            })
+            };
+            *maybe_mpt = Some(mpt.clone());
+            Ok(mpt)
         } else {
             Err(ErrorKind::DbNotExist.into())
         }
