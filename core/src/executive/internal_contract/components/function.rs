@@ -213,7 +213,7 @@ impl<T: PreExecCheckConfTrait> PreExecCheckTrait for T {
 /// ```
 /// use cfxcore::make_solidity_function;
 /// use cfx_types::{Address,U256};
-/// use cfxcore::executive::function::InterfaceTrait;
+/// use cfxcore::executive::internal_contract::InterfaceTrait;
 /// use sha3_macro::keccak;
 ///
 /// make_solidity_function!{
