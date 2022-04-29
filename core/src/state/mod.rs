@@ -49,8 +49,8 @@ use primitives::{
 
 use crate::{
     executive::internal_contract::{
-        pos_internal_entries, settle_current_votes, get_settled_param_vote_count,
-        IndexStatus,
+        get_settled_param_vote_count, pos_internal_entries,
+        settle_current_votes, IndexStatus,
     },
     hash::KECCAK_EMPTY,
     observer::{AddressPocket, StateTracer},
