@@ -17,7 +17,6 @@ pub use self::{
     error::{Error, ErrorKind, Result},
     impls::{
         StateDb as StateDbGeneric, StateDbCheckpointMethods,
-        StateDbGetOriginalMethods,
     },
     statedb_ext::{
         params_control_entries, StateDbExt, ACCUMULATE_INTEREST_RATE_KEY,
@@ -263,7 +262,7 @@ mod impls {
             }
             // Then, remove all un-modified existing keys.
             let deleted =
-                self.storage.delete_all::<access_mode::Read>(key_prefix)?;
+                self.storage.read_all(key_prefix)?;
             // We must update the accessed_entries.
             if let Some(storage_deleted) = &deleted {
                 for (k, v) in storage_deleted {
@@ -512,41 +511,6 @@ mod impls {
             self.storage.commit(epoch_id)?;
 
             Ok(result)
-        }
-    }
-
-    impl<Storage: StorageStateTraitExt> StateDbGetOriginalMethods
-        for StateDb<Storage>
-    {
-        fn get_original_raw_with_proof(
-            &self, key: StorageKeyWithSpace,
-        ) -> Result<(Option<Box<[u8]>>, StateProof)> {
-            let r = Ok(self.storage.get_with_proof(key)?);
-            trace!("get_original_raw_with_proof key={:?}, value={:?}", key, r);
-            r
-        }
-
-        fn get_original_storage_root(
-            &self, address: &AddressWithSpace,
-        ) -> Result<StorageRoot> {
-            let key = StorageKey::new_storage_root_key(&address.address)
-                .with_space(address.space);
-
-            let (root, _) =
-                self.storage.get_node_merkle_all_versions::<NoProof>(key)?;
-
-            Ok(root)
-        }
-
-        fn get_original_storage_root_with_proof(
-            &self, address: &AddressWithSpace,
-        ) -> Result<(StorageRoot, StorageRootProof)> {
-            let key = StorageKey::new_storage_root_key(&address.address)
-                .with_space(address.space);
-
-            self.storage
-                .get_node_merkle_all_versions::<WithProof>(key)
-                .map_err(Into::into)
         }
     }
 

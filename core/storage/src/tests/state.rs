@@ -528,7 +528,7 @@ fn test_set_delete_all() {
         let key_prefix = &key[0..(2 + rng.gen::<usize>() % 2)];
 
         let value = state
-            .delete_all::<access_mode::Write>(
+            .delete_all(
                 StorageKey::AccountKey(key_prefix).with_native_space(),
             )
             .expect("Failed to delete key.");
@@ -546,7 +546,7 @@ fn test_set_delete_all() {
         }
 
         let value = state
-            .delete_all::<access_mode::Write>(
+            .delete_all(
                 StorageKey::AccountKey(key).with_native_space(),
             )
             .expect("Failed to delete key.");

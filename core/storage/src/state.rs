@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use cfx_types::AddressWithSpace;
 /// A block defines a list of transactions that it sees and the sequence of
 /// the transactions (ledger). At the view of a block, after all
 /// transactions being executed, the data associated with all addresses is
@@ -30,9 +31,11 @@ pub trait StateTrait {
     ) -> Result<Option<Box<[u8]>>>;
     // Delete everything prefixed by access_key and return deleted key value
     // pairs.
-    fn delete_all<AM: access_mode::AccessMode>(
+    fn delete_all(
         &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> Result<Option<Vec<MptKeyValue>>>;
+    // TODO: Remove this mut.
+    fn read_all(&mut self, access_key_prefix: StorageKeyWithSpace) -> Result<Option<Vec<MptKeyValue>>>;
 
     // Finalize
     /// It's costly to compute state root however it's only necessary to compute
@@ -55,6 +58,22 @@ pub trait StateTraitExt {
     ) -> Result<(NodeMerkleTriplet, NodeMerkleProof)>;
 }
 
+
+// We skip the accessed_entries for getting original value.
+pub trait StateDbGetOriginalMethods {
+    fn get_original_raw_with_proof(
+        &self, key: StorageKeyWithSpace,
+    ) -> Result<(Option<Box<[u8]>>, StateProof)>;
+
+    fn get_original_storage_root(
+        &self, address: &AddressWithSpace,
+    ) -> Result<StorageRoot>;
+
+    fn get_original_storage_root_with_proof(
+        &self, address: &AddressWithSpace,
+    ) -> Result<(StorageRoot, StorageRootProof)>;
+}
+
 use super::{
     impls::{
         errors::*, node_merkle_proof::NodeMerkleProof, state_proof::StateProof,
@@ -62,4 +81,5 @@ use super::{
     utils::access_mode,
     MptKeyValue, StateRootWithAuxInfo,
 };
-use primitives::{EpochId, NodeMerkleTriplet, StaticBool, StorageKeyWithSpace};
+use primitives::{EpochId, NodeMerkleTriplet, StaticBool, StorageKeyWithSpace, StorageRoot};
+use crate::StorageRootProof;

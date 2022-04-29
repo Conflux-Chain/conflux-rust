@@ -14,6 +14,7 @@ use cfx_storage::{
     state_manager::StateManagerTrait,
     ReplicatedState, StateProof, StorageRootProof,
 };
+use cfx_storage::state::StateDbGetOriginalMethods;
 use cfx_types::{Address, AddressSpaceUtil, Bloom, H256};
 use primitives::{
     Block, BlockHeader, BlockHeaderBuilder, BlockReceipts, CheckInput,
@@ -213,7 +214,7 @@ impl LedgerInfo {
 
         let key = StorageKeyWithSpace::from_key_bytes::<CheckInput>(&key)?;
 
-        let (value, proof) = StateDb::new(ReplicatedState::new_single(state))
+        let (value, proof) = state
             .get_original_raw_with_proof(key)?;
 
         let value = value.map(|x| x.to_vec());

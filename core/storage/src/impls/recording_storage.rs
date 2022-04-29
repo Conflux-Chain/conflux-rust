@@ -28,6 +28,21 @@ impl<Storage: StateTrait> RecordingStorage<Storage> {
     }
 }
 
+impl<Storage: StateTrait + StateTraitExt> RecordingStorage<Storage> {
+    fn record_kvs(&self, kvs: &Vec<MptKeyValue>) -> Result<()> {
+        let mut proof_merger = self.proof_merger.lock();
+
+        for (k, _) in kvs {
+            let access_key =
+                StorageKeyWithSpace::from_key_bytes::<CheckInput>(k)?;
+            let (_, proof) = self.storage.get_with_proof(access_key)?;
+            proof_merger.merge(proof);
+        }
+
+        Ok(())
+    }
+}
+
 impl<Storage: StateTrait + StateTraitExt> StateTrait
     for RecordingStorage<Storage>
 {
@@ -51,25 +66,28 @@ impl<Storage: StateTrait + StateTraitExt> StateTrait
         Ok(val)
     }
 
-    // `delete_all<Read>` is a kind of read operation so we need to record it
-    fn delete_all<AM: access_mode::AccessMode>(
+    fn delete_all(
         &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> Result<Option<Vec<MptKeyValue>>> {
-        let kvs = match self.storage.delete_all::<AM>(access_key_prefix)? {
-            None => return Ok(None),
-            Some(kvs) => kvs,
-        };
-
-        let mut proof_merger = self.proof_merger.lock();
-
-        for (k, _) in &kvs {
-            let access_key =
-                StorageKeyWithSpace::from_key_bytes::<CheckInput>(k)?;
-            let (_, proof) = self.storage.get_with_proof(access_key)?;
-            proof_merger.merge(proof);
+        match self.storage.delete_all(access_key_prefix)? {
+            None => Ok(None),
+            Some(kvs) => {
+                self.record_kvs(&kvs)?;
+                Ok(Some(kvs))
+            },
         }
+    }
 
-        Ok(Some(kvs))
+    fn read_all(
+        &mut self, access_key_prefix: StorageKeyWithSpace,
+    ) -> Result<Option<Vec<MptKeyValue>>> {
+        match self.storage.read_all(access_key_prefix)? {
+            None => Ok(None),
+            Some(kvs) => {
+                self.record_kvs(&kvs)?;
+                Ok(Some(kvs))
+            },
+        }
     }
 }
 

@@ -557,13 +557,27 @@ impl StateManager {
 impl StateManagerTrait for StateManager {
     fn get_state_no_commit(
         self: &Arc<Self>, state_index: StateIndex, try_open: bool,
-    ) -> Result<Option<ReplicatedState<State>>> {
+    ) -> Result<Option<Box<dyn StateTrait>>> {
         let maybe_state_trees = self.get_state_trees(&state_index, try_open)?;
         match maybe_state_trees {
-            None => Ok(None),
-            Some(state_trees) => Ok(Some(ReplicatedState::new_single(
+            None => {
+                if self.single_mpt_storage_manager.is_none() {
+                    return Ok(None);
+                }
+                let single_mpt_state = self
+                    .single_mpt_storage_manager
+                    .as_ref()
+                    .unwrap()
+                    .get_state_by_epoch(state_index.epoch_id)?;
+                if single_mpt_state.is_none() {
+                    return Ok(None);
+                } else {
+                    Ok(Some(Box::new(ReplicatedState::new_single(single_mpt_state.unwrap()))))
+                }
+            },
+            Some(state_trees) => Ok(Some(Box::new(ReplicatedState::new_single(
                 State::new(self.clone(), state_trees),
-            ))),
+            )))),
         }
     }
 

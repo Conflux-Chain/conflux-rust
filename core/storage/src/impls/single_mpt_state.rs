@@ -255,6 +255,60 @@ impl SingleMptState {
 
         Ok(())
     }
+
+
+    fn delete_all_impl<AM: access_mode::AccessMode>(
+        &mut self, access_key_prefix: StorageKeyWithSpace,
+    ) -> Result<Option<Vec<MptKeyValue>>> {
+        if AM::is_read_only() {
+            self.ensure_temp_slab_for_db_load();
+        } else {
+            self.pre_modification();
+        }
+
+        // Retrieve and delete key/value pairs from delta trie
+        let trie_kvs = {
+            let key_prefix = access_key_prefix.to_key_bytes();
+            let deleted = if AM::is_read_only() {
+                SubTrieVisitor::new(
+                    &self.trie,
+                    self.trie_root.clone(),
+                    &mut self.owned_node_set,
+                )?
+                    .traversal(&key_prefix, &key_prefix)?
+            } else {
+                let (deleted, _, root_node) = SubTrieVisitor::new(
+                    &self.trie,
+                    self.trie_root.clone(),
+                    &mut self.owned_node_set,
+                )?
+                    .delete_all(&key_prefix, &key_prefix)?;
+                self.trie_root = root_node.unwrap().into();
+
+                deleted
+            };
+            deleted
+        };
+
+        let mut result = Vec::new();
+        // This is used to keep track of the deleted keys.
+        let mut deleted_keys = HashSet::new();
+        if let Some(kvs) = trie_kvs {
+            for (k, v) in kvs {
+                let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
+                let k = storage_key.to_key_bytes();
+                deleted_keys.insert(k.clone());
+                if v.len() > 0 {
+                    result.push((k, v));
+                }
+            }
+        }
+        if result.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(result))
+        }
+    }
 }
 
 impl StateTrait for SingleMptState {
@@ -306,57 +360,14 @@ impl StateTrait for SingleMptState {
         todo!()
     }
 
-    fn delete_all<AM: access_mode::AccessMode>(
+    fn delete_all(
         &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> Result<Option<Vec<MptKeyValue>>> {
-        if AM::is_read_only() {
-            self.ensure_temp_slab_for_db_load();
-        } else {
-            self.pre_modification();
-        }
+        self.delete_all_impl::<access_mode::Write>(access_key_prefix)
+    }
 
-        // Retrieve and delete key/value pairs from delta trie
-        let trie_kvs = {
-            let key_prefix = access_key_prefix.to_key_bytes();
-            let deleted = if AM::is_read_only() {
-                SubTrieVisitor::new(
-                    &self.trie,
-                    self.trie_root.clone(),
-                    &mut self.owned_node_set,
-                )?
-                .traversal(&key_prefix, &key_prefix)?
-            } else {
-                let (deleted, _, root_node) = SubTrieVisitor::new(
-                    &self.trie,
-                    self.trie_root.clone(),
-                    &mut self.owned_node_set,
-                )?
-                .delete_all(&key_prefix, &key_prefix)?;
-                self.trie_root = root_node.unwrap().into();
-
-                deleted
-            };
-            deleted
-        };
-
-        let mut result = Vec::new();
-        // This is used to keep track of the deleted keys.
-        let mut deleted_keys = HashSet::new();
-        if let Some(kvs) = trie_kvs {
-            for (k, v) in kvs {
-                let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
-                let k = storage_key.to_key_bytes();
-                deleted_keys.insert(k.clone());
-                if v.len() > 0 {
-                    result.push((k, v));
-                }
-            }
-        }
-        if result.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(result))
-        }
+    fn read_all(&mut self, access_key_prefix: StorageKeyWithSpace) -> Result<Option<Vec<MptKeyValue>>> {
+        self.delete_all_impl::<access_mode::Read>(access_key_prefix)
     }
 
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {

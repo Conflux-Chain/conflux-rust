@@ -71,7 +71,7 @@ impl ReplicationHandler {
                         }
                         StateOperation::DeleteAll { access_key_prefix } => {
                             replicated_state
-                                .delete_all::<access_mode::Write>(
+                                .delete_all(
                                     access_key_prefix.as_storage_key(),
                                 )
                                 .err()
@@ -272,18 +272,19 @@ impl<Main: StateTrait> StateTrait for ReplicatedState<Main> {
         todo!()
     }
 
-    fn delete_all<AM: AccessMode>(
+    fn delete_all(
         &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> Result<Option<Vec<MptKeyValue>>> {
-        if !AM::is_read_only() {
-            // Only send op for actual delete.
-            self.replication_handler.as_ref().map(|h| {
-                h.send_op(StateOperation::DeleteAll {
-                    access_key_prefix: access_key_prefix.into(),
-                })
-            });
-        }
-        self.state.delete_all::<AM>(access_key_prefix)
+        self.replication_handler.as_ref().map(|h| {
+            h.send_op(StateOperation::DeleteAll {
+                access_key_prefix: access_key_prefix.into(),
+            })
+        });
+        self.state.delete_all(access_key_prefix)
+    }
+
+    fn read_all(&mut self, access_key_prefix: StorageKeyWithSpace) -> Result<Option<Vec<MptKeyValue>>> {
+        self.state.read_all(access_key_prefix)
     }
 
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {

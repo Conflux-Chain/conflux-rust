@@ -32,7 +32,7 @@ pub trait StateManagerTrait {
     /// snapshot open is reached.
     fn get_state_no_commit(
         self: &Arc<Self>, epoch_id: StateIndex, try_open: bool,
-    ) -> Result<Option<ReplicatedState<State>>>;
+    ) -> Result<Option<Box<dyn StateTrait>>>;
     fn get_state_for_next_epoch(
         self: &Arc<Self>, parent_epoch_id: StateIndex,
     ) -> Result<Option<ReplicatedState<State>>>;
@@ -142,3 +142,4 @@ use primitives::{
     MERKLE_NULL_NODE, NULL_EPOCH,
 };
 use std::sync::Arc;
+use crate::state::StateTrait;
