@@ -10,17 +10,7 @@ use solidity_abi::{
     ABIVariable, LinkedBytes,
 };
 
-use crate::{
-    evm::{ActionParams, Spec},
-    executive::InternalRefContext,
-    observer::VmObserve,
-    vm,
-};
-
-use super::{
-    super::impls::params_control::*, macros::*, SimpleExecutionTrait,
-    SolFnTable,
-};
+use super::{super::impls::params_control::*, preludes::*};
 
 make_solidity_contract! {
     pub struct ParamsControl(PARAMS_CONTROL_CONTRACT_ADDRESS, generate_fn_table, initialize: |params: &CommonParams| params.transition_numbers.cip94, is_active: |spec: &Spec| spec.cip94);

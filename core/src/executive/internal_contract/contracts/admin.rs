@@ -2,17 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{
-    super::impls::admin::*, macros::*, SimpleExecutionTrait, SolFnTable,
-};
-use crate::{
-    evm::{ActionParams, Spec},
-    executive::InternalRefContext,
-    observer::VmObserve,
-    vm,
-};
 use cfx_parameters::internal_contract_addresses::ADMIN_CONTROL_CONTRACT_ADDRESS;
 use cfx_types::{Address, U256};
+use primitives::BlockNumber;
+
+use super::{super::impls::admin::*, preludes::*};
 
 make_solidity_contract! {
     pub struct AdminControl(ADMIN_CONTROL_CONTRACT_ADDRESS, generate_fn_table, "active_at_genesis");

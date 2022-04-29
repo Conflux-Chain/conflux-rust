@@ -9,17 +9,18 @@ use cfx_parameters::{
     staking::POS_VOTE_PRICE,
 };
 use cfx_types::{Address, BigEndianHash, H256, U256};
-use entries::*;
 use pow_types::StakingEvent::{self, IncreaseStake, Register, Retire};
 use primitives::log_entry::LogEntry;
 use solidity_abi::ABIDecodable;
 
-use crate::{
-    executive::{internal_contract::SolidityEventTrait, InternalRefContext},
-    vm::{self, ActionParams},
+use crate::vm::{self, ActionParams};
+
+use super::super::{
+    components::{InternalRefContext, SolidityEventTrait},
+    contracts::pos::{IncreaseStakeEvent, RegisterEvent, RetireEvent},
 };
 
-use super::super::contracts::{IncreaseStakeEvent, RegisterEvent, RetireEvent};
+use self::entries::*;
 
 pub struct IndexStatus {
     pub registered: u64,

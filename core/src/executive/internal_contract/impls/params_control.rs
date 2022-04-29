@@ -8,14 +8,11 @@ use std::convert::TryFrom;
 use cfx_statedb::params_control_entries::*;
 use cfx_types::{Address, U256, U512};
 
-use crate::{
-    executive::{
-        internal_contract::{
-            contracts::params_control::Vote, impls::staking::get_vote_power,
-        },
-        InternalRefContext,
-    },
-    vm::{self, ActionParams, Error},
+use crate::vm::{self, ActionParams, Error};
+
+use super::super::{
+    components::InternalRefContext, contracts::params_control::Vote,
+    impls::staking::get_vote_power,
 };
 
 pub fn cast_vote(
@@ -260,50 +257,10 @@ pub struct AllParamsVoteCount {
 /// mapping(address => VoteInfo) votes;
 /// ```
 mod storage_key {
-    use super::{Address, U256};
-    use cfx_types::BigEndianHash;
-    use hash::H256;
-    use keccak_hash::keccak;
+    use super::super::super::components::storage_layout::*;
+    use cfx_types::{Address, BigEndianHash, H256, U256};
 
     const VOTES_SLOT: usize = 0;
-
-    // General function for solidity storage rule
-    fn mapping_slot(base: U256, index: U256) -> U256 {
-        let mut input = [0u8; 64];
-        base.to_big_endian(&mut input[32..]);
-        index.to_big_endian(&mut input[..32]);
-        let hash = keccak(input);
-        U256::from_big_endian(hash.as_ref())
-    }
-
-    #[allow(dead_code)]
-    // General function for solidity storage rule
-    fn vector_slot(base: U256, index: usize, size: usize) -> U256 {
-        let start_slot = dynamic_slot(base);
-        return array_slot(start_slot, index, size);
-    }
-
-    fn dynamic_slot(base: U256) -> U256 {
-        let mut input = [0u8; 32];
-        base.to_big_endian(&mut input);
-        let hash = keccak(input);
-        return U256::from_big_endian(hash.as_ref());
-    }
-
-    // General function for solidity storage rule
-    fn array_slot(base: U256, index: usize, element_size: usize) -> U256 {
-        // Solidity will apply an overflowing add here.
-        // However, if this function is used correctly, the overflowing will
-        // happen with a negligible exception, so we let it panic when
-        // overflowing happen.
-        base + index * element_size
-    }
-
-    fn u256_to_array(input: U256) -> [u8; 32] {
-        let mut answer = [0u8; 32];
-        input.to_big_endian(answer.as_mut());
-        answer
-    }
 
     // TODO: add cache to avoid duplicated hash computing
     pub fn versions(address: &Address) -> [u8; 32] {
