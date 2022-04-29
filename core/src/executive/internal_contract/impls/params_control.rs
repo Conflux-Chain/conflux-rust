@@ -267,8 +267,7 @@ impl ParamVoteCount {
         assert!(frac_power < (U512::one() << 64u64));
         let frac_power = frac_power.as_u64();
 
-        let ratio = power_two_fractional(frac_power, increase);
-
+        let ratio = power_two_fractional(frac_power, increase, 96);
         let new_value = (U512::from(old_value) * U512::from(ratio)) >> 96u64;
 
         if new_value > (U512::one() << 192u64) {
