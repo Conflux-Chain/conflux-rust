@@ -31,8 +31,8 @@ use cfx_state::{
     CleanupMode, CollateralCheckResult, StateTrait, SubstateTrait,
 };
 use cfx_statedb::{
-    params_control_entries::*, ErrorKind as DbErrorKind, Result as DbResult,
-    StateDbExt, StateDbGeneric as StateDb,
+    ErrorKind as DbErrorKind, Result as DbResult, StateDbExt,
+    StateDbGeneric as StateDb,
 };
 use cfx_storage::{utils::access_mode, StorageState, StorageStateTrait};
 use cfx_types::{
@@ -49,7 +49,8 @@ use primitives::{
 
 use crate::{
     executive::internal_contract::{
-        pos_internal_entries, settled_param_vote_count, IndexStatus,
+        pos_internal_entries, settle_current_votes, get_settled_param_vote_count,
+        IndexStatus,
     },
     hash::KECCAK_EMPTY,
     observer::{AddressPocket, StateTracer},
@@ -1492,7 +1493,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     }
 
     pub fn initialize_or_update_dao_voted_params(&mut self) -> DbResult<()> {
-        let vote_count = settled_param_vote_count(self).expect("db error");
+        let vote_count = get_settled_param_vote_count(self).expect("db error");
         debug!(
             "initialize_or_update_dao_voted_params: vote_count={:?}",
             vote_count
@@ -1529,22 +1530,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
             self.db.get_pow_base_reward()?
         );
 
-        // Move the next vote counts into settled and reset the counts.
-        for index in 0..PARAMETER_INDEX_MAX {
-            for opt_index in 0..OPTION_INDEX_MAX {
-                let vote_count = self.get_system_storage(
-                    &TOTAL_VOTES_ENTRIES[index][opt_index],
-                )?;
-                self.set_system_storage(
-                    SETTLED_TOTAL_VOTES_ENTRIES[index][opt_index].to_vec(),
-                    vote_count,
-                )?;
-                self.set_system_storage(
-                    TOTAL_VOTES_ENTRIES[index][opt_index].to_vec(),
-                    U256::zero(),
-                )?;
-            }
-        }
+        settle_current_votes(self)?;
 
         Ok(())
     }

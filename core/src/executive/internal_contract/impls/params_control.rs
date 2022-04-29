@@ -2,16 +2,18 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_state::state_trait::StateOpsTrait;
 use std::convert::TryFrom;
 
-use cfx_statedb::params_control_entries::*;
+use lazy_static::lazy_static;
+
+use cfx_state::state_trait::StateOpsTrait;
+use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, U256, U512};
 
 use crate::vm::{self, ActionParams, Error};
 
 use super::super::{
-    components::InternalRefContext, contracts::params_control::Vote,
+    components::InternalRefContext, contracts::params_control::*,
     impls::staking::get_vote_power,
 };
 
@@ -105,7 +107,7 @@ pub fn cast_vote(
             // Update the global votes if the account vote changes.
             if param_vote[opt_index] != old_vote {
                 let old_total_votes = context.state.get_system_storage(
-                    &TOTAL_VOTES_ENTRIES[index][opt_index],
+                    &CURRENT_VOTES_ENTRIES[index][opt_index],
                 )?;
                 debug!("old_total_vote: {}", old_total_votes,);
                 let new_total_votes = if old_vote > param_vote[opt_index] {
@@ -122,7 +124,7 @@ pub fn cast_vote(
                 };
                 debug!("new_total_vote:{}", new_total_votes);
                 context.state.set_system_storage(
-                    TOTAL_VOTES_ENTRIES[index][opt_index].to_vec(),
+                    CURRENT_VOTES_ENTRIES[index][opt_index].to_vec(),
                     new_total_votes,
                 )?;
             }
@@ -168,46 +170,29 @@ pub fn read_vote(
     Ok(votes_list)
 }
 
-/// If the vote counts are not initialized, all counts will be zero, and the
-/// parameters will be unchanged.
-pub fn settled_param_vote_count<T: StateOpsTrait>(
-    state: &T,
-) -> vm::Result<AllParamsVoteCount> {
-    let pow_base_reward = ParamVoteCount {
-        unchange: state.get_system_storage(
-            &SETTLED_TOTAL_VOTES_ENTRIES[POW_BASE_REWARD_INDEX as usize]
-                [OPTION_UNCHANGE_INDEX as usize],
-        )?,
-        increase: state.get_system_storage(
-            &SETTLED_TOTAL_VOTES_ENTRIES[POW_BASE_REWARD_INDEX as usize]
-                [OPTION_INCREASE_INDEX as usize],
-        )?,
-        decrease: state.get_system_storage(
-            &SETTLED_TOTAL_VOTES_ENTRIES[POW_BASE_REWARD_INDEX as usize]
-                [OPTION_DECREASE_INDEX as usize],
-        )?,
+lazy_static! {
+    static ref CURRENT_VOTES_ENTRIES: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] = {
+        let mut answer: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] =
+            Default::default();
+        for index in 0..PARAMETER_INDEX_MAX {
+            for opt_index in 0..OPTION_INDEX_MAX {
+                answer[index][opt_index] =
+                    system_storage_key::current_votes(index, opt_index);
+            }
+        }
+        answer
     };
-    let pos_reward_interest = ParamVoteCount {
-        unchange: state.get_system_storage(
-            &SETTLED_TOTAL_VOTES_ENTRIES
-                [POS_REWARD_INTEREST_RATE_INDEX as usize]
-                [OPTION_UNCHANGE_INDEX as usize],
-        )?,
-        increase: state.get_system_storage(
-            &SETTLED_TOTAL_VOTES_ENTRIES
-                [POS_REWARD_INTEREST_RATE_INDEX as usize]
-                [OPTION_INCREASE_INDEX as usize],
-        )?,
-        decrease: state.get_system_storage(
-            &SETTLED_TOTAL_VOTES_ENTRIES
-                [POS_REWARD_INTEREST_RATE_INDEX as usize]
-                [OPTION_DECREASE_INDEX as usize],
-        )?,
+    static ref SETTLED_VOTES_ENTRIES: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] = {
+        let mut answer: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] =
+            Default::default();
+        for index in 0..PARAMETER_INDEX_MAX {
+            for opt_index in 0..OPTION_INDEX_MAX {
+                answer[index][opt_index] =
+                    system_storage_key::settled_votes(index, opt_index);
+            }
+        }
+        answer
     };
-    Ok(AllParamsVoteCount {
-        pow_base_reward,
-        pos_reward_interest,
-    })
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -224,6 +209,22 @@ impl ParamVoteCount {
             increase,
             decrease,
         }
+    }
+
+    pub fn from_state<T: StateOpsTrait, U: AsRef<[u8]>>(
+        state: &T, slot_entry: &[U; 3],
+    ) -> DbResult<Self> {
+        Ok(ParamVoteCount {
+            unchange: state.get_system_storage(
+                slot_entry[OPTION_UNCHANGE_INDEX as usize].as_ref(),
+            )?,
+            increase: state.get_system_storage(
+                &slot_entry[OPTION_INCREASE_INDEX as usize].as_ref(),
+            )?,
+            decrease: state.get_system_storage(
+                &slot_entry[OPTION_DECREASE_INDEX as usize].as_ref(),
+            )?,
+        })
     }
 
     pub fn compute_next_params(&self, old_value: U256) -> U256 {
@@ -247,6 +248,44 @@ pub struct AllParamsVoteCount {
     pub pos_reward_interest: ParamVoteCount,
 }
 
+/// If the vote counts are not initialized, all counts will be zero, and the
+/// parameters will be unchanged.
+pub fn get_settled_param_vote_count<T: StateOpsTrait>(
+    state: &T,
+) -> DbResult<AllParamsVoteCount> {
+    let pow_base_reward = ParamVoteCount::from_state(
+        state,
+        &SETTLED_VOTES_ENTRIES[POW_BASE_REWARD_INDEX as usize],
+    )?;
+    let pos_reward_interest = ParamVoteCount::from_state(
+        state,
+        &SETTLED_VOTES_ENTRIES[POS_REWARD_INTEREST_RATE_INDEX as usize],
+    )?;
+    Ok(AllParamsVoteCount {
+        pow_base_reward,
+        pos_reward_interest,
+    })
+}
+
+/// Move the next vote counts into settled and reset the counts.
+pub fn settle_current_votes<T: StateOpsTrait>(state: &mut T) -> DbResult<()> {
+    for index in 0..PARAMETER_INDEX_MAX {
+        for opt_index in 0..OPTION_INDEX_MAX {
+            let vote_count = state
+                .get_system_storage(&CURRENT_VOTES_ENTRIES[index][opt_index])?;
+            state.set_system_storage(
+                SETTLED_VOTES_ENTRIES[index][opt_index].to_vec(),
+                vote_count,
+            )?;
+            state.set_system_storage(
+                CURRENT_VOTES_ENTRIES[index][opt_index].to_vec(),
+                U256::zero(),
+            )?;
+        }
+    }
+    Ok(())
+}
+
 /// Solidity variable sequences.
 /// ```solidity
 /// struct VoteInfo {
@@ -257,8 +296,9 @@ pub struct AllParamsVoteCount {
 /// mapping(address => VoteInfo) votes;
 /// ```
 mod storage_key {
-    use super::super::super::components::storage_layout::*;
     use cfx_types::{Address, BigEndianHash, H256, U256};
+
+    use super::super::super::components::storage_layout::*;
 
     const VOTES_SLOT: usize = 0;
 
@@ -297,5 +337,59 @@ mod storage_key {
         let opt_slot = array_slot(topic_slot, opt_index, 1);
 
         return u256_to_array(opt_slot);
+    }
+}
+
+/// Solidity variable sequences.
+/// ```solidity
+/// struct VoteStats {
+///     uint[3] pow_base_reward dynamic,
+///     uint[3] pos_interest_rate dynamic,
+/// }
+/// VoteStats current_votes dynamic;
+/// VoteStats settled_votes dynamic;
+/// ```
+mod system_storage_key {
+    use cfx_parameters::internal_contract_addresses::PARAMS_CONTROL_CONTRACT_ADDRESS;
+    use cfx_types::U256;
+
+    use super::super::super::{
+        components::storage_layout::*, contracts::system_storage::base_slot,
+    };
+
+    const CURRENT_VOTES_SLOT: usize = 0;
+    const SETTLED_VOTES_SLOT: usize = 1;
+
+    fn vote_stats(base: U256, index: usize, opt_index: usize) -> U256 {
+        // Position of `.<topic>` (static slot)
+        let topic_slot = base + index;
+
+        // Position of `.<topic>` (dynamic slot)
+        let topic_slot = dynamic_slot(topic_slot);
+
+        // Position of `.<topic>[opt_index]`
+        return array_slot(topic_slot, opt_index, 1);
+    }
+
+    pub(super) fn current_votes(index: usize, opt_index: usize) -> [u8; 32] {
+        // Position of `current_votes` (static slot)
+        let base = base_slot(*PARAMS_CONTROL_CONTRACT_ADDRESS)
+            + U256::from(CURRENT_VOTES_SLOT);
+
+        // Position of `current_votes` (dynamic slot)
+        let base = dynamic_slot(base);
+
+        u256_to_array(vote_stats(base, index, opt_index))
+    }
+
+    pub(super) fn settled_votes(index: usize, opt_index: usize) -> [u8; 32] {
+        // Position of `settled_votes` (static slot)
+        let base = base_slot(*PARAMS_CONTROL_CONTRACT_ADDRESS)
+            + U256::from(SETTLED_VOTES_SLOT);
+
+        // Position of `settled_votes` (dynamic slot)
+        let base = dynamic_slot(base);
+
+        u256_to_array(vote_stats(base, index, opt_index))
     }
 }
