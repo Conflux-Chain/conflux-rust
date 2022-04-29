@@ -24,6 +24,7 @@ use cfx_types::{
 };
 use primitives::transaction::UNSIGNED_SENDER;
 use std::sync::Arc;
+use cfx_state::state_trait::StateOpsTrait;
 
 /// Transaction properties that externalities need to know about.
 #[derive(Debug)]
@@ -60,9 +61,8 @@ pub struct Context<
     'a, /* Lifetime of transaction executive. */
     'b, /* Lifetime of call-create executive. */
     Substate: SubstateTrait,
-    State: StateTrait<Substate = Substate>,
 > {
-    state: &'b mut State,
+    state: &'b mut dyn StateTrait<Substate = Substate>,
     callstack: &'b mut CallStackInfo,
     local_part: &'b mut LocalContext<'a, Substate>,
 }
@@ -106,9 +106,9 @@ impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
     /// executive. For the parameters shared between executives (like `&mut
     /// State`), the executive should activate `LocalContext` by passing in
     /// these parameters.
-    pub fn activate<State: StateTrait<Substate = Substate>>(
-        &'b mut self, state: &'b mut State, callstack: &'b mut CallStackInfo,
-    ) -> Context<'a, 'b, Substate, State> {
+    pub fn activate(
+        &'b mut self, state: &'b mut dyn StateTrait<Substate = Substate>, callstack: &'b mut CallStackInfo,
+    ) -> Context<'a, 'b, Substate> {
         Context {
             state,
             local_part: self,
@@ -121,8 +121,7 @@ impl<
         'a,
         'b,
         Substate: SubstateMngTrait,
-        State: StateTrait<Substate = Substate>,
-    > ContextTrait for Context<'a, 'b, Substate, State>
+    > ContextTrait for Context<'a, 'b, Substate>
 {
     fn storage_at(&self, key: &Vec<u8>) -> vm::Result<U256> {
         let caller = AddressWithSpace {
@@ -131,7 +130,7 @@ impl<
         };
         self.local_part
             .substate
-            .storage_at(self.state, &caller, key)
+            .storage_at(self.state.as_state_ops(), &caller, key)
             .map_err(Into::into)
     }
 
@@ -146,7 +145,7 @@ impl<
             self.local_part
                 .substate
                 .set_storage(
-                    self.state,
+                    self.state.as_mut_state_ops(),
                     &caller,
                     key,
                     value,
@@ -457,7 +456,7 @@ impl<
                 .address
                 .with_space(self.local_part.space),
             &refund_address.with_space(self.local_part.space),
-            self.state,
+            self.state.as_mut_state_ops(),
             &self.local_part.spec,
             &mut self.local_part.substate,
             tracer,
@@ -518,7 +517,7 @@ impl<
             env: self.local_part.env,
             spec: self.local_part.spec,
             callstack: self.callstack,
-            state: self.state,
+            state: self.state.as_mut_state_ops(),
             substate: &mut self.local_part.substate,
             static_flag: self.local_part.static_flag,
             depth: self.local_part.depth,

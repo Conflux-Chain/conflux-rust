@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-pub trait StateTrait: CheckpointTrait {
+pub trait StateTrait: CheckpointTrait + AsStateOpsTrait {
     type Substate: SubstateTrait;
 
     /// Collects the cache (`ownership_change` in `OverlayAccount`) of storage
@@ -268,6 +268,11 @@ pub trait StateOpsTrait {
         -> DbResult<()>;
 
     fn get_system_storage(&self, key: &[u8]) -> DbResult<U256>;
+}
+
+pub trait AsStateOpsTrait: StateOpsTrait {
+    fn as_state_ops(&self) -> &dyn StateOpsTrait;
+    fn as_mut_state_ops(&mut self) -> &mut dyn StateOpsTrait;
 }
 
 pub trait CheckpointTrait: StateOpsTrait {

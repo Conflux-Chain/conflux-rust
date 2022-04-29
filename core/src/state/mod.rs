@@ -30,6 +30,7 @@ use cfx_state::{
     state_trait::{CheckpointTrait, StateOpsTrait},
     CleanupMode, CollateralCheckResult, StateTrait, SubstateTrait,
 };
+use cfx_state::state_trait::AsStateOpsTrait;
 use cfx_statedb::{
     params_control_entries::*, ErrorKind as DbErrorKind, Result as DbResult,
     StateDbExt, StateDbGeneric as StateDb,
@@ -1237,6 +1238,16 @@ impl<StateDbStorage: StorageStateTrait> CheckpointTrait
                 }
             }
         }
+    }
+}
+
+impl<StateDbStorage: StorageStateTrait> AsStateOpsTrait for StateGeneric<StateDbStorage> {
+    fn as_state_ops(&self) -> &dyn StateOpsTrait {
+        self
+    }
+
+    fn as_mut_state_ops(&mut self) -> &mut dyn StateOpsTrait {
+        self
     }
 }
 
