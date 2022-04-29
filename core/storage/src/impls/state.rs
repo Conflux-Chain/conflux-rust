@@ -299,7 +299,9 @@ impl StateTrait for State {
         self.delete_all_impl::<access_mode::Write>(access_key_prefix)
     }
 
-    fn read_all(&mut self, access_key_prefix: StorageKeyWithSpace) -> Result<Option<Vec<MptKeyValue>>> {
+    fn read_all(
+        &mut self, access_key_prefix: StorageKeyWithSpace,
+    ) -> Result<Option<Vec<MptKeyValue>>> {
         self.delete_all_impl::<access_mode::Read>(access_key_prefix)
     }
 
@@ -513,10 +515,7 @@ impl StateTraitExt for State {
     }
 }
 
-
-impl StateDbGetOriginalMethods
-for State
-{
+impl StateDbGetOriginalMethods for State {
     fn get_original_raw_with_proof(
         &self, key: StorageKeyWithSpace,
     ) -> Result<(Option<Box<[u8]>>, StateProof)> {
@@ -531,8 +530,7 @@ for State
         let key = StorageKey::new_storage_root_key(&address.address)
             .with_space(address.space);
 
-        let (root, _) =
-            self.get_node_merkle_all_versions::<NoProof>(key)?;
+        let (root, _) = self.get_node_merkle_all_versions::<NoProof>(key)?;
 
         Ok(root)
     }
@@ -543,8 +541,7 @@ for State
         let key = StorageKey::new_storage_root_key(&address.address)
             .with_space(address.space);
 
-        self
-            .get_node_merkle_all_versions::<WithProof>(key)
+        self.get_node_merkle_all_versions::<WithProof>(key)
             .map_err(Into::into)
     }
 }
@@ -804,7 +801,6 @@ impl State {
         }
     }
 
-
     /// Delete all key/value pairs with access_key_prefix as prefix. These
     /// key/value pairs exist in three places: Delta Trie, Intermediate Trie
     /// and Snapshot DB.
@@ -836,14 +832,14 @@ impl State {
                         old_root_node.clone(),
                         &mut self.owned_node_set,
                     )?
-                        .traversal(&delta_mpt_key_prefix, &delta_mpt_key_prefix)?
+                    .traversal(&delta_mpt_key_prefix, &delta_mpt_key_prefix)?
                 } else {
                     let (deleted, _, root_node) = SubTrieVisitor::new(
                         &self.delta_trie,
                         old_root_node.clone(),
                         &mut self.owned_node_set,
                     )?
-                        .delete_all(&delta_mpt_key_prefix, &delta_mpt_key_prefix)?;
+                    .delete_all(&delta_mpt_key_prefix, &delta_mpt_key_prefix)?;
                     self.delta_trie_root =
                         root_node.map(|maybe_node| maybe_node.into());
 
@@ -871,10 +867,10 @@ impl State {
                         root_node.clone(),
                         &mut self.owned_node_set,
                     )?
-                        .traversal(
-                            &intermediate_mpt_key_prefix,
-                            &intermediate_mpt_key_prefix,
-                        )?;
+                    .traversal(
+                        &intermediate_mpt_key_prefix,
+                        &intermediate_mpt_key_prefix,
+                    )?;
 
                     values
                 } else {
@@ -952,20 +948,34 @@ impl State {
     }
 }
 
-use crate::{impls::{
-    delta_mpt::{node_memory_manager::ActualSlabIndex, *},
-    errors::*,
-    merkle_patricia_trie::{
-        mpt_cursor::{BasicPathNode, CursorOpenPathTerminal, MptCursor},
-        KVInserter, MptKeyValue, TrieProof, VanillaChildrenTable,
+use crate::{
+    impls::{
+        delta_mpt::{node_memory_manager::ActualSlabIndex, *},
+        errors::*,
+        merkle_patricia_trie::{
+            mpt_cursor::{BasicPathNode, CursorOpenPathTerminal, MptCursor},
+            KVInserter, MptKeyValue, TrieProof, VanillaChildrenTable,
+        },
+        node_merkle_proof::NodeMerkleProof,
+        state_manager::*,
+        state_proof::StateProof,
     },
-    node_merkle_proof::NodeMerkleProof,
-    state_manager::*,
-    state_proof::StateProof,
-}, state::*, storage_db::*, StorageRootProof, utils::{access_mode, to_key_prefix_iter_upper_bound}};
+    state::*,
+    storage_db::*,
+    utils::{
+        access_mode::{self, AccessMode},
+        to_key_prefix_iter_upper_bound,
+    },
+    StorageRootProof,
+};
 use cfx_internal_common::{StateRootAuxInfo, StateRootWithAuxInfo};
+use cfx_types::AddressWithSpace;
 use fallible_iterator::FallibleIterator;
-use primitives::{DeltaMptKeyPadding, EpochId, MerkleHash, MptValue, NodeMerkleTriplet, SkipInputCheck, StateRoot, StaticBool, StorageKeyWithSpace, MERKLE_NULL_NODE, NULL_EPOCH, StorageRoot, StorageKey};
+use primitives::{
+    DeltaMptKeyPadding, EpochId, MerkleHash, MptValue, NodeMerkleTriplet,
+    SkipInputCheck, StateRoot, StaticBool, StorageKey, StorageKeyWithSpace,
+    StorageRoot, MERKLE_NULL_NODE, NULL_EPOCH,
+};
 use rustc_hex::ToHex;
 use std::{
     cell::UnsafeCell,
@@ -973,5 +983,3 @@ use std::{
     hint::unreachable_unchecked,
     sync::{atomic::Ordering, Arc},
 };
-use cfx_types::AddressWithSpace;
-use crate::utils::access_mode::AccessMode;

@@ -195,9 +195,7 @@ pub mod params_control_entries {
     }
 }
 
-impl<StateDbStorage: StorageStateTrait> StateDbExt
-    for StateDbGeneric<StateDbStorage>
-{
+impl StateDbExt for StateDbGeneric {
     fn get<T>(&self, key: StorageKeyWithSpace) -> Result<Option<T>>
     where T: ::rlp::Decodable {
         match self.get_raw(key) {

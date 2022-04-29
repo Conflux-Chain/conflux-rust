@@ -8,13 +8,12 @@ use crate::{
 };
 use cfx_internal_common::StateRootWithAuxInfo;
 use cfx_parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
-use cfx_statedb::{StateDb, StateDbGetOriginalMethods};
+use cfx_statedb::StateDb;
 use cfx_storage::{
-    state::{State, StateTrait},
+    state::{State, StateDbGetOriginalMethods, StateTrait},
     state_manager::StateManagerTrait,
     ReplicatedState, StateProof, StorageRootProof,
 };
-use cfx_storage::state::StateDbGetOriginalMethods;
 use cfx_types::{Address, AddressSpaceUtil, Bloom, H256};
 use primitives::{
     Block, BlockHeader, BlockHeaderBuilder, BlockReceipts, CheckInput,
@@ -175,11 +174,14 @@ impl LedgerInfo {
             self.consensus
                 .get_data_manager()
                 .storage_manager
-                .get_state_no_commit(state_index, /* try_open = */ true)
+                .get_state_no_commit_inner(
+                    state_index,
+                    /* try_open = */ true,
+                )
         });
 
         match state {
-            Some(Ok(Some(state))) => Ok(state.into_main_state()),
+            Some(Ok(Some(state))) => Ok(state),
             _ => {
                 bail!(ErrorKind::InternalError(format!(
                     "State of epoch {} not found",
@@ -214,8 +216,7 @@ impl LedgerInfo {
 
         let key = StorageKeyWithSpace::from_key_bytes::<CheckInput>(&key)?;
 
-        let (value, proof) = state
-            .get_original_raw_with_proof(key)?;
+        let (value, proof) = state.get_original_raw_with_proof(key)?;
 
         let value = value.map(|x| x.to_vec());
         Ok((value, proof))
@@ -227,10 +228,9 @@ impl LedgerInfo {
         &self, epoch: u64, address: &Address,
     ) -> Result<(StorageRoot, StorageRootProof), Error> {
         let state = self.state_of(epoch)?;
-        Ok(StateDb::new(ReplicatedState::new_single(state))
-            .get_original_storage_root_with_proof(
-                &address.with_native_space(),
-            )?)
+        Ok(state.get_original_storage_root_with_proof(
+            &address.with_native_space(),
+        )?)
     }
 
     /// Get the epoch receipts corresponding to the execution of `epoch`.

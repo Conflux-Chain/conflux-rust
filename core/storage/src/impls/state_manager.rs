@@ -552,37 +552,21 @@ impl StateManager {
             }),
         )
     }
-}
 
-impl StateManagerTrait for StateManager {
-    fn get_state_no_commit(
+    pub fn get_state_no_commit_inner(
         self: &Arc<Self>, state_index: StateIndex, try_open: bool,
-    ) -> Result<Option<Box<dyn StateTrait>>> {
+    ) -> Result<Option<State>> {
         let maybe_state_trees = self.get_state_trees(&state_index, try_open)?;
         match maybe_state_trees {
-            None => {
-                if self.single_mpt_storage_manager.is_none() {
-                    return Ok(None);
-                }
-                let single_mpt_state = self
-                    .single_mpt_storage_manager
-                    .as_ref()
-                    .unwrap()
-                    .get_state_by_epoch(state_index.epoch_id)?;
-                if single_mpt_state.is_none() {
-                    return Ok(None);
-                } else {
-                    Ok(Some(Box::new(ReplicatedState::new_single(single_mpt_state.unwrap()))))
-                }
-            },
-            Some(state_trees) => Ok(Some(Box::new(ReplicatedState::new_single(
-                State::new(self.clone(), state_trees),
-            )))),
+            None => Ok(None),
+            Some(state_trees) => {
+                Ok(Some(State::new(self.clone(), state_trees)))
+            }
         }
     }
 
-    fn get_state_for_genesis_write(self: &Arc<Self>) -> ReplicatedState<State> {
-        ReplicatedState::new_single(State::new(
+    fn get_state_for_genesis_write_inner(self: &Arc<Self>) -> State {
+        State::new(
             self.clone(),
             StateTrees {
                 snapshot_db: self
@@ -609,7 +593,100 @@ impl StateManagerTrait for StateManager {
                 intermediate_epoch_id: NULL_EPOCH,
                 parent_epoch_id: NULL_EPOCH,
             },
-        ))
+        )
+    }
+
+    // Currently we use epoch number to decide whether or not to
+    // start a new delta trie. The value of parent_epoch_id is only
+    // known after the computation is done.
+    //
+    // If we use delta trie size upper bound to decide whether or not
+    // to start a new delta trie, then the computation about whether
+    // or not start a new delta trie, can only be done at the time
+    // of committing. In this scenario, the execution engine should
+    // first get the state assuming that the delta trie won't change,
+    // then check if committing fails due to over size, and if so,
+    // start a new delta trie and re-apply the change.
+    //
+    // Due to the complexity of the latter approach, we stay with the
+    // simple approach.
+    fn get_state_for_next_epoch_inner(
+        self: &Arc<Self>, parent_epoch_id: StateIndex,
+    ) -> Result<Option<State>> {
+        let maybe_state_trees = self.get_state_trees_for_next_epoch(
+            &parent_epoch_id,
+            /* try_open = */ false,
+        )?;
+        match maybe_state_trees {
+            None => Ok(None),
+            Some(state_trees) => {
+                Ok(Some(State::new(self.clone(), state_trees)))
+            }
+        }
+    }
+}
+
+impl StateManagerTrait for StateManager {
+    fn get_state_no_commit(
+        self: &Arc<Self>, state_index: StateIndex, try_open: bool,
+    ) -> Result<Option<Box<dyn StateTrait>>> {
+        let maybe_state_trees = self.get_state_trees(&state_index, try_open)?;
+        match maybe_state_trees {
+            None => {
+                if self.single_mpt_storage_manager.is_none() {
+                    return Ok(None);
+                }
+                let single_mpt_state = self
+                    .single_mpt_storage_manager
+                    .as_ref()
+                    .unwrap()
+                    .get_state_by_epoch(state_index.epoch_id)?;
+                if single_mpt_state.is_none() {
+                    return Ok(None);
+                } else {
+                    Ok(Some(Box::new(ReplicatedState::new_single(
+                        single_mpt_state.unwrap(),
+                    ))))
+                }
+            }
+            Some(state_trees) => {
+                Ok(Some(Box::new(ReplicatedState::new_single(State::new(
+                    self.clone(),
+                    state_trees,
+                )))))
+            }
+        }
+    }
+
+    fn get_state_for_genesis_write(self: &Arc<Self>) -> Box<dyn StateTrait> {
+        Box::new(ReplicatedState::new_single(State::new(
+            self.clone(),
+            StateTrees {
+                snapshot_db: self
+                    .storage_manager
+                    .wait_for_snapshot(&NULL_EPOCH, /* try_open = */ false)
+                    .unwrap()
+                    .unwrap()
+                    .into()
+                    .1,
+                snapshot_epoch_id: NULL_EPOCH,
+                snapshot_merkle_root: MERKLE_NULL_NODE,
+                maybe_intermediate_trie: None,
+                intermediate_trie_root: None,
+                intermediate_trie_root_merkle: MERKLE_NULL_NODE,
+                maybe_intermediate_trie_key_padding: None,
+                delta_trie: self
+                    .storage_manager
+                    .get_delta_mpt(&NULL_EPOCH)
+                    .unwrap(),
+                delta_trie_root: None,
+                delta_trie_key_padding: GENESIS_DELTA_MPT_KEY_PADDING.clone(),
+                maybe_delta_trie_height: Some(1),
+                maybe_height: Some(1),
+                intermediate_epoch_id: NULL_EPOCH,
+                parent_epoch_id: NULL_EPOCH,
+            },
+        )))
     }
 
     // Currently we use epoch number to decide whether or not to
@@ -628,16 +705,19 @@ impl StateManagerTrait for StateManager {
     // simple approach.
     fn get_state_for_next_epoch(
         self: &Arc<Self>, parent_epoch_id: StateIndex,
-    ) -> Result<Option<ReplicatedState<State>>> {
+    ) -> Result<Option<Box<dyn StateTrait>>> {
         let maybe_state_trees = self.get_state_trees_for_next_epoch(
             &parent_epoch_id,
             /* try_open = */ false,
         )?;
         match maybe_state_trees {
             None => Ok(None),
-            Some(state_trees) => Ok(Some(ReplicatedState::new_single(
-                State::new(self.clone(), state_trees),
-            ))),
+            Some(state_trees) => {
+                Ok(Some(Box::new(ReplicatedState::new_single(State::new(
+                    self.clone(),
+                    state_trees,
+                )))))
+            }
         }
     }
 }
@@ -645,14 +725,14 @@ impl StateManagerTrait for StateManager {
 impl ReplicatedStateManagerTrait for StateManager {
     fn get_replicated_state_for_next_epoch(
         self: &Arc<Self>, parent_epoch_id: StateIndex,
-    ) -> Result<Option<ReplicatedState<State>>> {
+    ) -> Result<Option<Box<dyn StateTrait>>> {
         let parent_epoch = parent_epoch_id.epoch_id;
-        let state = self.get_state_for_next_epoch(parent_epoch_id)?;
+        let state = self.get_state_for_next_epoch_inner(parent_epoch_id)?;
         if state.is_none() {
             return Ok(None);
         }
         if self.single_mpt_storage_manager.is_none() {
-            return Ok(state);
+            return Ok(Some(Box::new(state.unwrap())));
         }
         let single_mpt_state = self
             .single_mpt_storage_manager
@@ -662,18 +742,18 @@ impl ReplicatedStateManagerTrait for StateManager {
         if single_mpt_state.is_none() {
             return Ok(None);
         }
-        Ok(Some(ReplicatedState::new(
-            state.unwrap().into_main_state(),
+        Ok(Some(Box::new(ReplicatedState::new(
+            state.unwrap(),
             single_mpt_state.unwrap(),
-        )))
+        ))))
     }
 
     fn get_replicated_state_for_genesis_write(
         self: &Arc<Self>,
-    ) -> ReplicatedState<State> {
-        let state = self.get_state_for_genesis_write();
+    ) -> Box<dyn StateTrait> {
+        let state = self.get_state_for_genesis_write_inner();
         if self.single_mpt_storage_manager.is_none() {
-            return state;
+            return Box::new(state);
         }
         let single_mpt_state = self
             .single_mpt_storage_manager
@@ -681,7 +761,7 @@ impl ReplicatedStateManagerTrait for StateManager {
             .unwrap()
             .get_state_for_genesis()
             .expect("single_mpt genesis initialize error");
-        ReplicatedState::new(state.into_main_state(), single_mpt_state)
+        Box::new(ReplicatedState::new(state, single_mpt_state))
     }
 }
 

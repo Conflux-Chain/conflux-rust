@@ -256,7 +256,6 @@ impl SingleMptState {
         Ok(())
     }
 
-
     fn delete_all_impl<AM: access_mode::AccessMode>(
         &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> Result<Option<Vec<MptKeyValue>>> {
@@ -275,14 +274,14 @@ impl SingleMptState {
                     self.trie_root.clone(),
                     &mut self.owned_node_set,
                 )?
-                    .traversal(&key_prefix, &key_prefix)?
+                .traversal(&key_prefix, &key_prefix)?
             } else {
                 let (deleted, _, root_node) = SubTrieVisitor::new(
                     &self.trie,
                     self.trie_root.clone(),
                     &mut self.owned_node_set,
                 )?
-                    .delete_all(&key_prefix, &key_prefix)?;
+                .delete_all(&key_prefix, &key_prefix)?;
                 self.trie_root = root_node.unwrap().into();
 
                 deleted
@@ -366,7 +365,9 @@ impl StateTrait for SingleMptState {
         self.delete_all_impl::<access_mode::Write>(access_key_prefix)
     }
 
-    fn read_all(&mut self, access_key_prefix: StorageKeyWithSpace) -> Result<Option<Vec<MptKeyValue>>> {
+    fn read_all(
+        &mut self, access_key_prefix: StorageKeyWithSpace,
+    ) -> Result<Option<Vec<MptKeyValue>>> {
         self.delete_all_impl::<access_mode::Read>(access_key_prefix)
     }
 

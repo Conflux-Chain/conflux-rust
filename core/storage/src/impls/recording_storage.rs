@@ -74,7 +74,7 @@ impl<Storage: StateTrait + StateTraitExt> StateTrait
             Some(kvs) => {
                 self.record_kvs(&kvs)?;
                 Ok(Some(kvs))
-            },
+            }
         }
     }
 
@@ -86,7 +86,7 @@ impl<Storage: StateTrait + StateTraitExt> StateTrait
             Some(kvs) => {
                 self.record_kvs(&kvs)?;
                 Ok(Some(kvs))
-            },
+            }
         }
     }
 }

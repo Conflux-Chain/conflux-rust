@@ -18,13 +18,14 @@ use crate::{
 use cfx_parameters::staking::{
     code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
-use cfx_state::{StateTrait, SubstateMngTrait, SubstateTrait};
+use cfx_state::{
+    state_trait::StateOpsTrait, StateTrait, SubstateMngTrait, SubstateTrait,
+};
 use cfx_types::{
     Address, AddressSpaceUtil, AddressWithSpace, Space, H256, U256,
 };
 use primitives::transaction::UNSIGNED_SENDER;
 use std::sync::Arc;
-use cfx_state::state_trait::StateOpsTrait;
 
 /// Transaction properties that externalities need to know about.
 #[derive(Debug)]
@@ -107,8 +108,10 @@ impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
     /// State`), the executive should activate `LocalContext` by passing in
     /// these parameters.
     pub fn activate(
-        &'b mut self, state: &'b mut dyn StateTrait<Substate = Substate>, callstack: &'b mut CallStackInfo,
-    ) -> Context<'a, 'b, Substate> {
+        &'b mut self, state: &'b mut dyn StateTrait<Substate = Substate>,
+        callstack: &'b mut CallStackInfo,
+    ) -> Context<'a, 'b, Substate>
+    {
         Context {
             state,
             local_part: self,
@@ -117,11 +120,8 @@ impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
     }
 }
 
-impl<
-        'a,
-        'b,
-        Substate: SubstateMngTrait,
-    > ContextTrait for Context<'a, 'b, Substate>
+impl<'a, 'b, Substate: SubstateMngTrait> ContextTrait
+    for Context<'a, 'b, Substate>
 {
     fn storage_at(&self, key: &Vec<u8>) -> vm::Result<U256> {
         let caller = AddressWithSpace {

@@ -57,7 +57,7 @@ use cfx_parameters::{
 };
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::StateDb;
-use cfx_storage::state_manager::StateManagerTrait;
+use cfx_storage::{state_manager::StateManagerTrait, StorageState};
 use cfx_types::{AddressWithSpace, AllChainID, Bloom, Space, H256, U256};
 use either::Either;
 use itertools::Itertools;
@@ -726,8 +726,9 @@ impl ConsensusGraph {
             ),
             BlockHashOrEpochNumber::EpochNumber(epoch_number) => epoch_number,
         };
-        let state =
-            self.get_state_by_epoch_number(epoch_number, rpc_param_name)?;
+        let state = State::new(
+            self.get_state_db_by_epoch_number(epoch_number, rpc_param_name)?,
+        )?;
 
         Ok(state.nonce(&address)?)
     }
@@ -1395,9 +1396,9 @@ impl ConsensusGraph {
         self.statistics.get_consensus_graph_processed_block_count()
     }
 
-    fn get_state_db_by_height_and_hash(
+    fn get_storage_state_by_height_and_hash(
         &self, height: u64, hash: &H256,
-    ) -> RpcResult<StateDb> {
+    ) -> RpcResult<StorageState> {
         // Keep the lock until we get the desired State, otherwise the State may
         // expire.
         let state_availability_boundary =
@@ -1418,7 +1419,7 @@ impl ConsensusGraph {
             Some(state_readonly_index) => self
                 .data_man
                 .storage_manager
-                .get_state_no_commit(
+                .get_state_no_commit_inner(
                     state_readonly_index,
                     /* try_open = */ true,
                 )
@@ -1436,7 +1437,7 @@ impl ConsensusGraph {
             }
         };
 
-        Ok(StateDb::new(state))
+        Ok(state)
     }
 
     /// This function is called after a new block appended to the
@@ -2117,38 +2118,9 @@ impl ConsensusGraphTrait for ConsensusGraph {
         self.inner.write().set_initial_sequence_number(initial_sn);
     }
 
-    // TODO: investigate why we ended up with multiple similar functions to
-    //  get state / state db by epoch number and if we can simplify the code.
-    fn get_state_by_epoch_number(
+    fn get_storage_state_by_epoch_number(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
-    ) -> RpcResult<State> {
-        invalid_params_check(
-            rpc_param_name,
-            self.validate_stated_epoch(&epoch_number),
-        )?;
-
-        let height = invalid_params_check(
-            rpc_param_name,
-            self.get_height_from_epoch_number(epoch_number),
-        )?;
-        let epoch_id = if let Ok(v) =
-            self.inner.read_recursive().block_hashes_by_epoch(height)
-        {
-            v.last().expect("pivot block always exist").clone()
-        } else {
-            bail!("cannot get block hashes in the specified epoch, maybe it does not exist?");
-        };
-        let state_db =
-            self.get_state_db_by_height_and_hash(height, &epoch_id)?;
-
-        Ok(State::new(state_db)?)
-    }
-
-    // TODO: investigate why we ended up with multiple similar functions to
-    //  get state / state db by epoch number and if we can simplify the code.
-    fn get_state_db_by_epoch_number(
-        &self, epoch_number: EpochNumber, rpc_param_name: &str,
-    ) -> RpcResult<StateDb> {
+    ) -> RpcResult<StorageState> {
         invalid_params_check(
             rpc_param_name,
             self.validate_stated_epoch(&epoch_number),
@@ -2159,7 +2131,18 @@ impl ConsensusGraphTrait for ConsensusGraph {
         )?;
         let hash =
             self.inner.read().get_pivot_hash_from_epoch_number(height)?;
-        self.get_state_db_by_height_and_hash(height, &hash)
+        self.get_storage_state_by_height_and_hash(height, &hash)
+    }
+
+    fn get_state_db_by_epoch_number(
+        &self, epoch_number: EpochNumber, rpc_param_name: &str,
+    ) -> RpcResult<StateDb> {
+        Ok(StateDb::new(Box::new(
+            self.get_storage_state_by_epoch_number(
+                epoch_number,
+                rpc_param_name,
+            )?,
+        )))
     }
 
     /// Return the blocks without bodies in the subtree of stable genesis and

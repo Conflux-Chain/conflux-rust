@@ -15,9 +15,7 @@ mod tests;
 
 pub use self::{
     error::{Error, ErrorKind, Result},
-    impls::{
-        StateDb as StateDbGeneric, StateDbCheckpointMethods,
-    },
+    impls::{StateDb as StateDbGeneric, StateDbCheckpointMethods},
     statedb_ext::{
         params_control_entries, StateDbExt, ACCUMULATE_INTEREST_RATE_KEY,
         DISTRIBUTABLE_POS_INTEREST_KEY, INTEREST_RATE_KEY,
@@ -26,7 +24,7 @@ pub use self::{
         TOTAL_TOKENS_KEY,
     },
 };
-pub type StateDb = StateDbGeneric<ReplicatedState<StorageState>>;
+pub type StateDb = StateDbGeneric;
 
 // Put StateDb in mod to make sure that methods from statedb_ext don't access
 // its fields directly.
@@ -43,32 +41,17 @@ mod impls {
     type Checkpoint = BTreeMap<Key, Option<Value>>;
 
     // Use generic type for better test-ability.
-    pub struct StateDb<Storage> {
+    pub struct StateDb {
         /// Contains the original storage key values for all loaded and
         /// modified key values.
         accessed_entries: RwLock<AccessedEntries>,
 
         /// The underlying storage, The storage is updated only upon fn
         /// commit().
-        storage: Storage,
+        storage: Box<dyn StorageStateTrait>,
 
         /// Checkpoints allow callers to revert un-committed changes.
         checkpoints: Vec<Checkpoint>,
-    }
-
-    // We skip the accessed_entries for getting original value.
-    pub trait StateDbGetOriginalMethods {
-        fn get_original_raw_with_proof(
-            &self, key: StorageKeyWithSpace,
-        ) -> Result<(Option<Box<[u8]>>, StateProof)>;
-
-        fn get_original_storage_root(
-            &self, address: &AddressWithSpace,
-        ) -> Result<StorageRoot>;
-
-        fn get_original_storage_root_with_proof(
-            &self, address: &AddressWithSpace,
-        ) -> Result<(StorageRoot, StorageRootProof)>;
     }
 
     pub trait StateDbCheckpointMethods {
@@ -86,8 +69,8 @@ mod impls {
         fn revert_to_checkpoint(&mut self);
     }
 
-    impl<Storage: StorageStateTrait> StateDb<Storage> {
-        pub fn new(storage: Storage) -> Self {
+    impl StateDb {
+        pub fn new(storage: Box<dyn StorageStateTrait>) -> Self {
             StateDb {
                 accessed_entries: Default::default(),
                 storage,
@@ -261,8 +244,7 @@ mod impls {
                 }
             }
             // Then, remove all un-modified existing keys.
-            let deleted =
-                self.storage.read_all(key_prefix)?;
+            let deleted = self.storage.read_all(key_prefix)?;
             // We must update the accessed_entries.
             if let Some(storage_deleted) = &deleted {
                 for (k, v) in storage_deleted {
@@ -310,7 +292,8 @@ mod impls {
                 StorageLayout,
             >,
             accept_account_deletion: bool, address: &[u8], space: Space,
-            storage: &Storage, accessed_entries: &AccessedEntries,
+            storage: &dyn StorageStateTrait,
+            accessed_entries: &AccessedEntries,
         ) -> Result<()>
         {
             if !storage_layouts_to_rewrite
@@ -417,7 +400,7 @@ mod impls {
                             v.current_value.is_none(),
                             address_bytes,
                             storage_key.space,
-                            &self.storage,
+                            self.storage.as_ref(),
                             &accessed_entries,
                         )?;
                     } else if let StorageKey::AccountKey(address_bytes) =
@@ -434,7 +417,7 @@ mod impls {
                                 /* accept_account_deletion = */ false,
                                 address_bytes,
                                 storage_key.space,
-                                &self.storage,
+                                self.storage.as_ref(),
                                 &accessed_entries,
                             );
                             if result.is_err() {
@@ -461,7 +444,7 @@ mod impls {
                                 /* accept_account_deletion = */ false,
                                 address_bytes,
                                 storage_key.space,
-                                &self.storage,
+                                self.storage.as_ref(),
                                 &accessed_entries,
                             )?;
                         }
@@ -514,7 +497,7 @@ mod impls {
         }
     }
 
-    impl<Storage: StorageStateTrait> StateDbCheckpointMethods for StateDb<Storage> {
+    impl StateDbCheckpointMethods for StateDb {
         fn checkpoint(&mut self) -> usize {
             trace!("Creating checkpoint #{}", self.checkpoints.len());
             self.checkpoints.push(BTreeMap::new()); // no values are modified yet

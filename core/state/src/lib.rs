@@ -63,9 +63,7 @@ pub trait StateDbOps {
     ) -> Result<()>;
 }
 
-impl<StateDbStorage: StorageStateTrait> StateDbOps
-    for StateDbGeneric<StateDbStorage>
-{
+impl StateDbOps for StateDbGeneric {
     fn get_raw(&self, key: StorageKeyWithSpace) -> Result<Option<Arc<[u8]>>> {
         Self::get_raw(self, key)
     }

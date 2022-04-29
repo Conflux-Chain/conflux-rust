@@ -27,10 +27,9 @@ use cfx_parameters::{
 };
 use cfx_state::{
     maybe_address,
-    state_trait::{CheckpointTrait, StateOpsTrait},
+    state_trait::{AsStateOpsTrait, CheckpointTrait, StateOpsTrait},
     CleanupMode, CollateralCheckResult, StateTrait, SubstateTrait,
 };
-use cfx_state::state_trait::AsStateOpsTrait;
 use cfx_statedb::{
     params_control_entries::*, ErrorKind as DbErrorKind, Result as DbResult,
     StateDbExt, StateDbGeneric as StateDb,
@@ -108,10 +107,10 @@ struct WorldStatistics {
     total_evm_tokens: U256,
 }
 
-pub type State = StateGeneric<ReplicatedState<StorageState>>;
+pub type State = StateGeneric;
 
-pub struct StateGeneric<StateDbStorage: StorageStateTrait> {
-    db: StateDb<StateDbStorage>,
+pub struct StateGeneric {
+    db: StateDb,
 
     // Only created once for txpool notification.
     // Each element is an Ok(Account) for updated account, or
@@ -128,9 +127,7 @@ pub struct StateGeneric<StateDbStorage: StorageStateTrait> {
     checkpoints: RwLock<Vec<HashMap<AddressWithSpace, Option<AccountEntry>>>>,
 }
 
-impl<StateDbStorage: StorageStateTrait> StateTrait
-    for StateGeneric<StateDbStorage>
-{
+impl StateTrait for StateGeneric {
     type Substate = Substate;
 
     /// Collects the cache (`ownership_change` in `OverlayAccount`) of storage
@@ -320,9 +317,7 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
     }
 }
 
-impl<StateDbStorage: StorageStateTrait> StateOpsTrait
-    for StateGeneric<StateDbStorage>
-{
+impl StateOpsTrait for StateGeneric {
     /// Calculate the secondary reward for the next block number.
     fn bump_block_number_accumulate_interest(&mut self) {
         assert!(self.world_statistics_checkpoints.get_mut().is_empty());
@@ -1170,9 +1165,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     }
 }
 
-impl<StateDbStorage: StorageStateTrait> CheckpointTrait
-    for StateGeneric<StateDbStorage>
-{
+impl CheckpointTrait for StateGeneric {
     /// Create a recoverable checkpoint of this state. Return the checkpoint
     /// index. The checkpoint records any old value which is alive at the
     /// creation time of the checkpoint and updated after that and before
@@ -1241,18 +1234,14 @@ impl<StateDbStorage: StorageStateTrait> CheckpointTrait
     }
 }
 
-impl<StateDbStorage: StorageStateTrait> AsStateOpsTrait for StateGeneric<StateDbStorage> {
-    fn as_state_ops(&self) -> &dyn StateOpsTrait {
-        self
-    }
+impl AsStateOpsTrait for StateGeneric {
+    fn as_state_ops(&self) -> &dyn StateOpsTrait { self }
 
-    fn as_mut_state_ops(&mut self) -> &mut dyn StateOpsTrait {
-        self
-    }
+    fn as_mut_state_ops(&mut self) -> &mut dyn StateOpsTrait { self }
 }
 
-impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
-    pub fn new(db: StateDb<StateDbStorage>) -> DbResult<Self> {
+impl StateGeneric {
+    pub fn new(db: StateDb) -> DbResult<Self> {
         let annual_interest_rate = db.get_annual_interest_rate()?;
         let accumulate_interest_rate = db.get_accumulate_interest_rate()?;
         let total_issued_tokens = db.get_total_issued_tokens()?;
@@ -1485,10 +1474,8 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
     /// Load required account data from the databases. Returns whether the
     /// cache succeeds.
     fn update_account_cache(
-        require: RequireCache, account: &mut OverlayAccount,
-        db: &StateDb<StateDbStorage>,
-    ) -> DbResult<bool>
-    {
+        require: RequireCache, account: &mut OverlayAccount, db: &StateDb,
+    ) -> DbResult<bool> {
         match require {
             RequireCache::None => Ok(true),
             RequireCache::Code => account.cache_code(db),

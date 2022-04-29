@@ -35,17 +35,17 @@ pub trait StateManagerTrait {
     ) -> Result<Option<Box<dyn StateTrait>>>;
     fn get_state_for_next_epoch(
         self: &Arc<Self>, parent_epoch_id: StateIndex,
-    ) -> Result<Option<ReplicatedState<State>>>;
-    fn get_state_for_genesis_write(self: &Arc<Self>) -> ReplicatedState<State>;
+    ) -> Result<Option<Box<dyn StateTrait>>>;
+    fn get_state_for_genesis_write(self: &Arc<Self>) -> Box<dyn StateTrait>;
 }
 
 pub trait ReplicatedStateManagerTrait {
     fn get_replicated_state_for_next_epoch(
         self: &Arc<Self>, parent_epoch_id: StateIndex,
-    ) -> Result<Option<ReplicatedState<State>>>;
+    ) -> Result<Option<Box<dyn StateTrait>>>;
     fn get_replicated_state_for_genesis_write(
         self: &Arc<Self>,
-    ) -> ReplicatedState<State>;
+    ) -> Box<dyn StateTrait>;
 }
 
 impl StateIndex {
@@ -134,7 +134,7 @@ use crate::{
         errors::*, replicated_state::ReplicatedState,
         single_mpt_state::SingleMptState,
     },
-    state::State,
+    state::{State, StateTrait},
     StateRootWithAuxInfo,
 };
 use primitives::{
@@ -142,4 +142,3 @@ use primitives::{
     MERKLE_NULL_NODE, NULL_EPOCH,
 };
 use std::sync::Arc;
-use crate::state::StateTrait;

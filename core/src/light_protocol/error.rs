@@ -20,6 +20,7 @@ error_chain! {
     links {
         Network(network::Error, network::ErrorKind);
         StateDb(cfx_statedb::Error, cfx_statedb::ErrorKind);
+        Storage(cfx_storage::Error, cfx_storage::ErrorKind);
     }
 
     foreign_links {
@@ -292,7 +293,7 @@ pub fn handle(
             }
         },
 
-        ErrorKind::StateDb(_) => disconnect = false,
+        ErrorKind::StateDb(_)| ErrorKind::Storage(_) => disconnect = false,
 
         ErrorKind::__Nonexhaustive {} => {
             op = Some(UpdateNodeOperation::Failure)
