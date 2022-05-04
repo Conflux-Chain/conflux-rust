@@ -2,14 +2,17 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_state::state_trait::StateOpsTrait;
-use std::convert::TryFrom;
+use std::convert::TryInto;
 
 use crate::internal_bail;
+use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::params_control_entries::*;
 use cfx_types::{Address, U256, U512};
 
-use crate::vm::{self, ActionParams};
+use crate::{
+    state::power_two_fractional,
+    vm::{self, ActionParams},
+};
 
 use super::super::{
     components::InternalRefContext, contracts::params_control::Vote,
@@ -230,17 +233,51 @@ impl ParamVoteCount {
     }
 
     pub fn compute_next_params(&self, old_value: U256) -> U256 {
+        let answer = self.compute_next_params_inner(old_value);
+        // The return value should be in `[2^8, 2^192]`
+        let min_value = U256::from(256u64);
+        let max_value = U256::one() << 192usize;
+        if answer < min_value {
+            return min_value;
+        }
+        if answer > max_value {
+            return max_value;
+        }
+        return answer;
+    }
+
+    fn compute_next_params_inner(&self, old_value: U256) -> U256 {
         // `VoteCount` only counts valid votes, so this will not overflow.
         let total = self.unchange + self.increase + self.decrease;
-        if total == U256::zero() {
+
+        if total == U256::zero() || self.increase == self.decrease {
             // If no one votes, we just keep the value unchanged.
             return old_value;
+        } else if self.increase == total {
+            return old_value * 2u64;
+        } else if self.decrease == total {
+            return old_value / 2u64;
+        };
+
+        let weight = if self.increase > self.decrease {
+            self.increase - self.decrease
+        } else {
+            self.decrease - self.increase
+        };
+        let increase = self.increase > self.decrease;
+
+        let frac_power = (U512::from(weight) << 64u64) / U512::from(total);
+        assert!(frac_power < (U512::one() << 64u64));
+        let frac_power = frac_power.as_u64();
+
+        let ratio = power_two_fractional(frac_power, increase, 96);
+        let new_value = (U512::from(old_value) * U512::from(ratio)) >> 96u64;
+
+        if new_value > (U512::one() << 192u64) {
+            return U256::one() << 192u64;
+        } else {
+            return new_value.try_into().unwrap();
         }
-        let weighted_total =
-            self.unchange + self.increase * 2u64 + self.decrease / 2u64;
-        let new_value = U512::from(old_value) * U512::from(weighted_total)
-            / U512::from(total);
-        U256::try_from(new_value).unwrap()
     }
 }
 
@@ -260,8 +297,9 @@ pub struct AllParamsVoteCount {
 /// mapping(address => VoteInfo) votes;
 /// ```
 mod storage_key {
-    use super::super::super::components::storage_layout::*;
     use cfx_types::{Address, BigEndianHash, H256, U256};
+
+    use super::super::super::components::storage_layout::*;
 
     const VOTES_SLOT: usize = 0;
 
