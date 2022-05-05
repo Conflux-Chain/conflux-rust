@@ -57,7 +57,9 @@ use cfx_parameters::{
 };
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::StateDb;
-use cfx_storage::{state_manager::StateManagerTrait, StorageState};
+use cfx_storage::{
+    state::StateTrait, state_manager::StateManagerTrait, StorageState,
+};
 use cfx_types::{AddressWithSpace, AllChainID, Bloom, Space, H256, U256};
 use either::Either;
 use itertools::Itertools;
@@ -89,7 +91,6 @@ use std::{
     thread::sleep,
     time::Duration,
 };
-use cfx_storage::state::StateTrait;
 
 lazy_static! {
     static ref CONSENSIS_ON_NEW_BLOCK_TIMER: Arc<dyn Meter> =
@@ -1442,7 +1443,7 @@ impl ConsensusGraph {
     }
 
     fn get_state_by_height_and_hash(
-        &self, height: u64, hash: &H256,
+        &self, height: u64, hash: &H256, space: Option<Space>,
     ) -> RpcResult<Box<dyn StateTrait>> {
         // Keep the lock until we get the desired State, otherwise the State may
         // expire.
@@ -1467,6 +1468,7 @@ impl ConsensusGraph {
                 .get_state_no_commit(
                     state_readonly_index,
                     /* try_open = */ true,
+                    space,
                 )
                 .map_err(|e| format!("Error to get state, err={:?}", e))?,
             None => None,
@@ -1917,6 +1919,26 @@ impl ConsensusGraph {
             include_traces,
         )
     }
+
+    fn get_state_db_by_epoch_number_with_space(
+        &self, epoch_number: EpochNumber, rpc_param_name: &str,
+        space: Option<Space>,
+    ) -> RpcResult<StateDb>
+    {
+        invalid_params_check(
+            rpc_param_name,
+            self.validate_stated_epoch(&epoch_number),
+        )?;
+        let height = invalid_params_check(
+            rpc_param_name,
+            self.get_height_from_epoch_number(epoch_number),
+        )?;
+        let hash =
+            self.inner.read().get_pivot_hash_from_epoch_number(height)?;
+        Ok(StateDb::new(
+            self.get_state_by_height_and_hash(height, &hash, space)?,
+        ))
+    }
 }
 
 impl Drop for ConsensusGraph {
@@ -2182,22 +2204,21 @@ impl ConsensusGraphTrait for ConsensusGraph {
     fn get_state_db_by_epoch_number(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
     ) -> RpcResult<StateDb> {
-        invalid_params_check(
+        self.get_state_db_by_epoch_number_with_space(
+            epoch_number,
             rpc_param_name,
-            self.validate_stated_epoch(&epoch_number),
-        )?;
-        let height = invalid_params_check(
+            None,
+        )
+    }
+
+    fn get_evm_state_db_by_epoch_number(
+        &self, epoch_number: EpochNumber, rpc_param_name: &str,
+    ) -> RpcResult<StateDb> {
+        self.get_state_db_by_epoch_number_with_space(
+            epoch_number,
             rpc_param_name,
-            self.get_height_from_epoch_number(epoch_number),
-        )?;
-        let hash =
-            self.inner.read().get_pivot_hash_from_epoch_number(height)?;
-        Ok(StateDb::new(
-            self.get_state_by_height_and_hash(
-                height,
-                &hash,
-            )?,
-        ))
+            Some(Space::Ethereum),
+        )
     }
 
     /// Return the blocks without bodies in the subtree of stable genesis and

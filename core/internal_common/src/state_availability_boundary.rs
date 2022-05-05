@@ -56,7 +56,9 @@ impl StateAvailabilityBoundary {
             }
     }
 
-    pub fn check_read_availability(&self, _height: u64, _block_hash: &H256) -> bool {
+    pub fn check_read_availability(
+        &self, _height: u64, _block_hash: &H256,
+    ) -> bool {
         // FIXME(lpl): implement single mpt related availability check.
         return true;
     }

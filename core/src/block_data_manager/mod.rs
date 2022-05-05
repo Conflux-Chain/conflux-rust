@@ -370,6 +370,7 @@ impl BlockDataManager {
                     &StateRootWithAuxInfo::genesis(&true_genesis_hash),
                 ),
                 /* try_open = */ false,
+                None,
             )
             .unwrap()
             .unwrap()

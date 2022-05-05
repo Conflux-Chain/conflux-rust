@@ -251,6 +251,7 @@ fn test_mpt_node_path_to_from_db_key() {
         .get_state_no_commit(
             StateIndex::new_for_readonly(&epoch_id, &state_root_with_aux_info),
             /* try_open = */ false,
+            None,
         )
         .unwrap()
         .unwrap();

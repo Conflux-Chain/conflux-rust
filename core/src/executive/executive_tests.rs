@@ -1123,6 +1123,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             .get_state_no_commit(
                 StateIndex::new_for_test_only_delta_mpt(&epoch_id),
                 /* try_open = */ false,
+                None,
             )
             .unwrap()
             .unwrap(),

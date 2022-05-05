@@ -7,9 +7,11 @@ use crate::{
     node_memory_manager::{
         DeltaMptsCacheAlgorithm, DeltaMptsNodeMemoryManager,
     },
+    replicated_state::StateFilter,
     storage_db::DeltaDbManagerTrait,
     ArcDeltaDbWrapper, CowNodeRef, DeltaMpt, OpenableOnDemandOpenDeltaDbTrait,
 };
+use cfx_types::Space;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use parking_lot::Mutex;
 use primitives::EpochId;
@@ -21,10 +23,13 @@ pub struct SingleMptStorageManager {
     db_manager: Arc<SingleMptDbManager>,
     node_memory_manager: Arc<DeltaMptsNodeMemoryManager>,
     mpt: Arc<DeltaMpt>,
+
+    // If it's None, we will keep data for both spaces.
+    pub space: Option<Space>,
 }
 
 impl SingleMptStorageManager {
-    pub fn new_arc(db_path: PathBuf) -> Arc<Self> {
+    pub fn new_arc(db_path: PathBuf, space: Option<Space>) -> Arc<Self> {
         if !db_path.exists() {
             fs::create_dir_all(&db_path).expect("db path create error");
         }
@@ -51,6 +56,7 @@ impl SingleMptStorageManager {
             db_manager,
             node_memory_manager,
             mpt,
+            space,
         })
     }
 
@@ -68,6 +74,11 @@ impl SingleMptStorageManager {
 
     pub fn get_state_for_genesis(&self) -> Result<SingleMptState> {
         Ok(SingleMptState::new_empty(self.mpt.clone()))
+    }
+
+    pub fn state_filter(&self) -> Option<Box<dyn StateFilter>> {
+        self.space
+            .map(|space| Box::new(space) as Box<dyn StateFilter>)
     }
 }
 

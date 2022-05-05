@@ -23,11 +23,22 @@ pub struct ReplicatedState<Main> {
     replication_handler: Option<ReplicationHandler>,
 }
 
+pub trait StateFilter: Sync + Send {
+    fn keep_key(&self, _key: &StorageKeyWithSpace) -> bool;
+}
+
+impl StateFilter for Space {
+    fn keep_key(&self, key: &StorageKeyWithSpace) -> bool { key.space == *self }
+}
+
 impl<Main: StateTrait> ReplicatedState<Main> {
     pub fn new<Replicate: StateTrait + Send + 'static>(
         main_state: Main, replicated_state: Replicate,
-    ) -> ReplicatedState<Main> {
-        let replication_handler = ReplicationHandler::new(replicated_state);
+        filter: Option<Box<dyn StateFilter>>,
+    ) -> ReplicatedState<Main>
+    {
+        let replication_handler =
+            ReplicationHandler::new(replicated_state, filter);
         Self {
             state: main_state,
             replication_handler: Some(replication_handler),
@@ -45,13 +56,14 @@ impl<Main: StateTrait> ReplicatedState<Main> {
 }
 
 struct ReplicationHandler {
+    filter: Option<Box<dyn StateFilter>>,
     op_sender: Arc<Mutex<Sender<StateOperation>>>,
     thread_handle: JoinHandle<Result<()>>,
 }
 
 impl ReplicationHandler {
     fn new<Replicate: StateTrait + Send + 'static>(
-        mut replicated_state: Replicate,
+        mut replicated_state: Replicate, filter: Option<Box<dyn StateFilter>>,
     ) -> ReplicationHandler {
         let (op_tx, op_rx) = channel();
         let thread_handle = thread::Builder::new()
@@ -92,12 +104,21 @@ impl ReplicationHandler {
             })
             .expect("spawn error");
         Self {
+            filter,
             op_sender: Arc::new(Mutex::new(op_tx)),
             thread_handle,
         }
     }
 
     fn send_op(&self, op: StateOperation) {
+        if let Some(filter) = &self.filter {
+            if let Some(key) = op.get_key() {
+                if !filter.keep_key(&key) {
+                    // This key should not be stored in the replicated state.
+                    return;
+                }
+            }
+        }
         if let Err(e) = self.op_sender.lock().send(op) {
             error!("send_op: err={:?}", e);
         }
@@ -123,6 +144,21 @@ enum StateOperation {
     Commit {
         epoch_id: EpochId,
     },
+}
+
+impl StateOperation {
+    fn get_key(&self) -> Option<StorageKeyWithSpace> {
+        match self {
+            StateOperation::Set { access_key, .. }
+            | StateOperation::Delete { access_key, .. }
+            | StateOperation::DeleteAll {
+                access_key_prefix: access_key,
+                ..
+            } => Some(access_key.as_storage_key()),
+            StateOperation::ComputeStateRoot
+            | StateOperation::Commit { .. } => None,
+        }
+    }
 }
 
 enum OwnedStorageKey {

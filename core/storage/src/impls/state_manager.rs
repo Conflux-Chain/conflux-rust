@@ -51,6 +51,7 @@ impl StateManager {
         let single_mpt_storage_manager = if conf.enable_single_mpt_storage {
             Some(SingleMptStorageManager::new_arc(
                 conf.path_storage_dir.join("single_mpt"),
+                conf.single_mpt_space,
             ))
         } else {
             None
@@ -629,21 +630,37 @@ impl StateManager {
 impl StateManagerTrait for StateManager {
     fn get_state_no_commit(
         self: &Arc<Self>, state_index: StateIndex, try_open: bool,
-    ) -> Result<Option<Box<dyn StateTrait>>> {
+        space: Option<Space>,
+    ) -> Result<Option<Box<dyn StateTrait>>>
+    {
         let maybe_state_trees = self.get_state_trees(&state_index, try_open);
         match maybe_state_trees {
             Err(_) | Ok(None) => {
                 if self.single_mpt_storage_manager.is_none() {
                     return Ok(None);
                 }
-                debug!("read state from single mpt state: epoch={}", state_index.epoch_id);
-                let single_mpt_state = self
-                    .single_mpt_storage_manager
-                    .as_ref()
-                    .unwrap()
+                let single_mpt_storage_manager =
+                    self.single_mpt_storage_manager.as_ref().unwrap();
+                match (&space, &single_mpt_storage_manager.space) {
+                    (_, None) => {}
+                    (None, Some(_)) => return Ok(None),
+                    (Some(need_space), Some(kept_space)) => {
+                        if need_space != kept_space {
+                            return Ok(None);
+                        }
+                    }
+                }
+                debug!(
+                    "read state from single mpt state: epoch={}",
+                    state_index.epoch_id
+                );
+                let single_mpt_state = single_mpt_storage_manager
                     .get_state_by_epoch(state_index.epoch_id)?;
                 if single_mpt_state.is_none() {
-                    warn!("single mpt state missing: epoch={:?}", state_index.epoch_id);
+                    warn!(
+                        "single mpt state missing: epoch={:?}",
+                        state_index.epoch_id
+                    );
                     return Ok(None);
                 } else {
                     Ok(Some(Box::new(ReplicatedState::new_single(
@@ -736,17 +753,19 @@ impl ReplicatedStateManagerTrait for StateManager {
         if self.single_mpt_storage_manager.is_none() {
             return Ok(Some(Box::new(state.unwrap())));
         }
-        let single_mpt_state = self
-            .single_mpt_storage_manager
-            .as_ref()
-            .unwrap()
-            .get_state_by_epoch(parent_epoch)?;
+        let single_mpt_storage_manager =
+            self.single_mpt_storage_manager.as_ref().unwrap();
+        let single_mpt_state =
+            single_mpt_storage_manager.get_state_by_epoch(parent_epoch)?;
         if single_mpt_state.is_none() {
             return Ok(None);
         }
         Ok(Some(Box::new(ReplicatedState::new(
             state.unwrap(),
             single_mpt_state.unwrap(),
+            single_mpt_storage_manager
+                .space
+                .map(|space| Box::new(space) as Box<dyn StateFilter>),
         ))))
     }
 
@@ -757,13 +776,18 @@ impl ReplicatedStateManagerTrait for StateManager {
         if self.single_mpt_storage_manager.is_none() {
             return Box::new(state);
         }
-        let single_mpt_state = self
-            .single_mpt_storage_manager
-            .as_ref()
-            .unwrap()
+        let single_mpt_storage_manager =
+            self.single_mpt_storage_manager.as_ref().unwrap();
+        let single_mpt_state = single_mpt_storage_manager
             .get_state_for_genesis()
             .expect("single_mpt genesis initialize error");
-        Box::new(ReplicatedState::new(state, single_mpt_state))
+        Box::new(ReplicatedState::new(
+            state,
+            single_mpt_state,
+            single_mpt_storage_manager
+                .space
+                .map(|space| Box::new(space) as Box<dyn StateFilter>),
+        ))
     }
 }
 
@@ -782,12 +806,14 @@ use crate::{
             storage_manager::StorageManager,
         },
     },
+    replicated_state::StateFilter,
     state::*,
     state_manager::*,
     storage_db::*,
     utils::guarded_value::GuardedValue,
     StorageConfiguration,
 };
+use cfx_types::Space;
 use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
 use primitives::{
     DeltaMptKeyPadding, EpochId, MerkleHash, StorageKeyWithSpace,

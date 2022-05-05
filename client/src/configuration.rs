@@ -17,7 +17,7 @@ use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
 };
-use cfx_types::{Address, AllChainID, H256, U256};
+use cfx_types::{Address, AllChainID, Space, H256, U256};
 use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
     block_parameters::*,
@@ -365,6 +365,11 @@ build_config! {
         (node_type, (Option<NodeType>), None, NodeType::from_str)
         (public_rpc_apis, (ApiSet), ApiSet::Safe, ApiSet::from_str)
         (public_evm_rpc_apis, (ApiSet), ApiSet::Evm, ApiSet::from_str)
+        (single_mpt_space, (Option<Space>), None, |s| match s {
+            "native" => Ok(Space::Native),
+            "evm" => Ok(Space::Ethereum),
+            _ =>  Err("Invalid single_mpt_space".to_owned()),
+        })
     }
 }
 
@@ -714,8 +719,9 @@ impl Configuration {
                         error!("enable_single_mpt_storage is only supported for Archive nodes!")
                     }
                     false
-                },
+                }
             },
+            single_mpt_space: self.raw_conf.single_mpt_space.clone(),
         }
     }
 
