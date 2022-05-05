@@ -630,18 +630,20 @@ impl StateManagerTrait for StateManager {
     fn get_state_no_commit(
         self: &Arc<Self>, state_index: StateIndex, try_open: bool,
     ) -> Result<Option<Box<dyn StateTrait>>> {
-        let maybe_state_trees = self.get_state_trees(&state_index, try_open)?;
+        let maybe_state_trees = self.get_state_trees(&state_index, try_open);
         match maybe_state_trees {
-            None => {
+            Err(_) | Ok(None) => {
                 if self.single_mpt_storage_manager.is_none() {
                     return Ok(None);
                 }
+                debug!("read state from single mpt state: epoch={}", state_index.epoch_id);
                 let single_mpt_state = self
                     .single_mpt_storage_manager
                     .as_ref()
                     .unwrap()
                     .get_state_by_epoch(state_index.epoch_id)?;
                 if single_mpt_state.is_none() {
+                    warn!("single mpt state missing: epoch={:?}", state_index.epoch_id);
                     return Ok(None);
                 } else {
                     Ok(Some(Box::new(ReplicatedState::new_single(
@@ -649,7 +651,7 @@ impl StateManagerTrait for StateManager {
                     ))))
                 }
             }
-            Some(state_trees) => {
+            Ok(Some(state_trees)) => {
                 Ok(Some(Box::new(ReplicatedState::new_single(State::new(
                     self.clone(),
                     state_trees,

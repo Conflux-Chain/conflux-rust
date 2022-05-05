@@ -89,6 +89,7 @@ use std::{
     thread::sleep,
     time::Duration,
 };
+use cfx_storage::state::StateTrait;
 
 lazy_static! {
     static ref CONSENSIS_ON_NEW_BLOCK_TIMER: Arc<dyn Meter> =
@@ -1440,6 +1441,50 @@ impl ConsensusGraph {
         Ok(state)
     }
 
+    fn get_state_by_height_and_hash(
+        &self, height: u64, hash: &H256,
+    ) -> RpcResult<Box<dyn StateTrait>> {
+        // Keep the lock until we get the desired State, otherwise the State may
+        // expire.
+        let state_availability_boundary =
+            self.data_man.state_availability_boundary.read();
+        if !state_availability_boundary.check_read_availability(height, &hash) {
+            debug!(
+                "State for epoch (number={:?} hash={:?}) does not exist: out-of-bound {:?}",
+                height, hash, state_availability_boundary
+            );
+            bail!(format!(
+                "State for epoch (number={:?} hash={:?}) does not exist: out-of-bound {:?}",
+                height, hash, state_availability_boundary
+            ));
+        }
+        let maybe_state_readonly_index =
+            self.data_man.get_state_readonly_index(&hash).into();
+        let maybe_state = match maybe_state_readonly_index {
+            Some(state_readonly_index) => self
+                .data_man
+                .storage_manager
+                .get_state_no_commit(
+                    state_readonly_index,
+                    /* try_open = */ true,
+                )
+                .map_err(|e| format!("Error to get state, err={:?}", e))?,
+            None => None,
+        };
+
+        let state = match maybe_state {
+            Some(state) => state,
+            None => {
+                bail!(format!(
+                    "State for epoch (number={:?} hash={:?}) does not exist",
+                    height, hash
+                ));
+            }
+        };
+
+        Ok(state)
+    }
+
     /// This function is called after a new block appended to the
     /// ConsensusGraph. Because BestInformation is often queried outside. We
     /// store a version of best_info outside the inner to prevent keep
@@ -2137,12 +2182,22 @@ impl ConsensusGraphTrait for ConsensusGraph {
     fn get_state_db_by_epoch_number(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
     ) -> RpcResult<StateDb> {
-        Ok(StateDb::new(Box::new(
-            self.get_storage_state_by_epoch_number(
-                epoch_number,
-                rpc_param_name,
+        invalid_params_check(
+            rpc_param_name,
+            self.validate_stated_epoch(&epoch_number),
+        )?;
+        let height = invalid_params_check(
+            rpc_param_name,
+            self.get_height_from_epoch_number(epoch_number),
+        )?;
+        let hash =
+            self.inner.read().get_pivot_hash_from_epoch_number(height)?;
+        Ok(StateDb::new(
+            self.get_state_by_height_and_hash(
+                height,
+                &hash,
             )?,
-        )))
+        ))
     }
 
     /// Return the blocks without bodies in the subtree of stable genesis and

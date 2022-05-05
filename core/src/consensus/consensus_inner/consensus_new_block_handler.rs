@@ -1991,7 +1991,7 @@ impl ConsensusNewBlockHandler {
                     if self
                         .data_man
                         .storage_manager
-                        .get_state_no_commit(
+                        .get_state_no_commit_inner(
                             StateIndex::new_for_readonly(
                                 &pivot_hash,
                                 &commitment.state_root_with_aux_info,

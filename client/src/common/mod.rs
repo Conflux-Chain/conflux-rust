@@ -300,7 +300,7 @@ pub fn initialize_common_modules(
 
     let secret_store = Arc::new(SecretStore::new());
     let storage_manager = Arc::new(
-        StorageManager::new(conf.storage_config())
+        StorageManager::new(conf.storage_config(&node_type))
             .expect("Failed to initialize storage."),
     );
     {

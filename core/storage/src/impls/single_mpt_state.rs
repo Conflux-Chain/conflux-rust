@@ -399,6 +399,7 @@ impl StateTrait for SingleMptState {
 
             commit_result?;
         }
+        debug!("single mpt commit: epoch={:?} root={:?}", epoch_id, merkle_root);
         Ok(self.state_root(merkle_root))
     }
 }

@@ -1936,8 +1936,9 @@ impl ConsensusExecutionHandler {
         // expire.
         let state_availability_boundary =
             self.data_man.state_availability_boundary.read();
+
         if !state_availability_boundary
-            .check_availability(best_block_header.height(), epoch_id)
+            .check_read_availability(best_block_header.height(), epoch_id)
         {
             bail!("state is not ready");
         }
