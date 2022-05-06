@@ -1,3 +1,11 @@
+# 2.0.2
+
+## Improvements
+
+### Transaction Pool Improvements
+- Set the minimum gas price to 1 GDrip by default for packing transaction
+
+
 # 2.0.1
 
 ## Improvements

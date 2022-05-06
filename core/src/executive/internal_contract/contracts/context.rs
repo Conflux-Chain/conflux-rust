@@ -2,21 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{macros::*, SimpleExecutionTrait, SolFnTable};
-#[cfg(test)]
-use crate::check_func_signature;
-use crate::{
-    evm::{ActionParams, GasPriceTier, Spec},
-    executive::InternalRefContext,
-    impl_function_type, make_function_table, make_solidity_contract,
-    make_solidity_function,
-    observer::VmObserve,
-    vm,
-};
 use cfx_parameters::internal_contract_addresses::CONTEXT_CONTRACT_ADDRESS;
 use cfx_types::{Address, U256};
-#[cfg(test)]
-use rustc_hex::FromHex;
+
+use crate::evm::GasPriceTier;
+
+use super::preludes::*;
 
 make_solidity_contract! {
     pub struct Context(CONTEXT_CONTRACT_ADDRESS, generate_fn_table, initialize: |params: &CommonParams| params.transition_numbers.cip64, is_active: |spec: &Spec| spec.cip64);

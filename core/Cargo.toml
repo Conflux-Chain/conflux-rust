@@ -74,6 +74,7 @@ serde_json = "1.0"
 siphasher = "0.3"
 slab = "0.4"
 solidity-abi = {path="../util/solidity-abi"}
+solidity-abi-derive = {path="../util/solidity-abi-derive"}
 sha3-macro = {path="../util/sha3-macro"}
 sqlite = "0.25"
 sqlite3-sys = "0.12"
