@@ -611,7 +611,7 @@ impl StateManager {
     //
     // Due to the complexity of the latter approach, we stay with the
     // simple approach.
-    fn get_state_for_next_epoch_inner(
+    pub fn get_state_for_next_epoch_inner(
         self: &Arc<Self>, parent_epoch_id: StateIndex,
     ) -> Result<Option<State>> {
         let maybe_state_trees = self.get_state_trees_for_next_epoch(
@@ -678,34 +678,22 @@ impl StateManagerTrait for StateManager {
     }
 
     fn get_state_for_genesis_write(self: &Arc<Self>) -> Box<dyn StateTrait> {
-        Box::new(ReplicatedState::new_single(State::new(
-            self.clone(),
-            StateTrees {
-                snapshot_db: self
-                    .storage_manager
-                    .wait_for_snapshot(&NULL_EPOCH, /* try_open = */ false)
-                    .unwrap()
-                    .unwrap()
-                    .into()
-                    .1,
-                snapshot_epoch_id: NULL_EPOCH,
-                snapshot_merkle_root: MERKLE_NULL_NODE,
-                maybe_intermediate_trie: None,
-                intermediate_trie_root: None,
-                intermediate_trie_root_merkle: MERKLE_NULL_NODE,
-                maybe_intermediate_trie_key_padding: None,
-                delta_trie: self
-                    .storage_manager
-                    .get_delta_mpt(&NULL_EPOCH)
-                    .unwrap(),
-                delta_trie_root: None,
-                delta_trie_key_padding: GENESIS_DELTA_MPT_KEY_PADDING.clone(),
-                maybe_delta_trie_height: Some(1),
-                maybe_height: Some(1),
-                intermediate_epoch_id: NULL_EPOCH,
-                parent_epoch_id: NULL_EPOCH,
-            },
-        )))
+        let state = self.get_state_for_genesis_write_inner();
+        if self.single_mpt_storage_manager.is_none() {
+            return Box::new(state);
+        }
+        let single_mpt_storage_manager =
+            self.single_mpt_storage_manager.as_ref().unwrap();
+        let single_mpt_state = single_mpt_storage_manager
+            .get_state_for_genesis()
+            .expect("single_mpt genesis initialize error");
+        Box::new(ReplicatedState::new(
+            state,
+            single_mpt_state,
+            single_mpt_storage_manager
+                .space
+                .map(|space| Box::new(space) as Box<dyn StateFilter>),
+        ))
     }
 
     // Currently we use epoch number to decide whether or not to
@@ -725,19 +713,28 @@ impl StateManagerTrait for StateManager {
     fn get_state_for_next_epoch(
         self: &Arc<Self>, parent_epoch_id: StateIndex,
     ) -> Result<Option<Box<dyn StateTrait>>> {
-        let maybe_state_trees = self.get_state_trees_for_next_epoch(
-            &parent_epoch_id,
-            /* try_open = */ false,
-        )?;
-        match maybe_state_trees {
-            None => Ok(None),
-            Some(state_trees) => {
-                Ok(Some(Box::new(ReplicatedState::new_single(State::new(
-                    self.clone(),
-                    state_trees,
-                )))))
-            }
+        let parent_epoch = parent_epoch_id.epoch_id;
+        let state = self.get_state_for_next_epoch_inner(parent_epoch_id)?;
+        if state.is_none() {
+            return Ok(None);
         }
+        if self.single_mpt_storage_manager.is_none() {
+            return Ok(Some(Box::new(state.unwrap())));
+        }
+        let single_mpt_storage_manager =
+            self.single_mpt_storage_manager.as_ref().unwrap();
+        let single_mpt_state =
+            single_mpt_storage_manager.get_state_by_epoch(parent_epoch)?;
+        if single_mpt_state.is_none() {
+            return Ok(None);
+        }
+        Ok(Some(Box::new(ReplicatedState::new(
+            state.unwrap(),
+            single_mpt_state.unwrap(),
+            single_mpt_storage_manager
+                .space
+                .map(|space| Box::new(space) as Box<dyn StateFilter>),
+        ))))
     }
 }
 

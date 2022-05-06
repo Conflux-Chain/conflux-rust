@@ -87,7 +87,9 @@ mod impls {
         }
 
         #[cfg(test)]
-        pub fn get_storage_mut(&mut self) -> &mut Storage { &mut self.storage }
+        pub fn get_storage_mut(&mut self) -> &mut Box<dyn StateTrait> {
+            &mut self.storage
+        }
 
         #[cfg(test)]
         pub fn get_from_cache(&self, key: &Vec<u8>) -> Value {
@@ -601,7 +603,7 @@ mod impls {
         StateRootWithAuxInfo,
     };
     use cfx_storage::{
-        state::{NoProof, WithProof},
+        state::{NoProof, StateTrait, WithProof},
         utils::{access_mode, to_key_prefix_iter_upper_bound},
         MptKeyValue, StateProof, StorageRootProof, StorageStateTrait,
         StorageStateTraitExt,

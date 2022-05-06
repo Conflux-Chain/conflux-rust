@@ -321,7 +321,10 @@ fn simulate_transactions(
                 >(&mut values[range_start..range_end])
             };
             let state_r = unsafe {
-                std::mem::transmute::<&State, &'static State>(&state)
+                std::mem::transmute::<
+                    &Box<dyn StateTrait>,
+                    &'static Box<dyn StateTrait>,
+                >(&state)
             };
             join_handles.push(thread::spawn(move || {
                 let mut i = 0;
