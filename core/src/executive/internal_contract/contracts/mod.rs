@@ -4,224 +4,62 @@
 
 mod admin;
 mod context;
-pub mod cross_space;
+pub(super) mod cross_space;
 mod future;
-#[allow(unused)]
-mod pos;
+pub(super) mod params_control;
+pub(super) mod pos;
 mod sponsor;
 mod staking;
+mod system_storage;
 
-mod macros {
-    #[cfg(test)]
-    pub use crate::{check_event_signature, check_func_signature};
+mod preludes {
+    pub use keccak_hash::keccak;
     #[cfg(test)]
     pub use rustc_hex::FromHex;
 
+    pub use cfx_statedb::Result as DbResult;
+    pub use cfx_types::{Address, H256};
+    pub use primitives::BlockNumber;
     pub use sha3_macro::keccak;
 
+    #[cfg(test)]
+    pub use crate::{check_event_signature, check_func_signature};
     pub use crate::{
+        evm::{ActionParams, Spec},
         group_impl_is_active, impl_function_type, make_function_table,
         make_solidity_contract, make_solidity_event, make_solidity_function,
+        observer::VmObserve,
+        spec::CommonParams,
+        vm,
     };
-    pub use cfx_types::H256;
-    pub use keccak_hash::keccak;
 
-    pub use super::super::{
-        activate_at::{BlockNumber, IsActive},
+    pub use super::super::components::{
+        activation::IsActive,
+        context::InternalRefContext,
+        contract::{InternalContractTrait, SolFnTable},
+        event::SolidityEventTrait,
         function::{
             ExecutionTrait, InterfaceTrait, PreExecCheckConfTrait,
-            SimpleExecutionTrait, UpfrontPaymentTrait,
+            SimpleExecutionTrait, SolidityFunctionTrait, UpfrontPaymentTrait,
         },
-        InternalContractTrait, SolidityEventTrait, SolidityFunctionTrait,
     };
-
-    pub use cfx_statedb::Result as DbResult;
-
-    pub use crate::spec::CommonParams;
-}
-
-pub use self::{
-    admin::AdminControl, context::Context, cross_space::CrossSpaceCall,
-    pos::PoSRegister, sponsor::SponsorWhitelistControl, staking::Staking,
-};
-pub(super) use self::{
-    cross_space::{CallEvent, CreateEvent, ReturnEvent, WithdrawEvent},
-    pos::{IncreaseStakeEvent, RegisterEvent, RetireEvent},
-};
-
-use super::{
-    function::SimpleExecutionTrait, InternalContractTrait,
-    SolidityFunctionTrait,
-};
-use crate::{evm::Spec, spec::CommonParams};
-use cfx_types::{Address, AddressWithSpace, Space};
-use primitives::BlockNumber;
-use std::collections::{BTreeMap, HashMap};
-
-pub(super) type SolFnTable = HashMap<[u8; 4], Box<dyn SolidityFunctionTrait>>;
-
-/// A marco to implement an internal contract.
-#[macro_export]
-macro_rules! make_solidity_contract {
-    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr, "placeholder"); ) => {
-        $crate::make_solidity_contract! {
-            $(#[$attr])* $visibility struct $name ($addr, || Default::default(), initialize: |_: &CommonParams| u64::MAX, is_active: |_: &Spec| false);
-        }
-    };
-    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr, $gen_table:expr, "active_at_genesis"); ) => {
-        $crate::make_solidity_contract! {
-            $(#[$attr])* $visibility struct $name ($addr, $gen_table, initialize: |_: &CommonParams| 0u64, is_active: |_: &Spec| true);
-        }
-    };
-    ( $(#[$attr:meta])* $visibility:vis struct $name:ident ($addr:expr, $gen_table:expr, initialize: $init:expr, is_active: $is_active:expr); ) => {
-        $(#[$attr])*
-        $visibility struct $name {
-            function_table: SolFnTable
-        }
-
-        impl $name {
-            pub fn instance() -> Self {
-                Self {
-                    function_table: $gen_table()
-                }
-            }
-        }
-
-        impl InternalContractTrait for $name {
-            fn address(&self) -> &Address { &$addr }
-            fn get_func_table(&self) -> &SolFnTable { &self.function_table }
-            fn initialize_block(&self, param: &CommonParams) -> BlockNumber{ $init(param) }
-        }
-
-        impl IsActive for $name {
-            fn is_active(&self, spec: &Spec) -> bool {$is_active(spec)}
-        }
-    };
-}
-
-/// A marco to construct the functions table for an internal contract for a list
-/// of types implements `SolidityFunctionTrait`.
-#[macro_export]
-macro_rules! make_function_table {
-    ($($func:ty), *) => { {
-        let mut table = SolFnTable::new();
-        $({ let f = <$func>::instance(); table.insert(f.function_sig(), Box::new(f)); }) *
-        table
-    } }
-}
-
-#[macro_export]
-macro_rules! check_func_signature {
-    ($interface:ident, $signature:expr) => {
-        assert_eq!(
-            $interface::FUNC_SIG.to_vec(),
-            $signature.from_hex::<Vec<u8>>().unwrap(),
-            "Test solidity signature for {}",
-            $interface::NAME_AND_PARAMS
-        );
-    };
-}
-
-#[macro_export]
-macro_rules! check_event_signature {
-    ($interface:ident, $signature:expr) => {
-        assert_eq!(
-            $interface::EVENT_SIG.0.to_vec(),
-            $signature.from_hex::<Vec<u8>>().unwrap(),
-            "Test solidity event signature"
-        );
-    };
-}
-
-#[derive(Default)]
-pub struct InternalContractMap {
-    builtin: BTreeMap<Address, Box<dyn InternalContractTrait>>,
-    activation_info: BTreeMap<BlockNumber, Vec<Address>>,
-}
-
-impl std::ops::Deref for InternalContractMap {
-    type Target = BTreeMap<Address, Box<dyn InternalContractTrait>>;
-
-    fn deref(&self) -> &Self::Target { &self.builtin }
-}
-
-impl InternalContractMap {
-    pub fn new(params: &CommonParams) -> Self {
-        let mut builtin = BTreeMap::new();
-        let mut activation_info = BTreeMap::new();
-        // We should initialize all the internal contracts here. Even if not all
-        // of them are activated at the genesis block. The activation of the
-        // internal contracts are controlled by the `CommonParams` and
-        // `vm::Spec`.
-        let mut internal_contracts = all_internal_contracts();
-
-        while let Some(contract) = internal_contracts.pop() {
-            let address = *contract.address();
-            let transition_block = if params.early_set_internal_contracts_states
-            {
-                0
-            } else {
-                contract.initialize_block(params)
-            };
-
-            builtin.insert(*contract.address(), contract);
-            activation_info
-                .entry(transition_block)
-                .or_insert(vec![])
-                .push(address);
-        }
-
-        Self {
-            builtin,
-            activation_info,
-        }
-    }
-
-    #[cfg(test)]
-    pub fn initialize_for_test() -> Vec<Address> {
-        all_internal_contracts()
-            .iter()
-            .map(|contract| *contract.address())
-            .collect()
-    }
-
-    pub fn initialized_at_genesis(&self) -> &[Address] {
-        self.initialized_at(0)
-    }
-
-    pub fn initialized_at(&self, number: BlockNumber) -> &[Address] {
-        self.activation_info
-            .get(&number)
-            .map_or(&[], |vec| vec.as_slice())
-    }
-
-    pub fn contract(
-        &self, address: &AddressWithSpace, spec: &Spec,
-    ) -> Option<&Box<dyn InternalContractTrait>> {
-        if address.space != Space::Native {
-            return None;
-        }
-        self.builtin
-            .get(&address.address)
-            .filter(|&func| func.is_active(spec))
-    }
 }
 
 /// All Built-in contracts. All these addresses will be initialized as an
 /// internal contract in the genesis block of test mode.
-pub fn all_internal_contracts() -> Vec<Box<dyn InternalContractTrait>> {
+pub fn all_internal_contracts() -> Vec<Box<dyn super::InternalContractTrait>> {
     vec![
-        Box::new(AdminControl::instance()),
-        Box::new(Staking::instance()),
-        Box::new(SponsorWhitelistControl::instance()),
-        Box::new(future::AntiReentrancyConfig::instance()),
-        Box::new(Context::instance()),
-        Box::new(PoSRegister::instance()),
-        Box::new(CrossSpaceCall::instance()),
-        Box::new(future::Reserved7::instance()),
+        Box::new(admin::AdminControl::instance()),
+        Box::new(staking::Staking::instance()),
+        Box::new(sponsor::SponsorWhitelistControl::instance()),
+        Box::new(context::Context::instance()),
+        Box::new(pos::PoSRegister::instance()),
+        Box::new(cross_space::CrossSpaceCall::instance()),
+        Box::new(params_control::ParamsControl::instance()),
+        Box::new(system_storage::SystemStorage::instance()),
+        Box::new(future::Reserved3::instance()),
         Box::new(future::Reserved8::instance()),
         Box::new(future::Reserved9::instance()),
-        Box::new(future::Reserved10::instance()),
         Box::new(future::Reserved11::instance()),
     ]
 }

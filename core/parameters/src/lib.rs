@@ -5,6 +5,8 @@
 #[macro_use]
 extern crate lazy_static;
 
+use cfx_types::U256;
+
 pub mod internal_contract_addresses;
 
 pub mod consensus {
@@ -45,6 +47,7 @@ pub mod consensus {
     pub const BN128_ENABLE_NUMBER: u64 = 7_600_000;
 
     pub const TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [1];
+    pub const DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [2];
 }
 
 pub mod consensus_internal {
@@ -210,6 +213,12 @@ pub mod block {
     // space in the cross space call. Setting it to N means that only 1/N of gas
     // left can be passed to the cross space call.
     pub const CROSS_SPACE_GAS_RATIO: u64 = 10;
+    // The number of blocks to settle a DAO parameter vote.
+    // It's set to two months now.
+    pub const DAO_PARAMETER_VOTE_PERIOD: u64 =
+        super::staking::BLOCKS_PER_DAY * 30 * 2;
+    pub const DAO_PARAMETER_VOTE_INCREASE_RATIO: u64 = 2;
+    pub const DAO_PARAMETER_VOTE_DECREASE_RATIO: u64 = 2;
 }
 
 pub mod staking {
@@ -387,3 +396,8 @@ pub mod light {
 }
 
 pub const WORKER_COMPUTATION_PARALLELISM: usize = 8;
+
+pub struct DaoControlParameters {
+    pub pow_base_reward: U256,
+    pub pos_annual_interest_rate: U256,
+}

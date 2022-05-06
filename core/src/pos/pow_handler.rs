@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    executive::internal_contract::impls::pos::decode_register_info,
+    executive::internal_contract::decode_register_info,
     pos::consensus::ConsensusDB, ConsensusGraph,
 };
 use anyhow::{anyhow, bail, Result};

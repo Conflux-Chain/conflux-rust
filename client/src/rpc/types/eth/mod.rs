@@ -12,6 +12,7 @@ mod sync;
 mod trace;
 mod trace_filter;
 mod transaction;
+mod tx_pool;
 
 pub use self::{
     block::Block,
@@ -24,4 +25,5 @@ pub use self::{
     trace::{LocalizedTrace, Res},
     trace_filter::TraceFilter,
     transaction::Transaction,
+    tx_pool::AccountPendingTransactions,
 };

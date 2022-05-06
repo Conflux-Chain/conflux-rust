@@ -17,9 +17,11 @@ use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };
 use cfx_parameters::{
+    consensus::ONE_UCFX_IN_DRIP,
+    consensus_internal::MINING_REWARD_TANZANITE_IN_UCFX,
     internal_contract_addresses::{
         POS_REGISTER_CONTRACT_ADDRESS,
-        SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+        SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, SYSTEM_STORAGE_ADDRESS,
     },
     staking::*,
 };
@@ -29,8 +31,8 @@ use cfx_state::{
     CleanupMode, CollateralCheckResult, StateTrait, SubstateTrait,
 };
 use cfx_statedb::{
-    ErrorKind as DbErrorKind, Result as DbResult, StateDbExt,
-    StateDbGeneric as StateDb,
+    params_control_entries::*, ErrorKind as DbErrorKind, Result as DbResult,
+    StateDbExt, StateDbGeneric as StateDb,
 };
 use cfx_storage::{utils::access_mode, StorageState, StorageStateTrait};
 use cfx_types::{
@@ -46,7 +48,9 @@ use primitives::{
 };
 
 use crate::{
-    executive::{pos_internal_entries, IndexStatus},
+    executive::internal_contract::{
+        pos_internal_entries, settled_param_vote_count, IndexStatus,
+    },
     hash::KECCAK_EMPTY,
     observer::{AddressPocket, StateTracer},
     spec::genesis::{
@@ -335,6 +339,13 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         secondary_reward
     }
 
+    fn pow_base_reward(&self) -> U256 {
+        self.db
+            .get_pow_base_reward()
+            .expect("no db error")
+            .expect("initialized")
+    }
+
     /// Maintain `total_issued_tokens`.
     fn add_total_issued(&mut self, v: U256) {
         assert!(self.world_statistics_checkpoints.get_mut().is_empty());
@@ -388,9 +399,14 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
 
         // The `interest_amount` exactly equals to the floor of
         // pos_amount * 4% / blocks_per_year / sqrt(pos_amount/total_issued)
-        let interest_amount =
-            sqrt_u256(total_circulating_tokens * total_pos_staking_tokens)
-                / (BLOCKS_PER_YEAR * INVERSE_INTEREST_RATE);
+        let interest_amount = sqrt_u256(
+            total_circulating_tokens
+                * total_pos_staking_tokens
+                * self.world_statistics.interest_rate_per_block
+                * self.world_statistics.interest_rate_per_block,
+        ) / (BLOCKS_PER_YEAR
+            * INVERSE_INTEREST_RATE
+            * INITIAL_INTEREST_RATE_PER_BLOCK.as_u64());
         self.world_statistics.distributable_pos_interest += interest_amount;
 
         Ok(())
@@ -1129,6 +1145,25 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
             *POS_VOTE_PRICE * new_unlocked;
         Ok(())
     }
+
+    fn read_vote(&self, _address: &Address) -> DbResult<Vec<u8>> { todo!() }
+
+    fn set_system_storage(
+        &mut self, key: Vec<u8>, value: U256,
+    ) -> DbResult<()> {
+        self.set_storage(
+            &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+            key,
+            value,
+            // The system storage data have no owner, and this parameter is
+            // ignored.
+            Default::default(),
+        )
+    }
+
+    fn get_system_storage(&self, key: &[u8]) -> DbResult<U256> {
+        self.storage_at(&SYSTEM_STORAGE_ADDRESS.with_native_space(), key)
+    }
 }
 
 impl<StateDbStorage: StorageStateTrait> CheckpointTrait
@@ -1454,6 +1489,64 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
                 db,
             ),
         }
+    }
+
+    pub fn initialize_or_update_dao_voted_params(&mut self) -> DbResult<()> {
+        let vote_count = settled_param_vote_count(self).expect("db error");
+        debug!(
+            "initialize_or_update_dao_voted_params: vote_count={:?}",
+            vote_count
+        );
+        debug!(
+            "before pos interest: {} base_reward:{:?}",
+            self.world_statistics.interest_rate_per_block,
+            self.db.get_pow_base_reward()?
+        );
+        // If the internal contract is just initialized, all votes are zero and
+        // the parameters remain unchanged.
+        self.world_statistics.interest_rate_per_block = vote_count
+            .pos_reward_interest
+            .compute_next_params(self.world_statistics.interest_rate_per_block);
+        match self.db.get_pow_base_reward()? {
+            Some(old_pow_base_reward) => {
+                self.db.set_pow_base_reward(
+                    vote_count
+                        .pow_base_reward
+                        .compute_next_params(old_pow_base_reward),
+                    None,
+                )?;
+            }
+            None => {
+                self.db.set_pow_base_reward(
+                    (MINING_REWARD_TANZANITE_IN_UCFX * ONE_UCFX_IN_DRIP).into(),
+                    None,
+                )?;
+            }
+        }
+        debug!(
+            "pos interest: {} base_reward:{:?}",
+            self.world_statistics.interest_rate_per_block,
+            self.db.get_pow_base_reward()?
+        );
+
+        // Move the next vote counts into settled and reset the counts.
+        for index in 0..PARAMETER_INDEX_MAX {
+            for opt_index in 0..OPTION_INDEX_MAX {
+                let vote_count = self.get_system_storage(
+                    &TOTAL_VOTES_ENTRIES[index][opt_index],
+                )?;
+                self.set_system_storage(
+                    SETTLED_TOTAL_VOTES_ENTRIES[index][opt_index].to_vec(),
+                    vote_count,
+                )?;
+                self.set_system_storage(
+                    TOTAL_VOTES_ENTRIES[index][opt_index].to_vec(),
+                    U256::zero(),
+                )?;
+            }
+        }
+
+        Ok(())
     }
 
     fn commit_world_statistics(
@@ -2028,4 +2121,28 @@ fn sqrt_u256(input: U256) -> U256 {
     }
 
     root
+}
+
+// TODO: move to a util module.
+pub fn power_two_fractional(ratio: u64, increase: bool, precision: u8) -> U256 {
+    assert!(precision <= 127);
+
+    let mut base = U256::one();
+    base <<= 254usize;
+
+    for i in 0..64u64 {
+        if ratio & (1 << i) != 0 {
+            if increase {
+                base <<= 1usize;
+            } else {
+                base >>= 1usize;
+            }
+        }
+        base = sqrt_u256(base);
+        base <<= 127usize;
+    }
+
+    base >>= (254 - precision) as usize;
+    // Computing error < 5.2 * 2 ^ -127
+    base
 }

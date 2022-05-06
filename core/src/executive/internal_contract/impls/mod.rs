@@ -4,7 +4,8 @@
 
 pub(super) mod admin;
 pub(super) mod cross_space;
-pub(crate) mod pos;
+pub(super) mod params_control;
+pub(super) mod pos;
 pub(super) mod sponsor;
 pub(super) mod staking;
 

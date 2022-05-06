@@ -2,6 +2,45 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use core::convert::TryFrom;
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    convert::From,
+    fmt::{Debug, Formatter},
+    sync::{
+        atomic::{AtomicBool, Ordering::Relaxed},
+        mpsc::{channel, RecvError, Sender, TryRecvError},
+        Arc,
+    },
+    thread::{self, JoinHandle},
+};
+
+use hash::KECCAK_EMPTY_LIST_RLP;
+use parking_lot::{Mutex, RwLock};
+use rustc_hex::ToHex;
+
+use cfx_internal_common::{
+    debug::*, EpochExecutionCommitment, StateRootWithAuxInfo,
+};
+use cfx_parameters::consensus::*;
+use cfx_state::{state_trait::*, CleanupMode};
+use cfx_statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb};
+use cfx_storage::{
+    defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
+    StorageManagerTrait,
+};
+use cfx_types::{
+    address_util::AddressUtil, AddressSpaceUtil, AllChainID, BigEndianHash,
+    Space, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
+};
+use metrics::{register_meter_with_group, Meter, MeterTimer};
+use primitives::{
+    compute_block_number,
+    receipt::{BlockReceipts, Receipt, TransactionOutcome},
+    Action, Block, BlockHeaderBuilder, EpochId, NativeTransaction,
+    SignedTransaction, Transaction, TransactionIndex, MERKLE_NULL_NODE,
+};
+
 use crate::{
     block_data_manager::{BlockDataManager, BlockRewardResult, PosRewardInfo},
     consensus::{
@@ -15,7 +54,7 @@ use crate::{
     evm::Spec,
     executive::{
         internal_contract::{
-            build_bloom_and_recover_phantom, impls::pos::decode_register_info,
+            build_bloom_and_recover_phantom, decode_register_info,
         },
         revert_reason_decode, ExecutionError, ExecutionOutcome, Executive,
         TransactOptions,
@@ -36,42 +75,6 @@ use crate::{
     },
     vm::{Env, Error as VmErr},
     SharedTransactionPool,
-};
-use cfx_internal_common::{
-    debug::*, EpochExecutionCommitment, StateRootWithAuxInfo,
-};
-use cfx_parameters::consensus::*;
-use cfx_state::{state_trait::*, CleanupMode};
-use cfx_statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb};
-use cfx_storage::{
-    defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
-    StorageManagerTrait,
-};
-use cfx_types::{
-    address_util::AddressUtil, AddressSpaceUtil, AllChainID, BigEndianHash,
-    Space, H160, H256, KECCAK_EMPTY_BLOOM, U256, U512,
-};
-use core::convert::TryFrom;
-use hash::KECCAK_EMPTY_LIST_RLP;
-use metrics::{register_meter_with_group, Meter, MeterTimer};
-use parking_lot::{Mutex, RwLock};
-use primitives::{
-    compute_block_number,
-    receipt::{BlockReceipts, Receipt, TransactionOutcome},
-    Action, Block, BlockHeaderBuilder, EpochId, NativeTransaction,
-    SignedTransaction, Transaction, TransactionIndex, MERKLE_NULL_NODE,
-};
-use rustc_hex::ToHex;
-use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
-    convert::From,
-    fmt::{Debug, Formatter},
-    sync::{
-        atomic::{AtomicBool, Ordering::Relaxed},
-        mpsc::{channel, RecvError, Sender, TryRecvError},
-        Arc,
-    },
-    thread::{self, JoinHandle},
 };
 
 lazy_static! {
@@ -1041,6 +1044,20 @@ impl ConsensusExecutionHandler {
         let current_block_number =
             start_block_number + epoch_receipts.len() as u64 - 1;
 
+        // Update/initialize parameters before processing rewards.
+        if current_block_number
+            == self.machine.params().transition_numbers.cip94
+            || (current_block_number
+                > self.machine.params().transition_numbers.cip94
+                && current_block_number
+                    % self.machine.params().params_dao_vote_period
+                    == 0)
+        {
+            state
+                .initialize_or_update_dao_voted_params()
+                .expect("update params error");
+        }
+
         if let Some(reward_execution_info) = reward_execution_info {
             // Calculate the block reward for blocks inside the epoch
             // All transaction fees are shared among blocks inside one epoch
@@ -1544,10 +1561,15 @@ impl ConsensusExecutionHandler {
         // This is the total primary tokens issued in this epoch.
         let mut total_base_reward: U256 = 0.into();
 
-        let base_reward_per_block = self.compute_block_base_reward(
-            reward_info.past_block_count,
-            pivot_block.block_header.height(),
-        );
+        let base_reward_per_block = if spec.cip94 {
+            U512::from(state.pow_base_reward())
+        } else {
+            self.compute_block_base_reward(
+                reward_info.past_block_count,
+                pivot_block.block_header.height(),
+            )
+        };
+        debug!("base_reward: {}", base_reward_per_block);
 
         // Base reward and anticone penalties.
         for (enum_idx, block) in epoch_blocks.iter().enumerate() {

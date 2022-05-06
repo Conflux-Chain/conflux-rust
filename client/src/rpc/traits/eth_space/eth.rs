@@ -25,8 +25,8 @@ use jsonrpc_derive::rpc;
 
 use crate::rpc::types::{
     eth::{
-        Block, BlockNumber, CallRequest, EthRpcLogFilter, FilterChanges, Log,
-        Receipt, SyncStatus, Transaction,
+        AccountPendingTransactions, Block, BlockNumber, CallRequest,
+        EthRpcLogFilter, FilterChanges, Log, Receipt, SyncStatus, Transaction,
     },
     Bytes, Index,
 };
@@ -230,6 +230,12 @@ pub trait Eth {
 
     #[rpc(name = "parity_getBlockReceipts")]
     fn block_receipts(&self, _: Option<BlockNumber>) -> Result<Vec<Receipt>>;
+
+    #[rpc(name = "eth_getAccountPendingTransactions")]
+    fn account_pending_transactions(
+        &self, _: H160, maybe_start_nonce: Option<U256>,
+        maybe_limit: Option<U64>,
+    ) -> Result<AccountPendingTransactions>;
 }
 
 /// Eth filters rpc api (polling).

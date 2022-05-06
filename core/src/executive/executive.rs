@@ -9,9 +9,10 @@ use crate::{
     evm::{FinalizationResult, Finalize},
     executive::{
         context::LocalContext,
-        executed::{ExecutionOutcome, ToRepackError},
+        executed::{ExecutionOutcome, ToRepackError, TxDropError},
+        internal_contract::InternalContractTrait,
         vm_exec::{BuiltinExec, InternalContractExec, NoopExec},
-        CollateralCheckResultToVmResult, InternalContractTrait, TxDropError,
+        CollateralCheckResultToVmResult,
     },
     hash::keccak,
     machine::Machine,
@@ -1152,8 +1153,10 @@ impl<
     }
 
     pub fn transact(
-        &mut self, tx: &SignedTransaction, mut options: TransactOptions,
+        &mut self, tx: &SignedTransaction, options: TransactOptions,
     ) -> DbResult<ExecutionOutcome> {
+        let mut observer = options.observer;
+
         let spec = &self.spec;
         let sender = tx.sender();
         let nonce = self.state.nonce(&sender)?;
@@ -1265,7 +1268,7 @@ impl<
                 &actual_gas_cost,
                 &mut cleanup_mode(&mut tx_substate, &spec),
             )?;
-            options.observer.as_state_tracer().trace_internal_transfer(
+            observer.as_state_tracer().trace_internal_transfer(
                 AddressPocket::Balance(sender.address.with_space(tx.space())),
                 AddressPocket::GasPayment,
                 actual_gas_cost,
@@ -1286,10 +1289,7 @@ impl<
                     &actual_gas_cost,
                     gas_sponsored,
                     storage_sponsored,
-                    options
-                        .observer
-                        .tracer
-                        .map_or(Default::default(), |t| t.drain()),
+                    observer.tracer.map_or(Default::default(), |t| t.drain()),
                     &self.spec,
                 ),
             ));
@@ -1311,7 +1311,7 @@ impl<
         };
 
         if !gas_sponsored {
-            options.observer.as_state_tracer().trace_internal_transfer(
+            observer.as_state_tracer().trace_internal_transfer(
                 AddressPocket::Balance(sender.address.with_space(tx.space())),
                 AddressPocket::GasPayment,
                 gas_cost,
@@ -1324,7 +1324,7 @@ impl<
         // Don't subtract total_evm_balance here. It is maintained properly in
         // `finalize`.
         } else {
-            options.observer.as_state_tracer().trace_internal_transfer(
+            observer.as_state_tracer().trace_internal_transfer(
                 AddressPocket::SponsorBalanceForGas(code_address),
                 AddressPocket::GasPayment,
                 gas_cost,
@@ -1350,7 +1350,11 @@ impl<
         let total_storage_limit =
             self.state.collateral_for_storage(&sender.address)? + storage_cost;
 
+        // Initialize the checkpoint for transaction execution. This checkpoint
+        // can be reverted by "deploying contract on conflict address" or "not
+        // enough balance for storage".
         self.state.checkpoint();
+        observer.as_state_tracer().checkpoint();
         let mut substate = Substate::new();
 
         let res = match tx.action() {
@@ -1377,6 +1381,7 @@ impl<
                 if sender.space == Space::Native
                     && self.state.is_contract_with_code(&new_address)?
                 {
+                    observer.as_state_tracer().revert_to_checkpoint();
                     self.state.revert_to_checkpoint();
                     return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
                         ExecutionError::VmError(vm::Error::ConflictAddress(
@@ -1386,8 +1391,7 @@ impl<
                             tx,
                             gas_sponsored,
                             storage_sponsored,
-                            options
-                                .observer
+                            observer
                                 .tracer
                                 .map_or(Default::default(), |t| t.drain()),
                             &spec,
@@ -1415,7 +1419,7 @@ impl<
                 self.create(
                     params,
                     &mut substate,
-                    &mut *options.observer.as_vm_observe(),
+                    &mut *observer.as_vm_observe(),
                 )?
             }
             Action::Call(ref address) => {
@@ -1440,11 +1444,12 @@ impl<
                 self.call(
                     params,
                     &mut substate,
-                    &mut *options.observer.as_vm_observe(),
+                    &mut *observer.as_vm_observe(),
                 )?
             }
         };
 
+        // Charge collateral and process the checkpoint.
         let (result, output) = {
             let res = res.and_then(|finalize_res| {
                 // TODO: in fact, we don't need collect again here. But this is
@@ -1457,7 +1462,7 @@ impl<
                         &sender.address,
                         &total_storage_limit,
                         &mut substate,
-                        options.observer.as_state_tracer(),
+                        observer.as_state_tracer(),
                         self.spec.account_start_nonce,
                     )?
                     .into_vm_result()
@@ -1465,6 +1470,7 @@ impl<
             });
             let out = match &res {
                 Ok(res) => {
+                    observer.as_state_tracer().discard_checkpoint();
                     self.state.discard_checkpoint();
                     tx_substate.accrue(substate);
                     res.return_data.to_vec()
@@ -1474,6 +1480,7 @@ impl<
                     Vec::new()
                 }
                 Err(_) => {
+                    observer.as_state_tracer().revert_to_checkpoint();
                     self.state.revert_to_checkpoint();
                     Vec::new()
                 }
@@ -1487,8 +1494,7 @@ impl<
             None
         };
 
-        let estimated_gas_limit = options
-            .observer
+        let estimated_gas_limit = observer
             .gas_man
             .as_ref()
             .map(|g| g.gas_required() * 7 / 6 + base_gas_required);
@@ -1505,7 +1511,7 @@ impl<
             } else {
                 storage_sponsor_eligible
             },
-            options.observer,
+            observer,
             estimated_gas_limit,
         )?)
     }
