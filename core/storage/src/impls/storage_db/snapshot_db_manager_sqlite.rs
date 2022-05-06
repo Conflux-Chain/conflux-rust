@@ -15,6 +15,12 @@ pub struct SnapshotDbManagerSqlite {
     open_create_delete_lock: Mutex<()>,
 }
 
+#[derive(Debug)]
+enum CopyType {
+    Cow,
+    Std,
+}
+
 // The map from path to the already open snapshots.
 // when the mapped snapshot is None, the snapshot is open exclusively for write,
 // when the mapped snapshot is Some(), the snapshot can be shared by other
@@ -288,16 +294,16 @@ impl SnapshotDbManagerSqlite {
 
     fn try_copy_snapshot(
         &self, old_snapshot_path: &Path, new_snapshot_path: &Path,
-    ) -> Result<()> {
+    ) -> Result<CopyType> {
         if self
             .try_make_snapshot_cow_copy(old_snapshot_path, new_snapshot_path)?
         {
-            Ok(())
+            Ok(CopyType::Cow)
         } else {
             let mut options = CopyOptions::new();
             options.copy_inside = true; // copy recursively like `cp -r`
             fs_extra::dir::copy(old_snapshot_path, new_snapshot_path, &options)
-                .map(|_| ())
+                .map(|_| CopyType::Std)
                 .map_err(|e| {
                     warn!(
                         "Fail to copy snapshot {:?}, err={:?}",
@@ -358,6 +364,45 @@ impl SnapshotDbManagerSqlite {
     ) -> Result<()> {
         Ok(fs::rename(old_path, new_path)?)
     }
+
+    fn defragmenting_xfs_files(&self, new_snapshot_db_path: PathBuf) {
+        thread::Builder::new()
+            .name("Defragmenting XFS Files".into())
+            .spawn(move || {
+                let paths = fs::read_dir(new_snapshot_db_path).unwrap();
+                let mut files = vec![];
+                for path in paths {
+                    if let Ok(p) = path {
+                        let f = p.path();
+                        if f.is_file() {
+                            files.push(f.as_path().display().to_string());
+                        }
+                    }
+                }
+
+                let mut command = Command::new("xfs_fsr");
+                command.arg("-v");
+                command.args(files);
+                let command_result = command.output();
+                match command_result {
+                    Ok(o) => {
+                        if o.status.success() {
+                            info!(
+                                "Defragmenting XFS files success. Command {:?}",
+                                command
+                            );
+                        }
+                    }
+                    _ => {
+                        error!(
+                            "Defragmenting XFS files failed. Command {:?}",
+                            command
+                        );
+                    }
+                }
+            })
+            .unwrap();
+    }
 }
 
 impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
@@ -393,6 +438,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         );
 
         let mut snapshot_db;
+        let mut cow = false;
         let new_snapshot_root = if *old_snapshot_epoch_id == NULL_EPOCH {
             // direct merge the first snapshot
             snapshot_db = Self::SnapshotDb::create(
@@ -403,13 +449,15 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             snapshot_db.dump_delta_mpt(&delta_mpt)?;
             snapshot_db.direct_merge()?
         } else {
-            if self
-                .try_copy_snapshot(
-                    self.get_snapshot_db_path(old_snapshot_epoch_id).as_path(),
-                    temp_db_path.as_path(),
-                )
-                .is_ok()
-            {
+            if let Ok(copy_type) = self.try_copy_snapshot(
+                self.get_snapshot_db_path(old_snapshot_epoch_id).as_path(),
+                temp_db_path.as_path(),
+            ) {
+                cow = match copy_type {
+                    CopyType::Cow => true,
+                    _ => false,
+                };
+
                 // Open the copied database.
                 snapshot_db = self.open_snapshot_write(
                     temp_db_path.clone(),
@@ -434,10 +482,17 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         in_progress_snapshot_info.merkle_root = new_snapshot_root.clone();
         drop(snapshot_db);
         let locked = snapshot_info_map_rwlock.write();
-        Self::rename_snapshot_db(
-            &temp_db_path,
-            &self.get_snapshot_db_path(&snapshot_epoch_id),
-        )?;
+
+        let new_snapshot_db_path =
+            self.get_snapshot_db_path(&snapshot_epoch_id);
+        Self::rename_snapshot_db(&temp_db_path, &new_snapshot_db_path)?;
+
+        if cfg!(target_os = "linux")
+            && cow
+            && snapshot_epoch_id.as_fixed_bytes()[31] & 15 == 0
+        {
+            self.defragmenting_xfs_files(new_snapshot_db_path);
+        }
 
         Ok((locked, in_progress_snapshot_info))
     }

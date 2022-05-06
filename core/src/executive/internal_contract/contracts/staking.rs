@@ -2,17 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{
-    super::impls::staking::*, macros::*, SimpleExecutionTrait, SolFnTable,
-};
-use crate::{
-    evm::{ActionParams, Spec},
-    executive::InternalRefContext,
-    observer::VmObserve,
-    vm,
-};
 use cfx_parameters::internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS;
 use cfx_types::{Address, U256};
+
+use super::{super::impls::staking::*, preludes::*};
 
 // Definitions for the whole contract.
 make_solidity_contract! {

@@ -147,11 +147,14 @@ build_config! {
         (tanzanite_transition_height, (u64), TANZANITE_HEIGHT)
         (hydra_transition_number, (Option<u64>), Some(68845000))
         (hydra_transition_height, (Option<u64>), Some(55095000))
+        (dao_vote_transition_number, (Option<u64>), None)
+        (dao_vote_transition_height, (Option<u64>), None)
         (cip43_init_end_number, (Option<u64>), Some(69245000))
         (cip78_patch_transition_number,(Option<u64>), Some(77340000))
         (cip90_transition_height,(Option<u64>), Some(61465000))
         (cip90_transition_number,(Option<u64>), Some(77340000))
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
+        (params_dao_vote_period, (u64), DAO_PARAMETER_VOTE_PERIOD)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
         (timer_chain_block_difficulty_ratio, (u64), TIMER_CHAIN_BLOCK_DEFAULT_DIFFICULTY_RATIO)
         // FIXME: this is part of spec.
@@ -251,7 +254,7 @@ build_config! {
         // Transaction cache/transaction pool section.
         (tx_cache_index_maintain_timeout_ms, (u64), 300_000)
         (tx_pool_size, (usize), 200_000)
-        (tx_pool_min_tx_gas_price, (u64), 1)
+        (tx_pool_min_tx_gas_price, (Option<u64>), None)
         (tx_weight_scaling, (u64), 1)
         (tx_weight_exp, (u8), 1)
 
@@ -925,12 +928,20 @@ impl Configuration {
     }
 
     pub fn txpool_config(&self) -> TxPoolConfig {
+        let min_tx_price_default = if self.is_test_or_dev_mode() {
+            1
+        } else {
+            ONE_GDRIP_IN_DRIP
+        };
         TxPoolConfig {
             capacity: self.raw_conf.tx_pool_size,
             max_tx_gas: RwLock::new(U256::from(
                 DEFAULT_TARGET_BLOCK_GAS_LIMIT / 2,
             )),
-            min_tx_price: self.raw_conf.tx_pool_min_tx_gas_price,
+            min_tx_price: self
+                .raw_conf
+                .tx_pool_min_tx_gas_price
+                .unwrap_or(min_tx_price_default),
             tx_weight_scaling: self.raw_conf.tx_weight_scaling,
             tx_weight_exp: self.raw_conf.tx_weight_exp,
             packing_gas_limit_block_count: self
@@ -1122,6 +1133,10 @@ impl Configuration {
             .raw_conf
             .hydra_transition_number
             .unwrap_or(default_transition_time);
+        params.transition_numbers.cip94 = self
+            .raw_conf
+            .dao_vote_transition_number
+            .unwrap_or(default_transition_time);
         if self.is_test_or_dev_mode() {
             params.transition_numbers.cip43b =
                 self.raw_conf.cip43_init_end_number.unwrap_or(u64::MAX);
@@ -1177,6 +1192,11 @@ impl Configuration {
             .cip90_transition_height
             .or(self.raw_conf.hydra_transition_height)
             .unwrap_or(default_transition_time);
+        params.transition_heights.cip94 = self
+            .raw_conf
+            .dao_vote_transition_height
+            .unwrap_or(default_transition_time);
+        params.params_dao_vote_period = self.raw_conf.params_dao_vote_period;
 
         let mut base_block_rewards = BTreeMap::new();
         base_block_rewards.insert(0, INITIAL_BASE_MINING_REWARD_IN_UCFX.into());

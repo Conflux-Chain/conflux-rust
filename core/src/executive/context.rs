@@ -3,7 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 // Transaction execution environment.
-use super::{executive::*, suicide as suicide_impl, InternalRefContext};
+use super::{
+    executive::*,
+    internal_contract::{suicide as suicide_impl, InternalRefContext},
+};
 use crate::{
     bytes::Bytes,
     machine::Machine,

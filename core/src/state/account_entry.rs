@@ -8,7 +8,10 @@ use crate::{
     state::{AccountEntryProtectedMethods, StateGeneric},
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
-use cfx_parameters::staking::COLLATERAL_UNITS_PER_STORAGE_KEY;
+use cfx_parameters::{
+    internal_contract_addresses::SYSTEM_STORAGE_ADDRESS,
+    staking::COLLATERAL_UNITS_PER_STORAGE_KEY,
+};
 use cfx_state::SubstateTrait;
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
 use cfx_storage::StorageStateTrait;
@@ -630,7 +633,9 @@ impl OverlayAccount {
     pub fn set_storage(&mut self, key: Vec<u8>, value: U256, owner: Address) {
         Arc::make_mut(&mut self.storage_value_write_cache)
             .insert(key.clone(), value);
-        if self.address.space == Space::Ethereum {
+        if self.address.space == Space::Ethereum
+            || self.address.address == *SYSTEM_STORAGE_ADDRESS
+        {
             return;
         }
         let lv1_write_cache =
@@ -711,12 +716,16 @@ impl OverlayAccount {
     ) -> DbResult<U256>
     {
         assert!(!storage_owner_lv2_write_cache.contains_key(key));
+        let cache_ownership = cache_ownership
+            && address.space == Space::Native
+            && address.address != *SYSTEM_STORAGE_ADDRESS;
+
         if let Some(value) = db.get::<StorageValue>(
             StorageKey::new_storage_key(&address.address, key.as_ref())
                 .with_space(address.space),
         )? {
             storage_value_read_cache.insert(key.to_vec(), value.value);
-            if cache_ownership && address.space == Space::Native {
+            if cache_ownership {
                 storage_owner_lv2_write_cache.insert(
                     key.to_vec(),
                     Some(match value.owner {
@@ -813,6 +822,9 @@ impl OverlayAccount {
         if self.is_removed_contract {
             return Ok(());
         }
+        if self.address.address == *SYSTEM_STORAGE_ADDRESS {
+            return Ok(());
+        }
         let storage_owner_lv1_write_cache: Vec<_> =
             Arc::make_mut(&mut self.storage_owner_lv1_write_cache)
                 .drain()
@@ -884,7 +896,9 @@ impl OverlayAccount {
                     state.db.delete(address_key, debug_record.as_deref_mut())?
                 }
                 false => {
-                    let owner = if self.address.space == Space::Ethereum {
+                    let owner = if self.address.space == Space::Ethereum
+                        || self.address.address == *SYSTEM_STORAGE_ADDRESS
+                    {
                         None
                     } else {
                         let current_owner = storage_owner_lv2_write_cache

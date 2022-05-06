@@ -3,7 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    executive::InternalRefContext,
     observer::{AddressPocket, VmObserve},
     state::cleanup_mode,
     vm::{self, ActionParams, Spec},
@@ -13,6 +12,8 @@ use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
     Space, U256,
 };
+
+use super::super::components::InternalRefContext;
 
 fn available_admin_address(_spec: &Spec, address: &Address) -> bool {
     address.is_user_account_address() || address.is_null_address()

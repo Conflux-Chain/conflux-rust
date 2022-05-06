@@ -3,10 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 use super::{ABIDecodable, ABIDecodeError, ABIEncodable};
-use crate::ABIPackedEncodable;
+use crate::{ABIPackedEncodable, ABIVariable};
 use cfx_types::{Address, U256};
 use lazy_static;
 use rustc_hex::{FromHex, ToHex};
+use solidity_abi_derive::ABIVariable;
 use std::str::FromStr;
 
 lazy_static! {
@@ -385,5 +386,110 @@ fn test_packed_string() {
         "176c45928d7c26b0175dec8bf6051108563c62c5\
          000101\
          68656c6c6f"
+    );
+}
+
+#[derive(ABIVariable, Eq, PartialEq, Debug, Copy, Clone)]
+struct StaticStruct {
+    user: Address,
+    amount: U256,
+}
+
+#[test]
+fn test_static_struct() {
+    let input = StaticStruct {
+        user: ADDR1.clone(),
+        amount: U256::from(33u64),
+    };
+    let encoded = input.abi_encode();
+    assert_eq!(StaticStruct::BASIC_TYPE, false);
+    assert_eq!(StaticStruct::STATIC_LENGTH, Some(64));
+    assert_eq!(
+        encoded.to_hex::<String>(),
+        "000000000000000000000000176c45928d7c26b0175dec8bf6051108563c62c5\
+         0000000000000000000000000000000000000000000000000000000000000021"
+    );
+    assert_eq!(StaticStruct::abi_decode(encoded.as_slice()).unwrap(), input);
+}
+
+#[test]
+fn test_static_struct_multi_variable() {
+    let input = StaticStruct {
+        user: ADDR1.clone(),
+        amount: U256::from(33u64),
+    };
+    let encoded = (3u64, input).abi_encode();
+    assert_eq!(
+        encoded.to_hex::<String>(),
+        "0000000000000000000000000000000000000000000000000000000000000003\
+         000000000000000000000000176c45928d7c26b0175dec8bf6051108563c62c5\
+         0000000000000000000000000000000000000000000000000000000000000021"
+    );
+    let (out1, out2) =
+        <(u64, StaticStruct)>::abi_decode(encoded.as_slice()).unwrap();
+    assert_eq!(out1, 3);
+    assert_eq!(out2, input);
+}
+
+#[derive(ABIVariable, Eq, PartialEq, Debug, Clone)]
+struct DynamicStruct {
+    id: u64,
+    data: Vec<u8>,
+}
+
+#[test]
+fn test_dynamic_struct() {
+    let input = DynamicStruct {
+        id: 7,
+        data: vec![8, 9],
+    };
+    let encoded = input.abi_encode();
+    assert_eq!(DynamicStruct::STATIC_LENGTH, None);
+    assert_eq!(
+        encoded.to_hex::<String>(),
+        "0000000000000000000000000000000000000000000000000000000000000020\
+         0000000000000000000000000000000000000000000000000000000000000007\
+         0000000000000000000000000000000000000000000000000000000000000040\
+         0000000000000000000000000000000000000000000000000000000000000002\
+         0809000000000000000000000000000000000000000000000000000000000000"
+    );
+    assert_eq!(
+        DynamicStruct::abi_decode(encoded.as_slice()).unwrap(),
+        input
+    );
+}
+
+#[test]
+fn test_two_dynamic_struct() {
+    let input = vec![
+        DynamicStruct {
+            id: 33,
+            data: vec![5, 6, 7],
+        },
+        DynamicStruct {
+            id: 34,
+            data: vec![8, 9],
+        },
+    ];
+    let encoded = input.abi_encode();
+    assert_eq!(DynamicStruct::STATIC_LENGTH, None);
+    assert_eq!(
+        encoded.to_hex::<String>(),
+        "0000000000000000000000000000000000000000000000000000000000000020\
+         0000000000000000000000000000000000000000000000000000000000000002\
+         0000000000000000000000000000000000000000000000000000000000000040\
+         00000000000000000000000000000000000000000000000000000000000000c0\
+         0000000000000000000000000000000000000000000000000000000000000021\
+         0000000000000000000000000000000000000000000000000000000000000040\
+         0000000000000000000000000000000000000000000000000000000000000003\
+         0506070000000000000000000000000000000000000000000000000000000000\
+         0000000000000000000000000000000000000000000000000000000000000022\
+         0000000000000000000000000000000000000000000000000000000000000040\
+         0000000000000000000000000000000000000000000000000000000000000002\
+         0809000000000000000000000000000000000000000000000000000000000000"
+    );
+    assert_eq!(
+        Vec::<DynamicStruct>::abi_decode(encoded.as_slice()).unwrap(),
+        input
     );
 }

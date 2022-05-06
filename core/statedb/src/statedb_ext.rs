@@ -2,6 +2,21 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use rlp::Rlp;
+
+use cfx_internal_common::debug::ComputeEpochDebugRecord;
+use cfx_parameters::internal_contract_addresses::{
+    PARAMS_CONTROL_CONTRACT_ADDRESS, STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+};
+use cfx_storage::StorageStateTrait;
+use cfx_types::{AddressWithSpace, H256, U256};
+use primitives::{
+    is_default::IsDefault, Account, CodeInfo, DepositList, StorageKey,
+    StorageKeyWithSpace, VoteStakeList,
+};
+
+use super::{Result, StateDbGeneric};
+
 pub trait StateDbExt {
     fn get<T>(&self, key: StorageKeyWithSpace) -> Result<Option<T>>
     where T: ::rlp::Decodable;
@@ -84,6 +99,12 @@ pub trait StateDbExt {
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>;
 
+    fn get_pow_base_reward(&self) -> Result<Option<U256>>;
+    fn set_pow_base_reward(
+        &mut self, reward: U256,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> Result<()>;
+
     // This function is used to check whether the db has been initialized when
     // create a state. So we can know the loaded `None` represents "not
     // initialized" or "zero value".
@@ -102,6 +123,77 @@ pub const DISTRIBUTABLE_POS_INTEREST_KEY: &'static [u8] =
     b"distributable_pos_interest";
 pub const LAST_DISTRIBUTE_BLOCK_KEY: &'static [u8] = b"last_distribute_block";
 pub const TOTAL_EVM_TOKENS_KEY: &'static [u8] = b"total_evm_tokens";
+pub const POW_BASE_REWARD_KEY: &'static [u8] = b"pow_base_reward";
+
+pub mod params_control_entries {
+    use cfx_parameters::internal_contract_addresses::SYSTEM_STORAGE_ADDRESS;
+    use cfx_types::{Address, U256};
+    use lazy_static::lazy_static;
+    use tiny_keccak::{Hasher, Keccak};
+
+    pub const POW_BASE_REWARD_INDEX: u8 = 0;
+    pub const POS_REWARD_INTEREST_RATE_INDEX: u8 = 1;
+    pub const PARAMETER_INDEX_MAX: usize = 2;
+
+    pub const OPTION_UNCHANGE_INDEX: u8 = 0;
+    pub const OPTION_INCREASE_INDEX: u8 = 1;
+    pub const OPTION_DECREASE_INDEX: u8 = 2;
+    pub const OPTION_INDEX_MAX: usize = 3;
+
+    lazy_static! {
+        pub static ref TOTAL_VOTES_ENTRIES: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] =
+            gen_entry_addresses(&start_entry(&*SYSTEM_STORAGE_ADDRESS));
+        pub static ref SETTLED_TOTAL_VOTES_ENTRIES: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] =
+            gen_entry_addresses(&U256::from_big_endian(&prefix_and_hash(
+                4,
+                SYSTEM_STORAGE_ADDRESS.as_bytes()
+            )));
+    }
+
+    fn gen_entry_addresses(
+        start: &U256,
+    ) -> [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] {
+        let mut vote_entries =
+            [[[0u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX];
+        for index in 0..PARAMETER_INDEX_MAX {
+            for opt_index in 0..OPTION_INDEX_MAX {
+                vote_entries[index][opt_index] =
+                    storage_key_at_index(start, index, opt_index);
+            }
+        }
+        vote_entries
+    }
+
+    fn prefix_and_hash(prefix: u64, data: &[u8]) -> [u8; 32] {
+        let mut hasher = Keccak::v256();
+        hasher.update(&prefix.to_be_bytes());
+        hasher.update(data);
+        let mut hash = [0u8; 32];
+        hasher.finalize(&mut hash);
+        hash
+    }
+
+    #[inline]
+    pub fn start_entry(address: &Address) -> U256 {
+        U256::from_big_endian(&prefix_and_hash(3, address.as_bytes()))
+    }
+
+    pub fn version_entry_key(start: &U256) -> [u8; 32] {
+        let mut entry = [0u8; 32];
+        start.to_big_endian(&mut entry);
+        entry
+    }
+
+    #[inline]
+    pub fn storage_key_at_index(
+        start: &U256, index: usize, opt_index: usize,
+    ) -> [u8; 32] {
+        let mut vote_entry = [0u8; 32];
+        (start + 1 + index * OPTION_INDEX_MAX + opt_index)
+            .to_big_endian(&mut vote_entry);
+        vote_entry
+    }
+}
 
 impl<StateDbStorage: StorageStateTrait> StateDbExt
     for StateDbGeneric<StateDbStorage>
@@ -418,6 +510,29 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         )
     }
 
+    fn get_pow_base_reward(&self) -> Result<Option<U256>> {
+        let pow_base_reward_key = StorageKey::new_storage_key(
+            &PARAMS_CONTROL_CONTRACT_ADDRESS,
+            POW_BASE_REWARD_KEY,
+        )
+        .with_native_space();
+        let pow_base_reward_opt = self.get::<U256>(pow_base_reward_key)?;
+        Ok(pow_base_reward_opt)
+    }
+
+    fn set_pow_base_reward(
+        &mut self, reward: U256,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> Result<()>
+    {
+        let pow_base_reward_key = StorageKey::new_storage_key(
+            &PARAMS_CONTROL_CONTRACT_ADDRESS,
+            POW_BASE_REWARD_KEY,
+        )
+        .with_native_space();
+        self.set::<U256>(pow_base_reward_key, &reward, debug_record)
+    }
+
     fn is_initialized(&self) -> Result<bool> {
         let interest_rate_key = StorageKey::new_storage_key(
             &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
@@ -428,14 +543,3 @@ impl<StateDbStorage: StorageStateTrait> StateDbExt
         Ok(interest_rate_opt.is_some())
     }
 }
-
-use super::{Result, StateDbGeneric};
-use cfx_internal_common::debug::ComputeEpochDebugRecord;
-use cfx_parameters::internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS;
-use cfx_storage::StorageStateTrait;
-use cfx_types::{AddressWithSpace, H256, U256};
-use primitives::{
-    is_default::IsDefault, Account, CodeInfo, DepositList, StorageKey,
-    StorageKeyWithSpace, VoteStakeList,
-};
-use rlp::Rlp;

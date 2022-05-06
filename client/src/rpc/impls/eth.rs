@@ -11,8 +11,9 @@ use crate::rpc::{
     traits::eth_space::eth::{Eth, EthFilter},
     types::{
         eth::{
-            Block as RpcBlock, BlockNumber, CallRequest, EthRpcLogFilter,
-            FilterChanges, Log, Receipt, SyncInfo, SyncStatus, Transaction,
+            AccountPendingTransactions, Block as RpcBlock, BlockNumber,
+            CallRequest, EthRpcLogFilter, FilterChanges, Log, Receipt,
+            SyncInfo, SyncStatus, Transaction,
         },
         Bytes, Index, MAX_GAS_CALL_REQUEST,
     },
@@ -1064,6 +1065,36 @@ impl Eth for EthHandler {
         }
 
         Ok(block_receipts)
+    }
+
+    fn account_pending_transactions(
+        &self, address: H160, maybe_start_nonce: Option<U256>,
+        maybe_limit: Option<U64>,
+    ) -> jsonrpc_core::Result<AccountPendingTransactions>
+    {
+        info!("RPC Request: eth_getAccountPendingTransactions(addr={:?}, start_nonce={:?}, limit={:?})",
+              address, maybe_start_nonce, maybe_limit);
+
+        let (pending_txs, tx_status, pending_count) =
+            self.tx_pool.get_account_pending_transactions(
+                &Address::from(address).with_evm_space(),
+                maybe_start_nonce,
+                maybe_limit.map(|limit| limit.as_usize()),
+            );
+        Ok(AccountPendingTransactions {
+            pending_transactions: pending_txs
+                .into_iter()
+                .map(|tx| {
+                    Transaction::from_signed(
+                        &tx,
+                        (None, None, None),
+                        (None, None),
+                    )
+                })
+                .collect(),
+            first_tx_status: tx_status,
+            pending_count: pending_count.into(),
+        })
     }
 }
 

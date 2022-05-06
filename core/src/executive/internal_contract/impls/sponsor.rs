@@ -3,13 +3,14 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    executive::InternalRefContext,
     observer::{AddressPocket, VmObserve},
     state::cleanup_mode,
     vm::{self, ActionParams, Spec},
 };
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{Address, AddressSpaceUtil, U256};
+
+use super::super::components::InternalRefContext;
 
 /// Implementation of `set_sponsor_for_gas(address,uint256)`.
 pub fn set_sponsor_for_gas(
