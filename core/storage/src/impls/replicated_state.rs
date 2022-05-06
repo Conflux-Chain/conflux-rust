@@ -20,7 +20,7 @@ use std::{
 
 pub struct ReplicatedState<Main> {
     state: Main,
-    replication_handler: Option<ReplicationHandler>,
+    replication_handler: ReplicationHandler,
 }
 
 pub trait StateFilter: Sync + Send {
@@ -41,24 +41,15 @@ impl<Main: StateTrait> ReplicatedState<Main> {
             ReplicationHandler::new(replicated_state, filter);
         Self {
             state: main_state,
-            replication_handler: Some(replication_handler),
+            replication_handler,
         }
     }
-
-    pub fn new_single(main_state: Main) -> ReplicatedState<Main> {
-        Self {
-            state: main_state,
-            replication_handler: None,
-        }
-    }
-
-    pub fn into_main_state(self) -> Main { self.state }
 }
 
 struct ReplicationHandler {
     filter: Option<Box<dyn StateFilter>>,
     op_sender: Arc<Mutex<Sender<StateOperation>>>,
-    thread_handle: JoinHandle<Result<()>>,
+    thread_handle: Option<JoinHandle<Result<()>>>,
 }
 
 impl ReplicationHandler {
@@ -106,7 +97,7 @@ impl ReplicationHandler {
         Self {
             filter,
             op_sender: Arc::new(Mutex::new(op_tx)),
-            thread_handle,
+            thread_handle: Some(thread_handle),
         }
     }
 
@@ -122,10 +113,6 @@ impl ReplicationHandler {
         if let Err(e) = self.op_sender.lock().send(op) {
             error!("send_op: err={:?}", e);
         }
-    }
-
-    pub fn join(self) -> Result<()> {
-        self.thread_handle.join().expect("join error")
     }
 }
 
@@ -282,20 +269,16 @@ impl<Main: StateTrait> StateTrait for ReplicatedState<Main> {
     fn set(
         &mut self, access_key: StorageKeyWithSpace, value: Box<[u8]>,
     ) -> Result<()> {
-        self.replication_handler.as_ref().map(|h| {
-            h.send_op(StateOperation::Set {
-                access_key: access_key.into(),
-                value: value.clone(),
-            })
+        self.replication_handler.send_op(StateOperation::Set {
+            access_key: access_key.into(),
+            value: value.clone(),
         });
         self.state.set(access_key, value)
     }
 
     fn delete(&mut self, access_key: StorageKeyWithSpace) -> Result<()> {
-        self.replication_handler.as_ref().map(|h| {
-            h.send_op(StateOperation::Delete {
-                access_key: access_key.into(),
-            })
+        self.replication_handler.send_op(StateOperation::Delete {
+            access_key: access_key.into(),
         });
         self.state.delete(access_key)
     }
@@ -309,10 +292,8 @@ impl<Main: StateTrait> StateTrait for ReplicatedState<Main> {
     fn delete_all(
         &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> Result<Option<Vec<MptKeyValue>>> {
-        self.replication_handler.as_ref().map(|h| {
-            h.send_op(StateOperation::DeleteAll {
-                access_key_prefix: access_key_prefix.into(),
-            })
+        self.replication_handler.send_op(StateOperation::DeleteAll {
+            access_key_prefix: access_key_prefix.into(),
         });
         self.state.delete_all(access_key_prefix)
     }
@@ -325,8 +306,7 @@ impl<Main: StateTrait> StateTrait for ReplicatedState<Main> {
 
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {
         self.replication_handler
-            .as_ref()
-            .map(|h| h.send_op(StateOperation::ComputeStateRoot));
+            .send_op(StateOperation::ComputeStateRoot);
         self.state.compute_state_root()
     }
 
@@ -337,13 +317,14 @@ impl<Main: StateTrait> StateTrait for ReplicatedState<Main> {
     fn commit(&mut self, epoch_id: EpochId) -> Result<StateRootWithAuxInfo> {
         let r = self.state.commit(epoch_id);
         self.replication_handler
-            .as_ref()
-            .map(|h| h.send_op(StateOperation::Commit { epoch_id }));
-        if let Some(h) = self.replication_handler.take() {
-            h.thread_handle
-                .join()
-                .expect("ReplicationHandler thread join error")?;
-        }
+            .send_op(StateOperation::Commit { epoch_id });
+        // TODO(lpl): This can be probably delayed.
+        self.replication_handler
+            .thread_handle
+            .take()
+            .expect("only commit once")
+            .join()
+            .expect("ReplicationHandler thread join error")?;
         r
     }
 }

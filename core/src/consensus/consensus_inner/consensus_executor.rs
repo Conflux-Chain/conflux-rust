@@ -1012,21 +1012,19 @@ impl ConsensusExecutionHandler {
         let mut state = State::new(StateDb::new(
             self.data_man
                 .storage_manager
-                .get_replicated_state_for_next_epoch(
-                    StateIndex::new_for_next_epoch(
-                        pivot_block.block_header.parent_hash(),
-                        &self
-                            .data_man
-                            .get_epoch_execution_commitment(
-                                pivot_block.block_header.parent_hash(),
-                            )
-                            // Unwrapping is safe because the state exists.
-                            .unwrap()
-                            .state_root_with_aux_info,
-                        pivot_block.block_header.height() - 1,
-                        self.data_man.get_snapshot_epoch_count(),
-                    ),
-                )
+                .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
+                    pivot_block.block_header.parent_hash(),
+                    &self
+                        .data_man
+                        .get_epoch_execution_commitment(
+                            pivot_block.block_header.parent_hash(),
+                        )
+                        // Unwrapping is safe because the state exists.
+                        .unwrap()
+                        .state_root_with_aux_info,
+                    pivot_block.block_header.height() - 1,
+                    self.data_man.get_snapshot_epoch_count(),
+                ))
                 .expect("No db error")
                 // Unwrapping is safe because the state exists.
                 .expect("State exists"),
@@ -1869,21 +1867,19 @@ impl ConsensusExecutionHandler {
         let mut state = State::new(StateDb::new(
             self.data_man
                 .storage_manager
-                .get_replicated_state_for_next_epoch(
-                    StateIndex::new_for_next_epoch(
-                        pivot_block.block_header.parent_hash(),
-                        &self
-                            .data_man
-                            .get_epoch_execution_commitment(
-                                pivot_block.block_header.parent_hash(),
-                            )
-                            // Unwrapping is safe because the state exists.
-                            .unwrap()
-                            .state_root_with_aux_info,
-                        pivot_block.block_header.height() - 1,
-                        self.data_man.get_snapshot_epoch_count(),
-                    ),
-                )
+                .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
+                    pivot_block.block_header.parent_hash(),
+                    &self
+                        .data_man
+                        .get_epoch_execution_commitment(
+                            pivot_block.block_header.parent_hash(),
+                        )
+                        // Unwrapping is safe because the state exists.
+                        .unwrap()
+                        .state_root_with_aux_info,
+                    pivot_block.block_header.height() - 1,
+                    self.data_man.get_snapshot_epoch_count(),
+                ))
                 .unwrap()
                 // Unwrapping is safe because the state exists.
                 .unwrap(),

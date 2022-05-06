@@ -663,16 +663,11 @@ impl StateManagerTrait for StateManager {
                     );
                     return Ok(None);
                 } else {
-                    Ok(Some(Box::new(ReplicatedState::new_single(
-                        single_mpt_state.unwrap(),
-                    ))))
+                    Ok(Some(Box::new(single_mpt_state.unwrap())))
                 }
             }
             Ok(Some(state_trees)) => {
-                Ok(Some(Box::new(ReplicatedState::new_single(State::new(
-                    self.clone(),
-                    state_trees,
-                )))))
+                Ok(Some(Box::new(State::new(self.clone(), state_trees))))
             }
         }
     }
@@ -735,56 +730,6 @@ impl StateManagerTrait for StateManager {
                 .space
                 .map(|space| Box::new(space) as Box<dyn StateFilter>),
         ))))
-    }
-}
-
-impl ReplicatedStateManagerTrait for StateManager {
-    fn get_replicated_state_for_next_epoch(
-        self: &Arc<Self>, parent_epoch_id: StateIndex,
-    ) -> Result<Option<Box<dyn StateTrait>>> {
-        let parent_epoch = parent_epoch_id.epoch_id;
-        let state = self.get_state_for_next_epoch_inner(parent_epoch_id)?;
-        if state.is_none() {
-            return Ok(None);
-        }
-        if self.single_mpt_storage_manager.is_none() {
-            return Ok(Some(Box::new(state.unwrap())));
-        }
-        let single_mpt_storage_manager =
-            self.single_mpt_storage_manager.as_ref().unwrap();
-        let single_mpt_state =
-            single_mpt_storage_manager.get_state_by_epoch(parent_epoch)?;
-        if single_mpt_state.is_none() {
-            return Ok(None);
-        }
-        Ok(Some(Box::new(ReplicatedState::new(
-            state.unwrap(),
-            single_mpt_state.unwrap(),
-            single_mpt_storage_manager
-                .space
-                .map(|space| Box::new(space) as Box<dyn StateFilter>),
-        ))))
-    }
-
-    fn get_replicated_state_for_genesis_write(
-        self: &Arc<Self>,
-    ) -> Box<dyn StateTrait> {
-        let state = self.get_state_for_genesis_write_inner();
-        if self.single_mpt_storage_manager.is_none() {
-            return Box::new(state);
-        }
-        let single_mpt_storage_manager =
-            self.single_mpt_storage_manager.as_ref().unwrap();
-        let single_mpt_state = single_mpt_storage_manager
-            .get_state_for_genesis()
-            .expect("single_mpt genesis initialize error");
-        Box::new(ReplicatedState::new(
-            state,
-            single_mpt_state,
-            single_mpt_storage_manager
-                .space
-                .map(|space| Box::new(space) as Box<dyn StateFilter>),
-        ))
     }
 }
 
