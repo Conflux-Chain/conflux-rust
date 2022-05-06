@@ -101,7 +101,7 @@ impl From<serde_json::Error> for Error {
 }
 
 /// Client provides a client around the restful interface to a Vault servce.
-/// Learn more here: https://www.vaultproject.io/api-docs/
+/// Learn more here: <https://www.vaultproject.io/api-docs/>
 ///
 /// A brief overview of Vault:
 ///

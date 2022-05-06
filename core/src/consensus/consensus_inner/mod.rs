@@ -1868,24 +1868,24 @@ impl ConsensusGraphInner {
     ///   epoch to                         Block holding
     ///   compute reward                   the reward state
     ///                         Block epoch                  Block with
-    ///   | [Bi1]   |           for cared                    [Bj]'s state
+    ///   | \[Bi1\]   |           for cared                    \[Bj\]'s state
     ///   |     \   |           anticone                     as deferred root
-    /// --|----[Bi]-|--------------[Ba]---------[Bj]----------[Bt]
+    /// --|----\[Bi\]-|--------------\[Ba\]---------\[Bj\]----------\[Bt\]
     ///   |    /    |
-    ///   | [Bi2]   |
+    ///   | \[Bi2\]   |
     ///
-    /// Let i([Bi]) is the arena index of [Bi].
-    /// Let h([Bi]) is the height of [Bi].
+    /// Let i(\[Bi\]) is the arena index of \[Bi\].
+    /// Let h(\[Bi\]) is the height of \[Bi\].
     ///
     /// Params:
-    ///   epoch_arena_index: the arena index of [Bj]
+    ///   epoch_arena_index: the arena index of \[Bj\]
     /// Return:
-    ///   Option<(i([Bi]), i([Ba]))>
+    ///   Option<(i(\[Bi\]), i(\[Ba\]))>
     ///
-    /// The gap between [Bj] and [Bi], i.e., h([Bj])-h([Bi]),
+    /// The gap between \[Bj\] and \[Bi\], i.e., h(\[Bj\])-h(\[Bi\]),
     /// is REWARD_EPOCH_COUNT.
-    /// Let D is the gap between the parent of the genesis of next era and [Bi].
-    /// The gap between [Ba] and [Bi] is
+    /// Let D is the gap between the parent of the genesis of next era and
+    /// \[Bi\]. The gap between \[Ba\] and \[Bi\] is
     ///     min(ANTICONE_PENALTY_UPPER_EPOCH_COUNT, D).
     pub fn get_pivot_reward_index(
         &self, epoch_arena_index: usize,

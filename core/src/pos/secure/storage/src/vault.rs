@@ -32,7 +32,7 @@ const DIEM_DEFAULT: &str = "diem_default";
 /// for Diem. This version currently matches the behavior of OnDiskStorage and
 /// InMemoryStorage. In the future, Vault will be able to create keys, sign
 /// messages, and handle permissions across different services. The specific
-/// vault service leveraged herein is called KV (Key Value) Secrets Engine - Version 2 (https://www.vaultproject.io/api/secret/kv/kv-v2.html). So while Diem Secure Storage
+/// vault service leveraged herein is called \[KV (Key Value) Secrets Engine - Version 2\](https://www.vaultproject.io/api/secret/kv/kv-v2.html). So while Diem Secure Storage
 /// calls pointers to data keys, Vault has actually a secret that contains
 /// multiple key value pairs.
 pub struct VaultStorage {

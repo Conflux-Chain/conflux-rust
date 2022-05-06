@@ -4,8 +4,8 @@
 
 /// The trait automatically implements for D: Deref with D::Target. User may add
 /// implementation of DerefPlusSelf<Target = Type> for some Type
-/// via enable_deref_for_self, where Type can be str, [T], or a local type (i.e.
-/// not an upstream type).
+/// via enable_deref_for_self, where Type can be str, \[T\], or a local type
+/// (i.e. not an upstream type).
 pub trait DerefPlusSelf {
     type Target: ?Sized;
 

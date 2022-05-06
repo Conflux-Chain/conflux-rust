@@ -148,7 +148,7 @@ where H: CryptoHasher
     }
 
     /// Appends a list of new subtrees to the existing accumulator. This is
-    /// similar to [`append`](Accumulator::append) except that the new
+    /// similar to \[`append`\](Accumulator::append) except that the new
     /// leaves themselves are not known and they are represented by
     /// `subtrees`. As an example, given the following accumulator that
     /// currently has 10 leaves, the frozen subtree roots and the new subtrees
