@@ -1014,16 +1014,37 @@ impl<
     pub fn transact_virtual(
         &mut self, tx: &SignedTransaction,
     ) -> DbResult<ExecutionOutcome> {
-        // If call_requrest.from is passed
+        let is_native_tx = tx.space() == Space::Native;
         let options = TransactOptions::virtual_call();
+        // If tx.from is specified (is zero)
         if !tx.sender().address.is_zero() {
-            self.state.set_nonce(&tx.sender(), &tx.nonce())?;
-            return self.transact(tx, options);
+            let mut first_tx = tx.clone();
+            // If is native tx and tx.storage_limit is not specified (is u64::MAX)
+            // And balance of 'from' can cover value + gas_fee
+            // The set tx.storage_limit to tx.from max affordable amount
+            if is_native_tx && tx.storage_limit().unwrap_or(0) == u64::MAX {
+                let balance = self.state.balance(&tx.sender())?;
+                let value_and_fee = tx.value() + tx.gas() * tx.gas_price();
+                if balance > value_and_fee {
+                    let available_storage_limit = (balance - value_and_fee)
+                        / *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+                    if let Transaction::Native(NativeTransaction {
+                        ref mut storage_limit,
+                        ..
+                    }) = first_tx.transaction.transaction.unsigned
+                    {
+                        *storage_limit = available_storage_limit.as_u64();
+                    }
+                }
+            }
+            self.state
+                .set_nonce(&first_tx.sender(), &first_tx.nonce())?;
+            return self.transact(&first_tx, options);
         }
 
         // If not passed use a random one
         let mut random_hex = Address::random();
-        if tx.space() == Space::Native {
+        if is_native_tx {
             random_hex.set_user_account_type_bits();
         }
         let sender = random_hex.with_space(tx.space());
