@@ -80,7 +80,7 @@ use crate::{
 use jsonrpc_core::futures::{future::poll_fn, Async, Future};
 pub use metadata::Metadata;
 use metrics::{register_timer_with_group, ScopeTimer, Timer};
-use parking_lot::RwLock;
+use parking_lot::Mutex;
 use std::collections::{HashMap, HashSet};
 use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
 
@@ -557,7 +557,7 @@ impl RpcInterceptor for ThrottleInterceptor {
 }
 
 struct MetricsInterceptor {
-    timers: RwLock<HashMap<String, Arc<dyn Timer>>>,
+    timers: Mutex<HashMap<String, Arc<dyn Timer>>>,
     // TODO: Chain interceptors instead of wrapping up.
     throttle_interceptor: ThrottleInterceptor,
 }
@@ -565,7 +565,7 @@ struct MetricsInterceptor {
 impl MetricsInterceptor {
     pub fn new(throttle_interceptor: ThrottleInterceptor) -> Self {
         Self {
-            timers: RwLock::new(HashMap::new()),
+            timers: Mutex::new(HashMap::new()),
             throttle_interceptor,
         }
     }
@@ -574,11 +574,11 @@ impl MetricsInterceptor {
 impl RpcInterceptor for MetricsInterceptor {
     fn before(&self, name: &String) -> JsonRpcResult<()> {
         self.throttle_interceptor.before(name)?;
-        if !self.timers.read().contains_key(name) {
+        if !self.timers.lock().contains_key(name) {
             // We may insert more than once during initialization, but this
             // should be okay.
             let timer = register_timer_with_group("rpc", name.as_str());
-            self.timers.write().insert(name.clone(), timer);
+            self.timers.lock().insert(name.clone(), timer);
         }
         Ok(())
     }
@@ -587,7 +587,7 @@ impl RpcInterceptor for MetricsInterceptor {
         &self, name: &String, method_call: BoxFuture<Value>,
     ) -> BoxFuture<Value> {
         let maybe_timer =
-            self.timers.read().get(name).map(|timer| timer.clone());
+            self.timers.lock().get(name).map(|timer| timer.clone());
         let f = move || {
             Ok(Async::Ready(
                 maybe_timer
@@ -596,6 +596,6 @@ impl RpcInterceptor for MetricsInterceptor {
             ))
         };
         let setup = poll_fn(f);
-        Box::new(setup.and_then(|_timer| method_call.wait()))
+        Box::new(setup.and_then(|_timer| method_call))
     }
 }
