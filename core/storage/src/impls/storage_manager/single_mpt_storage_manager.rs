@@ -76,9 +76,23 @@ impl SingleMptStorageManager {
         Ok(SingleMptState::new_empty(self.mpt.clone()))
     }
 
-    pub fn state_filter(&self) -> Option<Box<dyn StateFilter>> {
+    pub fn get_state_filter(&self) -> Option<Box<dyn StateFilter>> {
         self.space
             .map(|space| Box::new(space) as Box<dyn StateFilter>)
+    }
+
+    pub fn contains_space(&self, space: &Option<Space>) -> bool {
+        match (space, &self.space) {
+            (_, None) => {
+                // We keep the state in all spaces.
+                true
+            }
+            (None, Some(_)) => {
+                // We keep a part of states but all states are needed.
+                false
+            }
+            (Some(need_space), Some(kept_space)) => need_space == kept_space,
+        }
     }
 }
 

@@ -48,7 +48,8 @@ impl<Main: StateTrait> ReplicatedState<Main> {
 
 struct ReplicationHandler {
     filter: Option<Box<dyn StateFilter>>,
-    op_sender: Arc<Mutex<Sender<StateOperation>>>,
+    // We need `Mutex` to make the struct `Sync`.
+    op_sender: Mutex<Sender<StateOperation>>,
     thread_handle: Option<JoinHandle<Result<()>>>,
 }
 
@@ -96,7 +97,7 @@ impl ReplicationHandler {
             .expect("spawn error");
         Self {
             filter,
-            op_sender: Arc::new(Mutex::new(op_tx)),
+            op_sender: Mutex::new(op_tx),
             thread_handle: Some(thread_handle),
         }
     }

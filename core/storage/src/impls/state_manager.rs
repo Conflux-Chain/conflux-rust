@@ -634,41 +634,37 @@ impl StateManagerTrait for StateManager {
     ) -> Result<Option<Box<dyn StateTrait>>>
     {
         let maybe_state_trees = self.get_state_trees(&state_index, try_open);
-        match maybe_state_trees {
-            Err(_) | Ok(None) => {
-                if self.single_mpt_storage_manager.is_none() {
-                    return Ok(None);
-                }
-                let single_mpt_storage_manager =
-                    self.single_mpt_storage_manager.as_ref().unwrap();
-                match (&space, &single_mpt_storage_manager.space) {
-                    (_, None) => {}
-                    (None, Some(_)) => return Ok(None),
-                    (Some(need_space), Some(kept_space)) => {
-                        if need_space != kept_space {
-                            return Ok(None);
-                        }
-                    }
-                }
-                debug!(
-                    "read state from single mpt state: epoch={}",
-                    state_index.epoch_id
-                );
-                let single_mpt_state = single_mpt_storage_manager
-                    .get_state_by_epoch(state_index.epoch_id)?;
-                if single_mpt_state.is_none() {
-                    warn!(
-                        "single mpt state missing: epoch={:?}",
-                        state_index.epoch_id
-                    );
-                    return Ok(None);
-                } else {
-                    Ok(Some(Box::new(single_mpt_state.unwrap())))
-                }
-            }
+        // If there is an error, we will continue to search for an available
+        // single_mpt.
+        let maybe_state_err = match maybe_state_trees {
             Ok(Some(state_trees)) => {
-                Ok(Some(Box::new(State::new(self.clone(), state_trees))))
+                return Ok(Some(Box::new(State::new(
+                    self.clone(),
+                    state_trees,
+                ))));
             }
+            Err(e) => Err(e),
+            Ok(None) => Ok(None),
+        };
+        if self.single_mpt_storage_manager.is_none() {
+            return maybe_state_err;
+        }
+        let single_mpt_storage_manager =
+            self.single_mpt_storage_manager.as_ref().unwrap();
+        if !single_mpt_storage_manager.contains_space(&space) {
+            return maybe_state_err;
+        }
+        debug!(
+            "read state from single mpt state: epoch={}",
+            state_index.epoch_id
+        );
+        let single_mpt_state = single_mpt_storage_manager
+            .get_state_by_epoch(state_index.epoch_id)?;
+        if single_mpt_state.is_none() {
+            warn!("single mpt state missing: epoch={:?}", state_index.epoch_id);
+            return maybe_state_err;
+        } else {
+            Ok(Some(Box::new(single_mpt_state.unwrap())))
         }
     }
 
@@ -685,9 +681,7 @@ impl StateManagerTrait for StateManager {
         Box::new(ReplicatedState::new(
             state,
             single_mpt_state,
-            single_mpt_storage_manager
-                .space
-                .map(|space| Box::new(space) as Box<dyn StateFilter>),
+            single_mpt_storage_manager.get_state_filter(),
         ))
     }
 
@@ -721,14 +715,13 @@ impl StateManagerTrait for StateManager {
         let single_mpt_state =
             single_mpt_storage_manager.get_state_by_epoch(parent_epoch)?;
         if single_mpt_state.is_none() {
+            error!("get_state_for_next_epoch: single_mpt_state is required but is not found!");
             return Ok(None);
         }
         Ok(Some(Box::new(ReplicatedState::new(
             state.unwrap(),
             single_mpt_state.unwrap(),
-            single_mpt_storage_manager
-                .space
-                .map(|space| Box::new(space) as Box<dyn StateFilter>),
+            single_mpt_storage_manager.get_state_filter(),
         ))))
     }
 }
