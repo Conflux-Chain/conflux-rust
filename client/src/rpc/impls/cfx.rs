@@ -81,16 +81,7 @@ use cfxcore::{
     },
 };
 use diem_types::account_address::AccountAddress;
-use lazy_static::lazy_static;
-use metrics::{register_timer_with_group, ScopeTimer, Timer};
 use serde::Serialize;
-
-lazy_static! {
-    static ref SEND_RAW_TX_TIMER: Arc<dyn Timer> =
-        register_timer_with_group("rpc", "rpc:sendRawTransaction");
-    static ref GET_LOGS_TIMER: Arc<dyn Timer> =
-        register_timer_with_group("rpc", "rpc:getLogs");
-}
 
 #[derive(Debug)]
 pub(crate) struct BlockExecInfo {
@@ -410,7 +401,6 @@ impl RpcImpl {
     }
 
     fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256> {
-        let _timer = ScopeTimer::time_scope(SEND_RAW_TX_TIMER.clone());
         info!("RPC Request: cfx_sendRawTransaction len={:?}", raw.0.len());
         debug!("RawTransaction bytes={:?}", raw);
 
@@ -1048,7 +1038,6 @@ impl RpcImpl {
             }
         }
 
-        let _timer = ScopeTimer::time_scope(GET_LOGS_TIMER.clone());
         let consensus_graph = self.consensus_graph();
 
         info!("RPC Request: cfx_getLogs({:?})", filter);
