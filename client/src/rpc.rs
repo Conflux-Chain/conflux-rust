@@ -574,11 +574,10 @@ impl MetricsInterceptor {
 impl RpcInterceptor for MetricsInterceptor {
     fn before(&self, name: &String) -> JsonRpcResult<()> {
         self.throttle_interceptor.before(name)?;
-        if !self.timers.lock().contains_key(name) {
-            // We may insert more than once during initialization, but this
-            // should be okay.
+        let mut timers = self.timers.lock();
+        if !timers.contains_key(name) {
             let timer = register_timer_with_group("rpc", name.as_str());
-            self.timers.lock().insert(name.clone(), timer);
+            timers.insert(name.clone(), timer);
         }
         Ok(())
     }
