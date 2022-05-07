@@ -14,6 +14,8 @@ pub struct RpcImplConfiguration {
     // note: currently we only handle this for `cfx_getEpochReceipts`,
     // other APIs will disconnect on oversized response
     pub max_payload_bytes: usize,
+
+    pub enable_metrics: bool,
 }
 
 pub mod cfx;

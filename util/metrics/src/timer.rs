@@ -11,7 +11,6 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use crate::registry::DEFAULT_GROUPING_REGISTRY;
 
 pub trait Timer: Send + Sync {
     fn update(&self, _d: Duration) {}

@@ -2,7 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use jsonrpc_core::{BoxFuture, MetaIoHandler, Result as JsonRpcResult, Value};
+use jsonrpc_core::{
+    BoxFuture, MetaIoHandler, RemoteProcedure, Result as JsonRpcResult, Value,
+};
 use jsonrpc_http_server::{
     AccessControlAllowOrigin, DomainsValidation, Server as HttpServer,
     ServerBuilder as HttpServerBuilder,
@@ -68,17 +70,18 @@ use crate::{
     configuration::Configuration,
     rpc::{
         error_codes::request_rejected_too_many_request_error,
-        impls::{eth::EthHandler, trace::EthTraceHandler},
+        impls::{
+            eth::EthHandler, trace::EthTraceHandler, RpcImplConfiguration,
+        },
         interceptor::{RpcInterceptor, RpcProxy},
         rpc_apis::{Api, ApiSet},
     },
 };
+use jsonrpc_core::futures::{future::poll_fn, Async, Future};
 pub use metadata::Metadata;
-use std::collections::{HashMap, HashSet};
-use futures::TryFutureExt;
-use jsonrpc_core::futures::{Async, future::poll_fn, Future};
-use parking_lot::RwLock;
 use metrics::{register_timer_with_group, ScopeTimer, Timer};
+use parking_lot::RwLock;
+use std::collections::{HashMap, HashSet};
 use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
 
 #[derive(Debug, PartialEq)]
@@ -224,11 +227,13 @@ fn setup_rpc_apis(
             Api::Cfx => {
                 let cfx =
                     CfxHandler::new(common.clone(), rpc.clone()).to_delegate();
-                let interceptor = ThrottleInterceptor::new(
+                extend_with_interceptor(
+                    &mut handler,
+                    &rpc.config,
+                    cfx,
                     throttling_conf,
                     throttling_section,
                 );
-                handler.extend_with(RpcProxy::new(cfx, interceptor));
             }
             Api::Eth => {
                 info!("Add EVM RPC");
@@ -247,12 +252,13 @@ fn setup_rpc_apis(
                     ),
                 }
                 .to_delegate();
-                let interceptor = ThrottleInterceptor::new(
+                extend_with_interceptor(
+                    &mut handler,
+                    &rpc.config,
+                    evm,
                     throttling_conf,
                     throttling_section,
                 );
-                handler.extend_with(RpcProxy::new(evm, interceptor));
-                // TODO(lpl): Set this separately.
                 handler.extend_with(evm_trace_handler);
             }
             Api::Debug => {
@@ -274,16 +280,24 @@ fn setup_rpc_apis(
                     rpc.consensus.clone(),
                 )
                 .to_delegate();
-                let interceptor = ThrottleInterceptor::new(
+                extend_with_interceptor(
+                    &mut handler,
+                    &rpc.config,
+                    trace,
                     throttling_conf,
                     throttling_section,
                 );
-                handler.extend_with(RpcProxy::new(trace, interceptor));
             }
             Api::TxPool => {
                 let txpool =
                     TransactionPoolHandler::new(common.clone()).to_delegate();
-                handler.extend_with(txpool);
+                extend_with_interceptor(
+                    &mut handler,
+                    &rpc.config,
+                    txpool,
+                    throttling_conf,
+                    throttling_section,
+                );
             }
             Api::Pos => {
                 let pos = PosHandler::new(
@@ -300,6 +314,25 @@ fn setup_rpc_apis(
     }
 
     add_meta_rpc_methods(handler, apis)
+}
+
+pub fn extend_with_interceptor<
+    T: IntoIterator<Item = (String, RemoteProcedure<Metadata>)>,
+>(
+    handler: &mut MetaIoHandler<Metadata>, rpc_conf: &RpcImplConfiguration,
+    rpc_impl: T, throttling_conf: &Option<String>, throttling_section: &str,
+)
+{
+    let interceptor =
+        ThrottleInterceptor::new(throttling_conf, throttling_section);
+    if rpc_conf.enable_metrics {
+        handler.extend_with(RpcProxy::new(
+            rpc_impl,
+            MetricsInterceptor::new(interceptor),
+        ));
+    } else {
+        handler.extend_with(RpcProxy::new(rpc_impl, interceptor));
+    }
 }
 
 fn add_meta_rpc_methods(
@@ -525,21 +558,43 @@ impl RpcInterceptor for ThrottleInterceptor {
 
 struct MetricsInterceptor {
     timers: RwLock<HashMap<String, Arc<dyn Timer>>>,
+    // TODO: Chain interceptors instead of wrapping up.
+    throttle_interceptor: ThrottleInterceptor,
+}
+
+impl MetricsInterceptor {
+    pub fn new(throttle_interceptor: ThrottleInterceptor) -> Self {
+        Self {
+            timers: RwLock::new(HashMap::new()),
+            throttle_interceptor,
+        }
+    }
 }
 
 impl RpcInterceptor for MetricsInterceptor {
     fn before(&self, name: &String) -> JsonRpcResult<()> {
+        self.throttle_interceptor.before(name)?;
         if !self.timers.read().contains_key(name) {
-            // We may insert more than once during initialization, but this should be okay.
+            // We may insert more than once during initialization, but this
+            // should be okay.
             let timer = register_timer_with_group("rpc", name.as_str());
             self.timers.write().insert(name.clone(), timer);
         }
         Ok(())
     }
 
-    fn around(&self, name: &String, method_call: BoxFuture<Value>) -> BoxFuture<Value> {
-        let maybe_timer = self.timers.read().get(name).map(|timer| timer.clone());
-        let f = move || Ok(Async::Ready( maybe_timer.as_ref().map(|timer|ScopeTimer::time_scope(timer.clone()))));
+    fn around(
+        &self, name: &String, method_call: BoxFuture<Value>,
+    ) -> BoxFuture<Value> {
+        let maybe_timer =
+            self.timers.read().get(name).map(|timer| timer.clone());
+        let f = move || {
+            Ok(Async::Ready(
+                maybe_timer
+                    .as_ref()
+                    .map(|timer| ScopeTimer::time_scope(timer.clone())),
+            ))
+        };
         let setup = poll_fn(f);
         Box::new(setup.and_then(|_timer| method_call.wait()))
     }
