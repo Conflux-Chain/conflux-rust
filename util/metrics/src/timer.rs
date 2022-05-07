@@ -11,6 +11,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use crate::registry::DEFAULT_GROUPING_REGISTRY;
 
 pub trait Timer: Send + Sync {
     fn update(&self, _d: Duration) {}
@@ -60,7 +61,7 @@ impl Timer for StandardTimer {
 }
 
 pub struct ScopeTimer {
-    timer: &'static dyn Timer,
+    timer: Arc<dyn Timer>,
     start: Instant,
 }
 
@@ -68,7 +69,7 @@ impl ScopeTimer {
     /// Call this to measure the time to run to the end of the current scope.
     /// It will update the time from the function called till the returned
     /// instance is dropped to `timer`.
-    pub fn time_scope(timer: &'static dyn Timer) -> Self {
+    pub fn time_scope(timer: Arc<dyn Timer>) -> Self {
         Self {
             timer,
             start: Instant::now(),

@@ -50,4 +50,8 @@ impl GroupingRegistry {
     ) -> &HashMap<String, HashMap<String, Arc<dyn Metric>>> {
         &self.groups
     }
+
+    pub fn is_registered(&self, group_name: &String, metric_name: &String) -> bool {
+        self.groups.get(group_name).map(|group| group.contains_key(metric_name)).unwrap_or(false)
+    }
 }
