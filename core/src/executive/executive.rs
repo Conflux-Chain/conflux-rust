@@ -1016,7 +1016,7 @@ impl<
     ) -> DbResult<ExecutionOutcome> {
         let is_native_tx = tx.space() == Space::Native;
         let options = TransactOptions::virtual_call();
-        // If tx.from is specified (is zero)
+        // If tx.from is specified (is not zero)
         if !tx.sender().address.is_zero() {
             let mut first_tx = tx.clone();
             // If is native tx and tx.storage_limit is not specified (is u64::MAX)
