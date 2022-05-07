@@ -13,7 +13,9 @@ use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 pub trait RpcInterceptor: Send + Sync + 'static {
     fn before(&self, _name: &String) -> RpcResult<()>;
 
-    fn around(&self, _name: &String, method_call: BoxFuture<Value>) -> BoxFuture<Value> {
+    fn around(
+        &self, _name: &String, method_call: BoxFuture<Value>,
+    ) -> BoxFuture<Value> {
         method_call
     }
 }
@@ -113,9 +115,10 @@ where
         });
 
         let method = self.method.clone();
-        let method_call = self.interceptor.around(&self.name, method.call(params, meta));
-        let method_future =
-            before_future.and_then(move |_| method_call);
+        let method_call = self
+            .interceptor
+            .around(&self.name, method.call(params, meta));
+        let method_future = before_future.and_then(move |_| method_call);
 
         Box::new(method_future)
     }
