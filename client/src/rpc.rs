@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use jsonrpc_core::{MetaIoHandler, Result as JsonRpcResult, Value};
+use jsonrpc_core::{BoxFuture, MetaIoHandler, Result as JsonRpcResult, Value};
 use jsonrpc_http_server::{
     AccessControlAllowOrigin, DomainsValidation, Server as HttpServer,
     ServerBuilder as HttpServerBuilder,
@@ -74,7 +74,11 @@ use crate::{
     },
 };
 pub use metadata::Metadata;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use futures::TryFutureExt;
+use jsonrpc_core::futures::{Async, future::poll_fn, Future};
+use parking_lot::RwLock;
+use metrics::{register_timer_with_group, ScopeTimer, Timer};
 use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
 
 #[derive(Debug, PartialEq)]
@@ -516,5 +520,27 @@ impl RpcInterceptor for ThrottleInterceptor {
                 )))
             }
         }
+    }
+}
+
+struct MetricsInterceptor {
+    timers: RwLock<HashMap<String, Arc<dyn Timer>>>,
+}
+
+impl RpcInterceptor for MetricsInterceptor {
+    fn before(&self, name: &String) -> JsonRpcResult<()> {
+        if !self.timers.read().contains_key(name) {
+            // We may insert more than once during initialization, but this should be okay.
+            let timer = register_timer_with_group("rpc", name.as_str());
+            self.timers.write().insert(name.clone(), timer);
+        }
+        Ok(())
+    }
+
+    fn around(&self, name: &String, method_call: BoxFuture<Value>) -> BoxFuture<Value> {
+        let maybe_timer = self.timers.read().get(name).map(|timer| timer.clone());
+        let f = move || Ok(Async::Ready( maybe_timer.as_ref().map(|timer|ScopeTimer::time_scope(timer.clone()))));
+        let setup = poll_fn(f);
+        Box::new(setup.and_then(|_timer| method_call.wait()))
     }
 }

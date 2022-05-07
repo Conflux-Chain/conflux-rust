@@ -410,7 +410,7 @@ impl RpcImpl {
     }
 
     fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256> {
-        let _timer = ScopeTimer::time_scope(SEND_RAW_TX_TIMER.as_ref());
+        let _timer = ScopeTimer::time_scope(SEND_RAW_TX_TIMER.clone());
         info!("RPC Request: cfx_sendRawTransaction len={:?}", raw.0.len());
         debug!("RawTransaction bytes={:?}", raw);
 
@@ -1048,7 +1048,7 @@ impl RpcImpl {
             }
         }
 
-        let _timer = ScopeTimer::time_scope(GET_LOGS_TIMER.as_ref());
+        let _timer = ScopeTimer::time_scope(GET_LOGS_TIMER.clone());
         let consensus_graph = self.consensus_graph();
 
         info!("RPC Request: cfx_getLogs({:?})", filter);
