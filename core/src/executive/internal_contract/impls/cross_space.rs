@@ -3,14 +3,7 @@ use crate::{
         ActionParams, CallType, Context, ContractCreateResult,
         CreateContractAddress, GasLeft, MessageCallResult, ReturnData,
     },
-    executive::{
-        contract_address,
-        executive::gas_required_for,
-        internal_contract::contracts::{
-            CallEvent, CreateEvent, ReturnEvent, WithdrawEvent,
-        },
-        InternalRefContext, SolidityEventTrait,
-    },
+    executive::{contract_address, executive::gas_required_for},
     observer::{AddressPocket, VmObserve},
     state::cleanup_mode,
     vm::{
@@ -18,6 +11,7 @@ use crate::{
         ExecTrapResult, ParamsType, ResumeCall, ResumeCreate, Spec, TrapResult,
     },
 };
+
 use cfx_parameters::{
     block::CROSS_SPACE_GAS_RATIO,
     internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS,
@@ -33,6 +27,13 @@ use primitives::{
 };
 use solidity_abi::{ABIDecodable, ABIEncodable};
 use std::{marker::PhantomData, sync::Arc};
+
+use super::super::{
+    components::{InternalRefContext, SolidityEventTrait},
+    contracts::cross_space::{
+        CallEvent, CreateEvent, ReturnEvent, WithdrawEvent,
+    },
+};
 
 pub fn create_gas(context: &InternalRefContext, code: &[u8]) -> DbResult<U256> {
     let code_length = code.len();

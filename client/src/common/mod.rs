@@ -898,7 +898,7 @@ pub mod delegate_convert {
     /// trait definition must use BoxFuture for the return type.
     ///
     /// This into conversion allow non-async rpc implementation method to
-    /// return RpcResult straight-forward. The delegate! macro with  #[into]
+    /// return RpcResult straight-forward. The delegate! macro with  #\[into\]
     /// attribute will automatically call this method to do the return type
     /// conversion.
     impl<T: Send + Sync + 'static> Into<BoxFuture<T>> for RpcResult<T> {

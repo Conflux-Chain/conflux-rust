@@ -185,7 +185,7 @@ impl fmt::Display for Error {
                 write!(f, "Out of subroutine stack {}/{}", wanted, limit)
             }
             NotEnoughBalanceForStorage { required, got } => {
-                write!(f, "Not enough balance for storage {}/{}", required, got)
+                write!(f, "Not enough balance for storage {}/{}", required, got,)
             }
             ExceedStorageLimit => write!(f, "Exceed storage limit"),
             BuiltIn(name) => write!(f, "Built-in failed: {}", name),

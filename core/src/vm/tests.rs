@@ -23,7 +23,9 @@ use super::{
     CreateContractAddress, Env, Error, GasLeft, MessageCallResult, Result,
     ReturnData, Spec,
 };
-use crate::{executive::InternalRefContext, observer::VmObserve};
+use crate::{
+    executive::internal_contract::InternalRefContext, observer::VmObserve,
+};
 use cfx_bytes::Bytes;
 use cfx_types::{address_util::AddressUtil, Address, Space, H256, U256};
 use hash::keccak;

@@ -9,9 +9,10 @@ use crate::{
     evm::{FinalizationResult, Finalize},
     executive::{
         context::LocalContext,
-        executed::{ExecutionOutcome, ToRepackError},
+        executed::{ExecutionOutcome, ToRepackError, TxDropError},
+        internal_contract::InternalContractTrait,
         vm_exec::{BuiltinExec, InternalContractExec, NoopExec},
-        CollateralCheckResultToVmResult, InternalContractTrait, TxDropError,
+        CollateralCheckResultToVmResult,
     },
     hash::keccak,
     machine::Machine,
