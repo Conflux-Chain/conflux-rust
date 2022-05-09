@@ -454,8 +454,8 @@ class RpcClient:
         contract_addr = hex_to_b32_address(contract_addr)
         return self.node.cfx_checkBalanceAgainstTransaction(account_addr, contract_addr, hex(gas_limit), hex(gas_price), hex(storage_limit))
 
-    def call(self, contract_addr:str, data_hex:str, nonce=None, epoch:str=None) -> str:
-        tx = self.new_tx_for_call(contract_addr, data_hex, nonce=nonce)
+    def call(self, contract_addr:str, data_hex:str, nonce=None, epoch:str=None, sender:str=None) -> str:
+        tx = self.new_tx_for_call(contract_addr, data_hex, nonce=nonce, sender=sender)
         if epoch is None:
             return self.node.cfx_call(tx)
         else:
