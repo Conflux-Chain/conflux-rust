@@ -1019,9 +1019,10 @@ impl<
         // If tx.from is specified (is not zero)
         if !tx.sender().address.is_zero() {
             let mut first_tx = tx.clone();
-            // If is native tx and tx.storage_limit is not specified (is u64::MAX)
-            // And balance of 'from' can cover value + gas_fee
-            // The set tx.storage_limit to tx.from max affordable amount
+            // If is native tx and tx.storage_limit is not specified (is
+            // u64::MAX) And balance of 'from' can cover value +
+            // gas_fee The set tx.storage_limit to tx.from max
+            // affordable amount
             if is_native_tx && tx.storage_limit().unwrap_or(0) == u64::MAX {
                 let balance = self.state.balance(&tx.sender())?;
                 let value_and_fee = tx.value() + tx.gas() * tx.gas_price();
