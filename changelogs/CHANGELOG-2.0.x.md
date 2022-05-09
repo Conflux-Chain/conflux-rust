@@ -1,10 +1,26 @@
+# 2.0.3
+
 # 2.0.2
 
 ## Improvements
 
+### RPC Improvements
+- Improve the performance of `eth_getLogs`.
+- Add a new RPC `eth_getAccountPendingTransactions` to get pending transactions by address, also return the first pending transaction's pending reason
+- Support WebSockets for eth APIs
+- Support block hash param for `eth_call` (EIP1898)
+- `cfx_call`, `cfx_estimateGasAndCollateral`, `eth_call`, and `eth_estimate` will respect `from`'s balance if passed, if balance is not enough will return error. If from is not passed then use a random one, which's balance will be very big.
+
 ### Transaction Pool Improvements
 - Set the minimum gas price to 1 GDrip by default for packing transaction
 
+### Storage Improvement
+- Improve the snapshot copy-on-write merging performance on XFS file systems.
+
+## Bug Fixes
+- Fix trace validity for transactions reverted in the top checkpoint.
+- Fix phantom trace length mismatch issue with failed transactions.
+- Fix a possible underflow crash in `eth_estimateGas`.
 
 # 2.0.1
 
