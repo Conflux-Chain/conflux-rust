@@ -40,8 +40,8 @@ use cfx_types::{
 };
 use primitives::{
     receipt::StorageChange, storage::STORAGE_LAYOUT_REGULAR_V0,
-    transaction::Action, NativeTransaction, SignedTransaction, StorageLayout,
-    Transaction,
+    transaction::Action, Eip155Transaction, NativeTransaction,
+    SignedTransaction, StorageLayout, Transaction,
 };
 use rlp::RlpStream;
 use std::{
@@ -1014,11 +1014,61 @@ impl<
     pub fn transact_virtual(
         &mut self, tx: &SignedTransaction,
     ) -> DbResult<ExecutionOutcome> {
-        let sender = tx.sender();
+        let is_native_tx = tx.space() == Space::Native;
+        let options = TransactOptions::virtual_call();
+        // If tx.from is specified (is not zero)
+        if !tx.sender().address.is_zero() {
+            let balance = self.state.balance(&tx.sender())?;
+            let mut first_tx = tx.clone();
+            // If is native tx and tx.storage_limit is not specified (is
+            // u64::MAX) And balance of 'from' can cover value +
+            // gas_fee Then set tx.storage_limit to tx.from max
+            // affordable amount
+            if is_native_tx && tx.storage_limit().unwrap_or(0) == u64::MAX {
+                let value_and_fee = tx.value() + tx.gas() * tx.gas_price();
+                if balance > value_and_fee {
+                    let available_storage_limit = (balance - value_and_fee)
+                        / *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+                    if let Transaction::Native(NativeTransaction {
+                        ref mut storage_limit,
+                        ..
+                    }) = first_tx.transaction.transaction.unsigned
+                    {
+                        *storage_limit = available_storage_limit.as_u64();
+                    }
+                }
+            }
+            // If is a eSpace tx and balance of 'from' can cover value
+            // Then set tx.gas to tx.from max affordable amount
+            if !is_native_tx && balance > *tx.value() {
+                if let Transaction::Ethereum(Eip155Transaction {
+                    ref mut gas,
+                    ..
+                }) = first_tx.transaction.transaction.unsigned
+                {
+                    *gas = (balance - tx.value()) / tx.gas_price();
+                }
+            }
+            self.state
+                .set_nonce(&first_tx.sender(), &first_tx.nonce())?;
+            return self.transact(&first_tx, options);
+        }
+
+        // If tx.from is not specified then use a random one, and give it a
+        // sufficient balance
+        let mut random_hex = Address::random();
+        if is_native_tx {
+            random_hex.set_user_account_type_bits();
+        }
+        let sender = random_hex.with_space(tx.space());
+        let tx_with_random_from = &SignedTransaction {
+            transaction: tx.transaction.clone(),
+            sender: sender.address,
+            public: None,
+        };
         let balance = self.state.balance(&sender)?;
         // Give the sender a sufficient balance.
         let needed_balance = U256::MAX / U256::from(2u64);
-        self.state.set_nonce(&sender, &tx.nonce())?;
         if balance < needed_balance {
             let balance_inc = needed_balance - balance;
             self.state.add_balance(
@@ -1034,8 +1084,8 @@ impl<
                 self.state.add_total_evm_tokens(balance_inc);
             }
         }
-        let options = TransactOptions::virtual_call();
-        self.transact(tx, options)
+        self.state.set_nonce(&sender, &tx.nonce())?;
+        self.transact(tx_with_random_from, options)
     }
 
     fn sponsor_check(

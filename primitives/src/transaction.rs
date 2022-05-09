@@ -471,6 +471,13 @@ impl Transaction {
             Transaction::Ethereum(tx) => tx.chain_id,
         }
     }
+
+    pub fn storage_limit(&self) -> Option<u64> {
+        match self {
+            Transaction::Native(tx) => Some(tx.storage_limit),
+            Transaction::Ethereum(_tx) => None,
+        }
+    }
 }
 
 impl Transaction {
@@ -837,6 +844,10 @@ impl SignedTransaction {
     pub fn gas_price(&self) -> &U256 { &self.transaction.gas_price() }
 
     pub fn gas_limit(&self) -> &U256 { &self.transaction.gas() }
+
+    pub fn storage_limit(&self) -> Option<u64> {
+        self.transaction.storage_limit()
+    }
 
     pub fn rlp_size(&self) -> usize { self.transaction.rlp_size() }
 
