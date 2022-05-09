@@ -40,8 +40,8 @@ use cfx_types::{
 };
 use primitives::{
     receipt::StorageChange, storage::STORAGE_LAYOUT_REGULAR_V0,
-    transaction::Action, NativeTransaction, SignedTransaction, StorageLayout,
-    Transaction,
+    transaction::Action, Eip155Transaction, NativeTransaction,
+    SignedTransaction, StorageLayout, Transaction,
 };
 use rlp::RlpStream;
 use std::{
@@ -1018,13 +1018,13 @@ impl<
         let options = TransactOptions::virtual_call();
         // If tx.from is specified (is not zero)
         if !tx.sender().address.is_zero() {
+            let balance = self.state.balance(&tx.sender())?;
             let mut first_tx = tx.clone();
             // If is native tx and tx.storage_limit is not specified (is
             // u64::MAX) And balance of 'from' can cover value +
-            // gas_fee The set tx.storage_limit to tx.from max
+            // gas_fee Then set tx.storage_limit to tx.from max
             // affordable amount
             if is_native_tx && tx.storage_limit().unwrap_or(0) == u64::MAX {
-                let balance = self.state.balance(&tx.sender())?;
                 let value_and_fee = tx.value() + tx.gas() * tx.gas_price();
                 if balance > value_and_fee {
                     let available_storage_limit = (balance - value_and_fee)
@@ -1038,12 +1038,24 @@ impl<
                     }
                 }
             }
+            // If is a eSpace tx and balance of 'from' can cover value
+            // Then set tx.gas to tx.from max affordable amount
+            if !is_native_tx && balance > *tx.value() {
+                if let Transaction::Ethereum(Eip155Transaction {
+                    ref mut gas,
+                    ..
+                }) = first_tx.transaction.transaction.unsigned
+                {
+                    *gas = (balance - tx.value()) / tx.gas_price();
+                }
+            }
             self.state
                 .set_nonce(&first_tx.sender(), &first_tx.nonce())?;
             return self.transact(&first_tx, options);
         }
 
-        // If not passed use a random one
+        // If tx.from is not specified then use a random one, and give it a
+        // sufficient balance
         let mut random_hex = Address::random();
         if is_native_tx {
             random_hex.set_user_account_type_bits();
