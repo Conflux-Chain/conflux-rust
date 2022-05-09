@@ -78,11 +78,17 @@ use crate::{
     },
 };
 use jsonrpc_core::futures::{future::poll_fn, Async, Future};
+use lazy_static::lazy_static;
 pub use metadata::Metadata;
 use metrics::{register_timer_with_group, ScopeTimer, Timer};
 use parking_lot::Mutex;
 use std::collections::{HashMap, HashSet};
 use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
+
+lazy_static! {
+    static ref METRICS_INTERCEPTOR_TIMERS: Mutex<HashMap<String, Arc<dyn Timer>>> =
+        Default::default();
+}
 
 #[derive(Debug, PartialEq)]
 pub struct TcpConfiguration {
@@ -557,7 +563,6 @@ impl RpcInterceptor for ThrottleInterceptor {
 }
 
 struct MetricsInterceptor {
-    timers: Mutex<HashMap<String, Arc<dyn Timer>>>,
     // TODO: Chain interceptors instead of wrapping up.
     throttle_interceptor: ThrottleInterceptor,
 }
@@ -565,7 +570,6 @@ struct MetricsInterceptor {
 impl MetricsInterceptor {
     pub fn new(throttle_interceptor: ThrottleInterceptor) -> Self {
         Self {
-            timers: Mutex::new(HashMap::new()),
             throttle_interceptor,
         }
     }
@@ -574,7 +578,10 @@ impl MetricsInterceptor {
 impl RpcInterceptor for MetricsInterceptor {
     fn before(&self, name: &String) -> JsonRpcResult<()> {
         self.throttle_interceptor.before(name)?;
-        let mut timers = self.timers.lock();
+        debug!("before: {}", name);
+        // Use a global variable here because `http` and `web3` setup different
+        // interceptors for the same RPC API.
+        let mut timers = METRICS_INTERCEPTOR_TIMERS.lock();
         if !timers.contains_key(name) {
             let timer = register_timer_with_group("rpc", name.as_str());
             timers.insert(name.clone(), timer);
@@ -585,8 +592,10 @@ impl RpcInterceptor for MetricsInterceptor {
     fn around(
         &self, name: &String, method_call: BoxFuture<Value>,
     ) -> BoxFuture<Value> {
-        let maybe_timer =
-            self.timers.lock().get(name).map(|timer| timer.clone());
+        let maybe_timer = METRICS_INTERCEPTOR_TIMERS
+            .lock()
+            .get(name)
+            .map(|timer| timer.clone());
         let f = move || {
             Ok(Async::Ready(
                 maybe_timer
