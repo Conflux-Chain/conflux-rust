@@ -7,6 +7,11 @@
 - Add a new RPC `eth_getAccountPendingTransactions` to get pending transactions by address, also return the first pending transaction's pending reason
 - Support WebSockets for eth APIs
 - Support block hash param for `eth_call` (EIP1898)
+- `eth_call`, `eth_estimate` will respect `from`'s balance if passed, if balance is not enough will return error. If from is not passed then use a random one, which's balance will be very big.  
+
+### Core Space
+
+- `cfx_call`, `cfx_estimateGasAndCollateral` will respect `from`'s balance if passed, if balance is not enough will return error. If from is not passed then use a random one, which's balance will be very big.
 
 ## v2.0.1
 
