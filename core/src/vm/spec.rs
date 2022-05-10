@@ -107,13 +107,13 @@ pub struct Spec {
     /// Amount of additional gas to pay when SUICIDE credits a non-existant
     /// account
     pub suicide_to_new_account_cost: usize,
-    /// If Some(x): let limit = GAS * (x - 1) / x; let CALL's gas =
-    /// min(requested, limit). let CREATE's gas = limit. If None: let
-    /// CALL's gas =
-    /// (requested > GAS
-    /// ? [OOG] : GAS).
-    /// let CREATE's gas
-    /// = GAS
+    /// If Some(x):
+    ///     let limit = GAS * (x - 1) / x;
+    ///     let CALL's gas = min(requested, limit);
+    ///     let CREATE's gas = limit;
+    /// If None:
+    ///     let CALL's gas = (requested > GAS ? \[OOG\] : GAS);
+    ///     let CREATE's gas = GAS;
     pub sub_gas_cap_divisor: Option<usize>,
     /// Don't ever make empty accounts; contracts start with nonce=1. Also,
     /// don't charge 25k when sending/suicide zero-value.

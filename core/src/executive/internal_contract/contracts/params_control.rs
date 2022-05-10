@@ -5,22 +5,9 @@
 use cfx_parameters::internal_contract_addresses::PARAMS_CONTROL_CONTRACT_ADDRESS;
 use cfx_statedb::params_control_entries::OPTION_INDEX_MAX;
 use cfx_types::{Address, U256};
-use solidity_abi::{
-    ABIDecodable, ABIDecodeError, ABIEncodable, ABIPackedEncodable,
-    ABIVariable, LinkedBytes,
-};
+use solidity_abi_derive::ABIVariable;
 
-use crate::{
-    evm::{ActionParams, Spec},
-    executive::InternalRefContext,
-    observer::VmObserve,
-    vm,
-};
-
-use super::{
-    super::impls::params_control::*, macros::*, SimpleExecutionTrait,
-    SolFnTable,
-};
+use super::{super::impls::params_control::*, preludes::*};
 
 make_solidity_contract! {
     pub struct ParamsControl(PARAMS_CONTROL_CONTRACT_ADDRESS, generate_fn_table, initialize: |params: &CommonParams| params.transition_numbers.cip94, is_active: |spec: &Spec| spec.cip94);
@@ -62,26 +49,14 @@ impl SimpleExecutionTrait for ReadVote {
     }
 }
 
+#[derive(ABIVariable, Clone, Eq, PartialEq, Default)]
 pub struct Vote {
     pub index: u16,
     pub votes: [U256; OPTION_INDEX_MAX],
 }
 
-// FIXME(lpl): Better ABI Serde for struct.
-impl ABIVariable for Vote {
-    const BASIC_TYPE: bool = false;
-    const STATIC_LENGTH: Option<usize> = Some(32 * (1 + OPTION_INDEX_MAX));
-
-    fn from_abi(data: &[u8]) -> Result<Self, ABIDecodeError> {
-        let (index, votes) = ABIDecodable::abi_decode(data)?;
-        Ok(Self { index, votes })
-    }
-
-    fn to_abi(&self) -> LinkedBytes {
-        LinkedBytes::from_bytes((self.index, self.votes).abi_encode())
-    }
-
-    fn to_packed_abi(&self) -> LinkedBytes {
-        LinkedBytes::from_bytes((self.index, self.votes).abi_packed_encode())
-    }
+#[test]
+fn test_vote_abi_length() {
+    use solidity_abi::ABIVariable;
+    assert_eq!(Vote::STATIC_LENGTH, Some(32 * (1 + OPTION_INDEX_MAX)));
 }

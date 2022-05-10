@@ -882,6 +882,26 @@ impl ConsensusGraph {
             return Err(FilterError::EpochAlreadyPruned { epoch, min });
         }
 
+        // filter block
+        let epoch_bloom = match self.get_phantom_block_bloom_filter(
+            EpochNumber::Number(epoch),
+            pivot_hash,
+        )? {
+            Some(b) => b,
+            None => {
+                return Err(FilterError::BlockNotExecutedYet {
+                    block_hash: pivot_hash,
+                })
+            }
+        };
+
+        if !bloom_possibilities
+            .iter()
+            .any(|bloom| epoch_bloom.contains_bloom(bloom))
+        {
+            return Ok(Either::Left(std::iter::empty()));
+        }
+
         // construct phantom block
         let pb = match self.get_phantom_block_by_number(
             EpochNumber::Number(epoch),
@@ -895,14 +915,6 @@ impl ConsensusGraph {
                 })
             }
         };
-
-        // filter block
-        if !bloom_possibilities
-            .iter()
-            .any(|bloom| pb.bloom.contains_bloom(bloom))
-        {
-            return Ok(Either::Left(std::iter::empty()));
-        }
 
         Ok(Either::Right(self.filter_block_receipts(
             &filter,
@@ -1711,6 +1723,59 @@ impl ConsensusGraph {
             }
         }
         Ok(traces)
+    }
+
+    pub fn get_phantom_block_bloom_filter(
+        &self, block_num: EpochNumber, pivot_assumption: H256,
+    ) -> Result<Option<Bloom>, String> {
+        let hashes = self.get_block_hashes_by_epoch(block_num)?;
+
+        // sanity check: epoch is not empty
+        let pivot = match hashes.last() {
+            Some(p) => p,
+            None => return Err("Inconsistent state: empty epoch".into()),
+        };
+
+        if *pivot != pivot_assumption {
+            return Ok(None);
+        }
+
+        // special handling for genesis block
+        let genesis_hash = self.get_data_manager().true_genesis.hash();
+
+        if hashes.last() == Some(&genesis_hash) {
+            return Ok(Some(Bloom::zero()));
+        }
+
+        let mut bloom = Bloom::zero();
+
+        for h in &hashes {
+            let exec_info = match self
+                .get_data_manager()
+                .block_execution_result_by_hash_with_epoch(
+                    h, pivot, false, // update_pivot_assumption
+                    false, // update_cache
+                ) {
+                None => return Ok(None),
+                Some(r) => r,
+            };
+
+            for receipt in exec_info.block_receipts.receipts.iter() {
+                if receipt.outcome_status == TransactionOutcome::Skipped {
+                    continue;
+                }
+
+                // FIXME(thegaram): receipt does not contain `space`
+                // so we combine blooms log by log.
+                for log in &receipt.logs {
+                    if log.space == Space::Ethereum {
+                        bloom.accrue_bloom(&log.bloom());
+                    }
+                }
+            }
+        }
+
+        Ok(Some(bloom))
     }
 
     pub fn get_phantom_block_by_number(

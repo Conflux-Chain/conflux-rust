@@ -970,6 +970,7 @@ dependencies = [
  "slab",
  "smart-default",
  "solidity-abi",
+ "solidity-abi-derive",
  "sqlite",
  "sqlite3-sys",
  "static_assertions",
@@ -3415,7 +3416,7 @@ version = "15.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99a847f9ec7bb52149b2786a17c9cb260d6effc6b8eeb8c16b343a487a7563a3"
 dependencies = [
- "proc-macro-crate",
+ "proc-macro-crate 0.1.5",
  "proc-macro2 1.0.36",
  "quote 1.0.15",
  "syn 1.0.87",
@@ -3874,6 +3875,7 @@ dependencies = [
  "influx_db_client",
  "lazy_static",
  "log 0.4.14",
+ "log4rs",
  "parking_lot 0.11.2",
  "rand 0.7.3",
  "time 0.1.44",
@@ -4943,6 +4945,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "proc-macro-crate"
+version = "1.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e17d47ce914bf4de440332250b0edd23ce48c005f59fab39d3335866b114f11a"
+dependencies = [
+ "thiserror",
+ "toml",
+]
+
+[[package]]
 name = "proc-macro-error"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5944,6 +5956,17 @@ dependencies = [
  "keccak-hash",
  "lazy_static",
  "rustc-hex",
+ "solidity-abi-derive",
+]
+
+[[package]]
+name = "solidity-abi-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro-crate 1.1.3",
+ "proc-macro2 1.0.36",
+ "quote 1.0.15",
+ "syn 1.0.87",
 ]
 
 [[package]]

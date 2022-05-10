@@ -278,7 +278,7 @@ where
     /// another transaction `T_{i+1}'`, we can use the tree `S_i` in storage
     /// and apply the `value_set` of transaction `T_{i+1}`. Then if the storage
     /// commits the returned batch, the state `S_{i+1}` is ready to be read
-    /// from the tree by calling [`get_with_proof`](struct.
+    /// from the tree by calling \[`get_with_proof`\](struct.
     /// JellyfishMerkleTree.html#method.get_with_proof). Anything inside the
     /// batch is not reachable from public interfaces before being committed.
     pub fn put_value_sets(

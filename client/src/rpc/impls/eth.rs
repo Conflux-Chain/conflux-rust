@@ -78,7 +78,7 @@ pub fn sign_call(
 ) -> RpcResult<SignedTransaction> {
     let max_gas = U256::from(MAX_GAS_CALL_REQUEST);
     let gas = min(request.gas.unwrap_or(max_gas), max_gas);
-    let from = request.from.unwrap_or_else(|| Address::random());
+    let from = request.from.unwrap_or_else(|| Address::zero());
 
     Ok(Eip155Transaction {
         nonce: request.nonce.unwrap_or_default(),

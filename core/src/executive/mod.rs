@@ -34,11 +34,7 @@ pub use self::{
         contract_address, gas_required_for, Executive, ExecutiveGeneric,
         ExecutiveResult, TransactOptions,
     },
-    internal_contract::{
-        function, pos_internal_entries, suicide, ABIDecodeError, IndexStatus,
-        InternalContractMap, InternalContractTrait, InternalRefContext,
-        SolidityEventTrait, SolidityFunctionTrait,
-    },
+    internal_contract::{InternalContractMap, InternalContractTrait},
 };
 use crate::vm::Error as vmError;
 use cfx_state::CollateralCheckResult;

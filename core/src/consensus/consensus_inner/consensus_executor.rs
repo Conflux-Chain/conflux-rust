@@ -54,7 +54,7 @@ use crate::{
     evm::Spec,
     executive::{
         internal_contract::{
-            build_bloom_and_recover_phantom, impls::pos::decode_register_info,
+            build_bloom_and_recover_phantom, decode_register_info,
         },
         revert_reason_decode, ExecutionError, ExecutionOutcome, Executive,
         TransactOptions,

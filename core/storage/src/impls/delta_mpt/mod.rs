@@ -33,6 +33,7 @@ pub use self::{
     node_ref::*,
     node_ref_map::DEFAULT_NODE_MAP_SIZE,
     owned_node_set::OwnedNodeSet,
+    slab::Slab,
     subtrie_visitor::SubTrieVisitor,
 };
 

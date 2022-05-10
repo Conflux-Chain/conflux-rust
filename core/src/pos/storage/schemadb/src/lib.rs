@@ -341,7 +341,7 @@ impl DB {
     /// Delete all keys in range [begin, end).
     ///
     /// `SK` has to be an explicit type parameter since
-    /// https://github.com/rust-lang/rust/issues/44721
+    /// <https://github.com/rust-lang/rust/issues/44721>
     pub fn range_delete<S, SK>(&self, begin: &SK, end: &SK) -> Result<()>
     where
         S: Schema,

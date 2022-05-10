@@ -39,7 +39,7 @@ use crate::{
     },
     consensus::pos_handler::PosVerifier,
     executive::internal_contract::{
-        build_bloom_and_recover_phantom, impls::pos::decode_register_info,
+        build_bloom_and_recover_phantom, decode_register_info,
     },
     observer::trace::{BlockExecTraces, TransactionExecTraces},
 };

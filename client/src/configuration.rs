@@ -187,6 +187,7 @@ build_config! {
         // when user would like to keep the existing blockchain data
         // but disconnect from the public network.
         (network_id, (Option<u64>), None)
+        (rpc_enable_metrics, (bool), false)
         (tcp_port, (u16), 32323)
         (public_tcp_port, (Option<u16>), None)
         (public_address, (Option<String>), None)
@@ -973,6 +974,7 @@ impl Configuration {
             dev_pack_tx_immediately: self.is_dev_mode()
                 && self.raw_conf.dev_block_interval_ms.is_none(),
             max_payload_bytes: self.raw_conf.jsonrpc_ws_max_payload_bytes,
+            enable_metrics: self.raw_conf.rpc_enable_metrics,
         }
     }
 

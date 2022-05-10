@@ -2,20 +2,20 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use cfx_state::state_trait::StateOpsTrait;
-use std::convert::TryFrom;
+use std::convert::TryInto;
 
+use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::params_control_entries::*;
 use cfx_types::{Address, U256, U512};
 
 use crate::{
-    executive::{
-        internal_contract::{
-            contracts::params_control::Vote, impls::staking::get_vote_power,
-        },
-        InternalRefContext,
-    },
+    state::power_two_fractional,
     vm::{self, ActionParams, Error},
+};
+
+use super::super::{
+    components::InternalRefContext, contracts::params_control::Vote,
+    impls::staking::get_vote_power,
 };
 
 pub fn cast_vote(
@@ -230,17 +230,51 @@ impl ParamVoteCount {
     }
 
     pub fn compute_next_params(&self, old_value: U256) -> U256 {
+        let answer = self.compute_next_params_inner(old_value);
+        // The return value should be in `[2^8, 2^192]`
+        let min_value = U256::from(256u64);
+        let max_value = U256::one() << 192usize;
+        if answer < min_value {
+            return min_value;
+        }
+        if answer > max_value {
+            return max_value;
+        }
+        return answer;
+    }
+
+    fn compute_next_params_inner(&self, old_value: U256) -> U256 {
         // `VoteCount` only counts valid votes, so this will not overflow.
         let total = self.unchange + self.increase + self.decrease;
-        if total == U256::zero() {
+
+        if total == U256::zero() || self.increase == self.decrease {
             // If no one votes, we just keep the value unchanged.
             return old_value;
+        } else if self.increase == total {
+            return old_value * 2u64;
+        } else if self.decrease == total {
+            return old_value / 2u64;
+        };
+
+        let weight = if self.increase > self.decrease {
+            self.increase - self.decrease
+        } else {
+            self.decrease - self.increase
+        };
+        let increase = self.increase > self.decrease;
+
+        let frac_power = (U512::from(weight) << 64u64) / U512::from(total);
+        assert!(frac_power < (U512::one() << 64u64));
+        let frac_power = frac_power.as_u64();
+
+        let ratio = power_two_fractional(frac_power, increase, 96);
+        let new_value = (U512::from(old_value) * U512::from(ratio)) >> 96u64;
+
+        if new_value > (U512::one() << 192u64) {
+            return U256::one() << 192u64;
+        } else {
+            return new_value.try_into().unwrap();
         }
-        let weighted_total =
-            self.unchange + self.increase * 2u64 + self.decrease / 2u64;
-        let new_value = U512::from(old_value) * U512::from(weighted_total)
-            / U512::from(total);
-        U256::try_from(new_value).unwrap()
     }
 }
 
@@ -260,50 +294,11 @@ pub struct AllParamsVoteCount {
 /// mapping(address => VoteInfo) votes;
 /// ```
 mod storage_key {
-    use super::{Address, U256};
-    use cfx_types::BigEndianHash;
-    use hash::H256;
-    use keccak_hash::keccak;
+    use cfx_types::{Address, BigEndianHash, H256, U256};
+
+    use super::super::super::components::storage_layout::*;
 
     const VOTES_SLOT: usize = 0;
-
-    // General function for solidity storage rule
-    fn mapping_slot(base: U256, index: U256) -> U256 {
-        let mut input = [0u8; 64];
-        base.to_big_endian(&mut input[32..]);
-        index.to_big_endian(&mut input[..32]);
-        let hash = keccak(input);
-        U256::from_big_endian(hash.as_ref())
-    }
-
-    #[allow(dead_code)]
-    // General function for solidity storage rule
-    fn vector_slot(base: U256, index: usize, size: usize) -> U256 {
-        let start_slot = dynamic_slot(base);
-        return array_slot(start_slot, index, size);
-    }
-
-    fn dynamic_slot(base: U256) -> U256 {
-        let mut input = [0u8; 32];
-        base.to_big_endian(&mut input);
-        let hash = keccak(input);
-        return U256::from_big_endian(hash.as_ref());
-    }
-
-    // General function for solidity storage rule
-    fn array_slot(base: U256, index: usize, element_size: usize) -> U256 {
-        // Solidity will apply an overflowing add here.
-        // However, if this function is used correctly, the overflowing will
-        // happen with a negligible exception, so we let it panic when
-        // overflowing happen.
-        base + index * element_size
-    }
-
-    fn u256_to_array(input: U256) -> [u8; 32] {
-        let mut answer = [0u8; 32];
-        input.to_big_endian(answer.as_mut());
-        answer
-    }
 
     // TODO: add cache to avoid duplicated hash computing
     pub fn versions(address: &Address) -> [u8; 32] {
