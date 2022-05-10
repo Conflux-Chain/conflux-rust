@@ -31,7 +31,7 @@ class EvmFullHistoryStateTest(ConfluxTestFramework):
         client = RpcClient(self.nodes[0])
         client.generate_empty_blocks(500)
         # This should not raise error if the state is available.
-        assert_raises_rpc_error(None, "state deleted", client.call, "0x0000000000000000000000000000000000000000", "0x00", None, "0x1")
+        assert_raises_rpc_error(None, None, client.call, "0x0000000000000000000000000000000000000000", "0x00", None, "0x1")
         self.nodes[0].eth_call({"to": "0x0000000000000000000000000000000000000000", "data": "0x00"}, "0x1")
 
         evm_genesis_account = Web3().eth.account.privateKeyToAccount(default_config["GENESIS_PRI_KEY"]).address
