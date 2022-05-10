@@ -3,7 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 use cfx_parameters::internal_contract_addresses::PARAMS_CONTROL_CONTRACT_ADDRESS;
-use cfx_statedb::params_control_entries::OPTION_INDEX_MAX;
 use cfx_types::{Address, U256};
 use solidity_abi_derive::ABIVariable;
 
@@ -60,3 +59,12 @@ fn test_vote_abi_length() {
     use solidity_abi::ABIVariable;
     assert_eq!(Vote::STATIC_LENGTH, Some(32 * (1 + OPTION_INDEX_MAX)));
 }
+
+pub const POW_BASE_REWARD_INDEX: u8 = 0;
+pub const POS_REWARD_INTEREST_RATE_INDEX: u8 = 1;
+pub const PARAMETER_INDEX_MAX: usize = 2;
+
+pub const OPTION_UNCHANGE_INDEX: u8 = 0;
+pub const OPTION_INCREASE_INDEX: u8 = 1;
+pub const OPTION_DECREASE_INDEX: u8 = 2;
+pub const OPTION_INDEX_MAX: usize = 3;
