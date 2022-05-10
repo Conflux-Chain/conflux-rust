@@ -20,3 +20,13 @@ macro_rules! check_event_signature {
         );
     };
 }
+
+#[macro_export]
+macro_rules! internal_bail {
+    ($e:expr) => {
+        return Err(crate::vm::Error::InternalContract($e.into()));
+    };
+    ($fmt:expr, $($arg:tt)+) => {
+        return Err(crate::vm::Error::InternalContract(format!($fmt, $($arg)+)));
+    };
+}

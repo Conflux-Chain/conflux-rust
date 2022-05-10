@@ -4,6 +4,7 @@
 
 use std::convert::TryInto;
 
+use crate::internal_bail;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, U256, U512};
@@ -11,7 +12,7 @@ use lazy_static::lazy_static;
 
 use crate::{
     state::power_two_fractional,
-    vm::{self, ActionParams, Error},
+    vm::{self, ActionParams},
 };
 
 use super::super::{
@@ -32,10 +33,11 @@ pub fn cast_vote(
         / context.spec.params_dao_vote_period
         + 1;
     if version != current_voting_version {
-        bail!(Error::InternalContract(format!(
+        internal_bail!(
             "vote version unmatch: current={} voted={}",
-            current_voting_version, version
-        )));
+            current_voting_version,
+            version
+        );
     }
     let old_version =
         context.storage_at(params, &storage_key::versions(&address))?;
@@ -44,19 +46,19 @@ pub fn cast_vote(
     let mut vote_counts = [None; PARAMETER_INDEX_MAX];
     for vote in votes {
         if vote.index >= PARAMETER_INDEX_MAX as u16 {
-            bail!(Error::InternalContract(
-                "invalid vote index or opt_index".to_string()
-            ));
+            internal_bail!("invalid vote index or opt_index");
         }
         let entry = &mut vote_counts[vote.index as usize];
         match entry {
             None => {
                 *entry = Some(vote.votes);
             }
-            Some(_) => bail!(Error::InternalContract(format!(
-                "Parameter voted twice: vote.index={}",
-                vote.index
-            ))),
+            Some(_) => {
+                internal_bail!(
+                    "Parameter voted twice: vote.index={}",
+                    vote.index
+                );
+            }
         }
     }
     if is_new_vote {
@@ -86,10 +88,11 @@ pub fn cast_vote(
             .saturating_add(param_vote[1])
             .saturating_add(param_vote[2]);
         if total_counts > vote_power {
-            bail!(Error::InternalContract(format!(
+            internal_bail!(
                 "not enough vote power: power={} votes={}",
-                vote_power, total_counts
-            )));
+                vote_power,
+                total_counts
+            );
         }
         for opt_index in 0..OPTION_INDEX_MAX {
             let vote_in_storage = context.storage_at(

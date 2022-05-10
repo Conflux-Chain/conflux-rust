@@ -187,7 +187,7 @@ impl SimpleExecutionTrait for IdentifierToAddress {
         context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<Address>
     {
-        identifier_to_address(inputs, params, context)
+        Ok(identifier_to_address(inputs, params, context)?)
     }
 }
 
@@ -201,7 +201,7 @@ impl SimpleExecutionTrait for AddressToIdentifier {
         context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
     ) -> vm::Result<H256>
     {
-        address_to_identifier(inputs, params, context)
+        Ok(address_to_identifier(inputs, params, context)?)
     }
 }
 

@@ -3,6 +3,7 @@ use crate::{
     vm::{self, ActionParams, Env, Spec},
 };
 use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
+use cfx_statedb::Result as DbResult;
 use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, H256, U256,
 };
@@ -64,7 +65,7 @@ impl<'a> InternalRefContext<'a> {
 
     pub fn storage_at(
         &mut self, params: &ActionParams, key: &[u8],
-    ) -> vm::Result<U256> {
+    ) -> DbResult<U256> {
         let receiver = params.address.with_space(params.space);
         self.substate
             .storage_at(self.state, &receiver, key)
