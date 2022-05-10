@@ -962,10 +962,7 @@ use crate::{
     },
     state::*,
     storage_db::*,
-    utils::{
-        access_mode::{self, AccessMode},
-        to_key_prefix_iter_upper_bound,
-    },
+    utils::{access_mode, to_key_prefix_iter_upper_bound},
     StorageRootProof,
 };
 use cfx_internal_common::{StateRootAuxInfo, StateRootWithAuxInfo};

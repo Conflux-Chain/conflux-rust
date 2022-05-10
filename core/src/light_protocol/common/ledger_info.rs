@@ -8,11 +8,10 @@ use crate::{
 };
 use cfx_internal_common::StateRootWithAuxInfo;
 use cfx_parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
-use cfx_statedb::StateDb;
+
 use cfx_storage::{
     state::{State, StateDbGetOriginalMethods, StateTrait},
-    state_manager::StateManagerTrait,
-    ReplicatedState, StateProof, StorageRootProof,
+    StateProof, StorageRootProof,
 };
 use cfx_types::{Address, AddressSpaceUtil, Bloom, H256};
 use primitives::{

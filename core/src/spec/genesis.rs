@@ -24,10 +24,7 @@ use cfx_parameters::{
 };
 use cfx_state::{state_trait::*, CleanupMode};
 use cfx_statedb::{Result as DbResult, StateDb};
-use cfx_storage::{
-    state_manager::ReplicatedStateManagerTrait, StorageManager,
-    StorageManagerTrait,
-};
+use cfx_storage::{StorageManager, StorageManagerTrait};
 use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
     Space, H256, U256,

@@ -79,7 +79,6 @@ use super::{
     impls::{
         errors::*, node_merkle_proof::NodeMerkleProof, state_proof::StateProof,
     },
-    utils::access_mode,
     MptKeyValue, StateRootWithAuxInfo,
 };
 use crate::StorageRootProof;

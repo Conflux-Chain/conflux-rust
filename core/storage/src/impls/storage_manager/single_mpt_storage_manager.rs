@@ -9,7 +9,7 @@ use crate::{
     },
     replicated_state::StateFilter,
     storage_db::DeltaDbManagerTrait,
-    ArcDeltaDbWrapper, CowNodeRef, DeltaMpt, OpenableOnDemandOpenDeltaDbTrait,
+    ArcDeltaDbWrapper, DeltaMpt, OpenableOnDemandOpenDeltaDbTrait,
 };
 use cfx_types::Space;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
@@ -20,7 +20,6 @@ use std::{fs, path::PathBuf, sync::Arc};
 const DB_NAME: &str = "single_mpt";
 
 pub struct SingleMptStorageManager {
-    db_manager: Arc<SingleMptDbManager>,
     node_memory_manager: Arc<DeltaMptsNodeMemoryManager>,
     mpt: Arc<DeltaMpt>,
 
@@ -53,7 +52,6 @@ impl SingleMptStorageManager {
             .expect("MPT initialization error"),
         );
         Arc::new(Self {
-            db_manager,
             node_memory_manager,
             mpt,
             space,

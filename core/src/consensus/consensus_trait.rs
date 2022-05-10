@@ -6,7 +6,6 @@ use crate::{
     block_data_manager::BlockDataManager,
     consensus::{BestInformation, ConsensusConfig, TransactionInfo},
     rpc_errors::Result as RpcResult,
-    state::State,
     statistics::SharedStatistics,
     transaction_pool::SharedTransactionPool,
     ConsensusGraph,
@@ -95,7 +94,7 @@ pub trait ConsensusGraphTrait: Send + Sync {
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
     ) -> RpcResult<StateDb>;
 
-    fn get_evm_state_db_by_epoch_number(
+    fn get_eth_state_db_by_epoch_number(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
     ) -> RpcResult<StateDb>;
 

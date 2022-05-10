@@ -14,7 +14,6 @@ use cfx_parameters::{
 };
 use cfx_state::SubstateTrait;
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
-use cfx_storage::StorageStateTrait;
 #[cfg(test)]
 use cfx_types::AddressSpaceUtil;
 use cfx_types::{Address, AddressWithSpace, Space, H256, U256};

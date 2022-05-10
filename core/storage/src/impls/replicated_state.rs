@@ -1,8 +1,6 @@
 use crate::{
-    impls::errors::*,
-    state::StateTrait,
-    utils::access_mode::{self, AccessMode},
-    MptKeyValue, NodeMerkleProof, StateProof, StorageStateTraitExt,
+    impls::errors::*, state::StateTrait, MptKeyValue, NodeMerkleProof,
+    StateProof, StorageStateTraitExt,
 };
 use cfx_internal_common::StateRootWithAuxInfo;
 use cfx_types::Space;
@@ -11,10 +9,7 @@ use primitives::{
     EpochId, NodeMerkleTriplet, StaticBool, StorageKey, StorageKeyWithSpace,
 };
 use std::{
-    sync::{
-        mpsc::{channel, Sender},
-        Arc,
-    },
+    sync::mpsc::{channel, Sender},
     thread::{self, JoinHandle},
 };
 

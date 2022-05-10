@@ -2211,7 +2211,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
         )
     }
 
-    fn get_evm_state_db_by_epoch_number(
+    fn get_eth_state_db_by_epoch_number(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
     ) -> RpcResult<StateDb> {
         self.get_state_db_by_epoch_number_with_space(

@@ -404,7 +404,7 @@ impl Eth for EthHandler {
 
         let state_db = self
             .consensus
-            .get_evm_state_db_by_epoch_number(epoch_num, "num")?;
+            .get_eth_state_db_by_epoch_number(epoch_num, "num")?;
         let acc = state_db
             .get_account(&address.with_evm_space())
             .map_err(|err| CfxRpcError::from(err))?;
@@ -424,7 +424,7 @@ impl Eth for EthHandler {
 
         let state_db = self
             .consensus
-            .get_evm_state_db_by_epoch_number(epoch_num, "epoch_number")?;
+            .get_eth_state_db_by_epoch_number(epoch_num, "epoch_number")?;
 
         let position: H256 = H256::from_uint(&position);
 
@@ -619,7 +619,7 @@ impl Eth for EthHandler {
 
         let state_db = self
             .consensus
-            .get_evm_state_db_by_epoch_number(epoch_num, "num")?;
+            .get_eth_state_db_by_epoch_number(epoch_num, "num")?;
 
         let address = address.with_evm_space();
 

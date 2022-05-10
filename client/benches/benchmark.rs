@@ -85,12 +85,12 @@ fn txexe_benchmark(c: &mut Criterion) {
             .expect("Failed to initialize state");
 
             let spec = machine.spec(env.number);
-            let mut ex = Executive::new(&mut state, &env, &machine, &spec);
 
             b.iter(|| {
+                state.clear();
+                let mut ex = Executive::new(&mut state, &env, &machine, &spec);
                 let options = TransactOptions::with_no_tracing();
                 ex.transact(&tx, options).unwrap();
-                ex.state.clear();
             })
         })
         .measurement_time(Duration::from_secs(10))

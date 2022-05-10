@@ -20,10 +20,7 @@ use crate::{
     NodeType, Notifications, SharedTransactionPool,
 };
 use cfx_parameters::{consensus::*, consensus_internal::*};
-use cfx_storage::{
-    state_manager::StateManagerTrait,
-    storage_db::SnapshotKeptToProvideSyncStatus, StateIndex,
-};
+use cfx_storage::{storage_db::SnapshotKeptToProvideSyncStatus, StateIndex};
 use cfx_types::H256;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use parking_lot::Mutex;

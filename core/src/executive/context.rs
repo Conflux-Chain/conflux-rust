@@ -18,9 +18,7 @@ use crate::{
 use cfx_parameters::staking::{
     code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
-use cfx_state::{
-    state_trait::StateOpsTrait, StateTrait, SubstateMngTrait, SubstateTrait,
-};
+use cfx_state::{StateTrait, SubstateMngTrait, SubstateTrait};
 use cfx_types::{
     Address, AddressSpaceUtil, AddressWithSpace, Space, H256, U256,
 };

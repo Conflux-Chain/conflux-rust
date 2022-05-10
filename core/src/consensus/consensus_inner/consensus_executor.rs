@@ -26,8 +26,7 @@ use cfx_parameters::consensus::*;
 use cfx_state::{state_trait::*, CleanupMode};
 use cfx_statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb};
 use cfx_storage::{
-    defaults::DEFAULT_EXECUTION_PREFETCH_THREADS,
-    state_manager::ReplicatedStateManagerTrait, StateIndex,
+    defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
     StorageManagerTrait,
 };
 use cfx_types::{

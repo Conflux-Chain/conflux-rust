@@ -5,12 +5,11 @@
 use super::StateDbGeneric;
 use cfx_internal_common::StateRootWithAuxInfo;
 use cfx_storage::{
-    storage_db::KeyValueDbAsAnyTrait, utils::access_mode, ErrorKind,
-    MptKeyValue, Result, StorageStateTrait,
+    utils::access_mode, ErrorKind, MptKeyValue, Result, StorageStateTrait,
 };
 use parking_lot::Mutex;
 use primitives::{EpochId, StorageKey, StorageKeyWithSpace, MERKLE_NULL_NODE};
-use std::{any::Any, cell::RefCell, collections::HashMap};
+use std::collections::HashMap;
 
 type StorageValue = Box<[u8]>;
 type RawStorage = HashMap<Vec<u8>, StorageValue>;

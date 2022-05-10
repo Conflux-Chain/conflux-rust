@@ -603,10 +603,8 @@ mod impls {
         StateRootWithAuxInfo,
     };
     use cfx_storage::{
-        state::{NoProof, StateTrait, WithProof},
         utils::{access_mode, to_key_prefix_iter_upper_bound},
-        MptKeyValue, StateProof, StorageRootProof, StorageStateTrait,
-        StorageStateTraitExt,
+        MptKeyValue, StorageStateTrait,
     };
     use cfx_types::{
         address_util::AddressUtil, Address, AddressWithSpace, Space,
@@ -614,8 +612,7 @@ mod impls {
     use hashbrown::HashMap;
     use parking_lot::RwLock;
     use primitives::{
-        EpochId, SkipInputCheck, StorageKey, StorageKeyWithSpace,
-        StorageLayout, StorageRoot,
+        EpochId, SkipInputCheck, StorageKey, StorageKeyWithSpace, StorageLayout,
     };
     use std::{
         collections::{btree_map::Entry::Occupied, BTreeMap},
@@ -623,5 +620,3 @@ mod impls {
         sync::Arc,
     };
 }
-
-use cfx_storage::{ReplicatedState, StorageState};

@@ -743,7 +743,6 @@ use crate::{
         generate_keys, get_rng_for_test, new_state_manager_for_unit_test,
         FakeStateManager, TEST_NUMBER_OF_KEYS,
     },
-    utils::access_mode,
     StateRootWithAuxInfo,
 };
 use cfx_types::{

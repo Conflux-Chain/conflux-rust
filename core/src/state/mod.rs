@@ -34,9 +34,7 @@ use cfx_statedb::{
     params_control_entries::*, ErrorKind as DbErrorKind, Result as DbResult,
     StateDbExt, StateDbGeneric as StateDb,
 };
-use cfx_storage::{
-    utils::access_mode, ReplicatedState, StorageState, StorageStateTrait,
-};
+use cfx_storage::utils::access_mode;
 use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
     BigEndianHash, Space, H256, U256,

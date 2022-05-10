@@ -731,7 +731,6 @@ use crate::{
         delta_mpt::*,
         errors::*,
         replicated_state::ReplicatedState,
-        single_mpt_state::SingleMptState,
         storage_db::{
             delta_db_manager_rocksdb::DeltaDbManagerRocksdb,
             snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
@@ -741,7 +740,6 @@ use crate::{
             storage_manager::StorageManager,
         },
     },
-    replicated_state::StateFilter,
     state::*,
     state_manager::*,
     storage_db::*,

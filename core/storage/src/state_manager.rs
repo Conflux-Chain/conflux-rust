@@ -132,14 +132,7 @@ impl StateIndex {
     }
 }
 
-use crate::{
-    impls::{
-        errors::*, replicated_state::ReplicatedState,
-        single_mpt_state::SingleMptState,
-    },
-    state::{State, StateTrait},
-    StateRootWithAuxInfo,
-};
+use crate::{impls::errors::*, state::StateTrait, StateRootWithAuxInfo};
 use cfx_types::Space;
 use primitives::{
     DeltaMptKeyPadding, EpochId, MerkleHash, GENESIS_DELTA_MPT_KEY_PADDING,

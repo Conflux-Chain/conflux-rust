@@ -96,7 +96,6 @@ use crate::{
         errors::*, merkle_patricia_trie::MptKeyValue, state_proof::StateProof,
     },
     state::*,
-    utils::access_mode,
     StateProofMerger,
 };
 use cfx_internal_common::StateRootWithAuxInfo;

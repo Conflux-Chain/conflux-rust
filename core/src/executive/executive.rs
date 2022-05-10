@@ -18,7 +18,7 @@ use crate::{
     observer::{
         tracer::ExecutiveTracer, AddressPocket, GasMan, StateTracer, VmObserve,
     },
-    state::{cleanup_mode, CallStackInfo, State, Substate},
+    state::{cleanup_mode, CallStackInfo, Substate},
     verification::VerificationConfig,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress,
