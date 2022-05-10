@@ -7,7 +7,6 @@ use cfx_internal_common::state_root_with_aux_info::{
 };
 use cfx_statedb::{StateDb, StateDbExt};
 use cfx_storage::{
-    state::StateTrait,
     state_manager::{StateManager, StateManagerTrait},
     storage_db::{KeyValueDbTraitRead, SnapshotDbManagerTrait, SnapshotInfo},
     DeltaMptIterator, Error as StorageError, StateIndex, StorageConfiguration,

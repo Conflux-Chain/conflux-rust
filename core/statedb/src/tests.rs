@@ -38,8 +38,10 @@ impl MockStorage {
         }
     }
 
+    #[allow(unused)]
     pub fn get_num_reads(&self) -> u64 { *self.num_reads.lock() }
 
+    #[allow(unused)]
     pub fn get_num_writes(&self) -> u64 { self.num_writes }
 }
 

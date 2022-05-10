@@ -87,11 +87,6 @@ mod impls {
         }
 
         #[cfg(test)]
-        pub fn get_storage_mut(&mut self) -> &mut Box<dyn StateTrait> {
-            &mut self.storage
-        }
-
-        #[cfg(test)]
         pub fn get_from_cache(&self, key: &Vec<u8>) -> Value {
             self.accessed_entries
                 .read()
