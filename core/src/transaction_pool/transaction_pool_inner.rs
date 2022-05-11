@@ -1430,6 +1430,28 @@ impl TransactionPoolInner {
             ));
         }
 
+        if let Transaction::Native(ref utx) = transaction.unsigned {
+            // check balance
+            let mut need_balance = utx.value.clone();
+            if sponsored_gas == U256::from(0) {
+                need_balance += utx.gas;
+            }
+            if sponsored_storage == 0 {
+                need_balance += U256::from(utx.storage_limit)
+                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+            }
+            if need_balance > state_balance {
+                let msg = format!(
+                    "Transaction {:?} is discarded due to out of balance, needs {:?} but account balance is {:?}",
+                    transaction.hash(),
+                    need_balance,
+                    state_balance
+                );
+                trace!("{}", msg);
+                return Err(msg);
+            }
+        }
+
         let result = self.insert_transaction_without_readiness_check(
             transaction.clone(),
             packed,
@@ -1628,7 +1650,7 @@ mod test_transaction_pool_inner {
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice_addr_s,
                 5.into(),
-                exact_cost.into()
+                exact_cost.into(),
             ),
             None
         );
@@ -1637,7 +1659,7 @@ mod test_transaction_pool_inner {
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice_addr_s,
                 7.into(),
-                exact_cost.into()
+                exact_cost.into(),
             ),
             None
         );
@@ -1646,7 +1668,7 @@ mod test_transaction_pool_inner {
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice_addr_s,
                 8.into(),
-                exact_cost.into()
+                exact_cost.into(),
             ),
             Some(tx4.transaction.clone())
         );
@@ -1656,7 +1678,7 @@ mod test_transaction_pool_inner {
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice_addr_s,
                 4.into(),
-                exact_cost.into()
+                exact_cost.into(),
             ),
             None
         );
@@ -1665,7 +1687,7 @@ mod test_transaction_pool_inner {
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice_addr_s,
                 5.into(),
-                exact_cost.into()
+                exact_cost.into(),
             ),
             Some(tx4.transaction.clone())
         );
@@ -1674,7 +1696,7 @@ mod test_transaction_pool_inner {
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice_addr_s,
                 7.into(),
-                exact_cost.into()
+                exact_cost.into(),
             ),
             Some(tx4.transaction.clone())
         );
@@ -1683,7 +1705,7 @@ mod test_transaction_pool_inner {
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice_addr_s,
                 8.into(),
-                exact_cost.into()
+                exact_cost.into(),
             ),
             Some(tx4.transaction.clone())
         );
@@ -1692,7 +1714,7 @@ mod test_transaction_pool_inner {
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice_addr_s,
                 9.into(),
-                exact_cost.into()
+                exact_cost.into(),
             ),
             Some(tx5.transaction.clone())
         );
@@ -1701,7 +1723,7 @@ mod test_transaction_pool_inner {
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice_addr_s,
                 10.into(),
-                exact_cost.into()
+                exact_cost.into(),
             ),
             None
         );
@@ -1710,7 +1732,7 @@ mod test_transaction_pool_inner {
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice_addr_s,
                 5.into(),
-                (exact_cost - 1).into()
+                (exact_cost - 1).into(),
             ),
             None
         );
