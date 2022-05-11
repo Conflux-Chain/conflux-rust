@@ -17,7 +17,6 @@ class RpcTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
         self.conf_parameters = {
-            "log_level": "\"trace\"",
             "executive_trace": "true",
             "public_rpc_apis": "\"cfx,debug,test,pubsub,trace\"",
         }
