@@ -361,8 +361,12 @@ impl ConsensusGraph {
         // multiple times, and we only generate blocks after
         // `ready_for_mining` is true.
         self.update_best_info(true);
-        self.txpool
-            .notify_new_best_info(self.best_info.read_recursive().clone());
+        if let Err(e) = self
+            .txpool
+            .notify_new_best_info(self.best_info.read_recursive().clone())
+        {
+            error!("wait for generation: notify_new_best_info err={:?}", e);
+        }
     }
 
     /// Determine whether the next mined block should have adaptive weight or
