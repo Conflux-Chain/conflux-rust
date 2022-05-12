@@ -12,6 +12,7 @@ from conflux.address import hex_to_b32_address
 from conflux.rpc import RpcClient
 from test_framework.util import assert_equal, assert_raises_rpc_error, assert_is_hash_string
 
+
 class TestSendTx(RpcClient):
     def test_encode_invalid_hex(self):
         # empty
@@ -26,7 +27,7 @@ class TestSendTx(RpcClient):
         tx = self.new_tx()
         encoded = eth_utils.encode_hex(rlp.encode(tx))
 
-        assert_raises_rpc_error(None, None, self.send_raw_tx, encoded + "12") # 1 more byte
+        assert_raises_rpc_error(None, None, self.send_raw_tx, encoded + "12")  # 1 more byte
         assert_raises_rpc_error(None, None, self.send_raw_tx, encoded[0:-2])  # 1 less byte
 
     def test_address_prefix(self):
@@ -62,7 +63,9 @@ class TestSendTx(RpcClient):
 
     def test_out_of_balance(self):
         (addr, priv_key) = self.rand_account()
-        tx = self.new_tx(priv_key=priv_key,value=10000)
+        tx = self.new_tx(priv_key=priv_key)
+        assert_raises_rpc_error(None, None, self.send_tx, tx)
+        tx = self.new_tx(value=default_config["TOTAL_COIN"], gas_price=10, storage_limit=1024)
         assert_raises_rpc_error(None, None, self.send_tx, tx)
 
     def test_price_zero(self):

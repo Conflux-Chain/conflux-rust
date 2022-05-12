@@ -811,8 +811,8 @@ impl TransactionPoolInner {
             // maintain ready info
             if !self.deferred_pool.contain_address(&victim_address) {
                 self.ready_nonces_and_balances.remove(&victim_address);
-            // The picked sender has no transactions now, and has been popped
-            // from `garbage_collector`.
+                // The picked sender has no transactions now, and has been popped
+                // from `garbage_collector`.
             } else {
                 let has_ready_tx =
                     self.ready_account_pool.get(&victim_address).is_some();
@@ -1246,8 +1246,8 @@ impl TransactionPoolInner {
             self.insert_transaction_without_readiness_check(
                 tx.clone(),
                 false, /* packed */
-                true,  /* force */
-                None,  /* state_nonce_and_balance */
+                true, /* force */
+                None, /* state_nonce_and_balance */
                 self.tx_sponsored_gas_map
                     .get(&tx.hash())
                     .map(|x| x.clone())
@@ -1344,12 +1344,12 @@ impl TransactionPoolInner {
                 // FIXME: This is a quick fix for performance issue.
                 if callee.is_contract_address() {
                     if let Some(sponsor_info) =
-                        account_cache.get_sponsor_info(callee).map_err(|e| {
-                            format!(
-                                "Failed to read account_cache from storage: {}",
-                                e
-                            )
-                        })?
+                    account_cache.get_sponsor_info(callee).map_err(|e| {
+                        format!(
+                            "Failed to read account_cache from storage: {}",
+                            e
+                        )
+                    })?
                     {
                         if account_cache
                             .check_commission_privilege(
@@ -1407,7 +1407,7 @@ impl TransactionPoolInner {
         }
         if *transaction.nonce()
             >= state_nonce
-                + U256::from(FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET)
+            + U256::from(FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET)
         {
             trace!(
                 "Transaction {:?} is discarded due to in too distant future",
@@ -1430,27 +1430,36 @@ impl TransactionPoolInner {
             ));
         }
 
-        if let Transaction::Native(ref utx) = transaction.unsigned {
-            // check balance
-            let mut need_balance = utx.value.clone();
-            if sponsored_gas == U256::from(0) {
-                need_balance += utx.gas;
+        // check balance
+        let mut need_balance = U256::from(0);
+        match transaction.unsigned {
+            Transaction::Native(ref utx) => {
+                need_balance += utx.value.clone();
+                if sponsored_gas == U256::from(0) {
+                    need_balance += utx.gas * utx.gas_price;
+                }
+                if sponsored_storage == 0 {
+                    need_balance += U256::from(utx.storage_limit)
+                        * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+                }
             }
-            if sponsored_storage == 0 {
-                need_balance += U256::from(utx.storage_limit)
-                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-            }
-            if need_balance > state_balance {
-                let msg = format!(
-                    "Transaction {:?} is discarded due to out of balance, needs {:?} but account balance is {:?}",
-                    transaction.hash(),
-                    need_balance,
-                    state_balance
-                );
-                trace!("{}", msg);
-                return Err(msg);
+            Transaction::Ethereum(ref utx) => {
+                need_balance += utx.value.clone();
+                need_balance += utx.gas * utx.gas_price;
             }
         }
+
+        if need_balance > state_balance {
+            let msg = format!(
+                "Transaction {:?} is discarded due to out of balance, needs {:?} but account balance is {:?}",
+                transaction.hash(),
+                need_balance,
+                state_balance
+            );
+            trace!("{}", msg);
+            return Err(msg);
+        }
+
 
         let result = self.insert_transaction_without_readiness_check(
             transaction.clone(),
@@ -1467,9 +1476,9 @@ impl TransactionPoolInner {
             &transaction.sender(),
             account_cache,
         )
-        .map_err(|e| {
-            format!("Failed to read account_cache from storage: {}", e)
-        })?;
+            .map_err(|e| {
+                format!("Failed to read account_cache from storage: {}", e)
+            })?;
 
         Ok(())
     }
@@ -1501,7 +1510,7 @@ mod test_transaction_pool_inner {
                 chain_id: 1,
                 data: Vec::new(),
             })
-            .sign(sender.secret()),
+                .sign(sender.secret()),
         )
     }
 
