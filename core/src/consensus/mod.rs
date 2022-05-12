@@ -52,7 +52,8 @@ use cfx_parameters::{
     consensus_internal::REWARD_EPOCH_COUNT,
     rpc::{
         EVM_GAS_PRICE_BLOCK_SAMPLE_SIZE, EVM_GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
-        GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
+        GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_DEFAULT_VALUE,
+        GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
     },
 };
 use cfx_state::state_trait::StateOpsTrait;
@@ -584,13 +585,13 @@ impl ConsensusGraph {
 
         prices.sort();
         if prices.is_empty() || total_tx_gas_limit == 0 {
-            Some(U256::from(1))
+            Some(U256::from(GAS_PRICE_DEFAULT_VALUE))
         } else {
             let average_gas_limit_multiple =
                 total_block_gas_limit / total_tx_gas_limit;
             if average_gas_limit_multiple > 5 {
                 // used less than 20%
-                Some(U256::from(1))
+                Some(U256::from(GAS_PRICE_DEFAULT_VALUE))
             } else if average_gas_limit_multiple >= 2 {
                 // used less than 50%
                 Some(prices[prices.len() / 8])

@@ -18,6 +18,7 @@ use crate::rpc::{
         Bytes, Index, MAX_GAS_CALL_REQUEST,
     },
 };
+use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
 use cfx_statedb::StateDbExt;
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H160, H256, U256, U64,
@@ -84,7 +85,7 @@ pub fn sign_call(
         nonce: request.nonce.unwrap_or_default(),
         action: request.to.map_or(Action::Create, |addr| Action::Call(addr)),
         gas,
-        gas_price: request.gas_price.unwrap_or(1.into()),
+        gas_price: request.gas_price.unwrap_or(GAS_PRICE_DEFAULT_VALUE.into()),
         value: request.value.unwrap_or_default(),
         chain_id: Some(chain_id),
         data: request.data.unwrap_or_default().into_vec(),
@@ -367,7 +368,7 @@ impl Eth for EthHandler {
         Ok(self
             .consensus_graph()
             .gas_price(Space::Ethereum)
-            .unwrap_or(5000000000u64.into()))
+            .unwrap_or(GAS_PRICE_DEFAULT_VALUE.into()))
     }
 
     fn max_priority_fee_per_gas(&self) -> jsonrpc_core::Result<U256> {
