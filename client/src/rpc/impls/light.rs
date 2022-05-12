@@ -8,7 +8,6 @@ use cfx_types::{
 };
 use cfxcore::{
     block_data_manager::BlockDataManager,
-    consensus_parameters::ONE_GDRIP_IN_DRIP,
     light_protocol::{
         self, query_service::TxInfo, Error as LightError, ErrorKind,
     },
@@ -54,6 +53,7 @@ use crate::{
     },
 };
 use cfx_addr::Network;
+use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
 use cfxcore::{
     light_protocol::QueryService, rpc_errors::ErrorKind::LightProtocol,
 };
@@ -929,7 +929,7 @@ impl RpcImpl {
                 .await
                 .map_err(|e| e.to_string())
                 .map_err(RpcError::invalid_params)?
-                .unwrap_or(ONE_GDRIP_IN_DRIP.into()))
+                .unwrap_or(GAS_PRICE_DEFAULT_VALUE.into()))
         };
 
         Box::new(fut.boxed().compat())
