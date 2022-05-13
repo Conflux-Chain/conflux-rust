@@ -68,12 +68,12 @@ class ReorgTest(ConfluxTestFramework):
                 tx = create_transaction(pri_key=sender_key, receiver=priv_to_addr(receiver_sk), value=value, nonce=nonce,
                                         gas_price=gas_price)
                 r = random.randint(0, self.shard_size - 1)
-                rpc_clients[r].send_tx(tx, wait_for_receipt=True)
-                nonce_map[sender_key] = nonce + 1
-                balance_map[sender_key] -= value + gas_price * 21000
                 self.log.info("New tx %s: %s send value %d to %s, sender balance:%d, receiver balance:%d", encode_hex(tx.hash), eth_utils.encode_hex(priv_to_addr(sender_key))[-4:],
                               value, eth_utils.encode_hex(priv_to_addr(receiver_sk))[-4:], balance_map[sender_key], balance_map[receiver_sk])
                 self.log.debug("Send Transaction %s to node %d", encode_hex(tx.hash), r)
+                rpc_clients[r].send_tx(tx, wait_for_receipt=True)
+                nonce_map[sender_key] = nonce + 1
+                balance_map[sender_key] -= value + gas_price * 21000
                 time.sleep(random.random() / 10)
             for k in balance_map:
                 self.log.info("Check account sk:%s addr:%s", bytes_to_int(k), eth_utils.encode_hex(priv_to_addr(k)))

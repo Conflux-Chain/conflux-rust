@@ -299,7 +299,12 @@ class RpcClient:
         def check_tx():
             self.generate_block(num_txs)
             return checktx(self.node, tx_hash)
-        wait_until(check_tx, timeout=timeout)
+        try:
+            wait_until(check_tx, timeout=timeout)
+        except Exception as e:
+            sender = self.node.cfx_getTransactionByHash(tx_hash)["from"]
+            print(self.node.cfx_getAccountPendingTransactions(sender))
+            raise e
 
     def block_by_hash(self, block_hash: str, include_txs: bool = False) -> dict:
         block = self.node.cfx_getBlockByHash(block_hash, include_txs)
