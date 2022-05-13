@@ -20,7 +20,8 @@ use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
 };
 use primitives::{
-    Account, Action, SignedTransaction, Transaction, TransactionWithSignature,
+    Account, Action, SignedTransaction, Transaction,
+    TransactionWithSignature,
 };
 use rlp::*;
 use serde::Serialize;
@@ -811,8 +812,8 @@ impl TransactionPoolInner {
             // maintain ready info
             if !self.deferred_pool.contain_address(&victim_address) {
                 self.ready_nonces_and_balances.remove(&victim_address);
-                // The picked sender has no transactions now, and has been popped
-                // from `garbage_collector`.
+            // The picked sender has no transactions now, and has been popped
+            // from `garbage_collector`.
             } else {
                 let has_ready_tx =
                     self.ready_account_pool.get(&victim_address).is_some();
@@ -1246,8 +1247,8 @@ impl TransactionPoolInner {
             self.insert_transaction_without_readiness_check(
                 tx.clone(),
                 false, /* packed */
-                true, /* force */
-                None, /* state_nonce_and_balance */
+                true,  /* force */
+                None,  /* state_nonce_and_balance */
                 self.tx_sponsored_gas_map
                     .get(&tx.hash())
                     .map(|x| x.clone())
@@ -1339,17 +1340,17 @@ impl TransactionPoolInner {
         let sender = transaction.sender();
 
         // Compute sponsored_gas for `transaction`
-        if let Transaction::Native(ref transaction) = transaction.unsigned {
-            if let Action::Call(ref callee) = transaction.action {
+        if let Transaction::Native(ref utx) = transaction.unsigned {
+            if let Action::Call(ref callee) = utx.action {
                 // FIXME: This is a quick fix for performance issue.
                 if callee.is_contract_address() {
                     if let Some(sponsor_info) =
-                    account_cache.get_sponsor_info(callee).map_err(|e| {
-                        format!(
-                            "Failed to read account_cache from storage: {}",
-                            e
-                        )
-                    })?
+                        account_cache.get_sponsor_info(callee).map_err(|e| {
+                            format!(
+                                "Failed to read account_cache from storage: {}",
+                                e
+                            )
+                        })?
                     {
                         if account_cache
                             .check_commission_privilege(
@@ -1363,29 +1364,20 @@ impl TransactionPoolInner {
                                 )
                             })?
                         {
-                            let estimated_gas_u512 =
-                                transaction.gas.full_mul(transaction.gas_price);
-                            // Normally, it is less than 2^128
-                            let estimated_gas = if estimated_gas_u512
-                                > U512::from(U128::max_value())
-                            {
-                                U256::from(U128::max_value())
-                            } else {
-                                transaction.gas * transaction.gas_price
-                            };
+                            let estimated_gas = Self::estimated_gas_fee(transaction.gas().clone(), transaction.gas_price().clone());
                             if estimated_gas <= sponsor_info.sponsor_gas_bound
                                 && estimated_gas
                                 <= sponsor_info.sponsor_balance_for_gas
                             {
-                                sponsored_gas = transaction.gas;
+                                sponsored_gas = utx.gas;
                             }
                             let estimated_collateral =
-                                U256::from(transaction.storage_limit)
+                                U256::from(utx.storage_limit)
                                     * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
                             if estimated_collateral
                                 <= sponsor_info.sponsor_balance_for_collateral
                             {
-                                sponsored_storage = transaction.storage_limit;
+                                sponsored_storage = utx.storage_limit;
                             }
                         }
                     }
@@ -1407,7 +1399,7 @@ impl TransactionPoolInner {
         }
         if *transaction.nonce()
             >= state_nonce
-            + U256::from(FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET)
+                + U256::from(FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET)
         {
             trace!(
                 "Transaction {:?} is discarded due to in too distant future",
@@ -1432,11 +1424,15 @@ impl TransactionPoolInner {
 
         // check balance
         let mut need_balance = U256::from(0);
+        let estimate_gas_fee = Self::estimated_gas_fee(
+            transaction.gas().clone(),
+            transaction.gas_price().clone(),
+        );
         match transaction.unsigned {
             Transaction::Native(ref utx) => {
                 need_balance += utx.value.clone();
                 if sponsored_gas == U256::from(0) {
-                    need_balance += utx.gas * utx.gas_price;
+                    need_balance += estimate_gas_fee;
                 }
                 if sponsored_storage == 0 {
                     need_balance += U256::from(utx.storage_limit)
@@ -1445,7 +1441,7 @@ impl TransactionPoolInner {
             }
             Transaction::Ethereum(ref utx) => {
                 need_balance += utx.value.clone();
-                need_balance += utx.gas * utx.gas_price;
+                need_balance += estimate_gas_fee;
             }
         }
 
@@ -1459,7 +1455,6 @@ impl TransactionPoolInner {
             trace!("{}", msg);
             return Err(msg);
         }
-
 
         let result = self.insert_transaction_without_readiness_check(
             transaction.clone(),
@@ -1476,11 +1471,23 @@ impl TransactionPoolInner {
             &transaction.sender(),
             account_cache,
         )
-            .map_err(|e| {
-                format!("Failed to read account_cache from storage: {}", e)
-            })?;
+        .map_err(|e| {
+            format!("Failed to read account_cache from storage: {}", e)
+        })?;
 
         Ok(())
+    }
+
+    fn estimated_gas_fee(gas: U256, gas_price: U256) -> U256 {
+        let estimated_gas_u512 = gas.full_mul(gas_price);
+        // Normally, it is less than 2^128
+        let estimated_gas =
+            if estimated_gas_u512 > U512::from(U128::max_value()) {
+                U256::from(U128::max_value())
+            } else {
+                gas * gas_price
+            };
+        estimated_gas
     }
 }
 
@@ -1491,7 +1498,7 @@ mod test_transaction_pool_inner {
     use cfx_types::{Address, AddressSpaceUtil, U256};
     use keylib::{Generator, KeyPair, Random};
     use primitives::{
-        Action, NativeTransaction, SignedTransaction, Transaction,
+        Action, SignedTransaction, Transaction,
     };
     use std::sync::Arc;
 
@@ -1510,7 +1517,7 @@ mod test_transaction_pool_inner {
                 chain_id: 1,
                 data: Vec::new(),
             })
-                .sign(sender.secret()),
+            .sign(sender.secret()),
         )
     }
 
