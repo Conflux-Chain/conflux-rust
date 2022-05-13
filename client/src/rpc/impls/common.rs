@@ -33,7 +33,9 @@ use parking_lot::{Condvar, Mutex};
 
 use crate::rpc::types::pos::{Block as RpcPosBlock, Decision};
 use cfx_addr::Network;
-use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+use cfx_parameters::{
+    rpc::GAS_PRICE_DEFAULT_VALUE, staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
+};
 use cfx_types::{
     Address, AddressSpaceUtil, Space, H160, H256, H520, U128, U256, U512, U64,
 };
@@ -206,7 +208,7 @@ impl RpcImpl {
         info!("RPC Request: cfx_gasPrice()");
         Ok(consensus_graph
             .gas_price(Space::Native)
-            .unwrap_or(cfxcore::consensus_parameters::ONE_GDRIP_IN_DRIP.into())
+            .unwrap_or(GAS_PRICE_DEFAULT_VALUE.into())
             .into())
     }
 

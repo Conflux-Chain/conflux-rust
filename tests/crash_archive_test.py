@@ -77,7 +77,8 @@ class CrashFullNodeTest(ConfluxTestFramework):
         receiver_addr = eth_utils.encode_hex(priv_to_addr(receiver_sk))
         sender_balance = default_config["TOTAL_COIN"] - value - gas_price * 21000
         # Generate 2 * CACHE_INDEX_STRIDE to start evicting anticone cache
-        self.nodes[0].generate_empty_blocks(2000)
+        self.nodes[0].generate_empty_blocks(1000)
+        self.nodes[0].generate_empty_blocks(1000)
         assert_equal(client.get_balance(sender_addr), sender_balance)
         assert_equal(client.get_balance(receiver_addr), value)
         time.sleep(1)
