@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
+    internal_bail,
     observer::{AddressPocket, VmObserve},
     state::cleanup_mode,
     vm::{self, ActionParams, Spec},
@@ -25,15 +26,11 @@ pub fn set_sponsor_for_gas(
         .state
         .exists(&contract_address.with_native_space())?
     {
-        return Err(vm::Error::InternalContract(
-            "contract address not exist".into(),
-        ));
+        internal_bail!("contract address not exist");
     }
 
     if !context.is_contract_address(&contract_address)? {
-        return Err(vm::Error::InternalContract(
-            "not allowed to sponsor non-contract account".into(),
-        ));
+        internal_bail!("not allowed to sponsor non-contract account");
     }
 
     let (spec, state, substate): (
@@ -45,9 +42,7 @@ pub fn set_sponsor_for_gas(
     let sponsor_balance = state.balance(&params.address.with_native_space())?;
 
     if sponsor_balance / U256::from(1000) < upper_bound {
-        return Err(vm::Error::InternalContract(
-            "sponsor should at least sponsor upper_bound * 1000".into(),
-        ));
+        internal_bail!("sponsor should at least sponsor upper_bound * 1000");
     }
 
     let prev_sponsor = state.sponsor_for_gas(&contract_address)?;
@@ -64,9 +59,7 @@ pub fn set_sponsor_for_gas(
         // `sponsor_balance` should exceed previous sponsor's
         // `sponsor_balance`.
         if sponsor_balance <= prev_sponsor_balance {
-            return Err(vm::Error::InternalContract(
-                "sponsor_balance is not exceed previous sponsor".into(),
-            ));
+            internal_bail!("sponsor_balance is not exceed previous sponsor");
         }
         // `upper_bound` should exceed previous sponsor's `upper_bound`,
         // unless previous sponsor's `sponsor_balance` is not able to cover
@@ -74,9 +67,7 @@ pub fn set_sponsor_for_gas(
         if prev_sponsor_balance >= prev_upper_bound
             && upper_bound < prev_upper_bound
         {
-            return Err(vm::Error::InternalContract(
-                "upper_bound is not exceed previous sponsor".into(),
-            ));
+            internal_bail!("upper_bound is not exceed previous sponsor");
         }
         // refund to previous sponsor
         if prev_sponsor.is_some() {
@@ -117,9 +108,7 @@ pub fn set_sponsor_for_gas(
         if prev_sponsor_balance >= prev_upper_bound
             && upper_bound < prev_upper_bound
         {
-            return Err(vm::Error::InternalContract(
-                "cannot change upper_bound to a smaller one".into(),
-            ));
+            internal_bail!("cannot change upper_bound to a smaller one");
         }
 
         tracer.trace_internal_transfer(
@@ -156,15 +145,11 @@ pub fn set_sponsor_for_collateral(
         .state
         .exists(&contract_address.with_native_space())?
     {
-        return Err(vm::Error::InternalContract(
-            "contract address not exist".into(),
-        ));
+        internal_bail!("contract address not exist");
     }
 
     if !context.is_contract_address(&contract_address)? {
-        return Err(vm::Error::InternalContract(
-            "not allowed to sponsor non-contract account".into(),
-        ));
+        internal_bail!("not allowed to sponsor non-contract account");
     }
 
     let (spec, state, substate): (
@@ -176,9 +161,7 @@ pub fn set_sponsor_for_collateral(
     let sponsor_balance = state.balance(&params.address.with_native_space())?;
 
     if sponsor_balance.is_zero() {
-        return Err(vm::Error::InternalContract(
-            "zero sponsor balance is not allowed".into(),
-        ));
+        internal_bail!("zero sponsor balance is not allowed");
     }
 
     let prev_sponsor = state.sponsor_for_collateral(&contract_address)?;
@@ -196,9 +179,7 @@ pub fn set_sponsor_for_collateral(
         // `sponsor_balance` should exceed previous sponsor's
         // `sponsor_balance` + `collateral_for_storage`.
         if sponsor_balance <= prev_sponsor_balance + collateral_for_storage {
-            return Err(vm::Error::InternalContract(
-                "sponsor_balance is not enough to cover previous sponsor's sponsor_balance and collateral_for_storage".into()
-            ));
+            internal_bail!("sponsor_balance is not enough to cover previous sponsor's sponsor_balance and collateral_for_storage");
         }
         // refund to previous sponsor
         if let Some(ref prev_sponsor) = prev_sponsor {

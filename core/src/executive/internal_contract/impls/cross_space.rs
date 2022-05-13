@@ -4,6 +4,7 @@ use crate::{
         CreateContractAddress, GasLeft, MessageCallResult, ReturnData,
     },
     executive::{contract_address, executive::gas_required_for},
+    internal_bail,
     observer::{AddressPocket, VmObserve},
     state::cleanup_mode,
     vm::{
@@ -284,7 +285,7 @@ pub fn call_to_evmcore(
 ) -> Result<ExecTrap, vm::Error>
 {
     if context.depth >= context.spec.max_depth {
-        return Err(vm::Error::InternalContract("Exceed Depth".into()));
+        internal_bail!("Exceed Depth");
     }
 
     let value = params.value.value();
@@ -365,7 +366,7 @@ pub fn create_to_evmcore(
 ) -> Result<ExecTrap, vm::Error>
 {
     if context.depth >= context.spec.max_depth {
-        return Err(vm::Error::InternalContract("Exceed Depth".into()));
+        internal_bail!("Exceed Depth");
     }
 
     let call_gas = gas_left / CROSS_SPACE_GAS_RATIO
@@ -456,9 +457,9 @@ pub fn withdraw_from_evmcore(
     let mapped_address = evm_map(sender);
     let balance = context.state.balance(&mapped_address)?;
     if balance < value {
-        return Err(vm::Error::InternalContract(
-            "Not enough balance for withdrawing from mapped address".into(),
-        ));
+        internal_bail!(
+            "Not enough balance for withdrawing from mapped address"
+        );
     }
     context.state.transfer_balance(
         &mapped_address,
