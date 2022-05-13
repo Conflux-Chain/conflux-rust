@@ -30,7 +30,7 @@ class ReorgTest(ConfluxTestFramework):
         for s in range(self.n_shard):
             ''' Send random transactions to this shard s '''
             shard_nodes = self.nodes[s * self.shard_size: (s + 1) * self.shard_size]
-            rpc_clients = list(map(lambda node: RpcClient(node), shard_nodes))
+            rpc_clients = list(map(lambda node: RpcClient(node, log=self.log), shard_nodes))
             # We can not use genesis accounts in two shards, because they may generate transactions
             # that are valid in another shard and breaks our assertion about the final shard state.
             start_sk, _ = ec_random_keys()

@@ -37,9 +37,10 @@ def convert_b32_address_field_to_hex(original_dict: dict, field_name: str):
 
 
 class RpcClient:
-    def __init__(self, node=None, auto_restart=False):
+    def __init__(self, node=None, auto_restart=False, log=None):
         self.node = node
         self.auto_restart = auto_restart
+        self.log = log
 
         # epoch definitions
         self.EPOCH_EARLIEST = "earliest"
@@ -302,8 +303,9 @@ class RpcClient:
         try:
             wait_until(check_tx, timeout=timeout)
         except Exception as e:
-            sender = self.node.cfx_getTransactionByHash(tx_hash)["from"]
-            print(self.node.cfx_getAccountPendingTransactions(sender))
+            if self.log is not None:
+                sender = self.node.cfx_getTransactionByHash(tx_hash)["from"]
+                self.log.info("wait_for_receipt: pending=%s", self.node.cfx_getAccountPendingTransactions(sender))
             raise e
 
     def block_by_hash(self, block_hash: str, include_txs: bool = False) -> dict:
