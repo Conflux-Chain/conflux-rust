@@ -41,5 +41,5 @@ class TestGasPrice(RpcClient):
             self.wait_for_receipt(tx, 1, 10, False)
 
         # median of prices
-        assert_equal(self.gas_price(), 1000000000)
+        assert_equal(self.gas_price(), 1)
 

@@ -109,7 +109,6 @@ pub mod rpc {
     pub const EVM_GAS_PRICE_TRANSACTION_SAMPLE_SIZE: usize = 1000;
     pub const TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_LOW: usize = 100;
     pub const TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM: usize = 600;
-    pub const GAS_PRICE_DEFAULT_VALUE: usize = 1_000_000_000;
 }
 
 pub mod sync {
