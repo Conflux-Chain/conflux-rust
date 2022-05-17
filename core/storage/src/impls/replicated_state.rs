@@ -57,6 +57,7 @@ impl ReplicationHandler {
             .name("state_replication".into())
             .spawn(move || {
                 for op in op_rx {
+                    trace!("replicated_state: op={:?}", op);
                     let err = match op {
                         StateOperation::Set { access_key, value } => {
                             replicated_state
@@ -112,6 +113,7 @@ impl ReplicationHandler {
     }
 }
 
+#[derive(Debug)]
 enum StateOperation {
     Set {
         access_key: OwnedStorageKeyWithSpace,
@@ -144,6 +146,7 @@ impl StateOperation {
     }
 }
 
+#[derive(Debug)]
 enum OwnedStorageKey {
     AccountKey(Vec<u8>),
     StorageRootKey(Vec<u8>),
@@ -196,6 +199,7 @@ impl OwnedStorageKey {
     }
 }
 
+#[derive(Debug)]
 struct OwnedStorageKeyWithSpace {
     pub key: OwnedStorageKey,
     pub space: Space,

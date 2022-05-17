@@ -25,10 +25,13 @@ pub struct SingleMptStorageManager {
 
     // If it's None, we will keep data for both spaces.
     pub space: Option<Space>,
+    pub available_height: u64,
 }
 
 impl SingleMptStorageManager {
-    pub fn new_arc(db_path: PathBuf, space: Option<Space>) -> Arc<Self> {
+    pub fn new_arc(
+        db_path: PathBuf, space: Option<Space>, available_height: u64,
+    ) -> Arc<Self> {
         if !db_path.exists() {
             fs::create_dir_all(&db_path).expect("db path create error");
         }
@@ -55,6 +58,7 @@ impl SingleMptStorageManager {
             node_memory_manager,
             mpt,
             space,
+            available_height,
         })
     }
 

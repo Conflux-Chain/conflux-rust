@@ -119,6 +119,7 @@ pub struct StorageConfiguration {
     pub max_open_mpt_count: u32,
     pub enable_single_mpt_storage: bool,
     pub single_mpt_space: Option<Space>,
+    pub cip90a: u64,
 }
 
 impl StorageConfiguration {
@@ -156,6 +157,7 @@ impl StorageConfiguration {
             max_open_mpt_count: defaults::DEFAULT_MAX_OPEN_MPT,
             enable_single_mpt_storage: false,
             single_mpt_space: None,
+            cip90a: 0,
         }
     }
 }

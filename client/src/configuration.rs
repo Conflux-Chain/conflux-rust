@@ -723,6 +723,10 @@ impl Configuration {
                 }
             },
             single_mpt_space: self.raw_conf.single_mpt_space.clone(),
+            cip90a: self
+                .raw_conf
+                .cip90_transition_height
+                .unwrap_or(self.raw_conf.hydra_transition_height.unwrap_or(0)),
         }
     }
 

@@ -52,6 +52,13 @@ impl StateManager {
             Some(SingleMptStorageManager::new_arc(
                 conf.path_storage_dir.join("single_mpt"),
                 conf.single_mpt_space,
+                if conf.single_mpt_space == Some(Space::Ethereum) {
+                    // The eSpace state is only available after cip90 is
+                    // enabled.
+                    conf.cip90a
+                } else {
+                    0
+                },
             ))
         } else {
             None
@@ -703,6 +710,7 @@ impl StateManagerTrait for StateManager {
         self: &Arc<Self>, parent_epoch_id: StateIndex,
     ) -> Result<Option<Box<dyn StateTrait>>> {
         let parent_epoch = parent_epoch_id.epoch_id;
+        let parent_height = parent_epoch_id.maybe_height;
         let state = self.get_state_for_next_epoch_inner(parent_epoch_id)?;
         if state.is_none() {
             return Ok(None);
@@ -712,6 +720,26 @@ impl StateManagerTrait for StateManager {
         }
         let single_mpt_storage_manager =
             self.single_mpt_storage_manager.as_ref().unwrap();
+        if let Some(parent_height) = parent_height {
+            trace!(
+                "get_state_for_next_epoch: parent={}, available={}",
+                parent_height,
+                single_mpt_storage_manager.available_height
+            );
+            if single_mpt_storage_manager.available_height > parent_height {
+                return Ok(Some(Box::new(state.unwrap())));
+            } else if single_mpt_storage_manager.available_height
+                == parent_height
+            {
+                // FIXME: This makes the state modified in genesis
+                // initialization unavailable.
+                return Ok(Some(Box::new(ReplicatedState::new(
+                    state.unwrap(),
+                    single_mpt_storage_manager.get_state_for_genesis()?,
+                    single_mpt_storage_manager.get_state_filter(),
+                ))));
+            }
+        }
         let single_mpt_state =
             single_mpt_storage_manager.get_state_by_epoch(parent_epoch)?;
         if single_mpt_state.is_none() {
