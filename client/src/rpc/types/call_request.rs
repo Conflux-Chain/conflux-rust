@@ -11,7 +11,6 @@ use crate::rpc::{
     RpcResult,
 };
 use cfx_addr::Network;
-use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
 use cfx_types::{Address, AddressSpaceUtil, U256, U64};
 use cfxcore::rpc_errors::invalid_params_check;
 use cfxcore_accounts::AccountProvider;
