@@ -387,7 +387,7 @@ jsonrpc_local_http_port=12539
 
 # Minimum allowed transaction gas price in the transaction pool.
 #
-# tx_pool_min_tx_gas_price = 1_000_000_000
+# tx_pool_min_tx_gas_price = 1
 
 # ------------------ Storage Parameters ----------------------
 
