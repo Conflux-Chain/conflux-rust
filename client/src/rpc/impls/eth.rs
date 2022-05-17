@@ -784,28 +784,8 @@ impl Eth for EthHandler {
             ExecutionOutcome::Finished(executed) => executed,
         };
 
-        // In case of unlimited full gas charge at some VM call, or if there are
-        // infinite loops, the total estimated gas used is very close to
-        // MAX_GAS_CALL_REQUEST, 0.8 is chosen to check if it's close.
-        const TOO_MUCH_GAS_USED: u64 =
-            (0.8 * (MAX_GAS_CALL_REQUEST as f32)) as u64;
-        // TODO: this value should always be Some(..) unless incorrect
-        // implementation. Should return an error for server bugs later.
         let estimated_gas_limit =
             executed.estimated_gas_limit.unwrap_or(U256::zero());
-        if estimated_gas_limit >= U256::from(TOO_MUCH_GAS_USED) {
-            bail!(call_execution_error(
-                format!(
-                    "Gas too high. Most likely there are problems within the contract code. \
-                    gas {}",
-                    estimated_gas_limit
-                ),
-                format!(
-                    "gas {}", estimated_gas_limit
-                )
-                .into_bytes(),
-            ));
-        }
         Ok(estimated_gas_limit)
     }
 
