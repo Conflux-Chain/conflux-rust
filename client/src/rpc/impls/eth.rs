@@ -85,7 +85,7 @@ pub fn sign_call(
         nonce: request.nonce.unwrap_or_default(),
         action: request.to.map_or(Action::Create, |addr| Action::Call(addr)),
         gas,
-        gas_price: request.gas_price.unwrap_or(0.into()),
+        gas_price: request.gas_price.unwrap_or(1.into()),
         value: request.value.unwrap_or_default(),
         chain_id: Some(chain_id),
         data: request.data.unwrap_or_default().into_vec(),

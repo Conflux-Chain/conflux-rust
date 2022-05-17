@@ -156,7 +156,7 @@ pub fn sign_call(
             Action::Call(rpc_addr.hex_address)
         }),
         gas,
-        gas_price: request.gas_price.unwrap_or(0.into()),
+        gas_price: request.gas_price.unwrap_or(1.into()),
         value: request.value.unwrap_or_default(),
         storage_limit: request
             .storage_limit
