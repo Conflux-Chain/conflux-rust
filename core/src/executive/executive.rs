@@ -1038,17 +1038,6 @@ impl<
                     }
                 }
             }
-            // If is a eSpace tx and balance of 'from' can cover value
-            // Then set tx.gas to tx.from max affordable amount
-            if !is_native_tx && balance > *tx.value() {
-                if let Transaction::Ethereum(Eip155Transaction {
-                    ref mut gas,
-                    ..
-                }) = first_tx.transaction.transaction.unsigned
-                {
-                    *gas = (balance - tx.value()) / tx.gas_price();
-                }
-            }
             self.state
                 .set_nonce(&first_tx.sender(), &first_tx.nonce())?;
             return self.transact(&first_tx, options);
