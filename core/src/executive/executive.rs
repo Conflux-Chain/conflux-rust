@@ -40,8 +40,8 @@ use cfx_types::{
 };
 use primitives::{
     receipt::StorageChange, storage::STORAGE_LAYOUT_REGULAR_V0,
-    transaction::Action, Eip155Transaction, NativeTransaction,
-    SignedTransaction, StorageLayout, Transaction,
+    transaction::Action, NativeTransaction, SignedTransaction, StorageLayout,
+    Transaction,
 };
 use rlp::RlpStream;
 use std::{
