@@ -26,7 +26,7 @@ class PosCommittedBlockTest(DefaultConfluxTestFramework):
         # wait for the first epoch to end
         wait_until(lambda: client.pos_status()["latestVoted"] is not None)
         print(client.pos_status())
-        wait_until(lambda: int(client.pos_status()["latestCommitted"], 0) == 8)
+        wait_until(lambda: int(client.pos_status()["latestCommitted"], 0) >= 8)
         self.log.info("wait for empty rounds")
         self.stop_node(2)
         self.stop_node(3)

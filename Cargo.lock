@@ -864,7 +864,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "2.0.0"
+version = "2.0.2"
 dependencies = [
  "anyhow",
  "async-oneshot",
@@ -1131,7 +1131,7 @@ dependencies = [
 
 [[package]]
 name = "client"
-version = "2.0.0"
+version = "2.0.2"
 dependencies = [
  "anyhow",
  "app_dirs",
@@ -1249,7 +1249,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "2.0.0"
+version = "2.0.2"
 dependencies = [
  "app_dirs",
  "base64ct",
@@ -3874,6 +3874,7 @@ dependencies = [
  "influx_db_client",
  "lazy_static",
  "log 0.4.14",
+ "log4rs",
  "parking_lot 0.11.2",
  "rand 0.7.3",
  "time 0.1.44",

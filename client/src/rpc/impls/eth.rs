@@ -18,6 +18,7 @@ use crate::rpc::{
         Bytes, Index, MAX_GAS_CALL_REQUEST,
     },
 };
+use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
 use cfx_statedb::StateDbExt;
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H160, H256, U256, U64,
@@ -78,7 +79,7 @@ pub fn sign_call(
 ) -> RpcResult<SignedTransaction> {
     let max_gas = U256::from(MAX_GAS_CALL_REQUEST);
     let gas = min(request.gas.unwrap_or(max_gas), max_gas);
-    let from = request.from.unwrap_or_else(|| Address::random());
+    let from = request.from.unwrap_or_else(|| Address::zero());
 
     Ok(Eip155Transaction {
         nonce: request.nonce.unwrap_or_default(),
@@ -367,7 +368,7 @@ impl Eth for EthHandler {
         Ok(self
             .consensus_graph()
             .gas_price(Space::Ethereum)
-            .unwrap_or(5000000000u64.into()))
+            .unwrap_or(GAS_PRICE_DEFAULT_VALUE.into()))
     }
 
     fn max_priority_fee_per_gas(&self) -> jsonrpc_core::Result<U256> {
@@ -783,28 +784,8 @@ impl Eth for EthHandler {
             ExecutionOutcome::Finished(executed) => executed,
         };
 
-        // In case of unlimited full gas charge at some VM call, or if there are
-        // infinite loops, the total estimated gas used is very close to
-        // MAX_GAS_CALL_REQUEST, 0.8 is chosen to check if it's close.
-        const TOO_MUCH_GAS_USED: u64 =
-            (0.8 * (MAX_GAS_CALL_REQUEST as f32)) as u64;
-        // TODO: this value should always be Some(..) unless incorrect
-        // implementation. Should return an error for server bugs later.
         let estimated_gas_limit =
             executed.estimated_gas_limit.unwrap_or(U256::zero());
-        if estimated_gas_limit >= U256::from(TOO_MUCH_GAS_USED) {
-            bail!(call_execution_error(
-                format!(
-                    "Gas too high. Most likely there are problems within the contract code. \
-                    gas {}",
-                    estimated_gas_limit
-                ),
-                format!(
-                    "gas {}", estimated_gas_limit
-                )
-                .into_bytes(),
-            ));
-        }
         Ok(estimated_gas_limit)
     }
 

@@ -187,6 +187,7 @@ build_config! {
         // when user would like to keep the existing blockchain data
         // but disconnect from the public network.
         (network_id, (Option<u64>), None)
+        (rpc_enable_metrics, (bool), false)
         (tcp_port, (u16), 32323)
         (public_tcp_port, (Option<u16>), None)
         (public_address, (Option<String>), None)
@@ -957,6 +958,7 @@ impl Configuration {
             dev_pack_tx_immediately: self.is_dev_mode()
                 && self.raw_conf.dev_block_interval_ms.is_none(),
             max_payload_bytes: self.raw_conf.jsonrpc_ws_max_payload_bytes,
+            enable_metrics: self.raw_conf.rpc_enable_metrics,
         }
     }
 
@@ -1115,6 +1117,19 @@ impl Configuration {
             } else {
                 u64::MAX
             };
+        // This is to set the default transition time for the CIPs that cannot
+        // be enabled in the genesis.
+        let non_genesis_default_transition_time =
+            match self.raw_conf.default_transition_time {
+                Some(num) if num > 0 => num,
+                _ => {
+                    if self.is_test_or_dev_mode() {
+                        1u64
+                    } else {
+                        u64::MAX
+                    }
+                }
+            };
 
         if self.is_test_or_dev_mode() {
             params.early_set_internal_contracts_states = true;
@@ -1136,7 +1151,7 @@ impl Configuration {
         params.transition_numbers.cip94 = self
             .raw_conf
             .dao_vote_transition_number
-            .unwrap_or(default_transition_time);
+            .unwrap_or(non_genesis_default_transition_time);
         if self.is_test_or_dev_mode() {
             params.transition_numbers.cip43b =
                 self.raw_conf.cip43_init_end_number.unwrap_or(u64::MAX);
@@ -1193,7 +1208,7 @@ impl Configuration {
         params.transition_heights.cip94 = self
             .raw_conf
             .dao_vote_transition_height
-            .unwrap_or(default_transition_time);
+            .unwrap_or(non_genesis_default_transition_time);
         params.params_dao_vote_period = self.raw_conf.params_dao_vote_period;
 
         let mut base_block_rewards = BTreeMap::new();

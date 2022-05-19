@@ -5,7 +5,7 @@
 use crate::rpc::types::{
     call_request::rpc_call_request_network, errors::check_rpc_address_network,
     pos::PoSEpochReward, PoSEconomics, RpcAddress, SponsorInfo,
-    TokenSupplyInfo, MAX_GAS_CALL_REQUEST,
+    TokenSupplyInfo,
 };
 use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
@@ -81,16 +81,7 @@ use cfxcore::{
     },
 };
 use diem_types::account_address::AccountAddress;
-use lazy_static::lazy_static;
-use metrics::{register_timer_with_group, ScopeTimer, Timer};
 use serde::Serialize;
-
-lazy_static! {
-    static ref SEND_RAW_TX_TIMER: Arc<dyn Timer> =
-        register_timer_with_group("rpc", "rpc:sendRawTransaction");
-    static ref GET_LOGS_TIMER: Arc<dyn Timer> =
-        register_timer_with_group("rpc", "rpc:getLogs");
-}
 
 #[derive(Debug)]
 pub(crate) struct BlockExecInfo {
@@ -410,7 +401,6 @@ impl RpcImpl {
     }
 
     fn send_raw_transaction(&self, raw: Bytes) -> RpcResult<H256> {
-        let _timer = ScopeTimer::time_scope(SEND_RAW_TX_TIMER.as_ref());
         info!("RPC Request: cfx_sendRawTransaction len={:?}", raw.0.len());
         debug!("RawTransaction bytes={:?}", raw);
 
@@ -1048,7 +1038,6 @@ impl RpcImpl {
             }
         }
 
-        let _timer = ScopeTimer::time_scope(GET_LOGS_TIMER.as_ref());
         let consensus_graph = self.consensus_graph();
 
         info!("RPC Request: cfx_getLogs({:?})", filter);
@@ -1258,28 +1247,8 @@ impl RpcImpl {
             storage_collateralized = executed.minimum_storage_limit;
         }
         let storage_collateralized = U64::from(storage_collateralized);
-        // In case of unlimited full gas charge at some VM call, or if there are
-        // infinite loops, the total estimated gas used is very close to
-        // MAX_GAS_CALL_REQUEST, 0.8 is chosen to check if it's close.
-        const TOO_MUCH_GAS_USED: u64 =
-            (0.8 * (MAX_GAS_CALL_REQUEST as f32)) as u64;
-        // TODO: this value should always be Some(..) unless incorrect
-        // implementation. Should return an error for server bugs later.
         let estimated_gas_limit =
             executed.estimated_gas_limit.unwrap_or(U256::zero());
-        if estimated_gas_limit >= U256::from(TOO_MUCH_GAS_USED) {
-            bail!(call_execution_error(
-                format!(
-                    "Gas too high. Most likely there are problems within the contract code. \
-                    gas {}, storage_limit {}",
-                   estimated_gas_limit, storage_collateralized
-                ),
-                format!(
-                    "gas {}, storage_limit {}", estimated_gas_limit, storage_collateralized
-                )
-                .into_bytes(),
-            ));
-        }
         let response = EstimateGasAndCollateralResponse {
             // We multiply the gas_used for 2 reasons:
             // 1. In each EVM call, the gas passed is at most 63/64 of the

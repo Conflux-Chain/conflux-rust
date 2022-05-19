@@ -37,9 +37,10 @@ def convert_b32_address_field_to_hex(original_dict: dict, field_name: str):
 
 
 class RpcClient:
-    def __init__(self, node=None, auto_restart=False):
+    def __init__(self, node=None, auto_restart=False, log=None):
         self.node = node
         self.auto_restart = auto_restart
+        self.log = log
 
         # epoch definitions
         self.EPOCH_EARLIEST = "earliest"
@@ -299,7 +300,13 @@ class RpcClient:
         def check_tx():
             self.generate_block(num_txs)
             return checktx(self.node, tx_hash)
-        wait_until(check_tx, timeout=timeout)
+        try:
+            wait_until(check_tx, timeout=timeout)
+        except Exception as e:
+            if self.log is not None:
+                sender = self.node.cfx_getTransactionByHash(tx_hash)["from"]
+                self.log.info("wait_for_receipt: pending=%s", self.node.cfx_getAccountPendingTransactions(sender))
+            raise e
 
     def block_by_hash(self, block_hash: str, include_txs: bool = False) -> dict:
         block = self.node.cfx_getBlockByHash(block_hash, include_txs)
@@ -454,8 +461,8 @@ class RpcClient:
         contract_addr = hex_to_b32_address(contract_addr)
         return self.node.cfx_checkBalanceAgainstTransaction(account_addr, contract_addr, hex(gas_limit), hex(gas_price), hex(storage_limit))
 
-    def call(self, contract_addr:str, data_hex:str, nonce=None, epoch:str=None) -> str:
-        tx = self.new_tx_for_call(contract_addr, data_hex, nonce=nonce)
+    def call(self, contract_addr:str, data_hex:str, nonce=None, epoch:str=None, sender:str=None) -> str:
+        tx = self.new_tx_for_call(contract_addr, data_hex, nonce=nonce, sender=sender)
         if epoch is None:
             return self.node.cfx_call(tx)
         else:
