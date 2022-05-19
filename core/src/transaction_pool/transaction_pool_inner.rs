@@ -20,8 +20,7 @@ use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
 };
 use primitives::{
-    Account, Action, SignedTransaction, Transaction,
-    TransactionWithSignature,
+    Account, Action, SignedTransaction, Transaction, TransactionWithSignature,
 };
 use rlp::*;
 use serde::Serialize;
@@ -1497,9 +1496,7 @@ mod test_transaction_pool_inner {
     use crate::transaction_pool::transaction_pool_inner::ReadyAccountPool;
     use cfx_types::{Address, AddressSpaceUtil, U256};
     use keylib::{Generator, KeyPair, Random};
-    use primitives::{
-        Action, SignedTransaction, Transaction,
-    };
+    use primitives::{Action, SignedTransaction, Transaction};
     use std::sync::Arc;
 
     fn new_test_tx(
