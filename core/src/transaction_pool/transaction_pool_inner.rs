@@ -20,7 +20,8 @@ use metrics::{
     register_meter_with_group, Counter, CounterUsize, Meter, MeterTimer,
 };
 use primitives::{
-    Account, Action, SignedTransaction, Transaction, TransactionWithSignature,
+    Account, Action, NativeTransaction, SignedTransaction, Transaction,
+    TransactionWithSignature,
 };
 use rlp::*;
 use serde::Serialize;
