@@ -1043,8 +1043,7 @@ impl<
             return self.transact(&first_tx, options);
         }
 
-        // If tx.from is not specified then use a random one, and give it a
-        // sufficient balance
+        // If tx.from is not specified(zero address) then use a random one
         let mut random_hex = Address::random();
         if is_native_tx {
             random_hex.set_user_account_type_bits();
@@ -1055,22 +1054,26 @@ impl<
             sender: sender.address,
             public: None,
         };
-        let balance = self.state.balance(&sender)?;
-        // Give the sender a sufficient balance.
-        let needed_balance = U256::MAX / U256::from(2u64);
-        if balance < needed_balance {
-            let balance_inc = needed_balance - balance;
-            self.state.add_balance(
-                &sender,
-                &balance_inc,
-                CleanupMode::NoEmpty,
-                self.spec.account_start_nonce,
-            )?;
-            // Make sure statistics are also correct and will not violate any
-            // underlying assumptions.
-            self.state.add_total_issued(balance_inc);
-            if tx.sender().space == Space::Ethereum {
-                self.state.add_total_evm_tokens(balance_inc);
+        // If use default storage_limit(u64::MAX) then give from account enough
+        // balance
+        if tx_with_random_from.storage_limit().unwrap_or(0) == u64::MAX {
+            let balance = self.state.balance(&sender)?;
+            // Give the sender a sufficient balance.
+            let needed_balance = U256::MAX / U256::from(2u64);
+            if balance < needed_balance {
+                let balance_inc = needed_balance - balance;
+                self.state.add_balance(
+                    &sender,
+                    &balance_inc,
+                    CleanupMode::NoEmpty,
+                    self.spec.account_start_nonce,
+                )?;
+                // Make sure statistics are also correct and will not violate
+                // any underlying assumptions.
+                self.state.add_total_issued(balance_inc);
+                if tx.sender().space == Space::Ethereum {
+                    self.state.add_total_evm_tokens(balance_inc);
+                }
             }
         }
         self.state.set_nonce(&sender, &tx.nonce())?;
