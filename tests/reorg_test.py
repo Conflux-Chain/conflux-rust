@@ -21,7 +21,6 @@ class ReorgTest(ConfluxTestFramework):
                 connect_nodes(self.nodes, i, i + 1)
 
     def run_test(self):
-        start_p2p_connection(self.nodes)
         genesis_key = default_config["GENESIS_PRI_KEY"]
         tx_n = 100
         gas_price = 1
