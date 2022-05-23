@@ -1016,7 +1016,9 @@ impl<
     ) -> DbResult<ExecutionOutcome> {
         let is_native_tx = tx.space() == Space::Native;
         let options = TransactOptions::virtual_call();
-        let value_and_fee = tx.value() + tx.gas() * tx.gas_price();
+        let value_and_fee = tx
+            .value()
+            .saturating_add(tx.gas().saturating_mul(*tx.gas_price()));
         // If tx.from is specified (is not zero)
         if !tx.sender().address.is_zero() {
             let balance = self.state.balance(&tx.sender())?;
