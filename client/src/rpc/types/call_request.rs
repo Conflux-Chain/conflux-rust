@@ -25,7 +25,7 @@ use std::{cmp::min, sync::Arc};
 
 /// The MAX_GAS_CALL_REQUEST is one magnitude higher than block gas limit and
 /// not too high that a call_virtual consumes too much resource.
-pub const MAX_GAS_CALL_REQUEST: u64 = 500_000_000;
+pub const MAX_GAS_CALL_REQUEST: u64 = 15_000_000;
 
 #[derive(Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]

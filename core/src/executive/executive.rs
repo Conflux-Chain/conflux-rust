@@ -40,8 +40,8 @@ use cfx_types::{
 };
 use primitives::{
     receipt::StorageChange, storage::STORAGE_LAYOUT_REGULAR_V0,
-    transaction::Action, Eip155Transaction, NativeTransaction,
-    SignedTransaction, StorageLayout, Transaction,
+    transaction::Action, NativeTransaction, SignedTransaction, StorageLayout,
+    Transaction,
 };
 use rlp::RlpStream;
 use std::{
@@ -1036,17 +1036,6 @@ impl<
                     {
                         *storage_limit = available_storage_limit.as_u64();
                     }
-                }
-            }
-            // If is a eSpace tx and balance of 'from' can cover value
-            // Then set tx.gas to tx.from max affordable amount
-            if !is_native_tx && balance > *tx.value() {
-                if let Transaction::Ethereum(Eip155Transaction {
-                    ref mut gas,
-                    ..
-                }) = first_tx.transaction.transaction.unsigned
-                {
-                    *gas = (balance - tx.value()) / tx.gas_price();
                 }
             }
             self.state
