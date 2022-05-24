@@ -208,15 +208,21 @@ impl SnapshotDbManagerSqlite {
             // modification.
             //
             // Conflux will remove orphan storage upon restart.
-            Self::fs_remove_snapshot(path).ok();
+            Self::fs_remove_snapshot(path);
         }
         already_open_snapshots.write().remove(path);
         open_semaphore.add_permits(1);
     }
 
-    fn fs_remove_snapshot(path: &Path) -> Result<()> {
+    fn fs_remove_snapshot(path: &Path) {
         debug!("Remove snapshot at {}", path.display());
-        Ok(fs::remove_dir_all(path)?)
+        let path = path.to_owned();
+        thread::spawn(move || {
+            if let Err(e) = fs::remove_dir_all(&path) {
+                error!("remove snapshot err: path={:?} err={:?}", path, e);
+            }
+            debug!("Finish removing snapshot at {}", path.display());
+        });
     }
 
     fn get_merge_temp_snapshot_db_path(
@@ -542,7 +548,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         match maybe_snapshot {
             None => {
                 if snapshot_epoch_id.ne(&NULL_EPOCH) {
-                    Self::fs_remove_snapshot(&path)?;
+                    Self::fs_remove_snapshot(&path);
                 }
             }
             Some(snapshot) => {
