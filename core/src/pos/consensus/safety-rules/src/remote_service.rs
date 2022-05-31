@@ -46,6 +46,7 @@ pub fn execute(
         verify_vote_proposal_signature,
         export_consensus_key,
         vrf_private_key,
+        Default::default(),
     );
     if let Err(e) = safety_rules.consensus_state() {
         diem_warn!("Unable to print consensus state: {}", e);

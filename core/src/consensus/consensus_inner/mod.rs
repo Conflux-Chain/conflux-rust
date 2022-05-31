@@ -3631,7 +3631,12 @@ impl ConsensusGraphInner {
                 }
             }
         } else {
-            error!("Fail to recover state_valid");
+            if start_epoch_hash != self.data_man.true_genesis.hash() {
+                error!(
+                    "Fail to recover state_valid: start_epoch_hash={:?}",
+                    start_epoch_hash
+                );
+            }
         }
     }
 
