@@ -3890,7 +3890,6 @@ impl ConsensusGraphInner {
         &self, ancestor_hash: &H256, me_hash: &H256,
     ) -> bool {
         if ancestor_hash == me_hash {
-            // TODO(lpl): Do we want to allow duplicate pivot decision?
             return true;
         }
         debug!(
@@ -3914,16 +3913,22 @@ impl ConsensusGraphInner {
             // block_execution_result for full nodes. Or include
             // height in the validation?
             (_, Some(_me)) => {
-                error!(
-                    "ancestor not in consensus graph: processed={}",
-                    self.pivot_block_processed(ancestor_hash)
-                );
+                // This should not happen after catching up for a normal node.
+                if !self.header_only {
+                    warn!(
+                        "ancestor not in consensus graph: processed={}",
+                        self.pivot_block_processed(ancestor_hash)
+                    );
+                }
                 // ancestor is before checkpoint and is on pivot chain, so me
                 // must be in the subtree.
                 true
             }
             (_, _) => {
-                error!("ancestor and me are both not in consensus graph, processed={} {}", self.pivot_block_processed(ancestor_hash), self.pivot_block_processed(me_hash));
+                // This should not happen after catching up for a normal node.
+                if !self.header_only {
+                    warn!("ancestor and me are both not in consensus graph, processed={} {}", self.pivot_block_processed(ancestor_hash), self.pivot_block_processed(me_hash));
+                }
                 true
             }
         }
