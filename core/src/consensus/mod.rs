@@ -222,7 +222,7 @@ pub struct ConsensusGraph {
     /// any inconsistency
     best_info: RwLock<Arc<BestInformation>>,
     /// Set to `true` when we enter NormalPhase
-    ready_for_mining: AtomicBool,
+    pub ready_for_mining: AtomicBool,
 
     /// The epoch id of the remotely synchronized state.
     /// This is always `None` for archive nodes.
