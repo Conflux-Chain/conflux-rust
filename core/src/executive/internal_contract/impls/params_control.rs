@@ -11,8 +11,9 @@ use cfx_types::{Address, U256, U512};
 use lazy_static::lazy_static;
 
 use crate::{
+    executive::internal_contract::components::SolidityEventTrait,
     state::power_two_fractional,
-    vm::{self, ActionParams},
+    vm::{self, ActionParams, Spec},
 };
 
 use super::super::{
@@ -94,16 +95,15 @@ pub fn cast_vote(
                 total_counts
             );
         }
+        let mut old_votes = [U256::zero(); 3];
         for opt_index in 0..OPTION_INDEX_MAX {
-            let vote_in_storage = context.storage_at(
-                params,
-                &storage_key::votes(&address, index, opt_index),
-            )?;
+            let vote_slot = storage_key::votes(&address, index, opt_index);
             let old_vote = if is_new_vote {
                 U256::zero()
             } else {
-                vote_in_storage
+                context.storage_at(params, &vote_slot)?
             };
+            old_votes[opt_index] = old_vote;
             debug!(
                 "index:{}, opt_index{}, old_vote: {}, new_vote: {}",
                 index, opt_index, old_vote, param_vote[opt_index]
@@ -114,35 +114,42 @@ pub fn cast_vote(
                 let old_total_votes = context.state.get_system_storage(
                     &CURRENT_VOTES_ENTRIES[index][opt_index],
                 )?;
-                debug!("old_total_vote: {}", old_total_votes,);
-                let new_total_votes = if old_vote > param_vote[opt_index] {
-                    let dec = old_vote - param_vote[opt_index];
-                    // If total votes are accurate, `old_total_votes` is
-                    // larger than `old_vote`.
-                    old_total_votes - dec
-                } else if old_vote < param_vote[opt_index] {
-                    let inc = param_vote[opt_index] - old_vote;
-                    old_total_votes + inc
-                } else {
-                    assert!(is_new_vote);
-                    old_total_votes
-                };
-                debug!("new_total_vote:{}", new_total_votes);
+                // Should not overflow since we checked the efficiency of voting
+                // power.
+                let new_total_votes =
+                    old_total_votes + param_vote[opt_index] - old_vote;
+
+                debug!(
+                    "old_total_vote: {}, new_total_vote:{}",
+                    old_total_votes, new_total_votes
+                );
                 context.state.set_system_storage(
                     CURRENT_VOTES_ENTRIES[index][opt_index].to_vec(),
                     new_total_votes,
                 )?;
             }
 
-            // Overwrite the account vote entry if needed.
-            if param_vote[opt_index] != vote_in_storage {
-                context.set_storage(
-                    params,
-                    storage_key::votes(&address, index, opt_index).to_vec(),
-                    param_vote[opt_index],
-                )?;
-            }
+            // Overwrite the account vote entry.
+            context.set_storage(
+                params,
+                vote_slot.to_vec(),
+                param_vote[opt_index],
+            )?;
         }
+        if !is_new_vote {
+            RevokeEvent::log(
+                &(version, address, index as u16),
+                &old_votes,
+                params,
+                context,
+            )?;
+        }
+        VoteEvent::log(
+            &(version, address, index as u16),
+            &vote_counts[index].as_ref().unwrap(),
+            params,
+            context,
+        )?;
     }
     if is_new_vote {
         context.set_storage(
@@ -152,6 +159,19 @@ pub fn cast_vote(
         )?;
     }
     Ok(())
+}
+
+pub fn cast_vote_gas(length: usize, spec: &Spec) -> usize {
+    let version_gas = spec.sload_gas + spec.sha3_gas + spec.sstore_reset_gas;
+
+    let io_gas_per_topic =
+        spec.sload_gas + 2 * spec.sstore_reset_gas + 2 * spec.sha3_gas;
+
+    let log_gas_per_topic = 2 * spec.log_gas
+        + 8 * spec.log_topic_gas
+        + 32 * 3 * 2 * spec.log_data_gas;
+
+    version_gas + length * (io_gas_per_topic + log_gas_per_topic)
 }
 
 pub fn read_vote(
@@ -173,6 +193,50 @@ pub fn read_vote(
         })
     }
     Ok(votes_list)
+}
+
+pub fn total_votes(
+    version: u64, context: &mut InternalRefContext,
+) -> vm::Result<Vec<Vote>> {
+    let current_voting_version = (context.env.number
+        - context.spec.cip94_activation_block_number)
+        / context.spec.params_dao_vote_period
+        + 1;
+
+    let state = &context.state;
+
+    let votes_entries = if version + 1 == current_voting_version {
+        SETTLED_VOTES_ENTRIES.as_ref()
+    } else if version == current_voting_version {
+        CURRENT_VOTES_ENTRIES.as_ref()
+    } else {
+        internal_bail!(
+            "Unsupport version {} (current {})",
+            version,
+            current_voting_version
+        );
+    };
+
+    let mut answer = vec![];
+    for x in 0..PARAMETER_INDEX_MAX {
+        let slot_entry = &votes_entries[x];
+        answer.push(Vote {
+            index: x as u16,
+            votes: [
+                state.get_system_storage(
+                    slot_entry[OPTION_UNCHANGE_INDEX as usize].as_ref(),
+                )?,
+                state.get_system_storage(
+                    slot_entry[OPTION_INCREASE_INDEX as usize].as_ref(),
+                )?,
+                state.get_system_storage(
+                    slot_entry[OPTION_DECREASE_INDEX as usize].as_ref(),
+                )?,
+            ],
+        });
+    }
+
+    Ok(answer)
 }
 
 lazy_static! {
