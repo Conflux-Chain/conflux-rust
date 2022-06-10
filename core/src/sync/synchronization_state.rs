@@ -227,6 +227,7 @@ impl SynchronizationState {
                     .capabilities
                     .contains(DynamicCapability::NormalPhase(true))
                 {
+                    fresh_start = false;
                     peer_best_epoches.push(state.best_epoch);
                 } else if state.best_epoch != 0 {
                     // Note `best_epoch` is initialized according to Status,
