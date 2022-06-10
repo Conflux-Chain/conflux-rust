@@ -352,7 +352,8 @@ impl StateOpsTrait for StateGeneric {
     /// unlikely case that there are a lot of partial invalid blocks.
     fn subtract_total_issued(&mut self, v: U256) {
         assert!(self.world_statistics_checkpoints.get_mut().is_empty());
-        self.world_statistics.total_issued_tokens -= v;
+        self.world_statistics.total_issued_tokens =
+            self.world_statistics.total_issued_tokens.saturating_sub(v);
     }
 
     fn add_total_pos_staking(&mut self, v: U256) {
