@@ -367,7 +367,8 @@ impl StateOpsTrait for StateGeneric {
 
     fn subtract_total_evm_tokens(&mut self, v: U256) {
         if !v.is_zero() {
-            self.world_statistics.total_evm_tokens -= v;
+            self.world_statistics.total_evm_tokens =
+                self.world_statistics.total_evm_tokens.saturating_sub(v);
         }
     }
 
