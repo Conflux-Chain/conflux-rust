@@ -74,7 +74,7 @@ use cfx_parameters::consensus_internal::REWARD_EPOCH_COUNT;
 use cfxcore::{
     consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
-    executive::revert_reason_decode,
+    executive::{revert_reason_decode, EstimateRequest},
     observer::ErrorUnwind,
     spec::genesis::{
         genesis_contract_address_four_year, genesis_contract_address_two_year,
@@ -1202,8 +1202,8 @@ impl RpcImpl {
                 // When a revert exception happens, there is usually an error in the sub-calls.
                 // So we return the trace information for debugging contract.
                 let errors = ErrorUnwind::from_traces(executed.trace).errors.iter()
-                    .map(|(addr,error)| {
-                        let cip37_addr = RpcAddress::try_from_h160(addr.clone(),network_type).unwrap().base32_address;
+                    .map(|(addr, error)| {
+                        let cip37_addr = RpcAddress::try_from_h160(addr.clone(), network_type).unwrap().base32_address;
                         format!("{}: {}", cip37_addr, error)
                     })
                     .collect::<Vec<String>>();
@@ -1211,15 +1211,15 @@ impl RpcImpl {
                 // Decode revert error
                 let revert_error = revert_reason_decode(&executed.output);
                 let revert_error = if !revert_error.is_empty() {
-                    format!(": {}.",revert_error)
-                }else{
+                    format!(": {}.", revert_error)
+                } else {
                     format!(".")
                 };
 
                 // Try to fetch the innermost error.
-                let innermost_error = if errors.len()>0{
+                let innermost_error = if errors.len() > 0 {
                     format!(" Innermost error is at {}.", errors[0])
-                }else{
+                } else {
                     String::default()
                 };
 
@@ -1334,12 +1334,20 @@ impl RpcImpl {
         let consensus_graph = self.consensus_graph();
         let epoch = epoch.unwrap_or(EpochNumber::LatestState);
 
+        let estimate_request = EstimateRequest {
+            has_sender: request.from.is_some(),
+            has_gas_limit: request.gas.is_some(),
+            has_gas_price: request.gas_price.is_some(),
+            has_nonce: request.nonce.is_some(),
+        };
+
         let best_epoch_height = consensus_graph.best_epoch_number();
         let chain_id = consensus_graph.best_chain_id();
         let signed_tx =
             sign_call(best_epoch_height, chain_id.in_native_space(), request)?;
         trace!("call tx {:?}", signed_tx);
-        consensus_graph.call_virtual(&signed_tx, epoch.into())
+
+        consensus_graph.call_virtual(&signed_tx, epoch.into(), estimate_request)
     }
 
     fn current_sync_phase(&self) -> RpcResult<String> {

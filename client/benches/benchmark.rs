@@ -88,7 +88,7 @@ fn txexe_benchmark(c: &mut Criterion) {
             let mut ex = Executive::new(&mut state, &env, &machine, &spec);
 
             b.iter(|| {
-                let options = TransactOptions::with_no_tracing();
+                let options = TransactOptions::exec_with_no_tracing();
                 ex.transact(&tx, options).unwrap();
                 ex.state.clear();
             })
