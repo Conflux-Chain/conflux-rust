@@ -54,7 +54,14 @@ impl SimpleExecutionTrait for Deposit {
         context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
-        deposit(input, params, context.env, context.spec, context.state, tracer)
+        deposit(
+            input,
+            params,
+            context.env,
+            context.spec,
+            context.state,
+            tracer,
+        )
     }
 }
 
