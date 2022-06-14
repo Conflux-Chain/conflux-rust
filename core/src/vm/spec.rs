@@ -153,6 +153,8 @@ pub struct Spec {
     /// CIP-94: On-chain Parameter DAO Vote
     pub cip94: bool,
     pub cip94_activation_block_number: u64,
+    /// CIP-98: Fix espace bug
+    pub cip98: bool,
     pub params_dao_vote_period: u64,
 }
 
@@ -291,6 +293,7 @@ impl Spec {
             evm_gas_ratio: 2,
             cip94_activation_block_number: u64::MAX,
             params_dao_vote_period: DAO_PARAMETER_VOTE_PERIOD,
+            cip98: false,
         }
     }
 
@@ -309,6 +312,7 @@ impl Spec {
         spec.cip78b = number >= params.transition_numbers.cip78b;
         spec.cip94 = number >= params.transition_numbers.cip94;
         spec.cip94_activation_block_number = params.transition_numbers.cip94;
+        spec.cip98 = number >= params.transition_numbers.cip98;
         spec.params_dao_vote_period = params.params_dao_vote_period;
         spec
     }
