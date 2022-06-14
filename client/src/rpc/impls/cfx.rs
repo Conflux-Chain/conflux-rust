@@ -1160,7 +1160,7 @@ impl RpcImpl {
                 executed,
             ) => bail!(call_execution_error(
                 "Transaction reverted".into(),
-                executed.output.to_hex::<String>()
+                format!("0x{}", executed.output.to_hex::<String>())
             )),
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
                 bail!(call_execution_error(

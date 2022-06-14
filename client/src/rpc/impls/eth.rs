@@ -706,7 +706,7 @@ impl Eth for EthHandler {
                     "execution reverted: {}",
                     revert_reason_decode(&executed.output)
                 ),
-                executed.output.to_hex::<String>()
+                format!("0x{}", executed.output.to_hex::<String>())
             )),
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
                 bail!(call_execution_error(
