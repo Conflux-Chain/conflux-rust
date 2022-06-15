@@ -1174,6 +1174,7 @@ impl RpcImpl {
     fn estimate_gas_and_collateral(
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<EstimateGasAndCollateralResponse> {
+        info!("[cccde] estimate_gas_and_collateral: {:?}", request);
         let executed = match self.exec_transaction(request, epoch)? {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(expected, got)) => {
                 bail!(call_execution_error(
@@ -1239,14 +1240,8 @@ impl RpcImpl {
             }
             ExecutionOutcome::Finished(executed) => executed,
         };
-        let mut storage_collateralized = 0;
-        for storage_change in &executed.storage_collateralized {
-            storage_collateralized += storage_change.collaterals.as_u64();
-        }
-        if executed.minimum_storage_limit > storage_collateralized {
-            storage_collateralized = executed.minimum_storage_limit;
-        }
-        let storage_collateralized = U64::from(storage_collateralized);
+        let storage_collateralized =
+            U64::from(executed.estimated_storage_limit);
         let estimated_gas_limit =
             executed.estimated_gas_limit.unwrap_or(U256::zero());
         let response = EstimateGasAndCollateralResponse {
@@ -1339,6 +1334,7 @@ impl RpcImpl {
             has_gas_limit: request.gas.is_some(),
             has_gas_price: request.gas_price.is_some(),
             has_nonce: request.nonce.is_some(),
+            has_storage_limit: request.storage_limit.is_some(),
         };
 
         let best_epoch_height = consensus_graph.best_epoch_number();

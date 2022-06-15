@@ -232,10 +232,15 @@ pub struct EstimateRequest {
     pub has_gas_limit: bool,
     pub has_gas_price: bool,
     pub has_nonce: bool,
+    pub has_storage_limit: bool,
 }
 
 impl EstimateRequest {
     fn recheck_gas_fee(&self) -> bool { self.has_sender && self.has_gas_price }
+
+    fn charge_gas(&self) -> bool {
+        self.has_sender && self.has_gas_limit && self.has_gas_price
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -257,9 +262,7 @@ impl TransactCheckSettings {
     ) -> Self {
         Self {
             charge_collateral,
-            charge_gas: request.has_sender
-                && request.has_gas_limit
-                && request.has_gas_price,
+            charge_gas: request.charge_gas(),
         }
     }
 }
@@ -1036,7 +1039,10 @@ impl<
     pub fn transact_virtual(
         &mut self, mut tx: SignedTransaction, request: EstimateRequest,
     ) -> DbResult<ExecutionOutcome> {
+        info!("[cccde] Transact virtual {:?}, request {:?}", tx, request);
+
         let is_native_tx = tx.space() == Space::Native;
+        let request_storage_limit = tx.storage_limit();
 
         if !request.has_sender {
             let mut random_hex = Address::random();
@@ -1101,30 +1107,43 @@ impl<
                 return Ok(res);
             }
         };
+        info!("[cccde] first pass outcome {:?}", sender_pay_executed);
         self.state.revert_to_checkpoint();
 
         // Second pass
         let mut contract_pay_executed: Option<Executed> = None;
-        let mut sponsor_balance_for_collateral = U256::zero();
-        let mut sponsor_eligible = false;
+        let mut native_to_contract: Option<Address> = None;
+        let mut sponsor_for_collateral_eligible = false;
         if let Transaction::Native(NativeTransaction {
             action: Action::Call(ref to),
             ..
         }) = tx.unsigned
         {
             if to.is_contract_address() {
-                sponsor_balance_for_collateral =
-                    self.state.sponsor_balance_for_collateral(&to)?;
-                if self
+                native_to_contract = Some(*to);
+                let has_sponsor = self
                     .state
-                    .check_commission_privilege(&to, &tx.sender().address)?
-                {
-                    sponsor_eligible = true;
+                    .sponsor_for_collateral(&to)?
+                    .map_or(false, |x| !x.is_zero());
 
-                    contract_pay_executed = match self.transact(
+                if has_sponsor
+                    && (self.state.check_commission_privilege(
+                        &to,
+                        &tx.sender().address,
+                    )? || self
+                        .state
+                        .check_commission_privilege(&to, &Address::zero())?)
+                {
+                    sponsor_for_collateral_eligible = true;
+
+                    self.state.checkpoint();
+                    let res = self.transact(
                         &tx,
                         TransactOptions::estimate_second_pass(request),
-                    )? {
+                    )?;
+                    self.state.revert_to_checkpoint();
+
+                    contract_pay_executed = match res {
                         ExecutionOutcome::Finished(executed) => Some(executed),
                         res => {
                             warn!("Should unreachable because two pass estimations should have the same output. \
@@ -1132,39 +1151,86 @@ impl<
                             None
                         }
                     };
+                    info!(
+                        "[cccde] second pass outcome {:?}",
+                        contract_pay_executed
+                    );
                 }
             }
         };
 
-        let max_sponsor_storage_limit = (sponsor_balance_for_collateral
-            / *DRIPS_PER_STORAGE_COLLATERAL_UNIT)
-            .as_u64();
-        let mut sponsored_success = false;
-        if let Some(ref contract_pay_executed) = contract_pay_executed {
-            if max_sponsor_storage_limit
-                <= contract_pay_executed.minimum_storage_limit
-            {
-                sponsored_success = true;
+        info!(
+            "[cccde] Sponsor eligible {}",
+            sponsor_for_collateral_eligible
+        );
+
+        let overwrite_storage_limit =
+            |mut executed: Executed, max_sponsor_storage_limit: u64| {
+                executed.estimated_storage_limit = max(
+                    executed.estimated_storage_limit,
+                    max_sponsor_storage_limit + 64,
+                );
+                executed
+            };
+
+        let mut executed = if !sponsor_for_collateral_eligible {
+            sender_pay_executed
+        } else {
+            let sponsor_balance_for_collateral =
+                self.state.sponsor_balance_for_collateral(
+                    native_to_contract.as_ref().unwrap(),
+                )?;
+            let max_sponsor_storage_limit = (sponsor_balance_for_collateral
+                / *DRIPS_PER_STORAGE_COLLATERAL_UNIT)
+                .as_u64();
+            if let Some(contract_pay_executed) = contract_pay_executed {
+                if max_sponsor_storage_limit
+                    >= contract_pay_executed.estimated_storage_limit
+                {
+                    contract_pay_executed
+                } else {
+                    overwrite_storage_limit(
+                        sender_pay_executed,
+                        max_sponsor_storage_limit,
+                    )
+                }
+            } else {
+                overwrite_storage_limit(
+                    sender_pay_executed,
+                    max_sponsor_storage_limit,
+                )
             }
+        };
+
+        // Revise the gas used in result, if we estimate the transaction with a
+        // default large enough gas.
+        if !request.has_gas_limit {
+            let estimated_gas_limit = executed.estimated_gas_limit.unwrap();
+            executed.gas_charged = max(
+                estimated_gas_limit - estimated_gas_limit / 4,
+                executed.gas_used,
+            );
+            executed.fee = executed.gas_charged.saturating_mul(*tx.gas_price());
         }
 
-        let executed = if !sponsor_eligible {
-            sender_pay_executed
-        } else if sponsored_success {
-            // Unwrap safety: if `sponsored_success` is true,
-            // `contract_pay_executed` must be `Some(_)`.
-            contract_pay_executed.unwrap()
-        } else {
-            // If the sender is eligible for sponsored, but the sponsor can not
-            // afford the actual collateral, the storage limit should be large
-            // enough to overcome sponsor balance.
-            let mut executed = sender_pay_executed;
-            executed.minimum_storage_limit = max(
-                executed.minimum_storage_limit,
-                max_sponsor_storage_limit + 64,
-            );
-            executed
-        };
+        // If we don't charge gas, recheck the current gas_fee is ok for
+        // sponsorship.
+        if !request.charge_gas()
+            && request.has_gas_price
+            && executed.gas_sponsor_paid
+        {
+            let enough_balance = executed.fee
+                <= self
+                    .state
+                    .sponsor_balance_for_gas(&native_to_contract.unwrap())?;
+            let enough_bound = executed.fee
+                <= self
+                    .state
+                    .sponsor_gas_bound(&native_to_contract.unwrap())?;
+            if !(enough_balance && enough_bound) {
+                executed.gas_sponsor_paid = false;
+            }
+        }
 
         // If the request has a sender, recheck the balance requirement matched.
         if request.has_sender {
@@ -1180,7 +1246,7 @@ impl<
                     0.into()
                 };
             let storage_collateral = if !executed.storage_sponsor_paid {
-                U256::from(executed.minimum_storage_limit)
+                U256::from(executed.estimated_storage_limit)
                     * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
             } else {
                 0.into()
@@ -1201,6 +1267,17 @@ impl<
                 ));
             }
         }
+
+        if request.has_storage_limit {
+            let storage_limit = request_storage_limit.unwrap();
+            if storage_limit < executed.estimated_storage_limit {
+                return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
+                    ExecutionError::VmError(vm::Error::ExceedStorageLimit),
+                    executed,
+                ));
+            }
+        }
+
         return Ok(ExecutionOutcome::Finished(executed));
     }
 
@@ -1855,14 +1932,14 @@ impl<
             let gas_charged = tx.gas() - gas_refunded;
             (
                 gas_charged,
-                gas_charged * tx.gas_price(),
-                gas_refunded * tx.gas_price(),
+                gas_charged.saturating_mul(*tx.gas_price()),
+                gas_refunded.saturating_mul(*tx.gas_price()),
             )
         } else {
             (
                 gas_used,
-                gas_used * tx.gas_price(),
-                gas_left * tx.gas_price(),
+                gas_used.saturating_mul(*tx.gas_price()),
+                gas_left.saturating_mul(*tx.gas_price()),
             )
         };
 
@@ -1961,6 +2038,13 @@ impl<
                 let trace =
                     observer.tracer.map_or(Default::default(), |t| t.drain());
 
+                let estimated_storage_limit =
+                    if let Some(x) = storage_collateralized.first() {
+                        x.collaterals.as_u64()
+                    } else {
+                        0
+                    };
+
                 let executed = Executed {
                     gas_used,
                     gas_charged,
@@ -1974,7 +2058,7 @@ impl<
                     output,
                     trace,
                     estimated_gas_limit,
-                    minimum_storage_limit: 0,
+                    estimated_storage_limit,
                 };
 
                 if r.apply_state {

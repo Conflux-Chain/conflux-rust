@@ -155,6 +155,7 @@ impl EthHandler {
             has_gas_limit: request.gas.is_some(),
             has_gas_price: request.gas_price.is_some(),
             has_nonce: request.nonce.is_some(),
+            has_storage_limit: false,
         };
 
         let chain_id = self.consensus.best_chain_id();

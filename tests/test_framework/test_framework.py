@@ -197,7 +197,7 @@ class ConfluxTestFramework:
             self.options.tmpdir = os.getenv(
                 "CONFLUX_TESTS_LOG_DIR",
                 default=tempfile.mkdtemp(prefix="conflux_test_"))
-        
+
         self._start_logging()
 
         success = TestStatus.FAILED
@@ -309,7 +309,8 @@ class ConfluxTestFramework:
         self.add_nodes(self.num_nodes, genesis_nodes=genesis_nodes, binary=binary, is_consortium=is_consortium)
         self.start_nodes()
 
-    def add_nodes(self, num_nodes, genesis_nodes=None, rpchost=None, binary=None, auto_recovery=False, recovery_timeout=30, is_consortium=True):
+    def add_nodes(self, num_nodes, genesis_nodes=None, rpchost=None, binary=None, auto_recovery=False,
+                  recovery_timeout=30, is_consortium=True):
         """Instantiate TestNode objects"""
         if binary is None:
             binary = [self.options.conflux] * num_nodes
@@ -317,7 +318,8 @@ class ConfluxTestFramework:
         if genesis_nodes is None:
             genesis_nodes = num_nodes
         if is_consortium:
-            initialize_tg_config(self.options.tmpdir, num_nodes, genesis_nodes, DEFAULT_PY_TEST_CHAIN_ID, start_index=len(self.nodes), pos_round_time_ms=self.pos_parameters["round_time_ms"])
+            initialize_tg_config(self.options.tmpdir, num_nodes, genesis_nodes, DEFAULT_PY_TEST_CHAIN_ID,
+                                 start_index=len(self.nodes), pos_round_time_ms=self.pos_parameters["round_time_ms"])
         for i in range(num_nodes):
             node_index = len(self.nodes)
             self.nodes.append(
@@ -452,9 +454,10 @@ class ConfluxTestFramework:
         Useful if a test case wants complete control over initialization."""
 
         for i in range(self.num_nodes):
-            initialize_datadir(self.options.tmpdir, i, self.options.port_min, self.conf_parameters, self.extra_conf_files)
+            initialize_datadir(self.options.tmpdir, i, self.options.port_min, self.conf_parameters,
+                               self.extra_conf_files)
 
-    def wait_for_tx(self, all_txs, check_status = False):
+    def wait_for_tx(self, all_txs, check_status=False):
         for tx in all_txs:
             self.log.debug("Wait for tx to confirm %s", tx.hash_hex())
             for i in range(3):
@@ -480,14 +483,17 @@ class ConfluxTestFramework:
         self.log.debug("Receipts received: {}".format(receipts))
         if check_status:
             for i in receipts:
-                assert_equal(int(i["outcomeStatus"], 0), 0)
+                if int(i["outcomeStatus"], 0) != 0:
+                    raise AssertionError("Receipt states the execution failes: {}".format(i))
         return receipts
+
 
 class SkipTest(Exception):
     """This exception is raised to skip a test"""
 
     def __init__(self, message):
         self.message = message
+
 
 class DefaultConfluxTestFramework(ConfluxTestFramework):
     def set_test_params(self):
@@ -502,6 +508,7 @@ class DefaultConfluxTestFramework(ConfluxTestFramework):
         sync_blocks(self.nodes)
         self.log.info("start P2P connection ...")
         start_p2p_connection(self.nodes)
+
 
 class OptionHelper:
     def to_argument_str(arg_name):
@@ -528,6 +535,7 @@ class OptionHelper:
     arg_filter, A class may use a subset of arg_definition of another 
     class, without changing default value.
     """
+
     def add_options(
             parser: argparse.ArgumentParser,
             arg_definition: dict,
@@ -546,7 +554,7 @@ class OptionHelper:
                         parser.add_argument(
                             OptionHelper.to_argument_str(arg_name),
                             dest=arg_name,
-                            action= 'store_false' if default_value else 'store_true',
+                            action='store_false' if default_value else 'store_true',
                         )
                     else:
                         parser.add_argument(
