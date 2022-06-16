@@ -73,7 +73,7 @@ class CIP97Test(ConfluxTestFramework):
         assert_equal(len(rpc.get_deposit_list(sender)), 0)
 
         assert_equal(old_deposit_gas - new_deposit_gas, 40000)
-        assert_equal(old_withdraw_gas - new_withdraw_gas, 49340)
+        assert_equal(old_withdraw_gas - new_withdraw_gas, 49600)
 
 
 if __name__ == "__main__":

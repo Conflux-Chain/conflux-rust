@@ -77,9 +77,7 @@ impl UpfrontPaymentTrait for Withdraw {
     ) -> DbResult<U256>
     {
         if context.spec.cip97 {
-            return Ok(U256::from(
-                3 * context.spec.sload_gas + 2 * context.spec.sha3_gas,
-            ));
+            return Ok(U256::from(2 * context.spec.sload_gas));
         }
         let length = context.state.deposit_list_length(&params.sender)?;
         Ok(U256::from(2 * context.spec.sstore_reset_gas) * U256::from(length))
