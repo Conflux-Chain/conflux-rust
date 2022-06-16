@@ -300,7 +300,7 @@ impl Observer {
 
     fn with_no_tracing() -> Self {
         Observer {
-            tracer: Some(ExecutiveTracer::default()),
+            tracer: None,
             gas_man: None,
             _noop: (),
         }
