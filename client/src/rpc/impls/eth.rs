@@ -648,7 +648,7 @@ impl Eth for EthHandler {
         );
         let tx: TransactionWithSignature =
             invalid_params_check("raw", Rlp::new(&raw.into_vec()).as_val())?;
-        
+
         if tx.space() != Space::Ethereum {
             bail!(invalid_params("tx", "Incorrect transaction space"));
         }
