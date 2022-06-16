@@ -840,7 +840,7 @@ fn test_validator_not_in_set(safety_rules: &Callback) {
     proof
         .ledger_info_with_sigs
         .push(a2.block().quorum_cert().ledger_info().clone());
-    safety_rules.initialize(&proof).ok();
+    safety_rules.initialize(&proof).unwrap();
 
     let state = safety_rules.consensus_state().unwrap();
     assert_eq!(state.in_validator_set(), false);
