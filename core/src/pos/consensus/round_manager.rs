@@ -400,6 +400,12 @@ impl RoundManager {
             // This node does not participate in any signing or voting.
             return Ok(());
         }
+        if self.block_store.pow_handler.is_normal_phase() {
+            // Do not start election before PoW enters normal phase so we will
+            // not be force retired unexpectedly because we are
+            // elected but cannot vote.
+            return Ok(());
+        }
         diem_debug!("broadcast_election starts");
         let pos_state = self.storage.pos_ledger_db().get_latest_pos_state();
         if let Some(target_term) = pos_state.next_elect_term(&author) {
