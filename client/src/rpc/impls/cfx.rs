@@ -1174,7 +1174,9 @@ impl RpcImpl {
     fn estimate_gas_and_collateral(
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<EstimateGasAndCollateralResponse> {
-        info!("[cccde] estimate_gas_and_collateral: {:?}", request);
+        info!(
+            "RPC Request: cfx_estimateGasAndCollateral request={:?}, epoch={:?}",request,epoch
+        );
         let executed = match self.exec_transaction(request, epoch)? {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(expected, got)) => {
                 bail!(call_execution_error(
