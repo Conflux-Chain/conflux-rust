@@ -16,7 +16,7 @@ use parking_lot::RwLock;
 use pow_types::{PowInterface, StakingEvent};
 use primitives::filter::{LogFilter, LogFilterParams};
 use std::{
-    sync::{Arc, Weak},
+    sync::{atomic::Ordering, Arc, Weak},
     time::Duration,
 };
 use tokio::runtime::Handle;
@@ -241,5 +241,17 @@ impl PowInterface for PowHandler {
             }
             tokio::time::sleep(Duration::from_millis(200)).await
         }
+    }
+
+    fn is_normal_phase(&self) -> bool {
+        self.pow_consensus
+            .read()
+            .as_ref()
+            .and_then(|p| {
+                p.upgrade().map(|consensus| {
+                    consensus.ready_for_mining.load(Ordering::SeqCst)
+                })
+            })
+            .unwrap_or(false)
     }
 }
