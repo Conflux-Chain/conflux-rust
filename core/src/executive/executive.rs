@@ -1039,8 +1039,6 @@ impl<
     pub fn transact_virtual(
         &mut self, mut tx: SignedTransaction, request: EstimateRequest,
     ) -> DbResult<ExecutionOutcome> {
-        info!("[cccde] Transact virtual {:?}, request {:?}", tx, request);
-
         let is_native_tx = tx.space() == Space::Native;
         let request_storage_limit = tx.storage_limit();
 
@@ -1107,7 +1105,10 @@ impl<
                 return Ok(res);
             }
         };
-        info!("[cccde] first pass outcome {:?}", sender_pay_executed);
+        debug!(
+            "Transaction estimate first pass outcome {:?}",
+            sender_pay_executed
+        );
         self.state.revert_to_checkpoint();
 
         // Second pass
@@ -1151,21 +1152,17 @@ impl<
                             None
                         }
                     };
-                    info!(
-                        "[cccde] second pass outcome {:?}",
+                    debug!(
+                        "Transaction estimate second pass outcome {:?}",
                         contract_pay_executed
                     );
                 }
             }
         };
 
-        info!(
-            "[cccde] Sponsor eligible {}",
-            sponsor_for_collateral_eligible
-        );
-
         let overwrite_storage_limit =
             |mut executed: Executed, max_sponsor_storage_limit: u64| {
+                debug!("Transaction estimate overwrite the storage limit to overcome sponsor_balance_for_collateral.");
                 executed.estimated_storage_limit = max(
                     executed.estimated_storage_limit,
                     max_sponsor_storage_limit + 64,
@@ -1228,6 +1225,7 @@ impl<
                     .state
                     .sponsor_gas_bound(&native_to_contract.unwrap())?;
             if !(enough_balance && enough_bound) {
+                debug!("Transaction estimate unset \"sponsor_paid\" because of not enough sponsor balance / gas bound.");
                 executed.gas_sponsor_paid = false;
             }
         }
