@@ -7,11 +7,15 @@
 - Add a new RPC `eth_getAccountPendingTransactions` to get pending transactions by address, also return the first pending transaction's pending reason
 - Support WebSockets for eth APIs
 - Support block hash param for `eth_call` (EIP1898)
-- `eth_call`, `eth_estimate` will respect `from`'s balance if passed, if balance is not enough will return error. If from is not passed then use a random one, which's balance will be very big.  
+- `eth_call`, `eth_estimate` will respect `from`'s balance if passed, if balance is not enough will return error. If from is not passed then use a random one, which balance will be very big.
+- `eth_sendRawTransaction` will reject transaction if sender's balance is not enough, return error like `Transaction {:?} is discarded due to out of balance, needs {:?} but account balance is {:?}`
+- If `eth_call`, `eth_estimate` method call raise error, and the `error.data` is string, it will directly return. In version before v2.0.2 they are hex encoded, is not convenient.
 
 ### Core Space
 
-- `cfx_call`, `cfx_estimateGasAndCollateral` will respect `from`'s balance if passed, if balance is not enough will return error. If from is not passed then use a random one, which's balance will be very big.
+- `cfx_call`, `cfx_estimateGasAndCollateral` will respect `from`'s balance if passed, if balance is not enough will return error. If from is not passed then use a random one, which balance will be very big.
+- `cfx_sendRawTransaction` will reject transaction if sender's balance is not enough, return error like `Transaction {:?} is discarded due to out of balance, needs {:?} but account balance is {:?}`
+- If `cfx_call`, `cfx_estimateGasAndCollateral` method call raise error, and the `error.data` is string, it will directly return. In version before v2.0.2 they are hex encoded, is not convenient.
 
 ## v2.0.1
 

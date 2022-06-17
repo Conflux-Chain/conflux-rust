@@ -3,7 +3,7 @@ pragma solidity >=0.4.15;
 
 contract ParamsControl {
     struct Vote {
-        uint8 index;
+        uint16 index;
         uint256[3] votes;
     }
 
