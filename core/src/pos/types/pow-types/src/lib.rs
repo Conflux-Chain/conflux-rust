@@ -24,6 +24,8 @@ pub trait PowInterface: Send + Sync {
     ) -> Result<Vec<StakingEvent>>;
 
     async fn wait_for_initialization(&self, last_decision: H256);
+
+    fn is_normal_phase(&self) -> bool;
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -63,4 +65,6 @@ impl PowInterface for FakePowHandler {
     }
 
     async fn wait_for_initialization(&self, _last_decision: H256) { todo!() }
+
+    fn is_normal_phase(&self) -> bool { todo!() }
 }

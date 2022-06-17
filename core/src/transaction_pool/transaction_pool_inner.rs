@@ -1339,8 +1339,8 @@ impl TransactionPoolInner {
         let sender = transaction.sender();
 
         // Compute sponsored_gas for `transaction`
-        if let Transaction::Native(ref transaction) = transaction.unsigned {
-            if let Action::Call(ref callee) = transaction.action {
+        if let Transaction::Native(ref utx) = transaction.unsigned {
+            if let Action::Call(ref callee) = utx.action {
                 // FIXME: This is a quick fix for performance issue.
                 if callee.is_contract_address() {
                     if let Some(sponsor_info) =
@@ -1363,29 +1363,20 @@ impl TransactionPoolInner {
                                 )
                             })?
                         {
-                            let estimated_gas_u512 =
-                                transaction.gas.full_mul(transaction.gas_price);
-                            // Normally, it is less than 2^128
-                            let estimated_gas = if estimated_gas_u512
-                                > U512::from(U128::max_value())
-                            {
-                                U256::from(U128::max_value())
-                            } else {
-                                transaction.gas * transaction.gas_price
-                            };
+                            let estimated_gas = Self::estimated_gas_fee(transaction.gas().clone(), transaction.gas_price().clone());
                             if estimated_gas <= sponsor_info.sponsor_gas_bound
                                 && estimated_gas
                                 <= sponsor_info.sponsor_balance_for_gas
                             {
-                                sponsored_gas = transaction.gas;
+                                sponsored_gas = utx.gas;
                             }
                             let estimated_collateral =
-                                U256::from(transaction.storage_limit)
+                                U256::from(utx.storage_limit)
                                     * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
                             if estimated_collateral
                                 <= sponsor_info.sponsor_balance_for_collateral
                             {
-                                sponsored_storage = transaction.storage_limit;
+                                sponsored_storage = utx.storage_limit;
                             }
                         }
                     }
@@ -1430,6 +1421,40 @@ impl TransactionPoolInner {
             ));
         }
 
+        // check balance
+        let mut need_balance = U256::from(0);
+        let estimate_gas_fee = Self::estimated_gas_fee(
+            transaction.gas().clone(),
+            transaction.gas_price().clone(),
+        );
+        match transaction.unsigned {
+            Transaction::Native(ref utx) => {
+                need_balance += utx.value.clone();
+                if sponsored_gas == U256::from(0) {
+                    need_balance += estimate_gas_fee;
+                }
+                if sponsored_storage == 0 {
+                    need_balance += U256::from(utx.storage_limit)
+                        * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+                }
+            }
+            Transaction::Ethereum(ref utx) => {
+                need_balance += utx.value.clone();
+                need_balance += estimate_gas_fee;
+            }
+        }
+
+        if need_balance > state_balance {
+            let msg = format!(
+                "Transaction {:?} is discarded due to out of balance, needs {:?} but account balance is {:?}",
+                transaction.hash(),
+                need_balance,
+                state_balance
+            );
+            trace!("{}", msg);
+            return Err(msg);
+        }
+
         let result = self.insert_transaction_without_readiness_check(
             transaction.clone(),
             packed,
@@ -1450,6 +1475,18 @@ impl TransactionPoolInner {
         })?;
 
         Ok(())
+    }
+
+    fn estimated_gas_fee(gas: U256, gas_price: U256) -> U256 {
+        let estimated_gas_u512 = gas.full_mul(gas_price);
+        // Normally, it is less than 2^128
+        let estimated_gas =
+            if estimated_gas_u512 > U512::from(U128::max_value()) {
+                U256::from(U128::max_value())
+            } else {
+                gas * gas_price
+            };
+        estimated_gas
     }
 }
 
@@ -1628,7 +1665,7 @@ mod test_transaction_pool_inner {
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice_addr_s,
                 5.into(),
-                exact_cost.into()
+                exact_cost.into(),
             ),
             None
         );
@@ -1637,7 +1674,7 @@ mod test_transaction_pool_inner {
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice_addr_s,
                 7.into(),
-                exact_cost.into()
+                exact_cost.into(),
             ),
             None
         );
@@ -1646,7 +1683,7 @@ mod test_transaction_pool_inner {
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice_addr_s,
                 8.into(),
-                exact_cost.into()
+                exact_cost.into(),
             ),
             Some(tx4.transaction.clone())
         );
@@ -1656,7 +1693,7 @@ mod test_transaction_pool_inner {
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice_addr_s,
                 4.into(),
-                exact_cost.into()
+                exact_cost.into(),
             ),
             None
         );
@@ -1665,7 +1702,7 @@ mod test_transaction_pool_inner {
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice_addr_s,
                 5.into(),
-                exact_cost.into()
+                exact_cost.into(),
             ),
             Some(tx4.transaction.clone())
         );
@@ -1674,7 +1711,7 @@ mod test_transaction_pool_inner {
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice_addr_s,
                 7.into(),
-                exact_cost.into()
+                exact_cost.into(),
             ),
             Some(tx4.transaction.clone())
         );
@@ -1683,7 +1720,7 @@ mod test_transaction_pool_inner {
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice_addr_s,
                 8.into(),
-                exact_cost.into()
+                exact_cost.into(),
             ),
             Some(tx4.transaction.clone())
         );
@@ -1692,7 +1729,7 @@ mod test_transaction_pool_inner {
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice_addr_s,
                 9.into(),
-                exact_cost.into()
+                exact_cost.into(),
             ),
             Some(tx5.transaction.clone())
         );
@@ -1701,7 +1738,7 @@ mod test_transaction_pool_inner {
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice_addr_s,
                 10.into(),
-                exact_cost.into()
+                exact_cost.into(),
             ),
             None
         );
@@ -1710,7 +1747,7 @@ mod test_transaction_pool_inner {
             deferred_pool.recalculate_readiness_with_local_info(
                 &alice_addr_s,
                 5.into(),
-                (exact_cost - 1).into()
+                (exact_cost - 1).into(),
             ),
             None
         );

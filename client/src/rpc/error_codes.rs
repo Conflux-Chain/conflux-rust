@@ -19,7 +19,6 @@
 
 use cfx_types::H256;
 use jsonrpc_core::{Error, ErrorCode, Value};
-use rustc_hex::ToHex;
 use std::fmt;
 
 pub mod codes {
@@ -178,11 +177,11 @@ pub fn internal_error<T: fmt::Debug>(details: T) -> Error {
     }
 }
 
-pub fn call_execution_error(message: String, output: Vec<u8>) -> Error {
+pub fn call_execution_error(message: String, data: String) -> Error {
     Error {
         code: ErrorCode::ServerError(codes::CALL_EXECUTION_ERROR),
         message,
-        data: Some(Value::String(format!("0x{}", output.to_hex::<String>()))),
+        data: Some(Value::String(data)),
     }
 }
 

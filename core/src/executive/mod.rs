@@ -31,8 +31,9 @@ impl CollateralCheckResultToVmResult for CollateralCheckResult {
 pub use self::{
     executed::*,
     executive::{
-        contract_address, gas_required_for, Executive, ExecutiveGeneric,
-        ExecutiveResult, TransactOptions,
+        contract_address, gas_required_for, EstimateRequest, Executive,
+        ExecutiveGeneric, ExecutiveResult, Observer, TransactCheckSettings,
+        TransactOptions,
     },
     internal_contract::{InternalContractMap, InternalContractTrait},
 };

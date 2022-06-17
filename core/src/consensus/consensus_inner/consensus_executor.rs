@@ -37,8 +37,8 @@ use metrics::{register_meter_with_group, Meter, MeterTimer};
 use primitives::{
     compute_block_number,
     receipt::{BlockReceipts, Receipt, TransactionOutcome},
-    Action, Block, BlockHeaderBuilder, EpochId, NativeTransaction,
-    SignedTransaction, Transaction, TransactionIndex, MERKLE_NULL_NODE,
+    Action, Block, BlockHeaderBuilder, EpochId, SignedTransaction,
+    TransactionIndex, MERKLE_NULL_NODE,
 };
 
 use crate::{
@@ -56,8 +56,8 @@ use crate::{
         internal_contract::{
             build_bloom_and_recover_phantom, decode_register_info,
         },
-        revert_reason_decode, ExecutionError, ExecutionOutcome, Executive,
-        TransactOptions,
+        revert_reason_decode, EstimateRequest, ExecutionError,
+        ExecutionOutcome, Executive, TransactOptions,
     },
     machine::Machine,
     observer::trace::{ExecTrace, TransactionExecTraces},
@@ -625,8 +625,10 @@ impl ConsensusExecutor {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
-    ) -> RpcResult<ExecutionOutcome> {
-        self.handler.call_virtual(tx, epoch_id, epoch_size)
+        request: EstimateRequest,
+    ) -> RpcResult<ExecutionOutcome>
+    {
+        self.handler.call_virtual(tx, epoch_id, epoch_size, request)
     }
 
     pub fn stop(&self) {
@@ -1282,9 +1284,9 @@ impl ConsensusExecutionHandler {
                 let mut storage_collateralized = Vec::new();
 
                 let options = if self.config.executive_trace {
-                    TransactOptions::with_tracing()
+                    TransactOptions::exec_with_tracing()
                 } else {
-                    TransactOptions::with_no_tracing()
+                    TransactOptions::exec_with_no_tracing()
                 };
                 let r =
                     Executive::new(state, &env, self.machine.as_ref(), &spec)
@@ -1893,7 +1895,9 @@ impl ConsensusExecutionHandler {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
-    ) -> RpcResult<ExecutionOutcome> {
+        request: EstimateRequest,
+    ) -> RpcResult<ExecutionOutcome>
+    {
         let best_block_header = self.data_man.block_header_by_hash(epoch_id);
         if best_block_header.is_none() {
             bail!("invalid epoch id");
@@ -1950,7 +1954,7 @@ impl ConsensusExecutionHandler {
         ))?;
         drop(state_availability_boundary);
 
-        let author = {
+        let miner = {
             let mut address = H160::random();
             if tx.space() == Space::Native {
                 address.set_user_account_type_bits();
@@ -1960,7 +1964,7 @@ impl ConsensusExecutionHandler {
 
         let env = Env {
             number: start_block_number,
-            author,
+            author: miner,
             timestamp: time_stamp,
             difficulty: Default::default(),
             accumulated_gas_used: U256::zero(),
@@ -1977,33 +1981,7 @@ impl ConsensusExecutionHandler {
         let mut ex =
             Executive::new(&mut state, &env, self.machine.as_ref(), &spec);
 
-        // If the transaction may be sponsored for collateral when calling a
-        // contract with storage sponsor, we needs a special method to estimate
-        // it.
-        if let Transaction::Native(NativeTransaction {
-            action: Action::Call(ref to),
-            ..
-        }) = tx.unsigned
-        {
-            if to.is_contract_address() {
-                let sponsor_balance_for_collateral =
-                    ex.state.sponsor_balance_for_collateral(&to)?;
-                if !sponsor_balance_for_collateral.is_zero()
-                    && ex
-                        .state
-                        .check_commission_privilege(&to, &tx.sender().address)?
-                {
-                    let r = ex.transact_virtual_two_pass(
-                        &tx,
-                        sponsor_balance_for_collateral,
-                    );
-                    trace!("Execution result {:?}", r);
-                    return Ok(r?);
-                }
-            }
-        }
-
-        let r = ex.transact_virtual(tx);
+        let r = ex.transact_virtual(tx.clone(), request);
         trace!("Execution result {:?}", r);
         Ok(r?)
     }
