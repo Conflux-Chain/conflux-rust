@@ -4,6 +4,7 @@
 
 use crate::{
     consensus_internal_parameters::MINED_BLOCK_COUNT_PER_QUARTER,
+    evm::Spec,
     internal_bail,
     observer::{AddressPocket, VmObserve},
     vm::{self, ActionParams, Env},
@@ -14,7 +15,7 @@ use cfx_types::{Address, AddressSpaceUtil, U256};
 
 /// Implementation of `deposit(uint256)`.
 pub fn deposit(
-    amount: U256, params: &ActionParams, env: &Env,
+    amount: U256, params: &ActionParams, env: &Env, spec: &Spec,
     state: &mut dyn StateOpsTrait, tracer: &mut dyn VmObserve,
 ) -> vm::Result<()>
 {
@@ -31,13 +32,13 @@ pub fn deposit(
         AddressPocket::StakingBalance(params.sender),
         amount,
     );
-    state.deposit(&params.sender, &amount, env.number)?;
+    state.deposit(&params.sender, &amount, env.number, spec.cip97)?;
     Ok(())
 }
 
 /// Implementation of `withdraw(uint256)`.
 pub fn withdraw(
-    amount: U256, params: &ActionParams, env: &Env,
+    amount: U256, params: &ActionParams, env: &Env, spec: &Spec,
     state: &mut dyn StateOpsTrait, tracer: &mut dyn VmObserve,
 ) -> vm::Result<()>
 {
@@ -58,7 +59,8 @@ pub fn withdraw(
         AddressPocket::Balance(params.sender.with_space(params.space)),
         amount,
     );
-    let interest_amount = state.withdraw(&params.sender, &amount)?;
+    let interest_amount =
+        state.withdraw(&params.sender, &amount, spec.cip97)?;
     tracer.trace_internal_transfer(
         AddressPocket::MintBurn,
         AddressPocket::Balance(params.sender.with_space(params.space)),
