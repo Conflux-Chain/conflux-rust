@@ -28,7 +28,7 @@ use crate::{
     },
     vm_factory::VmFactory,
 };
-use cfx_parameters::staking::*;
+use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
 use cfx_state::{
     state_trait::StateOpsTrait, substate_trait::SubstateMngTrait, CleanupMode,
     CollateralCheckResult, StateTrait, SubstateTrait,
@@ -40,13 +40,15 @@ use cfx_types::{
 };
 use primitives::{
     receipt::StorageChange, storage::STORAGE_LAYOUT_REGULAR_V0,
-    transaction::Action, Eip155Transaction, NativeTransaction,
-    SignedTransaction, StorageLayout, Transaction,
+    transaction::Action, NativeTransaction, SignedTransaction, StorageLayout,
+    Transaction,
 };
 use rlp::RlpStream;
 use std::{
+    cmp::{max, min},
     collections::HashSet,
     convert::{TryFrom, TryInto},
+    ops::Shl,
     sync::Arc,
 };
 
@@ -178,6 +180,91 @@ pub fn into_contract_create_result(
 /// Transaction execution options.
 pub struct TransactOptions {
     pub observer: Observer,
+    pub check_settings: TransactCheckSettings,
+}
+
+impl TransactOptions {
+    pub fn exec_with_tracing() -> Self {
+        Self {
+            observer: Observer::with_tracing(),
+            check_settings: TransactCheckSettings::all_checks(),
+        }
+    }
+
+    pub fn exec_with_no_tracing() -> Self {
+        Self {
+            observer: Observer::with_no_tracing(),
+            check_settings: TransactCheckSettings::all_checks(),
+        }
+    }
+
+    pub fn estimate_first_pass(request: EstimateRequest) -> Self {
+        Self {
+            observer: Observer::virtual_call(),
+            check_settings: TransactCheckSettings::from_estimate_request(
+                request,
+                ChargeCollateral::EstimateSender,
+            ),
+        }
+    }
+
+    pub fn estimate_second_pass(request: EstimateRequest) -> Self {
+        Self {
+            observer: Observer::virtual_call(),
+            check_settings: TransactCheckSettings::from_estimate_request(
+                request,
+                ChargeCollateral::EstimateSponsor,
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ChargeCollateral {
+    Normal,
+    EstimateSender,
+    EstimateSponsor,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct EstimateRequest {
+    pub has_sender: bool,
+    pub has_gas_limit: bool,
+    pub has_gas_price: bool,
+    pub has_nonce: bool,
+    pub has_storage_limit: bool,
+}
+
+impl EstimateRequest {
+    fn recheck_gas_fee(&self) -> bool { self.has_sender && self.has_gas_price }
+
+    fn charge_gas(&self) -> bool {
+        self.has_sender && self.has_gas_limit && self.has_gas_price
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct TransactCheckSettings {
+    pub charge_collateral: ChargeCollateral,
+    pub charge_gas: bool,
+}
+
+impl TransactCheckSettings {
+    fn all_checks() -> Self {
+        Self {
+            charge_collateral: ChargeCollateral::Normal,
+            charge_gas: true,
+        }
+    }
+
+    fn from_estimate_request(
+        request: EstimateRequest, charge_collateral: ChargeCollateral,
+    ) -> Self {
+        Self {
+            charge_collateral,
+            charge_gas: request.charge_gas(),
+        }
+    }
 }
 
 pub struct Observer {
@@ -202,36 +289,28 @@ impl Observer {
             Some(tracer) => tracer,
         }
     }
-}
 
-impl TransactOptions {
-    pub fn with_tracing() -> Self {
-        Self {
-            observer: Observer {
-                tracer: Some(ExecutiveTracer::default()),
-                gas_man: None,
-                _noop: (),
-            },
+    fn with_tracing() -> Self {
+        Observer {
+            tracer: Some(ExecutiveTracer::default()),
+            gas_man: None,
+            _noop: (),
         }
     }
 
-    pub fn with_no_tracing() -> Self {
-        Self {
-            observer: Observer {
-                tracer: Some(ExecutiveTracer::default()),
-                gas_man: None,
-                _noop: (),
-            },
+    fn with_no_tracing() -> Self {
+        Observer {
+            tracer: None,
+            gas_man: None,
+            _noop: (),
         }
     }
 
-    pub fn virtual_call() -> Self {
-        Self {
-            observer: Observer {
-                tracer: Some(ExecutiveTracer::default()),
-                gas_man: Some(GasMan::default()),
-                _noop: (),
-            },
+    fn virtual_call() -> Self {
+        Observer {
+            tracer: Some(ExecutiveTracer::default()),
+            gas_man: Some(GasMan::default()),
+            _noop: (),
         }
     }
 }
@@ -957,122 +1036,31 @@ impl<
         Ok(result)
     }
 
-    /// For the same transaction, the storage limit paid by user and the storage
-    /// limit paid by the sponsor are different values. So this function will
-    ///
-    /// 1. Assuming the sponsor pays for storage collateral, check if the
-    /// transaction will fail for NotEnoughBalanceForStorage.
-    ///
-    /// 2. If it does, executes the transaction again assuming the user pays for
-    /// the storage collateral. The resultant storage limit must be larger than
-    /// the maximum storage limit can be afford by the sponsor, to guarantee the
-    /// user pays for the storage limit.
-    pub fn transact_virtual_two_pass(
-        &mut self, tx: &SignedTransaction, sponsor_balance_for_collateral: U256,
-    ) -> DbResult<ExecutionOutcome> {
-        let mut first_pass_tx = tx.clone();
-        let sponsor_storage_limit = (sponsor_balance_for_collateral
-            / *DRIPS_PER_STORAGE_COLLATERAL_UNIT)
-            .as_u64();
-
-        if let Transaction::Native(NativeTransaction {
-            ref mut storage_limit,
-            ..
-        }) = first_pass_tx.transaction.transaction.unsigned
-        {
-            *storage_limit = sponsor_storage_limit;
-        } else {
-            unreachable!(
-                "Only the native transaction needs two pass estimation"
-            );
-        }
-        let first_pass_result = self.transact_virtual(&first_pass_tx)?;
-        let fail_for_storage_balance = matches!(
-            first_pass_result,
-            ExecutionOutcome::ExecutionErrorBumpNonce(
-                ExecutionError::VmError(
-                    vm::Error::NotEnoughBalanceForStorage { .. },
-                ),
-                _,
-            )
-        );
-        return if fail_for_storage_balance {
-            let mut second_pass_result = self.transact_virtual(&tx)?;
-            if let ExecutionOutcome::Finished(Executed {
-                ref mut minimum_storage_limit,
-                ..
-            }) = second_pass_result
-            {
-                *minimum_storage_limit = sponsor_storage_limit + 64
-            }
-            Ok(second_pass_result)
-        } else {
-            Ok(first_pass_result)
-        };
-    }
-
     pub fn transact_virtual(
-        &mut self, tx: &SignedTransaction,
+        &mut self, mut tx: SignedTransaction, request: EstimateRequest,
     ) -> DbResult<ExecutionOutcome> {
         let is_native_tx = tx.space() == Space::Native;
-        let options = TransactOptions::virtual_call();
-        // If tx.from is specified (is not zero)
-        if !tx.sender().address.is_zero() {
-            let balance = self.state.balance(&tx.sender())?;
-            let mut first_tx = tx.clone();
-            // If is native tx and tx.storage_limit is not specified (is
-            // u64::MAX) And balance of 'from' can cover value +
-            // gas_fee Then set tx.storage_limit to tx.from max
-            // affordable amount
-            if is_native_tx && tx.storage_limit().unwrap_or(0) == u64::MAX {
-                let value_and_fee = tx.value() + tx.gas() * tx.gas_price();
-                if balance > value_and_fee {
-                    let available_storage_limit = (balance - value_and_fee)
-                        / *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-                    if let Transaction::Native(NativeTransaction {
-                        ref mut storage_limit,
-                        ..
-                    }) = first_tx.transaction.transaction.unsigned
-                    {
-                        *storage_limit = available_storage_limit.as_u64();
-                    }
-                }
-            }
-            // If is a eSpace tx and balance of 'from' can cover value
-            // Then set tx.gas to tx.from max affordable amount
-            if !is_native_tx && balance > *tx.value() {
-                if let Transaction::Ethereum(Eip155Transaction {
-                    ref mut gas,
-                    ..
-                }) = first_tx.transaction.transaction.unsigned
-                {
-                    *gas = (balance - tx.value()) / tx.gas_price();
-                }
-            }
-            self.state
-                .set_nonce(&first_tx.sender(), &first_tx.nonce())?;
-            return self.transact(&first_tx, options);
-        }
+        let request_storage_limit = tx.storage_limit();
 
-        // If tx.from is not specified then use a random one, and give it a
-        // sufficient balance
-        let mut random_hex = Address::random();
-        if is_native_tx {
-            random_hex.set_user_account_type_bits();
-        }
-        let sender = random_hex.with_space(tx.space());
-        let tx_with_random_from = &SignedTransaction {
-            transaction: tx.transaction.clone(),
-            sender: sender.address,
-            public: None,
-        };
-        let balance = self.state.balance(&sender)?;
-        // Give the sender a sufficient balance.
-        let needed_balance = U256::MAX / U256::from(2u64);
-        if balance < needed_balance {
-            let balance_inc = needed_balance - balance;
+        if !request.has_sender {
+            let mut random_hex = Address::random();
+            if is_native_tx {
+                random_hex.set_user_account_type_bits();
+            }
+            tx.sender = random_hex;
+            tx.public = None;
+
+            // If the sender is not specified, give it enough balance: 1 billion
+            // CFX.
+            let balance_inc = min(
+                tx.value().saturating_add(
+                    U256::from(1_000_000_000) * ONE_CFX_IN_DRIP,
+                ),
+                U256::one().shl(128),
+            );
+
             self.state.add_balance(
-                &sender,
+                &random_hex.with_space(tx.space()),
                 &balance_inc,
                 CleanupMode::NoEmpty,
                 self.spec.account_start_nonce,
@@ -1080,17 +1068,220 @@ impl<
             // Make sure statistics are also correct and will not violate any
             // underlying assumptions.
             self.state.add_total_issued(balance_inc);
-            if tx.sender().space == Space::Ethereum {
+            if tx.space() == Space::Ethereum {
                 self.state.add_total_evm_tokens(balance_inc);
             }
         }
-        self.state.set_nonce(&sender, &tx.nonce())?;
-        self.transact(tx_with_random_from, options)
+
+        if request.has_nonce {
+            self.state.set_nonce(&tx.sender(), &tx.nonce())?;
+        } else {
+            *tx.nonce_mut() = self.state.nonce(&tx.sender())?;
+        }
+
+        let balance = self.state.balance(&tx.sender())?;
+
+        // For the same transaction, the storage limit paid by user and the
+        // storage limit paid by the sponsor are different values. So
+        // this function will
+        //
+        // 1. First Pass: Assuming the sponsor pays for storage collateral,
+        // check if the transaction will fail for
+        // NotEnoughBalanceForStorage.
+        //
+        // 2. Second Pass: If it does, executes the transaction again assuming
+        // the user pays for the storage collateral. The resultant
+        // storage limit must be larger than the maximum storage limit
+        // can be afford by the sponsor, to guarantee the user pays for
+        // the storage limit.
+
+        // First pass
+        self.state.checkpoint();
+        let sender_pay_executed = match self
+            .transact(&tx, TransactOptions::estimate_first_pass(request))?
+        {
+            ExecutionOutcome::Finished(executed) => executed,
+            res => {
+                return Ok(res);
+            }
+        };
+        debug!(
+            "Transaction estimate first pass outcome {:?}",
+            sender_pay_executed
+        );
+        self.state.revert_to_checkpoint();
+
+        // Second pass
+        let mut contract_pay_executed: Option<Executed> = None;
+        let mut native_to_contract: Option<Address> = None;
+        let mut sponsor_for_collateral_eligible = false;
+        if let Transaction::Native(NativeTransaction {
+            action: Action::Call(ref to),
+            ..
+        }) = tx.unsigned
+        {
+            if to.is_contract_address() {
+                native_to_contract = Some(*to);
+                let has_sponsor = self
+                    .state
+                    .sponsor_for_collateral(&to)?
+                    .map_or(false, |x| !x.is_zero());
+
+                if has_sponsor
+                    && (self.state.check_commission_privilege(
+                        &to,
+                        &tx.sender().address,
+                    )? || self
+                        .state
+                        .check_commission_privilege(&to, &Address::zero())?)
+                {
+                    sponsor_for_collateral_eligible = true;
+
+                    self.state.checkpoint();
+                    let res = self.transact(
+                        &tx,
+                        TransactOptions::estimate_second_pass(request),
+                    )?;
+                    self.state.revert_to_checkpoint();
+
+                    contract_pay_executed = match res {
+                        ExecutionOutcome::Finished(executed) => Some(executed),
+                        res => {
+                            warn!("Should unreachable because two pass estimations should have the same output. \
+                                Now we have: first pass success {:?}, second pass fail {:?}", sender_pay_executed, res);
+                            None
+                        }
+                    };
+                    debug!(
+                        "Transaction estimate second pass outcome {:?}",
+                        contract_pay_executed
+                    );
+                }
+            }
+        };
+
+        let overwrite_storage_limit =
+            |mut executed: Executed, max_sponsor_storage_limit: u64| {
+                debug!("Transaction estimate overwrite the storage limit to overcome sponsor_balance_for_collateral.");
+                executed.estimated_storage_limit = max(
+                    executed.estimated_storage_limit,
+                    max_sponsor_storage_limit + 64,
+                );
+                executed
+            };
+
+        let mut executed = if !sponsor_for_collateral_eligible {
+            sender_pay_executed
+        } else {
+            let sponsor_balance_for_collateral =
+                self.state.sponsor_balance_for_collateral(
+                    native_to_contract.as_ref().unwrap(),
+                )?;
+            let max_sponsor_storage_limit = (sponsor_balance_for_collateral
+                / *DRIPS_PER_STORAGE_COLLATERAL_UNIT)
+                .as_u64();
+            if let Some(contract_pay_executed) = contract_pay_executed {
+                if max_sponsor_storage_limit
+                    >= contract_pay_executed.estimated_storage_limit
+                {
+                    contract_pay_executed
+                } else {
+                    overwrite_storage_limit(
+                        sender_pay_executed,
+                        max_sponsor_storage_limit,
+                    )
+                }
+            } else {
+                overwrite_storage_limit(
+                    sender_pay_executed,
+                    max_sponsor_storage_limit,
+                )
+            }
+        };
+
+        // Revise the gas used in result, if we estimate the transaction with a
+        // default large enough gas.
+        if !request.has_gas_limit {
+            let estimated_gas_limit = executed.estimated_gas_limit.unwrap();
+            executed.gas_charged = max(
+                estimated_gas_limit - estimated_gas_limit / 4,
+                executed.gas_used,
+            );
+            executed.fee = executed.gas_charged.saturating_mul(*tx.gas_price());
+        }
+
+        // If we don't charge gas, recheck the current gas_fee is ok for
+        // sponsorship.
+        if !request.charge_gas()
+            && request.has_gas_price
+            && executed.gas_sponsor_paid
+        {
+            let enough_balance = executed.fee
+                <= self
+                    .state
+                    .sponsor_balance_for_gas(&native_to_contract.unwrap())?;
+            let enough_bound = executed.fee
+                <= self
+                    .state
+                    .sponsor_gas_bound(&native_to_contract.unwrap())?;
+            if !(enough_balance && enough_bound) {
+                debug!("Transaction estimate unset \"sponsor_paid\" because of not enough sponsor balance / gas bound.");
+                executed.gas_sponsor_paid = false;
+            }
+        }
+
+        // If the request has a sender, recheck the balance requirement matched.
+        if request.has_sender {
+            // Unwrap safety: in given TransactOptions, this value must be
+            // `Some(_)`.
+            let gas_fee =
+                if request.recheck_gas_fee() && !executed.gas_sponsor_paid {
+                    executed
+                        .estimated_gas_limit
+                        .unwrap()
+                        .saturating_mul(*tx.gas_price())
+                } else {
+                    0.into()
+                };
+            let storage_collateral = if !executed.storage_sponsor_paid {
+                U256::from(executed.estimated_storage_limit)
+                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+            } else {
+                0.into()
+            };
+            let value_and_fee = tx
+                .value()
+                .saturating_add(gas_fee)
+                .saturating_add(storage_collateral);
+            if balance < value_and_fee {
+                return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
+                    ExecutionError::NotEnoughCash {
+                        required: value_and_fee.into(),
+                        got: balance.into(),
+                        actual_gas_cost: min(balance, gas_fee),
+                        max_storage_limit_cost: storage_collateral,
+                    },
+                    executed,
+                ));
+            }
+        }
+
+        if request.has_storage_limit {
+            let storage_limit = request_storage_limit.unwrap();
+            if storage_limit < executed.estimated_storage_limit {
+                return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
+                    ExecutionError::VmError(vm::Error::ExceedStorageLimit),
+                    executed,
+                ));
+            }
+        }
+
+        return Ok(ExecutionOutcome::Finished(executed));
     }
 
     fn sponsor_check(
         &self, tx: &SignedTransaction, spec: &Spec, sender_balance: U512,
-        gas_cost: U512, storage_cost: U256,
+        gas_cost: U512, storage_cost: U256, settings: &TransactCheckSettings,
     ) -> DbResult<Result<SponsorCheckOutput, ExecutionOutcome>>
     {
         let sender = tx.sender();
@@ -1139,8 +1330,14 @@ impl<
 
         let sponsor_balance_for_storage =
             self.state.sponsor_balance_for_collateral(&code_address)?;
-        let storage_sponsored = storage_sponsor_eligible
-            && storage_cost <= sponsor_balance_for_storage;
+        let storage_sponsored = match settings.charge_collateral {
+            ChargeCollateral::Normal => {
+                storage_sponsor_eligible
+                    && storage_cost <= sponsor_balance_for_storage
+            }
+            ChargeCollateral::EstimateSender => false,
+            ChargeCollateral::EstimateSponsor => true,
+        };
 
         let sender_intended_cost = {
             let mut sender_intended_cost = U512::from(tx.value());
@@ -1198,6 +1395,9 @@ impl<
             total_cost,
             gas_sponsored,
             storage_sponsored,
+            // Only for backward compatible for a early bug.
+            // The receipt reported `storage_sponsor_eligible` instead of
+            // `storage_sponsored`.
             storage_sponsor_eligible,
         }));
     }
@@ -1205,7 +1405,10 @@ impl<
     pub fn transact(
         &mut self, tx: &SignedTransaction, options: TransactOptions,
     ) -> DbResult<ExecutionOutcome> {
-        let mut observer = options.observer;
+        let TransactOptions {
+            mut observer,
+            check_settings,
+        } = options;
 
         let spec = &self.spec;
         let sender = tx.sender();
@@ -1254,14 +1457,21 @@ impl<
         );
 
         let balance = self.state.balance(&sender)?;
-        let gas_cost = tx.gas().full_mul(*tx.gas_price());
-        let storage_cost = if let Transaction::Native(ref tx) =
-            tx.transaction.transaction.unsigned
-        {
-            U256::from(tx.storage_limit) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+        let gas_cost = if check_settings.charge_gas {
+            tx.gas().full_mul(*tx.gas_price())
         } else {
-            U256::zero()
+            0.into()
         };
+        let storage_cost =
+            if let (Transaction::Native(tx), ChargeCollateral::Normal) = (
+                &tx.transaction.transaction.unsigned,
+                check_settings.charge_collateral,
+            ) {
+                U256::from(tx.storage_limit)
+                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+            } else {
+                U256::zero()
+            };
 
         let sender_balance = U512::from(balance);
 
@@ -1278,6 +1488,7 @@ impl<
                 sender_balance,
                 gas_cost,
                 storage_cost,
+                &check_settings,
             )? {
                 Ok(res) => res,
                 Err(err) => {
@@ -1502,11 +1713,15 @@ impl<
         // Charge collateral and process the checkpoint.
         let (result, output) = {
             let res = res.and_then(|finalize_res| {
+                let dry_run_no_charge = !matches!(
+                    check_settings.charge_collateral,
+                    ChargeCollateral::Normal
+                );
+
+                // For a ethereum space tx, this function has no op.
                 // TODO: in fact, we don't need collect again here. But this is
                 // only the performance optimization and we put it in the later
                 // PR.
-
-                // For a ethereum space tx, this function has no op.
                 self.state
                     .collect_and_settle_collateral(
                         &sender.address,
@@ -1514,6 +1729,7 @@ impl<
                         &mut substate,
                         observer.as_state_tracer(),
                         self.spec.account_start_nonce,
+                        dry_run_no_charge,
                     )?
                     .into_vm_result()
                     .and(Ok(finalize_res))
@@ -1603,6 +1819,8 @@ impl<
             &substate,
             tracer,
             self.spec.account_start_nonce,
+            // Kill process does not occupy new storage entries.
+            false,
         )?;
         // The storage recycling process should never occupy new collateral.
         assert_eq!(res, CollateralCheckResult::Valid);
@@ -1712,14 +1930,14 @@ impl<
             let gas_charged = tx.gas() - gas_refunded;
             (
                 gas_charged,
-                gas_charged * tx.gas_price(),
-                gas_refunded * tx.gas_price(),
+                gas_charged.saturating_mul(*tx.gas_price()),
+                gas_refunded.saturating_mul(*tx.gas_price()),
             )
         } else {
             (
                 gas_used,
-                gas_used * tx.gas_price(),
-                gas_left * tx.gas_price(),
+                gas_used.saturating_mul(*tx.gas_price()),
+                gas_left.saturating_mul(*tx.gas_price()),
             )
         };
 
@@ -1818,6 +2036,13 @@ impl<
                 let trace =
                     observer.tracer.map_or(Default::default(), |t| t.drain());
 
+                let estimated_storage_limit =
+                    if let Some(x) = storage_collateralized.first() {
+                        x.collaterals.as_u64()
+                    } else {
+                        0
+                    };
+
                 let executed = Executed {
                     gas_used,
                     gas_charged,
@@ -1831,7 +2056,7 @@ impl<
                     output,
                     trace,
                     estimated_gas_limit,
-                    minimum_storage_limit: 0,
+                    estimated_storage_limit,
                 };
 
                 if r.apply_state {

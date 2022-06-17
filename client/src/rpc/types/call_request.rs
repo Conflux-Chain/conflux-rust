@@ -11,7 +11,6 @@ use crate::rpc::{
     RpcResult,
 };
 use cfx_addr::Network;
-use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
 use cfx_types::{Address, AddressSpaceUtil, U256, U64};
 use cfxcore::rpc_errors::invalid_params_check;
 use cfxcore_accounts::AccountProvider;
@@ -26,7 +25,7 @@ use std::{cmp::min, sync::Arc};
 
 /// The MAX_GAS_CALL_REQUEST is one magnitude higher than block gas limit and
 /// not too high that a call_virtual consumes too much resource.
-pub const MAX_GAS_CALL_REQUEST: u64 = 500_000_000;
+pub const MAX_GAS_CALL_REQUEST: u64 = 15_000_000;
 
 #[derive(Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -157,7 +156,7 @@ pub fn sign_call(
             Action::Call(rpc_addr.hex_address)
         }),
         gas,
-        gas_price: request.gas_price.unwrap_or(GAS_PRICE_DEFAULT_VALUE.into()),
+        gas_price: request.gas_price.unwrap_or(1.into()),
         value: request.value.unwrap_or_default(),
         storage_limit: request
             .storage_limit

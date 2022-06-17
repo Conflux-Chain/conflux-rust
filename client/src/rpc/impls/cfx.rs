@@ -5,7 +5,7 @@
 use crate::rpc::types::{
     call_request::rpc_call_request_network, errors::check_rpc_address_network,
     pos::PoSEpochReward, PoSEconomics, RpcAddress, SponsorInfo,
-    TokenSupplyInfo, MAX_GAS_CALL_REQUEST,
+    TokenSupplyInfo,
 };
 use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
@@ -74,7 +74,7 @@ use cfx_parameters::consensus_internal::REWARD_EPOCH_COUNT;
 use cfxcore::{
     consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
-    executive::revert_reason_decode,
+    executive::{revert_reason_decode, EstimateRequest},
     observer::ErrorUnwind,
     spec::genesis::{
         genesis_contract_address_four_year, genesis_contract_address_two_year,
@@ -1136,22 +1136,23 @@ impl RpcImpl {
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<Bytes> {
         match self.exec_transaction(request, epoch)? {
-            ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(expected, got)) => {
-                bail!(call_execution_error(
-                    "Transaction can not be executed".into(),
-                    format! {"nonce is too old expected {:?} got {:?}", expected, got}.into_bytes()
-                ))
-            }
-            ExecutionOutcome::NotExecutedDrop(TxDropError::InvalidRecipientAddress(recipient)) => {
-                bail!(call_execution_error(
-                    "Transaction can not be executed".into(),
-                    format! {"invalid recipient address {:?}", recipient}.into_bytes()
-                ))
-            }
+            ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
+                expected,
+                got,
+            )) => bail!(call_execution_error(
+                "Transaction can not be executed".into(),
+                format! {"nonce is too old expected {:?} got {:?}", expected, got}
+            )),
+            ExecutionOutcome::NotExecutedDrop(
+                TxDropError::InvalidRecipientAddress(recipient),
+            ) => bail!(call_execution_error(
+                "Transaction can not be executed".into(),
+                format! {"invalid recipient address {:?}", recipient}
+            )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(call_execution_error(
                     "Transaction can not be executed".into(),
-                    format! {"{:?}", e}.into_bytes()
+                    format! {"{:?}", e}
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
@@ -1159,12 +1160,12 @@ impl RpcImpl {
                 executed,
             ) => bail!(call_execution_error(
                 "Transaction reverted".into(),
-                executed.output
+                format!("0x{}", executed.output.to_hex::<String>())
             )),
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
                 bail!(call_execution_error(
                     "Transaction execution failed".into(),
-                    format! {"{:?}", e}.into_bytes()
+                    format! {"{:?}", e}
                 ))
             }
             ExecutionOutcome::Finished(executed) => Ok(executed.output.into()),
@@ -1174,23 +1175,27 @@ impl RpcImpl {
     fn estimate_gas_and_collateral(
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<EstimateGasAndCollateralResponse> {
+        info!(
+            "RPC Request: cfx_estimateGasAndCollateral request={:?}, epoch={:?}",request,epoch
+        );
         let executed = match self.exec_transaction(request, epoch)? {
-            ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(expected, got)) => {
-                bail!(call_execution_error(
-                    "Can not estimate: transaction can not be executed".into(),
-                    format! {"nonce is too old expected {:?} got {:?}", expected, got}.into_bytes()
-                ))
-            }
-            ExecutionOutcome::NotExecutedDrop(TxDropError::InvalidRecipientAddress(recipient)) => {
-                bail!(call_execution_error(
-                    "Can not estimate: transaction can not be executed".into(),
-                    format! {"invalid recipient address {:?}", recipient}.into_bytes()
-                ))
-            }
+            ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
+                expected,
+                got,
+            )) => bail!(call_execution_error(
+                "Can not estimate: transaction can not be executed".into(),
+                format! {"nonce is too old expected {:?} got {:?}", expected, got}
+            )),
+            ExecutionOutcome::NotExecutedDrop(
+                TxDropError::InvalidRecipientAddress(recipient),
+            ) => bail!(call_execution_error(
+                "Can not estimate: transaction can not be executed".into(),
+                format! {"invalid recipient address {:?}", recipient}
+            )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(call_execution_error(
                     "Can not estimate: transaction can not be executed".into(),
-                    format! {"{:?}", e}.into_bytes()
+                    format! {"{:?}", e}
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
@@ -1199,11 +1204,19 @@ impl RpcImpl {
             ) => {
                 let network_type = *self.sync.network.get_network_type();
 
-                // When a revert exception happens, there is usually an error in the sub-calls.
-                // So we return the trace information for debugging contract.
-                let errors = ErrorUnwind::from_traces(executed.trace).errors.iter()
-                    .map(|(addr,error)| {
-                        let cip37_addr = RpcAddress::try_from_h160(addr.clone(),network_type).unwrap().base32_address;
+                // When a revert exception happens, there is usually an error in
+                // the sub-calls. So we return the trace
+                // information for debugging contract.
+                let errors = ErrorUnwind::from_traces(executed.trace)
+                    .errors
+                    .iter()
+                    .map(|(addr, error)| {
+                        let cip37_addr = RpcAddress::try_from_h160(
+                            addr.clone(),
+                            network_type,
+                        )
+                        .unwrap()
+                        .base32_address;
                         format!("{}: {}", cip37_addr, error)
                     })
                     .collect::<Vec<String>>();
@@ -1211,22 +1224,22 @@ impl RpcImpl {
                 // Decode revert error
                 let revert_error = revert_reason_decode(&executed.output);
                 let revert_error = if !revert_error.is_empty() {
-                    format!(": {}.",revert_error)
-                }else{
+                    format!(": {}.", revert_error)
+                } else {
                     format!(".")
                 };
 
                 // Try to fetch the innermost error.
-                let innermost_error = if errors.len()>0{
+                let innermost_error = if errors.len() > 0 {
                     format!(" Innermost error is at {}.", errors[0])
-                }else{
+                } else {
                     String::default()
                 };
 
                 bail!(call_execution_error(
                     format!("Estimation isn't accurate: transaction is reverted{}{}",
                         revert_error, innermost_error),
-                    errors.join("\n").into_bytes(),
+                    errors.join("\n"),
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
@@ -1234,41 +1247,15 @@ impl RpcImpl {
                     format! {"Can not estimate: transaction execution failed, \
                     all gas will be charged (execution error: {:?})", e}
                     .into(),
-                    format! {"{:?}", e}.into_bytes()
+                    format! {"{:?}", e}
                 ))
             }
             ExecutionOutcome::Finished(executed) => executed,
         };
-        let mut storage_collateralized = 0;
-        for storage_change in &executed.storage_collateralized {
-            storage_collateralized += storage_change.collaterals.as_u64();
-        }
-        if executed.minimum_storage_limit > storage_collateralized {
-            storage_collateralized = executed.minimum_storage_limit;
-        }
-        let storage_collateralized = U64::from(storage_collateralized);
-        // In case of unlimited full gas charge at some VM call, or if there are
-        // infinite loops, the total estimated gas used is very close to
-        // MAX_GAS_CALL_REQUEST, 0.8 is chosen to check if it's close.
-        const TOO_MUCH_GAS_USED: u64 =
-            (0.8 * (MAX_GAS_CALL_REQUEST as f32)) as u64;
-        // TODO: this value should always be Some(..) unless incorrect
-        // implementation. Should return an error for server bugs later.
+        let storage_collateralized =
+            U64::from(executed.estimated_storage_limit);
         let estimated_gas_limit =
             executed.estimated_gas_limit.unwrap_or(U256::zero());
-        if estimated_gas_limit >= U256::from(TOO_MUCH_GAS_USED) {
-            bail!(call_execution_error(
-                format!(
-                    "Gas too high. Most likely there are problems within the contract code. \
-                    gas {}, storage_limit {}",
-                   estimated_gas_limit, storage_collateralized
-                ),
-                format!(
-                    "gas {}, storage_limit {}", estimated_gas_limit, storage_collateralized
-                )
-                .into_bytes(),
-            ));
-        }
         let response = EstimateGasAndCollateralResponse {
             // We multiply the gas_used for 2 reasons:
             // 1. In each EVM call, the gas passed is at most 63/64 of the
@@ -1354,12 +1341,21 @@ impl RpcImpl {
         let consensus_graph = self.consensus_graph();
         let epoch = epoch.unwrap_or(EpochNumber::LatestState);
 
+        let estimate_request = EstimateRequest {
+            has_sender: request.from.is_some(),
+            has_gas_limit: request.gas.is_some(),
+            has_gas_price: request.gas_price.is_some(),
+            has_nonce: request.nonce.is_some(),
+            has_storage_limit: request.storage_limit.is_some(),
+        };
+
         let best_epoch_height = consensus_graph.best_epoch_number();
         let chain_id = consensus_graph.best_chain_id();
         let signed_tx =
             sign_call(best_epoch_height, chain_id.in_native_space(), request)?;
         trace!("call tx {:?}", signed_tx);
-        consensus_graph.call_virtual(&signed_tx, epoch.into())
+
+        consensus_graph.call_virtual(&signed_tx, epoch.into(), estimate_request)
     }
 
     fn current_sync_phase(&self) -> RpcResult<String> {
