@@ -48,7 +48,7 @@ pub struct Executed {
     pub estimated_gas_limit: Option<U256>,
     /// Only for the virtual call, the minimum storage limit should returned in
     /// estimate gas and collateral.
-    pub minimum_storage_limit: u64,
+    pub estimated_storage_limit: u64,
 }
 
 #[derive(Debug)]
@@ -160,7 +160,7 @@ impl Executed {
             output: Default::default(),
             trace,
             estimated_gas_limit: None,
-            minimum_storage_limit: 0,
+            estimated_storage_limit: 0,
         }
     }
 
@@ -176,7 +176,7 @@ impl Executed {
         Self {
             gas_used: *tx.gas(),
             gas_charged: *tx.gas(),
-            fee: tx.gas() * tx.gas_price(),
+            fee: tx.gas().saturating_mul(*tx.gas_price()),
             gas_sponsor_paid,
             logs: vec![],
             contracts_created: vec![],
@@ -186,7 +186,7 @@ impl Executed {
             output: Default::default(),
             trace,
             estimated_gas_limit: None,
-            minimum_storage_limit: 0,
+            estimated_storage_limit: 0,
         }
     }
 }

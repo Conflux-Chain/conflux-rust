@@ -14,7 +14,10 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use rlp::{self, Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
-use std::{error, fmt, ops::Deref};
+use std::{
+    error, fmt,
+    ops::{Deref, DerefMut},
+};
 use unexpected::OutOfBounds;
 
 /// Fake address for unsigned transactions.
@@ -478,6 +481,13 @@ impl Transaction {
             Transaction::Ethereum(_tx) => None,
         }
     }
+
+    pub fn nonce_mut(&mut self) -> &mut U256 {
+        match self {
+            Transaction::Native(tx) => &mut tx.nonce,
+            Transaction::Ethereum(tx) => &mut tx.nonce,
+        }
+    }
 }
 
 impl Transaction {
@@ -654,6 +664,10 @@ impl Deref for TransactionWithSignatureSerializePart {
     fn deref(&self) -> &Self::Target { &self.unsigned }
 }
 
+impl DerefMut for TransactionWithSignatureSerializePart {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.unsigned }
+}
+
 /// Signed transaction information without verified signature.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TransactionWithSignature {
@@ -671,6 +685,10 @@ impl Deref for TransactionWithSignature {
     type Target = TransactionWithSignatureSerializePart;
 
     fn deref(&self) -> &Self::Target { &self.transaction }
+}
+
+impl DerefMut for TransactionWithSignature {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.transaction }
 }
 
 impl Decodable for TransactionWithSignature {
@@ -785,6 +803,10 @@ impl Deref for SignedTransaction {
     type Target = TransactionWithSignature;
 
     fn deref(&self) -> &Self::Target { &self.transaction }
+}
+
+impl DerefMut for SignedTransaction {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.transaction }
 }
 
 impl From<SignedTransaction> for TransactionWithSignature {

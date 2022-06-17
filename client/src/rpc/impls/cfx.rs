@@ -74,7 +74,7 @@ use cfx_parameters::consensus_internal::REWARD_EPOCH_COUNT;
 use cfxcore::{
     consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
-    executive::revert_reason_decode,
+    executive::{revert_reason_decode, EstimateRequest},
     observer::ErrorUnwind,
     spec::genesis::{
         genesis_contract_address_four_year, genesis_contract_address_two_year,
@@ -1175,6 +1175,9 @@ impl RpcImpl {
     fn estimate_gas_and_collateral(
         &self, request: CallRequest, epoch: Option<EpochNumber>,
     ) -> RpcResult<EstimateGasAndCollateralResponse> {
+        info!(
+            "RPC Request: cfx_estimateGasAndCollateral request={:?}, epoch={:?}",request,epoch
+        );
         let executed = match self.exec_transaction(request, epoch)? {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
                 expected,
@@ -1249,14 +1252,8 @@ impl RpcImpl {
             }
             ExecutionOutcome::Finished(executed) => executed,
         };
-        let mut storage_collateralized = 0;
-        for storage_change in &executed.storage_collateralized {
-            storage_collateralized += storage_change.collaterals.as_u64();
-        }
-        if executed.minimum_storage_limit > storage_collateralized {
-            storage_collateralized = executed.minimum_storage_limit;
-        }
-        let storage_collateralized = U64::from(storage_collateralized);
+        let storage_collateralized =
+            U64::from(executed.estimated_storage_limit);
         let estimated_gas_limit =
             executed.estimated_gas_limit.unwrap_or(U256::zero());
         let response = EstimateGasAndCollateralResponse {
@@ -1344,12 +1341,21 @@ impl RpcImpl {
         let consensus_graph = self.consensus_graph();
         let epoch = epoch.unwrap_or(EpochNumber::LatestState);
 
+        let estimate_request = EstimateRequest {
+            has_sender: request.from.is_some(),
+            has_gas_limit: request.gas.is_some(),
+            has_gas_price: request.gas_price.is_some(),
+            has_nonce: request.nonce.is_some(),
+            has_storage_limit: request.storage_limit.is_some(),
+        };
+
         let best_epoch_height = consensus_graph.best_epoch_number();
         let chain_id = consensus_graph.best_chain_id();
         let signed_tx =
             sign_call(best_epoch_height, chain_id.in_native_space(), request)?;
         trace!("call tx {:?}", signed_tx);
-        consensus_graph.call_virtual(&signed_tx, epoch.into())
+
+        consensus_graph.call_virtual(&signed_tx, epoch.into(), estimate_request)
     }
 
     fn current_sync_phase(&self) -> RpcResult<String> {

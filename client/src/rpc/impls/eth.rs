@@ -26,7 +26,8 @@ use cfx_types::{
 use cfxcore::{
     consensus::PhantomBlock,
     executive::{
-        revert_reason_decode, ExecutionError, ExecutionOutcome, TxDropError,
+        revert_reason_decode, EstimateRequest, ExecutionError,
+        ExecutionOutcome, TxDropError,
     },
     observer::ErrorUnwind,
     rpc_errors::{
@@ -151,10 +152,19 @@ impl EthHandler {
             epoch => epoch.try_into()?,
         };
 
+        let estimate_request = EstimateRequest {
+            has_sender: request.from.is_some(),
+            has_gas_limit: request.gas.is_some(),
+            has_gas_price: request.gas_price.is_some(),
+            has_nonce: request.nonce.is_some(),
+            has_storage_limit: false,
+        };
+
         let chain_id = self.consensus.best_chain_id();
         let signed_tx = sign_call(chain_id.in_evm_space(), request)?;
-        trace!("call tx {:?}", signed_tx);
-        consensus_graph.call_virtual(&signed_tx, epoch)
+
+        trace!("call tx {:?}, request {:?}", signed_tx, estimate_request);
+        consensus_graph.call_virtual(&signed_tx, epoch, estimate_request)
     }
 
     fn send_transaction_with_signature(
