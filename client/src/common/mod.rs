@@ -369,6 +369,7 @@ pub fn initialize_common_modules(
         conf.raw_conf.chain_id,
         &initial_nodes,
     );
+    storage_manager.notify_genesis_hash(genesis_block.hash());
     let mut genesis_accounts = genesis_accounts;
     let genesis_accounts = genesis_accounts
         .drain()

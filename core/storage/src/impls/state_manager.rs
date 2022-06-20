@@ -632,6 +632,12 @@ impl StateManager {
             }
         }
     }
+
+    pub fn notify_genesis_hash(&self, genesis_hash: EpochId) {
+        if let Some(single_mpt_manager) = &self.single_mpt_storage_manager {
+            *single_mpt_manager.genesis_hash.lock() = genesis_hash;
+        }
+    }
 }
 
 impl StateManagerTrait for StateManager {
@@ -709,7 +715,7 @@ impl StateManagerTrait for StateManager {
     fn get_state_for_next_epoch(
         self: &Arc<Self>, parent_epoch_id: StateIndex,
     ) -> Result<Option<Box<dyn StateTrait>>> {
-        let parent_epoch = parent_epoch_id.epoch_id;
+        let mut parent_epoch = parent_epoch_id.epoch_id;
         let parent_height = parent_epoch_id.maybe_height;
         let state = self.get_state_for_next_epoch_inner(parent_epoch_id)?;
         if state.is_none() {
@@ -731,13 +737,11 @@ impl StateManagerTrait for StateManager {
             } else if single_mpt_storage_manager.available_height
                 == parent_height
             {
-                // FIXME: This makes the state modified in genesis
-                // initialization unavailable.
-                return Ok(Some(Box::new(ReplicatedState::new(
-                    state.unwrap(),
-                    single_mpt_storage_manager.get_state_for_genesis()?,
-                    single_mpt_storage_manager.get_state_filter(),
-                ))));
+                // For the first available single_mpt state, we read the genesis
+                // block state as the parent state to continue execution.
+                // This is only needed for tests because there is no eSpace
+                // state entries for Conflux Mainnet.
+                parent_epoch = *single_mpt_storage_manager.genesis_hash.lock();
             }
         }
         let single_mpt_state =

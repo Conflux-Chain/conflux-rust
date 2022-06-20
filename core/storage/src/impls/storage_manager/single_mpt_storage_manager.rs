@@ -26,6 +26,8 @@ pub struct SingleMptStorageManager {
     // If it's None, we will keep data for both spaces.
     pub space: Option<Space>,
     pub available_height: u64,
+
+    pub genesis_hash: Mutex<EpochId>,
 }
 
 impl SingleMptStorageManager {
@@ -59,6 +61,8 @@ impl SingleMptStorageManager {
             mpt,
             space,
             available_height,
+            // This is only used after `notify_genesis_hash` called.
+            genesis_hash: Default::default(),
         })
     }
 
