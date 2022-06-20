@@ -148,7 +148,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> NodeRefMapDeltaMpts<CacheAlgoDataT> {
     }
 }
 
-pub const DEFAULT_NODE_MAP_SIZE: DeltaMptDbKey = 200_000_000;
+pub const DEFAULT_NODE_MAP_SIZE: u32 = 200_000_000;
 
 // Type alias for clarity.
 pub trait NodeRefMapTrait {

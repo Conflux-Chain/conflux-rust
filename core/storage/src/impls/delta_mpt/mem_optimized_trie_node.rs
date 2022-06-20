@@ -532,8 +532,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> EntryTrait
 
     fn from_vacant_index(next: usize) -> Self {
         Self {
-            slab_next_vacant_index: (next as u32)
-                ^ NodeRefDeltaMptCompact::DIRTY_SLOT_LIMIT,
+            slab_next_vacant_index: next as u32,
             children_table: Default::default(),
             merkle_hash: Default::default(),
             path_mask: CompressedPathRaw::NO_MISSING_NIBBLE,
@@ -549,7 +548,8 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> EntryTrait
 
     fn is_vacant(&self) -> bool {
         // A valid next vacant index can't be 0.
-        self.slab_next_vacant_index != MaybeNodeRefDeltaMptCompact::NULL
+        self.slab_next_vacant_index as CompactNodeRef
+            != MaybeNodeRefDeltaMptCompact::NULL
     }
 
     fn take_occupied_and_replace_with_vacant_index(
@@ -559,8 +559,7 @@ impl<CacheAlgoDataT: CacheAlgoDataTrait> EntryTrait
     }
 
     fn get_next_vacant_index(&self) -> usize {
-        (self.slab_next_vacant_index ^ NodeRefDeltaMptCompact::DIRTY_SLOT_LIMIT)
-            as usize
+        self.slab_next_vacant_index as usize
     }
 
     fn get_occupied_ref(&self) -> &MemOptimizedTrieNode<CacheAlgoDataT> { self }

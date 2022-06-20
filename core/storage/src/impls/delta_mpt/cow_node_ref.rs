@@ -662,7 +662,12 @@ impl CowNodeRef {
                 .transaction
                 .borrow_mut()
                 .put_with_number_key(
-                    commit_transaction.info.row_number.value.into(),
+                    commit_transaction
+                        .info
+                        .row_number
+                        .value
+                        .try_into()
+                        .expect("not exceed i64::MAX"),
                     trie_node.rlp_bytes().as_slice(),
                 )?;
             commit_transaction.info.row_number =
@@ -927,6 +932,6 @@ use parking_lot::MutexGuard;
 use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
 use rlp::*;
 use std::{
-    borrow::BorrowMut, cell::Cell, hint::unreachable_unchecked, ops::Deref,
-    sync::atomic::Ordering,
+    borrow::BorrowMut, cell::Cell, convert::TryInto,
+    hint::unreachable_unchecked, ops::Deref, sync::atomic::Ordering,
 };
