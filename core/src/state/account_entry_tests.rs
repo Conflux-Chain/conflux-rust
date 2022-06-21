@@ -207,7 +207,8 @@ fn test_deposit_and_withdraw() {
     overlay_account.deposit(
         1_000_000_000_000_000u64.into(), /* amount */
         accumulated_interest_rate[1],
-        1, /* deposit_time */
+        1,     /* deposit_time */
+        false, /* cip97 */
     );
     assert_eq!(
         *overlay_account.balance(),
@@ -224,7 +225,8 @@ fn test_deposit_and_withdraw() {
     overlay_account.deposit(
         100_000_000_000_000u64.into(), /* amount */
         accumulated_interest_rate[2],
-        2, /* deposit_time */
+        2,     /* deposit_time */
+        false, /* cip97 */
     );
     assert_eq!(
         *overlay_account.balance(),
@@ -241,7 +243,8 @@ fn test_deposit_and_withdraw() {
     overlay_account.deposit(
         10_000_000_000_000u64.into(), /* amount */
         accumulated_interest_rate[3],
-        3, /* deposit_time */
+        3,     /* deposit_time */
+        false, /* cip97 */
     );
     assert_eq!(
         *overlay_account.balance(),
@@ -258,7 +261,8 @@ fn test_deposit_and_withdraw() {
     overlay_account.deposit(
         1_000_000_000_000u64.into(), /* amount */
         accumulated_interest_rate[4],
-        4, /* deposit_time */
+        4,     /* deposit_time */
+        false, /* cip97 */
     );
     assert_eq!(
         *overlay_account.balance(),
@@ -275,7 +279,8 @@ fn test_deposit_and_withdraw() {
     overlay_account.deposit(
         100_000_000_000u64.into(), /* amount */
         accumulated_interest_rate[5],
-        5, /* deposit_time */
+        5,     /* deposit_time */
+        false, /* cip97 */
     );
     assert_eq!(
         *overlay_account.balance(),
@@ -292,7 +297,8 @@ fn test_deposit_and_withdraw() {
     overlay_account.deposit(
         10_000_000_000u64.into(), /* amount */
         accumulated_interest_rate[6],
-        6, /* deposit_time */
+        6,     /* deposit_time */
+        false, /* cip97 */
     );
     assert_eq!(
         *overlay_account.balance(),
@@ -309,7 +315,8 @@ fn test_deposit_and_withdraw() {
     overlay_account.deposit(
         1_000_000_000u64.into(), /* amount */
         accumulated_interest_rate[7],
-        7, /* deposit_time */
+        7,     /* deposit_time */
+        false, /* cip97 */
     );
     assert_eq!(
         *overlay_account.balance(),
@@ -366,6 +373,7 @@ fn test_deposit_and_withdraw() {
     let interest = overlay_account.withdraw(
         500_000_000_000_000u64.into(), /* amount */
         accumulated_interest_rate[1],
+        false,
     );
     assert_eq!(interest, U256::zero());
     assert_eq!(*overlay_account.accumulated_interest_return(), U256::zero());
@@ -391,6 +399,7 @@ fn test_deposit_and_withdraw() {
     let interest = overlay_account.withdraw(
         500_000_000_000_000u64.into(), /* amount */
         accumulated_interest_rate[100000],
+        false,
     );
     assert_eq!(interest, U256::from(31_710_480_387u64));
     assert_eq!(
@@ -421,6 +430,7 @@ fn test_deposit_and_withdraw() {
     let interest = overlay_account.withdraw(
         110_250_000_000_000u64.into(), /* amount */
         accumulated_interest_rate[100],
+        false,
     );
     assert_eq!(interest, U256::from(6_845_508u64));
     assert_eq!(
@@ -483,6 +493,7 @@ fn init_test_account() -> OverlayAccount {
         10000000.into(), /* amount */
         0.into(),        /* accumulated_interest_rate */
         0,               /* deposit_time */
+        false,           /* cip97 */
     );
     overlay_account.vote_lock(
         100000.into(), /* amount */

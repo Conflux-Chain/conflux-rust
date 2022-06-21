@@ -214,9 +214,12 @@ pub trait StateOpsTrait {
 
     fn deposit(
         &mut self, address: &Address, amount: &U256, current_block_number: u64,
+        cip_97: bool,
     ) -> DbResult<()>;
 
-    fn withdraw(&mut self, address: &Address, amount: &U256) -> DbResult<U256>;
+    fn withdraw(
+        &mut self, address: &Address, amount: &U256, cip_97: bool,
+    ) -> DbResult<U256>;
 
     fn vote_lock(
         &mut self, address: &Address, amount: &U256, unlock_block_number: u64,
