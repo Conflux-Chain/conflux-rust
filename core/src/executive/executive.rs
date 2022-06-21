@@ -247,6 +247,7 @@ impl EstimateRequest {
 pub struct TransactCheckSettings {
     pub charge_collateral: ChargeCollateral,
     pub charge_gas: bool,
+    pub real_execution: bool,
 }
 
 impl TransactCheckSettings {
@@ -254,6 +255,7 @@ impl TransactCheckSettings {
         Self {
             charge_collateral: ChargeCollateral::Normal,
             charge_gas: true,
+            real_execution: true,
         }
     }
 
@@ -263,6 +265,7 @@ impl TransactCheckSettings {
         Self {
             charge_collateral,
             charge_gas: request.charge_gas(),
+            real_execution: false,
         }
     }
 }
@@ -1517,7 +1520,7 @@ impl<
             // We don't want to bump nonce for non-existent account when we
             // can't charge gas fee. In this case, the sender account will
             // not be created if it does not exist.
-            if !self.state.exists(&sender)? {
+            if !self.state.exists(&sender)? && check_settings.real_execution {
                 return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
                     ToRepackError::SenderDoesNotExist,
                 ));
