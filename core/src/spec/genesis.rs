@@ -431,7 +431,9 @@ pub fn genesis_block(
                     /* account_start_nonce = */ U256::zero(),
                 )
                 .unwrap();
-            state.deposit(&node.address, &stake_balance, 0).unwrap();
+            state
+                .deposit(&node.address, &stake_balance, 0, false)
+                .unwrap();
             let signed_tx = node
                 .register_tx
                 .clone()
@@ -561,7 +563,7 @@ fn execute_genesis_transaction(
 ) {
     let env = Env::default();
 
-    let options = TransactOptions::with_no_tracing();
+    let options = TransactOptions::exec_with_no_tracing();
     let r = {
         Executive::new(state, &env, machine.as_ref(), &machine.spec(env.number))
             .transact(transaction, options)

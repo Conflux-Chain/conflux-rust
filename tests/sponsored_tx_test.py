@@ -217,6 +217,16 @@ class SponsoredTxTest(ConfluxTestFramework):
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sb - charged_of_huge_gas(gas))
         assert_equal(self.wait_for_tx([transaction], True)[0]['storageCoveredBySponsor'], True)
 
+        # send 1025 * 10 ** 18 // 1024 CFX to addr1
+        tx = client.new_tx(
+            sender=genesis_addr,
+            priv_key=genesis_key,
+            value=1025 * 10 ** 18 // 1024,
+            nonce=self.get_nonce(self.genesis_addr),
+            receiver=addr1)
+        client.send_tx(tx, True)
+        assert_equal(client.get_balance(addr1), 10 ** 6 + 1025 * 10 ** 18 // 1024)
+
         # addr1 call with larger storage limit, should not packed
         transaction = self.call_contract_function(
             contract=test_contract,
@@ -235,15 +245,7 @@ class SponsoredTxTest(ConfluxTestFramework):
 
         # Wait for 2 seconds so previous asynchronous `txpool.notify_modified_accounts()` calls can finish.
         time.sleep(2)
-        # send 1025 * 10 ** 18 // 1024 CFX to addr1
-        tx = client.new_tx(
-            sender=genesis_addr,
-            priv_key=genesis_key,
-            value=1025 * 10 ** 18 // 1024,
-            nonce=self.get_nonce(self.genesis_addr),
-            receiver=addr1)
-        client.send_tx(tx, True)
-        assert_equal(client.get_balance(addr1), 10 ** 6 + 1025 * 10 ** 18 // 1024)
+
         for _ in range(10):
             client.generate_block()
         tx_info = self.nodes[0].txpool_txWithPoolInfo(transaction.hash_hex())

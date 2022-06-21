@@ -28,6 +28,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
+name = "adler32"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aae1277d39aeec15cb388266ecc24b11c80469deae6067e17a1a7aa9e5c1f234"
+
+[[package]]
 name = "aead"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -399,7 +405,7 @@ dependencies = [
 [[package]]
 name = "bls-signatures"
 version = "0.11.1"
-source = "git+https://github.com/Conflux-Chain/bls-signatures.git?rev=3fba9589b0413a10db9c88b46de61956673d7cf8#3fba9589b0413a10db9c88b46de61956673d7cf8"
+source = "git+https://github.com/Conflux-Chain/bls-signatures.git?rev=ac9b5526b5782f7aba4a833a55b820f10af69a75#ac9b5526b5782f7aba4a833a55b820f10af69a75"
 dependencies = [
  "blst",
  "blstrs",
@@ -529,7 +535,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4964518bd3b4a8190e832886cdc0da9794f12e8e6c1613a9e90ff331c4c8724b"
 
 [[package]]
-name = "cached-diemdb"
+name = "cached-pos-ledger-db"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -538,8 +544,8 @@ dependencies = [
  "diem-infallible",
  "diem-logger",
  "diem-types",
- "diemdb",
  "executor-types",
+ "pos-ledger-db",
  "serde",
  "storage-interface",
 ]
@@ -644,10 +650,12 @@ dependencies = [
  "cfx-types",
  "error-chain",
  "hashbrown 0.7.2",
+ "lazy_static",
  "log 0.4.14",
  "parking_lot 0.11.2",
  "primitives",
  "rlp 0.4.6",
+ "tiny-keccak 2.0.2",
 ]
 
 [[package]]
@@ -693,9 +701,13 @@ dependencies = [
 
 [[package]]
 name = "cfx-types"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ethereum-types 0.9.2",
+ "rlp 0.4.6",
+ "rlp_derive 0.1.0 (git+https://github.com/Conflux-Chain/conflux-parity-deps.git?rev=1597a9cab02343eb2322ca0ac58d39b64e3f42d1)",
+ "serde",
+ "serde_derive",
 ]
 
 [[package]]
@@ -708,7 +720,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "1.1.4"
+version = "2.0.2"
 dependencies = [
  "anyhow",
  "async-oneshot",
@@ -718,7 +730,7 @@ dependencies = [
  "bls-signatures",
  "bounded-executor",
  "byteorder",
- "cached-diemdb",
+ "cached-pos-ledger-db",
  "cfx-addr",
  "cfx-bytes",
  "cfx-internal-common",
@@ -744,7 +756,6 @@ dependencies = [
  "diem-secure-storage",
  "diem-temppath",
  "diem-types",
- "diemdb",
  "either",
  "error-chain",
  "executor",
@@ -755,6 +766,7 @@ dependencies = [
  "fs_extra",
  "futures 0.3.18",
  "hashbrown 0.7.2",
+ "heap-map",
  "hibitset",
  "io",
  "itertools 0.9.0",
@@ -783,6 +795,7 @@ dependencies = [
  "parity-crypto 0.9.0",
  "parity-util-mem",
  "parking_lot 0.11.2",
+ "pos-ledger-db",
  "pow-types",
  "primal",
  "primitives",
@@ -803,11 +816,13 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "sha3-macro",
  "short-hex-str",
  "siphasher 0.3.7",
  "slab",
  "smart-default",
  "solidity-abi",
+ "solidity-abi-derive",
  "sqlite",
  "sqlite3-sys",
  "static_assertions",
@@ -1470,6 +1485,8 @@ dependencies = [
  "erased-serde",
  "hostname",
  "once_cell",
+ "parking_lot 0.11.2",
+ "pipe-logger-lib",
  "prometheus 0.12.0",
  "serde",
  "serde_json",
@@ -1629,35 +1646,6 @@ dependencies = [
  "serde_json",
  "thiserror",
  "ureq",
-]
-
-[[package]]
-name = "diemdb"
-version = "0.1.0"
-dependencies = [
- "accumulator",
- "anyhow",
- "arc-swap 1.5.0",
- "bcs",
- "byteorder",
- "consensus-types",
- "diem-config",
- "diem-crypto",
- "diem-infallible",
- "diem-jellyfish-merkle",
- "diem-logger",
- "diem-metrics",
- "diem-types",
- "executor-types",
- "itertools 0.10.1",
- "num-derive",
- "num-traits",
- "num-variants",
- "once_cell",
- "schemadb",
- "serde",
- "storage-interface",
- "thiserror",
 ]
 
 [[package]]
@@ -2136,7 +2124,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
- "cached-diemdb",
+ "cached-pos-ledger-db",
  "cfx-types",
  "consensus-types",
  "diem-crypto",
@@ -2620,6 +2608,14 @@ name = "hashbrown"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
+
+[[package]]
+name = "heap-map"
+version = "0.1.0"
+dependencies = [
+ "malloc_size_of",
+ "malloc_size_of_derive",
+]
 
 [[package]]
 name = "heapsize"
@@ -3164,6 +3160,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8521a1b57e76b1ec69af7599e75e38e7b7fad6610f037db8c79b127201b5d119"
 
 [[package]]
+name = "libflate"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05605ab2bce11bcfc0e9c635ff29ef8b2ea83f29be257ee7d730cac3ee373093"
+dependencies = [
+ "adler32",
+ "crc32fast",
+ "libflate_lz77",
+]
+
+[[package]]
+name = "libflate_lz77"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39a734c0493409afcd49deee13c006a04e3586b9761a03543c6272c9c51f2f5a"
+dependencies = [
+ "rle-decode-fast",
+]
+
+[[package]]
 name = "libloading"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3186,7 +3202,7 @@ dependencies = [
 [[package]]
 name = "librocksdb_sys"
 version = "0.1.0"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=e62343e63be38284556b6610d75833217e3360b4#e62343e63be38284556b6610d75833217e3360b4"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=cac983ab886a0701c8458bce76a76f63de16e1bd#cac983ab886a0701c8458bce76a76f63de16e1bd"
 dependencies = [
  "bindgen",
  "bzip2-sys",
@@ -3203,7 +3219,7 @@ dependencies = [
 [[package]]
 name = "libtitan_sys"
 version = "0.0.1"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=e62343e63be38284556b6610d75833217e3360b4#e62343e63be38284556b6610d75833217e3360b4"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=cac983ab886a0701c8458bce76a76f63de16e1bd#cac983ab886a0701c8458bce76a76f63de16e1bd"
 dependencies = [
  "bzip2-sys",
  "cc",
@@ -3480,6 +3496,7 @@ dependencies = [
  "influx_db_client",
  "lazy_static",
  "log 0.4.14",
+ "log4rs",
  "parking_lot 0.11.2",
  "rand 0.7.3",
  "time",
@@ -4171,6 +4188,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "path-absolutize"
+version = "3.0.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3de4b40bd9736640f14c438304c09538159802388febb02c8abaae0846c1f13"
+dependencies = [
+ "path-dedot",
+]
+
+[[package]]
+name = "path-dedot"
+version = "3.0.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d611d5291372b3738a34ebf0d1f849e58b1dcc1101032f76a346eaa1f8ddbb5b"
+dependencies = [
+ "once_cell",
+]
+
+[[package]]
 name = "path-slash"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4258,6 +4293,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
+name = "pipe-logger-lib"
+version = "1.1.13"
+source = "git+https://github.com/aleksuss/pipe-logger-lib.git?rev=3ff3550fc7e46d6e530daf1a47471c6628baa43d#3ff3550fc7e46d6e530daf1a47471c6628baa43d"
+dependencies = [
+ "chrono",
+ "libflate",
+ "path-absolutize",
+ "regex",
+]
+
+[[package]]
 name = "pkcs5"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4310,6 +4356,35 @@ dependencies = [
  "cpuid-bool",
  "opaque-debug",
  "universal-hash",
+]
+
+[[package]]
+name = "pos-ledger-db"
+version = "0.1.0"
+dependencies = [
+ "accumulator",
+ "anyhow",
+ "arc-swap 1.5.0",
+ "bcs",
+ "byteorder",
+ "consensus-types",
+ "diem-config",
+ "diem-crypto",
+ "diem-infallible",
+ "diem-jellyfish-merkle",
+ "diem-logger",
+ "diem-metrics",
+ "diem-types",
+ "executor-types",
+ "itertools 0.10.1",
+ "num-derive",
+ "num-traits",
+ "num-variants",
+ "once_cell",
+ "schemadb",
+ "serde",
+ "storage-interface",
+ "thiserror",
 ]
 
 [[package]]
@@ -4390,7 +4465,7 @@ dependencies = [
 
 [[package]]
 name = "primitives"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "byteorder",
  "cfx-bytes",
@@ -4413,6 +4488,16 @@ dependencies = [
 [[package]]
 name = "priority-send-queue"
 version = "0.1.0"
+
+[[package]]
+name = "proc-macro-crate"
+version = "1.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e17d47ce914bf4de440332250b0edd23ce48c005f59fab39d3335866b114f11a"
+dependencies = [
+ "thiserror",
+ "toml",
+]
 
 [[package]]
 name = "proc-macro2"
@@ -4850,9 +4935,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.5.4"
+version = "1.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d07a8629359eb56f1e2fb1652bb04212c072a87ba68546a04065d525673ac461"
+checksum = "d83f127d94bdbcda4c8cc2e50f6f84f4b611f69c902699ca385a39c3a75f9ff1"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -4861,9 +4946,9 @@ dependencies = [
 
 [[package]]
 name = "regex-syntax"
-version = "0.6.25"
+version = "0.6.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f497285884f3fcff424ffc933e56d7cbca511def0c9831a7f9b5f6153e3cc89b"
+checksum = "49b3de9ec5dc0a3417da371aab17d729997c15010e7fd24ff707773a33bddb64"
 
 [[package]]
 name = "remove_dir_all"
@@ -4898,6 +4983,12 @@ dependencies = [
  "digest",
  "opaque-debug",
 ]
+
+[[package]]
+name = "rle-decode-fast"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3582f63211428f83597b51b2ddb88e2a91a9d52d12831f9d08f5e624e8977422"
 
 [[package]]
 name = "rlp"
@@ -4952,7 +5043,7 @@ dependencies = [
 [[package]]
 name = "rocksdb"
 version = "0.3.0"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=e62343e63be38284556b6610d75833217e3360b4#e62343e63be38284556b6610d75833217e3360b4"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=cac983ab886a0701c8458bce76a76f63de16e1bd#cac983ab886a0701c8458bce76a76f63de16e1bd"
 dependencies = [
  "libc",
  "librocksdb_sys",
@@ -5275,6 +5366,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha3-macro"
+version = "0.1.0"
+dependencies = [
+ "keccak-hash 0.5.1",
+ "proc-macro2 1.0.32",
+ "quote 1.0.10",
+ "syn 1.0.82",
+]
+
+[[package]]
 name = "shlex"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5375,6 +5476,17 @@ version = "0.1.0"
 dependencies = [
  "cfx-types",
  "keccak-hash 0.5.1",
+ "solidity-abi-derive",
+]
+
+[[package]]
+name = "solidity-abi-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro-crate",
+ "proc-macro2 1.0.32",
+ "quote 1.0.10",
+ "syn 1.0.82",
 ]
 
 [[package]]
