@@ -10,7 +10,7 @@ pub(super) mod params_control;
 pub(super) mod pos;
 mod sponsor;
 mod staking;
-mod system_storage;
+pub(super) mod system_storage;
 
 mod preludes {
     pub use keccak_hash::keccak;

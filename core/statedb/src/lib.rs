@@ -17,7 +17,7 @@ pub use self::{
     error::{Error, ErrorKind, Result},
     impls::{StateDb as StateDbGeneric, StateDbCheckpointMethods},
     statedb_ext::{
-        params_control_entries, StateDbExt, ACCUMULATE_INTEREST_RATE_KEY,
+        StateDbExt, ACCUMULATE_INTEREST_RATE_KEY,
         DISTRIBUTABLE_POS_INTEREST_KEY, INTEREST_RATE_KEY,
         LAST_DISTRIBUTE_BLOCK_KEY, TOTAL_BANK_TOKENS_KEY,
         TOTAL_POS_STAKING_TOKENS_KEY, TOTAL_STORAGE_TOKENS_KEY,

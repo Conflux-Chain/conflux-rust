@@ -1,5 +1,6 @@
 import os
 import random
+from typing import Optional
 
 import eth_utils
 import rlp
@@ -9,9 +10,10 @@ from .address import hex_to_b32_address, b32_address_to_hex
 from .config import DEFAULT_PY_TEST_CHAIN_ID, default_config
 from .transactions import CONTRACT_DEFAULT_GAS, Transaction, UnsignedTransaction
 from .filter import Filter
-from .utils import priv_to_addr, sha3_256, int_to_bytes, convert_to_nodeid, int_to_hex
+from .utils import priv_to_addr, sha3_256, int_to_bytes, convert_to_nodeid, int_to_hex, encode_hex
 
 import sys
+
 sys.path.append("..")
 
 from test_framework.util import (
@@ -22,7 +24,6 @@ from test_framework.util import (
     wait_until, checktx, get_contract_instance
 )
 
-
 file_dir = os.path.dirname(os.path.realpath(__file__))
 REQUEST_BASE = {
     'gas': CONTRACT_DEFAULT_GAS,
@@ -31,15 +32,17 @@ REQUEST_BASE = {
     "to": b'',
 }
 
+
 def convert_b32_address_field_to_hex(original_dict: dict, field_name: str):
     if original_dict is not None and field_name in original_dict and original_dict[field_name] not in [None, "null"]:
         original_dict[field_name] = b32_address_to_hex(original_dict[field_name])
 
 
 class RpcClient:
-    def __init__(self, node=None, auto_restart=False):
+    def __init__(self, node=None, auto_restart=False, log=None):
         self.node = node
         self.auto_restart = auto_restart
+        self.log = log
 
         # epoch definitions
         self.EPOCH_EARLIEST = "earliest"
@@ -63,7 +66,7 @@ class RpcClient:
         self.DEFAULT_TX_GAS_PRICE = 1
         self.DEFAULT_TX_GAS = 21000
         self.DEFAULT_TX_FEE = self.DEFAULT_TX_GAS_PRICE * self.DEFAULT_TX_GAS
-    
+
     def EPOCH_NUM(self, num: int) -> str:
         return hex(num)
 
@@ -79,7 +82,7 @@ class RpcClient:
     def rand_hash(self, seed: bytes = None) -> str:
         if seed is None:
             seed = os.urandom(32)
-        
+
         return eth_utils.encode_hex(sha3_256(seed))
 
     def generate_block(self, num_txs: int = 0,
@@ -224,7 +227,7 @@ class RpcClient:
             return int(self.node.cfx_getCollateralForStorage(addr), 0)
         else:
             return int(self.node.cfx_getCollateralForStorage(addr, epoch), 0)
-    
+
     def get_sponsor_info(self, addr: str, epoch: str = None) -> dict:
         addr = hex_to_b32_address(addr)
         if epoch is None:
@@ -259,12 +262,13 @@ class RpcClient:
         return b32_address_to_hex(r)
 
     ''' Ignore block_hash if epoch is not None '''
+
     def get_nonce(self, addr: str, epoch: str = None, block_hash: str = None) -> int:
         addr = hex_to_b32_address(addr)
         if epoch is None and block_hash is None:
             return int(self.node.cfx_getNextNonce(addr), 0)
         elif epoch is None:
-            return int(self.node.cfx_getNextNonce(addr, "hash:"+block_hash), 0)
+            return int(self.node.cfx_getNextNonce(addr, "hash:" + block_hash), 0)
         else:
             return int(self.node.cfx_getNextNonce(addr, epoch), 0)
 
@@ -279,27 +283,33 @@ class RpcClient:
     def clear_tx_pool(self):
         self.node.txpool_clear()
 
-
     def send_tx(self, tx: Transaction, wait_for_receipt=False, wait_for_catchup=True) -> str:
         encoded = eth_utils.encode_hex(rlp.encode(tx))
         tx_hash = self.send_raw_tx(encoded, wait_for_catchup=wait_for_catchup)
-        
+
         if wait_for_receipt:
             self.wait_for_receipt(tx_hash)
-        
+
         return tx_hash
 
-    def send_usable_genesis_accounts(self, account_start_index:int):
+    def send_usable_genesis_accounts(self, account_start_index: int):
         self.node.test_sendUsableGenesisAccounts(account_start_index)
 
     def wait_for_receipt(self, tx_hash: str, num_txs=1, timeout=10, state_before_wait=True):
         if state_before_wait:
             self.generate_blocks_to_state(num_txs=num_txs)
-        
+
         def check_tx():
             self.generate_block(num_txs)
             return checktx(self.node, tx_hash)
-        wait_until(check_tx, timeout=timeout)
+
+        try:
+            wait_until(check_tx, timeout=timeout)
+        except Exception as e:
+            if self.log is not None:
+                sender = self.node.cfx_getTransactionByHash(tx_hash)["from"]
+                self.log.info("wait_for_receipt: pending=%s", self.node.cfx_getAccountPendingTransactions(sender))
+            raise e
 
     def block_by_hash(self, block_hash: str, include_txs: bool = False) -> dict:
         block = self.node.cfx_getBlockByHash(block_hash, include_txs)
@@ -331,7 +341,8 @@ class RpcClient:
         convert_b32_address_field_to_hex(tx, "contractCreated")
         return tx
 
-    def new_tx(self, sender = None, receiver = None, nonce = None, gas_price=1, gas=21000, value=100, data=b'', sign=True, priv_key=None, storage_limit=None, epoch_height=None, chain_id=DEFAULT_PY_TEST_CHAIN_ID):
+    def new_tx(self, sender=None, receiver=None, nonce=None, gas_price=1, gas=21000, value=100, data=b'', sign=True,
+               priv_key=None, storage_limit=None, epoch_height=None, chain_id=DEFAULT_PY_TEST_CHAIN_ID):
         if priv_key is None:
             priv_key = default_config["GENESIS_PRI_KEY"]
         if sender is None:
@@ -339,7 +350,7 @@ class RpcClient:
 
         if receiver is None:
             receiver = self.COINBASE_ADDR
-        
+
         if nonce is None:
             nonce = self.get_nonce(sender)
 
@@ -351,24 +362,41 @@ class RpcClient:
 
         action = eth_utils.decode_hex(receiver)
         tx = UnsignedTransaction(nonce, gas_price, gas, action, value, data, storage_limit, epoch_height, chain_id)
-        
+
         if sign:
             return tx.sign(priv_key)
         else:
             return tx
 
-    def new_contract_tx(self, receiver:str, data_hex:str, sender=None, priv_key=None, nonce=None, gas_price=1, gas=CONTRACT_DEFAULT_GAS, value=0, storage_limit=0, epoch_height=0, chain_id=DEFAULT_PY_TEST_CHAIN_ID):
-        if sender is None:
-            sender = self.GENESIS_ADDR
-
+    def new_contract_tx(self, receiver: Optional[str], data_hex: str = None, sender=None, priv_key=None, nonce=None,
+                        gas_price=1,
+                        gas=CONTRACT_DEFAULT_GAS, value=0, storage_limit=0, epoch_height=0,
+                        chain_id=DEFAULT_PY_TEST_CHAIN_ID):
         if priv_key is None:
             priv_key = default_config["GENESIS_PRI_KEY"]
 
+        if sender is None:
+            sender = encode_hex(priv_to_addr(priv_key))
+
         if nonce is None:
             nonce = self.get_nonce(sender)
+        elif type(nonce) is str:
+            nonce = int(nonce, 0)
 
-        action = eth_utils.decode_hex(receiver)
+        if receiver is not None:
+            action = eth_utils.decode_hex(receiver)
+        else:
+            action = b''
+        if data_hex is None:
+            data_hex = "0x"
         data = eth_utils.decode_hex(data_hex)
+
+        if type(gas) is str:
+            gas = int(gas, 0)
+
+        if type(storage_limit) is str:
+            storage_limit = int(storage_limit, 0)
+
         tx = UnsignedTransaction(nonce, gas_price, gas, action, value, data, storage_limit, epoch_height, chain_id)
 
         return tx.sign(priv_key)
@@ -395,7 +423,7 @@ class RpcClient:
     def add_node(self, node_id: str, ip: str, port: int):
         self.node.addnode(node_id, "{}:{}".format(ip, port))
 
-    def disconnect_peer(self, node_id: str, node_op:str=None) -> int:
+    def disconnect_peer(self, node_id: str, node_op: str = None) -> int:
         return self.node.net_disconnect_node(node_id, node_op)
 
     def chain(self) -> list:
@@ -411,18 +439,21 @@ class RpcClient:
 
     def txpool_status(self) -> (int, int):
         status = self.node.txpool_status()
-        return (eth_utils.to_int(hexstr = status["deferred"]), eth_utils.to_int(hexstr = status["ready"]))
+        return (eth_utils.to_int(hexstr=status["deferred"]), eth_utils.to_int(hexstr=status["ready"]))
 
-    def new_tx_for_call(self, contract_addr:str, data_hex:str, nonce:int=None, sender:str=None):
+    def new_tx_for_call(self, contract_addr: str = None, data_hex: str = None, nonce: int = None, sender: str = None):
         if sender is None:
             sender = self.GENESIS_ADDR
         if nonce is None:
             nonce = self.get_nonce(sender)
+        if data_hex is None:
+            data_hex = "0x"
         sender = hex_to_b32_address(sender)
-        contract_addr = hex_to_b32_address(contract_addr)
+        if contract_addr is not None:
+            contract_addr = hex_to_b32_address(contract_addr)
 
         return {
-            "hash": "0x"+"0"*64,
+            "hash": "0x" + "0" * 64,
             "nonce": hex(nonce),
             "from": sender,
             "to": contract_addr,
@@ -435,12 +466,14 @@ class RpcClient:
             "s": hex(0),
         }
 
-    def estimate_gas(self, contract_addr:str, data_hex:str, sender:str=None, nonce:int=None) -> int:
+    def estimate_gas(self, contract_addr: str = None, data_hex: str = None, sender: str = None,
+                     nonce: int = None) -> int:
         tx = self.new_tx_for_call(contract_addr, data_hex, sender=sender, nonce=nonce)
         response = self.node.cfx_estimateGasAndCollateral(tx)
         return int(response['gasUsed'], 0)
 
-    def estimate_collateral(self, contract_addr:str, data_hex:str, sender:str=None, nonce:int=None) -> int:
+    def estimate_collateral(self, contract_addr: str = None, data_hex: str = None, sender: str = None,
+                            nonce: int = None) -> int:
         tx = self.new_tx_for_call(contract_addr, data_hex, sender=sender, nonce=nonce)
         if contract_addr == "0x":
             del tx['to']
@@ -449,19 +482,21 @@ class RpcClient:
         response = self.node.cfx_estimateGasAndCollateral(tx)
         return response['storageCollateralized']
 
-    def check_balance_against_transaction(self, account_addr: str, contract_addr: str, gas_limit: int, gas_price: int, storage_limit: int) -> dict:
+    def check_balance_against_transaction(self, account_addr: str, contract_addr: str, gas_limit: int, gas_price: int,
+                                          storage_limit: int) -> dict:
         account_addr = hex_to_b32_address(account_addr)
         contract_addr = hex_to_b32_address(contract_addr)
-        return self.node.cfx_checkBalanceAgainstTransaction(account_addr, contract_addr, hex(gas_limit), hex(gas_price), hex(storage_limit))
+        return self.node.cfx_checkBalanceAgainstTransaction(account_addr, contract_addr, hex(gas_limit), hex(gas_price),
+                                                            hex(storage_limit))
 
-    def call(self, contract_addr:str, data_hex:str, nonce=None, epoch:str=None, sender:str=None) -> str:
+    def call(self, contract_addr: str, data_hex: str, nonce=None, epoch: str = None, sender: str = None) -> str:
         tx = self.new_tx_for_call(contract_addr, data_hex, nonce=nonce, sender=sender)
         if epoch is None:
             return self.node.cfx_call(tx)
         else:
             return self.node.cfx_call(tx, epoch)
 
-    def get_supply_info(self, epoch:str=None):
+    def get_supply_info(self, epoch: str = None):
         if epoch is None:
             return self.node.cfx_getSupplyInfo()
         else:
@@ -483,7 +518,7 @@ class RpcClient:
         return self.node.cfx_getInterestRate(epoch)
 
     def get_node_id(self):
-        challenge = random.randint(0, 2**32-1)
+        challenge = random.randint(0, 2 ** 32 - 1)
         signature = self.node.getnodeid(list(int_to_bytes(challenge)))
         node_id, _, _ = convert_to_nodeid(signature, challenge)
         return node_id
@@ -511,21 +546,26 @@ class RpcClient:
         address = eth_utils.encode_hex(priv_to_addr(priv_key))
         initial_tx = self.new_tx(receiver=address, value=(stake_value + 20) * 10 ** 18)
         self.send_tx(initial_tx, wait_for_receipt=True)
-        stake_tx = self.new_tx(priv_key=priv_key, data=stake_tx_data(stake_value), value=0, receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
+        stake_tx = self.new_tx(priv_key=priv_key, data=stake_tx_data(stake_value), value=0,
+                               receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
         self.send_tx(stake_tx, wait_for_receipt=True)
         data, pos_identifier = self.node.pos_register(int_to_hex(voting_power))
-        register_tx = self.new_tx(priv_key=priv_key, data=eth_utils.decode_hex(data), value=0, receiver="0x0888000000000000000000000000000000000005", gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+        register_tx = self.new_tx(priv_key=priv_key, data=eth_utils.decode_hex(data), value=0,
+                                  receiver="0x0888000000000000000000000000000000000005", gas=CONTRACT_DEFAULT_GAS,
+                                  storage_limit=1024)
         self.send_tx(register_tx, wait_for_receipt=True)
         return pos_identifier, priv_key
 
     def wait_for_unstake(self, priv_key=None, unstake_value=2_000_000):
         if priv_key is None:
             priv_key = self.node.pow_sk
-        unstake_tx = self.new_tx(priv_key=priv_key, data=unstake_tx_data(unstake_value), value=0, receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
+        unstake_tx = self.new_tx(priv_key=priv_key, data=unstake_tx_data(unstake_value), value=0,
+                                 receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
         self.send_tx(unstake_tx, wait_for_receipt=True)
 
     def pos_retire_self(self):
-        retire_tx = self.new_tx(priv_key=self.node.pow_sk, data=retire_tx_data(), value=0, receiver="0x0888000000000000000000000000000000000005", gas=6_000_000)
+        retire_tx = self.new_tx(priv_key=self.node.pow_sk, data=retire_tx_data(), value=0,
+                                receiver="0x0888000000000000000000000000000000000005", gas=6_000_000)
         self.send_tx(retire_tx, wait_for_receipt=True)
 
     def pos_get_consensus_blocks(self):
@@ -565,24 +605,32 @@ class RpcClient:
 
 
 def stake_tx_data(staking_value: int):
-    staking_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/Staking.json"), "r").read())
+    staking_contract_dict = json.loads(
+        open(os.path.join(file_dir, "../../internal_contract/metadata/Staking.json"), "r").read())
     staking_contract = get_contract_instance(contract_dict=staking_contract_dict)
     return get_contract_function_data(staking_contract, "deposit", args=[staking_value * 10 ** 18])
 
+
 def unstake_tx_data(unstaking_value: int):
-    staking_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/Staking.json"), "r").read())
+    staking_contract_dict = json.loads(
+        open(os.path.join(file_dir, "../../internal_contract/metadata/Staking.json"), "r").read())
     staking_contract = get_contract_instance(contract_dict=staking_contract_dict)
     return get_contract_function_data(staking_contract, "withdraw", args=[unstaking_value * 10 ** 18])
 
+
 def retire_tx_data():
-    register_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/PoSRegister.json"), "r").read())
+    register_contract_dict = json.loads(
+        open(os.path.join(file_dir, "../../internal_contract/metadata/PoSRegister.json"), "r").read())
     register_contract = get_contract_instance(contract_dict=register_contract_dict)
     return get_contract_function_data(register_contract, "retire", args=[2_000])
 
+
 def lock_tx_data(locked_value: int, unlock_block_number: int):
-    staking_contract_dict = json.loads(open(os.path.join(file_dir, "../../internal_contract/metadata/Staking.json"), "r").read())
+    staking_contract_dict = json.loads(
+        open(os.path.join(file_dir, "../../internal_contract/metadata/Staking.json"), "r").read())
     staking_contract = get_contract_instance(contract_dict=staking_contract_dict)
     return get_contract_function_data(staking_contract, "voteLock", args=[locked_value * 10 ** 18, unlock_block_number])
+
 
 def get_contract_function_data(contract, name, args):
     func = getattr(contract.functions, name)

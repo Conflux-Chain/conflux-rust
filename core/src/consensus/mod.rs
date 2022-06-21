@@ -29,7 +29,8 @@ use crate::{
         pos_handler::PosVerifier,
     },
     executive::{
-        internal_contract::build_bloom_and_recover_phantom, ExecutionOutcome,
+        internal_contract::build_bloom_and_recover_phantom, EstimateRequest,
+        ExecutionOutcome,
     },
     observer::{
         trace::{
@@ -52,7 +53,8 @@ use cfx_parameters::{
     consensus_internal::REWARD_EPOCH_COUNT,
     rpc::{
         EVM_GAS_PRICE_BLOCK_SAMPLE_SIZE, EVM_GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
-        GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
+        GAS_PRICE_BLOCK_SAMPLE_SIZE, GAS_PRICE_DEFAULT_VALUE,
+        GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
     },
 };
 use cfx_state::state_trait::StateOpsTrait;
@@ -223,7 +225,7 @@ pub struct ConsensusGraph {
     /// any inconsistency
     best_info: RwLock<Arc<BestInformation>>,
     /// Set to `true` when we enter NormalPhase
-    ready_for_mining: AtomicBool,
+    pub ready_for_mining: AtomicBool,
 
     /// The epoch id of the remotely synchronized state.
     /// This is always `None` for archive nodes.
@@ -363,6 +365,12 @@ impl ConsensusGraph {
         // multiple times, and we only generate blocks after
         // `ready_for_mining` is true.
         self.update_best_info(true);
+        if let Err(e) = self
+            .txpool
+            .notify_new_best_info(self.best_info.read_recursive().clone())
+        {
+            error!("wait for generation: notify_new_best_info err={:?}", e);
+        }
     }
 
     /// Determine whether the next mined block should have adaptive weight or
@@ -586,13 +594,13 @@ impl ConsensusGraph {
 
         prices.sort();
         if prices.is_empty() || total_tx_gas_limit == 0 {
-            Some(U256::from(1))
+            Some(U256::from(GAS_PRICE_DEFAULT_VALUE))
         } else {
             let average_gas_limit_multiple =
                 total_block_gas_limit / total_tx_gas_limit;
             if average_gas_limit_multiple > 5 {
                 // used less than 20%
-                Some(U256::from(1))
+                Some(U256::from(GAS_PRICE_DEFAULT_VALUE))
             } else if average_gas_limit_multiple >= 2 {
                 // used less than 50%
                 Some(prices[prices.len() / 8])
@@ -1391,7 +1399,9 @@ impl ConsensusGraph {
 
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch: EpochNumber,
-    ) -> RpcResult<ExecutionOutcome> {
+        request: EstimateRequest,
+    ) -> RpcResult<ExecutionOutcome>
+    {
         // only allow to call against stated epoch
         self.validate_stated_epoch(&epoch)?;
         let (epoch_id, epoch_size) = if let Ok(v) =
@@ -1401,7 +1411,8 @@ impl ConsensusGraph {
         } else {
             bail!("cannot get block hashes in the specified epoch, maybe it does not exist?");
         };
-        self.executor.call_virtual(tx, &epoch_id, epoch_size)
+        self.executor
+            .call_virtual(tx, &epoch_id, epoch_size, request)
     }
 
     /// Get the number of processed blocks (i.e., the number of calls to

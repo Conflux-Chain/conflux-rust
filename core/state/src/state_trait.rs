@@ -18,14 +18,14 @@ pub trait StateTrait: CheckpointTrait + AsStateOpsTrait {
     /// of a transaction.
     fn settle_collateral_for_all(
         &mut self, substate: &Self::Substate, tracer: &mut dyn StateTracer,
-        account_start_nonce: U256,
+        account_start_nonce: U256, dry_run_no_charge: bool,
     ) -> DbResult<CollateralCheckResult>;
 
     // FIXME: add doc string.
     fn collect_and_settle_collateral(
         &mut self, original_sender: &Address, storage_limit: &U256,
         substate: &mut Self::Substate, tracer: &mut dyn StateTracer,
-        account_start_nonce: U256,
+        account_start_nonce: U256, dry_run_no_charge: bool,
     ) -> DbResult<CollateralCheckResult>;
 
     // TODO: maybe we can find a better interface for doing the suicide
@@ -214,9 +214,12 @@ pub trait StateOpsTrait {
 
     fn deposit(
         &mut self, address: &Address, amount: &U256, current_block_number: u64,
+        cip_97: bool,
     ) -> DbResult<()>;
 
-    fn withdraw(&mut self, address: &Address, amount: &U256) -> DbResult<U256>;
+    fn withdraw(
+        &mut self, address: &Address, amount: &U256, cip_97: bool,
+    ) -> DbResult<U256>;
 
     fn vote_lock(
         &mut self, address: &Address, amount: &U256, unlock_block_number: u64,

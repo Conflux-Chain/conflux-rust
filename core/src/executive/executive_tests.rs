@@ -144,6 +144,7 @@ fn test_sender_balance() {
                 &mut substate,
                 &mut tracer,
                 spec.account_start_nonce,
+                false,
             )
             .unwrap()
             .into_vm_result()
@@ -410,6 +411,7 @@ fn test_call_to_create() {
                 &mut substate,
                 &mut tracer,
                 spec.account_start_nonce,
+                false,
             )
             .unwrap()
             .into_vm_result()
@@ -590,7 +592,7 @@ fn test_not_enough_cash() {
 
     let res = {
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-        let options = TransactOptions::with_no_tracing();
+        let options = TransactOptions::exec_with_no_tracing();
         ex.transact(&t, options).unwrap()
     };
 
@@ -1039,6 +1041,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &mut Substate::new(),
             &mut (),
             spec.account_start_nonce,
+            false,
         )
         .unwrap();
     state.discard_checkpoint();
@@ -1113,6 +1116,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &mut Substate::new(),
             &mut (),
             spec.account_start_nonce,
+            false,
         )
         .unwrap();
     state.discard_checkpoint();
@@ -1214,7 +1218,7 @@ fn test_commission_privilege() {
     })
     .sign(sender_key.secret());
     assert_eq!(tx.sender().address, sender);
-    let options = TransactOptions::with_no_tracing();
+    let options = TransactOptions::exec_with_no_tracing();
     let Executed { gas_used, .. } =
         Executive::new(&mut state, &env, &machine, &spec)
             .transact(&tx, options)
@@ -1307,7 +1311,7 @@ fn test_commission_privilege() {
             .unwrap(),
         U256::from(100_000)
     );
-    let options = TransactOptions::with_no_tracing();
+    let options = TransactOptions::exec_with_no_tracing();
     let Executed { gas_used, .. } =
         Executive::new(&mut state, &env, &machine, &spec)
             .transact(&tx, options)
@@ -1351,7 +1355,7 @@ fn test_commission_privilege() {
             .unwrap(),
         U256::from(100_000)
     );
-    let options = TransactOptions::with_no_tracing();
+    let options = TransactOptions::exec_with_no_tracing();
     let Executed { gas_used, .. } =
         Executive::new(&mut state, &env, &machine, &spec)
             .transact(&tx, options)
@@ -1395,7 +1399,7 @@ fn test_commission_privilege() {
             .unwrap(),
         U256::from(100_000)
     );
-    let options = TransactOptions::with_no_tracing();
+    let options = TransactOptions::exec_with_no_tracing();
     let Executed { gas_used, .. } =
         Executive::new(&mut state, &env, &machine, &spec)
             .transact(&tx, options)
@@ -1453,7 +1457,7 @@ fn test_commission_privilege() {
             .unwrap(),
         U256::from(25_000)
     );
-    let options = TransactOptions::with_no_tracing();
+    let options = TransactOptions::exec_with_no_tracing();
     let Executed { gas_used, .. } =
         Executive::new(&mut state, &env, &machine, &spec)
             .transact(&tx, options)
@@ -1504,7 +1508,7 @@ fn test_commission_privilege() {
             .unwrap(),
         U256::from(41_970)
     );
-    let options = TransactOptions::with_no_tracing();
+    let options = TransactOptions::exec_with_no_tracing();
     let Executed { gas_used, .. } =
         Executive::new(&mut state, &env, &machine, &spec)
             .transact(&tx, options)
@@ -1598,7 +1602,7 @@ fn test_storage_commission_privilege() {
     })
     .sign(sender.secret());
     assert_eq!(tx.sender().address, sender.address());
-    let options = TransactOptions::with_no_tracing();
+    let options = TransactOptions::exec_with_no_tracing();
     let Executed {
         gas_used,
         storage_collateralized,
@@ -1698,6 +1702,7 @@ fn test_storage_commission_privilege() {
                 &mut substate,
                 &mut (),
                 spec.account_start_nonce,
+                false
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -1756,7 +1761,7 @@ fn test_storage_commission_privilege() {
     })
     .sign(caller3.secret());
     assert_eq!(tx.sender().address, caller3.address());
-    let options = TransactOptions::with_no_tracing();
+    let options = TransactOptions::exec_with_no_tracing();
     let Executed {
         gas_used,
         storage_collateralized,
@@ -1840,7 +1845,7 @@ fn test_storage_commission_privilege() {
     })
     .sign(caller1.secret());
     assert_eq!(tx.sender().address, caller1.address());
-    let options = TransactOptions::with_no_tracing();
+    let options = TransactOptions::exec_with_no_tracing();
     let Executed {
         gas_used,
         storage_collateralized,
@@ -1945,7 +1950,7 @@ fn test_storage_commission_privilege() {
     })
     .sign(caller2.secret());
     assert_eq!(tx.sender().address, caller2.address());
-    let options = TransactOptions::with_no_tracing();
+    let options = TransactOptions::exec_with_no_tracing();
     let Executed {
         gas_used,
         storage_collateralized,
@@ -2033,6 +2038,7 @@ fn test_storage_commission_privilege() {
                 &mut substate,
                 &mut (),
                 spec.account_start_nonce,
+                false
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -2083,7 +2089,7 @@ fn test_storage_commission_privilege() {
     })
     .sign(caller1.secret());
     assert_eq!(tx.sender().address, caller1.address());
-    let options = TransactOptions::with_no_tracing();
+    let options = TransactOptions::exec_with_no_tracing();
     let Executed {
         gas_used,
         storage_collateralized,

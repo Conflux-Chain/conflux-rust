@@ -8,12 +8,16 @@ use cfx_parameters::{
     internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS,
     staking::POS_VOTE_PRICE,
 };
+use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, BigEndianHash, H256, U256};
 use pow_types::StakingEvent::{self, IncreaseStake, Register, Retire};
 use primitives::log_entry::LogEntry;
 use solidity_abi::ABIDecodable;
 
-use crate::vm::{self, ActionParams};
+use crate::{
+    internal_bail,
+    vm::{self, ActionParams},
+};
 
 use super::super::{
     components::{InternalRefContext, SolidityEventTrait},
@@ -103,14 +107,10 @@ fn update_vote_power(
         .into();
 
     if !initialize_mode && status.registered == 0 {
-        return Err(vm::Error::InternalContract(
-            "uninitialized identifier".into(),
-        ));
+        internal_bail!("uninitialized identifier");
     }
     if initialize_mode && status.registered != 0 {
-        return Err(vm::Error::InternalContract(
-            "identifier has already been initialized".into(),
-        ));
+        internal_bail!("identifier has already been initialized");
     }
 
     let votes = status
@@ -118,9 +118,7 @@ fn update_vote_power(
         .checked_add(vote_power)
         .ok_or(vm::Error::InternalContract("locked votes overflow".into()))?;
     if context.state.staking_balance(&sender)? < *POS_VOTE_PRICE * votes {
-        return Err(vm::Error::InternalContract(
-            "Not enough staking balance".into(),
-        ));
+        internal_bail!("Not enough staking balance");
     }
 
     let mut status = status;
@@ -138,7 +136,7 @@ fn update_vote_power(
 
 fn is_identifier_changeable(
     sender: Address, params: &ActionParams, context: &mut InternalRefContext,
-) -> vm::Result<bool> {
+) -> DbResult<bool> {
     let identifier = address_to_identifier(sender, params, context)?;
     if identifier.is_zero() {
         return Ok(true);
@@ -154,15 +152,11 @@ pub fn register(
 ) -> vm::Result<()>
 {
     if vote_power == 0 {
-        return Err(vm::Error::InternalContract(
-            "vote_power should be none zero".into(),
-        ));
+        internal_bail!("vote_power should be none zero");
     }
 
     if !is_identifier_changeable(sender, param, context)? {
-        return Err(vm::Error::InternalContract(
-            "can not change identifier".into(),
-        ));
+        internal_bail!("can not change identifier");
     }
 
     let maybe_verified_bls_pubkey = verify_bls_pubkey(bls_pubkey, bls_proof)?;
@@ -177,14 +171,10 @@ pub fn register(
     hasher.finalize(computed_identifier.as_bytes_mut());
 
     if computed_identifier != identifier {
-        return Err(vm::Error::InternalContract(
-            "Inconsistent identifier".into(),
-        ));
+        internal_bail!("Inconsistent identifier");
     }
     if identifier_to_address(identifier, param, context)? != Address::zero() {
-        return Err(vm::Error::InternalContract(
-            "identifier has already been registered".into(),
-        ));
+        internal_bail!("identifier has already been registered");
     }
 
     RegisterEvent::log(
@@ -216,17 +206,13 @@ pub fn increase_stake(
 ) -> vm::Result<()>
 {
     if vote_power == 0 {
-        return Err(vm::Error::InternalContract(
-            "vote_power should be none zero".into(),
-        ));
+        internal_bail!("vote_power should be none zero");
     }
 
     let identifier = address_to_identifier(sender, params, context)?;
 
     if identifier.is_zero() {
-        return Err(vm::Error::InternalContract(
-            "The sender has not register a PoS identifier".into(),
-        ));
+        internal_bail!("The sender has not register a PoS identifier");
     }
 
     update_vote_power(
@@ -243,9 +229,7 @@ pub fn retire(
     let identifier = address_to_identifier(sender, params, context)?;
 
     if identifier.is_zero() {
-        return Err(vm::Error::InternalContract(
-            "The sender has not register a PoS identifier".into(),
-        ));
+        internal_bail!("The sender has not register a PoS identifier");
     }
 
     let status: IndexStatus = context
@@ -253,9 +237,7 @@ pub fn retire(
         .into();
 
     if status.locked() == 0 {
-        return Err(vm::Error::InternalContract(
-            "The PoS account is fully unlocked".into(),
-        ));
+        internal_bail!("The PoS account is fully unlocked");
     }
 
     RetireEvent::log(&identifier, &votes, params, context)?;
@@ -264,7 +246,7 @@ pub fn retire(
 
 pub fn get_status(
     identifier: H256, params: &ActionParams, context: &mut InternalRefContext,
-) -> vm::Result<IndexStatus> {
+) -> DbResult<IndexStatus> {
     Ok(context
         .storage_at(params, &index_entry(&identifier))?
         .into())
@@ -272,7 +254,7 @@ pub fn get_status(
 
 pub fn identifier_to_address(
     identifier: H256, params: &ActionParams, context: &mut InternalRefContext,
-) -> vm::Result<Address> {
+) -> DbResult<Address> {
     Ok(u256_to_address(
         &context.storage_at(params, &address_entry(&identifier))?,
     ))
@@ -280,7 +262,7 @@ pub fn identifier_to_address(
 
 pub fn address_to_identifier(
     address: Address, params: &ActionParams, context: &mut InternalRefContext,
-) -> vm::Result<H256> {
+) -> DbResult<H256> {
     Ok(BigEndianHash::from_uint(
         &context.storage_at(params, &identifier_entry(&address))?,
     ))

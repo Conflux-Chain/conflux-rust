@@ -460,29 +460,45 @@ impl OverlayAccount {
 
     pub fn deposit(
         &mut self, amount: U256, accumulated_interest_rate: U256,
-        deposit_time: u64,
+        deposit_time: u64, cip_97: bool,
     )
     {
         self.address.assert_native();
         assert!(self.deposit_list.is_some());
         self.sub_balance(&amount);
+        let not_maintain_deposit_list =
+            cip_97 && self.deposit_list.as_ref().unwrap().0.is_empty();
         self.staking_balance += amount;
-        self.deposit_list.as_mut().unwrap().push(DepositInfo {
-            amount,
-            deposit_time,
-            accumulated_interest_rate,
-        });
+        if !not_maintain_deposit_list {
+            self.deposit_list.as_mut().unwrap().push(DepositInfo {
+                amount,
+                deposit_time,
+                accumulated_interest_rate,
+            });
+        }
     }
 
     /// Withdraw some amount of tokens, return the value of interest.
     pub fn withdraw(
-        &mut self, amount: U256, accumulated_interest_rate: U256,
+        &mut self, amount: U256, accumulated_interest_rate: U256, cip_97: bool,
     ) -> U256 {
         self.address.assert_native();
         assert!(self.deposit_list.is_some());
         let deposit_list = self.deposit_list.as_mut().unwrap();
+        let before_staking_balance = self.staking_balance.clone();
         self.staking_balance -= amount;
-        let mut rest = amount;
+
+        if deposit_list.0.is_empty() {
+            self.add_balance(&amount);
+            return U256::zero();
+        }
+
+        let mut rest = if cip_97 {
+            before_staking_balance
+        } else {
+            amount
+        };
+
         let mut interest = U256::zero();
         let mut index = 0;
         while !rest.is_zero() {

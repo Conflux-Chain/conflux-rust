@@ -18,6 +18,7 @@ use crate::rpc::{
         Bytes, Index, MAX_GAS_CALL_REQUEST,
     },
 };
+use cfx_parameters::rpc::GAS_PRICE_DEFAULT_VALUE;
 use cfx_statedb::StateDbExt;
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H160, H256, U256, U64,
@@ -25,7 +26,8 @@ use cfx_types::{
 use cfxcore::{
     consensus::PhantomBlock,
     executive::{
-        revert_reason_decode, ExecutionError, ExecutionOutcome, TxDropError,
+        revert_reason_decode, EstimateRequest, ExecutionError,
+        ExecutionOutcome, TxDropError,
     },
     observer::ErrorUnwind,
     rpc_errors::{
@@ -42,6 +44,7 @@ use primitives::{
     StorageKey, StorageValue, TransactionOutcome, TransactionWithSignature,
 };
 use rlp::Rlp;
+use rustc_hex::ToHex;
 use std::{cmp::min, convert::TryInto};
 
 pub struct EthHandler {
@@ -149,10 +152,19 @@ impl EthHandler {
             epoch => epoch.try_into()?,
         };
 
+        let estimate_request = EstimateRequest {
+            has_sender: request.from.is_some(),
+            has_gas_limit: request.gas.is_some(),
+            has_gas_price: request.gas_price.is_some(),
+            has_nonce: request.nonce.is_some(),
+            has_storage_limit: false,
+        };
+
         let chain_id = self.consensus.best_chain_id();
         let signed_tx = sign_call(chain_id.in_evm_space(), request)?;
-        trace!("call tx {:?}", signed_tx);
-        consensus_graph.call_virtual(&signed_tx, epoch)
+
+        trace!("call tx {:?}, request {:?}", signed_tx, estimate_request);
+        consensus_graph.call_virtual(&signed_tx, epoch, estimate_request)
     }
 
     fn send_transaction_with_signature(
@@ -367,7 +379,7 @@ impl Eth for EthHandler {
         Ok(self
             .consensus_graph()
             .gas_price(Space::Ethereum)
-            .unwrap_or(5000000000u64.into()))
+            .unwrap_or(GAS_PRICE_DEFAULT_VALUE.into()))
     }
 
     fn max_priority_fee_per_gas(&self) -> jsonrpc_core::Result<U256> {
@@ -677,35 +689,39 @@ impl Eth for EthHandler {
         // TODO: EVM core: Check the EVM error message. To make the
         // assert_error_eq test case in solidity project compatible.
         match self.exec_transaction(request, block_number_or_hash)? {
-            ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(expected, got)) => {
-                bail!(call_execution_error(
-                    "Transaction can not be executed".into(),
-                    format! {"nonce is too old expected {:?} got {:?}", expected, got}.into_bytes()
-                ))
-            }
-            ExecutionOutcome::NotExecutedDrop(TxDropError::InvalidRecipientAddress(recipient)) => {
-                bail!(call_execution_error(
-                    "Transaction can not be executed".into(),
-                    format! {"invalid recipient address {:?}", recipient}.into_bytes()
-                ))
-            }
+            ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
+                expected,
+                got,
+            )) => bail!(call_execution_error(
+                "Transaction can not be executed".into(),
+                format! {"nonce is too old expected {:?} got {:?}", expected, got}
+            )),
+            ExecutionOutcome::NotExecutedDrop(
+                TxDropError::InvalidRecipientAddress(recipient),
+            ) => bail!(call_execution_error(
+                "Transaction can not be executed".into(),
+                format! {"invalid recipient address {:?}", recipient}
+            )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(call_execution_error(
                     "Transaction can not be executed".into(),
-                    format! {"{:?}", e}.into_bytes()
+                    format! {"{:?}", e}
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(vm::Error::Reverted),
                 executed,
             ) => bail!(call_execution_error(
-                format!("execution reverted: {}", revert_reason_decode(&executed.output)),
-                executed.output
+                format!(
+                    "execution reverted: {}",
+                    revert_reason_decode(&executed.output)
+                ),
+                format!("0x{}", executed.output.to_hex::<String>())
             )),
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
                 bail!(call_execution_error(
                     "Transaction execution failed".into(),
-                    format! {"{:?}", e}.into_bytes()
+                    format! {"{:?}", e}
                 ))
             }
             ExecutionOutcome::Finished(executed) => Ok(executed.output.into()),
@@ -720,35 +736,39 @@ impl Eth for EthHandler {
             request, block_number_or_hash
         );
         // TODO: EVM core: same as call
-        let executed = match self.exec_transaction(request, block_number_or_hash)? {
-            ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(expected, got)) => {
-                bail!(call_execution_error(
-                    "Can not estimate: transaction can not be executed".into(),
-                    format! {"nonce is too old expected {:?} got {:?}", expected, got}.into_bytes()
-                ))
-            }
-            ExecutionOutcome::NotExecutedDrop(TxDropError::InvalidRecipientAddress(recipient)) => {
-                bail!(call_execution_error(
-                    "Can not estimate: transaction can not be executed".into(),
-                    format! {"invalid recipient address {:?}", recipient}.into_bytes()
-                ))
-            }
+        let executed = match self
+            .exec_transaction(request, block_number_or_hash)?
+        {
+            ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
+                expected,
+                got,
+            )) => bail!(call_execution_error(
+                "Can not estimate: transaction can not be executed".into(),
+                format! {"nonce is too old expected {:?} got {:?}", expected, got}
+            )),
+            ExecutionOutcome::NotExecutedDrop(
+                TxDropError::InvalidRecipientAddress(recipient),
+            ) => bail!(call_execution_error(
+                "Can not estimate: transaction can not be executed".into(),
+                format! {"invalid recipient address {:?}", recipient}
+            )),
             ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
                 bail!(call_execution_error(
                     "Can not estimate: transaction can not be executed".into(),
-                    format! {"{:?}", e}.into_bytes()
+                    format! {"{:?}", e}
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(
                 ExecutionError::VmError(vm::Error::Reverted),
                 executed,
             ) => {
-                // When a revert exception happens, there is usually an error in the sub-calls.
-                // So we return the trace information for debugging contract.
-                let errors = ErrorUnwind::from_traces(executed.trace).errors.iter()
-                    .map(|(addr, error)| {
-                        format!("{}: {}", addr, error)
-                    })
+                // When a revert exception happens, there is usually an error in
+                // the sub-calls. So we return the trace
+                // information for debugging contract.
+                let errors = ErrorUnwind::from_traces(executed.trace)
+                    .errors
+                    .iter()
+                    .map(|(addr, error)| format!("{}: {}", addr, error))
                     .collect::<Vec<String>>();
 
                 // Decode revert error
@@ -767,9 +787,11 @@ impl Eth for EthHandler {
                 };
 
                 bail!(call_execution_error(
-                    format!("execution reverted: {}{}",
-                        revert_error, innermost_error),
-                    errors.join("\n").into_bytes(),
+                    format!(
+                        "execution reverted: {}{}",
+                        revert_error, innermost_error
+                    ),
+                    errors.join("\n"),
                 ))
             }
             ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
@@ -777,34 +799,14 @@ impl Eth for EthHandler {
                     format! {"Can not estimate: transaction execution failed, \
                     all gas will be charged (execution error: {:?})", e}
                     .into(),
-                    format! {"{:?}", e}.into_bytes()
+                    format! {"{:?}", e}
                 ))
             }
             ExecutionOutcome::Finished(executed) => executed,
         };
 
-        // In case of unlimited full gas charge at some VM call, or if there are
-        // infinite loops, the total estimated gas used is very close to
-        // MAX_GAS_CALL_REQUEST, 0.8 is chosen to check if it's close.
-        const TOO_MUCH_GAS_USED: u64 =
-            (0.8 * (MAX_GAS_CALL_REQUEST as f32)) as u64;
-        // TODO: this value should always be Some(..) unless incorrect
-        // implementation. Should return an error for server bugs later.
         let estimated_gas_limit =
             executed.estimated_gas_limit.unwrap_or(U256::zero());
-        if estimated_gas_limit >= U256::from(TOO_MUCH_GAS_USED) {
-            bail!(call_execution_error(
-                format!(
-                    "Gas too high. Most likely there are problems within the contract code. \
-                    gas {}",
-                    estimated_gas_limit
-                ),
-                format!(
-                    "gas {}", estimated_gas_limit
-                )
-                .into_bytes(),
-            ));
-        }
         Ok(estimated_gas_limit)
     }
 

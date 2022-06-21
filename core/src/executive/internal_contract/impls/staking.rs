@@ -4,6 +4,8 @@
 
 use crate::{
     consensus_internal_parameters::MINED_BLOCK_COUNT_PER_QUARTER,
+    evm::Spec,
+    internal_bail,
     observer::{AddressPocket, VmObserve},
     vm::{self, ActionParams, Env},
 };
@@ -13,59 +15,58 @@ use cfx_types::{Address, AddressSpaceUtil, U256};
 
 /// Implementation of `deposit(uint256)`.
 pub fn deposit(
-    amount: U256, params: &ActionParams, env: &Env,
+    amount: U256, params: &ActionParams, env: &Env, spec: &Spec,
     state: &mut dyn StateOpsTrait, tracer: &mut dyn VmObserve,
 ) -> vm::Result<()>
 {
     if amount < U256::from(ONE_CFX_IN_DRIP) {
-        Err(vm::Error::InternalContract("invalid deposit amount".into()))
-    } else if state.balance(&params.sender.with_native_space())? < amount {
-        Err(vm::Error::InternalContract(
-            "not enough balance to deposit".into(),
-        ))
-    } else {
-        tracer.trace_internal_transfer(
-            AddressPocket::Balance(params.sender.with_space(params.space)),
-            AddressPocket::StakingBalance(params.sender),
-            amount,
-        );
-        state.deposit(&params.sender, &amount, env.number)?;
-        Ok(())
+        internal_bail!("invalid deposit amount");
     }
+
+    if state.balance(&params.sender.with_native_space())? < amount {
+        internal_bail!("not enough balance to deposit");
+    }
+
+    tracer.trace_internal_transfer(
+        AddressPocket::Balance(params.sender.with_space(params.space)),
+        AddressPocket::StakingBalance(params.sender),
+        amount,
+    );
+    state.deposit(&params.sender, &amount, env.number, spec.cip97)?;
+    Ok(())
 }
 
 /// Implementation of `withdraw(uint256)`.
 pub fn withdraw(
-    amount: U256, params: &ActionParams, env: &Env,
+    amount: U256, params: &ActionParams, env: &Env, spec: &Spec,
     state: &mut dyn StateOpsTrait, tracer: &mut dyn VmObserve,
 ) -> vm::Result<()>
 {
     state.remove_expired_vote_stake_info(&params.sender, env.number)?;
     if state.withdrawable_staking_balance(&params.sender, env.number)? < amount
     {
-        Err(vm::Error::InternalContract(
-            "not enough withdrawable staking balance to withdraw".into(),
-        ))
-    } else if state.staking_balance(&params.sender)? - amount
+        internal_bail!("not enough withdrawable staking balance to withdraw");
+    }
+
+    if state.staking_balance(&params.sender)? - amount
         < state.pos_locked_staking(&params.sender)?
     {
-        Err(vm::Error::InternalContract(
-            "not enough unlocked staking balance to withdraw".into(),
-        ))
-    } else {
-        tracer.trace_internal_transfer(
-            AddressPocket::StakingBalance(params.sender),
-            AddressPocket::Balance(params.sender.with_space(params.space)),
-            amount,
-        );
-        let interest_amount = state.withdraw(&params.sender, &amount)?;
-        tracer.trace_internal_transfer(
-            AddressPocket::MintBurn,
-            AddressPocket::Balance(params.sender.with_space(params.space)),
-            interest_amount,
-        );
-        Ok(())
+        internal_bail!("not enough unlocked staking balance to withdraw");
     }
+
+    tracer.trace_internal_transfer(
+        AddressPocket::StakingBalance(params.sender),
+        AddressPocket::Balance(params.sender.with_space(params.space)),
+        amount,
+    );
+    let interest_amount =
+        state.withdraw(&params.sender, &amount, spec.cip97)?;
+    tracer.trace_internal_transfer(
+        AddressPocket::MintBurn,
+        AddressPocket::Balance(params.sender.with_space(params.space)),
+        interest_amount,
+    );
+    Ok(())
 }
 
 /// Implementation of `getVoteLocked(address,uint)`.
@@ -76,18 +77,15 @@ pub fn vote_lock(
 {
     let unlock_block_number = unlock_block_number.low_u64();
     if unlock_block_number <= env.number {
-        Err(vm::Error::InternalContract(
-            "invalid unlock_block_number".into(),
-        ))
-    } else if state.staking_balance(&params.sender)? < amount {
-        Err(vm::Error::InternalContract(
-            "not enough staking balance to lock".into(),
-        ))
-    } else {
-        state.remove_expired_vote_stake_info(&params.sender, env.number)?;
-        state.vote_lock(&params.sender, &amount, unlock_block_number)?;
-        Ok(())
+        internal_bail!("invalid unlock_block_number");
     }
+    if state.staking_balance(&params.sender)? < amount {
+        internal_bail!("not enough staking balance to lock");
+    }
+
+    state.remove_expired_vote_stake_info(&params.sender, env.number)?;
+    state.vote_lock(&params.sender, &amount, unlock_block_number)?;
+    Ok(())
 }
 
 /// Implementation of `getLockedStakingBalance(address,uint)`.

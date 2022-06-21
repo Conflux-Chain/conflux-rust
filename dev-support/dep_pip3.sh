@@ -20,6 +20,7 @@ install jsonrpcclient==3.3.6
 install asyncio
 install websockets
 install pyyaml
+install numpy
 
 python3 -m solcx.install v0.5.17
 

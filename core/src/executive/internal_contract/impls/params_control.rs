@@ -4,17 +4,20 @@
 
 use std::convert::TryInto;
 
+use crate::internal_bail;
 use cfx_state::state_trait::StateOpsTrait;
-use cfx_statedb::params_control_entries::*;
+use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, U256, U512};
+use lazy_static::lazy_static;
 
 use crate::{
+    executive::internal_contract::components::SolidityEventTrait,
     state::power_two_fractional,
-    vm::{self, ActionParams, Error},
+    vm::{self, ActionParams, Spec},
 };
 
 use super::super::{
-    components::InternalRefContext, contracts::params_control::Vote,
+    components::InternalRefContext, contracts::params_control::*,
     impls::staking::get_vote_power,
 };
 
@@ -31,10 +34,11 @@ pub fn cast_vote(
         / context.spec.params_dao_vote_period
         + 1;
     if version != current_voting_version {
-        bail!(Error::InternalContract(format!(
+        internal_bail!(
             "vote version unmatch: current={} voted={}",
-            current_voting_version, version
-        )));
+            current_voting_version,
+            version
+        );
     }
     let old_version =
         context.storage_at(params, &storage_key::versions(&address))?;
@@ -43,19 +47,19 @@ pub fn cast_vote(
     let mut vote_counts = [None; PARAMETER_INDEX_MAX];
     for vote in votes {
         if vote.index >= PARAMETER_INDEX_MAX as u16 {
-            bail!(Error::InternalContract(
-                "invalid vote index or opt_index".to_string()
-            ));
+            internal_bail!("invalid vote index or opt_index");
         }
         let entry = &mut vote_counts[vote.index as usize];
         match entry {
             None => {
                 *entry = Some(vote.votes);
             }
-            Some(_) => bail!(Error::InternalContract(format!(
-                "Parameter voted twice: vote.index={}",
-                vote.index
-            ))),
+            Some(_) => {
+                internal_bail!(
+                    "Parameter voted twice: vote.index={}",
+                    vote.index
+                );
+            }
         }
     }
     if is_new_vote {
@@ -85,21 +89,21 @@ pub fn cast_vote(
             .saturating_add(param_vote[1])
             .saturating_add(param_vote[2]);
         if total_counts > vote_power {
-            bail!(Error::InternalContract(format!(
+            internal_bail!(
                 "not enough vote power: power={} votes={}",
-                vote_power, total_counts
-            )));
+                vote_power,
+                total_counts
+            );
         }
+        let mut old_votes = [U256::zero(); 3];
         for opt_index in 0..OPTION_INDEX_MAX {
-            let vote_in_storage = context.storage_at(
-                params,
-                &storage_key::votes(&address, index, opt_index),
-            )?;
+            let vote_slot = storage_key::votes(&address, index, opt_index);
             let old_vote = if is_new_vote {
                 U256::zero()
             } else {
-                vote_in_storage
+                context.storage_at(params, &vote_slot)?
             };
+            old_votes[opt_index] = old_vote;
             debug!(
                 "index:{}, opt_index{}, old_vote: {}, new_vote: {}",
                 index, opt_index, old_vote, param_vote[opt_index]
@@ -108,37 +112,44 @@ pub fn cast_vote(
             // Update the global votes if the account vote changes.
             if param_vote[opt_index] != old_vote {
                 let old_total_votes = context.state.get_system_storage(
-                    &TOTAL_VOTES_ENTRIES[index][opt_index],
+                    &CURRENT_VOTES_ENTRIES[index][opt_index],
                 )?;
-                debug!("old_total_vote: {}", old_total_votes,);
-                let new_total_votes = if old_vote > param_vote[opt_index] {
-                    let dec = old_vote - param_vote[opt_index];
-                    // If total votes are accurate, `old_total_votes` is
-                    // larger than `old_vote`.
-                    old_total_votes - dec
-                } else if old_vote < param_vote[opt_index] {
-                    let inc = param_vote[opt_index] - old_vote;
-                    old_total_votes + inc
-                } else {
-                    assert!(is_new_vote);
-                    old_total_votes
-                };
-                debug!("new_total_vote:{}", new_total_votes);
+                // Should not overflow since we checked the efficiency of voting
+                // power.
+                let new_total_votes =
+                    old_total_votes + param_vote[opt_index] - old_vote;
+
+                debug!(
+                    "old_total_vote: {}, new_total_vote:{}",
+                    old_total_votes, new_total_votes
+                );
                 context.state.set_system_storage(
-                    TOTAL_VOTES_ENTRIES[index][opt_index].to_vec(),
+                    CURRENT_VOTES_ENTRIES[index][opt_index].to_vec(),
                     new_total_votes,
                 )?;
             }
 
-            // Overwrite the account vote entry if needed.
-            if param_vote[opt_index] != vote_in_storage {
-                context.set_storage(
-                    params,
-                    storage_key::votes(&address, index, opt_index).to_vec(),
-                    param_vote[opt_index],
-                )?;
-            }
+            // Overwrite the account vote entry.
+            context.set_storage(
+                params,
+                vote_slot.to_vec(),
+                param_vote[opt_index],
+            )?;
         }
+        if !is_new_vote {
+            RevokeEvent::log(
+                &(version, address, index as u16),
+                &old_votes,
+                params,
+                context,
+            )?;
+        }
+        VoteEvent::log(
+            &(version, address, index as u16),
+            &vote_counts[index].as_ref().unwrap(),
+            params,
+            context,
+        )?;
     }
     if is_new_vote {
         context.set_storage(
@@ -148,6 +159,20 @@ pub fn cast_vote(
         )?;
     }
     Ok(())
+}
+
+pub fn cast_vote_gas(length: usize, spec: &Spec) -> usize {
+    let version_gas =
+        2 * spec.sload_gas + spec.sha3_gas + spec.sstore_reset_gas;
+
+    let io_gas_per_topic = 3
+        * (2 * spec.sload_gas + 2 * spec.sstore_reset_gas + 2 * spec.sha3_gas);
+
+    let log_gas_per_topic = 2 * spec.log_gas
+        + 8 * spec.log_topic_gas
+        + 32 * 3 * 2 * spec.log_data_gas;
+
+    version_gas + length * (io_gas_per_topic + log_gas_per_topic)
 }
 
 pub fn read_vote(
@@ -171,46 +196,73 @@ pub fn read_vote(
     Ok(votes_list)
 }
 
-/// If the vote counts are not initialized, all counts will be zero, and the
-/// parameters will be unchanged.
-pub fn settled_param_vote_count<T: StateOpsTrait>(
-    state: &T,
-) -> vm::Result<AllParamsVoteCount> {
-    let pow_base_reward = ParamVoteCount {
-        unchange: state.get_system_storage(
-            &SETTLED_TOTAL_VOTES_ENTRIES[POW_BASE_REWARD_INDEX as usize]
-                [OPTION_UNCHANGE_INDEX as usize],
-        )?,
-        increase: state.get_system_storage(
-            &SETTLED_TOTAL_VOTES_ENTRIES[POW_BASE_REWARD_INDEX as usize]
-                [OPTION_INCREASE_INDEX as usize],
-        )?,
-        decrease: state.get_system_storage(
-            &SETTLED_TOTAL_VOTES_ENTRIES[POW_BASE_REWARD_INDEX as usize]
-                [OPTION_DECREASE_INDEX as usize],
-        )?,
+pub fn total_votes(
+    version: u64, context: &mut InternalRefContext,
+) -> vm::Result<Vec<Vote>> {
+    let current_voting_version = (context.env.number
+        - context.spec.cip94_activation_block_number)
+        / context.spec.params_dao_vote_period
+        + 1;
+
+    let state = &context.state;
+
+    let votes_entries = if version + 1 == current_voting_version {
+        SETTLED_VOTES_ENTRIES.as_ref()
+    } else if version == current_voting_version {
+        CURRENT_VOTES_ENTRIES.as_ref()
+    } else {
+        internal_bail!(
+            "Unsupport version {} (current {})",
+            version,
+            current_voting_version
+        );
     };
-    let pos_reward_interest = ParamVoteCount {
-        unchange: state.get_system_storage(
-            &SETTLED_TOTAL_VOTES_ENTRIES
-                [POS_REWARD_INTEREST_RATE_INDEX as usize]
-                [OPTION_UNCHANGE_INDEX as usize],
-        )?,
-        increase: state.get_system_storage(
-            &SETTLED_TOTAL_VOTES_ENTRIES
-                [POS_REWARD_INTEREST_RATE_INDEX as usize]
-                [OPTION_INCREASE_INDEX as usize],
-        )?,
-        decrease: state.get_system_storage(
-            &SETTLED_TOTAL_VOTES_ENTRIES
-                [POS_REWARD_INTEREST_RATE_INDEX as usize]
-                [OPTION_DECREASE_INDEX as usize],
-        )?,
+
+    let mut answer = vec![];
+    for x in 0..PARAMETER_INDEX_MAX {
+        let slot_entry = &votes_entries[x];
+        answer.push(Vote {
+            index: x as u16,
+            votes: [
+                state.get_system_storage(
+                    slot_entry[OPTION_UNCHANGE_INDEX as usize].as_ref(),
+                )?,
+                state.get_system_storage(
+                    slot_entry[OPTION_INCREASE_INDEX as usize].as_ref(),
+                )?,
+                state.get_system_storage(
+                    slot_entry[OPTION_DECREASE_INDEX as usize].as_ref(),
+                )?,
+            ],
+        });
+    }
+
+    Ok(answer)
+}
+
+lazy_static! {
+    static ref CURRENT_VOTES_ENTRIES: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] = {
+        let mut answer: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] =
+            Default::default();
+        for index in 0..PARAMETER_INDEX_MAX {
+            for opt_index in 0..OPTION_INDEX_MAX {
+                answer[index][opt_index] =
+                    system_storage_key::current_votes(index, opt_index);
+            }
+        }
+        answer
     };
-    Ok(AllParamsVoteCount {
-        pow_base_reward,
-        pos_reward_interest,
-    })
+    static ref SETTLED_VOTES_ENTRIES: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] = {
+        let mut answer: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] =
+            Default::default();
+        for index in 0..PARAMETER_INDEX_MAX {
+            for opt_index in 0..OPTION_INDEX_MAX {
+                answer[index][opt_index] =
+                    system_storage_key::settled_votes(index, opt_index);
+            }
+        }
+        answer
+    };
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -227,6 +279,22 @@ impl ParamVoteCount {
             increase,
             decrease,
         }
+    }
+
+    pub fn from_state<T: StateOpsTrait, U: AsRef<[u8]>>(
+        state: &T, slot_entry: &[U; 3],
+    ) -> DbResult<Self> {
+        Ok(ParamVoteCount {
+            unchange: state.get_system_storage(
+                slot_entry[OPTION_UNCHANGE_INDEX as usize].as_ref(),
+            )?,
+            increase: state.get_system_storage(
+                &slot_entry[OPTION_INCREASE_INDEX as usize].as_ref(),
+            )?,
+            decrease: state.get_system_storage(
+                &slot_entry[OPTION_DECREASE_INDEX as usize].as_ref(),
+            )?,
+        })
     }
 
     pub fn compute_next_params(&self, old_value: U256) -> U256 {
@@ -284,6 +352,44 @@ pub struct AllParamsVoteCount {
     pub pos_reward_interest: ParamVoteCount,
 }
 
+/// If the vote counts are not initialized, all counts will be zero, and the
+/// parameters will be unchanged.
+pub fn get_settled_param_vote_count<T: StateOpsTrait>(
+    state: &T,
+) -> DbResult<AllParamsVoteCount> {
+    let pow_base_reward = ParamVoteCount::from_state(
+        state,
+        &SETTLED_VOTES_ENTRIES[POW_BASE_REWARD_INDEX as usize],
+    )?;
+    let pos_reward_interest = ParamVoteCount::from_state(
+        state,
+        &SETTLED_VOTES_ENTRIES[POS_REWARD_INTEREST_RATE_INDEX as usize],
+    )?;
+    Ok(AllParamsVoteCount {
+        pow_base_reward,
+        pos_reward_interest,
+    })
+}
+
+/// Move the next vote counts into settled and reset the counts.
+pub fn settle_current_votes<T: StateOpsTrait>(state: &mut T) -> DbResult<()> {
+    for index in 0..PARAMETER_INDEX_MAX {
+        for opt_index in 0..OPTION_INDEX_MAX {
+            let vote_count = state
+                .get_system_storage(&CURRENT_VOTES_ENTRIES[index][opt_index])?;
+            state.set_system_storage(
+                SETTLED_VOTES_ENTRIES[index][opt_index].to_vec(),
+                vote_count,
+            )?;
+            state.set_system_storage(
+                CURRENT_VOTES_ENTRIES[index][opt_index].to_vec(),
+                U256::zero(),
+            )?;
+        }
+    }
+    Ok(())
+}
+
 /// Solidity variable sequences.
 /// ```solidity
 /// struct VoteInfo {
@@ -335,5 +441,59 @@ mod storage_key {
         let opt_slot = array_slot(topic_slot, opt_index, 1);
 
         return u256_to_array(opt_slot);
+    }
+}
+
+/// Solidity variable sequences.
+/// ```solidity
+/// struct VoteStats {
+///     uint[3] pow_base_reward dynamic,
+///     uint[3] pos_interest_rate dynamic,
+/// }
+/// VoteStats current_votes dynamic;
+/// VoteStats settled_votes dynamic;
+/// ```
+mod system_storage_key {
+    use cfx_parameters::internal_contract_addresses::PARAMS_CONTROL_CONTRACT_ADDRESS;
+    use cfx_types::U256;
+
+    use super::super::super::{
+        components::storage_layout::*, contracts::system_storage::base_slot,
+    };
+
+    const CURRENT_VOTES_SLOT: usize = 0;
+    const SETTLED_VOTES_SLOT: usize = 1;
+
+    fn vote_stats(base: U256, index: usize, opt_index: usize) -> U256 {
+        // Position of `.<topic>` (static slot)
+        let topic_slot = base + index;
+
+        // Position of `.<topic>` (dynamic slot)
+        let topic_slot = dynamic_slot(topic_slot);
+
+        // Position of `.<topic>[opt_index]`
+        return array_slot(topic_slot, opt_index, 1);
+    }
+
+    pub(super) fn current_votes(index: usize, opt_index: usize) -> [u8; 32] {
+        // Position of `current_votes` (static slot)
+        let base = base_slot(*PARAMS_CONTROL_CONTRACT_ADDRESS)
+            + U256::from(CURRENT_VOTES_SLOT);
+
+        // Position of `current_votes` (dynamic slot)
+        let base = dynamic_slot(base);
+
+        u256_to_array(vote_stats(base, index, opt_index))
+    }
+
+    pub(super) fn settled_votes(index: usize, opt_index: usize) -> [u8; 32] {
+        // Position of `settled_votes` (static slot)
+        let base = base_slot(*PARAMS_CONTROL_CONTRACT_ADDRESS)
+            + U256::from(SETTLED_VOTES_SLOT);
+
+        // Position of `settled_votes` (dynamic slot)
+        let base = dynamic_slot(base);
+
+        u256_to_array(vote_stats(base, index, opt_index))
     }
 }
