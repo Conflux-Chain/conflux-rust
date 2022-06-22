@@ -427,7 +427,9 @@ pub fn genesis_block(
                     /* account_start_nonce = */ U256::zero(),
                 )
                 .unwrap();
-            state.deposit(&node.address, &stake_balance, 0).unwrap();
+            state
+                .deposit(&node.address, &stake_balance, 0, false)
+                .unwrap();
             let signed_tx = node
                 .register_tx
                 .clone()

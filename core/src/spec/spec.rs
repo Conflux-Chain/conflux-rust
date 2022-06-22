@@ -82,6 +82,8 @@ pub struct TransitionsBlockNumber {
     pub cip92: BlockNumber,
     /// CIP-94: On-chain Parameter DAO Vote
     pub cip94: BlockNumber,
+    /// CIP-97: Remove Staking List
+    pub cip97: BlockNumber,
 }
 
 #[derive(Default, Debug, Clone)]
