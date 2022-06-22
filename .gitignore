@@ -4,6 +4,7 @@ target
 **/*.rs.bk
 **/__pycache__
 .idea/
+.vscode/
 .git/
 .gitmodules
 .phabricator*
