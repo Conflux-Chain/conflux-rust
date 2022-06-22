@@ -74,6 +74,8 @@ class ReorgTest(ConfluxTestFramework):
                 nonce_map[sender_key] = nonce + 1
                 balance_map[sender_key] -= value + gas_price * 21000
                 time.sleep(random.random() / 10)
+            sync_blocks(shard_nodes)
+            rpc_clients[0].generate_blocks_to_state()
             for k in balance_map:
                 self.log.info("Check account sk:%s addr:%s", bytes_to_int(k), eth_utils.encode_hex(priv_to_addr(k)))
                 wait_until(lambda: self.check_account(k, balance_map, shard_nodes[0]))

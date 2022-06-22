@@ -1152,6 +1152,10 @@ impl Configuration {
             .raw_conf
             .dao_vote_transition_number
             .unwrap_or(non_genesis_default_transition_time);
+        params.transition_numbers.cip97 = self
+            .raw_conf
+            .dao_vote_transition_number
+            .unwrap_or(default_transition_time);
         if self.is_test_or_dev_mode() {
             params.transition_numbers.cip43b =
                 self.raw_conf.cip43_init_end_number.unwrap_or(u64::MAX);
