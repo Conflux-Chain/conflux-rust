@@ -623,6 +623,21 @@ impl ConsensusExecutor {
         }
     }
 
+    pub fn epoch_executed_and_recovered(
+        &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
+        on_local_pivot: bool,
+        reward_execution_info: &Option<RewardExecutionInfo>, epoch_height: u64,
+    ) -> bool
+    {
+        self.handler.epoch_executed_and_recovered(
+            epoch_hash,
+            epoch_block_hashes,
+            on_local_pivot,
+            reward_execution_info,
+            epoch_height,
+        )
+    }
+
     pub fn call_virtual(
         &self, tx: &SignedTransaction, epoch_id: &H256, epoch_size: usize,
         request: EstimateRequest,
@@ -891,6 +906,32 @@ impl ConsensusExecutionHandler {
             .get_epoch_execution_commitment_with_db(epoch_hash)
     }
 
+    pub fn epoch_executed_and_recovered(
+        &self, epoch_hash: &H256, epoch_block_hashes: &Vec<H256>,
+        on_local_pivot: bool,
+        reward_execution_info: &Option<RewardExecutionInfo>, epoch_height: u64,
+    ) -> bool
+    {
+        // note: the lock on chain_id is never held so this should be OK.
+        let evm_chain_id = self
+            .machine
+            .params()
+            .chain_id
+            .read()
+            .get_chain_id(epoch_height)
+            .in_evm_space();
+
+        self.data_man.epoch_executed_and_recovered(
+            &epoch_hash,
+            &epoch_block_hashes,
+            on_local_pivot,
+            self.config.executive_trace,
+            reward_execution_info,
+            self.pos_verifier.as_ref(),
+            evm_chain_id,
+        )
+    }
+
     /// Compute the epoch `epoch_hash`, and skip it if already computed.
     /// After the function is called, it's assured that the state, the receipt
     /// root, and the receipts of blocks executed by this epoch exist.
@@ -931,26 +972,15 @@ impl ConsensusExecutionHandler {
             .block_header_by_hash(epoch_hash)
             .expect("must exists");
 
-        // note: the lock on chain_id is never held so this should be OK.
-        let evm_chain_id = self
-            .machine
-            .params()
-            .chain_id
-            .read()
-            .get_chain_id(pivot_block_header.height())
-            .in_evm_space();
-
         // Check if the state has been computed
         if !force_recompute
             && debug_record.is_none()
-            && self.data_man.epoch_executed_and_recovered(
+            && self.epoch_executed_and_recovered(
                 &epoch_hash,
                 &epoch_block_hashes,
                 on_local_pivot,
-                self.config.executive_trace,
                 reward_execution_info,
-                self.pos_verifier.as_ref(),
-                evm_chain_id,
+                pivot_block_header.height(),
             )
         {
             if on_local_pivot {

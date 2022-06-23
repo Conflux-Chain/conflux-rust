@@ -26,11 +26,7 @@ use std::{
     time::{self, Instant},
 };
 
-///
-/// Archive node goes through the following phases:
-///     CatchUpFillBlockBody --> CatchUpSyncBlock --> Normal
-///
-/// Full node goes through the following phases:
+/// Both Archive and Full node go through the following phases:
 ///     CatchUpRecoverBlockHeaderFromDB --> CatchUpSyncBlockHeader -->
 ///     CatchUpCheckpoint --> CatchUpFillBlockBody -->
 ///     CatchUpSyncBlock --> Normal
@@ -292,6 +288,7 @@ impl SynchronizationPhaseTrait for CatchUpSyncBlockHeaderPhase {
         *sync_handler.latest_epoch_requested.lock() =
             (cur_era_genesis_height, Instant::now(), 0, 0);
 
+        // sync block headers from peers
         sync_handler.request_epochs(io);
     }
 }
@@ -433,11 +430,11 @@ impl SynchronizationPhaseTrait for CatchUpFillBlockBodyPhase {
     {
         info!("start phase {:?}", self.name());
         {
-            // For archive node, this will be `None`.
-            // For full node, this is `None` when the state of checkpoint is
-            // already in disk and we didn't sync it from peer.
-            // In both cases, we should set `state_availability_boundary` to
-            // `[cur_era_stable_height, cur_era_stable_height]`.
+            // For both archive and full node, synced_epoch_id possible be
+            // `None`. It wil be nont when stable epoch is equal to
+            // true genesis In both cases, we should set
+            // `state_availability_boundary` to
+            // `[cur_era_stable_hash, cur_era_stable_height]`.
             if let Some(epoch_synced) = &*sync_handler.synced_epoch_id.lock() {
                 let epoch_synced_height = self
                     .graph
