@@ -30,9 +30,11 @@ impl NodeRefDeltaMptCompact {
     /// Valid dirty slot ranges from [0..DIRTY_SLOT_LIMIT).
     /// The DIRTY_SLOT_LIMIT is reserved for MaybeNodeRefDeltaMptCompact#NULL.
     pub const DIRTY_SLOT_LIMIT: u32 = 0x7fffffff;
+    const LARGE_PERSISTENT_KEY_BIT: CompactNodeRef =
+        1 << (CompactNodeRef::BITS - 1);
     /// All the bit operations assume that a persistent key is less than
     /// PERSISTENT_KEY_BIT.
-    const PERSISTENT_KEY_BIT: CompactNodeRef = 1 << (CompactNodeRef::BITS - 1);
+    const PERSISTENT_KEY_BIT: CompactNodeRef = 0x80000000;
 
     pub fn new(value: CompactNodeRef) -> Self { Self { value } }
 }
@@ -57,10 +59,20 @@ impl From<NodeRefDeltaMpt> for NodeRefDeltaMptCompact {
     fn from(node: NodeRefDeltaMpt) -> Self {
         match node {
             NodeRefDeltaMpt::Committed { db_key } => Self {
-                value: db_key | NodeRefDeltaMptCompact::PERSISTENT_KEY_BIT,
+                value: if db_key < NodeRefDeltaMptCompact::PERSISTENT_KEY_BIT {
+                    db_key ^ NodeRefDeltaMptCompact::PERSISTENT_KEY_BIT
+                } else {
+                    if cfg!(feature = "u64_mpt_db_key") {
+                        db_key
+                            & NodeRefDeltaMptCompact::LARGE_PERSISTENT_KEY_BIT
+                    } else {
+                        unreachable!("should not run large state with u32 key")
+                    }
+                },
             },
             NodeRefDeltaMpt::Dirty { index } => Self {
-                value: index as CompactNodeRef,
+                value: (index ^ NodeRefDeltaMptCompact::DIRTY_SLOT_LIMIT)
+                    as CompactNodeRef,
             },
         }
     }
@@ -68,14 +80,18 @@ impl From<NodeRefDeltaMpt> for NodeRefDeltaMptCompact {
 
 impl From<NodeRefDeltaMptCompact> for NodeRefDeltaMpt {
     fn from(x: NodeRefDeltaMptCompact) -> Self {
-        if x.value <= NodeRefDeltaMptCompact::DIRTY_SLOT_LIMIT as CompactNodeRef
+        if NodeRefDeltaMptCompact::PERSISTENT_KEY_BIT & x.value == 0
+            // if `CompactNodeRef` is u32, `PERSISTENT_KEY_BIT` and `LARGE_PERSISTENT_KEY_BIT` are the same.
+            && (NodeRefDeltaMptCompact::LARGE_PERSISTENT_KEY_BIT as CompactNodeRef) & x.value == 0
         {
             NodeRefDeltaMpt::Dirty {
-                index: x.value as u32,
+                index: (NodeRefDeltaMptCompact::DIRTY_SLOT_LIMIT
+                    ^ x.value as u32),
             }
         } else {
             NodeRefDeltaMpt::Committed {
-                db_key: (!NodeRefDeltaMptCompact::PERSISTENT_KEY_BIT & x.value),
+                db_key: (NodeRefDeltaMptCompact::PERSISTENT_KEY_BIT ^ x.value)
+                    & !NodeRefDeltaMptCompact::LARGE_PERSISTENT_KEY_BIT,
             }
         }
     }

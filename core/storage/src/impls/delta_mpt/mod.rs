@@ -396,12 +396,15 @@ impl MultiVersionMerklePatriciaTrie {
     ) -> Result<Option<RowNumberUnderlyingType>> {
         Ok(match x?.as_ref() {
             None => None,
-            Some(row_number_bytes) => Some(
-                unsafe {
-                    std::str::from_utf8_unchecked(row_number_bytes.as_ref())
-                }
-                .parse::<RowNumberUnderlyingType>()?,
-            ),
+            Some(row_number_bytes) => {
+                trace!("parse_row_number:{:?}", row_number_bytes);
+                Some(
+                    unsafe {
+                        std::str::from_utf8_unchecked(row_number_bytes.as_ref())
+                    }
+                    .parse::<RowNumberUnderlyingType>()?,
+                )
+            }
         })
     }
 

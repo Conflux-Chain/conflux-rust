@@ -219,6 +219,8 @@ impl<
     >
     {
         self.db_load_counter.fetch_add(1, Ordering::Relaxed);
+        let tmp: i64 = db_key.try_into().unwrap();
+        trace!("load_from_db: {:?} {:?}", db_key, tmp);
         // We never save null node in db.
         let rlp_bytes = db
             .get_mut_with_number_key(

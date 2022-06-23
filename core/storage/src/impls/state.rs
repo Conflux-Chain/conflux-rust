@@ -733,6 +733,7 @@ impl State {
                 );
             }
         }
+        trace!("root after commit: {:?}", self.delta_trie_root);
 
         commit_transaction.transaction.put(
             ["parent_epoch_id_".as_bytes(), epoch_id.as_ref()]
