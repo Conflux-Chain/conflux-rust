@@ -17,9 +17,23 @@ from conflux.rpc import RpcClient
 class ExampleTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
+        self.conf_parameters["dev_allow_phase_change_without_peer"] = "false"
+
+    def setup_nodes(self):
+        self.add_nodes(self.num_nodes)
+        for i in range(self.num_nodes):
+            self.start_node(i, phase_to_wait=None)
+
 
     def setup_network(self):
         self.setup_nodes()
+        # Make all nodes fully connected, so a crashed archive node can be connected to another
+        # archive node to catch up
+        connect_sample_nodes(self.nodes, self.log, sample=self.num_nodes - 1)
+        sync_blocks(self.nodes)
+        for node in self.nodes:
+            node.wait_for_recovery(["NormalSyncPhase"], 30)
+
 
     def run_test(self):
         time.sleep(7)
@@ -31,19 +45,18 @@ class ExampleTest(ConfluxTestFramework):
         self.log.info("genesis {}".format(genesis))
         self.log.info("Node 1 epoch {}".format(client1.epoch_number()))
 
-        # generate blocks to slow down node startup to wait nodes connected
-        self.nodes[0].generate_empty_blocks(10000)
-        connect_nodes(self.nodes, 0, 1)
+        # generate common blocks
+        self.nodes[0].generate_empty_blocks(20)
         sync_blocks(self.nodes[0:2])
 
         e1 = client1.epoch_number()
         e2 = client2.epoch_number()
         self.log.info("Node 1 epoch {}".format(e1))
         self.log.info("Node 2 epoch {}".format(e2))
-        assert_equal(e1, 10000)
-        assert_equal(e2, 10000)
+        assert_equal(e1, 20)
+        assert_equal(e2, 20)
 
-        self.log.info("Disconnect nodes")
+        # Disconnect nodes
         disconnect_nodes(self.nodes, 0, 1)
 
         tx = client1.new_tx()
