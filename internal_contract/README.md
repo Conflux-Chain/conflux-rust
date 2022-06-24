@@ -28,7 +28,7 @@ keywords:
 
 (**IMPORTANT: the interfaces are changed in Tethys mainnet. This document is synced with the newest version.**)
 
-Conflux introduces several built-in internal contracts for better system maintenance and on-chain governance. Now Conflux has six internal contracts: `AdminControl` contract, `SponsorWhitelistControl` contract and `Staking` contract. These contracts provide solidity function apis defined [`here`](https://github.com/Conflux-Chain/conflux-rust/tree/master/internal_contract/contracts). These function can only be called via `CALL` or `STATICCALL` operation. Using operation `CALLCODE` or `DELEGATECALL` to interact with internal contracts will trigger an error.
+Conflux introduces several built-in internal contracts for better system maintenance and on-chain governance. Now Conflux has six internal contracts: `AdminControl` contract, `SponsorWhitelistControl` contract and `Staking` contract are introduced from the beginning, `ConfluxContext`, `PoSRegister`, `ConfluxContext` are introduced at v2 hard-fork. These contracts provide solidity function apis defined [`here`](https://github.com/Conflux-Chain/conflux-rust/tree/master/internal_contract/contracts). These function can only be called via `CALL` or `STATICCALL` operation. Using operation `CALLCODE` or `DELEGATECALL` to interact with internal contracts will trigger an error.
 
 The addresses of these six internal contracts are list as follows:
 - AdminControl: `0x0888000000000000000000000000000000000000`
@@ -278,7 +278,7 @@ staking_contract.voteLock(your_number_of_tokens, your_unlock_block_number).sendT
 }).confirmed();
 ```
 
-Conflux v2 hardfork has introduced three new internal contracts: `ConfluxContext`, `PoSRegister`, `CrossSpaceCall`
+Conflux v2 hard-fork has introduced three new internal contracts: `ConfluxContext`, `PoSRegister`, `CrossSpaceCall`
 
 ## ConfluxContext
 
