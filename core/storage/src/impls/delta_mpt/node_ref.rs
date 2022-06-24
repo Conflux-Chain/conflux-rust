@@ -63,8 +63,8 @@ impl From<NodeRefDeltaMpt> for NodeRefDeltaMptCompact {
                     db_key ^ NodeRefDeltaMptCompact::PERSISTENT_KEY_BIT
                 } else {
                     if cfg!(feature = "u64_mpt_db_key") {
-                        db_key
-                            & NodeRefDeltaMptCompact::LARGE_PERSISTENT_KEY_BIT
+                        db_key ^ NodeRefDeltaMptCompact::PERSISTENT_KEY_BIT
+                            | NodeRefDeltaMptCompact::LARGE_PERSISTENT_KEY_BIT
                     } else {
                         unreachable!("should not run large state with u32 key")
                     }
@@ -137,3 +137,19 @@ use super::{
 use crate::impls::delta_mpt::row_number::RowNumberUnderlyingType;
 use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
 use rlp::*;
+
+#[test]
+#[cfg(feature = "u64_mpt_db_key")]
+fn test_large_key() {
+    let db_key = NodeRefDeltaMpt::Committed { db_key: (1 << 32) };
+    let compact: NodeRefDeltaMptCompact = db_key.clone().into();
+    let a = match db_key {
+        NodeRefDeltaMpt::Committed { db_key } => db_key,
+        _ => unreachable!(),
+    };
+    let b = match NodeRefDeltaMpt::from(compact) {
+        NodeRefDeltaMpt::Committed { db_key } => db_key,
+        _ => unreachable!(),
+    };
+    assert_eq!(a.to_be_bytes(), b.to_be_bytes());
+}
