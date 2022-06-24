@@ -22,21 +22,27 @@ keywords:
   - [Interest Rate](#interest-rate)
   - [Locking and Voting Power](#locking-and-voting-power)
   - [Examples](#examples-2)
+- [ConfluxContext](#confluxcontext)
+- [PoSRegister](#posregister)
+- [CrossSpaceCall](#crossspacecall)
 
 (**IMPORTANT: the interfaces are changed in Tethys mainnet. This document is synced with the newest version.**)
 
-Conflux introduces several built-in internal contracts for better system maintenance and on-chain governance. Now Conflux has three internal contracts: `AdminControl` contract, `SponsorWhitelistControl` contract and `Staking` contract. These contracts provide solidity function apis defined [here](https://github.com/Conflux-Chain/conflux-rust/tree/master/internal_contract/contracts). These function can only be called via `CALL` or `STATICCALL` operation. Using operation `CALLCODE` or `DELEGATECALL` to interact with internal contracts will trigger an error.
+Conflux introduces several built-in internal contracts for better system maintenance and on-chain governance. Now Conflux has six internal contracts: `AdminControl` contract, `SponsorWhitelistControl` contract and `Staking` contract. These contracts provide solidity function apis defined [`here`](https://github.com/Conflux-Chain/conflux-rust/tree/master/internal_contract/contracts). These function can only be called via `CALL` or `STATICCALL` operation. Using operation `CALLCODE` or `DELEGATECALL` to interact with internal contracts will trigger an error.
 
-The addresses of these three internal contracts are list as follows:
+The addresses of these six internal contracts are list as follows:
 - AdminControl: `0x0888000000000000000000000000000000000000`
 - SponsorWhitelistControl: `0x0888000000000000000000000000000000000001`
 - Staking: `0x0888000000000000000000000000000000000002`
+- ConfluxContext: `0x0888000000000000000000000000000000000004`
+- PoSRegister: `0x0888000000000000000000000000000000000005`
+- CrossSpaceCall: `0x0888000000000000000000000000000000000006`
 
 All the example code in this document will use [js-conflux-sdk](https://github.com/Conflux-Chain/js-conflux-sdk). The solidity function apis are list [here](https://github.com/Conflux-Chain/conflux-rust/tree/master/internal_contract/contracts).
 
-# AdminControl contract
+## AdminControl contract
 
-## Overview
+### Overview
 
 The `AdminControl` contract is a debug tool for contract development. When a contract is created during a transaction, the sender for the current transaction will become the contract admin automatically.
 
@@ -56,7 +62,7 @@ The `AdminControl` contract also provides a query interface `getAdmin(address co
 2. However, if sender `A` calls contract `B`, then contract `B` creates contract `C` and then set admin to `D` during contract contraction, then the set will fail because the admin of `C` is `A` and the sender for creating `C` is `B`. 
 3. But, Conflux introduces a special policy. In case 2, if `D` is zero address, the set admin will success. This means that a contract can declare "I don't need admin" during contract creation. 
 
-## Examples
+### Examples
 
 Consider you have deployed a contract whose address is `contract_addr`. The administrator can call `AdminControl.setAdmin(contract_addr, new_admin)` to change the administrator and call `AdminControl.destroy(contract_addr)` to kill the contract. 
 
@@ -82,9 +88,9 @@ admin_contract.destroy(contract_addr).sendTransaction({
 ```
 
 
-# SponsorWhitelistControl contract
+## SponsorWhitelistControl contract
 
-## Overview
+### Overview
 
 Conflux implements a sponsorship mechanism to subsidize the usage of smart contracts. Thus, a new account with zero balance is able to call smart contracts as long as the execution is sponsored (usually by the operator of Dapps). The built-in SponsorControl contract is introduced to record the sponsorship information of smart contracts. 
 
@@ -105,7 +111,7 @@ There are two resources that can be sponsored: gas consumption and storage colla
 
 When a contract is created, its `sponsor_for_gas` and `sponsor_for_collateral` will be initialized by zero address, and the sponsor balance will be initialized by 0. Both sponsorship for gas and for collateral can be updated by calling the SponsorControl contract. The current sponsor can call this contract to transfer funds to increase the sponsor balances directly, and the current sponsor for gas is also allowed to increase the `sponsor_limit_for_gas_fee` without transferring new funds. Other normal accounts can replace the current sponsor by calling this contract and providing more funds for sponsorship.
 
-## Sponsorship Replacement
+### Sponsorship Replacement
 
 To replace the `sponsor_for_gas` of a contract, the new sponsor should call function `setSponsorForGas(address contractAddr, uint upperBound)` and transfer to the internal contract a fund. The following conditions are required to replace sponsor for gas:
 
@@ -119,11 +125,11 @@ The replacement of `sponsor_for_collateral` is similar except that there is no a
 
 Conflux also allows a contract account to be a sponsor. 
 
-## Add Sponsor Balance  
+### Add Sponsor Balance  
 
 The sponsor can provide additional sponsor balance without sponsorship replacement. In this case, the sponsor should also interact with function `setSponsorForGas(address contractAddr, uint upperBound)` or `setSponsorForCollateral(address contractAddr)`, and meet all the requirements except condition 1. If requirements are satisfied, the transferred fund will be added to sponsor balance and the `sponsor_limit_for_gas_fee` will be updated accordingly.
 
-## Whitelist maintenance
+### Whitelist maintenance
 
 Only the contract itself or contract admin can update the contract whitelist. The sponsors have no rights for changing whitelist. 
 
@@ -134,7 +140,7 @@ A contract can call function `addPrivilege(address[] memory)` to any addresses t
 
 The admin of a contract can use the interfaces `addPrivilegeByAdmin(address contractAddr, address[] memory addresses)` and `removePrivilegeByAdmin(address contractAddr, address[] memory addresses)` to maintain the whitelist.
 
-## Examples
+### Examples
 
 Suppose you have a simple contract like this.
 ```solidity
@@ -204,9 +210,9 @@ you_contract.remove(white_list_addr).sendTransaction({
 After that the accounts in `whiltelist` will pay nothing while calling `you_contract.foo()` or `you_contract.par_add(1, 10)`.
 
 
-# Staking Contract
+## Staking Contract
 
-## Overview
+### Overview
 
 Conflux introduces the staking mechanism for two reasons: first, staking mechanism provides a better way to charge the occupation of storage space (comparing to “pay once, occupy forever”); and second, this mechanism also helps in defining the voting power in decentralized governance.
 
@@ -216,7 +222,7 @@ A user (or a contract) can deposit balance for staking by calling `deposit(uint 
 
 The user can also withdraw balance by `withdraw(uint amount)`. The caller can call this function to withdraw some tokens from the Conflux Internal Staking Contract. This will also trigger interest settlement. The staking capital and staking interest will be transferred to the user's balance in time. All the withdrawal applications will be processed on a first-come-first-served basis according to the sequence of staking orders.
 
-## Interest Rate
+### Interest Rate
 
 The annualized staking interest rate is currently set to 4.08%. Compound interest is implemented in the granularity of blocks.
 
@@ -228,7 +234,7 @@ interest issued = v * (1 + 4% / 63072000)^T - v
 
 where `T = BlockNo(B)−BlockNo(B')` is the staking period measured by the number of blocks, and `63072000` is the expected number of blocks generated in `365` days with the target block time `0.5` seconds.
 
-## Locking and Voting Power 
+### Locking and Voting Power 
 
 By locking the staking balance, the user can obtain *vote power* for further on-chain governance. With function `voteLock(uint amount, uint unlock_block_number)`, the account makes a promise that This process resembles making promise that "My `stakingBalance` will always have at least `amount` Drip before the block with block number `unlock_block_number`". The account can make multiple promises, like "I will always at least 10 CFX in this year, and then always stake at least 5 CFX in the next year."  **Once the promise has been made, there is no way to cancel it!** But the account can overwrite old promise by locking more balance. Whenever the account tries to withdraw `stakingBalance`, the internal contract will check whether the rest balance matches the locking promise. 
 
@@ -244,7 +250,7 @@ Locking does not have any influence on the stake interest. When the account with
 
 At any time, each locked Drip will be assigned a *vote power* from 0 to 1 according to its unlock time. The Drips to be unlocked in more than one year will have a full vote power. See section 8.3.2 in the [Conflux Protocol Specification](https://conflux-protocol.s3-ap-southeast-1.amazonaws.com/tech-specification.pdf) for more details.
 
-## Examples
+### Examples
 
 ```javascript
 const PRIVATE_KEY = '0xxxxxxx';
@@ -270,4 +276,159 @@ staking_contract.withdraw(your_number_of_tokens).sendTransaction({
 staking_contract.voteLock(your_number_of_tokens, your_unlock_block_number).sendTransaction({
   from: account,
 }).confirmed();
+```
+
+Conflux v2 hardfork has introduced three new internal contracts: `ConfluxContext`, `PoSRegister`, `CrossSpaceCall`
+
+## ConfluxContext
+
+This contract can be used to query Conflux network info in contract including:
+
+* `epochNumber` - Current epoch number
+* `posHeight` - Current block height of PoS chain
+* `finalizedEpochNumber` - The latest finalized (by PoS chain) PoW epoch number
+
+`ConfluxContext`'s hex40 contract address is `0x0888000000000000000000000000000000000004`
+
+```js
+// SPDX-License-Identifier: MIT
+pragma solidity >=0.4.15;
+
+interface ConfluxContext {
+    /*** Query Functions ***/
+    /**
+     * @dev get the current epoch number
+     * @return the current epoch number
+     */
+    function epochNumber() external view returns (uint256);
+    /**
+     * @dev get the height of the referred PoS block in the last epoch
+`    * @return the current PoS block height
+     */
+    function posHeight() external view returns (uint256);
+    /**
+     * @dev get the epoch number of the finalized pivot block.
+     * @return the finalized epoch number
+     */
+    function finalizedEpochNumber() external view returns (uint256);
+}
+
+```
+
+## PoSRegister
+
+This contract is used let user participate in PoS chain. If anyone want to become a PoS node, he need to interact with this contract. This contract provide serveral methods to increase or decrease PoS votes:
+
+* `register` - Regist in PoS chain to become a PoS node
+* `increaseStake` - Increase PoS stake
+* `retire` - Decrease PoS stake
+
+Also several methods to query one account's PoS info:
+
+* `getVotes` - Query one account's votes info, will return `totalStakedVotes` and `totalUnlockedVotes`
+* `identifierToAddress` - Query one PoS account's binded PoW address
+* `addressToIdentifier` - Query one PoW account's binded PoS address
+
+`PoSRegister`'s hex40 contract address is `0x0888000000000000000000000000000000000005`
+
+```js
+// SPDX-License-Identifier: MIT
+pragma solidity >=0.5.0;
+
+interface PoSRegister {
+    /**
+     * @dev Register PoS account
+     * @param indentifier - PoS account address to register
+     * @param votePower - votes count
+     * @param blsPubKey - BLS public key
+     * @param vrfPubKey - VRF public key
+     * @param blsPubKeyProof - BLS public key's proof of legality, used to against some attack, generated by conflux-rust fullnode
+     */
+    function register(
+        bytes32 indentifier,
+        uint64 votePower,
+        bytes calldata blsPubKey,
+        bytes calldata vrfPubKey,
+        bytes[2] calldata blsPubKeyProof
+    ) external;
+
+    /**
+     * @dev Increase specified number votes for msg.sender
+     * @param votePower - count of votes to increase
+     */
+    function increaseStake(uint64 votePower) external;
+
+    /**
+     * @dev Retire specified number votes for msg.sender
+     * @param votePower - count of votes to retire
+     */
+    function retire(uint64 votePower) external;
+
+    /**
+     * @dev Query PoS account's lock info. Include "totalStakedVotes" and "totalUnlockedVotes"
+     * @param identifier - PoS address
+     */
+    function getVotes(bytes32 identifier) external view returns (uint256, uint256);
+
+    /**
+     * @dev Query the PoW address binding with specified PoS address
+     * @param identifier - PoS address
+     */
+    function identifierToAddress(bytes32 identifier) external view returns (address);
+
+    /**
+     * @dev Query the PoS address binding with specified PoW address
+     * @param addr - PoW address
+     */
+    function addressToIdentifier(address addr) external view returns (bytes32);
+
+    /**
+     * @dev Emitted when register method executed successfully
+     */
+    event Register(bytes32 indexed identifier, bytes blsPubKey, bytes vrfPubKey);
+
+    /**
+     * @dev Emitted when increaseStake method executed successfully
+     */
+    event IncreaseStake(bytes32 indexed identifier, uint64 votePower);
+
+    /**
+     * @dev Emitted when retire method executed successfully
+     */
+    event Retire(bytes32 indexed identifier, uint64 votePower);
+}
+```
+
+## CrossSpaceCall
+
+A new internal contract called the `CrossSpaceCall` contract will be deployed at the address `0x0888000000000000000000000000000000000006` with the following interfaces. The Core space user/contract can interact with the accounts in the eSpace and process the return value in the same transaction. So the cross-space operations can be atomic.
+
+```js
+// SPDX-License-Identifier: MIT
+pragma solidity >=0.5.0;
+
+interface CrossSpaceCall {
+
+    event Call(bytes20 indexed sender, bytes20 indexed receiver, uint256 value, uint256 nonce, bytes data);
+
+    event Create(bytes20 indexed sender, bytes20 indexed contract_address, uint256 value, uint256 nonce, bytes init);
+
+    event Withdraw(bytes20 indexed sender, address indexed receiver, uint256 value, uint256 nonce);
+
+    event Outcome(bool success);
+
+    function createEVM(bytes calldata init) external payable returns (bytes20);
+    
+    function transferEVM(bytes20 to) external payable returns (bytes memory output);
+
+    function callEVM(bytes20 to, bytes calldata data) external payable returns (bytes memory output);
+
+    function staticCallEVM(bytes20 to, bytes calldata data) external view returns (bytes memory output);
+
+    function withdrawFromMapped(uint256 value) external;
+
+    function mappedBalance(address addr) external view returns (uint256);
+
+    function mappedNonce(address addr) external view returns (uint256);
+}
 ```
