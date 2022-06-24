@@ -431,7 +431,7 @@ impl SynchronizationPhaseTrait for CatchUpFillBlockBodyPhase {
         info!("start phase {:?}", self.name());
         {
             // For both archive and full node, synced_epoch_id possible be
-            // `None`. It wil be nont when stable epoch is equal to
+            // `None`. It wil be none when stable epoch is equal to
             // true genesis In both cases, we should set
             // `state_availability_boundary` to
             // `[cur_era_stable_hash, cur_era_stable_height]`.
