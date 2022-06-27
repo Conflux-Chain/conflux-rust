@@ -434,7 +434,7 @@ impl SynchronizationPhaseTrait for CatchUpFillBlockBodyPhase {
             // `None`. It wil be none when stable epoch is equal to
             // true genesis In both cases, we should set
             // `state_availability_boundary` to
-            // `[cur_era_stable_hash, cur_era_stable_height]`.
+            // `[cur_era_stable_height, cur_era_stable_height]`.
             if let Some(epoch_synced) = &*sync_handler.synced_epoch_id.lock() {
                 let epoch_synced_height = self
                     .graph

@@ -36,8 +36,6 @@ class ExampleTest(ConfluxTestFramework):
 
 
     def run_test(self):
-        time.sleep(7)
-
         client1 = RpcClient(self.nodes[0])
         client2 = RpcClient(self.nodes[1])
 
@@ -63,8 +61,8 @@ class ExampleTest(ConfluxTestFramework):
 
         # pack tx in node 1
         # pivot chain in node 1
-        tx_hash1 = client1.send_tx(tx)
-        self.log.info("Node 1 tx hash {}".format(tx_hash1))
+        tx_hash = client1.send_tx(tx)
+        self.log.info("Node 1 tx hash {}".format(tx_hash))
 
         block_hash1 = client1.generate_block(1)
         self.log.info("Node 1 block hash {}".format(block_hash1))
@@ -72,7 +70,7 @@ class ExampleTest(ConfluxTestFramework):
         blocks = self.nodes[0].generate_empty_blocks(6)
         last_block = blocks[-1]
 
-        tx_info = client1.get_tx(tx_hash1)
+        tx_info = client1.get_tx(tx_hash)
         block_contains_tx1 = tx_info["blockHash"]
 
         assert_equal(block_contains_tx1, block_hash1)
@@ -82,15 +80,16 @@ class ExampleTest(ConfluxTestFramework):
         
         # pack tx in node2
         # pivot chain in node 2
-        tx_hash2 = client2.send_tx(tx)
-        self.log.info("Node 2 tx hash {}".format(tx_hash2))
+        tx_hash_new = client2.send_tx(tx)
+        self.log.info("Node 2 tx hash {}".format(tx_hash_new))
+        assert_equal(tx_hash, tx_hash_new)
 
         block_hash2 = client2.generate_block(1)
         self.log.info("Node 2 block hash {}".format(block_hash2))
 
         self.nodes[1].generate_empty_blocks(12)
 
-        tx_info = client2.get_tx(tx_hash1)
+        tx_info = client2.get_tx(tx_hash)
         block_contains_tx2 = tx_info["blockHash"]
 
         assert_equal(block_contains_tx2, block_hash2)
@@ -108,8 +107,8 @@ class ExampleTest(ConfluxTestFramework):
         self.log.info("Node 1 epoch {}".format(client1.epoch_number()))
         self.log.info("Node 2 epoch {}".format(client2.epoch_number()))
 
-        b1 = client1.get_tx(tx_hash1)["blockHash"]
-        b2 = client2.get_tx(tx_hash2)["blockHash"]
+        b1 = client1.get_tx(tx_hash)["blockHash"]
+        b2 = client2.get_tx(tx_hash)["blockHash"]
        
         assert_equal(b1, block_hash2)
         assert_equal(b2, block_hash2)
@@ -128,13 +127,12 @@ class ExampleTest(ConfluxTestFramework):
         self.nodes[0].wait_for_nodeid()
         self.nodes[0].wait_for_recovery(["NormalSyncPhase"], 100)
 
-        time.sleep(7)
         self.log.info("Node 1 epoch {}".format(client1.epoch_number()))
         self.log.info("Node 2 epoch {}".format(client2.epoch_number()))
 
         # pivot chain in node 1 changed
-        b1 = client1.get_tx(tx_hash1)["blockHash"]
-        b2 = client2.get_tx(tx_hash2)["blockHash"]
+        b1 = client1.get_tx(tx_hash)["blockHash"]
+        b2 = client2.get_tx(tx_hash)["blockHash"]
        
         assert_equal(b1, block_hash1)
         assert_equal(b2, block_hash1)
