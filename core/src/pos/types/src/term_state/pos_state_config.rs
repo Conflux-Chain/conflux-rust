@@ -7,6 +7,8 @@ use crate::{
 };
 use diem_crypto::_once_cell::sync::OnceCell;
 
+const CIP99_FORCE_RETIRE_EPOCH_COUNT: u64 = 3;
+
 #[derive(Clone, Debug)]
 pub struct PosStateConfig {
     round_per_term: Round,
@@ -31,6 +33,8 @@ pub trait PosStateConfigTrait {
     fn in_queue_locked_views(&self, view: u64) -> u64;
     fn out_queue_locked_views(&self, view: u64) -> u64;
     fn force_retired_locked_views(&self, view: u64) -> u64;
+
+    fn force_retire_check_epoch_count(&self, view: u64) -> u64;
 }
 
 impl PosStateConfig {
@@ -102,6 +106,17 @@ impl PosStateConfigTrait for OnceCell<PosStateConfig> {
 
     fn force_retired_locked_views(&self, view: u64) -> u64 {
         self.out_queue_locked_views(view)
+    }
+
+    fn force_retire_check_epoch_count(&self, view: u64) -> u64 {
+        let conf = self.get().unwrap();
+        if view >= conf.cip99_transition_view {
+            // This is set according to the value of `TERM_LIST_LEN`.
+            // Since `TERM_LIST_LEN` is hardcoded, we do not parameterize this.
+            CIP99_FORCE_RETIRE_EPOCH_COUNT
+        } else {
+            1
+        }
     }
 }
 
