@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use futures01::{future::poll_fn, Async, Future};
+use futures01::{lazy, Future};
 use jsonrpc_core::{
     BoxFuture, Metadata, Params, RemoteProcedure, Result as RpcResult,
     RpcMethod,
@@ -110,14 +110,13 @@ where
     fn call(&self, params: Params, meta: M) -> BoxFuture<Value> {
         let name = self.name.clone();
         let interceptor = self.interceptor.clone();
-        let before_future = poll_fn(move || {
-            interceptor.before(&name).map(|_| Async::Ready(()))
-        });
+        let before_future = lazy(move || interceptor.before(&name));
 
         let method = self.method.clone();
-        let method_call = self
-            .interceptor
-            .around(&self.name, method.call(params, meta));
+        let method_call = self.interceptor.around(
+            &self.name,
+            lazy(move || method.call(params, meta)).boxed(),
+        );
         let method_future = before_future.and_then(move |_| method_call);
 
         Box::new(method_future)
