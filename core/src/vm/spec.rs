@@ -155,6 +155,8 @@ pub struct Spec {
     pub cip94_activation_block_number: u64,
     /// CIP-97: Remove staking list
     pub cip97: bool,
+    /// CIP-98: Fix espace bug
+    pub cip98: bool,
     pub params_dao_vote_period: u64,
 }
 
@@ -295,6 +297,7 @@ impl Spec {
             cip94_activation_block_number: u64::MAX,
             params_dao_vote_period: DAO_PARAMETER_VOTE_PERIOD,
             cip97: false,
+            cip98: false,
         }
     }
 
@@ -314,6 +317,7 @@ impl Spec {
         spec.cip94 = number >= params.transition_numbers.cip94;
         spec.cip94_activation_block_number = params.transition_numbers.cip94;
         spec.cip97 = number >= params.transition_numbers.cip97;
+        spec.cip98 = number >= params.transition_numbers.cip98;
         spec.params_dao_vote_period = params.params_dao_vote_period;
         spec
     }
