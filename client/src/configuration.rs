@@ -888,10 +888,7 @@ impl Configuration {
                 conf.additional_maintained_trace_epoch_count = Some(0);
             }
         }
-        if conf
-            .additional_maintained_transaction_index_epoch_count
-            .is_some()
-        {
+        if conf.additional_maintained_transaction_index_epoch_count != Some(0) {
             conf.persist_tx_index = true;
         }
         conf
