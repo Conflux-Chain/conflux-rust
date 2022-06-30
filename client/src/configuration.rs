@@ -1238,7 +1238,8 @@ impl Configuration {
     }
 
     pub fn pos_state_config(&self) -> PosStateConfig {
-        // The current implementation requires the round number to be an even number.
+        // The current implementation requires the round number to be an even
+        // number.
         assert_eq!(self.raw_conf.pos_round_per_term % 2, 0);
         PosStateConfig::new(
             self.raw_conf.pos_round_per_term,
