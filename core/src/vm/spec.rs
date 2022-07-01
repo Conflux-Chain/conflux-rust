@@ -153,6 +153,10 @@ pub struct Spec {
     /// CIP-94: On-chain Parameter DAO Vote
     pub cip94: bool,
     pub cip94_activation_block_number: u64,
+    /// CIP-97: Remove staking list
+    pub cip97: bool,
+    /// CIP-98: Fix espace bug
+    pub cip98: bool,
     pub params_dao_vote_period: u64,
 }
 
@@ -272,9 +276,10 @@ impl Spec {
             no_empty: true,
             kill_empty: true,
             blockhash_gas: 20,
-            contract_start_nonce: U256([1, 0, 0, 0]), /* If `no_empty` is
-                                                       * false, it
-                                                       * should be 0. */
+            contract_start_nonce: U256([1, 0, 0, 0]),
+            /* If `no_empty` is
+             * false, it
+             * should be 0. */
             account_start_nonce: U256([0, 0, 0, 0]),
             kill_dust: CleanDustMode::Off,
             keep_unsigned_nonce: false,
@@ -291,6 +296,8 @@ impl Spec {
             evm_gas_ratio: 2,
             cip94_activation_block_number: u64::MAX,
             params_dao_vote_period: DAO_PARAMETER_VOTE_PERIOD,
+            cip97: false,
+            cip98: false,
         }
     }
 
@@ -309,6 +316,8 @@ impl Spec {
         spec.cip78b = number >= params.transition_numbers.cip78b;
         spec.cip94 = number >= params.transition_numbers.cip94;
         spec.cip94_activation_block_number = params.transition_numbers.cip94;
+        spec.cip97 = number >= params.transition_numbers.cip97;
+        spec.cip98 = number >= params.transition_numbers.cip98;
         spec.params_dao_vote_period = params.params_dao_vote_period;
         spec
     }

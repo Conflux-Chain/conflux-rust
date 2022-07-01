@@ -142,7 +142,7 @@
       "inputs": [
         {
           "internalType": "bytes32",
-          "name": "indentifier",
+          "name": "identifier",
           "type": "bytes32"
         },
         {

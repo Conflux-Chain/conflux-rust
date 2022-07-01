@@ -360,7 +360,6 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     /// Maintain `total_issued_tokens`. This is only used in the extremely
     /// unlikely case that there are a lot of partial invalid blocks.
     fn subtract_total_issued(&mut self, v: U256) {
-        assert!(self.world_statistics_checkpoints.get_mut().is_empty());
         self.world_statistics.total_issued_tokens -= v;
     }
 
@@ -947,7 +946,9 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
 
     fn deposit(
         &mut self, address: &Address, amount: &U256, current_block_number: u64,
-    ) -> DbResult<()> {
+        cip_97: bool,
+    ) -> DbResult<()>
+    {
         let address = address.with_native_space();
         if !amount.is_zero() {
             {
@@ -961,6 +962,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
                     *amount,
                     self.world_statistics.accumulate_interest_rate,
                     current_block_number,
+                    cip_97,
                 );
             }
             self.world_statistics.total_staking_tokens += *amount;
@@ -968,7 +970,9 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
         Ok(())
     }
 
-    fn withdraw(&mut self, address: &Address, amount: &U256) -> DbResult<U256> {
+    fn withdraw(
+        &mut self, address: &Address, amount: &U256, cip_97: bool,
+    ) -> DbResult<U256> {
         let address = address.with_native_space();
         if !amount.is_zero() {
             let interest;
@@ -982,6 +986,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
                 interest = account.withdraw(
                     *amount,
                     self.world_statistics.accumulate_interest_rate,
+                    cip_97,
                 );
             }
             // the interest will be put in balance.

@@ -54,7 +54,14 @@ impl SimpleExecutionTrait for Deposit {
         context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
-        deposit(input, params, context.env, context.state, tracer)
+        deposit(
+            input,
+            params,
+            context.env,
+            context.spec,
+            context.state,
+            tracer,
+        )
     }
 }
 
@@ -69,6 +76,9 @@ impl UpfrontPaymentTrait for Withdraw {
         context: &InternalRefContext,
     ) -> DbResult<U256>
     {
+        if context.spec.cip97 {
+            return Ok(U256::from(2 * context.spec.sload_gas));
+        }
         let length = context.state.deposit_list_length(&params.sender)?;
         Ok(U256::from(2 * context.spec.sstore_reset_gas) * U256::from(length))
     }
@@ -80,7 +90,14 @@ impl SimpleExecutionTrait for Withdraw {
         context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
-        withdraw(input, params, context.env, context.state, tracer)
+        withdraw(
+            input,
+            params,
+            context.env,
+            context.spec,
+            context.state,
+            tracer,
+        )
     }
 }
 
