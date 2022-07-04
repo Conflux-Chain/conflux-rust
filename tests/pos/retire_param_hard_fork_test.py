@@ -57,7 +57,7 @@ class RetireParamHardforkTest(ConfluxTestFramework):
         def wait():
             client.generate_empty_blocks(60)
             return int(client.pos_status()["epoch"], 0) > 6
-        wait_until(wait)
+        wait_until(wait, timeout=120)
         self.log.info("Retire half votes")
         old_view = int(client.pos_status()["latestCommitted"], 0)
         client.pos_retire_self(500)
@@ -68,7 +68,7 @@ class RetireParamHardforkTest(ConfluxTestFramework):
         print(unlock_view, old_view)
         assert_greater_than_or_equal(unlock_view - old_view, self.conf_parameters["pos_out_queue_locked_views"])
 
-        wait_until(lambda: int(client.pos_status()["latestCommitted"], 0) > self.conf_parameters["pos_cip99_transition_view"])
+        wait_until(lambda: int(client.pos_status()["latestCommitted"], 0) > self.conf_parameters["pos_cip99_transition_view"], timeout=120)
         self.log.info("Retire again")
         old_view = int(client.pos_status()["latestCommitted"], 0)
         client.pos_retire_self(500)
