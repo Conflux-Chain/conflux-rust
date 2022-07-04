@@ -14,7 +14,6 @@ class ExampleTest(ConfluxTestFramework):
         self.setup_nodes()
 
     def run_test(self):
-        time.sleep(7)
         genesis = self.nodes[0].best_block_hash()
         self.log.info(genesis)
 
