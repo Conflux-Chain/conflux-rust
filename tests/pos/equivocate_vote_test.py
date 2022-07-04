@@ -38,7 +38,7 @@ class PosEquivocateVoteTest(DefaultConfluxTestFramework):
             # wait for the vote to be processed.
             time.sleep(0.2)
         client.generate_empty_blocks(300)
-        client.pos_retire_self()
+        client.pos_retire_self(2000)
 
         for i in range(40):
             print(i)

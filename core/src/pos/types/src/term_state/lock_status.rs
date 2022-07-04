@@ -165,7 +165,8 @@ impl NodeLockStatus {
         }
 
         if self.force_retired.map_or(false, |retire_view| {
-            view >= retire_view + POS_STATE_CONFIG.force_retired_locked_views()
+            view >= retire_view
+                + POS_STATE_CONFIG.force_retired_locked_views(view)
         }) {
             self.force_retired = None;
         }
@@ -196,12 +197,12 @@ impl NodeLockStatus {
         // retire.
         if self.force_retired.is_some() {
             let exit_view = view
-                + POS_STATE_CONFIG.in_queue_locked_views()
-                + POS_STATE_CONFIG.out_queue_locked_views();
+                + POS_STATE_CONFIG.in_queue_locked_views(view)
+                + POS_STATE_CONFIG.out_queue_locked_views(view);
             self.out_queue.push(exit_view, votes, update_views);
         } else {
             self.available_votes += votes;
-            let exit_view = view + POS_STATE_CONFIG.in_queue_locked_views();
+            let exit_view = view + POS_STATE_CONFIG.in_queue_locked_views(view);
             self.in_queue.push(exit_view, votes, update_views);
         }
     }
@@ -225,7 +226,8 @@ impl NodeLockStatus {
             self.locked -= votes;
             self.available_votes -= votes;
 
-            let exit_view = view + POS_STATE_CONFIG.out_queue_locked_views();
+            let exit_view =
+                view + POS_STATE_CONFIG.out_queue_locked_views(view);
             self.out_queue.push(exit_view, votes, update_views);
         }
 
@@ -249,7 +251,7 @@ impl NodeLockStatus {
             self.available_votes -= item.votes;
 
             let exit_view =
-                item.view + POS_STATE_CONFIG.out_queue_locked_views();
+                item.view + POS_STATE_CONFIG.out_queue_locked_views(view);
             self.out_queue.push(exit_view, item.votes, update_views);
         }
     }
@@ -260,7 +262,7 @@ impl NodeLockStatus {
         if self.force_retired.is_none() {
             self.force_retired = Some(view);
             callback_views
-                .push(view + POS_STATE_CONFIG.force_retired_locked_views());
+                .push(view + POS_STATE_CONFIG.force_retired_locked_views(view));
             self.new_unlock(view, self.available_votes, callback_views);
         }
     }

@@ -840,10 +840,7 @@ fn test_validator_not_in_set(safety_rules: &Callback) {
     proof
         .ledger_info_with_sigs
         .push(a2.block().quorum_cert().ledger_info().clone());
-    assert!(matches!(
-        safety_rules.initialize(&proof),
-        Err(Error::ValidatorNotInSet(_))
-    ));
+    safety_rules.initialize(&proof).unwrap();
 
     let state = safety_rules.consensus_state().unwrap();
     assert_eq!(state.in_validator_set(), false);
@@ -863,8 +860,13 @@ fn test_reconcile_key(_safety_rules: &Callback) {
 
     let new_pub_key =
         storage.internal_store().rotate_key(CONSENSUS_KEY).unwrap();
-    let mut safety_rules =
-        Box::new(SafetyRules::new(storage, false, false, None));
+    let mut safety_rules = Box::new(SafetyRules::new(
+        storage,
+        false,
+        false,
+        None,
+        Default::default(),
+    ));
 
     let (mut proof, genesis_qc) = test_utils::make_genesis(&signer);
     let round = genesis_qc.certified_block().round();
