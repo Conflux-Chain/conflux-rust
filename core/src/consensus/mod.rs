@@ -1090,9 +1090,6 @@ impl ConsensusGraph {
     {
         let bloom_possibilities = filter.bloom_possibilities();
 
-        let offset = filter.offset.unwrap_or(0);
-        let limit = filter.limit.unwrap_or(::std::usize::MAX);
-
         // we store the last epoch processed and the corresponding pivot hash so
         // that we can check whether it changed between batches
         let mut consistency_check_data: Option<(u64, H256)> = None;
@@ -1122,8 +1119,6 @@ impl ConsensusGraph {
                 Ok(log) => blocks_to_skip.contains(&log.block_hash),
                 Err(_) => false,
             })
-            .skip(offset)
-            .take(limit)
             // short-circuit on error
             .collect::<Result<Vec<LocalizedLogEntry>, FilterError>>()?;
 
@@ -1232,9 +1227,6 @@ impl ConsensusGraph {
                 Ok(it) => Either::Left(it.into_iter().map(Ok)),
                 Err(e) => Either::Right(std::iter::once(Err(e))),
             })
-            // take as many as we need
-            .skip(filter.offset.unwrap_or(0))
-            .take(filter.limit.unwrap_or(::std::usize::MAX))
             // short-circuit on error
             .collect::<Result<Vec<_>, _>>()?;
 
