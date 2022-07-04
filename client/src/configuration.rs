@@ -322,6 +322,9 @@ build_config! {
         (pos_term_elected_size, (usize), TERM_ELECTED_SIZE)
         (pos_in_queue_locked_views, (u64), IN_QUEUE_LOCKED_VIEWS)
         (pos_out_queue_locked_views, (u64), OUT_QUEUE_LOCKED_VIEWS)
+        (pos_cip99_transition_view, (u64), u64::MAX)
+        (pos_cip99_in_queue_locked_views, (u64), IN_QUEUE_LOCKED_VIEWS)
+        (pos_cip99_out_queue_locked_views, (u64), OUT_QUEUE_LOCKED_VIEWS)
         (dev_pos_private_key_encryption_password, (Option<String>), None)
         (pos_started_as_voter, (bool), true)
 
@@ -1232,12 +1235,18 @@ impl Configuration {
     }
 
     pub fn pos_state_config(&self) -> PosStateConfig {
+        // The current implementation requires the round number to be an even
+        // number.
+        assert_eq!(self.raw_conf.pos_round_per_term % 2, 0);
         PosStateConfig::new(
             self.raw_conf.pos_round_per_term,
             self.raw_conf.pos_term_max_size,
             self.raw_conf.pos_term_elected_size,
             self.raw_conf.pos_in_queue_locked_views,
             self.raw_conf.pos_out_queue_locked_views,
+            self.raw_conf.pos_cip99_transition_view,
+            self.raw_conf.pos_cip99_in_queue_locked_views,
+            self.raw_conf.pos_cip99_out_queue_locked_views,
         )
     }
 }

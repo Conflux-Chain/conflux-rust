@@ -71,7 +71,10 @@ use crate::{
     },
     vm::VMExecutor,
 };
-use diem_types::term_state::DisputeEvent;
+use diem_types::term_state::{
+    pos_state_config::{PosStateConfigTrait, POS_STATE_CONFIG},
+    DisputeEvent,
+};
 
 pub mod db_bootstrapper;
 mod logging;
@@ -1195,11 +1198,12 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 }
                 voted_block_id = block.parent_id();
             }
+            let mut force_retired = HashSet::new();
 
             // Force retire the nodes that have not voted in this term.
             for (node, vote_count) in elected.iter_mut() {
                 if vote_count.vote_count == 0 {
-                    pos_state_to_commit.force_retire_node(&node)?;
+                    force_retired.insert(node);
                 } else {
                     vote_count.total_votes =
                         verifier.get_voting_power(node).unwrap_or(0);
@@ -1208,6 +1212,53 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                             node,
                             pos_state_to_commit.epoch_state().epoch);
                     }
+                }
+            }
+
+            if !force_retired.is_empty() {
+                // `end_epoch` has been checked above and is excluded below.
+                let end_epoch = ledger_info_with_sigs.ledger_info().epoch();
+                let start_epoch = end_epoch
+                    - POS_STATE_CONFIG.force_retire_check_epoch_count(
+                        pos_state_to_commit.current_view(),
+                    )
+                    + 1;
+                // Check more past epochs to see if the nodes in `force_retired`
+                // have voted.
+                for end_ledger_info in self
+                    .db_with_cache
+                    .db
+                    .reader
+                    .get_epoch_ending_ledger_infos(start_epoch, end_epoch)?
+                    .get_all_ledger_infos()
+                {
+                    let mut voted_block_id =
+                        end_ledger_info.ledger_info().consensus_block_id();
+                    loop {
+                        let block = self
+                            .consensus_db
+                            .get_ledger_block(&voted_block_id)?
+                            .unwrap();
+                        if block.quorum_cert().ledger_info().signatures().len()
+                            == 0
+                        {
+                            break;
+                        }
+                        for voter in block
+                            .quorum_cert()
+                            .ledger_info()
+                            .signatures()
+                            .keys()
+                        {
+                            // Find a vote, so the node will not be force
+                            // retired.
+                            force_retired.remove(voter);
+                        }
+                        voted_block_id = block.parent_id();
+                    }
+                }
+                for node in force_retired {
+                    pos_state_to_commit.force_retire_node(&node)?;
                 }
             }
 

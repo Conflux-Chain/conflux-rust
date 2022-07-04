@@ -29,7 +29,7 @@ REGISTER_TOPIC = encode_hex_0x(keccak(b"Register(bytes32,bytes,bytes)"))
 INCREASE_STAKE_TOPIC = encode_hex_0x(keccak(b"IncreaseStake(bytes32,uint64)"))
 
 
-class ExampleTest(ConfluxTestFramework):
+class HardforkTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 7
         # 1e-9 chance of an empty round with no proposer.
@@ -132,7 +132,7 @@ class ExampleTest(ConfluxTestFramework):
                 self.maybe_restart_node(5, 1, 0)
             if i == 15:
                 assert_equal(int(client.pos_get_account(pos_identifier)["status"]["availableVotes"], 0), 2000)
-                client.pos_retire_self()
+                client.pos_retire_self(2000)
             if i == 30:
                 self.maybe_restart_node(5, 1, 1)
             # Retire node 3 after 5 min.
@@ -157,4 +157,4 @@ class ExampleTest(ConfluxTestFramework):
 
 
 if __name__ == '__main__':
-    ExampleTest().main()
+    HardforkTest().main()
