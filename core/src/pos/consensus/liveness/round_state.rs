@@ -247,7 +247,7 @@ impl RoundState {
         if round != self.current_round {
             return false;
         }
-        diem_warn!(round = round, "Local timeout");
+        diem_info!(round = round, "Local timeout");
         counters::TIMEOUT_COUNT.inc();
         self.setup_timeout();
         true

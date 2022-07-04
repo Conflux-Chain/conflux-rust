@@ -32,6 +32,7 @@ use diem_crypto::{
 };
 use diem_logger::prelude::*;
 use diem_types::{
+    account_address::AccountAddress,
     block_info::BlockInfo,
     epoch_change::EpochChangeProof,
     epoch_state::EpochState,
@@ -41,8 +42,10 @@ use diem_types::{
     },
     waypoint::Waypoint,
 };
+use log::error;
 use serde::Serialize;
 use std::cmp::Ordering;
+
 const SAFETY_STORAGE_SAVE_SUFFIX: &str = "json.save";
 
 /// @TODO consider a cache of verified QCs to cut down on verification costs
@@ -62,9 +65,21 @@ impl SafetyRules {
         persistent_storage: PersistentSafetyStorage,
         _verify_vote_proposal_signature: bool, export_consensus_key: bool,
         vrf_private_key: Option<ConsensusVRFPrivateKey>,
+        author: AccountAddress,
     ) -> Self
     {
         let execution_public_key = None;
+        if let Ok(storage_author) = persistent_storage.author() {
+            if storage_author != author {
+                // TODO: After we allow non-voting nodes to not have a pos key,
+                // we can panic here so pos-voting nodes can be aware of this
+                // issue.
+                diem_error!(
+                    "author in secure_storage does not match PoS keys!"
+                );
+                error!("author in secure_storage does not match PoS keys!");
+            }
+        }
         /*
             if verify_vote_proposal_signature {
             None
@@ -314,8 +329,12 @@ impl SafetyRules {
         let expected_key = epoch_state.verifier.get_public_key(&author);
         let initialize_result = match expected_key {
             None => {
-                diem_debug!("guarded_initialize: epoch_set={:?}", epoch_state);
-                Err(Error::ValidatorNotInSet(author.to_string()))
+                diem_debug!(
+                    "guarded_initialize: not a validator in epoch_set={:?}",
+                    epoch_state
+                );
+                self.validator_signer = None;
+                Ok(())
             }
             Some(expected_key) => {
                 let current_key = self.signer().ok().map(|s| s.public_key());
