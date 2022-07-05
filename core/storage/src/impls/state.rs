@@ -728,13 +728,14 @@ impl State {
                 maybe_existing_merkle_root.unwrap(),
                 merkle_root
             );
-            assert_eq!(
-                maybe_existing_merkle_root,
-                Some(*merkle_root),
-                "Overwriting computed state with a different merkle root."
-            );
-            self.revert();
-            return Ok(());
+            if maybe_existing_merkle_root != Some(*merkle_root) {
+                error!(
+                    "Overwriting computed state with a different merkle root."
+                )
+            } else {
+                self.revert();
+                return Ok(());
+            }
         }
 
         // Use coarse lock to prevent row number from interleaving,
