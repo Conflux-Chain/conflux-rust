@@ -459,6 +459,16 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
     ) -> DbResult<()>
     {
         assert!(contract.space == Space::Native || admin.is_zero());
+        // Check if the new contract is deployed on a killed contract in the
+        // same block.
+        let invalidated_storage = self.ensure_account_loaded(
+            contract,
+            RequireCache::None,
+            |maybe_overlay| {
+                maybe_overlay
+                    .map_or(false, |overlay| overlay.invalidated_storage())
+            },
+        )?;
         Self::update_cache(
             self.cache.get_mut(),
             self.checkpoints.get_mut(),
@@ -469,6 +479,7 @@ impl<StateDbStorage: StorageStateTrait> StateOpsTrait
                     balance,
                     nonce,
                     admin,
+                    invalidated_storage,
                     storage_layout,
                 ),
             )),
