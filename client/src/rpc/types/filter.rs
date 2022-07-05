@@ -66,7 +66,7 @@ impl CfxRpcLogFilter {
         let from_epoch = self
             .from_epoch
             .clone()
-            .unwrap_or(EpochNumber::LatestCheckpoint)
+            .unwrap_or(EpochNumber::LatestState)
             .into();
 
         let to_epoch = self
