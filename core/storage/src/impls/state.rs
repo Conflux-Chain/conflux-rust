@@ -36,6 +36,7 @@ pub struct State {
 
 impl State {
     pub fn new(manager: Arc<StateManager>, state_trees: StateTrees) -> Self {
+        trace!("state new: root={:?}", state_trees.delta_trie_root);
         Self {
             manager,
             snapshot_db: state_trees.snapshot_db,
@@ -230,6 +231,7 @@ impl StateTrait for State {
     fn get(
         &self, access_key: StorageKeyWithSpace,
     ) -> Result<Option<Box<[u8]>>> {
+        trace!("state get: {:?}", access_key);
         self.ensure_temp_slab_for_db_load();
 
         self.get_from_all_tries::<NoProof>(access_key)
@@ -239,6 +241,7 @@ impl StateTrait for State {
     fn set(
         &mut self, access_key: StorageKeyWithSpace, value: Box<[u8]>,
     ) -> Result<()> {
+        trace!("state set: {:?} {:?}", access_key, value);
         self.pre_modification();
 
         let root_node = self.get_or_create_delta_root_node()?;
@@ -456,7 +459,7 @@ impl StateTrait for State {
         debug!(
             "commit state for epoch {:?}: merkle_root = {:?}, delta_trie_height={:?} \
             has_intermediate={}, height={:?}, snapshot_epoch_id={:?}, \
-            intermediate_epoch_id={:?}, intermediate_mpt_id={:?}, delta_mpt_id={}.",
+            intermediate_epoch_id={:?}, intermediate_mpt_id={:?}, delta_mpt_id={} delta_root={:?}",
             epoch_id,
             merkle_root,
             self.delta_trie_height,
@@ -466,6 +469,7 @@ impl StateTrait for State {
             self.intermediate_epoch_id,
             self.maybe_intermediate_trie.as_ref().map(|mpt| mpt.get_mpt_id()),
             self.delta_trie.get_mpt_id(),
+            self.delta_trie_root,
         );
         if commit_result.is_err() {
             self.revert();
