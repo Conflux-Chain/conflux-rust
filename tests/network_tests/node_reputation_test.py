@@ -92,9 +92,14 @@ class NodeReputationTests(ConfluxTestFramework):
         # demote to untrusted node table
         node = client0.get_node(self.nodes[2].key)
         assert node[0] == "untrusted"
-        assert node[1]["lastConnected"].get("failure")
         assert node[1]["lastContact"].get("demoted")
         assert node[1]["streamToken"] == n[1]["streamToken"]
+
+        # log to dubug flaky error, suspect lastConnected not updated timely, so assert it at last
+        if not node[1]["lastConnected"].get("failure"):
+            self.log.info("Last connected: {}".format(node[1]["lastConnected"]))
+
+        assert node[1]["lastConnected"].get("failure")
 
         # Node 0 will not create outgoing connection to Node 2
         time.sleep((self.test_house_keeping_ms + 100) / 1000)
