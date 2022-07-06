@@ -1928,21 +1928,95 @@ impl ConsensusNewBlockHandler {
         if inner.pivot_chain.len() < DEFERRED_STATE_EPOCH_COUNT as usize {
             return;
         }
-        for pivot_index in start_pivot_index + 1
-            ..inner.pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize + 1
-        {
+
+        let end_index =
+            inner.pivot_chain.len() - DEFERRED_STATE_EPOCH_COUNT as usize + 1;
+        for pivot_index in start_pivot_index + 1..end_index {
+            let pivot_arena_index = inner.pivot_chain[pivot_index];
+            let pivot_hash = inner.arena[pivot_arena_index].hash;
+
+            // Ensure that the commitments for the blocks on
+            // pivot_chain after cur_era_stable_genesis are kept in memory.
+            if self
+                .data_man
+                .load_epoch_execution_commitment_from_db(&pivot_hash)
+                .is_none()
+            {
+                break;
+            }
+        }
+
+        let mut force_compute_index = start_pivot_index;
+        let mut epoch_count = 0;
+        for pivot_index in (start_pivot_index + 1..end_index).rev() {
+            let pivot_arena_index = inner.pivot_chain[pivot_index];
+            let pivot_hash = inner.arena[pivot_arena_index].hash;
+
+            let maybe_epoch_execution_commitment =
+                self.data_man.get_epoch_execution_commitment(&pivot_hash);
+            if let Some(commitment) = *maybe_epoch_execution_commitment {
+                if self
+                    .data_man
+                    .storage_manager
+                    .get_state_no_commit(
+                        StateIndex::new_for_readonly(
+                            &pivot_hash,
+                            &commitment.state_root_with_aux_info,
+                        ),
+                        /* try_open = */ false,
+                    )
+                    .expect("DB Error")
+                    .is_some()
+                {
+                    epoch_count += 1;
+
+                    // force to recompute last 5 epochs in case state database
+                    // is not ready in last shutdown
+                    if epoch_count > DEFERRED_STATE_EPOCH_COUNT {
+                        let reward_execution_info =
+                            self.executor.get_reward_execution_info(
+                                inner,
+                                pivot_arena_index,
+                            );
+
+                        let pivot_block_height = self
+                            .data_man
+                            .block_header_by_hash(&pivot_hash)
+                            .expect("must exists")
+                            .height();
+
+                        // ensure current epoch is new executed whether there
+                        // is a fork or not
+                        if self.executor.epoch_executed_and_recovered(
+                            &pivot_hash,
+                            &inner.get_epoch_block_hashes(pivot_arena_index),
+                            true,
+                            &reward_execution_info,
+                            pivot_block_height,
+                        ) {
+                            force_compute_index = pivot_index;
+                            debug!(
+                                "Force compute start index {}",
+                                force_compute_index
+                            );
+                            break;
+                        }
+                    }
+                } else {
+                    epoch_count = 0;
+                }
+            }
+        }
+
+        let mut pre_epoch_state_exist = true;
+
+        for pivot_index in start_pivot_index + 1..end_index {
             let pivot_arena_index = inner.pivot_chain[pivot_index];
             let pivot_hash = inner.arena[pivot_arena_index].hash;
             let height = inner.arena[pivot_arena_index].height;
-            let mut has_storage = true;
 
             let mut compute_epoch = false;
-            // Ensure that the commitments for the blocks on
-            // pivot_chain after cur_era_stable_genesis are kept in memory.
-            let maybe_epoch_execution_commitment = self
-                .data_man
-                .load_epoch_execution_commitment_from_db(&pivot_hash);
-            match maybe_epoch_execution_commitment {
+            match *self.data_man.get_epoch_execution_commitment(&pivot_hash) {
                 None => {
                     // We should recompute the epochs that should have been
                     // executed but fail to persist their
@@ -1981,7 +2055,10 @@ impl ConsensusNewBlockHandler {
                             // last shutdown the snapshotting process wasn't
                             // finished yet. In this case, we must trigger the
                             // snapshotting process by computing epoch again.
-                            compute_epoch = true;
+
+                            if pre_epoch_state_exist {
+                                compute_epoch = true;
+                            }
                         }
                     }
 
@@ -1998,11 +2075,9 @@ impl ConsensusNewBlockHandler {
                         .expect("DB Error")
                         .is_none()
                     {
-                        // The commitment exists but the state is missing.
-                        // This is possible after a crash because commitments
-                        // and states are stored in different databases.
-                        compute_epoch = true;
-                        has_storage = false;
+                        pre_epoch_state_exist = false;
+                    } else {
+                        pre_epoch_state_exist = true;
                     }
 
                     self.data_man
@@ -2011,12 +2086,13 @@ impl ConsensusNewBlockHandler {
                         .upper_bound += 1;
                 }
             }
+
             info!(
-                "construct_pivot_state: index {} height {} compute_epoch {} has_storage {}.",
-                pivot_index, height, compute_epoch, has_storage,
+                "construct_pivot_state: index {} height {} compute_epoch {}.",
+                pivot_index, height, compute_epoch,
             );
 
-            if compute_epoch {
+            if compute_epoch || pivot_index > force_compute_index {
                 let reward_execution_info = self
                     .executor
                     .get_reward_execution_info(inner, pivot_arena_index);
@@ -2030,6 +2106,7 @@ impl ConsensusNewBlockHandler {
                     ),
                     None,
                 );
+                pre_epoch_state_exist = true;
             }
         }
     }

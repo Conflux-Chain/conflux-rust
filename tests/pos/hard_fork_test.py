@@ -3,6 +3,7 @@
 # allow imports from parent directory
 # source: https://stackoverflow.com/a/11158224
 import os, sys
+
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 import eth_utils
@@ -22,10 +23,13 @@ from test_framework.blocktools import encode_hex_0x
 
 def address_to_topic(address):
     return "0x" + address[2:].zfill(64)
+
+
 REGISTER_TOPIC = encode_hex_0x(keccak(b"Register(bytes32,bytes,bytes)"))
 INCREASE_STAKE_TOPIC = encode_hex_0x(keccak(b"IncreaseStake(bytes32,uint64)"))
 
-class ExampleTest(ConfluxTestFramework):
+
+class HardforkTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 7
         # 1e-9 chance of an empty round with no proposer.
@@ -79,7 +83,8 @@ class ExampleTest(ConfluxTestFramework):
 
         voting_power_map = {}
         pub_keys_map = {}
-        logs = client.get_logs(filter=Filter(from_epoch="earliest", to_epoch="latest_state", address=["0x0888000000000000000000000000000000000005"]))
+        logs = client.get_logs(filter=Filter(from_epoch="earliest", to_epoch="latest_state",
+                                             address=["0x0888000000000000000000000000000000000005"]))
         for log in logs:
             pos_identifier = log["topics"][1]
             if log["topics"][0] == REGISTER_TOPIC:
@@ -90,8 +95,10 @@ class ExampleTest(ConfluxTestFramework):
                 voting_power_map[pos_identifier] = parse_as_int(log["data"])
         with open(os.path.join(self.options.tmpdir, "public_keys"), "w") as f:
             for pos_identifier in pub_keys_map.keys():
-                f.write(",".join([pub_keys_map[pos_identifier][0][2:], pub_keys_map[pos_identifier][1][2:], str(voting_power_map[pos_identifier])]) + "\n")
-        initialize_tg_config(self.options.tmpdir, len(self.nodes), len(self.nodes), DEFAULT_PY_TEST_CHAIN_ID, pkfile="public_keys")
+                f.write(",".join([pub_keys_map[pos_identifier][0][2:], pub_keys_map[pos_identifier][1][2:],
+                                  str(voting_power_map[pos_identifier])]) + "\n")
+        initialize_tg_config(self.options.tmpdir, len(self.nodes), len(self.nodes), DEFAULT_PY_TEST_CHAIN_ID,
+                             pkfile="public_keys")
 
         # generate blocks until pos start
         self.nodes[0].generate_empty_blocks(500)
@@ -125,7 +132,7 @@ class ExampleTest(ConfluxTestFramework):
                 self.maybe_restart_node(5, 1, 0)
             if i == 15:
                 assert_equal(int(client.pos_get_account(pos_identifier)["status"]["availableVotes"], 0), 2000)
-                client.pos_retire_self()
+                client.pos_retire_self(2000)
             if i == 30:
                 self.maybe_restart_node(5, 1, 1)
             # Retire node 3 after 5 min.
@@ -139,7 +146,8 @@ class ExampleTest(ConfluxTestFramework):
                 assert_ne(latest_pos_ref, new_pos_ref)
 
         client.wait_for_unstake(client.node.pow_sk)
-        assert client.get_balance(eth_utils.encode_hex(priv_to_addr(client.node.pow_sk))) > 10000 * 10**18
+        assert_greater_than(client.get_balance(eth_utils.encode_hex(priv_to_addr(client.node.pow_sk))),
+                            10000 * 10 ** 18)
         assert_equal(int(client.pos_get_account(pos_identifier)["status"]["availableVotes"], 0), 0)
 
     def latest_pos_ref(self):
@@ -147,5 +155,6 @@ class ExampleTest(ConfluxTestFramework):
         block = self.nodes[6].cfx_getBlockByHash(best_hash, False)
         return block["posReference"]
 
+
 if __name__ == '__main__':
-    ExampleTest().main()
+    HardforkTest().main()

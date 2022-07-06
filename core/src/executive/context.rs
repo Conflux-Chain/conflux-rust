@@ -186,6 +186,16 @@ impl<'a, 'b, Substate: SubstateMngTrait> ContextTrait
     }
 
     fn blockhash(&mut self, number: &U256) -> H256 {
+        if self.local_part.space == Space::Ethereum
+            && self.local_part.spec.cip98
+        {
+            return if U256::from(self.env().epoch_height) == number + 1 {
+                self.env().last_hash.clone()
+            } else {
+                H256::default()
+            };
+        }
+
         // In Conflux, we only maintain the block hash of the previous block.
         // For other block numbers, it always returns zero.
         if U256::from(self.env().number) == number + 1 {

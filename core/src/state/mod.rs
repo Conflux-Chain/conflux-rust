@@ -356,7 +356,6 @@ impl StateOpsTrait for StateGeneric {
     /// Maintain `total_issued_tokens`. This is only used in the extremely
     /// unlikely case that there are a lot of partial invalid blocks.
     fn subtract_total_issued(&mut self, v: U256) {
-        assert!(self.world_statistics_checkpoints.get_mut().is_empty());
         self.world_statistics.total_issued_tokens =
             self.world_statistics.total_issued_tokens.saturating_sub(v);
     }

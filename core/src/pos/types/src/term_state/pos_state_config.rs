@@ -7,6 +7,8 @@ use crate::{
 };
 use diem_crypto::_once_cell::sync::OnceCell;
 
+const CIP99_FORCE_RETIRE_EPOCH_COUNT: u64 = 3;
+
 #[derive(Clone, Debug)]
 pub struct PosStateConfig {
     round_per_term: Round,
@@ -14,6 +16,10 @@ pub struct PosStateConfig {
     term_elected_size: usize,
     in_queue_locked_views: u64,
     out_queue_locked_views: u64,
+
+    cip99_transition_view: u64,
+    cip99_out_queue_locked_views: u64,
+    cip99_in_queue_locked_views: u64,
 }
 
 pub trait PosStateConfigTrait {
@@ -24,15 +30,19 @@ pub trait PosStateConfigTrait {
     fn first_end_election_view(&self) -> u64;
     fn term_max_size(&self) -> usize;
     fn term_elected_size(&self) -> usize;
-    fn in_queue_locked_views(&self) -> u64;
-    fn out_queue_locked_views(&self) -> u64;
-    fn force_retired_locked_views(&self) -> u64;
+    fn in_queue_locked_views(&self, view: u64) -> u64;
+    fn out_queue_locked_views(&self, view: u64) -> u64;
+    fn force_retired_locked_views(&self, view: u64) -> u64;
+
+    fn force_retire_check_epoch_count(&self, view: u64) -> u64;
 }
 
 impl PosStateConfig {
     pub fn new(
         round_per_term: Round, term_max_size: usize, term_elected_size: usize,
         in_queue_locked_views: u64, out_queue_locked_views: u64,
+        cip99_transition_view: u64, cip99_in_queue_locked_views: u64,
+        cip99_out_queue_locked_views: u64,
     ) -> Self
     {
         Self {
@@ -41,6 +51,9 @@ impl PosStateConfig {
             term_elected_size,
             in_queue_locked_views,
             out_queue_locked_views,
+            cip99_transition_view,
+            cip99_out_queue_locked_views,
+            cip99_in_queue_locked_views,
         }
     }
 }
@@ -73,16 +86,37 @@ impl PosStateConfigTrait for OnceCell<PosStateConfig> {
         self.get().unwrap().term_elected_size
     }
 
-    fn in_queue_locked_views(&self) -> u64 {
-        self.get().unwrap().in_queue_locked_views
+    fn in_queue_locked_views(&self, view: u64) -> u64 {
+        let conf = self.get().unwrap();
+        if view >= conf.cip99_transition_view {
+            conf.cip99_in_queue_locked_views
+        } else {
+            conf.in_queue_locked_views
+        }
     }
 
-    fn out_queue_locked_views(&self) -> u64 {
-        self.get().unwrap().out_queue_locked_views
+    fn out_queue_locked_views(&self, view: u64) -> u64 {
+        let conf = self.get().unwrap();
+        if view >= conf.cip99_transition_view {
+            conf.cip99_out_queue_locked_views
+        } else {
+            conf.out_queue_locked_views
+        }
     }
 
-    fn force_retired_locked_views(&self) -> u64 {
-        self.out_queue_locked_views()
+    fn force_retired_locked_views(&self, view: u64) -> u64 {
+        self.out_queue_locked_views(view)
+    }
+
+    fn force_retire_check_epoch_count(&self, view: u64) -> u64 {
+        let conf = self.get().unwrap();
+        if view >= conf.cip99_transition_view {
+            // This is set according to the value of `TERM_LIST_LEN`.
+            // Since `TERM_LIST_LEN` is hardcoded, we do not parameterize this.
+            CIP99_FORCE_RETIRE_EPOCH_COUNT
+        } else {
+            1
+        }
     }
 }
 
@@ -96,6 +130,9 @@ impl Default for PosStateConfig {
             term_elected_size: TERM_ELECTED_SIZE,
             in_queue_locked_views: IN_QUEUE_LOCKED_VIEWS,
             out_queue_locked_views: OUT_QUEUE_LOCKED_VIEWS,
+            cip99_transition_view: u64::MAX,
+            cip99_out_queue_locked_views: IN_QUEUE_LOCKED_VIEWS,
+            cip99_in_queue_locked_views: OUT_QUEUE_LOCKED_VIEWS,
         }
     }
 }

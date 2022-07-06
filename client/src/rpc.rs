@@ -77,7 +77,8 @@ use crate::{
         rpc_apis::{Api, ApiSet},
     },
 };
-use jsonrpc_core::futures::{future::poll_fn, Async, Future};
+use futures01::lazy;
+use jsonrpc_core::futures::Future;
 use lazy_static::lazy_static;
 pub use metadata::Metadata;
 use metrics::{register_timer_with_group, ScopeTimer, Timer};
@@ -595,14 +596,11 @@ impl RpcInterceptor for MetricsInterceptor {
             .lock()
             .get(name)
             .map(|timer| timer.clone());
-        let f = move || {
-            Ok(Async::Ready(
-                maybe_timer
-                    .as_ref()
-                    .map(|timer| ScopeTimer::time_scope(timer.clone())),
-            ))
-        };
-        let setup = poll_fn(f);
-        Box::new(setup.and_then(|_timer| method_call))
+        let setup = lazy(move || {
+            Ok(maybe_timer
+                .as_ref()
+                .map(|timer| ScopeTimer::time_scope(timer.clone())))
+        });
+        Box::new(setup.then(|_timer: Result<_, ()>| method_call))
     }
 }

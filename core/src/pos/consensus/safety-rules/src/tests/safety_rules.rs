@@ -33,6 +33,7 @@ fn safety_rules(
             verify_vote_proposal_signature,
             export_consensus_key,
             None,
+            Default::default(),
         ));
         (
             safety_rules,
