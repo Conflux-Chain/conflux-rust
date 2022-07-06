@@ -58,6 +58,8 @@ class ReorgTest(ConfluxTestFramework):
             for key in new_keys:
                 nonce_map[key] = wait_for_initial_nonce_for_privkey(shard_nodes[0], key)
 
+            # make sure all nodes have sync all accounts and latest state
+            sync_blocks(shard_nodes)
             for i in range(tx_n):
                 sender_key = random.choice(list(balance_map))
                 nonce = nonce_map[sender_key]
