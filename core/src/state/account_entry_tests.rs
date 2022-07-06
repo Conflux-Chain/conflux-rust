@@ -139,6 +139,7 @@ fn test_overlay_account_create() {
         5678.into(),
         1234.into(),
         &admin,
+        false,
         Some(STORAGE_LAYOUT_REGULAR_V0),
     );
     assert!(overlay_account.deposit_list().is_none());
