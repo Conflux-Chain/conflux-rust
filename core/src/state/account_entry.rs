@@ -209,7 +209,7 @@ impl OverlayAccount {
     #[cfg(test)]
     pub fn new_contract(
         address: &Address, balance: U256, nonce: U256,
-        storage_layout: Option<StorageLayout>,
+        invalidated_storage: bool, storage_layout: Option<StorageLayout>,
     ) -> Self
     {
         Self::new_contract_with_admin(
@@ -217,7 +217,7 @@ impl OverlayAccount {
             balance,
             nonce,
             &Address::zero(),
-            false,
+            invalidated_storage,
             storage_layout,
         )
     }
@@ -1155,6 +1155,7 @@ mod tests {
             &contract_addr.address,
             U256::zero(),
             U256::zero(),
+            false,
             /* storage_layout = */ None,
         ));
         test_account_is_default(&mut OverlayAccount::new_basic(
