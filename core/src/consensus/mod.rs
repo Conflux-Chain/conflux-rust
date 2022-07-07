@@ -146,6 +146,8 @@ pub struct ConsensusConfig {
     /// Limits on epoch and block number ranges during log filtering.
     pub get_logs_filter_max_epoch_range: Option<u64>,
     pub get_logs_filter_max_block_number_range: Option<u64>,
+    /// Max limiation for logs
+    pub get_logs_filter_max_limit: Option<usize>,
 
     /// TODO: These parameters are only utilized in catch-up now.
     /// TODO: They should be used in data garbage collection, too.
@@ -1119,6 +1121,8 @@ impl ConsensusGraph {
                 Ok(log) => blocks_to_skip.contains(&log.block_hash),
                 Err(_) => false,
             })
+            // Limit logs can return
+            .take(self.config.get_logs_filter_max_limit.unwrap_or(::std::usize::MAX - 1) + 1)
             // short-circuit on error
             .collect::<Result<Vec<LocalizedLogEntry>, FilterError>>()?;
 
@@ -1227,6 +1231,8 @@ impl ConsensusGraph {
                 Ok(it) => Either::Left(it.into_iter().map(Ok)),
                 Err(e) => Either::Right(std::iter::once(Err(e))),
             })
+            // Limit logs can return
+            .take(self.config.get_logs_filter_max_limit.unwrap_or(::std::usize::MAX - 1) + 1)
             // short-circuit on error
             .collect::<Result<Vec<_>, _>>()?;
 
