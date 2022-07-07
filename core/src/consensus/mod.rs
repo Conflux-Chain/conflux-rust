@@ -1122,7 +1122,12 @@ impl ConsensusGraph {
                 Err(_) => false,
             })
             // Limit logs can return
-            .take(self.config.get_logs_filter_max_limit.unwrap_or(::std::usize::MAX - 1) + 1)
+            .take(
+                self.config
+                    .get_logs_filter_max_limit
+                    .unwrap_or(::std::usize::MAX - 1)
+                    + 1,
+            )
             // short-circuit on error
             .collect::<Result<Vec<LocalizedLogEntry>, FilterError>>()?;
 
@@ -1232,7 +1237,12 @@ impl ConsensusGraph {
                 Err(e) => Either::Right(std::iter::once(Err(e))),
             })
             // Limit logs can return
-            .take(self.config.get_logs_filter_max_limit.unwrap_or(::std::usize::MAX - 1) + 1)
+            .take(
+                self.config
+                    .get_logs_filter_max_limit
+                    .unwrap_or(::std::usize::MAX - 1)
+                    + 1,
+            )
             // short-circuit on error
             .collect::<Result<Vec<_>, _>>()?;
 
