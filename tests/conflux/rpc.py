@@ -505,6 +505,12 @@ class RpcClient:
         else:
             return self.node.cfx_getSupplyInfo(epoch)
 
+    def get_params_from_vote(self, epoch: str = None):
+        if epoch is None:
+            return self.node.cfx_getParamsFromVote()
+        else:
+            return self.node.cfx_getParamsFromVote(epoch)
+
     def get_block_count(self):
         return self.node.getblockcount()
 
