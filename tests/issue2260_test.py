@@ -80,17 +80,7 @@ class Issue2260(ConfluxTestFramework):
         block_number_a = int(self.rpc.block_by_hash(block_a)['blockNumber'], 0)
         block_number_d = int(self.rpc.block_by_hash(block_d)['blockNumber'], 0)
 
-        filter = Filter(from_block=hex(block_number_a), to_block=hex(block_number_d), offset=hex(0), limit=hex(1))
-        logs = self.rpc.get_logs(filter)
-        assert_equal(len(logs), 1)
-        assert_equal(logs[0]["topics"][2], number_to_topic(2))
-
-        filter = Filter(from_block=hex(block_number_a), to_block=hex(block_number_d), offset=hex(1), limit=hex(1))
-        logs = self.rpc.get_logs(filter)
-        assert_equal(len(logs), 1)
-        assert_equal(logs[0]["topics"][2], number_to_topic(1))
-
-        filter = Filter(from_block=hex(block_number_a), to_block=hex(block_number_d), offset=hex(0), limit=hex(2))
+        filter = Filter(from_block=hex(block_number_a), to_block=hex(block_number_d))
         logs = self.rpc.get_logs(filter)
         assert_equal(len(logs), 2)
         assert_equal(logs[0]["topics"][2], number_to_topic(1))

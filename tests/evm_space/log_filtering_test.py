@@ -337,19 +337,10 @@ class CrossSpaceLogFilteringTest(Web3Base):
         logs_2 = self.nodes[0].eth_getLogs(filter)
         assert_equal(logs_2, logs)
 
-        # filter limit
-        filter = { "topics": [TEST_EVENT_TOPIC], "blockHash": block_e, "limit": 1 }
-        logs_2 = self.nodes[0].eth_getLogs(filter)
-        assert_equal(logs_2, [logs[-1]])
-
         # "earliest", "latest"
         filter = { "topics": [TEST_EVENT_TOPIC], "fromBlock": "earliest", "toBlock": "latest" }
         logs_2 = self.nodes[0].eth_getLogs(filter)
         assert_equal(len(logs_2), 8)
-
-        filter = { "topics": [TEST_EVENT_TOPIC], "fromBlock": "earliest", "toBlock": "latest", "limit": 4 }
-        logs_2 = self.nodes[0].eth_getLogs(filter)
-        assert_equal(logs_2, logs)
 
         # address
         filter = { "address": confluxContractAddr }
@@ -363,14 +354,6 @@ class CrossSpaceLogFilteringTest(Web3Base):
         # get-logs-filter-max-limit should limit the number of logs returned.
         self.stop_node(0)
         self.start_node(0, ["--get-logs-filter-max-limit", str(7)])
-
-        # limit <= max_limit: should not raise error
-        filter = { "address": evmContractAddr, "limit": 7 }
-        logs = self.nodes[0].eth_getLogs(filter)
-
-        # limit > max_limit but len(res) <= max_limit: should not raise error
-        filter = { "address": confluxContractAddr, "limit": 9 }
-        logs = self.nodes[0].eth_getLogs(filter)
 
         # len(res) > max_limit: raise error
         filter = { "address": evmContractAddr }

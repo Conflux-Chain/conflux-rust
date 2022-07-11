@@ -962,10 +962,6 @@ impl QueryService {
                 .any(|bloom| block_log_bloom.contains_bloom(bloom))
         };
 
-        // set maximum to number of logs returned
-        let offset = filter.offset.unwrap_or(0);
-        let limit = filter.limit.unwrap_or(::std::usize::MAX);
-
         // construct a stream object for log filtering
         // we first retrieve the epoch blooms and try to match against them. for
         // matching epochs, we retrieve the corresponding receipts and find the
@@ -1054,13 +1050,8 @@ impl QueryService {
                 log.transaction_hash = txs[log.transaction_index].hash();
                 log
             })
-            // --> TryStream<LocalizedLogEntry>
-
-            // limit number of entries we need
-            .skip(offset)
-            .take(limit)
-            // --> TryStream<LocalizedLogEntry>
-
+            // Limit logs can return
+            .take(self.consensus.get_config().get_logs_filter_max_limit.unwrap_or(::std::usize::MAX - 1) + 1)
             .try_collect();
         // --> TryFuture<Vec<LocalizedLogEntry>>
 

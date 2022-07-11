@@ -91,7 +91,6 @@ impl LightClient {
         sync_graph.recover_graph_from_db();
 
         let rpc_impl = Arc::new(RpcImpl::new(
-            conf.rpc_impl_config(),
             light.clone(),
             accounts,
             consensus.clone(),
