@@ -558,14 +558,14 @@ mod usable_size {
 
         } else if #[cfg(target_os = "linux")] {
 
-            /// Linux call system allocator (currently malloc).
+            // Linux call system allocator (currently malloc).
             extern "C" {
                 pub fn malloc_usable_size(ptr: *const c_void) -> usize;
             }
 
         } else if #[cfg(target_os = "macos")] {
 
-            /// Linux call system allocator (currently malloc).
+            // Linux call system allocator (currently malloc).
             extern "C" {
                 #[link_name = "malloc_size"]
                 pub fn malloc_usable_size(ptr: *const c_void) -> usize;
