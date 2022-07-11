@@ -96,23 +96,23 @@ class LogFilteringTest(ConfluxTestFramework):
             assert_equal(logs[ii]["topics"][2], self.number_to_topic(ii))
 
         # apply filter for specific topics
-        filter = Filter(topics=[CONSTRUCTED_TOPIC])
+        filter = Filter(from_epoch="latest_checkpoint", topics=[CONSTRUCTED_TOPIC])
         logs = self.rpc.get_logs(filter)
         self.assert_response_format_correct(logs)
         assert_equal(len(logs), 1)
 
-        filter = Filter(topics=[FOO_TOPIC])
+        filter = Filter(from_epoch="latest_checkpoint", topics=[FOO_TOPIC])
         logs = self.rpc.get_logs(filter)
         self.assert_response_format_correct(logs)
         assert_equal(len(logs), NUM_CALLS - 1)
 
-        filter = Filter(topics=[None, self.address_to_topic(sender)])
+        filter = Filter(from_epoch="latest_checkpoint", topics=[None, self.address_to_topic(sender)])
         logs = self.rpc.get_logs(filter)
         self.assert_response_format_correct(logs)
         assert_equal(len(logs), NUM_CALLS)
 
         # find logs with `FOO_TOPIC` as 1st topic and `3` or `4` as 3rd topic
-        filter = Filter(topics=[FOO_TOPIC, None, [self.number_to_topic(3), self.number_to_topic(4)]])
+        filter = Filter(from_epoch="latest_checkpoint", topics=[FOO_TOPIC, None, [self.number_to_topic(3), self.number_to_topic(4)]])
         logs = self.rpc.get_logs(filter)
         self.assert_response_format_correct(logs)
         assert_equal(len(logs), 2)
@@ -120,12 +120,12 @@ class LogFilteringTest(ConfluxTestFramework):
         # apply filter for specific contract address
         _, contractAddr2 = self.deploy_contract(sender, priv_key, bytecode)
 
-        filter = Filter(address=[contractAddr])
+        filter = Filter(from_epoch="latest_checkpoint", address=[contractAddr])
         logs = self.rpc.get_logs(filter)
         self.assert_response_format_correct(logs)
         assert_equal(len(logs), NUM_CALLS)
 
-        filter = Filter(address=[contractAddr2])
+        filter = Filter(from_epoch="latest_checkpoint", address=[contractAddr2])
         logs = self.rpc.get_logs(filter)
         self.assert_response_format_correct(logs)
         assert_equal(len(logs), 1)
