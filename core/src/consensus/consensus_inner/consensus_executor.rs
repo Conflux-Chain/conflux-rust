@@ -37,7 +37,7 @@ use metrics::{register_meter_with_group, Meter, MeterTimer};
 use primitives::{
     compute_block_number,
     receipt::{BlockReceipts, Receipt, TransactionOutcome},
-    Action, Block, BlockHeaderBuilder, EpochId, SignedTransaction,
+    Action, Block, BlockHeaderBuilder, BlockNumber, EpochId, SignedTransaction,
     TransactionIndex, MERKLE_NULL_NODE,
 };
 
@@ -1076,20 +1076,6 @@ impl ConsensusExecutionHandler {
         let current_block_number =
             start_block_number + epoch_receipts.len() as u64 - 1;
 
-        // Update/initialize parameters before processing rewards.
-        if current_block_number
-            == self.machine.params().transition_numbers.cip94
-            || (current_block_number
-                > self.machine.params().transition_numbers.cip94
-                && current_block_number
-                    % self.machine.params().params_dao_vote_period
-                    == 0)
-        {
-            state
-                .initialize_or_update_dao_voted_params()
-                .expect("update params error");
-        }
-
         if let Some(reward_execution_info) = reward_execution_info {
             // Calculate the block reward for blocks inside the epoch
             // All transaction fees are shared among blocks inside one epoch
@@ -1255,6 +1241,7 @@ impl ConsensusExecutionHandler {
         let mut evm_tx_index = 0;
 
         for block in epoch_blocks.iter() {
+            self.maybe_update_state(state, block_number);
             let mut cfx_tx_index = 0;
 
             let mut tx_exec_error_messages =
@@ -2014,6 +2001,19 @@ impl ConsensusExecutionHandler {
         let r = ex.transact_virtual(tx.clone(), request);
         trace!("Execution result {:?}", r);
         Ok(r?)
+    }
+
+    fn maybe_update_state(&self, state: &mut State, block_number: BlockNumber) {
+        // Update/initialize parameters before processing rewards.
+        if block_number == self.machine.params().transition_numbers.cip94
+            || (block_number > self.machine.params().transition_numbers.cip94
+                && block_number % self.machine.params().params_dao_vote_period
+                    == 0)
+        {
+            state
+                .initialize_or_update_dao_voted_params()
+                .expect("update params error");
+        }
     }
 }
 

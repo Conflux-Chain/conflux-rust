@@ -25,7 +25,7 @@ interface ParamsControl {
     /**
      * @dev Current vote round
      */
-    function voteRound() external view returns (uint64);
+    function currentRound() external view returns (uint64);
 
     /**
      * @dev read the total votes of given round

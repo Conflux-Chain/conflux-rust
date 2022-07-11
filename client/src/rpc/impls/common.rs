@@ -1244,7 +1244,7 @@ impl RpcImpl {
     }
 
     pub fn get_client_version(&self) -> JsonRpcResult<String> {
-        Ok(format!("conflux-rust-{}", crate_version!()).into())
+        Ok(parity_version::version(crate_version!()))
     }
 
     pub fn txpool_pending_nonce_range(

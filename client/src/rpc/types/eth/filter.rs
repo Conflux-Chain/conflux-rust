@@ -112,8 +112,6 @@ pub struct EthRpcLogFilter {
     pub address: Option<FilterAddress>,
     /// Topics
     pub topics: Option<Vec<Topic>>,
-    /// Limit
-    pub limit: Option<usize>,
 }
 
 impl EthRpcLogFilter {
@@ -128,8 +126,6 @@ impl EthRpcLogFilter {
                 .into_iter()
                 .map(|t| t.to_opt())
                 .collect(),
-            offset: None,
-            limit: self.limit,
             trusted: false,
             space: Space::Ethereum,
         };
