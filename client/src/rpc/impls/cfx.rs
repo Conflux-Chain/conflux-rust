@@ -9,7 +9,7 @@ use crate::rpc::types::{
 };
 use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
-use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods, INTEREST_RATE_KEY};
+use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H256, H520, U128, U256,
     U64,
@@ -71,9 +71,7 @@ use crate::{
 };
 use cfx_addr::Network;
 use cfx_parameters::{
-    consensus_internal::REWARD_EPOCH_COUNT,
-    internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-    staking::BLOCKS_PER_YEAR,
+    consensus_internal::REWARD_EPOCH_COUNT, staking::BLOCKS_PER_YEAR,
 };
 use cfxcore::{
     consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
@@ -1470,14 +1468,8 @@ impl RpcImpl {
         let state_db = self
             .consensus
             .get_state_db_by_epoch_number(epoch, "epoch_num")?;
-        let interest_rate_key = StorageKey::new_storage_key(
-            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-            INTEREST_RATE_KEY,
-        )
-        .with_native_space();
         let interest_rate =
-            state_db.get::<U256>(interest_rate_key)?.unwrap_or_default()
-                / U256::from(BLOCKS_PER_YEAR);
+            state_db.get_annual_interest_rate()? / U256::from(BLOCKS_PER_YEAR);
         let pow_base_reward =
             state_db.get_pow_base_reward()?.unwrap_or_default();
 
