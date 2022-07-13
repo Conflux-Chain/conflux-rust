@@ -5,7 +5,7 @@
 use crate::rpc::types::{
     call_request::rpc_call_request_network, errors::check_rpc_address_network,
     pos::PoSEpochReward, PoSEconomics, RpcAddress, SponsorInfo,
-    TokenSupplyInfo,
+    TokenSupplyInfo, VoteParamsInfo,
 };
 use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
@@ -70,7 +70,9 @@ use crate::{
     },
 };
 use cfx_addr::Network;
-use cfx_parameters::consensus_internal::REWARD_EPOCH_COUNT;
+use cfx_parameters::{
+    consensus_internal::REWARD_EPOCH_COUNT, staking::BLOCKS_PER_YEAR,
+};
 use cfxcore::{
     consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
@@ -1041,19 +1043,7 @@ impl RpcImpl {
         let consensus_graph = self.consensus_graph();
 
         info!("RPC Request: cfx_getLogs({:?})", filter);
-        let mut filter: LogFilter = filter.into_primitive()?;
-
-        // If max_limit is set, the value in `filter` will be modified to
-        // satisfy this limitation to avoid loading too many blocks
-        if let Some(max_limit) = self.config.get_logs_filter_max_limit {
-            if filter.limit.is_none() || filter.limit.unwrap() > max_limit {
-                // Use `max_limit + 1` so that we can detect when the query
-                // results in more than `max_limit` logs.
-                // Note: it is possible that processing `max_limit + 1` takes
-                // much more time than `max_limit`, however, this is rare.
-                filter.limit = Some(max_limit + 1);
-            }
-        }
+        let filter: LogFilter = filter.into_primitive()?;
 
         let logs = consensus_graph
             .logs(filter)?
@@ -1070,7 +1060,7 @@ impl RpcImpl {
         // If the results does not fit into `max_limit`, report an error
         if let Some(max_limit) = self.config.get_logs_filter_max_limit {
             if logs.len() > max_limit {
-                bail!(invalid_params("filter", format!("This query results in too many logs, please set filter.limit to {} or lower", max_limit)));
+                bail!(invalid_params("filter", format!("This query results in too many logs, max limitation is {}, please filter results by a smaller epoch/block range", max_limit)));
             }
         }
 
@@ -1459,6 +1449,24 @@ impl RpcImpl {
         })
     }
 
+    pub fn get_vote_params(
+        &self, epoch: Option<EpochNumber>,
+    ) -> RpcResult<VoteParamsInfo> {
+        let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch, "epoch_num")?;
+        let interest_rate =
+            state_db.get_annual_interest_rate()? / U256::from(BLOCKS_PER_YEAR);
+        let pow_base_reward =
+            state_db.get_pow_base_reward()?.unwrap_or_default();
+
+        Ok(VoteParamsInfo {
+            pow_base_reward,
+            interest_rate,
+        })
+    }
+
     pub fn set_db_crash(
         &self, crash_probability: f64, crash_exit_code: i32,
     ) -> RpcResult<()> {
@@ -1638,6 +1646,7 @@ impl Cfx for CfxHandler {
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
             fn storage_root(&self, address: RpcAddress, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
+            fn get_vote_params(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<VoteParamsInfo>;
         }
     }
 }

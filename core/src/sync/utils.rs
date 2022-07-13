@@ -256,6 +256,7 @@ pub fn initialize_synchronization_graph_with_data_manager(
             get_logs_epoch_batch_size: 32,
             get_logs_filter_max_epoch_range: None,
             get_logs_filter_max_block_number_range: None,
+            get_logs_filter_max_limit: None,
             sync_state_starting_epoch: None,
             sync_state_epoch_gap: None,
         },

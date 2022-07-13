@@ -248,6 +248,7 @@ pub struct TransactCheckSettings {
     pub charge_collateral: ChargeCollateral,
     pub charge_gas: bool,
     pub real_execution: bool,
+    pub check_epoch_height: bool,
 }
 
 impl TransactCheckSettings {
@@ -256,6 +257,7 @@ impl TransactCheckSettings {
             charge_collateral: ChargeCollateral::Normal,
             charge_gas: true,
             real_execution: true,
+            check_epoch_height: true,
         }
     }
 
@@ -266,6 +268,7 @@ impl TransactCheckSettings {
             charge_collateral,
             charge_gas: request.charge_gas(),
             real_execution: false,
+            check_epoch_height: false,
         }
     }
 }
@@ -1434,11 +1437,12 @@ impl<
         // Validate transaction epoch height.
         if let Transaction::Native(ref tx) = tx.transaction.transaction.unsigned
         {
-            if VerificationConfig::check_transaction_epoch_bound(
-                tx,
-                self.env.epoch_height,
-                self.env.transaction_epoch_bound,
-            ) != 0
+            if check_settings.check_epoch_height
+                && VerificationConfig::check_transaction_epoch_bound(
+                    tx,
+                    self.env.epoch_height,
+                    self.env.transaction_epoch_bound,
+                ) != 0
             {
                 return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
                     ToRepackError::EpochHeightOutOfBound {

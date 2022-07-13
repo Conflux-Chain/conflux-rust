@@ -592,6 +592,7 @@ impl Configuration {
             get_logs_epoch_batch_size: self.raw_conf.get_logs_epoch_batch_size,
             get_logs_filter_max_epoch_range: self.raw_conf.get_logs_filter_max_epoch_range,
             get_logs_filter_max_block_number_range: self.raw_conf.get_logs_filter_max_block_number_range,
+            get_logs_filter_max_limit: self.raw_conf.get_logs_filter_max_limit,
             sync_state_starting_epoch: self.raw_conf.sync_state_starting_epoch,
             sync_state_epoch_gap: self.raw_conf.sync_state_epoch_gap,
         };

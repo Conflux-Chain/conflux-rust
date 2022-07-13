@@ -112,8 +112,6 @@ pub struct EthRpcLogFilter {
     pub address: Option<FilterAddress>,
     /// Topics
     pub topics: Option<Vec<Topic>>,
-    /// Limit
-    pub limit: Option<usize>,
 }
 
 impl EthRpcLogFilter {
@@ -128,8 +126,6 @@ impl EthRpcLogFilter {
                 .into_iter()
                 .map(|t| t.to_opt())
                 .collect(),
-            offset: None,
-            limit: self.limit,
             trusted: false,
             space: Space::Ethereum,
         };
@@ -169,7 +165,7 @@ impl EthRpcLogFilter {
             (_, _, None) => {
                 let from_epoch = match self.from_block {
                     // FIXME(thegaram): this is probably not consistent with eth
-                    None => EpochNumber::LatestCheckpoint,
+                    None => EpochNumber::LatestState,
                     Some(bn) => bn.try_into()?,
                 };
 

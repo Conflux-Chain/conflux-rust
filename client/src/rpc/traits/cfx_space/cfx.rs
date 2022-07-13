@@ -9,6 +9,7 @@ use crate::rpc::types::{
     EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog, PoSEconomics,
     Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, RpcAddress,
     SponsorInfo, Status as RpcStatus, TokenSupplyInfo, Transaction,
+    VoteParamsInfo,
 };
 use cfx_types::{H256, U256, U64};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
@@ -266,6 +267,11 @@ pub trait Cfx {
     fn get_pos_reward_by_epoch(
         &self, epoch: EpochNumber,
     ) -> JsonRpcResult<Option<PoSEpochReward>>;
+
+    #[rpc(name = "cfx_getParamsFromVote")]
+    fn get_vote_params(
+        &self, epoch_number: Option<EpochNumber>,
+    ) -> JsonRpcResult<VoteParamsInfo>;
 
     //        /// Returns transaction at given block hash and index.
     //        #[rpc(name = "cfx_getTransactionByBlockHashAndIndex")]

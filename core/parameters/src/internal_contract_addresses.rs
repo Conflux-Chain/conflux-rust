@@ -21,7 +21,7 @@ lazy_static! {
         Address::from_str("0888000000000000000000000000000000000006").unwrap();
     pub static ref PARAMS_CONTROL_CONTRACT_ADDRESS: Address =
         Address::from_str("0888000000000000000000000000000000000007").unwrap();
-       pub static ref SYSTEM_STORAGE_ADDRESS: Address =
+    pub static ref SYSTEM_STORAGE_ADDRESS: Address =
         Address::from_str("088800000000000000000000000000000000000a").unwrap();
 
     // We reserve more addresses so we don't need to change the genesis hash

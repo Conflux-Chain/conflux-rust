@@ -114,14 +114,6 @@ class LogFilteringTest(ConfluxTestFramework):
         self.check_filter(Filter(topics=[None, self.address_to_topic(sender)]))
         self.check_filter(Filter(topics=[FOO_TOPIC, None, [self.number_to_topic(3), self.number_to_topic(4)]]))
 
-        # apply filter with limit
-        self.log.info("testing filter limit...")
-        self.check_filter(Filter(limit=("0x%x" % (NUM_CALLS // 2))))
-
-        # apply filter with offset and limit
-        self.log.info("testing filter offset and limit...")
-        self.check_filter(Filter(offset=("0x%x" % (NUM_CALLS // 4)), limit=("0x%x" % (NUM_CALLS // 2))))
-
         # apply filter for specific contract address
         self.log.info("testing address filtering...")
         self.check_filter(Filter(address=[contractAddr]))
