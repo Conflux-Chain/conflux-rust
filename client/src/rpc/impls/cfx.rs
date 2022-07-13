@@ -5,7 +5,7 @@
 use crate::rpc::types::{
     call_request::rpc_call_request_network, errors::check_rpc_address_network,
     pos::PoSEpochReward, PoSEconomics, RpcAddress, SponsorInfo,
-    TokenSupplyInfo,
+    TokenSupplyInfo, VoteParamsInfo,
 };
 use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
@@ -70,7 +70,9 @@ use crate::{
     },
 };
 use cfx_addr::Network;
-use cfx_parameters::consensus_internal::REWARD_EPOCH_COUNT;
+use cfx_parameters::{
+    consensus_internal::REWARD_EPOCH_COUNT, staking::BLOCKS_PER_YEAR,
+};
 use cfxcore::{
     consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
@@ -1447,6 +1449,24 @@ impl RpcImpl {
         })
     }
 
+    pub fn get_vote_params(
+        &self, epoch: Option<EpochNumber>,
+    ) -> RpcResult<VoteParamsInfo> {
+        let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
+        let state_db = self
+            .consensus
+            .get_state_db_by_epoch_number(epoch, "epoch_num")?;
+        let interest_rate =
+            state_db.get_annual_interest_rate()? / U256::from(BLOCKS_PER_YEAR);
+        let pow_base_reward =
+            state_db.get_pow_base_reward()?.unwrap_or_default();
+
+        Ok(VoteParamsInfo {
+            pow_base_reward,
+            interest_rate,
+        })
+    }
+
     pub fn set_db_crash(
         &self, crash_probability: f64, crash_exit_code: i32,
     ) -> RpcResult<()> {
@@ -1626,6 +1646,7 @@ impl Cfx for CfxHandler {
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
             fn storage_root(&self, address: RpcAddress, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
+            fn get_vote_params(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<VoteParamsInfo>;
         }
     }
 }

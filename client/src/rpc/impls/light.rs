@@ -2,7 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::errors::check_rpc_address_network;
 use cfx_types::{
     AddressSpaceUtil, BigEndianHash, Space, H160, H256, H520, U128, U256, U64,
 };
@@ -36,6 +35,7 @@ use crate::{
         impls::common::{self, RpcImpl as CommonImpl},
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
+            errors::check_rpc_address_network,
             pos::{Block as PosBlock, PoSEpochReward},
             Account as RpcAccount, AccountPendingInfo,
             AccountPendingTransactions, BlameInfo, Block as RpcBlock,
@@ -45,6 +45,7 @@ use crate::{
             PoSEconomics, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
             RpcAddress, SendTxRequest, SponsorInfo, Status as RpcStatus,
             SyncGraphStates, TokenSupplyInfo, Transaction as RpcTransaction,
+            VoteParamsInfo,
         },
         RpcBoxFuture, RpcResult,
     },
@@ -1098,6 +1099,7 @@ impl Cfx for CfxHandler {
         fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> JsonRpcResult<EstimateGasAndCollateralResponse>;
         fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
         fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
+        fn get_vote_params(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<VoteParamsInfo>;
         fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
     }
 }

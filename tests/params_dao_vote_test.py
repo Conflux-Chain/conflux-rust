@@ -27,7 +27,7 @@ def sqrt(n: int):
 def power_two_frac(dividend: int, neg: bool):
     base = 1 << 254
 
-    assert(type(dividend) is int)
+    assert (type(dividend) is int)
 
     for _ in range(64):
         if dividend % 2 != 0:
@@ -45,10 +45,11 @@ def power_two_frac(dividend: int, neg: bool):
 
 
 def update_value(old: int, votes: int, total_votes: int, neg: bool):
-    assert(type(old) is int)
-    assert(type(votes) is int)
-    assert(type(total_votes) is int)
+    assert (type(old) is int)
+    assert (type(votes) is int)
+    assert (type(total_votes) is int)
     return old * power_two_frac(votes * 2 ** 64 // total_votes, neg) // 2 ** 96
+
 
 BLOCKS_PER_YEAR = 2 * 60 * 60 * 24 * 365
 
@@ -189,6 +190,9 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0),
                      current_base_reward)
         assert_equal(int(client.get_interest_rate(), 0), current_interest_rate * BLOCKS_PER_YEAR)
+        vote_params = client.get_params_from_vote()
+        assert_equal(int(vote_params["interestRate"], 0), current_interest_rate)
+        assert_equal(int(vote_params["powBaseReward"], 0), current_base_reward)
 
         # Two accounts vote
         block_number = int(client.get_status()["blockNumber"], 0)
@@ -216,6 +220,9 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0),
                      current_base_reward)
         assert_equal(int(client.get_interest_rate(), 0), current_interest_rate * BLOCKS_PER_YEAR)
+        vote_params = client.get_params_from_vote()
+        assert_equal(int(vote_params["interestRate"], 0), current_interest_rate)
+        assert_equal(int(vote_params["powBaseReward"], 0), current_base_reward)
 
         # Replace old votes
         block_number = int(client.get_status()["blockNumber"], 0)
@@ -240,6 +247,9 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0),
                      current_base_reward)
         assert_equal(int(client.get_interest_rate(), 0), current_interest_rate * BLOCKS_PER_YEAR)
+        vote_params = client.get_params_from_vote()
+        assert_equal(int(vote_params["interestRate"], 0), current_interest_rate)
+        assert_equal(int(vote_params["powBaseReward"], 0), current_base_reward)
 
         # Test invalid votes
         block_number = int(client.get_status()["blockNumber"], 0)
@@ -296,6 +306,9 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0),
                      current_base_reward)
         assert_equal(int(client.get_interest_rate(), 0), current_interest_rate * BLOCKS_PER_YEAR)
+        vote_params = client.get_params_from_vote()
+        assert_equal(int(vote_params["interestRate"], 0), current_interest_rate)
+        assert_equal(int(vote_params["powBaseReward"], 0), current_base_reward)
 
 
 if __name__ == "__main__":

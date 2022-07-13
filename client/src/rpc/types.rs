@@ -29,6 +29,7 @@ mod trace;
 mod trace_filter;
 mod transaction;
 mod tx_pool;
+mod vote_params_info;
 
 pub use self::{
     account::Account,
@@ -62,4 +63,5 @@ pub use self::{
         AccountPendingInfo, AccountPendingTransactions,
         TxPoolPendingNonceRange, TxPoolStatus, TxWithPoolInfo,
     },
+    vote_params_info::VoteParamsInfo,
 };
