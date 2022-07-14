@@ -218,39 +218,69 @@ impl Block {
     }
 }
 
-// impl Header {
-//     pub fn new(h: &EthHeader, eip1559_transition: BlockNumber) -> Self {
-//         let eip1559_enabled = h.number() >= eip1559_transition;
-//         Header {
-//             hash: Some(h.hash()),
-// 			size: Some(h.rlp().as_raw().len().into()),
-// 			parent_hash: h.parent_hash(),
-// 			uncles_hash: h.uncles_hash(),
-// 			author: h.author(),
-// 			miner: h.author(),
-// 			state_root: h.state_root(),
-// 			transactions_root: h.transactions_root(),
-// 			receipts_root: h.receipts_root(),
-// 			number: Some(h.number().into()),
-// 			gas_used: h.gas_used(),
-// 			gas_limit: h.gas_limit(),
-// 			logs_bloom: h.log_bloom(),
-// 			timestamp: h.timestamp().into(),
-// 			difficulty: h.difficulty(),
-// 			extra_data: h.extra_data().into(),
-// 			seal_fields: h.view().decode_seal(eip1559_enabled)
-// 				.expect("Client/Miner returns only valid headers. We only serialize headers
-// from Client/Miner; qed") 				.into_iter().map(Into::into).collect(),
-// 			base_fee_per_gas: {
-// 				if eip1559_enabled {
-// 					Some(h.base_fee())
-// 				} else {
-// 					None
-// 				}
-// 			},
-// 		}
-//     }
-// }
+impl Header {
+    pub fn from_phantom(pb: &PhantomBlock) -> Self {
+        Header {
+            hash: pb.pivot_header.hash(),
+            parent_hash: pb.pivot_header.parent_hash().clone(),
+            uncles_hash: hexstr_to_h256(SHA3_HASH_OF_EMPTY_UNCLE),
+            author: pb.pivot_header.author().clone(),
+            miner: pb.pivot_header.author().clone(),
+            state_root: pb.pivot_header.deferred_state_root().clone(),
+            transactions_root: pb.pivot_header.transactions_root().clone(),
+            receipts_root: pb.pivot_header.deferred_receipts_root().clone(),
+            number: pb.pivot_header.height().into(),
+            gas_used: pb
+                .receipts
+                .last()
+                .map(|r| r.accumulated_gas_used)
+                .unwrap_or_default(),
+            gas_limit: pb.pivot_header.gas_limit().into(),
+            extra_data: Default::default(),
+            logs_bloom: pb.bloom,
+            timestamp: pb.pivot_header.timestamp().into(),
+            difficulty: pb.pivot_header.difficulty().into(),
+            base_fee_per_gas: None,
+            size: pb
+                .transactions
+                .iter()
+                .fold(0, |acc, tx| acc + tx.rlp_size())
+                .into(),
+        }
+    }
+    
+    //     pub fn new(h: &EthHeader, eip1559_transition: BlockNumber) -> Self {
+    //         let eip1559_enabled = h.number() >= eip1559_transition;
+    //         Header {
+    //             hash: Some(h.hash()),
+    // 			size: Some(h.rlp().as_raw().len().into()),
+    // 			parent_hash: h.parent_hash(),
+    // 			uncles_hash: h.uncles_hash(),
+    // 			author: h.author(),
+    // 			miner: h.author(),
+    // 			state_root: h.state_root(),
+    // 			transactions_root: h.transactions_root(),
+    // 			receipts_root: h.receipts_root(),
+    // 			number: Some(h.number().into()),
+    // 			gas_used: h.gas_used(),
+    // 			gas_limit: h.gas_limit(),
+    // 			logs_bloom: h.log_bloom(),
+    // 			timestamp: h.timestamp().into(),
+    // 			difficulty: h.difficulty(),
+    // 			extra_data: h.extra_data().into(),
+    // 			seal_fields: h.view().decode_seal(eip1559_enabled)
+    // 				.expect("Client/Miner returns only valid headers. We only serialize
+    // headers from Client/Miner; qed")
+    // .into_iter().map(Into::into).collect(), 			base_fee_per_gas: {
+    // 				if eip1559_enabled {
+    // 					Some(h.base_fee())
+    // 				} else {
+    // 					None
+    // 				}
+    // 			},
+    // 		}
+    //     }
+}
 
 // /// Block representation with additional info.
 // pub type RichBlock = Rich<Block>;
