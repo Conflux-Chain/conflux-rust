@@ -248,7 +248,7 @@ impl Header {
                 .into(),
         }
     }
-    
+
     //     pub fn new(h: &EthHeader, eip1559_transition: BlockNumber) -> Self {
     //         let eip1559_enabled = h.number() >= eip1559_transition;
     //         Header {
