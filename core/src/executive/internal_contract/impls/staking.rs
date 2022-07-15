@@ -10,6 +10,7 @@ use crate::{
     vm::{self, ActionParams, Env},
 };
 use cfx_parameters::consensus::ONE_CFX_IN_DRIP;
+use cfx_parameters::staking::BLOCKS_PER_HOUR;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{Address, AddressSpaceUtil, U256};
 
@@ -114,15 +115,15 @@ pub fn get_vote_power(
 
     let three_months_locked = state.locked_staking_balance_at_block_number(
         &address,
-        block_number + MINED_BLOCK_COUNT_PER_QUARTER,
+        block_number + BLOCKS_PER_HOUR,
     )?;
     let six_months_locked = state.locked_staking_balance_at_block_number(
         &address,
-        block_number + 2 * MINED_BLOCK_COUNT_PER_QUARTER,
+        block_number + 2 * BLOCKS_PER_HOUR,
     )?;
     let one_year_locked = state.locked_staking_balance_at_block_number(
         &address,
-        block_number + 4 * MINED_BLOCK_COUNT_PER_QUARTER,
+        block_number + 4 * BLOCKS_PER_HOUR,
     )?;
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━
