@@ -2004,11 +2004,11 @@ impl ConsensusExecutionHandler {
     }
 
     fn maybe_update_state(&self, state: &mut State, block_number: BlockNumber) {
+        let cip94_start = self.machine.params().transition_numbers.cip94;
+        let period = self.machine.params().params_dao_vote_period;
         // Update/initialize parameters before processing rewards.
-        if block_number == self.machine.params().transition_numbers.cip94
-            || (block_number > self.machine.params().transition_numbers.cip94
-                && block_number % self.machine.params().params_dao_vote_period
-                    == 0)
+        if block_number >= cip94_start
+            && (block_number - cip94_start) % period == 0
         {
             state
                 .initialize_or_update_dao_voted_params()
