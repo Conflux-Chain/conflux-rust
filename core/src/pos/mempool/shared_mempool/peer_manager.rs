@@ -302,7 +302,7 @@ impl PeerManager {
             },
         ) {
             counters::network_send_fail_inc(counters::BROADCAST_TXNS);
-            diem_error!(LogSchema::event_log(
+            diem_info!(LogSchema::event_log(
                 LogEntry::BroadcastTransaction,
                 LogEvent::NetworkSendFail
             )

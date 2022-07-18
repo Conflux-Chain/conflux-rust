@@ -619,13 +619,19 @@ impl SynchronizationProtocolHandler {
                 // wrong? maybe it's a different version of sync protocol?
                 op = Some(UpdateNodeOperation::Remove)
             }
-            ErrorKind::UnknownPeer => op = Some(UpdateNodeOperation::Failure),
+            ErrorKind::UnknownPeer => {
+                warn = false;
+                op = Some(UpdateNodeOperation::Failure)
+            }
             // TODO handle the unexpected response case (timeout or real invalid
             // message type)
             ErrorKind::UnexpectedResponse => {
                 op = Some(UpdateNodeOperation::Demotion)
             }
-            ErrorKind::RequestNotFound => disconnect = false,
+            ErrorKind::RequestNotFound => {
+                disconnect = false;
+                warn = false;
+            }
             ErrorKind::InCatchUpMode(_) => {
                 disconnect = false;
                 warn = false;
