@@ -36,7 +36,7 @@ class Issue2159Test(ConfluxTestFramework):
         self.rpc = RpcClient(node)
 
         # set up RPC over WS
-        url = pubsub_url(node.index, node.rpchost, node.pubsubport)
+        url = pubsub_url(node.index, False, node.rpchost, node.pubsubport)
         self.ws = WebSocketsClient(block_on(websockets.connect(url)))
 
         # wait for phase changes to complete
