@@ -468,7 +468,7 @@ pub fn genesis_block(
                 &genesis_transactions,
             ))
             // pos testnet version
-            .with_timestamp(21)
+            .with_timestamp(22)
             .build(),
         genesis_transactions,
     );
