@@ -140,12 +140,13 @@ class PubSubTest(ConfluxTestFramework):
         # block order changed, some transactions need to be re-executed
         num_to_reexecute = sum(1 for r in receipts if int(r["blockNumber"], 16) > fork_epoch)
 
-        msg = await sub_all.next(timeout=5)
-        assert(msg["revertTo"] != None)
-        assert_equal(int(msg["revertTo"], 16), fork_epoch)
-
         logs = [l async for l in sub_all.iter()]
-        assert_equal(len(logs), num_to_reexecute)
+        assert_equal(len(logs), num_to_reexecute * 2)
+        for i in range(num_to_reexecute):
+            assert(logs[i]["removed"])
+        
+        for i in range(num_to_reexecute, num_to_reexecute * 2):
+            assert(logs[i]["removed"] == False)
 
         self.log.info(f"Pass -- retrieved re-executed logs after fork")
 

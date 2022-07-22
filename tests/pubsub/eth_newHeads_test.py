@@ -74,8 +74,6 @@ class PubSubTest(ConfluxTestFramework):
 
         self.log.info("Pass -- 2")
 
-        await sub_full.unsubscribe()
-
     def run_test(self):
         asyncio.get_event_loop().run_until_complete(self.run_async())
 

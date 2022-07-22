@@ -31,6 +31,7 @@ use primitives::{
 };
 use runtime::Executor;
 use std::{
+    collections::VecDeque,
     sync::{Arc, Weak},
     time::Duration,
 };
@@ -145,9 +146,19 @@ impl PubSubClient {
             (DEFERRED_STATE_EPOCH_COUNT - 1) as usize,
         );
 
+        let consensus = self.consensus.clone();
+
         // loop asynchronously
         let fut = async move {
             let mut last_epoch = 0;
+            let mut epochs: VecDeque<(u64, Vec<H256>)> = VecDeque::new();
+
+            let consensus_graph = consensus
+                .as_any()
+                .downcast_ref::<ConsensusGraph>()
+                .expect("downcast should succeed");
+            let era_epoch_count =
+                consensus_graph.inner.read().inner_conf.era_epoch_count;
 
             while let Some(epoch) = receiver.recv().await {
                 trace!("logs_loop({:?}): {:?}", id, epoch);
@@ -171,13 +182,42 @@ impl PubSubClient {
                 if epoch.0 <= last_epoch {
                     debug!("pivot chain reorg: {} -> {}", last_epoch, epoch.0);
                     assert!(epoch.0 > 0, "Unexpected epoch number received.");
-                    handler.notify_revert(&sub, epoch.0 - 1).await;
+
+                    let mut reverted = vec![];
+                    while let Some(e) = epochs.back() {
+                        if e.0 >= epoch.0 {
+                            reverted.push(epochs.pop_back().unwrap());
+                        } else {
+                            break;
+                        }
+                    }
+
+                    for e in reverted.into_iter() {
+                        handler
+                            .notify_logs(&sub, filter.clone(), e, true)
+                            .await;
+                    }
                 }
 
                 last_epoch = epoch.0;
+                epochs.push_back(epoch.clone());
+
+                let mut latest_checkpoint =
+                    consensus.latest_checkpoint_epoch_number();
+                if latest_checkpoint > 0 {
+                    latest_checkpoint += era_epoch_count;
+                }
+
+                while let Some(e) = epochs.front() {
+                    if e.0 < latest_checkpoint {
+                        epochs.pop_front();
+                    } else {
+                        break;
+                    }
+                }
 
                 // publish matching logs
-                handler.notify_logs(&sub, filter, epoch).await;
+                handler.notify_logs(&sub, filter, epoch, false).await;
             }
         };
 
@@ -278,21 +318,11 @@ impl ChainNotificationHandler {
         }
     }
 
-    async fn notify_revert(&self, subscriber: &Client, epoch: u64) {
-        debug!("notify_revert({:?})", epoch);
-
-        Self::notify_async(
-            subscriber,
-            pubsub::Result::ChainReorg {
-                revert_to: epoch.into(),
-            },
-        )
-        .await
-    }
-
     async fn notify_logs(
         &self, subscriber: &Client, filter: LogFilter, epoch: (u64, Vec<H256>),
-    ) {
+        removed: bool,
+    )
+    {
         debug!("notify_logs({:?})", epoch);
 
         // NOTE: calls to DbManager are supposed to be cached
@@ -308,7 +338,9 @@ impl ChainNotificationHandler {
             .iter()
             .filter(|l| filter.matches(&l.entry))
             .cloned()
-            .map(|l| RpcLog::try_from_localized(l, self.consensus.clone()));
+            .map(|l| {
+                RpcLog::try_from_localized(l, self.consensus.clone(), removed)
+            });
 
         // send logs in order
         // FIXME(thegaram): Sink::notify flushes after each item.

@@ -996,7 +996,7 @@ impl Eth for EthHandler {
         Ok(logs
             .iter()
             .cloned()
-            .map(|l| Log::try_from_localized(l, self.consensus.clone()))
+            .map(|l| Log::try_from_localized(l, self.consensus.clone(), false))
             .collect::<Result<_, _>>()?)
     }
 

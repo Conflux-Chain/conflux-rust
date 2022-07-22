@@ -5,7 +5,7 @@
 //! Pub-Sub types.
 
 use super::{EthRpcLogFilter, Header, Log};
-use cfx_types::{H256, U256};
+use cfx_types::H256;
 use serde::{de::Error, Deserialize, Deserializer, Serialize};
 use serde_json::{from_value, Value};
 
@@ -24,10 +24,6 @@ pub enum Result {
 
     /// Transaction hash
     TransactionHash(H256),
-
-    /// Chain reorg
-    #[serde(rename_all = "camelCase")]
-    ChainReorg { revert_to: U256 },
 }
 
 /// Subscription kind.
