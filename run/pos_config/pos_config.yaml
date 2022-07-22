@@ -2,7 +2,7 @@ base:
   #data_dir: ./pos_db
   role: validator
   waypoint:
-    from_config: 0:7b3391878208aac8bd03c92d49fa5f38365d2930de77db70d77a627794d3cb08 
+    from_config: 0:fc08c18406a0f19bd2b0acb7f037e7d6c68bbb07e858ab261b35265954eef14f 
 consensus:
   round_initial_timeout_ms: 60000
   safety_rules:
