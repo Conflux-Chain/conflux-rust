@@ -248,7 +248,7 @@ fn test_mpt_node_path_to_from_db_key() {
     let state_root_with_aux_info = state.commit(epoch_id).unwrap();
 
     let state = state_manager
-        .get_state_no_commit(
+        .get_state_no_commit_inner(
             StateIndex::new_for_readonly(&epoch_id, &state_root_with_aux_info),
             /* try_open = */ false,
         )
@@ -644,7 +644,6 @@ use std::{
 use crate::{
     impls::merkle_patricia_trie::{MptMerger, TrieNodeTrait},
     impls::storage_db::snapshot_mpt::tests::verify_snapshot_db,
-    state::StateTrait,
     state_manager::StateManagerTrait,
     tests::{
         generate_keys, get_rng_for_test, new_state_manager_for_unit_test,

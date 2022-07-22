@@ -658,6 +658,11 @@ impl<'trie, 'db: 'trie> SubTrieVisitor<'trie, 'db> {
             &allocator,
             &mut *self.db.get_mut().to_owned_read()?,
         )?;
+        trace!(
+            "insert_checked_value: trie_node.path={:?} {:?}",
+            trie_node_ref.compressed_path_ref(),
+            trie_node_ref.get_compressed_path_size()
+        );
         match trie_node_ref.walk::<access_mode::Write>(key) {
             WalkStop::Arrived => {
                 let node_ref_changed = !is_owned;

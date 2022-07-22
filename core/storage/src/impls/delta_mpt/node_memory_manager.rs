@@ -219,8 +219,14 @@ impl<
     >
     {
         self.db_load_counter.fetch_add(1, Ordering::Relaxed);
+        let tmp: i64 = db_key.try_into().unwrap();
+        trace!("load_from_db: {:?} {:?}", db_key, tmp);
         // We never save null node in db.
-        let rlp_bytes = db.get_mut_with_number_key(db_key.into())?.unwrap();
+        let rlp_bytes = db
+            .get_mut_with_number_key(
+                db_key.try_into().expect("not exceed i64::MAX"),
+            )?
+            .unwrap();
         let rlp = Rlp::new(rlp_bytes.as_ref());
         let mut trie_node = MemOptimizedTrieNode::decode(&rlp)?;
 
@@ -795,6 +801,7 @@ use primitives::MerkleHash;
 use rlp::*;
 use std::{
     cell::UnsafeCell,
+    convert::TryInto,
     hint::unreachable_unchecked,
     sync::atomic::{AtomicUsize, Ordering},
 };

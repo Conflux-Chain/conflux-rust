@@ -17,7 +17,7 @@ use cfx_storage::{
     defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS, storage_dir,
     ConsensusParam, ProvideExtraSnapshotSyncConfig, StorageConfiguration,
 };
-use cfx_types::{Address, AllChainID, H256, U256};
+use cfx_types::{Address, AllChainID, Space, H256, U256};
 use cfxcore::{
     block_data_manager::{DataManagerConfiguration, DbType},
     block_parameters::*,
@@ -274,6 +274,7 @@ build_config! {
         (checkpoint_gc_time_in_era_count, (f64), 0.5)
         // The conflux data dir, if unspecified, is the workdir where conflux is started.
         (conflux_data_dir, (String), "./blockchain_data".to_string())
+        (enable_single_mpt_storage, (bool), false)
         (ledger_cache_size, (usize), DEFAULT_LEDGER_CACHE_SIZE)
         (invalid_block_hash_cache_size_in_count, (usize), DEFAULT_INVALID_BLOCK_HASH_CACHE_SIZE_IN_COUNT)
         (rocksdb_cache_size, (Option<usize>), Some(128))
@@ -369,6 +370,11 @@ build_config! {
         (node_type, (Option<NodeType>), None, NodeType::from_str)
         (public_rpc_apis, (ApiSet), ApiSet::Safe, ApiSet::from_str)
         (public_evm_rpc_apis, (ApiSet), ApiSet::Evm, ApiSet::from_str)
+        (single_mpt_space, (Option<Space>), None, |s| match s {
+            "native" => Ok(Space::Native),
+            "evm" => Ok(Space::Ethereum),
+            _ =>  Err("Invalid single_mpt_space".to_owned()),
+        })
     }
 }
 
@@ -670,7 +676,7 @@ impl Configuration {
         }
     }
 
-    pub fn storage_config(&self) -> StorageConfiguration {
+    pub fn storage_config(&self, node_type: &NodeType) -> StorageConfiguration {
         let conflux_data_path = Path::new(&self.raw_conf.conflux_data_dir);
         StorageConfiguration {
             additional_maintained_snapshot_count: self
@@ -712,6 +718,20 @@ impl Configuration {
                 .provide_more_snapshot_for_sync
                 .clone(),
             max_open_mpt_count: self.raw_conf.storage_max_open_mpt_count,
+            enable_single_mpt_storage: match node_type {
+                NodeType::Archive => self.raw_conf.enable_single_mpt_storage,
+                _ => {
+                    if self.raw_conf.enable_single_mpt_storage {
+                        error!("enable_single_mpt_storage is only supported for Archive nodes!")
+                    }
+                    false
+                }
+            },
+            single_mpt_space: self.raw_conf.single_mpt_space.clone(),
+            cip90a: self
+                .raw_conf
+                .cip90_transition_height
+                .unwrap_or(self.raw_conf.hydra_transition_height.unwrap_or(0)),
         }
     }
 

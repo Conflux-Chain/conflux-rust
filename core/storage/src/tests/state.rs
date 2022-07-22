@@ -321,7 +321,10 @@ fn simulate_transactions(
                 >(&mut values[range_start..range_end])
             };
             let state_r = unsafe {
-                std::mem::transmute::<&State, &'static State>(&state)
+                std::mem::transmute::<
+                    &Box<dyn StateTrait>,
+                    &'static Box<dyn StateTrait>,
+                >(&state)
             };
             join_handles.push(thread::spawn(move || {
                 let mut i = 0;
@@ -528,9 +531,7 @@ fn test_set_delete_all() {
         let key_prefix = &key[0..(2 + rng.gen::<usize>() % 2)];
 
         let value = state
-            .delete_all::<access_mode::Write>(
-                StorageKey::AccountKey(key_prefix).with_native_space(),
-            )
+            .delete_all(StorageKey::AccountKey(key_prefix).with_native_space())
             .expect("Failed to delete key.");
         if value.is_none() {
             continue;
@@ -546,9 +547,7 @@ fn test_set_delete_all() {
         }
 
         let value = state
-            .delete_all::<access_mode::Write>(
-                StorageKey::AccountKey(key).with_native_space(),
-            )
+            .delete_all(StorageKey::AccountKey(key).with_native_space())
             .expect("Failed to delete key.");
         assert_eq!(value, None);
     }
@@ -744,7 +743,6 @@ use crate::{
         generate_keys, get_rng_for_test, new_state_manager_for_unit_test,
         FakeStateManager, TEST_NUMBER_OF_KEYS,
     },
-    utils::access_mode,
     StateRootWithAuxInfo,
 };
 use cfx_types::{
