@@ -457,6 +457,16 @@ impl StateOpsTrait for StateGeneric {
     ) -> DbResult<()>
     {
         assert!(contract.space == Space::Native || admin.is_zero());
+        // Check if the new contract is deployed on a killed contract in the
+        // same block.
+        let invalidated_storage = self.ensure_account_loaded(
+            contract,
+            RequireCache::None,
+            |maybe_overlay| {
+                maybe_overlay
+                    .map_or(false, |overlay| overlay.invalidated_storage())
+            },
+        )?;
         Self::update_cache(
             self.cache.get_mut(),
             self.checkpoints.get_mut(),
@@ -467,6 +477,7 @@ impl StateOpsTrait for StateGeneric {
                     balance,
                     nonce,
                     admin,
+                    invalidated_storage,
                     storage_layout,
                 ),
             )),
@@ -1412,6 +1423,14 @@ impl StateGeneric {
     pub fn new_contract(
         &mut self, contract: &AddressWithSpace, balance: U256, nonce: U256,
     ) -> DbResult<()> {
+        let invalidated_storage = self.ensure_account_loaded(
+            contract,
+            RequireCache::None,
+            |maybe_overlay| {
+                maybe_overlay
+                    .map_or(false, |overlay| overlay.invalidated_storage())
+            },
+        )?;
         Self::update_cache(
             self.cache.get_mut(),
             self.checkpoints.get_mut(),
@@ -1420,6 +1439,7 @@ impl StateGeneric {
                 &contract.address,
                 balance,
                 nonce,
+                invalidated_storage,
                 Some(STORAGE_LAYOUT_REGULAR_V0),
             ))),
         );

@@ -148,6 +148,8 @@ pub struct ConsensusConfig {
     /// Limits on epoch and block number ranges during log filtering.
     pub get_logs_filter_max_epoch_range: Option<u64>,
     pub get_logs_filter_max_block_number_range: Option<u64>,
+    /// Max limiation for logs
+    pub get_logs_filter_max_limit: Option<usize>,
 
     /// TODO: These parameters are only utilized in catch-up now.
     /// TODO: They should be used in data garbage collection, too.
@@ -1093,9 +1095,6 @@ impl ConsensusGraph {
     {
         let bloom_possibilities = filter.bloom_possibilities();
 
-        let offset = filter.offset.unwrap_or(0);
-        let limit = filter.limit.unwrap_or(::std::usize::MAX);
-
         // we store the last epoch processed and the corresponding pivot hash so
         // that we can check whether it changed between batches
         let mut consistency_check_data: Option<(u64, H256)> = None;
@@ -1125,8 +1124,13 @@ impl ConsensusGraph {
                 Ok(log) => blocks_to_skip.contains(&log.block_hash),
                 Err(_) => false,
             })
-            .skip(offset)
-            .take(limit)
+            // Limit logs can return
+            .take(
+                self.config
+                    .get_logs_filter_max_limit
+                    .unwrap_or(::std::usize::MAX - 1)
+                    + 1,
+            )
             // short-circuit on error
             .collect::<Result<Vec<LocalizedLogEntry>, FilterError>>()?;
 
@@ -1235,9 +1239,13 @@ impl ConsensusGraph {
                 Ok(it) => Either::Left(it.into_iter().map(Ok)),
                 Err(e) => Either::Right(std::iter::once(Err(e))),
             })
-            // take as many as we need
-            .skip(filter.offset.unwrap_or(0))
-            .take(filter.limit.unwrap_or(::std::usize::MAX))
+            // Limit logs can return
+            .take(
+                self.config
+                    .get_logs_filter_max_limit
+                    .unwrap_or(::std::usize::MAX - 1)
+                    + 1,
+            )
             // short-circuit on error
             .collect::<Result<Vec<_>, _>>()?;
 

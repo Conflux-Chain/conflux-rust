@@ -16,7 +16,9 @@ use cfx_state::SubstateTrait;
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
 #[cfg(test)]
 use cfx_types::AddressSpaceUtil;
-use cfx_types::{Address, AddressWithSpace, Space, H256, U256};
+use cfx_types::{
+    address_util::AddressUtil, Address, AddressWithSpace, Space, H256, U256,
+};
 use parking_lot::RwLock;
 use primitives::{
     is_default::IsDefault, Account, CodeInfo, DepositInfo, DepositList,
@@ -116,7 +118,7 @@ pub struct OverlayAccount {
     // also be caused by a simple payment transaction, which result into a new
     // basic account at the same address.
     is_newly_created_contract: bool,
-    is_removed_contract: bool,
+    invalidated_storage: bool,
 }
 
 impl OverlayAccount {
@@ -141,7 +143,7 @@ impl OverlayAccount {
             code_hash: account.code_hash,
             code: None,
             is_newly_created_contract: false,
-            is_removed_contract: false,
+            invalidated_storage: false,
         };
 
         overlay_account
@@ -171,7 +173,7 @@ impl OverlayAccount {
             code_hash: KECCAK_EMPTY,
             code: None,
             is_newly_created_contract: false,
-            is_removed_contract: false,
+            invalidated_storage: false,
         }
     }
 
@@ -197,7 +199,7 @@ impl OverlayAccount {
             code_hash: KECCAK_EMPTY,
             code: None,
             is_newly_created_contract: false,
-            is_removed_contract: true,
+            invalidated_storage: true,
         }
     }
 
@@ -206,7 +208,7 @@ impl OverlayAccount {
     #[cfg(test)]
     pub fn new_contract(
         address: &Address, balance: U256, nonce: U256,
-        storage_layout: Option<StorageLayout>,
+        invalidated_storage: bool, storage_layout: Option<StorageLayout>,
     ) -> Self
     {
         Self::new_contract_with_admin(
@@ -214,6 +216,7 @@ impl OverlayAccount {
             balance,
             nonce,
             &Address::zero(),
+            invalidated_storage,
             storage_layout,
         )
     }
@@ -222,7 +225,8 @@ impl OverlayAccount {
     /// exist before.
     pub fn new_contract_with_admin(
         address: &AddressWithSpace, balance: U256, nonce: U256,
-        admin: &Address, storage_layout: Option<StorageLayout>,
+        admin: &Address, invalidated_storage: bool,
+        storage_layout: Option<StorageLayout>,
     ) -> Self
     {
         OverlayAccount {
@@ -244,7 +248,7 @@ impl OverlayAccount {
             code_hash: KECCAK_EMPTY,
             code: None,
             is_newly_created_contract: true,
-            is_removed_contract: false,
+            invalidated_storage,
         }
     }
 
@@ -267,13 +271,18 @@ impl OverlayAccount {
         self.code_hash != KECCAK_EMPTY || self.is_newly_created_contract
     }
 
-    fn reset_storage(&self) -> bool {
-        self.is_newly_created_contract || self.is_removed_contract
+    fn fresh_storage(&self) -> bool {
+        let builtin_address = self.address.space == Space::Native
+            && self.address.address.is_builtin_address();
+        (self.is_newly_created_contract && !builtin_address)
+            || self.invalidated_storage
     }
 
     pub fn removed_without_update(&self) -> bool {
-        self.is_removed_contract && self.as_account().is_default()
+        self.invalidated_storage && self.as_account().is_default()
     }
+
+    pub fn invalidated_storage(&self) -> bool { self.invalidated_storage }
 
     pub fn address(&self) -> &AddressWithSpace { &self.address }
 
@@ -583,9 +592,8 @@ impl OverlayAccount {
     ) -> DbResult<bool>
     {
         self.address.assert_native();
-        assert!(!self.is_removed_contract);
         if cache_deposit_list && self.deposit_list.is_none() {
-            let deposit_list_opt = if self.reset_storage() {
+            let deposit_list_opt = if self.fresh_storage() {
                 None
             } else {
                 db.get_deposit_list(&self.address)?
@@ -593,7 +601,7 @@ impl OverlayAccount {
             self.deposit_list = Some(deposit_list_opt.unwrap_or_default());
         }
         if cache_vote_list && self.vote_stake_list.is_none() {
-            let vote_list_opt = if self.reset_storage() {
+            let vote_list_opt = if self.fresh_storage() {
                 None
             } else {
                 db.get_vote_list(&self.address)?
@@ -623,7 +631,7 @@ impl OverlayAccount {
             code_hash: self.code_hash,
             code: self.code.clone(),
             is_newly_created_contract: self.is_newly_created_contract,
-            is_removed_contract: self.is_removed_contract,
+            invalidated_storage: self.invalidated_storage,
         }
     }
 
@@ -684,11 +692,10 @@ impl OverlayAccount {
     pub fn storage_at(
         &self, db: &StateDbGeneric, key: &[u8],
     ) -> DbResult<U256> {
-        assert!(!self.is_removed_contract);
         if let Some(value) = self.cached_storage_at(key) {
             return Ok(value);
         }
-        if self.reset_storage() {
+        if self.fresh_storage() {
             Ok(U256::zero())
         } else {
             Self::get_and_cache_storage(
@@ -783,7 +790,7 @@ impl OverlayAccount {
         self.deposit_list = other.deposit_list;
         self.vote_stake_list = other.vote_stake_list;
         self.is_newly_created_contract = other.is_newly_created_contract;
-        self.is_removed_contract = other.is_removed_contract;
+        self.invalidated_storage = other.invalidated_storage;
     }
 
     /// Return the owner of `key` before this execution. If it is `None`, it
@@ -793,12 +800,11 @@ impl OverlayAccount {
         &self, db: &StateDbGeneric, key: &Vec<u8>,
     ) -> DbResult<Option<Address>> {
         self.address.assert_native();
-        assert!(!self.is_removed_contract);
         if let Some(value) = self.storage_owner_lv2_write_cache.read().get(key)
         {
             return Ok(value.clone());
         }
-        if self.reset_storage() {
+        if self.fresh_storage() {
             return Ok(None);
         }
         let storage_owner_lv2_write_cache =
@@ -828,7 +834,7 @@ impl OverlayAccount {
         &mut self, db: &StateDbGeneric, substate: &mut dyn SubstateTrait,
     ) -> DbResult<()> {
         self.address.assert_native();
-        if self.is_removed_contract {
+        if self.invalidated_storage {
             return Ok(());
         }
         if self.address.address == *SYSTEM_STORAGE_ADDRESS {
@@ -883,7 +889,7 @@ impl OverlayAccount {
         );
         assert_eq!(Arc::strong_count(&self.storage_value_write_cache), 1);
 
-        if self.reset_storage() {
+        if self.invalidated_storage() {
             state.recycle_storage(
                 vec![self.address],
                 debug_record.as_deref_mut(),
@@ -1141,6 +1147,7 @@ mod tests {
             &contract_addr.address,
             U256::zero(),
             U256::zero(),
+            false,
             /* storage_layout = */ None,
         ));
         test_account_is_default(&mut OverlayAccount::new_basic(

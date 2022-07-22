@@ -145,11 +145,11 @@ build_config! {
         (genesis_secrets, (Option<String>), None)
         (initial_difficulty, (Option<u64>), None)
         (tanzanite_transition_height, (u64), TANZANITE_HEIGHT)
-        (hydra_transition_number, (Option<u64>), Some(92060600))
-        (hydra_transition_height, (Option<u64>), Some(36935000))
+        (hydra_transition_number, (Option<u64>), None)
+        (hydra_transition_height, (Option<u64>), None)
         (dao_vote_transition_number, (Option<u64>), None)
         (dao_vote_transition_height, (Option<u64>), None)
-        (cip43_init_end_number, (Option<u64>), Some(92406200))
+        (cip43_init_end_number, (Option<u64>), None)
         (cip78_patch_transition_number,(Option<u64>),None)
         (cip90_transition_height,(Option<u64>),None)
         (cip90_transition_number,(Option<u64>),None)
@@ -315,7 +315,7 @@ build_config! {
         (vrf_proposal_threshold, (U256), U256::from_str("1111111111111100000000000000000000000000000000000000000000000000").unwrap())
         // Deferred epoch count before a confirmed epoch.
         (pos_pivot_decision_defer_epoch_count, (u64), 50)
-        (pos_reference_enable_height, (u64), 37230000)
+        (pos_reference_enable_height, (u64), u64::MAX)
         (pos_initial_nodes_path, (String), "./pos_config/initial_nodes.json".to_string())
         (pos_private_key_path, (String), "./pos_config/pos_key".to_string())
         (pos_round_per_term, (u64), ROUND_PER_TERM)
@@ -597,6 +597,7 @@ impl Configuration {
             get_logs_epoch_batch_size: self.raw_conf.get_logs_epoch_batch_size,
             get_logs_filter_max_epoch_range: self.raw_conf.get_logs_filter_max_epoch_range,
             get_logs_filter_max_block_number_range: self.raw_conf.get_logs_filter_max_block_number_range,
+            get_logs_filter_max_limit: self.raw_conf.get_logs_filter_max_limit,
             sync_state_starting_epoch: self.raw_conf.sync_state_starting_epoch,
             sync_state_epoch_gap: self.raw_conf.sync_state_epoch_gap,
         };

@@ -978,20 +978,8 @@ impl Eth for EthHandler {
     fn logs(&self, filter: EthRpcLogFilter) -> jsonrpc_core::Result<Vec<Log>> {
         info!("RPC Request: eth_getLogs({:?})", filter);
 
-        let mut filter: LogFilter =
+        let filter: LogFilter =
             filter.into_primitive(self.consensus.clone())?;
-
-        // If max_limit is set, the value in `filter` will be modified to
-        // satisfy this limitation to avoid loading too many blocks
-        if let Some(max_limit) = self.config.get_logs_filter_max_limit {
-            if filter.limit.is_none() || filter.limit.unwrap() > max_limit {
-                // Use `max_limit + 1` so that we can detect when the query
-                // results in more than `max_limit` logs.
-                // Note: it is possible that processing `max_limit + 1` takes
-                // much more time than `max_limit`, however, this is rare.
-                filter.limit = Some(max_limit + 1);
-            }
-        }
 
         let logs = self
             .consensus_graph()
@@ -1001,7 +989,7 @@ impl Eth for EthHandler {
         // If the results does not fit into `max_limit`, report an error
         if let Some(max_limit) = self.config.get_logs_filter_max_limit {
             if logs.len() > max_limit {
-                bail!(invalid_params("filter", format!("This query results in too many logs, please use a smaller block range or set filter.limit to {} or lower", max_limit)));
+                bail!(invalid_params("filter", format!("This query results in too many logs, max limitation is {}, please use a smaller block range", max_limit)));
             }
         }
 
