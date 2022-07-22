@@ -38,14 +38,14 @@ loggers:
     network:
         level: info
     cfxcore:
-        level: info
+        level: debug
     rpc:
         level: info
     blockgen:
         level: info
     client:
-        level: info
+        level: debug
     cfx_storage:
-        level: trace
+        level: info
     cfx_statedb:
         level: info
