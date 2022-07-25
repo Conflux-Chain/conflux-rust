@@ -11,6 +11,7 @@ pub mod storage_manager {
 
     pub struct StorageConfiguration {
         pub snapshot_epoch_count: u32,
+        pub shard_size: Option<usize>,
         pub public_params_dir: PathBuf,
         pub path_storage_dir: PathBuf,
     }

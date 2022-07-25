@@ -4,57 +4,60 @@ use super::{
     state_trait::{StateTrait, StateTraitExt},
     state_trees::StateTrees,
 };
-use crate::{
-    utils::access_mode::AccessMode, MptKeyValue, STORAGE_COMMIT_TIMER,
-    STORAGE_COMMIT_TIMER2, STORAGE_GET_TIMER, STORAGE_GET_TIMER2,
-    STORAGE_SET_TIMER, STORAGE_SET_TIMER2,
-};
-use amt_db::{crypto::export::ProjectiveCurve, serde::MyToBytes, AmtDb, Key};
-use cfx_storage_primitives::amt::{
+use crate::{utils::access_mode::AccessMode, MptKeyValue};
+use cfx_storage_primitives::raw::{
     StateRoot, StateRootAuxInfo, StateRootWithAuxInfo, StorageRoot,
 };
-use keccak_hash::keccak;
-use metrics::{Lock, MeterTimer, RwLockExtensions, ScopeTimer};
+use keccak_hash::{keccak, H256};
 use parking_lot::RwLock;
 use primitives::{EpochId, StaticBool, StorageKey};
 use std::sync::Arc;
 
-lazy_static! {
-    static ref GETLOCK: Lock = Lock::register("lock", "storage_get_lock");
-    static ref SETLOCK: Lock = Lock::register("lock", "storage_set_lock");
-    static ref COMMITLOCK: Lock = Lock::register("lock", "storage_commit_lock");
-}
+use crate::{
+    STORAGE_COMMIT_TIMER, STORAGE_COMMIT_TIMER2, STORAGE_GET_TIMER,
+    STORAGE_GET_TIMER2, STORAGE_SET_TIMER, STORAGE_SET_TIMER2,
+};
+use kvdb::{DBKey, DBOp, DBTransaction, DBValue, KeyValueDB};
+use metrics::{MeterTimer, ScopeTimer};
+
 pub struct State {
     pub(crate) read_only: bool,
 
-    pub(crate) state: Arc<RwLock<AmtDb>>,
-    pub(crate) root_with_aux: Option<StateRootWithAuxInfo>,
+    pub(crate) state: Arc<RwLock<Arc<dyn KeyValueDB>>>,
+    pub(crate) epoch_id: H256,
 }
 
-fn convert_key(access_key: StorageKey) -> Key {
-    Key(keccak(access_key.to_key_bytes()).0.to_vec())
+fn convert_key(access_key: StorageKey) -> H256 {
+    keccak(access_key.to_key_bytes())
 }
 
 impl StateTrait for State {
     fn get(&self, access_key: StorageKey) -> crate::Result<Option<Box<[u8]>>> {
         let _timer = MeterTimer::time_func(STORAGE_GET_TIMER.as_ref());
         let _timer2 = ScopeTimer::time_scope(STORAGE_GET_TIMER2.as_ref());
-        let state = self.state.read_with_metric(&GETLOCK);
-        Ok(state.get(&convert_key(access_key))?)
+
+        Ok(self
+            .state
+            .read()
+            .get(0, convert_key(access_key).as_ref())?
+            .map(Into::into))
     }
 
     fn set(
         &mut self, access_key: StorageKey, value: Box<[u8]>,
     ) -> crate::Result<()> {
         assert!(!self.read_only);
-        assert!(self.root_with_aux.is_none());
+        trace!("MPTStateOp: Set key {:?}, value {:?}", access_key, value);
         let _timer = MeterTimer::time_func(STORAGE_SET_TIMER.as_ref());
         let _timer2 = ScopeTimer::time_scope(STORAGE_SET_TIMER2.as_ref());
-        trace!("AMTStateOp: Set key {:?}, value {:?}", access_key, value);
-        let mut state = self.state.write_with_metric(&SETLOCK);
 
-        state.set(&convert_key(access_key), value);
-
+        self.state.write().write_buffered(DBTransaction {
+            ops: vec![DBOp::Insert {
+                col: 0,
+                key: convert_key(access_key).0.into(),
+                value: value.into_vec(),
+            }],
+        });
         Ok(())
     }
 
@@ -72,7 +75,7 @@ impl StateTrait for State {
         &mut self, access_key_prefix: StorageKey,
     ) -> crate::Result<Option<Vec<MptKeyValue>>> {
         warn!(
-            "AMTState: No op for delete all. read only: {}, : key:{:?}",
+            "MPTState: No op for delete all. read only: {}, : key:{:?}",
             AM::is_read_only(),
             access_key_prefix
         );
@@ -82,51 +85,29 @@ impl StateTrait for State {
     fn compute_state_root(&mut self) -> crate::Result<StateRootWithAuxInfo> {
         let _timer = MeterTimer::time_func(STORAGE_COMMIT_TIMER.as_ref());
         let _timer2 = ScopeTimer::time_scope(STORAGE_COMMIT_TIMER2.as_ref());
-
         assert!(!self.read_only);
-        if self.root_with_aux.is_some() {
-            warn!("AMTState: Do not commit me again");
-            return Ok(self.root_with_aux.clone().unwrap());
-        }
-
-        let epoch = self.state.read().current_epoch()?;
-        info!("AMTState: Compute state root for epoch {:?}", epoch);
-
-        let mut state = self.state.write_with_metric(&COMMITLOCK);
-
-        let (amt_root, static_root) = state.commit(0)?;
-        let state_root = StateRoot {
-            amt_root,
-            static_root,
-        };
-        let state_root_hash = state_root.compute_state_root_hash();
-        info!(
-            "State root: hash {:?}, amt {:?}, static {:?}",
-            state_root_hash,
-            amt_root.into_affine(),
-            static_root
-        );
-
-        self.root_with_aux = Some(StateRootWithAuxInfo {
-            state_root,
-            aux_info: StateRootAuxInfo { state_root_hash },
-        });
         self.get_state_root()
     }
 
     fn get_state_root(&self) -> crate::Result<StateRootWithAuxInfo> {
-        if let Some(root_with_aux) = &self.root_with_aux {
-            Ok(root_with_aux.clone())
-        } else {
-            Err(crate::ErrorKind::DbIsUnclean.into())
-        }
+        Ok(StateRootWithAuxInfo {
+            state_root: StateRoot {
+                epoch_id: self.epoch_id,
+            },
+            aux_info: StateRootAuxInfo {
+                state_root_hash: self.epoch_id,
+            },
+        })
     }
 
     fn commit(
-        &mut self, _epoch: EpochId,
+        &mut self, epoch: EpochId,
     ) -> crate::Result<StateRootWithAuxInfo> {
         let _timer = MeterTimer::time_func(STORAGE_COMMIT_TIMER.as_ref());
         let _timer2 = ScopeTimer::time_scope(STORAGE_COMMIT_TIMER2.as_ref());
+
+        self.epoch_id = epoch;
+        self.state.write().flush();
         self.get_state_root()
     }
 }

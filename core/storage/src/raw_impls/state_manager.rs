@@ -3,11 +3,12 @@ use super::{
     state_index::StateIndex, state_trait::StateManagerTrait,
 };
 use crate::{KvdbRocksdb, Result, SnapshotInfo};
-use amt_db::{amt_db::cached_pp, AmtDb};
 use cfx_internal_common::{
     consensus_api::StateMaintenanceTrait, StateAvailabilityBoundary,
 };
-use cfx_storage_primitives::amt::StateRootWithAuxInfo;
+use cfx_storage_primitives::raw::StateRootWithAuxInfo;
+use cfx_types::H256;
+use kvdb::{DBTransaction, KeyValueDB};
 use kvdb_rocksdb::{CompactionProfile, Database, DatabaseConfig};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
@@ -18,8 +19,7 @@ use std::{path::Path, sync::Arc};
 // #[derive(MallocSizeOfDerive)]
 pub struct StateManager {
     snapshot_epoch_count: u32,
-    // Not support history version yet
-    amt_db: Arc<RwLock<AmtDb>>,
+    db: Arc<RwLock<Arc<dyn KeyValueDB>>>,
 }
 
 impl MallocSizeOf for StateManager {
@@ -42,39 +42,30 @@ fn open_backend(db_dir: &str) -> Arc<Database> {
 }
 
 impl StateManager {
-    pub fn get_storage_manager(&self) -> &StateManager { &*self }
+    pub fn get_storage_manager(&self) -> &StateManager {
+        &*self
+    }
 
     pub fn new(conf: StorageConfiguration) -> Result<Self> {
-        info!("Loading public params");
-        let pp = cached_pp(conf.public_params_dir.to_str().unwrap());
-        info!("Loaded public params");
-        let backend = open_backend(conf.path_storage_dir.to_str().unwrap());
+        let backend: Arc<dyn KeyValueDB> =
+            open_backend(conf.path_storage_dir.to_str().unwrap());
 
-        let shard_info = conf
-            .shard_size
-            .map(|size| (size.trailing_zeros() as usize, 0));
-
-        if conf.shard_size.is_some() {
-            pp.warm_quotient(0)
-        }
-
+        let db = Arc::new(RwLock::new(backend));
         Ok(Self {
             snapshot_epoch_count: conf.snapshot_epoch_count,
-            amt_db: Arc::new(RwLock::new(AmtDb::new(
-                backend, pp, true, shard_info,
-            ))),
+            db,
         })
     }
 
-    pub fn get_snapshot_epoch_count(&self) -> u32 { self.snapshot_epoch_count }
+    pub fn get_snapshot_epoch_count(&self) -> u32 {
+        self.snapshot_epoch_count
+    }
 
     pub fn maintain_state_confirmed<ConsensusInner: StateMaintenanceTrait>(
         &self, consensus_inner: &ConsensusInner, stable_checkpoint_height: u64,
         era_epoch_count: u64, confirmed_height: u64,
         state_availability_boundary: &RwLock<StateAvailabilityBoundary>,
-    ) -> Result<()>
-    {
-        info!("AMTStateManager: No op for maintain_state_confirmed, stable_checkpoint_height {}, era_epoch_count {}, confirmed_height {}", stable_checkpoint_height,era_epoch_count,confirmed_height);
+    ) -> Result<()> {
         Ok(())
     }
 
@@ -92,43 +83,45 @@ impl StateManagerTrait for StateManager {
         self: &Arc<Self>, epoch_id: StateIndex, try_open: bool,
     ) -> Result<Option<State>> {
         assert!(epoch_id.is_read_only());
-        Ok(Some(self.new_state(true, Some(epoch_id.state_root))))
+        let root = epoch_id.state_root.state_root.epoch_id.clone();
+        Ok(Some(self.new_state(true, 0, root)))
     }
 
     fn get_state_for_next_epoch(
         self: &Arc<Self>, parent_epoch_id: StateIndex,
     ) -> Result<Option<State>> {
-        if let Some(height) = parent_epoch_id.height {
-            info!(
-                "AMTStateManager: Construct state for new epoch {}",
-                height + 1
-            );
-            assert_eq!(height + 1, self.amt_db.read().current_epoch()?)
-        }
+        let epoch = if let Some(height) = parent_epoch_id.height {
+            height + 1
+        } else {
+            0
+        };
 
-        Ok(Some(
-            if parent_epoch_id.is_read_only() {
-                self.new_state(true, Some(parent_epoch_id.state_root))
-            } else {
-                self.new_state(false, None)
-            },
-        ))
+        let root = parent_epoch_id.state_root.state_root.epoch_id.clone();
+
+        Ok(Some(if parent_epoch_id.is_read_only() {
+            self.new_state(true, epoch, root)
+        } else {
+            self.new_state(false, epoch, root)
+        }))
     }
 
     fn get_state_for_genesis_write(self: &Arc<Self>) -> State {
-        assert_eq!(0, self.amt_db.read().current_epoch().unwrap());
-        self.new_state(false, None)
+        self.new_state(false, 0, KECCAK_NULL_RLP)
     }
 }
 
 impl StateManager {
-    fn new_state(
-        &self, read_only: bool, root_with_aux: Option<StateRootWithAuxInfo>,
-    ) -> State {
+    fn new_state(&self, read_only: bool, epoch: u64, root: H256) -> State {
         State {
             read_only,
-            state: self.amt_db.clone(),
-            root_with_aux,
+            state: self.db.clone(),
+            epoch_id: root,
         }
     }
 }
+
+pub const KECCAK_NULL_RLP: H256 = H256([
+    0x56, 0xe8, 0x1f, 0x17, 0x1b, 0xcc, 0x55, 0xa6, 0xff, 0x83, 0x45, 0xe6,
+    0x92, 0xc0, 0xf8, 0x6e, 0x5b, 0x48, 0xe0, 0x1b, 0x99, 0x6c, 0xad, 0xc0,
+    0x01, 0x62, 0x2f, 0xb5, 0xe3, 0x63, 0xb4, 0x21,
+]);

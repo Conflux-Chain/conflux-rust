@@ -35,6 +35,8 @@ mod amt_impls;
 mod impls;
 #[cfg(feature = "mpt-storage")]
 mod mpt_impls;
+#[cfg(feature = "raw-storage")]
+mod raw_impls;
 
 use metrics::{
     register_meter_with_group, register_timer_with_group, Meter, Timer,
@@ -92,6 +94,18 @@ pub use self::amt_impls::{
 };
 #[cfg(feature = "mpt-storage")]
 pub use self::mpt_impls::{
+    config::storage_dir,
+    config::storage_manager::StorageConfiguration,
+    proof_type::{StateProof, StorageRootProof},
+    state::State as StorageState,
+    state_index::StateIndex,
+    state_manager::StateManager as StorageManager,
+    state_trait::StateManagerTrait as StorageManagerTrait,
+    state_trait::StateTrait as StorageStateTrait,
+    state_trait::StateTraitExt as StorageStateTraitExt,
+};
+#[cfg(feature = "raw-storage")]
+pub use self::raw_impls::{
     config::storage_dir,
     config::storage_manager::StorageConfiguration,
     proof_type::{StateProof, StorageRootProof},
