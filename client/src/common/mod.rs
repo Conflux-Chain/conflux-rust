@@ -114,7 +114,7 @@ pub mod client_methods {
         CtrlC::set_handler({
             let e = exit_cond_var.clone();
             move || {
-                super::dump_stat();
+                // super::dump_stat();
                 *e.0.lock() = true;
                 e.1.notify_all();
             }

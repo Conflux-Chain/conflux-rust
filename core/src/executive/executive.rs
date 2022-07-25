@@ -890,18 +890,21 @@ impl<
         let sender = tx.sender();
         let nonce = self.state.nonce(&sender)?;
 
-        // Validate transaction nonce
-        if tx.nonce < nonce {
-            return Ok(ExecutionOutcome::NotExecutedDrop(
-                TxDropError::OldNonce(nonce, tx.nonce),
-            ));
-        } else if tx.nonce > nonce {
-            return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
-                ToRepackError::InvalidNonce {
-                    expected: nonce,
-                    got: tx.nonce,
-                },
-            ));
+        #[cfg(not(feature = "bypass-txpool"))]
+        {
+            // Validate transaction nonce
+            if tx.nonce < nonce {
+                return Ok(ExecutionOutcome::NotExecutedDrop(
+                    TxDropError::OldNonce(nonce, tx.nonce),
+                ));
+            } else if tx.nonce > nonce {
+                return Ok(ExecutionOutcome::NotExecutedToReconsiderPacking(
+                    ToRepackError::InvalidNonce {
+                        expected: nonce,
+                        got: tx.nonce,
+                    },
+                ));
+            }
         }
 
         // Validate transaction epoch height.

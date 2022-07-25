@@ -73,7 +73,7 @@ pub fn register_meter_with_group(group: &str, name: &str) -> Arc<dyn Meter> {
 #[derive(Default, Clone)]
 struct MeterSnapshot {
     count: usize,
-    rates: [u64; 4], // m1, m5, m15 and mean
+    rates: [u64; 4], // m1, m5, s15 and mean
 }
 
 impl Meter for MeterSnapshot {
@@ -103,7 +103,7 @@ impl StandardMeter {
         StandardMeter {
             name,
             snapshot: RwLock::new(MeterSnapshot::default()),
-            ewmas: [EWMA::new(1.0), EWMA::new(5.0), EWMA::new(15.0)],
+            ewmas: [EWMA::new(1.0), EWMA::new(5.0), EWMA::new(0.25)],
             start_time: Instant::now(),
             stopped: AtomicBool::new(false),
         }

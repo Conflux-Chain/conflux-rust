@@ -1,6 +1,7 @@
 // Copyright 2019 Conflux Foundation. All rights reserved.
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
+#![cfg_attr(feature = "bypass-txpool", allow(unused))]
 
 mod impls;
 
@@ -38,6 +39,8 @@ use metrics::{
 };
 use parking_lot::{Mutex, RwLock};
 use primitives::{Account, SignedTransaction, TransactionWithSignature};
+#[cfg(feature = "bypass-txpool")]
+use std::collections::VecDeque;
 use std::{
     cmp::{max, min},
     collections::hash_map::HashMap,
@@ -80,15 +83,17 @@ lazy_static! {
     static ref TX_POOL_GET_STATE_TIMER: Arc<dyn Meter> =
         register_meter_with_group("timer", "tx_pool::get_state");
     static ref INSERT_TXS_QUOTA_LOCK: Lock =
-        Lock::register("txpool_lock", "txpool_insert_txs_quota_lock");
+        Lock::register("lock", "txpool_insert_txs_quota_lock");
     static ref INSERT_TXS_ENQUEUE_LOCK: Lock =
-        Lock::register("txpool_lock", "txpool_insert_txs_enqueue_lock");
+        Lock::register("lock", "txpool_insert_txs_enqueue_lock");
     static ref PACK_TRANSACTION_LOCK: Lock =
-        Lock::register("txpool_lock", "txpool_pack_transactions");
+        Lock::register("lock", "txpool_pack_transactions");
     static ref NOTIFY_BEST_INFO_LOCK: Lock =
-        Lock::register("txpool_lock", "txpool_notify_best_info");
+        Lock::register("lock", "txpool_notify_best_info");
     static ref NOTIFY_MODIFIED_LOCK: Lock =
-        Lock::register("txpool_lock", "txpool_notify_modified_info");
+        Lock::register("lock", "txpool_notify_modified_info");
+    static ref BENCH_INSERT_LOCK: Lock =
+        Lock::register("lock", "txpool_bench_insert_lock");
 }
 
 pub struct TxPoolConfig {
@@ -271,6 +276,31 @@ impl TransactionPool {
         }
     }
 
+    #[cfg(feature = "bypass-txpool")]
+    pub fn insert_new_transactions(
+        &self, transactions: Vec<TransactionWithSignature>,
+    ) -> (Vec<Arc<SignedTransaction>>, HashMap<H256, String>) {
+        INSERT_TPS.mark(1);
+        INSERT_TXS_TPS.mark(transactions.len());
+
+        let txs: Vec<Arc<SignedTransaction>> = transactions
+            .into_iter()
+            .map(|tx| {
+                Arc::new(SignedTransaction::new(
+                    tx.recover_public().unwrap(),
+                    tx,
+                ))
+            })
+            .collect();
+        self.inner
+            .write_with_metric(&BENCH_INSERT_LOCK)
+            .bench_transaction_queue
+            .extend(txs.clone());
+
+        (txs, Default::default())
+    }
+
+    #[cfg(not(feature = "bypass-txpool"))]
     /// Try to insert `transactions` into transaction pool.
     ///
     /// If some tx is already in our tx_cache, it will be ignored and will not
@@ -440,7 +470,7 @@ impl TransactionPool {
                 Ok(_) => index += 1,
                 Err(e) => {
                     let removed = signed_transactions.swap_remove(index);
-                    debug!("failed to insert tx into pool (validation failed), hash = {:?}, error = {:?}", removed.hash, e);
+                    warn!("failed to insert tx into pool (validation failed), hash = {:?}, error = {:?}", removed.hash, e);
                     failure.insert(removed.hash, e);
                 }
             }
@@ -564,7 +594,7 @@ impl TransactionPool {
     // Add transaction into deferred pool and maintain its readiness
     // the packed tag provided
     // if force tag is true, the replacement in nonce pool must be happened
-    pub fn add_transaction_with_readiness_check(
+    fn add_transaction_with_readiness_check(
         &self, inner: &mut TransactionPoolInner, account_cache: &AccountCache,
         transaction: Arc<SignedTransaction>, packed: bool, force: bool,
     ) -> Result<(), String>
@@ -635,20 +665,51 @@ impl TransactionPool {
         best_epoch_height += 1;
         // The best block number is not necessary an exact number.
         best_block_number += 1;
-        inner.pack_transactions(
-            num_txs,
-            block_gas_limit,
-            block_size_limit,
-            best_epoch_height,
-            best_block_number,
-            &self.verification_config,
-            &self.machine,
-        )
+        #[cfg(not(feature = "bypass-txpool"))]
+        {
+            inner.pack_transactions(
+                num_txs,
+                block_gas_limit,
+                block_size_limit,
+                best_epoch_height,
+                best_block_number,
+                &self.verification_config,
+                &self.machine,
+            )
+        }
+        #[cfg(feature = "bypass-txpool")]
+        {
+            let mut txs = Vec::with_capacity(10000);
+            let mut total_gas = U256::zero();
+            let mut total_size = 0;
+            let queue: &mut VecDeque<Arc<SignedTransaction>> =
+                &mut inner.bench_transaction_queue;
+            while let Some(tx) = queue.pop_front() {
+                total_size += tx.transaction.rlp_size.unwrap_or(0);
+                total_gas += tx.transaction.transaction.gas;
+                if txs.len() >= num_txs
+                    || total_size > block_size_limit
+                    || total_gas > block_gas_limit
+                {
+                    queue.push_front(tx);
+                    break;
+                } else {
+                    txs.push(tx.clone())
+                }
+            }
+            transaction_pool_inner::TX_POOL_PACK_TRANSACTION_TPS
+                .mark(txs.len());
+
+            txs
+        }
     }
 
     pub fn notify_modified_accounts(
         &self, accounts_from_execution: Vec<Account>,
     ) {
+        if cfg!(feature = "bypass-txpool") {
+            return;
+        }
         let mut inner = self.inner.write_with_metric(&NOTIFY_MODIFIED_LOCK);
         inner.notify_modified_accounts(accounts_from_execution)
     }
@@ -707,6 +768,10 @@ impl TransactionPool {
             *consensus_best_info = best_info.clone();
         }
         *self.config.max_tx_gas.write() = self.calc_max_tx_gas();
+
+        if cfg!(feature = "bypass-txpool") {
+            return Ok(());
+        }
 
         let account_cache = self.get_best_state_account_cache();
         let mut inner = self.inner.write_with_metric(&NOTIFY_BEST_INFO_LOCK);
@@ -844,6 +909,9 @@ impl TransactionPool {
     pub fn set_best_executed_epoch(
         &self, best_executed_epoch: StateIndex,
     ) -> StateDbResult<()> {
+        // if cfg!(feature = "bypass-txpool") {
+        //     return Ok(());
+        // }
         *self.best_executed_state.lock() =
             Self::best_executed_state(&self.data_man, best_executed_epoch)?;
 

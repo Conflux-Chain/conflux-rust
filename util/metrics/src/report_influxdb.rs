@@ -133,7 +133,7 @@ impl InfluxdbReportable for StandardMeter {
         );
         point.add_field(field("m1", prefix), Value::Float(snapshot.rate1()));
         point.add_field(field("m5", prefix), Value::Float(snapshot.rate5()));
-        point.add_field(field("m15", prefix), Value::Float(snapshot.rate15()));
+        point.add_field(field("s15", prefix), Value::Float(snapshot.rate15()));
         point.add_field(
             field("mean", prefix),
             Value::Float(snapshot.rate_mean()),

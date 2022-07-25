@@ -271,6 +271,7 @@ build_config! {
         (sync_state_epoch_gap, (Option<u64>), None)
         (target_difficulties_cache_size_in_count, (usize), DEFAULT_TARGET_DIFFICULTIES_CACHE_SIZE_IN_COUNT)
         (amt_public_params, (String), "./pp".to_string())
+        (amt_shard_size, (Option<usize>), None)
 
 
         // General/Unclassified section.
@@ -647,6 +648,7 @@ impl Configuration {
             },
             public_params_dir: Path::new(&self.raw_conf.amt_public_params)
                 .into(),
+            shard_size: self.raw_conf.amt_shard_size,
         }
     }
 

@@ -22,7 +22,7 @@ use primitives::{
 use rlp::*;
 use serde::Serialize;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -129,6 +129,7 @@ impl DeferredPool {
         }
     }
 
+    #[cfg(test)]
     fn get_lowest_nonce(&self, addr: &Address) -> Option<&U256> {
         self.buckets
             .get(addr)
@@ -336,6 +337,8 @@ pub struct TransactionPoolInner {
     /// It should contain the same transaction set as `deferred_pool`.
     txs: HashMap<H256, Arc<SignedTransaction>>,
     tx_sponsored_gas_map: HashMap<H256, (U256, u64)>,
+
+    pub bench_transaction_queue: VecDeque<Arc<SignedTransaction>>,
 }
 
 impl TransactionPoolInner {
@@ -355,6 +358,7 @@ impl TransactionPoolInner {
             garbage_collector: GarbageCollector::default(),
             txs: HashMap::new(),
             tx_sponsored_gas_map: HashMap::new(),
+            bench_transaction_queue: Default::default(),
         }
     }
 
@@ -761,6 +765,7 @@ impl TransactionPoolInner {
         Ok(nonce_and_balance)
     }
 
+    #[cfg(test)]
     pub fn get_lowest_nonce(&self, addr: &Address) -> U256 {
         let mut ret = 0.into();
         if let Some((nonce, _)) = self.get_local_nonce_and_balance(addr) {

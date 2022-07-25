@@ -15,6 +15,9 @@ pub trait TestRpc {
     #[rpc(name = "sayhello")]
     fn say_hello(&self) -> RpcResult<String>;
 
+    // #[rpc(name = "getgoodput")]
+    // fn say_hello(&self) -> RpcResult<String>;
+
     #[rpc(name = "getblockcount")]
     fn get_block_count(&self) -> RpcResult<u64>;
 

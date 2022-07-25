@@ -37,12 +37,9 @@ use parking_lot::{Condvar, Mutex};
 use primitives::{
     transaction::TransactionType, Account, Action, SignedTransaction,
 };
-use std::{
-    collections::{BTreeMap, HashSet},
-    net::SocketAddr,
-    sync::Arc,
-    time::Duration,
-};
+#[cfg(not(feature = "metric-goodput"))]
+use std::collections::HashSet;
+use std::{collections::BTreeMap, net::SocketAddr, sync::Arc, time::Duration};
 
 fn grouped_txs<T, F>(
     txs: Vec<Arc<SignedTransaction>>, converter: F,
@@ -508,6 +505,12 @@ impl RpcImpl {
         Ok(count)
     }
 
+    #[cfg(feature = "metric-goodput")]
+    pub fn get_goodput(&self) -> JsonRpcResult<String> {
+        Ok(cfxcore::consensus::consensus_inner::consensus_executor::GOOD_TPS_METER.count().to_string())
+    }
+
+    #[cfg(not(feature = "metric-goodput"))]
     pub fn get_goodput(&self) -> JsonRpcResult<String> {
         let consensus_graph = self.consensus_graph();
         info!("RPC Request: get_goodput");

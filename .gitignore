@@ -9,10 +9,11 @@ target
 .phabricator*
 build/
 # **/blockchain_db/
-**/sqlite_db/
-**/net_config/
-**/*.log
+# **/sqlite_db/
+# **/net_config/
+# **/*.log
 **/testnet.toml
 *~
 pp
 experiment_data
+eurosys

@@ -81,7 +81,7 @@ lazy_static! {
             "timer",
             "consensus::compute_state_for_block"
         );
-    static ref GOOD_TPS_METER: Arc<dyn Meter> =
+    pub static ref GOOD_TPS_METER: Arc<dyn Meter> =
         register_meter_with_group("system_metrics", "good_tps");
 }
 
@@ -1185,11 +1185,10 @@ impl ConsensusExecutionHandler {
                         tx_outcome_status =
                             TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING;
                         tx_exec_error_msg = "tx not executed".into();
-                        trace!(
+                        info!(
                             "tx not executed, not to reconsider packing: \
                              transaction={:?},err={:?}",
-                            transaction,
-                            e
+                            transaction, e
                         );
                         gas_fee = U256::zero();
                         if self.config.executive_trace {
@@ -1200,11 +1199,10 @@ impl ConsensusExecutionHandler {
                         tx_outcome_status =
                             TRANSACTION_OUTCOME_EXCEPTION_WITHOUT_NONCE_BUMPING;
                         tx_exec_error_msg = "tx not executed".into();
-                        trace!(
+                        info!(
                             "tx not executed, to reconsider packing: \
                              transaction={:?}, err={:?}",
-                            transaction,
-                            e
+                            transaction, e
                         );
                         if on_local_pivot {
                             trace!(
@@ -1245,7 +1243,7 @@ impl ConsensusExecutionHandler {
                             storage_sponsor_paid =
                                 executed.storage_sponsor_paid;
                         }
-                        debug!(
+                        info!(
                             "tx execution error: err={:?}, transaction={:?}",
                             error, transaction
                         );

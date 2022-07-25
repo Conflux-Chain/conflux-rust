@@ -110,3 +110,4 @@ amt-storage = ["cfx-storage/amt-storage", "cfx-storage-primitives/amt-storage", 
 mpt-storage = ["cfx-storage/mpt-storage", "cfx-storage-primitives/mpt-storage", "storage-dev"]
 consensus_bench=[]
 no-exec=[]
+bypass-txpool=[]
