@@ -178,15 +178,26 @@ pub fn cast_vote_gas(length: usize, spec: &Spec) -> usize {
 pub fn read_vote(
     address: Address, params: &ActionParams, context: &mut InternalRefContext,
 ) -> vm::Result<Vec<Vote>> {
+    let current_voting_version = (context.env.number
+        - context.spec.cip94_activation_block_number)
+        / context.spec.params_dao_vote_period
+        + 1;
+    let version = context
+        .storage_at(params, &storage_key::versions(&address))?
+        .as_u64();
+    let deprecated_vote = version != current_voting_version;
+
     let mut votes_list = Vec::new();
     for index in 0..PARAMETER_INDEX_MAX {
         let mut param_vote = [U256::zero(); OPTION_INDEX_MAX];
-        for opt_index in 0..OPTION_INDEX_MAX {
-            let votes = context.storage_at(
-                params,
-                &storage_key::votes(&address, index, opt_index),
-            )?;
-            param_vote[opt_index] = votes;
+        if !deprecated_vote {
+            for opt_index in 0..OPTION_INDEX_MAX {
+                let votes = context.storage_at(
+                    params,
+                    &storage_key::votes(&address, index, opt_index),
+                )?;
+                param_vote[opt_index] = votes;
+            }
         }
         votes_list.push(Vote {
             index: index as u16,
