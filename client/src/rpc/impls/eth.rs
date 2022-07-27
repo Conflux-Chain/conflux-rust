@@ -847,6 +847,19 @@ impl Eth for EthHandler {
         for (idx, tx) in phantom_block.transactions.iter().enumerate() {
             if tx.hash() == hash {
                 let tx = block_tx_by_index(Some(phantom_block), idx);
+                if let Some(tx_ref) = &tx {
+                    if tx_ref.status
+                        == Some(
+                            TransactionOutcome::Skipped
+                                .in_space(Space::Ethereum)
+                                .into(),
+                        )
+                    {
+                        // A skipped transaction is not available to clients if
+                        // accessed by its hash.
+                        return Ok(None);
+                    }
+                }
                 return Ok(tx);
             }
         }
