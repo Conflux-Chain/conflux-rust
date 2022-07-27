@@ -958,6 +958,15 @@ impl Eth for EthHandler {
                     idx,
                     &mut prior_log_index,
                 )?;
+                // A skipped transaction is not available to clients if accessed
+                // by its hash.
+                if receipt.status_code
+                    == TransactionOutcome::Skipped
+                        .in_space(Space::Ethereum)
+                        .into()
+                {
+                    return Ok(None);
+                }
 
                 return Ok(Some(receipt));
             }
