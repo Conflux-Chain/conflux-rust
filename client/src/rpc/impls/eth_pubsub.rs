@@ -153,13 +153,6 @@ impl PubSubClient {
             let mut last_epoch = 0;
             let mut epochs: VecDeque<(u64, Vec<H256>)> = VecDeque::new();
 
-            let consensus_graph = consensus
-                .as_any()
-                .downcast_ref::<ConsensusGraph>()
-                .expect("downcast should succeed");
-            let era_epoch_count =
-                consensus_graph.inner.read().inner_conf.era_epoch_count;
-
             while let Some(epoch) = receiver.recv().await {
                 trace!("logs_loop({:?}): {:?}", id, epoch);
 
@@ -202,14 +195,10 @@ impl PubSubClient {
                 last_epoch = epoch.0;
                 epochs.push_back(epoch.clone());
 
-                let mut latest_checkpoint =
-                    consensus.latest_checkpoint_epoch_number();
-                if latest_checkpoint > 0 {
-                    latest_checkpoint += era_epoch_count;
-                }
-
+                let latest_finalized_epoch_number =
+                    consensus.latest_finalized_epoch_number();
                 while let Some(e) = epochs.front() {
-                    if e.0 < latest_checkpoint {
+                    if e.0 < latest_finalized_epoch_number {
                         epochs.pop_front();
                     } else {
                         break;
