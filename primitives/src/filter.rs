@@ -213,19 +213,6 @@ pub struct LogFilterParams {
     /// If specified, log must contain one of these topics.
     pub topics: Vec<Option<Vec<H256>>>,
 
-    /// Logs offset
-    ///
-    /// If None, return all logs
-    /// If specified, should skip the *last* `n` logs.
-    pub offset: Option<usize>,
-
-    /// Logs limit
-    ///
-    /// If None, return all logs
-    /// If specified, should only return *last* `n` logs
-    /// after the offset has been applied.
-    pub limit: Option<usize>,
-
     /// Indicate if the log filter can be trusted, so we do not need to check
     /// other fields.
     ///
@@ -244,8 +231,6 @@ impl Default for LogFilterParams {
         LogFilterParams {
             address: None,
             topics: vec![None, None, None, None],
-            offset: None,
-            limit: None,
             trusted: false,
             space: Space::Native,
         }

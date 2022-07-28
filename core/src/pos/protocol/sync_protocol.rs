@@ -271,11 +271,6 @@ impl HotStuffSynchronizationProtocol {
     fn handle_error(
         &self, io: &dyn NetworkContext, peer: &NodeId, msg_id: MsgId, e: Error,
     ) {
-        warn!(
-            "Error while handling message, peer={}, msgid={:?}, error={:?}",
-            peer, msg_id, e
-        );
-
         let mut disconnect = true;
         let mut warn = false;
         let reason = format!("{}", e.0);
@@ -295,11 +290,17 @@ impl HotStuffSynchronizationProtocol {
             ErrorKind::InvalidMessageFormat => {
                 op = Some(UpdateNodeOperation::Remove)
             }
-            ErrorKind::UnknownPeer => op = Some(UpdateNodeOperation::Failure),
+            ErrorKind::UnknownPeer => {
+                warn = false;
+                op = Some(UpdateNodeOperation::Failure)
+            }
             // TODO handle the unexpected response case (timeout or real invalid
             // message type)
             ErrorKind::UnexpectedResponse => disconnect = true,
-            ErrorKind::RequestNotFound => disconnect = false,
+            ErrorKind::RequestNotFound => {
+                warn = false;
+                disconnect = false;
+            }
             ErrorKind::InCatchUpMode(_) => {
                 disconnect = false;
                 warn = false;

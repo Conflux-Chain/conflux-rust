@@ -602,6 +602,11 @@ impl RpcInterceptor for MetricsInterceptor {
                 .as_ref()
                 .map(|timer| ScopeTimer::time_scope(timer.clone())))
         });
-        Box::new(setup.then(|_timer: Result<_, ()>| method_call))
+        Box::new(setup.then(|timer: Result<_, ()>| {
+            method_call.then(|r| {
+                drop(timer);
+                r
+            })
+        }))
     }
 }

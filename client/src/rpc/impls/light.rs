@@ -2,7 +2,6 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::errors::check_rpc_address_network;
 use cfx_types::{
     AddressSpaceUtil, BigEndianHash, Space, H160, H256, H520, U128, U256, U64,
 };
@@ -33,12 +32,10 @@ use crate::{
     common::delegate_convert,
     rpc::{
         error_codes,
-        impls::{
-            common::{self, RpcImpl as CommonImpl},
-            RpcImplConfiguration,
-        },
+        impls::common::{self, RpcImpl as CommonImpl},
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
+            errors::check_rpc_address_network,
             pos::{Block as PosBlock, PoSEpochReward},
             Account as RpcAccount, AccountPendingInfo,
             AccountPendingTransactions, BlameInfo, Block as RpcBlock,
@@ -48,6 +45,7 @@ use crate::{
             PoSEconomics, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
             RpcAddress, SendTxRequest, SponsorInfo, Status as RpcStatus,
             SyncGraphStates, TokenSupplyInfo, Transaction as RpcTransaction,
+            VoteParamsInfo,
         },
         RpcBoxFuture, RpcResult,
     },
@@ -87,9 +85,6 @@ pub struct RpcImpl {
     // account provider used for signing transactions
     accounts: Arc<AccountProvider>,
 
-    // configuration parameters
-    config: RpcImplConfiguration,
-
     // consensus graph
     consensus: SharedConsensusGraph,
 
@@ -102,14 +97,12 @@ pub struct RpcImpl {
 
 impl RpcImpl {
     pub fn new(
-        config: RpcImplConfiguration, light: Arc<LightQueryService>,
-        accounts: Arc<AccountProvider>, consensus: SharedConsensusGraph,
-        data_man: Arc<BlockDataManager>,
+        light: Arc<LightQueryService>, accounts: Arc<AccountProvider>,
+        consensus: SharedConsensusGraph, data_man: Arc<BlockDataManager>,
     ) -> Self
     {
         RpcImpl {
             accounts,
-            config,
             consensus,
             data_man,
             light,
@@ -424,7 +417,6 @@ impl RpcImpl {
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
-        let get_logs_filter_max_limit = self.config.get_logs_filter_max_limit;
 
         let fut = async move {
             // all addresses specified should be for the correct network
@@ -440,16 +432,7 @@ impl RpcImpl {
                 }
             }
 
-            let mut filter = filter.into_primitive()?;
-
-            // If max_limit is set, the value in `filter` will be modified to
-            // satisfy this limitation to avoid loading too many blocks
-            // TODO Should the response indicate that the filter is modified?
-            if let Some(max_limit) = get_logs_filter_max_limit {
-                if filter.limit.is_none() || filter.limit.unwrap() > max_limit {
-                    filter.limit = Some(max_limit);
-                }
-            }
+            let filter = filter.into_primitive()?;
 
             let logs = light
                 .get_logs(filter)
@@ -1116,6 +1099,7 @@ impl Cfx for CfxHandler {
         fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> JsonRpcResult<EstimateGasAndCollateralResponse>;
         fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
         fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
+        fn get_vote_params(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<VoteParamsInfo>;
         fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
     }
 }

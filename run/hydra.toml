@@ -555,3 +555,7 @@ chain_id = 1029
 # 1030 for Mainnet (Hydra)
 #
 evm_chain_id = 1030
+hydra_transition_number = 92060600
+hydra_transition_height = 36935000
+cip43_init_end_number = 92751800
+pos_reference_enable_height = 37400000

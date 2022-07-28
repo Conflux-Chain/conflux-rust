@@ -45,19 +45,6 @@ pub struct CfxRpcLogFilter {
     /// logs with "0xA" as the 1st topic AND ("0xB" OR "0xC") as the 3rd
     /// topic. If None, match all.
     pub topics: Option<Vec<VariadicValue<H256>>>,
-
-    /// Logs offset
-    ///
-    /// If None, return all logs
-    /// If specified, should skip the *last* `n` logs.
-    pub offset: Option<U64>,
-
-    /// Logs limit
-    ///
-    /// If None, return all logs
-    /// If specified, should only return *last* `n` logs
-    /// after the offset has been applied.
-    pub limit: Option<U64>,
 }
 
 impl CfxRpcLogFilter {
@@ -66,7 +53,7 @@ impl CfxRpcLogFilter {
         let from_epoch = self
             .from_epoch
             .clone()
-            .unwrap_or(EpochNumber::LatestCheckpoint)
+            .unwrap_or(EpochNumber::LatestState)
             .into();
 
         let to_epoch = self
@@ -126,14 +113,9 @@ impl CfxRpcLogFilter {
             }
         };
 
-        let offset = self.offset.map(|x| x.as_u64() as usize);
-        let limit = self.limit.map(|x| x.as_u64() as usize);
-
         let params = LogFilterParams {
             address,
             topics,
-            offset,
-            limit,
             trusted: false,
             space: Space::Native,
         };
@@ -214,8 +196,6 @@ mod tests {
             block_hashes: None,
             address: None,
             topics: None,
-            offset: None,
-            limit: None,
         };
 
         let serialized_filter = serde_json::to_string(&filter).unwrap();
@@ -229,9 +209,7 @@ mod tests {
              \"toBlock\":null,\
              \"blockHashes\":null,\
              \"address\":null,\
-             \"topics\":null,\
-             \"offset\":null,\
-             \"limit\":null\
+             \"topics\":null\
              }"
         );
 
@@ -255,8 +233,6 @@ mod tests {
                     H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
                 ]),
             ]),
-            offset: Some(U64::from(1)),
-            limit: Some(U64::from(2)),
         };
 
         let serialized_filter = serde_json::to_string(&filter).unwrap();
@@ -273,9 +249,7 @@ mod tests {
              \"topics\":[\
                 \"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\
                 [\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\"]\
-             ],\
-             \"offset\":\"0x1\",\
-             \"limit\":\"0x2\"\
+             ]\
              }"
         );
     }
@@ -292,8 +266,6 @@ mod tests {
             block_hashes: None,
             address: None,
             topics: None,
-            offset: None,
-            limit: None,
         };
 
         let deserialized_filter: CfxRpcLogFilter =
@@ -310,9 +282,7 @@ mod tests {
              \"topics\":[\
                 \"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\
                 [\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\",\"0xd397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5\"]\
-             ],\
-             \"offset\":\"0x1\",\
-             \"limit\":\"0x2\"\
+             ]\
         }";
 
         let result_filter = CfxRpcLogFilter {
@@ -335,8 +305,6 @@ mod tests {
                     H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
                 ]),
             ]),
-            offset: Some(U64::from(1)),
-            limit: Some(U64::from(2)),
         };
 
         let deserialized_filter: CfxRpcLogFilter =
@@ -363,8 +331,6 @@ mod tests {
                     H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
                 ]),
             ]),
-            offset: Some(U64::from(1)),
-            limit: Some(U64::from(2)),
         };
 
         let primitive_epoch_filter = PrimitiveFilter::EpochLogFilter {
@@ -384,8 +350,6 @@ mod tests {
                     None,
                     None,
                 ],
-                offset: Some(1),
-                limit: Some(2),
                 trusted: false,
                 space: Space::Native,
             },
@@ -412,8 +376,6 @@ mod tests {
                     H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
                 ]),
             ]),
-            offset: Some(U64::from(1)),
-            limit: Some(U64::from(2)),
         };
 
         let primitive_block_number_filter = PrimitiveFilter::BlockNumberLogFilter {
@@ -433,8 +395,6 @@ mod tests {
                     None,
                     None,
                 ],
-                offset: Some(1),
-                limit: Some(2),
                 trusted: false,
                 space: Space::Native,
             },
@@ -467,8 +427,6 @@ mod tests {
                     H256::from_str("d397b3b043d87fcd6fad1291ff0bfd16401c274896d8c63a923727f077b8e0b5").unwrap(),
                 ]),
             ]),
-            offset: Some(U64::from(1)),
-            limit: Some(U64::from(2)),
         };
 
         let primitive_block_hash_filter = PrimitiveFilter::BlockHashLogFilter {
@@ -490,8 +448,6 @@ mod tests {
                     None,
                     None,
                 ],
-                offset: Some(1),
-                limit: Some(2),
                 trusted: false,
                 space: Space::Native,
             },

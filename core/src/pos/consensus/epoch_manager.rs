@@ -635,7 +635,7 @@ impl EpochManager {
                         self.start_new_epoch(*proof, peer_id).await?
                     );
                 } else {
-                    bail!(
+                    debug!(
                         "[EpochManager] Unexpected epoch proof from epoch {}, local epoch {}",
                         msg_epoch,
                         self.epoch()

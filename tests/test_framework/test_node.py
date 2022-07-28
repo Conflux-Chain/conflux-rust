@@ -278,6 +278,13 @@ class TestNode:
         stderr = self.stderr.read().decode('utf-8').strip()
         # TODO: Check how to avoid `pthread lock: Invalid argument`.
         if stderr != expected_stderr and stderr != "pthread lock: Invalid argument":
+            # print process status for debug
+            p = self.process.poll()
+            if p is None:
+                self.log.info("Process is still running")
+            else:
+                self.log.info("Process has terminated with code {}".format(p))
+
             raise AssertionError("Unexpected stderr {} != {} from {}:{} index={}".format(
                 stderr, expected_stderr, self.ip, self.port, self.index))
 
