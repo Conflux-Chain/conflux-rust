@@ -2114,7 +2114,9 @@ impl ConsensusNewBlockHandler {
                 );
                 pre_epoch_state_exist = true;
 
-                // Remove non-pivot state to save disk
+                // Remove old-pivot state during start up to save disk,
+                // otherwise, all state will be keep till normal phase, this
+                // will occupy too many disk
                 {
                     let mut confirmed_height = min(confirmed_epoch_num, height);
                     if confirmed_height < DEFERRED_STATE_EPOCH_COUNT {
