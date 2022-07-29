@@ -2008,7 +2008,8 @@ impl ConsensusGraphTrait for ConsensusGraph {
         // Ensure that `state_valid` of the first valid block after
         // cur_era_stable_genesis is set
         inner.recover_state_valid();
-        self.new_block_handler.construct_pivot_state(inner);
+        self.new_block_handler
+            .construct_pivot_state(inner, &self.confirmation_meter);
         inner.finish_block_recovery();
     }
 
