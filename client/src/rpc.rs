@@ -44,7 +44,7 @@ use self::{
     impls::{
         cfx::{CfxHandler, LocalRpcImpl, RpcImpl, TestRpcImpl},
         common::RpcImpl as CommonImpl,
-        eth_pubsub::PubSubClient as EthPubSubClinet,
+        eth_pubsub::PubSubClient as EthPubSubClient,
         light::{
             CfxHandler as LightCfxHandler, DebugRpcImpl as LightDebugRpcImpl,
             RpcImpl as LightImpl, TestRpcImpl as LightTestRpcImpl,
@@ -182,7 +182,7 @@ impl WsConfiguration {
 
 pub fn setup_public_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClinet, conf: &Configuration,
+    eth_pubsub: EthPubSubClient, conf: &Configuration,
 ) -> MetaIoHandler<Metadata>
 {
     setup_rpc_apis(
@@ -198,7 +198,7 @@ pub fn setup_public_rpc_apis(
 
 pub fn setup_public_eth_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClinet, conf: &Configuration,
+    eth_pubsub: EthPubSubClient, conf: &Configuration,
 ) -> MetaIoHandler<Metadata>
 {
     setup_rpc_apis(
@@ -214,7 +214,7 @@ pub fn setup_public_eth_rpc_apis(
 
 pub fn setup_debug_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClinet, conf: &Configuration,
+    eth_pubsub: EthPubSubClient, conf: &Configuration,
 ) -> MetaIoHandler<Metadata>
 {
     setup_rpc_apis(
@@ -230,7 +230,7 @@ pub fn setup_debug_rpc_apis(
 
 fn setup_rpc_apis(
     common: Arc<CommonImpl>, rpc: Arc<RpcImpl>, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClinet, throttling_conf: &Option<String>,
+    eth_pubsub: EthPubSubClient, throttling_conf: &Option<String>,
     throttling_section: &str, apis: HashSet<Api>,
 ) -> MetaIoHandler<Metadata>
 {
@@ -384,7 +384,7 @@ fn add_meta_rpc_methods(
 
 pub fn setup_public_rpc_apis_light(
     common: Arc<CommonImpl>, rpc: Arc<LightImpl>, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClinet, conf: &Configuration,
+    eth_pubsub: EthPubSubClient, conf: &Configuration,
 ) -> MetaIoHandler<Metadata>
 {
     setup_rpc_apis_light(
@@ -400,7 +400,7 @@ pub fn setup_public_rpc_apis_light(
 
 pub fn setup_debug_rpc_apis_light(
     common: Arc<CommonImpl>, rpc: Arc<LightImpl>, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClinet, conf: &Configuration,
+    eth_pubsub: EthPubSubClient, conf: &Configuration,
 ) -> MetaIoHandler<Metadata>
 {
     let mut light_debug_apis = ApiSet::All.list_apis();
@@ -418,7 +418,7 @@ pub fn setup_debug_rpc_apis_light(
 
 fn setup_rpc_apis_light(
     common: Arc<CommonImpl>, rpc: Arc<LightImpl>, pubsub: PubSubClient,
-    eth_pubsub: EthPubSubClinet, throttling_conf: &Option<String>,
+    eth_pubsub: EthPubSubClient, throttling_conf: &Option<String>,
     throttling_section: &str, apis: HashSet<Api>,
 ) -> MetaIoHandler<Metadata>
 {
