@@ -592,13 +592,16 @@ def rpc_url(i, rpchost=None, rpcport=None):
     return "http://%s:%d" % (rpchost, int(rpcport))
 
 
-def pubsub_url(i, pubsubhost=None, pubsubport=None):
+def pubsub_url(i, evm=False, pubsubhost=None, pubsubport=None):
     if pubsubhost is None:
         # Do not use localhost because our test environment doesn't support
         # IPv6 however the python http library assumes that.
         pubsubhost = "127.0.0.1"
     if pubsubport is None:
-        pubsubport = pubsub_port(i)
+        if evm:
+            pubsubport = evm_rpc_ws_port(i)
+        else:
+            pubsubport = pubsub_port(i)
     return "ws://%s:%d" % (pubsubhost, int(pubsubport))
 
 

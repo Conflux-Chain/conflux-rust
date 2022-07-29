@@ -5,6 +5,7 @@
 mod block;
 mod block_number;
 mod call_request;
+pub mod eth_pubsub;
 mod filter;
 mod log;
 mod receipt;
@@ -15,7 +16,7 @@ mod transaction;
 mod tx_pool;
 
 pub use self::{
-    block::Block,
+    block::{Block, Header},
     block_number::BlockNumber,
     call_request::CallRequest,
     filter::{EthRpcLogFilter, FilterChanges},
