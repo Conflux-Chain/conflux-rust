@@ -21,7 +21,7 @@ fn test_full_children_table_encode_decode() {
             children_table = ChildrenTableDeltaMpt::insert_child_unchecked(
                 children_table.to_ref(),
                 i,
-                NodeRefDeltaMptCompact::new(i as u32 * 16384),
+                NodeRefDeltaMptCompact::new(i as CompactNodeRef * 16384),
             );
         }
         children_table.set_child_unchecked(
@@ -47,7 +47,7 @@ fn test_non_empty_children_table_encode_decode() {
             children_table = ChildrenTableDeltaMpt::insert_child_unchecked(
                 children_table.to_ref(),
                 i,
-                NodeRefDeltaMptCompact::new(i as u32 * 16384),
+                NodeRefDeltaMptCompact::new(i as CompactNodeRef * 16384),
             );
         }
     }
@@ -80,7 +80,7 @@ fn test_trie_node_encode_decode() {
             children_table = ChildrenTableDeltaMpt::insert_child_unchecked(
                 children_table.to_ref(),
                 i,
-                NodeRefDeltaMptCompact::new(i as u32 * 16384),
+                NodeRefDeltaMptCompact::new(i as CompactNodeRef * 16384),
             );
         }
     }

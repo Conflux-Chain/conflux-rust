@@ -594,7 +594,6 @@ impl MetricsInterceptor {
 impl RpcInterceptor for MetricsInterceptor {
     fn before(&self, name: &String) -> JsonRpcResult<()> {
         self.throttle_interceptor.before(name)?;
-        debug!("before: {}", name);
         // Use a global variable here because `http` and `web3` setup different
         // interceptors for the same RPC API.
         let mut timers = METRICS_INTERCEPTOR_TIMERS.lock();

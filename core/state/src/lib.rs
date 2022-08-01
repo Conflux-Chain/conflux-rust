@@ -63,9 +63,7 @@ pub trait StateDbOps {
     ) -> Result<()>;
 }
 
-impl<StateDbStorage: StorageStateTrait> StateDbOps
-    for StateDbGeneric<StateDbStorage>
-{
+impl StateDbOps for StateDbGeneric {
     fn get_raw(&self, key: StorageKeyWithSpace) -> Result<Option<Arc<[u8]>>> {
         Self::get_raw(self, key)
     }
@@ -96,7 +94,6 @@ impl<StateDbStorage: StorageStateTrait> StateDbOps
 
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_statedb::{Result, StateDbExt, StateDbGeneric};
-use cfx_storage::StorageStateTrait;
 use cfx_types::{Address, AddressWithSpace, U256};
 use primitives::{is_default::IsDefault, StorageKeyWithSpace};
 use std::{collections::HashSet, sync::Arc};

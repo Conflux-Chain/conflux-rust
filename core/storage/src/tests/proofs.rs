@@ -89,7 +89,7 @@ fn generate_random_state(
 
     // insert 1st, 3rd, 4th, 5th 1/7 portions into state-1
     let mut state_1 = state_manager
-        .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
+        .get_state_for_next_epoch_inner(StateIndex::new_for_next_epoch(
             &epoch_id_0,
             &root_0,
             1,
@@ -141,7 +141,7 @@ fn generate_random_state(
 
     // insert 2nd, 3rd, 5th, 6th 1/7 portions into state-2
     let mut state_2 = state_manager
-        .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
+        .get_state_for_next_epoch_inner(StateIndex::new_for_next_epoch(
             &epoch_id_1,
             &root_1,
             2,
@@ -199,7 +199,7 @@ fn generate_random_state(
     );
 
     let new_state = state_manager
-        .get_state_for_next_epoch(StateIndex::new_for_next_epoch(
+        .get_state_for_next_epoch_inner(StateIndex::new_for_next_epoch(
             &epoch_id_2,
             &root_2,
             3,

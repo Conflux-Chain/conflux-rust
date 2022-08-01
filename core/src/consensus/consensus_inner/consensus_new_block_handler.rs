@@ -20,10 +20,7 @@ use crate::{
     NodeType, Notifications, SharedTransactionPool,
 };
 use cfx_parameters::{consensus::*, consensus_internal::*};
-use cfx_storage::{
-    state_manager::StateManagerTrait,
-    storage_db::SnapshotKeptToProvideSyncStatus, StateIndex,
-};
+use cfx_storage::{storage_db::SnapshotKeptToProvideSyncStatus, StateIndex};
 use cfx_types::H256;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use parking_lot::Mutex;
@@ -1963,7 +1960,7 @@ impl ConsensusNewBlockHandler {
                 if self
                     .data_man
                     .storage_manager
-                    .get_state_no_commit(
+                    .get_state_no_commit_inner(
                         StateIndex::new_for_readonly(
                             &pivot_hash,
                             &commitment.state_root_with_aux_info,
@@ -2071,7 +2068,7 @@ impl ConsensusNewBlockHandler {
                     if self
                         .data_man
                         .storage_manager
-                        .get_state_no_commit(
+                        .get_state_no_commit_inner(
                             StateIndex::new_for_readonly(
                                 &pivot_hash,
                                 &commitment.state_root_with_aux_info,

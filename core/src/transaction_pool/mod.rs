@@ -832,6 +832,7 @@ impl TransactionPool {
                 .get_state_no_commit(
                     best_executed_epoch,
                     /* try_open = */ false,
+                    None,
                 )?
                 // Safe because the state is guaranteed to be available
                 .unwrap(),

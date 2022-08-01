@@ -33,6 +33,11 @@ pub trait KeyValueDbTraitOwnedRead: KeyValueDbTypes {
     fn get_mut_with_number_key(
         &mut self, key: i64,
     ) -> Result<Option<Self::ValueType>> {
+        trace!(
+            "KeyValue:get: key={:?} {:?}",
+            key,
+            key.to_string().as_bytes()
+        );
         self.get_mut(key.to_string().as_bytes())
     }
 }
@@ -87,6 +92,11 @@ pub trait KeyValueDbTraitSingleWriter: KeyValueDbTraitOwnedRead {
     fn put_with_number_key(
         &mut self, key: i64, value: &<Self::ValueType as DbValueType>::Type,
     ) -> Result<Option<Option<Self::ValueType>>> {
+        trace!(
+            "KeyValue:put: key={:?} {:?}",
+            key,
+            key.to_string().as_bytes()
+        );
         self.put(key.to_string().as_bytes(), value)
     }
 }
@@ -240,6 +250,11 @@ impl<
     fn get_mut_with_number_key(
         &mut self, key: i64,
     ) -> Result<Option<Self::ValueType>> {
+        trace!(
+            "KeyValue:get_impl: key={:?} {:?}",
+            key,
+            key.to_string().as_bytes()
+        );
         self.get_mut_with_number_key_impl(key)
     }
 }

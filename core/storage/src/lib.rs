@@ -117,6 +117,9 @@ pub struct StorageConfiguration {
     pub path_snapshot_info_db: PathBuf,
     pub provide_more_snapshot_for_sync: Vec<ProvideExtraSnapshotSyncConfig>,
     pub max_open_mpt_count: u32,
+    pub enable_single_mpt_storage: bool,
+    pub single_mpt_space: Option<Space>,
+    pub cip90a: u64,
 }
 
 impl StorageConfiguration {
@@ -152,6 +155,9 @@ impl StorageConfiguration {
                 ProvideExtraSnapshotSyncConfig::StableCheckpoint,
             ],
             max_open_mpt_count: defaults::DEFAULT_MAX_OPEN_MPT,
+            enable_single_mpt_storage: false,
+            single_mpt_space: None,
+            cip90a: 0,
         }
     }
 }
@@ -176,6 +182,7 @@ pub use self::{
             sqlite::SqliteConnection,
         },
     },
+    replicated_state::ReplicatedState,
     state::{
         State as StorageState, StateTrait as StorageStateTrait,
         StateTraitExt as StorageStateTraitExt,
@@ -189,5 +196,7 @@ pub use self::{
 
 #[cfg(any(test, feature = "testonly_code"))]
 pub use self::tests::new_state_manager_for_unit_test as new_storage_manager_for_testing;
+use crate::impls::replicated_state;
 use cfx_internal_common::StateRootWithAuxInfo;
+use cfx_types::Space;
 use std::path::{Path, PathBuf};

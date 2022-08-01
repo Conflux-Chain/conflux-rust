@@ -30,11 +30,12 @@ impl CacheStoreUtil for CacheUtil {
     }
 }
 
+#[derive(Clone)]
 pub struct ArcDeltaDbWrapper {
     // inner will always be Some() before drop
-    inner: Option<Arc<dyn DeltaDbTrait>>,
-    lru: Option<Weak<Mutex<dyn OnDemandOpenDeltaDbInnerTrait>>>,
-    mpt_id: DeltaMptId,
+    pub inner: Option<Arc<dyn DeltaDbTrait>>,
+    pub lru: Option<Weak<Mutex<dyn OnDemandOpenDeltaDbInnerTrait>>>,
+    pub mpt_id: DeltaMptId,
 }
 
 impl ArcDeltaDbWrapper {
@@ -51,6 +52,10 @@ impl Deref for ArcDeltaDbWrapper {
 
 impl Drop for ArcDeltaDbWrapper {
     fn drop(&mut self) {
+        if self.lru.is_none() {
+            // TODO: This is for SingleMptState.
+            return;
+        }
         Weak::upgrade(self.lru.as_ref().unwrap()).map(|lru| {
             let mut lru_lock = lru.lock();
             let maybe_arc_db = self.inner.take();
@@ -76,7 +81,7 @@ impl KeyValueDbTraitRead for ArcDeltaDbWrapper {
 
 mark_kvdb_multi_reader!(ArcDeltaDbWrapper);
 
-trait OnDemandOpenDeltaDbInnerTrait: Send + Sync {
+pub trait OnDemandOpenDeltaDbInnerTrait: Send + Sync {
     fn open(&mut self, mpt_id: DeltaMptId) -> Result<ArcDeltaDbWrapper>;
     fn create(
         &mut self, snapshot_epoch_id: &EpochId, mpt_id: DeltaMptId,

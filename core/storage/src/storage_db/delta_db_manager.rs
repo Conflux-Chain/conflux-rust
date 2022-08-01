@@ -16,6 +16,8 @@ pub trait DeltaDbTrait:
     + KeyValueDbTraitRead
     + KeyValueDbTraitTransactionalDyn
     + MallocSizeOf
+    + Send
+    + Sync
 {
 }
 

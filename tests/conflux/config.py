@@ -62,5 +62,6 @@ small_local_test_conf = dict(
     min_phase_change_normal_peer_count = 1,
     dao_vote_transition_number = 2**31,
     dao_vote_transition_height = 2**31,
+    enable_single_mpt_storage = "true",
     rpc_enable_metrics = "true",
 )

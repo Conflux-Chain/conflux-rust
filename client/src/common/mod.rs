@@ -301,7 +301,7 @@ pub fn initialize_common_modules(
 
     let secret_store = Arc::new(SecretStore::new());
     let storage_manager = Arc::new(
-        StorageManager::new(conf.storage_config())
+        StorageManager::new(conf.storage_config(&node_type))
             .expect("Failed to initialize storage."),
     );
     {
@@ -370,6 +370,7 @@ pub fn initialize_common_modules(
         conf.raw_conf.chain_id,
         &initial_nodes,
     );
+    storage_manager.notify_genesis_hash(genesis_block.hash());
     let mut genesis_accounts = genesis_accounts;
     let genesis_accounts = genesis_accounts
         .drain()
