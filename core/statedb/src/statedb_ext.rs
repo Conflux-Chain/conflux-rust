@@ -8,7 +8,6 @@ use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::internal_contract_addresses::{
     PARAMS_CONTROL_CONTRACT_ADDRESS, STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
 };
-use cfx_storage::StorageStateTrait;
 use cfx_types::{AddressWithSpace, H256, U256};
 use primitives::{
     is_default::IsDefault, Account, CodeInfo, DepositList, StorageKey,
@@ -178,9 +177,7 @@ pub const POW_BASE_REWARD_KEY: &'static [u8] = b"pow_base_reward";
 //     }
 // }
 
-impl<StateDbStorage: StorageStateTrait> StateDbExt
-    for StateDbGeneric<StateDbStorage>
-{
+impl StateDbExt for StateDbGeneric {
     fn get<T>(&self, key: StorageKeyWithSpace) -> Result<Option<T>>
     where T: ::rlp::Decodable {
         match self.get_raw(key) {

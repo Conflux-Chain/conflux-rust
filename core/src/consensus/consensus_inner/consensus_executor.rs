@@ -724,6 +724,7 @@ impl ConsensusExecutor {
                     self.handler.data_man.storage_manager.get_state_no_commit(
                         state_readonly_index,
                         /* try_open = */ false,
+                        None,
                     )
                 })
             {
@@ -1952,20 +1953,26 @@ impl ConsensusExecutionHandler {
         // expire.
         let state_availability_boundary =
             self.data_man.state_availability_boundary.read();
+
         if !state_availability_boundary
-            .check_availability(best_block_header.height(), epoch_id)
+            .check_read_availability(best_block_header.height(), epoch_id)
         {
             bail!("state is not ready");
         }
         let state_index = self.data_man.get_state_readonly_index(epoch_id);
         trace!("best_block_header: {:?}", best_block_header);
         let time_stamp = best_block_header.timestamp();
+        let state_space = match tx.space() {
+            Space::Native => None,
+            Space::Ethereum => Some(Space::Ethereum),
+        };
         let mut state = State::new(StateDb::new(
             self.data_man
                 .storage_manager
                 .get_state_no_commit(
                     state_index.unwrap(),
                     /* try_open = */ true,
+                    state_space,
                 )?
                 .ok_or("state deleted")?,
         ))?;

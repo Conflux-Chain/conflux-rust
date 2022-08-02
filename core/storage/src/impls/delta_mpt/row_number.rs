@@ -4,8 +4,10 @@
 
 use super::super::errors::*;
 // TODO: make it Delta MPT only. Add another type for Persistent MPT later.
+#[cfg(not(feature = "u64_mpt_db_key"))]
 pub type RowNumberUnderlyingType = u32;
-
+#[cfg(feature = "u64_mpt_db_key")]
+pub type RowNumberUnderlyingType = u64;
 /// Because the Merkle Hash is too large to store for links to children in MPT,
 /// and it's only useful for persistence, in delta MPT we use row number as
 /// storage key.
@@ -21,7 +23,8 @@ impl RowNumber {
     /// It's an error for row number to go higher than max u32 4_294_967_296. It
     /// shouldn't happen because for 2h lifetime it requires 596523 nodes /
     /// sec.
-    pub const ROW_NUMBER_LIMIT: RowNumberUnderlyingType = 0xffffffff;
+    pub const ROW_NUMBER_LIMIT: RowNumberUnderlyingType =
+        1 << (RowNumberUnderlyingType::BITS - 1) - 1;
 
     pub fn get_next(&self) -> Result<RowNumber> {
         if self.value != Self::ROW_NUMBER_LIMIT {

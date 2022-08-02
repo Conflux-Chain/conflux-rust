@@ -11,7 +11,7 @@ use crate::{
 };
 use cfx_storage::{
     state_manager::StateIndex, utils::guarded_value::*, StorageManager,
-    StorageManagerTrait, StorageStateTrait,
+    StorageManagerTrait,
 };
 use cfx_types::{Bloom, Space, H256};
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
@@ -370,6 +370,7 @@ impl BlockDataManager {
                     &StateRootWithAuxInfo::genesis(&true_genesis_hash),
                 ),
                 /* try_open = */ false,
+                None,
             )
             .unwrap()
             .unwrap()

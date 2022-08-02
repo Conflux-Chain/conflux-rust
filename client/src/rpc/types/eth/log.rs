@@ -59,7 +59,7 @@ pub struct Log {
 
 impl Log {
     pub fn try_from_localized(
-        e: LocalizedLogEntry, consensus: SharedConsensusGraph,
+        e: LocalizedLogEntry, consensus: SharedConsensusGraph, removed: bool,
     ) -> Result<Log, RpcError> {
         // find pivot hash
         let epoch = consensus
@@ -85,7 +85,7 @@ impl Log {
             transaction_index: e.transaction_index.into(),
             log_index: Some(e.log_index.into()),
             transaction_log_index: Some(e.transaction_log_index.into()),
-            removed: false,
+            removed,
         })
     }
 
