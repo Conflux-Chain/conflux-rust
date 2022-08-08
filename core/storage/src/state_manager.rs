@@ -30,13 +30,25 @@ pub trait StateManagerTrait {
     ///
     /// With try_open == true, the call fails immediately when the max number of
     /// snapshot open is reached.
+    ///
+    /// If `space` is `None`, we need data from all spaces.
     fn get_state_no_commit(
         self: &Arc<Self>, epoch_id: StateIndex, try_open: bool,
-    ) -> Result<Option<State>>;
+        space: Option<Space>,
+    ) -> Result<Option<Box<dyn StateTrait>>>;
     fn get_state_for_next_epoch(
         self: &Arc<Self>, parent_epoch_id: StateIndex,
-    ) -> Result<Option<State>>;
-    fn get_state_for_genesis_write(self: &Arc<Self>) -> State;
+    ) -> Result<Option<Box<dyn StateTrait>>>;
+    fn get_state_for_genesis_write(self: &Arc<Self>) -> Box<dyn StateTrait>;
+}
+
+pub trait ReplicatedStateManagerTrait {
+    fn get_replicated_state_for_next_epoch(
+        self: &Arc<Self>, parent_epoch_id: StateIndex,
+    ) -> Result<Option<Box<dyn StateTrait>>>;
+    fn get_replicated_state_for_genesis_write(
+        self: &Arc<Self>,
+    ) -> Box<dyn StateTrait>;
 }
 
 impl StateIndex {
@@ -120,7 +132,8 @@ impl StateIndex {
     }
 }
 
-use crate::{impls::errors::*, state::State, StateRootWithAuxInfo};
+use crate::{impls::errors::*, state::StateTrait, StateRootWithAuxInfo};
+use cfx_types::Space;
 use primitives::{
     DeltaMptKeyPadding, EpochId, MerkleHash, GENESIS_DELTA_MPT_KEY_PADDING,
     MERKLE_NULL_NODE, NULL_EPOCH,

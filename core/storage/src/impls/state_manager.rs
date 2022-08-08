@@ -36,6 +36,7 @@ pub struct StateTrees {
 #[derive(MallocSizeOfDerive)]
 pub struct StateManager {
     storage_manager: Arc<StorageManager>,
+    single_mpt_storage_manager: Option<Arc<SingleMptStorageManager>>,
     pub number_committed_nodes: AtomicUsize,
 }
 
@@ -47,10 +48,26 @@ impl StateManager {
     pub fn new(conf: StorageConfiguration) -> Result<Self> {
         debug!("Storage conf {:?}", conf);
 
-        let storage_manager = StorageManager::new_arc(conf)?;
+        let single_mpt_storage_manager = if conf.enable_single_mpt_storage {
+            Some(SingleMptStorageManager::new_arc(
+                conf.path_storage_dir.join("single_mpt"),
+                conf.single_mpt_space,
+                if conf.single_mpt_space == Some(Space::Ethereum) {
+                    // The eSpace state is only available after cip90 is
+                    // enabled.
+                    conf.cip90a
+                } else {
+                    0
+                },
+            ))
+        } else {
+            None
+        };
 
+        let storage_manager = StorageManager::new_arc(conf)?;
         Ok(Self {
             storage_manager,
+            single_mpt_storage_manager,
             number_committed_nodes: Default::default(),
         })
     }
@@ -543,10 +560,8 @@ impl StateManager {
             }),
         )
     }
-}
 
-impl StateManagerTrait for StateManager {
-    fn get_state_no_commit(
+    pub fn get_state_no_commit_inner(
         self: &Arc<Self>, state_index: StateIndex, try_open: bool,
     ) -> Result<Option<State>> {
         let maybe_state_trees = self.get_state_trees(&state_index, try_open)?;
@@ -558,7 +573,7 @@ impl StateManagerTrait for StateManager {
         }
     }
 
-    fn get_state_for_genesis_write(self: &Arc<Self>) -> State {
+    fn get_state_for_genesis_write_inner(self: &Arc<Self>) -> State {
         State::new(
             self.clone(),
             StateTrees {
@@ -603,7 +618,7 @@ impl StateManagerTrait for StateManager {
     //
     // Due to the complexity of the latter approach, we stay with the
     // simple approach.
-    fn get_state_for_next_epoch(
+    pub fn get_state_for_next_epoch_inner(
         self: &Arc<Self>, parent_epoch_id: StateIndex,
     ) -> Result<Option<State>> {
         let maybe_state_trees = self.get_state_trees_for_next_epoch(
@@ -617,17 +632,145 @@ impl StateManagerTrait for StateManager {
             }
         }
     }
+
+    pub fn notify_genesis_hash(&self, genesis_hash: EpochId) {
+        if let Some(single_mpt_manager) = &self.single_mpt_storage_manager {
+            *single_mpt_manager.genesis_hash.lock() = genesis_hash;
+        }
+    }
+}
+
+impl StateManagerTrait for StateManager {
+    fn get_state_no_commit(
+        self: &Arc<Self>, state_index: StateIndex, try_open: bool,
+        space: Option<Space>,
+    ) -> Result<Option<Box<dyn StateTrait>>>
+    {
+        let maybe_state_trees = self.get_state_trees(&state_index, try_open);
+        // If there is an error, we will continue to search for an available
+        // single_mpt.
+        let maybe_state_err = match maybe_state_trees {
+            Ok(Some(state_trees)) => {
+                return Ok(Some(Box::new(State::new(
+                    self.clone(),
+                    state_trees,
+                ))));
+            }
+            Err(e) => Err(e),
+            Ok(None) => Ok(None),
+        };
+        if self.single_mpt_storage_manager.is_none() {
+            return maybe_state_err;
+        }
+        let single_mpt_storage_manager =
+            self.single_mpt_storage_manager.as_ref().unwrap();
+        if !single_mpt_storage_manager.contains_space(&space) {
+            return maybe_state_err;
+        }
+        debug!(
+            "read state from single mpt state: epoch={}",
+            state_index.epoch_id
+        );
+        let single_mpt_state = single_mpt_storage_manager
+            .get_state_by_epoch(state_index.epoch_id)?;
+        if single_mpt_state.is_none() {
+            warn!("single mpt state missing: epoch={:?}", state_index.epoch_id);
+            return maybe_state_err;
+        } else {
+            Ok(Some(Box::new(single_mpt_state.unwrap())))
+        }
+    }
+
+    fn get_state_for_genesis_write(self: &Arc<Self>) -> Box<dyn StateTrait> {
+        let state = self.get_state_for_genesis_write_inner();
+        if self.single_mpt_storage_manager.is_none() {
+            return Box::new(state);
+        }
+        let single_mpt_storage_manager =
+            self.single_mpt_storage_manager.as_ref().unwrap();
+        let single_mpt_state = single_mpt_storage_manager
+            .get_state_for_genesis()
+            .expect("single_mpt genesis initialize error");
+        Box::new(ReplicatedState::new(
+            state,
+            single_mpt_state,
+            single_mpt_storage_manager.get_state_filter(),
+        ))
+    }
+
+    // Currently we use epoch number to decide whether or not to
+    // start a new delta trie. The value of parent_epoch_id is only
+    // known after the computation is done.
+    //
+    // If we use delta trie size upper bound to decide whether or not
+    // to start a new delta trie, then the computation about whether
+    // or not start a new delta trie, can only be done at the time
+    // of committing. In this scenario, the execution engine should
+    // first get the state assuming that the delta trie won't change,
+    // then check if committing fails due to over size, and if so,
+    // start a new delta trie and re-apply the change.
+    //
+    // Due to the complexity of the latter approach, we stay with the
+    // simple approach.
+    fn get_state_for_next_epoch(
+        self: &Arc<Self>, parent_epoch_id: StateIndex,
+    ) -> Result<Option<Box<dyn StateTrait>>> {
+        let mut parent_epoch = parent_epoch_id.epoch_id;
+        let parent_height = parent_epoch_id.maybe_height;
+        let state = self.get_state_for_next_epoch_inner(parent_epoch_id)?;
+        if state.is_none() {
+            return Ok(None);
+        }
+        if self.single_mpt_storage_manager.is_none() {
+            return Ok(Some(Box::new(state.unwrap())));
+        }
+        let single_mpt_storage_manager =
+            self.single_mpt_storage_manager.as_ref().unwrap();
+        if let Some(parent_height) = parent_height {
+            trace!(
+                "get_state_for_next_epoch: parent={}, available={}",
+                parent_height,
+                single_mpt_storage_manager.available_height
+            );
+            if single_mpt_storage_manager.available_height > parent_height {
+                return Ok(Some(Box::new(state.unwrap())));
+            } else if single_mpt_storage_manager.available_height
+                == parent_height
+            {
+                // For the first available single_mpt state, we read the genesis
+                // block state as the parent state to continue execution.
+                // This is only needed for tests because there is no eSpace
+                // state entries for Conflux Mainnet.
+                parent_epoch = *single_mpt_storage_manager.genesis_hash.lock();
+            }
+        }
+        let single_mpt_state =
+            single_mpt_storage_manager.get_state_by_epoch(parent_epoch)?;
+        if single_mpt_state.is_none() {
+            error!("get_state_for_next_epoch: single_mpt_state is required but is not found!");
+            return Ok(None);
+        }
+        Ok(Some(Box::new(ReplicatedState::new(
+            state.unwrap(),
+            single_mpt_state.unwrap(),
+            single_mpt_storage_manager.get_state_filter(),
+        ))))
+    }
 }
 
 use crate::{
     impls::{
         delta_mpt::*,
         errors::*,
+        replicated_state::ReplicatedState,
         storage_db::{
             delta_db_manager_rocksdb::DeltaDbManagerRocksdb,
             snapshot_db_manager_sqlite::SnapshotDbManagerSqlite,
         },
-        storage_manager::storage_manager::StorageManager,
+        storage_manager::{
+            single_mpt_storage_manager::SingleMptStorageManager,
+            storage_manager::StorageManager,
+        },
     },
     state::*,
     state_manager::*,
@@ -635,6 +778,7 @@ use crate::{
     utils::guarded_value::GuardedValue,
     StorageConfiguration,
 };
+use cfx_types::Space;
 use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
 use primitives::{
     DeltaMptKeyPadding, EpochId, MerkleHash, StorageKeyWithSpace,

@@ -6,12 +6,12 @@ use crate::{
     block_data_manager::BlockDataManager,
     consensus::{BestInformation, ConsensusConfig, TransactionInfo},
     rpc_errors::Result as RpcResult,
-    state::State,
     statistics::SharedStatistics,
     transaction_pool::SharedTransactionPool,
     ConsensusGraph,
 };
 use cfx_statedb::StateDb;
+use cfx_storage::StorageState;
 use cfx_types::{AllChainID, H256, U256};
 use primitives::{EpochId, EpochNumber, SignedTransaction};
 use std::{any::Any, collections::HashSet, sync::Arc};
@@ -70,6 +70,8 @@ pub trait ConsensusGraphTrait: Send + Sync {
         &self, epoch_number: EpochNumber,
     ) -> Result<Vec<H256>, String>;
 
+    /// Return transaction info for clients.
+    /// Note that the skipped transactions (status == 2) will not be returned.
     fn get_transaction_info_by_hash(
         &self, hash: &H256,
     ) -> Option<(SignedTransaction, TransactionInfo)>;
@@ -90,13 +92,17 @@ pub trait ConsensusGraphTrait: Send + Sync {
 
     fn set_initial_sequence_number(&self, initial_sn: u64);
 
-    fn get_state_by_epoch_number(
-        &self, epoch_number: EpochNumber, rpc_param_name: &str,
-    ) -> RpcResult<State>;
-
     fn get_state_db_by_epoch_number(
         &self, epoch_number: EpochNumber, rpc_param_name: &str,
     ) -> RpcResult<StateDb>;
+
+    fn get_eth_state_db_by_epoch_number(
+        &self, epoch_number: EpochNumber, rpc_param_name: &str,
+    ) -> RpcResult<StateDb>;
+
+    fn get_storage_state_by_epoch_number(
+        &self, epoch_number: EpochNumber, rpc_param_name: &str,
+    ) -> RpcResult<StorageState>;
 
     fn get_blocks_needing_bodies(&self) -> HashSet<H256>;
 

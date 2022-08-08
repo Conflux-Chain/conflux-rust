@@ -11,11 +11,12 @@ from jsonrpcclient.requests import Request
 from test_framework.util import pubsub_url
 
 class PubSubClient:
-    def __init__(self, node):
+    def __init__(self, node, evm=False):
         self.buffer = {}
         self.nid = node.index
-        self.url = pubsub_url(node.index, node.rpchost, node.pubsubport)
+        self.url = pubsub_url(node.index, evm, node.rpchost, node.ethwsport if evm else node.pubsubport)
         self.ws = None
+        self.evm = evm
 
     async def subscribe(self, topic, *args):
         # connect if necessary
@@ -23,24 +24,27 @@ class PubSubClient:
             self.ws = await websockets.connect(self.url)
 
         # subscribe
-        req = Request("cfx_subscribe", topic, *args)
+        method = "eth_subscribe" if self.evm else "cfx_subscribe"
+        req = Request(method, topic, *args)
         resp = await WebSocketsClient(self.ws).send(req)
 
         # initialize buffer
         id = resp.data.result
         self.buffer[id] = []
-        return Subscription(self, id)
+        return Subscription(self, id, self.evm)
 
 class Subscription:
-    def __init__(self, pubsub, id):
+    def __init__(self, pubsub, id, evm):
         self.pubsub = pubsub
         self.id = id
+        self.evm = evm
 
     async def unsubscribe(self):
         assert(self.pubsub.ws != None)
 
         # unsubscribe
-        req = Request("cfx_unsubscribe", self.id)
+        method = "eth_unsubscribe" if self.evm else "cfx_unsubscribe"
+        req = Request(method, self.id)
         resp = await WebSocketsClient(self.pubsub.ws).send(req)
         assert(resp.data.result == True)
 

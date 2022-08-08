@@ -293,142 +293,16 @@ impl StateTrait for State {
     /// key/value pairs in Intermediate Trie and Snapshot DB, we try to
     /// enumerate all key/value pairs and set tombstone in Delta Trie only when
     /// necessary.
-    ///
-    /// When AM is Read, only calculate the key values to be deleted.
-    fn delete_all<AM: access_mode::AccessMode>(
+    fn delete_all(
         &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> Result<Option<Vec<MptKeyValue>>> {
-        if AM::is_read_only() {
-            self.ensure_temp_slab_for_db_load();
-        } else {
-            self.pre_modification();
-        }
+        self.delete_all_impl::<access_mode::Write>(access_key_prefix)
+    }
 
-        // Retrieve and delete key/value pairs from delta trie
-        let delta_trie_kvs = match &self.delta_trie_root {
-            None => None,
-            Some(old_root_node) => {
-                let delta_mpt_key_prefix = access_key_prefix
-                    .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
-                let deleted = if AM::is_read_only() {
-                    SubTrieVisitor::new(
-                        &self.delta_trie,
-                        old_root_node.clone(),
-                        &mut self.owned_node_set,
-                    )?
-                    .traversal(&delta_mpt_key_prefix, &delta_mpt_key_prefix)?
-                } else {
-                    let (deleted, _, root_node) = SubTrieVisitor::new(
-                        &self.delta_trie,
-                        old_root_node.clone(),
-                        &mut self.owned_node_set,
-                    )?
-                    .delete_all(&delta_mpt_key_prefix, &delta_mpt_key_prefix)?;
-                    self.delta_trie_root =
-                        root_node.map(|maybe_node| maybe_node.into());
-
-                    deleted
-                };
-                deleted
-            }
-        };
-
-        // Retrieve key/value pairs from intermediate trie
-        let intermediate_trie_kvs = match &self.intermediate_trie_root {
-            None => None,
-            Some(root_node) => {
-                if self.maybe_intermediate_trie_key_padding.is_some()
-                    && self.maybe_intermediate_trie.is_some()
-                {
-                    let intermediate_trie_key_padding = self
-                        .maybe_intermediate_trie_key_padding
-                        .as_ref()
-                        .unwrap();
-                    let intermediate_mpt_key_prefix = access_key_prefix
-                        .to_delta_mpt_key_bytes(intermediate_trie_key_padding);
-                    let values = SubTrieVisitor::new(
-                        self.maybe_intermediate_trie.as_ref().unwrap(),
-                        root_node.clone(),
-                        &mut self.owned_node_set,
-                    )?
-                    .traversal(
-                        &intermediate_mpt_key_prefix,
-                        &intermediate_mpt_key_prefix,
-                    )?;
-
-                    values
-                } else {
-                    None
-                }
-            }
-        };
-
-        // Retrieve key/value pairs from snapshot
-        let mut kv_iterator = self.snapshot_db.snapshot_kv_iterator()?.take();
-        let lower_bound_incl = access_key_prefix.to_key_bytes();
-        let upper_bound_excl =
-            to_key_prefix_iter_upper_bound(&lower_bound_incl);
-        let mut kvs = kv_iterator
-            .iter_range(
-                lower_bound_incl.as_slice(),
-                upper_bound_excl.as_ref().map(|v| &**v),
-            )?
-            .take();
-
-        let mut snapshot_kvs = Vec::new();
-        while let Some((key, value)) = kvs.next()? {
-            snapshot_kvs.push((key, value));
-        }
-
-        let mut result = Vec::new();
-        // This is used to keep track of the deleted keys.
-        let mut deleted_keys = HashSet::new();
-        if let Some(kvs) = delta_trie_kvs {
-            for (k, v) in kvs {
-                let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
-                let k = storage_key.to_key_bytes();
-                deleted_keys.insert(k.clone());
-                if v.len() > 0 {
-                    result.push((k, v));
-                }
-            }
-        }
-
-        if let Some(kvs) = intermediate_trie_kvs {
-            for (k, v) in kvs {
-                let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
-                // Only delete non-empty keys.
-                if v.len() > 0 && !AM::is_read_only() {
-                    self.delete(storage_key)?;
-                }
-                let k = storage_key.to_key_bytes();
-                if !deleted_keys.contains(&k) {
-                    deleted_keys.insert(k.clone());
-                    if v.len() > 0 {
-                        result.push((k, v));
-                    }
-                }
-            }
-        }
-
-        // No need to check v.len() because there are no tombStone values in
-        // snapshot.
-        for (k, v) in snapshot_kvs {
-            let storage_key =
-                StorageKeyWithSpace::from_key_bytes::<SkipInputCheck>(&k);
-            if !AM::is_read_only() {
-                self.delete(storage_key)?;
-            }
-            if !deleted_keys.contains(&k) {
-                result.push((k, v));
-            }
-        }
-
-        if result.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(result))
-        }
+    fn read_all(
+        &mut self, access_key_prefix: StorageKeyWithSpace,
+    ) -> Result<Option<Vec<MptKeyValue>>> {
+        self.delete_all_impl::<access_mode::Read>(access_key_prefix)
     }
 
     fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo> {
@@ -641,6 +515,37 @@ impl StateTraitExt for State {
     }
 }
 
+impl StateDbGetOriginalMethods for State {
+    fn get_original_raw_with_proof(
+        &self, key: StorageKeyWithSpace,
+    ) -> Result<(Option<Box<[u8]>>, StateProof)> {
+        let r = Ok(self.get_with_proof(key)?);
+        trace!("get_original_raw_with_proof key={:?}, value={:?}", key, r);
+        r
+    }
+
+    fn get_original_storage_root(
+        &self, address: &AddressWithSpace,
+    ) -> Result<StorageRoot> {
+        let key = StorageKey::new_storage_root_key(&address.address)
+            .with_space(address.space);
+
+        let (root, _) = self.get_node_merkle_all_versions::<NoProof>(key)?;
+
+        Ok(root)
+    }
+
+    fn get_original_storage_root_with_proof(
+        &self, address: &AddressWithSpace,
+    ) -> Result<(StorageRoot, StorageRootProof)> {
+        let key = StorageKey::new_storage_root_key(&address.address)
+            .with_space(address.space);
+
+        self.get_node_merkle_all_versions::<WithProof>(key)
+            .map_err(Into::into)
+    }
+}
+
 impl State {
     fn ensure_temp_slab_for_db_load(&self) {
         self.delta_trie.get_node_memory_manager().enlarge().ok();
@@ -828,6 +733,7 @@ impl State {
                 );
             }
         }
+        trace!("root after commit: {:?}", self.delta_trie_root);
 
         commit_transaction.transaction.put(
             ["parent_epoch_id_".as_bytes(), epoch_id.as_ref()]
@@ -895,6 +801,152 @@ impl State {
             );
         }
     }
+
+    /// Delete all key/value pairs with access_key_prefix as prefix. These
+    /// key/value pairs exist in three places: Delta Trie, Intermediate Trie
+    /// and Snapshot DB.
+    ///
+    /// For key/value pairs in Delta Trie, we can simply delete them. For
+    /// key/value pairs in Intermediate Trie and Snapshot DB, we try to
+    /// enumerate all key/value pairs and set tombstone in Delta Trie only when
+    /// necessary.
+    ///
+    /// When AM is Read, only calculate the key values to be deleted.
+    fn delete_all_impl<AM: access_mode::AccessMode>(
+        &mut self, access_key_prefix: StorageKeyWithSpace,
+    ) -> Result<Option<Vec<MptKeyValue>>> {
+        if AM::is_read_only() {
+            self.ensure_temp_slab_for_db_load();
+        } else {
+            self.pre_modification();
+        }
+
+        // Retrieve and delete key/value pairs from delta trie
+        let delta_trie_kvs = match &self.delta_trie_root {
+            None => None,
+            Some(old_root_node) => {
+                let delta_mpt_key_prefix = access_key_prefix
+                    .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
+                let deleted = if AM::is_read_only() {
+                    SubTrieVisitor::new(
+                        &self.delta_trie,
+                        old_root_node.clone(),
+                        &mut self.owned_node_set,
+                    )?
+                    .traversal(&delta_mpt_key_prefix, &delta_mpt_key_prefix)?
+                } else {
+                    let (deleted, _, root_node) = SubTrieVisitor::new(
+                        &self.delta_trie,
+                        old_root_node.clone(),
+                        &mut self.owned_node_set,
+                    )?
+                    .delete_all(&delta_mpt_key_prefix, &delta_mpt_key_prefix)?;
+                    self.delta_trie_root =
+                        root_node.map(|maybe_node| maybe_node.into());
+
+                    deleted
+                };
+                deleted
+            }
+        };
+
+        // Retrieve key/value pairs from intermediate trie
+        let intermediate_trie_kvs = match &self.intermediate_trie_root {
+            None => None,
+            Some(root_node) => {
+                if self.maybe_intermediate_trie_key_padding.is_some()
+                    && self.maybe_intermediate_trie.is_some()
+                {
+                    let intermediate_trie_key_padding = self
+                        .maybe_intermediate_trie_key_padding
+                        .as_ref()
+                        .unwrap();
+                    let intermediate_mpt_key_prefix = access_key_prefix
+                        .to_delta_mpt_key_bytes(intermediate_trie_key_padding);
+                    let values = SubTrieVisitor::new(
+                        self.maybe_intermediate_trie.as_ref().unwrap(),
+                        root_node.clone(),
+                        &mut self.owned_node_set,
+                    )?
+                    .traversal(
+                        &intermediate_mpt_key_prefix,
+                        &intermediate_mpt_key_prefix,
+                    )?;
+
+                    values
+                } else {
+                    None
+                }
+            }
+        };
+
+        // Retrieve key/value pairs from snapshot
+        let mut kv_iterator = self.snapshot_db.snapshot_kv_iterator()?.take();
+        let lower_bound_incl = access_key_prefix.to_key_bytes();
+        let upper_bound_excl =
+            to_key_prefix_iter_upper_bound(&lower_bound_incl);
+        let mut kvs = kv_iterator
+            .iter_range(
+                lower_bound_incl.as_slice(),
+                upper_bound_excl.as_ref().map(|v| &**v),
+            )?
+            .take();
+
+        let mut snapshot_kvs = Vec::new();
+        while let Some((key, value)) = kvs.next()? {
+            snapshot_kvs.push((key, value));
+        }
+
+        let mut result = Vec::new();
+        // This is used to keep track of the deleted keys.
+        let mut deleted_keys = HashSet::new();
+        if let Some(kvs) = delta_trie_kvs {
+            for (k, v) in kvs {
+                let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
+                let k = storage_key.to_key_bytes();
+                deleted_keys.insert(k.clone());
+                if v.len() > 0 {
+                    result.push((k, v));
+                }
+            }
+        }
+
+        if let Some(kvs) = intermediate_trie_kvs {
+            for (k, v) in kvs {
+                let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
+                // Only delete non-empty keys.
+                if v.len() > 0 && !AM::is_read_only() {
+                    self.delete(storage_key)?;
+                }
+                let k = storage_key.to_key_bytes();
+                if !deleted_keys.contains(&k) {
+                    deleted_keys.insert(k.clone());
+                    if v.len() > 0 {
+                        result.push((k, v));
+                    }
+                }
+            }
+        }
+
+        // No need to check v.len() because there are no tombStone values in
+        // snapshot.
+        for (k, v) in snapshot_kvs {
+            let storage_key =
+                StorageKeyWithSpace::from_key_bytes::<SkipInputCheck>(&k);
+            if !AM::is_read_only() {
+                self.delete(storage_key)?;
+            }
+            if !deleted_keys.contains(&k) {
+                result.push((k, v));
+            }
+        }
+
+        if result.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(result))
+        }
+    }
 }
 
 use crate::{
@@ -912,13 +964,15 @@ use crate::{
     state::*,
     storage_db::*,
     utils::{access_mode, to_key_prefix_iter_upper_bound},
+    StorageRootProof,
 };
 use cfx_internal_common::{StateRootAuxInfo, StateRootWithAuxInfo};
+use cfx_types::AddressWithSpace;
 use fallible_iterator::FallibleIterator;
 use primitives::{
     DeltaMptKeyPadding, EpochId, MerkleHash, MptValue, NodeMerkleTriplet,
-    SkipInputCheck, StateRoot, StaticBool, StorageKeyWithSpace,
-    MERKLE_NULL_NODE, NULL_EPOCH,
+    SkipInputCheck, StateRoot, StaticBool, StorageKey, StorageKeyWithSpace,
+    StorageRoot, MERKLE_NULL_NODE, NULL_EPOCH,
 };
 use rustc_hex::ToHex;
 use std::{

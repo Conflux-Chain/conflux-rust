@@ -108,6 +108,7 @@ serial_test = "0.5.1"
 # we have to define a feature for test code.
 # https://users.rust-lang.org/t/cfg-test-doesnt-propagate-to-external-crates/13046
 testonly_code = []
+u64_mpt_db_key = ["cfx-storage/u64_mpt_db_key"]
 
 [[bench]]
 name = "benchmark"

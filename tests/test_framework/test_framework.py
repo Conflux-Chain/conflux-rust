@@ -181,7 +181,6 @@ class ConfluxTestFramework:
             type=int)
         self.add_options(parser)
         self.options = parser.parse_args()
-        self.after_options_parsed()
 
         PortMin.n = self.options.port_min
 
@@ -204,6 +203,8 @@ class ConfluxTestFramework:
 
         if self.options.random_seed is not None:
             random.seed(self.options.random_seed)
+
+        self.after_options_parsed()
 
         try:
             if self.options.usecli and not self.supports_cli:

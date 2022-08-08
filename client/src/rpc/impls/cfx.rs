@@ -9,7 +9,7 @@ use crate::rpc::types::{
 };
 use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
-use cfx_statedb::{StateDbExt, StateDbGetOriginalMethods};
+use cfx_statedb::StateDbExt;
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H256, H520, U128, U256,
     U64,
@@ -33,7 +33,8 @@ use parking_lot::Mutex;
 use primitives::{
     filter::LogFilter, Account, Block, BlockReceipts, DepositInfo,
     SignedTransaction, StorageKey, StorageRoot, StorageValue, Transaction,
-    TransactionIndex, TransactionWithSignature, VoteStakeInfo,
+    TransactionIndex, TransactionOutcome, TransactionWithSignature,
+    VoteStakeInfo,
 };
 use random_crash::*;
 use rlp::Rlp;
@@ -73,6 +74,7 @@ use cfx_addr::Network;
 use cfx_parameters::{
     consensus_internal::REWARD_EPOCH_COUNT, staking::BLOCKS_PER_YEAR,
 };
+use cfx_storage::state::StateDbGetOriginalMethods;
 use cfxcore::{
     consensus::{MaybeExecutedTxExtraInfo, TransactionInfo},
     consensus_parameters::DEFERRED_STATE_EPOCH_COUNT,
@@ -81,6 +83,7 @@ use cfxcore::{
     spec::genesis::{
         genesis_contract_address_four_year, genesis_contract_address_two_year,
     },
+    state::State,
 };
 use diem_types::account_address::AccountAddress;
 use serde::Serialize;
@@ -577,7 +580,7 @@ impl RpcImpl {
 
         let root = self
             .consensus
-            .get_state_db_by_epoch_number(epoch_num, "epoch_num")?
+            .get_storage_state_by_epoch_number(epoch_num, "epoch_num")?
             .get_original_storage_root(
                 &address.hex_address.with_native_space(),
             )?;
@@ -796,7 +799,17 @@ impl RpcImpl {
                 Some(res) => res,
             };
 
-        self.construct_rpc_receipt(tx_index, &exec_info)
+        let receipt = self.construct_rpc_receipt(tx_index, &exec_info)?;
+        if let Some(r) = &receipt {
+            // A skipped transaction is not available to clients if accessed by
+            // its hash.
+            if r.outcome_status
+                == TransactionOutcome::Skipped.in_space(Space::Native).into()
+            {
+                return Ok(None);
+            }
+        }
+        Ok(receipt)
     }
 
     fn prepare_block_receipts(
@@ -1286,15 +1299,13 @@ impl RpcImpl {
             bail!(JsonRpcError::invalid_params(format!("storage_limit has to be within the range of u64 but {} supplied!", storage_limit)));
         }
 
-        let state = self
-            .consensus
-            .get_state_by_epoch_number(epoch.clone(), "epoch")?;
         let state_db = self
             .consensus
             .get_state_db_by_epoch_number(epoch, "epoch")?;
 
         let user_account = state_db.get_account(&account_addr)?;
         let contract_account = state_db.get_account(&contract_addr)?;
+        let state = State::new(state_db)?;
         let is_sponsored = state.check_commission_privilege(
             &contract_addr.address,
             &account_addr.address,
@@ -1425,7 +1436,10 @@ impl RpcImpl {
         &self, epoch: Option<EpochNumber>,
     ) -> RpcResult<TokenSupplyInfo> {
         let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
-        let state = self.consensus.get_state_by_epoch_number(epoch, "epoch")?;
+        let state = State::new(
+            self.consensus
+                .get_state_db_by_epoch_number(epoch, "epoch")?,
+        )?;
         let total_issued = state.total_issued_tokens();
         let total_staking = state.total_staking_tokens();
         let total_collateral = state.total_storage_tokens();

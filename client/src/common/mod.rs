@@ -61,7 +61,7 @@ use crate::{
         extractor::RpcExtractor,
         impls::{
             cfx::RpcImpl, common::RpcImpl as CommonRpcImpl,
-            pubsub::PubSubClient,
+            eth_pubsub::PubSubClient as EthPubSubClient, pubsub::PubSubClient,
         },
         setup_debug_rpc_apis, setup_public_eth_rpc_apis, setup_public_rpc_apis,
     },
@@ -230,6 +230,7 @@ pub fn initialize_common_modules(
         Arc<Notifications>,
         PubSubClient,
         Runtime,
+        EthPubSubClient,
     ),
     String,
 >
@@ -300,7 +301,7 @@ pub fn initialize_common_modules(
 
     let secret_store = Arc::new(SecretStore::new());
     let storage_manager = Arc::new(
-        StorageManager::new(conf.storage_config())
+        StorageManager::new(conf.storage_config(&node_type))
             .expect("Failed to initialize storage."),
     );
     {
@@ -369,6 +370,7 @@ pub fn initialize_common_modules(
         conf.raw_conf.chain_id,
         &initial_nodes,
     );
+    storage_manager.notify_genesis_hash(genesis_block.hash());
     let mut genesis_accounts = genesis_accounts;
     let genesis_accounts = genesis_accounts
         .drain()
@@ -501,6 +503,13 @@ pub fn initialize_common_modules(
         notifications.clone(),
         *network.get_network_type(),
     );
+
+    let eth_pubsub = EthPubSubClient::new(
+        runtime.executor(),
+        consensus.clone(),
+        notifications.clone(),
+    );
+
     Ok((
         machine,
         secret_store,
@@ -517,6 +526,7 @@ pub fn initialize_common_modules(
         notifications,
         pubsub,
         runtime,
+        eth_pubsub,
     ))
 }
 
@@ -561,6 +571,7 @@ pub fn initialize_not_light_node_modules(
         _notifications,
         pubsub,
         runtime,
+        eth_pubsub,
     ) = initialize_common_modules(conf, exit.clone(), node_type)?;
 
     let light_provider = Arc::new(LightProvider::new(
@@ -698,6 +709,7 @@ pub fn initialize_not_light_node_modules(
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
+            eth_pubsub.clone(),
             &conf,
         ),
     )?;
@@ -708,6 +720,7 @@ pub fn initialize_not_light_node_modules(
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
+            eth_pubsub.clone(),
             &conf,
         ),
         RpcExtractor,
@@ -719,6 +732,7 @@ pub fn initialize_not_light_node_modules(
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
+            eth_pubsub.clone(),
             &conf,
         ),
         RpcExtractor,
@@ -730,6 +744,7 @@ pub fn initialize_not_light_node_modules(
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
+            eth_pubsub.clone(),
             &conf,
         ),
         RpcExtractor,
@@ -741,6 +756,7 @@ pub fn initialize_not_light_node_modules(
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
+            eth_pubsub.clone(),
             &conf,
         ),
         RpcExtractor,
@@ -752,6 +768,7 @@ pub fn initialize_not_light_node_modules(
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
+            eth_pubsub.clone(),
             &conf,
         ),
     )?;
@@ -762,6 +779,7 @@ pub fn initialize_not_light_node_modules(
             common_impl.clone(),
             rpc_impl.clone(),
             pubsub.clone(),
+            eth_pubsub.clone(),
             &conf,
         ),
         RpcExtractor,
@@ -769,7 +787,13 @@ pub fn initialize_not_light_node_modules(
 
     let rpc_http_server = super::rpc::start_http(
         conf.http_config(),
-        setup_public_rpc_apis(common_impl, rpc_impl, pubsub, &conf),
+        setup_public_rpc_apis(
+            common_impl,
+            rpc_impl,
+            pubsub,
+            eth_pubsub.clone(),
+            &conf,
+        ),
     )?;
 
     network.start();

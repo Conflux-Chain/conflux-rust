@@ -56,6 +56,13 @@ impl StateAvailabilityBoundary {
             }
     }
 
+    pub fn check_read_availability(
+        &self, _height: u64, _block_hash: &H256,
+    ) -> bool {
+        // FIXME(lpl): implement single mpt related availability check.
+        return true;
+    }
+
     /// Try to update `upper_bound` according to a new executed block.
     pub fn adjust_upper_bound(&mut self, executed_block: &BlockHeader) {
         let next_index = (self.upper_bound - self.lower_bound + 1) as usize;

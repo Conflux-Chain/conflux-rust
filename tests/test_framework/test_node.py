@@ -278,13 +278,10 @@ class TestNode:
         stderr = self.stderr.read().decode('utf-8').strip()
         # TODO: Check how to avoid `pthread lock: Invalid argument`.
         if stderr != expected_stderr and stderr != "pthread lock: Invalid argument":
-            # print process status for debug
-            p = self.process.poll()
-            if p is None:
+            if self.return_code is None:
                 self.log.info("Process is still running")
             else:
-                self.log.info("Process has terminated with code {}".format(p))
-
+                self.log.info("Process has terminated with code {}".format(self.return_code))
             raise AssertionError("Unexpected stderr {} != {} from {}:{} index={}".format(
                 stderr, expected_stderr, self.ip, self.port, self.index))
 
@@ -313,6 +310,7 @@ class TestNode:
         self.rpc_connected = False
         self.rpc = None
         self.log.debug("Node stopped")
+        self.return_code = return_code
         return True
 
     def wait_until_stopped(self, timeout=CONFLUX_GRACEFUL_SHUTDOWN_TIMEOUT):
