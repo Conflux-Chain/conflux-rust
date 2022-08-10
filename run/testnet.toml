@@ -556,3 +556,7 @@ node_table_promotion_timeout_s = 9600
 # 1030 for Tethys
 #
 evm_chain_id = 71
+
+dao_vote_transition_height = 88100000
+dao_vote_transition_number = 112400000
+pos_cip99_transition_view = 342000
