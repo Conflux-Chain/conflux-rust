@@ -7,7 +7,6 @@ keywords:
   - contract
 ---
 
-
 - [AdminControl contract](#admincontrol-contract)
   - [Overview](#overview)
   - [Examples](#examples)
@@ -25,10 +24,11 @@ keywords:
 - [ConfluxContext](#confluxcontext)
 - [PoSRegister](#posregister)
 - [CrossSpaceCall](#crossspacecall)
+- [ParamsControl](#paramscontrol)
 
 (**IMPORTANT: the interfaces are changed in Tethys mainnet. This document is synced with the newest version.**)
 
-Conflux introduces several built-in internal contracts for better system maintenance and on-chain governance. Now Conflux has six internal contracts: `AdminControl` contract, `SponsorWhitelistControl` contract and `Staking` contract are introduced from the beginning, `ConfluxContext`, `PoSRegister`, `ConfluxContext` are introduced at v2 hard-fork. These contracts provide solidity function apis defined [`here`](https://github.com/Conflux-Chain/conflux-rust/tree/master/internal_contract/contracts). These function can only be called via `CALL` or `STATICCALL` operation. Using operation `CALLCODE` or `DELEGATECALL` to interact with internal contracts will trigger an error.
+Conflux introduces several built-in internal contracts for better system maintenance and on-chain governance. Now Conflux has six internal contracts: `AdminControl` contract, `SponsorWhitelistControl` contract and `Staking` contract are introduced from the beginning, `ConfluxContext`, `PoSRegister`, `ConfluxContext` are introduced at v2 hard-fork, `ParamsControl` is introduced at v2.1 hard-fork. These contracts provide solidity function apis defined [`here`](https://github.com/Conflux-Chain/conflux-rust/tree/master/internal_contract/contracts). These function can only be called via `CALL` or `STATICCALL` operation. Using operation `CALLCODE` or `DELEGATECALL` to interact with internal contracts will trigger an error.
 
 The addresses of these six internal contracts are list as follows:
 - AdminControl: `0x0888000000000000000000000000000000000000`
@@ -37,6 +37,7 @@ The addresses of these six internal contracts are list as follows:
 - ConfluxContext: `0x0888000000000000000000000000000000000004`
 - PoSRegister: `0x0888000000000000000000000000000000000005`
 - CrossSpaceCall: `0x0888000000000000000000000000000000000006`
+- ParamsControl: `0x0888000000000000000000000000000000000007`
 
 All the example code in this document will use [js-conflux-sdk](https://github.com/Conflux-Chain/js-conflux-sdk). The solidity function apis are list [here](https://github.com/Conflux-Chain/conflux-rust/tree/master/internal_contract/contracts).
 
@@ -216,23 +217,11 @@ After that the accounts in `whiltelist` will pay nothing while calling `you_cont
 
 Conflux introduces the staking mechanism for two reasons: first, staking mechanism provides a better way to charge the occupation of storage space (comparing to “pay once, occupy forever”); and second, this mechanism also helps in defining the voting power in decentralized governance.
 
-At a high level, Conflux implements a built-in **Staking** contract to record the staking information of all accounts, for both normal addresses and smart contracts. By sending a transaction to this contract, users (both external users and smart contracts) can deposit/withdraw funds, which is also called stakes in the contract. The interest of staked funds is issued at withdrawal, and depends on both the amount and staking period of the fund being withdrawn.
+At a high level, Conflux implements a built-in **Staking** contract to record the staking information of all accounts, for both normal addresses and smart contracts. By sending a transaction to this contract, users (both external users and smart contracts) can deposit/withdraw funds, which is also called stakes in the contract.
 
 A user (or a contract) can deposit balance for staking by calling `deposit(uint amount)` and then `amount` Drip will be moved from its `balance` to `stakingBalance`. Notice that this function is non-payable, the user only needs to specify the amount to be staked without transferring any funds to internal contract and the minimum deposit amount is `1 CFX`.
 
-The user can also withdraw balance by `withdraw(uint amount)`. The caller can call this function to withdraw some tokens from the Conflux Internal Staking Contract. This will also trigger interest settlement. The staking capital and staking interest will be transferred to the user's balance in time. All the withdrawal applications will be processed on a first-come-first-served basis according to the sequence of staking orders.
-
-### Interest Rate
-
-The annualized staking interest rate is currently set to 4.08%. Compound interest is implemented in the granularity of blocks.
-
-When executing a transaction sent by account `addr` at block `B` to withdraw a fund of value `v` deposited at block `B'`, the interest is calculated as follows:
-
-```
-interest issued = v * (1 + 4% / 63072000)^T - v
-```
-
-where `T = BlockNo(B)−BlockNo(B')` is the staking period measured by the number of blocks, and `63072000` is the expected number of blocks generated in `365` days with the target block time `0.5` seconds.
+The user can also withdraw balance by `withdraw(uint amount)`. The caller can call this function to withdraw some tokens from the Conflux Internal Staking Contract. The staking capital will be transferred to the user's balance in time. All the withdrawal applications will be processed on a first-come-first-served basis according to the sequence of staking orders.
 
 ### Locking and Voting Power 
 
@@ -401,7 +390,7 @@ interface PoSRegister {
 
 ## CrossSpaceCall
 
-A new internal contract called the `CrossSpaceCall` contract will be deployed at the address `0x0888000000000000000000000000000000000006` with the following interfaces. The Core space user/contract can interact with the accounts in the eSpace and process the return value in the same transaction. So the cross-space operations can be atomic.
+The `CrossSpaceCall` contract will be deployed at the address `0x0888000000000000000000000000000000000006` with the following interfaces. The Core space user/contract can interact with the accounts in the eSpace and process the return value in the same transaction. So the cross-space operations can be atomic.
 
 ```js
 // SPDX-License-Identifier: MIT
@@ -430,5 +419,50 @@ interface CrossSpaceCall {
     function mappedBalance(address addr) external view returns (uint256);
 
     function mappedNonce(address addr) external view returns (uint256);
+}
+```
+
+## ParamsControl
+
+`ParamsControl` at address `0x0888000000000000000000000000000000000006` with the following interfaces. Which can be used to participate chain parameter DAO vote.
+
+```js
+// SPDX-License-Identifier: MIT
+
+pragma solidity >=0.8.0;
+
+interface ParamsControl {
+    struct Vote {
+        uint16 topic_index;
+        uint256[3] votes;
+    }
+
+    /*** Query Functions ***/
+    /**
+     * @dev cast vote for parameters
+     * @param vote_round The round to vote for
+     * @param vote_data The list of votes to cast
+     */
+    function castVote(uint64 vote_round, Vote[] calldata vote_data) external;
+
+    /**
+     * @dev read the vote data of an account
+     * @param addr The address of the account to read
+     */
+    function readVote(address addr) external view returns (Vote[] memory);
+
+    /**
+     * @dev Current vote round
+     */
+    function currentRound() external view returns (uint64);
+
+    /**
+     * @dev read the total votes of given round
+     * @param vote_round The vote number
+     */
+    function totalVotes(uint64 vote_round) external view returns (Vote[] memory);
+
+    event CastVote(uint64 indexed vote_round, address indexed addr, uint16 indexed topic_index, uint256[3] votes);
+    event RevokeVote(uint64 indexed vote_round, address indexed addr, uint16 indexed topic_index, uint256[3] votes);
 }
 ```
