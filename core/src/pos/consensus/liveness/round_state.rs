@@ -166,11 +166,11 @@ pub struct RoundState {
     // Service for timer
     time_service: Arc<dyn TimeService>,
     // To send local timeout events to the subscriber (e.g., SMR)
-    timeout_sender: channel::Sender<Round>,
+    timeout_sender: channel::Sender<(u64, Round)>,
     // To send timeout events for proposal selection to the subscriber (e.g.,
     // SMR)
-    proposal_timeout_sender: channel::Sender<Round>,
-    new_round_timeout_sender: channel::Sender<Round>,
+    proposal_timeout_sender: channel::Sender<(u64, Round)>,
+    new_round_timeout_sender: channel::Sender<(u64, Round)>,
     new_round_sent: bool,
     // Votes received for the current round.
     pending_votes: PendingVotes,
@@ -206,9 +206,9 @@ impl RoundState {
     pub fn new(
         time_interval: Box<dyn RoundTimeInterval>,
         time_service: Arc<dyn TimeService>,
-        timeout_sender: channel::Sender<Round>,
-        proposal_timeout_sender: channel::Sender<Round>,
-        new_round_timeout_sender: channel::Sender<Round>,
+        timeout_sender: channel::Sender<(u64, Round)>,
+        proposal_timeout_sender: channel::Sender<(u64, Round)>,
+        new_round_timeout_sender: channel::Sender<(u64, Round)>,
     ) -> Self
     {
         // Our counters are initialized lazily, so they're not going to appear
@@ -243,13 +243,10 @@ impl RoundState {
 
     /// In case the local timeout corresponds to the current round, reset the
     /// timeout and return true. Otherwise ignore and return false.
-    pub fn process_local_timeout(&mut self, round: Round) -> bool {
-        if round != self.current_round {
-            return false;
-        }
-        diem_info!(round = round, "Local timeout");
+    pub fn process_local_timeout(&mut self, epoch_round: (u64, Round)) -> bool {
+        diem_info!(round = epoch_round.1, "Local timeout");
         counters::TIMEOUT_COUNT.inc();
-        self.setup_timeout();
+        self.setup_timeout(epoch_round.0);
         true
     }
 
@@ -269,7 +266,7 @@ impl RoundState {
             self.new_round_sent = false;
             self.pending_votes = PendingVotes::new();
             self.vote_sent = None;
-            let timeout = self.setup_timeout();
+            let timeout = self.setup_timeout(sync_info.epoch());
             // The new round reason is QCReady in case both QC and TC are equal
             let new_round_reason =
                 if sync_info.highest_timeout_certificate().is_none() {
@@ -320,7 +317,7 @@ impl RoundState {
     }
 
     /// Setup the timeout task and return the duration of the current timeout
-    fn setup_timeout(&mut self) -> Duration {
+    fn setup_timeout(&mut self, epoch: u64) -> Duration {
         let timeout_sender = self.timeout_sender.clone();
         let timeout = self.setup_deadline();
         diem_trace!(
@@ -330,7 +327,7 @@ impl RoundState {
         );
         self.time_service.run_after(
             timeout,
-            SendTask::make(timeout_sender, self.current_round),
+            SendTask::make(timeout_sender, (epoch, self.current_round)),
         );
         timeout
     }
@@ -360,7 +357,7 @@ impl RoundState {
     }
 
     /// Setup the timeout task and return the duration of the current timeout
-    pub fn setup_proposal_timeout(&self) -> Duration {
+    pub fn setup_proposal_timeout(&self, epoch: u64) -> Duration {
         let proposal_timeout_sender = self.proposal_timeout_sender.clone();
         let timeout = self.setup_proposal_deadline();
         diem_trace!(
@@ -370,13 +367,16 @@ impl RoundState {
         );
         self.time_service.run_after(
             timeout,
-            SendTask::make(proposal_timeout_sender, self.current_round),
+            SendTask::make(
+                proposal_timeout_sender,
+                (epoch, self.current_round),
+            ),
         );
         timeout
     }
 
     /// Setup the timeout task and return the duration of the current timeout
-    pub fn setup_new_round_timeout(&mut self) -> Option<Duration> {
+    pub fn setup_new_round_timeout(&mut self, epoch: u64) -> Option<Duration> {
         if self.new_round_sent {
             return None;
         }
@@ -389,7 +389,10 @@ impl RoundState {
         );
         self.time_service.run_after(
             timeout,
-            SendTask::make(new_round_timeout_sender, self.current_round),
+            SendTask::make(
+                new_round_timeout_sender,
+                (epoch, self.current_round),
+            ),
         );
         self.new_round_sent = true;
         Some(timeout)
