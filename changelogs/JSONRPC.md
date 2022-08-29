@@ -1,6 +1,19 @@
 # JSON-RPC CHANGELOG
 
-## Next
+## v2.1.0
+
+- Support `eth_subscribe` and `eth_unsubscribe` in eSpace RPCs.
+- Add an RPC method [`cfx_getParamsFromVote`](https://developer.confluxnetwork.org/conflux-doc/docs/json_rpc#cfx_getparamsfromvote) to return the currently used value of the voted parameters.
+- Return null for getting skipped transactions and receipts. Whether they will be returned was nondeterministic before, but now they are ensured to be null.
+
+## v2.0.3
+
+- `cfx_getLogs` and `eth_getLogs` will no longer support the parameters limit and offset. They are not efficient and can be replaced by setting the block/epoch range instead.
+- `cfx_clientVersion` will have included more information like `web3_clientVersion` in eSpace.
+- `fromEpoch` will default to "latest_state" in `cfx_getLogs`.
+- `fromBlock` will default to "latest" in `eth_getLogs`.
+
+## v2.0.2
 
 ### eSpace
 
