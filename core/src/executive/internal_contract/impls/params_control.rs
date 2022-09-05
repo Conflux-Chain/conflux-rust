@@ -325,6 +325,7 @@ impl ParamVoteCount {
                 answer
             }
         } else {
+            debug!("params unchanged with pos token {}", pos_staking_tokens);
             old_value
         }
     }
