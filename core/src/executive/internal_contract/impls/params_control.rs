@@ -5,6 +5,7 @@
 use std::convert::TryInto;
 
 use crate::internal_bail;
+use cfx_parameters::consensus_internal::DAO_MIN_VOTE_PERCENTAGE;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, U256, U512};
@@ -308,18 +309,24 @@ impl ParamVoteCount {
         })
     }
 
-    pub fn compute_next_params(&self, old_value: U256) -> U256 {
-        let answer = self.compute_next_params_inner(old_value);
-        // The return value should be in `[2^8, 2^192]`
-        let min_value = U256::from(256u64);
-        let max_value = U256::one() << 192usize;
-        if answer < min_value {
-            return min_value;
+    pub fn compute_next_params(
+        &self, old_value: U256, pos_staking_tokens: U256,
+    ) -> U256 {
+        if self.should_update(pos_staking_tokens) {
+            let answer = self.compute_next_params_inner(old_value);
+            // The return value should be in `[2^8, 2^192]`
+            let min_value = U256::from(256u64);
+            let max_value = U256::one() << 192usize;
+            if answer < min_value {
+                min_value
+            } else if answer > max_value {
+                max_value
+            } else {
+                answer
+            }
+        } else {
+            old_value
         }
-        if answer > max_value {
-            return max_value;
-        }
-        return answer;
     }
 
     fn compute_next_params_inner(&self, old_value: U256) -> U256 {
@@ -354,6 +361,11 @@ impl ParamVoteCount {
         } else {
             return new_value.try_into().unwrap();
         }
+    }
+
+    fn should_update(&self, pos_staking_tokens: U256) -> bool {
+        (self.decrease + self.increase + self.unchange)
+            >= pos_staking_tokens / 100 * DAO_MIN_VOTE_PERCENTAGE
     }
 }
 

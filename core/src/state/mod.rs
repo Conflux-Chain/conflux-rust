@@ -1537,15 +1537,18 @@ impl StateGeneric {
         );
         // If the internal contract is just initialized, all votes are zero and
         // the parameters remain unchanged.
-        self.world_statistics.interest_rate_per_block = vote_count
-            .pos_reward_interest
-            .compute_next_params(self.world_statistics.interest_rate_per_block);
+        self.world_statistics.interest_rate_per_block =
+            vote_count.pos_reward_interest.compute_next_params(
+                self.world_statistics.interest_rate_per_block,
+                self.total_pos_staking_tokens(),
+            );
         match self.db.get_pow_base_reward()? {
             Some(old_pow_base_reward) => {
                 self.db.set_pow_base_reward(
-                    vote_count
-                        .pow_base_reward
-                        .compute_next_params(old_pow_base_reward),
+                    vote_count.pow_base_reward.compute_next_params(
+                        old_pow_base_reward,
+                        self.total_pos_staking_tokens(),
+                    ),
                     None,
                 )?;
             }

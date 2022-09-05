@@ -21,7 +21,7 @@
 //! Cost spec and other parameterisations for the EVM.
 
 use crate::spec::CommonParams;
-use cfx_parameters::block::DAO_PARAMETER_VOTE_PERIOD;
+use cfx_parameters::consensus_internal::DAO_PARAMETER_VOTE_PERIOD;
 use cfx_types::{address_util::AddressUtil, Address, U256};
 use primitives::BlockNumber;
 

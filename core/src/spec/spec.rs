@@ -5,16 +5,14 @@
 use crate::{message::Bytes, vm};
 use cfx_internal_common::{ChainIdParams, ChainIdParamsInner};
 use cfx_parameters::{
-    block::{
-        DAO_PARAMETER_VOTE_PERIOD, EVM_TRANSACTION_BLOCK_RATIO,
-        EVM_TRANSACTION_GAS_RATIO,
-    },
+    block::{EVM_TRANSACTION_BLOCK_RATIO, EVM_TRANSACTION_GAS_RATIO},
     consensus::{
         DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT, ONE_UCFX_IN_DRIP,
         TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT,
     },
     consensus_internal::{
-        ANTICONE_PENALTY_RATIO, INITIAL_BASE_MINING_REWARD_IN_UCFX,
+        ANTICONE_PENALTY_RATIO, DAO_PARAMETER_VOTE_PERIOD,
+        INITIAL_BASE_MINING_REWARD_IN_UCFX,
     },
 };
 use cfx_types::{AllChainID, U256, U512};
