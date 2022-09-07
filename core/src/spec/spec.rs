@@ -84,6 +84,8 @@ pub struct TransitionsBlockNumber {
     pub cip97: BlockNumber,
     /// CIP-98: Fix BLOCKHASH in espace
     pub cip98: BlockNumber,
+    /// CIP-105: PoS staking based minimal votes.
+    pub cip105: BlockNumber,
 }
 
 #[derive(Default, Debug, Clone)]

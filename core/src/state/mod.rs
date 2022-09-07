@@ -1524,7 +1524,9 @@ impl StateGeneric {
         }
     }
 
-    pub fn initialize_or_update_dao_voted_params(&mut self) -> DbResult<()> {
+    pub fn initialize_or_update_dao_voted_params(
+        &mut self, set_pos_staking: bool,
+    ) -> DbResult<()> {
         let vote_count = get_settled_param_vote_count(self).expect("db error");
         debug!(
             "initialize_or_update_dao_voted_params: vote_count={:?}",
@@ -1535,9 +1537,13 @@ impl StateGeneric {
             self.world_statistics.interest_rate_per_block,
             self.db.get_pow_base_reward()?
         );
+
+        // If pos_staking has not been set before, this will be zero and the
+        // vote count will always be sufficient, so we do not need to
+        // check if CIP105 is enabled here.
+        let pos_staking_for_votes = get_settled_pos_staking_for_votes(self)?;
         // If the internal contract is just initialized, all votes are zero and
         // the parameters remain unchanged.
-        let pos_staking_for_votes = get_settled_pos_staking_for_votes(self)?;
         self.world_statistics.interest_rate_per_block =
             vote_count.pos_reward_interest.compute_next_params(
                 self.world_statistics.interest_rate_per_block,
@@ -1566,7 +1572,7 @@ impl StateGeneric {
             self.db.get_pow_base_reward()?
         );
 
-        settle_current_votes(self)?;
+        settle_current_votes(self, set_pos_staking)?;
 
         Ok(())
     }

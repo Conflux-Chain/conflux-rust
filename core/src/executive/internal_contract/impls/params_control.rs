@@ -371,7 +371,7 @@ impl ParamVoteCount {
 
     fn should_update(&self, pos_staking_tokens: U256) -> bool {
         (self.decrease + self.increase + self.unchange)
-            >= pos_staking_tokens / 100 * DAO_MIN_VOTE_PERCENTAGE
+            >= pos_staking_tokens * DAO_MIN_VOTE_PERCENTAGE / 100
     }
 }
 
@@ -407,7 +407,10 @@ pub fn get_settled_pos_staking_for_votes<T: StateOpsTrait>(
 }
 
 /// Move the next vote counts into settled and reset the counts.
-pub fn settle_current_votes<T: StateOpsTrait>(state: &mut T) -> DbResult<()> {
+/// `set_pos_staking` is for compatibility with the Testnet.
+pub fn settle_current_votes<T: StateOpsTrait>(
+    state: &mut T, set_pos_staking: bool,
+) -> DbResult<()> {
     for index in 0..PARAMETER_INDEX_MAX {
         for opt_index in 0..OPTION_INDEX_MAX {
             let vote_count = state
@@ -422,16 +425,18 @@ pub fn settle_current_votes<T: StateOpsTrait>(state: &mut T) -> DbResult<()> {
             )?;
         }
     }
-    let pos_staking =
-        state.get_system_storage(&current_pos_staking_for_votes())?;
-    state.set_system_storage(
-        settled_pos_staking_for_votes().to_vec(),
-        pos_staking,
-    )?;
-    state.set_system_storage(
-        current_pos_staking_for_votes().to_vec(),
-        state.total_pos_staking_tokens(),
-    )?;
+    if set_pos_staking {
+        let pos_staking =
+            state.get_system_storage(&current_pos_staking_for_votes())?;
+        state.set_system_storage(
+            settled_pos_staking_for_votes().to_vec(),
+            pos_staking,
+        )?;
+        state.set_system_storage(
+            current_pos_staking_for_votes().to_vec(),
+            state.total_pos_staking_tokens(),
+        )?;
+    }
     Ok(())
 }
 
