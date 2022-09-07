@@ -49,8 +49,8 @@ use primitives::{
 
 use crate::{
     executive::internal_contract::{
-        get_settled_param_vote_count, pos_internal_entries,
-        settle_current_votes, IndexStatus,
+        get_settled_param_vote_count, get_settled_pos_staking_for_votes,
+        pos_internal_entries, settle_current_votes, IndexStatus,
     },
     hash::KECCAK_EMPTY,
     observer::{AddressPocket, StateTracer},
@@ -1537,17 +1537,18 @@ impl StateGeneric {
         );
         // If the internal contract is just initialized, all votes are zero and
         // the parameters remain unchanged.
+        let pos_staking_for_votes = get_settled_pos_staking_for_votes(self)?;
         self.world_statistics.interest_rate_per_block =
             vote_count.pos_reward_interest.compute_next_params(
                 self.world_statistics.interest_rate_per_block,
-                self.total_pos_staking_tokens(),
+                pos_staking_for_votes,
             );
         match self.db.get_pow_base_reward()? {
             Some(old_pow_base_reward) => {
                 self.db.set_pow_base_reward(
                     vote_count.pow_base_reward.compute_next_params(
                         old_pow_base_reward,
-                        self.total_pos_staking_tokens(),
+                        pos_staking_for_votes,
                     ),
                     None,
                 )?;

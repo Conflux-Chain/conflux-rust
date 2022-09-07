@@ -12,7 +12,12 @@ use cfx_types::{Address, U256, U512};
 use lazy_static::lazy_static;
 
 use crate::{
-    executive::internal_contract::components::SolidityEventTrait,
+    executive::internal_contract::{
+        components::SolidityEventTrait,
+        impls::params_control::system_storage_key::{
+            current_pos_staking_for_votes, settled_pos_staking_for_votes,
+        },
+    },
     state::power_two_fractional,
     vm::{self, ActionParams, Spec},
 };
@@ -395,6 +400,12 @@ pub fn get_settled_param_vote_count<T: StateOpsTrait>(
     })
 }
 
+pub fn get_settled_pos_staking_for_votes<T: StateOpsTrait>(
+    state: &T,
+) -> DbResult<U256> {
+    state.get_system_storage(&settled_pos_staking_for_votes())
+}
+
 /// Move the next vote counts into settled and reset the counts.
 pub fn settle_current_votes<T: StateOpsTrait>(state: &mut T) -> DbResult<()> {
     for index in 0..PARAMETER_INDEX_MAX {
@@ -411,6 +422,16 @@ pub fn settle_current_votes<T: StateOpsTrait>(state: &mut T) -> DbResult<()> {
             )?;
         }
     }
+    let pos_staking =
+        state.get_system_storage(&current_pos_staking_for_votes())?;
+    state.set_system_storage(
+        settled_pos_staking_for_votes().to_vec(),
+        pos_staking,
+    )?;
+    state.set_system_storage(
+        current_pos_staking_for_votes().to_vec(),
+        state.total_pos_staking_tokens(),
+    )?;
     Ok(())
 }
 
@@ -476,6 +497,8 @@ mod storage_key {
 /// }
 /// VoteStats current_votes dynamic;
 /// VoteStats settled_votes dynamic;
+/// uint current_pos_staking;
+/// uint settled_pos_staking;
 /// ```
 mod system_storage_key {
     use cfx_parameters::internal_contract_addresses::PARAMS_CONTROL_CONTRACT_ADDRESS;
@@ -487,6 +510,8 @@ mod system_storage_key {
 
     const CURRENT_VOTES_SLOT: usize = 0;
     const SETTLED_VOTES_SLOT: usize = 1;
+    const CURRENT_POS_STAKING_SLOT: usize = 2;
+    const SETTLED_POS_STAKING_SLOT: usize = 3;
 
     fn vote_stats(base: U256, index: usize, opt_index: usize) -> U256 {
         // Position of `.<topic>` (static slot)
@@ -519,5 +544,19 @@ mod system_storage_key {
         let base = dynamic_slot(base);
 
         u256_to_array(vote_stats(base, index, opt_index))
+    }
+
+    pub(super) fn current_pos_staking_for_votes() -> [u8; 32] {
+        // Position of `current_pos_staking` (static slot)
+        let base = base_slot(*PARAMS_CONTROL_CONTRACT_ADDRESS)
+            + U256::from(CURRENT_POS_STAKING_SLOT);
+        u256_to_array(base)
+    }
+
+    pub(super) fn settled_pos_staking_for_votes() -> [u8; 32] {
+        // Position of `current_pos_staking` (static slot)
+        let base = base_slot(*PARAMS_CONTROL_CONTRACT_ADDRESS)
+            + U256::from(SETTLED_POS_STAKING_SLOT);
+        u256_to_array(base)
     }
 }
