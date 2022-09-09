@@ -144,8 +144,6 @@ class Transaction(rlp.Serializable):
         d = {}
         for name, _ in self.__class__._meta.fields:
             d[name] = getattr(self, name)
-        d['sender'] = '0x' + encode_hex(self.sender)
-        d['hash'] = '0x' + encode_hex(self.hash)
         return d
 
     def __eq__(self, other):
