@@ -2017,8 +2017,10 @@ impl ConsensusExecutionHandler {
         if block_number >= cip94_start
             && (block_number - cip94_start) % period == 0
         {
+            let set_pos_staking =
+                block_number > self.machine.params().transition_numbers.cip105;
             state
-                .initialize_or_update_dao_voted_params()
+                .initialize_or_update_dao_voted_params(set_pos_staking)
                 .expect("update params error");
         }
     }

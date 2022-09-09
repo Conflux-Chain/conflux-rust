@@ -134,7 +134,9 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         assert_equal(int(client.get_block_reward_info(int_to_hex(20))[0]["baseReward"], 0), current_base_reward)
 
         # stake and lock CFX
-        lock_value = 100
+        # By default, we have one pos account that stakes 2_000_000 CFX for PoS, so 100000 vote locks for one year
+        # is just sufficient for parameter change. Here we lock 200000 because we may vote with half votes.
+        lock_value = 200000
         tx = client.new_tx(data=stake_tx_data(lock_value), value=0,
                            receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
         client.send_tx(tx, wait_for_receipt=True)
@@ -301,6 +303,26 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
                            gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
         # Generate enough blocks to get pow reward with new parameters.
+        client.generate_empty_blocks(40)
+        best_epoch = client.epoch_number()
+        assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0),
+                     current_base_reward)
+        assert_equal(int(client.get_interest_rate(), 0), current_interest_rate * BLOCKS_PER_YEAR)
+        vote_params = client.get_params_from_vote()
+        assert_equal(int(vote_params["interestRate"], 0), current_interest_rate)
+        assert_equal(int(vote_params["powBaseReward"], 0), current_base_reward)
+
+        # Vote with not sufficient vote and check if the parameter remains unchanged.
+        min_vote = int(2_000_000 * 0.05)
+        block_number = int(client.get_status()["blockNumber"], 0)
+        version = int(block_number / vote_period) + 1
+        # Vote with enough votes for PoS interest but not enough votes for PoW reward.
+        data = get_contract_function_data(params_control_contract, "castVote",
+                                          args=[version, [(0, [0, min_vote - 1, 0]), (1, [0, min_vote, 0])]])
+        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007",
+                           gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+        client.send_tx(tx, wait_for_receipt=True)
+        current_interest_rate = update_value(current_interest_rate, min_vote, min_vote, False)
         client.generate_empty_blocks(40)
         best_epoch = client.epoch_number()
         assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0),
