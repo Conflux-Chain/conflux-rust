@@ -18,6 +18,7 @@ pub enum Api {
     Trace,
     TxPool,
     Pos,
+    EthPubsub,
 }
 
 impl FromStr for Api {
@@ -34,6 +35,7 @@ impl FromStr for Api {
             "trace" => Ok(Trace),
             "txpool" => Ok(TxPool),
             "pos" => Ok(Pos),
+            "ethpubsub" => Ok(EthPubsub),
             _ => Err("Unknown api type".into()),
         }
     }
@@ -50,6 +52,7 @@ impl Display for Api {
             Api::Trace => write!(f, "trace"),
             Api::TxPool => write!(f, "txpool"),
             Api::Pos => write!(f, "pos"),
+            Api::EthPubsub => write!(f, "ethpubsub"),
         }
     }
 }
@@ -82,7 +85,7 @@ impl ApiSet {
                 .iter()
                 .cloned()
                 .collect(),
-            ApiSet::Evm => [Api::Eth].iter().cloned().collect(),
+            ApiSet::Evm => [Api::Eth, Api::EthPubsub].iter().cloned().collect(),
         }
     }
 }

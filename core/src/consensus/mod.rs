@@ -2076,7 +2076,8 @@ impl ConsensusGraphTrait for ConsensusGraph {
         // Ensure that `state_valid` of the first valid block after
         // cur_era_stable_genesis is set
         inner.recover_state_valid();
-        self.new_block_handler.construct_pivot_state(inner);
+        self.new_block_handler
+            .construct_pivot_state(inner, &self.confirmation_meter);
         inner.finish_block_recovery();
     }
 
@@ -2179,6 +2180,15 @@ impl ConsensusGraphTrait for ConsensusGraph {
         // are consistent
         let inner = self.inner.read();
         if let Some(tx_info) = inner.get_transaction_info(hash) {
+            if let Some(executed) = &tx_info.maybe_executed_extra_info {
+                if executed.receipt.outcome_status
+                    == TransactionOutcome::Skipped
+                {
+                    // A skipped transaction is not visible to clients if
+                    // accessed by its hash.
+                    return None;
+                }
+            }
             let block = self.data_man.block_by_hash(
                 &tx_info.tx_index.block_hash,
                 false, /* update_cache */

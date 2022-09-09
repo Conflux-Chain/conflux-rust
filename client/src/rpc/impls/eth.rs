@@ -847,6 +847,19 @@ impl Eth for EthHandler {
         for (idx, tx) in phantom_block.transactions.iter().enumerate() {
             if tx.hash() == hash {
                 let tx = block_tx_by_index(Some(phantom_block), idx);
+                if let Some(tx_ref) = &tx {
+                    if tx_ref.status
+                        == Some(
+                            TransactionOutcome::Skipped
+                                .in_space(Space::Ethereum)
+                                .into(),
+                        )
+                    {
+                        // A skipped transaction is not available to clients if
+                        // accessed by its hash.
+                        return Ok(None);
+                    }
+                }
                 return Ok(tx);
             }
         }
@@ -945,6 +958,15 @@ impl Eth for EthHandler {
                     idx,
                     &mut prior_log_index,
                 )?;
+                // A skipped transaction is not available to clients if accessed
+                // by its hash.
+                if receipt.status_code
+                    == TransactionOutcome::Skipped
+                        .in_space(Space::Ethereum)
+                        .into()
+                {
+                    return Ok(None);
+                }
 
                 return Ok(Some(receipt));
             }
@@ -996,7 +1018,7 @@ impl Eth for EthHandler {
         Ok(logs
             .iter()
             .cloned()
-            .map(|l| Log::try_from_localized(l, self.consensus.clone()))
+            .map(|l| Log::try_from_localized(l, self.consensus.clone(), false))
             .collect::<Result<_, _>>()?)
     }
 

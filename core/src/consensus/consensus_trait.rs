@@ -70,6 +70,8 @@ pub trait ConsensusGraphTrait: Send + Sync {
         &self, epoch_number: EpochNumber,
     ) -> Result<Vec<H256>, String>;
 
+    /// Return transaction info for clients.
+    /// Note that the skipped transactions (status == 2) will not be returned.
     fn get_transaction_info_by_hash(
         &self, hash: &H256,
     ) -> Option<(SignedTransaction, TransactionInfo)>;

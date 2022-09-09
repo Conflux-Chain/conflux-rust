@@ -33,7 +33,8 @@ use parking_lot::Mutex;
 use primitives::{
     filter::LogFilter, Account, Block, BlockReceipts, DepositInfo,
     SignedTransaction, StorageKey, StorageRoot, StorageValue, Transaction,
-    TransactionIndex, TransactionWithSignature, VoteStakeInfo,
+    TransactionIndex, TransactionOutcome, TransactionWithSignature,
+    VoteStakeInfo,
 };
 use random_crash::*;
 use rlp::Rlp;
@@ -798,7 +799,17 @@ impl RpcImpl {
                 Some(res) => res,
             };
 
-        self.construct_rpc_receipt(tx_index, &exec_info)
+        let receipt = self.construct_rpc_receipt(tx_index, &exec_info)?;
+        if let Some(r) = &receipt {
+            // A skipped transaction is not available to clients if accessed by
+            // its hash.
+            if r.outcome_status
+                == TransactionOutcome::Skipped.in_space(Space::Native).into()
+            {
+                return Ok(None);
+            }
+        }
+        Ok(receipt)
     }
 
     fn prepare_block_receipts(

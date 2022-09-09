@@ -1878,7 +1878,9 @@ impl ConsensusNewBlockHandler {
     /// It also recovers receipts_root and logs_bloom_hash in pivot chain.
     /// This function is only invoked from recover_graph_from_db with
     /// header_only being false.
-    pub fn construct_pivot_state(&self, inner: &mut ConsensusGraphInner) {
+    pub fn construct_pivot_state(
+        &self, inner: &mut ConsensusGraphInner, meter: &ConfirmationMeter,
+    ) {
         // FIXME: this line doesn't exactly match its purpose.
         // FIXME: Is it the checkpoint or synced snapshot or could it be
         // anything else?
@@ -2009,6 +2011,7 @@ impl ConsensusNewBlockHandler {
         }
 
         let mut pre_epoch_state_exist = true;
+        let confirmed_epoch_num = meter.get_confirmed_epoch_num();
 
         for pivot_index in start_pivot_index + 1..end_index {
             let pivot_arena_index = inner.pivot_chain[pivot_index];
@@ -2107,6 +2110,36 @@ impl ConsensusNewBlockHandler {
                     None,
                 );
                 pre_epoch_state_exist = true;
+
+                // Remove old-pivot state during start up to save disk,
+                // otherwise, all state will be keep till normal phase, this
+                // will occupy too many disk
+                {
+                    let mut confirmed_height = min(confirmed_epoch_num, height);
+                    if confirmed_height < DEFERRED_STATE_EPOCH_COUNT {
+                        confirmed_height = 0;
+                    } else {
+                        confirmed_height -= DEFERRED_STATE_EPOCH_COUNT;
+                    }
+
+                    self.data_man
+                        .storage_manager
+                        .get_storage_manager()
+                        .maintain_state_confirmed(
+                            inner,
+                            inner.cur_era_stable_height,
+                            self.conf.inner_conf.era_epoch_count,
+                            confirmed_height,
+                            &self.data_man.state_availability_boundary,
+                        )
+                        .expect(&concat!(
+                            file!(),
+                            ":",
+                            line!(),
+                            ":",
+                            column!()
+                        ));
+                }
             }
         }
     }
