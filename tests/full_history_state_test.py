@@ -24,6 +24,7 @@ class FullHistoryStateTest(ConfluxTestFramework):
         self.conf_parameters["dev_snapshot_epoch_count"] = "25"
         self.conf_parameters["enable_single_mpt_storage"] = "true"
         self.conf_parameters["node_type"] = "\"archive\""
+        self.rpc_timewait = 120
 
     def run_test(self):
         client = RpcClient(self.nodes[0])
