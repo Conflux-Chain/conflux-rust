@@ -3,7 +3,6 @@
 // See http://www.gnu.org/licenses/
 
 use crate::{
-    consensus_internal_parameters::MINED_BLOCK_COUNT_PER_QUARTER,
     evm::Spec,
     internal_bail,
     observer::{AddressPocket, VmObserve},
