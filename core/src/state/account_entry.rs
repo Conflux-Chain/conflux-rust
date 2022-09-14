@@ -807,12 +807,14 @@ impl OverlayAccount {
         if self.fresh_storage() {
             return Ok(None);
         }
+        let storage_value_read_cache =
+            &mut self.storage_value_read_cache.write();
         let storage_owner_lv2_write_cache =
             &mut *self.storage_owner_lv2_write_cache.write();
         let storage_owner_lv2_write_cache =
             Arc::make_mut(storage_owner_lv2_write_cache);
         Self::get_and_cache_storage(
-            &mut self.storage_value_read_cache.write(),
+            storage_value_read_cache,
             storage_owner_lv2_write_cache,
             db,
             &self.address,
