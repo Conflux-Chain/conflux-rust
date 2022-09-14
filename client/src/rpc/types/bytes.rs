@@ -76,8 +76,10 @@ impl<'a> Visitor<'a> for BytesVisitor {
 
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
     where E: Error {
-        if value.len() >= 2 && &value[0..2] == "0x" && value.len() & 1 == 0 {
-            Ok(Bytes::new(FromHex::from_hex(&value[2..]).map_err(|e| {
+        if let (Some(s), true) =
+            (value.strip_prefix("0x"), value.len() & 1 == 0)
+        {
+            Ok(Bytes::new(FromHex::from_hex(s).map_err(|e| {
                 Error::custom(format!("Invalid hex: {}", e))
             })?))
         } else {
