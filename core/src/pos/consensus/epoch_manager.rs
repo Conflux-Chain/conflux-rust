@@ -105,9 +105,9 @@ pub struct EpochManager {
     time_service: Arc<dyn TimeService>,
     //self_sender: channel::Sender<Event<ConsensusMsg>>,
     network_sender: NetworkSender,
-    timeout_sender: channel::Sender<Round>,
-    proposal_timeout_sender: channel::Sender<Round>,
-    new_round_timeout_sender: channel::Sender<Round>,
+    timeout_sender: channel::Sender<(u64, Round)>,
+    proposal_timeout_sender: channel::Sender<(u64, Round)>,
+    new_round_timeout_sender: channel::Sender<(u64, Round)>,
     txn_manager: Arc<dyn TxnManager>,
     state_computer: Arc<dyn StateComputer>,
     storage: Arc<dyn PersistentLivenessStorage>,
@@ -130,9 +130,9 @@ impl EpochManager {
         time_service: Arc<dyn TimeService>,
         //self_sender: channel::Sender<Event<ConsensusMsg>>,
         network_sender: NetworkSender,
-        timeout_sender: channel::Sender<Round>,
-        proposal_timeout_sender: channel::Sender<Round>,
-        new_round_timeout_sender: channel::Sender<Round>,
+        timeout_sender: channel::Sender<(u64, Round)>,
+        proposal_timeout_sender: channel::Sender<(u64, Round)>,
+        new_round_timeout_sender: channel::Sender<(u64, Round)>,
         txn_manager: Arc<dyn TxnManager>,
         state_computer: Arc<dyn StateComputer>,
         storage: Arc<dyn PersistentLivenessStorage>,
@@ -187,9 +187,9 @@ impl EpochManager {
 
     fn create_round_state(
         &self, time_service: Arc<dyn TimeService>,
-        timeout_sender: channel::Sender<Round>,
-        proposal_timeout_sender: channel::Sender<Round>,
-        new_round_timeout_sender: channel::Sender<Round>,
+        timeout_sender: channel::Sender<(u64, Round)>,
+        proposal_timeout_sender: channel::Sender<(u64, Round)>,
+        new_round_timeout_sender: channel::Sender<(u64, Round)>,
     ) -> RoundState
     {
         // 1.5^6 ~= 11
@@ -735,31 +735,33 @@ impl EpochManager {
     }
 
     async fn process_local_timeout(
-        &mut self, round: u64,
+        &mut self, epoch_round: (u64, Round),
     ) -> anyhow::Result<()> {
         match self.processor_mut() {
-            RoundProcessor::Normal(p) => p.process_local_timeout(round).await,
+            RoundProcessor::Normal(p) => {
+                p.process_local_timeout(epoch_round).await
+            }
             _ => unreachable!("RoundManager not started yet"),
         }
     }
 
     async fn process_proposal_timeout(
-        &mut self, round: u64,
+        &mut self, epoch_round: (u64, Round),
     ) -> anyhow::Result<()> {
         match self.processor_mut() {
             RoundProcessor::Normal(p) => {
-                p.process_proposal_timeout(round).await
+                p.process_proposal_timeout(epoch_round).await
             }
             _ => unreachable!("RoundManager not started yet"),
         }
     }
 
     async fn process_new_round_timeout(
-        &mut self, round: u64,
+        &mut self, epoch_round: (u64, Round),
     ) -> anyhow::Result<()> {
         match self.processor_mut() {
             RoundProcessor::Normal(p) => {
-                p.process_new_round_timeout(round).await
+                p.process_new_round_timeout(epoch_round).await
             }
             _ => unreachable!("RoundManager not started yet"),
         }
@@ -777,9 +779,9 @@ impl EpochManager {
     }
 
     pub async fn start(
-        mut self, mut round_timeout_sender_rx: channel::Receiver<Round>,
-        mut proposal_timeout_sender_rx: channel::Receiver<Round>,
-        mut new_round_timeout_sender_rx: channel::Receiver<Round>,
+        mut self, mut round_timeout_sender_rx: channel::Receiver<(u64, Round)>,
+        mut proposal_timeout_sender_rx: channel::Receiver<(u64, Round)>,
+        mut new_round_timeout_sender_rx: channel::Receiver<(u64, Round)>,
         mut network_receivers: NetworkReceivers,
         mut test_command_receiver: channel::Receiver<TestCommand>,
         stopped: Arc<AtomicBool>,
@@ -858,31 +860,31 @@ impl EpochManager {
             TestCommand::ProposalTimeOut => {
                 let round = match self.processor_mut() {
                     RoundProcessor::Normal(p) => {
-                        p.round_state().current_round()
+                        (p.epoch_state().epoch, p.round_state().current_round())
                     }
                     _ => anyhow::bail!("RoundManager not started yet"),
                 };
-                diem_debug!("TestCommand::ProposalTimeOut, round={}", round);
+                diem_debug!("TestCommand::ProposalTimeOut, round={:?}", round);
                 self.process_proposal_timeout(round).await
             }
             TestCommand::LocalTimeout => {
                 let round = match self.processor_mut() {
                     RoundProcessor::Normal(p) => {
-                        p.round_state().current_round()
+                        (p.epoch_state().epoch, p.round_state().current_round())
                     }
                     _ => anyhow::bail!("RoundManager not started yet"),
                 };
-                diem_debug!("TestCommand::LocalTimeout, round={}", round);
+                diem_debug!("TestCommand::LocalTimeout, round={:?}", round);
                 self.process_local_timeout(round).await
             }
             TestCommand::NewRoundTimeout => {
                 let round = match self.processor_mut() {
                     RoundProcessor::Normal(p) => {
-                        p.round_state().current_round()
+                        (p.epoch_state().epoch, p.round_state().current_round())
                     }
                     _ => anyhow::bail!("RoundManager not started yet"),
                 };
-                diem_debug!("TestCommand::NewRoundTimeout, round={}", round);
+                diem_debug!("TestCommand::NewRoundTimeout, round={:?}", round);
                 self.process_new_round_timeout(round).await
             }
             TestCommand::BroadcastPivotDecision(decision) => {

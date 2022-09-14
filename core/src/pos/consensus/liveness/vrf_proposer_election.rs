@@ -159,8 +159,14 @@ impl ProposerElection for VrfProposer {
         &self, block: &Block,
     ) -> anyhow::Result<bool> {
         // Proposal validity should have been checked in `process_proposal`.
-        if block.round() != *self.current_round.lock() {
+        let current_round = *self.current_round.lock();
+        if block.round() < current_round {
             anyhow::bail!("Incorrect round");
+        } else if block.round() > current_round {
+            // The proposal is in the future, so it should pass
+            // filter_unverified_event and proceed to trigger
+            // sync_up.
+            return Ok(true);
         }
         let old_proposal = self.proposal_candidates.lock();
         if old_proposal.is_none()

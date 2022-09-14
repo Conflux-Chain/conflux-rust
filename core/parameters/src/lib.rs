@@ -99,6 +99,15 @@ pub mod consensus_internal {
     /// to update the meter every 20 blocks. Note that confirmation meter
     /// update is CPU intensive if the tree graph is in a unstable state.
     pub const CONFIRMATION_METER_UPDATE_FREQUENCY: usize = 20;
+
+    // The number of blocks to settle a DAO parameter vote.
+    // It's set to two months now.
+    pub const DAO_PARAMETER_VOTE_PERIOD: u64 =
+        super::staking::BLOCKS_PER_DAY * 30 * 2;
+    // DAO votes are only effective if the total vote count reaches this minimal
+    // percentage of pos staking tokens.
+    // The condition is checked against each voted parameter separately.
+    pub const DAO_MIN_VOTE_PERCENTAGE: u64 = 5;
 }
 
 pub mod rpc {
@@ -213,12 +222,6 @@ pub mod block {
     // space in the cross space call. Setting it to N means that only 1/N of gas
     // left can be passed to the cross space call.
     pub const CROSS_SPACE_GAS_RATIO: u64 = 10;
-    // The number of blocks to settle a DAO parameter vote.
-    // It's set to two months now.
-    pub const DAO_PARAMETER_VOTE_PERIOD: u64 =
-        super::staking::BLOCKS_PER_DAY * 30 * 2;
-    pub const DAO_PARAMETER_VOTE_INCREASE_RATIO: u64 = 2;
-    pub const DAO_PARAMETER_VOTE_DECREASE_RATIO: u64 = 2;
 }
 
 pub mod staking {

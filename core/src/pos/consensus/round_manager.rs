@@ -309,7 +309,8 @@ impl RoundManager {
                 new_round_event.round,
                 self.epoch_state.vrf_seed.clone(),
             );
-            self.round_state.setup_proposal_timeout();
+            self.round_state
+                .setup_proposal_timeout(self.epoch_state.epoch);
         }
 
         if let Err(e) = self.broadcast_pivot_decision().await {
@@ -684,12 +685,15 @@ impl RoundManager {
     }
 
     pub async fn process_new_round_timeout(
-        &mut self, round: Round,
+        &mut self, epoch_round: (u64, Round),
     ) -> anyhow::Result<()> {
-        diem_debug!("process_new_round_timeout: round={}", round);
-        if round != self.round_state.current_round() {
+        diem_debug!("process_new_round_timeout: round={:?}", epoch_round);
+        if epoch_round
+            != (self.epoch_state.epoch, self.round_state.current_round())
+        {
             return Ok(());
         }
+        let round = epoch_round.1;
 
         match self
             .round_state
@@ -731,10 +735,17 @@ impl RoundManager {
     /// successfully because timeout is considered as error. It only returns
     /// Ok(()) when the timeout is stale.
     pub async fn process_local_timeout(
-        &mut self, round: Round,
+        &mut self, epoch_round: (u64, Round),
     ) -> anyhow::Result<()> {
-        diem_debug!("process_local_timeout: round={}", round);
-        if !self.round_state.process_local_timeout(round) {
+        diem_debug!("process_local_timeout: round={:?}", epoch_round);
+        if epoch_round
+            != (self.epoch_state.epoch, self.round_state.current_round())
+        {
+            return Ok(());
+        }
+        let round = epoch_round.1;
+
+        if !self.round_state.process_local_timeout(epoch_round) {
             return Ok(());
         }
 
@@ -810,12 +821,16 @@ impl RoundManager {
     }
 
     pub async fn process_proposal_timeout(
-        &mut self, round: Round,
+        &mut self, epoch_round: (u64, Round),
     ) -> anyhow::Result<()> {
-        diem_debug!("process_proposal_timeout: round={}", round);
-        if round != self.round_state.current_round() {
+        diem_debug!("process_proposal_timeout: round={:?}", epoch_round);
+        if epoch_round
+            != (self.epoch_state.epoch, self.round_state.current_round())
+        {
             return Ok(());
         }
+        let round = epoch_round.1;
+
         if let Some(proposal) = self.proposer_election.choose_proposal_to_vote()
         {
             if self.is_validator() {
@@ -847,7 +862,7 @@ impl RoundManager {
         } else {
             debug!("No proposal to vote: round={}", round);
             // No proposal to vote. Send Timeout earlier.
-            self.process_local_timeout(round).await
+            self.process_local_timeout(epoch_round).await
         }
     }
 
@@ -1054,7 +1069,8 @@ impl RoundManager {
             | VoteReceptionResult::NewTimeoutCertificate(_) => {
                 // Wait for extra time to gather more votes before entering the
                 // next round.
-                self.round_state.setup_new_round_timeout();
+                self.round_state
+                    .setup_new_round_timeout(self.epoch_state.epoch);
             }
             VoteReceptionResult::VoteAdded(_) => {}
             VoteReceptionResult::DuplicateVote => {
