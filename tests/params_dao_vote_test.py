@@ -333,6 +333,5 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         assert_equal(int(vote_params["powBaseReward"], 0), current_base_reward)
 
 
-
 if __name__ == "__main__":
     ParamsDaoVoteTest().main()
