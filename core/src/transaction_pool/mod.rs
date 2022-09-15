@@ -725,7 +725,7 @@ impl TransactionPool {
         let transitions = &self.machine.params().transition_heights;
 
         while let Some(tx) = recycle_tx_buffer.pop() {
-            debug!(
+            info!(
                 "should not trigger recycle transaction, nonce = {}, sender = {:?}, \
                 account nonce = {}, hash = {:?} .",
                 &tx.nonce(), &tx.sender(),
