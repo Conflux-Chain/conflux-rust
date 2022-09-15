@@ -457,6 +457,8 @@ impl NoncePool {
         while let Some(tx_info) = maybe_tx_info {
             if !tx_info.packed {
                 pending_txs.push(tx_info.transaction.clone());
+            } else {
+                debug!("packed pending tx: tx_info={:?}", tx_info);
             }
             maybe_tx_info = self.root.as_ref().and_then(|node| {
                 node.succ(&(tx_info.transaction.nonce() + U256::from(1)))
