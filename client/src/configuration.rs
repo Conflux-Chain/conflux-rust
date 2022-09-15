@@ -153,7 +153,7 @@ build_config! {
         (cip78_patch_transition_number,(Option<u64>), Some(77340000))
         (cip90_transition_height,(Option<u64>), Some(61465000))
         (cip90_transition_number,(Option<u64>), Some(77340000))
-        (cip105_transition_number, (Option<u64>), None)
+        (cip105_transition_number, (Option<u64>), Some(122700000))
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (params_dao_vote_period, (u64), DAO_PARAMETER_VOTE_PERIOD)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
