@@ -257,6 +257,27 @@ pub fn total_votes(
     Ok(answer)
 }
 
+pub fn pos_stake_for_votes(version: u64, context: &mut InternalRefContext,) -> vm::Result<U256> {
+    let current_voting_version = (context.env.number
+        - context.spec.cip94_activation_block_number)
+        / context.spec.params_dao_vote_period
+        + 1;
+
+    let state = &context.state;
+    let pos_stake_entry = if version + 1 == current_voting_version {
+        settled_pos_staking_for_votes()
+    } else if version == current_voting_version {
+        current_pos_staking_for_votes()
+    } else {
+        internal_bail!(
+            "Unsupport version {} (current {})",
+            version,
+            current_voting_version
+        );
+    };
+    Ok(state.get_system_storage(&pos_stake_entry)?)
+}
+
 lazy_static! {
     static ref CURRENT_VOTES_ENTRIES: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] = {
         let mut answer: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] =

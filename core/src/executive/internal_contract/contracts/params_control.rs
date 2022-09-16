@@ -14,7 +14,7 @@ make_solidity_contract! {
     pub struct ParamsControl(PARAMS_CONTROL_CONTRACT_ADDRESS, generate_fn_table, initialize: |params: &CommonParams| params.transition_numbers.cip94, is_active: |spec: &Spec| spec.cip94);
 }
 fn generate_fn_table() -> SolFnTable {
-    make_function_table!(CastVote, ReadVote, CurrentRound, TotalVotes)
+    make_function_table!(CastVote, ReadVote, CurrentRound, TotalVotes, PosStakeForVotes)
 }
 group_impl_is_active!(
     |spec: &Spec| spec.cip94,
@@ -22,6 +22,10 @@ group_impl_is_active!(
     ReadVote,
     CurrentRound,
     TotalVotes
+);
+group_impl_is_active!(
+    |spec: &Spec| spec.cip105,
+    PosStakeForVotes,
 );
 
 make_solidity_event! {
@@ -103,6 +107,21 @@ impl SimpleExecutionTrait for TotalVotes {
     ) -> vm::Result<Vec<Vote>>
     {
         total_votes(input, context)
+    }
+}
+
+make_solidity_function! {
+    struct PosStakeForVotes(u64, "posStakeForVotes()", U256);
+}
+impl_function_type!(PosStakeForVotes, "query", gas: |spec: &Spec| 2 * spec.sload_gas);
+
+impl SimpleExecutionTrait for PosStakeForVotes {
+    fn execute_inner(
+        &self, input: u64, _params: &ActionParams,
+        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
+    ) -> vm::Result<U256>
+    {
+        pos_stake_for_votes(input, context)
     }
 }
 
