@@ -744,6 +744,7 @@ impl ConsensusNewBlockHandler {
     fn recycle_tx_in_block(
         &self, inner: &ConsensusGraphInner, block_hash: &H256,
     ) {
+        info!("recycle_tx_in_block: block_hash={:?}", block_hash);
         if let Some(block) = inner
             .data_man
             .block_by_hash(block_hash, true /* update_cache */)
@@ -752,7 +753,7 @@ impl ConsensusNewBlockHandler {
         } else {
             // This should only happen for blocks in the anticone of
             // checkpoints.
-            debug!("recycle_tx_in_block: block {:?} not in db", block_hash);
+            warn!("recycle_tx_in_block: block {:?} not in db", block_hash);
         }
     }
 
@@ -1599,7 +1600,7 @@ impl ConsensusNewBlockHandler {
                 // FIXME: propogate error.
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
             self.set_block_tx_packed(inner, me);
-            self.delayed_tx_recycle_in_skipped_blocks(inner);
+            self.delayed_tx_recycle_in_skipped_blocks(inner, capped_fork_at);
 
             let to_state_pos = if inner
                 .pivot_index_to_height(inner.pivot_chain.len())
@@ -2156,6 +2157,10 @@ impl ConsensusNewBlockHandler {
         }
         let parent = inner.arena[me].parent;
         if parent == NULL {
+            warn!(
+                "set_block_tx_packed skips block with empty parent {:?}",
+                inner.arena[me].hash
+            );
             return;
         }
         let era_genesis_height =
@@ -2185,26 +2190,39 @@ impl ConsensusNewBlockHandler {
                     .expect("Already checked")
                     .transactions,
             );
+        } else {
+            warn!("set_block_tx_packed skips block {:?}", inner.arena[me].hash);
         }
     }
 
     fn delayed_tx_recycle_in_skipped_blocks(
-        &self, inner: &mut ConsensusGraphInner,
+        &self, inner: &mut ConsensusGraphInner, fork_height: u64,
     ) {
         if !self.txpool.ready_for_mining() {
             // Skip tx pool operation before catching up.
             return;
         }
         if inner.pivot_chain.len() > RECYCLE_TRANSACTION_DELAY as usize {
-            let recycle_pivot_index = inner.pivot_chain.len()
+            let recycle_end_pivot_index = inner.pivot_chain.len()
                 - RECYCLE_TRANSACTION_DELAY as usize
                 - 1;
-            let recycle_arena_index = inner.pivot_chain[recycle_pivot_index];
-            let skipped_blocks = inner
-                .get_or_compute_skipped_epoch_blocks(recycle_arena_index)
-                .clone();
-            for h in &skipped_blocks {
-                self.recycle_tx_in_block(inner, h);
+            // If the pivot reorg is deeper than `RECYCLE_TRANSACTION_DELAY`, we
+            // will try to recycle all skipped blocks since the
+            // forking point.
+            let start = min(
+                // `fork_height` has been capped by the caller.
+                inner.height_to_pivot_index(fork_height),
+                recycle_end_pivot_index,
+            );
+            for recycle_pivot_index in start..=recycle_end_pivot_index {
+                let recycle_arena_index =
+                    inner.pivot_chain[recycle_pivot_index];
+                let skipped_blocks = inner
+                    .get_or_compute_skipped_epoch_blocks(recycle_arena_index)
+                    .clone();
+                for h in &skipped_blocks {
+                    self.recycle_tx_in_block(inner, h);
+                }
             }
         }
     }
