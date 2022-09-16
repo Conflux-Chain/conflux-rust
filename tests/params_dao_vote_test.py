@@ -313,7 +313,7 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         assert_equal(int(vote_params["powBaseReward"], 0), current_base_reward)
 
         # Vote with not sufficient vote and check if the parameter remains unchanged.
-        min_vote = int(2_000_000 * 0.05)
+        min_vote = int(2_000_000 * 0.05) * 10 ** 18
         block_number = int(client.get_status()["blockNumber"], 0)
         version = int(block_number / vote_period) + 1
         # Vote with enough votes for PoS interest but not enough votes for PoW reward.
@@ -322,7 +322,7 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007",
                            gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
         client.send_tx(tx, wait_for_receipt=True)
-        current_interest_rate = update_value(current_interest_rate, min_vote, min_vote, False)
+        current_interest_rate = current_interest_rate * 2
         client.generate_empty_blocks(40)
         best_epoch = client.epoch_number()
         assert_equal(int(client.get_block_reward_info(int_to_hex(best_epoch - 17))[0]["baseReward"], 0),
