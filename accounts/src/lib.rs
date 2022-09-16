@@ -400,6 +400,14 @@ impl AccountProvider {
         &self, account: &StoreAccountRef,
     ) -> Result<Password, SignError> {
         let mut unlocked = self.unlocked.write();
+        Self::password_with_unlocked(&mut unlocked, account)
+    }
+
+    fn password_with_unlocked(
+        unlocked: &mut HashMap<StoreAccountRef, AccountData>,
+        account: &StoreAccountRef,
+    ) -> Result<Password, SignError>
+    {
         let data = unlocked.get(account).ok_or(SignError::NotUnlocked)?.clone();
         if let Unlock::OneTime = data.unlock {
             unlocked
@@ -473,14 +481,16 @@ impl AccountProvider {
         &self, address: Address, password: Option<Password>, message: Message,
     ) -> Result<Signature, SignError> {
         let account = self.sstore.account_ref(&address)?;
+        // unlocked must be acquired before unlocked_secrets
+        let mut unlocked = self.unlocked.write();
         match self.unlocked_secrets.read().get(&account) {
             Some(secret) => {
                 Ok(self.sstore.sign_with_secret(&secret, &message)?)
             }
             None => {
-                let password = password
-                    .map(Ok)
-                    .unwrap_or_else(|| self.password(&account))?;
+                let password = password.map(Ok).unwrap_or_else(|| {
+                    Self::password_with_unlocked(&mut unlocked, &account)
+                })?;
                 Ok(self.sstore.sign(&account, &password, &message)?)
             }
         }
