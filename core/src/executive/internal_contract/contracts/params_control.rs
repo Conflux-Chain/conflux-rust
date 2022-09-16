@@ -14,7 +14,13 @@ make_solidity_contract! {
     pub struct ParamsControl(PARAMS_CONTROL_CONTRACT_ADDRESS, generate_fn_table, initialize: |params: &CommonParams| params.transition_numbers.cip94, is_active: |spec: &Spec| spec.cip94);
 }
 fn generate_fn_table() -> SolFnTable {
-    make_function_table!(CastVote, ReadVote, CurrentRound, TotalVotes, PosStakeForVotes)
+    make_function_table!(
+        CastVote,
+        ReadVote,
+        CurrentRound,
+        TotalVotes,
+        PosStakeForVotes
+    )
 }
 group_impl_is_active!(
     |spec: &Spec| spec.cip94,
@@ -23,10 +29,7 @@ group_impl_is_active!(
     CurrentRound,
     TotalVotes
 );
-group_impl_is_active!(
-    |spec: &Spec| spec.cip105,
-    PosStakeForVotes,
-);
+group_impl_is_active!(|spec: &Spec| spec.cip105, PosStakeForVotes,);
 
 make_solidity_event! {
     pub struct VoteEvent("Vote(uint64,address,uint16,uint256[3])", indexed: (u64,Address,u16), non_indexed: [U256;3]);

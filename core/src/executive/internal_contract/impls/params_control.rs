@@ -257,7 +257,9 @@ pub fn total_votes(
     Ok(answer)
 }
 
-pub fn pos_stake_for_votes(version: u64, context: &mut InternalRefContext,) -> vm::Result<U256> {
+pub fn pos_stake_for_votes(
+    version: u64, context: &mut InternalRefContext,
+) -> vm::Result<U256> {
     let current_voting_version = (context.env.number
         - context.spec.cip94_activation_block_number)
         / context.spec.params_dao_vote_period
