@@ -114,7 +114,7 @@ impl SimpleExecutionTrait for TotalVotes {
 }
 
 make_solidity_function! {
-    struct PosStakeForVotes(u64, "posStakeForVotes()", U256);
+    struct PosStakeForVotes(u64, "posStakeForVotes(uint64)", U256);
 }
 impl_function_type!(PosStakeForVotes, "query", gas: |spec: &Spec| 2 * spec.sload_gas);
 
