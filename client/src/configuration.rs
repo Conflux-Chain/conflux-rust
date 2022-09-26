@@ -148,7 +148,7 @@ build_config! {
         (hydra_transition_number, (Option<u64>), Some(92060600))
         (hydra_transition_height, (Option<u64>), Some(36935000))
         (dao_vote_transition_number, (Option<u64>), Some(133800000))
-        (dao_vote_transition_height, (Option<u64>), Some(56740000))
+        (dao_vote_transition_height, (Option<u64>), Some(56800000))
         (cip43_init_end_number, (Option<u64>), Some(92751800))
         (cip78_patch_transition_number,(Option<u64>),None)
         (cip90_transition_height,(Option<u64>),None)
