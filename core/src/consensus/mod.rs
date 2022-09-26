@@ -1362,13 +1362,32 @@ impl ConsensusGraph {
                 from_epoch,
                 to_epoch,
                 ..
-            } => self.filter_logs_by_epochs(
-                from_epoch.clone(),
-                to_epoch.clone(),
-                &filter,
-                Default::default(),
-                !filter.trusted, /* check_range */
-            ),
+            } => {
+                // When query logs, if epoch number greater than
+                // best_executed_state_epoch_number, use LatestState instead of
+                // epoch number, in this case we can return logs from from_epoch
+                // to LatestState
+                let to_epoch = if let EpochNumber::Number(num) = to_epoch {
+                    let epoch_number =
+                        if *num > self.best_executed_state_epoch_number() {
+                            EpochNumber::LatestState
+                        } else {
+                            to_epoch.clone()
+                        };
+
+                    epoch_number
+                } else {
+                    to_epoch.clone()
+                };
+
+                self.filter_logs_by_epochs(
+                    from_epoch.clone(),
+                    to_epoch,
+                    &filter,
+                    Default::default(),
+                    !filter.trusted, /* check_range */
+                )
+            }
 
             // filter by block hashes
             LogFilter::BlockHashLogFilter { block_hashes, .. } => {

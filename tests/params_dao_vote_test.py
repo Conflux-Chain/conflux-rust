@@ -2,7 +2,10 @@
 import json
 import os
 
+import eth_utils
 from eth_utils import decode_hex
+from jsonrpcclient.exceptions import ReceivedErrorResponseError
+from web3 import Web3
 
 from conflux.config import default_config
 from conflux.messages import Transactions
@@ -55,12 +58,6 @@ BLOCKS_PER_YEAR = 2 * 60 * 60 * 24 * 365
 
 
 class ParamsDaoVoteTest(ConfluxTestFramework):
-    REQUEST_BASE = {
-        'gas': CONTRACT_DEFAULT_GAS,
-        'gasPrice': 1,
-        'chainId': 1,
-    }
-
     def __init__(self):
         super().__init__()
         self.nonce_map = {}
@@ -73,49 +70,6 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         self.conf_parameters["params_dao_vote_period"] = "10"
         self.conf_parameters["dao_vote_transition_number"] = "1"
         self.conf_parameters["dao_vote_transition_height"] = "1"
-
-    def get_nonce(self, sender, inc=True):
-        if sender not in self.nonce_map:
-            self.nonce_map[sender] = wait_for_initial_nonce_for_address(self.nodes[0], sender)
-        else:
-            self.nonce_map[sender] += 1
-        return self.nonce_map[sender]
-
-    def send_transaction(self, transaction, wait, check_status):
-        self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=[transaction]))
-        if wait:
-            self.wait_for_tx([transaction], check_status)
-
-    def call_contract_function(self, contract, name, args, sender_key, value=None,
-                               contract_addr=None, wait=False,
-                               check_status=False,
-                               storage_limit=0):
-        if contract_addr:
-            func = getattr(contract.functions, name)
-        else:
-            func = getattr(contract, name)
-        attrs = {
-            'nonce': self.get_nonce(priv_to_addr(sender_key)),
-            **ParamsDaoVoteTest.REQUEST_BASE
-        }
-        if contract_addr:
-            attrs['receiver'] = decode_hex(contract_addr)
-            attrs['to'] = contract_addr
-        else:
-            attrs['receiver'] = b''
-        tx_data = func(*args).buildTransaction(attrs)
-        tx_data['data'] = decode_hex(tx_data['data'])
-        tx_data['pri_key'] = sender_key
-        tx_data['gas_price'] = tx_data['gasPrice']
-        if value:
-            tx_data['value'] = value
-        tx_data.pop('gasPrice', None)
-        tx_data.pop('chainId', None)
-        tx_data.pop('to', None)
-        tx_data['storage_limit'] = storage_limit
-        transaction = create_transaction(**tx_data)
-        self.send_transaction(transaction, wait, check_status)
-        return transaction
 
     def run_test(self):
         file_dir = os.path.dirname(os.path.realpath(__file__))
@@ -331,6 +285,19 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         vote_params = client.get_params_from_vote()
         assert_equal(int(vote_params["interestRate"], 0), current_interest_rate)
         assert_equal(int(vote_params["powBaseReward"], 0), current_base_reward)
+
+        # test reading interfaces
+        block_number = int(client.get_status()["blockNumber"], 0)
+        round = int(block_number / vote_period)
+        data = get_contract_function_data(params_control_contract, "currentRound", args=[])
+        assert_equal(round, int(client.call("0x0888000000000000000000000000000000000007", eth_utils.encode_hex(data)), 0))
+        data = get_contract_function_data(params_control_contract, "posStakeForVotes", args=[round])
+        assert_equal(2_000_000 * 10 ** 18, int(client.call("0x0888000000000000000000000000000000000007", eth_utils.encode_hex(data)), 0))
+        data = get_contract_function_data(params_control_contract, "totalVotes", args=[round])
+        total = client.call("0x0888000000000000000000000000000000000007", eth_utils.encode_hex(data))
+        data = get_contract_function_data(params_control_contract, "readVote", args=[Web3.toChecksumAddress(client.GENESIS_ADDR)])
+        vote = client.call("0x0888000000000000000000000000000000000007", eth_utils.encode_hex(data))
+        assert_equal(total, vote)
 
 
 if __name__ == "__main__":
