@@ -27,7 +27,7 @@ class PosDecisionCrossCheckpoint(DefaultConfluxTestFramework):
         self.conf_parameters["anticone_penalty_ratio"] = "10"
         # No auto timeout.
         self.pos_parameters["round_time_ms"] = 1000000000
-
+        self.conf_parameters["poll_lifetime_in_seconds"] = '180'
     def run_test(self):
         clients = []
         for node in self.nodes:

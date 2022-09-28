@@ -39,7 +39,7 @@ use parking_lot::{Mutex, RwLock};
 use primitives::{Account, SignedTransaction, TransactionWithSignature};
 use std::{
     cmp::{max, min},
-    collections::hash_map::HashMap,
+    collections::{hash_map::HashMap, BTreeSet},
     mem,
     ops::DerefMut,
     sync::{
@@ -247,6 +247,10 @@ impl TransactionPool {
             maybe_start_nonce,
             maybe_limit,
         )
+    }
+
+    pub fn get_pending_transaction_hashes(&self) -> BTreeSet<H256> {
+        self.inner.read().deferred_transacton_hashes()
     }
 
     pub fn get_state_account_info(

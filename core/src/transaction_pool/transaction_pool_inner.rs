@@ -26,7 +26,7 @@ use rlp::*;
 use serde::Serialize;
 use std::{
     cmp::{Ordering, Reverse},
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -681,6 +681,10 @@ impl TransactionPoolInner {
     }
 
     pub fn total_deferred(&self) -> usize { self.txs.len() }
+
+    pub fn deferred_transacton_hashes(&self) -> BTreeSet<H256> {
+        self.txs.keys().cloned().collect()
+    }
 
     pub fn total_ready_accounts(&self) -> usize {
         self.ready_account_pool.len()
