@@ -5,6 +5,8 @@
 use std::{
     collections::{BTreeSet, HashMap, VecDeque},
     sync::Arc,
+    thread,
+    time::Duration,
 };
 
 use cfx_types::{H256, U256};
@@ -46,6 +48,7 @@ pub trait Filterable {
     /// Get logs that match the given filter.
     fn logs(&self, filter: LogFilter) -> RpcResult<Vec<Log>>;
 
+    /// Get logs that match the given filter for specific epoch
     fn logs_for_epoch(
         &self, filter: &LogFilter, epoch: (u64, Vec<H256>), removed: bool,
         data_man: &Arc<BlockDataManager>,
@@ -54,12 +57,16 @@ pub trait Filterable {
     /// Get a reference to the poll manager.
     fn polls(&self) -> &Mutex<PollManager<SyncPollFilter>>;
 
+    /// Get a reference to ConsensusGraph
     fn consensus_graph(&self) -> &ConsensusGraph;
 
+    /// Get a clone of SharedConsensusGraph
     fn shared_consensus_graph(&self) -> SharedConsensusGraph;
 
+    /// Get logs limitation
     fn get_logs_filter_max_limit(&self) -> Option<usize>;
 
+    /// Get epochs since last query
     fn epochs_since_last_request(
         &self, last_block_number: u64,
         recent_reported_epochs: &VecDeque<(u64, Vec<H256>)>,
@@ -91,6 +98,7 @@ impl EthFilterClient {
             logs_filter_max_limit,
         };
 
+        // start loop to receive epochs, to avoid re-org during filter query
         filter_client.start_epochs_loop(epochs_ordered, executor);
         filter_client
     }
@@ -117,6 +125,8 @@ impl EthFilterClient {
                     "latest finalized epoch number: {}, received epochs: {:?}",
                     latest_finalized_epoch_number, epoch
                 );
+
+                // only keep epochs after finalized state
                 while let Some(e) = epochs.front() {
                     if e.0 < latest_finalized_epoch_number {
                         epochs.pop_front();
@@ -228,7 +238,7 @@ impl Filterable for EthFilterClient {
             if last_block_number != num {
                 bail!(RpcError {
                     code: ErrorCode::ServerError(codes::UNSUPPORTED),
-                    message: "Last block number not match".into(),
+                    message: "Last block number does not match".into(),
                     data: None,
                 });
             }
@@ -242,7 +252,7 @@ impl Filterable for EthFilterClient {
         debug!("current epoch number {}", current_epoch_number);
         let latest_epochs = self.unfinalized_epochs.read();
 
-        // the best executed epoch
+        // the best executed epoch index
         let mut idx = latest_epochs.len() as i32 - 1;
         while idx >= 0 && latest_epochs[idx as usize].0 != current_epoch_number
         {
@@ -262,6 +272,7 @@ impl Filterable for EthFilterClient {
                 break;
             }
 
+            // only keep the last one
             if !hm.contains_key(&num) {
                 hm.insert(num, blocks.clone());
                 new_epochs.push((num, blocks));
@@ -274,7 +285,7 @@ impl Filterable for EthFilterClient {
 
         // re-orged epochs
         // when last_block_number great than or equal to
-        // latest_finalized_epoch_number, reorg_epochs is empty
+        // latest_finalized_epoch_number, reorg_epochs should be empty
         // when last_block_number less than
         // latest_finalized_epoch_number, epochs between [fork point,
         // min(last_block_number, latest_finalized_epoch_number)]
@@ -290,19 +301,20 @@ impl Filterable for EthFilterClient {
             };
 
             if pivot_hash == hash {
-                // fork point
+                // meet fork point
                 break;
             }
 
             if num < end_epoch_number {
-                debug!("reorg {}, {:?}", num, pivot_hash);
+                debug!("reorg for {}, pivot hash {:?}", num, pivot_hash);
                 reorg_epochs.push((num, pivot_hash));
             }
             reorg_len += 1;
         }
         reorg_epochs.reverse();
 
-        // mid stable epochs
+        // mid stable epochs, epochs in [last_block_number,
+        // latest_finalized_epoch_number]
         debug!(
             "stable epochs from {} to {}",
             last_block_number + 1,
@@ -317,7 +329,7 @@ impl Filterable for EthFilterClient {
         reorg_epochs.append(&mut new_epochs);
 
         debug!(
-            "Chain reorg len: {}, new epoch len: {}",
+            "Chain reorg len: {}, new epochs len: {}",
             reorg_len,
             reorg_epochs.len()
         );
@@ -410,6 +422,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
                     recent_reported_epochs,
                 )?;
 
+                // rewind block to last valid
                 for _ in 0..reorg_len {
                     recent_reported_epochs.pop_front();
                 }
@@ -607,20 +620,29 @@ fn retrieve_epoch_logs(
 }
 
 // attempt to retrieve block receipts from BlockDataManager
-// on failure, wait and retry a few times, then fail
-// NOTE: we do this because we might get epoch notifications
-// before the corresponding execution results are computed
 fn retrieve_block_receipts(
     data_man: &Arc<BlockDataManager>, block: &H256, pivot: &H256,
 ) -> Option<Arc<BlockReceipts>> {
-    match data_man.block_execution_result_by_hash_with_epoch(
-        &block, &pivot, false, /* update_pivot_assumption */
-        false, /* update_cache */
-    ) {
-        Some(res) => return Some(res.block_receipts.clone()),
-        None => {
+    const POLL_INTERVAL_MS: Duration = Duration::from_millis(100);
+
+    for ii in 0.. {
+        match data_man.block_execution_result_by_hash_with_epoch(
+            &block, &pivot, false, /* update_pivot_assumption */
+            false, /* update_cache */
+        ) {
+            Some(res) => return Some(res.block_receipts.clone()),
+            None => {
+                error!("Cannot find receipts with {:?}/{:?}", block, pivot);
+                thread::sleep(POLL_INTERVAL_MS);
+            }
+        }
+
+        // we assume that an epoch gets executed within 100 seconds
+        if ii > 1000 {
             error!("Cannot find receipts with {:?}/{:?}", block, pivot);
             return None;
         }
     }
+
+    unreachable!()
 }

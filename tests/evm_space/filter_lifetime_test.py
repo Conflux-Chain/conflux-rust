@@ -2,7 +2,7 @@
 
 import os, sys, time
 
-sys.path.insert(1, os.path.join(sys.path[0], '..'))
+sys.path.insert(1, os.path.join(sys.path[0], ".."))
 
 import asyncio
 
@@ -13,12 +13,13 @@ from jsonrpcclient.exceptions import ReceivedErrorResponseError
 
 FULLNODE0 = 0
 
+
 class FilterLifetimeTest(Web3Base):
     def set_test_params(self):
         self.num_nodes = 1
         self.conf_parameters["log_level"] = '"trace"'
-        self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = '200'
-        self.conf_parameters["poll_lifetime_in_seconds"] = '10'
+        self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = "200"
+        self.conf_parameters["poll_lifetime_in_seconds"] = "10"
 
     def setup_network(self):
         self.add_nodes(self.num_nodes)
@@ -28,14 +29,14 @@ class FilterLifetimeTest(Web3Base):
         # set up RPC clients
         self.rpc = [None] * self.num_nodes
         self.rpc[FULLNODE0] = RpcClient(self.nodes[FULLNODE0])
-  
+
         # wait for phase changes to complete
         self.nodes[FULLNODE0].wait_for_phase(["NormalSyncPhase"])
 
     async def run_async(self):
         # filter not exist
         try:
-            self.nodes[0].eth_getFilterChanges('0x0')
+            self.nodes[0].eth_getFilterChanges("0x0")
         except ReceivedErrorResponseError as e:
             assert_equal(e.response.message, "Filter not found")
         else:
@@ -46,7 +47,9 @@ class FilterLifetimeTest(Web3Base):
             filter = {"toBlock": "pending"}
             self.nodes[0].eth_newFilter(filter)
         except ReceivedErrorResponseError as e:
-            assert_equal(e.response.message, "Filter logs from pending blocks is not supported")
+            assert_equal(
+                e.response.message, "Filter logs from pending blocks is not supported"
+            )
         else:
             raise AssertionError("Expected exception")
 
@@ -63,7 +66,7 @@ class FilterLifetimeTest(Web3Base):
             assert_equal(e.response.message, "Filter not found")
         else:
             raise AssertionError("Expected exception")
-        
+
         filter = self.nodes[0].eth_newPendingTransactionFilter()
         txs = self.nodes[0].eth_getFilterChanges(filter)
         assert_equal(len(txs), 0)

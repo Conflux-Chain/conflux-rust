@@ -1,23 +1,18 @@
 #!/usr/bin/env python3
 
-# allow imports from parent directory
-# source: https://stackoverflow.com/a/11158224
 import os, sys, time
 
 
-sys.path.insert(1, os.path.join(sys.path[0], '..'))
+sys.path.insert(1, os.path.join(sys.path[0], ".."))
 
 import asyncio
 from test_framework.test_framework import DefaultConfluxTestFramework
 
-from eth_utils import decode_hex
-from conflux.config import default_config
 from conflux.rpc import RpcClient
-from conflux.utils import sha3 as keccak
-from test_framework.blocktools import encode_hex_0x
-from test_framework.util import assert_equal, connect_nodes, disconnect_nodes, sync_blocks
-from web3 import Web3
-from base import Web3Base
+from test_framework.util import (
+    assert_equal,
+    sync_blocks,
+)
 from conflux.utils import int_to_hex
 from test_framework.util import wait_until
 
@@ -26,12 +21,13 @@ class FilterBlockTest(DefaultConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 4
         self.conf_parameters["log_level"] = '"trace"'
-        self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = '120'
-        self.conf_parameters["poll_lifetime_in_seconds"] = '180'
+        self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = "120"
+        self.conf_parameters["poll_lifetime_in_seconds"] = "180"
         self.conf_parameters["era_epoch_count"] = "100"
 
-
-        self.conf_parameters["vrf_proposal_threshold"] = '"{}"'.format(int_to_hex(int(2 ** 256 - 1)))
+        self.conf_parameters["vrf_proposal_threshold"] = '"{}"'.format(
+            int_to_hex(int(2**256 - 1))
+        )
         self.conf_parameters["timer_chain_block_difficulty_ratio"] = "3"
         self.conf_parameters["timer_chain_beta"] = "20"
         self.conf_parameters["dev_snapshot_epoch_count"] = "25"
@@ -69,6 +65,7 @@ class FilterBlockTest(DefaultConfluxTestFramework):
         filter_blocks = self.nodes[0].eth_getFilterChanges(filter)
         assert_equal(len(filter_blocks), 6)
 
+        # create fork
         for _ in range(26):
             last_block = clients[0].generate_block_with_parent(last_block)
             blocks.append(last_block)
@@ -76,12 +73,20 @@ class FilterBlockTest(DefaultConfluxTestFramework):
         chain_len = 270
         blocks.extend(clients[0].generate_empty_blocks(chain_len + 1))
         sync_blocks(self.nodes)
-        pivot_decision_height = (300 - int(self.conf_parameters["pos_pivot_decision_defer_epoch_count"])) // 60 * 60
+        pivot_decision_height = (
+            (300 - int(self.conf_parameters["pos_pivot_decision_defer_epoch_count"]))
+            // 60
+            * 60
+        )
         # generate_empty_blocks may not generate a chain if the node is slow.
-        chosen_decision = clients[0].block_by_epoch(int_to_hex(pivot_decision_height))["hash"]
+        chosen_decision = clients[0].block_by_epoch(int_to_hex(pivot_decision_height))[
+            "hash"
+        ]
         sync_blocks(self.nodes)
         for client in clients:
-            client.pos_force_sign_pivot_decision(chosen_decision, int_to_hex(pivot_decision_height))
+            client.pos_force_sign_pivot_decision(
+                chosen_decision, int_to_hex(pivot_decision_height)
+            )
         time.sleep(1)
 
         for i in range(4):
@@ -94,7 +99,10 @@ class FilterBlockTest(DefaultConfluxTestFramework):
             time.sleep(0.5)
             blocks.extend(clients[0].generate_blocks(1))
             sync_blocks(self.nodes)
-        assert_equal(int(clients[0].pos_status()["pivotDecision"]["height"], 0), pivot_decision_height)
+        assert_equal(
+            int(clients[0].pos_status()["pivotDecision"]["height"], 0),
+            pivot_decision_height,
+        )
         assert_equal(clients[0].epoch_number("latest_finalized"), pivot_decision_height)
 
         filter_blocks = self.nodes[0].eth_getFilterChanges(filter)
