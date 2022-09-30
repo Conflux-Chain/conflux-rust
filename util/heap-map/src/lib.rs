@@ -139,6 +139,10 @@ impl<K: hash::Hash + Eq + Copy + Debug, V: PartialEq + Eq + Ord + Clone>
     #[allow(dead_code)]
     pub fn len(&self) -> usize { self.data.len() }
 
+    pub fn iter(&self) -> impl Iterator<Item = V> + '_ {
+        self.data.iter().map(|f| f.value.clone())
+    }
+
     fn update(&mut self, key: &K, value: V) -> V {
         let index = *self.mapping.get(key).unwrap();
         let origin_node = self.data[index].clone();

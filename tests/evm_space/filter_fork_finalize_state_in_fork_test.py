@@ -18,7 +18,7 @@ from conflux.utils import int_to_hex
 from test_framework.util import wait_until
 
 
-class FilterBlockTest(DefaultConfluxTestFramework):
+class FilterForkTest(DefaultConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 4
         self.conf_parameters["log_level"] = '"trace"'
@@ -118,4 +118,4 @@ class FilterBlockTest(DefaultConfluxTestFramework):
 
 
 if __name__ == "__main__":
-    FilterBlockTest().main()
+    FilterForkTest().main()

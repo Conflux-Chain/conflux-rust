@@ -249,8 +249,8 @@ impl TransactionPool {
         )
     }
 
-    pub fn get_pending_transaction_hashes(&self) -> BTreeSet<H256> {
-        self.inner.read().deferred_transacton_hashes()
+    pub fn get_pending_transaction_hashes_in_evm_pool(&self) -> BTreeSet<H256> {
+        self.inner.read().ready_transacton_hashes_in_evm_pool()
     }
 
     pub fn get_state_account_info(

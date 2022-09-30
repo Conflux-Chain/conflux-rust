@@ -163,7 +163,7 @@ impl Filterable for EthFilterClient {
 
     /// pending transaction hashes at the given block (unordered).
     fn pending_transaction_hashes(&self) -> BTreeSet<H256> {
-        self.tx_pool.get_pending_transaction_hashes()
+        self.tx_pool.get_pending_transaction_hashes_in_evm_pool()
     }
 
     /// Get logs that match the given filter.
