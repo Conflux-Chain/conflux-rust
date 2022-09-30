@@ -308,6 +308,7 @@ build_config! {
         (executive_trace, (bool), false)
         (check_status_genesis, (bool), true)
         (packing_gas_limit_block_count, (u64), 10)
+        (poll_lifetime_in_seconds, (Option<u32>), None)
 
         // TreeGraph Section.
         (is_consortium, (bool), false)
@@ -981,6 +982,7 @@ impl Configuration {
                 && self.raw_conf.dev_block_interval_ms.is_none(),
             max_payload_bytes: self.raw_conf.jsonrpc_ws_max_payload_bytes,
             enable_metrics: self.raw_conf.rpc_enable_metrics,
+            poll_lifetime_in_seconds: self.raw_conf.poll_lifetime_in_seconds,
         }
     }
 
