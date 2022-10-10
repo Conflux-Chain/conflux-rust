@@ -2,7 +2,7 @@
 
 ## v2.1.1
 
-- Add filter RPCs in eSpace including `eth_newFilter`, `eth_newBlockFilter`, `eth_newPendingTransactionFilter`, `eth_getFilterChanges`, `eth_getFilterChanges`, `eth_uninstallFilter`
+- Add filter RPCs in eSpace including `eth_newFilter`, `eth_newBlockFilter`, `eth_newPendingTransactionFilter`, `eth_getFilterLogs`, `eth_getFilterChanges`, `eth_uninstallFilter`
 
 ## v2.1.0
 
