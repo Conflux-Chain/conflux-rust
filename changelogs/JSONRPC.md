@@ -1,10 +1,15 @@
 # JSON-RPC CHANGELOG
 
+## v2.1.1
+
+- Add filter RPCs in eSpace including `eth_newFilter`, `eth_newBlockFilter`, `eth_newPendingTransactionFilter`, `eth_getFilterChanges`, `eth_getFilterChanges`, `eth_uninstallFilter`
+
 ## v2.1.0
 
 - Support `eth_subscribe` and `eth_unsubscribe` in eSpace RPCs.
 - Add an RPC method [`cfx_getParamsFromVote`](https://developer.confluxnetwork.org/conflux-doc/docs/json_rpc#cfx_getparamsfromvote) to return the currently used value of the voted parameters.
 - Return null for getting skipped transactions and receipts. Whether they will be returned was nondeterministic before, but now they are ensured to be null.
+- When querying logs, use LatestState instead of the to epoch number when the to epoch number is greater than LatestState
 
 ## v2.0.3
 
