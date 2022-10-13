@@ -227,7 +227,12 @@ impl BlockDataManager {
             db_manager,
             pow,
             state_availability_boundary: RwLock::new(
-                StateAvailabilityBoundary::new(true_genesis.hash(), 0),
+                StateAvailabilityBoundary::new(
+                    true_genesis.hash(),
+                    0,
+                    None,
+                    None,
+                ),
             ),
             gc_progress: Arc::new(Mutex::new(GCProgress::new(
                 previous_db_progress,
