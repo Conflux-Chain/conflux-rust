@@ -23,8 +23,9 @@ pub struct SingleMptStorageManager {
     node_memory_manager: Arc<DeltaMptsNodeMemoryManager>,
     mpt: Arc<DeltaMpt>,
 
-    // If it's None, we will keep data for both spaces.
+    /// If it's None, we will keep data for both spaces.
     pub space: Option<Space>,
+    /// The state is available from (including) this height.
     pub available_height: u64,
 
     pub genesis_hash: Mutex<EpochId>,
