@@ -26,7 +26,7 @@ use rlp::*;
 use serde::Serialize;
 use std::{
     cmp::{Ordering, Reverse},
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -336,6 +336,16 @@ impl SpacedReadyAccountPool {
 
     fn len(&self) -> usize { self.packing_pool.len() + self.waiting_pool.len() }
 
+    fn get_all_transaction_hashes(&self) -> BTreeSet<H256> {
+        self.waiting_pool
+            .iter()
+            .map(|f| f.0.hash())
+            .collect::<BTreeSet<_>>()
+            .union(&self.packing_pool.get_all_transaction_hashes())
+            .cloned()
+            .collect()
+    }
+
     #[cfg(test)]
     fn top(&self) -> Option<Arc<SignedTransaction>> { self.packing_pool.top() }
 }
@@ -380,6 +390,10 @@ impl PackingPool {
     }
 
     fn len(&self) -> usize { self.treap.len() }
+
+    fn get_all_transaction_hashes(&self) -> BTreeSet<H256> {
+        self.treap.iter().map(|v| v.1.hash()).collect()
+    }
 
     fn get(&self, address: &Address) -> Option<Arc<SignedTransaction>> {
         self.heap_map.get(address).map(|tx| (tx.0).0.clone())
@@ -500,6 +514,10 @@ impl ReadyAccountPool {
     }
 
     fn len(&self) -> usize { self.native_pool.len() + self.evm_pool.len() }
+
+    fn get_transaction_hashes_in_evm_pool(&self) -> BTreeSet<H256> {
+        self.evm_pool.get_all_transaction_hashes()
+    }
 
     fn get(
         &self, address: &AddressWithSpace,
@@ -681,6 +699,10 @@ impl TransactionPoolInner {
     }
 
     pub fn total_deferred(&self) -> usize { self.txs.len() }
+
+    pub fn ready_transacton_hashes_in_evm_pool(&self) -> BTreeSet<H256> {
+        self.ready_account_pool.get_transaction_hashes_in_evm_pool()
+    }
 
     pub fn total_ready_accounts(&self) -> usize {
         self.ready_account_pool.len()

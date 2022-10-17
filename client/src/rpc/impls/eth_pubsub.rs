@@ -82,6 +82,10 @@ impl PubSubClient {
         Arc::downgrade(&self.handler)
     }
 
+    pub fn epochs_ordered(&self) -> Arc<Channel<(u64, Vec<H256>)>> {
+        self.epochs_ordered.clone()
+    }
+
     fn start_heads_loop(&self) {
         let mut loop_started = self.heads_loop_started.write();
         if *loop_started {

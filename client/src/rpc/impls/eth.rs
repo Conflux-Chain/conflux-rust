@@ -5,15 +5,15 @@
 use crate::rpc::{
     error_codes::{
         call_execution_error, internal_error, invalid_params,
-        request_rejected_in_catch_up_mode, unimplemented, unknown_block,
+        request_rejected_in_catch_up_mode, unknown_block,
     },
     impls::RpcImplConfiguration,
-    traits::eth_space::eth::{Eth, EthFilter},
+    traits::eth_space::eth::Eth,
     types::{
         eth::{
             AccountPendingTransactions, Block as RpcBlock, BlockNumber,
-            CallRequest, EthRpcLogFilter, FilterChanges, Log, Receipt,
-            SyncInfo, SyncStatus, Transaction,
+            CallRequest, EthRpcLogFilter, Log, Receipt, SyncInfo, SyncStatus,
+            Transaction,
         },
         Bytes, Index, MAX_GAS_CALL_REQUEST,
     },
@@ -1107,49 +1107,5 @@ impl Eth for EthHandler {
             first_tx_status: tx_status,
             pending_count: pending_count.into(),
         })
-    }
-}
-
-impl EthFilter for EthHandler {
-    fn new_filter(&self, _: EthRpcLogFilter) -> jsonrpc_core::Result<U256> {
-        warn!("RPC Request (Not Supported!): eth_newFilter");
-        bail!(unimplemented(Some(
-            "ETH Filter RPC not implemented!".into()
-        )));
-    }
-
-    fn new_block_filter(&self) -> jsonrpc_core::Result<U256> {
-        warn!("RPC Request (Not Supported!): eth_newBlockFilter");
-        bail!(unimplemented(Some(
-            "ETH Filter RPC not implemented!".into()
-        )));
-    }
-
-    fn new_pending_transaction_filter(&self) -> jsonrpc_core::Result<U256> {
-        warn!("RPC Request (Not Supported!): eth_newPendingTransactionFilter");
-        bail!(unimplemented(Some(
-            "ETH Filter RPC not implemented!".into()
-        )));
-    }
-
-    fn filter_changes(&self, _: Index) -> jsonrpc_core::Result<FilterChanges> {
-        warn!("RPC Request (Not Supported!): eth_getFilterChanges");
-        bail!(unimplemented(Some(
-            "ETH Filter RPC not implemented!".into()
-        )));
-    }
-
-    fn filter_logs(&self, _: Index) -> jsonrpc_core::Result<Vec<Log>> {
-        warn!("RPC Request (Not Supported!): eth_getFilterLogs");
-        bail!(unimplemented(Some(
-            "ETH Filter RPC not implemented!".into()
-        )));
-    }
-
-    fn uninstall_filter(&self, _: Index) -> jsonrpc_core::Result<bool> {
-        warn!("RPC Request (Not Supported!): eth_uninstallFilter");
-        bail!(unimplemented(Some(
-            "ETH Filter RPC not implemented!".into()
-        )));
     }
 }
