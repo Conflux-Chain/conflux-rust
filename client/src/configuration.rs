@@ -154,6 +154,7 @@ build_config! {
         (cip90_transition_height,(Option<u64>),None)
         (cip90_transition_number,(Option<u64>),None)
         (cip105_transition_number, (Option<u64>), None)
+        (sigma_fix_transition_number, (Option<u64>), None)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (params_dao_vote_period, (u64), DAO_PARAMETER_VOTE_PERIOD)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
@@ -1188,6 +1189,11 @@ impl Configuration {
             .raw_conf
             .cip105_transition_number
             .or(self.raw_conf.dao_vote_transition_number)
+            .unwrap_or(default_transition_time);
+        params.transition_numbers.cip_sigma_fix = self
+            .raw_conf
+            .cip105_transition_number
+            .or(self.raw_conf.sigma_fix_transition_number)
             .unwrap_or(default_transition_time);
         if self.is_test_or_dev_mode() {
             params.transition_numbers.cip43b =
