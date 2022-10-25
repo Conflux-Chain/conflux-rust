@@ -9,7 +9,10 @@ use crate::rpc::{
     traits::eth_space::eth_pubsub::EthPubSub as PubSub,
     types::eth::{eth_pubsub as pubsub, Header as RpcHeader, Log as RpcLog},
 };
-use cfx_parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
+use cfx_parameters::{
+    consensus::DEFERRED_STATE_EPOCH_COUNT,
+    consensus_internal::REWARD_EPOCH_COUNT,
+};
 use cfx_types::{Space, H256};
 use cfxcore::{
     channel::Channel, BlockDataManager, ConsensusGraph, Notifications,
@@ -362,6 +365,7 @@ impl ChainNotificationHandler {
     ) -> Option<Arc<BlockReceipts>> {
         info!("eth pubsub retrieve_block_receipts");
         const POLL_INTERVAL_MS: Duration = Duration::from_millis(100);
+        let block_height = self.data_man.block_height_by_hash(block)?;
 
         // we assume that all epochs we receive (with a distance of at least
         // `DEFERRED_STATE_EPOCH_COUNT` from the tip of the pivot chain) are
@@ -371,6 +375,7 @@ impl ChainNotificationHandler {
         // if these assumptions hold, we will eventually successfully read these
         // execution results, even if they are outdated.
         for ii in 0.. {
+            let latest = self.consensus.best_epoch_number();
             match self.data_man.block_execution_result_by_hash_with_epoch(
                 &block, &pivot, false, /* update_pivot_assumption */
                 false, /* update_cache */
@@ -386,6 +391,21 @@ impl ChainNotificationHandler {
             if ii > 1000 {
                 error!("Cannot find receipts with {:?}/{:?}", block, pivot);
                 return None;
+            } else {
+                if latest
+                    > block_height
+                        + DEFERRED_STATE_EPOCH_COUNT
+                        + REWARD_EPOCH_COUNT
+                {
+                    // Even if the epoch was executed, the receipts on the fork
+                    // should have been deleted and cannot
+                    // be retrieved.
+                    warn!(
+                        "Cannot find receipts with {:?}/{:?}, latest_epoch={}",
+                        block, pivot, latest
+                    );
+                    return None;
+                }
             }
         }
 
