@@ -80,12 +80,12 @@ fn decode_bls_pubkey(bls_pubkey: Bytes) -> Result<PublicKey, CryptoError> {
 }
 
 fn verify_bls_pubkey(
-    bls_pubkey: Bytes, bls_proof: [Bytes; 2],
+    bls_pubkey: Bytes, bls_proof: [Bytes; 2], legacy: bool,
 ) -> Result<Option<Bytes>, CryptoError> {
     let pubkey = decode_bls_pubkey(bls_pubkey)?;
     let commit = decode_commit(bls_proof[0].as_slice())?;
     let answer = decode_answer(bls_proof[1].as_slice())?;
-    let verified_pubkey = if verify(pubkey.clone(), commit, answer) {
+    let verified_pubkey = if verify(pubkey.clone(), commit, answer, legacy) {
         let mut serialized_pubkey: Vec<u8> = Vec::new();
         pubkey
             .write_bytes(&mut serialized_pubkey)
@@ -159,7 +159,8 @@ pub fn register(
         internal_bail!("can not change identifier");
     }
 
-    let maybe_verified_bls_pubkey = verify_bls_pubkey(bls_pubkey, bls_proof)?;
+    let maybe_verified_bls_pubkey =
+        verify_bls_pubkey(bls_pubkey, bls_proof, !context.spec.cip_sigma_fix)?;
     let verified_bls_pubkey = maybe_verified_bls_pubkey.ok_or(
         vm::Error::InternalContract("Can not verify bls pubkey".into()),
     )?;
