@@ -113,7 +113,7 @@ class TxRelayTest(ConfluxTestFramework):
 
         # sync blocks to make sure the light client has the header with the latest state
         self.log.info("syncing blocks...")
-        sync_blocks(self.nodes)
+        sync_blocks(self.nodes, sync_state=False)
 
         for (hash, _, _) in txs:
             self.check_tx(hash)      # cfx_getTransactionByHash
@@ -150,7 +150,7 @@ class TxRelayTest(ConfluxTestFramework):
 
         # sync blocks to make sure the light client has the header with the latest state
         self.log.info("syncing blocks...")
-        sync_blocks(self.nodes)
+        sync_blocks(self.nodes, sync_state=False)
 
         latest_epoch = self.rpc[FULLNODE0].epoch_number()
 
