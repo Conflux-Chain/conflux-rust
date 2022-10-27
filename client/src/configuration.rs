@@ -155,7 +155,7 @@ build_config! {
         (cip90_transition_height,(Option<u64>),None)
         (cip90_transition_number,(Option<u64>),None)
         (cip105_transition_number, (Option<u64>), Some(102000))
-        (sigma_fix_transition_number, (Option<u64>), None)
+        (sigma_fix_transition_number, (Option<u64>), Some(7160000))
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (params_dao_vote_period, (u64), 3600)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
