@@ -471,7 +471,7 @@ def sync_blocks(rpc_connections, *, sync_count=True, sync_state=True, wait=1, ti
     stop_time = time.time() + timeout
     while time.time() <= stop_time:
         best_hash = [x.best_block_hash() for x in rpc_connections]
-        best_executed = [x.cfx_epochNumber("latest_state") for x in rpc_connections]
+        best_executed = [x.cfx_epochNumber("latest_state") if sync_state else 0 for x in rpc_connections]
         block_count = [x.getblockcount() for x in rpc_connections]
         if best_hash.count(best_hash[0]) == len(rpc_connections) \
             and (not sync_state or best_executed.count(best_executed[0]) == len(rpc_connections)) \
