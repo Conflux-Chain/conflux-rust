@@ -366,7 +366,7 @@ impl ChainNotificationHandler {
         &self, block: &H256, pivot: &H256,
     ) -> Option<Arc<BlockReceipts>> {
         const POLL_INTERVAL_MS: Duration = Duration::from_millis(100);
-        let block_height = self.data_man.block_height_by_hash(block)?;
+        let epoch = self.data_man.block_height_by_hash(pivot)?;
 
         // we assume that all epochs we receive (with a distance of at least
         // `DEFERRED_STATE_EPOCH_COUNT` from the tip of the pivot chain) are
@@ -394,7 +394,7 @@ impl ChainNotificationHandler {
                 return None;
             } else {
                 if latest
-                    > block_height
+                    > epoch
                         + DEFERRED_STATE_EPOCH_COUNT
                         + REWARD_EPOCH_COUNT
                 {
