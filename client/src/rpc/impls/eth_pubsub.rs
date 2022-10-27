@@ -365,7 +365,7 @@ impl ChainNotificationHandler {
     ) -> Option<Arc<BlockReceipts>> {
         info!("eth pubsub retrieve_block_receipts");
         const POLL_INTERVAL_MS: Duration = Duration::from_millis(100);
-        let block_height = self.data_man.block_height_by_hash(block)?;
+        let epoch = self.data_man.block_height_by_hash(pivot)?;
 
         // we assume that all epochs we receive (with a distance of at least
         // `DEFERRED_STATE_EPOCH_COUNT` from the tip of the pivot chain) are
@@ -393,9 +393,7 @@ impl ChainNotificationHandler {
                 return None;
             } else {
                 if latest
-                    > block_height
-                        + DEFERRED_STATE_EPOCH_COUNT
-                        + REWARD_EPOCH_COUNT
+                    > epoch + DEFERRED_STATE_EPOCH_COUNT + REWARD_EPOCH_COUNT
                 {
                     // Even if the epoch was executed, the receipts on the fork
                     // should have been deleted and cannot
