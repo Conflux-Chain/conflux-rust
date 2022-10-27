@@ -394,9 +394,7 @@ impl ChainNotificationHandler {
                 return None;
             } else {
                 if latest
-                    > epoch
-                        + DEFERRED_STATE_EPOCH_COUNT
-                        + REWARD_EPOCH_COUNT
+                    > epoch + DEFERRED_STATE_EPOCH_COUNT + REWARD_EPOCH_COUNT
                 {
                     // Even if the epoch was executed, the receipts on the fork
                     // should have been deleted and cannot
