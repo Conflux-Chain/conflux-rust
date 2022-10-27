@@ -21,6 +21,7 @@ from test_framework.util import (
     assert_greater_than_or_equal,
     assert_is_hash_string,
     assert_is_hex_string,
+    assert_equal,
     wait_until, checktx, get_contract_instance
 )
 
@@ -110,7 +111,8 @@ class RpcClient:
     def generate_blocks_to_state(self, num_blocks: int = 5, num_txs: int = 1) -> list:
         return self.generate_blocks(num_blocks, num_txs)
 
-    def generate_block_with_parent(self, parent_hash: str, referee: list = None, num_txs: int = 0, adaptive: bool = False,
+    def generate_block_with_parent(self, parent_hash: str, referee: list = None, num_txs: int = 0,
+                                   adaptive: bool = False,
                                    difficulty=None, pos_reference=None) -> str:
         assert_is_hash_string(parent_hash)
 
@@ -546,7 +548,7 @@ class RpcClient:
     def filter_trace(self, filter: dict):
         return self.node.trace_filter(filter)
 
-    def wait_for_pos_register(self, priv_key=None, stake_value=2_000_000, voting_power=None):
+    def wait_for_pos_register(self, priv_key=None, stake_value=2_000_000, voting_power=None, legacy=True, should_fail=False):
         if priv_key is None:
             priv_key = self.node.pow_sk
         if voting_power is None:
@@ -557,11 +559,15 @@ class RpcClient:
         stake_tx = self.new_tx(priv_key=priv_key, data=stake_tx_data(stake_value), value=0,
                                receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
         self.send_tx(stake_tx, wait_for_receipt=True)
-        data, pos_identifier = self.node.pos_register(int_to_hex(voting_power))
+        data, pos_identifier = self.node.pos_register(int_to_hex(voting_power), 0 if legacy else 1)
         register_tx = self.new_tx(priv_key=priv_key, data=eth_utils.decode_hex(data), value=0,
                                   receiver="0x0888000000000000000000000000000000000005", gas=CONTRACT_DEFAULT_GAS,
                                   storage_limit=1024)
-        self.send_tx(register_tx, wait_for_receipt=True)
+        register_tx_hash = self.send_tx(register_tx, wait_for_receipt=True)
+        assert_equal(
+            int(self.node.cfx_getTransactionReceipt(register_tx_hash)["outcomeStatus"], 0),
+            1 if should_fail else 0
+        )
         return pos_identifier, priv_key
 
     def wait_for_unstake(self, priv_key=None, unstake_value=2_000_000):

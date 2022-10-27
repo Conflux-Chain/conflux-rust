@@ -116,7 +116,7 @@ pub trait TestRpc {
 
     #[rpc(name = "pos_register")]
     fn pos_register(
-        &self, voting_power: U64,
+        &self, voting_power: U64, version: Option<u8>,
     ) -> RpcResult<(Bytes, AccountAddress)>;
 
     #[rpc(name = "pos_update_voting_power")]
