@@ -1193,8 +1193,7 @@ impl Configuration {
             .unwrap_or(default_transition_time);
         params.transition_numbers.cip_sigma_fix = self
             .raw_conf
-            .cip105_transition_number
-            .or(self.raw_conf.sigma_fix_transition_number)
+            .sigma_fix_transition_number
             .unwrap_or(default_transition_time);
         if self.is_test_or_dev_mode() {
             params.transition_numbers.cip43b =
