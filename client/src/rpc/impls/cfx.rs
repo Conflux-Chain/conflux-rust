@@ -1691,7 +1691,7 @@ impl TestRpc for TestRpcImpl {
             fn say_hello(&self) -> JsonRpcResult<String>;
             fn stop(&self) -> JsonRpcResult<()>;
             fn save_node_db(&self) -> JsonRpcResult<()>;
-            fn pos_register(&self, voting_power: U64) -> JsonRpcResult<(Bytes, AccountAddress)>;
+            fn pos_register(&self, voting_power: U64, version: Option<u8>) -> JsonRpcResult<(Bytes, AccountAddress)>;
             fn pos_update_voting_power(
                 &self, pos_account: AccountAddress, increased_voting_power: U64,
             ) -> JsonRpcResult<()>;

@@ -130,7 +130,7 @@ pub struct StorageManager {
 
     last_confirmed_snapshottable_epoch_id: Mutex<Option<EpochId>>,
 
-    storage_conf: StorageConfiguration,
+    pub storage_conf: StorageConfiguration,
 }
 
 impl MallocSizeOf for StorageManager {

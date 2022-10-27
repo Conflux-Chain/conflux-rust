@@ -495,7 +495,7 @@ pub fn genesis_block(
 
 pub fn register_transaction(
     bls_priv_key: BLSPrivateKey, vrf_pub_key: EcVrfPublicKey, power: u64,
-    genesis_chain_id: u32,
+    genesis_chain_id: u32, legacy: bool,
 ) -> NativeTransaction
 {
     /// TODO: test this function with new internal contracts.
@@ -512,6 +512,7 @@ pub fn register_transaction(
     let (commit, answer) = sigma_protocol::prove(
         bls_priv_key.raw_key(),
         &mut StdRng::seed_from_u64(0),
+        legacy,
     );
 
     let mut encoded_commit = Vec::<u8>::new();

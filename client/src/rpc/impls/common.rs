@@ -755,13 +755,15 @@ impl RpcImpl {
     }
 
     pub fn pos_register(
-        &self, voting_power: U64,
+        &self, voting_power: U64, version: Option<u8>,
     ) -> JsonRpcResult<(Bytes, AccountAddress)> {
+        let legacy = version.map_or(false, |x| x == 0);
         let tx = register_transaction(
             self.pos_handler.config().bls_key.private_key(),
             self.pos_handler.config().vrf_key.public_key(),
             voting_power.as_u64(),
             0,
+            legacy,
         );
         let identifier = from_consensus_public_key(
             &self.pos_handler.config().bls_key.public_key(),

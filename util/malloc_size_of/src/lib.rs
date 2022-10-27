@@ -20,7 +20,9 @@ use jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 use cfg_if::cfg_if;
-use cfx_types::{AddressWithSpace, AllChainID, H160, H256, H512, U256, U512};
+use cfx_types::{
+    AddressWithSpace, AllChainID, Space, H160, H256, H512, U256, U512,
+};
 use hashbrown::HashMap as FastHashMap;
 use parking_lot;
 use slab::Slab;
@@ -521,7 +523,8 @@ malloc_size_of_is_0!(
     H160,
     U512,
     AddressWithSpace,
-    AllChainID
+    AllChainID,
+    Space
 );
 
 mod usable_size {

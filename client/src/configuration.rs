@@ -155,6 +155,7 @@ build_config! {
         (cip90_transition_height,(Option<u64>),None)
         (cip90_transition_number,(Option<u64>),None)
         (cip105_transition_number, (Option<u64>), Some(102000))
+        (sigma_fix_transition_number, (Option<u64>), None)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (params_dao_vote_period, (u64), 3600)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
@@ -309,6 +310,7 @@ build_config! {
         (executive_trace, (bool), false)
         (check_status_genesis, (bool), true)
         (packing_gas_limit_block_count, (u64), 10)
+        (poll_lifetime_in_seconds, (Option<u32>), None)
 
         // TreeGraph Section.
         (is_consortium, (bool), false)
@@ -982,6 +984,7 @@ impl Configuration {
                 && self.raw_conf.dev_block_interval_ms.is_none(),
             max_payload_bytes: self.raw_conf.jsonrpc_ws_max_payload_bytes,
             enable_metrics: self.raw_conf.rpc_enable_metrics,
+            poll_lifetime_in_seconds: self.raw_conf.poll_lifetime_in_seconds,
         }
     }
 
@@ -1187,6 +1190,11 @@ impl Configuration {
             .raw_conf
             .cip105_transition_number
             .or(self.raw_conf.dao_vote_transition_number)
+            .unwrap_or(default_transition_time);
+        params.transition_numbers.cip_sigma_fix = self
+            .raw_conf
+            .cip105_transition_number
+            .or(self.raw_conf.sigma_fix_transition_number)
             .unwrap_or(default_transition_time);
         if self.is_test_or_dev_mode() {
             params.transition_numbers.cip43b =
