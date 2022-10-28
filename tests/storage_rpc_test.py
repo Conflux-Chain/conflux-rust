@@ -58,7 +58,7 @@ class StorageRpcTest(ConfluxTestFramework):
 
         # make sure we all nodes are in sync
         self.log.info("syncing nodes...\n")
-        sync_blocks(self.nodes[:])
+        sync_blocks(self.nodes, sync_state=False)
 
         # test `pos0`
         self.log.info("Retrieving single variable value `pos0` from full node...")

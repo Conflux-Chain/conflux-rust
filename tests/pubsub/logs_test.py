@@ -29,7 +29,6 @@ NUM_CALLS = 20
 class PubSubTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
-        self.conf_parameters["log_level"] = '"trace"'
         self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = '200'
 
     def setup_network(self):
