@@ -155,7 +155,7 @@ class LightRPCTest(ConfluxTestFramework):
 
         # make sure we can check the blame for each header
         self.rpc[FULLNODE0].generate_blocks(BLAME_CHECK_OFFSET)
-        sync_blocks(self.nodes)
+        sync_blocks(self.nodes, sync_state=False)
 
         # save genesis hash
         self.GENESIS_HASH = self.nodes[FULLNODE0].cfx_getBlocksByEpoch("earliest")[-1]
@@ -441,7 +441,7 @@ class LightRPCTest(ConfluxTestFramework):
         for _ in range(BLAME_CHECK_OFFSET + 10):
             parent_hash = self.rpc[FULLNODE0].generate_block_with_parent(parent_hash=parent_hash)
 
-        sync_blocks(self.nodes)
+        sync_blocks(self.nodes, sync_state=False)
         time.sleep(1)
 
         # --------------------------

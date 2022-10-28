@@ -75,7 +75,7 @@ class StorageRootTest(ConfluxTestFramework):
         # make sure the storage roots are verifiable on the light node
         latest_epoch = self.rpc[FULLNODE0].epoch_number()
         self.rpc[FULLNODE0].generate_blocks(SNAPSHOT_EPOCH_COUNT)
-        sync_blocks(self.nodes)
+        sync_blocks(self.nodes, sync_state=False)
 
         # check storage roots
         first_available_epoch = (latest_epoch - 1) // SNAPSHOT_EPOCH_COUNT \
