@@ -299,6 +299,7 @@ where
                 vrf_public_key.clone(),
                 voting_power,
                 chain_id,
+                false,
             );
             let public_key_str = public_key.to_encoded_string().unwrap();
             let vrf_public_key_str =

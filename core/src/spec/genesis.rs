@@ -490,7 +490,7 @@ pub fn genesis_block(
 
 pub fn register_transaction(
     bls_priv_key: BLSPrivateKey, vrf_pub_key: EcVrfPublicKey, power: u64,
-    genesis_chain_id: u32,
+    genesis_chain_id: u32, legacy: bool,
 ) -> NativeTransaction
 {
     use bls_signatures::{
@@ -504,7 +504,7 @@ pub fn register_transaction(
 
     let bls_pub_key = bls_priv_key.public_key();
     let (commit, answer) =
-        sigma_protocol::prove(bls_priv_key.raw_key(), &mut OsRng);
+        sigma_protocol::prove(bls_priv_key.raw_key(), &mut OsRng, legacy);
 
     let mut encoded_commit = Vec::<u8>::new();
     BlsPubKey::from(commit)

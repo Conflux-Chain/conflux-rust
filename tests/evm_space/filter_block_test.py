@@ -11,7 +11,7 @@ from test_framework.util import (
     assert_equal,
     connect_nodes,
     disconnect_nodes,
-    sync_blocks,
+    sync_blocks, wait_until,
 )
 from base import Web3Base
 

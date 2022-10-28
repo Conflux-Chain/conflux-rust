@@ -52,13 +52,7 @@ impl StateManager {
             Some(SingleMptStorageManager::new_arc(
                 conf.path_storage_dir.join("single_mpt"),
                 conf.single_mpt_space,
-                if conf.single_mpt_space == Some(Space::Ethereum) {
-                    // The eSpace state is only available after cip90 is
-                    // enabled.
-                    conf.cip90a
-                } else {
-                    0
-                },
+                conf.full_state_start_height().expect("enabled"),
             ))
         } else {
             None
@@ -637,6 +631,10 @@ impl StateManager {
         if let Some(single_mpt_manager) = &self.single_mpt_storage_manager {
             *single_mpt_manager.genesis_hash.lock() = genesis_hash;
         }
+    }
+
+    pub fn config(&self) -> &StorageConfiguration {
+        &self.storage_manager.storage_conf
     }
 }
 

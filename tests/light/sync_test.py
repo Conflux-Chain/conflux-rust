@@ -100,7 +100,7 @@ class LightSyncTest(ConfluxTestFramework):
         self.log.info(f"Pass 3 -- recover from db")
 
     def check_headers_synced(self):
-        sync_blocks(self.nodes)
+        sync_blocks(self.nodes, sync_state=False)
 
     def check_witnesses_synced(self):
         latest_epoch = self.rpc[FULLNODE0].epoch_number()

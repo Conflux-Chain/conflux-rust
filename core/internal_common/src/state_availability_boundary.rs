@@ -11,6 +11,13 @@ pub struct StateAvailabilityBoundary {
     pub pivot_chain: Vec<H256>,
 
     pub synced_state_height: u64,
+    /// All states of `full_state_space` are available for reading after this
+    /// height. `None` means no full state are kept.
+    pub full_state_start_height: Option<u64>,
+    /// `None` means both spaces are kept.
+    /// This field is not used if `full_state_start_height` is `None`.
+    pub full_state_space: Option<Space>,
+
     /// This is the lower boundary height of available state where we can
     /// execute new epochs based on it. Note that `synced_state_height` is
     /// within this bound for execution, but its state cannot be accessed
@@ -26,10 +33,16 @@ pub struct StateAvailabilityBoundary {
 }
 
 impl StateAvailabilityBoundary {
-    pub fn new(epoch_hash: H256, epoch_height: u64) -> Self {
+    pub fn new(
+        epoch_hash: H256, epoch_height: u64,
+        full_state_start_height: Option<u64>, full_state_space: Option<Space>,
+    ) -> Self
+    {
         Self {
             pivot_chain: vec![epoch_hash],
             synced_state_height: 0,
+            full_state_start_height,
+            full_state_space,
             lower_bound: epoch_height,
             upper_bound: epoch_height,
             optimistic_executed_height: None,
@@ -57,10 +70,36 @@ impl StateAvailabilityBoundary {
     }
 
     pub fn check_read_availability(
-        &self, _height: u64, _block_hash: &H256,
+        &self, height: u64, block_hash: &H256, space: Option<Space>,
     ) -> bool {
-        // FIXME(lpl): implement single mpt related availability check.
-        return true;
+        self.check_availability(height, block_hash)
+            || (height < self.lower_bound
+                && self.full_state_available(height, space))
+    }
+
+    fn full_state_available(&self, height: u64, space: Option<Space>) -> bool {
+        match self.full_state_start_height {
+            // No full state
+            None => false,
+            // Support full state, so check the height and space.
+            Some(start_height) => {
+                height >= start_height && self.contains_space(&space)
+            }
+        }
+    }
+
+    pub fn contains_space(&self, space: &Option<Space>) -> bool {
+        match (space, &self.full_state_space) {
+            (_, None) => {
+                // We keep the state in all spaces.
+                true
+            }
+            (None, Some(_)) => {
+                // We keep a part of states but all states are needed.
+                false
+            }
+            (Some(need_space), Some(kept_space)) => need_space == kept_space,
+        }
     }
 
     /// Try to update `upper_bound` according to a new executed block.
@@ -113,7 +152,7 @@ impl StateAvailabilityBoundary {
 }
 
 use cfx_parameters::consensus_internal::REWARD_EPOCH_COUNT;
-use cfx_types::H256;
+use cfx_types::{Space, H256};
 use derivative::Derivative;
 use malloc_size_of_derive::MallocSizeOf;
 use primitives::BlockHeader;

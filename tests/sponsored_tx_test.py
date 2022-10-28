@@ -2,7 +2,7 @@
 from eth_utils import decode_hex
 
 from conflux.address import hex_to_b32_address
-from conflux.rpc import RpcClient
+from conflux.rpc import RpcClient, get_contract_function_data
 from conflux.transactions import CONTRACT_DEFAULT_GAS, COLLATERAL_UNIT_IN_DRIP, charged_of_huge_gas
 from conflux.utils import priv_to_addr
 from test_framework.block_gen_thread import BlockGenThread
@@ -217,6 +217,15 @@ class SponsoredTxTest(ConfluxTestFramework):
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sb - charged_of_huge_gas(gas))
         assert_equal(self.wait_for_tx([transaction], True)[0]['storageCoveredBySponsor'], True)
 
+        # addr1 call with larger storage limit, should be rejected for not enough balance
+        data = get_contract_function_data(test_contract, "foo", [])
+        transaction = client.new_contract_tx(receiver=contract_addr, data_hex=encode_hex(data), priv_key=priv_key1,
+                                             storage_limit=1025)
+        # rejected for not enough balance
+        assert_raises_rpc_error(None, None, client.send_tx, transaction)
+        tx_info = self.nodes[0].txpool_txWithPoolInfo(transaction.hash_hex())
+        assert_equal(tx_info['exist'], False)
+
         # send 1025 * 10 ** 18 // 1024 CFX to addr1
         tx = client.new_tx(
             sender=genesis_addr,
@@ -227,30 +236,10 @@ class SponsoredTxTest(ConfluxTestFramework):
         client.send_tx(tx, True)
         assert_equal(client.get_balance(addr1), 10 ** 6 + 1025 * 10 ** 18 // 1024)
 
-        # addr1 call with larger storage limit, should not packed
-        transaction = self.call_contract_function(
-            contract=test_contract,
-            name="foo",
-            args=[],
-            sender_key=priv_key1,
-            contract_addr=contract_addr,
-            storage_limit=1025)
-        for _ in range(10):
-            client.generate_block()
-
-        tx_info = self.nodes[0].txpool_txWithPoolInfo(transaction.hash_hex())
-        assert_equal(int(tx_info['local_nonce'], 16), 2)
-        assert_equal(tx_info['local_balance_enough'], False)
-        assert_equal(tx_info['packed'], False)
-
-        # Wait for 2 seconds so previous asynchronous `txpool.notify_modified_accounts()` calls can finish.
-        time.sleep(2)
-
-        for _ in range(10):
-            client.generate_block()
+        client.send_tx(transaction, True)
+        assert_equal(self.wait_for_tx([transaction], True)[0]['storageCoveredBySponsor'], False)
         tx_info = self.nodes[0].txpool_txWithPoolInfo(transaction.hash_hex())
         # Now addr1 pays for storage collateral by itself.
-        assert_equal(self.wait_for_tx([transaction], True)[0]['storageCoveredBySponsor'], False)
         assert_equal(int(tx_info['local_nonce'], 16), 3)
         assert_equal(tx_info['packed'], True)
 

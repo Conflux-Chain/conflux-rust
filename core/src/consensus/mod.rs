@@ -1499,7 +1499,9 @@ impl ConsensusGraph {
         // expire.
         let state_availability_boundary =
             self.data_man.state_availability_boundary.read();
-        if !state_availability_boundary.check_read_availability(height, &hash) {
+        if !state_availability_boundary
+            .check_read_availability(height, &hash, space)
+        {
             debug!(
                 "State for epoch (number={:?} hash={:?}) does not exist: out-of-bound {:?}",
                 height, hash, state_availability_boundary

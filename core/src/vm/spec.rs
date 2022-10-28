@@ -159,6 +159,7 @@ pub struct Spec {
     pub cip98: bool,
     /// CIP-105: Minimal DAO votes requirement based on PoS votes.
     pub cip105: bool,
+    pub cip_sigma_fix: bool,
     pub params_dao_vote_period: u64,
 }
 
@@ -301,6 +302,7 @@ impl Spec {
             cip97: false,
             cip98: false,
             cip105: false,
+            cip_sigma_fix: false,
         }
     }
 
@@ -322,6 +324,7 @@ impl Spec {
         spec.cip97 = number >= params.transition_numbers.cip97;
         spec.cip98 = number >= params.transition_numbers.cip98;
         spec.cip105 = number >= params.transition_numbers.cip105;
+        spec.cip_sigma_fix = number >= params.transition_numbers.cip_sigma_fix;
         spec.params_dao_vote_period = params.params_dao_vote_period;
         spec
     }
