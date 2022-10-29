@@ -1350,10 +1350,11 @@ impl RpcImpl {
             has_storage_limit: request.storage_limit.is_some(),
         };
 
-        let best_epoch_height = consensus_graph.best_epoch_number();
+        let epoch_height = consensus_graph
+            .get_height_from_epoch_number(epoch.clone().into())?;
         let chain_id = consensus_graph.best_chain_id();
         let signed_tx =
-            sign_call(best_epoch_height, chain_id.in_native_space(), request)?;
+            sign_call(epoch_height, chain_id.in_native_space(), request)?;
         trace!("call tx {:?}", signed_tx);
 
         consensus_graph.call_virtual(&signed_tx, epoch.into(), estimate_request)
