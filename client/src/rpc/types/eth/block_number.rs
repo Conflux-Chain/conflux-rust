@@ -196,7 +196,7 @@ impl TryFrom<BlockNumber> for EpochNumber {
             BlockNumber::Num(num) => Ok(EpochNumber::Number(num)),
             BlockNumber::Latest => Ok(EpochNumber::LatestState),
             BlockNumber::Earliest => Ok(EpochNumber::Earliest),
-            BlockNumber::Pending => Ok(EpochNumber::LatestMined),
+            BlockNumber::Pending => Ok(EpochNumber::LatestState),
             BlockNumber::Hash { .. } => Err(invalid_params(
                 "block_num",
                 "Expected block number, found block hash",
