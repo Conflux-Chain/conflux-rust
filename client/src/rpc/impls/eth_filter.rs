@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-use cfx_types::{H256, U256};
+use cfx_types::{H128, H256};
 use cfxcore::{
     channel::Channel, BlockDataManager, ConsensusGraph, ConsensusGraphTrait,
     SharedConsensusGraph, SharedTransactionPool,
@@ -26,10 +26,7 @@ use crate::rpc::{
     error_codes::codes,
     helpers::{limit_logs, PollFilter, PollManager, SyncPollFilter},
     traits::eth_space::eth::EthFilter,
-    types::{
-        eth::{BlockNumber, EthRpcLogFilter, FilterChanges, Log},
-        Index,
-    },
+    types::eth::{BlockNumber, EthRpcLogFilter, FilterChanges, Log},
 };
 use cfxcore::rpc_errors::Error as CfxRpcError;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result as RpcResult};
@@ -339,7 +336,7 @@ impl Filterable for EthFilterClient {
 
 impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
     /// Returns id of new filter.
-    fn new_filter(&self, filter: EthRpcLogFilter) -> RpcResult<U256> {
+    fn new_filter(&self, filter: EthRpcLogFilter) -> RpcResult<H128> {
         debug!("create filter: {:?}", filter);
         let mut polls = self.polls().lock();
         let block_number = self.best_executed_epoch_number();
@@ -376,7 +373,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
     }
 
     /// Returns id of new block filter.
-    fn new_block_filter(&self) -> RpcResult<U256> {
+    fn new_block_filter(&self) -> RpcResult<H128> {
         debug!("create block filter");
         let mut polls = self.polls().lock();
         // +1, since we don't want to include the current block
@@ -391,7 +388,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
     }
 
     /// Returns id of new block filter.
-    fn new_pending_transaction_filter(&self) -> RpcResult<U256> {
+    fn new_pending_transaction_filter(&self) -> RpcResult<H128> {
         debug!("create pending transaction filter");
         let mut polls = self.polls().lock();
         let pending_transactions = self.pending_transaction_hashes();
@@ -402,8 +399,8 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
     }
 
     /// Returns filter changes since last poll.
-    fn filter_changes(&self, index: Index) -> RpcResult<FilterChanges> {
-        let filter = match self.polls().lock().poll_mut(&index.value()) {
+    fn filter_changes(&self, index: H128) -> RpcResult<FilterChanges> {
+        let filter = match self.polls().lock().poll_mut(&index) {
             Some(filter) => filter.clone(),
             None => bail!(RpcError {
                 code: ErrorCode::InvalidRequest,
@@ -528,11 +525,11 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
     }
 
     /// Returns all logs matching given filter (in a range 'from' - 'to').
-    fn filter_logs(&self, index: Index) -> RpcResult<Vec<Log>> {
+    fn filter_logs(&self, index: H128) -> RpcResult<Vec<Log>> {
         let (filter, _) = {
             let mut polls = self.polls().lock();
 
-            match polls.poll(&index.value()).and_then(|f| {
+            match polls.poll(&index).and_then(|f| {
                 f.modify(|filter| match *filter {
                     PollFilter::Logs {
                         ref filter,
@@ -559,8 +556,8 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
     }
 
     /// Uninstalls filter.
-    fn uninstall_filter(&self, index: Index) -> RpcResult<bool> {
-        Ok(self.polls().lock().remove_poll(&index.value()))
+    fn uninstall_filter(&self, index: H128) -> RpcResult<bool> {
+        Ok(self.polls().lock().remove_poll(&index))
     }
 }
 
