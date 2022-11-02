@@ -17,9 +17,10 @@
 
 //! Indexes all rpc poll requests.
 
+use cfx_types::H128;
 use transient_hashmap::{StandardTimer, Timer, TransientHashMap};
 
-pub type PollId = usize;
+pub type PollId = H128;
 
 /// Indexes all poll requests.
 ///
@@ -28,7 +29,6 @@ pub struct PollManager<F, T = StandardTimer>
 where T: Timer
 {
     polls: TransientHashMap<PollId, F, T>,
-    next_available_id: PollId,
 }
 
 impl<F> PollManager<F, StandardTimer> {
@@ -44,7 +44,6 @@ where T: Timer
     pub fn new_with_timer(timer: T, lifetime: u32) -> Self {
         PollManager {
             polls: TransientHashMap::new_with_timer(lifetime, timer),
-            next_available_id: 0,
         }
     }
 
@@ -54,10 +53,17 @@ where T: Timer
     pub fn create_poll(&mut self, filter: F) -> PollId {
         self.polls.prune();
 
-        let id = self.next_available_id;
+        let id = loop {
+            let id = PollId::random();
+            if self.polls.contains_key(&id) {
+                continue;
+            }
+
+            break id;
+        };
+
         self.polls.insert(id, filter);
 
-        self.next_available_id += 1;
         id
     }
 
@@ -100,23 +106,24 @@ mod tests {
         let timer = TestTimer { time: &time };
 
         let mut indexer = PollManager::new_with_timer(timer, 60);
-        assert_eq!(indexer.create_poll(20), 0);
-        assert_eq!(indexer.create_poll(20), 1);
+        let id1 = indexer.create_poll(20);
+        let id2 = indexer.create_poll(20);
+        assert_ne!(id1, id2);
 
         time.set(10);
-        *indexer.poll_mut(&0).unwrap() = 21;
-        assert_eq!(*indexer.poll(&0).unwrap(), 21);
-        assert_eq!(*indexer.poll(&1).unwrap(), 20);
+        *indexer.poll_mut(&id1).unwrap() = 21;
+        assert_eq!(*indexer.poll(&id1).unwrap(), 21);
+        assert_eq!(*indexer.poll(&id2).unwrap(), 20);
 
         time.set(30);
-        *indexer.poll_mut(&1).unwrap() = 23;
-        assert_eq!(*indexer.poll(&1).unwrap(), 23);
+        *indexer.poll_mut(&id2).unwrap() = 23;
+        assert_eq!(*indexer.poll(&id2).unwrap(), 23);
 
         time.set(75);
-        assert!(indexer.poll(&0).is_none());
-        assert_eq!(*indexer.poll(&1).unwrap(), 23);
+        assert!(indexer.poll(&id1).is_none());
+        assert_eq!(*indexer.poll(&id2).unwrap(), 23);
 
-        indexer.remove_poll(&1);
-        assert!(indexer.poll(&1).is_none());
+        indexer.remove_poll(&id2);
+        assert!(indexer.poll(&id2).is_none());
     }
 }
