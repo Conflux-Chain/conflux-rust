@@ -46,7 +46,8 @@ pub enum BlockNumber {
     Earliest,
     /// Pending block (being mined)
     Pending,
-    /// Compatibility tag support for ethereum "safe" tag. Will reflect to "latest_confirmed"
+    /// Compatibility tag support for ethereum "safe" tag. Will reflect to
+    /// "latest_confirmed"
     Safe,
     /// Finalized block
     Finalized,
@@ -228,6 +229,8 @@ mod tests {
 			"latest",
 			"earliest",
 			"pending",
+            "safe",
+            "finalized",
 			{"blockNumber": "0xa"},
 			{"blockHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"},
 			{"blockHash": "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347", "requireCanonical": true}
@@ -241,6 +244,8 @@ mod tests {
                 BlockNumber::Latest,
                 BlockNumber::Earliest,
                 BlockNumber::Pending,
+                BlockNumber::Safe,
+                BlockNumber::Finalized,
                 BlockNumber::Num(10),
                 BlockNumber::Hash {
                     hash: H256::from_str(
