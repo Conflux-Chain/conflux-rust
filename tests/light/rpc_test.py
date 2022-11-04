@@ -385,10 +385,12 @@ class LightRPCTest(ConfluxTestFramework):
         self.log.info(f"Checking cfx_getDepositList & cfx_getVoteList")
         full = self.rpc[FULLNODE0].get_deposit_list(self.stake_addr, latest_state)
         light = self.rpc[LIGHTNODE].get_deposit_list(self.stake_addr, latest_state)
+        assert full[0]["depositTime"].startswith("0x")
         assert_equal(light, full)
 
         full = self.rpc[FULLNODE0].get_vote_list(self.stake_addr, latest_state)
         light = self.rpc[LIGHTNODE].get_vote_list(self.stake_addr, latest_state)
+        assert full[0]["unlockBlockNumber"].startswith("0x")
         assert_equal(light, full)
 
         self.log.info(f"Pass -- cfx_getDepositList & cfx_getVoteList")
