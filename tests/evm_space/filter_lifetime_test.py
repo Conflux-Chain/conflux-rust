@@ -36,7 +36,7 @@ class FilterLifetimeTest(Web3Base):
     async def run_async(self):
         # filter not exist
         try:
-            self.nodes[0].eth_getFilterChanges("0x0")
+            self.nodes[0].eth_getFilterChanges("0x70ab3983392f45393c624f8e95a2dee4")
         except ReceivedErrorResponseError as e:
             assert_equal(e.response.message, "Filter not found")
         else:
