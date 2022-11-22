@@ -285,6 +285,12 @@ impl FakeVM {
                             return false;
                         }
                     };
+                if proposal1 == proposal2 {
+                    diem_trace!(
+                        "Two same proposals are claimed to be conflict"
+                    );
+                    return false;
+                }
                 if (proposal1.block_data().epoch()
                     != proposal2.block_data().epoch())
                     || (proposal1.block_data().round()
@@ -324,6 +330,10 @@ impl FakeVM {
                         return false;
                     }
                 };
+                if vote1 == vote2 {
+                    diem_trace!("Two same votes are claimed to be conflict");
+                    return false;
+                }
                 if (vote1.vote_data().proposed().epoch()
                     != vote2.vote_data().proposed().epoch())
                     || (vote1.vote_data().proposed().round()
