@@ -283,7 +283,7 @@ def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="
         set_node_pos_config(dirname, n, pos_round_time_ms=pos_round_time_ms)
 
 
-def set_node_pos_config(dirname, n, setup_keys=True, pos_round_time_ms=1000):
+def set_node_pos_config(dirname, n, setup_keys=True, pos_round_time_ms=1000, hardcoded_epoch_committee=None):
     waypoint_path = os.path.join(dirname, 'waypoint_config')
     genesis_path = os.path.join(dirname, 'genesis_file')
     waypoint = open(waypoint_path, 'r').readlines()[0].strip()
@@ -316,6 +316,8 @@ def set_node_pos_config(dirname, n, setup_keys=True, pos_round_time_ms=1000):
         },
         'round_initial_timeout_ms': pos_round_time_ms,
     }
+    if hardcoded_epoch_committee is not None:
+        validator_config['consensus']['hardcoded_epoch_committee'] = hardcoded_epoch_committee
     validator_config['logger'] = {
         'level': "TRACE",
         'file': os.path.join(datadir, "pos.log")

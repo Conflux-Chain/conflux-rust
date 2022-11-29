@@ -61,7 +61,7 @@ impl EpochState {
         {
             verifier
         } else {
-            &self.verifier()
+            &self.verifier
         }
     }
 }
