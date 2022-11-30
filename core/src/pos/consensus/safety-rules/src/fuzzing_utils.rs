@@ -183,7 +183,7 @@ prop_compose! {
             Some(EpochState::new(
                 epoch,
                 verifier,
-                vrf_seed: vec![],
+                vec![],
             ))
         } else {
             None
