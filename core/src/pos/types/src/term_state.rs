@@ -974,7 +974,12 @@ impl PosState {
             self.term_list.serving_votes(target_term_offset, author);
         let voting_power = available_votes.saturating_sub(serving_votes);
         if voting_power > 0 {
-            self.term_list.new_node_elected(event, voting_power)?;
+            // A workaround for too much staked CFX in Testnet.
+            let bounded_power = std::cmp::min(
+                voting_power,
+                POS_STATE_CONFIG.max_nonce_per_account(self.current_view()),
+            );
+            self.term_list.new_node_elected(event, bounded_power)?;
         } else {
             diem_warn!("No votes can be elected: {:?} {:?}. available: {}, serving: {}.", event.node_id,
             event.start_term,available_votes,serving_votes);
