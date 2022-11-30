@@ -56,8 +56,7 @@ impl EpochState {
     pub fn verifier(&self) -> &ValidatorVerifier {
         if let Some(verifier) = HARDCODED_COMMITTEE_FOR_EPOCH
             .get()
-            .expect("initialized")
-            .get(&self.epoch)
+            .and_then(|m| m.get(&self.epoch))
         {
             verifier
         } else {
