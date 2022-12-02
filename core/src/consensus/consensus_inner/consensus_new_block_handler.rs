@@ -2096,6 +2096,9 @@ impl ConsensusNewBlockHandler {
                 pivot_index, height, compute_epoch,
             );
 
+            // FIXME(lpl): Temp fix for testnet to force recompute.
+            compute_epoch = true;
+
             if compute_epoch || pivot_index > force_compute_index {
                 let reward_execution_info = self
                     .executor
