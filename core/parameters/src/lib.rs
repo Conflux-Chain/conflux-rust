@@ -48,7 +48,7 @@ pub mod consensus {
     pub const TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [1];
     pub const DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [2];
     pub const TESTNET_FIX_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [3];
-    pub const TESTNET_FIX_HEIGHT: u64 = 101800000;
+    pub const TESTNET_FIX_HEIGHT: u64 = 101760000;
 }
 
 pub mod consensus_internal {
