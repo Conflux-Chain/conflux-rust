@@ -2255,7 +2255,6 @@ impl ConsensusGraphInner {
         &mut self, referee_bound: usize,
     ) -> Vec<H256> {
         let best_block_arena_index = *self.pivot_chain.last().unwrap();
-        // FIXME(lpl): Temp fix for Testnet.
         if self.terminal_hashes.len() > referee_bound {
             self.best_terminals(best_block_arena_index, referee_bound)
         } else {
