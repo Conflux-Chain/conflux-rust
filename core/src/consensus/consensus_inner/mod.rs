@@ -579,7 +579,7 @@ impl ConsensusGraphInner {
         pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
         pos_verifier: Arc<PosVerifier>, data_man: Arc<BlockDataManager>,
         inner_conf: ConsensusInnerConfig, cur_era_genesis_block_hash: &H256,
-        cur_era_stable_block_hash: &H256,
+        mut cur_era_stable_block_hash: H256,
     ) -> Self
     {
         let genesis_block_header = data_man
@@ -587,9 +587,20 @@ impl ConsensusGraphInner {
             .expect("genesis block header should exist here");
         let cur_era_genesis_height = genesis_block_header.height();
         let stable_block_header = data_man
-            .block_header_by_hash(cur_era_stable_block_hash)
+            .block_header_by_hash(&cur_era_stable_block_hash)
             .expect("stable genesis block header should exist here");
-        let cur_era_stable_height = stable_block_header.height();
+        let mut cur_era_stable_height = stable_block_header.height();
+        while !data_man.verified_invalid(&cur_era_stable_block_hash).0 {
+            cur_era_stable_height -= inner_conf.era_epoch_count;
+            if cur_era_stable_height < cur_era_genesis_height {
+                panic!("cur_era_stable_height < cur_era_genesis_height");
+            }
+            cur_era_stable_block_hash = *data_man
+                .executed_epoch_set_hashes_from_db(cur_era_stable_height)
+                .unwrap()
+                .last()
+                .unwrap();
+        }
         let initial_difficulty = pow_config.initial_difficulty;
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
@@ -636,7 +647,7 @@ impl ConsensusGraphInner {
         // inserted first into synchronization graph then consensus graph.
         // For genesis block, its past weight is simply zero (default value).
         let (genesis_arena_index, _) = inner.insert(&genesis_block_header);
-        if cur_era_genesis_block_hash == cur_era_stable_block_hash {
+        if *cur_era_genesis_block_hash == cur_era_stable_block_hash {
             inner
                 .initial_stable_future
                 .as_mut()
@@ -2249,13 +2260,7 @@ impl ConsensusGraphInner {
     ) -> Vec<H256> {
         let best_block_arena_index = *self.pivot_chain.last().unwrap();
         // FIXME(lpl): Temp fix for Testnet.
-        if self.terminal_hashes.len() >= referee_bound * 3 {
-            self.terminal_hashes
-                .iter()
-                .take(referee_bound)
-                .map(Clone::clone)
-                .collect()
-        } else if self.terminal_hashes.len() > referee_bound {
+        if self.terminal_hashes.len() > referee_bound {
             self.best_terminals(best_block_arena_index, referee_bound)
         } else {
             self.terminal_hashes

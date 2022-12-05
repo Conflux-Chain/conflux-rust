@@ -268,7 +268,7 @@ impl ConsensusGraph {
                 data_man.clone(),
                 conf.inner_conf.clone(),
                 era_genesis_block_hash,
-                era_stable_block_hash,
+                *era_stable_block_hash,
             )));
         let executor = ConsensusExecutor::start(
             txpool.clone(),
@@ -2436,7 +2436,7 @@ impl ConsensusGraphTrait for ConsensusGraph {
             self.data_man.clone(),
             old_consensus_inner.inner_conf.clone(),
             &cur_era_genesis_hash,
-            &cur_era_stable_hash,
+            cur_era_stable_hash,
         );
         *old_consensus_inner = new_consensus_inner;
         debug!("Build new consensus graph for sync-recovery with identified genesis {} stable block {}", cur_era_genesis_hash, cur_era_stable_hash);
