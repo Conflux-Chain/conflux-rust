@@ -20,6 +20,9 @@ pub struct PosStateConfig {
     cip99_transition_view: u64,
     cip99_out_queue_locked_views: u64,
     cip99_in_queue_locked_views: u64,
+
+    nonce_limit_transition_view: u64,
+    max_nonce_per_account: u64,
 }
 
 pub trait PosStateConfigTrait {
@@ -35,6 +38,7 @@ pub trait PosStateConfigTrait {
     fn force_retired_locked_views(&self, view: u64) -> u64;
 
     fn force_retire_check_epoch_count(&self, view: u64) -> u64;
+    fn max_nonce_per_account(&self, view: u64) -> u64;
 }
 
 impl PosStateConfig {
@@ -42,7 +46,8 @@ impl PosStateConfig {
         round_per_term: Round, term_max_size: usize, term_elected_size: usize,
         in_queue_locked_views: u64, out_queue_locked_views: u64,
         cip99_transition_view: u64, cip99_in_queue_locked_views: u64,
-        cip99_out_queue_locked_views: u64,
+        cip99_out_queue_locked_views: u64, nonce_limit_transition_view: u64,
+        max_nonce_per_account: u64,
     ) -> Self
     {
         Self {
@@ -54,6 +59,8 @@ impl PosStateConfig {
             cip99_transition_view,
             cip99_out_queue_locked_views,
             cip99_in_queue_locked_views,
+            nonce_limit_transition_view,
+            max_nonce_per_account,
         }
     }
 }
@@ -118,6 +125,15 @@ impl PosStateConfigTrait for OnceCell<PosStateConfig> {
             1
         }
     }
+
+    fn max_nonce_per_account(&self, view: u64) -> u64 {
+        let conf = self.get().unwrap();
+        if view >= conf.nonce_limit_transition_view {
+            conf.max_nonce_per_account
+        } else {
+            u64::MAX
+        }
+    }
 }
 
 pub static POS_STATE_CONFIG: OnceCell<PosStateConfig> = OnceCell::new();
@@ -133,6 +149,8 @@ impl Default for PosStateConfig {
             cip99_transition_view: u64::MAX,
             cip99_out_queue_locked_views: IN_QUEUE_LOCKED_VIEWS,
             cip99_in_queue_locked_views: OUT_QUEUE_LOCKED_VIEWS,
+            nonce_limit_transition_view: u64::MAX,
+            max_nonce_per_account: u64::MAX,
         }
     }
 }
