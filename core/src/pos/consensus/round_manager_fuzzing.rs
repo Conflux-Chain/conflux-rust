@@ -143,7 +143,7 @@ fn create_node_for_fuzzing() -> RoundManager {
         signer.author(),
         network_sender,
         self_sender,
-        epoch_state.verifier.clone(),
+        epoch_state.verifier().clone(),
     );
 
     // TODO: mock

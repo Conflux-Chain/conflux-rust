@@ -1032,11 +1032,11 @@ impl BlockInfoGen {
                     )
                 })
                 .collect();
-            let next_epoch_state = EpochState {
-                epoch: current_epoch + 1,
-                verifier: (&ValidatorSet::new(next_validator_infos)).into(),
-                vrf_seed: vec![],
-            };
+            let next_epoch_state = EpochState::new(
+                current_epoch + 1,
+                (&ValidatorSet::new(next_validator_infos)).into(),
+                vec![],
+            );
 
             universe.get_and_bump_epoch();
             universe.set_validator_set(current_epoch + 1, next_validator_set);

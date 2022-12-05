@@ -558,11 +558,7 @@ impl PosState {
             skipped: false,
         };
         let (verifier, vrf_seed) = pos_state.get_committee_at(0).unwrap();
-        pos_state.epoch_state = EpochState {
-            epoch: 0,
-            verifier,
-            vrf_seed,
-        };
+        pos_state.epoch_state = EpochState::new(0, verifier, vrf_seed);
         pos_state
     }
 
@@ -750,11 +746,14 @@ impl PosState {
                 pivot_decision_tx.height, self.pivot_decision.height
             )));
         }
-        let senders =
-            self.epoch_state.verifier.address_to_validator_info().keys();
+        let senders = self
+            .epoch_state
+            .verifier()
+            .address_to_validator_info()
+            .keys();
         let public_keys: Vec<ConsensusPublicKey> = senders
             .map(|sender| {
-                self.epoch_state.verifier.get_public_key(sender).unwrap()
+                self.epoch_state.verifier().get_public_key(sender).unwrap()
             })
             .collect();
         let public_key = MultiConsensusPublicKey::new(public_keys);
@@ -1014,13 +1013,7 @@ impl PosState {
         let epoch_state = if self.current_view == 1 {
             let (verifier, term_seed) = self.get_committee_at(0)?;
             // genesis
-            Some(EpochState {
-                // TODO(lpl): If we allow epoch changes within a term, this
-                // should be updated.
-                epoch: 1,
-                verifier,
-                vrf_seed: term_seed.clone(),
-            })
+            Some(EpochState::new(1, verifier, term_seed.clone()))
         } else if self.current_view % POS_STATE_CONFIG.round_per_term() == 0 {
             let new_term =
                 self.current_view / POS_STATE_CONFIG.round_per_term();
@@ -1030,13 +1023,9 @@ impl PosState {
                 new_term,
                 self.pivot_decision.block_hash.as_bytes().to_vec(),
             );
-            Some(EpochState {
-                // TODO(lpl): If we allow epoch changes within a term, this
-                // should be updated.
-                epoch: new_term + 1,
-                verifier,
-                vrf_seed: term_seed.clone(),
-            })
+            // TODO(lpl): If we allow epoch changes within a term, this
+            // should be updated.
+            Some(EpochState::new(new_term + 1, verifier, term_seed.clone()))
         } else if self.current_view
             >= POS_STATE_CONFIG.first_end_election_view()
             && self.current_view % POS_STATE_CONFIG.round_per_term()

@@ -213,7 +213,7 @@ impl EpochManager {
         &self, epoch_state: &EpochState,
     ) -> Box<dyn ProposerElection + Send + Sync> {
         let proposers = epoch_state
-            .verifier
+            .verifier()
             .get_ordered_account_addresses_iter()
             .collect::<Vec<_>>();
         match &self.config.proposer_type {
@@ -376,10 +376,10 @@ impl EpochManager {
         let epoch = epoch_state.epoch;
         counters::EPOCH.set(epoch_state.epoch as i64);
         counters::CURRENT_EPOCH_VALIDATORS
-            .set(epoch_state.verifier.len() as i64);
+            .set(epoch_state.verifier().len() as i64);
         diem_info!(
             epoch = epoch_state.epoch,
-            validators = epoch_state.verifier.to_string(),
+            validators = epoch_state.verifier().to_string(),
             root_block = recovery_data.root_block(),
             "Starting new epoch",
         );
@@ -414,7 +414,7 @@ impl EpochManager {
         // txn manager is required both by proposal generator (to pull the
         // proposers) and by event processor (to update their status).
         let proposal_generator = match epoch_state
-            .verifier
+            .verifier()
             .get_public_key(&self.author)
         {
             Some(public_key) => {
@@ -461,7 +461,7 @@ impl EpochManager {
             self.author,
             self.network_sender.clone(),
             //self.self_sender.clone(),
-            epoch_state.verifier.clone(),
+            epoch_state.verifier().clone(),
         );
 
         let mut processor = RoundManager::new(
@@ -520,7 +520,7 @@ impl EpochManager {
             self.author,
             self.network_sender.clone(),
             //self.self_sender.clone(),
-            epoch_state.verifier.clone(),
+            epoch_state.verifier().clone(),
         );
         self.processor = Some(RoundProcessor::Recovery(RecoveryManager::new(
             epoch_state,
@@ -535,12 +535,11 @@ impl EpochManager {
     async fn start_processor(&mut self, payload: OnChainConfigPayload) {
         let epoch_state: EpochState = payload.get().unwrap_or_else(|_| {
             let validator_set: ValidatorSet = payload.get().unwrap();
-            EpochState {
-                epoch: payload.epoch(),
-                verifier: (&validator_set).into(),
+            EpochState::new(
+                payload.epoch(),
+                (&validator_set).into(),
                 // genesis pivot decision
-                vrf_seed: self
-                    .storage
+                self.storage
                     .pos_ledger_db()
                     .get_latest_ledger_info()
                     .expect("non-empty ledger info")
@@ -550,7 +549,7 @@ impl EpochManager {
                     .block_hash
                     .as_bytes()
                     .to_vec(),
-            }
+            )
         });
         diem_debug!("start_processor: epoch_state={:?}", epoch_state);
 
@@ -582,7 +581,7 @@ impl EpochManager {
             let verified_event = unverified_event
                 .clone()
                 .verify(
-                    &self.epoch_state().verifier,
+                    &self.epoch_state().verifier(),
                     self.epoch_state().vrf_seed.as_slice(),
                 )
                 .context("[EpochManager] Verify event")

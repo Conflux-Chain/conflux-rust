@@ -182,7 +182,7 @@ impl RecoveryManager {
         &mut self, sync_info: &SyncInfo, peer: Author,
     ) -> Result<RecoveryData> {
         sync_info
-            .verify(&self.epoch_state.verifier)
+            .verify(&self.epoch_state.verifier())
             .map_err(VerifyError::from)?;
         ensure!(
             sync_info.highest_round() > self.last_committed_round,
@@ -450,7 +450,7 @@ impl RoundManager {
             .expect("checked by process_new_round_event")
             .generate_proposal(
                 new_round_event.round,
-                self.epoch_state.verifier.clone(),
+                self.epoch_state.verifier().clone(),
             )
             .await?;
         let mut signed_proposal = self.safety_rules.sign_proposal(proposal)?;
@@ -559,7 +559,7 @@ impl RoundManager {
             // Some information in SyncInfo is ahead of what we have locally.
             // First verify the SyncInfo (didn't verify it in the yet).
             sync_info
-                .verify(&self.epoch_state().verifier)
+                .verify(&self.epoch_state().verifier())
                 .map_err(|e| {
                     diem_error!(
                         SecurityEvent::InvalidSyncInfoMsg,
@@ -697,7 +697,7 @@ impl RoundManager {
 
         match self
             .round_state
-            .get_round_certificate(&self.epoch_state.verifier)
+            .get_round_certificate(&self.epoch_state.verifier())
         {
             VoteReceptionResult::NewQuorumCertificate(qc) => {
                 self.new_qc_aggregated(
@@ -758,7 +758,7 @@ impl RoundManager {
 
         match self
             .round_state
-            .get_round_certificate(&self.epoch_state.verifier)
+            .get_round_certificate(&self.epoch_state.verifier())
         {
             VoteReceptionResult::NewQuorumCertificate(_)
             | VoteReceptionResult::NewTimeoutCertificate(_) => {
@@ -1063,7 +1063,7 @@ impl RoundManager {
         let mut relay = true;
         match self
             .round_state
-            .insert_vote(vote, &self.epoch_state.verifier)
+            .insert_vote(vote, &self.epoch_state.verifier())
         {
             VoteReceptionResult::NewQuorumCertificate(_)
             | VoteReceptionResult::NewTimeoutCertificate(_) => {
@@ -1098,12 +1098,12 @@ impl RoundManager {
                             address: vote1.author(),
                             bls_pub_key: self
                                 .epoch_state
-                                .verifier
+                                .verifier()
                                 .get_public_key(&vote1.author())
                                 .expect("checked in verify"),
                             vrf_pub_key: self
                                 .epoch_state
-                                .verifier
+                                .verifier()
                                 .get_vrf_public_key(&vote1.author())
                                 .expect("checked in verify")
                                 .unwrap(),

@@ -25,10 +25,10 @@ impl RpcCommittee {
         let mut committee = RpcCommittee::default();
         committee.epoch_number = U64::from(epoch_state.epoch);
         committee.quorum_voting_power =
-            U64::from(epoch_state.verifier.quorum_voting_power());
+            U64::from(epoch_state.verifier().quorum_voting_power());
         committee.total_voting_power =
-            U64::from(epoch_state.verifier.total_voting_power());
-        let validator_info = epoch_state.verifier.address_to_validator_info();
+            U64::from(epoch_state.verifier().total_voting_power());
+        let validator_info = epoch_state.verifier().address_to_validator_info();
 
         for (account_address, validator_consensus_info) in validator_info {
             committee.nodes.push(NodeVotingPower::new(
