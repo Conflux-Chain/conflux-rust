@@ -5,7 +5,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering as AtomicOrdering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use anyhow::{bail, ensure, Context, Result};
 use fail::fail_point;
@@ -26,8 +32,9 @@ use consensus_types::{
     vote::Vote,
     vote_msg::VoteMsg,
 };
-use diem_config::keys::ConfigKey;
-use diem_crypto::{hash::CryptoHash, HashValue, SigningKey, VRFPrivateKey};
+use diem_crypto::{
+    hash::CryptoHash, HashValue, PrivateKey, SigningKey, VRFPrivateKey,
+};
 use diem_infallible::checked;
 use diem_logger::prelude::*;
 use diem_types::{
@@ -40,7 +47,7 @@ use diem_types::{
         ConflictSignature, DisputePayload, ElectionPayload, RawTransaction,
         SignedTransaction, TransactionPayload,
     },
-    validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
+    validator_config::ConsensusPrivateKey,
     validator_verifier::ValidatorVerifier,
 };
 #[cfg(test)]
@@ -219,7 +226,6 @@ pub struct RoundManager {
     proposer_election: Box<dyn ProposerElection + Send + Sync>,
     // None if this is not a validator.
     proposal_generator: Option<ProposalGenerator>,
-    is_voting: bool,
     safety_rules: MetricsSafetyRules,
     network: ConsensusNetworkSender,
     txn_manager: Arc<dyn TxnManager>,
@@ -230,6 +236,9 @@ pub struct RoundManager {
         oneshot::Sender<anyhow::Result<SubmissionStatus>>,
     )>,
     chain_id: ChainId,
+
+    is_voting: bool,
+    election_control: Arc<AtomicBool>,
 }
 
 impl RoundManager {
@@ -245,7 +254,7 @@ impl RoundManager {
             SignedTransaction,
             oneshot::Sender<anyhow::Result<SubmissionStatus>>,
         )>,
-        chain_id: ChainId, is_voting: bool,
+        chain_id: ChainId, is_voting: bool, election_control: Arc<AtomicBool>,
     ) -> Self
     {
         counters::OP_COUNTERS
@@ -265,6 +274,7 @@ impl RoundManager {
             sync_only,
             tx_sender,
             chain_id,
+            election_control,
         }
     }
 
@@ -316,12 +326,20 @@ impl RoundManager {
         if let Err(e) = self.broadcast_pivot_decision().await {
             diem_error!("error in broadcasting pivot decision tx: {:?}", e);
         }
+        // After the election transaction has been packed and executed,
+        // `broadcast_election` will be a no-op.
+        if let Err(e) = self.broadcast_election().await {
+            diem_error!("error in broadcasting election tx: {:?}", e);
+        }
+
         if self.is_validator() {
             if let Some(ref proposal_generator) = self.proposal_generator {
-                if self.proposer_election.is_valid_proposer(
-                    proposal_generator.author(),
-                    new_round_event.round,
-                ) {
+                let author = proposal_generator.author();
+
+                if self
+                    .proposer_election
+                    .is_valid_proposer(author, new_round_event.round)
+                {
                     let proposal_msg = ConsensusMsg::ProposalMsg(Box::new(
                         self.generate_proposal(new_round_event).await?,
                     ));
@@ -391,13 +409,12 @@ impl RoundManager {
         Ok(())
     }
 
-    pub async fn broadcast_election(
-        &mut self, author: AccountAddress,
-        private_key: &ConfigKey<ConsensusPrivateKey>,
-        vrf_private_key: &ConfigKey<ConsensusVRFPrivateKey>,
-    ) -> anyhow::Result<()>
-    {
-        if !self.is_voting {
+    pub async fn broadcast_election(&mut self) -> anyhow::Result<()> {
+        if !self.election_control.load(AtomicOrdering::Relaxed) {
+            diem_debug!("Skip election for election_control");
+            return Ok(());
+        }
+        if !self.is_validator() {
             // This node does not participate in any signing or voting.
             return Ok(());
         }
@@ -407,26 +424,30 @@ impl RoundManager {
             // elected but cannot vote.
             return Ok(());
         }
+        let proposal_generator =
+            self.proposal_generator.as_ref().expect("checked");
         diem_debug!("broadcast_election starts");
         let pos_state = self.storage.pos_ledger_db().get_latest_pos_state();
-        if let Some(target_term) = pos_state.next_elect_term(&author) {
+        if let Some(target_term) =
+            pos_state.next_elect_term(&proposal_generator.author())
+        {
             let epoch_vrf_seed = pos_state.target_term_seed(target_term);
             let election_payload = ElectionPayload {
-                public_key: private_key.public_key(),
-                vrf_public_key: vrf_private_key.public_key(),
+                public_key: proposal_generator.private_key.public_key(),
+                vrf_public_key: proposal_generator.vrf_private_key.public_key(),
                 target_term,
-                vrf_proof: vrf_private_key
-                    .private_key()
+                vrf_proof: proposal_generator
+                    .vrf_private_key
                     .compute(epoch_vrf_seed.as_slice())
                     .unwrap(),
             };
             let raw_tx = RawTransaction::new_election(
-                author,
+                proposal_generator.author(),
                 election_payload,
                 self.chain_id,
             );
             let signed_tx =
-                raw_tx.sign(&private_key.private_key())?.into_inner();
+                raw_tx.sign(&proposal_generator.private_key)?.into_inner();
             let (tx, rx) = oneshot::channel();
             self.tx_sender.send((signed_tx, tx)).await?;
             // TODO(lpl): Check if we want to wait here.
@@ -435,6 +456,8 @@ impl RoundManager {
                 "broadcast_election sends: target_term={}",
                 target_term
             );
+        } else {
+            diem_debug!("Skip election for elected");
         }
         Ok(())
     }

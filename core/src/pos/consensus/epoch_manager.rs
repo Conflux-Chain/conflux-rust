@@ -116,7 +116,7 @@ pub struct EpochManager {
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
     // Conflux PoW handler
     pow_handler: Arc<dyn PowInterface>,
-    election_control: AtomicBool,
+    election_control: Arc<AtomicBool>,
     tx_sender: mpsc::Sender<(
         SignedTransaction,
         oneshot::Sender<anyhow::Result<SubmissionStatus>>,
@@ -166,7 +166,7 @@ impl EpochManager {
             processor: None,
             reconfig_events,
             pow_handler,
-            election_control: AtomicBool::new(true),
+            election_control: Arc::new(AtomicBool::new(true)),
             tx_sender,
             is_voting: started_as_voter,
         }
@@ -478,29 +478,8 @@ impl EpochManager {
             self.tx_sender.clone(),
             self.config.chain_id,
             self.is_voting,
+            self.election_control.clone(),
         );
-        // Only check if we should send election after entering an new epoch.
-        if self.election_control.load(AtomicOrdering::Relaxed) {
-            if let Err(e) = processor
-                .broadcast_election(
-                    self.author,
-                    self.config
-                        .safety_rules
-                        .test
-                        .as_ref()
-                        .expect("test config set")
-                        .consensus_key
-                        .as_ref()
-                        .expect("private key set in pos"),
-                    self.config.safety_rules.vrf_private_key.as_ref().unwrap(),
-                )
-                .await
-            {
-                diem_error!("error in broadcasting election tx: {:?}", e);
-            }
-        } else {
-            diem_info!("Skip election in epoch {}", epoch);
-        }
         processor.start(last_vote).await;
         self.processor = Some(RoundProcessor::Normal(processor));
         diem_info!(epoch = epoch, "RoundManager started");
