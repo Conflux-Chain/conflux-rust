@@ -898,18 +898,26 @@ impl SynchronizationProtocolHandler {
                 self.graph.data_man.all_epoch_set_hashes_from_db(from)
             {
                 debug!("Recovered epoch {} from db", from);
-                if self.need_requesting_blocks() {
-                    self.request_blocks(io, None, epoch_hashes);
+                if epoch_hashes
+                    .iter()
+                    .any(|h| self.graph.data_man.verified_invalid(h).0)
+                {
+                    debug!("local epoch set has invalid block, try to request from others");
                 } else {
-                    self.request_block_headers(
-                        io,
-                        None,
-                        epoch_hashes,
-                        true, /* ignore_db */
-                    );
+                    // The local epoch set is valid.
+                    if self.need_requesting_blocks() {
+                        self.request_blocks(io, None, epoch_hashes);
+                    } else {
+                        self.request_block_headers(
+                            io,
+                            None,
+                            epoch_hashes,
+                            true, /* ignore_db */
+                        );
+                    }
+                    latest_requested_epoch = from;
+                    continue;
                 }
-                latest_requested_epoch = from;
-                continue;
             } else if median_peer_epoch == 0 {
                 // We have recovered all epochs from db, and there is no peer to
                 // request new epochs, so we should enter `Latest` phase
