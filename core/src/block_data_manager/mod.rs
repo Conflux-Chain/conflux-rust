@@ -50,7 +50,7 @@ use cfx_internal_common::{
 use db_gc_manager::GCProgress;
 use metrics::{register_meter_with_group, Meter, MeterTimer};
 use primitives::pos::PosBlockId;
-use std::{hash::Hash, path::Path, str::FromStr, time::Duration};
+use std::{hash::Hash, path::Path, time::Duration};
 
 lazy_static! {
     static ref TX_POOL_RECOVER_TIMER: Arc<dyn Meter> =

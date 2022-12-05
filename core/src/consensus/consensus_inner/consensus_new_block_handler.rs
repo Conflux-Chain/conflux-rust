@@ -819,7 +819,13 @@ impl ConsensusNewBlockHandler {
         if !inner.header_only && !self.conf.bench_mode {
             // Stable block must have a blame vector that does not stretch
             // beyond the new genesis
-            if !inner.arena[stable_pivot_block].data.state_valid.unwrap() {
+            // The `or` case only happens when we introduce a hardfork at the
+            // stable point.
+            if !inner.arena[stable_pivot_block]
+                .data
+                .state_valid
+                .unwrap_or(true)
+            {
                 if inner.arena[stable_pivot_block]
                     .data
                     .blame_info
