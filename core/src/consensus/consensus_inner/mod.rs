@@ -613,6 +613,10 @@ impl ConsensusGraphInner {
                 cur_era_stable_height, cur_era_stable_block_hash
             );
         }
+        data_man.set_cur_consensus_era_genesis_hash(
+            cur_era_genesis_block_hash,
+            &cur_era_stable_block_hash,
+        );
         let initial_difficulty = pow_config.initial_difficulty;
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
