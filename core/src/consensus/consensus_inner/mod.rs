@@ -46,7 +46,6 @@ use std::{
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     convert::TryFrom,
     mem,
-    str::FromStr,
     sync::Arc,
 };
 lazy_static! {
@@ -580,7 +579,7 @@ impl ConsensusGraphInner {
         pow_config: ProofOfWorkConfig, pow: Arc<PowComputer>,
         pos_verifier: Arc<PosVerifier>, data_man: Arc<BlockDataManager>,
         inner_conf: ConsensusInnerConfig, cur_era_genesis_block_hash: &H256,
-        mut cur_era_stable_block_hash: H256,
+        cur_era_stable_block_hash: H256,
     ) -> Self
     {
         let genesis_block_header = data_man
@@ -590,7 +589,7 @@ impl ConsensusGraphInner {
         let stable_block_header = data_man
             .block_header_by_hash(&cur_era_stable_block_hash)
             .expect("stable genesis block header should exist here");
-        let mut cur_era_stable_height = stable_block_header.height();
+        let cur_era_stable_height = stable_block_header.height();
         info!(
             "with_era_genesis {:?} {:?} {:?} {:?}",
             cur_era_genesis_block_hash,
@@ -598,16 +597,6 @@ impl ConsensusGraphInner {
             cur_era_genesis_height,
             cur_era_stable_height
         );
-        cur_era_stable_block_hash = H256::from_str(
-            "2ab9b43ed320158f16e04d1ce12937660aedd7caaad7e3506daaf65ca1c69a26",
-        )
-        .unwrap();
-        cur_era_stable_height = 101760000;
-        data_man.set_cur_consensus_era_genesis_hash(
-            cur_era_genesis_block_hash,
-            &cur_era_stable_block_hash,
-        );
-
         let initial_difficulty = pow_config.initial_difficulty;
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
