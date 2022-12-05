@@ -46,6 +46,7 @@ use std::{
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
     convert::TryFrom,
     mem,
+    str::FromStr,
     sync::Arc,
 };
 lazy_static! {
@@ -590,7 +591,14 @@ impl ConsensusGraphInner {
             .block_header_by_hash(&cur_era_stable_block_hash)
             .expect("stable genesis block header should exist here");
         let mut cur_era_stable_height = stable_block_header.height();
-        while !data_man.verified_invalid(&cur_era_stable_block_hash).0 {
+        info!(
+            "with_era_genesis {:?} {:?} {:?} {:?}",
+            cur_era_genesis_block_hash,
+            cur_era_stable_block_hash,
+            cur_era_genesis_height,
+            cur_era_stable_height
+        );
+        while data_man.verified_invalid(&cur_era_stable_block_hash).0 || cur_era_stable_block_hash == H256::from_str("2ab9b43ed320158f16e04d1ce12937660aedd7caaad7e3506daaf65ca1c69a26").unwrap() {
             cur_era_stable_height -= inner_conf.era_epoch_count;
             if cur_era_stable_height < cur_era_genesis_height {
                 panic!("cur_era_stable_height < cur_era_genesis_height");
@@ -600,6 +608,10 @@ impl ConsensusGraphInner {
                 .unwrap()
                 .last()
                 .unwrap();
+            warn!(
+                "invalid stable, try earlier {:?} {:?}",
+                cur_era_stable_height, cur_era_stable_block_hash
+            );
         }
         let initial_difficulty = pow_config.initial_difficulty;
         let mut inner = ConsensusGraphInner {
