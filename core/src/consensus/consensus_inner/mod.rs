@@ -598,25 +598,16 @@ impl ConsensusGraphInner {
             cur_era_genesis_height,
             cur_era_stable_height
         );
-        while data_man.verified_invalid(&cur_era_stable_block_hash).0 || cur_era_stable_block_hash == H256::from_str("2ab9b43ed320158f16e04d1ce12937660aedd7caaad7e3506daaf65ca1c69a26").unwrap() {
-            cur_era_stable_height -= inner_conf.era_epoch_count;
-            if cur_era_stable_height < cur_era_genesis_height {
-                panic!("cur_era_stable_height < cur_era_genesis_height");
-            }
-            cur_era_stable_block_hash = *data_man
-                .executed_epoch_set_hashes_from_db(cur_era_stable_height)
-                .unwrap()
-                .last()
-                .unwrap();
-            warn!(
-                "invalid stable, try earlier {:?} {:?}",
-                cur_era_stable_height, cur_era_stable_block_hash
-            );
-        }
+        cur_era_stable_block_hash = H256::from_str(
+            "2ab9b43ed320158f16e04d1ce12937660aedd7caaad7e3506daaf65ca1c69a26",
+        )
+        .unwrap();
+        cur_era_stable_height = 101760000;
         data_man.set_cur_consensus_era_genesis_hash(
             cur_era_genesis_block_hash,
             &cur_era_stable_block_hash,
         );
+
         let initial_difficulty = pow_config.initial_difficulty;
         let mut inner = ConsensusGraphInner {
             arena: Slab::new(),
