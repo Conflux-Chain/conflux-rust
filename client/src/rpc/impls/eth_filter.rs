@@ -474,7 +474,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
                     self.consensus_graph().get_data_manager().clone();
 
                 let mut retry_count = 0;
-                let (reorg_len, epochs, new_logs) = loop {
+                let (reorg_len, epochs, new_logs) = 'outer: loop {
                     retry_count += 1;
                     if retry_count >= 10 {
                         return Err(RpcError {
@@ -503,7 +503,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
                             &data_man,
                         ) {
                             Ok(l) => l,
-                            _ => continue,
+                            _ => continue 'outer,
                         };
 
                         logs.push(log);
