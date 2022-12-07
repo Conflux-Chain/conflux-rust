@@ -470,15 +470,49 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
                 ref filter,
                 include_pending: _,
             } => {
-                let (reorg_len, epochs) = self.epochs_since_last_request(
-                    *last_block_number,
-                    recent_reported_epochs,
-                )?;
-
-                let mut logs = vec![];
                 let data_man =
                     self.consensus_graph().get_data_manager().clone();
 
+                let mut retry_count = 0;
+                let (reorg_len, epochs, new_logs) = 'outer: loop {
+                    retry_count += 1;
+                    if retry_count >= 10 {
+                        return Err(RpcError {
+                            code: ErrorCode::ServerError(codes::UNSUPPORTED),
+                            message: "Unable to retrieve logs for epoch".into(),
+                            data: None,
+                        });
+                    }
+
+                    let mut logs = vec![];
+                    let (reorg_len, epochs) = match self
+                        .epochs_since_last_request(
+                            *last_block_number,
+                            recent_reported_epochs,
+                        ) {
+                        Ok((reorg_len, epochs)) => (reorg_len, epochs),
+                        _ => continue,
+                    };
+
+                    // logs from new epochs
+                    for (num, blocks) in epochs.iter() {
+                        let log = match self.logs_for_epoch(
+                            &filter,
+                            (*num, blocks.clone()),
+                            false,
+                            &data_man,
+                        ) {
+                            Ok(l) => l,
+                            _ => continue 'outer,
+                        };
+
+                        logs.push(log);
+                    }
+
+                    break (reorg_len, epochs, logs);
+                };
+
+                let mut logs = vec![];
                 // retrieve reorg logs
                 for _ in 0..reorg_len {
                     recent_reported_epochs.pop_front().unwrap();
@@ -495,14 +529,8 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
                 }
 
                 // logs from new epochs
-                for (num, blocks) in epochs.into_iter() {
-                    let log = self.logs_for_epoch(
-                        &filter,
-                        (num, blocks.clone()),
-                        false,
-                        &data_man,
-                    )?;
-                    logs.append(&mut log.clone());
+                for (i, (num, blocks)) in epochs.into_iter().enumerate() {
+                    logs.append(&mut new_logs[i].clone());
                     *last_block_number = num;
 
                     // Only keep the most recent history
@@ -513,7 +541,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
                         previous_logs.pop_back();
                     }
                     recent_reported_epochs.push_front((num, blocks));
-                    previous_logs.push_front(log);
+                    previous_logs.push_front(new_logs[i].clone());
                 }
 
                 Ok(FilterChanges::Logs(limit_logs(
