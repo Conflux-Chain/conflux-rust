@@ -591,7 +591,7 @@ fn test_vote_lock() {
     assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 4);
     assert_eq!(
         overlay_account.vote_stake_list().unwrap()[0].unlock_block_number,
-        11
+        U256::from(11)
     );
     overlay_account
         .vote_lock(U256::from(1000000), 13 /* unlock_block_number */);
@@ -604,7 +604,7 @@ fn test_vote_lock() {
     assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 4);
     assert_eq!(
         overlay_account.vote_stake_list().unwrap()[0].unlock_block_number,
-        13
+        U256::from(13)
     );
     overlay_account
         .vote_lock(U256::from(2000000), 40 /* unlock_block_number */);
@@ -617,7 +617,7 @@ fn test_vote_lock() {
     assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 3);
     assert_eq!(
         overlay_account.vote_stake_list().unwrap()[0].unlock_block_number,
-        40
+        U256::from(40)
     );
     overlay_account
         .vote_lock(U256::from(10), 600 /* unlock_block_number */);
@@ -630,7 +630,7 @@ fn test_vote_lock() {
     assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 4);
     assert_eq!(
         overlay_account.vote_stake_list().unwrap()[3].unlock_block_number,
-        600
+        U256::from(600)
     );
     overlay_account
         .vote_lock(U256::from(1000), 502 /* unlock_block_number */);
@@ -643,11 +643,11 @@ fn test_vote_lock() {
     assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 3);
     assert_eq!(
         overlay_account.vote_stake_list().unwrap()[0].unlock_block_number,
-        40
+        U256::from(40)
     );
     assert_eq!(
         overlay_account.vote_stake_list().unwrap()[1].unlock_block_number,
-        502
+        U256::from(502)
     );
     overlay_account
         .vote_lock(U256::from(3000000), 550 /* unlock_block_number */);
@@ -660,11 +660,11 @@ fn test_vote_lock() {
     assert_eq!(overlay_account.vote_stake_list().unwrap().len(), 2);
     assert_eq!(
         overlay_account.vote_stake_list().unwrap()[0].unlock_block_number,
-        550
+        U256::from(550)
     );
     assert_eq!(
         overlay_account.vote_stake_list().unwrap()[1].unlock_block_number,
-        600
+        U256::from(600)
     );
 }
 

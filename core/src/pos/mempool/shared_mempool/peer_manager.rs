@@ -308,6 +308,8 @@ impl PeerManager {
             )
             //.peer(&peer)
             .error(&e.into()));
+            // Actively enter backoff mode if error happens.
+            state.broadcast_info.backoff_mode = true;
             return;
         }
         // Update peer sync state with info from above broadcast.

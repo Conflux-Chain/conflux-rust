@@ -43,6 +43,7 @@ use diem_types::{
     account_address::from_consensus_public_key,
     block_info::{PivotBlockDecision, Round},
     chain_id::ChainId,
+    epoch_state::HARDCODED_COMMITTEE_FOR_EPOCH,
     term_state::pos_state_config::{PosStateConfig, POS_STATE_CONFIG},
     transaction::TransactionPayload,
 };
@@ -179,6 +180,12 @@ impl PosHandler {
             })?;
         let mut pos_config = NodeConfig::load(pos_config_path)
             .map_err(|e| format!("Failed to load node config: e={:?}", e))?;
+        HARDCODED_COMMITTEE_FOR_EPOCH
+            .set(pos_config.consensus.hardcoded_epoch_committee.clone())
+            .map_err(|e| {
+                format!("Failed to set hardcoded_epoch_committee: e={:?}", e)
+            })?;
+
         pos_config.set_data_dir(pos_config.data_dir().to_path_buf());
         let pos_genesis = read_initial_nodes_from_file(
             self.conf.pos_initial_nodes_path.as_str(),

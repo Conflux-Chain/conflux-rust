@@ -603,17 +603,17 @@ where V: VMExecutor
             .ok_or_else(|| {
                 format_err!("Association account does not exist")
             })??;*/
-            next_epoch_state = Some(EpochState {
-                // TODO(lpl): This is only used for genesis, and after executing
-                // the genesis block, the epoch number should be
-                // increased from 0 to 1.
-                epoch: 1, //configuration.epoch(),
-                verifier: (&validator_set).into(),
-                vrf_seed: pivot_decision
+            next_epoch_state = Some(EpochState::new(
+                // TODO(lpl): This is only used for genesis, and after
+                // executing the genesis block, the epoch
+                // number should be increased from 0 to 1.
+                1,
+                (&validator_set).into(),
+                pivot_decision
                     .as_ref()
                     .map(|p| p.block_hash.as_bytes().to_vec())
                     .unwrap_or(vec![]),
-            })
+            ))
         };
 
         let current_transaction_accumulator =
@@ -1150,7 +1150,7 @@ impl<V: VMExecutor> BlockExecutor for Executor<V> {
                 .committed_trees()
                 .pos_state()
                 .epoch_state()
-                .verifier
+                .verifier()
                 // Clone to avoid possible deadlock.
                 .clone();
             for committee_member in verifier.address_to_validator_info().keys()

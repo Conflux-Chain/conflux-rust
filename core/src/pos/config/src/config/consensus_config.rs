@@ -8,9 +8,13 @@
 use crate::config::SafetyRulesConfig;
 use diem_types::{
     account_address::AccountAddress, block_info::Round, chain_id::ChainId,
+    validator_verifier::ValidatorVerifier,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::PathBuf,
+};
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default, deny_unknown_fields)]
@@ -35,6 +39,8 @@ pub struct ConsensusConfig {
     pub mempool_poll_count: u64,
 
     pub chain_id: ChainId,
+
+    pub hardcoded_epoch_committee: BTreeMap<u64, ValidatorVerifier>,
 }
 
 impl Default for ConsensusConfig {
@@ -53,6 +59,7 @@ impl Default for ConsensusConfig {
             sync_only: false,
             mempool_poll_count: 1,
             chain_id: Default::default(),
+            hardcoded_epoch_committee: Default::default(),
         }
     }
 }

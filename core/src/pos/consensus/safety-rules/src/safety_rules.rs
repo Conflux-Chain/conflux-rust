@@ -263,7 +263,7 @@ impl SafetyRules {
     fn verify_qc(&self, qc: &QuorumCert) -> Result<(), Error> {
         let epoch_state = self.epoch_state()?;
 
-        qc.verify(&epoch_state.verifier)
+        qc.verify(&epoch_state.verifier())
             .map_err(|e| Error::InvalidQuorumCertificate(e.to_string()))?;
         Ok(())
     }
@@ -326,7 +326,7 @@ impl SafetyRules {
         self.epoch_state = Some(epoch_state.clone());
 
         let author = self.persistent_storage.author()?;
-        let expected_key = epoch_state.verifier.get_public_key(&author);
+        let expected_key = epoch_state.verifier().get_public_key(&author);
         let initialize_result = match expected_key {
             None => {
                 diem_debug!(
@@ -434,7 +434,7 @@ impl SafetyRules {
 
         self.verify_qc(proposed_block.quorum_cert())?;
         proposed_block
-            .validate_signature(&self.epoch_state()?.verifier)
+            .validate_signature(&self.epoch_state()?.verifier())
             .map_err(|error| Error::InternalError(error.to_string()))?;
 
         self.verify_and_update_preferred_round(
