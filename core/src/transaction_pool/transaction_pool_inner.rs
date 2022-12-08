@@ -1444,37 +1444,39 @@ impl TransactionPoolInner {
         }
 
         // check balance
-        let mut need_balance = U256::from(0);
-        let estimate_gas_fee = Self::estimated_gas_fee(
-            transaction.gas().clone(),
-            transaction.gas_price().clone(),
-        );
-        match transaction.unsigned {
-            Transaction::Native(ref utx) => {
-                need_balance += utx.value.clone();
-                if sponsored_gas == U256::from(0) {
+        if !packed && !force {
+            let mut need_balance = U256::from(0);
+            let estimate_gas_fee = Self::estimated_gas_fee(
+                transaction.gas().clone(),
+                transaction.gas_price().clone(),
+            );
+            match transaction.unsigned {
+                Transaction::Native(ref utx) => {
+                    need_balance += utx.value.clone();
+                    if sponsored_gas == U256::from(0) {
+                        need_balance += estimate_gas_fee;
+                    }
+                    if sponsored_storage == 0 {
+                        need_balance += U256::from(utx.storage_limit)
+                            * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+                    }
+                }
+                Transaction::Ethereum(ref utx) => {
+                    need_balance += utx.value.clone();
                     need_balance += estimate_gas_fee;
                 }
-                if sponsored_storage == 0 {
-                    need_balance += U256::from(utx.storage_limit)
-                        * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-                }
             }
-            Transaction::Ethereum(ref utx) => {
-                need_balance += utx.value.clone();
-                need_balance += estimate_gas_fee;
-            }
-        }
 
-        if need_balance > state_balance {
-            let msg = format!(
-                "Transaction {:?} is discarded due to out of balance, needs {:?} but account balance is {:?}",
-                transaction.hash(),
-                need_balance,
-                state_balance
-            );
-            trace!("{}", msg);
-            return Err(msg);
+            if need_balance > state_balance {
+                let msg = format!(
+                    "Transaction {:?} is discarded due to out of balance, needs {:?} but account balance is {:?}",
+                    transaction.hash(),
+                    need_balance,
+                    state_balance
+                );
+                trace!("{}", msg);
+                return Err(msg);
+            }
         }
 
         let result = self.insert_transaction_without_readiness_check(

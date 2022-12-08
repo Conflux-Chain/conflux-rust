@@ -329,6 +329,7 @@ build_config! {
         (pos_cip99_transition_view, (u64), 342000)
         (pos_cip99_in_queue_locked_views, (u64), 18720)
         (pos_cip99_out_queue_locked_views, (u64), 1440)
+        (nonce_limit_transition_view, (u64), u64::MAX)
         (dev_pos_private_key_encryption_password, (Option<String>), None)
         (pos_started_as_voter, (bool), true)
 
@@ -1283,6 +1284,8 @@ impl Configuration {
             self.raw_conf.pos_cip99_transition_view,
             self.raw_conf.pos_cip99_in_queue_locked_views,
             self.raw_conf.pos_cip99_out_queue_locked_views,
+            self.raw_conf.nonce_limit_transition_view,
+            20_000, // 2 * 10^7 CFX
         )
     }
 }

@@ -706,14 +706,15 @@ impl TransactionPool {
         let inner = inner.deref_mut();
 
         while let Some(tx) = set_tx_buffer.pop() {
-            self.add_transaction_with_readiness_check(
+            if let Err(e) = self.add_transaction_with_readiness_check(
                 inner,
                 &account_cache,
                 tx,
                 true,
                 false,
-            )
-            .ok();
+            ) {
+                warn!("set tx err: e={:?}", e);
+            }
         }
 
         let (chain_id, best_height, best_block_number) = {
@@ -748,14 +749,15 @@ impl TransactionPool {
                     tx.hash(), e
                 );
             }
-            self.add_transaction_with_readiness_check(
+            if let Err(e) = self.add_transaction_with_readiness_check(
                 inner,
                 &account_cache,
                 tx,
                 false,
                 true,
-            )
-            .ok();
+            ) {
+                warn!("recycle tx err: e={:?}", e);
+            }
         }
         debug!(
             "notify_new_best_info: {:?}",

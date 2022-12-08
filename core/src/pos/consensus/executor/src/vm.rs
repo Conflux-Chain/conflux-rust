@@ -67,11 +67,11 @@ impl VMExecutor for FakeVM {
                         let epoch = (state_view.pos_state().current_view() + 1)
                             / POS_STATE_CONFIG.round_per_term()
                             + 1;
-                        let validator_bytes = bcs::to_bytes(&EpochState {
+                        let validator_bytes = bcs::to_bytes(&EpochState::new(
                             epoch,
-                            verifier: validator_verifier,
+                            validator_verifier,
                             vrf_seed,
-                        })
+                        ))
                         .unwrap();
                         let contract_event = ContractEvent::new(
                             new_epoch_event_key(),

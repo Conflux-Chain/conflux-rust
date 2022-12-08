@@ -66,7 +66,7 @@ impl Restorer {
     ) -> StorageResult<()>
     {
         // Release temp snapshot db so it can be renamed on Windows.
-        // `self.verifier` is never unwrapped, so it's safe to set it to None,
+        // `self.verifier()` is never unwrapped, so it's safe to set it to None,
         self.verifier = None;
 
         let storage_manager = state_manager.get_storage_manager_arc();

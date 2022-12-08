@@ -134,7 +134,7 @@ class WithdrawDepositTest(ConfluxTestFramework):
 
         vote_list = client.get_vote_list(addr)
         assert_equal(len(vote_list), 1)
-        assert_equal(vote_list[0]['unlockBlockNumber'], 100000)
+        assert_equal(vote_list[0]['unlockBlockNumber'], "0x186a0")
         assert_equal(vote_list[0]['amount'], "0x58d15e176280000")
 
         deposit_list = client.get_deposit_list(addr)
