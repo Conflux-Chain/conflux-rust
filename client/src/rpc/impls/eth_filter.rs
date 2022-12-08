@@ -325,7 +325,7 @@ impl Filterable for EthFilterClient {
         }
         reorg_epochs.append(&mut new_epochs);
 
-        debug!(
+        info!(
             "Chain reorg len: {}, new epochs len: {}",
             reorg_len,
             reorg_epochs.len()
@@ -400,6 +400,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
 
     /// Returns filter changes since last poll.
     fn filter_changes(&self, index: H128) -> RpcResult<FilterChanges> {
+        info!("filter_changes id: {}", index);
         let filter = match self.polls().lock().poll_mut(&index) {
             Some(filter) => filter.clone(),
             None => bail!(RpcError {
@@ -476,7 +477,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
                 let mut retry_count = 0;
                 let (reorg_len, epochs, new_logs) = 'outer: loop {
                     retry_count += 1;
-                    if retry_count >= 10 {
+                    if retry_count > 10 {
                         return Err(RpcError {
                             code: ErrorCode::ServerError(codes::UNSUPPORTED),
                             message: "Unable to retrieve logs for epoch".into(),
@@ -592,7 +593,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
 fn retrieve_epoch_logs(
     data_man: &Arc<BlockDataManager>, epoch: (u64, Vec<H256>),
 ) -> Option<Vec<LocalizedLogEntry>> {
-    info!("retrieve_epoch_logs");
+    debug!("retrieve_epoch_logs");
     let (epoch_number, hashes) = epoch;
     let pivot = hashes.last().cloned().expect("epoch should not be empty");
 
@@ -662,8 +663,8 @@ fn retrieve_block_receipts(
             }
         }
 
-        // we assume that an epoch gets executed within 100 seconds
-        if ii > 1000 {
+        // we assume that an epoch gets executed within 10 seconds
+        if ii > 100 {
             error!("Cannot find receipts with {:?}/{:?}", block, pivot);
             return None;
         }
