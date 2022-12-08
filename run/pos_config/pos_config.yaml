@@ -8,6 +8,15 @@ consensus:
   safety_rules:
     service:
       type: local
+  hardcoded_epoch_committee:
+    9496:
+      quorum_voting_power: 201
+      total_voting_power: 300
+      address_to_validator_info:
+        260ebfcae22fd3952c72933b795e0c1cb17b84f44a1128c9fc42f5abee071277:
+          public_key: 811e103da17df9f6c0c09bad05b70c31bbbbab28d0d7e3f3a345a91989bc8cc3ec55c962d23f502d67ae6c990b3f7ae5
+          vrf_public_key: 03cc883d910043dbafe8f7c0fb15b4d554e143d5a7d5f1e3f9264e81193c51855d
+          voting_power: 300
 execution:
   genesis_file_location: ./genesis_file
 logger:
