@@ -92,8 +92,10 @@ pub(crate) async fn coordinator(
                 diem_debug!("network_events to scheduled_broadcasts");
                 match event {
                         NetworkEvent::PeerConnected => {
-                        smp.peer_manager.add_peer(peer);
-                        tasks::execute_broadcast(peer, true, &mut smp, &mut scheduled_broadcasts, executor.clone());
+                        if smp.peer_manager.add_peer(peer) {
+                            // Only spawn tx broadcast for new peers.
+                            tasks::execute_broadcast(peer, true, &mut smp, &mut scheduled_broadcasts, executor.clone());
+                        }
                     }
                     NetworkEvent::PeerDisconnected => {
                         smp.peer_manager.disable_peer(peer);
