@@ -10,6 +10,7 @@ use cfx_parameters::{
         DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT, ONE_UCFX_IN_DRIP,
         TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT,
         TESTNET_FIX_HEADER_CUSTOM_FIRST_ELEMENT, TESTNET_FIX_HEIGHT,
+        TESTNET_FIX_POS_HEADER_CUSTOM_FIRST_ELEMENT, TESTNET_FIX_POS_HEIGHT,
     },
     consensus_internal::{
         ANTICONE_PENALTY_RATIO, DAO_PARAMETER_VOTE_PERIOD,
@@ -154,8 +155,12 @@ impl CommonParams {
             && height < TESTNET_FIX_HEIGHT
         {
             Some(vec![DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
-        } else if height >= TESTNET_FIX_HEIGHT {
+        } else if height >= TESTNET_FIX_HEIGHT
+            && height < TESTNET_FIX_POS_HEIGHT
+        {
             Some(vec![TESTNET_FIX_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
+        } else if height >= TESTNET_FIX_POS_HEIGHT {
+            Some(vec![TESTNET_FIX_POS_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
         } else {
             None
         }

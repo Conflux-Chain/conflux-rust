@@ -9,6 +9,27 @@ consensus:
   safety_rules:
     service:
       type: local
+  hardcoded_epoch_committee:
+    7760:
+      quorum_voting_power: 201
+      total_voting_power: 300
+      address_to_validator_info:
+        9b63065c12300b32308ca18022178c1032544e07ffe2821c948c2d31fc5e200a:
+          public_key: afccd4c5f9b9cd02807d7c513b0b8ca75ecc4a4553c1d74e437db45a40db720c5de791f28170eaad0867c3d724ed3a57
+          vrf_public_key: 0272d6bf3866fc642b3b2b5b40cc863322e8e035685a6eca32f7a8ee2afcf0e4bd
+          voting_power: 75
+        ce257f9b12d67089057d71fe4f20f25569268582e1fa6f6673bb60934582f9f3:
+          public_key: adc3ffbb2ac81ddfc1a56829580b1f31c41e9cc90d82796f69918564c6febb6e266e80421e8f53af6b15cc884190963f
+          vrf_public_key: 03285d72aa04a01b7b9f2bc4d2201c6c9d542c01ace24370142b762550a9ce07b6
+          voting_power: 75
+        9a6fcdd8646a4c56735414187ae6b9f343732c2bb52f678f4fa2f92f3625402a:
+          public_key: 947aa54b808ad3a58465c43320894b4409e5e949794d5ce25b2b3570815947c338b631c62482b871ea640f0b8598e5d8
+          vrf_public_key: 036d9e75654d87fc5484d11d5265fb4e0910b1dc09d4e76a049a9c43c45891ba86
+          voting_power: 75
+        918a1f94632ec4858ca0391e0bedcb7da9dc0a7194eb01d21b6f5956003dbc6e:
+          public_key: b413f616dc22b6c14626b3e0961ce358b9b658b0e581ede8a33a67864ffdacf335dd8a113aa037a7e57154f8b829c040
+          vrf_public_key: 02d96026db65dfb2cab7efc88178890d5f69676af2876f2301901bb4c7de5c8446
+          voting_power: 75
 execution:
   genesis_file_location: ./genesis_file
 logger:

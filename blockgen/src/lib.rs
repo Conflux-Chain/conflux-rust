@@ -7,7 +7,9 @@ use crate::miner::{
     stratum::{Options as StratumOption, Stratum},
     work_notify::NotifyWork,
 };
-use cfx_parameters::consensus::GENESIS_GAS_LIMIT;
+use cfx_parameters::consensus::{
+    GENESIS_GAS_LIMIT, TESTNET_FIX_POS_HEIGHT, TESTNET_FIX_POS_POS_REFERENCE,
+};
 use cfx_types::{Address, H256, U256};
 use cfxcore::{
     block_parameters::*,
@@ -25,6 +27,7 @@ use primitives::{pos::PosBlockId, *};
 use std::{
     cmp::max,
     collections::HashSet,
+    str::FromStr,
     sync::{
         mpsc::{self, TryRecvError},
         Arc,
@@ -367,7 +370,12 @@ impl BlockGenerator {
             // parent is in consensus, so our PoS must have processed its
             // pos_reference, meaning this latest pos reference must
             // be valid.
-            Some(self.pos_verifier.get_latest_pos_reference())
+            if best_info.best_epoch_number + 1 < TESTNET_FIX_POS_HEIGHT {
+                // FIXME(lpl): Temp fix pos reference before fix hardfork.
+                Some(H256::from_str(TESTNET_FIX_POS_POS_REFERENCE).unwrap())
+            } else {
+                Some(self.pos_verifier.get_latest_pos_reference())
+            }
         } else {
             None
         };

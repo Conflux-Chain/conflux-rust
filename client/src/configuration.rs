@@ -329,7 +329,7 @@ build_config! {
         (pos_cip99_transition_view, (u64), 342000)
         (pos_cip99_in_queue_locked_views, (u64), 18720)
         (pos_cip99_out_queue_locked_views, (u64), 1440)
-        (nonce_limit_transition_view, (u64), u64::MAX)
+        (nonce_limit_transition_view, (u64), 465540)
         (dev_pos_private_key_encryption_password, (Option<String>), None)
         (pos_started_as_voter, (bool), true)
 

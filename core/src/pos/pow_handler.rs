@@ -193,6 +193,15 @@ impl PowInterface for PowHandler {
             // not be packed again.
             return Ok(vec![]);
         }
+        if me_height > parent_height + 100000 {
+            // FIXME(lpl): Temp fix for testnet to avoid loading a long history
+            // that cannot be processed.
+            error!(
+                "Dropping staking events: me_height={} parent_height={}",
+                me_height, parent_height
+            );
+            return Ok(vec![]);
+        }
         self.pos_consensus_db
             .get_staking_events(
                 PivotBlockDecision {

@@ -48,7 +48,11 @@ pub mod consensus {
     pub const TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [1];
     pub const DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [2];
     pub const TESTNET_FIX_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [3];
+    pub const TESTNET_FIX_POS_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [4];
     pub const TESTNET_FIX_HEIGHT: u64 = 101760001;
+    pub const TESTNET_FIX_POS_HEIGHT: u64 = 103400000;
+    pub const TESTNET_FIX_POS_POS_REFERENCE: &str =
+        "18a6b9c237f025e934a1633bae0cc084f81a457e3be75300447e857c3bc89d82";
 }
 
 pub mod consensus_internal {
