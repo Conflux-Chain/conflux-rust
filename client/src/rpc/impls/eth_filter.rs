@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use std::{
-    collections::{BTreeSet, HashMap, VecDeque, HashSet},
+    collections::{BTreeSet, HashMap, HashSet, VecDeque},
     sync::Arc,
 };
 
@@ -83,12 +83,12 @@ pub struct UnfinalizedEpochs {
 }
 
 impl Default for UnfinalizedEpochs {
-    fn default() -> Self { 
+    fn default() -> Self {
         UnfinalizedEpochs {
             epochs_queue: Default::default(),
             epochs_map: Default::default(),
         }
-     }
+    }
 }
 
 impl EthFilterClient {
@@ -129,8 +129,12 @@ impl EthFilterClient {
 
                 epochs.epochs_queue.push_back(epoch.clone());
                 match epochs.epochs_map.get_mut(&epoch.0) {
-                    Some(v) => {*v = epoch.1.clone();},
-                    _ => {epochs.epochs_map.insert(epoch.0, epoch.1.clone()); },
+                    Some(v) => {
+                        *v = epoch.1.clone();
+                    }
+                    _ => {
+                        epochs.epochs_map.insert(epoch.0, epoch.1.clone());
+                    }
                 }
 
                 let latest_finalized_epoch_number =
@@ -273,7 +277,9 @@ impl Filterable for EthFilterClient {
 
         // the best executed epoch index
         let mut idx = latest_epochs.epochs_queue.len() as i32 - 1;
-        while idx >= 0 && latest_epochs.epochs_queue[idx as usize].0 != current_epoch_number
+        while idx >= 0
+            && latest_epochs.epochs_queue[idx as usize].0
+                != current_epoch_number
         {
             idx -= 1;
         }
@@ -284,7 +290,8 @@ impl Filterable for EthFilterClient {
         let mut new_epochs = vec![];
         let mut hs = HashSet::new();
         while idx >= 0 {
-            let (num, blocks) = latest_epochs.epochs_queue[idx as usize].clone();
+            let (num, blocks) =
+                latest_epochs.epochs_queue[idx as usize].clone();
             if num == last_block_number
                 && (last_block.is_none() || last_block == Some(blocks.clone()))
             {
@@ -314,12 +321,13 @@ impl Filterable for EthFilterClient {
             let (num, hash) = recent_reported_epochs[i].clone();
 
             if num < end_epoch_number {
-                let pivot_hash = if let Some(v) = latest_epochs.epochs_map.get(&num) {
-                    v.clone()
-                } else {
-                    self.block_hashes(EpochNumber::Number(num))
-                        .expect("Epoch should exist")
-                };
+                let pivot_hash =
+                    if let Some(v) = latest_epochs.epochs_map.get(&num) {
+                        v.clone()
+                    } else {
+                        self.block_hashes(EpochNumber::Number(num))
+                            .expect("Epoch should exist")
+                    };
 
                 if pivot_hash == hash {
                     // meet fork point
