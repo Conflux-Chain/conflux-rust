@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use std::{
-    collections::{BTreeSet, HashMap, VecDeque},
+    collections::{BTreeSet, HashMap, VecDeque, HashSet},
     sync::Arc,
 };
 
@@ -73,8 +73,22 @@ pub struct EthFilterClient {
     consensus: SharedConsensusGraph,
     tx_pool: SharedTransactionPool,
     polls: Mutex<PollManager<SyncPollFilter>>,
-    unfinalized_epochs: Arc<RwLock<VecDeque<(u64, Vec<H256>)>>>,
+    unfinalized_epochs: Arc<RwLock<UnfinalizedEpochs>>,
     logs_filter_max_limit: Option<usize>,
+}
+
+pub struct UnfinalizedEpochs {
+    epochs_queue: VecDeque<(u64, Vec<H256>)>,
+    epochs_map: HashMap<u64, Vec<H256>>,
+}
+
+impl Default for UnfinalizedEpochs {
+    fn default() -> Self { 
+        UnfinalizedEpochs {
+            epochs_queue: Default::default(),
+            epochs_map: Default::default(),
+        }
+     }
 }
 
 impl EthFilterClient {
@@ -112,7 +126,12 @@ impl EthFilterClient {
         let fut = async move {
             while let Some(epoch) = receiver.recv().await {
                 let mut epochs = epochs.write();
-                epochs.push_back(epoch.clone());
+
+                epochs.epochs_queue.push_back(epoch.clone());
+                match epochs.epochs_map.get_mut(&epoch.0) {
+                    Some(v) => {*v = epoch.1.clone();},
+                    _ => {epochs.epochs_map.insert(epoch.0, epoch.1.clone()); },
+                }
 
                 let latest_finalized_epoch_number =
                     consensus.latest_finalized_epoch_number();
@@ -122,9 +141,14 @@ impl EthFilterClient {
                 );
 
                 // only keep epochs after finalized state
-                while let Some(e) = epochs.front() {
+                while let Some(e) = epochs.epochs_queue.front() {
                     if e.0 < latest_finalized_epoch_number {
-                        epochs.pop_front();
+                        let (k, v) = epochs.epochs_queue.pop_front().unwrap();
+                        if let Some(target) = epochs.epochs_map.get_mut(&k) {
+                            if *target == v {
+                                epochs.epochs_map.remove(&k);
+                            }
+                        }
                     } else {
                         break;
                     }
@@ -248,8 +272,8 @@ impl Filterable for EthFilterClient {
         let latest_epochs = self.unfinalized_epochs.read();
 
         // the best executed epoch index
-        let mut idx = latest_epochs.len() as i32 - 1;
-        while idx >= 0 && latest_epochs[idx as usize].0 != current_epoch_number
+        let mut idx = latest_epochs.epochs_queue.len() as i32 - 1;
+        while idx >= 0 && latest_epochs.epochs_queue[idx as usize].0 != current_epoch_number
         {
             idx -= 1;
         }
@@ -258,9 +282,9 @@ impl Filterable for EthFilterClient {
         // latest_finalized_epoch_number), best executed epoch]
         let mut end_epoch_number = current_epoch_number + 1;
         let mut new_epochs = vec![];
-        let mut hm = HashMap::new();
+        let mut hs = HashSet::new();
         while idx >= 0 {
-            let (num, blocks) = latest_epochs[idx as usize].clone();
+            let (num, blocks) = latest_epochs.epochs_queue[idx as usize].clone();
             if num == last_block_number
                 && (last_block.is_none() || last_block == Some(blocks.clone()))
             {
@@ -268,8 +292,8 @@ impl Filterable for EthFilterClient {
             }
 
             // only keep the last one
-            if !hm.contains_key(&num) {
-                hm.insert(num, blocks.clone());
+            if num < end_epoch_number && !hs.contains(&num) {
+                hs.insert(num);
                 new_epochs.push((num, blocks));
                 end_epoch_number = num;
             }
@@ -288,19 +312,20 @@ impl Filterable for EthFilterClient {
         let mut reorg_len = 0;
         for i in 0..recent_reported_epochs.len() {
             let (num, hash) = recent_reported_epochs[i].clone();
-            let pivot_hash = if let Some(v) = hm.get(&num) {
-                v.clone()
-            } else {
-                self.block_hashes(EpochNumber::Number(num))
-                    .expect("Epoch should exist")
-            };
-
-            if pivot_hash == hash {
-                // meet fork point
-                break;
-            }
 
             if num < end_epoch_number {
+                let pivot_hash = if let Some(v) = latest_epochs.epochs_map.get(&num) {
+                    v.clone()
+                } else {
+                    self.block_hashes(EpochNumber::Number(num))
+                        .expect("Epoch should exist")
+                };
+
+                if pivot_hash == hash {
+                    // meet fork point
+                    break;
+                }
+
                 debug!("reorg for {}, pivot hash {:?}", num, pivot_hash);
                 reorg_epochs.push((num, pivot_hash));
             }
