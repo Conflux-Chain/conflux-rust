@@ -7,7 +7,9 @@ use crate::rpc::{
     helpers::{EpochQueue, SubscriberId, Subscribers},
     metadata::Metadata,
     traits::eth_space::eth_pubsub::EthPubSub as PubSub,
-    types::eth::{eth_pubsub as pubsub, Header as RpcHeader, Log as RpcLog},
+    types::eth::{
+        eth_pubsub as pubsub, Header as RpcHeader, Log as RpcLog, Log,
+    },
 };
 use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
@@ -15,10 +17,9 @@ use cfx_parameters::{
 };
 use cfx_types::{Space, H256};
 use cfxcore::{
-    channel::Channel, BlockDataManager, ConsensusGraph, Notifications,
-    SharedConsensusGraph, consensus::PhantomBlock,
+    channel::Channel, consensus::PhantomBlock, BlockDataManager,
+    ConsensusGraph, Notifications, SharedConsensusGraph,
 };
-use crate::rpc::types::eth::Log;
 use futures::{
     compat::Future01CompatExt,
     future::{FutureExt, TryFutureExt},
@@ -159,7 +160,8 @@ impl PubSubClient {
         // loop asynchronously
         let fut = async move {
             let mut last_epoch = 0;
-            let mut epochs: VecDeque<(u64, Vec<H256>, Vec<Log>)> = VecDeque::new();
+            let mut epochs: VecDeque<(u64, Vec<H256>, Vec<Log>)> =
+                VecDeque::new();
 
             while let Some(epoch) = receiver.recv().await {
                 trace!("logs_loop({:?}): {:?}", id, epoch);
@@ -194,9 +196,7 @@ impl PubSubClient {
                     }
 
                     for (_, _, logs) in reverted.into_iter() {
-                        handler
-                            .notify_removed_logs(&sub, logs)
-                            .await;
+                        handler.notify_removed_logs(&sub, logs).await;
                     }
                 }
 
@@ -213,7 +213,9 @@ impl PubSubClient {
                 }
 
                 // publish matching logs
-                let logs = handler.notify_logs(&sub, filter, epoch.clone(), false).await;
+                let logs = handler
+                    .notify_logs(&sub, filter, epoch.clone(), false)
+                    .await;
                 epochs.push_back((epoch.0, epoch.1, logs));
             }
         };
@@ -315,9 +317,7 @@ impl ChainNotificationHandler {
         }
     }
 
-    async fn notify_removed_logs(
-        &self, subscriber: &Client, logs: Vec<Log>    ) 
-    {
+    async fn notify_removed_logs(&self, subscriber: &Client, logs: Vec<Log>) {
         // send logs in order
         for mut log in logs.into_iter() {
             log.removed = true;
@@ -356,7 +356,11 @@ impl ChainNotificationHandler {
         for log in logs {
             match log {
                 Ok(l) => {
-                    Self::notify_async(subscriber, pubsub::Result::Log(l.clone())).await;
+                    Self::notify_async(
+                        subscriber,
+                        pubsub::Result::Log(l.clone()),
+                    )
+                    .await;
                     ret.push(l);
                 }
                 Err(e) => {
@@ -371,7 +375,9 @@ impl ChainNotificationHandler {
         ret
     }
 
-    async fn get_phantom_block(&self, epoch_number: u64, pivot: H256) -> Option<PhantomBlock>{
+    async fn get_phantom_block(
+        &self, epoch_number: u64, pivot: H256,
+    ) -> Option<PhantomBlock> {
         debug!("eth pubsub get_phantom_block");
         const POLL_INTERVAL_MS: Duration = Duration::from_millis(100);
 
@@ -382,13 +388,11 @@ impl ChainNotificationHandler {
                 Some(pivot),
                 false, /* include_traces */
             ) {
-                Ok(v) => {
-                    match v {
-                        Some(b) => return Some(b),
-                        None => {
-                            error!("Block not executed yet {:?}", pivot);
-                            let _ = sleep(POLL_INTERVAL_MS).compat().await;
-                        }
+                Ok(v) => match v {
+                    Some(b) => return Some(b),
+                    None => {
+                        error!("Block not executed yet {:?}", pivot);
+                        let _ = sleep(POLL_INTERVAL_MS).compat().await;
                     }
                 },
                 Err(e) => {
@@ -403,10 +407,12 @@ impl ChainNotificationHandler {
                 return None;
             } else {
                 if latest
-                    > epoch_number + DEFERRED_STATE_EPOCH_COUNT + REWARD_EPOCH_COUNT
+                    > epoch_number
+                        + DEFERRED_STATE_EPOCH_COUNT
+                        + REWARD_EPOCH_COUNT
                 {
-                    // Even if the epoch was executed, the phantom block on the fork
-                    // should be unable to constructed.
+                    // Even if the epoch was executed, the phantom block on the
+                    // fork should be unable to constructed.
                     warn!(
                         "Cannot onstruct phantom block for {:?}, latest_epoch={}",
                         pivot, latest
@@ -491,27 +497,25 @@ impl ChainNotificationHandler {
         let mut logs = vec![];
         let mut log_index = 0;
 
-            let txs = &pb.transactions;
-            assert_eq!(pb.receipts.len(), txs.len());
+        let txs = &pb.transactions;
+        assert_eq!(pb.receipts.len(), txs.len());
 
-            // construct logs
-            for (txid, (receipt, tx)) in
-                zip(&pb.receipts, txs).enumerate()
-            {
-                for (logid, entry) in receipt.logs.iter().cloned().enumerate() {
-                    logs.push(LocalizedLogEntry {
-                        entry,
-                        block_hash: pivot,
-                        epoch_number,
-                        transaction_hash: tx.hash,
-                        transaction_index: txid,
-                        log_index,
-                        transaction_log_index: logid,
-                    });
+        // construct logs
+        for (txid, (receipt, tx)) in zip(&pb.receipts, txs).enumerate() {
+            for (logid, entry) in receipt.logs.iter().cloned().enumerate() {
+                logs.push(LocalizedLogEntry {
+                    entry,
+                    block_hash: pivot,
+                    epoch_number,
+                    transaction_hash: tx.hash,
+                    transaction_index: txid,
+                    log_index,
+                    transaction_log_index: logid,
+                });
 
-                    log_index += 1;
-                }
+                log_index += 1;
             }
+        }
 
         Some(logs)
     }

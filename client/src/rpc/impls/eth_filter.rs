@@ -10,7 +10,7 @@ use std::{
 use cfx_types::{H128, H256};
 use cfxcore::{
     channel::Channel, ConsensusGraph, ConsensusGraphTrait,
-    SharedConsensusGraph, SharedTransactionPool
+    SharedConsensusGraph, SharedTransactionPool,
 };
 use futures::{FutureExt, TryFutureExt};
 use itertools::zip;
@@ -176,8 +176,7 @@ impl Filterable for EthFilterClient {
 
     fn logs_for_epoch(
         &self, filter: &LogFilter, epoch: (u64, Vec<H256>), removed: bool,
-    ) -> RpcResult<Vec<Log>>
-    {
+    ) -> RpcResult<Vec<Log>> {
         let mut result = vec![];
         let logs = match retrieve_epoch_logs(epoch, self.consensus_graph()) {
             Some(logs) => logs,
@@ -559,59 +558,54 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
     }
 }
 
-fn retrieve_epoch_logs(epoch: (u64, Vec<H256>), consensus_graph: &ConsensusGraph,
+fn retrieve_epoch_logs(
+    epoch: (u64, Vec<H256>), consensus_graph: &ConsensusGraph,
 ) -> Option<Vec<LocalizedLogEntry>> {
     debug!("retrieve_epoch_logs {:?}", epoch);
     let (epoch_number, hashes) = epoch;
     let pivot = hashes.last().cloned().expect("epoch should not be empty");
 
-     // construct phantom block
-        let pb = match consensus_graph.get_phantom_block_by_number(
-            EpochNumber::Number(epoch_number),
-            Some(pivot),
-            false, /* include_traces */
-        ) {
-            Ok(v) => {
-                match v {
-                    Some(b) => b,
-                    None => {
-                        error!("Block not executed yet {:?}", pivot);
-                        return None;
-                    }
-                }
-            },
-            Err(e) => {
-                error!("get_phantom_block_by_number failed {}", e);
+    // construct phantom block
+    let pb = match consensus_graph.get_phantom_block_by_number(
+        EpochNumber::Number(epoch_number),
+        Some(pivot),
+        false, /* include_traces */
+    ) {
+        Ok(v) => match v {
+            Some(b) => b,
+            None => {
+                error!("Block not executed yet {:?}", pivot);
                 return None;
             }
-        };
+        },
+        Err(e) => {
+            error!("get_phantom_block_by_number failed with {}", e);
+            return None;
+        }
+    };
 
-        let mut logs = vec![];
+    let mut logs = vec![];
     let mut log_index = 0;
 
+    let txs = &pb.transactions;
+    assert_eq!(pb.receipts.len(), txs.len());
 
-        let txs = &pb.transactions;
-        assert_eq!(pb.receipts.len(), txs.len());
+    // construct logs
+    for (txid, (receipt, tx)) in zip(&pb.receipts, txs).enumerate() {
+        for (logid, entry) in receipt.logs.iter().cloned().enumerate() {
+            logs.push(LocalizedLogEntry {
+                entry,
+                block_hash: pivot,
+                epoch_number,
+                transaction_hash: tx.hash,
+                transaction_index: txid,
+                log_index,
+                transaction_log_index: logid,
+            });
 
-        // construct logs
-        for (txid, (receipt, tx)) in
-            zip(&pb.receipts, txs).enumerate()
-        {
-            for (logid, entry) in receipt.logs.iter().cloned().enumerate() {
-                logs.push(LocalizedLogEntry {
-                    entry,
-                    block_hash: pivot,
-                    epoch_number,
-                    transaction_hash: tx.hash,
-                    transaction_index: txid,
-                    log_index,
-                    transaction_log_index: logid,
-                });
-
-                log_index += 1;
-            }
+            log_index += 1;
         }
-    
+    }
 
     Some(logs)
 }
