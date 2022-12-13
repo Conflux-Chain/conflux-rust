@@ -128,14 +128,7 @@ impl EthFilterClient {
                 let mut epochs = epochs.write();
 
                 epochs.epochs_queue.push_back(epoch.clone());
-                match epochs.epochs_map.get_mut(&epoch.0) {
-                    Some(v) => {
-                        *v = epoch.1.clone();
-                    }
-                    _ => {
-                        epochs.epochs_map.insert(epoch.0, epoch.1.clone());
-                    }
-                }
+                epochs.epochs_map.insert(epoch.0, epoch.1.clone());
 
                 let latest_finalized_epoch_number =
                     consensus.latest_finalized_epoch_number();
