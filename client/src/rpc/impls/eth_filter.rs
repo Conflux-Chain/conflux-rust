@@ -571,13 +571,11 @@ fn retrieve_epoch_logs(
         Some(pivot),
         false, /* include_traces */
     ) {
-        Ok(v) => match v {
-            Some(b) => b,
-            None => {
-                error!("Block not executed yet {:?}", pivot);
-                return None;
-            }
-        },
+        Ok(Some(b)) => b,
+        Ok(None) => {
+            error!("Block not executed yet {:?}", pivot);
+            return None;
+        }
         Err(e) => {
             error!("get_phantom_block_by_number failed with {}", e);
             return None;

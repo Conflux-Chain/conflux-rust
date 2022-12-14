@@ -388,13 +388,11 @@ impl ChainNotificationHandler {
                 Some(pivot),
                 false, /* include_traces */
             ) {
-                Ok(v) => match v {
-                    Some(b) => return Some(b),
-                    None => {
-                        error!("Block not executed yet {:?}", pivot);
-                        let _ = sleep(POLL_INTERVAL_MS).compat().await;
-                    }
-                },
+                Ok(Some(b)) => return Some(b),
+                Ok(None) => {
+                    error!("Block not executed yet {:?}", pivot);
+                    let _ = sleep(POLL_INTERVAL_MS).compat().await;
+                }
                 Err(e) => {
                     error!("get_phantom_block_by_number failed {}", e);
                     return None;
