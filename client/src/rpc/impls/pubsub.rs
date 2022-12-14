@@ -333,8 +333,6 @@ impl ChainNotificationHandler {
             None => return,
         };
 
-        debug!("core logs {:?}", logs);
-
         // apply filter to logs
         let logs = logs
             .iter()

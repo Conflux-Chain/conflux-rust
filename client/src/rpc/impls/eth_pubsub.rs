@@ -340,8 +340,6 @@ impl ChainNotificationHandler {
             None => return vec![],
         };
 
-        debug!("eth logs {:?}", logs);
-
         // apply filter to logs
         let logs = logs
             .iter()
