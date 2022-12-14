@@ -79,7 +79,7 @@ pub struct EthFilterClient {
 
 pub struct UnfinalizedEpochs {
     epochs_queue: VecDeque<(u64, Vec<H256>)>,
-    epochs_map: HashMap<u64, Vec<H256>>,
+    epochs_map: HashMap<u64, Vec<Vec<H256>>>,
 }
 
 impl Default for UnfinalizedEpochs {
@@ -128,7 +128,11 @@ impl EthFilterClient {
                 let mut epochs = epochs.write();
 
                 epochs.epochs_queue.push_back(epoch.clone());
-                epochs.epochs_map.insert(epoch.0, epoch.1.clone());
+                epochs
+                    .epochs_map
+                    .entry(epoch.0)
+                    .or_insert(vec![])
+                    .push(epoch.1.clone());
 
                 let latest_finalized_epoch_number =
                     consensus.latest_finalized_epoch_number();
@@ -140,10 +144,12 @@ impl EthFilterClient {
                 // only keep epochs after finalized state
                 while let Some(e) = epochs.epochs_queue.front() {
                     if e.0 < latest_finalized_epoch_number {
-                        let (k, v) = epochs.epochs_queue.pop_front().unwrap();
+                        let (k, _) = epochs.epochs_queue.pop_front().unwrap();
                         if let Some(target) = epochs.epochs_map.get_mut(&k) {
-                            if *target == v {
+                            if target.len() == 1 {
                                 epochs.epochs_map.remove(&k);
+                            } else {
+                                target.remove(0);
                             }
                         }
                     } else {
@@ -316,7 +322,7 @@ impl Filterable for EthFilterClient {
             if num < end_epoch_number {
                 let pivot_hash =
                     if let Some(v) = latest_epochs.epochs_map.get(&num) {
-                        v.clone()
+                        v.last().unwrap().clone()
                     } else {
                         self.block_hashes(EpochNumber::Number(num))
                             .expect("Epoch should exist")
