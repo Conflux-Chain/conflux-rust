@@ -17,7 +17,7 @@ use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
     consensus_internal::REWARD_EPOCH_COUNT,
 };
-use cfx_types::H256;
+use cfx_types::{Space, H256};
 use cfxcore::{
     channel::Channel, BlockDataManager, Notifications, SharedConsensusGraph,
 };
@@ -333,6 +333,8 @@ impl ChainNotificationHandler {
             None => return,
         };
 
+        debug!("core logs {:?}", logs);
+
         // apply filter to logs
         let logs = logs
             .iter()
@@ -456,7 +458,14 @@ impl ChainNotificationHandler {
             for (txid, (receipt, tx)) in
                 zip(&block_receipts.receipts, txs).enumerate()
             {
-                for (logid, entry) in receipt.logs.iter().cloned().enumerate() {
+                let native_logs: Vec<_> = receipt
+                    .logs
+                    .iter()
+                    .cloned()
+                    .filter(|l| l.space == Space::Native)
+                    .collect();
+
+                for (logid, entry) in native_logs.into_iter().enumerate() {
                     logs.push(LocalizedLogEntry {
                         entry,
                         block_hash,

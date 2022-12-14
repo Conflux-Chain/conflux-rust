@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use cfx_types::{H128, H256};
+use cfx_types::{Space, H128, H256};
 use cfxcore::{
     channel::Channel, ConsensusGraph, ConsensusGraphTrait,
     SharedConsensusGraph, SharedTransactionPool,
@@ -590,7 +590,14 @@ fn retrieve_epoch_logs(
 
     // construct logs
     for (txid, (receipt, tx)) in zip(&pb.receipts, txs).enumerate() {
-        for (logid, entry) in receipt.logs.iter().cloned().enumerate() {
+        let eth_logs: Vec<_> = receipt
+            .logs
+            .iter()
+            .cloned()
+            .filter(|l| l.space == Space::Ethereum)
+            .collect();
+
+        for (logid, entry) in eth_logs.into_iter().enumerate() {
             logs.push(LocalizedLogEntry {
                 entry,
                 block_hash: pivot,

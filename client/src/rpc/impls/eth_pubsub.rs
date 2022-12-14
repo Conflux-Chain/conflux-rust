@@ -340,6 +340,8 @@ impl ChainNotificationHandler {
             None => return vec![],
         };
 
+        debug!("eth logs {:?}", logs);
+
         // apply filter to logs
         let logs = logs
             .iter()
@@ -500,7 +502,14 @@ impl ChainNotificationHandler {
 
         // construct logs
         for (txid, (receipt, tx)) in zip(&pb.receipts, txs).enumerate() {
-            for (logid, entry) in receipt.logs.iter().cloned().enumerate() {
+            let eth_logs: Vec<_> = receipt
+                .logs
+                .iter()
+                .cloned()
+                .filter(|l| l.space == Space::Ethereum)
+                .collect();
+
+            for (logid, entry) in eth_logs.into_iter().enumerate() {
                 logs.push(LocalizedLogEntry {
                     entry,
                     block_hash: pivot,
