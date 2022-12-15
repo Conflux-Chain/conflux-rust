@@ -47,6 +47,10 @@ class PubSubTest(ConfluxTestFramework):
         self.pubsub[FULLNODE0] = PubSubClient(self.nodes[FULLNODE0])
         self.pubsub[FULLNODE1] = PubSubClient(self.nodes[FULLNODE1])
 
+        self.eth_pubsub = [None] * self.num_nodes
+        self.eth_pubsub[FULLNODE0] = PubSubClient(self.nodes[FULLNODE0], True)
+        self.eth_pubsub[FULLNODE1] = PubSubClient(self.nodes[FULLNODE1], True)
+
         # connect nodes
         connect_nodes(self.nodes, FULLNODE0, FULLNODE1)
 
@@ -69,6 +73,8 @@ class PubSubTest(ConfluxTestFramework):
         sub_all = await self.pubsub[FULLNODE0].subscribe("logs")
         sub_one = await self.pubsub[FULLNODE0].subscribe("logs", Filter(address=[contract2]).__dict__)
 
+        sub_all_eth = await self.eth_pubsub[FULLNODE0].subscribe("logs")
+
         # call contracts and collect receipts
         receipts = []
 
@@ -84,6 +90,7 @@ class PubSubTest(ConfluxTestFramework):
         sync_blocks(self.nodes)
 
         # collect pub-sub notifications
+        assert_equal(len([l async for l in sub_all_eth.iter()]), 0)
         logs1 = [l async for l in sub_all.iter()]
         logs2 = [l async for l in sub_one.iter()]
 
@@ -114,6 +121,8 @@ class PubSubTest(ConfluxTestFramework):
         msg = await sub_all.next(timeout=5)
         assert(msg["revertTo"] != None)
         assert_equal(int(msg["revertTo"], 16), fork_epoch)
+
+        assert_equal(len([l async for l in sub_all_eth.iter()]), 0)
 
         logs = [l async for l in sub_all.iter()]
         assert_equal(len(logs), num_to_reexecute)

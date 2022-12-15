@@ -70,7 +70,7 @@ class FilterBlockTest(Web3Base):
         filter_blocks = self.nodes[0].eth_getFilterChanges(filter)
         assert_equal(len(filter_blocks), 20)
         idx = len(blocks) - 5
-        for i in range(19, -1, -1):
+        for i in range(len(filter_blocks) - 1, -1, -1):
             assert_equal(filter_blocks[i], blocks[idx])
             idx -= 1
 
@@ -84,7 +84,7 @@ class FilterBlockTest(Web3Base):
         assert_equal(len(filter_blocks), 6)
 
         idx = len(blocks) - 5
-        for i in range(5, -1, -1):
+        for i in range(len(filter_blocks) - 1, -1, -1):
             assert_equal(filter_blocks[i], blocks[idx])
             idx -= 1
 
@@ -93,8 +93,10 @@ class FilterBlockTest(Web3Base):
         assert_equal(len(filter_blocks), 1)
         assert_equal(filter_blocks[0], blocks[len(blocks) - 5])
 
+        parent_block = blocks[-1]
+
         # blocks in node2
-        blocks.extend(self.nodes[1].generate_empty_blocks(12))
+        b2 = self.nodes[1].generate_empty_blocks(12)
 
         # re-org
         connect_nodes(self.nodes, 0, 1)
@@ -102,10 +104,24 @@ class FilterBlockTest(Web3Base):
 
         filter_blocks = self.nodes[0].eth_getFilterChanges(filter)
         assert_equal(len(filter_blocks), 8)
+        idx = len(b2) - 5
+        for i in range(len(filter_blocks) - 1, -1, -1):
+            assert_equal(filter_blocks[i], b2[idx])
+            idx -= 1
+        
+        # change pivot chain back
+        for i in range(10):
+            parent_block = client1.generate_block_with_parent(parent_block)
+            blocks.append(parent_block)
+        
+        filter_blocks = self.nodes[0].eth_getFilterChanges(filter)
+        assert_equal(len(filter_blocks), 13)
+
         idx = len(blocks) - 5
-        for i in range(7, -1, -1):
+        for i in range(len(filter_blocks)-1, -1, -1):
             assert_equal(filter_blocks[i], blocks[idx])
             idx -= 1
+
 
     def run_test(self):
         asyncio.get_event_loop().run_until_complete(self.run_async())
