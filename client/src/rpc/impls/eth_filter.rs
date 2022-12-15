@@ -277,6 +277,16 @@ impl Filterable for EthFilterClient {
             && latest_epochs.epochs_queue[idx as usize].0
                 != current_epoch_number
         {
+            // special case: best_executed_epoch_number rollback, so those
+            // epoches before last_block_number can be considered to have be
+            // processed.
+            if latest_epochs.epochs_queue[idx as usize].0 == last_block_number
+                && last_block
+                    == Some(latest_epochs.epochs_queue[idx as usize].1.clone())
+            {
+                return Ok((0, vec![]));
+            }
+
             idx -= 1;
         }
 
