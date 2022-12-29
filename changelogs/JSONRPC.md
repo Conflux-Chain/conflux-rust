@@ -1,5 +1,15 @@
 # JSON-RPC CHANGELOG
 
+## v2.2.1
+
+- Fix `pending` tag behaviour in espace. Now `pending` tag will be considered as `latest` tag except for `eth_getTransactionCount`.
+- Fix `cfx_getDepositList` and `cfx_getVoteList` return value format.
+
+## v2.2.0
+
+- Support `safe` and `finalized` block tag in espace.
+  - `safe` block number corresponds to `latest_confirmed` and `finalized` corresponds to `latest_finalized`
+
 ## v2.1.1
 
 - Add filter RPCs in eSpace including `eth_newFilter`, `eth_newBlockFilter`, `eth_newPendingTransactionFilter`, `eth_getFilterLogs`, `eth_getFilterChanges`, `eth_uninstallFilter`

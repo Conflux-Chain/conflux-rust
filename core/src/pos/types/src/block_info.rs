@@ -131,12 +131,12 @@ impl BlockInfo {
             executed_state_id: genesis_state_root_hash,
             version: GENESIS_VERSION,
             timestamp_usecs: GENESIS_TIMESTAMP_USECS,
-            next_epoch_state: Some(EpochState {
-                epoch: 1,
-                verifier: (&validator_set).into(),
+            next_epoch_state: Some(EpochState::new(
+                1,
+                (&validator_set).into(),
                 // Only used in unit test.
-                vrf_seed: vec![],
-            }),
+                vec![],
+            )),
             pivot: None,
         }
     }
