@@ -481,7 +481,7 @@ impl OverlayAccount {
         if !not_maintain_deposit_list {
             self.deposit_list.as_mut().unwrap().push(DepositInfo {
                 amount,
-                deposit_time,
+                deposit_time: deposit_time.into(),
                 accumulated_interest_rate,
             });
         }

@@ -277,7 +277,7 @@ impl PosHandler {
                             .iter()
                             .map(|(a, _s)| {
                                 let voting_power = epoch_state
-                                    .verifier
+                                    .verifier()
                                     .get_voting_power(a)
                                     .unwrap_or(0);
                                 Signature {
@@ -410,7 +410,7 @@ impl PosHandler {
                         .iter()
                         .map(|(a, _s)| {
                             let voting_power = latest_epoch_state
-                                .verifier
+                                .verifier()
                                 .get_voting_power(a)
                                 .unwrap_or(0);
                             Signature {

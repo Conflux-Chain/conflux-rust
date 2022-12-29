@@ -148,7 +148,7 @@ impl NodeSetup {
             epoch: 1,
             verifier: storage.get_validator_set().into(),
         };
-        let validators = epoch_state.verifier.clone();
+        let validators = epoch_state.verifier().clone();
         let (network_reqs_tx, network_reqs_rx) =
             diem_channel::new(QueueStyle::FIFO, 8, None);
         let (connection_reqs_tx, _) =

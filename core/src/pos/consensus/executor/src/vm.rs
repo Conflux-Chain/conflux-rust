@@ -67,11 +67,11 @@ impl VMExecutor for FakeVM {
                         let epoch = (state_view.pos_state().current_view() + 1)
                             / POS_STATE_CONFIG.round_per_term()
                             + 1;
-                        let validator_bytes = bcs::to_bytes(&EpochState {
+                        let validator_bytes = bcs::to_bytes(&EpochState::new(
                             epoch,
-                            verifier: validator_verifier,
+                            validator_verifier,
                             vrf_seed,
-                        })
+                        ))
                         .unwrap();
                         let contract_event = ContractEvent::new(
                             new_epoch_event_key(),
@@ -285,6 +285,12 @@ impl FakeVM {
                             return false;
                         }
                     };
+                if proposal1 == proposal2 {
+                    diem_trace!(
+                        "Two same proposals are claimed to be conflict"
+                    );
+                    return false;
+                }
                 if (proposal1.block_data().epoch()
                     != proposal2.block_data().epoch())
                     || (proposal1.block_data().round()
@@ -324,6 +330,10 @@ impl FakeVM {
                         return false;
                     }
                 };
+                if vote1 == vote2 {
+                    diem_trace!("Two same votes are claimed to be conflict");
+                    return false;
+                }
                 if (vote1.vote_data().proposed().epoch()
                     != vote2.vote_data().proposed().epoch())
                     || (vote1.vote_data().proposed().round()

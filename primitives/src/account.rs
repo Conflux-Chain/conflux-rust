@@ -50,7 +50,7 @@ pub struct DepositInfo {
     /// This is the timestamp when this deposit happened, measured in the
     /// number of past blocks. It will be used to calculate
     /// the service charge.
-    pub deposit_time: u64,
+    pub deposit_time: U256,
     /// This is the accumulated interest rate when this deposit happened.
     pub accumulated_interest_rate: U256,
 }
@@ -74,7 +74,7 @@ pub struct VoteStakeInfo {
     pub amount: U256,
     /// This is the timestamp when the vote right will be invalid, measured in
     /// the number of past blocks.
-    pub unlock_block_number: u64,
+    pub unlock_block_number: U256,
 }
 
 #[derive(Clone, Debug, Default, Ord, PartialOrd, Eq, PartialEq)]
@@ -129,6 +129,7 @@ impl VoteStakeList {
     pub fn withdrawable_staking_balance(
         &self, staking_balance: U256, block_number: u64,
     ) -> U256 {
+        let block_number: U256 = block_number.into();
         if !self.is_empty() {
             // Find first index whose `unlock_block_number` is greater than
             // timestamp and all entries before the index could be
@@ -149,6 +150,7 @@ impl VoteStakeList {
     }
 
     pub fn remove_expired_vote_stake_info(&mut self, block_number: u64) {
+        let block_number: U256 = block_number.into();
         if !self.is_empty() && self[0].unlock_block_number <= block_number {
             // Find first index whose `unlock_block_number` is greater than
             // timestamp and all entries before the index could be
@@ -163,6 +165,7 @@ impl VoteStakeList {
     }
 
     pub fn vote_lock(&mut self, amount: U256, unlock_block_number: u64) {
+        let unlock_block_number: U256 = unlock_block_number.into();
         let mut updated = false;
         let mut updated_index = 0;
         match self.binary_search_by(|vote_info| {

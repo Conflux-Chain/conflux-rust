@@ -180,11 +180,11 @@ prop_compose! {
             total_voting_power
         );
         if include_epoch_state {
-            Some(EpochState {
+            Some(EpochState::new(
                 epoch,
                 verifier,
-                vrf_seed: vec![],
-            })
+                vec![],
+            ))
         } else {
             None
         }

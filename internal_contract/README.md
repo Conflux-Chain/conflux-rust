@@ -461,7 +461,7 @@ interface CrossSpaceCall {
 
 ## ParamsControl
 
-`ParamsControl` at address `0x0888000000000000000000000000000000000006` with the following interfaces. Which can be used to participate chain parameter DAO vote.
+`ParamsControl` at address `0x0888000000000000000000000000000000000007` with the following interfaces. Which can be used to participate chain parameter DAO vote.
 
 ```js
 // SPDX-License-Identifier: MIT
