@@ -414,7 +414,7 @@ impl RoundManager {
             diem_debug!("Skip election for election_control");
             return Ok(());
         }
-        if !self.is_validator() {
+        if !self.is_voting {
             // This node does not participate in any signing or voting.
             return Ok(());
         }
