@@ -33,9 +33,7 @@ use consensus_types::{
     vote_msg::VoteMsg,
 };
 use diem_config::keys::ConfigKey;
-use diem_crypto::{
-    hash::CryptoHash, HashValue, SigningKey, VRFPrivateKey,
-};
+use diem_crypto::{hash::CryptoHash, HashValue, SigningKey, VRFPrivateKey};
 use diem_infallible::checked;
 use diem_logger::prelude::*;
 use diem_types::{
