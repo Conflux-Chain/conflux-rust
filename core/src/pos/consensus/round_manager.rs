@@ -32,13 +32,14 @@ use consensus_types::{
     vote::Vote,
     vote_msg::VoteMsg,
 };
+use diem_config::keys::ConfigKey;
 use diem_crypto::{
-    hash::CryptoHash, HashValue, PrivateKey, SigningKey, VRFPrivateKey,
+    hash::CryptoHash, HashValue, SigningKey, VRFPrivateKey,
 };
 use diem_infallible::checked;
 use diem_logger::prelude::*;
 use diem_types::{
-    account_address::AccountAddress,
+    account_address::{from_consensus_public_key, AccountAddress},
     block_info::PivotBlockDecision,
     chain_id::ChainId,
     epoch_state::EpochState,
@@ -47,7 +48,7 @@ use diem_types::{
         ConflictSignature, DisputePayload, ElectionPayload, RawTransaction,
         SignedTransaction, TransactionPayload,
     },
-    validator_config::ConsensusPrivateKey,
+    validator_config::{ConsensusPrivateKey, ConsensusVRFPrivateKey},
     validator_verifier::ValidatorVerifier,
 };
 #[cfg(test)]
@@ -239,6 +240,8 @@ pub struct RoundManager {
 
     is_voting: bool,
     election_control: Arc<AtomicBool>,
+    consensus_private_key: Option<ConfigKey<ConsensusPrivateKey>>,
+    vrf_private_key: Option<ConfigKey<ConsensusVRFPrivateKey>>,
 }
 
 impl RoundManager {
@@ -255,6 +258,8 @@ impl RoundManager {
             oneshot::Sender<anyhow::Result<SubmissionStatus>>,
         )>,
         chain_id: ChainId, is_voting: bool, election_control: Arc<AtomicBool>,
+        consensus_private_key: Option<ConfigKey<ConsensusPrivateKey>>,
+        vrf_private_key: Option<ConfigKey<ConsensusVRFPrivateKey>>,
     ) -> Self
     {
         counters::OP_COUNTERS
@@ -275,6 +280,8 @@ impl RoundManager {
             tx_sender,
             chain_id,
             election_control,
+            consensus_private_key,
+            vrf_private_key,
         }
     }
 
@@ -424,30 +431,38 @@ impl RoundManager {
             // elected but cannot vote.
             return Ok(());
         }
-        let proposal_generator =
-            self.proposal_generator.as_ref().expect("checked");
+        if self.vrf_private_key.is_none()
+            || self.consensus_private_key.is_none()
+        {
+            diem_warn!("broadcast_election without keys");
+            return Ok(());
+        }
+        let private_key = self.consensus_private_key.as_ref().unwrap();
+        let vrf_private_key = self.vrf_private_key.as_ref().unwrap();
+        let author = from_consensus_public_key(
+            &private_key.public_key(),
+            &vrf_private_key.public_key(),
+        );
         diem_debug!("broadcast_election starts");
         let pos_state = self.storage.pos_ledger_db().get_latest_pos_state();
-        if let Some(target_term) =
-            pos_state.next_elect_term(&proposal_generator.author())
-        {
+        if let Some(target_term) = pos_state.next_elect_term(&author) {
             let epoch_vrf_seed = pos_state.target_term_seed(target_term);
             let election_payload = ElectionPayload {
-                public_key: proposal_generator.private_key.public_key(),
-                vrf_public_key: proposal_generator.vrf_private_key.public_key(),
+                public_key: private_key.public_key(),
+                vrf_public_key: vrf_private_key.public_key(),
                 target_term,
-                vrf_proof: proposal_generator
-                    .vrf_private_key
+                vrf_proof: vrf_private_key
+                    .private_key()
                     .compute(epoch_vrf_seed.as_slice())
                     .unwrap(),
             };
             let raw_tx = RawTransaction::new_election(
-                proposal_generator.author(),
+                author,
                 election_payload,
                 self.chain_id,
             );
             let signed_tx =
-                raw_tx.sign(&proposal_generator.private_key)?.into_inner();
+                raw_tx.sign(&private_key.private_key())?.into_inner();
             let (tx, rx) = oneshot::channel();
             self.tx_sender.send((signed_tx, tx)).await?;
             // TODO(lpl): Check if we want to wait here.
