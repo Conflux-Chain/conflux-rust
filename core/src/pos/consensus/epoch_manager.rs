@@ -479,6 +479,12 @@ impl EpochManager {
             self.config.chain_id,
             self.is_voting,
             self.election_control.clone(),
+            self.config
+                .safety_rules
+                .test
+                .as_ref()
+                .and_then(|config| config.consensus_key.clone()),
+            self.config.safety_rules.vrf_private_key.clone(),
         );
         processor.start(last_vote).await;
         self.processor = Some(RoundProcessor::Normal(processor));
