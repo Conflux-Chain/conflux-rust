@@ -3,22 +3,20 @@
 // See http://www.gnu.org/licenses/
 
 use std::{
-    collections::{BTreeSet, HashMap, VecDeque},
+    collections::{BTreeSet, HashMap, HashSet, VecDeque},
     sync::Arc,
-    thread,
-    time::Duration,
 };
 
-use cfx_types::{H128, H256};
+use cfx_types::{Space, H128, H256};
 use cfxcore::{
-    channel::Channel, BlockDataManager, ConsensusGraph, ConsensusGraphTrait,
+    channel::Channel, ConsensusGraph, ConsensusGraphTrait,
     SharedConsensusGraph, SharedTransactionPool,
 };
 use futures::{FutureExt, TryFutureExt};
 use itertools::zip;
 use parking_lot::{Mutex, RwLock};
 use primitives::{
-    filter::LogFilter, log_entry::LocalizedLogEntry, BlockReceipts, EpochNumber,
+    filter::LogFilter, log_entry::LocalizedLogEntry, EpochNumber,
 };
 use runtime::Executor;
 
@@ -48,7 +46,6 @@ pub trait Filterable {
     /// Get logs that match the given filter for specific epoch
     fn logs_for_epoch(
         &self, filter: &LogFilter, epoch: (u64, Vec<H256>), removed: bool,
-        data_man: &Arc<BlockDataManager>,
     ) -> RpcResult<Vec<Log>>;
 
     /// Get a reference to the poll manager.
@@ -75,8 +72,22 @@ pub struct EthFilterClient {
     consensus: SharedConsensusGraph,
     tx_pool: SharedTransactionPool,
     polls: Mutex<PollManager<SyncPollFilter>>,
-    unfinalized_epochs: Arc<RwLock<VecDeque<(u64, Vec<H256>)>>>,
+    unfinalized_epochs: Arc<RwLock<UnfinalizedEpochs>>,
     logs_filter_max_limit: Option<usize>,
+}
+
+pub struct UnfinalizedEpochs {
+    epochs_queue: VecDeque<(u64, Vec<H256>)>,
+    epochs_map: HashMap<u64, Vec<Vec<H256>>>,
+}
+
+impl Default for UnfinalizedEpochs {
+    fn default() -> Self {
+        UnfinalizedEpochs {
+            epochs_queue: Default::default(),
+            epochs_map: Default::default(),
+        }
+    }
 }
 
 impl EthFilterClient {
@@ -114,7 +125,13 @@ impl EthFilterClient {
         let fut = async move {
             while let Some(epoch) = receiver.recv().await {
                 let mut epochs = epochs.write();
-                epochs.push_back(epoch.clone());
+
+                epochs.epochs_queue.push_back(epoch.clone());
+                epochs
+                    .epochs_map
+                    .entry(epoch.0)
+                    .or_insert(vec![])
+                    .push(epoch.1.clone());
 
                 let latest_finalized_epoch_number =
                     consensus.latest_finalized_epoch_number();
@@ -124,9 +141,16 @@ impl EthFilterClient {
                 );
 
                 // only keep epochs after finalized state
-                while let Some(e) = epochs.front() {
+                while let Some(e) = epochs.epochs_queue.front() {
                     if e.0 < latest_finalized_epoch_number {
-                        epochs.pop_front();
+                        let (k, _) = epochs.epochs_queue.pop_front().unwrap();
+                        if let Some(target) = epochs.epochs_map.get_mut(&k) {
+                            if target.len() == 1 {
+                                epochs.epochs_map.remove(&k);
+                            } else {
+                                target.remove(0);
+                            }
+                        }
                     } else {
                         break;
                     }
@@ -179,11 +203,9 @@ impl Filterable for EthFilterClient {
 
     fn logs_for_epoch(
         &self, filter: &LogFilter, epoch: (u64, Vec<H256>), removed: bool,
-        data_man: &Arc<BlockDataManager>,
-    ) -> RpcResult<Vec<Log>>
-    {
+    ) -> RpcResult<Vec<Log>> {
         let mut result = vec![];
-        let logs = match retrieve_epoch_logs(&data_man, epoch) {
+        let logs = match retrieve_epoch_logs(epoch, self.consensus_graph()) {
             Some(logs) => logs,
             None => bail!(RpcError {
                 code: ErrorCode::ServerError(codes::UNSUPPORTED),
@@ -250,9 +272,21 @@ impl Filterable for EthFilterClient {
         let latest_epochs = self.unfinalized_epochs.read();
 
         // the best executed epoch index
-        let mut idx = latest_epochs.len() as i32 - 1;
-        while idx >= 0 && latest_epochs[idx as usize].0 != current_epoch_number
+        let mut idx = latest_epochs.epochs_queue.len() as i32 - 1;
+        while idx >= 0
+            && latest_epochs.epochs_queue[idx as usize].0
+                != current_epoch_number
         {
+            // special case: best_executed_epoch_number rollback, so those
+            // epoches before last_block_number can be considered to have be
+            // processed.
+            if latest_epochs.epochs_queue[idx as usize].0 == last_block_number
+                && last_block
+                    == Some(latest_epochs.epochs_queue[idx as usize].1.clone())
+            {
+                return Ok((0, vec![]));
+            }
+
             idx -= 1;
         }
 
@@ -260,9 +294,10 @@ impl Filterable for EthFilterClient {
         // latest_finalized_epoch_number), best executed epoch]
         let mut end_epoch_number = current_epoch_number + 1;
         let mut new_epochs = vec![];
-        let mut hm = HashMap::new();
+        let mut hs = HashSet::new();
         while idx >= 0 {
-            let (num, blocks) = latest_epochs[idx as usize].clone();
+            let (num, blocks) =
+                latest_epochs.epochs_queue[idx as usize].clone();
             if num == last_block_number
                 && (last_block.is_none() || last_block == Some(blocks.clone()))
             {
@@ -270,8 +305,8 @@ impl Filterable for EthFilterClient {
             }
 
             // only keep the last one
-            if !hm.contains_key(&num) {
-                hm.insert(num, blocks.clone());
+            if num < end_epoch_number && !hs.contains(&num) {
+                hs.insert(num);
                 new_epochs.push((num, blocks));
                 end_epoch_number = num;
             }
@@ -290,19 +325,21 @@ impl Filterable for EthFilterClient {
         let mut reorg_len = 0;
         for i in 0..recent_reported_epochs.len() {
             let (num, hash) = recent_reported_epochs[i].clone();
-            let pivot_hash = if let Some(v) = hm.get(&num) {
-                v.clone()
-            } else {
-                self.block_hashes(EpochNumber::Number(num))
-                    .expect("Epoch should exist")
-            };
-
-            if pivot_hash == hash {
-                // meet fork point
-                break;
-            }
 
             if num < end_epoch_number {
+                let pivot_hash =
+                    if let Some(v) = latest_epochs.epochs_map.get(&num) {
+                        v.last().unwrap().clone()
+                    } else {
+                        self.block_hashes(EpochNumber::Number(num))
+                            .expect("Epoch should exist")
+                    };
+
+                if pivot_hash == hash {
+                    // meet fork point
+                    break;
+                }
+
                 debug!("reorg for {}, pivot hash {:?}", num, pivot_hash);
                 reorg_epochs.push((num, pivot_hash));
             }
@@ -471,49 +508,13 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
                 ref filter,
                 include_pending: _,
             } => {
-                let data_man =
-                    self.consensus_graph().get_data_manager().clone();
-
-                let mut retry_count = 0;
-                let (reorg_len, epochs, new_logs) = 'outer: loop {
-                    retry_count += 1;
-                    if retry_count > 10 {
-                        return Err(RpcError {
-                            code: ErrorCode::ServerError(codes::UNSUPPORTED),
-                            message: "Unable to retrieve logs for epoch".into(),
-                            data: None,
-                        });
-                    }
-
-                    let mut logs = vec![];
-                    let (reorg_len, epochs) = match self
-                        .epochs_since_last_request(
-                            *last_block_number,
-                            recent_reported_epochs,
-                        ) {
-                        Ok((reorg_len, epochs)) => (reorg_len, epochs),
-                        _ => continue,
-                    };
-
-                    // logs from new epochs
-                    for (num, blocks) in epochs.iter() {
-                        let log = match self.logs_for_epoch(
-                            &filter,
-                            (*num, blocks.clone()),
-                            false,
-                            &data_man,
-                        ) {
-                            Ok(l) => l,
-                            _ => continue 'outer,
-                        };
-
-                        logs.push(log);
-                    }
-
-                    break (reorg_len, epochs, logs);
-                };
+                let (reorg_len, epochs) = self.epochs_since_last_request(
+                    *last_block_number,
+                    recent_reported_epochs,
+                )?;
 
                 let mut logs = vec![];
+
                 // retrieve reorg logs
                 for _ in 0..reorg_len {
                     recent_reported_epochs.pop_front().unwrap();
@@ -530,8 +531,17 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
                 }
 
                 // logs from new epochs
-                for (i, (num, blocks)) in epochs.into_iter().enumerate() {
-                    logs.append(&mut new_logs[i].clone());
+                for (num, blocks) in epochs.into_iter() {
+                    let log = match self.logs_for_epoch(
+                        &filter,
+                        (num, blocks.clone()),
+                        false,
+                    ) {
+                        Ok(l) => l,
+                        _ => break,
+                    };
+
+                    logs.append(&mut log.clone());
                     *last_block_number = num;
 
                     // Only keep the most recent history
@@ -542,7 +552,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
                         previous_logs.pop_back();
                     }
                     recent_reported_epochs.push_front((num, blocks));
-                    previous_logs.push_front(new_logs[i].clone());
+                    previous_logs.push_front(log);
                 }
 
                 Ok(FilterChanges::Logs(limit_logs(
@@ -591,84 +601,58 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
 }
 
 fn retrieve_epoch_logs(
-    data_man: &Arc<BlockDataManager>, epoch: (u64, Vec<H256>),
+    epoch: (u64, Vec<H256>), consensus_graph: &ConsensusGraph,
 ) -> Option<Vec<LocalizedLogEntry>> {
-    debug!("retrieve_epoch_logs");
+    debug!("retrieve_epoch_logs {:?}", epoch);
     let (epoch_number, hashes) = epoch;
     let pivot = hashes.last().cloned().expect("epoch should not be empty");
 
-    // retrieve epoch receipts
-    let fut = hashes
-        .iter()
-        .map(|h| retrieve_block_receipts(data_man, &h, &pivot));
-
-    let receipts = fut.into_iter().collect::<Option<Vec<_>>>()?;
+    // construct phantom block
+    let pb = match consensus_graph.get_phantom_block_by_number(
+        EpochNumber::Number(epoch_number),
+        Some(pivot),
+        false, /* include_traces */
+    ) {
+        Ok(Some(b)) => b,
+        Ok(None) => {
+            error!("Block not executed yet {:?}", pivot);
+            return None;
+        }
+        Err(e) => {
+            error!("get_phantom_block_by_number failed with {}", e);
+            return None;
+        }
+    };
 
     let mut logs = vec![];
     let mut log_index = 0;
 
-    for (block_hash, block_receipts) in zip(hashes, receipts) {
-        // retrieve block transactions
-        let block = match data_man
-            .block_by_hash(&block_hash, true /* update_cache */)
-        {
-            Some(b) => b,
-            None => {
-                warn!("Unable to retrieve block {:?}", block_hash);
-                return None;
-            }
-        };
+    let txs = &pb.transactions;
+    assert_eq!(pb.receipts.len(), txs.len());
 
-        let txs = &block.transactions;
-        assert_eq!(block_receipts.receipts.len(), txs.len());
+    // construct logs
+    for (txid, (receipt, tx)) in zip(&pb.receipts, txs).enumerate() {
+        let eth_logs: Vec<_> = receipt
+            .logs
+            .iter()
+            .cloned()
+            .filter(|l| l.space == Space::Ethereum)
+            .collect();
 
-        // construct logs
-        for (txid, (receipt, tx)) in
-            zip(&block_receipts.receipts, txs).enumerate()
-        {
-            for (logid, entry) in receipt.logs.iter().cloned().enumerate() {
-                logs.push(LocalizedLogEntry {
-                    entry,
-                    block_hash,
-                    epoch_number,
-                    transaction_hash: tx.hash,
-                    transaction_index: txid,
-                    log_index,
-                    transaction_log_index: logid,
-                });
+        for (logid, entry) in eth_logs.into_iter().enumerate() {
+            logs.push(LocalizedLogEntry {
+                entry,
+                block_hash: pivot,
+                epoch_number,
+                transaction_hash: tx.hash,
+                transaction_index: txid,
+                log_index,
+                transaction_log_index: logid,
+            });
 
-                log_index += 1;
-            }
+            log_index += 1;
         }
     }
 
     Some(logs)
-}
-
-// attempt to retrieve block receipts from BlockDataManager
-fn retrieve_block_receipts(
-    data_man: &Arc<BlockDataManager>, block: &H256, pivot: &H256,
-) -> Option<Arc<BlockReceipts>> {
-    const POLL_INTERVAL_MS: Duration = Duration::from_millis(100);
-
-    for ii in 0.. {
-        match data_man.block_execution_result_by_hash_with_epoch(
-            &block, &pivot, false, /* update_pivot_assumption */
-            false, /* update_cache */
-        ) {
-            Some(res) => return Some(res.block_receipts.clone()),
-            None => {
-                error!("Cannot find receipts with {:?}/{:?}", block, pivot);
-                thread::sleep(POLL_INTERVAL_MS);
-            }
-        }
-
-        // we assume that an epoch gets executed within 10 seconds
-        if ii > 100 {
-            error!("Cannot find receipts with {:?}/{:?}", block, pivot);
-            return None;
-        }
-    }
-
-    unreachable!()
 }
