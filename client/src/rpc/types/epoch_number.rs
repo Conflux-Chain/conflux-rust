@@ -143,16 +143,27 @@ impl<'a> Visitor<'a> for EpochNumberVisitor {
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum BlockHashOrEpochNumber {
-    BlockHash(H256),
+    BlockHashWithOption {
+        hash: H256,
+        /// The Option is used to provide serialization
+        /// compatibility with "hash:0x..." block hash format.
+        /// None means the raw input is "hash:0x..."
+        /// Some means a EIP-1898 block parameter is received
+        require_pivot: Option<bool>,
+    },
     EpochNumber(EpochNumber),
 }
 
 impl BlockHashOrEpochNumber {
     pub fn into_primitive(self) -> PrimitiveBlockHashOrEpochNumber {
         match self {
-            BlockHashOrEpochNumber::BlockHash(hash) => {
-                PrimitiveBlockHashOrEpochNumber::BlockHash(hash)
-            }
+            BlockHashOrEpochNumber::BlockHashWithOption {
+                hash,
+                require_pivot,
+            } => PrimitiveBlockHashOrEpochNumber::BlockHashWithOption {
+                hash,
+                require_pivot,
+            },
             BlockHashOrEpochNumber::EpochNumber(epoch_number) => {
                 PrimitiveBlockHashOrEpochNumber::EpochNumber(
                     epoch_number.into(),
@@ -182,8 +193,20 @@ impl Serialize for BlockHashOrEpochNumber {
             BlockHashOrEpochNumber::EpochNumber(epoch_number) => {
                 epoch_number.serialize(serializer)
             }
-            BlockHashOrEpochNumber::BlockHash(block_hash) => {
-                serializer.serialize_str(&format!("hash:{:#x}", block_hash))
+            BlockHashOrEpochNumber::BlockHashWithOption {
+                hash,
+                require_pivot,
+            } => {
+                // If require_pivot is None,
+                // serialize to the format of "hash:0x..."
+                if let Some(require_pivot) = require_pivot {
+                    serializer.serialize_str(&format!(
+                        "{{ 'hash': '{}', 'requirePivot': '{}'  }}",
+                        hash, require_pivot
+                    ))
+                } else {
+                    serializer.serialize_str(&format!("hash:{:#x}", hash))
+                }
             }
         }
     }
@@ -205,9 +228,10 @@ impl<'a> Visitor<'a> for BlockHashOrEpochNumberVisitor {
     fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
     where E: Error {
         if value.starts_with("hash:0x") {
-            Ok(BlockHashOrEpochNumber::BlockHash(
-                value[7..].parse().map_err(Error::custom)?,
-            ))
+            Ok(BlockHashOrEpochNumber::BlockHashWithOption {
+                hash: value[7..].parse().map_err(Error::custom)?,
+                require_pivot: None,
+            })
         } else {
             value.parse().map_err(Error::custom).map(|epoch_number| {
                 BlockHashOrEpochNumber::EpochNumber(epoch_number)

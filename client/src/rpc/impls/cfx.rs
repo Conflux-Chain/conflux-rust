@@ -1539,7 +1539,7 @@ impl RpcImpl {
             BlockHashOrEpochNumber::EpochNumber(e) => {
                 self.consensus.get_block_hashes_by_epoch(e.into())?
             }
-            BlockHashOrEpochNumber::BlockHash(h) => {
+            BlockHashOrEpochNumber::BlockHashWithOption { hash: h, .. } => {
                 if self
                     .consensus
                     .get_data_manager()

@@ -730,12 +730,14 @@ impl ConsensusGraph {
     ) -> RpcResult<U256>
     {
         let epoch_number = match block_hash_or_epoch_number {
-            BlockHashOrEpochNumber::BlockHash(hash) => EpochNumber::Number(
-                self.inner
-                    .read()
-                    .get_block_epoch_number(&hash)
-                    .ok_or("block epoch number is NULL")?,
-            ),
+            BlockHashOrEpochNumber::BlockHashWithOption { hash, .. } => {
+                EpochNumber::Number(
+                    self.inner
+                        .read()
+                        .get_block_epoch_number(&hash)
+                        .ok_or("block epoch number is NULL")?,
+                )
+            }
             BlockHashOrEpochNumber::EpochNumber(epoch_number) => epoch_number,
         };
         let state = State::new(

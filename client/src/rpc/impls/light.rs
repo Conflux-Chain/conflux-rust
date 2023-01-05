@@ -701,8 +701,11 @@ impl RpcImpl {
             let epoch = match num {
                 None => EpochNumber::LatestState,
                 Some(BlockHashOrEpochNumber::EpochNumber(e)) => e,
-                Some(BlockHashOrEpochNumber::BlockHash(h)) => consensus_graph
-                    .get_block_epoch_number(&h)
+                Some(BlockHashOrEpochNumber::BlockHashWithOption {
+                    hash,
+                    ..
+                }) => consensus_graph
+                    .get_block_epoch_number(&hash)
                     .map(Into::into)
                     .map(EpochNumber::Num)
                     .ok_or(RpcError::invalid_params(
