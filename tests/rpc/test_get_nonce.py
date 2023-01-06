@@ -68,3 +68,12 @@ class TestGetNonce(RpcClient):
         block_hash = self.get_transaction_receipt(tx_hash)["blockHash"]
         new_nonce = self.get_nonce(addr=addr, block_hash=block_hash)
         assert_equal(new_nonce, pre_nonce + 1)
+        
+    def test_block_object(self):
+        addr = self.GENESIS_ADDR
+        pre_nonce = self.get_nonce(addr)
+        tx = self.new_tx(nonce=pre_nonce)
+        tx_hash = self.send_tx(tx, True)
+        block_hash = self.get_transaction_receipt(tx_hash)["blockHash"]
+        new_nonce = self.get_nonce(addr=addr, block_object={ "blockHash": block_hash })
+        assert_equal(new_nonce, pre_nonce + 1)

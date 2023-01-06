@@ -266,16 +266,17 @@ class RpcClient:
             r = self.node.cfx_getAdmin(addr, epoch)
         return b32_address_to_hex(r)
 
-    ''' Ignore block_hash if epoch is not None '''
+    ''' Use the first but not None parameter and ignore the others '''
 
-    def get_nonce(self, addr: str, epoch: str = None, block_hash: str = None) -> int:
+    def get_nonce(self, addr: str, epoch: str = None, block_hash: str = None, block_object: dict = None) -> int:
         addr = hex_to_b32_address(addr)
-        if epoch is None and block_hash is None:
-            return int(self.node.cfx_getNextNonce(addr), 0)
-        elif epoch is None:
-            return int(self.node.cfx_getNextNonce(addr, "hash:" + block_hash), 0)
+        if block_hash:
+            block_hash = "hash:" + block_hash
+        block_param = epoch or block_hash or block_object
+        if block_param:
+            return int(self.node.cfx_getNextNonce(addr, block_param), 0)
         else:
-            return int(self.node.cfx_getNextNonce(addr, epoch), 0)
+            return int(self.node.cfx_getNextNonce(addr), 0)
 
     def send_raw_tx(self, raw_tx: str, wait_for_catchup=True) -> str:
         # We wait for the node out of the catch up mode first
