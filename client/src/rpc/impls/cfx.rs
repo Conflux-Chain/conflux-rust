@@ -1539,7 +1539,10 @@ impl RpcImpl {
             BlockHashOrEpochNumber::EpochNumber(e) => {
                 self.consensus.get_block_hashes_by_epoch(e.into())?
             }
-            BlockHashOrEpochNumber::BlockHashWithOption { hash: h, .. } => {
+            BlockHashOrEpochNumber::BlockHashWithOption {
+                hash: h,
+                require_pivot,
+            } => {
                 if self
                     .consensus
                     .get_data_manager()
@@ -1558,10 +1561,12 @@ impl RpcImpl {
                     primitives::EpochNumber::Number(e),
                 )?;
 
-                // if the provided hash is not the pivot hash, abort
+                // if the provided hash is not the pivot hash,
+                // and require_pivot is true or None(default to true)
+                // abort
                 let pivot_hash = *hashes.last().ok_or("Inconsistent state")?;
 
-                if h != pivot_hash {
+                if require_pivot.unwrap_or(true) && (h != pivot_hash) {
                     bail!(pivot_assumption_failed(h, pivot_hash));
                 }
 

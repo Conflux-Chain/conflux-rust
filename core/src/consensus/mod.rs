@@ -730,13 +730,22 @@ impl ConsensusGraph {
     ) -> RpcResult<U256>
     {
         let epoch_number = match block_hash_or_epoch_number {
-            BlockHashOrEpochNumber::BlockHashWithOption { hash, .. } => {
-                EpochNumber::Number(
-                    self.inner
-                        .read()
-                        .get_block_epoch_number(&hash)
-                        .ok_or("block epoch number is NULL")?,
-                )
+            BlockHashOrEpochNumber::BlockHashWithOption {
+                hash,
+                require_pivot,
+            } => {
+                let inner = &*self.inner.read();
+                let tmp_epoch_number = inner
+                    .get_block_epoch_number(&hash)
+                    .ok_or("block epoch number is NULL")?;
+
+                if require_pivot.unwrap_or(true) {
+                    inner.check_block_pivot_assumption(
+                        &hash,
+                        tmp_epoch_number,
+                    )?;
+                }
+                EpochNumber::Number(tmp_epoch_number)
             }
             BlockHashOrEpochNumber::EpochNumber(epoch_number) => epoch_number,
         };
