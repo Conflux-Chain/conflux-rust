@@ -367,11 +367,10 @@ impl SnapshotChunkSync {
         if inner.manifest_attempts
             >= self.config.max_downloading_manifest_attempts
         {
-            error!(
+            panic!(
                 "Exceed max manifest attempts {}",
                 self.config.max_downloading_manifest_attempts
             );
-            return;
         }
 
         debug!("sync state status before updating: {:?}", *inner);
