@@ -212,6 +212,8 @@ build_config! {
         (max_allowed_timeout_in_observing_period, (u64), 10)
         (max_chunk_number_in_manifest, (usize), 500)
         (max_downloading_chunks, (usize), 8)
+        (max_downloading_chunk_attempts, (usize), 5)
+        (max_downloading_manifest_attempts, (usize), 5)
         (max_handshakes, (usize), 64)
         (max_incoming_peers, (usize), 64)
         (max_inflight_request_count, (u64), 64)
@@ -787,6 +789,9 @@ impl Configuration {
             min_peers_tx_propagation: self.raw_conf.min_peers_tx_propagation,
             max_peers_tx_propagation: self.raw_conf.max_peers_tx_propagation,
             max_downloading_chunks: self.raw_conf.max_downloading_chunks,
+            max_downloading_chunk_attempts: self
+                .raw_conf
+                .max_downloading_chunk_attempts,
             test_mode: self.is_test_mode(),
             dev_mode: self.is_dev_mode(),
             throttling_config_file: self.raw_conf.throttling_conf.clone(),
@@ -849,6 +854,9 @@ impl Configuration {
             manifest_request_timeout: Duration::from_millis(
                 self.raw_conf.snapshot_manifest_request_timeout_ms,
             ),
+            max_downloading_manifest_attempts: self
+                .raw_conf
+                .max_downloading_manifest_attempts,
         }
     }
 

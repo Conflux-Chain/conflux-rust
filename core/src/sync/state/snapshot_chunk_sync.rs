@@ -82,6 +82,7 @@ struct Inner {
     manifest_manager: Option<SnapshotManifestManager>,
 
     related_data: Option<RelatedData>,
+    manifest_attempts: usize,
 }
 
 impl Default for Inner {
@@ -96,6 +97,7 @@ impl Inner {
             related_data: None,
             chunk_manager: None,
             manifest_manager: None,
+            manifest_attempts: 0,
         }
     }
 
@@ -362,6 +364,16 @@ impl SnapshotChunkSync {
     )
     {
         let mut inner = self.inner.write();
+        if inner.manifest_attempts
+            >= self.config.max_downloading_manifest_attempts
+        {
+            error!(
+                "Exceed max manifest attempts {}",
+                self.config.max_downloading_manifest_attempts
+            );
+            return;
+        }
+
         debug!("sync state status before updating: {:?}", *inner);
         self.check_timeout(
             &mut *inner,
@@ -495,7 +507,12 @@ impl SnapshotChunkSync {
             manifest_manager.check_timeout(ctx);
         }
         if let Some(chunk_manager) = &mut inner.chunk_manager {
-            chunk_manager.check_timeout(ctx);
+            if !chunk_manager.check_timeout(ctx) {
+                debug!("reset status to Inactive and redownload manifest");
+                inner.status = Status::Inactive;
+                inner.chunk_manager = None;
+                inner.manifest_attempts += 1;
+            }
         }
     }
 }
@@ -505,6 +522,7 @@ pub struct StateSyncConfiguration {
     pub candidate_request_timeout: Duration,
     pub chunk_request_timeout: Duration,
     pub manifest_request_timeout: Duration,
+    pub max_downloading_manifest_attempts: usize,
 }
 
 impl StateSyncConfiguration {

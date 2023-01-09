@@ -411,6 +411,7 @@ pub struct ProtocolConfiguration {
     pub min_peers_tx_propagation: usize,
     pub max_peers_tx_propagation: usize,
     pub max_downloading_chunks: usize,
+    pub max_downloading_chunk_attempts: usize,
     pub test_mode: bool,
     pub dev_mode: bool,
     pub throttling_config_file: Option<String>,
