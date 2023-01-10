@@ -63,8 +63,10 @@ impl Handleable for SnapshotChunkRequest {
             snapshot_epoch_id,
             &self.chunk_key,
             &ctx.manager.graph.data_man.storage_manager,
+            ctx.manager.protocol_config.chunk_size_byte * 2,
         ) {
             Ok(Some(chunk)) => chunk,
+            Err(r) => return Err(r),
             _ => Chunk::default(),
         };
 
