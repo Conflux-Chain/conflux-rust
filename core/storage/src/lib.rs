@@ -183,7 +183,8 @@ pub use self::{
         delta_mpt::*,
         errors::{Error, ErrorKind, Result},
         merkle_patricia_trie::{
-            simple_mpt::*, KVInserter, MptKeyValue, TrieProof,
+            mpt_cursor::rlp_key_value_len, simple_mpt::*, KVInserter,
+            MptKeyValue, TrieProof,
         },
         node_merkle_proof::{NodeMerkleProof, StorageRootProof},
         proof_merger::StateProofMerger,

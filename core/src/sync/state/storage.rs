@@ -4,6 +4,7 @@
 
 use crate::sync::{Error, ErrorKind};
 use cfx_storage::{
+    rlp_key_value_len,
     storage_db::{
         key_value_db::KeyValueDbIterableTrait, snapshot_db::SnapshotDbTrait,
         OpenSnapshotMptTrait,
@@ -365,7 +366,7 @@ impl Chunk {
 
     pub fn load(
         snapshot_epoch_id: &H256, chunk_key: &ChunkKey,
-        storage_manager: &StorageManager,
+        storage_manager: &StorageManager, max_chunk_size: u64,
     ) -> Result<Option<Chunk>, Error>
     {
         debug!(
@@ -399,7 +400,16 @@ impl Chunk {
 
         let mut keys = Vec::new();
         let mut values = Vec::new();
+        let mut chunk_size = 0;
         while let Some((key, value)) = kvs.next()? {
+            chunk_size += rlp_key_value_len(key.len() as u16, value.len());
+            if chunk_size > max_chunk_size {
+                let msg =
+                    format!("Exceed max allowed chunk size {}", max_chunk_size);
+                error!("{}", msg);
+                return Err(ErrorKind::InvalidSnapshotChunk(msg).into());
+            }
+
             keys.push(key);
             values.push(value.into());
         }
