@@ -25,6 +25,7 @@ pub struct SnapshotChunkManager {
     active_peers: HashSet<NodeId>,
     pending_chunks: VecDeque<ChunkKey>,
     downloading_chunks: HashMap<ChunkKey, DownloadingChunkStatus>,
+    downloading_attempts: HashMap<ChunkKey, usize>,
     num_downloaded: usize,
     config: SnapshotChunkConfig,
 
@@ -68,6 +69,7 @@ impl SnapshotChunkManager {
             active_peers,
             pending_chunks: chunks.into(),
             downloading_chunks: Default::default(),
+            downloading_attempts: Default::default(),
             num_downloaded: 0,
             config,
             restorer,
@@ -165,7 +167,7 @@ impl SnapshotChunkManager {
     }
 
     /// Remove timeout chunks and request new chunks.
-    pub fn check_timeout(&mut self, ctx: &Context) {
+    pub fn check_timeout(&mut self, ctx: &Context) -> bool {
         let mut timeout_chunks = Vec::new();
         for (chunk_key, status) in &self.downloading_chunks {
             if status.start_time.elapsed() > self.config.chunk_request_timeout {
@@ -174,10 +176,23 @@ impl SnapshotChunkManager {
             }
         }
         for timeout_key in timeout_chunks {
+            self.downloading_attempts
+                .entry(timeout_key.clone())
+                .and_modify(|attempts| *attempts += 1)
+                .or_insert(1);
+
+            if *self.downloading_attempts.get(&timeout_key).unwrap()
+                >= ctx.manager.protocol_config.max_downloading_chunk_attempts
+            {
+                error!("Exceeds max attemps to download {:?} ", timeout_key);
+                return false;
+            }
+
             self.downloading_chunks.remove(&timeout_key);
             self.pending_chunks.push_back(timeout_key);
         }
         self.request_chunks(ctx);
+        true
     }
 
     pub fn is_inactive(&self) -> bool { self.active_peers.is_empty() }
