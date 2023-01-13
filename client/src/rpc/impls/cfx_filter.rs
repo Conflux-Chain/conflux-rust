@@ -47,7 +47,7 @@ pub trait Filterable {
 
     /// Get logs that match the given filter for specific epoch
     fn logs_for_epoch(
-        &self, filter: &LogFilter, epoch: (u64, Vec<H256>), removed: bool,
+        &self, filter: &LogFilter, epoch: (u64, Vec<H256>),
     ) -> JsonRpcResult<Vec<Log>>;
 
     /// Get a reference to the poll manager.
@@ -189,7 +189,7 @@ impl Filterable for EthFilterClient {
 
     /// pending transaction hashes at the given block (unordered).
     fn pending_transaction_hashes(&self) -> BTreeSet<H256> {
-        self.tx_pool.get_pending_transaction_hashes_in_evm_pool()
+        self.tx_pool.get_pending_transaction_hashes_in_native_pool()
     }
 
     /// Get logs that match the given filter.
@@ -208,7 +208,7 @@ impl Filterable for EthFilterClient {
     }
 
     fn logs_for_epoch(
-        &self, filter: &LogFilter, epoch: (u64, Vec<H256>), removed: bool,
+        &self, filter: &LogFilter, epoch: (u64, Vec<H256>),
     ) -> JsonRpcResult<Vec<Log>> {
         let mut result = vec![];
         let logs = match retrieve_epoch_logs(epoch, self.consensus_graph()) {
@@ -522,7 +522,6 @@ impl<T: Filterable + Send + Sync + 'static> CfxFilter for T {
                     let log = match self.logs_for_epoch(
                         &filter,
                         (num, blocks.clone()),
-                        false,
                     ) {
                         Ok(l) => l,
                         _ => break,

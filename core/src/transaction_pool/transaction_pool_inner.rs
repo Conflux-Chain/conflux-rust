@@ -519,6 +519,10 @@ impl ReadyAccountPool {
         self.evm_pool.get_all_transaction_hashes()
     }
 
+    fn get_transaction_hashes_in_native_pool(&self) -> BTreeSet<H256> {
+        self.native_pool.get_all_transaction_hashes()
+    }
+
     fn get(
         &self, address: &AddressWithSpace,
     ) -> Option<Arc<SignedTransaction>> {
@@ -702,6 +706,10 @@ impl TransactionPoolInner {
 
     pub fn ready_transacton_hashes_in_evm_pool(&self) -> BTreeSet<H256> {
         self.ready_account_pool.get_transaction_hashes_in_evm_pool()
+    }
+
+    pub fn ready_transacton_hashes_in_native_pool(&self) -> BTreeSet<H256> {
+        self.ready_account_pool.get_transaction_hashes_in_native_pool()
     }
 
     pub fn total_ready_accounts(&self) -> usize {

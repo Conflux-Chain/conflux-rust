@@ -253,6 +253,10 @@ impl TransactionPool {
         self.inner.read().ready_transacton_hashes_in_evm_pool()
     }
 
+    pub fn get_pending_transaction_hashes_in_native_pool(&self) -> BTreeSet<H256> {
+        self.inner.read().ready_transacton_hashes_in_native_pool()
+    }
+
     pub fn get_state_account_info(
         &self, address: &Address,
     ) -> StateDbResult<(U256, U256)> {
