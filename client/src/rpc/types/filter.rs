@@ -7,8 +7,11 @@ use crate::rpc::helpers::{maybe_vec_into, VariadicValue};
 use cfx_types::{Space, H256, U64};
 use jsonrpc_core::Error as RpcError;
 use primitives::filter::{LogFilter as PrimitiveFilter, LogFilterParams};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use std::collections::HashSet;
+use crate::rpc::types::Log;
+use serde_json::{Value};
+
 
 const FILTER_BLOCK_HASH_LIMIT: usize = 128;
 
@@ -168,6 +171,28 @@ impl CfxRpcLogFilter {
                     format!("Filter must provide one of the following: (1) an epoch range through `fromEpoch` and `toEpoch`, (2) a block number range through `fromBlock` and `toBlock`, (3) a set of block hashes through `blockHashes`")
                 ));
             }
+        }
+    }
+}
+
+/// Results of the filter_changes RPC.
+#[derive(Debug, PartialEq)]
+pub enum CfxFilterChanges {
+    /// New logs.
+    Logs(Vec<Log>),
+    /// New hashes (block or transactions)
+    Hashes(Vec<H256>),
+    /// Empty result,
+    Empty,
+}
+
+impl Serialize for CfxFilterChanges {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        match *self {
+            CfxFilterChanges::Logs(ref logs) => logs.serialize(s),
+            CfxFilterChanges::Hashes(ref hashes) => hashes.serialize(s),
+            CfxFilterChanges::Empty => (&[] as &[Value]).serialize(s),
         }
     }
 }
