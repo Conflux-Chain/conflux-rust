@@ -2,6 +2,34 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use std::{
+    collections::{BTreeSet, HashMap, HashSet, VecDeque},
+    sync::Arc,
+};
+
+use crate::rpc::{
+    error_codes::{codes, invalid_params},
+    helpers::{
+        limit_logs, PollFilter, PollManager, SyncPollFilter,
+        MAX_BLOCK_HISTORY_SIZE,
+    },
+    traits::cfx::CfxFilter,
+    types::{CfxFilterChanges, CfxFilterLog, CfxRpcLogFilter, Log},
+};
+use cfx_addr::Network;
+use cfx_types::{Space, H128, H256};
+use cfxcore::{
+    channel::Channel, rpc_errors::Error as CfxRpcError, ConsensusGraph,
+    ConsensusGraphTrait, SharedConsensusGraph, SharedTransactionPool,
+};
+use futures::{FutureExt, TryFutureExt};
+use itertools::zip;
+use jsonrpc_core::{Error as RpcError, ErrorCode, Result as JsonRpcResult};
+use parking_lot::{Mutex, RwLock};
+use primitives::{
+    filter::LogFilter, log_entry::LocalizedLogEntry, EpochNumber,
+};
+use runtime::Executor;
 
 /// Something which provides data that can be filtered over.
 pub trait Filterable {
@@ -15,15 +43,15 @@ pub trait Filterable {
     fn pending_transaction_hashes(&self) -> BTreeSet<H256>;
 
     /// Get logs that match the given filter.
-    fn logs(&self, filter: LogFilter) -> RpcResult<Vec<Log>>;
+    fn logs(&self, filter: LogFilter) -> JsonRpcResult<Vec<Log>>;
 
     /// Get logs that match the given filter for specific epoch
     fn logs_for_epoch(
         &self, filter: &LogFilter, epoch: (u64, Vec<H256>), removed: bool,
-    ) -> RpcResult<Vec<Log>>;
+    ) -> JsonRpcResult<Vec<Log>>;
 
     /// Get a reference to the poll manager.
-    fn polls(&self) -> &Mutex<PollManager<SyncPollFilter>>;
+    fn polls(&self) -> &Mutex<PollManager<SyncPollFilter<Log>>>;
 
     /// Get a reference to ConsensusGraph
     fn consensus_graph(&self) -> &ConsensusGraph;
@@ -38,16 +66,17 @@ pub trait Filterable {
     fn epochs_since_last_request(
         &self, last_block_number: u64,
         recent_reported_epochs: &VecDeque<(u64, Vec<H256>)>,
-    ) -> RpcResult<(u64, Vec<(u64, Vec<H256>)>)>;
+    ) -> JsonRpcResult<(u64, Vec<(u64, Vec<H256>)>)>;
 }
 
 /// Eth filter rpc implementation for a full node.
 pub struct EthFilterClient {
     consensus: SharedConsensusGraph,
     tx_pool: SharedTransactionPool,
-    polls: Mutex<PollManager<SyncPollFilter>>,
+    polls: Mutex<PollManager<SyncPollFilter<Log>>>,
     unfinalized_epochs: Arc<RwLock<UnfinalizedEpochs>>,
     logs_filter_max_limit: Option<usize>,
+    network: Network,
 }
 
 pub struct UnfinalizedEpochs {
@@ -70,6 +99,7 @@ impl EthFilterClient {
         consensus: SharedConsensusGraph, tx_pool: SharedTransactionPool,
         epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>, executor: Executor,
         poll_lifetime: u32, logs_filter_max_limit: Option<usize>,
+        network: Network,
     ) -> Self
     {
         let filter_client = EthFilterClient {
@@ -78,6 +108,7 @@ impl EthFilterClient {
             polls: Mutex::new(PollManager::new(poll_lifetime)),
             unfinalized_epochs: Default::default(),
             logs_filter_max_limit,
+            network,
         };
 
         // start loop to receive epochs, to avoid re-org during filter query
@@ -162,7 +193,7 @@ impl Filterable for EthFilterClient {
     }
 
     /// Get logs that match the given filter.
-    fn logs(&self, filter: LogFilter) -> RpcResult<Vec<Log>> {
+    fn logs(&self, filter: LogFilter) -> JsonRpcResult<Vec<Log>> {
         let logs = self
             .consensus_graph()
             .logs(filter)
@@ -171,13 +202,14 @@ impl Filterable for EthFilterClient {
         Ok(logs
             .iter()
             .cloned()
-            .map(|l| Log::try_from_localized(l, self.consensus.clone(), false))
-            .collect::<Result<_, _>>()?)
+            .map(|l| Log::try_from_localized(l, self.network))
+            .collect::<Result<_, _>>()
+            .map_err(|_| invalid_params("", ""))?)
     }
 
     fn logs_for_epoch(
         &self, filter: &LogFilter, epoch: (u64, Vec<H256>), removed: bool,
-    ) -> RpcResult<Vec<Log>> {
+    ) -> JsonRpcResult<Vec<Log>> {
         let mut result = vec![];
         let logs = match retrieve_epoch_logs(epoch, self.consensus_graph()) {
             Some(logs) => logs,
@@ -193,17 +225,16 @@ impl Filterable for EthFilterClient {
             .iter()
             .filter(|l| filter.matches(&l.entry))
             .cloned()
-            .map(|l| {
-                Log::try_from_localized(l, self.consensus.clone(), removed)
-            })
-            .collect::<Result<_, _>>()?;
+            .map(|l| Log::try_from_localized(l, self.network))
+            .collect::<Result<_, _>>()
+            .map_err(|_| invalid_params("", ""))?;
         result.extend(logs);
 
         Ok(result)
     }
 
     /// Get a reference to the poll manager.
-    fn polls(&self) -> &Mutex<PollManager<SyncPollFilter>> { &self.polls }
+    fn polls(&self) -> &Mutex<PollManager<SyncPollFilter<Log>>> { &self.polls }
 
     fn consensus_graph(&self) -> &ConsensusGraph {
         self.consensus
@@ -223,7 +254,7 @@ impl Filterable for EthFilterClient {
     fn epochs_since_last_request(
         &self, last_block_number: u64,
         recent_reported_epochs: &VecDeque<(u64, Vec<H256>)>,
-    ) -> RpcResult<(u64, Vec<(u64, Vec<H256>)>)>
+    ) -> JsonRpcResult<(u64, Vec<(u64, Vec<H256>)>)>
     {
         let last_block = if let Some((num, hash)) =
             recent_reported_epochs.front().cloned()
@@ -345,39 +376,26 @@ impl Filterable for EthFilterClient {
     }
 }
 
-
-impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
+impl<T: Filterable + Send + Sync + 'static> CfxFilter for T {
     /// Returns id of new filter.
     fn new_filter(&self, filter: CfxRpcLogFilter) -> JsonRpcResult<H128> {
         debug!("create filter: {:?}", filter);
         let mut polls = self.polls().lock();
         let block_number = self.best_executed_epoch_number();
 
-        if filter.to_block == Some(BlockNumber::Pending) {
-            bail!(RpcError {
-                code: ErrorCode::InvalidRequest,
-                message: "Filter logs from pending blocks is not supported"
-                    .into(),
-                data: None,
-            })
-        }
-
-        let filter: LogFilter =
-            filter.into_primitive(self.shared_consensus_graph())?;
+        let filter: LogFilter = filter.into_primitive()?;
 
         let id = polls.create_poll(SyncPollFilter::new(PollFilter::Logs {
-            last_block_number: if block_number == 0 {
+            last_epoch_number: if block_number == 0 {
                 0
             } else {
                 block_number - 1
             },
             filter,
             include_pending: false,
-            previous_logs: VecDeque::with_capacity(
-                PollFilter::MAX_BLOCK_HISTORY_SIZE,
-            ),
+            previous_logs: VecDeque::with_capacity(MAX_BLOCK_HISTORY_SIZE),
             recent_reported_epochs: VecDeque::with_capacity(
-                PollFilter::MAX_BLOCK_HISTORY_SIZE,
+                MAX_BLOCK_HISTORY_SIZE,
             ),
         }));
 
@@ -390,9 +408,9 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
         let mut polls = self.polls().lock();
         // +1, since we don't want to include the current block
         let id = polls.create_poll(SyncPollFilter::new(PollFilter::Block {
-            last_block_number: self.best_executed_epoch_number(),
+            last_epoch_number: self.best_executed_epoch_number(),
             recent_reported_epochs: VecDeque::with_capacity(
-                PollFilter::MAX_BLOCK_HISTORY_SIZE,
+                MAX_BLOCK_HISTORY_SIZE,
             ),
         }));
 
@@ -411,7 +429,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
     }
 
     /// Returns filter changes since last poll.
-    fn filter_changes(&self, _: H128) -> JsonRpcResult<CfxFilterChanges> {
+    fn filter_changes(&self, index: H128) -> JsonRpcResult<CfxFilterChanges> {
         info!("filter_changes id: {}", index);
         let filter = match self.polls().lock().poll_mut(&index) {
             Some(filter) => filter.clone(),
@@ -424,7 +442,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
 
         filter.modify(|filter| match *filter {
             PollFilter::Block {
-                ref mut last_block_number,
+                last_epoch_number: ref mut last_block_number,
                 ref mut recent_reported_epochs,
             } => {
                 let (reorg_len, epochs) = self.epochs_since_last_request(
@@ -447,15 +465,13 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
                             .expect("pivot block should exist"),
                     );
                     // Only keep the most recent history
-                    if recent_reported_epochs.len()
-                        >= PollFilter::MAX_BLOCK_HISTORY_SIZE
-                    {
+                    if recent_reported_epochs.len() >= MAX_BLOCK_HISTORY_SIZE {
                         recent_reported_epochs.pop_back();
                     }
                     recent_reported_epochs.push_front((num, blocks));
                 }
 
-                Ok(FilterChanges::Hashes(hashes))
+                Ok(CfxFilterChanges::Hashes(hashes))
             }
             PollFilter::PendingTransaction(ref mut previous_hashes) => {
                 // get hashes of pending transactions
@@ -474,10 +490,10 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
                 *previous_hashes = current_hashes;
 
                 // return new hashes
-                Ok(FilterChanges::Hashes(new_hashes))
+                Ok(CfxFilterChanges::Hashes(new_hashes))
             }
             PollFilter::Logs {
-                ref mut last_block_number,
+                last_epoch_number: ref mut last_block_number,
                 ref mut recent_reported_epochs,
                 ref mut previous_logs,
                 ref filter,
@@ -493,16 +509,12 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
                 // retrieve reorg logs
                 for _ in 0..reorg_len {
                     recent_reported_epochs.pop_front().unwrap();
-                    let mut log: Vec<Log> = previous_logs
-                        .pop_front()
-                        .unwrap()
-                        .into_iter()
-                        .map(|mut l| {
-                            l.removed = true;
-                            l
-                        })
-                        .collect();
-                    logs.append(&mut log);
+                }
+
+                if reorg_len > 0 {
+                    logs.push(CfxFilterLog::ChainReorg {
+                        revert_to: epochs.first().unwrap().0.into(),
+                    });
                 }
 
                 // logs from new epochs
@@ -516,13 +528,15 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
                         _ => break,
                     };
 
-                    logs.append(&mut log.clone());
+                    log.iter()
+                        // .map(|l| CfxFilterLog::Log(l))
+                        .for_each(|l| logs.push(CfxFilterLog::Log(l.clone())));
+
+                    // logs.append(&mut log.clone());
                     *last_block_number = num;
 
                     // Only keep the most recent history
-                    if recent_reported_epochs.len()
-                        >= PollFilter::MAX_BLOCK_HISTORY_SIZE
-                    {
+                    if recent_reported_epochs.len() >= MAX_BLOCK_HISTORY_SIZE {
                         recent_reported_epochs.pop_back();
                         previous_logs.pop_back();
                     }
@@ -530,7 +544,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
                     previous_logs.push_front(log);
                 }
 
-                Ok(FilterChanges::Logs(limit_logs(
+                Ok(CfxFilterChanges::Logs(limit_logs(
                     logs,
                     self.get_logs_filter_max_limit(),
                 )))
@@ -539,7 +553,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
     }
 
     /// Returns all logs matching given filter (in a range 'from' - 'to').
-    fn filter_logs(&self, _: H128) -> JsonRpcResult<Vec<RpcLog>> {
+    fn filter_logs(&self, index: H128) -> JsonRpcResult<Vec<Log>> {
         let (filter, _) = {
             let mut polls = self.polls().lock();
 
@@ -570,7 +584,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
     }
 
     /// Uninstalls filter.
-    fn uninstall_filter(&self, _: H128) -> JsonRpcResult<bool> {
+    fn uninstall_filter(&self, index: H128) -> JsonRpcResult<bool> {
         Ok(self.polls().lock().remove_poll(&index))
     }
 }
@@ -611,7 +625,7 @@ fn retrieve_epoch_logs(
             .logs
             .iter()
             .cloned()
-            .filter(|l| l.space == Space::Ethereum)
+            .filter(|l| l.space == Space::Native)
             .collect();
 
         for (logid, entry) in eth_logs.into_iter().enumerate() {

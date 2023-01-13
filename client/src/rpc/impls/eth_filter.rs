@@ -22,7 +22,10 @@ use runtime::Executor;
 
 use crate::rpc::{
     error_codes::codes,
-    helpers::{limit_logs, PollFilter, PollManager, SyncPollFilter},
+    helpers::{
+        limit_logs, PollFilter, PollManager, SyncPollFilter,
+        MAX_BLOCK_HISTORY_SIZE,
+    },
     traits::eth_space::eth::EthFilter,
     types::eth::{BlockNumber, EthRpcLogFilter, FilterChanges, Log},
 };
@@ -49,7 +52,7 @@ pub trait Filterable {
     ) -> RpcResult<Vec<Log>>;
 
     /// Get a reference to the poll manager.
-    fn polls(&self) -> &Mutex<PollManager<SyncPollFilter>>;
+    fn polls(&self) -> &Mutex<PollManager<SyncPollFilter<Log>>>;
 
     /// Get a reference to ConsensusGraph
     fn consensus_graph(&self) -> &ConsensusGraph;
@@ -71,7 +74,7 @@ pub trait Filterable {
 pub struct EthFilterClient {
     consensus: SharedConsensusGraph,
     tx_pool: SharedTransactionPool,
-    polls: Mutex<PollManager<SyncPollFilter>>,
+    polls: Mutex<PollManager<SyncPollFilter<Log>>>,
     unfinalized_epochs: Arc<RwLock<UnfinalizedEpochs>>,
     logs_filter_max_limit: Option<usize>,
 }
@@ -229,7 +232,7 @@ impl Filterable for EthFilterClient {
     }
 
     /// Get a reference to the poll manager.
-    fn polls(&self) -> &Mutex<PollManager<SyncPollFilter>> { &self.polls }
+    fn polls(&self) -> &Mutex<PollManager<SyncPollFilter<Log>>> { &self.polls }
 
     fn consensus_graph(&self) -> &ConsensusGraph {
         self.consensus
@@ -376,7 +379,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
     fn new_filter(&self, filter: EthRpcLogFilter) -> RpcResult<H128> {
         debug!("create filter: {:?}", filter);
         let mut polls = self.polls().lock();
-        let block_number = self.best_executed_epoch_number();
+        let epoch_number = self.best_executed_epoch_number();
 
         if filter.to_block == Some(BlockNumber::Pending) {
             bail!(RpcError {
@@ -391,18 +394,16 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
             filter.into_primitive(self.shared_consensus_graph())?;
 
         let id = polls.create_poll(SyncPollFilter::new(PollFilter::Logs {
-            last_block_number: if block_number == 0 {
+            last_epoch_number: if epoch_number == 0 {
                 0
             } else {
-                block_number - 1
+                epoch_number - 1
             },
             filter,
             include_pending: false,
-            previous_logs: VecDeque::with_capacity(
-                PollFilter::MAX_BLOCK_HISTORY_SIZE,
-            ),
+            previous_logs: VecDeque::with_capacity(MAX_BLOCK_HISTORY_SIZE),
             recent_reported_epochs: VecDeque::with_capacity(
-                PollFilter::MAX_BLOCK_HISTORY_SIZE,
+                MAX_BLOCK_HISTORY_SIZE,
             ),
         }));
 
@@ -415,9 +416,9 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
         let mut polls = self.polls().lock();
         // +1, since we don't want to include the current block
         let id = polls.create_poll(SyncPollFilter::new(PollFilter::Block {
-            last_block_number: self.best_executed_epoch_number(),
+            last_epoch_number: self.best_executed_epoch_number(),
             recent_reported_epochs: VecDeque::with_capacity(
-                PollFilter::MAX_BLOCK_HISTORY_SIZE,
+                MAX_BLOCK_HISTORY_SIZE,
             ),
         }));
 
@@ -449,7 +450,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
 
         filter.modify(|filter| match *filter {
             PollFilter::Block {
-                ref mut last_block_number,
+                last_epoch_number: ref mut last_block_number,
                 ref mut recent_reported_epochs,
             } => {
                 let (reorg_len, epochs) = self.epochs_since_last_request(
@@ -472,9 +473,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
                             .expect("pivot block should exist"),
                     );
                     // Only keep the most recent history
-                    if recent_reported_epochs.len()
-                        >= PollFilter::MAX_BLOCK_HISTORY_SIZE
-                    {
+                    if recent_reported_epochs.len() >= MAX_BLOCK_HISTORY_SIZE {
                         recent_reported_epochs.pop_back();
                     }
                     recent_reported_epochs.push_front((num, blocks));
@@ -502,7 +501,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
                 Ok(FilterChanges::Hashes(new_hashes))
             }
             PollFilter::Logs {
-                ref mut last_block_number,
+                last_epoch_number: ref mut last_block_number,
                 ref mut recent_reported_epochs,
                 ref mut previous_logs,
                 ref filter,
@@ -545,9 +544,7 @@ impl<T: Filterable + Send + Sync + 'static> EthFilter for T {
                     *last_block_number = num;
 
                     // Only keep the most recent history
-                    if recent_reported_epochs.len()
-                        >= PollFilter::MAX_BLOCK_HISTORY_SIZE
-                    {
+                    if recent_reported_epochs.len() >= MAX_BLOCK_HISTORY_SIZE {
                         recent_reported_epochs.pop_back();
                         previous_logs.pop_back();
                     }

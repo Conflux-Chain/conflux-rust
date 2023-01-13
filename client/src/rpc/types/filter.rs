@@ -3,15 +3,16 @@
 // See http://www.gnu.org/licenses/
 
 use super::{EpochNumber, RpcAddress};
-use crate::rpc::helpers::{maybe_vec_into, VariadicValue};
-use cfx_types::{Space, H256, U64};
+use crate::rpc::{
+    helpers::{maybe_vec_into, VariadicValue},
+    types::Log,
+};
+use cfx_types::{Space, H256, U256, U64};
 use jsonrpc_core::Error as RpcError;
 use primitives::filter::{LogFilter as PrimitiveFilter, LogFilterParams};
 use serde::{Deserialize, Serialize, Serializer};
+use serde_json::Value;
 use std::collections::HashSet;
-use crate::rpc::types::Log;
-use serde_json::{Value};
-
 
 const FILTER_BLOCK_HASH_LIMIT: usize = 128;
 
@@ -175,11 +176,17 @@ impl CfxRpcLogFilter {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub enum CfxFilterLog {
+    Log(Log),
+    ChainReorg { revert_to: U256 },
+}
+
 /// Results of the filter_changes RPC.
 #[derive(Debug, PartialEq)]
 pub enum CfxFilterChanges {
     /// New logs.
-    Logs(Vec<Log>),
+    Logs(Vec<CfxFilterLog>),
     /// New hashes (block or transactions)
     Hashes(Vec<H256>),
     /// Empty result,

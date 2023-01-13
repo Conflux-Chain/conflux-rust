@@ -21,6 +21,7 @@ pub struct RpcImplConfiguration {
 }
 
 pub mod cfx;
+pub mod cfx_filter;
 pub mod common;
 pub mod eth;
 pub mod eth_filter;

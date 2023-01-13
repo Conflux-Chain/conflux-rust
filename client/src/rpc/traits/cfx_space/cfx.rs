@@ -5,11 +5,12 @@
 use crate::rpc::types::{
     pos::PoSEpochReward, Account as RpcAccount, AccountPendingInfo,
     AccountPendingTransactions, Block, BlockHashOrEpochNumber, Bytes,
-    CallRequest, CfxRpcLogFilter, CheckBalanceAgainstTransactionResponse,
-    EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog, PoSEconomics,
+    CallRequest, CfxFilterChanges, CfxRpcLogFilter,
+    CheckBalanceAgainstTransactionResponse, EpochNumber,
+    EstimateGasAndCollateralResponse, Log as RpcLog, PoSEconomics,
     Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, RpcAddress,
     SponsorInfo, Status as RpcStatus, TokenSupplyInfo, Transaction,
-    VoteParamsInfo, CfxFilterChanges,
+    VoteParamsInfo,
 };
 use cfx_types::{H128, H256, U256, U64};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
@@ -294,11 +295,10 @@ pub trait Cfx {
     // BoxFuture<Option<Block>>;
 }
 
-
 /// Eth filters rpc api (polling).
 // TODO: do filters api properly
 #[rpc(server)]
-pub trait EthFilter {
+pub trait CfxFilter {
     /// Returns id of new filter.
     #[rpc(name = "cfx_newFilter")]
     fn new_filter(&self, _: CfxRpcLogFilter) -> JsonRpcResult<H128>;
