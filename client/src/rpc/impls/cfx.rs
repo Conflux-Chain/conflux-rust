@@ -146,11 +146,43 @@ impl RpcImpl {
         )
     }
 
+    /// This function is used to simplify the replacement of current EpochNumber
+    /// with BlockHashOrEpochNumber Note that using this function is likely
+    /// not to be the most efficient way for related imlemention
+    /// more optimization could be made if some perfermance throttle is met
+    fn get_epoch_number_with_pivot_check(
+        &self, block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
+    ) -> RpcResult<EpochNumber> {
+        match block_hash_or_epoch_number {
+            Some(BlockHashOrEpochNumber::BlockHashWithOption {
+                hash,
+                require_pivot,
+            }) => {
+                // TODO: check if out of range
+                let epoch_number = self
+                    .consensus_graph()
+                    .get_block_epoch_number_with_pivot_check(
+                        &hash,
+                        require_pivot.unwrap_or(true),
+                    )?;
+                Ok(EpochNumber::Num(U64::from(epoch_number)))
+            }
+            Some(BlockHashOrEpochNumber::EpochNumber(epoch_number)) => {
+                Ok(epoch_number)
+            }
+            None => Ok(EpochNumber::LatestState),
+        }
+    }
+
     fn code(
-        &self, address: RpcAddress, epoch_num: Option<EpochNumber>,
-    ) -> RpcResult<Bytes> {
+        &self, address: RpcAddress,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
+    ) -> RpcResult<Bytes>
+    {
         self.check_address_network(address.network)?;
-        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
+        let epoch_num = self
+            .get_epoch_number_with_pivot_check(block_hash_or_epoch_number)?
+            .into();
 
         info!(
             "RPC Request: cfx_getCode address={:?} epoch_num={:?}",
@@ -1633,7 +1665,7 @@ impl Cfx for CfxHandler {
         }
 
         to self.rpc_impl {
-            fn code(&self, addr: RpcAddress, epoch_number: Option<EpochNumber>) -> BoxFuture<Bytes>;
+            fn code(&self, addr: RpcAddress, block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>) -> BoxFuture<Bytes>;
             fn account(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;

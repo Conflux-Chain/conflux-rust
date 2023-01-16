@@ -90,7 +90,8 @@ pub trait Cfx {
     /// Returns the code at given address at given time (epoch number).
     #[rpc(name = "cfx_getCode")]
     fn code(
-        &self, addr: RpcAddress, epoch_number: Option<EpochNumber>,
+        &self, addr: RpcAddress,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
     ) -> BoxFuture<Bytes>;
 
     /// Returns storage entries from a given contract.

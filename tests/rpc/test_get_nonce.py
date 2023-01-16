@@ -2,7 +2,7 @@ import sys
 sys.path.append("..")
 
 from conflux.rpc import RpcClient
-from test_framework.util import assert_equal, assert_raises_rpc_error
+from test_framework.util import assert_equal, assert_raises_rpc_error, test_rpc_call_with_block_object
 
 NUM_TXS = 10
 
@@ -72,48 +72,13 @@ class TestGetNonce(RpcClient):
         assert_equal(new_nonce, pre_nonce + 1)
         
     def test_block_object(self):
-        parent_hash = self.block_by_epoch("latest_mined")['hash']
         start_nonce = self.get_nonce(self.GENESIS_ADDR)
 
-        # generate epoch of 2 block with transactions in each block
-        # NOTE: we need `C` to ensure that the top fork is heavier
-
-        #                      ---        ---        ---
-        #                  .- | A | <--- | C | <--- | D | <--- ...
-        #           ---    |   ---        ---        ---
-        # ... <--- | P | <-*                          .
-        #           ---    |   ---                    .
-        #                  .- | B | <..................
-        #                      ---
-
         txs = [self.new_tx(receiver=self.rand_addr(), nonce = start_nonce + ii) for ii in range(NUM_TXS)]
-        txs1 = txs[:NUM_TXS//2]
-        txs2 = txs[NUM_TXS//2:]
-        
-        block_a = self.generate_custom_block(parent_hash = parent_hash, referee = [], txs = [])
-        block_b = self.generate_custom_block(parent_hash = parent_hash, referee = [], txs = txs1)
-        block_c = self.generate_custom_block(parent_hash = block_a, referee = [], txs = [])
-        block_d = self.generate_custom_block(parent_hash = block_c, referee = [block_b], txs = txs2)
-
-        parent_hash = block_d
-
-        for _ in range(5):
-            block = self.generate_custom_block(parent_hash = parent_hash, referee = [], txs = [])
-            parent_hash = block
-
-        # for cfx_getNextNonce, as B is not a pivot block,
-        # we can only get start_nonce or start_nonce + NUM_TXS
-        
-        assert_raises_rpc_error(None, None, self.node.cfx_getNextNonce, {
-            "blockHash": block_b
-        })
-        
-        nonce1 = self.get_nonce(self.GENESIS_ADDR, block_object={
-            "blockHash": block_d
-        })
-        nonce2 = self.get_nonce(self.GENESIS_ADDR, block_object={
-            "blockHash": block_b,
-            "requirePivot": False
-        })
-        assert_equal(nonce1, start_nonce + NUM_TXS)
-        assert_equal(nonce2, start_nonce + NUM_TXS)
+        test_rpc_call_with_block_object(
+            self,
+            txs,
+            self.get_nonce,
+            lambda x: x == (start_nonce + NUM_TXS),
+            [self.GENESIS_ADDR]
+        )

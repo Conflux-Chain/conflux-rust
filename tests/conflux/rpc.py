@@ -1,6 +1,6 @@
 import os
 import random
-from typing import Optional
+from typing import Optional, Union
 
 import eth_utils
 import rlp
@@ -175,7 +175,7 @@ class RpcClient:
 
         return res
 
-    def get_code(self, address: str, epoch: str = None) -> str:
+    def get_code(self, address: str, epoch: Union[str, dict] = None) -> str:
         address = hex_to_b32_address(address)
         if epoch is None:
             code = self.node.cfx_getCode(address)

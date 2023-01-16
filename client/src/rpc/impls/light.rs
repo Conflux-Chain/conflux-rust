@@ -118,6 +118,33 @@ impl RpcImpl {
         )
     }
 
+    fn get_epoch_number_with_pivot_check(
+        consensus_graph: SharedConsensusGraph,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
+    ) -> RpcResult<EpochNumber>
+    {
+        match block_hash_or_epoch_number {
+            Some(BlockHashOrEpochNumber::BlockHashWithOption {
+                hash,
+                require_pivot,
+            }) => {
+                let epoch_number = consensus_graph
+                    .as_any()
+                    .downcast_ref::<ConsensusGraph>()
+                    .expect("downcast should succeed")
+                    .get_block_epoch_number_with_pivot_check(
+                        &hash,
+                        require_pivot.unwrap_or(true),
+                    )?;
+                Ok(EpochNumber::Num(U64::from(epoch_number)))
+            }
+            Some(BlockHashOrEpochNumber::EpochNumber(epoch_number)) => {
+                Ok(epoch_number)
+            }
+            None => Ok(EpochNumber::LatestState),
+        }
+    }
+
     fn account(
         &self, address: RpcAddress, num: Option<EpochNumber>,
     ) -> RpcBoxFuture<RpcAccount> {
@@ -381,19 +408,28 @@ impl RpcImpl {
     }
 
     fn code(
-        &self, address: RpcAddress, epoch_num: Option<EpochNumber>,
-    ) -> RpcBoxFuture<Bytes> {
-        let epoch = epoch_num.unwrap_or(EpochNumber::LatestState).into();
-
+        &self, address: RpcAddress,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
+    ) -> RpcBoxFuture<Bytes>
+    {
         info!(
             "RPC Request: cfx_getCode address={:?} epoch={:?}",
-            address, epoch
+            address,
+            block_hash_or_epoch_number
+                .as_ref()
+                .ok_or(EpochNumber::LatestState)
         );
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
+        let consensus_graph = self.consensus.clone();
 
         let fut = async move {
+            let epoch = Self::get_epoch_number_with_pivot_check(
+                consensus_graph,
+                block_hash_or_epoch_number,
+            )?
+            .into();
             Self::check_address_network(address.network, &light)?;
 
             // FIMXE:
@@ -698,21 +734,9 @@ impl RpcImpl {
         let fut = async move {
             Self::check_address_network(address.network, &light)?;
 
-            let epoch = match num {
-                None => EpochNumber::LatestState,
-                Some(BlockHashOrEpochNumber::EpochNumber(e)) => e,
-                Some(BlockHashOrEpochNumber::BlockHashWithOption {
-                    hash,
-                    ..
-                }) => consensus_graph
-                    .get_block_epoch_number(&hash)
-                    .map(Into::into)
-                    .map(EpochNumber::Num)
-                    .ok_or(RpcError::invalid_params(
-                        "Cannot find epoch corresponding to block hash",
-                    ))?,
-            }
-            .into();
+            let epoch =
+                Self::get_epoch_number_with_pivot_check(consensus_graph, num)?
+                    .into();
 
             let account = invalid_params_check(
                 "address",
@@ -1074,7 +1098,7 @@ impl Cfx for CfxHandler {
             fn block_by_hash(&self, hash: H256, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;
             fn blocks_by_epoch(&self, num: EpochNumber) -> JsonRpcResult<Vec<H256>>;
             fn check_balance_against_transaction(&self, account_addr: RpcAddress, contract_addr: RpcAddress, gas_limit: U256, gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>) -> BoxFuture<CheckBalanceAgainstTransactionResponse>;
-            fn code(&self, address: RpcAddress, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
+            fn code(&self, address: RpcAddress, block_hash_or_epoch_num: Option<BlockHashOrEpochNumber>) -> BoxFuture<Bytes>;
             fn collateral_for_storage(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn deposit_list(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<Vec<DepositInfo>>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<U256>;

@@ -3,6 +3,7 @@
 # allow imports from parent directory
 # source: https://stackoverflow.com/a/11158224
 import os, sys, random, time, json
+from typing import Tuple
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 from eth_utils import decode_hex
@@ -102,6 +103,30 @@ class LightRPCTest(ConfluxTestFramework):
         self.sponsored_address = "0x1637feaab9faa11bf809f37967c3c8a43b8b874d"
         self.call_contract(contractAddr, "0a3b0a4f0000000000000000000000001637feaab9faa11bf809f37967c3c8a43b8b874d")
 
+    def _create_branch(self) -> Tuple[str, str]:
+        client = self.rpc[FULLNODE0]
+        start_nonce = client.get_nonce(client.GENESIS_ADDR)
+        txs = [client.new_tx(receiver=client.rand_addr(), nonce = start_nonce + ii) for ii in range(NUM_TXS)]
+        parent_hash = client.block_by_epoch("latest_mined")['hash']
+        #                      ---        ---        ---
+        #                  .- | A | <--- | C | <--- | D | <--- ...
+        #           ---    |   ---        ---        ---
+        # ... <--- | P | <-*                          .
+        #           ---    |   ---                    .
+        #                  .- | B | <..................
+        #                      ---
+        block_a = client.generate_custom_block(parent_hash = parent_hash, referee = [], txs = [])
+        block_b = client.generate_custom_block(parent_hash = parent_hash, referee = [], txs = [])
+        block_c = client.generate_custom_block(parent_hash = block_a, referee = [], txs = [])
+        block_d = client.generate_custom_block(parent_hash = block_c, referee = [block_b], txs = txs)
+
+        parent_hash = block_d
+        for _ in range(5):
+            block = client.generate_custom_block(parent_hash = parent_hash, referee = [], txs = [])
+            parent_hash = block
+            
+        return block_b, block_d
+
     def setup_network(self):
         self.add_nodes(self.num_nodes)
 
@@ -131,10 +156,9 @@ class LightRPCTest(ConfluxTestFramework):
         self.log.info(f"Generating transactions...")
 
         # send some txs to increase the nonce
-        for nonce in range(0, NUM_TXS):
-            receiver = self.rpc[FULLNODE0].rand_addr()
-            tx = self.rpc[FULLNODE0].new_tx(receiver=receiver, nonce=nonce)
-            self.rpc[FULLNODE0].send_tx(tx, wait_for_receipt=True)
+        block_b, block_d = self._create_branch()
+        self.block_b = block_b
+        self.block_d = block_d
 
         # deploy contract
         bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), CONTRACT_PATH)
@@ -405,6 +429,40 @@ class LightRPCTest(ConfluxTestFramework):
 
         self.log.info(f"Pass -- cfx_checkBalanceAgainstTransaction")
 
+    def _test_single_rpc_methods_with_block_hash_param(self, rpc_call_name: str, params: list):
+        self.log.info(f"Checking {rpc_call_name} with block hash parameter...")
+        
+        full = getattr(self.rpc[FULLNODE0], rpc_call_name)(*params, {
+            "blockHash": self.block_d
+        })
+        rpc_call = getattr(self.rpc[LIGHTNODE], rpc_call_name)
+        light = rpc_call(*params, {
+            "blockHash": self.block_d
+        })
+        assert_equal(full, light)
+        assert_raises_rpc_error(-32602, "Invalid parameters: epoch parameter", rpc_call, *params, {
+            "blockHash": self.block_b
+        })
+        assert_raises_rpc_error(-32602, "Invalid parameters: epoch parameter", rpc_call, *params, {
+            "blockHash": self.block_b,
+            "requirePivot": True
+        })
+
+    # TODO: add tests for light nodes
+    # current rpc supporting block hash
+    # cfx_epochReceipts(not supported by light nodes)
+    # RPC to support
+    # cfx_getBalance
+    # cfx_call
+    def test_rpc_methods_with_block_hash_param(self):
+        # --------------------------
+        pairs = [
+            ("get_code", [self.user]),
+            ("get_nonce", [self.user])
+        ]
+        for pair in pairs:
+            self._test_single_rpc_methods_with_block_hash_param(pair[0], pair[1])
+
     def assert_blocks_equal(self, light_block, block):
         # light nodes do not retrieve receipts for block queries
         # so fields related to execution results are not filled
@@ -577,6 +635,7 @@ class LightRPCTest(ConfluxTestFramework):
         self.test_local_methods()
         self.test_state_methods()
         self.test_block_methods()
+        self.test_rpc_methods_with_block_hash_param()
         self.test_tx_methods()
         self.test_not_supported()
 
