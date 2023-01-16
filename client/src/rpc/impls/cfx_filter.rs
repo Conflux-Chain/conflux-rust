@@ -19,15 +19,16 @@ use crate::rpc::{
 use cfx_addr::Network;
 use cfx_types::{Space, H128, H256};
 use cfxcore::{
-    channel::Channel, rpc_errors::Error as CfxRpcError, ConsensusGraph,
-    ConsensusGraphTrait, SharedConsensusGraph, SharedTransactionPool,
+    channel::Channel, rpc_errors::Error as CfxRpcError, BlockDataManager,
+    ConsensusGraph, ConsensusGraphTrait, SharedConsensusGraph,
+    SharedTransactionPool,
 };
 use futures::{FutureExt, TryFutureExt};
 use itertools::zip;
 use jsonrpc_core::{Error as RpcError, ErrorCode, Result as JsonRpcResult};
 use parking_lot::{Mutex, RwLock};
 use primitives::{
-    filter::LogFilter, log_entry::LocalizedLogEntry, EpochNumber,
+    filter::LogFilter, log_entry::LocalizedLogEntry, BlockReceipts, EpochNumber,
 };
 use runtime::Executor;
 
@@ -48,6 +49,7 @@ pub trait Filterable {
     /// Get logs that match the given filter for specific epoch
     fn logs_for_epoch(
         &self, filter: &LogFilter, epoch: (u64, Vec<H256>),
+        data_man: &Arc<BlockDataManager>,
     ) -> JsonRpcResult<Vec<Log>>;
 
     /// Get a reference to the poll manager.
@@ -69,8 +71,8 @@ pub trait Filterable {
     ) -> JsonRpcResult<(u64, Vec<(u64, Vec<H256>)>)>;
 }
 
-/// Eth filter rpc implementation for a full node.
-pub struct EthFilterClient {
+/// Cfx filter rpc implementation for a full node.
+pub struct CfxFilterClient {
     consensus: SharedConsensusGraph,
     tx_pool: SharedTransactionPool,
     polls: Mutex<PollManager<SyncPollFilter<Log>>>,
@@ -93,8 +95,8 @@ impl Default for UnfinalizedEpochs {
     }
 }
 
-impl EthFilterClient {
-    /// Creates new Eth filter client.
+impl CfxFilterClient {
+    /// Creates new Cfx filter client.
     pub fn new(
         consensus: SharedConsensusGraph, tx_pool: SharedTransactionPool,
         epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>, executor: Executor,
@@ -102,7 +104,7 @@ impl EthFilterClient {
         network: Network,
     ) -> Self
     {
-        let filter_client = EthFilterClient {
+        let filter_client = CfxFilterClient {
             consensus,
             tx_pool,
             polls: Mutex::new(PollManager::new(poll_lifetime)),
@@ -168,7 +170,7 @@ impl EthFilterClient {
     }
 }
 
-impl Filterable for EthFilterClient {
+impl Filterable for CfxFilterClient {
     /// Current best block number.
     fn best_executed_epoch_number(&self) -> u64 {
         self.consensus_graph().best_executed_state_epoch_number()
@@ -204,14 +206,16 @@ impl Filterable for EthFilterClient {
             .cloned()
             .map(|l| Log::try_from_localized(l, self.network))
             .collect::<Result<_, _>>()
-            .map_err(|_| invalid_params("", ""))?)
+            .map_err(|_| invalid_params("filter", "retrieve logs error"))?)
     }
 
     fn logs_for_epoch(
         &self, filter: &LogFilter, epoch: (u64, Vec<H256>),
-    ) -> JsonRpcResult<Vec<Log>> {
+        data_man: &Arc<BlockDataManager>,
+    ) -> JsonRpcResult<Vec<Log>>
+    {
         let mut result = vec![];
-        let logs = match retrieve_epoch_logs(epoch, self.consensus_graph()) {
+        let logs = match retrieve_epoch_logs(data_man, epoch) {
             Some(logs) => logs,
             None => bail!(RpcError {
                 code: ErrorCode::ServerError(codes::UNSUPPORTED),
@@ -227,7 +231,9 @@ impl Filterable for EthFilterClient {
             .cloned()
             .map(|l| Log::try_from_localized(l, self.network))
             .collect::<Result<_, _>>()
-            .map_err(|_| invalid_params("", ""))?;
+            .map_err(|_| {
+                invalid_params("filter", "retrieve logs for epoch error")
+            })?;
         result.extend(logs);
 
         Ok(result)
@@ -458,12 +464,8 @@ impl<T: Filterable + Send + Sync + 'static> CfxFilter for T {
                 let mut hashes = Vec::new();
                 for (num, blocks) in epochs.into_iter() {
                     *last_block_number = num;
-                    hashes.push(
-                        blocks
-                            .last()
-                            .cloned()
-                            .expect("pivot block should exist"),
-                    );
+                    hashes.append(&mut blocks.clone());
+
                     // Only keep the most recent history
                     if recent_reported_epochs.len() >= MAX_BLOCK_HISTORY_SIZE {
                         recent_reported_epochs.pop_back();
@@ -516,12 +518,15 @@ impl<T: Filterable + Send + Sync + 'static> CfxFilter for T {
                         revert_to: epochs.first().unwrap().0.into(),
                     });
                 }
+                let data_man =
+                    self.consensus_graph().get_data_manager().clone();
 
                 // logs from new epochs
                 for (num, blocks) in epochs.into_iter() {
                     let log = match self.logs_for_epoch(
                         &filter,
                         (num, blocks.clone()),
+                        &data_man,
                     ) {
                         Ok(l) => l,
                         _ => break,
@@ -589,58 +594,79 @@ impl<T: Filterable + Send + Sync + 'static> CfxFilter for T {
 }
 
 fn retrieve_epoch_logs(
-    epoch: (u64, Vec<H256>), consensus_graph: &ConsensusGraph,
+    data_man: &Arc<BlockDataManager>, epoch: (u64, Vec<H256>),
 ) -> Option<Vec<LocalizedLogEntry>> {
     debug!("retrieve_epoch_logs {:?}", epoch);
     let (epoch_number, hashes) = epoch;
     let pivot = hashes.last().cloned().expect("epoch should not be empty");
 
-    // construct phantom block
-    let pb = match consensus_graph.get_phantom_block_by_number(
-        EpochNumber::Number(epoch_number),
-        Some(pivot),
-        false, /* include_traces */
-    ) {
-        Ok(Some(b)) => b,
-        Ok(None) => {
-            error!("Block not executed yet {:?}", pivot);
-            return None;
-        }
-        Err(e) => {
-            error!("get_phantom_block_by_number failed with {}", e);
-            return None;
-        }
-    };
+    // retrieve epoch receipts
+    let fut = hashes
+        .iter()
+        .map(|h| retrieve_block_receipts(&data_man, h, &pivot));
+
+    let receipts = fut.into_iter().collect::<Option<Vec<_>>>()?;
 
     let mut logs = vec![];
     let mut log_index = 0;
 
-    let txs = &pb.transactions;
-    assert_eq!(pb.receipts.len(), txs.len());
+    for (block_hash, block_receipts) in zip(hashes, receipts) {
+        // retrieve block transactions
+        let block = match data_man
+            .block_by_hash(&block_hash, true /* update_cache */)
+        {
+            Some(b) => b,
+            None => {
+                warn!("Unable to retrieve block {:?}", block_hash);
+                return None;
+            }
+        };
 
-    // construct logs
-    for (txid, (receipt, tx)) in zip(&pb.receipts, txs).enumerate() {
-        let eth_logs: Vec<_> = receipt
-            .logs
-            .iter()
-            .cloned()
-            .filter(|l| l.space == Space::Native)
-            .collect();
+        let txs = &block.transactions;
+        assert_eq!(block_receipts.receipts.len(), txs.len());
 
-        for (logid, entry) in eth_logs.into_iter().enumerate() {
-            logs.push(LocalizedLogEntry {
-                entry,
-                block_hash: pivot,
-                epoch_number,
-                transaction_hash: tx.hash,
-                transaction_index: txid,
-                log_index,
-                transaction_log_index: logid,
-            });
+        // construct logs
+        for (txid, (receipt, tx)) in
+            zip(&block_receipts.receipts, txs).enumerate()
+        {
+            let native_logs: Vec<_> = receipt
+                .logs
+                .iter()
+                .cloned()
+                .filter(|l| l.space == Space::Native)
+                .collect();
+            
+            for (logid, entry) in native_logs.into_iter().enumerate() {
+                logs.push(LocalizedLogEntry {
+                    entry,
+                    block_hash,
+                    epoch_number,
+                    transaction_hash: tx.hash,
+                    transaction_index: txid,
+                    log_index,
+                    transaction_log_index: logid,
+                });
 
-            log_index += 1;
+                log_index += 1;
+            }
         }
     }
 
     Some(logs)
+}
+
+// attempt to retrieve block receipts from BlockDataManager
+fn retrieve_block_receipts(
+    data_man: &Arc<BlockDataManager>, block: &H256, pivot: &H256,
+) -> Option<Arc<BlockReceipts>> {
+    match data_man.block_execution_result_by_hash_with_epoch(
+        &block, &pivot, false, /* update_pivot_assumption */
+        false, /* update_cache */
+    ) {
+        Some(res) => return Some(res.block_receipts.clone()),
+        None => {
+            error!("Cannot find receipts with {:?}/{:?}", block, pivot);
+            return None;
+        }
+    }
 }

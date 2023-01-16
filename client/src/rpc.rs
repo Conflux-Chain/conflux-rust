@@ -43,6 +43,7 @@ pub use cfxcore::rpc_errors::{
 use self::{
     impls::{
         cfx::{CfxHandler, LocalRpcImpl, RpcImpl, TestRpcImpl},
+        cfx_filter::CfxFilterClient,
         common::RpcImpl as CommonImpl,
         eth_pubsub::PubSubClient as EthPubSubClient,
         light::{
@@ -55,7 +56,7 @@ use self::{
         trace::TraceHandler,
     },
     traits::{
-        cfx::Cfx,
+        cfx::{Cfx, CfxFilter},
         debug::LocalRpc,
         eth_space::{
             eth::{Eth, EthFilter},
@@ -250,6 +251,24 @@ fn setup_rpc_apis(
                     throttling_conf,
                     throttling_section,
                 );
+
+                if let Some(poll_lifetime) = rpc.config.poll_lifetime_in_seconds
+                {
+                    if let Some(h) = pubsub.handler().upgrade() {
+                        let filter_client = CfxFilterClient::new(
+                            rpc.consensus.clone(),
+                            rpc.tx_pool.clone(),
+                            eth_pubsub.epochs_ordered(),
+                            h.executor.clone(),
+                            poll_lifetime,
+                            rpc.config.get_logs_filter_max_limit,
+                            h.network.clone(),
+                        )
+                        .to_delegate();
+
+                        handler.extend_with(filter_client);
+                    }
+                }
             }
             Api::Eth => {
                 info!("Add EVM RPC");

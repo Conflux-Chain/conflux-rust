@@ -709,7 +709,8 @@ impl TransactionPoolInner {
     }
 
     pub fn ready_transacton_hashes_in_native_pool(&self) -> BTreeSet<H256> {
-        self.ready_account_pool.get_transaction_hashes_in_native_pool()
+        self.ready_account_pool
+            .get_transaction_hashes_in_native_pool()
     }
 
     pub fn total_ready_accounts(&self) -> usize {
