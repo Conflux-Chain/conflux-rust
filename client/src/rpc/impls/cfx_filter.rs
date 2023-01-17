@@ -635,7 +635,7 @@ fn retrieve_epoch_logs(
                 .cloned()
                 .filter(|l| l.space == Space::Native)
                 .collect();
-            
+
             for (logid, entry) in native_logs.into_iter().enumerate() {
                 logs.push(LocalizedLogEntry {
                     entry,
