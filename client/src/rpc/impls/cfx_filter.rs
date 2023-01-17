@@ -34,7 +34,7 @@ use runtime::Executor;
 
 /// Something which provides data that can be filtered over.
 pub trait Filterable {
-    /// Current best block number.
+    /// Current best epoch number.
     fn best_executed_epoch_number(&self) -> u64;
 
     /// Get a block hash by block id.
@@ -66,7 +66,7 @@ pub trait Filterable {
 
     /// Get epochs since last query
     fn epochs_since_last_request(
-        &self, last_block_number: u64,
+        &self, last_epoch_number: u64,
         recent_reported_epochs: &VecDeque<(u64, Vec<H256>)>,
     ) -> JsonRpcResult<(u64, Vec<(u64, Vec<H256>)>)>;
 }
@@ -171,7 +171,7 @@ impl CfxFilterClient {
 }
 
 impl Filterable for CfxFilterClient {
-    /// Current best block number.
+    /// Current best epoch number.
     fn best_executed_epoch_number(&self) -> u64 {
         self.consensus_graph().best_executed_state_epoch_number()
     }
@@ -258,14 +258,14 @@ impl Filterable for CfxFilterClient {
     }
 
     fn epochs_since_last_request(
-        &self, last_block_number: u64,
+        &self, last_epoch_number: u64,
         recent_reported_epochs: &VecDeque<(u64, Vec<H256>)>,
     ) -> JsonRpcResult<(u64, Vec<(u64, Vec<H256>)>)>
     {
         let last_block = if let Some((num, hash)) =
             recent_reported_epochs.front().cloned()
         {
-            if last_block_number != num {
+            if last_epoch_number != num {
                 bail!(RpcError {
                     code: ErrorCode::ServerError(codes::UNSUPPORTED),
                     message: "Last block number does not match".into(),
@@ -277,7 +277,7 @@ impl Filterable for CfxFilterClient {
             None
         };
 
-        // retrive the current block number
+        // retrive the current epoch number
         let current_epoch_number = self.best_executed_epoch_number();
         debug!("current epoch number {}", current_epoch_number);
         let latest_epochs = self.unfinalized_epochs.read();
@@ -289,9 +289,9 @@ impl Filterable for CfxFilterClient {
                 != current_epoch_number
         {
             // special case: best_executed_epoch_number rollback, so those
-            // epoches before last_block_number can be considered to have be
+            // epoches before last_epoch_number can be considered to have be
             // processed.
-            if latest_epochs.epochs_queue[idx as usize].0 == last_block_number
+            if latest_epochs.epochs_queue[idx as usize].0 == last_epoch_number
                 && last_block
                     == Some(latest_epochs.epochs_queue[idx as usize].1.clone())
             {
@@ -301,7 +301,7 @@ impl Filterable for CfxFilterClient {
             idx -= 1;
         }
 
-        // epochs between [max(last_block_number,
+        // epochs between [max(last_epoch_number,
         // latest_finalized_epoch_number), best executed epoch]
         let mut end_epoch_number = current_epoch_number + 1;
         let mut new_epochs = vec![];
@@ -309,7 +309,7 @@ impl Filterable for CfxFilterClient {
         while idx >= 0 {
             let (num, blocks) =
                 latest_epochs.epochs_queue[idx as usize].clone();
-            if num == last_block_number
+            if num == last_epoch_number
                 && (last_block.is_none() || last_block == Some(blocks.clone()))
             {
                 break;
@@ -327,11 +327,11 @@ impl Filterable for CfxFilterClient {
         new_epochs.reverse();
 
         // re-orged epochs
-        // when last_block_number great than or equal to
+        // when last_epoch_number great than or equal to
         // latest_finalized_epoch_number, reorg_epochs should be empty
-        // when last_block_number less than
+        // when last_epoch_number less than
         // latest_finalized_epoch_number, epochs between [fork point,
-        // min(last_block_number, latest_finalized_epoch_number)]
+        // min(last_epoch_number, latest_finalized_epoch_number)]
         let mut reorg_epochs = vec![];
         let mut reorg_len = 0;
         for i in 0..recent_reported_epochs.len() {
@@ -358,14 +358,14 @@ impl Filterable for CfxFilterClient {
         }
         reorg_epochs.reverse();
 
-        // mid stable epochs, epochs in [last_block_number,
+        // mid stable epochs, epochs in [last_epoch_number,
         // latest_finalized_epoch_number]
         debug!(
             "stable epochs from {} to {}",
-            last_block_number + 1,
+            last_epoch_number + 1,
             end_epoch_number
         );
-        for epoch_num in (last_block_number + 1)..end_epoch_number {
+        for epoch_num in (last_epoch_number + 1)..end_epoch_number {
             let hash = self
                 .block_hashes(EpochNumber::Number(epoch_num))
                 .expect("Epoch should exist");
@@ -387,15 +387,15 @@ impl<T: Filterable + Send + Sync + 'static> CfxFilter for T {
     fn new_filter(&self, filter: CfxRpcLogFilter) -> JsonRpcResult<H128> {
         debug!("create filter: {:?}", filter);
         let mut polls = self.polls().lock();
-        let block_number = self.best_executed_epoch_number();
+        let epoch_number = self.best_executed_epoch_number();
 
         let filter: LogFilter = filter.into_primitive()?;
 
         let id = polls.create_poll(SyncPollFilter::new(PollFilter::Logs {
-            last_epoch_number: if block_number == 0 {
+            last_epoch_number: if epoch_number == 0 {
                 0
             } else {
-                block_number - 1
+                epoch_number - 1
             },
             filter,
             include_pending: false,
@@ -448,11 +448,11 @@ impl<T: Filterable + Send + Sync + 'static> CfxFilter for T {
 
         filter.modify(|filter| match *filter {
             PollFilter::Block {
-                last_epoch_number: ref mut last_block_number,
+                ref mut last_epoch_number,
                 ref mut recent_reported_epochs,
             } => {
                 let (reorg_len, epochs) = self.epochs_since_last_request(
-                    *last_block_number,
+                    *last_epoch_number,
                     recent_reported_epochs,
                 )?;
 
@@ -463,7 +463,7 @@ impl<T: Filterable + Send + Sync + 'static> CfxFilter for T {
 
                 let mut hashes = Vec::new();
                 for (num, blocks) in epochs.into_iter() {
-                    *last_block_number = num;
+                    *last_epoch_number = num;
                     hashes.append(&mut blocks.clone());
 
                     // Only keep the most recent history
@@ -495,14 +495,14 @@ impl<T: Filterable + Send + Sync + 'static> CfxFilter for T {
                 Ok(CfxFilterChanges::Hashes(new_hashes))
             }
             PollFilter::Logs {
-                last_epoch_number: ref mut last_block_number,
+                ref mut last_epoch_number,
                 ref mut recent_reported_epochs,
                 ref mut previous_logs,
                 ref filter,
                 include_pending: _,
             } => {
                 let (reorg_len, epochs) = self.epochs_since_last_request(
-                    *last_block_number,
+                    *last_epoch_number,
                     recent_reported_epochs,
                 )?;
 
@@ -537,7 +537,7 @@ impl<T: Filterable + Send + Sync + 'static> CfxFilter for T {
                         .for_each(|l| logs.push(CfxFilterLog::Log(l.clone())));
 
                     // logs.append(&mut log.clone());
-                    *last_block_number = num;
+                    *last_epoch_number = num;
 
                     // Only keep the most recent history
                     if recent_reported_epochs.len() >= MAX_BLOCK_HISTORY_SIZE {
