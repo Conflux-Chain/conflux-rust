@@ -277,7 +277,7 @@ impl Filterable for CfxFilterClient {
             None
         };
 
-        // retrive the current epoch number
+        // retrieve current epoch number
         let current_epoch_number = self.best_executed_epoch_number();
         debug!("current epoch number {}", current_epoch_number);
         let latest_epochs = self.unfinalized_epochs.read();

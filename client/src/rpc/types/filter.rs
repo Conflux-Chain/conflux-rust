@@ -189,7 +189,7 @@ pub enum CfxFilterChanges {
     Logs(Vec<CfxFilterLog>),
     /// New hashes (block or transactions)
     Hashes(Vec<H256>),
-    /// Empty result,
+    /// Empty result
     Empty,
 }
 
