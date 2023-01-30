@@ -458,7 +458,8 @@ class LightRPCTest(ConfluxTestFramework):
         # --------------------------
         pairs = [
             ("get_code", [self.user]),
-            ("get_nonce", [self.user])
+            ("get_nonce", [self.user]),
+            ("get_balance", [self.user])
         ]
         for pair in pairs:
             self._test_single_rpc_methods_with_block_hash_param(pair[0], pair[1])

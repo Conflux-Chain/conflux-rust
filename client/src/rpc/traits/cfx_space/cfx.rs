@@ -48,7 +48,8 @@ pub trait Cfx {
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getBalance")]
     fn balance(
-        &self, addr: RpcAddress, epoch_number: Option<EpochNumber>,
+        &self, addr: RpcAddress,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
     ) -> BoxFuture<U256>;
 
     /// Returns admin of the given contract

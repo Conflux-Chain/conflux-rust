@@ -183,19 +183,28 @@ impl RpcImpl {
     }
 
     fn balance(
-        &self, address: RpcAddress, num: Option<EpochNumber>,
-    ) -> RpcBoxFuture<U256> {
+        &self, address: RpcAddress,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
+    ) -> RpcBoxFuture<U256>
+    {
         info!(
             "RPC Request: cfx_getBalance address={:?} epoch={:?}",
-            address, num
+            address,
+            block_hash_or_epoch_number
+                .as_ref()
+                .ok_or(EpochNumber::LatestState)
         );
-
-        let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
+        let consensus_graph = self.consensus.clone();
 
         let fut = async move {
+            let epoch = Self::get_epoch_number_with_pivot_check(
+                consensus_graph,
+                block_hash_or_epoch_number,
+            )?
+            .into();
             Self::check_address_network(address.network, &light)?;
 
             let account = invalid_params_check(
@@ -1092,7 +1101,7 @@ impl Cfx for CfxHandler {
             fn account(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn admin(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<Option<RpcAddress>>;
-            fn balance(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<U256>;
+            fn balance(&self, address: RpcAddress, block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>) -> BoxFuture<U256>;
             fn block_by_epoch_number(&self, epoch_num: EpochNumber, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;
             fn block_by_hash_with_pivot_assumption(&self, block_hash: H256, pivot_hash: H256, epoch_number: U64) -> BoxFuture<RpcBlock>;
             fn block_by_hash(&self, hash: H256, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;

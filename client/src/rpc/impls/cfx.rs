@@ -207,10 +207,15 @@ impl RpcImpl {
     }
 
     fn balance(
-        &self, address: RpcAddress, num: Option<EpochNumber>,
-    ) -> RpcResult<U256> {
+        &self, address: RpcAddress,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
+    ) -> RpcResult<U256>
+    {
         self.check_address_network(address.network)?;
-        let epoch_num = num.unwrap_or(EpochNumber::LatestState).into();
+        let epoch_num = self
+            .get_epoch_number_with_pivot_check(block_hash_or_epoch_number)?
+            .into();
+        // num.unwrap_or(EpochNumber::LatestState).into();
 
         info!(
             "RPC Request: cfx_getBalance address={:?} epoch_num={:?}",
@@ -1679,7 +1684,7 @@ impl Cfx for CfxHandler {
                 -> BoxFuture<Option<RpcAddress>>;
             fn sponsor_info(&self, address: RpcAddress, num: Option<EpochNumber>)
                 -> BoxFuture<SponsorInfo>;
-            fn balance(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<U256>;
+            fn balance(&self, address: RpcAddress, block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>) -> BoxFuture<U256>;
             fn staking_balance(&self, address: RpcAddress, num: Option<EpochNumber>)
                 -> BoxFuture<U256>;
             fn deposit_list(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<Vec<DepositInfo>>;
