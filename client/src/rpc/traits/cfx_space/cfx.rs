@@ -161,7 +161,8 @@ pub trait Cfx {
     /// Call contract, returning the output data.
     #[rpc(name = "cfx_call")]
     fn call(
-        &self, tx: CallRequest, epoch_number: Option<EpochNumber>,
+        &self, tx: CallRequest,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
     ) -> JsonRpcResult<Bytes>;
 
     /// Returns logs matching the filter provided.

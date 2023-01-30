@@ -1168,8 +1168,13 @@ impl RpcImpl {
     }
 
     fn call(
-        &self, request: CallRequest, epoch: Option<EpochNumber>,
-    ) -> RpcResult<Bytes> {
+        &self, request: CallRequest,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
+    ) -> RpcResult<Bytes>
+    {
+        let epoch = Some(
+            self.get_epoch_number_with_pivot_check(block_hash_or_epoch_number)?,
+        );
         match self.exec_transaction(request, epoch)? {
             ExecutionOutcome::NotExecutedDrop(TxDropError::OldNonce(
                 expected,
@@ -1681,7 +1686,7 @@ impl Cfx for CfxHandler {
             fn vote_list(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<Vec<VoteStakeInfo>>;
             fn collateral_for_storage(&self, address: RpcAddress, num: Option<EpochNumber>)
                 -> BoxFuture<U256>;
-            fn call(&self, request: CallRequest, epoch: Option<EpochNumber>)
+            fn call(&self, request: CallRequest, block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>)
                 -> JsonRpcResult<Bytes>;
             fn estimate_gas_and_collateral(
                 &self, request: CallRequest, epoch_number: Option<EpochNumber>)
