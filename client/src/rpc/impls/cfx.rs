@@ -5,7 +5,7 @@
 use crate::rpc::types::{
     call_request::rpc_call_request_network, errors::check_rpc_address_network,
     pos::PoSEpochReward, PoSEconomics, RpcAddress, SponsorInfo,
-    TokenSupplyInfo, VoteParamsInfo, WrapTransaction
+    TokenSupplyInfo, VoteParamsInfo, WrapTransaction,
 };
 use blockgen::BlockGenerator;
 use cfx_state::state_trait::StateOpsTrait;
@@ -31,10 +31,10 @@ use network::{
 };
 use parking_lot::Mutex;
 use primitives::{
-    filter::LogFilter, Account, Block, BlockReceipts, DepositInfo,
-    SignedTransaction, StorageKey, StorageRoot, StorageValue, Transaction,
-    TransactionIndex, TransactionOutcome, TransactionWithSignature,
-    VoteStakeInfo, receipt::EVM_SPACE_SUCCESS,
+    filter::LogFilter, receipt::EVM_SPACE_SUCCESS, Account, Block,
+    BlockReceipts, DepositInfo, SignedTransaction, StorageKey, StorageRoot,
+    StorageValue, Transaction, TransactionIndex, TransactionOutcome,
+    TransactionWithSignature, VoteStakeInfo,
 };
 use random_crash::*;
 use rlp::Rlp;
@@ -57,16 +57,15 @@ use crate::{
         },
         traits::{cfx::Cfx, debug::LocalRpc, test::TestRpc},
         types::{
-            pos::Block as PosBlock, sign_call, Account as RpcAccount,
-            AccountPendingInfo, AccountPendingTransactions, BlameInfo,
-            Block as RpcBlock, BlockHashOrEpochNumber, Bytes, CallRequest,
-            CfxRpcLogFilter, CheckBalanceAgainstTransactionResponse,
-            ConsensusGraphStates, EpochNumber,
-            EstimateGasAndCollateralResponse, Log as RpcLog, PackedOrExecuted,
-            Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, SendTxRequest,
-            Status as RpcStatus, SyncGraphStates,
-            Transaction as RpcTransaction,
-            eth::Transaction as EthTransaction,
+            eth::Transaction as EthTransaction, pos::Block as PosBlock,
+            sign_call, Account as RpcAccount, AccountPendingInfo,
+            AccountPendingTransactions, BlameInfo, Block as RpcBlock,
+            BlockHashOrEpochNumber, Bytes, CallRequest, CfxRpcLogFilter,
+            CheckBalanceAgainstTransactionResponse, ConsensusGraphStates,
+            EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
+            PackedOrExecuted, Receipt as RpcReceipt,
+            RewardInfo as RpcRewardInfo, SendTxRequest, Status as RpcStatus,
+            SyncGraphStates, Transaction as RpcTransaction,
         },
         RpcResult,
     },
@@ -1588,15 +1587,26 @@ impl RpcImpl {
 
         Ok(Some(epoch_receipts))
     }
-    
-    fn transactions_by_epoch(&self, epoch_number: U64) -> JsonRpcResult<Vec<WrapTransaction>> {
-        let blocks = self.consensus.get_block_hashes_by_epoch(primitives::EpochNumber::Number(epoch_number.as_u64())).map_err(|_| JsonRpcError::internal_error() )?;
 
-        let blocks = match self.consensus.get_data_manager().blocks_by_hash_list(&blocks, false) {
+    fn transactions_by_epoch(
+        &self, epoch_number: U64,
+    ) -> JsonRpcResult<Vec<WrapTransaction>> {
+        let blocks = self
+            .consensus
+            .get_block_hashes_by_epoch(primitives::EpochNumber::Number(
+                epoch_number.as_u64(),
+            ))
+            .map_err(|_| JsonRpcError::internal_error())?;
+
+        let blocks = match self
+            .consensus
+            .get_data_manager()
+            .blocks_by_hash_list(&blocks, false)
+        {
             None => return Ok(vec![]),
             Some(b) => b,
         };
-        
+
         let pivot = match blocks.last() {
             Some(p) => p,
             None => return Err(JsonRpcError::internal_error()),
@@ -1605,7 +1615,8 @@ impl RpcImpl {
         let mut transactions = vec![];
 
         for b in &blocks {
-            let exec_info = match self.consensus
+            let exec_info = match self
+                .consensus
                 .get_data_manager()
                 .block_execution_result_by_hash_with_epoch(
                     &b.hash(),
@@ -1622,33 +1633,43 @@ impl RpcImpl {
             let mut eth_transaction_idx = 0;
             for (id, tx) in b.transactions.iter().enumerate() {
                 let receipt = &block_receipts[id];
-                        if receipt.outcome_status == TransactionOutcome::Skipped
-                        {
-                            continue;
-                        }
+                if receipt.outcome_status == TransactionOutcome::Skipped {
+                    continue;
+                }
 
                 match tx.space() {
                     Space::Ethereum => {
-                        let status = receipt.outcome_status.in_space(Space::Ethereum);
-                        let contract_address = match status == EVM_SPACE_SUCCESS {
-                            true => EthTransaction::deployed_contract_address(&tx),
+                        let status =
+                            receipt.outcome_status.in_space(Space::Ethereum);
+                        let contract_address = match status == EVM_SPACE_SUCCESS
+                        {
+                            true => {
+                                EthTransaction::deployed_contract_address(&tx)
+                            }
                             false => None,
                         };
-                        let t = EthTransaction::from_signed(tx, (
-                            Some(pivot.hash()),
-                            Some(pivot.block_header.height().into()),
-                            Some(eth_transaction_idx.into()),
-                        ),
-                        (Some(status.into()), contract_address)
-                    );
+                        let t = EthTransaction::from_signed(
+                            tx,
+                            (
+                                Some(pivot.hash()),
+                                Some(pivot.block_header.height().into()),
+                                Some(eth_transaction_idx.into()),
+                            ),
+                            (Some(status.into()), contract_address),
+                        );
 
-                    transactions.push(WrapTransaction::EthTransaction(t));
-                    eth_transaction_idx += 1;
-
+                        transactions.push(WrapTransaction::EthTransaction(t));
+                        eth_transaction_idx += 1;
                     }
                     Space::Native => {
-                        let t = RpcTransaction::from_signed(tx, None, *self.sync.network.get_network_type()).map_err(|_| JsonRpcError::internal_error() )?;
-                        transactions.push(WrapTransaction::NativeTransaction(t));
+                        let t = RpcTransaction::from_signed(
+                            tx,
+                            None,
+                            *self.sync.network.get_network_type(),
+                        )
+                        .map_err(|_| JsonRpcError::internal_error())?;
+                        transactions
+                            .push(WrapTransaction::NativeTransaction(t));
                     }
                 }
             }
@@ -1657,18 +1678,29 @@ impl RpcImpl {
         Ok(transactions)
     }
 
-    fn transactions_by_block(&self, block_hash: H256) -> JsonRpcResult<Vec<WrapTransaction>> {
+    fn transactions_by_block(
+        &self, block_hash: H256,
+    ) -> JsonRpcResult<Vec<WrapTransaction>> {
         let epoch_number = match self.get_block_epoch_number(&block_hash) {
             None => return Ok(vec![]),
             Some(n) => n,
         };
 
-        let blocks = self.consensus.get_block_hashes_by_epoch(primitives::EpochNumber::Number(epoch_number)).map_err(|_| JsonRpcError::internal_error() )?;
-        let blocks = match self.consensus.get_data_manager().blocks_by_hash_list(&blocks, false) {
+        let blocks = self
+            .consensus
+            .get_block_hashes_by_epoch(primitives::EpochNumber::Number(
+                epoch_number,
+            ))
+            .map_err(|_| JsonRpcError::internal_error())?;
+        let blocks = match self
+            .consensus
+            .get_data_manager()
+            .blocks_by_hash_list(&blocks, false)
+        {
             None => return Ok(vec![]),
             Some(b) => b,
         };
-        
+
         let pivot = match blocks.last() {
             Some(p) => p,
             None => return Err(JsonRpcError::internal_error()),
@@ -1683,7 +1715,8 @@ impl RpcImpl {
         let mut transactions = vec![];
 
         for b in &blocks {
-            let exec_info = match self.consensus
+            let exec_info = match self
+                .consensus
                 .get_data_manager()
                 .block_execution_result_by_hash_with_epoch(
                     &b.hash(),
@@ -1700,46 +1733,57 @@ impl RpcImpl {
             let mut eth_transaction_idx = 0;
             for (id, tx) in b.transactions.iter().enumerate() {
                 let receipt = &block_receipts[id];
-                        if receipt.outcome_status == TransactionOutcome::Skipped
-                        {
-                            continue;
-                        }
+                if receipt.outcome_status == TransactionOutcome::Skipped {
+                    continue;
+                }
 
                 match tx.space() {
                     Space::Ethereum => {
                         if include_eth_tx {
-                        let status = receipt.outcome_status.in_space(Space::Ethereum);
-                        let contract_address = match status == EVM_SPACE_SUCCESS {
-                            true => EthTransaction::deployed_contract_address(&tx),
-                            false => None,
-                        };
-                        let t = EthTransaction::from_signed(tx, (
-                            Some(pivot.hash()),
-                            Some(pivot.block_header.height().into()),
-                            Some(eth_transaction_idx.into()),
-                        ),
-                        (Some(status.into()), contract_address)
-                    );
+                            let status = receipt
+                                .outcome_status
+                                .in_space(Space::Ethereum);
+                            let contract_address = match status
+                                == EVM_SPACE_SUCCESS
+                            {
+                                true => {
+                                    EthTransaction::deployed_contract_address(
+                                        &tx,
+                                    )
+                                }
+                                false => None,
+                            };
+                            let t = EthTransaction::from_signed(
+                                tx,
+                                (
+                                    Some(pivot.hash()),
+                                    Some(pivot.block_header.height().into()),
+                                    Some(eth_transaction_idx.into()),
+                                ),
+                                (Some(status.into()), contract_address),
+                            );
 
-                    transactions.push(WrapTransaction::EthTransaction(t));
-                    eth_transaction_idx += 1;
-                }
-
+                            transactions
+                                .push(WrapTransaction::EthTransaction(t));
+                            eth_transaction_idx += 1;
+                        }
                     }
                     Space::Native => {
-                        let t = RpcTransaction::from_signed(tx, None, *self.sync.network.get_network_type()).map_err(|_| JsonRpcError::internal_error() )?;
-                        transactions.push(WrapTransaction::NativeTransaction(t));
+                        let t = RpcTransaction::from_signed(
+                            tx,
+                            None,
+                            *self.sync.network.get_network_type(),
+                        )
+                        .map_err(|_| JsonRpcError::internal_error())?;
+                        transactions
+                            .push(WrapTransaction::NativeTransaction(t));
                     }
                 }
             }
         }
 
-
         Ok(vec![])
     }
-
-
-
 }
 
 #[allow(dead_code)]

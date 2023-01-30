@@ -111,8 +111,12 @@ pub trait LocalRpc {
     ) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
 
     #[rpc(name = "cfx_getTransactionsByEpoch")]
-    fn transactions_by_epoch(&self, epoch_number: U64) -> JsonRpcResult<Vec<WrapTransaction>>;
+    fn transactions_by_epoch(
+        &self, epoch_number: U64,
+    ) -> JsonRpcResult<Vec<WrapTransaction>>;
 
     #[rpc(name = "cfx_getTransactionsByBlock")]
-    fn transactions_by_block(&self, block_hash: H256) -> JsonRpcResult<Vec<WrapTransaction>>;
+    fn transactions_by_block(
+        &self, block_hash: H256,
+    ) -> JsonRpcResult<Vec<WrapTransaction>>;
 }
