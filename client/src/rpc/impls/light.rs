@@ -603,21 +603,30 @@ impl RpcImpl {
 
     fn storage_at(
         &self, address: RpcAddress, position: U256,
-        epoch_num: Option<EpochNumber>,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
     ) -> RpcBoxFuture<Option<H256>>
     {
         let position: H256 = H256::from_uint(&position);
-        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
+        // let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
 
         info!(
             "RPC Request: cfx_getStorageAt address={:?} position={:?} epoch={:?})",
-            address, position, epoch_num
+            address,
+            position,
+            block_hash_or_epoch_number
+                .as_ref()
+                .ok_or(EpochNumber::LatestState)
         );
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
+        let consensus_graph = self.consensus.clone();
 
         let fut = async move {
+            let epoch_num = Self::get_epoch_number_with_pivot_check(
+                consensus_graph,
+                block_hash_or_epoch_number,
+            )?;
             Self::check_address_network(address.network, &light)?;
 
             let maybe_entry = light
@@ -1119,7 +1128,7 @@ impl Cfx for CfxHandler {
             fn send_raw_transaction(&self, raw: Bytes) -> JsonRpcResult<H256>;
             fn sponsor_info(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<SponsorInfo>;
             fn staking_balance(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<U256>;
-            fn storage_at(&self, addr: RpcAddress, pos: U256, epoch_number: Option<EpochNumber>) -> BoxFuture<Option<H256>>;
+            fn storage_at(&self, addr: RpcAddress, pos: U256, block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>) -> BoxFuture<Option<H256>>;
             fn storage_root(&self, address: RpcAddress, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;

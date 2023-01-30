@@ -484,11 +484,13 @@ impl RpcImpl {
 
     fn storage_at(
         &self, address: RpcAddress, position: U256,
-        epoch_num: Option<EpochNumber>,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
     ) -> RpcResult<Option<H256>>
     {
         self.check_address_network(address.network)?;
-        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState).into();
+        let epoch_num = self
+            .get_epoch_number_with_pivot_check(block_hash_or_epoch_number)?
+            .into();
 
         info!(
             "RPC Request: cfx_getStorageAt address={:?}, position={:?}, epoch_num={:?})",
@@ -1702,7 +1704,7 @@ impl Cfx for CfxHandler {
             fn get_logs(&self, filter: CfxRpcLogFilter) -> BoxFuture<Vec<RpcLog>>;
             fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
             fn send_raw_transaction(&self, raw: Bytes) -> JsonRpcResult<H256>;
-            fn storage_at(&self, addr: RpcAddress, pos: U256, epoch_number: Option<EpochNumber>)
+            fn storage_at(&self, addr: RpcAddress, pos: U256, block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>)
                 -> BoxFuture<Option<H256>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
