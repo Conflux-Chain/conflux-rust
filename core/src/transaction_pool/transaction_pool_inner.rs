@@ -642,6 +642,11 @@ pub enum TransactionStatus {
 pub enum PendingReason {
     FutureNonce,
     NotEnoughCash,
+    OldEpochHeight,
+    // The tx used to be NotEnoughCash. Now it has enough balance, but the
+    // txpool state has not been updated, and the user needs to submit a
+    // new tx to trigger the update.
+    OutdatedNotEnoughCash,
 }
 
 #[derive(DeriveMallocSizeOf)]
@@ -1364,56 +1369,8 @@ impl TransactionPoolInner {
     ) -> Result<(), String>
     {
         let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
-        let mut sponsored_gas = U256::from(0);
-        let mut sponsored_storage = 0;
-
-        let sender = transaction.sender();
-
-        // Compute sponsored_gas for `transaction`
-        if let Transaction::Native(ref utx) = transaction.unsigned {
-            if let Action::Call(ref callee) = utx.action {
-                // FIXME: This is a quick fix for performance issue.
-                if callee.is_contract_address() {
-                    if let Some(sponsor_info) =
-                        account_cache.get_sponsor_info(callee).map_err(|e| {
-                            format!(
-                                "Failed to read account_cache from storage: {}",
-                                e
-                            )
-                        })?
-                    {
-                        if account_cache
-                            .check_commission_privilege(
-                                &callee,
-                                &sender.address,
-                            )
-                            .map_err(|e| {
-                                format!(
-                                    "Failed to read account_cache from storage: {}",
-                                    e
-                                )
-                            })?
-                        {
-                            let estimated_gas = Self::estimated_gas_fee(transaction.gas().clone(), transaction.gas_price().clone());
-                            if estimated_gas <= sponsor_info.sponsor_gas_bound
-                                && estimated_gas
-                                <= sponsor_info.sponsor_balance_for_gas
-                            {
-                                sponsored_gas = utx.gas;
-                            }
-                            let estimated_collateral =
-                                U256::from(utx.storage_limit)
-                                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-                            if estimated_collateral
-                                <= sponsor_info.sponsor_balance_for_collateral
-                            {
-                                sponsored_storage = utx.storage_limit;
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        let (sponsored_gas, sponsored_storage) =
+            self.get_sponsored_gas_and_storage(account_cache, &transaction)?;
 
         let (state_nonce, state_balance) = account_cache
             .get_nonce_and_balance(&transaction.sender())
@@ -1520,6 +1477,61 @@ impl TransactionPoolInner {
                 gas * gas_price
             };
         estimated_gas
+    }
+
+    pub fn get_sponsored_gas_and_storage(
+        &self, account_cache: &AccountCache, transaction: &SignedTransaction,
+    ) -> Result<(U256, u64), String> {
+        let mut sponsored_gas = U256::from(0);
+        let mut sponsored_storage = 0;
+        let sender = transaction.sender();
+
+        // Compute sponsored_gas for `transaction`
+        if let Transaction::Native(ref utx) = transaction.unsigned {
+            if let Action::Call(ref callee) = utx.action {
+                // FIXME: This is a quick fix for performance issue.
+                if callee.is_contract_address() {
+                    if let Some(sponsor_info) =
+                        account_cache.get_sponsor_info(callee).map_err(|e| {
+                            format!(
+                                "Failed to read account_cache from storage: {}",
+                                e
+                            )
+                        })?
+                    {
+                        if account_cache
+                            .check_commission_privilege(
+                                &callee,
+                                &sender.address,
+                            )
+                            .map_err(|e| {
+                                format!(
+                                    "Failed to read account_cache from storage: {}",
+                                    e
+                                )
+                            })?
+                        {
+                            let estimated_gas = Self::estimated_gas_fee(transaction.gas().clone(), transaction.gas_price().clone());
+                            if estimated_gas <= sponsor_info.sponsor_gas_bound
+                                && estimated_gas
+                                <= sponsor_info.sponsor_balance_for_gas
+                            {
+                                sponsored_gas = utx.gas;
+                            }
+                            let estimated_collateral =
+                                U256::from(utx.storage_limit)
+                                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+                            if estimated_collateral
+                                <= sponsor_info.sponsor_balance_for_collateral
+                            {
+                                sponsored_storage = utx.storage_limit;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok((sponsored_gas, sponsored_storage))
     }
 }
 
