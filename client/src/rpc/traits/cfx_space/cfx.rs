@@ -49,7 +49,8 @@ pub trait Cfx {
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getBalance")]
     fn balance(
-        &self, addr: RpcAddress, epoch_number: Option<EpochNumber>,
+        &self, addr: RpcAddress,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
     ) -> BoxFuture<U256>;
 
     /// Returns admin of the given contract
@@ -91,13 +92,15 @@ pub trait Cfx {
     /// Returns the code at given address at given time (epoch number).
     #[rpc(name = "cfx_getCode")]
     fn code(
-        &self, addr: RpcAddress, epoch_number: Option<EpochNumber>,
+        &self, addr: RpcAddress,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
     ) -> BoxFuture<Bytes>;
 
     /// Returns storage entries from a given contract.
     #[rpc(name = "cfx_getStorageAt")]
     fn storage_at(
-        &self, addr: RpcAddress, pos: U256, epoch_number: Option<EpochNumber>,
+        &self, addr: RpcAddress, pos: U256,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
     ) -> BoxFuture<Option<H256>>;
 
     #[rpc(name = "cfx_getStorageRoot")]
@@ -161,7 +164,8 @@ pub trait Cfx {
     /// Call contract, returning the output data.
     #[rpc(name = "cfx_call")]
     fn call(
-        &self, tx: CallRequest, epoch_number: Option<EpochNumber>,
+        &self, tx: CallRequest,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
     ) -> JsonRpcResult<Bytes>;
 
     /// Returns logs matching the filter provided.

@@ -7,7 +7,7 @@ from conflux.rpc import RpcClient
 from conflux.utils import sha3 as keccak, parse_as_int
 from jsonrpcclient.exceptions import ReceivedErrorResponseError
 from test_framework.blocktools import encode_hex_0x
-from test_framework.util import assert_equal
+from test_framework.util import assert_equal, test_rpc_call_with_block_object, assert_raises_rpc_error
 
 REVERT_MESSAGE_CONTRACT_PATH = "../contracts/revert_message.dat"
 
@@ -167,3 +167,103 @@ class TestContract(RpcClient):
             ))
         except Exception as e:
             assert(False) # no other exception should be thrown
+
+    def test_get_code_with_block_object(self):
+        # we cannot use the universal framework to test get_code as 
+        
+        contract_addr = self.test_contract_deploy()
+
+        client = self
+        rpc_call = self.get_code
+        # This is a random tx, which is used to create a branch in the graph
+        txs = [self.new_contract_tx(contract_addr, "0x60fe47b10000000000000000000000000000000000000000000000000000000000000006", storage_limit=64)]
+        expected_result_lambda = lambda x: x != "0x"
+    
+        params = [contract_addr]
+        
+        test_rpc_call_with_block_object(
+            client,
+            txs,
+            rpc_call,
+            expected_result_lambda,
+            params
+        )
+    
+    
+    def test_call_with_block_object(self):
+        # the cfx_call rpc behaviour is slight different from others, so we need to manually test it
+        contract_addr = self.test_contract_deploy()
+        
+        tx = self.new_contract_tx(contract_addr, "0x60fe47b10000000000000000000000000000000000000000000000000000000000000006", storage_limit=64)
+
+        # test_rpc_call_with_block_object(
+        #     self,
+        #     [tx],
+        #     self.node.cfx_call,
+        #     lambda x: x == 6,
+        #     [self.new_tx_for_call(contract_addr, "0x6d4ce63c")] 
+        # )
+        txs = [tx]
+        client = self
+        expected_result_lambda = lambda x: int(x, 16) == 6
+        rpc_call = self.node.cfx_call
+        params = [self.new_tx_for_call(contract_addr, "0x6d4ce63c")] 
+    
+        # we need to set None as the self.call definition
+        # params = [contract_addr, "0x6d4ce63c", None]
+        
+        parent_hash = client.block_by_epoch("latest_mined")['hash']
+    
+        # generate epoch of 2 block with transactions in each block
+        # NOTE: we need `C` to ensure that the top fork is heavier
+
+        #                      ---        ---        ---
+        #                  .- | A | <--- | C | <--- | D | <--- ...
+        #           ---    |   ---        ---        ---
+        # ... <--- | P | <-*                          .
+        #           ---    |   ---                    .
+        #                  .- | B | <..................
+        #                      ---
+        
+        # all block except for block D is empty
+
+        block_a = client.generate_custom_block(parent_hash = parent_hash, referee = [], txs = [])
+        block_b = client.generate_custom_block(parent_hash = parent_hash, referee = [], txs = [])
+        block_c = client.generate_custom_block(parent_hash = block_a, referee = [], txs = [])
+        block_d = client.generate_custom_block(parent_hash = block_c, referee = [block_b], txs = txs)
+
+        parent_hash = block_d
+        
+        # current block_d is not executed
+        assert_raises_rpc_error(-32016, "is not executed", rpc_call, *params, {
+            "blockHash": block_d
+        })
+        
+        # cannot find this block
+        assert_raises_rpc_error(-32602, "Invalid parameters: epoch parameter", rpc_call, *params, {
+            "blockHash": hex(int(block_d, 16) + 1)
+        }, err_data_="block's epoch number is not found")
+
+        for _ in range(5):
+            block = client.generate_custom_block(parent_hash = parent_hash, referee = [], txs = [])
+            parent_hash = block
+
+        assert_raises_rpc_error(-32602, "Invalid parameters: epoch parameter", rpc_call, *params, {
+            "blockHash": block_b
+        })
+        assert_raises_rpc_error(-32602, "Invalid parameters: epoch parameter", rpc_call, *params, {
+            "blockHash": block_b,
+            "requirePivot": True
+        })
+        
+        result1 = rpc_call(*params, {
+            "blockHash": block_d
+        })
+        
+        result2 = rpc_call(*params, {
+            "blockHash": block_b,
+            "requirePivot": False
+        })
+        
+        assert(expected_result_lambda(result1))
+        assert_equal(result2, result1)
