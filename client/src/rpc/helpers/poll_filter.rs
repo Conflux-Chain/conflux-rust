@@ -25,55 +25,51 @@ use std::{
     sync::Arc,
 };
 
-use crate::rpc::types::eth::Log;
-
-pub type BlockNumber = u64;
+pub type EpochNumber = u64;
 
 /// Thread-safe filter state.
 #[derive(Clone)]
-pub struct SyncPollFilter(Arc<Mutex<PollFilter>>);
+pub struct SyncPollFilter<T>(Arc<Mutex<PollFilter<T>>>);
 
-impl SyncPollFilter {
+impl<T> SyncPollFilter<T> {
     /// New `SyncPollFilter`
-    pub fn new(f: PollFilter) -> Self {
+    pub fn new(f: PollFilter<T>) -> Self {
         SyncPollFilter(Arc::new(Mutex::new(f)))
     }
 
     /// Modify underlying filter
     pub fn modify<F, R>(&self, f: F) -> R
-    where F: FnOnce(&mut PollFilter) -> R {
+    where F: FnOnce(&mut PollFilter<T>) -> R {
         f(&mut self.0.lock())
     }
 }
 
 /// Filter state.
 #[derive(Clone)]
-pub enum PollFilter {
+pub enum PollFilter<T> {
     /// Number of last block which client was notified about.
     Block {
-        last_block_number: BlockNumber,
+        last_epoch_number: EpochNumber,
         #[doc(hidden)]
-        recent_reported_epochs: VecDeque<(BlockNumber, Vec<H256>)>,
+        recent_reported_epochs: VecDeque<(EpochNumber, Vec<H256>)>,
     },
     /// Hashes of all pending transactions the client knows about.
     PendingTransaction(BTreeSet<H256>),
     /// Number of From block number, last seen block hash, pending logs and log
     /// filter itself.
     Logs {
-        last_block_number: BlockNumber,
-        recent_reported_epochs: VecDeque<(BlockNumber, Vec<H256>)>,
-        previous_logs: VecDeque<Vec<Log>>,
+        last_epoch_number: EpochNumber,
+        recent_reported_epochs: VecDeque<(EpochNumber, Vec<H256>)>,
+        previous_logs: VecDeque<Vec<T>>,
         filter: LogFilter,
         include_pending: bool,
     },
 }
 
-impl PollFilter {
-    pub const MAX_BLOCK_HISTORY_SIZE: usize = 200;
-}
+pub const MAX_BLOCK_HISTORY_SIZE: usize = 200;
 
 /// Returns only last `n` logs
-pub fn limit_logs(mut logs: Vec<Log>, limit: Option<usize>) -> Vec<Log> {
+pub fn limit_logs<T>(mut logs: Vec<T>, limit: Option<usize>) -> Vec<T> {
     let len = logs.len();
     match limit {
         Some(limit) if len >= limit => logs.split_off(len - limit),

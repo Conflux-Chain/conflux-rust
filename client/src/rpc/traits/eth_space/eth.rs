@@ -239,7 +239,6 @@ pub trait Eth {
 }
 
 /// Eth filters rpc api (polling).
-// TODO: do filters api properly
 #[rpc(server)]
 pub trait EthFilter {
     /// Returns id of new filter.
