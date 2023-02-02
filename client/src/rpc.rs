@@ -360,6 +360,7 @@ fn setup_rpc_apis(
                     common.pos_handler.clone(),
                     rpc.consensus.get_data_manager().clone(),
                     *rpc.sync.network.get_network_type(),
+                    rpc.consensus.clone(),
                 )
                 .to_delegate();
                 let pos_interceptor =

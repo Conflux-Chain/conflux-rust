@@ -618,6 +618,13 @@ class RpcClient:
             return self.node.pos_getAccount(account_address)
         else:
             return self.node.pos_getAccount(account_address, view)
+    
+    def pos_get_account_by_pow_address(self, address, view=None):
+        address = hex_to_b32_address(address)
+        if view is None:
+            return self.node.pos_getAccountByPowAddress(address)
+        else:
+            return self.node.pos_getAccountByPowAddress(address, view)
 
 
 def stake_tx_data(staking_value: int):
