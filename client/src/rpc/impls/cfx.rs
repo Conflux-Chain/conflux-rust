@@ -1636,7 +1636,7 @@ impl RpcImpl {
             ))
             .map_err(|_| JsonRpcError::internal_error())?;
 
-        let mut blocks = match self
+        let blocks = match self
             .consensus
             .get_data_manager()
             .blocks_by_hash_list(&blocks, false)
@@ -1657,9 +1657,9 @@ impl RpcImpl {
         };
 
         let mut block = vec![];
-        for b in blocks.into_iter() {
+        for b in blocks.iter() {
             if b.hash() == block_hash {
-                block.push(b);
+                block.push((*b).clone());
                 break;
             }
         }
