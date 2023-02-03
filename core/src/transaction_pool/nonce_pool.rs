@@ -549,7 +549,6 @@ impl NoncePool {
 #[cfg(test)]
 mod nonce_pool_test {
     use super::{InsertResult, NoncePool, TxWithReadyInfo};
-    use crate::transaction_pool::nonce_pool::NoncePoolNode;
     use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
     use cfx_types::{Address, U128, U256};
     use keylib::{Generator, KeyPair, Random};
