@@ -86,6 +86,8 @@ pub struct TransitionsBlockNumber {
     pub cip98: BlockNumber,
     /// CIP-105: PoS staking based minimal votes.
     pub cip105: BlockNumber,
+    /// CIP-107: Reduce the refunded storage collateral.
+    pub cip107: BlockNumber,
     pub cip_sigma_fix: BlockNumber,
 }
 

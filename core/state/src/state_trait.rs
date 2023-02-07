@@ -271,6 +271,8 @@ pub trait StateOpsTrait {
         -> DbResult<()>;
 
     fn get_system_storage(&self, key: &[u8]) -> DbResult<U256>;
+
+    fn get_system_storage_opt(&self, key: &[u8]) -> DbResult<Option<U256>>;
 }
 
 pub trait AsStateOpsTrait: StateOpsTrait {

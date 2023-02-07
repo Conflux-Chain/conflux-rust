@@ -160,6 +160,8 @@ pub struct Spec {
     /// CIP-105: Minimal DAO votes requirement based on PoS votes.
     pub cip105: bool,
     pub cip_sigma_fix: bool,
+    /// CIP-107: Reduce storage collateral refund.
+    pub cip107: bool,
     pub params_dao_vote_period: u64,
 }
 
@@ -303,6 +305,7 @@ impl Spec {
             cip98: false,
             cip105: false,
             cip_sigma_fix: false,
+            cip107: false,
         }
     }
 
@@ -326,6 +329,7 @@ impl Spec {
         spec.cip105 = number >= params.transition_numbers.cip105;
         spec.cip_sigma_fix = number >= params.transition_numbers.cip_sigma_fix;
         spec.params_dao_vote_period = params.params_dao_vote_period;
+        spec.cip107 = number >= params.transition_numbers.cip107;
         spec
     }
 

@@ -22,7 +22,7 @@ use rustc_hex::ToHex;
 use cfx_internal_common::{
     debug::*, EpochExecutionCommitment, StateRootWithAuxInfo,
 };
-use cfx_parameters::consensus::*;
+use cfx_parameters::{consensus::*, consensus_internal::CIP107_INITIAL_RATIO};
 use cfx_state::{state_trait::*, CleanupMode};
 use cfx_statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb};
 use cfx_storage::{
@@ -55,6 +55,7 @@ use crate::{
     executive::{
         internal_contract::{
             build_bloom_and_recover_phantom, decode_register_info,
+            storage_collateral_refund_ratio,
         },
         revert_reason_decode, EstimateRequest, ExecutionError,
         ExecutionOutcome, Executive, TransactOptions,
@@ -1242,7 +1243,7 @@ impl ConsensusExecutionHandler {
         let mut evm_tx_index = 0;
 
         for block in epoch_blocks.iter() {
-            self.maybe_update_state(state, block_number);
+            self.maybe_update_state(state, block_number)?;
             let mut cfx_tx_index = 0;
 
             let mut tx_exec_error_messages =
@@ -2012,7 +2013,9 @@ impl ConsensusExecutionHandler {
         Ok(r?)
     }
 
-    fn maybe_update_state(&self, state: &mut State, block_number: BlockNumber) {
+    fn maybe_update_state(
+        &self, state: &mut State, block_number: BlockNumber,
+    ) -> DbResult<()> {
         let cip94_start = self.machine.params().transition_numbers.cip94;
         let period = self.machine.params().params_dao_vote_period;
         // Update/initialize parameters before processing rewards.
@@ -2021,10 +2024,25 @@ impl ConsensusExecutionHandler {
         {
             let set_pos_staking =
                 block_number > self.machine.params().transition_numbers.cip105;
-            state
-                .initialize_or_update_dao_voted_params(set_pos_staking)
-                .expect("update params error");
+            state.initialize_or_update_dao_voted_params(set_pos_staking)?;
         }
+
+        // Initialize old_storage_collateral_refund_ratio in the state.
+        // The time may not be in the vote period boundary, so this is not
+        // integrated with `initialize_or_update_dao_voted_params`, but
+        // that function will update the value after cip107 is enabled
+        // here.
+        if block_number == self.machine.params().transition_numbers.cip107 {
+            debug!(
+                "set storage_collateral_refund_ratio to {}",
+                CIP107_INITIAL_RATIO
+            );
+            state.set_system_storage(
+                storage_collateral_refund_ratio().to_vec(),
+                CIP107_INITIAL_RATIO.into(),
+            )?;
+        }
+        Ok(())
     }
 }
 

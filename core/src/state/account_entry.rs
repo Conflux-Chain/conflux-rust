@@ -548,15 +548,17 @@ impl OverlayAccount {
         self.collateral_for_storage += *by;
     }
 
-    pub fn sub_collateral_for_storage(&mut self, by: &U256) {
+    pub fn sub_collateral_for_storage(
+        &mut self, by_balance: &U256, by_collateral: &U256,
+    ) {
         self.address.assert_native();
-        assert!(self.collateral_for_storage >= *by);
+        assert!(self.collateral_for_storage >= *by_collateral);
         if self.is_contract() {
-            self.add_sponsor_balance_for_collateral(by);
+            self.add_sponsor_balance_for_collateral(by_balance);
         } else {
-            self.add_balance(by);
+            self.add_balance(by_balance);
         }
-        self.collateral_for_storage -= *by;
+        self.collateral_for_storage -= *by_collateral;
     }
 
     pub fn record_interest_receive(&mut self, interest: &U256) {
@@ -706,6 +708,27 @@ impl OverlayAccount {
                 key,
                 true, /* cache_ownership */
             )
+        }
+    }
+
+    pub fn storage_opt_at(
+        &self, db: &StateDbGeneric, key: &[u8],
+    ) -> DbResult<Option<U256>> {
+        if let Some(value) = self.cached_storage_at(key) {
+            return Ok(Some(value));
+        }
+        if self.fresh_storage() {
+            Ok(None)
+        } else {
+            Ok(db
+                .get::<StorageValue>(
+                    StorageKey::new_storage_key(
+                        &self.address.address,
+                        key.as_ref(),
+                    )
+                    .with_space(self.address.space),
+                )?
+                .map(|v| v.value))
         }
     }
 

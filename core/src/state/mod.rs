@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 use std::{
+    cmp::min,
     collections::{hash_map::Entry, HashMap, HashSet},
     sync::Arc,
 };
@@ -50,7 +51,8 @@ use primitives::{
 use crate::{
     executive::internal_contract::{
         get_settled_param_vote_count, get_settled_pos_staking_for_votes,
-        pos_internal_entries, settle_current_votes, IndexStatus,
+        pos_internal_entries, settle_current_votes,
+        storage_collateral_refund_ratio, IndexStatus,
     },
     hash::KECCAK_EMPTY,
     observer::{AddressPocket, StateTracer},
@@ -857,6 +859,13 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
+    fn inc_nonce(
+        &mut self, address: &AddressWithSpace, account_start_nonce: &U256,
+    ) -> DbResult<()> {
+        self.require_or_new_basic_account(address, account_start_nonce)
+            .map(|mut x| x.inc_nonce())
+    }
+
     // TODO: This implementation will fail
     // tests::load_chain_tests::test_load_chain. We need to figure out why.
     //
@@ -869,13 +878,6 @@ impl StateOpsTrait for StateGeneric {
     //     );
     //     Ok(())
     // }
-
-    fn inc_nonce(
-        &mut self, address: &AddressWithSpace, account_start_nonce: &U256,
-    ) -> DbResult<()> {
-        self.require_or_new_basic_account(address, account_start_nonce)
-            .map(|mut x| x.inc_nonce())
-    }
 
     fn set_nonce(
         &mut self, address: &AddressWithSpace, nonce: &U256,
@@ -901,24 +903,6 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn add_pos_interest(
-        &mut self, address: &Address, interest: &U256,
-        cleanup_mode: CleanupMode, account_start_nonce: U256,
-    ) -> DbResult<()>
-    {
-        let address = address.with_native_space();
-        self.add_total_issued(*interest);
-        self.add_balance(
-            &address,
-            interest,
-            cleanup_mode,
-            account_start_nonce,
-        )?;
-        self.require_or_new_basic_account(&address, &account_start_nonce)?
-            .record_interest_receive(interest);
-        Ok(())
-    }
-
     fn add_balance(
         &mut self, address: &AddressWithSpace, by: &U256,
         cleanup_mode: CleanupMode, account_start_nonce: U256,
@@ -940,6 +924,24 @@ impl StateOpsTrait for StateGeneric {
                 set.insert(*address);
             }
         }
+        Ok(())
+    }
+
+    fn add_pos_interest(
+        &mut self, address: &Address, interest: &U256,
+        cleanup_mode: CleanupMode, account_start_nonce: U256,
+    ) -> DbResult<()>
+    {
+        let address = address.with_native_space();
+        self.add_total_issued(*interest);
+        self.add_balance(
+            &address,
+            interest,
+            cleanup_mode,
+            account_start_nonce,
+        )?;
+        self.require_or_new_basic_account(&address, &account_start_nonce)?
+            .record_interest_receive(interest);
         Ok(())
     }
 
@@ -1041,16 +1043,16 @@ impl StateOpsTrait for StateGeneric {
         self.world_statistics.total_issued_tokens
     }
 
-    fn total_espace_tokens(&self) -> U256 {
-        self.world_statistics.total_evm_tokens
-    }
-
     fn total_staking_tokens(&self) -> U256 {
         self.world_statistics.total_staking_tokens
     }
 
     fn total_storage_tokens(&self) -> U256 {
         self.world_statistics.total_storage_tokens
+    }
+
+    fn total_espace_tokens(&self) -> U256 {
+        self.world_statistics.total_evm_tokens
     }
 
     fn total_pos_staking_tokens(&self) -> U256 {
@@ -1125,20 +1127,6 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn pos_locked_staking(&self, address: &Address) -> DbResult<U256> {
-        let identifier = BigEndianHash::from_uint(&self.storage_at(
-            &POS_REGISTER_CONTRACT_ADDRESS.with_native_space(),
-            &pos_internal_entries::identifier_entry(address),
-        )?);
-        let current_value: IndexStatus = self
-            .storage_at(
-                &POS_REGISTER_CONTRACT_ADDRESS.with_native_space(),
-                &pos_internal_entries::index_entry(&identifier),
-            )?
-            .into();
-        Ok(*POS_VOTE_PRICE * current_value.locked())
-    }
-
     fn update_pos_status(
         &mut self, identifier: H256, number: u64,
     ) -> DbResult<()> {
@@ -1165,6 +1153,20 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
+    fn pos_locked_staking(&self, address: &Address) -> DbResult<U256> {
+        let identifier = BigEndianHash::from_uint(&self.storage_at(
+            &POS_REGISTER_CONTRACT_ADDRESS.with_native_space(),
+            &pos_internal_entries::identifier_entry(address),
+        )?);
+        let current_value: IndexStatus = self
+            .storage_at(
+                &POS_REGISTER_CONTRACT_ADDRESS.with_native_space(),
+                &pos_internal_entries::index_entry(&identifier),
+            )?
+            .into();
+        Ok(*POS_VOTE_PRICE * current_value.locked())
+    }
+
     fn read_vote(&self, _address: &Address) -> DbResult<Vec<u8>> { todo!() }
 
     fn set_system_storage(
@@ -1182,6 +1184,18 @@ impl StateOpsTrait for StateGeneric {
 
     fn get_system_storage(&self, key: &[u8]) -> DbResult<U256> {
         self.storage_at(&SYSTEM_STORAGE_ADDRESS.with_native_space(), key)
+    }
+
+    fn get_system_storage_opt(&self, key: &[u8]) -> DbResult<Option<U256>> {
+        self.ensure_account_loaded(
+            &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+            RequireCache::None,
+            |acc| {
+                acc.map_or(Ok(None), |account| {
+                    account.storage_opt_at(&self.db, key)
+                })
+            },
+        )?
     }
 }
 
@@ -1471,15 +1485,23 @@ impl StateGeneric {
     fn sub_collateral_for_storage(
         &mut self, address: &Address, by: &U256, account_start_nonce: U256,
     ) -> DbResult<()> {
+        let refund_max = by * self.storage_collateral_refund_ratio()?
+            / *STORAGE_COLLATERAL_REFUND_RATIO_SCALE;
         let collateral = self.collateral_for_storage(address)?;
-        let refundable = if by > &collateral { &collateral } else { by };
-        let burnt = *by - *refundable;
-        if !refundable.is_zero() {
+        let refundable_balance = min(refund_max, collateral);
+        let refundable_collateral = min(*by, collateral);
+        let burnt = *by - refundable_balance;
+        // It's possible that `refundable_balance` is zero while
+        // `refundable_collateral` is not.
+        if !refundable_collateral.is_zero() {
             self.require_or_new_basic_account(
                 &address.with_native_space(),
                 &account_start_nonce,
             )?
-            .sub_collateral_for_storage(refundable);
+            .sub_collateral_for_storage(
+                &refundable_balance,
+                &refundable_collateral,
+            );
         }
         self.world_statistics.total_storage_tokens -= *by;
         self.world_statistics.total_issued_tokens -= burnt;
@@ -1549,6 +1571,8 @@ impl StateGeneric {
                 self.world_statistics.interest_rate_per_block,
                 pos_staking_for_votes,
             );
+
+        // Initialize or update PoW base reward.
         match self.db.get_pow_base_reward()? {
             Some(old_pow_base_reward) => {
                 self.db.set_pow_base_reward(
@@ -1565,6 +1589,26 @@ impl StateGeneric {
                     None,
                 )?;
             }
+        }
+
+        // Only write storage_collateral_refund_ratio if it has been set in the
+        // db. This keeps the state unchanged before cip107 is enabled.
+        if let Some(old_storage_collateral_refund_ratio) =
+            self.get_system_storage_opt(&storage_collateral_refund_ratio())?
+        {
+            debug!(
+                "old_storage_collateral_refund_ratio: {}",
+                old_storage_collateral_refund_ratio
+            );
+            self.set_system_storage(
+                storage_collateral_refund_ratio().to_vec(),
+                vote_count
+                    .storage_collateral_refund_ratio
+                    .compute_next_params(
+                        old_storage_collateral_refund_ratio,
+                        pos_staking_for_votes,
+                    ),
+            )?;
         }
         debug!(
             "pos interest: {} base_reward:{:?}",
@@ -2077,6 +2121,14 @@ impl StateGeneric {
                 .as_mut()
                 .expect("Required account must exist.")
         }))
+    }
+
+    fn storage_collateral_refund_ratio(&self) -> DbResult<U256> {
+        Ok(self
+            .get_system_storage_opt(&storage_collateral_refund_ratio())?
+            // If `storage_collateral_refund_ratio` has not been set in db, we
+            // still refund all tokens and remain compatible.
+            .unwrap_or(*STORAGE_COLLATERAL_REFUND_RATIO_SCALE))
     }
 
     #[cfg(any(test, feature = "testonly_code"))]
