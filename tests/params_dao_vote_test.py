@@ -3,16 +3,15 @@ import json
 import os
 
 import eth_utils
-from eth_utils import decode_hex
-from jsonrpcclient.exceptions import ReceivedErrorResponseError
+from eth_utils import keccak
 from web3 import Web3
 
+from conflux.address import b32_address_to_hex
 from conflux.config import default_config
-from conflux.messages import Transactions
 from conflux.rpc import RpcClient, stake_tx_data, lock_tx_data, get_contract_function_data
 from conflux.transactions import CONTRACT_DEFAULT_GAS
 from conflux.utils import int_to_hex, priv_to_addr
-from test_framework.blocktools import create_transaction, wait_for_initial_nonce_for_address
+from test_framework.blocktools import encode_hex_0x
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import get_contract_instance, assert_equal
 import numpy as np
@@ -70,6 +69,7 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         self.conf_parameters["params_dao_vote_period"] = "10"
         self.conf_parameters["dao_vote_transition_number"] = "1"
         self.conf_parameters["dao_vote_transition_height"] = "1"
+        self.conf_parameters["cip107_transition_number"] = "420"
 
     def run_test(self):
         file_dir = os.path.dirname(os.path.realpath(__file__))
@@ -298,6 +298,70 @@ class ParamsDaoVoteTest(ConfluxTestFramework):
         data = get_contract_function_data(params_control_contract, "readVote", args=[Web3.toChecksumAddress(client.GENESIS_ADDR)])
         vote = client.call("0x0888000000000000000000000000000000000007", eth_utils.encode_hex(data))
         assert_equal(total, vote)
+
+        # test the collateral refund before cip107
+        refund = get_collateral_refund(client)
+        block_number = int(client.get_status()["blockNumber"], 0)
+        assert block_number < int(self.conf_parameters["cip107_transition_number"])
+        assert_equal(refund, 625000000000000000)
+
+        # test the collateral refund after cip107
+        client.generate_empty_blocks(int(self.conf_parameters["cip107_transition_number"]) - block_number + 5)
+        refund = get_collateral_refund(client)
+        assert_equal(refund, 625000000000000000 / 2)
+
+        # vote after cip107
+        block_number = int(client.get_status()["blockNumber"], 0)
+        version = int(block_number / vote_period) + 1
+        data = get_contract_function_data(params_control_contract, "castVote",
+                                          args=[version, [(2, [0, 0, lock_value])]])
+        tx = client.new_tx(data=data, value=0, receiver="0x0888000000000000000000000000000000000007",
+                           gas=CONTRACT_DEFAULT_GAS, storage_limit=1024)
+        client.send_tx(tx, wait_for_receipt=True)
+        # Generate enough blocks to get refund with new parameters.
+        client.generate_empty_blocks(40)
+        refund = get_collateral_refund(client)
+        assert_equal(refund, 625000000000000000 / 4)
+
+
+def get_collateral_refund(client: RpcClient):
+    bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), "./contracts/simple_storage.dat")
+    assert (os.path.isfile(bytecode_file))
+    bytecode = open(bytecode_file).read()
+
+    # deploy contract
+    tx = client.new_contract_tx(receiver="", data_hex=bytecode, storage_limit=20000)
+    assert_equal(client.send_tx(tx, True), tx.hash_hex())
+    receipt = client.get_transaction_receipt(tx.hash_hex())
+    assert_equal(receipt['outcomeStatus'], '0x0')
+    contract = receipt['contractCreated']
+
+    assert_equal(receipt['storageCollateralized'], '0x280')
+    assert_equal(receipt['storageReleased'], [])
+
+    # call increment()
+    data_hex = encode_hex_0x(keccak(b"increment()"))
+    tx = client.new_contract_tx(receiver=contract, data_hex=data_hex, storage_limit=20000)
+    assert_equal(client.send_tx(tx, True), tx.hash_hex())
+    receipt = client.get_transaction_receipt(tx.hash_hex())
+
+    assert_equal(receipt['storageCollateralized'], '0x0')
+    assert_equal(receipt['storageReleased'], [])
+
+    start_balance = client.get_balance(client.GENESIS_ADDR)
+    # call destroy()
+    data_hex = encode_hex_0x(keccak(b"destroy()"))
+    tx = client.new_contract_tx(receiver=contract, data_hex=data_hex, storage_limit=20000)
+    assert_equal(client.send_tx(tx, True), tx.hash_hex())
+    receipt = client.get_transaction_receipt(tx.hash_hex())
+
+    assert_equal(receipt['storageCollateralized'], '0x0')
+
+    assert_equal(len(receipt['storageReleased']), 1)
+    assert_equal(receipt['storageReleased'][0]['collaterals'], '0x280')
+    assert_equal(b32_address_to_hex(receipt['storageReleased'][0]['address']), client.GENESIS_ADDR)
+    end_balance = client.get_balance(client.GENESIS_ADDR)
+    return end_balance - start_balance + int(receipt["gasFee"], 0)
 
 
 if __name__ == "__main__":

@@ -355,7 +355,7 @@ fn test_deposit_and_withdraw() {
     );
 
     // sub storage
-    overlay_account.sub_collateral_for_storage(&11116.into());
+    overlay_account.sub_collateral_for_storage(&11116.into(), &11116.into());
     assert_eq!(*overlay_account.collateral_for_storage(), U256::zero());
     assert_eq!(
         *overlay_account.balance(),
