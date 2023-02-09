@@ -117,7 +117,7 @@ impl Default for TxPoolConfig {
 }
 
 pub struct TransactionPool {
-    config: TxPoolConfig,
+    pub config: TxPoolConfig,
     verification_config: VerificationConfig,
     inner: RwLock<TransactionPoolInner>,
     to_propagate_trans: Arc<RwLock<HashMap<H256, Arc<SignedTransaction>>>>,

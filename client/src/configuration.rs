@@ -963,11 +963,12 @@ impl Configuration {
     }
 
     pub fn txpool_config(&self) -> TxPoolConfig {
-        let min_tx_price_default = if self.is_test_or_dev_mode() {
-            1
-        } else {
-            ONE_GDRIP_IN_DRIP
-        };
+        let (min_native_tx_price_default, min_eth_tx_price_default) =
+            if self.is_test_or_dev_mode() {
+                (1, 1)
+            } else {
+                (ONE_GDRIP_IN_DRIP, 20 * ONE_GDRIP_IN_DRIP)
+            };
         TxPoolConfig {
             capacity: self.raw_conf.tx_pool_size,
             max_tx_gas: RwLock::new(U256::from(
@@ -976,7 +977,7 @@ impl Configuration {
             min_native_tx_price: self
                 .raw_conf
                 .tx_pool_min_native_tx_gas_price
-                .unwrap_or(min_tx_price_default),
+                .unwrap_or(min_native_tx_price_default),
             tx_weight_scaling: self.raw_conf.tx_weight_scaling,
             tx_weight_exp: self.raw_conf.tx_weight_exp,
             packing_gas_limit_block_count: self
@@ -986,7 +987,7 @@ impl Configuration {
             min_eth_tx_price: self
                 .raw_conf
                 .tx_pool_min_eth_tx_gas_price
-                .unwrap_or(min_tx_price_default),
+                .unwrap_or(min_eth_tx_price_default),
         }
     }
 
