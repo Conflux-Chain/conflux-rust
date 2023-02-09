@@ -241,7 +241,7 @@ class TestContract(RpcClient):
         
         # cannot find this block
         assert_raises_rpc_error(-32602, "Invalid parameters: epoch parameter", rpc_call, *params, {
-            "blockHash": hex(int(block_d, 16) + 1)
+            "blockHash": "0x{:064x}".format(int(block_d, 16) + 1)
         }, err_data_="block's epoch number is not found")
 
         for _ in range(5):
