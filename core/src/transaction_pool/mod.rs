@@ -29,7 +29,7 @@ use account_cache::AccountCache;
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_statedb::{Result as StateDbResult, StateDb};
 use cfx_storage::{StateIndex, StorageManagerTrait};
-use cfx_types::{AddressWithSpace as Address, AllChainID, H256, U256};
+use cfx_types::{AddressWithSpace as Address, AllChainID, Space, H256, U256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Lock, Meter, MeterTimer,
@@ -84,7 +84,8 @@ lazy_static! {
 
 pub struct TxPoolConfig {
     pub capacity: usize,
-    pub min_tx_price: u64,
+    pub min_native_tx_price: u64,
+    pub min_eth_tx_price: u64,
     pub max_tx_gas: RwLock<U256>,
     pub tx_weight_scaling: u64,
     pub tx_weight_exp: u8,
@@ -100,7 +101,8 @@ impl Default for TxPoolConfig {
     fn default() -> Self {
         TxPoolConfig {
             capacity: 500_000,
-            min_tx_price: 1,
+            min_native_tx_price: 1,
+            min_eth_tx_price: 1,
             max_tx_gas: RwLock::new(U256::from(
                 DEFAULT_TARGET_BLOCK_GAS_LIMIT / 2,
             )),
@@ -546,13 +548,17 @@ impl TransactionPool {
             ));
         }
 
+        let min_tx_price = match transaction.space() {
+            Space::Native => self.config.min_native_tx_price,
+            Space::Ethereum => self.config.min_eth_tx_price,
+        };
         // check transaction gas price
-        if *transaction.gas_price() < self.config.min_tx_price.into() {
+        if *transaction.gas_price() < min_tx_price.into() {
             trace!("Transaction {} discarded due to below minimal gas price: price {}", transaction.hash(), transaction.gas_price());
             return Err(format!(
                 "transaction gas price {} less than the minimum value {}",
                 transaction.gas_price(),
-                self.config.min_tx_price
+                min_tx_price
             ));
         }
 
