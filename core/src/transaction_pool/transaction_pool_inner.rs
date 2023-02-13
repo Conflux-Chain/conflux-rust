@@ -643,10 +643,11 @@ pub enum PendingReason {
     FutureNonce,
     NotEnoughCash,
     OldEpochHeight,
-    // The tx used to be NotEnoughCash. Now it has enough balance, but the
-    // txpool state has not been updated, and the user needs to submit a
-    // new tx to trigger the update.
-    OutdatedNotEnoughCash,
+    // The tx status in the pool is inaccurate due to chain switch or sponsor
+    // balance change. This tx will not be packed even if it should have
+    // been ready, and the user needs to send a new transaction to trigger
+    // the status change.
+    OutdatedStatus,
 }
 
 #[derive(DeriveMallocSizeOf)]

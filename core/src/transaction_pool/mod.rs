@@ -279,7 +279,10 @@ impl TransactionPool {
 
         if matches!(
             first_tx_status,
-            Some(TransactionStatus::Pending(PendingReason::NotEnoughCash))
+            Some(TransactionStatus::Ready)
+                | Some(TransactionStatus::Pending(
+                    PendingReason::NotEnoughCash
+                ))
         ) {
             // The sponsor status may have changed, check again.
             // This is not applied to the tx pool state because this check is
@@ -298,12 +301,28 @@ impl TransactionPool {
                             sponsored_storage,
                         };
                         if tx_info.calc_tx_cost() <= balance {
-                            // The tx should have been ready now, just need a
-                            // new tx to trigger the
-                            // state update.
-                            first_tx_status = Some(TransactionStatus::Pending(
-                                PendingReason::OutdatedNotEnoughCash,
-                            ));
+                            // The tx should have been ready now.
+                            if matches!(
+                                first_tx_status,
+                                Some(TransactionStatus::Pending(
+                                    PendingReason::NotEnoughCash
+                                ))
+                            ) {
+                                first_tx_status =
+                                    Some(TransactionStatus::Pending(
+                                        PendingReason::OutdatedStatus,
+                                    ));
+                            }
+                        } else {
+                            if matches!(
+                                first_tx_status,
+                                Some(TransactionStatus::Ready)
+                            ) {
+                                first_tx_status =
+                                    Some(TransactionStatus::Pending(
+                                        PendingReason::OutdatedStatus,
+                                    ));
+                            }
                         }
                     }
                 }
