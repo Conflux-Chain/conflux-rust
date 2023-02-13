@@ -22,6 +22,9 @@ use crate::{
 
 use crate::{
     spec::TransitionsEpochHeight,
+    transaction_pool::{
+        nonce_pool::TxWithReadyInfo, transaction_pool_inner::PendingReason,
+    },
     verification::{VerifyTxLocalMode, VerifyTxMode},
     vm::Spec,
 };
@@ -36,7 +39,10 @@ use metrics::{
     RwLockExtensions,
 };
 use parking_lot::{Mutex, RwLock};
-use primitives::{Account, SignedTransaction, TransactionWithSignature};
+use primitives::{
+    block::BlockHeight, Account, SignedTransaction, Transaction,
+    TransactionWithSignature,
+};
 use std::{
     cmp::{max, min},
     collections::{hash_map::HashMap, BTreeSet},
@@ -237,18 +243,100 @@ impl TransactionPool {
     /// Return `(pending_txs, first_tx_status, pending_count)`.
     pub fn get_account_pending_transactions(
         &self, address: &Address, maybe_start_nonce: Option<U256>,
-        maybe_limit: Option<usize>,
+        maybe_limit: Option<usize>, best_height: BlockHeight,
     ) -> (
         Vec<Arc<SignedTransaction>>,
         Option<TransactionStatus>,
         usize,
     )
     {
-        self.inner.read().get_account_pending_transactions(
-            address,
-            maybe_start_nonce,
-            maybe_limit,
-        )
+        let inner = self.inner.read();
+        let (txs, mut first_tx_status, pending_count) = inner
+            .get_account_pending_transactions(
+                address,
+                maybe_start_nonce,
+                maybe_limit,
+            );
+        if txs.is_empty() {
+            return (txs, first_tx_status, pending_count);
+        }
+
+        let first_tx = txs.first().expect("non empty");
+        if address.space == Space::Native {
+            if let Transaction::Native(tx) = &first_tx.unsigned {
+                if VerificationConfig::check_transaction_epoch_bound(
+                    tx,
+                    best_height,
+                    self.verification_config.transaction_epoch_bound,
+                ) == -1
+                {
+                    // If the epoch height is out of bound, overwrite the
+                    // pending reason.
+                    first_tx_status = Some(TransactionStatus::Pending(
+                        PendingReason::OldEpochHeight,
+                    ));
+                }
+            }
+        }
+
+        if matches!(
+            first_tx_status,
+            Some(TransactionStatus::Ready)
+                | Some(TransactionStatus::Pending(
+                    PendingReason::NotEnoughCash
+                ))
+        ) {
+            // The sponsor status may have changed, check again.
+            // This is not applied to the tx pool state because this check is
+            // only triggered on the RPC server.
+            let account_cache = self.get_best_state_account_cache();
+            match inner.get_sponsored_gas_and_storage(&account_cache, &first_tx)
+            {
+                Ok((sponsored_gas, sponsored_storage)) => {
+                    if let Ok((_, balance)) =
+                        account_cache.get_nonce_and_balance(&first_tx.sender())
+                    {
+                        let tx_info = TxWithReadyInfo {
+                            transaction: first_tx.clone(),
+                            packed: false,
+                            sponsored_gas,
+                            sponsored_storage,
+                        };
+                        if tx_info.calc_tx_cost() <= balance {
+                            // The tx should have been ready now.
+                            if matches!(
+                                first_tx_status,
+                                Some(TransactionStatus::Pending(
+                                    PendingReason::NotEnoughCash
+                                ))
+                            ) {
+                                first_tx_status =
+                                    Some(TransactionStatus::Pending(
+                                        PendingReason::OutdatedStatus,
+                                    ));
+                            }
+                        } else {
+                            if matches!(
+                                first_tx_status,
+                                Some(TransactionStatus::Ready)
+                            ) {
+                                first_tx_status =
+                                    Some(TransactionStatus::Pending(
+                                        PendingReason::OutdatedStatus,
+                                    ));
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!(
+                        "error in get_account_pending_transactions: e={:?}",
+                        e
+                    );
+                }
+            }
+        }
+        (txs, first_tx_status, pending_count)
     }
 
     pub fn get_pending_transaction_hashes_in_evm_pool(&self) -> BTreeSet<H256> {

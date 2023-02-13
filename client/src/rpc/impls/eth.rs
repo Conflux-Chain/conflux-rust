@@ -1096,6 +1096,7 @@ impl Eth for EthHandler {
                 &Address::from(address).with_evm_space(),
                 maybe_start_nonce,
                 maybe_limit.map(|limit| limit.as_usize()),
+                self.consensus.best_epoch_number(),
             );
         Ok(AccountPendingTransactions {
             pending_transactions: pending_txs
