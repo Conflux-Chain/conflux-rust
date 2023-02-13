@@ -206,10 +206,14 @@ impl RpcImpl {
     pub fn gas_price(&self) -> RpcResult<U256> {
         let consensus_graph = self.consensus_graph();
         info!("RPC Request: cfx_gasPrice()");
-        Ok(consensus_graph
+        let consensus_gas_price = consensus_graph
             .gas_price(Space::Native)
             .unwrap_or(GAS_PRICE_DEFAULT_VALUE.into())
-            .into())
+            .into();
+        Ok(std::cmp::max(
+            consensus_gas_price,
+            self.tx_pool.config.min_native_tx_price.into(),
+        ))
     }
 
     pub fn epoch_number(
