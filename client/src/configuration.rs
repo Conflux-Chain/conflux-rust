@@ -259,7 +259,7 @@ build_config! {
 
         // Transaction cache/transaction pool section.
         (tx_cache_index_maintain_timeout_ms, (u64), 300_000)
-        (tx_pool_size, (usize), 200_000)
+        (tx_pool_size, (usize), 50_000)
         (tx_pool_min_native_tx_gas_price, (Option<u64>), None)
         (tx_pool_min_eth_tx_gas_price, (Option<u64>), None)
         (tx_weight_scaling, (u64), 1)
