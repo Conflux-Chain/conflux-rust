@@ -213,6 +213,8 @@ build_config! {
         (max_allowed_timeout_in_observing_period, (u64), 10)
         (max_chunk_number_in_manifest, (usize), 500)
         (max_downloading_chunks, (usize), 8)
+        (max_downloading_chunk_attempts, (usize), 5)
+        (max_downloading_manifest_attempts, (usize), 5)
         (max_handshakes, (usize), 64)
         (max_incoming_peers, (usize), 48)
         (max_inflight_request_count, (u64), 64)
@@ -258,7 +260,8 @@ build_config! {
         // Transaction cache/transaction pool section.
         (tx_cache_index_maintain_timeout_ms, (u64), 300_000)
         (tx_pool_size, (usize), 200_000)
-        (tx_pool_min_tx_gas_price, (Option<u64>), None)
+        (tx_pool_min_native_tx_gas_price, (Option<u64>), None)
+        (tx_pool_min_eth_tx_gas_price, (Option<u64>), None)
         (tx_weight_scaling, (u64), 1)
         (tx_weight_exp, (u8), 1)
 
@@ -788,6 +791,9 @@ impl Configuration {
             min_peers_tx_propagation: self.raw_conf.min_peers_tx_propagation,
             max_peers_tx_propagation: self.raw_conf.max_peers_tx_propagation,
             max_downloading_chunks: self.raw_conf.max_downloading_chunks,
+            max_downloading_chunk_attempts: self
+                .raw_conf
+                .max_downloading_chunk_attempts,
             test_mode: self.is_test_mode(),
             dev_mode: self.is_dev_mode(),
             throttling_config_file: self.raw_conf.throttling_conf.clone(),
@@ -850,6 +856,9 @@ impl Configuration {
             manifest_request_timeout: Duration::from_millis(
                 self.raw_conf.snapshot_manifest_request_timeout_ms,
             ),
+            max_downloading_manifest_attempts: self
+                .raw_conf
+                .max_downloading_manifest_attempts,
         }
     }
 
@@ -955,26 +964,31 @@ impl Configuration {
     }
 
     pub fn txpool_config(&self) -> TxPoolConfig {
-        let min_tx_price_default = if self.is_test_or_dev_mode() {
-            1
-        } else {
-            ONE_GDRIP_IN_DRIP
-        };
+        let (min_native_tx_price_default, min_eth_tx_price_default) =
+            if self.is_test_or_dev_mode() {
+                (1, 1)
+            } else {
+                (ONE_GDRIP_IN_DRIP, 20 * ONE_GDRIP_IN_DRIP)
+            };
         TxPoolConfig {
             capacity: self.raw_conf.tx_pool_size,
             max_tx_gas: RwLock::new(U256::from(
                 DEFAULT_TARGET_BLOCK_GAS_LIMIT / 2,
             )),
-            min_tx_price: self
+            min_native_tx_price: self
                 .raw_conf
-                .tx_pool_min_tx_gas_price
-                .unwrap_or(min_tx_price_default),
+                .tx_pool_min_native_tx_gas_price
+                .unwrap_or(min_native_tx_price_default),
             tx_weight_scaling: self.raw_conf.tx_weight_scaling,
             tx_weight_exp: self.raw_conf.tx_weight_exp,
             packing_gas_limit_block_count: self
                 .raw_conf
                 .packing_gas_limit_block_count,
             target_block_gas_limit: self.raw_conf.target_block_gas_limit,
+            min_eth_tx_price: self
+                .raw_conf
+                .tx_pool_min_eth_tx_gas_price
+                .unwrap_or(min_eth_tx_price_default),
         }
     }
 

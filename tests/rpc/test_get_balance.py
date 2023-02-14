@@ -5,7 +5,7 @@ import sys
 sys.path.append("..")
 
 from conflux.rpc import RpcClient
-from test_framework.util import assert_equal, assert_raises_rpc_error, assert_greater_than
+from test_framework.util import assert_equal, assert_raises_rpc_error, assert_greater_than, test_rpc_call_with_block_object
 
 class TestGetBalance(RpcClient):
     def test_genesis_account_balance(self):
@@ -108,4 +108,15 @@ class TestGetBalance(RpcClient):
         # that contains the above tx
         self.wait_for_receipt(tx.hash_hex())
         assert_equal(self.get_balance(self.GENESIS_ADDR), changed_balance)
-        
+    
+    def test_balance_with_block_object(self):
+        tx = self.new_tx(value=789) 
+        cost = 789 + self.DEFAULT_TX_FEE
+        expected = self.get_balance(self.GENESIS_ADDR) - cost
+        test_rpc_call_with_block_object(
+            self,
+            [tx],
+            self.get_balance,
+            lambda x: x == expected,
+            [self.GENESIS_ADDR]
+        )
