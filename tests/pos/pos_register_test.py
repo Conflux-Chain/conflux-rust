@@ -4,7 +4,9 @@ sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 from conflux.rpc import RpcClient
 from test_framework.test_framework import ConfluxTestFramework
-
+from conflux.utils import priv_to_addr
+import eth_utils
+from test_framework.util import *
 
 class PosRegisterTest(ConfluxTestFramework):
     def set_test_params(self):
@@ -25,14 +27,30 @@ class PosRegisterTest(ConfluxTestFramework):
         priv3 = "4" * 64
 
         client0.generate_empty_blocks(30)
-        client0.wait_for_pos_register(priv_key=priv0, legacy=True)
-        client1.wait_for_pos_register(priv_key=priv1, legacy=False, should_fail=True)
+        pos_identifier0, priv_key0 = client0.wait_for_pos_register(priv_key=priv0, legacy=True)
+        _, priv_key1 = client1.wait_for_pos_register(priv_key=priv1, legacy=False, should_fail=True)
 
         client0.generate_empty_blocks(80)
-        client2.wait_for_pos_register(priv_key=priv2, legacy=False)
+        pos_identifier2, priv_key2 = client2.wait_for_pos_register(priv_key=priv2, legacy=False)
         client3.wait_for_pos_register(priv_key=priv3, legacy=True, should_fail=True)
 
         self.log.info("Done")
+
+        pos_account1 = client0.pos_get_account(pos_identifier0)
+        pos_account2 = client0.pos_get_account_by_pow_address(eth_utils.encode_hex(priv_to_addr(priv_key0)))
+        assert_equal(pos_account1["address"], pos_account2["address"])
+        assert_equal(pos_account1["status"], pos_account2["status"])
+
+
+        pos_account1 = client2.pos_get_account(pos_identifier2)
+        pos_account2 = client2.pos_get_account_by_pow_address(eth_utils.encode_hex(priv_to_addr(priv_key2)))
+        assert_equal(pos_account1["address"], pos_account2["address"])
+        assert_equal(pos_account1["status"], pos_account2["status"])
+
+        pos_account = client1.pos_get_account_by_pow_address(eth_utils.encode_hex(priv_to_addr(priv_key1)))
+        assert_equal(pos_account["address"], "0x0000000000000000000000000000000000000000000000000000000000000000")
+        assert_equal(pos_account["status"]["availableVotes"], "0x0")
+
 
 if __name__ == "__main__":
     PosRegisterTest().main()

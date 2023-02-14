@@ -40,7 +40,7 @@ use crate::{
         trace_filter::TraceFilter,
     },
     pow::{PowComputer, ProofOfWorkConfig},
-    rpc_errors::{invalid_params_check, Result as RpcResult},
+    rpc_errors::{invalid_params, invalid_params_check, Result as RpcResult},
     state::State,
     statistics::SharedStatistics,
     transaction_pool::SharedTransactionPool,
@@ -721,6 +721,33 @@ impl ConsensusGraph {
         Some((results_with_epoch, maybe_state_root))
     }
 
+    pub fn get_block_epoch_number_with_pivot_check(
+        &self, hash: &H256, require_pivot: bool,
+    ) -> RpcResult<u64> {
+        let inner = &*self.inner.read();
+        // TODO: block not found error
+        let epoch_number =
+            inner.get_block_epoch_number(&hash).ok_or(invalid_params(
+                "epoch parameter",
+                format!("block's epoch number is not found: {:?}", hash),
+            ))?;
+
+        if require_pivot {
+            if let Err(..) =
+                inner.check_block_pivot_assumption(&hash, epoch_number)
+            {
+                bail!(invalid_params(
+                    "epoch parameter",
+                    format!(
+                        "should receive a pivot block hash, receives: {:?}",
+                        hash
+                    ),
+                ))
+            }
+        }
+        Ok(epoch_number)
+    }
+
     // TODO: maybe return error for reserved address? Not sure where is the best
     //  place to do the check.
     pub fn next_nonce(
@@ -730,11 +757,14 @@ impl ConsensusGraph {
     ) -> RpcResult<U256>
     {
         let epoch_number = match block_hash_or_epoch_number {
-            BlockHashOrEpochNumber::BlockHash(hash) => EpochNumber::Number(
-                self.inner
-                    .read()
-                    .get_block_epoch_number(&hash)
-                    .ok_or("block epoch number is NULL")?,
+            BlockHashOrEpochNumber::BlockHashWithOption {
+                hash,
+                require_pivot,
+            } => EpochNumber::Number(
+                self.get_block_epoch_number_with_pivot_check(
+                    &hash,
+                    require_pivot.unwrap_or(true),
+                )?,
             ),
             BlockHashOrEpochNumber::EpochNumber(epoch_number) => epoch_number,
         };

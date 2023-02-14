@@ -64,6 +64,35 @@ impl TxWithReadyInfo {
         self.gas_price() > x.gas_price()
             || self.gas_price() == x.gas_price() && higher_epoch_height
     }
+
+    pub fn calc_tx_cost(&self) -> U256 {
+        let estimate_gas_u512 =
+            (self.gas() - self.sponsored_gas).full_mul(*self.gas_price());
+        // normally, the value <= 2^128
+        let estimate_gas = if estimate_gas_u512 > U512::from(U128::max_value())
+        {
+            U256::from(U128::max_value())
+        } else {
+            (self.gas() - self.sponsored_gas) * self.gas_price()
+        };
+        let sponsored_storage = self.sponsored_storage;
+        let storage_collateral_requirement =
+            if let Transaction::Native(ref tx) = self.unsigned {
+                U256::from(tx.storage_limit - sponsored_storage)
+                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
+            } else {
+                U256::zero()
+            };
+        // normally, the value <= 2^192
+        if *self.value() > U256::from(u64::MAX) * U256::from(U128::max_value())
+        {
+            U256::from(u64::MAX) * U256::from(U128::max_value())
+                + estimate_gas
+                + storage_collateral_requirement
+        } else {
+            self.value() + estimate_gas + storage_collateral_requirement
+        }
+    }
 }
 
 impl Deref for TxWithReadyInfo {
@@ -99,39 +128,11 @@ struct NoncePoolNode {
 }
 
 impl NoncePoolNode {
-    fn calc_tx_cost(tx: &TxWithReadyInfo) -> U256 {
-        let estimate_gas_u512 =
-            (tx.gas() - tx.sponsored_gas).full_mul(*tx.gas_price());
-        // normally, the value <= 2^128
-        let estimate_gas = if estimate_gas_u512 > U512::from(U128::max_value())
-        {
-            U256::from(U128::max_value())
-        } else {
-            (tx.gas() - tx.sponsored_gas) * tx.gas_price()
-        };
-        let sponsored_storage = tx.sponsored_storage;
-        let storage_collateral_requirement =
-            if let Transaction::Native(ref tx) = tx.unsigned {
-                U256::from(tx.storage_limit - sponsored_storage)
-                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
-            } else {
-                U256::zero()
-            };
-        // normally, the value <= 2^192
-        if *tx.value() > U256::from(u64::MAX) * U256::from(U128::max_value()) {
-            U256::from(u64::MAX) * U256::from(U128::max_value())
-                + estimate_gas
-                + storage_collateral_requirement
-        } else {
-            tx.value() + estimate_gas + storage_collateral_requirement
-        }
-    }
-
     pub fn new(tx: &TxWithReadyInfo, priority: u64) -> Self {
         NoncePoolNode {
             tx: tx.clone(),
             subtree_unpacked: 1 - tx.packed as u32,
-            subtree_cost: Self::calc_tx_cost(tx),
+            subtree_cost: tx.calc_tx_cost(),
             subtree_size: 1,
             priority,
             child: [None, None],
@@ -291,7 +292,7 @@ impl NoncePoolNode {
                 } else {
                     let mut ret = NoncePoolNode::size(&node.child[0]);
                     ret.0 += 1;
-                    ret.1 += Self::calc_tx_cost(&node.tx);
+                    ret.1 += node.tx.calc_tx_cost();
                     if cmp == Ordering::Greater {
                         let tmp = NoncePoolNode::rank(&node.child[1], nonce);
                         ret.0 += tmp.0;
@@ -355,7 +356,7 @@ impl NoncePoolNode {
     /// update subtree info: cost_sum, size, unpacked
     fn update(&mut self) {
         self.subtree_unpacked = 1 - self.tx.packed as u32;
-        self.subtree_cost = Self::calc_tx_cost(&self.tx);
+        self.subtree_cost = self.tx.calc_tx_cost();
         self.subtree_size = 1;
         for i in 0..2 {
             if self.child[i as usize].is_some() {
@@ -548,7 +549,6 @@ impl NoncePool {
 #[cfg(test)]
 mod nonce_pool_test {
     use super::{InsertResult, NoncePool, TxWithReadyInfo};
-    use crate::transaction_pool::nonce_pool::NoncePoolNode;
     use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
     use cfx_types::{Address, U128, U256};
     use keylib::{Generator, KeyPair, Random};
@@ -610,10 +610,7 @@ mod nonce_pool_test {
             0,
             false,
         );
-        assert_eq!(
-            NoncePoolNode::calc_tx_cost(&tx),
-            U256::from(10 * 50000 / 2 + 10000)
-        );
+        assert_eq!(tx.calc_tx_cost(), U256::from(10 * 50000 / 2 + 10000));
         // normal case with storage limit
         let tx = new_test_tx_with_ready_info(
             &me,
@@ -625,7 +622,7 @@ mod nonce_pool_test {
             false,
         );
         assert_eq!(
-            NoncePoolNode::calc_tx_cost(&tx),
+            tx.calc_tx_cost(),
             U256::from(10 * 50000 / 2 + 10000)
                 + U256::from(5000 / 2) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
         );
@@ -639,10 +636,7 @@ mod nonce_pool_test {
             0,
             false,
         );
-        assert_eq!(
-            NoncePoolNode::calc_tx_cost(&tx),
-            U256::from(10 * 50000 / 2) + value_max
-        );
+        assert_eq!(tx.calc_tx_cost(), U256::from(10 * 50000 / 2) + value_max);
         // very large tx value, fit the range, #1
         let tx = new_test_tx_with_ready_info(
             &me,
@@ -653,10 +647,7 @@ mod nonce_pool_test {
             0,
             false,
         );
-        assert_eq!(
-            NoncePoolNode::calc_tx_cost(&tx),
-            U256::from(10 * 50000 / 2) + value_max
-        );
+        assert_eq!(tx.calc_tx_cost(), U256::from(10 * 50000 / 2) + value_max);
         // very large tx value, fit the range, #1
         let tx = new_test_tx_with_ready_info(
             &me,
@@ -668,7 +659,7 @@ mod nonce_pool_test {
             false,
         );
         assert_eq!(
-            NoncePoolNode::calc_tx_cost(&tx),
+            tx.calc_tx_cost(),
             U256::from(10 * 50000 / 2) + value_max - U256::from(1)
         );
         // very large gas fee, not fit the range, #1
@@ -682,7 +673,7 @@ mod nonce_pool_test {
             false,
         );
         assert_eq!(
-            NoncePoolNode::calc_tx_cost(&tx),
+            tx.calc_tx_cost(),
             gas_fee_max
                 + U256::from(10000)
                 + U256::from(5000 / 2) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
@@ -698,7 +689,7 @@ mod nonce_pool_test {
             false,
         );
         assert_eq!(
-            NoncePoolNode::calc_tx_cost(&tx),
+            tx.calc_tx_cost(),
             gas_fee_max
                 + U256::from(10000)
                 + U256::from(5000 / 2) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
@@ -714,7 +705,7 @@ mod nonce_pool_test {
             false,
         );
         assert_eq!(
-            NoncePoolNode::calc_tx_cost(&tx),
+            tx.calc_tx_cost(),
             gas_fee_max
                 + U256::from(10000)
                 + U256::from(5000 / 2) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
@@ -730,7 +721,7 @@ mod nonce_pool_test {
             false,
         );
         assert_eq!(
-            NoncePoolNode::calc_tx_cost(&tx),
+            tx.calc_tx_cost(),
             gas_fee_max - U256::from(1)
                 + U256::from(10000)
                 + U256::from(5000 / 2) * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
@@ -915,7 +906,7 @@ mod nonce_pool_test {
         let mut next_nonce = nonce;
         let mut balance_left = balance;
         while let Some(tx) = nonce_pool.get(&next_nonce) {
-            let cost = NoncePoolNode::calc_tx_cost(tx);
+            let cost = tx.calc_tx_cost();
             if balance_left < cost {
                 return None;
             }

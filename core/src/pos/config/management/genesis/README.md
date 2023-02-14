@@ -42,7 +42,7 @@ Each individual instance, OW or OP, should have access to a secure storage solut
 
 `diem-genesis-tool` offers several facilities:
 
-* Simplified configuration management via a config file that can store frequently reused paramters including validator and shared storage.
+* Simplified configuration management via a config file that can store frequently reused parameters including validator and shared storage.
 * Retrieving and submitting OW, OP, and validator configuration -- this is from a local secure storage to a remote secure storage -- leveraging the identity tool.
 * Converting a genesis configuration and a secure storage into a genesis.blob / genesis waypoint.
 
@@ -86,7 +86,7 @@ Overview of fields:
 
 * `chain_id` specifies a distinct chain and is written into genesis, checked during network connections, and part of each transaction. It is provided by the association.
 * `json_server` specifies a Diem JSON Server. This can be any that connect to your network including your own of one run by the association. It is not used in genesis, so a dummy value is acceptable during initial configuration.
-* `shared_backend` is a pointer to the associaton's `shared storage`.
+* `shared_backend` is a pointer to the association's `shared storage`.
 * `validator_backend` is a pointer to the local validator node's secure storage.
 
 ### The Association
@@ -98,13 +98,13 @@ cargo run -p diem-genesis-tool -- \
     --config config_file.yaml \
     --path $PATH_TO_LAYOUT
 ```
-* The association will publish the the `diem root`  public key to the `shared storage`:
+* The association will publish the `diem root`  public key to the `shared storage`:
 ```
 cargo run -p diem-genesis-tool -- \
     diem-root-key \
     --config config_file.yaml
 ```
-* The association will publish the the `diem root`  public key to the `shared storage`:
+* The association will publish the `diem root`  public key to the `shared storage`:
 ```
 cargo run -p diem-genesis-tool -- \
     diem-treasury-compliance-key \

@@ -376,10 +376,14 @@ impl Eth for EthHandler {
 
     fn gas_price(&self) -> jsonrpc_core::Result<U256> {
         info!("RPC Request: eth_gasPrice");
-        Ok(self
+        let consensus_gas_price = self
             .consensus_graph()
             .gas_price(Space::Ethereum)
-            .unwrap_or(GAS_PRICE_DEFAULT_VALUE.into()))
+            .unwrap_or(GAS_PRICE_DEFAULT_VALUE.into());
+        Ok(std::cmp::max(
+            consensus_gas_price,
+            self.tx_pool.config.min_eth_tx_price.into(),
+        ))
     }
 
     fn max_priority_fee_per_gas(&self) -> jsonrpc_core::Result<U256> {
@@ -1092,6 +1096,7 @@ impl Eth for EthHandler {
                 &Address::from(address).with_evm_space(),
                 maybe_start_nonce,
                 maybe_limit.map(|limit| limit.as_usize()),
+                self.consensus.best_epoch_number(),
             );
         Ok(AccountPendingTransactions {
             pending_transactions: pending_txs
