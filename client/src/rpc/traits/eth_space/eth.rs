@@ -19,7 +19,7 @@
 // along with OpenEthereum.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Eth rpc interface.
-use cfx_types::{H160, H256, U256, U64};
+use cfx_types::{H128, H160, H256, U256, U64};
 use jsonrpc_core::Result;
 use jsonrpc_derive::rpc;
 
@@ -239,30 +239,29 @@ pub trait Eth {
 }
 
 /// Eth filters rpc api (polling).
-// TODO: do filters api properly
 #[rpc(server)]
 pub trait EthFilter {
     /// Returns id of new filter.
     #[rpc(name = "eth_newFilter")]
-    fn new_filter(&self, _: EthRpcLogFilter) -> Result<U256>;
+    fn new_filter(&self, _: EthRpcLogFilter) -> Result<H128>;
 
     /// Returns id of new block filter.
     #[rpc(name = "eth_newBlockFilter")]
-    fn new_block_filter(&self) -> Result<U256>;
+    fn new_block_filter(&self) -> Result<H128>;
 
     /// Returns id of new block filter.
     #[rpc(name = "eth_newPendingTransactionFilter")]
-    fn new_pending_transaction_filter(&self) -> Result<U256>;
+    fn new_pending_transaction_filter(&self) -> Result<H128>;
 
     /// Returns filter changes since last poll.
     #[rpc(name = "eth_getFilterChanges")]
-    fn filter_changes(&self, _: Index) -> Result<FilterChanges>;
+    fn filter_changes(&self, _: H128) -> Result<FilterChanges>;
 
     /// Returns all logs matching given filter (in a range 'from' - 'to').
     #[rpc(name = "eth_getFilterLogs")]
-    fn filter_logs(&self, _: Index) -> Result<Vec<Log>>;
+    fn filter_logs(&self, _: H128) -> Result<Vec<Log>>;
 
     /// Uninstalls filter.
     #[rpc(name = "eth_uninstallFilter")]
-    fn uninstall_filter(&self, _: Index) -> Result<bool>;
+    fn uninstall_filter(&self, _: H128) -> Result<bool>;
 }

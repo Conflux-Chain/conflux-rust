@@ -160,6 +160,21 @@ impl StorageConfiguration {
             cip90a: 0,
         }
     }
+
+    pub fn full_state_start_height(&self) -> Option<u64> {
+        if self.enable_single_mpt_storage {
+            let height = if self.single_mpt_space == Some(Space::Ethereum) {
+                // The eSpace state is only available after cip90 is
+                // enabled.
+                self.cip90a
+            } else {
+                0
+            };
+            Some(height)
+        } else {
+            None
+        }
+    }
 }
 
 pub use self::{
@@ -168,7 +183,8 @@ pub use self::{
         delta_mpt::*,
         errors::{Error, ErrorKind, Result},
         merkle_patricia_trie::{
-            simple_mpt::*, KVInserter, MptKeyValue, TrieProof,
+            mpt_cursor::rlp_key_value_len, simple_mpt::*, KVInserter,
+            MptKeyValue, TrieProof,
         },
         node_merkle_proof::{NodeMerkleProof, StorageRootProof},
         proof_merger::StateProofMerger,

@@ -10,6 +10,7 @@ import random
 import re
 from subprocess import CalledProcessError, check_output
 import time
+from typing import Optional, Callable, List, TYPE_CHECKING, cast
 import socket
 import threading
 import jsonrpcclient.exceptions
@@ -22,6 +23,8 @@ import shutil
 from test_framework.simple_rpc_proxy import SimpleRpcProxy
 from . import coverage
 from .authproxy import AuthServiceProxy, JSONRPCException
+if TYPE_CHECKING:
+    from conflux.rpc import RpcClient
 
 solcx.set_solc_version('v0.5.17')
 
@@ -113,7 +116,7 @@ def assert_raises_process_error(returncode, output, fun, *args, **kwds):
         raise AssertionError("No exception raised")
 
 
-def assert_raises_rpc_error(code, message, fun, *args, **kwds):
+def assert_raises_rpc_error(code: Optional[int], message: Optional[str], fun: Callable, *args, err_data_: Optional[str]=None, **kwds):
     """Run an RPC and verify that a specific JSONRPC exception code and message is raised.
 
     Calls function `fun` with arguments `args` and `kwds`. Catches a JSONRPCException
@@ -129,10 +132,10 @@ def assert_raises_rpc_error(code, message, fun, *args, **kwds):
         args*: positional arguments for the function.
         kwds**: named arguments for the function.
     """
-    assert try_rpc(code, message, fun, *args, **kwds), "No exception raised"
+    assert try_rpc(code, message, fun, err_data_, *args, **kwds), "No exception raised"
 
 
-def try_rpc(code, message, fun, *args, **kwds):
+def try_rpc(code: Optional[int], message: Optional[str], fun: Callable, err_data_: Optional[str]=None, *args, **kwds):
     """Tries to run an rpc command.
 
     Test against error code and message if the rpc fails.
@@ -145,9 +148,11 @@ def try_rpc(code, message, fun, *args, **kwds):
         if (code is not None) and (code != error.code):
             raise AssertionError(
                 "Unexpected JSONRPC error code %i" % error.code)
-        if (message is not None) and (message not in error.message):
-            raise AssertionError("Expected substring not found:" +
-                                 error.message)
+        if (message is not None) and (message not in cast(str, error.message)):
+            raise AssertionError(f"Expected substring not found: {error.message}")
+        if (err_data_ is not None):
+            if not getattr(error, "data", None) or (err_data_ not in cast(str, error.data)):
+                raise AssertionError(f"Expected substring not found: {error.data}")
         return True
     except Exception as e:
         raise AssertionError("Unexpected exception raised: " +
@@ -283,7 +288,7 @@ def initialize_tg_config(dirname, nodes, genesis_nodes, chain_id, initial_seed="
         set_node_pos_config(dirname, n, pos_round_time_ms=pos_round_time_ms)
 
 
-def set_node_pos_config(dirname, n, setup_keys=True, pos_round_time_ms=1000):
+def set_node_pos_config(dirname, n, setup_keys=True, pos_round_time_ms=1000, hardcoded_epoch_committee=None):
     waypoint_path = os.path.join(dirname, 'waypoint_config')
     genesis_path = os.path.join(dirname, 'genesis_file')
     waypoint = open(waypoint_path, 'r').readlines()[0].strip()
@@ -316,6 +321,8 @@ def set_node_pos_config(dirname, n, setup_keys=True, pos_round_time_ms=1000):
         },
         'round_initial_timeout_ms': pos_round_time_ms,
     }
+    if hardcoded_epoch_committee is not None:
+        validator_config['consensus']['hardcoded_epoch_committee'] = hardcoded_epoch_committee
     validator_config['logger'] = {
         'level': "TRACE",
         'file': os.path.join(datadir, "pos.log")
@@ -460,7 +467,7 @@ def connect_nodes(nodes, a, node_num, timeout=60):
     wait_until(lambda: check_handshake(from_connection, to_connection.key), timeout=timeout)
 
 
-def sync_blocks(rpc_connections, *, sync_count=True, wait=1, timeout=60):
+def sync_blocks(rpc_connections, *, sync_count=True, sync_state=True, wait=1, timeout=60):
     """
     Wait until everybody has the same tip.
 
@@ -471,12 +478,15 @@ def sync_blocks(rpc_connections, *, sync_count=True, wait=1, timeout=60):
     stop_time = time.time() + timeout
     while time.time() <= stop_time:
         best_hash = [x.best_block_hash() for x in rpc_connections]
+        best_executed = [x.cfx_epochNumber("latest_state") if sync_state else 0 for x in rpc_connections]
         block_count = [x.getblockcount() for x in rpc_connections]
-        if best_hash.count(best_hash[0]) == len(rpc_connections) and (not sync_count or block_count.count(block_count[0]) == len(rpc_connections)):
+        if best_hash.count(best_hash[0]) == len(rpc_connections) \
+            and (not sync_state or best_executed.count(best_executed[0]) == len(rpc_connections)) \
+                and (not sync_count or block_count.count(block_count[0]) == len(rpc_connections)):
             return
         time.sleep(wait)
     raise AssertionError("Block sync timed out:{}".format("".join(
-        "\n  {!r}".format(b) for b in best_hash + block_count)))
+        "\n  {!r}".format(b) for b in best_hash + best_executed + block_count)))
 
 
 def sync_mempools(rpc_connections, *, wait=1, timeout=60,
@@ -727,4 +737,60 @@ def get_contract_instance(contract_dict=None,
                 raise ValueError("The bytecode or the address must be provided")
     return contract
 
+# This is a util function to test rpc with block object
+def test_rpc_call_with_block_object(client: "RpcClient", txs: List, rpc_call: Callable, expected_result_lambda: Callable[..., bool], params: List=[]):
+    parent_hash = client.block_by_epoch("latest_mined")['hash']
+    
+    # generate epoch of 2 block with transactions in each block
+    # NOTE: we need `C` to ensure that the top fork is heavier
 
+    #                      ---        ---        ---
+    #                  .- | A | <--- | C | <--- | D | <--- ...
+    #           ---    |   ---        ---        ---
+    # ... <--- | P | <-*                          .
+    #           ---    |   ---                    .
+    #                  .- | B | <..................
+    #                      ---
+    
+    # all block except for block D is empty
+
+    block_a = client.generate_custom_block(parent_hash = parent_hash, referee = [], txs = [])
+    block_b = client.generate_custom_block(parent_hash = parent_hash, referee = [], txs = [])
+    block_c = client.generate_custom_block(parent_hash = block_a, referee = [], txs = [])
+    block_d = client.generate_custom_block(parent_hash = block_c, referee = [block_b], txs = txs)
+
+    parent_hash = block_d
+    
+    # current block_d is not executed
+    assert_raises_rpc_error(-32602, None, rpc_call, *params, {
+        "blockHash": block_d
+    }, err_data_="is not executed")
+    
+    # cannot find this block
+    assert_raises_rpc_error(-32602, "Invalid parameters: epoch parameter", rpc_call, *params, {
+        "blockHash": "0x{:064x}".format(int(block_d, 16) + 1)
+    }, err_data_="block's epoch number is not found")
+
+    for _ in range(5):
+        block = client.generate_custom_block(parent_hash = parent_hash, referee = [], txs = [])
+        parent_hash = block
+
+    assert_raises_rpc_error(-32602, "Invalid parameters: epoch parameter", rpc_call, *params, {
+        "blockHash": block_b
+    })
+    assert_raises_rpc_error(-32602, "Invalid parameters: epoch parameter", rpc_call, *params, {
+        "blockHash": block_b,
+        "requirePivot": True
+    })
+    
+    result1 = rpc_call(*params, {
+        "blockHash": block_d
+    })
+    
+    result2 = rpc_call(*params, {
+        "blockHash": block_b,
+        "requirePivot": False
+    })
+    
+    assert(expected_result_lambda(result1))
+    assert_equal(result2, result1)

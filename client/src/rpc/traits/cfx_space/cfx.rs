@@ -5,13 +5,14 @@
 use crate::rpc::types::{
     pos::PoSEpochReward, Account as RpcAccount, AccountPendingInfo,
     AccountPendingTransactions, Block, BlockHashOrEpochNumber, Bytes,
-    CallRequest, CfxRpcLogFilter, CheckBalanceAgainstTransactionResponse,
-    EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog, PoSEconomics,
+    CallRequest, CfxFilterChanges, CfxRpcLogFilter,
+    CheckBalanceAgainstTransactionResponse, EpochNumber,
+    EstimateGasAndCollateralResponse, Log as RpcLog, PoSEconomics,
     Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, RpcAddress,
     SponsorInfo, Status as RpcStatus, TokenSupplyInfo, Transaction,
     VoteParamsInfo,
 };
-use cfx_types::{H256, U256, U64};
+use cfx_types::{H128, H256, U256, U64};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
 use jsonrpc_derive::rpc;
 use primitives::{DepositInfo, StorageRoot, VoteStakeInfo};
@@ -48,7 +49,8 @@ pub trait Cfx {
     /// Returns balance of the given account.
     #[rpc(name = "cfx_getBalance")]
     fn balance(
-        &self, addr: RpcAddress, epoch_number: Option<EpochNumber>,
+        &self, addr: RpcAddress,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
     ) -> BoxFuture<U256>;
 
     /// Returns admin of the given contract
@@ -90,13 +92,15 @@ pub trait Cfx {
     /// Returns the code at given address at given time (epoch number).
     #[rpc(name = "cfx_getCode")]
     fn code(
-        &self, addr: RpcAddress, epoch_number: Option<EpochNumber>,
+        &self, addr: RpcAddress,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
     ) -> BoxFuture<Bytes>;
 
     /// Returns storage entries from a given contract.
     #[rpc(name = "cfx_getStorageAt")]
     fn storage_at(
-        &self, addr: RpcAddress, pos: U256, epoch_number: Option<EpochNumber>,
+        &self, addr: RpcAddress, pos: U256,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
     ) -> BoxFuture<Option<H256>>;
 
     #[rpc(name = "cfx_getStorageRoot")]
@@ -160,7 +164,8 @@ pub trait Cfx {
     /// Call contract, returning the output data.
     #[rpc(name = "cfx_call")]
     fn call(
-        &self, tx: CallRequest, epoch_number: Option<EpochNumber>,
+        &self, tx: CallRequest,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
     ) -> JsonRpcResult<Bytes>;
 
     /// Returns logs matching the filter provided.
@@ -292,4 +297,32 @@ pub trait Cfx {
     //        #[rpc(name = "cfx_getUnclesByBlockNumberAndIndex")]
     //        fn uncles_by_block_number_and_index(&self, BlockNumber, Index) ->
     // BoxFuture<Option<Block>>;
+}
+
+/// Eth filters rpc api (polling).
+#[rpc(server)]
+pub trait CfxFilter {
+    /// Returns id of new filter.
+    #[rpc(name = "cfx_newFilter")]
+    fn new_filter(&self, _: CfxRpcLogFilter) -> JsonRpcResult<H128>;
+
+    /// Returns id of new block filter.
+    #[rpc(name = "cfx_newBlockFilter")]
+    fn new_block_filter(&self) -> JsonRpcResult<H128>;
+
+    /// Returns id of new block filter.
+    #[rpc(name = "cfx_newPendingTransactionFilter")]
+    fn new_pending_transaction_filter(&self) -> JsonRpcResult<H128>;
+
+    /// Returns filter changes since last poll.
+    #[rpc(name = "cfx_getFilterChanges")]
+    fn filter_changes(&self, _: H128) -> JsonRpcResult<CfxFilterChanges>;
+
+    /// Returns all logs matching given filter (in a range 'from' - 'to').
+    #[rpc(name = "cfx_getFilterLogs")]
+    fn filter_logs(&self, _: H128) -> JsonRpcResult<Vec<RpcLog>>;
+
+    /// Uninstalls filter.
+    #[rpc(name = "cfx_uninstallFilter")]
+    fn uninstall_filter(&self, _: H128) -> JsonRpcResult<bool>;
 }

@@ -206,10 +206,14 @@ impl RpcImpl {
     pub fn gas_price(&self) -> RpcResult<U256> {
         let consensus_graph = self.consensus_graph();
         info!("RPC Request: cfx_gasPrice()");
-        Ok(consensus_graph
+        let consensus_gas_price = consensus_graph
             .gas_price(Space::Native)
             .unwrap_or(GAS_PRICE_DEFAULT_VALUE.into())
-            .into())
+            .into();
+        Ok(std::cmp::max(
+            consensus_gas_price,
+            self.tx_pool.config.min_native_tx_price.into(),
+        ))
     }
 
     pub fn epoch_number(
@@ -755,13 +759,15 @@ impl RpcImpl {
     }
 
     pub fn pos_register(
-        &self, voting_power: U64,
+        &self, voting_power: U64, version: Option<u8>,
     ) -> JsonRpcResult<(Bytes, AccountAddress)> {
+        let legacy = version.map_or(false, |x| x == 0);
         let tx = register_transaction(
             self.pos_handler.config().bls_key.private_key(),
             self.pos_handler.config().vrf_key.public_key(),
             voting_power.as_u64(),
             0,
+            legacy,
         );
         let identifier = from_consensus_public_key(
             &self.pos_handler.config().bls_key.public_key(),
@@ -1258,6 +1264,7 @@ impl RpcImpl {
                 &address.hex_address.with_native_space(),
                 None,
                 None,
+                self.consensus.best_epoch_number(),
             );
         let mut max_nonce: U256 = U256::from(0);
         let mut min_nonce: U256 = U256::max_value();
@@ -1318,6 +1325,7 @@ impl RpcImpl {
                 &Address::from(address).with_native_space(),
                 maybe_start_nonce,
                 maybe_limit.map(|limit| limit.as_usize()),
+                self.consensus.best_epoch_number(),
             );
         Ok(AccountPendingTransactions {
             pending_transactions: pending_txs

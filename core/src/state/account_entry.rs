@@ -481,7 +481,7 @@ impl OverlayAccount {
         if !not_maintain_deposit_list {
             self.deposit_list.as_mut().unwrap().push(DepositInfo {
                 amount,
-                deposit_time,
+                deposit_time: deposit_time.into(),
                 accumulated_interest_rate,
             });
         }
@@ -807,12 +807,14 @@ impl OverlayAccount {
         if self.fresh_storage() {
             return Ok(None);
         }
+        let storage_value_read_cache =
+            &mut self.storage_value_read_cache.write();
         let storage_owner_lv2_write_cache =
             &mut *self.storage_owner_lv2_write_cache.write();
         let storage_owner_lv2_write_cache =
             Arc::make_mut(storage_owner_lv2_write_cache);
         Self::get_and_cache_storage(
-            &mut self.storage_value_read_cache.write(),
+            storage_value_read_cache,
             storage_owner_lv2_write_cache,
             db,
             &self.address,

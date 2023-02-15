@@ -32,7 +32,6 @@ DEFAULT_TEST_ACCOUNT_KEY = "0x0123456789abcdef0123456789abcdef0123456789abcdef01
 class PubSubTest(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
-        self.conf_parameters["log_level"] = '"trace"'
         self.conf_parameters["pos_pivot_decision_defer_epoch_count"] = '200'
 
     def setup_network(self):
@@ -50,6 +49,10 @@ class PubSubTest(ConfluxTestFramework):
         self.pubsub = [None] * self.num_nodes
         self.pubsub[FULLNODE0] = PubSubClient(self.nodes[FULLNODE0], True)
         self.pubsub[FULLNODE1] = PubSubClient(self.nodes[FULLNODE1], True)
+
+        self.core_pubsub = [None] * self.num_nodes
+        self.core_pubsub[FULLNODE0] = PubSubClient(self.nodes[FULLNODE0])
+        self.core_pubsub[FULLNODE1] = PubSubClient(self.nodes[FULLNODE1])
 
         # connect nodes
         connect_nodes(self.nodes, FULLNODE0, FULLNODE1)
@@ -98,6 +101,8 @@ class PubSubTest(ConfluxTestFramework):
         sub_all = await self.pubsub[FULLNODE0].subscribe("logs")
         sub_one = await self.pubsub[FULLNODE0].subscribe("logs", { "address": contract2 })
 
+        sub_all_core = await self.core_pubsub[FULLNODE0].subscribe("logs")
+
         # call contracts and collect receipts
         receipts = []
 
@@ -116,6 +121,7 @@ class PubSubTest(ConfluxTestFramework):
         logs1 = [l async for l in sub_all.iter()]
         logs2 = [l async for l in sub_one.iter()]
 
+        assert_equal(len([l async for l in sub_all_core.iter()]), 0)
         assert_equal(len(logs1), 2 * NUM_CALLS)
         assert_equal(len(logs2), NUM_CALLS)
 
@@ -142,6 +148,8 @@ class PubSubTest(ConfluxTestFramework):
 
         logs = [l async for l in sub_all.iter()]
         assert_equal(len(logs), num_to_reexecute * 2)
+        assert_equal(len([l async for l in sub_all_core.iter()]), 1)
+
         for i in range(num_to_reexecute):
             assert(logs[i]["removed"])
         

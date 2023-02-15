@@ -1,6 +1,6 @@
 import os
 import random
-from typing import Optional
+from typing import Optional, Union
 
 import eth_utils
 import rlp
@@ -21,6 +21,7 @@ from test_framework.util import (
     assert_greater_than_or_equal,
     assert_is_hash_string,
     assert_is_hex_string,
+    assert_equal,
     wait_until, checktx, get_contract_instance
 )
 
@@ -110,7 +111,8 @@ class RpcClient:
     def generate_blocks_to_state(self, num_blocks: int = 5, num_txs: int = 1) -> list:
         return self.generate_blocks(num_blocks, num_txs)
 
-    def generate_block_with_parent(self, parent_hash: str, referee: list = None, num_txs: int = 0, adaptive: bool = False,
+    def generate_block_with_parent(self, parent_hash: str, referee: list = None, num_txs: int = 0,
+                                   adaptive: bool = False,
                                    difficulty=None, pos_reference=None) -> str:
         assert_is_hash_string(parent_hash)
 
@@ -173,7 +175,7 @@ class RpcClient:
 
         return res
 
-    def get_code(self, address: str, epoch: str = None) -> str:
+    def get_code(self, address: str, epoch: Union[str, dict] = None) -> str:
         address = hex_to_b32_address(address)
         if epoch is None:
             code = self.node.cfx_getCode(address)
@@ -264,16 +266,17 @@ class RpcClient:
             r = self.node.cfx_getAdmin(addr, epoch)
         return b32_address_to_hex(r)
 
-    ''' Ignore block_hash if epoch is not None '''
+    ''' Use the first but not None parameter and ignore the others '''
 
-    def get_nonce(self, addr: str, epoch: str = None, block_hash: str = None) -> int:
+    def get_nonce(self, addr: str, epoch: str = None, block_hash: str = None, block_object: dict = None) -> int:
         addr = hex_to_b32_address(addr)
-        if epoch is None and block_hash is None:
-            return int(self.node.cfx_getNextNonce(addr), 0)
-        elif epoch is None:
-            return int(self.node.cfx_getNextNonce(addr, "hash:" + block_hash), 0)
+        if block_hash:
+            block_hash = "hash:" + block_hash
+        block_param = epoch or block_hash or block_object
+        if block_param:
+            return int(self.node.cfx_getNextNonce(addr, block_param), 0)
         else:
-            return int(self.node.cfx_getNextNonce(addr, epoch), 0)
+            return int(self.node.cfx_getNextNonce(addr), 0)
 
     def send_raw_tx(self, raw_tx: str, wait_for_catchup=True) -> str:
         # We wait for the node out of the catch up mode first
@@ -547,7 +550,7 @@ class RpcClient:
     def filter_trace(self, filter: dict):
         return self.node.trace_filter(filter)
 
-    def wait_for_pos_register(self, priv_key=None, stake_value=2_000_000, voting_power=None):
+    def wait_for_pos_register(self, priv_key=None, stake_value=2_000_000, voting_power=None, legacy=True, should_fail=False):
         if priv_key is None:
             priv_key = self.node.pow_sk
         if voting_power is None:
@@ -558,11 +561,15 @@ class RpcClient:
         stake_tx = self.new_tx(priv_key=priv_key, data=stake_tx_data(stake_value), value=0,
                                receiver="0x0888000000000000000000000000000000000002", gas=CONTRACT_DEFAULT_GAS)
         self.send_tx(stake_tx, wait_for_receipt=True)
-        data, pos_identifier = self.node.pos_register(int_to_hex(voting_power))
+        data, pos_identifier = self.node.pos_register(int_to_hex(voting_power), 0 if legacy else 1)
         register_tx = self.new_tx(priv_key=priv_key, data=eth_utils.decode_hex(data), value=0,
                                   receiver="0x0888000000000000000000000000000000000005", gas=CONTRACT_DEFAULT_GAS,
                                   storage_limit=1024)
-        self.send_tx(register_tx, wait_for_receipt=True)
+        register_tx_hash = self.send_tx(register_tx, wait_for_receipt=True)
+        assert_equal(
+            int(self.node.cfx_getTransactionReceipt(register_tx_hash)["outcomeStatus"], 0),
+            1 if should_fail else 0
+        )
         return pos_identifier, priv_key
 
     def wait_for_unstake(self, priv_key=None, unstake_value=2_000_000):
@@ -611,6 +618,13 @@ class RpcClient:
             return self.node.pos_getAccount(account_address)
         else:
             return self.node.pos_getAccount(account_address, view)
+    
+    def pos_get_account_by_pow_address(self, address, view=None):
+        address = hex_to_b32_address(address)
+        if view is None:
+            return self.node.pos_getAccountByPowAddress(address)
+        else:
+            return self.node.pos_getAccountByPowAddress(address, view)
 
 
 def stake_tx_data(staking_value: int):

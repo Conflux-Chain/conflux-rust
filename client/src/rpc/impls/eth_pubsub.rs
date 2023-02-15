@@ -7,17 +7,22 @@ use crate::rpc::{
     helpers::{EpochQueue, SubscriberId, Subscribers},
     metadata::Metadata,
     traits::eth_space::eth_pubsub::EthPubSub as PubSub,
-    types::eth::{eth_pubsub as pubsub, Header as RpcHeader, Log as RpcLog},
+    types::eth::{
+        eth_pubsub as pubsub, Header as RpcHeader, Log as RpcLog, Log,
+    },
 };
-use cfx_parameters::consensus::DEFERRED_STATE_EPOCH_COUNT;
+use cfx_parameters::{
+    consensus::DEFERRED_STATE_EPOCH_COUNT,
+    consensus_internal::REWARD_EPOCH_COUNT,
+};
 use cfx_types::{Space, H256};
 use cfxcore::{
-    channel::Channel, BlockDataManager, ConsensusGraph, Notifications,
-    SharedConsensusGraph,
+    channel::Channel, consensus::PhantomBlock, BlockDataManager,
+    ConsensusGraph, Notifications, SharedConsensusGraph,
 };
 use futures::{
     compat::Future01CompatExt,
-    future::{join_all, FutureExt, TryFutureExt},
+    future::{FutureExt, TryFutureExt},
 };
 use itertools::zip;
 use jsonrpc_core::{futures::Future, Result as RpcResult};
@@ -80,6 +85,10 @@ impl PubSubClient {
     /// Returns a chain notification handler.
     pub fn handler(&self) -> Weak<ChainNotificationHandler> {
         Arc::downgrade(&self.handler)
+    }
+
+    pub fn epochs_ordered(&self) -> Arc<Channel<(u64, Vec<H256>)>> {
+        self.epochs_ordered.clone()
     }
 
     fn start_heads_loop(&self) {
@@ -151,7 +160,8 @@ impl PubSubClient {
         // loop asynchronously
         let fut = async move {
             let mut last_epoch = 0;
-            let mut epochs: VecDeque<(u64, Vec<H256>)> = VecDeque::new();
+            let mut epochs: VecDeque<(u64, Vec<H256>, Vec<Log>)> =
+                VecDeque::new();
 
             while let Some(epoch) = receiver.recv().await {
                 trace!("logs_loop({:?}): {:?}", id, epoch);
@@ -185,15 +195,12 @@ impl PubSubClient {
                         }
                     }
 
-                    for e in reverted.into_iter() {
-                        handler
-                            .notify_logs(&sub, filter.clone(), e, true)
-                            .await;
+                    for (_, _, logs) in reverted.into_iter() {
+                        handler.notify_removed_logs(&sub, logs).await;
                     }
                 }
 
                 last_epoch = epoch.0;
-                epochs.push_back(epoch.clone());
 
                 let latest_finalized_epoch_number =
                     consensus.latest_finalized_epoch_number();
@@ -206,7 +213,10 @@ impl PubSubClient {
                 }
 
                 // publish matching logs
-                handler.notify_logs(&sub, filter, epoch, false).await;
+                let logs = handler
+                    .notify_logs(&sub, filter, epoch.clone(), false)
+                    .await;
+                epochs.push_back((epoch.0, epoch.1, logs));
             }
         };
 
@@ -307,10 +317,18 @@ impl ChainNotificationHandler {
         }
     }
 
+    async fn notify_removed_logs(&self, subscriber: &Client, logs: Vec<Log>) {
+        // send logs in order
+        for mut log in logs.into_iter() {
+            log.removed = true;
+            Self::notify_async(subscriber, pubsub::Result::Log(log)).await;
+        }
+    }
+
     async fn notify_logs(
         &self, subscriber: &Client, filter: LogFilter, epoch: (u64, Vec<H256>),
         removed: bool,
-    )
+    ) -> Vec<Log>
     {
         debug!("notify_logs({:?})", epoch);
 
@@ -319,7 +337,7 @@ impl ChainNotificationHandler {
         // subscriber? would it be better to do this once for each epoch?
         let logs = match self.retrieve_epoch_logs(epoch).await {
             Some(logs) => logs,
-            None => return,
+            None => return vec![],
         };
 
         // apply filter to logs
@@ -334,10 +352,16 @@ impl ChainNotificationHandler {
         // send logs in order
         // FIXME(thegaram): Sink::notify flushes after each item.
         // consider sending them in a batch.
+        let mut ret = vec![];
         for log in logs {
             match log {
                 Ok(l) => {
-                    Self::notify_async(subscriber, pubsub::Result::Log(l)).await
+                    Self::notify_async(
+                        subscriber,
+                        pubsub::Result::Log(l.clone()),
+                    )
+                    .await;
+                    ret.push(l);
                 }
                 Err(e) => {
                     error!(
@@ -347,6 +371,56 @@ impl ChainNotificationHandler {
                 }
             }
         }
+
+        ret
+    }
+
+    async fn get_phantom_block(
+        &self, epoch_number: u64, pivot: H256,
+    ) -> Option<PhantomBlock> {
+        debug!("eth pubsub get_phantom_block");
+        const POLL_INTERVAL_MS: Duration = Duration::from_millis(100);
+
+        for ii in 0.. {
+            let latest = self.consensus.best_epoch_number();
+            match self.consensus_graph().get_phantom_block_by_number(
+                EpochNumber::Number(epoch_number),
+                Some(pivot),
+                false, /* include_traces */
+            ) {
+                Ok(Some(b)) => return Some(b),
+                Ok(None) => {
+                    error!("Block not executed yet {:?}", pivot);
+                    let _ = sleep(POLL_INTERVAL_MS).compat().await;
+                }
+                Err(e) => {
+                    error!("get_phantom_block_by_number failed {}", e);
+                    return None;
+                }
+            };
+
+            // we assume that an epoch gets executed within 100 seconds
+            if ii > 1000 {
+                error!("Cannot construct phantom block for {:?}", pivot);
+                return None;
+            } else {
+                if latest
+                    > epoch_number
+                        + DEFERRED_STATE_EPOCH_COUNT
+                        + REWARD_EPOCH_COUNT
+                {
+                    // Even if the epoch was executed, the phantom block on the
+                    // fork should be unable to constructed.
+                    warn!(
+                        "Cannot onstruct phantom block for {:?}, latest_epoch={}",
+                        pivot, latest
+                    );
+                    return None;
+                }
+            }
+        }
+
+        unreachable!()
     }
 
     // attempt to retrieve block receipts from BlockDataManager
@@ -358,6 +432,7 @@ impl ChainNotificationHandler {
     ) -> Option<Arc<BlockReceipts>> {
         info!("eth pubsub retrieve_block_receipts");
         const POLL_INTERVAL_MS: Duration = Duration::from_millis(100);
+        let epoch = self.data_man.block_height_by_hash(pivot)?;
 
         // we assume that all epochs we receive (with a distance of at least
         // `DEFERRED_STATE_EPOCH_COUNT` from the tip of the pivot chain) are
@@ -367,6 +442,7 @@ impl ChainNotificationHandler {
         // if these assumptions hold, we will eventually successfully read these
         // execution results, even if they are outdated.
         for ii in 0.. {
+            let latest = self.consensus.best_epoch_number();
             match self.data_man.block_execution_result_by_hash_with_epoch(
                 &block, &pivot, false, /* update_pivot_assumption */
                 false, /* update_cache */
@@ -382,6 +458,19 @@ impl ChainNotificationHandler {
             if ii > 1000 {
                 error!("Cannot find receipts with {:?}/{:?}", block, pivot);
                 return None;
+            } else {
+                if latest
+                    > epoch + DEFERRED_STATE_EPOCH_COUNT + REWARD_EPOCH_COUNT
+                {
+                    // Even if the epoch was executed, the receipts on the fork
+                    // should have been deleted and cannot
+                    // be retrieved.
+                    warn!(
+                        "Cannot find receipts with {:?}/{:?}, latest_epoch={}",
+                        block, pivot, latest
+                    );
+                    return None;
+                }
             }
         }
 
@@ -401,52 +490,35 @@ impl ChainNotificationHandler {
         let (epoch_number, hashes) = epoch;
         let pivot = hashes.last().cloned().expect("epoch should not be empty");
 
-        // retrieve epoch receipts
-        let fut = hashes
-            .iter()
-            .map(|h| self.retrieve_block_receipts(&h, &pivot));
-
-        let receipts = join_all(fut)
-            .await
-            .into_iter()
-            .collect::<Option<Vec<_>>>()?;
+        let pb = self.get_phantom_block(epoch_number, pivot).await?;
 
         let mut logs = vec![];
         let mut log_index = 0;
 
-        for (block_hash, block_receipts) in zip(hashes, receipts) {
-            // retrieve block transactions
-            let block = match self
-                .data_man
-                .block_by_hash(&block_hash, true /* update_cache */)
-            {
-                Some(b) => b,
-                None => {
-                    warn!("Unable to retrieve block {:?}", block_hash);
-                    return None;
-                }
-            };
+        let txs = &pb.transactions;
+        assert_eq!(pb.receipts.len(), txs.len());
 
-            let txs = &block.transactions;
-            assert_eq!(block_receipts.receipts.len(), txs.len());
+        // construct logs
+        for (txid, (receipt, tx)) in zip(&pb.receipts, txs).enumerate() {
+            let eth_logs: Vec<_> = receipt
+                .logs
+                .iter()
+                .cloned()
+                .filter(|l| l.space == Space::Ethereum)
+                .collect();
 
-            // construct logs
-            for (txid, (receipt, tx)) in
-                zip(&block_receipts.receipts, txs).enumerate()
-            {
-                for (logid, entry) in receipt.logs.iter().cloned().enumerate() {
-                    logs.push(LocalizedLogEntry {
-                        entry,
-                        block_hash,
-                        epoch_number,
-                        transaction_hash: tx.hash,
-                        transaction_index: txid,
-                        log_index,
-                        transaction_log_index: logid,
-                    });
+            for (logid, entry) in eth_logs.into_iter().enumerate() {
+                logs.push(LocalizedLogEntry {
+                    entry,
+                    block_hash: pivot,
+                    epoch_number,
+                    transaction_hash: tx.hash,
+                    transaction_index: txid,
+                    log_index,
+                    transaction_log_index: logid,
+                });
 
-                    log_index += 1;
-                }
+                log_index += 1;
             }
         }
 

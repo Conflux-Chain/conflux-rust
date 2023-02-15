@@ -182,11 +182,8 @@ mod tests {
             validator_verifier.push(current_verifier.clone());
             let (next_signers, next_verifier) =
                 random_validator_verifier((*epoch + 1) as usize, None, true);
-            let epoch_state = EpochState {
-                epoch: *epoch + 1,
-                verifier: next_verifier.clone(),
-                vrf_seed: vec![],
-            };
+            let epoch_state =
+                EpochState::new(*epoch + 1, next_verifier.clone(), vec![]);
             let ledger_info = LedgerInfo::new(
                 BlockInfo::new(
                     *epoch,
@@ -217,11 +214,11 @@ mod tests {
             /* more = */ false,
         );
         assert!(proof_1
-            .verify(&EpochState {
-                epoch: all_epoch[0],
-                verifier: validator_verifier[0].clone(),
-                vrf_seed: vec![]
-            })
+            .verify(&EpochState::new(
+                all_epoch[0],
+                validator_verifier[0].clone(),
+                vec![]
+            ))
             .is_ok());
 
         let proof_2 = EpochChangeProof::new(
@@ -229,30 +226,30 @@ mod tests {
             /* more = */ false,
         );
         assert!(proof_2
-            .verify(&EpochState {
-                epoch: all_epoch[2],
-                verifier: validator_verifier[2].clone(),
-                vrf_seed: vec![]
-            })
+            .verify(&EpochState::new(
+                all_epoch[2],
+                validator_verifier[2].clone(),
+                vec![]
+            ))
             .is_ok());
 
         // Test proof with stale prefix will verify
         assert!(proof_1
-            .verify(&EpochState {
-                epoch: all_epoch[4],
-                verifier: validator_verifier[4].clone(),
-                vrf_seed: vec![]
-            })
+            .verify(&EpochState::new(
+                all_epoch[4],
+                validator_verifier[4].clone(),
+                vec![]
+            ))
             .is_ok());
 
         // Test empty proof will fail verification
         let proof_3 = EpochChangeProof::new(vec![], /* more = */ false);
         assert!(proof_3
-            .verify(&EpochState {
-                epoch: all_epoch[0],
-                verifier: validator_verifier[0].clone(),
-                vrf_seed: vec![]
-            })
+            .verify(&EpochState::new(
+                all_epoch[0],
+                validator_verifier[0].clone(),
+                vec![]
+            ))
             .is_err());
 
         // Test non contiguous proof will fail
@@ -260,11 +257,11 @@ mod tests {
         list.extend_from_slice(&valid_ledger_info[8..9]);
         let proof_4 = EpochChangeProof::new(list, /* more = */ false);
         assert!(proof_4
-            .verify(&EpochState {
-                epoch: all_epoch[3],
-                verifier: validator_verifier[3].clone(),
-                vrf_seed: vec![]
-            })
+            .verify(&EpochState::new(
+                all_epoch[3],
+                validator_verifier[3].clone(),
+                vec![]
+            ))
             .is_err());
 
         // Test non increasing proof will fail
@@ -272,11 +269,11 @@ mod tests {
         list.reverse();
         let proof_5 = EpochChangeProof::new(list, /* more = */ false);
         assert!(proof_5
-            .verify(&EpochState {
-                epoch: all_epoch[9],
-                verifier: validator_verifier[9].clone(),
-                vrf_seed: vec![]
-            })
+            .verify(&EpochState::new(
+                all_epoch[9],
+                validator_verifier[9].clone(),
+                vec![]
+            ))
             .is_err());
 
         // Test proof with invalid signatures will fail
@@ -288,11 +285,11 @@ mod tests {
             /* more = */ false,
         );
         assert!(proof_6
-            .verify(&EpochState {
-                epoch: all_epoch[0],
-                verifier: validator_verifier[0].clone(),
-                vrf_seed: vec![]
-            })
+            .verify(&EpochState::new(
+                all_epoch[0],
+                validator_verifier[0].clone(),
+                vec![]
+            ))
             .is_err());
 
         // Test proof with waypoint corresponding to the first epoch change

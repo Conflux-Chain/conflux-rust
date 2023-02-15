@@ -16,11 +16,15 @@ pub struct RpcImplConfiguration {
     pub max_payload_bytes: usize,
 
     pub enable_metrics: bool,
+
+    pub poll_lifetime_in_seconds: Option<u32>,
 }
 
 pub mod cfx;
+pub mod cfx_filter;
 pub mod common;
 pub mod eth;
+pub mod eth_filter;
 pub mod eth_pubsub;
 pub mod light;
 pub mod pool;

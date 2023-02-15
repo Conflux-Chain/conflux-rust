@@ -5,13 +5,19 @@
 use std::convert::TryInto;
 
 use crate::internal_bail;
+use cfx_parameters::consensus_internal::DAO_MIN_VOTE_PERCENTAGE;
 use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, U256, U512};
 use lazy_static::lazy_static;
 
 use crate::{
-    executive::internal_contract::components::SolidityEventTrait,
+    executive::internal_contract::{
+        components::SolidityEventTrait,
+        impls::params_control::system_storage_key::{
+            current_pos_staking_for_votes, settled_pos_staking_for_votes,
+        },
+    },
     state::power_two_fractional,
     vm::{self, ActionParams, Spec},
 };
@@ -251,6 +257,29 @@ pub fn total_votes(
     Ok(answer)
 }
 
+pub fn pos_stake_for_votes(
+    version: u64, context: &mut InternalRefContext,
+) -> vm::Result<U256> {
+    let current_voting_version = (context.env.number
+        - context.spec.cip94_activation_block_number)
+        / context.spec.params_dao_vote_period
+        + 1;
+
+    let state = &context.state;
+    let pos_stake_entry = if version + 1 == current_voting_version {
+        settled_pos_staking_for_votes()
+    } else if version == current_voting_version {
+        current_pos_staking_for_votes()
+    } else {
+        internal_bail!(
+            "Unsupport version {} (current {})",
+            version,
+            current_voting_version
+        );
+    };
+    Ok(state.get_system_storage(&pos_stake_entry)?)
+}
+
 lazy_static! {
     static ref CURRENT_VOTES_ENTRIES: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] = {
         let mut answer: [[[u8; 32]; OPTION_INDEX_MAX]; PARAMETER_INDEX_MAX] =
@@ -308,18 +337,25 @@ impl ParamVoteCount {
         })
     }
 
-    pub fn compute_next_params(&self, old_value: U256) -> U256 {
-        let answer = self.compute_next_params_inner(old_value);
-        // The return value should be in `[2^8, 2^192]`
-        let min_value = U256::from(256u64);
-        let max_value = U256::one() << 192usize;
-        if answer < min_value {
-            return min_value;
+    pub fn compute_next_params(
+        &self, old_value: U256, pos_staking_tokens: U256,
+    ) -> U256 {
+        if self.should_update(pos_staking_tokens) {
+            let answer = self.compute_next_params_inner(old_value);
+            // The return value should be in `[2^8, 2^192]`
+            let min_value = U256::from(256u64);
+            let max_value = U256::one() << 192usize;
+            if answer < min_value {
+                min_value
+            } else if answer > max_value {
+                max_value
+            } else {
+                answer
+            }
+        } else {
+            debug!("params unchanged with pos token {}", pos_staking_tokens);
+            old_value
         }
-        if answer > max_value {
-            return max_value;
-        }
-        return answer;
     }
 
     fn compute_next_params_inner(&self, old_value: U256) -> U256 {
@@ -355,6 +391,11 @@ impl ParamVoteCount {
             return new_value.try_into().unwrap();
         }
     }
+
+    fn should_update(&self, pos_staking_tokens: U256) -> bool {
+        (self.decrease + self.increase + self.unchange)
+            >= pos_staking_tokens * DAO_MIN_VOTE_PERCENTAGE / 100
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -382,8 +423,17 @@ pub fn get_settled_param_vote_count<T: StateOpsTrait>(
     })
 }
 
+pub fn get_settled_pos_staking_for_votes<T: StateOpsTrait>(
+    state: &T,
+) -> DbResult<U256> {
+    state.get_system_storage(&settled_pos_staking_for_votes())
+}
+
 /// Move the next vote counts into settled and reset the counts.
-pub fn settle_current_votes<T: StateOpsTrait>(state: &mut T) -> DbResult<()> {
+/// `set_pos_staking` is for compatibility with the Testnet.
+pub fn settle_current_votes<T: StateOpsTrait>(
+    state: &mut T, set_pos_staking: bool,
+) -> DbResult<()> {
     for index in 0..PARAMETER_INDEX_MAX {
         for opt_index in 0..OPTION_INDEX_MAX {
             let vote_count = state
@@ -397,6 +447,18 @@ pub fn settle_current_votes<T: StateOpsTrait>(state: &mut T) -> DbResult<()> {
                 U256::zero(),
             )?;
         }
+    }
+    if set_pos_staking {
+        let pos_staking =
+            state.get_system_storage(&current_pos_staking_for_votes())?;
+        state.set_system_storage(
+            settled_pos_staking_for_votes().to_vec(),
+            pos_staking,
+        )?;
+        state.set_system_storage(
+            current_pos_staking_for_votes().to_vec(),
+            state.total_pos_staking_tokens(),
+        )?;
     }
     Ok(())
 }
@@ -463,6 +525,8 @@ mod storage_key {
 /// }
 /// VoteStats current_votes dynamic;
 /// VoteStats settled_votes dynamic;
+/// uint current_pos_staking;
+/// uint settled_pos_staking;
 /// ```
 mod system_storage_key {
     use cfx_parameters::internal_contract_addresses::PARAMS_CONTROL_CONTRACT_ADDRESS;
@@ -474,6 +538,8 @@ mod system_storage_key {
 
     const CURRENT_VOTES_SLOT: usize = 0;
     const SETTLED_VOTES_SLOT: usize = 1;
+    const CURRENT_POS_STAKING_SLOT: usize = 2;
+    const SETTLED_POS_STAKING_SLOT: usize = 3;
 
     fn vote_stats(base: U256, index: usize, opt_index: usize) -> U256 {
         // Position of `.<topic>` (static slot)
@@ -506,5 +572,19 @@ mod system_storage_key {
         let base = dynamic_slot(base);
 
         u256_to_array(vote_stats(base, index, opt_index))
+    }
+
+    pub(super) fn current_pos_staking_for_votes() -> [u8; 32] {
+        // Position of `current_pos_staking` (static slot)
+        let base = base_slot(*PARAMS_CONTROL_CONTRACT_ADDRESS)
+            + U256::from(CURRENT_POS_STAKING_SLOT);
+        u256_to_array(base)
+    }
+
+    pub(super) fn settled_pos_staking_for_votes() -> [u8; 32] {
+        // Position of `current_pos_staking` (static slot)
+        let base = base_slot(*PARAMS_CONTROL_CONTRACT_ADDRESS)
+            + U256::from(SETTLED_POS_STAKING_SLOT);
+        u256_to_array(base)
     }
 }

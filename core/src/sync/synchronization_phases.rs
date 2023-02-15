@@ -430,6 +430,18 @@ impl SynchronizationPhaseTrait for CatchUpFillBlockBodyPhase {
     {
         info!("start phase {:?}", self.name());
         {
+            let full_state_start_height = self
+                .graph
+                .data_man
+                .storage_manager
+                .config()
+                .full_state_start_height();
+            let full_state_space = self
+                .graph
+                .data_man
+                .storage_manager
+                .config()
+                .single_mpt_space;
             // For both archive and full node, synced_epoch_id possible be
             // `None`. It wil be none when stable epoch is equal to
             // true genesis In both cases, we should set
@@ -446,6 +458,8 @@ impl SynchronizationPhaseTrait for CatchUpFillBlockBodyPhase {
                     StateAvailabilityBoundary::new(
                         *epoch_synced,
                         epoch_synced_height,
+                        full_state_start_height,
+                        full_state_space,
                     );
                 self.graph
                     .data_man
@@ -465,6 +479,8 @@ impl SynchronizationPhaseTrait for CatchUpFillBlockBodyPhase {
                     StateAvailabilityBoundary::new(
                         cur_era_stable_hash,
                         cur_era_stable_height,
+                        full_state_start_height,
+                        full_state_space,
                     );
             }
             self.graph.inner.write().block_to_fill_set =

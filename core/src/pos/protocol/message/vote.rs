@@ -24,7 +24,7 @@ impl Handleable for VoteMsg {
             "vote received must be from the sending peer"
         );*/
 
-        //self.verify(&ctx.manager.network_task.epoch_info.read().verifier)?;
+        //self.verify(&ctx.manager.network_task.epoch_info.read().verifier())?;
         let author = self.vote().author();
         let msg = ConsensusMsg::VoteMsg(Box::new(self));
         ctx.manager

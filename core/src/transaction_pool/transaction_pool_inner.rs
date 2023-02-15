@@ -26,7 +26,7 @@ use rlp::*;
 use serde::Serialize;
 use std::{
     cmp::{Ordering, Reverse},
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -336,6 +336,16 @@ impl SpacedReadyAccountPool {
 
     fn len(&self) -> usize { self.packing_pool.len() + self.waiting_pool.len() }
 
+    fn get_all_transaction_hashes(&self) -> BTreeSet<H256> {
+        self.waiting_pool
+            .iter()
+            .map(|f| f.0.hash())
+            .collect::<BTreeSet<_>>()
+            .union(&self.packing_pool.get_all_transaction_hashes())
+            .cloned()
+            .collect()
+    }
+
     #[cfg(test)]
     fn top(&self) -> Option<Arc<SignedTransaction>> { self.packing_pool.top() }
 }
@@ -380,6 +390,10 @@ impl PackingPool {
     }
 
     fn len(&self) -> usize { self.treap.len() }
+
+    fn get_all_transaction_hashes(&self) -> BTreeSet<H256> {
+        self.treap.iter().map(|v| v.1.hash()).collect()
+    }
 
     fn get(&self, address: &Address) -> Option<Arc<SignedTransaction>> {
         self.heap_map.get(address).map(|tx| (tx.0).0.clone())
@@ -501,6 +515,14 @@ impl ReadyAccountPool {
 
     fn len(&self) -> usize { self.native_pool.len() + self.evm_pool.len() }
 
+    fn get_transaction_hashes_in_evm_pool(&self) -> BTreeSet<H256> {
+        self.evm_pool.get_all_transaction_hashes()
+    }
+
+    fn get_transaction_hashes_in_native_pool(&self) -> BTreeSet<H256> {
+        self.native_pool.get_all_transaction_hashes()
+    }
+
     fn get(
         &self, address: &AddressWithSpace,
     ) -> Option<Arc<SignedTransaction>> {
@@ -620,6 +642,12 @@ pub enum TransactionStatus {
 pub enum PendingReason {
     FutureNonce,
     NotEnoughCash,
+    OldEpochHeight,
+    // The tx status in the pool is inaccurate due to chain switch or sponsor
+    // balance change. This tx will not be packed even if it should have
+    // been ready, and the user needs to send a new transaction to trigger
+    // the status change.
+    OutdatedStatus,
 }
 
 #[derive(DeriveMallocSizeOf)]
@@ -681,6 +709,15 @@ impl TransactionPoolInner {
     }
 
     pub fn total_deferred(&self) -> usize { self.txs.len() }
+
+    pub fn ready_transacton_hashes_in_evm_pool(&self) -> BTreeSet<H256> {
+        self.ready_account_pool.get_transaction_hashes_in_evm_pool()
+    }
+
+    pub fn ready_transacton_hashes_in_native_pool(&self) -> BTreeSet<H256> {
+        self.ready_account_pool
+            .get_transaction_hashes_in_native_pool()
+    }
 
     pub fn total_ready_accounts(&self) -> usize {
         self.ready_account_pool.len()
@@ -1333,9 +1370,121 @@ impl TransactionPoolInner {
     ) -> Result<(), String>
     {
         let _timer = MeterTimer::time_func(TX_POOL_INNER_INSERT_TIMER.as_ref());
+        let (sponsored_gas, sponsored_storage) =
+            self.get_sponsored_gas_and_storage(account_cache, &transaction)?;
+
+        let (state_nonce, state_balance) = account_cache
+            .get_nonce_and_balance(&transaction.sender())
+            .map_err(|e| {
+                format!("Failed to read account_cache from storage: {}", e)
+            })?;
+
+        if transaction.hash[0] & 254 == 0 {
+            trace!(
+                "Transaction {:?} sender: {:?} current nonce: {:?}, state nonce:{:?}",
+                transaction.hash, transaction.sender, transaction.nonce(), state_nonce
+            );
+        }
+        if *transaction.nonce()
+            >= state_nonce
+                + U256::from(FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET)
+        {
+            trace!(
+                "Transaction {:?} is discarded due to in too distant future",
+                transaction.hash()
+            );
+            return Err(format!(
+                "Transaction {:?} is discarded due to in too distant future",
+                transaction.hash()
+            ));
+        } else if !packed /* Because we may get slightly out-dated state for transaction pool, we should allow transaction pool to set already past-nonce transactions to packed. */
+            && *transaction.nonce() < state_nonce
+        {
+            trace!(
+                "Transaction {:?} is discarded due to a too stale nonce, self.nonce()={}, state_nonce={}",
+                transaction.hash(), transaction.nonce(), state_nonce,
+            );
+            return Err(format!(
+                "Transaction {:?} is discarded due to a too stale nonce",
+                transaction.hash()
+            ));
+        }
+
+        // check balance
+        if !packed && !force {
+            let mut need_balance = U256::from(0);
+            let estimate_gas_fee = Self::estimated_gas_fee(
+                transaction.gas().clone(),
+                transaction.gas_price().clone(),
+            );
+            match transaction.unsigned {
+                Transaction::Native(ref utx) => {
+                    need_balance += utx.value.clone();
+                    if sponsored_gas == U256::from(0) {
+                        need_balance += estimate_gas_fee;
+                    }
+                    if sponsored_storage == 0 {
+                        need_balance += U256::from(utx.storage_limit)
+                            * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+                    }
+                }
+                Transaction::Ethereum(ref utx) => {
+                    need_balance += utx.value.clone();
+                    need_balance += estimate_gas_fee;
+                }
+            }
+
+            if need_balance > state_balance {
+                let msg = format!(
+                    "Transaction {:?} is discarded due to out of balance, needs {:?} but account balance is {:?}",
+                    transaction.hash(),
+                    need_balance,
+                    state_balance
+                );
+                trace!("{}", msg);
+                return Err(msg);
+            }
+        }
+
+        let result = self.insert_transaction_without_readiness_check(
+            transaction.clone(),
+            packed,
+            force,
+            Some((state_nonce, state_balance)),
+            (sponsored_gas, sponsored_storage),
+        );
+        if let InsertResult::Failed(info) = result {
+            return Err(format!("Failed imported to deferred pool: {}", info));
+        }
+
+        self.recalculate_readiness_with_state(
+            &transaction.sender(),
+            account_cache,
+        )
+        .map_err(|e| {
+            format!("Failed to read account_cache from storage: {}", e)
+        })?;
+
+        Ok(())
+    }
+
+    fn estimated_gas_fee(gas: U256, gas_price: U256) -> U256 {
+        let estimated_gas_u512 = gas.full_mul(gas_price);
+        // Normally, it is less than 2^128
+        let estimated_gas =
+            if estimated_gas_u512 > U512::from(U128::max_value()) {
+                U256::from(U128::max_value())
+            } else {
+                gas * gas_price
+            };
+        estimated_gas
+    }
+
+    pub fn get_sponsored_gas_and_storage(
+        &self, account_cache: &AccountCache, transaction: &SignedTransaction,
+    ) -> Result<(U256, u64), String> {
         let mut sponsored_gas = U256::from(0);
         let mut sponsored_storage = 0;
-
         let sender = transaction.sender();
 
         // Compute sponsored_gas for `transaction`
@@ -1383,110 +1532,7 @@ impl TransactionPoolInner {
                 }
             }
         }
-
-        let (state_nonce, state_balance) = account_cache
-            .get_nonce_and_balance(&transaction.sender())
-            .map_err(|e| {
-                format!("Failed to read account_cache from storage: {}", e)
-            })?;
-
-        if transaction.hash[0] & 254 == 0 {
-            trace!(
-                "Transaction {:?} sender: {:?} current nonce: {:?}, state nonce:{:?}",
-                transaction.hash, transaction.sender, transaction.nonce(), state_nonce
-            );
-        }
-        if *transaction.nonce()
-            >= state_nonce
-                + U256::from(FURTHEST_FUTURE_TRANSACTION_NONCE_OFFSET)
-        {
-            trace!(
-                "Transaction {:?} is discarded due to in too distant future",
-                transaction.hash()
-            );
-            return Err(format!(
-                "Transaction {:?} is discarded due to in too distant future",
-                transaction.hash()
-            ));
-        } else if !packed /* Because we may get slightly out-dated state for transaction pool, we should allow transaction pool to set already past-nonce transactions to packed. */
-            && *transaction.nonce() < state_nonce
-        {
-            trace!(
-                "Transaction {:?} is discarded due to a too stale nonce, self.nonce()={}, state_nonce={}",
-                transaction.hash(), transaction.nonce(), state_nonce,
-            );
-            return Err(format!(
-                "Transaction {:?} is discarded due to a too stale nonce",
-                transaction.hash()
-            ));
-        }
-
-        // check balance
-        let mut need_balance = U256::from(0);
-        let estimate_gas_fee = Self::estimated_gas_fee(
-            transaction.gas().clone(),
-            transaction.gas_price().clone(),
-        );
-        match transaction.unsigned {
-            Transaction::Native(ref utx) => {
-                need_balance += utx.value.clone();
-                if sponsored_gas == U256::from(0) {
-                    need_balance += estimate_gas_fee;
-                }
-                if sponsored_storage == 0 {
-                    need_balance += U256::from(utx.storage_limit)
-                        * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-                }
-            }
-            Transaction::Ethereum(ref utx) => {
-                need_balance += utx.value.clone();
-                need_balance += estimate_gas_fee;
-            }
-        }
-
-        if need_balance > state_balance {
-            let msg = format!(
-                "Transaction {:?} is discarded due to out of balance, needs {:?} but account balance is {:?}",
-                transaction.hash(),
-                need_balance,
-                state_balance
-            );
-            trace!("{}", msg);
-            return Err(msg);
-        }
-
-        let result = self.insert_transaction_without_readiness_check(
-            transaction.clone(),
-            packed,
-            force,
-            Some((state_nonce, state_balance)),
-            (sponsored_gas, sponsored_storage),
-        );
-        if let InsertResult::Failed(info) = result {
-            return Err(format!("Failed imported to deferred pool: {}", info));
-        }
-
-        self.recalculate_readiness_with_state(
-            &transaction.sender(),
-            account_cache,
-        )
-        .map_err(|e| {
-            format!("Failed to read account_cache from storage: {}", e)
-        })?;
-
-        Ok(())
-    }
-
-    fn estimated_gas_fee(gas: U256, gas_price: U256) -> U256 {
-        let estimated_gas_u512 = gas.full_mul(gas_price);
-        // Normally, it is less than 2^128
-        let estimated_gas =
-            if estimated_gas_u512 > U512::from(U128::max_value()) {
-                U256::from(U128::max_value())
-            } else {
-                gas * gas_price
-            };
-        estimated_gas
+        Ok((sponsored_gas, sponsored_storage))
     }
 }
 

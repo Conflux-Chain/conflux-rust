@@ -80,7 +80,7 @@ impl ProposerElection for VrfProposer {
             "VRF election can not generate vrf_proof for other rounds"
         );
         let voting_power =
-            match self.epoch_state.verifier.get_voting_power(&author) {
+            match self.epoch_state.verifier().get_voting_power(&author) {
                 None => return false,
                 Some(p) => p,
             };
@@ -107,7 +107,7 @@ impl ProposerElection for VrfProposer {
     fn is_valid_proposal(&self, block: &Block) -> bool {
         let voting_power = match self
             .epoch_state
-            .verifier
+            .verifier()
             .get_voting_power(&block.author().expect("checked"))
         {
             None => return false,
@@ -122,7 +122,7 @@ impl ProposerElection for VrfProposer {
             .vrf_round_seed(self.current_seed.lock().as_slice());
         let vrf_hash = match self
             .epoch_state
-            .verifier
+            .verifier()
             .get_vrf_public_key(&block.author().expect("checked"))
         {
             Some(Some(vrf_public_key)) => {
@@ -159,8 +159,14 @@ impl ProposerElection for VrfProposer {
         &self, block: &Block,
     ) -> anyhow::Result<bool> {
         // Proposal validity should have been checked in `process_proposal`.
-        if block.round() != *self.current_round.lock() {
+        let current_round = *self.current_round.lock();
+        if block.round() < current_round {
             anyhow::bail!("Incorrect round");
+        } else if block.round() > current_round {
+            // The proposal is in the future, so it should pass
+            // filter_unverified_event and proceed to trigger
+            // sync_up.
+            return Ok(true);
         }
         let old_proposal = self.proposal_candidates.lock();
         if old_proposal.is_none()
@@ -201,7 +207,7 @@ impl ProposerElection for VrfProposer {
         let mut best_nonce = None;
         let voting_power = self
             .epoch_state
-            .verifier
+            .verifier()
             .get_voting_power(&block_data.author()?)?;
 
         let vrf_proof = self

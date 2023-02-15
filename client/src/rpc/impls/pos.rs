@@ -5,20 +5,35 @@
 use crate::{
     common::delegate_convert::into_jsonrpc_result,
     rpc::{
-        error_codes::{build_rpc_server_error, codes::POS_NOT_ENABLED},
+        error_codes::{
+            build_rpc_server_error, call_execution_error,
+            codes::POS_NOT_ENABLED,
+        },
         traits::pos::Pos,
-        types::pos::{
-            tx_type, Account, Block, BlockNumber, CommitteeState, Decision,
-            NodeLockStatus, PoSEpochReward, RpcCommittee, RpcTermData,
-            RpcTransactionStatus, RpcTransactionType, Signature, Status,
-            Transaction, VotePowerState,
+        types::{
+            call_request::rpc_call_request_network,
+            errors::check_rpc_address_network,
+            pos::{
+                tx_type, Account, Block, BlockNumber, CommitteeState, Decision,
+                NodeLockStatus, PoSEpochReward, RpcCommittee, RpcTermData,
+                RpcTransactionStatus, RpcTransactionType, Signature, Status,
+                Transaction, VotePowerState,
+            },
+            sign_call, Bytes, CallRequest, EpochNumber, RpcAddress,
         },
         RpcInterceptor, RpcResult,
     },
 };
 use cfx_addr::Network;
-use cfx_types::{hexstr_to_h256, H256, U64};
-use cfxcore::{consensus::pos_handler::PosVerifier, BlockDataManager};
+use cfx_parameters::internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS;
+use cfx_types::{hexstr_to_h256, Address, H256, U64};
+use cfxcore::{
+    consensus::pos_handler::PosVerifier,
+    executive::{EstimateRequest, ExecutionOutcome},
+    rpc_errors::invalid_params_check,
+    BlockDataManager, ConsensusGraph, ConsensusGraphTrait,
+    SharedConsensusGraph,
+};
 use consensus_types::block::Block as ConsensusBlock;
 use diem_crypto::hash::HashValue;
 use diem_types::{
@@ -30,6 +45,8 @@ use diem_types::{
 };
 use itertools::Itertools;
 use jsonrpc_core::Result as JsonRpcResult;
+use rustc_hex::FromHex;
+use solidity_abi::ABIEncodable;
 use std::sync::Arc;
 use storage_interface::{DBReaderForPoW, DbReader};
 
@@ -59,18 +76,20 @@ pub struct PosHandler {
     pos_handler: Arc<PosVerifier>,
     pow_data_manager: Arc<BlockDataManager>,
     network_type: Network,
+    consensus: SharedConsensusGraph,
 }
 
 impl PosHandler {
     pub fn new(
         pos_handler: Arc<PosVerifier>, pow_data_manager: Arc<BlockDataManager>,
-        network_type: Network,
+        network_type: Network, consensus: SharedConsensusGraph,
     ) -> Self
     {
         PosHandler {
             pos_handler,
             pow_data_manager,
             network_type,
+            consensus,
         }
     }
 
@@ -145,6 +164,111 @@ impl PosHandler {
         default_acct.address = address;
         default_acct.block_number = U64::from(state.current_view());
         return Ok(default_acct);
+    }
+
+    fn account_by_pow_address_impl(
+        &self, address: RpcAddress, view: Option<U64>,
+    ) -> RpcResult<Account> {
+        debug!(
+            "Get pos account by pow address {:?}, view {:?}",
+            address, view
+        );
+        let account_addr: Address = address.hex_address;
+        let mut call_data: Vec<u8> = "6a06ea96".from_hex().unwrap();
+        call_data.extend_from_slice(&account_addr.abi_encode());
+
+        let call_request = CallRequest {
+            from: None,
+            to: Some(RpcAddress::try_from_h160(
+                *POS_REGISTER_CONTRACT_ADDRESS,
+                self.network_type,
+            )?),
+            gas_price: None,
+            gas: None,
+            value: None,
+            data: Some(Bytes(call_data)),
+            nonce: None,
+            storage_limit: None,
+        };
+
+        let epoch = match view {
+            Some(number) => Some(EpochNumber::Num(number)),
+            None => None,
+        };
+
+        let execution_outcome = self.exec_transaction(call_request, epoch)?;
+        let executed = match execution_outcome {
+            ExecutionOutcome::NotExecutedDrop(e) => {
+                bail!(call_execution_error(
+                    "Can not estimate: transaction can not be executed".into(),
+                    format! {"{:?}", e}
+                ))
+            }
+            ExecutionOutcome::NotExecutedToReconsiderPacking(e) => {
+                bail!(call_execution_error(
+                    "Can not estimate: transaction can not be executed".into(),
+                    format! {"{:?}", e}
+                ))
+            }
+            ExecutionOutcome::ExecutionErrorBumpNonce(e, _) => {
+                bail!(call_execution_error(
+                    format! {"Can not estimate: transaction execution failed, \
+                    all gas will be charged (execution error: {:?})", e}
+                    .into(),
+                    format! {"{:?}", e}
+                ))
+            }
+            ExecutionOutcome::Finished(executed) => executed,
+        };
+
+        let pos_address = executed.output;
+        let addr = H256::from_slice(&pos_address[..]);
+        debug!("Pos Address: {:?}", addr);
+
+        self.account_impl(addr, view)
+    }
+
+    fn consensus_graph(&self) -> &ConsensusGraph {
+        self.consensus
+            .as_any()
+            .downcast_ref::<ConsensusGraph>()
+            .expect("downcast should succeed")
+    }
+
+    fn exec_transaction(
+        &self, request: CallRequest, epoch: Option<EpochNumber>,
+    ) -> RpcResult<ExecutionOutcome> {
+        let rpc_request_network = invalid_params_check(
+            "request",
+            rpc_call_request_network(
+                request.from.as_ref(),
+                request.to.as_ref(),
+            ),
+        )?;
+        invalid_params_check(
+            "request",
+            check_rpc_address_network(rpc_request_network, &self.network_type),
+        )?;
+
+        let consensus_graph = self.consensus_graph();
+        let epoch = epoch.unwrap_or(EpochNumber::LatestState);
+
+        let estimate_request = EstimateRequest {
+            has_sender: request.from.is_some(),
+            has_gas_limit: request.gas.is_some(),
+            has_gas_price: request.gas_price.is_some(),
+            has_nonce: request.nonce.is_some(),
+            has_storage_limit: request.storage_limit.is_some(),
+        };
+
+        let epoch_height = consensus_graph
+            .get_height_from_epoch_number(epoch.clone().into())?;
+        let chain_id = consensus_graph.best_chain_id();
+        let signed_tx =
+            sign_call(epoch_height, chain_id.in_native_space(), request)?;
+        debug!("call tx {:?}", signed_tx);
+
+        consensus_graph.call_virtual(&signed_tx, epoch.into(), estimate_request)
     }
 
     fn pos_state_by_view(
@@ -277,7 +401,7 @@ impl PosHandler {
                             .iter()
                             .map(|(a, _s)| {
                                 let voting_power = epoch_state
-                                    .verifier
+                                    .verifier()
                                     .get_voting_power(a)
                                     .unwrap_or(0);
                                 Signature {
@@ -410,7 +534,7 @@ impl PosHandler {
                         .iter()
                         .map(|(a, _s)| {
                             let voting_power = latest_epoch_state
-                                .verifier
+                                .verifier()
                                 .get_voting_power(a)
                                 .unwrap_or(0);
                             Signature {
@@ -537,6 +661,12 @@ impl Pos for PosHandler {
         &self, address: H256, view: Option<U64>,
     ) -> JsonRpcResult<Account> {
         into_jsonrpc_result(self.account_impl(address, view))
+    }
+
+    fn pos_account_by_pow_address(
+        &self, address: RpcAddress, view: Option<U64>,
+    ) -> JsonRpcResult<Account> {
+        into_jsonrpc_result(self.account_by_pow_address_impl(address, view))
     }
 
     fn pos_committee(

@@ -43,6 +43,7 @@ pub use cfxcore::rpc_errors::{
 use self::{
     impls::{
         cfx::{CfxHandler, LocalRpcImpl, RpcImpl, TestRpcImpl},
+        cfx_filter::CfxFilterClient,
         common::RpcImpl as CommonImpl,
         eth_pubsub::PubSubClient as EthPubSubClient,
         light::{
@@ -55,10 +56,12 @@ use self::{
         trace::TraceHandler,
     },
     traits::{
-        cfx::Cfx,
+        cfx::{Cfx, CfxFilter},
         debug::LocalRpc,
         eth_space::{
-            eth::Eth, eth_pubsub::EthPubSub, trace::Trace as EthTrace,
+            eth::{Eth, EthFilter},
+            eth_pubsub::EthPubSub,
+            trace::Trace as EthTrace,
         },
         pool::TransactionPool,
         pos::Pos,
@@ -74,7 +77,8 @@ use crate::{
     rpc::{
         error_codes::request_rejected_too_many_request_error,
         impls::{
-            eth::EthHandler, trace::EthTraceHandler, RpcImplConfiguration,
+            eth::EthHandler, eth_filter::EthFilterClient,
+            trace::EthTraceHandler, RpcImplConfiguration,
         },
         interceptor::{RpcInterceptor, RpcProxy},
         rpc_apis::{Api, ApiSet},
@@ -247,6 +251,24 @@ fn setup_rpc_apis(
                     throttling_conf,
                     throttling_section,
                 );
+
+                if let Some(poll_lifetime) = rpc.config.poll_lifetime_in_seconds
+                {
+                    if let Some(h) = pubsub.handler().upgrade() {
+                        let filter_client = CfxFilterClient::new(
+                            rpc.consensus.clone(),
+                            rpc.tx_pool.clone(),
+                            eth_pubsub.epochs_ordered(),
+                            h.executor.clone(),
+                            poll_lifetime,
+                            rpc.config.get_logs_filter_max_limit,
+                            h.network.clone(),
+                        )
+                        .to_delegate();
+
+                        handler.extend_with(filter_client);
+                    }
+                }
             }
             Api::Eth => {
                 info!("Add EVM RPC");
@@ -273,6 +295,23 @@ fn setup_rpc_apis(
                     throttling_section,
                 );
                 handler.extend_with(evm_trace_handler);
+
+                if let Some(poll_lifetime) = rpc.config.poll_lifetime_in_seconds
+                {
+                    if let Some(h) = eth_pubsub.handler().upgrade() {
+                        let filter_client = EthFilterClient::new(
+                            rpc.consensus.clone(),
+                            rpc.tx_pool.clone(),
+                            eth_pubsub.epochs_ordered(),
+                            h.executor.clone(),
+                            poll_lifetime,
+                            rpc.config.get_logs_filter_max_limit,
+                        )
+                        .to_delegate();
+
+                        handler.extend_with(filter_client);
+                    }
+                }
             }
             Api::Debug => {
                 handler.extend_with(
@@ -321,6 +360,7 @@ fn setup_rpc_apis(
                     common.pos_handler.clone(),
                     rpc.consensus.get_data_manager().clone(),
                     *rpc.sync.network.get_network_type(),
+                    rpc.consensus.clone(),
                 )
                 .to_delegate();
                 let pos_interceptor =

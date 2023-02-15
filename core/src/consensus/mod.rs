@@ -40,7 +40,7 @@ use crate::{
         trace_filter::TraceFilter,
     },
     pow::{PowComputer, ProofOfWorkConfig},
-    rpc_errors::{invalid_params_check, Result as RpcResult},
+    rpc_errors::{invalid_params, invalid_params_check, Result as RpcResult},
     state::State,
     statistics::SharedStatistics,
     transaction_pool::SharedTransactionPool,
@@ -721,6 +721,33 @@ impl ConsensusGraph {
         Some((results_with_epoch, maybe_state_root))
     }
 
+    pub fn get_block_epoch_number_with_pivot_check(
+        &self, hash: &H256, require_pivot: bool,
+    ) -> RpcResult<u64> {
+        let inner = &*self.inner.read();
+        // TODO: block not found error
+        let epoch_number =
+            inner.get_block_epoch_number(&hash).ok_or(invalid_params(
+                "epoch parameter",
+                format!("block's epoch number is not found: {:?}", hash),
+            ))?;
+
+        if require_pivot {
+            if let Err(..) =
+                inner.check_block_pivot_assumption(&hash, epoch_number)
+            {
+                bail!(invalid_params(
+                    "epoch parameter",
+                    format!(
+                        "should receive a pivot block hash, receives: {:?}",
+                        hash
+                    ),
+                ))
+            }
+        }
+        Ok(epoch_number)
+    }
+
     // TODO: maybe return error for reserved address? Not sure where is the best
     //  place to do the check.
     pub fn next_nonce(
@@ -730,11 +757,14 @@ impl ConsensusGraph {
     ) -> RpcResult<U256>
     {
         let epoch_number = match block_hash_or_epoch_number {
-            BlockHashOrEpochNumber::BlockHash(hash) => EpochNumber::Number(
-                self.inner
-                    .read()
-                    .get_block_epoch_number(&hash)
-                    .ok_or("block epoch number is NULL")?,
+            BlockHashOrEpochNumber::BlockHashWithOption {
+                hash,
+                require_pivot,
+            } => EpochNumber::Number(
+                self.get_block_epoch_number_with_pivot_check(
+                    &hash,
+                    require_pivot.unwrap_or(true),
+                )?,
             ),
             BlockHashOrEpochNumber::EpochNumber(epoch_number) => epoch_number,
         };
@@ -1362,13 +1392,32 @@ impl ConsensusGraph {
                 from_epoch,
                 to_epoch,
                 ..
-            } => self.filter_logs_by_epochs(
-                from_epoch.clone(),
-                to_epoch.clone(),
-                &filter,
-                Default::default(),
-                !filter.trusted, /* check_range */
-            ),
+            } => {
+                // When query logs, if epoch number greater than
+                // best_executed_state_epoch_number, use LatestState instead of
+                // epoch number, in this case we can return logs from from_epoch
+                // to LatestState
+                let to_epoch = if let EpochNumber::Number(num) = to_epoch {
+                    let epoch_number =
+                        if *num > self.best_executed_state_epoch_number() {
+                            EpochNumber::LatestState
+                        } else {
+                            to_epoch.clone()
+                        };
+
+                    epoch_number
+                } else {
+                    to_epoch.clone()
+                };
+
+                self.filter_logs_by_epochs(
+                    from_epoch.clone(),
+                    to_epoch,
+                    &filter,
+                    Default::default(),
+                    !filter.trusted, /* check_range */
+                )
+            }
 
             // filter by block hashes
             LogFilter::BlockHashLogFilter { block_hashes, .. } => {
@@ -1480,7 +1529,9 @@ impl ConsensusGraph {
         // expire.
         let state_availability_boundary =
             self.data_man.state_availability_boundary.read();
-        if !state_availability_boundary.check_read_availability(height, &hash) {
+        if !state_availability_boundary
+            .check_read_availability(height, &hash, space)
+        {
             debug!(
                 "State for epoch (number={:?} hash={:?}) does not exist: out-of-bound {:?}",
                 height, hash, state_availability_boundary

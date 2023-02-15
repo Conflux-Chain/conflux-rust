@@ -1954,18 +1954,20 @@ impl ConsensusExecutionHandler {
         let state_availability_boundary =
             self.data_man.state_availability_boundary.read();
 
-        if !state_availability_boundary
-            .check_read_availability(best_block_header.height(), epoch_id)
-        {
+        let state_space = match tx.space() {
+            Space::Native => None,
+            Space::Ethereum => Some(Space::Ethereum),
+        };
+        if !state_availability_boundary.check_read_availability(
+            best_block_header.height(),
+            epoch_id,
+            state_space,
+        ) {
             bail!("state is not ready");
         }
         let state_index = self.data_man.get_state_readonly_index(epoch_id);
         trace!("best_block_header: {:?}", best_block_header);
         let time_stamp = best_block_header.timestamp();
-        let state_space = match tx.space() {
-            Space::Native => None,
-            Space::Ethereum => Some(Space::Ethereum),
-        };
         let mut state = State::new(StateDb::new(
             self.data_man
                 .storage_manager
@@ -2017,8 +2019,10 @@ impl ConsensusExecutionHandler {
         if block_number >= cip94_start
             && (block_number - cip94_start) % period == 0
         {
+            let set_pos_staking =
+                block_number > self.machine.params().transition_numbers.cip105;
             state
-                .initialize_or_update_dao_voted_params()
+                .initialize_or_update_dao_voted_params(set_pos_staking)
                 .expect("update params error");
         }
     }

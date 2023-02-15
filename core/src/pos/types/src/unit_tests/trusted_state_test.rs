@@ -66,9 +66,9 @@ fn arb_validator_sets(
 /// Convert a slice of `ValidatorSigner` (includes the private signing key) into
 /// the public-facing `EpochState` type (just the public key).
 fn into_epoch_state(epoch: u64, signers: &[ValidatorSigner]) -> EpochState {
-    EpochState {
+    EpochState::new(
         epoch,
-        verifier: ValidatorVerifier::new(
+        ValidatorVerifier::new(
             signers
                 .iter()
                 .map(|signer| {
@@ -83,8 +83,8 @@ fn into_epoch_state(epoch: u64, signers: &[ValidatorSigner]) -> EpochState {
                 })
                 .collect(),
         ),
-        vrf_seed: vec![],
-    }
+        vec![],
+    )
 }
 
 /// Create all signatures for a `LedgerInfoWithSignatures` given a set of

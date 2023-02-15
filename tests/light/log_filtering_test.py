@@ -83,7 +83,7 @@ class LogFilteringTest(ConfluxTestFramework):
             self.generate_correct_block(FULLNODE0)
 
         self.log.info("syncing full nodes...")
-        sync_blocks(self.nodes[FULLNODE0:FULLNODE1])
+        sync_blocks(self.nodes[FULLNODE0:FULLNODE1], sync_state=False)
 
         # connect light node to full nodes
         connect_nodes(self.nodes, LIGHTNODE, FULLNODE0)
@@ -91,7 +91,7 @@ class LogFilteringTest(ConfluxTestFramework):
 
         # make sure we all nodes are in sync
         self.log.info("syncing light node...")
-        sync_blocks(self.nodes[:])
+        sync_blocks(self.nodes, sync_state=False)
 
         # retrieve contract code
         self.log.info("retrieving contract code...")

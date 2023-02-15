@@ -818,13 +818,15 @@ fn test_validator_not_in_set(safety_rules: &Callback) {
     );
 
     // remove the validator_signer in next epoch
-    let mut next_epoch_state = EpochState::empty();
-    next_epoch_state.epoch = 1;
     let rand_signer = ValidatorSigner::random([0xfu8; 32]);
-    next_epoch_state.verifier = ValidatorVerifier::new_single(
-        rand_signer.author(),
-        rand_signer.public_key(),
-        None,
+    let next_epoch_state = EpochState::new(
+        1,
+        ValidatorVerifier::new_single(
+            rand_signer.author(),
+            rand_signer.public_key(),
+            None,
+        ),
+        vec![],
     );
     let a2 = test_utils::make_proposal_with_parent_and_overrides(
         vec![],
@@ -879,10 +881,11 @@ fn test_reconcile_key(_safety_rules: &Callback) {
 
     // Update validator epoch state, reconciling the old key with the new pub
     // key
-    let mut next_epoch_state = EpochState::empty();
-    next_epoch_state.epoch = 2;
-    next_epoch_state.verifier =
-        ValidatorVerifier::new_single(signer.author(), new_pub_key, None);
+    let mut next_epoch_state = EpochState::new(
+        2,
+        ValidatorVerifier::new_single(signer.author(), new_pub_key, None),
+        vec![],
+    );
     let a2 = test_utils::make_proposal_with_parent_and_overrides(
         vec![],
         round + 2,
@@ -935,13 +938,15 @@ fn test_key_not_in_store(safety_rules: &Callback) {
 
     // Update to an epoch where the validator fails to retrive the respective
     // key from persistent storage
-    let mut next_epoch_state = EpochState::empty();
-    next_epoch_state.epoch = 1;
     let rand_signer = ValidatorSigner::random([0xfu8; 32]);
-    next_epoch_state.verifier = ValidatorVerifier::new_single(
-        signer.author(),
-        rand_signer.public_key(),
-        None,
+    let next_epoch_state = EpochState::new(
+        1,
+        ValidatorVerifier::new_single(
+            signer.author(),
+            rand_signer.public_key(),
+            None,
+        ),
+        vec![],
     );
     let a2 = test_utils::make_proposal_with_parent_and_overrides(
         vec![],

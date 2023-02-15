@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 import os
+from typing import List
 import eth_utils
 
 from conflux.config import default_config
 from conflux.rpc import RpcClient
 from conflux.utils import priv_to_addr
 from test_framework.test_framework import ConfluxTestFramework
-from test_framework.util import *
+from test_framework.util import assert_equal, connect_nodes, sync_blocks, assert_is_hex_string, test_rpc_call_with_block_object
 from test_framework.mininode import *
 
 CONTRACT_PATH = "contracts/simple_storage.dat"
@@ -27,7 +28,7 @@ class StorageRpcTest(ConfluxTestFramework):
         self.start_node(LIGHTNODE, ["--light"], phase_to_wait=None)
 
         # set up RPC clients
-        self.rpc = [None] * self.num_nodes
+        self.rpc: List[RpcClient] = [None] * self.num_nodes
         self.rpc[FULLNODE0] = RpcClient(self.nodes[FULLNODE0])
         self.rpc[FULLNODE1] = RpcClient(self.nodes[FULLNODE1])
         self.rpc[LIGHTNODE] = RpcClient(self.nodes[LIGHTNODE])
@@ -58,7 +59,7 @@ class StorageRpcTest(ConfluxTestFramework):
 
         # make sure we all nodes are in sync
         self.log.info("syncing nodes...\n")
-        sync_blocks(self.nodes[:])
+        sync_blocks(self.nodes, sync_state=False)
 
         # test `pos0`
         self.log.info("Retrieving single variable value `pos0` from full node...")
@@ -92,6 +93,15 @@ class StorageRpcTest(ConfluxTestFramework):
         assert_equal(res, None)
 
         self.log.info("Pass\n")
+        
+        tx = self.rpc[FULLNODE0].new_tx()
+        test_rpc_call_with_block_object(
+            self.rpc[FULLNODE0],
+            [tx],
+            self.rpc[FULLNODE0].get_storage_at,
+            lambda x: x == "0x00000000000000000000000000000000000000000000000000000000000004d2",
+            [contractAddr, "0x0000000000000000000000000000000000000000000000000000000000000000"]
+        )
 
     def deploy_contract(self, sender, priv_key, data_hex):
         tx = self.rpc[FULLNODE0].new_contract_tx(receiver="", data_hex=data_hex, sender=sender, priv_key=priv_key, storage_limit=20000)

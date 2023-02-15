@@ -342,6 +342,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         debug!("copy_and_merge begins.");
         let mut kv_iter = old_snapshot_db.snapshot_kv_iterator()?.take();
         let mut iter = kv_iter.iter_range(&[], None)?.take();
+        self.start_transaction()?;
         while let Ok(kv_item) = iter.next() {
             match kv_item {
                 Some((k, v)) => {
@@ -350,6 +351,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
                 None => break,
             }
         }
+        self.commit_transaction()?;
         self.apply_update_to_kvdb()?;
 
         let mut set_keys_iter = self.dumped_delta_kv_set_keys_iterator()?;

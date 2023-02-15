@@ -105,9 +105,9 @@ pub struct EpochManager {
     time_service: Arc<dyn TimeService>,
     //self_sender: channel::Sender<Event<ConsensusMsg>>,
     network_sender: NetworkSender,
-    timeout_sender: channel::Sender<Round>,
-    proposal_timeout_sender: channel::Sender<Round>,
-    new_round_timeout_sender: channel::Sender<Round>,
+    timeout_sender: channel::Sender<(u64, Round)>,
+    proposal_timeout_sender: channel::Sender<(u64, Round)>,
+    new_round_timeout_sender: channel::Sender<(u64, Round)>,
     txn_manager: Arc<dyn TxnManager>,
     state_computer: Arc<dyn StateComputer>,
     storage: Arc<dyn PersistentLivenessStorage>,
@@ -116,7 +116,7 @@ pub struct EpochManager {
     reconfig_events: diem_channel::Receiver<(), OnChainConfigPayload>,
     // Conflux PoW handler
     pow_handler: Arc<dyn PowInterface>,
-    election_control: AtomicBool,
+    election_control: Arc<AtomicBool>,
     tx_sender: mpsc::Sender<(
         SignedTransaction,
         oneshot::Sender<anyhow::Result<SubmissionStatus>>,
@@ -130,9 +130,9 @@ impl EpochManager {
         time_service: Arc<dyn TimeService>,
         //self_sender: channel::Sender<Event<ConsensusMsg>>,
         network_sender: NetworkSender,
-        timeout_sender: channel::Sender<Round>,
-        proposal_timeout_sender: channel::Sender<Round>,
-        new_round_timeout_sender: channel::Sender<Round>,
+        timeout_sender: channel::Sender<(u64, Round)>,
+        proposal_timeout_sender: channel::Sender<(u64, Round)>,
+        new_round_timeout_sender: channel::Sender<(u64, Round)>,
         txn_manager: Arc<dyn TxnManager>,
         state_computer: Arc<dyn StateComputer>,
         storage: Arc<dyn PersistentLivenessStorage>,
@@ -166,7 +166,7 @@ impl EpochManager {
             processor: None,
             reconfig_events,
             pow_handler,
-            election_control: AtomicBool::new(true),
+            election_control: Arc::new(AtomicBool::new(true)),
             tx_sender,
             is_voting: started_as_voter,
         }
@@ -187,9 +187,9 @@ impl EpochManager {
 
     fn create_round_state(
         &self, time_service: Arc<dyn TimeService>,
-        timeout_sender: channel::Sender<Round>,
-        proposal_timeout_sender: channel::Sender<Round>,
-        new_round_timeout_sender: channel::Sender<Round>,
+        timeout_sender: channel::Sender<(u64, Round)>,
+        proposal_timeout_sender: channel::Sender<(u64, Round)>,
+        new_round_timeout_sender: channel::Sender<(u64, Round)>,
     ) -> RoundState
     {
         // 1.5^6 ~= 11
@@ -213,7 +213,7 @@ impl EpochManager {
         &self, epoch_state: &EpochState,
     ) -> Box<dyn ProposerElection + Send + Sync> {
         let proposers = epoch_state
-            .verifier
+            .verifier()
             .get_ordered_account_addresses_iter()
             .collect::<Vec<_>>();
         match &self.config.proposer_type {
@@ -376,10 +376,10 @@ impl EpochManager {
         let epoch = epoch_state.epoch;
         counters::EPOCH.set(epoch_state.epoch as i64);
         counters::CURRENT_EPOCH_VALIDATORS
-            .set(epoch_state.verifier.len() as i64);
+            .set(epoch_state.verifier().len() as i64);
         diem_info!(
             epoch = epoch_state.epoch,
-            validators = epoch_state.verifier.to_string(),
+            validators = epoch_state.verifier().to_string(),
             root_block = recovery_data.root_block(),
             "Starting new epoch",
         );
@@ -414,7 +414,7 @@ impl EpochManager {
         // txn manager is required both by proposal generator (to pull the
         // proposers) and by event processor (to update their status).
         let proposal_generator = match epoch_state
-            .verifier
+            .verifier()
             .get_public_key(&self.author)
         {
             Some(public_key) => {
@@ -461,7 +461,7 @@ impl EpochManager {
             self.author,
             self.network_sender.clone(),
             //self.self_sender.clone(),
-            epoch_state.verifier.clone(),
+            epoch_state.verifier().clone(),
         );
 
         let mut processor = RoundManager::new(
@@ -478,29 +478,14 @@ impl EpochManager {
             self.tx_sender.clone(),
             self.config.chain_id,
             self.is_voting,
+            self.election_control.clone(),
+            self.config
+                .safety_rules
+                .test
+                .as_ref()
+                .and_then(|config| config.consensus_key.clone()),
+            self.config.safety_rules.vrf_private_key.clone(),
         );
-        // Only check if we should send election after entering an new epoch.
-        if self.election_control.load(AtomicOrdering::Relaxed) {
-            if let Err(e) = processor
-                .broadcast_election(
-                    self.author,
-                    self.config
-                        .safety_rules
-                        .test
-                        .as_ref()
-                        .expect("test config set")
-                        .consensus_key
-                        .as_ref()
-                        .expect("private key set in pos"),
-                    self.config.safety_rules.vrf_private_key.as_ref().unwrap(),
-                )
-                .await
-            {
-                diem_error!("error in broadcasting election tx: {:?}", e);
-            }
-        } else {
-            diem_info!("Skip election in epoch {}", epoch);
-        }
         processor.start(last_vote).await;
         self.processor = Some(RoundProcessor::Normal(processor));
         diem_info!(epoch = epoch, "RoundManager started");
@@ -520,7 +505,7 @@ impl EpochManager {
             self.author,
             self.network_sender.clone(),
             //self.self_sender.clone(),
-            epoch_state.verifier.clone(),
+            epoch_state.verifier().clone(),
         );
         self.processor = Some(RoundProcessor::Recovery(RecoveryManager::new(
             epoch_state,
@@ -535,12 +520,11 @@ impl EpochManager {
     async fn start_processor(&mut self, payload: OnChainConfigPayload) {
         let epoch_state: EpochState = payload.get().unwrap_or_else(|_| {
             let validator_set: ValidatorSet = payload.get().unwrap();
-            EpochState {
-                epoch: payload.epoch(),
-                verifier: (&validator_set).into(),
+            EpochState::new(
+                payload.epoch(),
+                (&validator_set).into(),
                 // genesis pivot decision
-                vrf_seed: self
-                    .storage
+                self.storage
                     .pos_ledger_db()
                     .get_latest_ledger_info()
                     .expect("non-empty ledger info")
@@ -550,7 +534,7 @@ impl EpochManager {
                     .block_hash
                     .as_bytes()
                     .to_vec(),
-            }
+            )
         });
         diem_debug!("start_processor: epoch_state={:?}", epoch_state);
 
@@ -582,7 +566,7 @@ impl EpochManager {
             let verified_event = unverified_event
                 .clone()
                 .verify(
-                    &self.epoch_state().verifier,
+                    &self.epoch_state().verifier(),
                     self.epoch_state().vrf_seed.as_slice(),
                 )
                 .context("[EpochManager] Verify event")
@@ -735,31 +719,33 @@ impl EpochManager {
     }
 
     async fn process_local_timeout(
-        &mut self, round: u64,
+        &mut self, epoch_round: (u64, Round),
     ) -> anyhow::Result<()> {
         match self.processor_mut() {
-            RoundProcessor::Normal(p) => p.process_local_timeout(round).await,
+            RoundProcessor::Normal(p) => {
+                p.process_local_timeout(epoch_round).await
+            }
             _ => unreachable!("RoundManager not started yet"),
         }
     }
 
     async fn process_proposal_timeout(
-        &mut self, round: u64,
+        &mut self, epoch_round: (u64, Round),
     ) -> anyhow::Result<()> {
         match self.processor_mut() {
             RoundProcessor::Normal(p) => {
-                p.process_proposal_timeout(round).await
+                p.process_proposal_timeout(epoch_round).await
             }
             _ => unreachable!("RoundManager not started yet"),
         }
     }
 
     async fn process_new_round_timeout(
-        &mut self, round: u64,
+        &mut self, epoch_round: (u64, Round),
     ) -> anyhow::Result<()> {
         match self.processor_mut() {
             RoundProcessor::Normal(p) => {
-                p.process_new_round_timeout(round).await
+                p.process_new_round_timeout(epoch_round).await
             }
             _ => unreachable!("RoundManager not started yet"),
         }
@@ -777,9 +763,9 @@ impl EpochManager {
     }
 
     pub async fn start(
-        mut self, mut round_timeout_sender_rx: channel::Receiver<Round>,
-        mut proposal_timeout_sender_rx: channel::Receiver<Round>,
-        mut new_round_timeout_sender_rx: channel::Receiver<Round>,
+        mut self, mut round_timeout_sender_rx: channel::Receiver<(u64, Round)>,
+        mut proposal_timeout_sender_rx: channel::Receiver<(u64, Round)>,
+        mut new_round_timeout_sender_rx: channel::Receiver<(u64, Round)>,
         mut network_receivers: NetworkReceivers,
         mut test_command_receiver: channel::Receiver<TestCommand>,
         stopped: Arc<AtomicBool>,
@@ -858,31 +844,31 @@ impl EpochManager {
             TestCommand::ProposalTimeOut => {
                 let round = match self.processor_mut() {
                     RoundProcessor::Normal(p) => {
-                        p.round_state().current_round()
+                        (p.epoch_state().epoch, p.round_state().current_round())
                     }
                     _ => anyhow::bail!("RoundManager not started yet"),
                 };
-                diem_debug!("TestCommand::ProposalTimeOut, round={}", round);
+                diem_debug!("TestCommand::ProposalTimeOut, round={:?}", round);
                 self.process_proposal_timeout(round).await
             }
             TestCommand::LocalTimeout => {
                 let round = match self.processor_mut() {
                     RoundProcessor::Normal(p) => {
-                        p.round_state().current_round()
+                        (p.epoch_state().epoch, p.round_state().current_round())
                     }
                     _ => anyhow::bail!("RoundManager not started yet"),
                 };
-                diem_debug!("TestCommand::LocalTimeout, round={}", round);
+                diem_debug!("TestCommand::LocalTimeout, round={:?}", round);
                 self.process_local_timeout(round).await
             }
             TestCommand::NewRoundTimeout => {
                 let round = match self.processor_mut() {
                     RoundProcessor::Normal(p) => {
-                        p.round_state().current_round()
+                        (p.epoch_state().epoch, p.round_state().current_round())
                     }
                     _ => anyhow::bail!("RoundManager not started yet"),
                 };
-                diem_debug!("TestCommand::NewRoundTimeout, round={}", round);
+                diem_debug!("TestCommand::NewRoundTimeout, round={:?}", round);
                 self.process_new_round_timeout(round).await
             }
             TestCommand::BroadcastPivotDecision(decision) => {

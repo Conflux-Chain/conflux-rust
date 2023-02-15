@@ -1668,6 +1668,8 @@ impl TxReplayer {
                     lower_bound: 0,
                     upper_bound: 0,
                     optimistic_executed_height: None,
+                    full_state_start_height: None,
+                    full_state_space: None,
                 },
             ),
             exit,

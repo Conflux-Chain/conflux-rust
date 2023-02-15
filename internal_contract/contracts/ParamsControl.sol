@@ -33,6 +33,11 @@ interface ParamsControl {
      */
     function totalVotes(uint64 vote_round) external view returns (Vote[] memory);
 
+    /**
+     * @dev read the PoS stake for the round.
+     */
+    function posStakeForVotes(uint64) external view returns (uint256);
+
     event CastVote(uint64 indexed vote_round, address indexed addr, uint16 indexed topic_index, uint256[3] votes);
     event RevokeVote(uint64 indexed vote_round, address indexed addr, uint16 indexed topic_index, uint256[3] votes);
 }

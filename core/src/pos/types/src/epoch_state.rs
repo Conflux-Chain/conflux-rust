@@ -12,10 +12,15 @@ use crate::{
     validator_verifier::ValidatorVerifier,
 };
 use anyhow::ensure;
+use once_cell::sync::OnceCell;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fmt};
+
+pub static HARDCODED_COMMITTEE_FOR_EPOCH: OnceCell<
+    BTreeMap<u64, ValidatorVerifier>,
+> = OnceCell::new();
 
 /// EpochState represents a trusted validator set to validate messages from the
 /// specific epoch, it could be updated with EpochChangeProof.
@@ -24,7 +29,7 @@ use std::{collections::BTreeMap, fmt};
 pub struct EpochState {
     pub epoch: u64,
 
-    pub verifier: ValidatorVerifier,
+    verifier: ValidatorVerifier,
 
     pub vrf_seed: Vec<u8>,
 }
@@ -35,6 +40,27 @@ impl EpochState {
             epoch: 0,
             verifier: ValidatorVerifier::new(BTreeMap::new()),
             vrf_seed: vec![],
+        }
+    }
+
+    pub fn new(
+        epoch: u64, verifier: ValidatorVerifier, vrf_seed: Vec<u8>,
+    ) -> Self {
+        Self {
+            epoch,
+            verifier,
+            vrf_seed,
+        }
+    }
+
+    pub fn verifier(&self) -> &ValidatorVerifier {
+        if let Some(verifier) = HARDCODED_COMMITTEE_FOR_EPOCH
+            .get()
+            .and_then(|m| m.get(&self.epoch))
+        {
+            verifier
+        } else {
+            &self.verifier
         }
     }
 }
@@ -53,7 +79,7 @@ impl Verifier for EpochState {
             ledger_info.ledger_info().epoch(),
             self.epoch
         );
-        ledger_info.verify_signatures(&self.verifier)?;
+        ledger_info.verify_signatures(&self.verifier())?;
         Ok(())
     }
 
@@ -78,7 +104,8 @@ impl fmt::Display for EpochState {
         write!(
             f,
             "EpochState [epoch: {}, validator: {}]",
-            self.epoch, self.verifier
+            self.epoch,
+            self.verifier()
         )
     }
 }
