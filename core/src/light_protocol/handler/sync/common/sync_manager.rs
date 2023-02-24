@@ -311,6 +311,7 @@ where
                     missing, peer, e
                 );
 
+                drop(in_flight);
                 self.insert_waiting(missing.into_iter());
             }
         }
