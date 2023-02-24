@@ -235,6 +235,9 @@ impl StorageManager {
                 snapshot_db_manager: SnapshotDbManager::new(
                     storage_conf.path_snapshot_dir.clone(),
                     storage_conf.max_open_snapshots,
+                    storage_conf.use_isolated_db_for_mpt_table,
+                    storage_conf.use_isolated_db_for_mpt_table_height,
+                    storage_conf.consensus_param.era_epoch_count,
                 )?,
             }),
             delta_mpts_id_gen: Default::default(),
@@ -598,6 +601,47 @@ impl StorageManager {
                 }
             };
 
+            let r = this_cloned.snapshot_associated_mpts_by_epoch.read();
+            match r.get(&parent_snapshot_epoch_id) {
+                Some(v) => {
+                    match v.0.clone() {
+                        Some(x) => {
+                            let mpt = x.get_root_node_ref_by_epoch(
+                                &parent_snapshot_epoch_id,
+                            );
+                            debug!(
+                                "check_make_register_snapshot_background 0 {:?}",
+                                mpt
+                            );
+                        }
+                        _ => {
+                            debug!("check_make_register_snapshot_background not found 0 {:?}", parent_snapshot_epoch_id);
+                        }
+                    }
+
+                    match v.1.clone() {
+                        Some(x) => {
+                            let mpt = x.get_root_node_ref_by_epoch(
+                                &parent_snapshot_epoch_id,
+                            );
+                            debug!(
+                                "check_make_register_snapshot_background 1 {:?}",
+                                mpt
+                            );
+                        }
+                        _ => {
+                            debug!("check_make_register_snapshot_background not found 1 {:?}", parent_snapshot_epoch_id);
+                        }
+                    }
+                }
+                _ => {
+                    debug!(
+                        "check_make_register_snapshot_background not found {:?}",
+                        parent_snapshot_epoch_id
+                    );
+                }
+            }
+
             let in_progress_snapshot_info = SnapshotInfo {
                 snapshot_info_kept_to_provide_sync: Default::default(),
                 serve_one_step_sync: true,
@@ -633,7 +677,8 @@ impl StorageManager {
                                     &parent_snapshot_epoch_id_cloned,
                                     snapshot_epoch_id.clone(), delta_db,
                                     in_progress_snapshot_info_cloned,
-                                &this.snapshot_info_map_by_epoch)?
+                                    &this.snapshot_info_map_by_epoch,
+                                    height,)?
                         }
                     };
                     if let Err(e) = this.register_new_snapshot(new_snapshot_info.clone(), &mut snapshot_info_map_locked) {

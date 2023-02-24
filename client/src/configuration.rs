@@ -345,6 +345,8 @@ build_config! {
         (ln_max_parallel_epochs_to_request, (Option<usize>), None)
         (ln_num_epochs_to_request, (Option<usize>), None)
         (ln_num_waiting_headers_threshold, (Option<usize>), None)
+        (use_isolated_db_for_mpt_table, (bool), false)
+        (use_isolated_db_for_mpt_table_height, (Option<u64>), None)
     }
     {
         // Development related section.
@@ -694,6 +696,7 @@ impl Configuration {
                 } else {
                     SNAPSHOT_EPOCHS_CAPACITY
                 },
+                era_epoch_count: self.raw_conf.era_epoch_count,
             },
             debug_snapshot_checker_threads:
                 DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS,
@@ -738,6 +741,12 @@ impl Configuration {
                 .raw_conf
                 .cip90_transition_height
                 .unwrap_or(self.raw_conf.hydra_transition_height.unwrap_or(0)),
+            use_isolated_db_for_mpt_table: self
+                .raw_conf
+                .use_isolated_db_for_mpt_table,
+            use_isolated_db_for_mpt_table_height: self
+                .raw_conf
+                .use_isolated_db_for_mpt_table_height,
         }
     }
 

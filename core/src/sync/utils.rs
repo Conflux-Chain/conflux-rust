@@ -131,6 +131,7 @@ pub fn initialize_data_manager(
         StorageManager::new(StorageConfiguration::new_default(
             db_dir,
             cfx_parameters::consensus::SNAPSHOT_EPOCHS_CAPACITY,
+            cfx_parameters::consensus::ERA_DEFAULT_EPOCH_COUNT,
         ))
         .expect("Failed to initialize storage."),
     );

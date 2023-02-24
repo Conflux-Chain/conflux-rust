@@ -421,6 +421,7 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
         _snapshot_path: &Path, _readonly: bool,
         _already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         _open_semaphore: &Arc<Semaphore>,
+        _open_snapshot_mpt: &Arc<RwLock<SnapshotMptDbSqlite>>,
     ) -> Result<Self>
     {
         unreachable!()
@@ -430,12 +431,18 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
         _snapshot_path: &Path,
         _already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         _open_semaphore: &Arc<Semaphore>,
+        _open_snapshot_mpt: &Arc<RwLock<SnapshotMptDbSqlite>>,
+        _old_version: bool,
     ) -> Result<Self>
     {
         unreachable!()
     }
 
-    fn direct_merge(&mut self) -> Result<MerkleHash> { unreachable!() }
+    fn direct_merge(
+        &mut self, _old_snapshot_db: Option<&Self>,
+    ) -> Result<MerkleHash> {
+        unreachable!()
+    }
 
     fn copy_and_merge(
         &mut self, _old_snapshot_db: &Self,
@@ -487,6 +494,7 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
         &self, _old_snapshot_epoch_id: &EpochId, _snapshot_epoch_id: EpochId,
         _delta_mpt: DeltaMptIterator, _in_progress_snapshot_info: SnapshotInfo,
         _snapshot_info_map: &'m RwLock<PersistedSnapshotInfoMap>,
+        _new_epoch_height: u64,
     ) -> Result<(RwLockWriteGuard<'m, PersistedSnapshotInfoMap>, SnapshotInfo)>
     {
         unreachable!()
@@ -504,7 +512,9 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
 
     fn new_temp_snapshot_for_full_sync(
         &self, _snapshot_epoch_id: &EpochId, _merkle_root: &EpochId,
-    ) -> Result<Self::SnapshotDb> {
+        _epoch_height: u64,
+    ) -> Result<Self::SnapshotDb>
+    {
         Ok(self.temp_snapshot.clone())
     }
 
@@ -550,6 +560,7 @@ fn test_full_sync_verifier_one_chunk() {
         merkle_root,
         &snapshot_db_manager,
         &NULL_EPOCH,
+        0,
     )
     .unwrap();
 
@@ -650,6 +661,7 @@ fn test_full_sync_verifier() {
         merkle_root,
         &snapshot_db_manager,
         &NULL_EPOCH,
+        0,
     )
     .unwrap();
 
@@ -698,7 +710,10 @@ use crate::{
             full_sync_verifier::FullSyncVerifier,
             mpt_slice_verifier::MptSliceVerifier,
         },
-        storage_db::snapshot_db_manager_sqlite::AlreadyOpenSnapshots,
+        storage_db::{
+            snapshot_db_manager_sqlite::AlreadyOpenSnapshots,
+            snapshot_mpt_db_sqlite::SnapshotMptDbSqlite,
+        },
         storage_manager::PersistedSnapshotInfoMap,
     },
     storage_db::{

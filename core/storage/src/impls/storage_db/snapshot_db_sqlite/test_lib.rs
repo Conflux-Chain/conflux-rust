@@ -4,13 +4,24 @@
 
 #[cfg(test)]
 pub fn open_snapshot_db_for_testing(
-    snapshot_path: &Path, readonly: bool,
+    snapshot_path: &Path, readonly: bool, mpt_snapshot_path: &Path,
 ) -> Result<SnapshotDbSqlite> {
+    use crate::impls::storage_db::snapshot_mpt_db_sqlite::SnapshotMptDbSqlite;
+    use parking_lot::RwLock;
+
+    let mpt_snapshot = Arc::new(RwLock::new(SnapshotMptDbSqlite::open(
+        mpt_snapshot_path,
+        readonly,
+        &Default::default(),
+        &Arc::new(Semaphore::new(DEFAULT_MAX_OPEN_SNAPSHOTS as usize)),
+    )?));
+
     SnapshotDbSqlite::open(
         snapshot_path,
         readonly,
         &Default::default(),
         &Arc::new(Semaphore::new(DEFAULT_MAX_OPEN_SNAPSHOTS as usize)),
+        &mpt_snapshot,
     )
 }
 

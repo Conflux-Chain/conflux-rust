@@ -72,6 +72,7 @@ pub trait SnapshotDbManagerTrait {
         &self, old_snapshot_epoch_id: &EpochId, snapshot_epoch_id: EpochId,
         delta_mpt: DeltaMptIterator, in_progress_snapshot_info: SnapshotInfo,
         snapshot_info_map: &'m RwLock<PersistedSnapshotInfoMap>,
+        new_epoch_height: u64,
     ) -> Result<(RwLockWriteGuard<'m, PersistedSnapshotInfoMap>, SnapshotInfo)>;
     fn get_snapshot_by_epoch_id(
         &self, epoch_id: &EpochId, try_open: bool,
@@ -80,6 +81,7 @@ pub trait SnapshotDbManagerTrait {
 
     fn new_temp_snapshot_for_full_sync(
         &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
+        new_epoch_height: u64,
     ) -> Result<Self::SnapshotDb>;
     fn finalize_full_sync_snapshot<'m>(
         &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,

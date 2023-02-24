@@ -99,6 +99,7 @@ fn main() -> Result<(), Error> {
             delta_mpt_iterator,
             info,
             &storage_manager.snapshot_info_map_by_epoch,
+            height,
         )?;
     storage_manager.register_new_snapshot(
         snapshot_info1.clone(),
@@ -168,6 +169,7 @@ fn main() -> Result<(), Error> {
             delta_mpt_iterator,
             info,
             &storage_manager.snapshot_info_map_by_epoch,
+            height,
         )?;
     println!(
         "After merging: {:?}, accounts size {}",
@@ -232,6 +234,7 @@ fn main() -> Result<(), Error> {
             delta_mpt_iterator,
             info,
             &storage_manager.snapshot_info_map_by_epoch,
+            height,
         )?;
     storage_manager.register_new_snapshot(
         snapshot_info3.clone(),
@@ -293,6 +296,7 @@ fn new_state_manager(
     let mut storage_conf = StorageConfiguration::new_default(
         conflux_data_dir,
         cfx_parameters::consensus::SNAPSHOT_EPOCHS_CAPACITY,
+        cfx_parameters::consensus::ERA_DEFAULT_EPOCH_COUNT,
     );
     storage_conf.consensus_param.snapshot_epoch_count = 10000000;
     Ok(Arc::new(StateManager::new(storage_conf).unwrap()))

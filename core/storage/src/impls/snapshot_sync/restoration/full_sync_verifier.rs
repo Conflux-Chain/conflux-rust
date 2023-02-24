@@ -24,6 +24,7 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
         number_chunks: usize, chunk_boundaries: Vec<Vec<u8>>,
         chunk_boundary_proofs: Vec<TrieProof>, merkle_root: MerkleHash,
         snapshot_db_manager: &SnapshotDbManager, epoch_id: &EpochId,
+        epoch_height: u64,
     ) -> Result<Self>
     {
         if number_chunks != chunk_boundaries.len() + 1 {
@@ -65,7 +66,11 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
             boundary_subtree_total_size: Default::default(),
             chunk_index_by_upper_key,
             temp_snapshot_db: snapshot_db_manager
-                .new_temp_snapshot_for_full_sync(epoch_id, &merkle_root)?,
+                .new_temp_snapshot_for_full_sync(
+                    epoch_id,
+                    &merkle_root,
+                    epoch_height,
+                )?,
         })
     }
 
