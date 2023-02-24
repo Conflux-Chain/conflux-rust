@@ -15,10 +15,7 @@ use cfx_types::{
     U64,
 };
 use cfxcore::{
-    executive::{
-        internal_contract::build_bloom_and_recover_phantom, ExecutionError,
-        ExecutionOutcome, TxDropError,
-    },
+    executive::{ExecutionError, ExecutionOutcome, TxDropError},
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     state_exposer::STATE_EXPOSER,
     vm, ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
