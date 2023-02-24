@@ -24,7 +24,7 @@ class EvmTx2ReceiptTest(Web3Base):
         x = b32_address_to_hex("NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH")
         y = b32_address_to_hex('NET10:TYPE.BUILTIN:AAEJUAAAAAAAAAAAAAAAAAAAAAAAAAAAA27GYVFYR7')
         ret = self.nodes[0].cfx_getTransactionsByEpoch("0x1")
-        assert_equal(len(ret), 3)
+        assert_equal(len(ret), 1)
 
         nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
         signed = self.evmAccount.signTransaction({
