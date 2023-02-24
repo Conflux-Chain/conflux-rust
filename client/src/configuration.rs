@@ -347,6 +347,7 @@ build_config! {
         (ln_num_waiting_headers_threshold, (Option<usize>), None)
         (use_isolated_db_for_mpt_table, (bool), false)
         (use_isolated_db_for_mpt_table_height, (Option<u64>), None)
+        (recovery_latest_mpt_snapshot, (bool), false)
     }
     {
         // Development related section.
@@ -599,6 +600,8 @@ impl Configuration {
                     }
                     None => None,
                 },
+                recovery_latest_mpt_snapshot: self.raw_conf.recovery_latest_mpt_snapshot,
+                use_isolated_db_for_mpt_table: self.raw_conf.use_isolated_db_for_mpt_table,
             },
             bench_mode: false,
             transaction_epoch_bound: self.raw_conf.transaction_epoch_bound,

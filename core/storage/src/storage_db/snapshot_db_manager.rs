@@ -9,6 +9,11 @@ pub trait SnapshotDbManagerTrait {
     fn get_snapshot_dir(&self) -> &Path;
     fn get_snapshot_db_name(&self, snapshot_epoch_id: &EpochId) -> String;
     fn get_snapshot_db_path(&self, snapshot_epoch_id: &EpochId) -> PathBuf;
+    fn get_mpt_snapshot_dir(&self) -> &Path;
+    fn get_latest_mpt_snapshot_db_name(&self) -> String;
+    fn recovery_lastest_mpt_snapshot(
+        &self, snapshot_epoch_id: &EpochId,
+    ) -> Result<()>;
 
     // Scan snapshot dir, remove extra files and return the list of missing
     // snapshots.
@@ -62,6 +67,32 @@ pub trait SnapshotDbManagerTrait {
             }
         }
 
+        for entry in fs::read_dir(self.get_mpt_snapshot_dir())? {
+            let entry = entry?;
+            let path = entry.path();
+            let dir_name = path.as_path().file_name().unwrap().to_str();
+
+            if dir_name.is_none() {
+                error!(
+                    "Unexpected snapshot path {}, deleted.",
+                    entry.path().display()
+                );
+                fs::remove_dir_all(entry.path())?;
+                continue;
+            }
+
+            let dir_name = dir_name.unwrap();
+            if !all_snapshots.contains_key(dir_name.as_bytes())
+                && !self.get_latest_mpt_snapshot_db_name().eq(dir_name)
+            {
+                error!(
+                    "Unexpected snapshot path {}, deleted.",
+                    entry.path().display()
+                );
+                fs::remove_dir_all(entry.path())?;
+            }
+        }
+
         Ok(missing_snapshots
             .into_iter()
             .map(|(_path_bytes, snapshot_epoch_id)| snapshot_epoch_id)
@@ -86,6 +117,7 @@ pub trait SnapshotDbManagerTrait {
     fn finalize_full_sync_snapshot<'m>(
         &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
         snapshot_info_map_rwlock: &'m RwLock<PersistedSnapshotInfoMap>,
+        epoch_height: u64,
     ) -> Result<RwLockWriteGuard<'m, PersistedSnapshotInfoMap>>;
 }
 

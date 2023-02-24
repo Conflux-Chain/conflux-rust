@@ -16,7 +16,6 @@ pub struct SnapshotDbManagerSqlite {
     use_isolated_db_for_mpt_table: bool,
     use_isolated_db_for_mpt_table_height: Option<u64>,
     mpt_snapshot_path: PathBuf,
-    latest_mpt_snapshot: Option<Arc<RwLock<SnapshotMptDbSqlite>>>,
     mpt_already_open_snapshots:
         AlreadyOpenSnapshots<RwLock<SnapshotMptDbSqlite>>,
     mpt_open_snapshot_semaphore: Arc<Semaphore>,
@@ -57,23 +56,17 @@ impl SnapshotDbManagerSqlite {
             .parent()
             .unwrap()
             .join(SnapshotDbManagerSqlite::MPT_SNAPSHOT_DIR);
-        let latest_mpt_snapshot_path = mpt_snapshot_path
-            .join(SnapshotDbManagerSqlite::LATEST_MPT_SNAPSHOT_DIR);
-
-        let mpt_snapshot = if latest_mpt_snapshot_path.exists() {
-            Some(Arc::new(RwLock::new(SnapshotMptDbSqlite::open(
-                latest_mpt_snapshot_path.as_path(),
-                false,
-                &Default::default(),
-                &Arc::new(Semaphore::new(max_open_snapshots as usize)),
-            )?)))
-        } else {
-            Some(Arc::new(RwLock::new(SnapshotMptDbSqlite::create(
+        let latest_mpt_snapshot_path = mpt_snapshot_path.join(
+            Self::SNAPSHOT_DB_SQLITE_DIR_PREFIX.to_string()
+                + SnapshotDbManagerSqlite::LATEST_MPT_SNAPSHOT_DIR,
+        );
+        if !latest_mpt_snapshot_path.exists() {
+            SnapshotMptDbSqlite::create(
                 latest_mpt_snapshot_path.as_path(),
                 &Default::default(),
                 &Arc::new(Semaphore::new(max_open_snapshots as usize)),
-            )?)))
-        };
+            )?;
+        }
 
         Ok(Self {
             snapshot_path,
@@ -83,7 +76,6 @@ impl SnapshotDbManagerSqlite {
                 max_open_snapshots as usize,
             )),
             open_create_delete_lock: Default::default(),
-            latest_mpt_snapshot: mpt_snapshot,
             mpt_snapshot_path,
             use_isolated_db_for_mpt_table,
             use_isolated_db_for_mpt_table_height,
@@ -168,22 +160,21 @@ impl SnapshotDbManagerSqlite {
                 }
             }
 
-            let snapshot_mpt_db;
-            let mpt_snapshot = if self.use_isolated_db_for_mpt_table {
+            let mpt_snapshot_path = if self.use_isolated_db_for_mpt_table {
                 let mpt_snapshot_path =
                     self.get_mpt_snapshot_db_path(snapshot_epoch_id);
-                let mpt_snapshot = if mpt_snapshot_path.exists() {
-                    snapshot_mpt_db = self
-                        .open_mpt_snapshot_readonly(mpt_snapshot_path, false)?;
-                    snapshot_mpt_db.as_ref().unwrap()
+                if mpt_snapshot_path.exists() {
+                    mpt_snapshot_path
                 } else {
-                    self.latest_mpt_snapshot.as_ref().unwrap()
-                };
-
-                mpt_snapshot
+                    self.get_latest_mpt_snapshot_db_path()
+                }
             } else {
-                self.latest_mpt_snapshot.as_ref().unwrap()
+                self.get_latest_mpt_snapshot_db_path()
             };
+
+            let mpt_snapshot_db =
+                self.open_mpt_snapshot_readonly(mpt_snapshot_path, false)?;
+            let mpt_snapshot = mpt_snapshot_db.as_ref().unwrap();
 
             let snapshot_db = Arc::new(SnapshotDbSqlite::open(
                 snapshot_path.as_path(),
@@ -207,7 +198,9 @@ impl SnapshotDbManagerSqlite {
 
     fn open_snapshot_write(
         &self, snapshot_path: PathBuf, create: bool, epoch_height: u64,
-    ) -> Result<SnapshotDbSqlite> {
+        mpt_snapshot_path: Option<PathBuf>,
+    ) -> Result<SnapshotDbSqlite>
+    {
         if self
             .already_open_snapshots
             .read()
@@ -233,7 +226,14 @@ impl SnapshotDbManagerSqlite {
             bail!(ErrorKind::SnapshotAlreadyExists)
         }
 
-        let latest_mpt_snapshot = self.latest_mpt_snapshot.as_ref().unwrap();
+        let (mpt_snapshot_path, create_mpt) = match mpt_snapshot_path {
+            Some(v) => (v, true),
+            _ => (self.get_latest_mpt_snapshot_db_path(), false),
+        };
+        let snapshot_mpt_db =
+            self.open_mpt_snapshot_write(mpt_snapshot_path, create_mpt)?;
+        let latest_mpt_snapshot = &snapshot_mpt_db;
+
         let mpt_table_in_current_db = if self.use_isolated_db_for_mpt_table {
             match self.use_isolated_db_for_mpt_table_height {
                 Some(v) => epoch_height < v,
@@ -259,7 +259,7 @@ impl SnapshotDbManagerSqlite {
                     /* readonly = */ false,
                     &self.already_open_snapshots,
                     &self.open_snapshot_semaphore,
-                    &latest_mpt_snapshot,
+                    latest_mpt_snapshot,
                 )?;
 
                 if !mpt_table_in_current_db {
@@ -282,6 +282,7 @@ impl SnapshotDbManagerSqlite {
     fn open_mpt_snapshot_readonly(
         &self, snapshot_path: PathBuf, try_open: bool,
     ) -> Result<Option<Arc<RwLock<SnapshotMptDbSqlite>>>> {
+        debug!("Open mpt snapshot with readonly {}", snapshot_path);
         if let Some(already_open) =
             self.mpt_already_open_snapshots.read().get(&snapshot_path)
         {
@@ -293,16 +294,9 @@ impl SnapshotDbManagerSqlite {
                 Some(open_shared_weak) => {
                     match Weak::upgrade(open_shared_weak) {
                         None => {
-                            debug!(
-                                "new open_mpt_snapshot_readonly {:?}",
-                                snapshot_path
-                            );
+                            debug!(snapshot_path);
                         }
                         Some(already_open) => {
-                            debug!(
-                                "already open_mpt_snapshot_readonly {:?}",
-                                snapshot_path
-                            );
                             return Ok(Some(already_open));
                         }
                     }
@@ -347,9 +341,17 @@ impl SnapshotDbManagerSqlite {
                 }
             }
 
+            let readonly = if snapshot_path
+                .ends_with(self.get_latest_mpt_snapshot_db_name())
+            {
+                false
+            } else {
+                true
+            };
+
             let snapshot_db = Arc::new(RwLock::new(SnapshotMptDbSqlite::open(
                 snapshot_path.as_path(),
-                /* readonly = */ true,
+                /* readonly = */ readonly,
                 &self.mpt_already_open_snapshots,
                 &self.mpt_open_snapshot_semaphore,
             )?));
@@ -364,6 +366,84 @@ impl SnapshotDbManagerSqlite {
         } else {
             return Ok(None);
         }
+    }
+
+    fn open_mpt_snapshot_write(
+        &self, snapshot_path: PathBuf, create: bool,
+    ) -> Result<Arc<RwLock<SnapshotMptDbSqlite>>> {
+        debug!("open mpt snapshot with write {:?}", snapshot_path);
+        if let Some(already_open) =
+            self.mpt_already_open_snapshots.read().get(&snapshot_path)
+        {
+            if snapshot_path.ends_with(self.get_latest_mpt_snapshot_db_name()) {
+                match already_open {
+                    None => {
+                        bail!(ErrorKind::SnapshotAlreadyExists);
+                    }
+                    Some(open_shared_weak) => {
+                        match Weak::upgrade(open_shared_weak) {
+                            None => {}
+                            Some(already_open) => {
+                                return Ok(already_open);
+                            }
+                        }
+                    }
+                }
+            } else {
+                bail!(ErrorKind::SnapshotAlreadyExists)
+            }
+        }
+
+        let semaphore_permit =
+            executor::block_on(self.mpt_open_snapshot_semaphore.acquire());
+        // When an open happens around the same time, we should make sure that
+        // the open returns None.
+        let mut _open_lock = self.mpt_open_create_delete_lock.lock();
+
+        // Simultaneous creation fails here.
+        if self
+            .mpt_already_open_snapshots
+            .read()
+            .get(&snapshot_path)
+            .is_some()
+        {
+            bail!(ErrorKind::SnapshotAlreadyExists)
+        }
+
+        let snapshot_db = if create {
+            SnapshotMptDbSqlite::create(
+                snapshot_path.as_path(),
+                &self.mpt_already_open_snapshots,
+                &self.mpt_open_snapshot_semaphore,
+            )
+        } else {
+            let file_exists = snapshot_path.exists();
+            if file_exists {
+                SnapshotMptDbSqlite::open(
+                    snapshot_path.as_path(),
+                    /* readonly = */ false,
+                    &self.mpt_already_open_snapshots,
+                    &self.mpt_open_snapshot_semaphore,
+                )
+            } else {
+                bail!(ErrorKind::SnapshotNotFound);
+            }
+        }?;
+
+        semaphore_permit.forget();
+        let mpt_snapshot_db = Arc::new(RwLock::new(snapshot_db));
+
+        if snapshot_path.ends_with(self.get_latest_mpt_snapshot_db_name()) {
+            self.mpt_already_open_snapshots
+                .write()
+                .insert(snapshot_path.clone(), Some(Arc::downgrade(&mpt_snapshot_db)));
+        } else {
+            self.mpt_already_open_snapshots
+                .write()
+                .insert(snapshot_path.clone(), None);
+        }
+
+        Ok(mpt_snapshot_db)
     }
 
     pub fn on_close(
@@ -394,6 +474,7 @@ impl SnapshotDbManagerSqlite {
         open_semaphore: &Arc<Semaphore>, path: &Path, remove_on_close: bool,
     )
     {
+        debug!("on_close_mpt_snapshot path {:?}", path);
         // Destroy at close.
         if remove_on_close {
             Self::fs_remove_snapshot(path);
@@ -445,9 +526,25 @@ impl SnapshotDbManagerSqlite {
         )
     }
 
+    fn get_latest_mpt_snapshot_db_path(&self) -> PathBuf {
+        self.mpt_snapshot_path
+            .join(self.get_latest_mpt_snapshot_db_name())
+    }
+
     fn get_mpt_snapshot_db_path(&self, snapshot_epoch_id: &EpochId) -> PathBuf {
         self.mpt_snapshot_path
             .join(&self.get_snapshot_db_name(snapshot_epoch_id))
+    }
+
+    fn get_full_sync_temp_mpt_snapshot_db_path(
+        &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
+    ) -> PathBuf {
+        self.mpt_snapshot_path.join(
+            Self::SNAPSHOT_DB_SQLITE_DIR_PREFIX.to_string()
+                + "full_sync_temp_"
+                + &snapshot_epoch_id.as_ref().to_hex::<String>()
+                + &merkle_root.as_ref().to_hex::<String>(),
+        )
     }
 
     /// Returns error when cow copy fails; Ok(true) when cow copy succeeded;
@@ -620,6 +717,13 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
 
     fn get_snapshot_dir(&self) -> &Path { self.snapshot_path.as_path() }
 
+    fn get_mpt_snapshot_dir(&self) -> &Path { self.mpt_snapshot_path.as_path() }
+
+    fn get_latest_mpt_snapshot_db_name(&self) -> String {
+        Self::SNAPSHOT_DB_SQLITE_DIR_PREFIX.to_string()
+            + Self::LATEST_MPT_SNAPSHOT_DIR
+    }
+
     fn get_snapshot_db_name(&self, snapshot_epoch_id: &EpochId) -> String {
         Self::SNAPSHOT_DB_SQLITE_DIR_PREFIX.to_string()
             + &snapshot_epoch_id.as_ref().to_hex::<String>()
@@ -661,7 +765,12 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         };
 
         let new_snapshot_root = if *old_snapshot_epoch_id == NULL_EPOCH {
-            let open_snapshot_mpt = self.latest_mpt_snapshot.as_ref().unwrap();
+            let snapshot_mpt_db = self.open_mpt_snapshot_write(
+                self.get_latest_mpt_snapshot_db_path(),
+                false,
+            )?;
+            let open_snapshot_mpt = &snapshot_mpt_db;
+
             // direct merge the first snapshot
             snapshot_db = Self::SnapshotDb::create(
                 temp_db_path.as_path(),
@@ -687,6 +796,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                     temp_db_path.clone(),
                     /* create = */ false,
                     new_epoch_height,
+                    None,
                 )?;
 
                 // Drop copied old snapshot delta mpt dump
@@ -712,6 +822,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                     temp_db_path.clone(),
                     /* create = */ true,
                     new_epoch_height,
+                    None,
                 )?;
                 snapshot_db.dump_delta_mpt(&delta_mpt)?;
                 self.copy_and_merge(&mut snapshot_db, old_snapshot_epoch_id)?
@@ -727,8 +838,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             );
             let temp_mpt_path =
                 self.get_merge_temp_mpt_snapshot_db_path(&snapshot_epoch_id);
-            let latest_mpt_path =
-                self.mpt_snapshot_path.join(Self::LATEST_MPT_SNAPSHOT_DIR);
+            let latest_mpt_path = self.get_latest_mpt_snapshot_db_path();
 
             self.try_copy_snapshot(
                 latest_mpt_path.as_path(),
@@ -737,7 +847,23 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
 
             let new_mpt_snapshot_db_path =
                 self.get_mpt_snapshot_db_path(&snapshot_epoch_id);
-            Self::rename_snapshot_db(&temp_db_path, &new_mpt_snapshot_db_path)?;
+
+            if new_mpt_snapshot_db_path.exists() {
+                if let Err(e) =
+                    fs::remove_dir_all(&new_mpt_snapshot_db_path.as_path())
+                {
+                    error!(
+                        "remove snapshot err: path={:?} err={:?}",
+                        new_mpt_snapshot_db_path.as_path(),
+                        e
+                    );
+                }
+            }
+
+            Self::rename_snapshot_db(
+                &temp_mpt_path,
+                &new_mpt_snapshot_db_path,
+            )?;
         }
 
         in_progress_snapshot_info.merkle_root = new_snapshot_root.clone();
@@ -770,6 +896,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
     }
 
     fn destroy_snapshot(&self, snapshot_epoch_id: &EpochId) -> Result<()> {
+        debug!("destroy snapshot {:?}", snapshot_epoch_id);
         let path = self.get_snapshot_db_path(snapshot_epoch_id);
         let maybe_snapshot = loop {
             match self.already_open_snapshots.read().get(&path) {
@@ -803,7 +930,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         match maybe_snapshot {
             None => {
                 if snapshot_epoch_id.ne(&NULL_EPOCH) {
-                    debug!("destroy_snapshot::fs_remove_snapshot");
+                    debug!("destroy_snapshot::fs_remove_snapshot {:?}", path);
                     Self::fs_remove_snapshot(&path);
                 }
             }
@@ -843,8 +970,11 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             match maybe_snapshot {
                 None => {
                     if snapshot_epoch_id.ne(&NULL_EPOCH) {
-                        debug!("destroy_snapshot remove mpt db");
-                        Self::fs_remove_snapshot(&path);
+                        debug!(
+                            "destroy_snapshot remove mpt db {:?}",
+                            mpt_snapshot_path
+                        );
+                        Self::fs_remove_snapshot(&mpt_snapshot_path);
                     }
                 }
                 Some(snapshot) => {
@@ -861,6 +991,12 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         epoch_height: u64,
     ) -> Result<Self::SnapshotDb>
     {
+        let temp_mpt_snapshot_path = self
+            .get_full_sync_temp_mpt_snapshot_db_path(
+                snapshot_epoch_id,
+                merkle_root,
+            );
+
         let temp_db_path = self.get_full_sync_temp_snapshot_db_path(
             snapshot_epoch_id,
             merkle_root,
@@ -869,22 +1005,121 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             temp_db_path.to_path_buf(),
             /* create = */ true,
             epoch_height,
+            Some(temp_mpt_snapshot_path),
         )
     }
 
     fn finalize_full_sync_snapshot<'m>(
         &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
         snapshot_info_map_rwlock: &'m RwLock<PersistedSnapshotInfoMap>,
+        epoch_height: u64,
     ) -> Result<RwLockWriteGuard<'m, PersistedSnapshotInfoMap>>
     {
+        let temp_mpt_snapshot_path = self
+            .get_full_sync_temp_mpt_snapshot_db_path(
+                snapshot_epoch_id,
+                merkle_root,
+            );
+        let latest_mpt_snapshot_path = self.get_latest_mpt_snapshot_db_path();
+
         let temp_db_path = self.get_full_sync_temp_snapshot_db_path(
             snapshot_epoch_id,
             merkle_root,
         );
         let final_db_path = self.get_snapshot_db_path(snapshot_epoch_id);
         let locked = snapshot_info_map_rwlock.write();
+
+        if latest_mpt_snapshot_path.exists() {
+            debug!("remove {:?}", latest_mpt_snapshot_path);
+            if let Err(e) =
+                fs::remove_dir_all(&latest_mpt_snapshot_path.as_path())
+            {
+                error!(
+                    "remove snapshot err: path={:?} err={:?}",
+                    latest_mpt_snapshot_path.as_path(),
+                    e
+                );
+            }
+        }
+
+        Self::rename_snapshot_db(
+            &temp_mpt_snapshot_path,
+            &latest_mpt_snapshot_path,
+        )?;
+
         Self::rename_snapshot_db(&temp_db_path, &final_db_path)?;
+
+        let mpt_table_in_current_db = if self.use_isolated_db_for_mpt_table {
+            match self.use_isolated_db_for_mpt_table_height {
+                Some(v) => epoch_height < v,
+                _ => false,
+            }
+        } else {
+            true
+        };
+
+        if !mpt_table_in_current_db && epoch_height % self.era_epoch_count == 0
+        {
+            debug!(
+                "Copy mpt db for new_epoch_height {}, era_epoch_count {}",
+                epoch_height, self.era_epoch_count
+            );
+            let temp_mpt_path =
+                self.get_merge_temp_mpt_snapshot_db_path(&snapshot_epoch_id);
+            let latest_mpt_path = self.get_latest_mpt_snapshot_db_path();
+
+            self.try_copy_snapshot(
+                latest_mpt_path.as_path(),
+                temp_mpt_path.as_path(),
+            )?;
+
+            let new_mpt_snapshot_db_path =
+                self.get_mpt_snapshot_db_path(&snapshot_epoch_id);
+            Self::rename_snapshot_db(
+                &temp_mpt_path,
+                &new_mpt_snapshot_db_path,
+            )?;
+        }
+
         Ok(locked)
+    }
+
+    fn recovery_lastest_mpt_snapshot(
+        &self, snapshot_epoch_id: &EpochId,
+    ) -> Result<()> {
+        let latest_mpt_snapshot_path = self.get_latest_mpt_snapshot_db_path();
+
+        if latest_mpt_snapshot_path.exists() {
+            debug!("remvoe mpt snapshot {:?}", latest_mpt_snapshot_path);
+            if let Err(e) =
+                fs::remove_dir_all(&latest_mpt_snapshot_path.as_path())
+            {
+                error!(
+                    "remove snapshot err: path={:?} err={:?}",
+                    latest_mpt_snapshot_path.as_path(),
+                    e
+                );
+            }
+        }
+
+        let source = self.get_mpt_snapshot_db_path(snapshot_epoch_id);
+        if source.exists() {
+            debug!("Copy mpt db for new_epoch_height, era_epoch_count",);
+            let temp_mpt_path =
+                self.get_merge_temp_mpt_snapshot_db_path(&snapshot_epoch_id);
+
+            self.try_copy_snapshot(source.as_path(), temp_mpt_path.as_path())?;
+
+            Self::rename_snapshot_db(&temp_mpt_path, &latest_mpt_snapshot_path)
+        } else {
+            debug!("mpt snapshot for epoch {} not exist", snapshot_epoch_id);
+            SnapshotMptDbSqlite::create(
+                latest_mpt_snapshot_path.as_path(),
+                &Default::default(),
+                &Arc::new(Semaphore::new(10)),
+            )?;
+            Ok(())
+        }
     }
 }
 
@@ -914,3 +1149,4 @@ use std::{
 use tokio::sync::Semaphore;
 
 use super::snapshot_mpt_db_sqlite::SnapshotMptDbSqlite;
+use backtrace::Backtrace;

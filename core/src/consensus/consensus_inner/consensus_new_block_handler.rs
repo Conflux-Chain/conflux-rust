@@ -20,7 +20,7 @@ use crate::{
     NodeType, Notifications, SharedTransactionPool,
 };
 use cfx_parameters::{consensus::*, consensus_internal::*};
-use cfx_storage::{storage_db::SnapshotKeptToProvideSyncStatus, StateIndex};
+use cfx_storage::{storage_db::SnapshotDbManagerTrait, StateIndex};
 use cfx_types::H256;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use parking_lot::Mutex;
@@ -1694,8 +1694,8 @@ impl ConsensusNewBlockHandler {
 
         self.persist_terminals(inner);
         debug!(
-            "Finish activating block in ConsensusGraph: index={:?} hash={:?}",
-            me, inner.arena[me].hash
+            "Finish activating block in ConsensusGraph: index={:?} hash={:?} cur_era_stable_height={} cur_era_genesis_height={}",
+            me, inner.arena[me].hash, inner.cur_era_stable_height, inner.cur_era_genesis_height
         );
     }
 
@@ -1890,9 +1890,10 @@ impl ConsensusNewBlockHandler {
         let start_pivot_index =
             (state_boundary_height - inner.cur_era_genesis_height) as usize;
         debug!(
-            "construct_pivot_state: start={}, pivot_chain.len()={}",
+            "construct_pivot_state: start={}, pivot_chain.len()={}, state_boundary_height={}",
             start_pivot_index,
-            inner.pivot_chain.len()
+            inner.pivot_chain.len(),
+            state_boundary_height
         );
         if start_pivot_index >= inner.pivot_chain.len() {
             // The pivot chain of recovered blocks is before state lower_bound,
@@ -2011,84 +2012,153 @@ impl ConsensusNewBlockHandler {
             }
         }
 
-        let mut pre_epoch_state_exist = true;
         let confirmed_epoch_num = meter.get_confirmed_epoch_num();
+
+        let mut start_compute_epoch_pivot_index = end_index;
+        for pivot_index in start_pivot_index + 1..end_index {
+            let pivot_arena_index = inner.pivot_chain[pivot_index];
+            let pivot_hash = inner.arena[pivot_arena_index].hash;
+
+            if let None =
+                *self.data_man.get_epoch_execution_commitment(&pivot_hash)
+            {
+                let height = inner.arena[pivot_arena_index].height;
+                start_compute_epoch_pivot_index = pivot_index;
+                debug!(
+                    "Start compute epoch pivot index {}, height {}",
+                    pivot_index, height
+                );
+                break;
+            }
+        }
+
+        let snapshot_manager = inner
+            .data_man
+            .storage_manager
+            .get_storage_manager()
+            .get_snapshot_manager();
+
+        let mut missing_snapsthos = HashSet::new();
+        let mut latest_snapshot_height = 0;
+        let mut snapshot_pivot_index = start_pivot_index + 1;
+
+        for pivot_index in (start_pivot_index + 1..end_index).rev() {
+            let pivot_arena_index = inner.pivot_chain[pivot_index];
+            let pivot_hash = inner.arena[pivot_arena_index].hash;
+
+            match *self.data_man.get_epoch_execution_commitment(&pivot_hash) {
+                None => {}
+                Some(commitment) => {
+                    let next_snapshot_epoch = &commitment
+                        .state_root_with_aux_info
+                        .aux_info
+                        .intermediate_epoch_id;
+
+                    debug!(
+                        "pivot hash {:?}, next_snapshot_epoch {:?}",
+                        pivot_hash, next_snapshot_epoch
+                    );
+
+                    if !missing_snapsthos.contains(next_snapshot_epoch) {
+                        match snapshot_manager
+                            .get_snapshot_by_epoch_id(next_snapshot_epoch, true)
+                        {
+                            Ok(Some(_)) => {
+                                latest_snapshot_height = self
+                                    .data_man
+                                    .block_height_by_hash(next_snapshot_epoch)
+                                    .unwrap();
+                                snapshot_pivot_index = pivot_index + 1;
+                                debug!(
+                                    "Snapshot {:?}, height {}, snapshot pivot index {}",
+                                    next_snapshot_epoch, latest_snapshot_height, snapshot_pivot_index
+                                );
+                                break;
+                            }
+                            _ => {
+                                debug!(
+                                    "Snapshot {:?} does not exist",
+                                    next_snapshot_epoch
+                                );
+                                missing_snapsthos.insert(*next_snapshot_epoch);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        start_compute_epoch_pivot_index = min(
+            start_compute_epoch_pivot_index,
+            min(force_compute_index, snapshot_pivot_index),
+        );
+
+        if self.conf.inner_conf.use_isolated_db_for_mpt_table {
+            let start_compute_epoch_height = inner.arena
+                [inner.pivot_chain[start_compute_epoch_pivot_index]]
+                .height;
+            let era_pivot_epoch_height = start_compute_epoch_height
+                / self.conf.inner_conf.era_epoch_count
+                * self.conf.inner_conf.era_epoch_count;
+            let era_pivot_hash = inner
+                .get_pivot_hash_from_epoch_number(era_pivot_epoch_height)
+                .unwrap();
+
+            debug!(
+                "start_compute_epoch_index {}, start_compute_epoch_height {}, era_pivot_epoch_height {}",
+                start_compute_epoch_pivot_index, start_compute_epoch_height, era_pivot_epoch_height
+            );
+
+            let snapshot_db_manager =
+                snapshot_manager.get_snapshot_db_manager();
+
+            if self.conf.inner_conf.recovery_latest_mpt {
+                if era_pivot_epoch_height >= inner.cur_era_genesis_height {
+                    let pivot_idx =
+                        inner.height_to_pivot_index(era_pivot_epoch_height) + 1;
+                    debug!("recovery_latest_mpt idx {}", pivot_idx);
+                    start_compute_epoch_pivot_index = min(
+                        start_compute_epoch_pivot_index,
+                        max(start_pivot_index + 1, pivot_idx),
+                    );
+                } else {
+                    panic!("unreachable");
+                }
+
+                snapshot_db_manager
+                    .recovery_lastest_mpt_snapshot(&era_pivot_hash)
+                    .unwrap();
+            } else if latest_snapshot_height
+                >= start_compute_epoch_height as u64
+            {
+                debug!("recovery latest mpt snapshot");
+                snapshot_db_manager
+                    .recovery_lastest_mpt_snapshot(&era_pivot_hash)
+                    .unwrap();
+            } else {
+                debug!("latest mpt snapshot is good");
+            }
+        }
 
         for pivot_index in start_pivot_index + 1..end_index {
             let pivot_arena_index = inner.pivot_chain[pivot_index];
             let pivot_hash = inner.arena[pivot_arena_index].hash;
             let height = inner.arena[pivot_arena_index].height;
 
-            let mut compute_epoch = false;
-            match *self.data_man.get_epoch_execution_commitment(&pivot_hash) {
-                None => {
-                    // We should recompute the epochs that should have been
-                    // executed but fail to persist their
-                    // execution_commitments before shutdown
+            let compute_epoch =
+                if pivot_index >= start_compute_epoch_pivot_index {
+                    true
+                } else {
+                    false
+                };
 
-                    compute_epoch = true;
-                }
-                Some(commitment) => {
-                    let block_height = inner.pivot_index_to_height(pivot_index);
-
-                    if (block_height + 1)
-                        % inner
-                            .data_man
-                            .storage_manager
-                            .get_storage_manager()
-                            .get_snapshot_epoch_count()
-                            as u64
-                        == 0
-                    {
-                        let next_snapshot_epoch = &commitment
-                            .state_root_with_aux_info
-                            .aux_info
-                            .intermediate_epoch_id;
-                        if inner
-                            .data_man
-                            .storage_manager
-                            .get_storage_manager()
-                            .get_snapshot_info_at_epoch(next_snapshot_epoch)
-                            // returns true when the snapshot is not available.
-                            .map_or(true, |info| {
-                                info.snapshot_info_kept_to_provide_sync
-                                    == SnapshotKeptToProvideSyncStatus::InfoOnly
-                            })
-                        {
-                            // The upcoming snapshot is not ready because at the
-                            // last shutdown the snapshotting process wasn't
-                            // finished yet. In this case, we must trigger the
-                            // snapshotting process by computing epoch again.
-
-                            if pre_epoch_state_exist {
-                                compute_epoch = true;
-                            }
-                        }
-                    }
-
-                    if self
-                        .data_man
-                        .storage_manager
-                        .get_state_no_commit_inner(
-                            StateIndex::new_for_readonly(
-                                &pivot_hash,
-                                &commitment.state_root_with_aux_info,
-                            ),
-                            /* try_open = */ false,
-                        )
-                        .expect("DB Error")
-                        .is_none()
-                    {
-                        pre_epoch_state_exist = false;
-                    } else {
-                        pre_epoch_state_exist = true;
-                    }
-
-                    self.data_man
-                        .state_availability_boundary
-                        .write()
-                        .upper_bound += 1;
-                }
+            if let Some(_) =
+                *self.data_man.get_epoch_execution_commitment(&pivot_hash)
+            {
+                self.data_man
+                    .state_availability_boundary
+                    .write()
+                    .upper_bound += 1;
             }
 
             info!(
@@ -2096,7 +2166,7 @@ impl ConsensusNewBlockHandler {
                 pivot_index, height, compute_epoch,
             );
 
-            if compute_epoch || pivot_index > force_compute_index {
+            if compute_epoch {
                 let reward_execution_info = self
                     .executor
                     .get_reward_execution_info(inner, pivot_arena_index);
@@ -2110,7 +2180,6 @@ impl ConsensusNewBlockHandler {
                     ),
                     None,
                 );
-                pre_epoch_state_exist = true;
 
                 // Remove old-pivot state during start up to save disk,
                 // otherwise, all state will be keep till normal phase, this

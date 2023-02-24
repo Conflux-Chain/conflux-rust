@@ -77,6 +77,7 @@ impl Restorer {
                 &self.snapshot_epoch_id,
                 &self.snapshot_merkle_root,
                 &storage_manager.snapshot_info_map_by_epoch,
+                snapshot_info.height,
             )?;
         storage_manager.register_new_snapshot(
             snapshot_info,

@@ -484,6 +484,16 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
         unreachable!()
     }
 
+    fn get_mpt_snapshot_dir(&self) -> &Path { unreachable!() }
+
+    fn get_latest_mpt_snapshot_db_name(&self) -> String { unreachable!() }
+
+    fn recovery_lastest_mpt_snapshot(
+        &self, _snapshot_epoch_id: &EpochId,
+    ) -> Result<()> {
+        unreachable!()
+    }
+
     fn scan_persist_state(
         &self, _snapshot_info_map: &HashMap<EpochId, SnapshotInfo>,
     ) -> Result<Vec<EpochId>> {
@@ -521,6 +531,7 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
     fn finalize_full_sync_snapshot<'m>(
         &self, _snapshot_epoch_id: &MerkleHash, _merkle_root: &MerkleHash,
         _snapshot_info_map_rwlock: &'m RwLock<PersistedSnapshotInfoMap>,
+        _epoch_height: u64,
     ) -> Result<RwLockWriteGuard<'m, PersistedSnapshotInfoMap>>
     {
         unreachable!()

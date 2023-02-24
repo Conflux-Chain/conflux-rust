@@ -84,6 +84,8 @@ pub struct ConsensusInnerConfig {
     /// directory specified here. This is useful for testing.
     pub debug_dump_dir_invalid_state_root: Option<String>,
     pub debug_invalid_state_root_epoch: Option<H256>,
+    pub recovery_latest_mpt_snapshot: bool,
+    pub use_isolated_db_for_mpt_table: bool,
 }
 
 #[derive(Copy, Clone, DeriveMallocSizeOf)]

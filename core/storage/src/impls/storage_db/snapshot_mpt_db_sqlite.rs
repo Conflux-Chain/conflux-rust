@@ -32,11 +32,7 @@ lazy_static! {
 
 impl Drop for SnapshotMptDbSqlite {
     fn drop(&mut self) {
-        if !self.path.as_os_str().is_empty()
-            && !self
-                .path
-                .ends_with(SnapshotDbManagerSqlite::LATEST_MPT_SNAPSHOT_DIR)
-        {
+        if !self.path.as_os_str().is_empty() {
             debug!("drop SnapshotMptDbSqlite {:?}", self.path);
 
             self.maybe_db_connections.take();
