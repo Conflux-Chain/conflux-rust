@@ -22,6 +22,9 @@ use crate::{
 
 use crate::{
     spec::TransitionsEpochHeight,
+    transaction_pool::{
+        nonce_pool::TxWithReadyInfo, transaction_pool_inner::PendingReason,
+    },
     verification::{VerifyTxLocalMode, VerifyTxMode},
     vm::Spec,
 };
@@ -29,14 +32,17 @@ use account_cache::AccountCache;
 use cfx_parameters::block::DEFAULT_TARGET_BLOCK_GAS_LIMIT;
 use cfx_statedb::{Result as StateDbResult, StateDb};
 use cfx_storage::{StateIndex, StorageManagerTrait};
-use cfx_types::{AddressWithSpace as Address, AllChainID, H256, U256};
+use cfx_types::{AddressWithSpace as Address, AllChainID, Space, H256, U256};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use metrics::{
     register_meter_with_group, Gauge, GaugeUsize, Lock, Meter, MeterTimer,
     RwLockExtensions,
 };
 use parking_lot::{Mutex, RwLock};
-use primitives::{Account, SignedTransaction, TransactionWithSignature};
+use primitives::{
+    block::BlockHeight, Account, SignedTransaction, Transaction,
+    TransactionWithSignature,
+};
 use std::{
     cmp::{max, min},
     collections::{hash_map::HashMap, BTreeSet},
@@ -84,7 +90,8 @@ lazy_static! {
 
 pub struct TxPoolConfig {
     pub capacity: usize,
-    pub min_tx_price: u64,
+    pub min_native_tx_price: u64,
+    pub min_eth_tx_price: u64,
     pub max_tx_gas: RwLock<U256>,
     pub tx_weight_scaling: u64,
     pub tx_weight_exp: u8,
@@ -100,7 +107,8 @@ impl Default for TxPoolConfig {
     fn default() -> Self {
         TxPoolConfig {
             capacity: 500_000,
-            min_tx_price: 1,
+            min_native_tx_price: 1,
+            min_eth_tx_price: 1,
             max_tx_gas: RwLock::new(U256::from(
                 DEFAULT_TARGET_BLOCK_GAS_LIMIT / 2,
             )),
@@ -115,7 +123,7 @@ impl Default for TxPoolConfig {
 }
 
 pub struct TransactionPool {
-    config: TxPoolConfig,
+    pub config: TxPoolConfig,
     verification_config: VerificationConfig,
     inner: RwLock<TransactionPoolInner>,
     to_propagate_trans: Arc<RwLock<HashMap<H256, Arc<SignedTransaction>>>>,
@@ -235,22 +243,110 @@ impl TransactionPool {
     /// Return `(pending_txs, first_tx_status, pending_count)`.
     pub fn get_account_pending_transactions(
         &self, address: &Address, maybe_start_nonce: Option<U256>,
-        maybe_limit: Option<usize>,
+        maybe_limit: Option<usize>, best_height: BlockHeight,
     ) -> (
         Vec<Arc<SignedTransaction>>,
         Option<TransactionStatus>,
         usize,
     )
     {
-        self.inner.read().get_account_pending_transactions(
-            address,
-            maybe_start_nonce,
-            maybe_limit,
-        )
+        let inner = self.inner.read();
+        let (txs, mut first_tx_status, pending_count) = inner
+            .get_account_pending_transactions(
+                address,
+                maybe_start_nonce,
+                maybe_limit,
+            );
+        if txs.is_empty() {
+            return (txs, first_tx_status, pending_count);
+        }
+
+        let first_tx = txs.first().expect("non empty");
+        if address.space == Space::Native {
+            if let Transaction::Native(tx) = &first_tx.unsigned {
+                if VerificationConfig::check_transaction_epoch_bound(
+                    tx,
+                    best_height,
+                    self.verification_config.transaction_epoch_bound,
+                ) == -1
+                {
+                    // If the epoch height is out of bound, overwrite the
+                    // pending reason.
+                    first_tx_status = Some(TransactionStatus::Pending(
+                        PendingReason::OldEpochHeight,
+                    ));
+                }
+            }
+        }
+
+        if matches!(
+            first_tx_status,
+            Some(TransactionStatus::Ready)
+                | Some(TransactionStatus::Pending(
+                    PendingReason::NotEnoughCash
+                ))
+        ) {
+            // The sponsor status may have changed, check again.
+            // This is not applied to the tx pool state because this check is
+            // only triggered on the RPC server.
+            let account_cache = self.get_best_state_account_cache();
+            match inner.get_sponsored_gas_and_storage(&account_cache, &first_tx)
+            {
+                Ok((sponsored_gas, sponsored_storage)) => {
+                    if let Ok((_, balance)) =
+                        account_cache.get_nonce_and_balance(&first_tx.sender())
+                    {
+                        let tx_info = TxWithReadyInfo {
+                            transaction: first_tx.clone(),
+                            packed: false,
+                            sponsored_gas,
+                            sponsored_storage,
+                        };
+                        if tx_info.calc_tx_cost() <= balance {
+                            // The tx should have been ready now.
+                            if matches!(
+                                first_tx_status,
+                                Some(TransactionStatus::Pending(
+                                    PendingReason::NotEnoughCash
+                                ))
+                            ) {
+                                first_tx_status =
+                                    Some(TransactionStatus::Pending(
+                                        PendingReason::OutdatedStatus,
+                                    ));
+                            }
+                        } else {
+                            if matches!(
+                                first_tx_status,
+                                Some(TransactionStatus::Ready)
+                            ) {
+                                first_tx_status =
+                                    Some(TransactionStatus::Pending(
+                                        PendingReason::OutdatedStatus,
+                                    ));
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!(
+                        "error in get_account_pending_transactions: e={:?}",
+                        e
+                    );
+                }
+            }
+        }
+        (txs, first_tx_status, pending_count)
     }
 
     pub fn get_pending_transaction_hashes_in_evm_pool(&self) -> BTreeSet<H256> {
         self.inner.read().ready_transacton_hashes_in_evm_pool()
+    }
+
+    pub fn get_pending_transaction_hashes_in_native_pool(
+        &self,
+    ) -> BTreeSet<H256> {
+        self.inner.read().ready_transacton_hashes_in_native_pool()
     }
 
     pub fn get_state_account_info(
@@ -540,13 +636,17 @@ impl TransactionPool {
             ));
         }
 
+        let min_tx_price = match transaction.space() {
+            Space::Native => self.config.min_native_tx_price,
+            Space::Ethereum => self.config.min_eth_tx_price,
+        };
         // check transaction gas price
-        if *transaction.gas_price() < self.config.min_tx_price.into() {
+        if *transaction.gas_price() < min_tx_price.into() {
             trace!("Transaction {} discarded due to below minimal gas price: price {}", transaction.hash(), transaction.gas_price());
             return Err(format!(
                 "transaction gas price {} less than the minimum value {}",
                 transaction.gas_price(),
-                self.config.min_tx_price
+                min_tx_price
             ));
         }
 

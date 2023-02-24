@@ -10,6 +10,7 @@ import random
 import re
 from subprocess import CalledProcessError, check_output
 import time
+from typing import Optional, Callable, List, TYPE_CHECKING, cast
 import socket
 import threading
 import jsonrpcclient.exceptions
@@ -22,6 +23,8 @@ import shutil
 from test_framework.simple_rpc_proxy import SimpleRpcProxy
 from . import coverage
 from .authproxy import AuthServiceProxy, JSONRPCException
+if TYPE_CHECKING:
+    from conflux.rpc import RpcClient
 
 solcx.set_solc_version('v0.5.17')
 
@@ -113,7 +116,7 @@ def assert_raises_process_error(returncode, output, fun, *args, **kwds):
         raise AssertionError("No exception raised")
 
 
-def assert_raises_rpc_error(code, message, fun, *args, **kwds):
+def assert_raises_rpc_error(code: Optional[int], message: Optional[str], fun: Callable, *args, err_data_: Optional[str]=None, **kwds):
     """Run an RPC and verify that a specific JSONRPC exception code and message is raised.
 
     Calls function `fun` with arguments `args` and `kwds`. Catches a JSONRPCException
@@ -129,10 +132,10 @@ def assert_raises_rpc_error(code, message, fun, *args, **kwds):
         args*: positional arguments for the function.
         kwds**: named arguments for the function.
     """
-    assert try_rpc(code, message, fun, *args, **kwds), "No exception raised"
+    assert try_rpc(code, message, fun, err_data_, *args, **kwds), "No exception raised"
 
 
-def try_rpc(code, message, fun, *args, **kwds):
+def try_rpc(code: Optional[int], message: Optional[str], fun: Callable, err_data_: Optional[str]=None, *args, **kwds):
     """Tries to run an rpc command.
 
     Test against error code and message if the rpc fails.
@@ -145,9 +148,11 @@ def try_rpc(code, message, fun, *args, **kwds):
         if (code is not None) and (code != error.code):
             raise AssertionError(
                 "Unexpected JSONRPC error code %i" % error.code)
-        if (message is not None) and (message not in error.message):
-            raise AssertionError("Expected substring not found:" +
-                                 error.message)
+        if (message is not None) and (message not in cast(str, error.message)):
+            raise AssertionError(f"Expected substring not found: {error.message}")
+        if (err_data_ is not None):
+            if not getattr(error, "data", None) or (err_data_ not in cast(str, error.data)):
+                raise AssertionError(f"Expected substring not found: {error.data}")
         return True
     except Exception as e:
         raise AssertionError("Unexpected exception raised: " +
@@ -732,4 +737,60 @@ def get_contract_instance(contract_dict=None,
                 raise ValueError("The bytecode or the address must be provided")
     return contract
 
+# This is a util function to test rpc with block object
+def test_rpc_call_with_block_object(client: "RpcClient", txs: List, rpc_call: Callable, expected_result_lambda: Callable[..., bool], params: List=[]):
+    parent_hash = client.block_by_epoch("latest_mined")['hash']
+    
+    # generate epoch of 2 block with transactions in each block
+    # NOTE: we need `C` to ensure that the top fork is heavier
 
+    #                      ---        ---        ---
+    #                  .- | A | <--- | C | <--- | D | <--- ...
+    #           ---    |   ---        ---        ---
+    # ... <--- | P | <-*                          .
+    #           ---    |   ---                    .
+    #                  .- | B | <..................
+    #                      ---
+    
+    # all block except for block D is empty
+
+    block_a = client.generate_custom_block(parent_hash = parent_hash, referee = [], txs = [])
+    block_b = client.generate_custom_block(parent_hash = parent_hash, referee = [], txs = [])
+    block_c = client.generate_custom_block(parent_hash = block_a, referee = [], txs = [])
+    block_d = client.generate_custom_block(parent_hash = block_c, referee = [block_b], txs = txs)
+
+    parent_hash = block_d
+    
+    # current block_d is not executed
+    assert_raises_rpc_error(-32602, None, rpc_call, *params, {
+        "blockHash": block_d
+    }, err_data_="is not executed")
+    
+    # cannot find this block
+    assert_raises_rpc_error(-32602, "Invalid parameters: epoch parameter", rpc_call, *params, {
+        "blockHash": "0x{:064x}".format(int(block_d, 16) + 1)
+    }, err_data_="block's epoch number is not found")
+
+    for _ in range(5):
+        block = client.generate_custom_block(parent_hash = parent_hash, referee = [], txs = [])
+        parent_hash = block
+
+    assert_raises_rpc_error(-32602, "Invalid parameters: epoch parameter", rpc_call, *params, {
+        "blockHash": block_b
+    })
+    assert_raises_rpc_error(-32602, "Invalid parameters: epoch parameter", rpc_call, *params, {
+        "blockHash": block_b,
+        "requirePivot": True
+    })
+    
+    result1 = rpc_call(*params, {
+        "blockHash": block_d
+    })
+    
+    result2 = rpc_call(*params, {
+        "blockHash": block_b,
+        "requirePivot": False
+    })
+    
+    assert(expected_result_lambda(result1))
+    assert_equal(result2, result1)

@@ -8,7 +8,7 @@ from test_framework.mininode import *
 class NotEnoughGasPrice(ConfluxTestFramework):
     def set_test_params(self):
         self.num_nodes = 1
-        self.conf_parameters["tx_pool_min_tx_gas_price"] = 1_000_000_000
+        self.conf_parameters["tx_pool_min_native_tx_gas_price"] = 1_000_000_000
 
     def run_test(self):
         rpc = RpcClient(self.nodes[0])

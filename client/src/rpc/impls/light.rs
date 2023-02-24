@@ -118,6 +118,33 @@ impl RpcImpl {
         )
     }
 
+    fn get_epoch_number_with_pivot_check(
+        consensus_graph: SharedConsensusGraph,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
+    ) -> RpcResult<EpochNumber>
+    {
+        match block_hash_or_epoch_number {
+            Some(BlockHashOrEpochNumber::BlockHashWithOption {
+                hash,
+                require_pivot,
+            }) => {
+                let epoch_number = consensus_graph
+                    .as_any()
+                    .downcast_ref::<ConsensusGraph>()
+                    .expect("downcast should succeed")
+                    .get_block_epoch_number_with_pivot_check(
+                        &hash,
+                        require_pivot.unwrap_or(true),
+                    )?;
+                Ok(EpochNumber::Num(U64::from(epoch_number)))
+            }
+            Some(BlockHashOrEpochNumber::EpochNumber(epoch_number)) => {
+                Ok(epoch_number)
+            }
+            None => Ok(EpochNumber::LatestState),
+        }
+    }
+
     fn account(
         &self, address: RpcAddress, num: Option<EpochNumber>,
     ) -> RpcBoxFuture<RpcAccount> {
@@ -156,19 +183,28 @@ impl RpcImpl {
     }
 
     fn balance(
-        &self, address: RpcAddress, num: Option<EpochNumber>,
-    ) -> RpcBoxFuture<U256> {
+        &self, address: RpcAddress,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
+    ) -> RpcBoxFuture<U256>
+    {
         info!(
             "RPC Request: cfx_getBalance address={:?} epoch={:?}",
-            address, num
+            address,
+            block_hash_or_epoch_number
+                .as_ref()
+                .ok_or(EpochNumber::LatestState)
         );
-
-        let epoch = num.unwrap_or(EpochNumber::LatestState).into();
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
+        let consensus_graph = self.consensus.clone();
 
         let fut = async move {
+            let epoch = Self::get_epoch_number_with_pivot_check(
+                consensus_graph,
+                block_hash_or_epoch_number,
+            )?
+            .into();
             Self::check_address_network(address.network, &light)?;
 
             let account = invalid_params_check(
@@ -381,19 +417,28 @@ impl RpcImpl {
     }
 
     fn code(
-        &self, address: RpcAddress, epoch_num: Option<EpochNumber>,
-    ) -> RpcBoxFuture<Bytes> {
-        let epoch = epoch_num.unwrap_or(EpochNumber::LatestState).into();
-
+        &self, address: RpcAddress,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
+    ) -> RpcBoxFuture<Bytes>
+    {
         info!(
             "RPC Request: cfx_getCode address={:?} epoch={:?}",
-            address, epoch
+            address,
+            block_hash_or_epoch_number
+                .as_ref()
+                .ok_or(EpochNumber::LatestState)
         );
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
+        let consensus_graph = self.consensus.clone();
 
         let fut = async move {
+            let epoch = Self::get_epoch_number_with_pivot_check(
+                consensus_graph,
+                block_hash_or_epoch_number,
+            )?
+            .into();
             Self::check_address_network(address.network, &light)?;
 
             // FIMXE:
@@ -558,21 +603,30 @@ impl RpcImpl {
 
     fn storage_at(
         &self, address: RpcAddress, position: U256,
-        epoch_num: Option<EpochNumber>,
+        block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>,
     ) -> RpcBoxFuture<Option<H256>>
     {
         let position: H256 = H256::from_uint(&position);
-        let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
+        // let epoch_num = epoch_num.unwrap_or(EpochNumber::LatestState);
 
         info!(
             "RPC Request: cfx_getStorageAt address={:?} position={:?} epoch={:?})",
-            address, position, epoch_num
+            address,
+            position,
+            block_hash_or_epoch_number
+                .as_ref()
+                .ok_or(EpochNumber::LatestState)
         );
 
         // clone `self.light` to avoid lifetime issues due to capturing `self`
         let light = self.light.clone();
+        let consensus_graph = self.consensus.clone();
 
         let fut = async move {
+            let epoch_num = Self::get_epoch_number_with_pivot_check(
+                consensus_graph,
+                block_hash_or_epoch_number,
+            )?;
             Self::check_address_network(address.network, &light)?;
 
             let maybe_entry = light
@@ -698,18 +752,9 @@ impl RpcImpl {
         let fut = async move {
             Self::check_address_network(address.network, &light)?;
 
-            let epoch = match num {
-                None => EpochNumber::LatestState,
-                Some(BlockHashOrEpochNumber::EpochNumber(e)) => e,
-                Some(BlockHashOrEpochNumber::BlockHash(h)) => consensus_graph
-                    .get_block_epoch_number(&h)
-                    .map(Into::into)
-                    .map(EpochNumber::Num)
-                    .ok_or(RpcError::invalid_params(
-                        "Cannot find epoch corresponding to block hash",
-                    ))?,
-            }
-            .into();
+            let epoch =
+                Self::get_epoch_number_with_pivot_check(consensus_graph, num)?
+                    .into();
 
             let account = invalid_params_check(
                 "address",
@@ -1065,13 +1110,13 @@ impl Cfx for CfxHandler {
             fn account(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<RpcAccount>;
             fn accumulate_interest_rate(&self, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn admin(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<Option<RpcAddress>>;
-            fn balance(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<U256>;
+            fn balance(&self, address: RpcAddress, block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>) -> BoxFuture<U256>;
             fn block_by_epoch_number(&self, epoch_num: EpochNumber, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;
             fn block_by_hash_with_pivot_assumption(&self, block_hash: H256, pivot_hash: H256, epoch_number: U64) -> BoxFuture<RpcBlock>;
             fn block_by_hash(&self, hash: H256, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;
             fn blocks_by_epoch(&self, num: EpochNumber) -> JsonRpcResult<Vec<H256>>;
             fn check_balance_against_transaction(&self, account_addr: RpcAddress, contract_addr: RpcAddress, gas_limit: U256, gas_price: U256, storage_limit: U256, epoch: Option<EpochNumber>) -> BoxFuture<CheckBalanceAgainstTransactionResponse>;
-            fn code(&self, address: RpcAddress, epoch_num: Option<EpochNumber>) -> BoxFuture<Bytes>;
+            fn code(&self, address: RpcAddress, block_hash_or_epoch_num: Option<BlockHashOrEpochNumber>) -> BoxFuture<Bytes>;
             fn collateral_for_storage(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<U256>;
             fn deposit_list(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<Vec<DepositInfo>>;
             fn epoch_number(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<U256>;
@@ -1083,7 +1128,7 @@ impl Cfx for CfxHandler {
             fn send_raw_transaction(&self, raw: Bytes) -> JsonRpcResult<H256>;
             fn sponsor_info(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<SponsorInfo>;
             fn staking_balance(&self, address: RpcAddress, num: Option<EpochNumber>) -> BoxFuture<U256>;
-            fn storage_at(&self, addr: RpcAddress, pos: U256, epoch_number: Option<EpochNumber>) -> BoxFuture<Option<H256>>;
+            fn storage_at(&self, addr: RpcAddress, pos: U256, block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>) -> BoxFuture<Option<H256>>;
             fn storage_root(&self, address: RpcAddress, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn transaction_by_hash(&self, hash: H256) -> BoxFuture<Option<RpcTransaction>>;
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
@@ -1095,7 +1140,7 @@ impl Cfx for CfxHandler {
     not_supported! {
         fn account_pending_transactions(&self, address: RpcAddress, maybe_start_nonce: Option<U256>, maybe_limit: Option<U64>) -> BoxFuture<AccountPendingTransactions>;
         fn block_by_block_number(&self, block_number: U64, include_txs: bool) -> BoxFuture<Option<RpcBlock>>;
-        fn call(&self, request: CallRequest, epoch: Option<EpochNumber>) -> JsonRpcResult<Bytes>;
+        fn call(&self, request: CallRequest, block_hash_or_epoch_number: Option<BlockHashOrEpochNumber>) -> JsonRpcResult<Bytes>;
         fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> JsonRpcResult<EstimateGasAndCollateralResponse>;
         fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
         fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;

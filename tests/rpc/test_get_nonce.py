@@ -2,7 +2,9 @@ import sys
 sys.path.append("..")
 
 from conflux.rpc import RpcClient
-from test_framework.util import assert_equal, assert_raises_rpc_error
+from test_framework.util import assert_equal, assert_raises_rpc_error, test_rpc_call_with_block_object
+
+NUM_TXS = 10
 
 class TestGetNonce(RpcClient):
     def test_account_not_found(self):
@@ -68,3 +70,15 @@ class TestGetNonce(RpcClient):
         block_hash = self.get_transaction_receipt(tx_hash)["blockHash"]
         new_nonce = self.get_nonce(addr=addr, block_hash=block_hash)
         assert_equal(new_nonce, pre_nonce + 1)
+        
+    def test_block_object(self):
+        start_nonce = self.get_nonce(self.GENESIS_ADDR)
+
+        txs = [self.new_tx(receiver=self.rand_addr(), nonce = start_nonce + ii) for ii in range(NUM_TXS)]
+        test_rpc_call_with_block_object(
+            self,
+            txs,
+            self.get_nonce,
+            lambda x: x == (start_nonce + NUM_TXS),
+            [self.GENESIS_ADDR]
+        )
