@@ -10,9 +10,11 @@ use crate::{
     registry::{DEFAULT_GROUPING_REGISTRY, DEFAULT_REGISTRY},
     report::Reporter,
 };
-use influx_db_client::{Client, Point, Points, Precision, Value};
+use influx_db_client::{Client, Point, Points, Precision, Value, reqwest::ClientBuilder as HttpClientBuilder};
 use log::debug;
 use std::collections::HashMap;
+use std::convert::TryInto;
+use std::time::Duration;
 
 const REPORT_TIMEOUT_SECONDS: u64 = 30;
 
@@ -22,21 +24,22 @@ pub struct InfluxdbReporter {
 }
 
 impl InfluxdbReporter {
-    pub fn new<T: ToString>(host: T, db: T) -> Self {
-        let mut client = Client::new(host, db);
-        client.set_read_timeout(REPORT_TIMEOUT_SECONDS);
-        client.set_write_timeout(REPORT_TIMEOUT_SECONDS);
+    pub fn new<T: Into<String>>(host: T, db: T) -> Self {
+        let mut http_client_builder = HttpClientBuilder::new();
+        http_client_builder = http_client_builder.timeout(Duration::from_secs(REPORT_TIMEOUT_SECONDS)).pool_idle_timeout(Duration::from_secs(REPORT_TIMEOUT_SECONDS));
+        let http_client = http_client_builder.build().expect("http client build error");
+        let client = Client::new_with_client(host.into().as_str().try_into().expect("wrong url"), db, http_client);
         InfluxdbReporter {
             client,
             tags: HashMap::new(),
         }
     }
 
-    pub fn with_auth<T: ToString, R: Into<String>>(
+    pub fn with_auth<T: Into<String>, R: Into<String>>(
         host: T, db: T, username: R, password: R,
     ) -> Self {
         InfluxdbReporter {
-            client: Client::new(host, db)
+            client: Client::new(host.into().as_str().try_into().expect("wrong url"), db)
                 .set_authentication(username, password),
             tags: HashMap::new(),
         }
@@ -53,13 +56,13 @@ impl Reporter for InfluxdbReporter {
 
         for (name, metric) in DEFAULT_REGISTRY.read().get_all() {
             let mut point = Point::new(name);
-            metric.add_field(&mut point, None);
+            point = metric.add_field(point, None);
 
             for (k, v) in &self.tags {
-                point.add_tag(k.clone(), Value::String(v.clone()));
+                point = point.add_tag(k.clone(), Value::String(v.clone()));
             }
 
-            points.push(point);
+            points = points.push(point);
         }
 
         for (group_name, metrics) in DEFAULT_GROUPING_REGISTRY.read().get_all()
@@ -67,21 +70,21 @@ impl Reporter for InfluxdbReporter {
             let mut point = Point::new(group_name);
 
             for (metric_name, metric) in metrics {
-                metric.add_field(&mut point, Some(metric_name));
+                point = metric.add_field(point, Some(metric_name));
             }
 
             for (k, v) in &self.tags {
-                point.add_tag(k.clone(), Value::String(v.clone()));
+                point = point.add_tag(k.clone(), Value::String(v.clone()));
             }
 
-            points.push(point);
+            points = points.push(point);
         }
 
-        if let Err(e) = self.client.write_points(
+        if let Err(e) = futures::executor::block_on(self.client.write_points(
             points,
             Some(Precision::Milliseconds),
             None,
-        ) {
+        )) {
             debug!("failed to write points to influxdb, {:?}", e);
             Ok(false)
         } else {
@@ -91,7 +94,7 @@ impl Reporter for InfluxdbReporter {
 }
 
 pub trait InfluxdbReportable {
-    fn add_field(&self, point: &mut Point, prefix: Option<&String>);
+    fn add_field(&self, point: Point, prefix: Option<&String>) -> Point;
 }
 
 fn field(name: &str, prefix: Option<&String>) -> String {
@@ -107,87 +110,87 @@ fn field(name: &str, prefix: Option<&String>) -> String {
 }
 
 impl InfluxdbReportable for CounterUsize {
-    fn add_field(&self, point: &mut Point, prefix: Option<&String>) {
+    fn add_field(&self, point: Point, prefix: Option<&String>) -> Point {
         point.add_field(
             field("count", prefix),
             Value::Integer(self.count() as i64),
-        );
+        )
     }
 }
 
 impl InfluxdbReportable for GaugeUsize {
-    fn add_field(&self, point: &mut Point, prefix: Option<&String>) {
+    fn add_field(&self, point: Point, prefix: Option<&String>) -> Point {
         point.add_field(
             field("value", prefix),
             Value::Integer(self.value() as i64),
-        );
+        )
     }
 }
 
 impl InfluxdbReportable for StandardMeter {
-    fn add_field(&self, point: &mut Point, prefix: Option<&String>) {
+    fn add_field(&self, point: Point, prefix: Option<&String>) -> Point {
         let snapshot = self.snapshot();
         point.add_field(
             field("count", prefix),
             Value::Integer(snapshot.count() as i64),
-        );
-        point.add_field(field("m1", prefix), Value::Float(snapshot.rate1()));
-        point.add_field(field("m5", prefix), Value::Float(snapshot.rate5()));
-        point.add_field(field("m15", prefix), Value::Float(snapshot.rate15()));
-        point.add_field(
+        )
+        .add_field(field("m1", prefix), Value::Float(snapshot.rate1()))
+        .add_field(field("m5", prefix), Value::Float(snapshot.rate5()))
+        .add_field(field("m15", prefix), Value::Float(snapshot.rate15()))
+        .add_field(
             field("mean", prefix),
             Value::Float(snapshot.rate_mean()),
-        );
+        )
     }
 }
 
 impl<T: Histogram> InfluxdbReportable for T {
-    fn add_field(&self, point: &mut Point, prefix: Option<&String>) {
+    fn add_field(&self, point: Point, prefix: Option<&String>) -> Point {
         let snapshot = self.snapshot();
         point.add_field(
             field("count", prefix),
             Value::Integer(snapshot.count() as i64),
-        );
-        point.add_field(
+        )
+        .add_field(
             field("min", prefix),
             Value::Integer(snapshot.min() as i64),
-        );
-        point.add_field(field("mean", prefix), Value::Float(snapshot.mean()));
-        point.add_field(
+        )
+        .add_field(field("mean", prefix), Value::Float(snapshot.mean()))
+        .add_field(
             field("max", prefix),
             Value::Integer(snapshot.max() as i64),
-        );
-        point.add_field(
+        )
+        .add_field(
             field("stddev", prefix),
             Value::Float(snapshot.stddev()),
-        );
-        point.add_field(
+        )
+        .add_field(
             field("variance", prefix),
             Value::Float(snapshot.variance()),
-        );
-        point.add_field(
+        )
+        .add_field(
             field("p50", prefix),
             Value::Integer(snapshot.percentile(0.5) as i64),
-        );
-        point.add_field(
+        )
+        .add_field(
             field("p75", prefix),
             Value::Integer(snapshot.percentile(0.75) as i64),
-        );
-        point.add_field(
+        )
+        .add_field(
             field("p90", prefix),
             Value::Integer(snapshot.percentile(0.9) as i64),
-        );
-        point.add_field(
+        )
+        .add_field(
             field("p95", prefix),
             Value::Integer(snapshot.percentile(0.95) as i64),
-        );
-        point.add_field(
+        )
+        .add_field(
             field("p99", prefix),
             Value::Integer(snapshot.percentile(0.99) as i64),
-        );
-        point.add_field(
+        )
+        .add_field(
             field("p999", prefix),
             Value::Integer(snapshot.percentile(0.999) as i64),
-        );
+        )
     }
 }
