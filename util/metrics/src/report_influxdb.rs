@@ -10,11 +10,12 @@ use crate::{
     registry::{DEFAULT_GROUPING_REGISTRY, DEFAULT_REGISTRY},
     report::Reporter,
 };
-use influx_db_client::{Client, Point, Points, Precision, Value, reqwest::ClientBuilder as HttpClientBuilder};
+use influx_db_client::{
+    reqwest::ClientBuilder as HttpClientBuilder, Client, Point, Points,
+    Precision, Value,
+};
 use log::debug;
-use std::collections::HashMap;
-use std::convert::TryInto;
-use std::time::Duration;
+use std::{collections::HashMap, convert::TryInto, time::Duration};
 
 const REPORT_TIMEOUT_SECONDS: u64 = 30;
 
@@ -26,9 +27,17 @@ pub struct InfluxdbReporter {
 impl InfluxdbReporter {
     pub fn new<T: Into<String>>(host: T, db: T) -> Self {
         let mut http_client_builder = HttpClientBuilder::new();
-        http_client_builder = http_client_builder.timeout(Duration::from_secs(REPORT_TIMEOUT_SECONDS)).pool_idle_timeout(Duration::from_secs(REPORT_TIMEOUT_SECONDS));
-        let http_client = http_client_builder.build().expect("http client build error");
-        let client = Client::new_with_client(host.into().as_str().try_into().expect("wrong url"), db, http_client);
+        http_client_builder = http_client_builder
+            .timeout(Duration::from_secs(REPORT_TIMEOUT_SECONDS))
+            .pool_idle_timeout(Duration::from_secs(REPORT_TIMEOUT_SECONDS));
+        let http_client = http_client_builder
+            .build()
+            .expect("http client build error");
+        let client = Client::new_with_client(
+            host.into().as_str().try_into().expect("wrong url"),
+            db,
+            http_client,
+        );
         InfluxdbReporter {
             client,
             tags: HashMap::new(),
@@ -39,8 +48,11 @@ impl InfluxdbReporter {
         host: T, db: T, username: R, password: R,
     ) -> Self {
         InfluxdbReporter {
-            client: Client::new(host.into().as_str().try_into().expect("wrong url"), db)
-                .set_authentication(username, password),
+            client: Client::new(
+                host.into().as_str().try_into().expect("wrong url"),
+                db,
+            )
+            .set_authentication(username, password),
             tags: HashMap::new(),
         }
     }
@@ -130,67 +142,66 @@ impl InfluxdbReportable for GaugeUsize {
 impl InfluxdbReportable for StandardMeter {
     fn add_field(&self, point: Point, prefix: Option<&String>) -> Point {
         let snapshot = self.snapshot();
-        point.add_field(
-            field("count", prefix),
-            Value::Integer(snapshot.count() as i64),
-        )
-        .add_field(field("m1", prefix), Value::Float(snapshot.rate1()))
-        .add_field(field("m5", prefix), Value::Float(snapshot.rate5()))
-        .add_field(field("m15", prefix), Value::Float(snapshot.rate15()))
-        .add_field(
-            field("mean", prefix),
-            Value::Float(snapshot.rate_mean()),
-        )
+        point
+            .add_field(
+                field("count", prefix),
+                Value::Integer(snapshot.count() as i64),
+            )
+            .add_field(field("m1", prefix), Value::Float(snapshot.rate1()))
+            .add_field(field("m5", prefix), Value::Float(snapshot.rate5()))
+            .add_field(field("m15", prefix), Value::Float(snapshot.rate15()))
+            .add_field(
+                field("mean", prefix),
+                Value::Float(snapshot.rate_mean()),
+            )
     }
 }
 
 impl<T: Histogram> InfluxdbReportable for T {
     fn add_field(&self, point: Point, prefix: Option<&String>) -> Point {
         let snapshot = self.snapshot();
-        point.add_field(
-            field("count", prefix),
-            Value::Integer(snapshot.count() as i64),
-        )
-        .add_field(
-            field("min", prefix),
-            Value::Integer(snapshot.min() as i64),
-        )
-        .add_field(field("mean", prefix), Value::Float(snapshot.mean()))
-        .add_field(
-            field("max", prefix),
-            Value::Integer(snapshot.max() as i64),
-        )
-        .add_field(
-            field("stddev", prefix),
-            Value::Float(snapshot.stddev()),
-        )
-        .add_field(
-            field("variance", prefix),
-            Value::Float(snapshot.variance()),
-        )
-        .add_field(
-            field("p50", prefix),
-            Value::Integer(snapshot.percentile(0.5) as i64),
-        )
-        .add_field(
-            field("p75", prefix),
-            Value::Integer(snapshot.percentile(0.75) as i64),
-        )
-        .add_field(
-            field("p90", prefix),
-            Value::Integer(snapshot.percentile(0.9) as i64),
-        )
-        .add_field(
-            field("p95", prefix),
-            Value::Integer(snapshot.percentile(0.95) as i64),
-        )
-        .add_field(
-            field("p99", prefix),
-            Value::Integer(snapshot.percentile(0.99) as i64),
-        )
-        .add_field(
-            field("p999", prefix),
-            Value::Integer(snapshot.percentile(0.999) as i64),
-        )
+        point
+            .add_field(
+                field("count", prefix),
+                Value::Integer(snapshot.count() as i64),
+            )
+            .add_field(
+                field("min", prefix),
+                Value::Integer(snapshot.min() as i64),
+            )
+            .add_field(field("mean", prefix), Value::Float(snapshot.mean()))
+            .add_field(
+                field("max", prefix),
+                Value::Integer(snapshot.max() as i64),
+            )
+            .add_field(field("stddev", prefix), Value::Float(snapshot.stddev()))
+            .add_field(
+                field("variance", prefix),
+                Value::Float(snapshot.variance()),
+            )
+            .add_field(
+                field("p50", prefix),
+                Value::Integer(snapshot.percentile(0.5) as i64),
+            )
+            .add_field(
+                field("p75", prefix),
+                Value::Integer(snapshot.percentile(0.75) as i64),
+            )
+            .add_field(
+                field("p90", prefix),
+                Value::Integer(snapshot.percentile(0.9) as i64),
+            )
+            .add_field(
+                field("p95", prefix),
+                Value::Integer(snapshot.percentile(0.95) as i64),
+            )
+            .add_field(
+                field("p99", prefix),
+                Value::Integer(snapshot.percentile(0.99) as i64),
+            )
+            .add_field(
+                field("p999", prefix),
+                Value::Integer(snapshot.percentile(0.999) as i64),
+            )
     }
 }
