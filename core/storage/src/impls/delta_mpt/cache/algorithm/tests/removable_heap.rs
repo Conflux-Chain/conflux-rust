@@ -7,7 +7,7 @@ use super::{
     *,
 };
 use rand::Rng;
-use std::{cmp::Ord, collections::HashSet, mem};
+use std::{cmp::Ord, collections::HashSet};
 
 fn initialize_heap(
     capacity: u32, non_heap_size: u32,
@@ -20,10 +20,9 @@ fn initialize_heap(
     let mut heap_util = TrivialHeapValueUtil::default();
     for _i in 0..non_heap_size {
         let mut hole: Hole<TrivialValueWithHeapHandle<i64, u32>> =
-            unsafe { mem::uninitialized() };
-        hole.value = TrivialValueWithHeapHandle::<i64, u32>::new(
-            rng.gen_range(-100, -1),
-        );
+            Hole::<_>::new_uninit_pointer(TrivialValueWithHeapHandle::<i64, u32>::new(
+                rng.gen_range(-100, -1),
+            ));
         unsafe {
             heap.hole_push_back_and_swap_unchecked(0, &mut hole, &mut heap_util)
         };

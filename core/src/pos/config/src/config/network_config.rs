@@ -34,7 +34,7 @@ use std::{
 // are defaults for the   configurations of the system, we'll leave it here for
 // now.
 /// Current supported protocol negotiation handshake version. See
-/// [`network::protocols::wire::v1`](../../network/protocols/wire/handshake/v1/
+/// `network::protocols::wire::v1`(../../network/protocols/wire/handshake/v1/
 /// index.html).
 pub const HANDSHAKE_VERSION: u8 = 0;
 pub const NETWORK_CHANNEL_SIZE: usize = 1024;
