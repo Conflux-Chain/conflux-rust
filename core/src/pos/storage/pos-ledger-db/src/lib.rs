@@ -7,8 +7,8 @@
 
 #![forbid(unsafe_code)]
 
-//! This crate provides [`PosLedgerDB`] which represents physical storage of the core
-//! Diem data structures.
+//! This crate provides [`PosLedgerDB`] which represents physical storage of the
+//! core Diem data structures.
 //!
 //! It relays read/write operations on the physical storage via [`schemadb`] to
 //! the underlying Key-Value storage system, and implements diem data structures

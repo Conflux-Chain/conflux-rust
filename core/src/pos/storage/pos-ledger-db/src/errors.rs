@@ -9,7 +9,8 @@
 
 use thiserror::Error;
 
-/// This enum defines errors commonly used among [`PosLedgerDB`](crate::PosLedgerDB) APIs.
+/// This enum defines errors commonly used among
+/// [`PosLedgerDB`](crate::PosLedgerDB) APIs.
 #[derive(Debug, Error)]
 pub enum DiemDbError {
     /// A requested item is not found.
