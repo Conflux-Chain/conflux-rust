@@ -17,7 +17,6 @@ pub struct SnapshotDbSqlite {
 
 pub struct SnapshotDbStatements {
     kvdb_statements: Arc<KvdbSqliteStatements>,
-    // mpt_statements: Arc<KvdbSqliteStatements>,
     delta_mpt_set_keys_statements: Arc<KvdbSqliteStatements>,
     delta_mpt_delete_keys_statements: Arc<KvdbSqliteStatements>,
 }
@@ -33,15 +32,6 @@ lazy_static! {
             )
             .unwrap(),
         );
-        // let mpt_statements = Arc::new(
-        //     KvdbSqliteStatements::make_statements(
-        //         &["node_rlp"],
-        //         &["BLOB"],
-        //         SnapshotDbSqlite::SNAPSHOT_MPT_TABLE_NAME,
-        //         false,
-        //     )
-        //     .unwrap(),
-        // );
 
         let delta_mpt_set_keys_statements = Arc::new(
             KvdbSqliteStatements::make_statements(
@@ -64,7 +54,6 @@ lazy_static! {
 
         SnapshotDbStatements {
             kvdb_statements,
-            // mpt_statements,
             delta_mpt_set_keys_statements,
             delta_mpt_delete_keys_statements,
         }
@@ -108,8 +97,6 @@ impl SnapshotDbSqlite {
     */
     /// Key-Value table. Key is unique key in this table.
     pub const SNAPSHOT_KV_TABLE_NAME: &'static str = "snapshot_key_value";
-    // /// MPT Table.
-    // pub const SNAPSHOT_MPT_TABLE_NAME: &'static str = "snapshot_mpt";
 }
 
 impl KeyValueDbTypes for SnapshotDbSqlite {

@@ -2039,7 +2039,7 @@ impl ConsensusNewBlockHandler {
             .get_snapshot_manager();
 
         let mut missing_snapsthos = HashSet::new();
-        let mut latest_snapshot_height = 0;
+        let mut latest_snapshot_epoch_height = 0;
         let mut snapshot_pivot_index = start_pivot_index + 1;
 
         for pivot_index in (start_pivot_index + 1..end_index).rev() {
@@ -2064,14 +2064,14 @@ impl ConsensusNewBlockHandler {
                             .get_snapshot_by_epoch_id(next_snapshot_epoch, true)
                         {
                             Ok(Some(_)) => {
-                                latest_snapshot_height = self
+                                latest_snapshot_epoch_height = self
                                     .data_man
                                     .block_height_by_hash(next_snapshot_epoch)
                                     .unwrap();
                                 snapshot_pivot_index = pivot_index + 1;
                                 debug!(
                                     "Snapshot {:?}, height {}, snapshot pivot index {}",
-                                    next_snapshot_epoch, latest_snapshot_height, snapshot_pivot_index
+                                    next_snapshot_epoch, latest_snapshot_epoch_height, snapshot_pivot_index
                                 );
                                 break;
                             }
@@ -2112,11 +2112,11 @@ impl ConsensusNewBlockHandler {
             let snapshot_db_manager =
                 snapshot_manager.get_snapshot_db_manager();
 
-            if self.conf.inner_conf.recovery_latest_mpt {
+            if self.conf.inner_conf.recovery_latest_mpt_snapshot {
                 if era_pivot_epoch_height >= inner.cur_era_genesis_height {
                     let pivot_idx =
                         inner.height_to_pivot_index(era_pivot_epoch_height) + 1;
-                    debug!("recovery_latest_mpt idx {}", pivot_idx);
+                    debug!("recovery_lastest_mpt_snapshot index {}", pivot_idx);
                     start_compute_epoch_pivot_index = min(
                         start_compute_epoch_pivot_index,
                         max(start_pivot_index + 1, pivot_idx),
@@ -2128,7 +2128,7 @@ impl ConsensusNewBlockHandler {
                 snapshot_db_manager
                     .recovery_lastest_mpt_snapshot(&era_pivot_hash)
                     .unwrap();
-            } else if latest_snapshot_height
+            } else if latest_snapshot_epoch_height
                 >= start_compute_epoch_height as u64
             {
                 debug!("recovery latest mpt snapshot");
