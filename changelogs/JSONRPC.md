@@ -1,5 +1,14 @@
 # JSON-RPC CHANGELOG
 
+## v2.2.2
+
+- A new scheme for epoch parameter like [EIP-1898](https://eips.ethereum.org/EIPS/eip-1898), which has 3 optional fields:
+  - `epochNumber`. Corresponding to `blockNumber`
+  - `blockHash`. Same as EIP-1898 `blockHash`
+  - `requirePivot`. Corresponding to `requireCanonical`. And according to previous behaviour (including espace `eth_call` and core space `EpochReceipt`), this value will default to `true`
+- Add filter RPCs in core space including `cfx_newFilter`, `cfx_newBlockFilter`, `cfx_newPendingTransactionFilter`, `cfx_getFilterChanges`, `cfx_getFilterLogs`, `cfx_uninstallFilter`
+- Add a new RPC `pos_getAccountByPowAddress` to get pos account from pow address
+
 ## v2.2.1
 
 - Fix `pending` tag behaviour in espace. Now `pending` tag will be considered as `latest` tag except for `eth_getTransactionCount`.
