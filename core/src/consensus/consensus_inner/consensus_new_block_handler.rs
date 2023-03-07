@@ -24,6 +24,7 @@ use cfx_storage::{storage_db::SnapshotDbManagerTrait, StateIndex};
 use cfx_types::H256;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use parking_lot::Mutex;
+use primitives::NULL_EPOCH;
 use std::{
     cmp::{max, min},
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
@@ -2064,10 +2065,17 @@ impl ConsensusNewBlockHandler {
                             .get_snapshot_by_epoch_id(next_snapshot_epoch, true)
                         {
                             Ok(Some(_)) => {
-                                latest_snapshot_epoch_height = self
-                                    .data_man
-                                    .block_height_by_hash(next_snapshot_epoch)
-                                    .unwrap();
+                                latest_snapshot_epoch_height =
+                                    if *next_snapshot_epoch == NULL_EPOCH {
+                                        0
+                                    } else {
+                                        self.data_man
+                                            .block_height_by_hash(
+                                                next_snapshot_epoch,
+                                            )
+                                            .unwrap()
+                                    };
+
                                 snapshot_pivot_index = pivot_index + 1;
                                 debug!(
                                     "Snapshot {:?}, height {}, snapshot pivot index {}",
@@ -2100,9 +2108,13 @@ impl ConsensusNewBlockHandler {
             let era_pivot_epoch_height = start_compute_epoch_height
                 / self.conf.inner_conf.era_epoch_count
                 * self.conf.inner_conf.era_epoch_count;
-            let era_pivot_hash = inner
-                .get_pivot_hash_from_epoch_number(era_pivot_epoch_height)
-                .unwrap();
+            let era_pivot_hash = if era_pivot_epoch_height == 0 {
+                NULL_EPOCH
+            } else {
+                inner
+                    .get_pivot_hash_from_epoch_number(era_pivot_epoch_height)
+                    .unwrap()
+            };
 
             debug!(
                 "start_compute_epoch_index {}, start_compute_epoch_height {}, era_pivot_epoch_height {}",
