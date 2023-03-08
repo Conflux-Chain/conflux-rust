@@ -1776,11 +1776,6 @@ impl RpcImpl {
                             if !include_eth_tx {
                                 continue;
                             }
-                            if receipt.outcome_status
-                                == TransactionOutcome::Skipped
-                            {
-                                continue;
-                            }
 
                             let status = receipt
                                 .outcome_status
@@ -1885,7 +1880,26 @@ impl RpcImpl {
             None => {
                 for (_, tx) in b.transactions.iter().enumerate() {
                     match tx.space() {
-                        Space::Ethereum => {}
+                        Space::Ethereum => {
+                            if !include_eth_tx {
+                                continue;
+                            }
+
+                            res.push(WrapTransaction::EthTransaction(
+                                EthTransaction::from_signed(
+                                    tx,
+                                    (
+                                        Some(pivot.hash()),
+                                        Some(
+                                            pivot.block_header.height().into(),
+                                        ),
+                                        Some(eth_transaction_idx.into()),
+                                    ),
+                                    (None, None),
+                                ),
+                            ));
+                            eth_transaction_idx += 1;
+                        }
                         Space::Native => {
                             res.push(WrapTransaction::NativeTransaction(
                                 RpcTransaction::from_signed(tx, None, network)?,
