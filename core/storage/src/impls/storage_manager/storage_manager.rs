@@ -1446,7 +1446,7 @@ fn extra_snapshots_to_keep_predicate(
                         % era_epoch_count
                         == 0
                 {
-                    return true;
+                    return storage_conf.keep_snapshot_before_ear_checkpoint;
                 }
             }
             ProvideExtraSnapshotSyncConfig::EpochNearestMultipleOf(
