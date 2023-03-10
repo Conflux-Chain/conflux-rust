@@ -531,7 +531,6 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
     fn finalize_full_sync_snapshot<'m>(
         &self, _snapshot_epoch_id: &MerkleHash, _merkle_root: &MerkleHash,
         _snapshot_info_map_rwlock: &'m RwLock<PersistedSnapshotInfoMap>,
-        _epoch_height: u64,
     ) -> Result<RwLockWriteGuard<'m, PersistedSnapshotInfoMap>>
     {
         unreachable!()

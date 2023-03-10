@@ -386,6 +386,8 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
                 if !self.is_mpt_table_in_current_db()
                     && old_db.is_mpt_table_in_current_db()
                 {
+                    // When creating the MPT database for the first time, we
+                    // need to copy the MPT table.
                     debug!("Copy mpt into new database");
                     base_mpt = old_db.open_snapshot_mpt_as_owned()?;
                     MptMerger::new(
@@ -449,6 +451,8 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
                 &mut save_as_mpt as &mut dyn SnapshotMptTraitRw,
             )
         } else {
+            // When the MPT table is in another database, readonly_mpt can be
+            // safely left as None since there's no need to copy the MPT table
             MptMerger::new(
                 None,
                 &mut save_as_mpt as &mut dyn SnapshotMptTraitRw,
@@ -654,7 +658,7 @@ impl SnapshotDbSqlite {
         Ok(())
     }
 
-    fn is_mpt_table_in_current_db(&self) -> bool {
+    pub fn is_mpt_table_in_current_db(&self) -> bool {
         self.mpt_table_in_current_db
     }
 }

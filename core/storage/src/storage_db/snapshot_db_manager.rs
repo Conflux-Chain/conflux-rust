@@ -67,6 +67,7 @@ pub trait SnapshotDbManagerTrait {
             }
         }
 
+        // scan mpt directory, and delete unnecessary snapshots
         for entry in fs::read_dir(self.get_mpt_snapshot_dir())? {
             let entry = entry?;
             let path = entry.path();
@@ -74,7 +75,7 @@ pub trait SnapshotDbManagerTrait {
 
             if dir_name.is_none() {
                 error!(
-                    "Unexpected snapshot path {}, deleted.",
+                    "Unexpected MPT snapshot path {}, deleted.",
                     entry.path().display()
                 );
                 fs::remove_dir_all(entry.path())?;
@@ -86,7 +87,7 @@ pub trait SnapshotDbManagerTrait {
                 && !self.get_latest_mpt_snapshot_db_name().eq(dir_name)
             {
                 error!(
-                    "Unexpected snapshot path {}, deleted.",
+                    "Unexpected MPT snapshot path {}, deleted.",
                     entry.path().display()
                 );
                 fs::remove_dir_all(entry.path())?;
@@ -117,7 +118,6 @@ pub trait SnapshotDbManagerTrait {
     fn finalize_full_sync_snapshot<'m>(
         &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
         snapshot_info_map_rwlock: &'m RwLock<PersistedSnapshotInfoMap>,
-        epoch_height: u64,
     ) -> Result<RwLockWriteGuard<'m, PersistedSnapshotInfoMap>>;
 }
 
