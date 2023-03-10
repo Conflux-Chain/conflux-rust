@@ -21,6 +21,7 @@ pub struct SnapshotDbManagerSqlite {
     mpt_open_snapshot_semaphore: Arc<Semaphore>,
     mpt_open_create_delete_lock: Mutex<()>,
     era_epoch_count: u64,
+    max_open_snapshots: u16,
 }
 
 #[derive(Debug)]
@@ -85,6 +86,7 @@ impl SnapshotDbManagerSqlite {
             )),
             mpt_open_create_delete_lock: Default::default(),
             era_epoch_count,
+            max_open_snapshots,
         })
     }
 
@@ -174,14 +176,13 @@ impl SnapshotDbManagerSqlite {
 
             let mpt_snapshot_db =
                 self.open_mpt_snapshot_readonly(mpt_snapshot_path, false)?;
-            let mpt_snapshot = mpt_snapshot_db.as_ref().unwrap();
 
             let snapshot_db = Arc::new(SnapshotDbSqlite::open(
                 snapshot_path.as_path(),
                 /* readonly = */ true,
                 &self.already_open_snapshots,
                 &self.open_snapshot_semaphore,
-                mpt_snapshot,
+                mpt_snapshot_db,
             )?);
 
             semaphore_permit.forget();
@@ -248,7 +249,7 @@ impl SnapshotDbManagerSqlite {
                 snapshot_path.as_path(),
                 &self.already_open_snapshots,
                 &self.open_snapshot_semaphore,
-                latest_mpt_snapshot,
+                Some(latest_mpt_snapshot.clone()),
                 mpt_table_in_current_db,
             )
         } else {
@@ -259,7 +260,7 @@ impl SnapshotDbManagerSqlite {
                     /* readonly = */ false,
                     &self.already_open_snapshots,
                     &self.open_snapshot_semaphore,
-                    latest_mpt_snapshot,
+                    Some(latest_mpt_snapshot.clone()),
                 )?;
 
                 if !mpt_table_in_current_db {
@@ -768,14 +769,13 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 self.get_latest_mpt_snapshot_db_path(),
                 false,
             )?;
-            let open_snapshot_mpt = &snapshot_mpt_db;
 
             // direct merge the first snapshot
             snapshot_db = Self::SnapshotDb::create(
                 temp_db_path.as_path(),
                 &self.already_open_snapshots,
                 &self.open_snapshot_semaphore,
-                open_snapshot_mpt,
+                Some(snapshot_mpt_db),
                 mpt_table_in_current_db,
             )?;
             snapshot_db.dump_delta_mpt(&delta_mpt)?;
@@ -1117,7 +1117,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
             SnapshotMptDbSqlite::create(
                 latest_mpt_snapshot_path.as_path(),
                 &Default::default(),
-                &Arc::new(Semaphore::new(10)),
+                &Arc::new(Semaphore::new(self.max_open_snapshots as usize)),
             )?;
             Ok(())
         }

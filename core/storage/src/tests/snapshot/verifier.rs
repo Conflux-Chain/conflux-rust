@@ -421,7 +421,7 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
         _snapshot_path: &Path, _readonly: bool,
         _already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         _open_semaphore: &Arc<Semaphore>,
-        _open_snapshot_mpt: &Arc<RwLock<SnapshotMptDbSqlite>>,
+        _open_snapshot_mpt: Option<Arc<RwLock<SnapshotMptDbSqlite>>>,
     ) -> Result<Self>
     {
         unreachable!()
@@ -431,7 +431,7 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
         _snapshot_path: &Path,
         _already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         _open_semaphore: &Arc<Semaphore>,
-        _open_snapshot_mpt: &Arc<RwLock<SnapshotMptDbSqlite>>,
+        _open_snapshot_mpt: Option<Arc<RwLock<SnapshotMptDbSqlite>>>,
         _old_version: bool,
     ) -> Result<Self>
     {

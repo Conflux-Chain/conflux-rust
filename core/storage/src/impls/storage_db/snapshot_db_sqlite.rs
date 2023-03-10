@@ -200,11 +200,15 @@ impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
                 ))
             })?)
         } else {
-            self.mpt_snapshot
-                .as_ref()
-                .unwrap()
-                .write()
-                .open_snapshot_mpt_owned()
+            if self.mpt_snapshot.is_some() {
+                self.mpt_snapshot
+                    .as_ref()
+                    .unwrap()
+                    .write()
+                    .open_snapshot_mpt_owned()
+            } else {
+                bail!("mpt_snapshot is none");
+            }
         }
     }
 
@@ -223,11 +227,15 @@ impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
                 ),
             )?)
         } else {
-            self.mpt_snapshot
-                .as_ref()
-                .unwrap()
-                .read()
-                .open_snapshot_mpt_as_owned()
+            if self.mpt_snapshot.is_some() {
+                self.mpt_snapshot
+                    .as_ref()
+                    .unwrap()
+                    .read()
+                    .open_snapshot_mpt_as_owned()
+            } else {
+                bail!("mpt_snapshot is none");
+            }
         }
     }
 
@@ -248,11 +256,15 @@ impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
                 ))
             })?)
         } else {
-            self.mpt_snapshot
-                .as_ref()
-                .unwrap()
-                .read()
-                .open_snapshot_mpt_shared()
+            if self.mpt_snapshot.is_some() {
+                self.mpt_snapshot
+                    .as_ref()
+                    .unwrap()
+                    .read()
+                    .open_snapshot_mpt_shared()
+            } else {
+                bail!("mpt_snapshot is none");
+            }
         }
     }
 }
@@ -278,7 +290,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         snapshot_path: &Path, readonly: bool,
         already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         open_semaphore: &Arc<Semaphore>,
-        mpt_snapshot: &Arc<RwLock<SnapshotMptDbSqlite>>,
+        mpt_snapshot: Option<Arc<RwLock<SnapshotMptDbSqlite>>>,
     ) -> Result<SnapshotDbSqlite>
     {
         let kvdb_sqlite_sharded = KvdbSqliteSharded::<Box<[u8]>>::open(
@@ -301,7 +313,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             open_semaphore: open_semaphore.clone(),
             path: snapshot_path.to_path_buf(),
             remove_on_close: Default::default(),
-            mpt_snapshot: Some(mpt_snapshot.clone()),
+            mpt_snapshot: mpt_snapshot.clone(),
             mpt_table_in_current_db: mpt_table_exist,
         })
     }
@@ -310,7 +322,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
         snapshot_path: &Path,
         already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         open_snapshots_semaphore: &Arc<Semaphore>,
-        mpt_snapshot: &Arc<RwLock<SnapshotMptDbSqlite>>,
+        mpt_snapshot: Option<Arc<RwLock<SnapshotMptDbSqlite>>>,
         mpt_table_in_current_db: bool,
     ) -> Result<SnapshotDbSqlite>
     {
@@ -347,7 +359,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
                 open_semaphore: open_snapshots_semaphore.clone(),
                 path: snapshot_path.to_path_buf(),
                 remove_on_close: Default::default(),
-                mpt_snapshot: Some(mpt_snapshot.clone()),
+                mpt_snapshot: mpt_snapshot.clone(),
                 mpt_table_in_current_db,
             }),
         }
@@ -458,7 +470,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             }
         }
 
-        if !self.mpt_table_in_current_db {
+        if !self.mpt_table_in_current_db && self.mpt_snapshot.is_some() {
             self.mpt_snapshot
                 .as_ref()
                 .unwrap()
@@ -470,7 +482,7 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
     }
 
     fn commit_transaction(&mut self) -> Result<()> {
-        if !self.mpt_table_in_current_db {
+        if !self.mpt_table_in_current_db && self.mpt_snapshot.is_some() {
             self.mpt_snapshot
                 .as_ref()
                 .unwrap()

@@ -21,7 +21,7 @@ pub fn open_snapshot_db_for_testing(
         readonly,
         &Default::default(),
         &Arc::new(Semaphore::new(DEFAULT_MAX_OPEN_SNAPSHOTS as usize)),
-        &mpt_snapshot,
+        Some(mpt_snapshot),
     )
 }
 

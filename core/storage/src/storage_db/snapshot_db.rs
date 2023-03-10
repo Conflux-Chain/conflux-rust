@@ -125,7 +125,7 @@ pub trait SnapshotDbTrait:
         snapshot_path: &Path, readonly: bool,
         already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         open_semaphore: &Arc<Semaphore>,
-        mpt_snapshot: &Arc<RwLock<SnapshotMptDbSqlite>>,
+        mpt_snapshot: Option<Arc<RwLock<SnapshotMptDbSqlite>>>,
     ) -> StorageResult<Self>;
 
     /// Store already_open_snapshots and open_semaphore to update
@@ -135,7 +135,7 @@ pub trait SnapshotDbTrait:
         snapshot_path: &Path,
         already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         open_semaphore: &Arc<Semaphore>,
-        mpt_snapshot: &Arc<RwLock<SnapshotMptDbSqlite>>,
+        mpt_snapshot: Option<Arc<RwLock<SnapshotMptDbSqlite>>>,
         mpt_table_in_current_db: bool,
     ) -> StorageResult<Self>;
 

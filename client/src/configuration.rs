@@ -345,8 +345,15 @@ build_config! {
         (ln_max_parallel_epochs_to_request, (Option<usize>), None)
         (ln_num_epochs_to_request, (Option<usize>), None)
         (ln_num_waiting_headers_threshold, (Option<usize>), None)
+
+        // The snapshot database consists of two tables: snapshot_key_value and snapshot_mpt. However, the size of snapshot_mpt is significantly larger than that of snapshot_key_value.
+        // When the configuration parameter use_isolated_db_for_mpt_table is set to true, the snapshot_mpt table will be located in a separate database.
         (use_isolated_db_for_mpt_table, (bool), false)
+        // The use_isolated_db_for_mpt_table_height parameter is utilized to determine when to enable the use_isolated_db_for_mpt_table option.
+        //  None: enabled since the next snapshot
+        //  u64: enabled since the specified height
         (use_isolated_db_for_mpt_table_height, (Option<u64>), None)
+        // Recover the latest MPT snapshot from the era checkpoint
         (recovery_latest_mpt_snapshot, (bool), false)
     }
     {
