@@ -1216,6 +1216,7 @@ dependencies = [
  "serde_json",
  "serial_test",
  "slab",
+ "solidity-abi",
  "static_assertions",
  "storage-interface",
  "strum 0.20.0",
@@ -3713,7 +3714,7 @@ dependencies = [
 [[package]]
 name = "librocksdb_sys"
 version = "0.1.0"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=cac983ab886a0701c8458bce76a76f63de16e1bd#cac983ab886a0701c8458bce76a76f63de16e1bd"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=f34009ab323d6218fe85324bfdaf47762e2d1ec0#f34009ab323d6218fe85324bfdaf47762e2d1ec0"
 dependencies = [
  "bindgen",
  "bzip2-sys",
@@ -3730,7 +3731,7 @@ dependencies = [
 [[package]]
 name = "libtitan_sys"
 version = "0.0.1"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=cac983ab886a0701c8458bce76a76f63de16e1bd#cac983ab886a0701c8458bce76a76f63de16e1bd"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=f34009ab323d6218fe85324bfdaf47762e2d1ec0#f34009ab323d6218fe85324bfdaf47762e2d1ec0"
 dependencies = [
  "bzip2-sys",
  "cc",
@@ -5486,7 +5487,7 @@ dependencies = [
 [[package]]
 name = "rocksdb"
 version = "0.3.0"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=cac983ab886a0701c8458bce76a76f63de16e1bd#cac983ab886a0701c8458bce76a76f63de16e1bd"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=f34009ab323d6218fe85324bfdaf47762e2d1ec0#f34009ab323d6218fe85324bfdaf47762e2d1ec0"
 dependencies = [
  "libc",
  "librocksdb_sys",

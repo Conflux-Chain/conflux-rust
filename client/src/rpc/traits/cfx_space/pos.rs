@@ -2,9 +2,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::pos::{
-    Account, Block, BlockNumber, CommitteeState, PoSEpochReward, Status,
-    Transaction,
+use crate::rpc::types::{
+    pos::{
+        Account, Block, BlockNumber, CommitteeState, PoSEpochReward, Status,
+        Transaction,
+    },
+    RpcAddress,
 };
 use cfx_types::{H256, U64};
 use diem_types::{
@@ -22,6 +25,11 @@ pub trait Pos {
     #[rpc(name = "pos_getAccount")]
     fn pos_account(
         &self, address: H256, view: Option<U64>,
+    ) -> JsonRpcResult<Account>;
+
+    #[rpc(name = "pos_getAccountByPowAddress")]
+    fn pos_account_by_pow_address(
+        &self, address: RpcAddress, view: Option<U64>,
     ) -> JsonRpcResult<Account>;
 
     #[rpc(name = "pos_getCommittee")]

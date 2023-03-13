@@ -51,7 +51,7 @@ use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{
     node_table::NodeId, service::ProtocolVersion,
     throttling::THROTTLING_SERVICE, NetworkContext, NetworkProtocolHandler,
-    NetworkService,
+    NetworkService, UpdateNodeOperation,
 };
 use parking_lot::RwLock;
 use primitives::{
@@ -59,8 +59,13 @@ use primitives::{
 };
 use rand::prelude::SliceRandom;
 use rlp::Rlp;
-use std::sync::{Arc, Weak};
+use std::{
+    sync::{Arc, Weak},
+    time::{Duration, Instant},
+};
 use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
+
+const CHECK_PEER_HEARTBEAT_TIMER: TimerToken = 0;
 
 #[derive(DeriveMallocSizeOf)]
 pub struct Provider {
@@ -448,6 +453,7 @@ impl Provider {
         let state = self.get_existing_peer_state(peer)?;
         let mut state = state.write();
         state.handshake_completed = true;
+        state.last_heartbeat = Instant::now();
         Ok(())
     }
 
@@ -992,6 +998,19 @@ impl Provider {
             }
         }
     }
+
+    fn check_timeout(&self, io: &dyn NetworkContext, timeout: Duration) {
+        for peer in self
+            .peers
+            .all_peers_satisfying(|p| p.last_heartbeat.elapsed() >= timeout)
+        {
+            io.disconnect_peer(
+                &peer,
+                Some(UpdateNodeOperation::Failure),
+                "light node sync heartbeat timeout", /* reason */
+            );
+        }
+    }
 }
 
 impl NetworkProtocolHandler for Provider {
@@ -1004,7 +1023,10 @@ impl NetworkProtocolHandler for Provider {
         }
     }
 
-    fn initialize(&self, _io: &dyn NetworkContext) {}
+    fn initialize(&self, io: &dyn NetworkContext) {
+        io.register_timer(CHECK_PEER_HEARTBEAT_TIMER, Duration::from_secs(60))
+            .expect("Error registering CHECK_PEER_HEARTBEAT_TIMER");
+    }
 
     fn on_message(&self, io: &dyn NetworkContext, peer: &NodeId, raw: &[u8]) {
         trace!("on_message: peer={:?}, raw={:?}", peer, raw);
@@ -1044,12 +1066,13 @@ impl NetworkProtocolHandler for Provider {
         self.peers.get(node_id).unwrap().write().protocol_version =
             peer_protocol_version;
 
+        let peer = self.peers.get(node_id).expect("peer not found");
         if let Some(ref file) = self.throttling_config_file {
-            let peer = self.peers.get(node_id).expect("peer not found");
             peer.write().throttling =
                 TokenBucketManager::load(file, Some("light_protocol"))
                     .expect("invalid throttling configuration file");
         }
+        peer.write().last_heartbeat = Instant::now();
     }
 
     fn on_peer_disconnected(&self, _io: &dyn NetworkContext, peer: &NodeId) {
@@ -1057,8 +1080,14 @@ impl NetworkProtocolHandler for Provider {
         self.peers.remove(peer);
     }
 
-    fn on_timeout(&self, _io: &dyn NetworkContext, _timer: TimerToken) {
-        // EMPTY
+    fn on_timeout(&self, io: &dyn NetworkContext, timer: TimerToken) {
+        match timer {
+            CHECK_PEER_HEARTBEAT_TIMER => {
+                // TODO: config for light clients.
+                self.check_timeout(io, Duration::from_secs(180))
+            }
+            _ => warn!("Unknown timer {} triggered.", timer),
+        }
     }
 
     fn send_local_message(&self, _io: &dyn NetworkContext, _message: Vec<u8>) {

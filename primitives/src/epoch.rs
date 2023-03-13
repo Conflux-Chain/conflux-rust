@@ -35,6 +35,9 @@ impl Into<EpochNumber> for u64 {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum BlockHashOrEpochNumber {
-    BlockHash(H256),
+    BlockHashWithOption {
+        hash: H256,
+        require_pivot: Option<bool>,
+    },
     EpochNumber(EpochNumber),
 }
