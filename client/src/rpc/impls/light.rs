@@ -45,7 +45,7 @@ use crate::{
             PoSEconomics, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
             RpcAddress, SendTxRequest, SponsorInfo, Status as RpcStatus,
             SyncGraphStates, TokenSupplyInfo, Transaction as RpcTransaction,
-            VoteParamsInfo,
+            VoteParamsInfo, WrapTransaction,
         },
         RpcBoxFuture, RpcResult,
     },
@@ -1253,5 +1253,7 @@ impl LocalRpc for DebugRpcImpl {
         fn epoch_receipts(&self, epoch: BlockHashOrEpochNumber) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
         fn sign_transaction(&self, tx: SendTxRequest, password: Option<String>) -> JsonRpcResult<String>;
         fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
+        fn transactions_by_epoch(&self, epoch_number: U64) -> JsonRpcResult<Vec<WrapTransaction>>;
+        fn transactions_by_block(&self, block_hash: H256) -> JsonRpcResult<Vec<WrapTransaction>>;
     }
 }

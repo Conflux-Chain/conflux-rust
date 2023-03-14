@@ -85,3 +85,28 @@ class TestGetTxByHash(RpcClient):
         # tx found in referenced block
         self.wait_for_receipt(tx_hash)
         assert_equal(self.get_tx(tx_hash)["blockHash"], b1)
+
+    def test_tx_by_epoch(self):
+        tx = self.new_tx()
+        tx_hash = self.send_tx(tx)
+
+        tx2 = self.get_tx(tx_hash)
+        assert_equal(tx2["hash"], tx_hash)
+        assert_equal(tx2["blockHash"], None)
+        assert_equal(tx2["transactionIndex"], None)
+
+        self.wait_for_receipt(tx_hash)
+
+        tx3 = self.get_tx(tx_hash)
+
+        block_hash = tx3["blockHash"]
+        block = self.block_by_hash(block_hash)
+
+        r1 = self.node.cfx_getTransactionsByEpoch(block["epochNumber"])
+        assert_equal(r1[0]["nativeTransaction"]["hash"], tx_hash)
+        assert_equal(r1[0]["nativeTransaction"]["blockHash"], block_hash)
+
+        r2 = self.node.cfx_getTransactionsByBlock(tx3["blockHash"])
+        assert_equal(r2[0]["nativeTransaction"]["hash"], tx_hash)
+        assert_equal(r2[0]["nativeTransaction"]["blockHash"], block_hash)
+        assert_equal(r1[0]["nativeTransaction"]["epochHeight"], r2[0]["nativeTransaction"]["epochHeight"])
