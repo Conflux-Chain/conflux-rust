@@ -1,6 +1,6 @@
 [package]
 name = "client"
-version = "2.2.1-fixpos"
+version = "2.2.2"
 edition = "2018"
 
 [dependencies]
@@ -96,6 +96,7 @@ anyhow = "1.0.38"
 rpassword = "5.0.1"
 static_assertions = "1.1.0"
 parity-version = {path = "../util/version"}
+solidity-abi = {path="../util/solidity-abi"}
 
 [dev-dependencies]
 criterion = "0.3"

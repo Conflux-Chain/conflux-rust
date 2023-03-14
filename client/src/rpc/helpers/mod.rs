@@ -9,7 +9,9 @@ mod subscribers;
 mod variadic_value;
 
 pub use self::{
-    poll_filter::{limit_logs, PollFilter, SyncPollFilter},
+    poll_filter::{
+        limit_logs, PollFilter, SyncPollFilter, MAX_BLOCK_HISTORY_SIZE,
+    },
     poll_manager::PollManager,
 };
 pub use epoch_queue::EpochQueue;

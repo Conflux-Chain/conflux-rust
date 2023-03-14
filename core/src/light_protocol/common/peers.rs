@@ -8,6 +8,7 @@ use parking_lot::RwLock;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
+    time::Instant,
 };
 
 use crate::message::MsgId;
@@ -15,6 +16,7 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::{node_table::NodeId, service::ProtocolVersion};
 use rand::prelude::SliceRandom;
+use smart_default::SmartDefault;
 use throttling::token_bucket::{ThrottledManager, TokenBucketManager};
 
 #[derive(Default)]
@@ -27,11 +29,13 @@ pub struct FullPeerState {
     pub unexpected_msgs: TokenBucketManager,
 }
 
-#[derive(Default, DeriveMallocSizeOf)]
+#[derive(SmartDefault, DeriveMallocSizeOf)]
 pub struct LightPeerState {
     pub handshake_completed: bool,
     pub protocol_version: ProtocolVersion,
     pub throttling: TokenBucketManager,
+    #[default(Instant::now())]
+    pub last_heartbeat: Instant,
 }
 
 #[derive(Default)]

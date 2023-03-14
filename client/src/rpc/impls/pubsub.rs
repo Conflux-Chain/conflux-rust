@@ -229,7 +229,7 @@ pub struct ChainNotificationHandler {
     consensus: SharedConsensusGraph,
     data_man: Arc<BlockDataManager>,
     heads_subscribers: Arc<RwLock<Subscribers<Client>>>,
-    network: Network,
+    pub network: Network,
 }
 
 impl ChainNotificationHandler {
