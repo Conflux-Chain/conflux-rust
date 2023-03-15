@@ -2014,7 +2014,7 @@ impl ConsensusNewBlockHandler {
             }
         }
 
-        // Retrieven the earliest non-executed epoch
+        // Retrieve the earliest non-executed epoch
         let mut start_compute_epoch_pivot_index = end_index;
         for pivot_index in start_pivot_index + 1..end_index {
             let pivot_arena_index = inner.pivot_chain[pivot_index];
@@ -2159,6 +2159,7 @@ impl ConsensusNewBlockHandler {
                     panic!("unreachable, era_pivot_epoch_height is less than cur_era_genesis_height");
                 }
 
+                // use ear snapshot replace latest
                 snapshot_db_manager
                     .recovery_lastest_mpt_snapshot(&era_pivot_hash)
                     .unwrap();

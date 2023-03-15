@@ -731,7 +731,7 @@ impl SnapshotDbManagerSqlite {
                 fs::remove_dir_all(&new_mpt_snapshot_db_path.as_path())
             {
                 error!(
-                    "remove snapshot err: path={:?} err={:?}",
+                    "remove mpt snapshot err: path={:?} err={:?}",
                     new_mpt_snapshot_db_path.as_path(),
                     e
                 );
@@ -1072,7 +1072,6 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         }
 
         Self::rename_snapshot_db(&temp_db_path, &final_db_path)?;
-
         Ok(locked)
     }
 
@@ -1082,14 +1081,13 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
         // Replace the latest MPT snapshot with the MPT snapshot of the
         // specified snapshot_epoch_id
         let latest_mpt_snapshot_path = self.get_latest_mpt_snapshot_db_path();
-
         if latest_mpt_snapshot_path.exists() {
             debug!("remvoe mpt snapshot {:?}", latest_mpt_snapshot_path);
             if let Err(e) =
                 fs::remove_dir_all(&latest_mpt_snapshot_path.as_path())
             {
                 error!(
-                    "remove snapshot err: path={:?} err={:?}",
+                    "remove mpt snapshot err: path={:?} err={:?}",
                     latest_mpt_snapshot_path.as_path(),
                     e
                 );
@@ -1106,10 +1104,10 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 self.get_merge_temp_mpt_snapshot_db_path(&snapshot_epoch_id);
 
             self.try_copy_snapshot(source.as_path(), temp_mpt_path.as_path())?;
-
             Self::rename_snapshot_db(&temp_mpt_path, &latest_mpt_snapshot_path)
         } else {
             debug!("mpt snapshot for epoch {} not exist", snapshot_epoch_id);
+            // recreate latest MPT database
             SnapshotMptDbSqlite::create(
                 latest_mpt_snapshot_path.as_path(),
                 &Default::default(),

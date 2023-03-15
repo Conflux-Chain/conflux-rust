@@ -190,6 +190,9 @@ impl<'db> OpenSnapshotMptTrait<'db> for SnapshotDbSqlite {
             "open_snapshot_mpt_owned mpt_table_in_current_db {}",
             self.mpt_table_in_current_db
         );
+
+        // Prioritize using the MPT table in the self-database; if unavailable,
+        // then using MPT table from MPT snapshot.
         if self.mpt_table_in_current_db {
             Ok(SnapshotMpt::new(unsafe {
                 std::mem::transmute(KvdbSqliteShardedBorrowMut::<
