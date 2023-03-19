@@ -2,7 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{receipt::Receipt, Bytes, RpcAddress};
+use crate::rpc::types::{
+    eth::Transaction as ETHTransaction, receipt::Receipt, Bytes, RpcAddress,
+};
 use cfx_addr::Network;
 use cfx_types::{Space, H256, U256, U64};
 use cfxkey::Error;
@@ -11,6 +13,13 @@ use primitives::{
     SignedTransaction, Transaction as PrimitiveTransaction, TransactionIndex,
     TransactionWithSignature, TransactionWithSignatureSerializePart,
 };
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WrapTransaction {
+    NativeTransaction(Transaction),
+    EthTransaction(ETHTransaction),
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
