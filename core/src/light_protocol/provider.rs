@@ -41,8 +41,8 @@ use crate::{
 };
 use cfx_internal_common::ChainIdParamsDeprecated;
 use cfx_parameters::light::{
-    HEARTBEAT_PERIOD, MAX_EPOCHS_TO_SEND, MAX_HEADERS_TO_SEND,
-    MAX_ITEMS_TO_SEND, MAX_TXS_TO_SEND, MAX_WITNESSES_TO_SEND,
+    MAX_EPOCHS_TO_SEND, MAX_HEADERS_TO_SEND, MAX_ITEMS_TO_SEND,
+    MAX_TXS_TO_SEND, MAX_WITNESSES_TO_SEND,
 };
 use cfx_types::H256;
 use diem_types::validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey};
@@ -66,7 +66,6 @@ use std::{
 use throttling::token_bucket::{ThrottleResult, TokenBucketManager};
 
 const CHECK_PEER_HEARTBEAT_TIMER: TimerToken = 0;
-const HEARTBEAT_TIMER: TimerToken = 1;
 
 #[derive(DeriveMallocSizeOf)]
 pub struct Provider {
@@ -1001,29 +1000,14 @@ impl Provider {
     }
 
     fn check_timeout(&self, io: &dyn NetworkContext, timeout: Duration) {
-        for peer in self
-            .peers
-            .all_peers_satisfying(|p| p.last_heartbeat.elapsed() >= timeout)
-        {
+        for peer in self.peers.all_peers_satisfying(|p| {
+            p.handshake_completed && p.last_heartbeat.elapsed() >= timeout
+        }) {
             io.disconnect_peer(
                 &peer,
                 Some(UpdateNodeOperation::Failure),
                 "light node sync heartbeat timeout", /* reason */
             );
-        }
-    }
-
-    fn send_heartbeat(&self, io: &dyn NetworkContext) {
-        let peer_ids = self.peers.all_peers_satisfying(|_| true);
-
-        for peer in peer_ids {
-            debug!("send_heartbeat peer={:?}", peer);
-            if let Err(e) = self.send_status(io, &peer) {
-                warn!(
-                    "Error while sending heartbeat to peer {:?}: {:?}",
-                    peer, e
-                );
-            }
         }
     }
 }
@@ -1041,8 +1025,6 @@ impl NetworkProtocolHandler for Provider {
     fn initialize(&self, io: &dyn NetworkContext) {
         io.register_timer(CHECK_PEER_HEARTBEAT_TIMER, Duration::from_secs(60))
             .expect("Error registering CHECK_PEER_HEARTBEAT_TIMER");
-        io.register_timer(HEARTBEAT_TIMER, *HEARTBEAT_PERIOD)
-            .expect("Error registering heartbeat timer");
     }
 
     fn on_message(&self, io: &dyn NetworkContext, peer: &NodeId, raw: &[u8]) {
@@ -1103,7 +1085,6 @@ impl NetworkProtocolHandler for Provider {
                 // TODO: config for light clients.
                 self.check_timeout(io, Duration::from_secs(180))
             }
-            HEARTBEAT_TIMER => self.send_heartbeat(io),
             _ => warn!("Unknown timer {} triggered.", timer),
         }
     }
