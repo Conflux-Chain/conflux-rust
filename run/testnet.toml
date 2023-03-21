@@ -383,12 +383,12 @@ jsonrpc_local_http_port=12539
 
 # Maximum number of transactions allowed in the transaction pool.
 #
-# tx_pool_size = 500_000
+# tx_pool_size = 50_000
 
 # Minimum allowed transaction gas price for two spaces in the transaction pool.
 #
 # tx_pool_min_native_tx_gas_price = 1_000_000_000
-# tx_pool_min_eth_tx_gas_price = 1_000_000_000
+# tx_pool_min_eth_tx_gas_price = 20_000_000_000
 
 # ------------------ Storage Parameters ----------------------
 

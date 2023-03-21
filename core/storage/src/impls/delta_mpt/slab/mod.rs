@@ -127,7 +127,7 @@ use std::{
 /// operations. Slab doesn't check if user get &mut and & for the same slot.
 /// User should maintain a layer which controls the mutability of each specific
 /// slot. It can be done through the wrapper around the slot index, or in the
-/// type which implements EntryTrait<T>.
+/// type which implements `EntryTrait<T>`.
 ///
 /// Allocation and Deallocation are serialized by mutex because they modify the
 /// slab link-list.
@@ -423,8 +423,11 @@ impl<T, E: EntryTrait<EntryType = T>> Slab<T, E> {
     /// # Examples
     ///
     /// # use cfx_storage::Slab;
+    /// ```
+    /// use cfx_storage::Slab;
     /// let slab: Slab<i32> = Slab::with_capacity(10);
     /// assert_eq!(slab.capacity(), 10);
+    /// ```
     pub fn capacity(&self) -> usize { self.entries.capacity() }
 
     /// Reserve capacity for at least `additional` more values to be stored

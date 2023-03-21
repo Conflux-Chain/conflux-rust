@@ -12,8 +12,8 @@ cfg_if! {
 }
 
 pub type SnapshotMptDbValue = Box<[u8]>;
-/// We use VanillaTrieNode<(MerkleHash, i64)> instead of
-/// (VanillaTrieNode<MerkleHash>, i64) to make seeking by rlp size position
+/// We use `VanillaTrieNode<(MerkleHash, i64)>` instead of
+/// `(VanillaTrieNode<MerkleHash>, i64)` to make seeking by rlp size position
 /// faster.
 #[derive(Clone, Default, Debug)]
 pub struct SnapshotMptNode(pub VanillaTrieNode<SubtreeMerkleWithSize>);

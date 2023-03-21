@@ -202,10 +202,7 @@ impl MaybeInPlaceByteArray {
             Box::into_raw(value);
             Self { ptr }
         } else {
-            let mut in_place: [u8; Self::MAX_INPLACE_SIZE];
-            unsafe {
-                in_place = std::mem::uninitialized();
-            }
+            let mut in_place: [u8; Self::MAX_INPLACE_SIZE] = Default::default();
             in_place[0..size].copy_from_slice(&*value);
             Self { in_place }
         }

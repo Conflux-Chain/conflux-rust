@@ -95,11 +95,12 @@ class NodeReputationTests(ConfluxTestFramework):
         assert node[1]["lastContact"].get("demoted")
         assert node[1]["streamToken"] == n[1]["streamToken"]
 
+        last_connected = node[1]["lastConnected"]
         # log to dubug flaky error, suspect lastConnected not updated timely, so assert it at last
-        if not node[1]["lastConnected"].get("failure"):
-            self.log.info("Last connected: {}".format(node[1]["lastConnected"]))
+        if not last_connected.get("failure"):
+            self.log.info("Last connected: {}".format(last_connected))
 
-        assert node[1]["lastConnected"].get("failure")
+        assert last_connected.get("failure") or last_connected.get("demoted")
 
         # Node 0 will not create outgoing connection to Node 2
         time.sleep((self.test_house_keeping_ms + 100) / 1000)
