@@ -41,7 +41,10 @@ impl InfluxdbReporter {
             http_client,
         );
         InfluxdbReporter {
-            runtime: Builder::new_current_thread().enable_all().build().unwrap(),
+            runtime: Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap(),
             client,
             tags: HashMap::new(),
         }
@@ -51,7 +54,10 @@ impl InfluxdbReporter {
         host: T, db: T, username: R, password: R,
     ) -> Self {
         InfluxdbReporter {
-            runtime: Builder::new_current_thread().enable_all().build().unwrap(),
+            runtime: Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap(),
             client: Client::new(
                 host.into().as_str().try_into().expect("wrong url"),
                 db,
