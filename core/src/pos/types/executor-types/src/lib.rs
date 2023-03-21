@@ -80,8 +80,8 @@ pub trait BlockExecutor: Send {
     /// Commits a block and all its ancestors in a batch manner.
     ///
     /// Returns `Ok(Result<Vec<Transaction>, Vec<ContractEvents>)` if
-    /// successful, where Vec<Transaction> is a vector of transactions that
-    /// were kept from the submitted blocks, and Vec<ContractEvents> is a
+    /// successful, where `Vec<Transaction>` is a vector of transactions that
+    /// were kept from the submitted blocks, and `Vec<ContractEvents>` is a
     /// vector of reconfiguration events in the submitted blocks
     fn commit_blocks(
         &self, block_ids: Vec<HashValue>,
@@ -113,8 +113,7 @@ pub struct StateComputeResult {
     /// Consensus.
     root_hash: HashValue,
     /// Represents the roots of all the full subtrees from left to right in
-    /// this accumulator after the execution. For details, please see
-    /// [`InMemoryAccumulator`](accumulator::InMemoryAccumulator).
+    /// this accumulator after the execution.
     frozen_subtree_roots: Vec<HashValue>,
 
     /// The frozen subtrees roots of the parent block,

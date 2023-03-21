@@ -14,21 +14,23 @@ use crate::utils::tuple::ElementSatisfy;
 /// which render some usages infeasible.
 ///
 /// Say if we have the code below:
-///
+/// ```
 /// trait LifetimeBoundedTrait<'a> {
 ///     fn get(&'a mut self) -> T<'a>;
 /// }
 ///
 /// #[derive(Debug)]
 /// struct T<'a> {
-///    s: &'a i64,
+///     s: &'a i64,
 /// }
 ///
 /// struct EndUserType<TypeImplTrait> {
 ///     v: TypeImplTrait,
 /// }
 ///
-/// impl<T> EndUserType<T> where for<'a> T: LifetimeBoundedTrait<'a> {
+/// impl<T> EndUserType<T>
+/// where for<'a> T: LifetimeBoundedTrait<'a>
+/// {
 ///     fn use_t(&mut self) {
 ///         let ret = self.v.get();
 ///         println!("{:?}", ret);
@@ -38,12 +40,13 @@ use crate::utils::tuple::ElementSatisfy;
 /// struct ConcreteType {}
 ///
 /// impl<'a> LifetimeBoundedTrait<'a> for ConcreteType {
-///     fn get(&'a mut self) -> T<'a> { T{s: &0} }
+///     fn get(&'a mut self) -> T<'a> { T { s: &0 } }
 /// }
 ///
 /// impl<'a: 'b, 'b> LifetimeBoundedTrait<'b> for &'a mut ConcreteType {
 ///     fn get(&'b mut self) -> T<'b> { (*self).get() }
 /// }
+/// ```
 ///
 /// Ideally, we could store &mut ConcreteType in EndUserType#use_t in the
 /// same way. But It's not possible for the EndUserType to store &mut

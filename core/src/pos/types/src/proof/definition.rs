@@ -292,9 +292,6 @@ where V: CryptoHash
 /// new leaves. If the client can verify that it can indeed obtain the new root
 /// hash by appending these new leaves, it can be convinced that the two
 /// accumulators are consistent.
-///
-/// See [`crate::proof::accumulator::Accumulator::append_subtrees`] for more
-/// details.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AccumulatorConsistencyProof {
     /// The subtrees representing the newly appended leaves.
