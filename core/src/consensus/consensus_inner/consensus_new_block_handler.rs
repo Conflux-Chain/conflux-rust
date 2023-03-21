@@ -2108,7 +2108,7 @@ impl ConsensusNewBlockHandler {
                     inner.data_man.storage_manager.get_storage_manager();
                 if !storage_manager
                     .storage_conf
-                    .keep_snapshot_before_ear_checkpoint
+                    .keep_snapshot_before_stable_checkpoint
                     && !previous_compute
                 {
                     let intermediate_trie_root_merkle = match *self
