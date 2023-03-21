@@ -16,10 +16,12 @@ use influx_db_client::{
 };
 use log::debug;
 use std::{collections::HashMap, convert::TryInto, time::Duration};
+use tokio::runtime::{Builder, Runtime};
 
 const REPORT_TIMEOUT_SECONDS: u64 = 30;
 
 pub struct InfluxdbReporter {
+    runtime: Runtime,
     client: Client,
     tags: HashMap<String, String>, // e.g. node=Node_0, region=east_asia
 }
@@ -39,6 +41,7 @@ impl InfluxdbReporter {
             http_client,
         );
         InfluxdbReporter {
+            runtime: Builder::new_current_thread().enable_all().build().unwrap(),
             client,
             tags: HashMap::new(),
         }
@@ -48,6 +51,7 @@ impl InfluxdbReporter {
         host: T, db: T, username: R, password: R,
     ) -> Self {
         InfluxdbReporter {
+            runtime: Builder::new_current_thread().enable_all().build().unwrap(),
             client: Client::new(
                 host.into().as_str().try_into().expect("wrong url"),
                 db,
@@ -92,7 +96,7 @@ impl Reporter for InfluxdbReporter {
             points = points.push(point);
         }
 
-        if let Err(e) = futures::executor::block_on(self.client.write_points(
+        if let Err(e) = self.runtime.block_on(self.client.write_points(
             points,
             Some(Precision::Milliseconds),
             None,
