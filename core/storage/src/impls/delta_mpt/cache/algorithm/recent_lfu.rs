@@ -11,7 +11,7 @@ use super::{
 use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use std::{hint, mem};
+use std::hint;
 
 /// In RecentLFU we keep an LRU to maintain frequency for alpha * cache_slots
 /// recently visited elements. When inserting the most recent element, evict the
@@ -229,22 +229,11 @@ struct CacheStoreUtilLRUMiss<
 impl<'a, 'b, PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait>
     CacheStoreUtilLRUMiss<'a, 'b, PosT, CacheIndexT>
 {
-    fn new<RngT: Rng>(
+    fn new(
         metadata: CacheStoreUtilLRUHit<'a, PosT, CacheIndexT>,
-        cache_index: CacheIndexT,
         new_metadata: &'b mut RecentLFUMetadata<PosT, CacheIndexT>,
-        rng: &mut RngT,
     ) -> Self
     {
-        *new_metadata = RecentLFUMetadata::<PosT, CacheIndexT> {
-            frequency:
-                RecentLFUMetadata::<PosT, CacheIndexT>::init_visit_counter_random_bits(
-                    rng,
-                ),
-            lru_handle: Default::default(),
-            cache_index: cache_index,
-        };
-
         Self {
             new_metadata,
             metadata,
@@ -368,16 +357,20 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheAlgorithm
                 }
             }
         } else {
+            let mut hole = Hole::<_>::new_uninit_pointer(RecentLFUMetadata::<PosT, CacheIndexT> {
+                frequency:
+                RecentLFUMetadata::<PosT, CacheIndexT>::init_visit_counter_random_bits(
+                    &mut self.counter_rng,
+                ),
+                lru_handle: Default::default(),
+                cache_index,
+            });
             // r_lfu_handle equals NULL_POS.
             if self.frequency_lru.has_space() {
-                let mut hole: Hole<RecentLFUMetadata<PosT, CacheIndexT>> =
-                    unsafe { mem::uninitialized() };
                 {
                     let mut lru_cache_store_util = CacheStoreUtilLRUMiss::new(
                         self.frequency_heap.get_array_mut(),
-                        cache_index,
                         &mut hole.value,
-                        &mut self.counter_rng,
                     );
 
                     self.frequency_lru
@@ -415,15 +408,11 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheAlgorithm
                     }
                 }
             } else {
-                let mut hole: Hole<RecentLFUMetadata<PosT, CacheIndexT>> =
-                    unsafe { mem::uninitialized() };
                 let lru_access_result;
                 {
                     let mut lru_cache_store_util = CacheStoreUtilLRUMiss::new(
                         self.frequency_heap.get_array_mut(),
-                        cache_index,
                         &mut hole.value,
-                        &mut self.counter_rng,
                     );
                     lru_access_result = self
                         .frequency_lru
@@ -450,7 +439,7 @@ impl<PosT: PrimitiveNum, CacheIndexT: CacheIndexTrait> CacheAlgorithm
                             };
                             evicted_cache_index =
                                 evicted_r_lfu_metadata.cache_index;
-                            hole.pointer_pos = evicted_r_lfu_metadata;
+                            hole.pointer_pos.write(evicted_r_lfu_metadata);
 
                             // The caller should read the the returned
                             // CacheAccessResult and

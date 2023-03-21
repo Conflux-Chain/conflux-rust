@@ -52,7 +52,7 @@ const ZERO_DURATION: Duration = Duration::from_nanos(0);
 /// instead of `sleep`. Note that the blocking call will actually block the
 /// current thread until the sleep time has elapsed.
 ///
-/// `TimeService` tries to mirror the API provided by [`tokio::time`] to an
+/// `TimeService` tries to mirror the API provided by `tokio::time` to an
 /// extent. The primary difference is that all time is expressed in relative
 /// [`Duration`]s. In other words, "sleep for 5s" vs "sleep until unix time
 /// 1607734460". Absolute time is provided by [`TimeService::now`] which returns
@@ -61,8 +61,8 @@ const ZERO_DURATION: Duration = Duration::from_nanos(0);
 /// Note: you must also include the [`TimeServiceTrait`] to use the actual
 /// time-related functionality.
 ///
-/// Note: we have to provide our own [`Timeout`] and [`Interval`] types that
-/// use the [`Sleep`] future, since tokio's implementations are coupled to its
+/// Note: we have to provide our own `Timeout` and `Interval` types that
+/// use the `Sleep` future, since tokio's implementations are coupled to its
 /// internal Sleep future.
 ///
 /// Note: `TimeService`'s should be free (or very cheap) to clone and send

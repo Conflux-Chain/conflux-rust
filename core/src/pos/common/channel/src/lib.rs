@@ -9,11 +9,11 @@
 
 //! Provides an mpsc (multi-producer single-consumer) channel wrapped in an
 //! [`IntGauge`](diem_metrics::IntGauge) that counts the number of currently
-//! queued items. While there is only one [`channel::Receiver`], there can be
-//! many [`channel::Sender`]s, which are also cheap to clone.
+//! queued items. While there is only one `channel::Receiver`, there can be
+//! many `channel::Sender`s, which are also cheap to clone.
 //!
 //! This channel differs from our other channel implementation,
-//! [`channel::diem_channel`], in that it is just a single queue (vs. different
+//! `channel::diem_channel`, in that it is just a single queue (vs. different
 //! queues for different keys) with backpressure (senders will block if the
 //! queue is full instead of evicting another item in the queue) that only
 //! implements FIFO (vs. LIFO or KLAST).

@@ -47,9 +47,9 @@ pub struct ValidatorConfig {
     pub consensus_public_key: ConsensusPublicKey,
     /// None if the leader election does not need VRF.
     pub vrf_public_key: Option<ConsensusVRFPublicKey>,
-    /// This is an bcs serialized Vec<EncNetworkAddress>
+    /// This is an bcs serialized `Vec<EncNetworkAddress>`
     pub validator_network_addresses: Vec<u8>,
-    /// This is an bcs serialized Vec<NetworkAddress>
+    /// This is an bcs serialized `Vec<NetworkAddress>`
     pub fullnode_network_addresses: Vec<u8>,
 }
 
