@@ -231,10 +231,19 @@ impl SnapshotChunkSync {
                         ctx,
                         manifest_manager.snapshot_candidate.clone(),
                         related_data.snapshot_info.clone(),
+                        related_data.parent_snapshot_info.clone(),
                         manifest_manager.chunk_boundaries.clone(),
                         manifest_manager.chunk_boundary_proofs.clone(),
                         manifest_manager.active_peers.clone(),
                         self.config.chunk_config(),
+                        // This delta_root is the intermediate_delta_root of
+                        // the new snapshot, and this field will be used to
+                        // fill new state_root in
+                        // get_state_trees_for_next_epoch
+                        related_data
+                            .true_state_root_by_blame_info
+                            .state_root
+                            .delta_root,
                     )?);
                 inner.related_data = Some(related_data);
             }

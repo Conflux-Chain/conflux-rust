@@ -63,6 +63,8 @@ impl Restorer {
     pub fn finalize_restoration(
         &mut self, state_manager: Arc<StateManager>,
         snapshot_info: SnapshotInfo,
+        parent_snapshot_info: Option<SnapshotInfo>,
+        intermediate_trie_root_merkle: MerkleHash,
     ) -> StorageResult<()>
     {
         // Release temp snapshot db so it can be renamed on Windows.
@@ -78,10 +80,23 @@ impl Restorer {
                 &self.snapshot_merkle_root,
                 &storage_manager.snapshot_info_map_by_epoch,
             )?;
+
+        if let Some(v) = parent_snapshot_info {
+            storage_manager
+                .register_new_snapshot(v, &mut snapshot_info_map_locked)?;
+        }
+
         storage_manager.register_new_snapshot(
             snapshot_info,
             &mut snapshot_info_map_locked,
         )?;
+
+        debug!(
+            "intermediate_trie_root_merkle for next epoch in finalize_restoration {:?}",
+            intermediate_trie_root_merkle
+        );
+        *storage_manager.intermediate_trie_root_merkle.write() =
+            Some(intermediate_trie_root_merkle);
 
         debug!("Completed snapshot restoration.");
         Ok(())
