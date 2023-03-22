@@ -244,6 +244,7 @@ fn checkpoint_from_empty_get_storage_at() {
             &a,
             &sponsor,
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)),
+            false,
         )
         .unwrap();
     assert_eq!(
@@ -311,8 +312,8 @@ fn checkpoint_from_empty_get_storage_at() {
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
-                false
+                &Spec::new_spec_for_test(),
+                false,
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -379,7 +380,7 @@ fn checkpoint_from_empty_get_storage_at() {
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
+                &Spec::new_spec_for_test(),
                 false
             )
             .unwrap(),
@@ -433,7 +434,7 @@ fn checkpoint_from_empty_get_storage_at() {
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
+                &Spec::new_spec_for_test(),
                 false
             )
             .unwrap(),
@@ -516,7 +517,7 @@ fn checkpoint_get_storage_at() {
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
+                &Spec::new_spec_for_test(),
                 false
             )
             .unwrap(),
@@ -584,6 +585,7 @@ fn checkpoint_get_storage_at() {
             &contract_a,
             &sponsor,
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)),
+            false,
         )
         .unwrap();
     assert_eq!(
@@ -665,7 +667,7 @@ fn checkpoint_get_storage_at() {
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
+                &Spec::new_spec_for_test(),
                 false
             )
             .unwrap(),
@@ -758,7 +760,7 @@ fn checkpoint_get_storage_at() {
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
+                &Spec::new_spec_for_test(),
                 false
             )
             .unwrap(),
@@ -836,7 +838,7 @@ fn checkpoint_get_storage_at() {
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
+                &Spec::new_spec_for_test(),
                 false
             )
             .unwrap(),
@@ -1067,7 +1069,7 @@ fn create_contract_fail() {
                 &U256::MAX,
                 &mut substate,
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
+                &Spec::new_spec_for_test(),
                 false
             )
             .unwrap(),
@@ -1128,7 +1130,7 @@ fn create_contract_fail_previous_storage() {
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
+                &Spec::new_spec_for_test(),
                 false
             )
             .unwrap(),
@@ -1299,7 +1301,7 @@ fn test_automatic_collateral_normal_account() {
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
+                &Spec::new_spec_for_test(),
                 false
             )
             .unwrap(),
@@ -1348,7 +1350,7 @@ fn test_automatic_collateral_normal_account() {
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
+                &Spec::new_spec_for_test(),
                 false
             )
             .unwrap(),
@@ -1404,7 +1406,7 @@ fn test_automatic_collateral_normal_account() {
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
+                &Spec::new_spec_for_test(),
                 false
             )
             .unwrap(),
@@ -1447,7 +1449,7 @@ fn test_automatic_collateral_normal_account() {
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
+                &Spec::new_spec_for_test(),
                 false
             )
             .unwrap(),
@@ -1491,7 +1493,7 @@ fn test_automatic_collateral_normal_account() {
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
+                &Spec::new_spec_for_test(),
                 false
             )
             .unwrap(),
@@ -1537,7 +1539,7 @@ fn test_automatic_collateral_normal_account() {
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
+                &Spec::new_spec_for_test(),
                 false
             )
             .unwrap(),
@@ -1587,6 +1589,7 @@ fn test_automatic_collateral_contract_account() {
             &contract_account,
             &sponsor,
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)),
+            false,
         )
         .unwrap();
     assert_eq!(
@@ -1627,7 +1630,7 @@ fn test_automatic_collateral_contract_account() {
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
+                &Spec::new_spec_for_test(),
                 false
             )
             .unwrap(),
@@ -1666,7 +1669,7 @@ fn test_automatic_collateral_contract_account() {
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
+                &Spec::new_spec_for_test(),
                 false
             )
             .unwrap(),
@@ -1721,7 +1724,7 @@ fn test_automatic_collateral_contract_account() {
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
+                &Spec::new_spec_for_test(),
                 false
             )
             .unwrap(),
@@ -1769,7 +1772,7 @@ fn test_automatic_collateral_contract_account() {
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
+                &Spec::new_spec_for_test(),
                 false
             )
             .unwrap(),
@@ -1815,7 +1818,7 @@ fn test_automatic_collateral_contract_account() {
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
+                &Spec::new_spec_for_test(),
                 false
             )
             .unwrap(),
@@ -1862,8 +1865,8 @@ fn test_automatic_collateral_contract_account() {
                 &U256::MAX,
                 &mut substates.last_mut().unwrap(),
                 &mut (),
-                Spec::new_spec_for_test().account_start_nonce,
-                false
+                &Spec::new_spec_for_test(),
+                false,
             )
             .unwrap(),
         CollateralCheckResult::Valid

@@ -51,6 +51,8 @@ pub mod consensus {
 }
 
 pub mod consensus_internal {
+    use crate::consensus::ONE_CFX_IN_DRIP;
+
     /// `REWARD_EPOCH_COUNT` needs to be larger than
     /// `ANTICONE_PENALTY_UPPER_EPOCH_COUNT`. If we cannot cache receipts of
     /// recent `REWARD_EPOCH_COUNT` epochs, the receipts will be loaded from
@@ -110,9 +112,8 @@ pub mod consensus_internal {
     // The condition is checked against each voted parameter separately.
     pub const DAO_MIN_VOTE_PERCENTAGE: u64 = 5;
 
-    /// The initial storage collateral refund ratio after CIP107 is enabled.
-    /// This is based on the scale of `STORAGE_COLLATERAL_REFUND_RATIO_SCALE`.
-    pub const CIP107_INITIAL_RATIO: u64 = 5000;
+    /// The initial storage point proportion after CIP107 is enabled.
+    pub const CIP107_STORAGE_POINT_PROP_INIT: u64 = ONE_CFX_IN_DRIP;
 }
 
 pub mod rpc {
@@ -286,8 +287,6 @@ pub mod staking {
         pub static ref SERVICE_CHARGE_RATE_SCALE: U256 = U256::from(10000);
         /// This controls the tokens required for one PoS vote
         pub static ref POS_VOTE_PRICE: U256 = U256::from(1000)*ONE_CFX_IN_DRIP;
-        /// Storage collateral refund ratio scale.
-        pub static ref STORAGE_COLLATERAL_REFUND_RATIO_SCALE: U256 = U256::from(10000);
     }
 
     pub fn code_collateral_units(len: usize) -> u64 {

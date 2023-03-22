@@ -4,6 +4,7 @@
 
 pub trait StateTrait: CheckpointTrait + AsStateOpsTrait {
     type Substate: SubstateTrait;
+    type Spec;
 
     /// Collects the cache (`ownership_change` in `OverlayAccount`) of storage
     /// change and write to substate.
@@ -18,14 +19,14 @@ pub trait StateTrait: CheckpointTrait + AsStateOpsTrait {
     /// of a transaction.
     fn settle_collateral_for_all(
         &mut self, substate: &Self::Substate, tracer: &mut dyn StateTracer,
-        account_start_nonce: U256, dry_run_no_charge: bool,
+        spec: &Self::Spec, dry_run_no_charge: bool,
     ) -> DbResult<CollateralCheckResult>;
 
     // FIXME: add doc string.
     fn collect_and_settle_collateral(
         &mut self, original_sender: &Address, storage_limit: &U256,
         substate: &mut Self::Substate, tracer: &mut dyn StateTracer,
-        account_start_nonce: U256, dry_run_no_charge: bool,
+        spec: &Self::Spec, dry_run_no_charge: bool,
     ) -> DbResult<CollateralCheckResult>;
 
     // TODO: maybe we can find a better interface for doing the suicide
@@ -98,7 +99,8 @@ pub trait StateOpsTrait {
 
     fn set_sponsor_for_collateral(
         &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
-    ) -> DbResult<()>;
+        is_cip107: bool,
+    ) -> DbResult<U256>;
 
     fn sponsor_info(&self, address: &Address) -> DbResult<Option<SponsorInfo>>;
 
@@ -107,6 +109,10 @@ pub trait StateOpsTrait {
     fn sponsor_balance_for_gas(&self, address: &Address) -> DbResult<U256>;
 
     fn sponsor_balance_for_collateral(
+        &self, address: &Address,
+    ) -> DbResult<U256>;
+
+    fn avaliable_storage_point_for_collateral(
         &self, address: &Address,
     ) -> DbResult<U256>;
 
@@ -165,6 +171,9 @@ pub trait StateOpsTrait {
     fn staking_balance(&self, address: &Address) -> DbResult<U256>;
 
     fn collateral_for_storage(&self, address: &Address) -> DbResult<U256>;
+
+    fn token_collateral_for_storage(&self, address: &Address)
+        -> DbResult<U256>;
 
     fn admin(&self, address: &Address) -> DbResult<Address>;
 
