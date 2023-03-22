@@ -25,7 +25,7 @@ use super::super::{
     components::InternalRefContext, contracts::params_control::*,
     impls::staking::get_vote_power,
 };
-pub use system_storage_key::storage_collateral_refund_ratio;
+pub use system_storage_key::storage_point_prop;
 
 pub fn cast_vote(
     address: Address, version: u64, votes: Vec<Vote>, params: &ActionParams,
@@ -402,7 +402,7 @@ impl ParamVoteCount {
 pub struct AllParamsVoteCount {
     pub pow_base_reward: ParamVoteCount,
     pub pos_reward_interest: ParamVoteCount,
-    pub storage_collateral_refund_ratio: ParamVoteCount,
+    pub storage_point_prop: ParamVoteCount,
 }
 
 /// If the vote counts are not initialized, all counts will be zero, and the
@@ -418,14 +418,14 @@ pub fn get_settled_param_vote_count<T: StateOpsTrait>(
         state,
         &SETTLED_VOTES_ENTRIES[POS_REWARD_INTEREST_RATE_INDEX as usize],
     )?;
-    let storage_collateral_refund_ratio = ParamVoteCount::from_state(
+    let storage_point_prop = ParamVoteCount::from_state(
         state,
-        &SETTLED_VOTES_ENTRIES[STORAGE_COLLATERAL_REFUND_RATIO_INDEX as usize],
+        &SETTLED_VOTES_ENTRIES[STORAGE_POINT_PROP_INDEX as usize],
     )?;
     Ok(AllParamsVoteCount {
         pow_base_reward,
         pos_reward_interest,
-        storage_collateral_refund_ratio,
+        storage_point_prop,
     })
 }
 
@@ -557,7 +557,7 @@ mod system_storage_key {
     const SETTLED_VOTES_SLOT: usize = 1;
     const CURRENT_POS_STAKING_SLOT: usize = 2;
     const SETTLED_POS_STAKING_SLOT: usize = 3;
-    const STORAGE_COLLATERAL_REFUND_RATIO_SLOT: usize = 4;
+    const STORAGE_POINT_PROP_SLOT: usize = 4;
 
     fn vote_stats(base: U256, index: usize, opt_index: usize) -> U256 {
         // Position of `.<topic>` (static slot)
@@ -606,10 +606,10 @@ mod system_storage_key {
         u256_to_array(base)
     }
 
-    pub fn storage_collateral_refund_ratio() -> [u8; 32] {
-        // Position of `storage_collateral_refund_ratio` (static slot)
+    pub fn storage_point_prop() -> [u8; 32] {
+        // Position of `storage_point_prop` (static slot)
         let base = base_slot(*PARAMS_CONTROL_CONTRACT_ADDRESS)
-            + U256::from(STORAGE_COLLATERAL_REFUND_RATIO_SLOT);
+            + U256::from(STORAGE_POINT_PROP_SLOT);
         u256_to_array(base)
     }
 }

@@ -233,14 +233,20 @@ impl Decodable for CodeInfo {
 #[derive(
     Clone,
     Debug,
-    RlpDecodable,
-    RlpEncodable,
     Ord,
     PartialOrd,
     Eq,
     PartialEq,
     Default,
+    RlpDecodable,
+    RlpEncodable,
 )]
+pub struct StoragePoints {
+    pub unused: U256,
+    pub used: U256,
+}
+
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Default)]
 pub struct SponsorInfo {
     /// This is the address of the sponsor for gas cost of the contract.
     pub sponsor_for_gas: Address,
@@ -252,6 +258,56 @@ pub struct SponsorInfo {
     pub sponsor_balance_for_gas: U256,
     /// This is the amount of tokens sponsor for collateral to the contract.
     pub sponsor_balance_for_collateral: U256,
+    /// This is the storage point introduced in CIP-107
+    pub storage_points: Option<StoragePoints>,
+}
+
+impl Encodable for SponsorInfo {
+    fn rlp_append(&self, s: &mut RlpStream) {
+        match &self.storage_points {
+            None => {
+                s.begin_list(5);
+                s.append(&self.sponsor_for_gas);
+                s.append(&self.sponsor_for_collateral);
+                s.append(&self.sponsor_gas_bound);
+                s.append(&self.sponsor_balance_for_gas);
+                s.append(&self.sponsor_balance_for_collateral);
+            }
+            Some(points) => {
+                s.begin_list(6);
+                s.append(&self.sponsor_for_gas);
+                s.append(&self.sponsor_for_collateral);
+                s.append(&self.sponsor_gas_bound);
+                s.append(&self.sponsor_balance_for_gas);
+                s.append(&self.sponsor_balance_for_collateral);
+                s.append(points);
+            }
+        }
+    }
+}
+
+impl Decodable for SponsorInfo {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+        match rlp.item_count()? {
+            5 => Ok(SponsorInfo {
+                sponsor_for_gas: rlp.val_at(0)?,
+                sponsor_for_collateral: rlp.val_at(1)?,
+                sponsor_gas_bound: rlp.val_at(2)?,
+                sponsor_balance_for_gas: rlp.val_at(3)?,
+                sponsor_balance_for_collateral: rlp.val_at(4)?,
+                storage_points: None,
+            }),
+            6 => Ok(SponsorInfo {
+                sponsor_for_gas: rlp.val_at(0)?,
+                sponsor_for_collateral: rlp.val_at(1)?,
+                sponsor_gas_bound: rlp.val_at(2)?,
+                sponsor_balance_for_gas: rlp.val_at(3)?,
+                sponsor_balance_for_collateral: rlp.val_at(4)?,
+                storage_points: Some(rlp.val_at(5)?),
+            }),
+            _ => Err(DecoderError::RlpInvalidLength),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
@@ -512,6 +568,7 @@ fn test_random_account(
         sponsor_balance_for_gas: U256::from(123),
         sponsor_balance_for_collateral: U256::from(124),
         sponsor_gas_bound: U256::from(2),
+        storage_points: None,
     };
 
     let code_hash = if non_empty_hash {
