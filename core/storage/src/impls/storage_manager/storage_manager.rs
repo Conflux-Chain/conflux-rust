@@ -1007,13 +1007,19 @@ impl StorageManager {
                         } else {
                             // Retain the snapshot information for the one
                             // preceding the stable checkpoint
-                            if snapshot_info.height
-                                != stable_checkpoint_height
-                                    - self
-                                        .storage_conf
-                                        .consensus_param
-                                        .snapshot_epoch_count
-                                        as u64
+                            if stable_checkpoint_height
+                                < self
+                                    .storage_conf
+                                    .consensus_param
+                                    .snapshot_epoch_count
+                                    as u64
+                                || snapshot_info.height
+                                    != stable_checkpoint_height
+                                        - self
+                                            .storage_conf
+                                            .consensus_param
+                                            .snapshot_epoch_count
+                                            as u64
                             {
                                 old_pivot_snapshot_infos_to_remove
                                     .push(snapshot_epoch_id.clone());
