@@ -58,7 +58,7 @@ pub use self::{
         Action, LocalizedBlockTrace, LocalizedTrace, LocalizedTransactionTrace,
     },
     trace_filter::TraceFilter,
-    transaction::{PackedOrExecuted, Transaction},
+    transaction::{PackedOrExecuted, Transaction, WrapTransaction},
     tx_pool::{
         AccountPendingInfo, AccountPendingTransactions,
         TxPoolPendingNonceRange, TxPoolStatus, TxWithPoolInfo,

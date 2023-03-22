@@ -806,6 +806,7 @@ impl TransactionPool {
         let inner = inner.deref_mut();
 
         while let Some(tx) = set_tx_buffer.pop() {
+            let tx_hash = tx.hash();
             if let Err(e) = self.add_transaction_with_readiness_check(
                 inner,
                 &account_cache,
@@ -813,7 +814,9 @@ impl TransactionPool {
                 true,
                 false,
             ) {
-                warn!("set tx err: e={:?}", e);
+                // TODO: A transaction that is packed multiple times would also
+                // throw an error here, but it should be normal.
+                debug!("set tx err: tx={}, e={:?}", tx_hash, e);
             }
         }
 

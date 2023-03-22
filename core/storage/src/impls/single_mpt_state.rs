@@ -91,7 +91,7 @@ impl SingleMptState {
             self.trie.get_merkle(Some(self.trie_root.clone()))?;
         match maybe_merkle_root {
             // Empty state.
-            None => (Ok(MERKLE_NULL_NODE)),
+            None => Ok(MERKLE_NULL_NODE),
             Some(merkle_hash) => {
                 // Non-empty state
                 if merkle_hash.is_zero() {

@@ -109,9 +109,9 @@ impl Drop for SpeculationBlock {
     }
 }
 
-/// SpeculationCache implements the block tree structrue. The tree is
-/// reprensented by a root block id, all the children of root and a global block
-/// map. Each block is an Arc<Mutx<SpeculationBlock>> with ref_count = 1. For
+/// SpeculationCache implements the block tree structure. The tree is
+/// represented by a root block id, all the children of root and a global block
+/// map. Each block is an `Arc<Mutex<SpeculationBlock>>` with ref_count = 1. For
 /// the chidren of the root, the sole owner is `heads`. For the rest, the sole
 /// owner is their parent block. So when a block is dropped, all its descendants
 /// will be dropped recursively. In the meanwhile, wheir entries in the block
