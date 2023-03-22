@@ -296,7 +296,7 @@ impl CompressedPathRaw {
                 } else {
                     let in_place: [u8;
                         MaybeInPlaceByteArray::MAX_INPLACE_SIZE] =
-                        std::mem::uninitialized();
+                        Default::default();
                     path = MaybeInPlaceByteArray { in_place };
                     slice = &mut path.in_place[0..size];
                 }

@@ -195,8 +195,8 @@ pub struct GasConstants {
     /// ~5 microseconds should equal one unit of computational gas. We bound
     /// the maximum computational time of any given transaction at roughly
     /// 20 seconds. We want this number and `MAX_PRICE_PER_GAS_UNIT` to
-    /// always satisfy the inequality that MAXIMUM_NUMBER_OF_GAS_UNITS *
-    /// MAX_PRICE_PER_GAS_UNIT < min(u64::MAX, GasUnits<GasCarrier>::MAX)
+    /// always satisfy the inequality that `MAXIMUM_NUMBER_OF_GAS_UNITS *
+    /// MAX_PRICE_PER_GAS_UNIT < min(u64::MAX, GasUnits<GasCarrier>::MAX)`
     /// NB: The bound is set quite high since custom scripts aren't allowed
     /// except from predefined and vetted senders.
     pub maximum_number_of_gas_units: GasUnits<GasCarrier>,

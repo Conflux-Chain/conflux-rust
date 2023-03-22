@@ -5,11 +5,12 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-//! This module defines error types used by [`DiemDB`](crate::DiemDB).
+//! This module defines error types used by [`PosLedgerDB`](crate::PosLedgerDB).
 
 use thiserror::Error;
 
-/// This enum defines errors commonly used among [`DiemDB`](crate::DiemDB) APIs.
+/// This enum defines errors commonly used among
+/// [`PosLedgerDB`](crate::PosLedgerDB) APIs.
 #[derive(Debug, Error)]
 pub enum DiemDbError {
     /// A requested item is not found.
