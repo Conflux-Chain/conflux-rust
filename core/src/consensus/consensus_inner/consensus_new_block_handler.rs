@@ -2090,9 +2090,7 @@ impl ConsensusNewBlockHandler {
                             // maximum epoch need to compute
                             let maximum_height_to_create_next_snapshot =
                                 latest_snapshot_epoch_height
-                                    + snapshot_epoch_count * 2
-                                    + snapshot_epoch_count / 3
-                                    - 1;
+                                    + snapshot_epoch_count * 2;
                             let index = inner.height_to_pivot_index(
                                 maximum_height_to_create_next_snapshot,
                             );
