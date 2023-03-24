@@ -5,9 +5,9 @@
 use crate::rpc::types::{
     BlockHashOrEpochNumber, Bytes as RpcBytes, ConsensusGraphStates,
     Receipt as RpcReceipt, RpcAddress, SendTxRequest, SyncGraphStates,
-    Transaction as RpcTransaction,
+    Transaction as RpcTransaction, WrapTransaction,
 };
-use cfx_types::{H256, H520, U128};
+use cfx_types::{H256, H520, U128, U64};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
 use jsonrpc_derive::rpc;
 use network::{
@@ -109,4 +109,14 @@ pub trait LocalRpc {
     fn epoch_receipts(
         &self, epoch: BlockHashOrEpochNumber,
     ) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
+
+    #[rpc(name = "cfx_getTransactionsByEpoch")]
+    fn transactions_by_epoch(
+        &self, epoch_number: U64,
+    ) -> JsonRpcResult<Vec<WrapTransaction>>;
+
+    #[rpc(name = "cfx_getTransactionsByBlock")]
+    fn transactions_by_block(
+        &self, block_hash: H256,
+    ) -> JsonRpcResult<Vec<WrapTransaction>>;
 }

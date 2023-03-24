@@ -235,7 +235,7 @@ impl<PosT: PrimitiveNum, ValueType> RemovableHeap<PosT, ValueType> {
             );
             value_util.set_handle(self.get_unchecked_mut(array_pos), array_pos);
         }
-        hole.pointer_pos = self.get_unchecked_mut(pos);
+        hole.pointer_pos.write(self.get_unchecked_mut(pos));
 
         array_pos
     }
@@ -442,14 +442,21 @@ impl<
 }
 
 pub struct Hole<ValueType> {
-    pub pointer_pos: *mut ValueType,
+    pub pointer_pos: MaybeUninit<*mut ValueType>,
     pub value: ValueType,
 }
 
 impl<ValueType> Hole<ValueType> {
+    pub fn new_uninit_pointer(value: ValueType) -> Self {
+        Self {
+            pointer_pos: MaybeUninit::uninit(),
+            value,
+        }
+    }
+
     pub fn new(pointer_pos: *mut ValueType) -> Self {
         Self {
-            pointer_pos,
+            pointer_pos: MaybeUninit::new(pointer_pos),
             value: unsafe { ptr::read(pointer_pos) },
         }
     }
@@ -458,7 +465,7 @@ impl<ValueType> Hole<ValueType> {
         pointer_pos: *mut ValueType, value: &ValueType,
     ) -> Self {
         Self {
-            pointer_pos,
+            pointer_pos: MaybeUninit::new(pointer_pos),
             value: unsafe { ptr::read(value) },
         }
     }
@@ -471,7 +478,7 @@ impl<ValueType> Hole<ValueType> {
     ) {
         unsafe {
             value_updater.set_handle_final(&mut self.value, pos);
-            ptr::write(self.pointer_pos, self.value);
+            ptr::write(self.pointer_pos.assume_init(), self.value);
         };
     }
 
@@ -485,8 +492,12 @@ impl<ValueType> Hole<ValueType> {
     {
         unsafe {
             value_updater.set_handle(&mut *pointer_new_pos, pos);
-            ptr::copy_nonoverlapping(pointer_new_pos, self.pointer_pos, 1);
-            self.pointer_pos = pointer_new_pos;
+            ptr::copy_nonoverlapping(
+                pointer_new_pos,
+                self.pointer_pos.assume_init(),
+                1,
+            );
+            self.pointer_pos.write(pointer_new_pos);
         }
     }
 }

@@ -18,7 +18,7 @@ diem-metrics = { path = "../../common/metrics" }
 
 [dependencies.rocksdb]
 git = "https://github.com/Conflux-Chain/rust-rocksdb.git"
-rev = "f34009ab323d6218fe85324bfdaf47762e2d1ec0"
+rev = "29c99ae9b7c26fc3e7e67523fa5007ba9b8a7f15"
 
 [dev-dependencies]
 byteorder = "1.4.3"

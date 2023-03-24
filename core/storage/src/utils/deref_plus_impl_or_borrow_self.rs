@@ -63,9 +63,9 @@ pub trait ImplOrBorrowMutSelf<Trait: ?Sized> {
 }
 
 /// Suppose you have a trait Trait and some type T: Trait, this trait is
-/// automatically implemented for Trait itself, &Tr, Box<Tr>, Arc<Tr>, &T,
-/// Box<T>, Arc<T>, etc. When DerefPlusSelf is implemented for T, this trait is
-/// also implemented for T.
+/// automatically implemented for Trait itself, &Tr, `Box<Tr>`, `Arc<Tr>`, &T,
+/// `Box<T>`, `Arc<T>`, etc. When DerefPlusSelf is implemented for T, this trait
+/// is also implemented for T.
 pub trait DerefPlusImplOrBorrowSelf<T: ?Sized> {
     fn borrow(&self) -> &T;
 }

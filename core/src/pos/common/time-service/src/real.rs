@@ -18,7 +18,7 @@ use std::{
 /// The real production tokio [`TimeService`](crate::TimeService).
 ///
 /// Note: `RealTimeService` is just a zero-sized type whose methods only
-/// delegate to the respective [`tokio::time`] functions.
+/// delegate to the respective `tokio::time` functions.
 #[derive(Copy, Clone, Debug, Default)]
 pub struct RealTimeService;
 
