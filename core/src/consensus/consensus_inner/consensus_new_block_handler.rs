@@ -2012,6 +2012,21 @@ impl ConsensusNewBlockHandler {
             }
         }
 
+        if let Some(height) = self
+            .conf
+            .inner_conf
+            .force_recompute_height_during_construct_pivot
+        {
+            if height > inner.cur_era_stable_height {
+                let pivot_idx = inner.height_to_pivot_index(height);
+                debug!(
+                    "force recompute height during constructing pivot {}",
+                    pivot_idx
+                );
+                force_compute_index = min(force_compute_index, pivot_idx - 1);
+            }
+        }
+
         let mut pre_epoch_state_exist = true;
         let confirmed_epoch_num = meter.get_confirmed_epoch_num();
         let mut previous_pivot_hash = start_hash;

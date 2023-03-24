@@ -324,10 +324,11 @@ impl StateManager {
                     }
                     maybe_intermediate_mpt = None;
                     maybe_intermediate_mpt_key_padding = None;
-                    match *self
+                    match self
                         .storage_manager
                         .intermediate_trie_root_merkle
-                        .read()
+                        .write()
+                        .take()
                     {
                         Some(v) => {
                             intermediate_trie_root_merkle = v;
@@ -343,10 +344,6 @@ impl StateManager {
                         }
                     }
 
-                    *self
-                        .storage_manager
-                        .intermediate_trie_root_merkle
-                        .write() = None;
                     debug!("get_state_trees_for_next_epoch, snapshot_merkle_root {:?}, intermediate_trie_root_merkle {:?}", snapshot_merkle_root, intermediate_trie_root_merkle);
 
                     match self
@@ -445,9 +442,22 @@ impl StateManager {
                                 }
                                 maybe_intermediate_mpt = None;
                                 maybe_intermediate_mpt_key_padding = None;
-                                intermediate_trie_root_merkle =
-                                    parent_state_index
-                                        .intermediate_trie_root_merkle;
+                                match self
+                                    .storage_manager
+                                    .intermediate_trie_root_merkle
+                                    .write()
+                                    .take()
+                                {
+                                    Some(v) => {
+                                        intermediate_trie_root_merkle = v;
+                                    }
+                                    _ => {
+                                        warn!("get_state_trees_for_next_epoch, shift snapshot, special case, \
+                                        intermediate_trie_root_merkle not found for snapshot {:?}. StateIndex: {:?}.", snapshot_epoch_id, parent_state_index,);
+                                        return Ok(None);
+                                    }
+                                }
+
                                 match self
                                     .storage_manager
                                     .get_intermediate_mpt(

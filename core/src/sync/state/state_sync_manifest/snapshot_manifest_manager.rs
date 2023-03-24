@@ -19,7 +19,10 @@ use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
     consensus_internal::REWARD_EPOCH_COUNT,
 };
-use cfx_storage::{storage_db::SnapshotInfo, TrieProof};
+use cfx_storage::{
+    storage_db::{SnapshotInfo, SnapshotKeptToProvideSyncStatus},
+    TrieProof,
+};
 use cfx_types::H256;
 use network::node_table::NodeId;
 use primitives::{
@@ -467,7 +470,9 @@ impl SnapshotManifestManager {
             );
 
             Some(SnapshotInfo {
-                snapshot_info_kept_to_provide_sync: Default::default(),
+                // Prevent immediate removed by setting 'InfoOnly' to avoid
+                snapshot_info_kept_to_provide_sync:
+                    SnapshotKeptToProvideSyncStatus::InfoOnly,
                 serve_one_step_sync: false,
                 merkle_root: state_root_vec[offset - 1].snapshot_root,
                 height: snapshot_block_header.height()

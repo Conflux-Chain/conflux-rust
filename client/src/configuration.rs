@@ -346,6 +346,7 @@ build_config! {
         (ln_num_epochs_to_request, (Option<usize>), None)
         (ln_num_waiting_headers_threshold, (Option<usize>), None)
         (keep_snapshot_before_stable_checkpoint, (bool), true)
+        (force_recompute_height_during_construct_pivot, (Option<u64>), None)
     }
     {
         // Development related section.
@@ -598,6 +599,7 @@ impl Configuration {
                     }
                     None => None,
                 },
+                force_recompute_height_during_construct_pivot: self.raw_conf.force_recompute_height_during_construct_pivot,
             },
             bench_mode: false,
             transaction_epoch_bound: self.raw_conf.transaction_epoch_bound,

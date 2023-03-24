@@ -72,6 +72,34 @@ impl Restorer {
         self.verifier = None;
 
         let storage_manager = state_manager.get_storage_manager_arc();
+
+        let (need_register_parent_snapshot, parent_snapshot) =
+            if let Some(snapshot_info) = parent_snapshot_info.clone() {
+                let snapshot_epoch_id = snapshot_info.get_snapshot_epoch_id();
+                if let Some(snapshot_info_in_db) = storage_manager
+                    .get_snapshot_info_at_epoch(snapshot_epoch_id)
+                {
+                    if snapshot_info.merkle_root
+                        != snapshot_info_in_db.merkle_root
+                        || snapshot_info.get_snapshot_epoch_id()
+                            != snapshot_info_in_db.get_snapshot_epoch_id()
+                    {
+                        debug!("destory snapshot {:?}", snapshot_epoch_id);
+                        storage_manager
+                            .get_snapshot_manager()
+                            .get_snapshot_db_manager()
+                            .destroy_snapshot(snapshot_epoch_id)?;
+                        (true, snapshot_info)
+                    } else {
+                        (false, Default::default())
+                    }
+                } else {
+                    (true, snapshot_info)
+                }
+            } else {
+                (false, Default::default())
+            };
+
         let mut snapshot_info_map_locked = storage_manager
             .get_snapshot_manager()
             .get_snapshot_db_manager()
@@ -81,9 +109,11 @@ impl Restorer {
                 &storage_manager.snapshot_info_map_by_epoch,
             )?;
 
-        if let Some(v) = parent_snapshot_info {
-            storage_manager
-                .register_new_snapshot(v, &mut snapshot_info_map_locked)?;
+        if need_register_parent_snapshot {
+            storage_manager.register_new_snapshot(
+                parent_snapshot,
+                &mut snapshot_info_map_locked,
+            )?;
         }
 
         storage_manager.register_new_snapshot(
