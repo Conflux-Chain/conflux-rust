@@ -410,6 +410,7 @@ impl OverlayAccount {
 
     /// When CIP 107 is activated, half of the storage will coverte
     pub fn initialize_cip107(&mut self, prop: U256) -> (U256, U256) {
+        assert!(self.is_contract());
         let total_collateral = self.sponsor_info.sponsor_balance_for_collateral
             + self.collateral_for_storage;
         let changed_storage_points =
