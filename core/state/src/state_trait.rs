@@ -98,8 +98,8 @@ pub trait StateOpsTrait {
     ) -> DbResult<()>;
 
     fn set_sponsor_for_collateral(
-        &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
-        is_cip107: bool,
+        &mut self, address: &Address, sponsor: &Address,
+        sponsor_balance: &U256, is_cip107: bool,
     ) -> DbResult<U256>;
 
     fn sponsor_info(&self, address: &Address) -> DbResult<Option<SponsorInfo>>;
@@ -245,6 +245,10 @@ pub trait StateOpsTrait {
     fn total_storage_tokens(&self) -> U256;
 
     fn total_espace_tokens(&self) -> U256;
+
+    fn used_storage_points(&self) -> U256;
+
+    fn converted_storage_points(&self) -> U256;
 
     fn total_pos_staking_tokens(&self) -> U256;
 

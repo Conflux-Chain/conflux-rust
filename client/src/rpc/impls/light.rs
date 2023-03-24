@@ -44,8 +44,8 @@ use crate::{
             EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
             PoSEconomics, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
             RpcAddress, SendTxRequest, SponsorInfo, Status as RpcStatus,
-            SyncGraphStates, TokenSupplyInfo, Transaction as RpcTransaction,
-            VoteParamsInfo, WrapTransaction,
+            StorageCollateralInfo, SyncGraphStates, TokenSupplyInfo,
+            Transaction as RpcTransaction, VoteParamsInfo, WrapTransaction,
         },
         RpcBoxFuture, RpcResult,
     },
@@ -1146,6 +1146,7 @@ impl Cfx for CfxHandler {
         fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> JsonRpcResult<EstimateGasAndCollateralResponse>;
         fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
         fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
+        fn get_collateral_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<StorageCollateralInfo>;
         fn get_vote_params(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<VoteParamsInfo>;
         fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
     }
