@@ -105,6 +105,10 @@ struct WorldStatistics {
     last_distribute_block: u64,
     // This is the tokens in the EVM space.
     total_evm_tokens: U256,
+    // This is the amount of using storage points (in terms of Drip)
+    used_storage_points: U256,
+    // This is the amount of converted storage points (in terms of Drip)
+    converted_storage_points: U256,
 }
 
 pub type State = StateGeneric;
@@ -551,26 +555,31 @@ impl StateOpsTrait for StateGeneric {
     }
 
     fn set_sponsor_for_collateral(
-        &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
-        is_cip107: bool,
+        &mut self, address: &Address, sponsor: &Address,
+        sponsor_balance: &U256, is_cip107: bool,
     ) -> DbResult<U256>
     {
-        if *sponsor != self.sponsor_for_collateral(address)?.unwrap_or_default()
-            || *sponsor_balance
-                != self.sponsor_balance_for_collateral(address)?
+        if *sponsor == self.sponsor_for_collateral(address)?.unwrap_or_default()
+            && *sponsor_balance
+                == self.sponsor_balance_for_collateral(address)?
         {
-            let prop = if is_cip107 {
-                self.storage_point_prop()?
-            } else {
-                U256::zero()
-            };
-            self.require_exists(&address.with_native_space(), false)
-                .map(|mut x| {
-                    x.set_sponsor_for_collateral(sponsor, sponsor_balance, prop)
-                })
-        } else {
-            Ok(U256::zero())
+            return Ok(U256::zero());
         }
+
+        let prop = if is_cip107 {
+            self.storage_point_prop()?
+        } else {
+            U256::zero()
+        };
+        let converted_storage_points = self
+            .require_exists(&address.with_native_space(), false)
+            .map(|mut x| {
+                x.set_sponsor_for_collateral(sponsor, sponsor_balance, prop)
+            })?;
+        self.world_statistics.total_issued_tokens -= converted_storage_points;
+        self.world_statistics.converted_storage_points +=
+            converted_storage_points;
+        Ok(converted_storage_points)
     }
 
     fn sponsor_info(&self, address: &Address) -> DbResult<Option<SponsorInfo>> {
@@ -1094,6 +1103,14 @@ impl StateOpsTrait for StateGeneric {
         self.world_statistics.total_evm_tokens
     }
 
+    fn used_storage_points(&self) -> U256 {
+        self.world_statistics.used_storage_points
+    }
+
+    fn converted_storage_points(&self) -> U256 {
+        self.world_statistics.converted_storage_points
+    }
+
     fn total_pos_staking_tokens(&self) -> U256 {
         self.world_statistics.total_pos_staking_tokens
     }
@@ -1324,6 +1341,8 @@ impl StateGeneric {
         let distributable_pos_interest = db.get_distributable_pos_interest()?;
         let last_distribute_block = db.get_last_distribute_block()?;
         let total_evm_tokens = db.get_total_evm_tokens()?;
+        let used_storage_points = db.get_used_storage_points()?;
+        let converted_storage_points = db.get_converted_storage_points()?;
 
         let world_stat = if db.is_initialized()? {
             WorldStatistics {
@@ -1337,6 +1356,8 @@ impl StateGeneric {
                 distributable_pos_interest,
                 last_distribute_block,
                 total_evm_tokens,
+                used_storage_points,
+                converted_storage_points,
             }
         } else {
             // If db is not initialized, all the loaded value should be zero.
@@ -1383,6 +1404,8 @@ impl StateGeneric {
                 distributable_pos_interest: U256::default(),
                 last_distribute_block: u64::default(),
                 total_evm_tokens: U256::default(),
+                used_storage_points: U256::default(),
+                converted_storage_points: U256::default(),
             }
         };
 
@@ -1550,7 +1573,9 @@ impl StateGeneric {
             let storage_point_used = self
                 .require_exists(&address.with_native_space(), false)?
                 .add_collateral_for_storage(by);
-            self.world_statistics.total_storage_tokens += *by;
+            self.world_statistics.total_storage_tokens +=
+                *by - storage_point_used;
+            self.world_statistics.used_storage_points += storage_point_used;
             storage_point_used
         } else {
             U256::zero()
@@ -1573,7 +1598,9 @@ impl StateGeneric {
             U256::zero()
         };
 
-        self.world_statistics.total_storage_tokens -= *by;
+        self.world_statistics.total_storage_tokens -=
+            *by - storage_point_refund;
+        self.world_statistics.used_storage_points -= storage_point_refund;
         self.world_statistics.total_issued_tokens -= burnt;
 
         Ok(storage_point_refund)
@@ -1583,15 +1610,39 @@ impl StateGeneric {
         &mut self, address: &Address, account_start_nonce: U256,
     ) -> DbResult<(U256, U256)> {
         let prop = self.storage_point_prop()?;
-        let account = &mut *self.require_or_new_basic_account(
-            &address.with_native_space(),
-            &account_start_nonce,
-        )?;
-        Ok(if !account.is_cip_107_initialized() {
-            account.initialize_cip107(prop)
+        let init_result = {
+            let account = &mut *self.require_or_new_basic_account(
+                &address.with_native_space(),
+                &account_start_nonce,
+            )?;
+            if !account.is_cip_107_initialized() {
+                Some(account.initialize_cip107(prop))
+            } else {
+                None
+            }
+        };
+
+        if let Some((
+            burnt_balance_from_balance,
+            burnt_balance_from_collateral,
+            changed_storage_points,
+        )) = init_result
+        {
+            self.world_statistics.total_issued_tokens -=
+                burnt_balance_from_balance + burnt_balance_from_collateral;
+            self.world_statistics.total_storage_tokens -=
+                burnt_balance_from_collateral;
+            self.world_statistics.used_storage_points +=
+                burnt_balance_from_collateral;
+            self.world_statistics.converted_storage_points =
+                changed_storage_points;
+            return Ok((
+                burnt_balance_from_balance,
+                burnt_balance_from_collateral,
+            ));
         } else {
-            (U256::zero(), U256::zero())
-        })
+            return Ok((U256::zero(), U256::zero()));
+        }
     }
 
     #[allow(dead_code)]
@@ -1739,6 +1790,14 @@ impl StateGeneric {
         )?;
         self.db.set_total_evm_tokens(
             &self.world_statistics.total_evm_tokens,
+            debug_record.as_deref_mut(),
+        )?;
+        self.db.set_used_storage_points(
+            &self.world_statistics.used_storage_points,
+            debug_record.as_deref_mut(),
+        )?;
+        self.db.set_converted_storage_points(
+            &self.world_statistics.converted_storage_points,
             debug_record,
         )?;
         Ok(())
@@ -2233,6 +2292,10 @@ impl StateGeneric {
             self.db.get_last_distribute_block().expect("no db error");
         self.world_statistics.total_evm_tokens =
             self.db.get_total_evm_tokens().expect("no db error");
+        self.world_statistics.used_storage_points =
+            self.db.get_used_storage_points().expect("no db error");
+        self.world_statistics.converted_storage_points =
+            self.db.get_converted_storage_points().expect("no db error");
     }
 }
 

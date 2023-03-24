@@ -25,6 +25,12 @@ impl Account {
     pub fn try_from(
         account: PrimitiveAccount, network: Network,
     ) -> Result<Self, String> {
+        let collateral_for_storage = account.collateral_for_storage
+            + account
+                .sponsor_info
+                .storage_points
+                .as_ref()
+                .map_or(U256::zero(), |x| x.used);
         Ok(Self {
             address: RpcAddress::try_from_h160(
                 account.address().address,
@@ -34,7 +40,7 @@ impl Account {
             nonce: account.nonce.into(),
             code_hash: account.code_hash.into(),
             staking_balance: account.staking_balance.into(),
-            collateral_for_storage: account.collateral_for_storage.into(),
+            collateral_for_storage,
             accumulated_interest_return: account
                 .accumulated_interest_return
                 .into(),

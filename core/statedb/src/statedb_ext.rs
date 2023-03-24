@@ -62,9 +62,20 @@ pub trait StateDbExt {
     ) -> Result<()>;
 
     fn get_total_evm_tokens(&self) -> Result<U256>;
-
     fn set_total_evm_tokens(
         &mut self, total_staking_tokens: &U256,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> Result<()>;
+
+    fn get_used_storage_points(&self) -> Result<U256>;
+    fn set_used_storage_points(
+        &mut self, used_storage_points: &U256,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> Result<()>;
+
+    fn get_converted_storage_points(&self) -> Result<U256>;
+    fn set_converted_storage_points(
+        &mut self, converted_storage_points: &U256,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>;
 
@@ -122,6 +133,9 @@ pub const DISTRIBUTABLE_POS_INTEREST_KEY: &'static [u8] =
     b"distributable_pos_interest";
 pub const LAST_DISTRIBUTE_BLOCK_KEY: &'static [u8] = b"last_distribute_block";
 pub const TOTAL_EVM_TOKENS_KEY: &'static [u8] = b"total_evm_tokens";
+pub const USDED_STORAGE_POINTS_KEY: &'static [u8] = b"used_storage_points";
+pub const CONVERTED_STORAGE_POINTS_KEY: &'static [u8] =
+    b"converted_storage_points_key";
 pub const POW_BASE_REWARD_KEY: &'static [u8] = b"pow_base_reward";
 
 // pub mod params_control_entries {
@@ -348,6 +362,61 @@ impl StateDbExt for StateDbGeneric {
         )
         .with_native_space();
         self.set::<U256>(total_evm_tokens_key, total_evm_tokens, debug_record)
+    }
+
+    fn get_used_storage_points(&self) -> Result<U256> {
+        let used_storage_points_key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            USDED_STORAGE_POINTS_KEY,
+        )
+        .with_native_space();
+        let total_evm_tokens_opt = self.get::<U256>(used_storage_points_key)?;
+        Ok(total_evm_tokens_opt.unwrap_or_default())
+    }
+
+    fn set_used_storage_points(
+        &mut self, used_storage_points: &U256,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> Result<()>
+    {
+        let used_storage_points_key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            USDED_STORAGE_POINTS_KEY,
+        )
+        .with_native_space();
+        self.set::<U256>(
+            used_storage_points_key,
+            used_storage_points,
+            debug_record,
+        )
+    }
+
+    fn get_converted_storage_points(&self) -> Result<U256> {
+        let converted_storage_points_key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            CONVERTED_STORAGE_POINTS_KEY,
+        )
+        .with_native_space();
+        let total_evm_tokens_opt =
+            self.get::<U256>(converted_storage_points_key)?;
+        Ok(total_evm_tokens_opt.unwrap_or_default())
+    }
+
+    fn set_converted_storage_points(
+        &mut self, converted_storage_points: &U256,
+        debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> Result<()>
+    {
+        let converted_storage_points_key = StorageKey::new_storage_key(
+            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
+            CONVERTED_STORAGE_POINTS_KEY,
+        )
+        .with_native_space();
+        self.set::<U256>(
+            converted_storage_points_key,
+            converted_storage_points,
+            debug_record,
+        )
     }
 
     fn get_total_staking_tokens(&self) -> Result<U256> {
