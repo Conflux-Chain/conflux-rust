@@ -1413,7 +1413,10 @@ impl StateGeneric {
         let is_contract = self.is_contract_with_code(&addr_with_space)?;
 
         // Initialize CIP-107
-        if !sub.is_zero() || !inc.is_zero() {
+        if spec.cip107
+            && addr.is_contract_address()
+            && (!sub.is_zero() || !inc.is_zero())
+        {
             let (converted_point_from_balance, converted_point_from_collateral) =
                 self.initialize_cip107(addr, spec.account_start_nonce)?;
             if !converted_point_from_balance.is_zero() {
