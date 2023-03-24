@@ -103,7 +103,7 @@ impl Identifier {
     /// Returns true if this string is a valid identifier.
     pub fn is_valid(s: impl AsRef<str>) -> bool { is_valid(s.as_ref()) }
 
-    /// Returns if this identifier is "<SELF>".
+    /// Returns if this identifier is `"<SELF>"`.
     /// TODO: remove once we fully separate CompiledScript & CompiledModule.
     pub fn is_self(&self) -> bool { &*self.0 == "<SELF>" }
 

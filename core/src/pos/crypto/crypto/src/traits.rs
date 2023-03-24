@@ -9,7 +9,7 @@
 //! primitives.
 //!
 //! For examples on how to use these traits, see the implementations of the
-//! [`ed25519`] or [`bls12381`] modules.
+//! `ed25519` modules.
 
 use crate::{hash::CryptoHash, HashValue};
 use anyhow::Result;

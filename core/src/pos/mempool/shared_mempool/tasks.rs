@@ -290,7 +290,7 @@ fn log_txn_process_results(
     results: &[SubmissionStatusBundle], sender: Option<NodeId>,
 ) {
     let sender = match sender {
-        Some(peer) => (peer),
+        Some(peer) => peer,
         None => {
             return;
         }

@@ -1000,10 +1000,9 @@ impl Provider {
     }
 
     fn check_timeout(&self, io: &dyn NetworkContext, timeout: Duration) {
-        for peer in self
-            .peers
-            .all_peers_satisfying(|p| p.last_heartbeat.elapsed() >= timeout)
-        {
+        for peer in self.peers.all_peers_satisfying(|p| {
+            p.handshake_completed && p.last_heartbeat.elapsed() >= timeout
+        }) {
             io.disconnect_peer(
                 &peer,
                 Some(UpdateNodeOperation::Failure),
