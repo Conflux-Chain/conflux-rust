@@ -21,7 +21,7 @@ jobs:
         languages: rust
         
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v1
+      uses: github/codeql-action/analyze@v2
       with:
         database-name: codeql-database
         query: path/to/query.rq
