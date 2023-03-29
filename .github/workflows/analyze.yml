@@ -1,50 +1,31 @@
 name: CodeQL Analysis
 
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the default branch
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 # Environment variables
 env:
-  # Sets the target language for analysis (Rust in this case)
   LANGUAGE: rust
+  DB_PATH: .codeql/db
 
 jobs:
-  # Job to run CodeQL analysis
-  codeql-analysis:
-    # Name of the job
-    name: Analyze Code with CodeQL
-
-    # Name of the runner to use
+  build:
     runs-on: ubuntu-latest
 
-    # Steps to run in the job
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-      
+    - uses: actions/checkout@v2
+
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v2
       with:
         languages: ${{ env.LANGUAGE }}
 
-    - name: Perform Analysis
+    - name: Analyze with CodeQL
       uses: github/codeql-action/analyze@v2
       with:
-        # Path to the database file to be created
-         database: codeql-database
-
-        # Path to the CodeQL query to run
+        database: ${{ env.DB_PATH }}
         query: path/to/your/query.ql
-
-        # Output format for the results
-        format: sarif-latest
-
-        # Path to put the results file in
         output: results.sarif
