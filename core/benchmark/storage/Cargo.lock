@@ -219,7 +219,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf13118df3e3dce4b5ac930641343b91b656e4e72c8f8325838b01a4b1c9d45"
 dependencies = [
  "http",
- "log 0.4.14",
+ "log 0.4.17",
  "url 2.2.2",
 ]
 
@@ -405,7 +405,7 @@ dependencies = [
 [[package]]
 name = "bls-signatures"
 version = "0.11.1"
-source = "git+https://github.com/Conflux-Chain/bls-signatures.git?rev=ac9b5526b5782f7aba4a833a55b820f10af69a75#ac9b5526b5782f7aba4a833a55b820f10af69a75"
+source = "git+https://github.com/Conflux-Chain/bls-signatures.git?rev=e7d9119eb285607d5134d40efd89555c41d73160#e7d9119eb285607d5134d40efd89555c41d73160"
 dependencies = [
  "blst",
  "blstrs",
@@ -605,7 +605,7 @@ dependencies = [
  "cfx-types",
  "derivative",
  "lazy_static",
- "log 0.4.14",
+ "log 0.4.17",
  "malloc_size_of",
  "malloc_size_of_derive",
  "parking_lot 0.11.2",
@@ -651,7 +651,7 @@ dependencies = [
  "error-chain",
  "hashbrown 0.7.2",
  "lazy_static",
- "log 0.4.14",
+ "log 0.4.17",
  "parking_lot 0.11.2",
  "primitives",
  "rlp 0.4.6",
@@ -677,11 +677,12 @@ dependencies = [
  "kvdb 0.4.0",
  "kvdb-rocksdb",
  "lazy_static",
- "log 0.4.14",
+ "log 0.4.17",
  "log4rs",
  "malloc_size_of",
  "malloc_size_of_derive",
  "memoffset 0.5.6",
+ "once_cell",
  "parity-util-mem",
  "parking_lot 0.11.2",
  "primitives",
@@ -714,7 +715,7 @@ dependencies = [
 name = "cfx-utils"
 version = "0.6.0"
 dependencies = [
- "log 0.4.14",
+ "log 0.4.17",
  "parking_lot 0.11.2",
 ]
 
@@ -776,7 +777,7 @@ dependencies = [
  "kvdb-rocksdb",
  "lazy_static",
  "link-cut-tree",
- "log 0.4.14",
+ "log 0.4.17",
  "log4rs",
  "lru_time_cache",
  "malloc_size_of",
@@ -852,7 +853,7 @@ dependencies = [
  "cfx-types",
  "edit-distance",
  "lazy_static",
- "log 0.4.14",
+ "log 0.4.17",
  "malloc_size_of",
  "malloc_size_of_derive",
  "parity-crypto 0.9.0",
@@ -1321,7 +1322,7 @@ version = "0.1.0"
 dependencies = [
  "kvdb 0.4.0",
  "kvdb-rocksdb",
- "log 0.4.14",
+ "log 0.4.17",
 ]
 
 [[package]]
@@ -1370,7 +1371,7 @@ dependencies = [
  "diem-temppath",
  "diem-types",
  "get_if_addrs",
- "log 0.4.14",
+ "log 0.4.17",
  "mirai-annotations",
  "rand 0.8.4",
  "serde",
@@ -1751,7 +1752,7 @@ checksum = "44533bbbb3bb3c1fa17d9f2e4e38bbbaf8396ba82193c4cb1b6445d711445d36"
 dependencies = [
  "atty",
  "humantime 1.3.0",
- "log 0.4.14",
+ "log 0.4.17",
  "regex",
  "termcolor",
 ]
@@ -1830,7 +1831,7 @@ dependencies = [
  "either",
  "ethereum-types 0.4.2",
  "keccak-hash 0.1.2",
- "log 0.4.14",
+ "log 0.4.17",
  "memmap",
  "parking_lot 0.7.1",
  "primal",
@@ -1897,7 +1898,7 @@ dependencies = [
  "kvdb-memorydb",
  "lazy_static",
  "len-caching-lock",
- "log 0.4.14",
+ "log 0.4.17",
  "lru-cache",
  "macros",
  "memory-cache 0.1.0 (git+https://github.com/paritytech/parity-ethereum?tag=v2.4.0)",
@@ -1940,7 +1941,7 @@ dependencies = [
  "heapsize",
  "itertools 0.5.10",
  "kvdb 0.1.1",
- "log 0.4.14",
+ "log 0.4.17",
  "parity-bytes",
  "parking_lot 0.7.1",
  "rayon",
@@ -1995,7 +1996,7 @@ dependencies = [
  "crossbeam-deque 0.6.3",
  "fnv",
  "futures 0.1.31",
- "log 0.4.14",
+ "log 0.4.17",
  "num_cpus",
  "parking_lot 0.7.1",
  "slab",
@@ -2021,7 +2022,7 @@ dependencies = [
  "heapsize",
  "keccak-hash 0.1.2",
  "linked-hash-map",
- "log 0.4.14",
+ "log 0.4.17",
  "parity-runtime",
  "parking_lot 0.7.1",
  "rlp 0.3.0",
@@ -2088,7 +2089,7 @@ dependencies = [
  "eth-secp256k1",
  "ethereum-types 0.4.2",
  "lazy_static",
- "log 0.4.14",
+ "log 0.4.17",
  "memzero",
  "parity-crypto 0.3.0",
  "parity-wordlist",
@@ -2110,7 +2111,7 @@ dependencies = [
  "heapsize",
  "keccak-hash 0.1.2",
  "lazy_static",
- "log 0.4.14",
+ "log 0.4.17",
  "memory-cache 0.1.0 (git+https://github.com/paritytech/parity-ethereum?tag=v2.4.0)",
  "parity-bytes",
  "parking_lot 0.7.1",
@@ -2170,7 +2171,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3be3c61c59fdc91f5dbc3ea31ee8623122ce80057058be560654c5d410d181a6"
 dependencies = [
  "lazy_static",
- "log 0.4.14",
+ "log 0.4.17",
  "rand 0.7.3",
 ]
 
@@ -2931,7 +2932,7 @@ dependencies = [
  "crossbeam-deque 0.7.4",
  "fnv",
  "lazy_static",
- "log 0.4.14",
+ "log 0.4.17",
  "metrics",
  "mio 0.6.23",
  "num_cpus",
@@ -3015,7 +3016,7 @@ dependencies = [
  "heapsize",
  "keccak-hasher",
  "kvdb 0.1.1",
- "log 0.4.14",
+ "log 0.4.17",
  "memory-db",
  "parity-bytes",
  "parking_lot 0.7.1",
@@ -3029,7 +3030,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0745a6379e3edc893c84ec203589790774e4247420033e71a76d3ab4687991fa"
 dependencies = [
  "futures 0.1.31",
- "log 0.4.14",
+ "log 0.4.17",
  "serde",
  "serde_derive",
  "serde_json",
@@ -3114,7 +3115,7 @@ dependencies = [
  "cfx-types",
  "fs-swap",
  "kvdb 0.4.0",
- "log 0.4.14",
+ "log 0.4.17",
  "malloc_size_of",
  "malloc_size_of_derive",
  "num_cpus",
@@ -3202,7 +3203,7 @@ dependencies = [
 [[package]]
 name = "librocksdb_sys"
 version = "0.1.0"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=cac983ab886a0701c8458bce76a76f63de16e1bd#cac983ab886a0701c8458bce76a76f63de16e1bd"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=1432683cb94609113d2ca9fcd6e2d7117b31e8a3#1432683cb94609113d2ca9fcd6e2d7117b31e8a3"
 dependencies = [
  "bindgen",
  "bzip2-sys",
@@ -3219,7 +3220,7 @@ dependencies = [
 [[package]]
 name = "libtitan_sys"
 version = "0.0.1"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=cac983ab886a0701c8458bce76a76f63de16e1bd#cac983ab886a0701c8458bce76a76f63de16e1bd"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=1432683cb94609113d2ca9fcd6e2d7117b31e8a3#1432683cb94609113d2ca9fcd6e2d7117b31e8a3"
 dependencies = [
  "bzip2-sys",
  "cc",
@@ -3295,14 +3296,14 @@ version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e19e8d5c34a3e0e2223db8e060f9e8264aeeb5c5fc64a4ee9965c062211c024b"
 dependencies = [
- "log 0.4.14",
+ "log 0.4.17",
 ]
 
 [[package]]
 name = "log"
-version = "0.4.14"
+version = "0.4.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51b9bbe6c47d51fc3e1a9b945965946b4c44142ab8792c50835a980d362c2710"
+checksum = "abb12e687cfb44aa40f41fc3978ef76448f9b6038cad6aef4259d3c095a2382e"
 dependencies = [
  "cfg-if 1.0.0",
  "serde",
@@ -3328,7 +3329,7 @@ dependencies = [
  "fnv",
  "humantime 2.1.0",
  "libc",
- "log 0.4.14",
+ "log 0.4.17",
  "log-mdc",
  "parking_lot 0.11.2",
  "regex",
@@ -3495,7 +3496,7 @@ version = "0.1.0"
 dependencies = [
  "influx_db_client",
  "lazy_static",
- "log 0.4.14",
+ "log 0.4.17",
  "log4rs",
  "parking_lot 0.11.2",
  "rand 0.7.3",
@@ -3534,7 +3535,7 @@ dependencies = [
  "iovec",
  "kernel32-sys",
  "libc",
- "log 0.4.14",
+ "log 0.4.17",
  "miow 0.2.2",
  "net2",
  "slab",
@@ -3548,7 +3549,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8067b404fe97c70829f082dec8bcf4f71225d7eaea1d8645349cb76fa06205cc"
 dependencies = [
  "libc",
- "log 0.4.14",
+ "log 0.4.17",
  "miow 0.3.7",
  "ntapi",
  "winapi 0.3.9",
@@ -3560,7 +3561,7 @@ version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0840c1c50fd55e521b247f949c241c9997709f23bd7f023b9762cd561e935656"
 dependencies = [
- "log 0.4.14",
+ "log 0.4.17",
  "mio 0.6.23",
  "miow 0.3.7",
  "winapi 0.3.9",
@@ -3634,7 +3635,7 @@ checksum = "48ba9f7719b5a0f42f338907614285fb5fd70e53858141f69898a1fb7203b24d"
 dependencies = [
  "lazy_static",
  "libc",
- "log 0.4.14",
+ "log 0.4.17",
  "openssl",
  "openssl-probe",
  "openssl-sys",
@@ -3685,7 +3686,7 @@ dependencies = [
  "keccak-hash 0.5.1",
  "lazy_static",
  "libc",
- "log 0.4.14",
+ "log 0.4.17",
  "malloc_size_of",
  "metrics",
  "mio 0.6.23",
@@ -3872,9 +3873,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.8.0"
+version = "1.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "692fcb63b64b1758029e0a96ee63e049ce8c5948587f2f7208df04625e5f6b56"
+checksum = "b7e5500299e16ebb147ae15a00a942af264cf3688f47923b8fc2cd5858f23ad3"
 
 [[package]]
 name = "opaque-debug"
@@ -4474,7 +4475,7 @@ dependencies = [
  "fixed-hash 0.5.2",
  "keccak-hash 0.5.1",
  "lazy_static",
- "log 0.4.14",
+ "log 0.4.17",
  "malloc_size_of",
  "rand 0.7.3",
  "rlp 0.4.6",
@@ -4558,7 +4559,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "efb0dcbddbb600f47a7098d33762a00552c671992171637f5bb310b37fe1f0e4"
 dependencies = [
  "byteorder",
- "log 0.4.14",
+ "log 0.4.17",
  "parity-wasm",
 ]
 
@@ -4853,7 +4854,7 @@ name = "random-crash"
 version = "1.0.0"
 dependencies = [
  "lazy_static",
- "log 0.4.14",
+ "log 0.4.17",
  "parking_lot 0.11.2",
  "rand 0.7.3",
 ]
@@ -5043,7 +5044,7 @@ dependencies = [
 [[package]]
 name = "rocksdb"
 version = "0.3.0"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=cac983ab886a0701c8458bce76a76f63de16e1bd#cac983ab886a0701c8458bce76a76f63de16e1bd"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=1432683cb94609113d2ca9fcd6e2d7117b31e8a3#1432683cb94609113d2ca9fcd6e2d7117b31e8a3"
 dependencies = [
  "libc",
  "librocksdb_sys",
@@ -5131,6 +5132,7 @@ dependencies = [
  "diem-temppath",
  "diem-types",
  "diem-vault-client",
+ "log 0.4.17",
  "once_cell",
  "rand 0.8.4",
  "rand_core 0.6.3",
@@ -5550,7 +5552,7 @@ name = "stats"
 version = "0.1.0"
 source = "git+https://github.com/paritytech/parity-ethereum?tag=v2.4.0#c7d8ee1dd7c5d0167b589616c77945abdc5c5928"
 dependencies = [
- "log 0.4.14",
+ "log 0.4.17",
 ]
 
 [[package]]
@@ -5593,7 +5595,7 @@ dependencies = [
  "heapsize",
  "kvdb 0.4.0",
  "lazy_static",
- "log 0.4.14",
+ "log 0.4.17",
  "parking_lot 0.11.2",
  "primitives",
  "rlp 0.3.0",
@@ -5978,7 +5980,7 @@ checksum = "57fc868aae093479e3131e3d165c93b1c7474109d13c90ec0dda2a1bbfff0674"
 dependencies = [
  "bytes 0.4.12",
  "futures 0.1.31",
- "log 0.4.14",
+ "log 0.4.17",
 ]
 
 [[package]]
@@ -6012,7 +6014,7 @@ dependencies = [
  "crossbeam-utils 0.7.2",
  "futures 0.1.31",
  "lazy_static",
- "log 0.4.14",
+ "log 0.4.17",
  "mio 0.6.23",
  "num_cpus",
  "parking_lot 0.9.0",
@@ -6068,7 +6070,7 @@ dependencies = [
  "crossbeam-utils 0.7.2",
  "futures 0.1.31",
  "lazy_static",
- "log 0.4.14",
+ "log 0.4.17",
  "num_cpus",
  "slab",
  "tokio-executor",
@@ -6094,7 +6096,7 @@ checksum = "e2a0b10e610b39c38b031a2fcab08e4b82f16ece36504988dcbd81dbba650d82"
 dependencies = [
  "bytes 0.4.12",
  "futures 0.1.31",
- "log 0.4.14",
+ "log 0.4.17",
  "mio 0.6.23",
  "tokio-codec",
  "tokio-io",
@@ -6111,7 +6113,7 @@ dependencies = [
  "futures 0.1.31",
  "iovec",
  "libc",
- "log 0.4.14",
+ "log 0.4.17",
  "mio 0.6.23",
  "mio-uds",
  "tokio-codec",
@@ -6128,7 +6130,7 @@ dependencies = [
  "bytes 1.1.0",
  "futures-core",
  "futures-sink",
- "log 0.4.14",
+ "log 0.4.17",
  "pin-project-lite 0.2.7",
  "tokio 1.14.0",
 ]
@@ -6154,7 +6156,7 @@ version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a1e75297b57b61495169dd40dd86e0ab52bfc7cdba570f59be5683709c9d480"
 dependencies = [
- "log 0.4.14",
+ "log 0.4.17",
 ]
 
 [[package]]
@@ -6190,7 +6192,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5866e5126b14358f1d7af4bf51a0be677a363799b90e655edcec8254edef1d2"
 dependencies = [
  "error-chain",
- "log 0.4.14",
+ "log 0.4.17",
  "smallvec 0.6.14",
  "trace-time",
 ]
@@ -6203,7 +6205,7 @@ checksum = "3c7319e28ca295f27359d944a682f7f65b419158bf1590c92cadc0000258d788"
 dependencies = [
  "elastic-array",
  "hash-db",
- "log 0.4.14",
+ "log 0.4.17",
  "rand 0.6.5",
 ]
 
@@ -6369,7 +6371,7 @@ checksum = "2b8b063c2d59218ae09f22b53c42eaad0d53516457905f5235ca4bc9e99daa71"
 dependencies = [
  "base64 0.13.0",
  "chunked_transfer",
- "log 0.4.14",
+ "log 0.4.17",
  "native-tls",
  "once_cell",
  "qstring",
@@ -6439,7 +6441,7 @@ dependencies = [
  "ethereum-types 0.4.2",
  "ethjson",
  "keccak-hash 0.1.2",
- "log 0.4.14",
+ "log 0.4.17",
  "parity-bytes",
  "patricia-trie-ethereum",
  "rlp 0.3.0",
@@ -6463,7 +6465,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ce8a968cb1cd110d136ff8b819a556d6fb6d919363c61534f6860c7eb172ba0"
 dependencies = [
- "log 0.4.14",
+ "log 0.4.17",
  "try-lock",
 ]
 
@@ -6487,7 +6489,7 @@ dependencies = [
  "byteorder",
  "ethereum-types 0.4.2",
  "libc",
- "log 0.4.14",
+ "log 0.4.17",
  "parity-wasm",
  "pwasm-utils",
  "vm",
