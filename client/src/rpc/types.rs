@@ -43,7 +43,7 @@ pub use self::{
     },
     consensus_graph_states::ConsensusGraphStates,
     epoch_number::{BlockHashOrEpochNumber, EpochNumber},
-    filter::{CfxFilterChanges, CfxFilterLog, CfxRpcLogFilter},
+    filter::{CfxFilterChanges, CfxFilterLog, CfxRpcLogFilter, RevertTo},
     index::Index,
     log::Log,
     pos_economics::PoSEconomics,
