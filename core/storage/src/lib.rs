@@ -122,6 +122,7 @@ pub struct StorageConfiguration {
     pub enable_single_mpt_storage: bool,
     pub single_mpt_space: Option<Space>,
     pub cip90a: u64,
+    pub keep_snapshot_before_stable_checkpoint: bool,
     pub use_isolated_db_for_mpt_table: bool,
     pub use_isolated_db_for_mpt_table_height: Option<u64>,
 }
@@ -163,6 +164,7 @@ impl StorageConfiguration {
             enable_single_mpt_storage: false,
             single_mpt_space: None,
             cip90a: 0,
+            keep_snapshot_before_stable_checkpoint: true,
             use_isolated_db_for_mpt_table: false,
             use_isolated_db_for_mpt_table_height: None,
         }

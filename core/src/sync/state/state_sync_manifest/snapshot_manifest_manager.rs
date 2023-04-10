@@ -19,7 +19,10 @@ use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
     consensus_internal::REWARD_EPOCH_COUNT,
 };
-use cfx_storage::{storage_db::SnapshotInfo, TrieProof};
+use cfx_storage::{
+    storage_db::{SnapshotInfo, SnapshotKeptToProvideSyncStatus},
+    TrieProof,
+};
 use cfx_types::H256;
 use network::node_table::NodeId;
 use primitives::{
@@ -57,6 +60,7 @@ pub struct RelatedData {
     pub bloom_blame_vec: Vec<H256>,
     pub epoch_receipts: Vec<(H256, H256, Arc<BlockReceipts>)>,
     pub snapshot_info: SnapshotInfo,
+    pub parent_snapshot_info: Option<SnapshotInfo>,
 }
 
 impl SnapshotManifestManager {
@@ -125,24 +129,28 @@ impl SnapshotManifestManager {
                     "Initial manifest is not expected".into(),
                 ));
             }
-            let (blame_vec_offset, state_root_with_aux_info, snapshot_info) =
-                match Self::validate_blame_states(
-                    ctx,
-                    self.snapshot_candidate.get_snapshot_epoch_id(),
-                    &self.trusted_blame_block,
-                    &response.state_root_vec,
-                    &response.receipt_blame_vec,
-                    &response.bloom_blame_vec,
-                ) {
-                    Some(info_tuple) => info_tuple,
-                    None => {
-                        warn!("failed to validate the blame state, re-sync manifest from other peer");
-                        self.resync_manifest(ctx);
-                        bail!(ErrorKind::InvalidSnapshotManifest(
-                            "invalid blame state in manifest".into(),
-                        ));
-                    }
-                };
+            let (
+                blame_vec_offset,
+                state_root_with_aux_info,
+                snapshot_info,
+                parent_snapshot_info,
+            ) = match Self::validate_blame_states(
+                ctx,
+                self.snapshot_candidate.get_snapshot_epoch_id(),
+                &self.trusted_blame_block,
+                &response.state_root_vec,
+                &response.receipt_blame_vec,
+                &response.bloom_blame_vec,
+            ) {
+                Some(info_tuple) => info_tuple,
+                None => {
+                    warn!("failed to validate the blame state, re-sync manifest from other peer");
+                    self.resync_manifest(ctx);
+                    bail!(ErrorKind::InvalidSnapshotManifest(
+                        "invalid blame state in manifest".into(),
+                    ));
+                }
+            };
 
             let epoch_receipts =
                 match SnapshotManifestManager::validate_epoch_receipts(
@@ -179,6 +187,7 @@ impl SnapshotManifestManager {
                 bloom_blame_vec: response.bloom_blame_vec,
                 epoch_receipts,
                 snapshot_info,
+                parent_snapshot_info,
             });
         } else {
             if self.chunk_boundaries.is_empty() {
@@ -281,7 +290,12 @@ impl SnapshotManifestManager {
         ctx: &Context, snapshot_epoch_id: &H256, trusted_blame_block: &H256,
         state_root_vec: &Vec<StateRoot>, receipt_blame_vec: &Vec<H256>,
         bloom_blame_vec: &Vec<H256>,
-    ) -> Option<(usize, StateRootWithAuxInfo, SnapshotInfo)>
+    ) -> Option<(
+        usize,
+        StateRootWithAuxInfo,
+        SnapshotInfo,
+        Option<SnapshotInfo>,
+    )>
     {
         let mut state_blame_vec = vec![];
 
@@ -408,10 +422,12 @@ impl SnapshotManifestManager {
             slice_begin = slice_end;
         }
 
+        let snapshot_epoch_count =
+            ctx.manager.graph.data_man.get_snapshot_epoch_count();
         let (parent_snapshot_epoch, pivot_chain_parts) =
             ctx.manager.graph.data_man.get_parent_epochs_for(
                 snapshot_epoch_id.clone(),
-                ctx.manager.graph.data_man.get_snapshot_epoch_count() as u64,
+                snapshot_epoch_count as u64,
             );
 
         let parent_snapshot_height = if parent_snapshot_epoch == NULL_EPOCH {
@@ -426,23 +442,55 @@ impl SnapshotManifestManager {
         };
         let mut snapshot_state_root = state_root_vec[offset].clone();
         let state_root_hash = state_root_vec[offset].compute_state_root_hash();
-        // This delta_root is the intermediate_delta_root of the new snapshot,
-        // and this field will be used to fill new state_root in
-        // get_state_trees_for_next_epoch
-        snapshot_state_root.intermediate_delta_root =
-            state_root_vec[offset].delta_root;
+
+        let snapshot_before_stable_checkpoint = if snapshot_block_header
+            .height()
+            > snapshot_epoch_count as u64
+        {
+            let (grandparent_snapshot_epoch, grandparent_pivot_chain_parts) =
+                ctx.manager.graph.data_man.get_parent_epochs_for(
+                    parent_snapshot_epoch.clone(),
+                    snapshot_epoch_count as u64,
+                );
+
+            let grandparent_snapshot_height =
+                if grandparent_snapshot_epoch == NULL_EPOCH {
+                    0
+                } else {
+                    ctx.manager
+                        .graph
+                        .data_man
+                        .block_header_by_hash(&grandparent_snapshot_epoch)
+                        .unwrap()
+                        .height()
+                };
+            debug!(
+                "grandparent snapshot epoch {:?}, height {}",
+                grandparent_snapshot_epoch, grandparent_snapshot_height
+            );
+
+            Some(SnapshotInfo {
+                // Prevent immediate removed by setting 'InfoOnly' to avoid
+                snapshot_info_kept_to_provide_sync:
+                    SnapshotKeptToProvideSyncStatus::InfoOnly,
+                serve_one_step_sync: false,
+                merkle_root: state_root_vec[offset - 1].snapshot_root,
+                height: snapshot_block_header.height()
+                    - snapshot_epoch_count as u64,
+                parent_snapshot_epoch_id: grandparent_snapshot_epoch,
+                parent_snapshot_height: grandparent_snapshot_height,
+                pivot_chain_parts: grandparent_pivot_chain_parts,
+            })
+        } else {
+            None
+        };
 
         Some((
             offset,
             StateRootWithAuxInfo {
                 state_root: snapshot_state_root,
                 aux_info: StateRootAuxInfo {
-                    // FIXME: we should not commit the EpochExecutionCommitment
-                    // FIXME: for the synced snapshot because it's fake.
-                    // Should be parent of parent but we don't necessarily need
-                    // to know. We put the
-                    // parent_snapshot_merkle_root here.
-                    snapshot_epoch_id: state_root_vec[offset - 1].snapshot_root,
+                    snapshot_epoch_id: snapshot_epoch_id.clone(),
                     // This field will not be used
                     delta_mpt_key_padding:
                         StorageKeyWithSpace::delta_mpt_padding(
@@ -473,6 +521,7 @@ impl SnapshotManifestManager {
                 parent_snapshot_height,
                 pivot_chain_parts,
             },
+            snapshot_before_stable_checkpoint,
         ))
     }
 

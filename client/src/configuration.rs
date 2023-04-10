@@ -345,6 +345,8 @@ build_config! {
         (ln_max_parallel_epochs_to_request, (Option<usize>), None)
         (ln_num_epochs_to_request, (Option<usize>), None)
         (ln_num_waiting_headers_threshold, (Option<usize>), None)
+        (keep_snapshot_before_stable_checkpoint, (bool), true)
+        (force_recompute_height_during_construct_pivot, (Option<u64>), None)
 
         // The snapshot database consists of two tables: snapshot_key_value and snapshot_mpt. However, the size of snapshot_mpt is significantly larger than that of snapshot_key_value.
         // When the configuration parameter use_isolated_db_for_mpt_table is set to true, the snapshot_mpt table will be located in a separate database.
@@ -607,6 +609,7 @@ impl Configuration {
                     }
                     None => None,
                 },
+                force_recompute_height_during_construct_pivot: self.raw_conf.force_recompute_height_during_construct_pivot,
                 recovery_latest_mpt_snapshot: self.raw_conf.recovery_latest_mpt_snapshot,
                 use_isolated_db_for_mpt_table: self.raw_conf.use_isolated_db_for_mpt_table,
             },
@@ -751,6 +754,9 @@ impl Configuration {
                 .raw_conf
                 .cip90_transition_height
                 .unwrap_or(self.raw_conf.hydra_transition_height.unwrap_or(0)),
+            keep_snapshot_before_stable_checkpoint: self
+                .raw_conf
+                .keep_snapshot_before_stable_checkpoint,
             use_isolated_db_for_mpt_table: self
                 .raw_conf
                 .use_isolated_db_for_mpt_table,
