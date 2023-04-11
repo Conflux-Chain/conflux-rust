@@ -2310,7 +2310,8 @@ impl ConsensusNewBlockHandler {
             .storage_conf
             .keep_snapshot_before_stable_checkpoint
         {
-            let pivot_arena_index = inner.pivot_chain[start_compute_epoch_pivot_index - 1];
+            let pivot_arena_index =
+                inner.pivot_chain[start_compute_epoch_pivot_index - 1];
             let pivot_hash = inner.arena[pivot_arena_index].hash;
             let height = inner.arena[pivot_arena_index].height + 1;
 
