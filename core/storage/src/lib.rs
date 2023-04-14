@@ -120,6 +120,7 @@ pub struct StorageConfiguration {
     pub enable_single_mpt_storage: bool,
     pub single_mpt_space: Option<Space>,
     pub cip90a: u64,
+    pub keep_snapshot_before_stable_checkpoint: bool,
 }
 
 impl StorageConfiguration {
@@ -158,6 +159,7 @@ impl StorageConfiguration {
             enable_single_mpt_storage: false,
             single_mpt_space: None,
             cip90a: 0,
+            keep_snapshot_before_stable_checkpoint: true,
         }
     }
 
