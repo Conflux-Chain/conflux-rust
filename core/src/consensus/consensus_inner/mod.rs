@@ -84,6 +84,7 @@ pub struct ConsensusInnerConfig {
     /// directory specified here. This is useful for testing.
     pub debug_dump_dir_invalid_state_root: Option<String>,
     pub debug_invalid_state_root_epoch: Option<H256>,
+    pub force_recompute_height_during_construct_pivot: Option<u64>,
 }
 
 #[derive(Copy, Clone, DeriveMallocSizeOf)]

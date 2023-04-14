@@ -287,11 +287,10 @@ impl StateManager {
                     // There is no snapshot_info for the parent snapshot,
                     // how can we find out the snapshot_merkle_root?
                     // See validate_blame_states().
-                    snapshot_merkle_root = parent_state_index.snapshot_epoch_id;
-                    match self.storage_manager.wait_for_snapshot(
-                        &parent_state_index.epoch_id,
-                        try_open,
-                    )? {
+                    match self
+                        .storage_manager
+                        .wait_for_snapshot(&intermediate_epoch_id, try_open)?
+                    {
                         None => {
                             warn!(
                                 "get_state_trees_for_next_epoch, shift snapshot, special case, \
@@ -301,12 +300,52 @@ impl StateManager {
                             );
                             return Ok(None);
                         }
-                        Some(guarded_snapshot) => snapshot = guarded_snapshot,
+                        Some(guarded_snapshot) => {
+                            let (guard, _snapshot) = guarded_snapshot.into();
+                            snapshot_merkle_root =
+                                match StorageManager::find_merkle_root(
+                                    &guard,
+                                    snapshot_epoch_id,
+                                ) {
+                                    None => {
+                                        warn!(
+                                            "get_state_trees_for_next_epoch, shift snapshot, special case, \
+                                            snapshot merkel root not found for snapshot {:?}. StateIndex: {:?}.",
+                                            snapshot_epoch_id,
+                                            parent_state_index,
+                                        );
+                                        return Ok(None);
+                                    }
+                                    Some(merkle_root) => merkle_root,
+                                };
+
+                            snapshot = GuardedValue::new(guard, _snapshot);
+                        }
                     }
                     maybe_intermediate_mpt = None;
                     maybe_intermediate_mpt_key_padding = None;
-                    intermediate_trie_root_merkle =
-                        parent_state_index.intermediate_trie_root_merkle;
+                    match self
+                        .storage_manager
+                        .intermediate_trie_root_merkle
+                        .write()
+                        .take()
+                    {
+                        Some(v) => {
+                            intermediate_trie_root_merkle = v;
+                        }
+                        _ => {
+                            warn!(
+                                "get_state_trees_for_next_epoch, shift snapshot, special case, \
+                                intermediate_trie_root_merkle not found for snapshot {:?}. StateIndex: {:?}.",
+                                snapshot_epoch_id,
+                                parent_state_index,
+                            );
+                            return Ok(None);
+                        }
+                    }
+
+                    debug!("get_state_trees_for_next_epoch, snapshot_merkle_root {:?}, intermediate_trie_root_merkle {:?}", snapshot_merkle_root, intermediate_trie_root_merkle);
+
                     match self
                         .storage_manager
                         .get_intermediate_mpt(&parent_state_index.epoch_id)?
@@ -403,9 +442,22 @@ impl StateManager {
                                 }
                                 maybe_intermediate_mpt = None;
                                 maybe_intermediate_mpt_key_padding = None;
-                                intermediate_trie_root_merkle =
-                                    parent_state_index
-                                        .intermediate_trie_root_merkle;
+                                match self
+                                    .storage_manager
+                                    .intermediate_trie_root_merkle
+                                    .write()
+                                    .take()
+                                {
+                                    Some(v) => {
+                                        intermediate_trie_root_merkle = v;
+                                    }
+                                    _ => {
+                                        warn!("get_state_trees_for_next_epoch, shift snapshot, special case, \
+                                        intermediate_trie_root_merkle not found for snapshot {:?}. StateIndex: {:?}.", snapshot_epoch_id, parent_state_index,);
+                                        return Ok(None);
+                                    }
+                                }
+
                                 match self
                                     .storage_manager
                                     .get_intermediate_mpt(
