@@ -63,6 +63,8 @@ impl Restorer {
     pub fn finalize_restoration(
         &mut self, state_manager: Arc<StateManager>,
         snapshot_info: SnapshotInfo,
+        parent_snapshot_info: Option<SnapshotInfo>,
+        intermediate_trie_root_merkle: MerkleHash,
     ) -> StorageResult<()>
     {
         // Release temp snapshot db so it can be renamed on Windows.
@@ -70,6 +72,34 @@ impl Restorer {
         self.verifier = None;
 
         let storage_manager = state_manager.get_storage_manager_arc();
+
+        let parent_snapshot = if let Some(snapshot_info) =
+            parent_snapshot_info.clone()
+        {
+            let snapshot_epoch_id = snapshot_info.get_snapshot_epoch_id();
+            if let Some(snapshot_info_in_db) =
+                storage_manager.get_snapshot_info_at_epoch(snapshot_epoch_id)
+            {
+                if snapshot_info.merkle_root != snapshot_info_in_db.merkle_root
+                    || snapshot_info.get_snapshot_epoch_id()
+                        != snapshot_info_in_db.get_snapshot_epoch_id()
+                {
+                    debug!("destory snapshot {:?}", snapshot_epoch_id);
+                    storage_manager
+                        .get_snapshot_manager()
+                        .get_snapshot_db_manager()
+                        .destroy_snapshot(snapshot_epoch_id)?;
+                    Some(snapshot_info)
+                } else {
+                    None
+                }
+            } else {
+                Some(snapshot_info)
+            }
+        } else {
+            None
+        };
+
         let mut snapshot_info_map_locked = storage_manager
             .get_snapshot_manager()
             .get_snapshot_db_manager()
@@ -78,10 +108,25 @@ impl Restorer {
                 &self.snapshot_merkle_root,
                 &storage_manager.snapshot_info_map_by_epoch,
             )?;
+
+        if let Some(parent_snapshot) = parent_snapshot {
+            storage_manager.register_new_snapshot(
+                parent_snapshot,
+                &mut snapshot_info_map_locked,
+            )?;
+        }
+
         storage_manager.register_new_snapshot(
             snapshot_info,
             &mut snapshot_info_map_locked,
         )?;
+
+        debug!(
+            "intermediate_trie_root_merkle for next epoch in finalize_restoration {:?}",
+            intermediate_trie_root_merkle
+        );
+        *storage_manager.intermediate_trie_root_merkle.write() =
+            Some(intermediate_trie_root_merkle);
 
         debug!("Completed snapshot restoration.");
         Ok(())

@@ -131,6 +131,9 @@ pub struct StorageManager {
     last_confirmed_snapshottable_epoch_id: Mutex<Option<EpochId>>,
 
     pub storage_conf: StorageConfiguration,
+
+    // used during startup for the next compute epoch
+    pub intermediate_trie_root_merkle: RwLock<Option<MerkleHash>>,
 }
 
 impl MallocSizeOf for StorageManager {
@@ -260,6 +263,7 @@ impl StorageManager {
             snapshot_info_map_by_epoch: RwLock::new(snapshot_info_map),
             last_confirmed_snapshottable_epoch_id: Default::default(),
             storage_conf,
+            intermediate_trie_root_merkle: RwLock::new(None),
         }));
 
         let storage_manager_arc =
@@ -788,7 +792,16 @@ impl StorageManager {
                 parent_delta_mpt
             }
             Some(parent_snapshot_associated_mpts) => {
-                parent_snapshot_associated_mpts.1.clone()
+                if parent_snapshot_associated_mpts.1.is_none() {
+                    debug!("MPT for parent_snapshot_epoch_id is none");
+                    Some(StorageManager::new_or_get_delta_mpt(
+                        self.clone(),
+                        &new_snapshot_info.parent_snapshot_epoch_id,
+                        &mut *snapshot_associated_mpts_locked,
+                    )?)
+                } else {
+                    parent_snapshot_associated_mpts.1.clone()
+                }
             }
         };
         let delta_mpt = if in_recover_mode {
@@ -865,6 +878,7 @@ impl StorageManager {
                     find_nearest_snapshot_multiple_of,
                 )
             },
+            stable_checkpoint_height,
         )
     }
 
@@ -887,6 +901,7 @@ impl StorageManager {
         maintained_state_root: &StateRootWithAuxInfo,
         state_availability_boundary: &RwLock<StateAvailabilityBoundary>,
         extra_snapshots_to_keep: &dyn Fn(u64, &mut bool) -> bool,
+        stable_checkpoint_height: u64,
     ) -> Result<()>
     {
         // Update the confirmed epoch id. Skip remaining actions when the
@@ -990,8 +1005,19 @@ impl StorageManager {
                             extra_snapshot_infos_kept_for_sync
                                 .push((snapshot_epoch_id.clone(), SnapshotKeptToProvideSyncStatus::InfoAndSnapshot));
                         } else {
-                            old_pivot_snapshot_infos_to_remove
-                                .push(snapshot_epoch_id.clone());
+                            // Retain the snapshot information for the one
+                            // preceding the stable checkpoint
+                            if snapshot_info.height
+                                + self
+                                    .storage_conf
+                                    .consensus_param
+                                    .snapshot_epoch_count
+                                    as u64
+                                != stable_checkpoint_height
+                            {
+                                old_pivot_snapshot_infos_to_remove
+                                    .push(snapshot_epoch_id.clone());
+                            }
                             old_pivot_snapshots_to_remove
                                 .push(snapshot_epoch_id.clone());
                         }
@@ -1446,7 +1472,7 @@ fn extra_snapshots_to_keep_predicate(
                         % era_epoch_count
                         == 0
                 {
-                    return true;
+                    return storage_conf.keep_snapshot_before_stable_checkpoint;
                 }
             }
             ProvideExtraSnapshotSyncConfig::EpochNearestMultipleOf(
