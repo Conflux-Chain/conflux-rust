@@ -12,8 +12,9 @@ use crate::{
                 BlockNumber, LocalizedTrace as EthLocalizedTrace,
                 Res as EthRes, TraceFilter as EthTraceFilter,
             },
-            Action as RpcAction, LocalizedTrace as RpcLocalizedTrace,
-            LocalizedTrace, TraceFilter as RpcTraceFilter,
+            Action as RpcAction, EpochNumber as RpcEpochNumber, EpochTrace,
+            LocalizedTrace as RpcLocalizedTrace, LocalizedTrace,
+            TraceFilter as RpcTraceFilter,
         },
         RpcResult,
     },
@@ -38,6 +39,7 @@ macro_rules! unwrap_or_return {
     };
 }
 
+#[derive(Clone)]
 pub struct TraceHandler {
     data_man: Arc<BlockDataManager>,
     consensus: SharedConsensusGraph,
@@ -193,6 +195,28 @@ impl TraceHandler {
                     })
             }))
     }
+
+    fn epoch_trace_impl(
+        &self, epoch_number: EpochNumber,
+    ) -> RpcResult<EpochTrace> {
+        let epoch = self
+            .consensus_graph()
+            .get_height_from_epoch_number(epoch_number.clone())?;
+        let mut cfx_trace_filter =
+            PrimitiveTraceFilter::space_filter(Space::Native);
+        cfx_trace_filter.from_epoch = epoch_number.clone();
+        cfx_trace_filter.to_epoch = epoch_number.clone();
+        let cfx_traces = self
+            .filter_traces_impl(cfx_trace_filter)?
+            .unwrap_or_default();
+        let eth_trace_handler = EthTraceHandler {
+            trace_handler: self.clone(),
+        };
+        let eth_traces = eth_trace_handler
+            .block_traces(BlockNumber::Num(epoch))?
+            .unwrap_or_default();
+        Ok(EpochTrace::new(cfx_traces, eth_traces))
+    }
 }
 
 impl Trace for TraceHandler {
@@ -213,6 +237,10 @@ impl Trace for TraceHandler {
         &self, tx_hash: H256,
     ) -> JsonRpcResult<Option<Vec<LocalizedTrace>>> {
         into_jsonrpc_result(self.transaction_trace_impl(&tx_hash))
+    }
+
+    fn epoch_traces(&self, epoch: RpcEpochNumber) -> JsonRpcResult<EpochTrace> {
+        into_jsonrpc_result(self.epoch_trace_impl(epoch.into_primitive()))
     }
 }
 
