@@ -55,7 +55,8 @@ pub use self::{
     sync_graph_states::SyncGraphStates,
     token_supply_info::TokenSupplyInfo,
     trace::{
-        Action, LocalizedBlockTrace, LocalizedTrace, LocalizedTransactionTrace,
+        Action, EpochTrace, LocalizedBlockTrace, LocalizedTrace,
+        LocalizedTransactionTrace,
     },
     trace_filter::TraceFilter,
     transaction::{PackedOrExecuted, Transaction, WrapTransaction},

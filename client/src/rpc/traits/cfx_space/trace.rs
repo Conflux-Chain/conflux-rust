@@ -2,7 +2,9 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::rpc::types::{LocalizedBlockTrace, LocalizedTrace, TraceFilter};
+use crate::rpc::types::{
+    EpochNumber, EpochTrace, LocalizedBlockTrace, LocalizedTrace, TraceFilter,
+};
 use cfx_types::H256;
 use jsonrpc_core::Result as JsonRpcResult;
 use jsonrpc_derive::rpc;
@@ -27,4 +29,8 @@ pub trait Trace {
     fn transaction_traces(
         &self, tx_hash: H256,
     ) -> JsonRpcResult<Option<Vec<LocalizedTrace>>>;
+
+    /// Return all traces of both spaces in an epoch.
+    #[rpc(name = "trace_epoch")]
+    fn epoch_traces(&self, epoch: EpochNumber) -> JsonRpcResult<EpochTrace>;
 }
