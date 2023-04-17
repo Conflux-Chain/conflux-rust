@@ -52,7 +52,7 @@ use tokio::runtime::Handle;
 pub(crate) fn execute_broadcast(
     peer: NodeId, backoff: bool, smp: &mut SharedMempool,
     scheduled_broadcasts: &mut FuturesUnordered<ScheduledBroadcast>,
-    executor: Handle,
+    broadcasting_peers: &mut HashSet<NodeId>, executor: Handle,
 )
 {
     diem_trace!("execute_broadcast starts: peer={}", peer);
@@ -67,12 +67,18 @@ pub(crate) fn execute_broadcast(
     };
 
     if peer_manager.contains_peer(&peer) {
+        // Make sure we only has one broadcast task for one peer id.
+        broadcasting_peers.insert(peer);
         scheduled_broadcasts.push(ScheduledBroadcast::new(
             Instant::now() + Duration::from_millis(interval_ms),
             peer,
             schedule_backoff,
             executor,
-        ))
+        ));
+    } else {
+        // The peer has been disconnected,
+        // so it can be added again after reconnection.
+        broadcasting_peers.remove(&peer);
     }
     diem_trace!("execute_broadcast end: peer={}", peer);
 }
