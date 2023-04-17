@@ -262,7 +262,10 @@ impl PeerManager {
                 if pending_broadcasts
                     >= self.mempool_config.max_broadcasts_per_peer
                 {
-                    diem_trace!("pending_broadcasts too much");
+                    diem_trace!(
+                        "pending_broadcasts too much for peer {:?}",
+                        peer
+                    );
                     return;
                 }
             }
