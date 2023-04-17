@@ -1639,7 +1639,7 @@ impl ConsensusGraph {
     }
 
     /// Return `Vec<(pivot_hash, block_hash, block_traces, block_txs)>`
-    fn collect_traces_single_epoch(
+    pub fn collect_traces_single_epoch(
         &self, filter: &TraceFilter, epoch_number: u64, assumed_pivot: H256,
     ) -> Result<
         Vec<(H256, H256, BlockExecTraces, Vec<Arc<SignedTransaction>>)>,
@@ -1731,7 +1731,7 @@ impl ConsensusGraph {
 
     /// `block_traces` is a list of tuple `(pivot_hash, block_hash,
     /// block_trace)`.
-    fn filter_block_traces(
+    pub fn filter_block_traces(
         &self, filter: &TraceFilter,
         block_traces: Vec<(
             H256,
