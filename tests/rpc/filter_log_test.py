@@ -142,7 +142,7 @@ class FilterLogTest(ConfluxTestFramework):
         logs1 = self.nodes[0].cfx_getFilterChanges(filter1)
         logs2 = self.nodes[0].cfx_getFilterChanges(filter2)
         assert_equal(len(logs2), num_to_reexecute + 1)
-        assert logs2[0]["ChainReorg"]
+        assert logs2[0]["revertTo"]
 
         # call cfx_getFilterLogs API
         logs1 = self.nodes[0].cfx_getFilterLogs(filter1)

@@ -43,7 +43,7 @@ pub use self::{
     },
     consensus_graph_states::ConsensusGraphStates,
     epoch_number::{BlockHashOrEpochNumber, EpochNumber},
-    filter::{CfxFilterChanges, CfxFilterLog, CfxRpcLogFilter},
+    filter::{CfxFilterChanges, CfxFilterLog, CfxRpcLogFilter, RevertTo},
     index::Index,
     log::Log,
     pos_economics::PoSEconomics,
@@ -55,7 +55,8 @@ pub use self::{
     sync_graph_states::SyncGraphStates,
     token_supply_info::TokenSupplyInfo,
     trace::{
-        Action, LocalizedBlockTrace, LocalizedTrace, LocalizedTransactionTrace,
+        Action, EpochTrace, LocalizedBlockTrace, LocalizedTrace,
+        LocalizedTransactionTrace,
     },
     trace_filter::TraceFilter,
     transaction::{PackedOrExecuted, Transaction, WrapTransaction},
