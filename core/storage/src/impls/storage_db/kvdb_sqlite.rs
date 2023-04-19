@@ -325,30 +325,31 @@ impl<ValueType> KvdbSqlite<ValueType> {
         connection: &mut SqliteConnection, statements: &KvdbSqliteStatements,
     ) -> Result<bool> {
         // Maybe extra bytes table.
-
-        if statements.stmts_main_table.select_tbl_name
-            != statements.stmts_bytes_key_table.select_tbl_name
+        if statements.stmts_main_table.create_table
+            != statements.stmts_bytes_key_table.create_table
         {
-            if let Some(_) = connection
+            if connection
                 .execute(
                     &statements.stmts_bytes_key_table.select_tbl_name,
                     SQLITE_NO_PARAM,
                 )?
                 .map(|_| true)
                 .expect_one_row()?
+                .is_none()
             {
-                return Ok(true);
+                return Ok(false);
             }
         }
 
         // Main table.
-        if let Some(_) = connection
+        if connection
             .execute(
                 &statements.stmts_main_table.select_tbl_name,
                 SQLITE_NO_PARAM,
             )?
             .map(|_| true)
             .expect_one_row()?
+            .is_some()
         {
             Ok(true)
         } else {

@@ -664,6 +664,12 @@ impl SnapshotDbSqlite {
     pub fn is_mpt_table_in_current_db(&self) -> bool {
         self.mpt_table_in_current_db
     }
+
+    pub fn update_mpt_snapshot(
+        &mut self, mpt_snapshot: Option<Arc<RwLock<SnapshotMptDbSqlite>>>,
+    ) {
+        self.mpt_snapshot = mpt_snapshot;
+    }
 }
 
 pub struct DeltaMptMergeDumperSqlite<'a> {

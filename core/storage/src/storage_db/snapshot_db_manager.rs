@@ -19,7 +19,7 @@ pub trait SnapshotDbManagerTrait {
     // snapshots.
     fn scan_persist_state(
         &self, snapshot_info_map: &HashMap<EpochId, SnapshotInfo>,
-    ) -> Result<Vec<EpochId>> {
+    ) -> Result<(Vec<EpochId>, EpochId)> {
         let mut missing_snapshots = HashMap::new();
         let mut all_snapshots = HashMap::new();
         for (snapshot_epoch_id, snapshot_info) in snapshot_info_map {
@@ -36,13 +36,15 @@ pub trait SnapshotDbManagerTrait {
             {
                 missing_snapshots.insert(
                     self.get_snapshot_db_name(snapshot_epoch_id).into_bytes(),
-                    snapshot_epoch_id.clone(),
+                    (snapshot_epoch_id.clone(), snapshot_info.height),
                 );
             }
         }
 
         // Scan the snapshot dir. Remove extra files, and return the list of
         // missing snapshots.
+        let mut max_height = 0;
+        let mut epoch_id = NULL_EPOCH;
         for entry in fs::read_dir(self.get_snapshot_dir())? {
             let entry = entry?;
             let path = entry.path();
@@ -63,7 +65,14 @@ pub trait SnapshotDbManagerTrait {
                 );
                 fs::remove_dir_all(entry.path())?;
             } else {
-                missing_snapshots.remove(dir_name.as_bytes());
+                if let Some((epoch, height)) =
+                    missing_snapshots.remove(dir_name.as_bytes())
+                {
+                    if height > max_height {
+                        max_height = height;
+                        epoch_id = epoch;
+                    }
+                }
             }
         }
 
@@ -94,10 +103,13 @@ pub trait SnapshotDbManagerTrait {
             }
         }
 
-        Ok(missing_snapshots
-            .into_iter()
-            .map(|(_path_bytes, snapshot_epoch_id)| snapshot_epoch_id)
-            .collect())
+        Ok((
+            missing_snapshots
+                .into_iter()
+                .map(|(_path_bytes, (snapshot_epoch_id, _))| snapshot_epoch_id)
+                .collect(),
+            epoch_id,
+        ))
     }
 
     fn new_snapshot_by_merging<'m>(
@@ -127,7 +139,7 @@ use super::{
 };
 use crate::impls::storage_manager::PersistedSnapshotInfoMap;
 use parking_lot::{RwLock, RwLockWriteGuard};
-use primitives::{EpochId, MerkleHash};
+use primitives::{EpochId, MerkleHash, NULL_EPOCH};
 use std::{
     collections::HashMap,
     fs,

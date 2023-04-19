@@ -8,6 +8,7 @@ pub struct SnapshotMptDbSqlite {
     open_semaphore: Arc<Semaphore>,
     path: PathBuf,
     remove_on_close: AtomicBool,
+    latest_mpt_snapshot_semaphore: Option<Arc<Semaphore>>,
 }
 
 pub struct SnapshotMptDbStatements {
@@ -41,6 +42,7 @@ impl Drop for SnapshotMptDbSqlite {
                 &self.open_semaphore,
                 &self.path,
                 self.remove_on_close.load(Ordering::Relaxed),
+                &self.latest_mpt_snapshot_semaphore,
             )
         }
     }
@@ -142,6 +144,7 @@ impl SnapshotMptDbSqlite {
         snapshot_path: &Path, readonly: bool,
         already_open_snapshots: &AlreadyOpenSnapshots<RwLock<Self>>,
         open_semaphore: &Arc<Semaphore>,
+        latest_mpt_snapshot_semaphore: Option<Arc<Semaphore>>,
     ) -> Result<SnapshotMptDbSqlite>
     {
         let kvdb_sqlite_sharded = KvdbSqliteSharded::<Box<[u8]>>::open(
@@ -157,6 +160,7 @@ impl SnapshotMptDbSqlite {
             open_semaphore: open_semaphore.clone(),
             path: snapshot_path.to_path_buf(),
             remove_on_close: Default::default(),
+            latest_mpt_snapshot_semaphore,
         })
     }
 
@@ -164,6 +168,7 @@ impl SnapshotMptDbSqlite {
         snapshot_path: &Path,
         already_open_snapshots: &AlreadyOpenSnapshots<RwLock<Self>>,
         open_snapshots_semaphore: &Arc<Semaphore>,
+        latest_mpt_snapshot_semaphore: Option<Arc<Semaphore>>,
     ) -> Result<SnapshotMptDbSqlite>
     {
         fs::create_dir_all(snapshot_path)?;
@@ -191,6 +196,7 @@ impl SnapshotMptDbSqlite {
                 open_semaphore: open_snapshots_semaphore.clone(),
                 path: snapshot_path.to_path_buf(),
                 remove_on_close: Default::default(),
+                latest_mpt_snapshot_semaphore,
             }),
         }
     }

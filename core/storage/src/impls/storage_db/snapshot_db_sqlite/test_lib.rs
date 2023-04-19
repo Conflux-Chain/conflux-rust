@@ -14,6 +14,7 @@ pub fn open_snapshot_db_for_testing(
         readonly,
         &Default::default(),
         &Arc::new(Semaphore::new(DEFAULT_MAX_OPEN_SNAPSHOTS as usize)),
+        None,
     )?));
 
     SnapshotDbSqlite::open(

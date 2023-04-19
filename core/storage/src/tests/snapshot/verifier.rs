@@ -496,7 +496,7 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
 
     fn scan_persist_state(
         &self, _snapshot_info_map: &HashMap<EpochId, SnapshotInfo>,
-    ) -> Result<Vec<EpochId>> {
+    ) -> Result<(Vec<EpochId>, EpochId)> {
         unreachable!()
     }
 

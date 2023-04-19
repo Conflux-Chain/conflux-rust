@@ -2024,8 +2024,10 @@ impl ConsensusNewBlockHandler {
                     false
                 };
 
-            if let Some(_) =
-                *self.data_man.get_epoch_execution_commitment(&pivot_hash)
+            if self
+                .data_man
+                .get_epoch_execution_commitment(&pivot_hash)
+                .is_some()
             {
                 self.data_man
                     .state_availability_boundary
@@ -2206,7 +2208,7 @@ impl ConsensusNewBlockHandler {
 
                 if !missing_snapshots.contains(next_snapshot_epoch) {
                     match snapshot_manager
-                        .get_snapshot_by_epoch_id(next_snapshot_epoch, true)
+                        .get_snapshot_by_epoch_id(next_snapshot_epoch, false)
                     {
                         Ok(Some(_)) => {
                             latest_snapshot_epoch_height =
