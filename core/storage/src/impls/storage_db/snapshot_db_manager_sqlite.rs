@@ -22,7 +22,7 @@ pub struct SnapshotDbManagerSqlite {
     era_epoch_count: u64,
     max_open_snapshots: u16,
     lastest_mpt_snapshot_semaphore: Arc<Semaphore>,
-    latest_snapshot_id: RwLock<EpochId>,
+    latest_snapshot_id: RwLock<(EpochId, u64)>,
 }
 
 #[derive(Debug)]
@@ -89,12 +89,12 @@ impl SnapshotDbManagerSqlite {
             era_epoch_count,
             max_open_snapshots,
             lastest_mpt_snapshot_semaphore: Arc::new(Semaphore::new(1)),
-            latest_snapshot_id: RwLock::new(NULL_EPOCH),
+            latest_snapshot_id: RwLock::new((NULL_EPOCH, 0)),
         })
     }
 
-    pub fn update_latest_snapshot_id(&self, snapshot_id: EpochId) {
-        *self.latest_snapshot_id.write() = snapshot_id;
+    pub fn update_latest_snapshot_id(&self, snapshot_id: EpochId, height: u64) {
+        *self.latest_snapshot_id.write() = (snapshot_id, height);
     }
 
     fn open_snapshot_readonly(
@@ -186,7 +186,8 @@ impl SnapshotDbManagerSqlite {
                     if mpt_snapshot_path.exists() {
                         mpt_snapshot_path
                     } else {
-                        if *self.latest_snapshot_id.read() == *snapshot_epoch_id
+                        if self.latest_snapshot_id.read().0
+                            == *snapshot_epoch_id
                         {
                             self.get_latest_mpt_snapshot_db_path()
                         } else {
@@ -220,7 +221,7 @@ impl SnapshotDbManagerSqlite {
     }
 
     fn open_snapshot_write(
-        &self, snapshot_path: PathBuf, create: bool, epoch_height: u64,
+        &self, snapshot_path: PathBuf, create: bool, new_epoch_height: u64,
         mpt_snapshot_path: Option<PathBuf>, new_snapshot_id: &EpochId,
     ) -> Result<SnapshotDbSqlite>
     {
@@ -250,19 +251,26 @@ impl SnapshotDbManagerSqlite {
         }
 
         let mpt_table_in_current_db =
-            self.is_mpt_table_in_current_db_for_epoch(epoch_height);
+            self.is_mpt_table_in_current_db_for_epoch(new_epoch_height);
 
         let latest_mpt_snapshot = if mpt_table_in_current_db {
             None
         } else {
             let (mpt_snapshot_path, create_mpt) = match mpt_snapshot_path {
                 Some(v) => (v, true),
-                _ => (self.get_latest_mpt_snapshot_db_path(), false),
+                _ => {
+                    assert!(
+                        new_epoch_height > self.latest_snapshot_id.read().1,
+                        "Try to write an old snapshot"
+                    );
+                    (self.get_latest_mpt_snapshot_db_path(), false)
+                }
             };
 
             Some(self.open_mpt_snapshot_write(
                 mpt_snapshot_path,
                 create_mpt,
+                new_epoch_height,
                 new_snapshot_id,
             )?)
         };
@@ -364,13 +372,14 @@ impl SnapshotDbManagerSqlite {
             }
 
             let (latest_mpt_semaphore_permit, v) =
-                if *self.latest_snapshot_id.read() == *snapshot_epoch_id {
+                if self.latest_snapshot_id.read().0 == *snapshot_epoch_id {
                     let s = self
                         .lastest_mpt_snapshot_semaphore
                         .try_acquire()
                         .map_err(|_err| {
-                        ErrorKind::SemaphoreTryAcquireError
+                        "The MPT snapshot is already open for writing."
                     })?;
+
                     (Some(s), Some(self.lastest_mpt_snapshot_semaphore.clone()))
                 } else {
                     (None, None)
@@ -400,8 +409,10 @@ impl SnapshotDbManagerSqlite {
     }
 
     fn open_mpt_snapshot_write(
-        &self, snapshot_path: PathBuf, create: bool, new_snapshot_id: &EpochId,
-    ) -> Result<Arc<RwLock<SnapshotMptDbSqlite>>> {
+        &self, snapshot_path: PathBuf, create: bool, new_epoch_height: u64,
+        new_snapshot_id: &EpochId,
+    ) -> Result<Arc<RwLock<SnapshotMptDbSqlite>>>
+    {
         debug!("open mpt snapshot with write {:?}", snapshot_path);
         let latest_mpt_semaphore_permit: tokio::sync::SemaphorePermit =
             executor::block_on(self.lastest_mpt_snapshot_semaphore.acquire());
@@ -443,7 +454,8 @@ impl SnapshotDbManagerSqlite {
         latest_mpt_semaphore_permit.forget();
         semaphore_permit.forget();
 
-        *self.latest_snapshot_id.write() = new_snapshot_id.clone();
+        *self.latest_snapshot_id.write() =
+            (new_snapshot_id.clone(), new_epoch_height);
         let mpt_snapshot_db = Arc::new(RwLock::new(snapshot_db));
 
         self.mpt_already_open_snapshots
@@ -817,6 +829,7 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                 Some(self.open_mpt_snapshot_write(
                     self.get_mpt_snapshot_db_path(&snapshot_epoch_id),
                     true,
+                    new_epoch_height,
                     &snapshot_epoch_id,
                 )?)
             };
@@ -873,7 +886,11 @@ impl SnapshotDbManagerTrait for SnapshotDbManagerSqlite {
                     )?;
                     old_snapshot = maybe_old_snapshot_db
                         .ok_or(Error::from(ErrorKind::SnapshotNotFound))?;
-                    Some(&*old_snapshot)
+                    if old_snapshot.is_mpt_table_in_current_db() {
+                        Some(&*old_snapshot)
+                    } else {
+                        None
+                    }
                 };
 
                 snapshot_db.direct_merge(old_snapshot_db)?

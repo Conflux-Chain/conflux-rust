@@ -489,6 +489,12 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
     }
 
     fn commit_transaction(&mut self) -> Result<()> {
+        if let Some(connections) = self.maybe_db_connections.as_mut() {
+            for connection in connections.iter_mut() {
+                connection.execute("COMMIT", SQLITE_NO_PARAM)?;
+            }
+        }
+
         if !self.mpt_table_in_current_db && self.mpt_snapshot.is_some() {
             self.mpt_snapshot
                 .as_ref()
@@ -497,11 +503,6 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
                 .commit_transaction()?;
         }
 
-        if let Some(connections) = self.maybe_db_connections.as_mut() {
-            for connection in connections.iter_mut() {
-                connection.execute("COMMIT", SQLITE_NO_PARAM)?;
-            }
-        }
         Ok(())
     }
 

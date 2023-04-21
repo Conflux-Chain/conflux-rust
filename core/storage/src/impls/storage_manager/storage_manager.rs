@@ -1337,14 +1337,17 @@ impl StorageManager {
             .push(SnapshotInfo::genesis_snapshot_info());
 
         // Persist state loaded.
-        let (missing_snapshots, existing_latest_snapshot_id) = self
-            .snapshot_manager
-            .get_snapshot_db_manager()
-            .scan_persist_state(snapshot_info_map.get_map())?;
+        let (missing_snapshots, existing_latest_snapshot_id, epoch_height) =
+            self.snapshot_manager
+                .get_snapshot_db_manager()
+                .scan_persist_state(snapshot_info_map.get_map())?;
 
         self.snapshot_manager
             .get_snapshot_db_manager()
-            .update_latest_snapshot_id(existing_latest_snapshot_id);
+            .update_latest_snapshot_id(
+                existing_latest_snapshot_id,
+                epoch_height,
+            );
 
         // Remove missing snapshots.
         for snapshot_epoch_id in missing_snapshots {

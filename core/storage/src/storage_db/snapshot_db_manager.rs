@@ -19,7 +19,7 @@ pub trait SnapshotDbManagerTrait {
     // snapshots.
     fn scan_persist_state(
         &self, snapshot_info_map: &HashMap<EpochId, SnapshotInfo>,
-    ) -> Result<(Vec<EpochId>, EpochId)> {
+    ) -> Result<(Vec<EpochId>, EpochId, u64)> {
         let mut missing_snapshots = HashMap::new();
         let mut all_snapshots = HashMap::new();
         for (snapshot_epoch_id, snapshot_info) in snapshot_info_map {
@@ -43,7 +43,7 @@ pub trait SnapshotDbManagerTrait {
 
         // Scan the snapshot dir. Remove extra files, and return the list of
         // missing snapshots.
-        let mut max_height = 0;
+        let mut max_epoch_height = 0;
         let mut epoch_id = NULL_EPOCH;
         for entry in fs::read_dir(self.get_snapshot_dir())? {
             let entry = entry?;
@@ -68,8 +68,8 @@ pub trait SnapshotDbManagerTrait {
                 if let Some((epoch, height)) =
                     missing_snapshots.remove(dir_name.as_bytes())
                 {
-                    if height > max_height {
-                        max_height = height;
+                    if height > max_epoch_height {
+                        max_epoch_height = height;
                         epoch_id = epoch;
                     }
                 }
@@ -109,6 +109,7 @@ pub trait SnapshotDbManagerTrait {
                 .map(|(_path_bytes, (snapshot_epoch_id, _))| snapshot_epoch_id)
                 .collect(),
             epoch_id,
+            max_epoch_height,
         ))
     }
 
