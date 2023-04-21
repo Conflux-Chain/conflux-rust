@@ -1018,6 +1018,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             U256::zero(),
             U256::one(),
             Some(STORAGE_LAYOUT_REGULAR_V0),
+            false,
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state.init_code(&address, code.clone(), sender).unwrap();
@@ -1082,6 +1083,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             U256::zero(),
             U256::one(),
             Some(STORAGE_LAYOUT_REGULAR_V0),
+            false,
         )
         .unwrap();
     state.init_code(&address, code, sender).unwrap();
@@ -1193,6 +1195,7 @@ fn test_commission_privilege() {
             U256::zero(),
             U256::one(),
             Some(STORAGE_LAYOUT_REGULAR_V0),
+            false,
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state.init_code(&address, code, sender).unwrap();
@@ -1575,6 +1578,7 @@ fn test_storage_commission_privilege() {
             U256::zero(),
             U256::one(),
             Some(STORAGE_LAYOUT_REGULAR_V0),
+            false,
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state.init_code(&address, code, sender.address()).unwrap();

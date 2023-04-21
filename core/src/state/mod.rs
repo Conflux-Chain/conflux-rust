@@ -460,7 +460,7 @@ impl StateOpsTrait for StateGeneric {
 
     fn new_contract_with_admin(
         &mut self, contract: &AddressWithSpace, admin: &Address, balance: U256,
-        nonce: U256, storage_layout: Option<StorageLayout>,
+        nonce: U256, storage_layout: Option<StorageLayout>, cip107: bool,
     ) -> DbResult<()>
     {
         assert!(contract.space == Space::Native || admin.is_zero());
@@ -486,6 +486,7 @@ impl StateOpsTrait for StateGeneric {
                     admin,
                     invalidated_storage,
                     storage_layout,
+                    cip107,
                 ),
             )),
         );
@@ -1450,7 +1451,6 @@ impl StateGeneric {
                     AddressPocket::MintBurn,
                     converted_point_from_balance,
                 );
-                self.subtract_total_issued(converted_point_from_balance);
             }
             if !converted_point_from_collateral.is_zero() {
                 tracer.trace_internal_transfer(
@@ -1459,7 +1459,6 @@ impl StateGeneric {
                     AddressPocket::MintBurn,
                     converted_point_from_collateral,
                 );
-                self.subtract_total_issued(converted_point_from_collateral);
             }
         }
 
@@ -1585,7 +1584,7 @@ impl StateGeneric {
     fn sub_collateral_for_storage(
         &mut self, address: &Address, by: &U256, account_start_nonce: U256,
     ) -> DbResult<U256> {
-        let collateral = self.collateral_for_storage(address)?;
+        let collateral = self.token_collateral_for_storage(address)?;
         let refundable = if by > &collateral { &collateral } else { by };
         let burnt = *by - *refundable;
         let storage_point_refund = if !refundable.is_zero() {
@@ -1611,6 +1610,7 @@ impl StateGeneric {
     ) -> DbResult<(U256, U256)> {
         let prop = self.storage_point_prop()?;
         let init_result = {
+            debug!("Check initialize CIP-107");
             let account = &mut *self.require_or_new_basic_account(
                 &address.with_native_space(),
                 &account_start_nonce,

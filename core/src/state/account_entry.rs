@@ -9,6 +9,7 @@ use crate::{
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::{
+    consensus::ONE_CFX_IN_DRIP,
     internal_contract_addresses::SYSTEM_STORAGE_ADDRESS,
     staking::COLLATERAL_UNITS_PER_STORAGE_KEY,
 };
@@ -219,6 +220,7 @@ impl OverlayAccount {
             &Address::zero(),
             invalidated_storage,
             storage_layout,
+            false,
         )
     }
 
@@ -227,15 +229,23 @@ impl OverlayAccount {
     pub fn new_contract_with_admin(
         address: &AddressWithSpace, balance: U256, nonce: U256,
         admin: &Address, invalidated_storage: bool,
-        storage_layout: Option<StorageLayout>,
+        storage_layout: Option<StorageLayout>, cip107: bool,
     ) -> Self
     {
+        let sponsor_info = if cip107 && address.space == Space::Native {
+            SponsorInfo {
+                storage_points: Some(Default::default()),
+                ..Default::default()
+            }
+        } else {
+            Default::default()
+        };
         OverlayAccount {
             address: address.clone(),
             balance,
             nonce,
             admin: admin.clone(),
-            sponsor_info: Default::default(),
+            sponsor_info,
             storage_value_read_cache: Default::default(),
             storage_value_write_cache: Default::default(),
             storage_owner_lv2_write_cache: Default::default(),
@@ -312,7 +322,8 @@ impl OverlayAccount {
         self.sponsor_info.sponsor_balance_for_collateral = *sponsor_balance;
 
         if self.sponsor_info.storage_points.is_some() && !inc.is_zero() {
-            let converted_storage_point = inc * prop / (U256::one() + prop);
+            let converted_storage_point =
+                inc * prop / (U256::from(ONE_CFX_IN_DRIP) + prop);
             self.sponsor_info.sponsor_balance_for_collateral -=
                 converted_storage_point;
             self.sponsor_info.storage_points.as_mut().unwrap().unused +=
@@ -414,7 +425,7 @@ impl OverlayAccount {
         let total_collateral = self.sponsor_info.sponsor_balance_for_collateral
             + self.collateral_for_storage;
         let changed_storage_points =
-            total_collateral * prop / (U256::one() + prop);
+            total_collateral * prop / (U256::from(ONE_CFX_IN_DRIP) + prop);
         let mut storage_points = StoragePoints {
             unused: changed_storage_points,
             used: U256::zero(),

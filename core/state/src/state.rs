@@ -121,7 +121,7 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
 
     fn new_contract_with_admin(
         &mut self, _contract: &Address, _admin: &Address, _balance: U256,
-        _nonce: U256, _storage_layout: Option<StorageLayout>,
+        _nonce: U256, _storage_layout: Option<StorageLayout>, cip107: bool,
     ) -> Result<()>
     {
         unimplemented!()

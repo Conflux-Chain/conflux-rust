@@ -557,6 +557,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                 val.saturating_add(prev_balance),
                 nonce,
                 storage_layout,
+                spec.cip107,
             )?;
         } else {
             // In contract creation, the `params.value` should never be
@@ -1330,7 +1331,10 @@ impl<'a, Substate: SubstateMngTrait> ExecutiveGeneric<'a, Substate> {
             gas_sponsor_eligible && sponsor_balance_for_gas >= gas_cost;
 
         let sponsor_balance_for_storage =
-            self.state.sponsor_balance_for_collateral(&code_address)?;
+            self.state.sponsor_balance_for_collateral(&code_address)?
+                + self
+                    .state
+                    .avaliable_storage_point_for_collateral(&code_address)?;
         let storage_sponsored = match settings.charge_collateral {
             ChargeCollateral::Normal => {
                 storage_sponsor_eligible

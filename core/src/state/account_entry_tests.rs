@@ -143,6 +143,7 @@ fn test_overlay_account_create() {
         &admin,
         false,
         Some(STORAGE_LAYOUT_REGULAR_V0),
+        false,
     );
     assert!(overlay_account.deposit_list().is_none());
     assert!(overlay_account.vote_stake_list().is_none());

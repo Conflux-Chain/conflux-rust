@@ -237,7 +237,6 @@ pub fn set_sponsor_for_collateral(
         )?
     };
     if !converted_storage_point.is_zero() {
-        state.subtract_total_issued(converted_storage_point);
         tracer.trace_internal_transfer(
             AddressPocket::SponsorBalanceForStorage(contract_address),
             AddressPocket::MintBurn,

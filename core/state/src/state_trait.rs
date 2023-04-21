@@ -77,7 +77,7 @@ pub trait StateOpsTrait {
 
     fn new_contract_with_admin(
         &mut self, contract: &AddressWithSpace, admin: &Address, balance: U256,
-        nonce: U256, storage_layout: Option<StorageLayout>,
+        nonce: U256, storage_layout: Option<StorageLayout>, cip107: bool,
     ) -> DbResult<()>;
 
     fn balance(&self, address: &AddressWithSpace) -> DbResult<U256>;
