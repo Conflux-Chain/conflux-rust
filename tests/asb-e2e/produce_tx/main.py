@@ -6,6 +6,7 @@ import transfer
 import erc20
 from sign import sign
 from datetime import datetime
+from params import *
 
 BASE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../..")
 log = lambda x: print(datetime.now().time(), x)
@@ -50,21 +51,6 @@ def generate_transfer(path, from_list, to_list, value=1, tx_num=None, chunk=5000
 
     fout.close()
     log("Done")
-
-DISTRIBUTE_SIZE = 10_000_000
-ACCOUNT_SIZE_LIST = [1_000_000, 3_000_000, 5_000_000]
-RANDOM_TXS = lambda x: x*5
-LESS_SENDER = 10_000
-
-# DISTRIBUTE_SIZE = 10_000_000
-# ACCOUNT_SIZE_LIST = [1_000_000, 3_000_000, 5_000_000, 10_000_000]
-# RANDOM_TXS = 30_000_000
-# LESS_SENDER = 10_000
-
-# DISTRIBUTE_SIZE = 100_000
-# ACCOUNT_SIZE_LIST = [10_000, 30_000, 50_000, 100_000]
-# RANDOM_TXS = 300_000
-# LESS_SENDER = 100
 
 
 def deploy_general_transfer(type, folder_path, contract=None, **kwargs):

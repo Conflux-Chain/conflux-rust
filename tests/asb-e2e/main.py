@@ -11,7 +11,7 @@ This is the state root for pre-generated genesis accounts in `genesis_secrets.tx
 '''
 
 STORAGE = os.environ.get("CONFLUX_DEV_STORAGE", "dmpt")
-SHARD_SIZE = os.environ.get("AMT_SHARD_SIZE")
+SHARD_SIZE = os.environ.get("LVMT_SHARD_SIZE")
 LIGHT_HASH = os.environ.get("LIGHT_HASH")
 
 SECRET = "seq_secrets.txt"
@@ -117,7 +117,7 @@ class SingleBench(ConfluxTestFramework):
         parser.add_argument(
             "--bench-mode",
             dest="bench_mode",
-            default="normal",
+            default="less-sender",
             type=str
         )
 

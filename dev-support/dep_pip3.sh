@@ -20,9 +20,10 @@ install pysha3
 install trie
 install web3 5.31
 install py-solc-x
-install jsonrpcclient
+install jsonrpcclient 3.3
 install asyncio
 install websockets
+install eth-tester 0.6.0b6
 
 python3 -m solcx.install v0.5.17
 

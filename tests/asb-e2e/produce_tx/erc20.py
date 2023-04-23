@@ -22,7 +22,7 @@ class Contract:
         compiled_sol = compile_files([path], output_values=ALL_OUTPUT_VALUES, optimize=True, optimize_runs=200)
         contract = compiled_sol[path + ':' + name]
 
-        w3 = Web3(Web3.EthereumTesterProvider())
+        w3 = Web3()
         self.contract = w3.eth.contract(abi=contract['abi'], bytecode=contract['bin'])
 
     def deploy(self, *args):
