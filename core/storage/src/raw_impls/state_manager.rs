@@ -42,9 +42,7 @@ fn open_backend(db_dir: &str) -> Arc<Database> {
 }
 
 impl StateManager {
-    pub fn get_storage_manager(&self) -> &StateManager {
-        &*self
-    }
+    pub fn get_storage_manager(&self) -> &StateManager { &*self }
 
     pub fn new(conf: StorageConfiguration) -> Result<Self> {
         let backend: Arc<dyn KeyValueDB> =
@@ -57,15 +55,14 @@ impl StateManager {
         })
     }
 
-    pub fn get_snapshot_epoch_count(&self) -> u32 {
-        self.snapshot_epoch_count
-    }
+    pub fn get_snapshot_epoch_count(&self) -> u32 { self.snapshot_epoch_count }
 
     pub fn maintain_state_confirmed<ConsensusInner: StateMaintenanceTrait>(
         &self, consensus_inner: &ConsensusInner, stable_checkpoint_height: u64,
         era_epoch_count: u64, confirmed_height: u64,
         state_availability_boundary: &RwLock<StateAvailabilityBoundary>,
-    ) -> Result<()> {
+    ) -> Result<()>
+    {
         Ok(())
     }
 
@@ -98,11 +95,13 @@ impl StateManagerTrait for StateManager {
 
         let root = parent_epoch_id.state_root.state_root.epoch_id.clone();
 
-        Ok(Some(if parent_epoch_id.is_read_only() {
-            self.new_state(true, epoch, root)
-        } else {
-            self.new_state(false, epoch, root)
-        }))
+        Ok(Some(
+            if parent_epoch_id.is_read_only() {
+                self.new_state(true, epoch, root)
+            } else {
+                self.new_state(false, epoch, root)
+            },
+        ))
     }
 
     fn get_state_for_genesis_write(self: &Arc<Self>) -> State {

@@ -13,16 +13,16 @@ serde = "1.0"
 serde_json = "1.0"
 serde_derive = "1.0"
 parking_lot = "0.11"
-panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
+panic_hook = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1" }
 app_dirs = "1.2.1"
-dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
+dir = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1" }
 cfxstore = { path = "accounts/cfxstore" }
 cfxcore-accounts = { path = "accounts" }
 home = "0.5.0"
 rpassword = "4.0.1"
 io = { path = "util/io" }
 runtime = { path = "util/runtime" }
-ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev="b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
+ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git", rev = "b523017108bb2d571a7a69bd97bc406e63bc7a9d" }
 jsonrpc-core = "15.1.0"
 jsonrpc-tcp-server = "15.1.0"
 jsonrpc-http-server = "15.1.0"
@@ -41,7 +41,7 @@ log4rs = { version = "1.0.0", features = ["background_rotation", "gzip"] }
 rlp = "0.4.0"
 keccak-hash = "0.5"
 rand = "0.7"
-kvdb-rocksdb = {path="db/src/kvdb-rocksdb"}
+kvdb-rocksdb = { path = "db/src/kvdb-rocksdb" }
 client = { path = "client" }
 cfx-types = { path = "cfx_types" }
 threadpool = "1.7"
@@ -51,7 +51,8 @@ cfxkey = { path = "accounts/cfxkey" }
 parity-wordlist = "1.3.0"
 rustc-hex = "2.1"
 env_logger = "0.5"
-malloc_size_of = {path="util/malloc_size_of"}
+malloc_size_of = { path = "util/malloc_size_of" }
+profile = { path = "util/profile" }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies.jemallocator]
 version = "0.3.2"
@@ -82,9 +83,10 @@ members = ["core/benchmark/consensus"]
 default = ["jemalloc-global"]
 deadlock-detection = ["parking_lot/deadlock_detection"]
 jemalloc-global = ["jemallocator", "malloc_size_of/jemalloc-global"]
-amt-storage= ["cfxcore/amt-storage", "client/storage-dev"]
+amt-storage = ["cfxcore/amt-storage", "client/storage-dev"]
 mpt-storage = ["cfxcore/mpt-storage", "client/storage-dev"]
 raw-storage = ["cfxcore/raw-storage", "client/storage-dev"]
+pprof-profile = ["profile/pprof-metrics"]
 
 
 [patch.crates-io]

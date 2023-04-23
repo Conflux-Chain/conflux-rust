@@ -11,7 +11,8 @@ impl StorageRootProof {
     pub fn is_valid_with_prev_root(
         &self, key: &Vec<u8>, storage_root: &StorageRoot,
         state_root: StateRoot, maybe_prev_root: &Option<StateRoot>,
-    ) -> bool {
+    ) -> bool
+    {
         todo!()
     }
 }
@@ -20,7 +21,8 @@ impl StateProof {
     pub fn is_valid_kv_with_prev_root(
         &self, key: &Vec<u8>, value: Option<&[u8]>, root: StateRoot,
         maybe_prev_root: &Option<StateRoot>,
-    ) -> bool {
+    ) -> bool
+    {
         todo!()
     }
 }

@@ -19,6 +19,12 @@ use std::collections::BTreeMap;
 
 #[rpc(server)]
 pub trait LocalRpc {
+    #[rpc(name = "debug_mark")]
+    fn debug_mark(&self) -> JsonRpcResult<()>;
+
+    #[rpc(name = "dump_profile")]
+    fn dump_profile(&self) -> JsonRpcResult<()>;
+
     #[rpc(name = "txpool_inspect")]
     fn txpool_inspect(
         &self, address: Option<RpcAddress>,

@@ -18,6 +18,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+#[macro_use]
+extern crate profile;
+
+mod timer;
+
 use std::{cmp, collections::HashMap, error, fs, io, mem, path::Path, result};
 
 use parking_lot::{Mutex, MutexGuard, RwLock};
@@ -30,6 +35,8 @@ use fs_swap::{swap, swap_nonatomic};
 use kvdb::{DBKey, DBOp, DBTransaction, DBValue, KeyValueDB};
 use log::{debug, warn};
 
+#[allow(unused)]
+use crate::timer::*;
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
 use parity_util_mem::{
@@ -458,6 +465,7 @@ impl Database {
 
     /// Commit transaction to database.
     pub fn write_buffered(&self, tr: DBTransaction) {
+        metric_record!(STORAGE_SET_TIMER, STORAGE_SET_TIMER2);
         let mut overlay = self.overlay.write();
         let ops = tr.ops;
         for op in ops {
@@ -521,6 +529,7 @@ impl Database {
 
     /// Commit buffered changes to database.
     pub fn flush(&self) -> io::Result<()> {
+        metric_record!(STORAGE_COMMIT_TIMER, STORAGE_COMMIT_TIMER2);
         let mut lock = self.flushing_lock.lock();
         // If RocksDB batch allocation fails the thread gets terminated and the
         // lock is released. The value inside the lock is used to detect
@@ -540,6 +549,7 @@ impl Database {
 
     /// Commit transaction to database.
     pub fn write(&self, tr: DBTransaction) -> io::Result<()> {
+        metric_record!(STORAGE_SET_TIMER, STORAGE_SET_TIMER2);
         match *self.db.read() {
             Some(ref cfs) => {
                 let batch = WriteBatch::default();
@@ -569,6 +579,7 @@ impl Database {
 
     /// Get value by key.
     pub fn get(&self, col: u32, key: &[u8]) -> io::Result<Option<DBValue>> {
+        metric_record!(STORAGE_GET_TIMER, STORAGE_GET_TIMER2);
         match *self.db.read() {
             Some(ref cfs) => {
                 let overlay = &self.overlay.read()[col as usize];

@@ -20,9 +20,7 @@ pub struct StateRoot {
 }
 
 impl StateRoot {
-    pub fn compute_state_root_hash(&self) -> H256 {
-        self.epoch_id
-    }
+    pub fn compute_state_root_hash(&self) -> H256 { self.epoch_id }
 
     pub fn genesis(genesis_root: &MerkleHash) -> StateRoot {
         warn!(

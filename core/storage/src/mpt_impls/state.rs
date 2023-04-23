@@ -4,12 +4,12 @@ use super::{
     state_trait::{StateTrait, StateTraitExt},
     state_trees::StateTrees,
 };
-use crate::{utils::access_mode::AccessMode, MptKeyValue};
+use crate::{convert_key, utils::access_mode::AccessMode, MptKeyValue};
 use cfx_storage_primitives::mpt::{
     StateRoot, StateRootAuxInfo, StateRootWithAuxInfo, StorageRoot,
 };
 use keccak_hash::{keccak, H256};
-use parity_journaldb::JournalDB;
+use parity_journaldb::{DBHasher, JournalDB};
 use parking_lot::RwLock;
 use primitives::{EpochId, StaticBool, StorageKey};
 use std::sync::Arc;
@@ -18,14 +18,15 @@ use crate::{
     STORAGE_COMMIT_TIMER, STORAGE_COMMIT_TIMER2, STORAGE_GET_TIMER,
     STORAGE_GET_TIMER2, STORAGE_SET_TIMER, STORAGE_SET_TIMER2,
 };
-use keccak_hasher::KeccakHasher;
 use kvdb::DBTransaction;
 use metrics::{MeterTimer, ScopeTimer};
-use patricia_trie_ethereum::RlpCodec;
+use patricia_trie_ethereum::RlpNodeCodec;
+use profile::metric_record;
 use trie_db::{Trie, TrieMut};
 
-pub type TrieDBMut<'db> = trie_db::TrieDBMut<'db, KeccakHasher, RlpCodec>;
-pub type TrieDB<'db> = trie_db::TrieDB<'db, KeccakHasher, RlpCodec>;
+pub type TrieDBMut<'db> =
+    trie_db::TrieDBMut<'db, DBHasher, RlpNodeCodec<DBHasher>>;
+pub type TrieDB<'db> = trie_db::TrieDB<'db, DBHasher, RlpNodeCodec<DBHasher>>;
 
 pub struct State {
     pub(crate) read_only: bool,
@@ -35,14 +36,9 @@ pub struct State {
     pub(crate) epoch: u64,
 }
 
-fn convert_key(access_key: StorageKey) -> H256 {
-    keccak(access_key.to_key_bytes())
-}
-
 impl StateTrait for State {
     fn get(&self, access_key: StorageKey) -> crate::Result<Option<Box<[u8]>>> {
-        let _timer = MeterTimer::time_func(STORAGE_GET_TIMER.as_ref());
-        let _timer2 = ScopeTimer::time_scope(STORAGE_GET_TIMER2.as_ref());
+        metric_record!(STORAGE_GET_TIMER, STORAGE_GET_TIMER2);
 
         let db = self.state.read();
         let hash_db = &db.as_hash_db();
@@ -59,8 +55,7 @@ impl StateTrait for State {
     ) -> crate::Result<()> {
         assert!(!self.read_only);
         trace!("MPTStateOp: Set key {:?}, value {:?}", access_key, value);
-        let _timer = MeterTimer::time_func(STORAGE_SET_TIMER.as_ref());
-        let _timer2 = ScopeTimer::time_scope(STORAGE_SET_TIMER2.as_ref());
+        metric_record!(STORAGE_SET_TIMER, STORAGE_SET_TIMER2);
 
         let mut db = self.state.write();
         let hash_db = db.as_hash_db_mut();
@@ -94,8 +89,6 @@ impl StateTrait for State {
     }
 
     fn compute_state_root(&mut self) -> crate::Result<StateRootWithAuxInfo> {
-        let _timer = MeterTimer::time_func(STORAGE_COMMIT_TIMER.as_ref());
-        let _timer2 = ScopeTimer::time_scope(STORAGE_COMMIT_TIMER2.as_ref());
         assert!(!self.read_only);
         self.get_state_root()
     }
@@ -112,8 +105,7 @@ impl StateTrait for State {
     fn commit(
         &mut self, epoch: EpochId,
     ) -> crate::Result<StateRootWithAuxInfo> {
-        let _timer = MeterTimer::time_func(STORAGE_COMMIT_TIMER.as_ref());
-        let _timer2 = ScopeTimer::time_scope(STORAGE_COMMIT_TIMER2.as_ref());
+        metric_record!(STORAGE_COMMIT_TIMER, STORAGE_COMMIT_TIMER2);
 
         let mut batch = DBTransaction::new();
         let mut db = self.state.write();

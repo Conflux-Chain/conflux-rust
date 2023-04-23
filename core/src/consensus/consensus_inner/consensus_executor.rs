@@ -1044,24 +1044,28 @@ impl ConsensusExecutionHandler {
                     debug_record.as_deref_mut(),
                 )
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
+            debug!("set best executed epoch");
             self.tx_pool
                 .set_best_executed_epoch(StateIndex::new_for_readonly(
                     epoch_hash,
                     &state_root,
                 ))
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
+            debug!("set best executed epoch done");
         } else {
             state_root = state
                 .commit(*epoch_hash, debug_record)
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
         };
 
+        debug!("insert epoch comm");
         self.data_man.insert_epoch_execution_commitment(
             pivot_block.hash(),
             state_root.clone(),
             compute_receipts_root(&epoch_receipts),
             BlockHeaderBuilder::compute_block_logs_bloom_hash(&epoch_receipts),
         );
+        debug!("insert epoch comm done");
 
         let epoch_execution_commitment = self
             .data_man
@@ -1175,6 +1179,9 @@ impl ConsensusExecutionHandler {
                     Executive::new(state, &env, self.machine.as_ref(), &spec)
                         .transact(transaction, options)?
                 };
+                if !matches!(r, ExecutionOutcome::Finished(_)) {
+                    panic!("Execution error {:?}", r);
+                }
 
                 let gas_fee;
                 let mut gas_sponsor_paid = false;

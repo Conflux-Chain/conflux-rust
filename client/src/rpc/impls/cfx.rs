@@ -1649,6 +1649,8 @@ impl LocalRpcImpl {
 impl LocalRpc for LocalRpcImpl {
     delegate! {
         to self.common {
+            fn debug_mark(&self) -> JsonRpcResult<()>;
+            fn dump_profile(&self) -> JsonRpcResult<()>;
             fn txpool_content(&self, address: Option<RpcAddress>) -> JsonRpcResult<
                 BTreeMap<String, BTreeMap<String, BTreeMap<usize, Vec<RpcTransaction>>>>>;
             fn txpool_inspect(&self, address: Option<RpcAddress>) -> JsonRpcResult<

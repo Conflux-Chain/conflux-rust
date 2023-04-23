@@ -26,6 +26,91 @@ lazy_static! {
     pub static ref COMMISSION_PRIVILEGE_SPECIAL_KEY: Address = Address::zero();
 }
 
+#[derive(Debug, Clone)]
+pub struct LayeredHashMap {
+    this_level: HashMap<Vec<u8>, U256>,
+    pub last_layer: Option<Arc<LayeredHashMap>>,
+}
+
+impl Default for LayeredHashMap {
+    fn default() -> Self {
+        Self {
+            this_level: Default::default(),
+            last_layer: None,
+        }
+    }
+}
+
+impl LayeredHashMap {
+    pub fn get(&self, key: &[u8]) -> Option<&U256> {
+        return if let Some(val) = self.this_level.get(key) {
+            Some(val)
+        } else if let Some(ref layer) = self.last_layer {
+            layer.get(key)
+        } else {
+            None
+        };
+    }
+
+    pub fn insert(&mut self, key: Vec<u8>, value: U256) {
+        self.this_level.insert(key, value);
+    }
+
+    pub fn drain(&mut self) -> impl Iterator<Item = (Vec<u8>, U256)> + '_ {
+        assert!(self.last_layer.is_none());
+        self.this_level.drain()
+    }
+
+    pub fn iter<'a>(
+        &'a self,
+    ) -> Box<dyn Iterator<Item = (&'a Vec<u8>, &'a U256)> + 'a> {
+        if let Some(ref layer) = self.last_layer {
+            Box::new(self.this_level.iter().chain(layer.iter().filter(
+                move |(k, _)| !self.this_level.contains_key(k.clone()),
+            )))
+        } else {
+            Box::new(self.this_level.iter())
+        }
+    }
+
+    pub fn merge(&mut self) {
+        let mut last_layer = if let Some(layer) = self.last_layer.as_mut() {
+            layer
+        } else {
+            return;
+        };
+        let last_layer = if let Some(layer) = Arc::get_mut(&mut last_layer) {
+            layer
+        } else {
+            return;
+        };
+
+        let this = &mut self.this_level;
+        let that = &mut last_layer.this_level;
+        if this.len() < that.len() {
+            std::mem::swap(this, that);
+        }
+        let that = std::mem::take(that);
+        this.extend(that);
+
+        self.last_layer = last_layer.last_layer.clone();
+    }
+
+    pub fn clone_dirty(self: &Arc<Self>) -> Arc<Self> {
+        if self.this_level.is_empty() {
+            Arc::new(Self {
+                this_level: Default::default(),
+                last_layer: Some(self.clone()),
+            })
+        } else {
+            Arc::new(Self {
+                this_level: Default::default(),
+                last_layer: Some(self.clone()),
+            })
+        }
+    }
+}
+
 #[derive(Debug)]
 /// Single account in the system.
 /// Keeps track of changes to the code and storage.
@@ -53,7 +138,7 @@ pub struct OverlayAccount {
     storage_value_read_cache: Arc<RwLock<HashMap<Vec<u8>, U256>>>,
     // This is a write cache for changing storage value in db. It will be
     // written to db when committing overlay account.
-    storage_value_write_cache: Arc<HashMap<Vec<u8>, U256>>,
+    storage_value_write_cache: Arc<LayeredHashMap>,
 
     // This is a level 2 cache for storage ownership change of the current
     // account. It will be written to db when committing overlay account.
@@ -389,7 +474,7 @@ impl OverlayAccount {
             .withdrawable_staking_balance(self.staking_balance, block_number);
     }
 
-    pub fn storage_value_write_cache(&self) -> &HashMap<Vec<u8>, U256> {
+    pub fn storage_value_write_cache(&self) -> &LayeredHashMap {
         &self.storage_value_write_cache
     }
 
@@ -426,6 +511,12 @@ impl OverlayAccount {
     pub fn set_nonce(&mut self, nonce: &U256) { self.nonce = *nonce; }
 
     pub fn inc_nonce(&mut self) { self.nonce = self.nonce + U256::from(1u8); }
+
+    pub fn merge(&mut self) {
+        Arc::get_mut(&mut self.storage_value_write_cache)
+            .unwrap()
+            .merge();
+    }
 
     pub fn add_balance(&mut self, by: &U256) {
         self.balance = self.balance + *by;
@@ -580,10 +671,15 @@ impl OverlayAccount {
         }
     }
 
-    pub fn clone_dirty(&self) -> Self {
+    pub fn clone_dirty(&mut self) -> Self {
         let mut account = self.clone_basic();
+
         account.storage_value_write_cache =
-            self.storage_value_write_cache.clone();
+            self.storage_value_write_cache.clone_dirty();
+        std::mem::swap(
+            &mut account.storage_value_write_cache,
+            &mut self.storage_value_write_cache,
+        );
         account.storage_value_read_cache =
             self.storage_value_read_cache.clone();
         account.storage_owner_lv2_write_cache =
@@ -595,8 +691,12 @@ impl OverlayAccount {
     }
 
     pub fn set_storage(&mut self, key: Vec<u8>, value: U256, owner: Address) {
-        Arc::make_mut(&mut self.storage_value_write_cache)
+        Arc::get_mut(&mut self.storage_value_write_cache)
+            .unwrap()
             .insert(key.clone(), value);
+        if cfg!(feature = "storage-dev") {
+            return;
+        }
         let lv1_write_cache =
             Arc::make_mut(&mut self.storage_owner_lv1_write_cache);
         if value.is_zero() {
@@ -639,9 +739,15 @@ impl OverlayAccount {
         if self.reset_storage() {
             Ok(U256::zero())
         } else {
+            let mut cache = self.storage_owner_lv2_write_cache.write();
+            let mut dummy_cache = HashMap::new();
             Self::get_and_cache_storage(
                 &mut self.storage_value_read_cache.write(),
-                Arc::make_mut(&mut *self.storage_owner_lv2_write_cache.write()),
+                if cfg!(feature = "storage-dev") {
+                    &mut dummy_cache
+                } else {
+                    Arc::make_mut(&mut *cache)
+                },
                 db,
                 &self.address,
                 key,
@@ -657,6 +763,7 @@ impl OverlayAccount {
         cache_ownership: bool,
     ) -> DbResult<U256>
     {
+        let cache_ownership = cache_ownership && cfg!(feature = "storage-dev");
         assert!(!storage_owner_lv2_write_cache.contains_key(key));
         if let Some(value) = db.get::<StorageValue>(
             StorageKey::new_storage_key(address, key.as_ref()),
@@ -826,21 +933,22 @@ impl OverlayAccount {
                     state.db.delete(address_key, debug_record.as_deref_mut())?
                 }
                 false => {
-                    let owner = storage_owner_lv2_write_cache
-                        .get(&k)
-                        .expect("all key must exist")
-                        .expect("owner exists");
-
+                    let owner = if cfg!(feature = "storage-dev") {
+                        None
+                    } else {
+                        let owner = storage_owner_lv2_write_cache
+                            .get(&k)
+                            .expect("all key must exist")
+                            .expect("owner exists");
+                        if owner == self.address {
+                            None
+                        } else {
+                            Some(owner)
+                        }
+                    };
                     state.db.set::<StorageValue>(
                         address_key,
-                        &StorageValue {
-                            value: v,
-                            owner: if owner == self.address {
-                                None
-                            } else {
-                                Some(owner)
-                            },
-                        },
+                        &StorageValue { value: v, owner },
                         debug_record.as_deref_mut(),
                     )?
                 }
@@ -945,10 +1053,10 @@ impl AccountEntry {
 
     /// Clone dirty data into new `AccountEntry`. This includes
     /// basic account data and modified storage keys.
-    pub fn clone_dirty(&self) -> AccountEntry {
+    pub fn clone_dirty(&mut self) -> AccountEntry {
         AccountEntry {
             old_balance: self.old_balance,
-            account: self.account.as_ref().map(OverlayAccount::clone_dirty),
+            account: self.account.as_mut().map(OverlayAccount::clone_dirty),
             state: self.state,
         }
     }

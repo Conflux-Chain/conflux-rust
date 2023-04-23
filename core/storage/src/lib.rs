@@ -15,6 +15,9 @@ extern crate error_chain;
 extern crate lazy_static;
 #[macro_use]
 extern crate log;
+#[cfg(feature = "light-hash")]
+extern crate blake2_hasher;
+extern crate profile;
 
 #[macro_use]
 pub mod utils;
@@ -148,3 +151,12 @@ pub use self::{
     impls::delta_mpt::delta_mpt_iterator::DeltaMptIterator,
     tests::new_state_manager_for_unit_test as new_storage_manager_for_testing,
 };
+
+#[cfg(feature = "light-hash")]
+use blake2_hasher::blake2b as hash;
+#[cfg(not(feature = "light-hash"))]
+use keccak_hash::keccak as hash;
+
+fn convert_key(access_key: primitives::StorageKey) -> cfx_types::H256 {
+    hash(access_key.to_key_bytes())
+}

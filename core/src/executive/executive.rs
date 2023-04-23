@@ -948,7 +948,9 @@ impl<
                         TxDropError::InvalidRecipientAddress(*address),
                     ));
                 }
-                if self.state.is_contract_with_code(address)? {
+                if cfg!(not(feature = "storage-dev"))
+                    && self.state.is_contract_with_code(address)?
+                {
                     code_address = *address;
                     if self
                         .state

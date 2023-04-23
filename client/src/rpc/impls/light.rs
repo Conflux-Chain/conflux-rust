@@ -1168,6 +1168,8 @@ impl LocalRpc for DebugRpcImpl {
     }
 
     not_supported! {
+        fn debug_mark(&self) -> JsonRpcResult<()>;
+        fn dump_profile(&self) -> JsonRpcResult<()>;
         fn consensus_graph_state(&self) -> JsonRpcResult<ConsensusGraphStates>;
         fn current_sync_phase(&self) -> JsonRpcResult<String>;
         fn epoch_receipts(&self, epoch: BlockHashOrEpochNumber) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;

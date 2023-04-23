@@ -19,6 +19,12 @@ use parking_lot::RwLock;
 use primitives::{EpochId, StaticBool, StorageKey};
 use std::sync::Arc;
 
+use profile::metric_record;
+
+fn convert_key(key: StorageKey) -> Key {
+    Key(crate::convert_key(key).0.to_vec())
+}
+
 lazy_static! {
     static ref GETLOCK: Lock = Lock::register("lock", "storage_get_lock");
     static ref SETLOCK: Lock = Lock::register("lock", "storage_set_lock");
@@ -31,14 +37,9 @@ pub struct State {
     pub(crate) root_with_aux: Option<StateRootWithAuxInfo>,
 }
 
-fn convert_key(access_key: StorageKey) -> Key {
-    Key(keccak(access_key.to_key_bytes()).0.to_vec())
-}
-
 impl StateTrait for State {
     fn get(&self, access_key: StorageKey) -> crate::Result<Option<Box<[u8]>>> {
-        let _timer = MeterTimer::time_func(STORAGE_GET_TIMER.as_ref());
-        let _timer2 = ScopeTimer::time_scope(STORAGE_GET_TIMER2.as_ref());
+        metric_record!(STORAGE_GET_TIMER, STORAGE_GET_TIMER2);
         let state = self.state.read_with_metric(&GETLOCK);
         Ok(state.get(&convert_key(access_key))?)
     }
@@ -48,8 +49,7 @@ impl StateTrait for State {
     ) -> crate::Result<()> {
         assert!(!self.read_only);
         assert!(self.root_with_aux.is_none());
-        let _timer = MeterTimer::time_func(STORAGE_SET_TIMER.as_ref());
-        let _timer2 = ScopeTimer::time_scope(STORAGE_SET_TIMER2.as_ref());
+        metric_record!(STORAGE_SET_TIMER, STORAGE_SET_TIMER2);
         trace!("AMTStateOp: Set key {:?}, value {:?}", access_key, value);
         let mut state = self.state.write_with_metric(&SETLOCK);
 
@@ -80,8 +80,7 @@ impl StateTrait for State {
     }
 
     fn compute_state_root(&mut self) -> crate::Result<StateRootWithAuxInfo> {
-        let _timer = MeterTimer::time_func(STORAGE_COMMIT_TIMER.as_ref());
-        let _timer2 = ScopeTimer::time_scope(STORAGE_COMMIT_TIMER2.as_ref());
+        metric_record!(STORAGE_COMMIT_TIMER, STORAGE_COMMIT_TIMER2);
 
         assert!(!self.read_only);
         if self.root_with_aux.is_some() {
@@ -125,8 +124,7 @@ impl StateTrait for State {
     fn commit(
         &mut self, _epoch: EpochId,
     ) -> crate::Result<StateRootWithAuxInfo> {
-        let _timer = MeterTimer::time_func(STORAGE_COMMIT_TIMER.as_ref());
-        let _timer2 = ScopeTimer::time_scope(STORAGE_COMMIT_TIMER2.as_ref());
+        metric_record!(STORAGE_COMMIT_TIMER, STORAGE_COMMIT_TIMER2);
         self.get_state_root()
     }
 }

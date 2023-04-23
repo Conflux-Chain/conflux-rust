@@ -12,6 +12,10 @@ pub trait StateTrait: CheckpointTrait {
         &mut self, substate: &mut Self::Substate,
     ) -> DbResult<()>;
 
+    fn dirty_accounts_in_top_checkpoint(&mut self) -> Vec<Address>;
+
+    fn merge_storage_changes(&mut self, addresses: Vec<Address>);
+
     /// Charge and refund all the storage collaterals.
     /// The suicided addresses are skimmed because their collateral have been
     /// checked out. This function should only be called in post-processing

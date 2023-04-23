@@ -12,10 +12,12 @@ use kvdb::DBTransaction;
 use kvdb_rocksdb::{CompactionProfile, Database, DatabaseConfig};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
-use parity_journaldb::{Algorithm, JournalDB};
+use parity_journaldb::{Algorithm, DBHasher, JournalDB};
 use parking_lot::{Mutex, RwLock, RwLockReadGuard};
+use patricia_trie_ethereum::RlpNodeCodec;
 use primitives::{EpochId, MerkleHash};
 use std::{path::Path, sync::Arc};
+use trie_db::NodeCodec;
 
 // #[derive(MallocSizeOfDerive)]
 pub struct StateManager {
@@ -120,7 +122,7 @@ impl StateManagerTrait for StateManager {
     }
 
     fn get_state_for_genesis_write(self: &Arc<Self>) -> State {
-        self.new_state(false, 0, KECCAK_NULL_RLP)
+        self.new_state(false, 0, RlpNodeCodec::<DBHasher>::hashed_null_node())
     }
 }
 
@@ -134,9 +136,3 @@ impl StateManager {
         }
     }
 }
-
-pub const KECCAK_NULL_RLP: H256 = H256([
-    0x56, 0xe8, 0x1f, 0x17, 0x1b, 0xcc, 0x55, 0xa6, 0xff, 0x83, 0x45, 0xe6,
-    0x92, 0xc0, 0xf8, 0x6e, 0x5b, 0x48, 0xe0, 0x1b, 0x99, 0x6c, 0xad, 0xc0,
-    0x01, 0x62, 0x2f, 0xb5, 0xe3, 0x63, 0xb4, 0x21,
-]);

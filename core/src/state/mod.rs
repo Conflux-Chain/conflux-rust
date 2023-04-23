@@ -104,6 +104,9 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
     fn collect_ownership_changed(
         &mut self, substate: &mut Substate,
     ) -> DbResult<()> {
+        if cfg!(feature = "storage-dev") {
+            return Ok(());
+        }
         if let Some(checkpoint) = self.checkpoints.get_mut().last() {
             for address in checkpoint.keys() {
                 if let Some(ref mut maybe_acc) = self
@@ -121,6 +124,31 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
         Ok(())
     }
 
+    fn dirty_accounts_in_top_checkpoint(&mut self) -> Vec<Address> {
+        let cache = self.cache.get_mut();
+        return if let Some(checkpoint) = self.checkpoints.get_mut().last() {
+            checkpoint
+                .keys()
+                .filter(|addr| cache.get(addr).map_or(false, |x| x.is_dirty()))
+                .cloned()
+                .collect()
+        } else {
+            vec![]
+        };
+    }
+
+    fn merge_storage_changes(&mut self, addresses: Vec<Address>) {
+        let cache = self.cache.get_mut();
+        for address in addresses {
+            if let Some(AccountEntry {
+                account: Some(acc), ..
+            }) = cache.get_mut(&address).filter(|x| x.is_dirty())
+            {
+                acc.merge();
+            }
+        }
+    }
+
     /// Charge and refund all the storage collaterals.
     /// The suicided addresses are skimmed because their collateral have been
     /// checked out. This function should only be called in post-processing
@@ -128,6 +156,9 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
     fn settle_collateral_for_all(
         &mut self, substate: &Substate, account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult> {
+        if cfg!(feature = "storage-dev") {
+            return Ok(CollateralCheckResult::Valid);
+        }
         for address in substate.keys_for_collateral_changed().iter() {
             match self.settle_collateral_for_address(
                 address,
@@ -148,6 +179,9 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
         substate: &mut Substate, account_start_nonce: U256,
     ) -> DbResult<CollateralCheckResult>
     {
+        if cfg!(feature = "storage-dev") {
+            return Ok(CollateralCheckResult::Valid);
+        }
         self.collect_ownership_changed(substate)?;
         let res = match self
             .settle_collateral_for_all(substate, account_start_nonce)?
@@ -210,7 +244,7 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
 
         if let Some(acc) = maybe_account {
             // The current value isn't important because it will be deleted.
-            for (key, _value) in acc.storage_value_write_cache() {
+            for (key, _value) in acc.storage_value_write_cache().iter() {
                 if let Some(storage_owner) =
                     acc.original_ownership_at(&self.db, key)?
                 {
@@ -879,6 +913,7 @@ impl<StateDbStorage: StorageStateTrait> CheckpointTrait
     /// this function.
     fn discard_checkpoint(&mut self) {
         // merge with previous checkpoint
+        let accounts = self.dirty_accounts_in_top_checkpoint();
         let last = self.checkpoints.get_mut().pop();
         if let Some(mut checkpoint) = last {
             self.staking_state_checkpoints.get_mut().pop();
@@ -892,6 +927,7 @@ impl<StateDbStorage: StorageStateTrait> CheckpointTrait
                 }
             }
         }
+        self.merge_storage_changes(accounts);
     }
 
     /// Revert to the last checkpoint and discard it.
@@ -1252,8 +1288,9 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         }
 
         // Then scan storage changes in cache.
-        for (key, _value) in
-            sponsor_whitelist_control_address.storage_value_write_cache()
+        for (key, _value) in sponsor_whitelist_control_address
+            .storage_value_write_cache()
+            .iter()
         {
             if key.starts_with(address.as_ref()) {
                 if let Some(storage_owner) =
@@ -1565,7 +1602,7 @@ impl<StateDbStorage: StorageStateTrait> StateGeneric<StateDbStorage> {
         // Save the value before modification into the checkpoint.
         if let Some(ref mut checkpoint) = self.checkpoints.write().last_mut() {
             checkpoint.entry(*address).or_insert_with(|| {
-                cache.get(address).map(AccountEntry::clone_dirty)
+                cache.get_mut(address).map(AccountEntry::clone_dirty)
             });
         }
 

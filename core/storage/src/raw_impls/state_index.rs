@@ -21,7 +21,8 @@ impl StateIndex {
     pub fn new_for_next_epoch(
         base_epoch_id: &EpochId, state_root: &StateRootWithAuxInfo,
         height: u64, _snapshot_epoch_count: u32,
-    ) -> Self {
+    ) -> Self
+    {
         StateIndex {
             epoch_id: base_epoch_id.clone(),
             height: Some(height),
@@ -29,7 +30,5 @@ impl StateIndex {
         }
     }
 
-    pub(crate) fn is_read_only(&self) -> bool {
-        self.height.is_none()
-    }
+    pub(crate) fn is_read_only(&self) -> bool { self.height.is_none() }
 }

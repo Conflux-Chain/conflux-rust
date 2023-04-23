@@ -651,8 +651,26 @@ impl RpcImpl {
     }
 }
 
+use lazy_static::lazy_static;
+use profile::report_pprof;
+lazy_static! {
+    pub(crate) static ref DEBUG_MARK: Arc<dyn metrics::Meter> =
+        metrics::register_meter_with_group("debug", "debug");
+}
+
 // Debug RPC implementation
 impl RpcImpl {
+    pub fn debug_mark(&self) -> JsonRpcResult<()> {
+        DEBUG_MARK.mark(1);
+        info!("debug_mark");
+        Ok(())
+    }
+
+    pub fn dump_profile(&self) -> JsonRpcResult<()> {
+        report_pprof();
+        Ok(())
+    }
+
     pub fn txpool_clear(&self) -> JsonRpcResult<()> {
         self.tx_pool.clear_tx_pool();
         Ok(())

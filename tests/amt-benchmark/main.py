@@ -12,19 +12,31 @@ This is the state root for pre-generated genesis accounts in `genesis_secrets.tx
 
 STORAGE = os.environ.get("CONFLUX_DEV_STORAGE", "dmpt")
 SHARD_SIZE = os.environ.get("AMT_SHARD_SIZE")
+LIGHT_HASH = os.environ.get("LIGHT_HASH")
 
 SECRET = "seq_secrets.txt"
-if STORAGE == "amt":
-    if SHARD_SIZE is None:
-        GENESIS_ROOT = "0x10c5eb78d8d7f9794d826fbbf306397bffc15cb5fbde4105759508af8029f6de"
-    elif int(SHARD_SIZE) == 64:
-        GENESIS_ROOT = "0x540ab19ec2ceb0a88fa2cf44e2f9b381bcd914be23de26f6490e55e78c36ce1a"
-    elif int(SHARD_SIZE) == 16:
-        GENESIS_ROOT = "0xb3487e95aef46626c2c0b9688eff172663f84b44564cee047ae6f7aa59992935"
-elif STORAGE == "mpt":
-    GENESIS_ROOT = "0x05b1ba2c15838e58b054ced4497db8bca54053a018f54a5ae5283bcf6a34d5cb"
+
+if LIGHT_HASH is not None:
+    conflux.config.default_config["GENESIS_RECEIPTS_ROOT"] = decode_hex("0xac762af87c0243671ece95f10e40269ce14ff5f6013ef77630bc17cfa84a878c")
+    conflux.config.default_config["GENESIS_TRANSACTION_ROOT"] = decode_hex("0x195d43bc6ecc742b2d7134156617bf96e018b6f84daf8d0ca9812d44edd9e361")
+
+    if STORAGE == "amt":
+        GENESIS_ROOT = "0x2656c8cf5e759be06784c0cb950500598b6ca3078ed6e0a9c3a3ad8583cbae2f"
+    elif STORAGE == "mpt":
+        GENESIS_ROOT = "0x56c994b4077b9316235adff36b460400e605b26f324fa03fb24d32176bfa0162"
+    elif STORAGE == "raw":
+        GENESIS_ROOT = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+    else:
+        GENESIS_ROOT = "0xf7d1918d912bb8d47d34c48297735bcef3220e16efec980ca4a9cb47e90905a9"
 else:
-    GENESIS_ROOT = "0xf7d1918d912bb8d47d34c48297735bcef3220e16efec980ca4a9cb47e90905a9"
+    if STORAGE == "amt":
+        GENESIS_ROOT = "0x7127c2c33112eb83a3b01668026381ced16a42ae6e7a94a31b7e6b732ba78b08"
+    elif STORAGE == "mpt":
+        GENESIS_ROOT = "0x05b1ba2c15838e58b054ced4497db8bca54053a018f54a5ae5283bcf6a34d5cb"
+    elif STORAGE == "raw":
+        GENESIS_ROOT = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+    else:
+        GENESIS_ROOT = "0xf7d1918d912bb8d47d34c48297735bcef3220e16efec980ca4a9cb47e90905a9"
 
 conflux.config.default_config["GENESIS_STATE_ROOT"] = decode_hex(GENESIS_ROOT)
 
@@ -34,6 +46,8 @@ if STORAGE == "amt":
     BINARY = os.path.join(BASE_PATH, "target/amt-db/release/conflux")
 elif STORAGE == "mpt":
     BINARY = os.path.join(BASE_PATH, "target/mpt-db/release/conflux")
+elif STORAGE == "raw":
+    BINARY = os.path.join(BASE_PATH, "target/raw-db/release/conflux")
 else:
     BINARY = os.path.join(BASE_PATH, "target/release/conflux")
 
@@ -59,7 +73,6 @@ class SingleBench(ConfluxTestFramework):
         self.num_nodes = 1
         self.rpc_timewait = 600
         # The file can be downloaded from `https://s3-ap-southeast-1.amazonaws.com/conflux-test/genesis_secrets.txt`
-        print(os.path.dirname(os.path.realpath(__file__)))
         genesis_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), SECRET)
         amt_public_params_path = os.path.join(BASE_PATH, "pp")
         log_config = os.path.join(BASE_PATH, "run/log.yaml")
@@ -76,6 +89,8 @@ class SingleBench(ConfluxTestFramework):
             storage_delta_mpts_cache_size=4_000_000,
             storage_delta_mpts_cache_start_size=2_000_000,
             storage_delta_mpts_slab_idle_size=2_000_000,
+            persist_tx_index="false",
+            persist_block_number_index="false",
         )
         if SHARD_SIZE is not None:
             self.conf_parameters["amt_shard_size"] = SHARD_SIZE
@@ -147,7 +162,6 @@ class SingleBench(ConfluxTestFramework):
 
         # Start mininode connection
         self.node = self.nodes[0]
-        print(self.node.ip, self.node.port)
         n_connections = 5
         p2p_connections = []
         for node in range(n_connections):
@@ -177,18 +191,21 @@ class SingleBench(ConfluxTestFramework):
                                                   log=self.log.info)
             wait_transaction_with_goodput(base, self.node, log=self.log.info)
 
-        if base > 0:
-            for i in range(100):
-                if i % 10 == 0:
-                    self.log.info(f"Waiting {i}%")
-                time.sleep(0.5)
+        # if base > 0:
+        #     for i in range(100):
+        #         if i % 10 == 0:
+        #             self.log.info(f"Waiting {i}%")
+        #         time.sleep(0.1)
+
+        self.log.info("debug mark")
+        self.node.debug_mark()
+        self.log.info("mark done")
 
         base += send_transaction_with_goodput(loader.bench_transaction(), send_tx, self.node, base=base,
                                               log=self.log.info)
         wait_transaction_with_goodput(base, self.node, log=self.log.info)
 
-        metric_file_path = os.path.join(self.options.tmpdir, "node0",
-                                        conflux.config.small_local_test_conf["metrics_output_file"][1:-1])
+        self.node.dump_profile()
 
         if self.options.metric_folder is None:
             metric_folder = os.path.basename(self.options.tmpdir)
@@ -201,8 +218,17 @@ class SingleBench(ConfluxTestFramework):
 
         log_name = f"{self.options.bench_mode}-{self.options.bench_token}-{STORAGE}{shard}-{self.options.keys}{warmup_info}"
         Path(f"experiment_data/metrics/{metric_folder}").mkdir(parents=True, exist_ok=True)
+
         output_path = os.path.join(BASE_PATH, f"experiment_data/metrics/{metric_folder}/{log_name}.log")
+        metric_file_path = os.path.join(self.options.tmpdir, "node0",
+                                        conflux.config.small_local_test_conf["metrics_output_file"][1:-1])
         shutil.copyfile(metric_file_path, output_path)
+
+        output_path = os.path.join(BASE_PATH, f"experiment_data/metrics/{metric_folder}/{log_name}.pb")
+        report_file_path = os.path.join(self.options.tmpdir, "node0",
+                                        "profile.pb")
+        if os.path.exists(report_file_path):
+            shutil.copyfile(report_file_path, output_path)
 
         block_gen_thread.stop()
         block_gen_thread.join()

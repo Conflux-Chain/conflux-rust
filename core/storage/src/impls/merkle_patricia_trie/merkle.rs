@@ -43,7 +43,7 @@ pub fn compute_node_merkle(
         _ => {}
     }
 
-    keccak(&buffer)
+    hash(&buffer)
 }
 
 /// Path merkle is stored as one of a children merkles in its parent node.
@@ -102,7 +102,7 @@ fn compute_path_merkle(
         }
         buffer.extend_from_slice(node_merkle.as_bytes());
 
-        keccak(buffer)
+        hash(buffer)
     } else {
         *node_merkle
     }
@@ -124,5 +124,5 @@ pub fn compute_merkle(
 }
 
 use super::*;
-use keccak_hash::keccak;
+use crate::hash;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};

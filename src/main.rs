@@ -26,6 +26,7 @@ use log4rs::{
 };
 use network::throttling::THROTTLING_SERVICE;
 use parking_lot::{Condvar, Mutex};
+use profile::initialize_pprof;
 use std::sync::Arc;
 
 fn main() -> Result<(), String> {
@@ -135,6 +136,8 @@ fn main() -> Result<(), String> {
         conf.raw_conf.egress_min_throttle,
         conf.raw_conf.egress_max_throttle,
     );
+
+    initialize_pprof();
 
     let exit = Arc::new((Mutex::new(false), Condvar::new()));
 
