@@ -4,7 +4,11 @@ set -e
 
 function install() {
 	if [ "`pip3 show $1`" =  "" ]; then
-		pip3 install $1
+	  if [ -z "$2" ]; then
+			pip3 install $1
+		else
+			pip3 install $1==$2
+		fi
 	fi
 }
 
@@ -14,7 +18,7 @@ install py_ecc
 install coincurve
 install pysha3
 install trie
-install web3
+install web3 5.31
 install py-solc-x
 install jsonrpcclient
 install asyncio

@@ -1,11 +1,10 @@
 #!/bin/bash
 
-#python tests/extra-test-toolkits/produce_tx.py
-
-#  --features cfxcore/light-hash-storage
+#python3 tests/extra-test-toolkits/produce_tx.py
 
 function build {
-  #--features "pprof-profile"
+  # --features "pprof-profile"
+  # --features cfxcore/light-hash-storage
 
   export common_features='--features client/metric-goodput --features cfxcore/bypass-txpool'
 
@@ -20,11 +19,10 @@ function build {
 }
 
 function run {
-  python tests/asb-benchmark/main.py --port-min 23000 --bench-keys $1 --bench-txs $2 --bench-mode less-sender --bench-token native --metric-folder oakland-l
-  python tests/asb-benchmark/main.py --port-min 23000 --bench-keys $1 --bench-txs $2 --bench-mode less-sender --bench-token erc20 --metric-folder oakland-l
+  python3 tests/asb-benchmark/main.py --port-min 23000 --bench-keys $1 --bench-txs $2 --bench-mode less-sender --bench-token native --metric-folder oakland-l
+  python3 tests/asb-benchmark/main.py --port-min 23000 --bench-keys $1 --bench-txs $2 --bench-mode less-sender --bench-token erc20 --metric-folder oakland-l
 }
 
-#python tests/extra-test-toolkits/single_bench.py --port-min 23000 --bench-txs 100000 --bench-mode sample
 
 function main {
   export CONFLUX_DEV_STORAGE=lvmt
@@ -60,7 +58,3 @@ else
   # main "5m" "15m"
   #main "10m" "30m"
 fi
-
-#    python tests/extra-test-toolkits/single_bench.py --port-min 13000 --bench-keys $1 --bench-txs $2 --bench-mode normal
-#    python tests/extra-test-toolkits/single_bench.py --port-min 13000 --bench-keys $KEYS --bench-txs $TXS --bench-mode slow-exec
-#    python tests/extra-test-toolkits/single_bench.py --port-min 13000 --bench-keys $1 --bench-txs $2 --bench-mode less-sender
