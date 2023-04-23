@@ -9,7 +9,7 @@ use crate::{
     STORAGE_COMMIT_TIMER2, STORAGE_GET_TIMER, STORAGE_GET_TIMER2,
     STORAGE_SET_TIMER, STORAGE_SET_TIMER2,
 };
-use amt_db::{crypto::export::ProjectiveCurve, serde::MyToBytes, AmtDb, Key};
+use lvmt_db::{crypto::export::ProjectiveCurve, serde::MyToBytes, LvmtDB, Key};
 use cfx_storage_primitives::amt::{
     StateRoot, StateRootAuxInfo, StateRootWithAuxInfo, StorageRoot,
 };
@@ -33,7 +33,7 @@ lazy_static! {
 pub struct State {
     pub(crate) read_only: bool,
 
-    pub(crate) state: Arc<RwLock<AmtDb>>,
+    pub(crate) state: Arc<RwLock<LvmtDB>>,
     pub(crate) root_with_aux: Option<StateRootWithAuxInfo>,
 }
 
@@ -93,16 +93,16 @@ impl StateTrait for State {
 
         let mut state = self.state.write_with_metric(&COMMITLOCK);
 
-        let (amt_root, static_root) = state.commit(0)?;
+        let (lvmt_root, static_root) = state.commit(0)?;
         let state_root = StateRoot {
-            amt_root,
+            lvmt_root,
             static_root,
         };
         let state_root_hash = state_root.compute_state_root_hash();
         info!(
             "State root: hash {:?}, amt {:?}, static {:?}",
             state_root_hash,
-            amt_root.into_affine(),
+            lvmt_root.into_affine(),
             static_root
         );
 

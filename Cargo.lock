@@ -96,47 +96,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "amt-db"
-version = "0.0.1"
-source = "git+ssh://git@github.com/Conflux-Chain/conflux-amt-ledgerdb.git#50c641f549d88be57826c57d53a871c4c95e31c3"
-dependencies = [
- "amt-serde-derive",
- "ark-bls12-381",
- "ark-bn254",
- "ark-ec",
- "ark-ff",
- "ark-poly",
- "ark-serialize",
- "ark-std",
- "base64 0.13.0",
- "error-chain",
- "ethereum-types 0.9.2",
- "exitcode",
- "global",
- "hashbrown 0.11.2",
- "integer-encoding",
- "keccak-hash",
- "kvdb",
- "log 0.4.14",
- "log4rs",
- "ppot2ark",
- "rand 0.7.3",
- "rayon",
- "static_assertions",
-]
-
-[[package]]
-name = "amt-serde-derive"
-version = "0.1.0"
-source = "git+ssh://git@github.com/Conflux-Chain/conflux-amt-ledgerdb.git#50c641f549d88be57826c57d53a871c4c95e31c3"
-dependencies = [
- "proc-macro-crate 1.1.0",
- "proc-macro2 1.0.28",
- "quote 1.0.9",
- "syn 1.0.74",
-]
-
-[[package]]
 name = "ansi_term"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -501,7 +460,7 @@ dependencies = [
 [[package]]
 name = "blake2-hasher"
 version = "0.1.0"
-source = "git+ssh://git@github.com/Conflux-Chain/conflux-amt-ledgerdb.git#50c641f549d88be57826c57d53a871c4c95e31c3"
+source = "git+https://github.com/ChenxingLi/authenticated-storage-benchmarks.git?rev=1f42d73#1f42d7375ea37a0e7cb31faa8af15192f8fa0378"
 dependencies = [
  "blake2 0.10.4",
  "ethereum-types 0.9.2",
@@ -808,7 +767,6 @@ dependencies = [
 name = "cfx-storage"
 version = "1.0.0"
 dependencies = [
- "amt-db",
  "backtrace",
  "blake2-hasher",
  "cfg-if 0.1.10",
@@ -830,6 +788,7 @@ dependencies = [
  "lazy_static",
  "log 0.4.14",
  "log4rs",
+ "lvmt-db",
  "malloc_size_of",
  "malloc_size_of_derive",
  "memoffset 0.5.6",
@@ -859,13 +818,13 @@ dependencies = [
 name = "cfx-storage-primitives"
 version = "0.1.0"
 dependencies = [
- "amt-db",
  "backtrace",
  "cfg-if 0.1.10",
  "cfx-bytes",
  "cfx-types",
  "keccak-hash",
  "log 0.4.14",
+ "lvmt-db",
  "primitives",
  "rlp",
  "rlp_derive",
@@ -1845,7 +1804,7 @@ checksum = "4443176a9f2c162692bd3d352d745ef9413eec5782a80d8fd6f8a1ac692a07f7"
 [[package]]
 name = "fastmap"
 version = "0.1.0"
-source = "git+ssh://git@github.com/Conflux-Chain/conflux-amt-ledgerdb.git#50c641f549d88be57826c57d53a871c4c95e31c3"
+source = "git+https://github.com/ChenxingLi/authenticated-storage-benchmarks.git?rev=1f42d73#1f42d7375ea37a0e7cb31faa8af15192f8fa0378"
 dependencies = [
  "ethereum-types 0.9.2",
  "plain_hasher",
@@ -2896,6 +2855,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "kvdb-memorydb"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9355274e5a9e0a7e8ef43916950eae3949024de2a8dffe4d5a6c13974a37c8e"
+dependencies = [
+ "kvdb",
+ "parity-util-mem 0.5.2",
+ "parking_lot 0.10.2",
+]
+
+[[package]]
 name = "kvdb-rocksdb"
 version = "0.1.6"
 dependencies = [
@@ -2966,7 +2936,7 @@ dependencies = [
 [[package]]
 name = "librocksdb_sys"
 version = "0.1.0"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=e62343e63be38284556b6610d75833217e3360b4#e62343e63be38284556b6610d75833217e3360b4"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=cac983ab886a0701c8458bce76a76f63de16e1bd#cac983ab886a0701c8458bce76a76f63de16e1bd"
 dependencies = [
  "bindgen",
  "bzip2-sys",
@@ -2983,7 +2953,7 @@ dependencies = [
 [[package]]
 name = "libtitan_sys"
 version = "0.0.1"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=e62343e63be38284556b6610d75833217e3360b4#e62343e63be38284556b6610d75833217e3360b4"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=cac983ab886a0701c8458bce76a76f63de16e1bd#cac983ab886a0701c8458bce76a76f63de16e1bd"
 dependencies = [
  "bzip2-sys",
  "cc",
@@ -3131,6 +3101,48 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab44e08e5b5110188be64dc8f0865635206ad7386fe672903bef195df3cc8960"
 
 [[package]]
+name = "lvmt-db"
+version = "0.0.1"
+source = "git+https://github.com/ChenxingLi/authenticated-storage-benchmarks.git?rev=1f42d73#1f42d7375ea37a0e7cb31faa8af15192f8fa0378"
+dependencies = [
+ "ark-bls12-381",
+ "ark-bn254",
+ "ark-ec",
+ "ark-ff",
+ "ark-poly",
+ "ark-serialize",
+ "ark-std",
+ "base64 0.13.0",
+ "error-chain",
+ "ethereum-types 0.9.2",
+ "exitcode",
+ "global",
+ "hashbrown 0.11.2",
+ "integer-encoding",
+ "keccak-hash",
+ "kvdb",
+ "kvdb-memorydb",
+ "log 0.4.14",
+ "log4rs",
+ "lvmt-serde-derive",
+ "ppot2ark",
+ "rand 0.7.3",
+ "rayon",
+ "static_assertions",
+]
+
+[[package]]
+name = "lvmt-serde-derive"
+version = "0.1.0"
+source = "git+https://github.com/ChenxingLi/authenticated-storage-benchmarks.git?rev=1f42d73#1f42d7375ea37a0e7cb31faa8af15192f8fa0378"
+dependencies = [
+ "proc-macro-crate 1.1.0",
+ "proc-macro2 1.0.28",
+ "quote 1.0.9",
+ "syn 1.0.74",
+]
+
+[[package]]
 name = "lz4-sys"
 version = "1.8.3"
 source = "git+https://github.com/busyjay/lz4-rs.git?branch=adjust-build#5a8afe4010c67899fc7af876a58d67fd6269bf81"
@@ -3238,7 +3250,7 @@ dependencies = [
 [[package]]
 name = "memory-db"
 version = "0.11.0"
-source = "git+ssh://git@github.com/Conflux-Chain/conflux-amt-ledgerdb.git#50c641f549d88be57826c57d53a871c4c95e31c3"
+source = "git+https://github.com/ChenxingLi/authenticated-storage-benchmarks.git?rev=1f42d73#1f42d7375ea37a0e7cb31faa8af15192f8fa0378"
 dependencies = [
  "hash-db",
  "parity-util-mem 0.7.0",
@@ -3718,7 +3730,7 @@ dependencies = [
 [[package]]
 name = "parity-journaldb"
 version = "0.2.0"
-source = "git+ssh://git@github.com/Conflux-Chain/conflux-amt-ledgerdb.git#50c641f549d88be57826c57d53a871c4c95e31c3"
+source = "git+https://github.com/ChenxingLi/authenticated-storage-benchmarks.git?rev=1f42d73#1f42d7375ea37a0e7cb31faa8af15192f8fa0378"
 dependencies = [
  "blake2-hasher",
  "ethereum-types 0.9.2",
@@ -3729,10 +3741,10 @@ dependencies = [
  "log 0.4.14",
  "memory-db",
  "parity-bytes",
+ "parity-stats",
  "parity-util-mem 0.7.0",
  "parking_lot 0.11.1",
  "rlp",
- "stats",
  "trie-db",
 ]
 
@@ -3770,6 +3782,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "parity-stats"
+version = "0.1.0"
+source = "git+https://github.com/ChenxingLi/authenticated-storage-benchmarks.git?rev=1f42d73#1f42d7375ea37a0e7cb31faa8af15192f8fa0378"
+dependencies = [
+ "log 0.4.14",
+ "prometheus 0.9.0",
+]
+
+[[package]]
 name = "parity-util-mem"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3778,6 +3799,7 @@ dependencies = [
  "cfg-if 0.1.10",
  "impl-trait-for-tuples",
  "parity-util-mem-derive",
+ "parking_lot 0.10.2",
  "winapi 0.3.9",
 ]
 
@@ -3958,7 +3980,7 @@ checksum = "3cacbb3c4ff353b534a67fb8d7524d00229da4cb1dc8c79f4db96e375ab5b619"
 [[package]]
 name = "patricia-trie-ethereum"
 version = "0.1.0"
-source = "git+ssh://git@github.com/Conflux-Chain/conflux-amt-ledgerdb.git#50c641f549d88be57826c57d53a871c4c95e31c3"
+source = "git+https://github.com/ChenxingLi/authenticated-storage-benchmarks.git?rev=1f42d73#1f42d7375ea37a0e7cb31faa8af15192f8fa0378"
 dependencies = [
  "blake2-hasher",
  "elastic-array",
@@ -4116,7 +4138,7 @@ dependencies = [
 [[package]]
 name = "ppot2ark"
 version = "0.1.0"
-source = "git+ssh://git@github.com/Conflux-Chain/conflux-amt-ledgerdb.git#50c641f549d88be57826c57d53a871c4c95e31c3"
+source = "git+https://github.com/ChenxingLi/authenticated-storage-benchmarks.git?rev=1f42d73#1f42d7375ea37a0e7cb31faa8af15192f8fa0378"
 dependencies = [
  "ark-bn254",
  "ark-ec",
@@ -4808,7 +4830,7 @@ dependencies = [
 [[package]]
 name = "rocksdb"
 version = "0.3.0"
-source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=e62343e63be38284556b6610d75833217e3360b4#e62343e63be38284556b6610d75833217e3360b4"
+source = "git+https://github.com/Conflux-Chain/rust-rocksdb.git?rev=cac983ab886a0701c8458bce76a76f63de16e1bd#cac983ab886a0701c8458bce76a76f63de16e1bd"
 dependencies = [
  "libc",
  "librocksdb_sys",
@@ -5278,15 +5300,6 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "stats"
-version = "0.1.0"
-source = "git+ssh://git@github.com/Conflux-Chain/conflux-amt-ledgerdb.git#50c641f549d88be57826c57d53a871c4c95e31c3"
-dependencies = [
- "log 0.4.14",
- "prometheus 0.9.0",
-]
 
 [[package]]
 name = "str_stack"

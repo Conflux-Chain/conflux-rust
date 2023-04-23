@@ -1,7 +1,7 @@
 use crate::key_value::MERKLE_NULL_NODE;
-use amt_db::{
+use lvmt_db::{
     serde::{MyFromBytes, MyToBytes},
-    AmtRoot,
+    LvmtRoot,
 };
 use cfx_primitives::MerkleHash;
 use cfx_types::H256;
@@ -16,14 +16,14 @@ use serde_derive::{
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 // #[serde(rename_all = "camelCase")]
 pub struct StateRoot {
-    pub amt_root: AmtRoot,
+    pub lvmt_root: LvmtRoot,
     pub static_root: H256,
 }
 #[derive(
     Clone, Debug, Default, PartialEq, Eq, DeserializeDerive, SerializeDerive,
 )]
 pub struct StateRootForSerde {
-    pub amt_root: Vec<u8>,
+    pub lvmt_root: Vec<u8>,
     pub static_root: H256,
 }
 
@@ -39,7 +39,7 @@ impl StateRoot {
             genesis_root
         );
         Self {
-            amt_root: AmtRoot::default(),
+            lvmt_root: LvmtRoot::default(),
             static_root: MERKLE_NULL_NODE,
         }
     }
@@ -47,21 +47,21 @@ impl StateRoot {
 
 impl Encodable for StateRoot {
     fn rlp_append(&self, s: &mut RlpStream) {
-        let serialized_amt_root = self.amt_root.to_bytes_consensus();
+        let serialized_lvmt_root = self.lvmt_root.to_bytes_consensus();
         s.begin_list(2)
-            .append(&serialized_amt_root)
+            .append(&serialized_lvmt_root)
             .append(&self.static_root);
     }
 }
 
 impl Decodable for StateRoot {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        let serialized_amt_root: Vec<u8> = rlp.val_at(0).unwrap();
+        let serialized_lvmt_root: Vec<u8> = rlp.val_at(0).unwrap();
         let static_root = rlp.val_at(1).unwrap();
-        let amt_root = AmtRoot::from_bytes_consensus(&serialized_amt_root)
+        let lvmt_root = LvmtRoot::from_bytes_consensus(&serialized_lvmt_root)
             .map_err(|_| DecoderError::Custom("Curve serialize error"))?;
         Ok(StateRoot {
-            amt_root,
+            lvmt_root,
             static_root,
         })
     }
@@ -70,7 +70,7 @@ impl Decodable for StateRoot {
 #[test]
 fn test_rlp_serde() {
     let root = StateRoot {
-        amt_root: AmtRoot::default(),
+        lvmt_root: LvmtRoot::default(),
         static_root: MERKLE_NULL_NODE,
     };
     let ser_root: Vec<u8> = root.rlp_bytes();
@@ -81,9 +81,9 @@ fn test_rlp_serde() {
 impl Serialize for StateRoot {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
-        let serialized_amt_root = self.amt_root.to_bytes_local();
+        let serialized_lvmt_root = self.lvmt_root.to_bytes_local();
         let state_root = StateRootForSerde {
-            amt_root: serialized_amt_root,
+            lvmt_root: serialized_lvmt_root,
             static_root: self.static_root.clone(),
         };
         state_root.serialize(serializer)
@@ -95,7 +95,7 @@ impl<'de> Deserialize<'de> for StateRoot {
     where D: Deserializer<'de> {
         let state_root = StateRootForSerde::deserialize(deserializer)?;
         Ok(StateRoot {
-            amt_root: AmtRoot::from_bytes_local(&state_root.amt_root)
+            lvmt_root: LvmtRoot::from_bytes_local(&state_root.lvmt_root)
                 .map_err(|_| D::Error::custom("Curve serialize error"))?,
             static_root: state_root.static_root,
         })

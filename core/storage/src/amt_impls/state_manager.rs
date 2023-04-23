@@ -3,7 +3,7 @@ use super::{
     state_index::StateIndex, state_trait::StateManagerTrait,
 };
 use crate::{KvdbRocksdb, Result, SnapshotInfo};
-use amt_db::{amt_db::cached_pp, AmtDb};
+use lvmt_db::{lvmt_db::cached_pp, LvmtDB};
 use cfx_internal_common::{
     consensus_api::StateMaintenanceTrait, StateAvailabilityBoundary,
 };
@@ -19,7 +19,7 @@ use std::{path::Path, sync::Arc};
 pub struct StateManager {
     snapshot_epoch_count: u32,
     // Not support history version yet
-    amt_db: Arc<RwLock<AmtDb>>,
+    lvmt_db: Arc<RwLock<LvmtDB>>,
 }
 
 impl MallocSizeOf for StateManager {
@@ -55,12 +55,12 @@ impl StateManager {
             .map(|size| (size.trailing_zeros() as usize, 0));
 
         if conf.shard_size.is_some() {
-            pp.warm_quotient(0)
+            pp.warm_quotient()
         }
 
         Ok(Self {
             snapshot_epoch_count: conf.snapshot_epoch_count,
-            amt_db: Arc::new(RwLock::new(AmtDb::new(
+            lvmt_db: Arc::new(RwLock::new(LvmtDB::new(
                 backend, pp, true, shard_info,
             ))),
         })
@@ -103,7 +103,7 @@ impl StateManagerTrait for StateManager {
                 "AMTStateManager: Construct state for new epoch {}",
                 height + 1
             );
-            assert_eq!(height + 1, self.amt_db.read().current_epoch()?)
+            assert_eq!(height + 1, self.lvmt_db.read().current_epoch()?)
         }
 
         Ok(Some(
@@ -116,7 +116,7 @@ impl StateManagerTrait for StateManager {
     }
 
     fn get_state_for_genesis_write(self: &Arc<Self>) -> State {
-        assert_eq!(0, self.amt_db.read().current_epoch().unwrap());
+        assert_eq!(0, self.lvmt_db.read().current_epoch().unwrap());
         self.new_state(false, None)
     }
 }
@@ -127,7 +127,7 @@ impl StateManager {
     ) -> State {
         State {
             read_only,
-            state: self.amt_db.clone(),
+            state: self.lvmt_db.clone(),
             root_with_aux,
         }
     }

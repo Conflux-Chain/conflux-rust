@@ -33,7 +33,7 @@ pub mod tests;
 #[cfg(not(any(test, feature = "testonly_code")))]
 mod tests;
 
-#[cfg(feature = "amt-storage")]
+#[cfg(feature = "lvmt-storage")]
 mod amt_impls;
 mod impls;
 #[cfg(feature = "mpt-storage")]
@@ -83,7 +83,7 @@ pub use self::{
     storage_db::{snapshot_db::SnapshotInfo, KeyValueDbTrait},
 };
 
-#[cfg(feature = "amt-storage")]
+#[cfg(feature = "lvmt-storage")]
 pub use self::amt_impls::{
     config::storage_dir,
     config::storage_manager::StorageConfiguration,
@@ -157,6 +157,7 @@ use blake2_hasher::blake2b as hash;
 #[cfg(not(feature = "light-hash"))]
 use keccak_hash::keccak as hash;
 
+#[allow(dead_code)]
 fn convert_key(access_key: primitives::StorageKey) -> cfx_types::H256 {
     hash(access_key.to_key_bytes())
 }

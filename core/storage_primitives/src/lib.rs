@@ -12,10 +12,10 @@ pub mod raw;
 
 pub use key_value::MptValue;
 
-#[cfg(feature = "amt-storage")]
+#[cfg(feature = "lvmt-storage")]
 pub use amt::*;
 #[cfg(not(any(
-    feature = "amt-storage",
+    feature = "lvmt-storage",
     feature = "mpt-storage",
     feature = "raw-storage"
 )))]

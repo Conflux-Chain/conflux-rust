@@ -5,6 +5,7 @@ target
 **/__pycache__
 .idea/
 .git/
+.vscode/
 .gitmodules
 .phabricator*
 build/

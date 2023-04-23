@@ -106,7 +106,7 @@ default = ["cfx-storage","cfx-storage-primitives"]
 # https://users.rust-lang.org/t/cfg-test-doesnt-propagate-to-external-crates/13046
 testonly_code = []
 storage-dev = []
-amt-storage = ["cfx-storage/amt-storage", "cfx-storage-primitives/amt-storage", "storage-dev"]
+lvmt-storage = ["cfx-storage/lvmt-storage", "cfx-storage-primitives/lvmt-storage", "storage-dev"]
 mpt-storage = ["cfx-storage/mpt-storage", "cfx-storage-primitives/mpt-storage", "storage-dev"]
 raw-storage = ["cfx-storage/raw-storage", "cfx-storage-primitives/raw-storage", "storage-dev"]
 light-hash-storage = ["cfx-storage/light-hash"]

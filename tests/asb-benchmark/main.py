@@ -20,7 +20,7 @@ if LIGHT_HASH is not None:
     conflux.config.default_config["GENESIS_RECEIPTS_ROOT"] = decode_hex("0xac762af87c0243671ece95f10e40269ce14ff5f6013ef77630bc17cfa84a878c")
     conflux.config.default_config["GENESIS_TRANSACTION_ROOT"] = decode_hex("0x195d43bc6ecc742b2d7134156617bf96e018b6f84daf8d0ca9812d44edd9e361")
 
-    if STORAGE == "amt":
+    if STORAGE == "lvmt":
         GENESIS_ROOT = "0x2656c8cf5e759be06784c0cb950500598b6ca3078ed6e0a9c3a3ad8583cbae2f"
     elif STORAGE == "mpt":
         GENESIS_ROOT = "0x56c994b4077b9316235adff36b460400e605b26f324fa03fb24d32176bfa0162"
@@ -29,7 +29,7 @@ if LIGHT_HASH is not None:
     else:
         GENESIS_ROOT = "0xf7d1918d912bb8d47d34c48297735bcef3220e16efec980ca4a9cb47e90905a9"
 else:
-    if STORAGE == "amt":
+    if STORAGE == "lvmt":
         GENESIS_ROOT = "0x7127c2c33112eb83a3b01668026381ced16a42ae6e7a94a31b7e6b732ba78b08"
     elif STORAGE == "mpt":
         GENESIS_ROOT = "0x05b1ba2c15838e58b054ced4497db8bca54053a018f54a5ae5283bcf6a34d5cb"
@@ -42,8 +42,8 @@ conflux.config.default_config["GENESIS_STATE_ROOT"] = decode_hex(GENESIS_ROOT)
 
 BASE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../..")
 
-if STORAGE == "amt":
-    BINARY = os.path.join(BASE_PATH, "target/amt-db/release/conflux")
+if STORAGE == "lvmt":
+    BINARY = os.path.join(BASE_PATH, "target/lvmt-db/release/conflux")
 elif STORAGE == "mpt":
     BINARY = os.path.join(BASE_PATH, "target/mpt-db/release/conflux")
 elif STORAGE == "raw":
