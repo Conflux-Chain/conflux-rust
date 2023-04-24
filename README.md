@@ -95,6 +95,7 @@ Follow the steps below to build the project:
     
     The results will be saved in the `experiment_data/metrics/osdi23` directory. You can also tailor the evaluation by modifying compile features and script options. Refer to the guidance below for further information.
     
+Also you can customize the evaluation by compiling the node with different features and run the evaluation script with different options to suit your requirements. 
 
 ## Compile Features
 

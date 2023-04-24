@@ -51,7 +51,7 @@ if [[ $1 == "build" ]]; then
   build
 else
   # export LIGHT_HASH=1
-  main "1m" "1m"
+  main "1m" "3m"
   main "3m" "9m"
   main "5m" "15m"
   #main "10m" "30m"
