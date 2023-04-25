@@ -44,13 +44,12 @@ Follow the steps below to build the project:
     cd conflux-rust
     ```
     
-5. Create folders for experiment data and cryptography parameters:
+5. Create folders for experiment data:
     
     ```bash
     mkdir experiment_data
     mkdir experiment_data/metrics
     mkdir experiment_data/transactions
-    mkdir pp
     ```
     
 6. Build the project:
@@ -76,8 +75,16 @@ Follow the steps below to build the project:
     ```
     
     **Note:** You may ignore any incompatible version errors reported by pip.
+
+9. Before evaluating LVMT, create a designated folder named `pp` that will be used for storing all cryptography parameters.
     
-9. Generate random signed transactions for test
+    ```bash
+    mkdir pp
+    ```
+
+    **Note:** When using LVMT for the first time, it may take anywhere from minutes to hours to initialize the cryptography parameters. Alternatively, you can [download the generated cryptography parameters](https://drive.google.com/file/d/1pHiHpZ4eNee17C63tSDEvmcEVtv23-jK/view?usp=sharing) and place the files in the folder `./pp`.
+    
+10. Generate random signed transactions for test
     
     ```bash
     python3 tests/asb-e2e/produce_tx/main.py
@@ -87,7 +94,7 @@ Follow the steps below to build the project:
     
     Alternatively, you can [download the generated transactions](https://1drv.ms/f/s!Au7Bejk2NtCskWpGOUUNxC9Bu1cD?e=tcMttz), and place the folders `transfer` and `erc20` in the `experiment_data/transactions` folder.
     
-10. Execute the preconfigured evaluation tasks (**Note:** ensure that no HTTP proxy is enabled):
+11. Execute the preconfigured evaluation tasks (**Note:** ensure that no HTTP proxy is enabled):
     
     ```bash
     ./run_bench.sh
