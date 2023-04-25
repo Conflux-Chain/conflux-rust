@@ -147,16 +147,19 @@ impl StateManager {
 
     pub fn get_state_trees(
         &self, state_index: &StateIndex, try_open: bool,
-    ) -> Result<Option<StateTrees>> {
+        open_mpt_snapshot: bool,
+    ) -> Result<Option<StateTrees>>
+    {
         let maybe_intermediate_mpt;
         let maybe_intermediate_mpt_key_padding;
         let delta_mpt;
         let snapshot;
 
-        match self
-            .storage_manager
-            .wait_for_snapshot(&state_index.snapshot_epoch_id, try_open)?
-        {
+        match self.storage_manager.wait_for_snapshot(
+            &state_index.snapshot_epoch_id,
+            try_open,
+            open_mpt_snapshot,
+        )? {
             None => {
                 // This is the special scenario when the snapshot isn't
                 // available but the snapshot at the intermediate epoch exists.
@@ -164,6 +167,7 @@ impl StateManager {
                     self.storage_manager.wait_for_snapshot(
                         &state_index.intermediate_epoch_id,
                         try_open,
+                        open_mpt_snapshot,
                     )?
                 {
                     snapshot = guarded_snapshot;
@@ -245,7 +249,9 @@ impl StateManager {
 
     pub fn get_state_trees_for_next_epoch(
         &self, parent_state_index: &StateIndex, try_open: bool,
-    ) -> Result<Option<StateTrees>> {
+        open_mpt_snapshot: bool,
+    ) -> Result<Option<StateTrees>>
+    {
         let maybe_height = parent_state_index.maybe_height.map(|x| x + 1);
 
         let snapshot;
@@ -272,10 +278,11 @@ impl StateManager {
 
             snapshot_epoch_id = &parent_state_index.intermediate_epoch_id;
             intermediate_epoch_id = &parent_state_index.epoch_id;
-            match self
-                .storage_manager
-                .wait_for_snapshot(snapshot_epoch_id, try_open)?
-            {
+            match self.storage_manager.wait_for_snapshot(
+                snapshot_epoch_id,
+                try_open,
+                open_mpt_snapshot,
+            )? {
                 None => {
                     // This is the special scenario when the snapshot isn't
                     // available but the snapshot at the intermediate epoch
@@ -287,10 +294,11 @@ impl StateManager {
                     // There is no snapshot_info for the parent snapshot,
                     // how can we find out the snapshot_merkle_root?
                     // See validate_blame_states().
-                    match self
-                        .storage_manager
-                        .wait_for_snapshot(&intermediate_epoch_id, try_open)?
-                    {
+                    match self.storage_manager.wait_for_snapshot(
+                        &intermediate_epoch_id,
+                        try_open,
+                        open_mpt_snapshot,
+                    )? {
                         None => {
                             warn!(
                                 "get_state_trees_for_next_epoch, shift snapshot, special case, \
@@ -426,6 +434,7 @@ impl StateManager {
                                 match self.storage_manager.wait_for_snapshot(
                                     &parent_state_index.epoch_id,
                                     try_open,
+                                    open_mpt_snapshot,
                                 )? {
                                     None => {
                                         warn!(
@@ -488,17 +497,21 @@ impl StateManager {
             intermediate_epoch_id = &parent_state_index.intermediate_epoch_id;
             intermediate_trie_root_merkle =
                 parent_state_index.intermediate_trie_root_merkle;
-            match self
-                .storage_manager
-                .wait_for_snapshot(snapshot_epoch_id, try_open)?
-            {
+            match self.storage_manager.wait_for_snapshot(
+                snapshot_epoch_id,
+                try_open,
+                open_mpt_snapshot,
+            )? {
                 None => {
                     // This is the special scenario when the snapshot isn't
                     // available but the snapshot at the intermediate epoch
                     // exists.
-                    if let Some(guarded_snapshot) = self
-                        .storage_manager
-                        .wait_for_snapshot(&intermediate_epoch_id, try_open)?
+                    if let Some(guarded_snapshot) =
+                        self.storage_manager.wait_for_snapshot(
+                            &intermediate_epoch_id,
+                            try_open,
+                            open_mpt_snapshot,
+                        )?
                     {
                         snapshot = guarded_snapshot;
                         maybe_intermediate_mpt = None;
@@ -609,8 +622,11 @@ impl StateManager {
 
     pub fn get_state_no_commit_inner(
         self: &Arc<Self>, state_index: StateIndex, try_open: bool,
-    ) -> Result<Option<State>> {
-        let maybe_state_trees = self.get_state_trees(&state_index, try_open)?;
+        open_mpt_snapshot: bool,
+    ) -> Result<Option<State>>
+    {
+        let maybe_state_trees =
+            self.get_state_trees(&state_index, try_open, open_mpt_snapshot)?;
         match maybe_state_trees {
             None => Ok(None),
             Some(state_trees) => {
@@ -625,7 +641,11 @@ impl StateManager {
             StateTrees {
                 snapshot_db: self
                     .storage_manager
-                    .wait_for_snapshot(&NULL_EPOCH, /* try_open = */ false)
+                    .wait_for_snapshot(
+                        &NULL_EPOCH,
+                        /* try_open = */ false,
+                        true,
+                    )
                     .unwrap()
                     .unwrap()
                     .into()
@@ -665,11 +685,12 @@ impl StateManager {
     // Due to the complexity of the latter approach, we stay with the
     // simple approach.
     pub fn get_state_for_next_epoch_inner(
-        self: &Arc<Self>, parent_epoch_id: StateIndex,
+        self: &Arc<Self>, parent_epoch_id: StateIndex, open_mpt_snapshot: bool,
     ) -> Result<Option<State>> {
         let maybe_state_trees = self.get_state_trees_for_next_epoch(
             &parent_epoch_id,
             /* try_open = */ false,
+            open_mpt_snapshot,
         )?;
         match maybe_state_trees {
             None => Ok(None),
@@ -696,7 +717,8 @@ impl StateManagerTrait for StateManager {
         space: Option<Space>,
     ) -> Result<Option<Box<dyn StateTrait>>>
     {
-        let maybe_state_trees = self.get_state_trees(&state_index, try_open);
+        let maybe_state_trees =
+            self.get_state_trees(&state_index, try_open, false);
         // If there is an error, we will continue to search for an available
         // single_mpt.
         let maybe_state_err = match maybe_state_trees {
@@ -767,7 +789,8 @@ impl StateManagerTrait for StateManager {
     ) -> Result<Option<Box<dyn StateTrait>>> {
         let mut parent_epoch = parent_epoch_id.epoch_id;
         let parent_height = parent_epoch_id.maybe_height;
-        let state = self.get_state_for_next_epoch_inner(parent_epoch_id)?;
+        let state =
+            self.get_state_for_next_epoch_inner(parent_epoch_id, false)?;
         if state.is_none() {
             return Ok(None);
         }

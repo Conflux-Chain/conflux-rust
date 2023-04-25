@@ -134,6 +134,9 @@ pub struct StorageManager {
 
     // used during startup for the next compute epoch
     pub intermediate_trie_root_merkle: RwLock<Option<MerkleHash>>,
+
+    pub persist_state_from_initialization:
+        RwLock<Option<(bool, HashSet<EpochId>, u64)>>,
 }
 
 impl MallocSizeOf for StorageManager {
@@ -267,6 +270,7 @@ impl StorageManager {
             last_confirmed_snapshottable_epoch_id: Default::default(),
             storage_conf,
             intermediate_trie_root_merkle: RwLock::new(None),
+            persist_state_from_initialization: RwLock::new(None),
         }));
 
         let storage_manager_arc =
@@ -316,11 +320,13 @@ impl StorageManager {
 
     pub fn wait_for_snapshot(
         &self, snapshot_epoch_id: &EpochId, try_open: bool,
+        open_mpt_snapshot: bool,
     ) -> Result<
         Option<
             GuardedValue<RwLockReadGuard<Vec<SnapshotInfo>>, Arc<SnapshotDb>>,
         >,
-    > {
+    >
+    {
         // Make sure that the snapshot info is ready at the same time of the
         // snapshot db. This variable is used for the whole scope
         // however prefixed with _ to please cargo fmt.
@@ -328,10 +334,11 @@ impl StorageManager {
         // maintain_snapshots_pivot_chain_confirmed() can not delete snapshot
         // while the current_snapshots are read locked.
         let guard = self.current_snapshots.read();
-        match self
-            .snapshot_manager
-            .get_snapshot_by_epoch_id(snapshot_epoch_id, try_open)?
-        {
+        match self.snapshot_manager.get_snapshot_by_epoch_id(
+            snapshot_epoch_id,
+            try_open,
+            open_mpt_snapshot,
+        )? {
             Some(snapshot_db) => {
                 Ok(Some(GuardedValue::new(guard, snapshot_db)))
             }
@@ -353,10 +360,11 @@ impl StorageManager {
                         result?;
                     }
                     let guard = self.current_snapshots.read();
-                    match self
-                        .snapshot_manager
-                        .get_snapshot_by_epoch_id(snapshot_epoch_id, try_open)
-                    {
+                    match self.snapshot_manager.get_snapshot_by_epoch_id(
+                        snapshot_epoch_id,
+                        try_open,
+                        open_mpt_snapshot,
+                    ) {
                         Err(e) => Err(e),
                         Ok(None) => Ok(None),
                         Ok(Some(snapshot_db)) => {
@@ -679,6 +687,7 @@ impl StorageManager {
                                     .get_snapshot_by_epoch_id(
                                         &snapshot_epoch_id,
                                         /* try_open = */ false,
+                                        true
                                     )?.unwrap();
                                 let mut set_keys_iter =
                                     snapshot_db.dumped_delta_kv_set_keys_iterator()?;
@@ -688,6 +697,7 @@ impl StorageManager {
                                     .get_snapshot_by_epoch_id(
                                         &parent_snapshot_epoch_id_cloned,
                                         /* try_open = */ false,
+                                        false
                                     )?.unwrap();
                                 let mut previous_set_keys_iter = previous_snapshot_db
                                     .dumped_delta_kv_set_keys_iterator()?;
@@ -1337,20 +1347,25 @@ impl StorageManager {
             .push(SnapshotInfo::genesis_snapshot_info());
 
         // Persist state loaded.
-        let (missing_snapshots, existing_latest_snapshot_id, epoch_height) =
-            self.snapshot_manager
-                .get_snapshot_db_manager()
-                .scan_persist_state(snapshot_info_map.get_map())?;
+        let snapshto_persist_state = self
+            .snapshot_manager
+            .get_snapshot_db_manager()
+            .scan_persist_state(snapshot_info_map.get_map())?;
 
+        *self.persist_state_from_initialization.write() = Some((
+            snapshto_persist_state.temp_snapshot_db_existing,
+            snapshto_persist_state.removed_snapshots,
+            snapshto_persist_state.max_epoch_height,
+        ));
         self.snapshot_manager
             .get_snapshot_db_manager()
             .update_latest_snapshot_id(
-                existing_latest_snapshot_id,
-                epoch_height,
+                snapshto_persist_state.max_epoch_id,
+                snapshto_persist_state.max_epoch_height,
             );
 
         // Remove missing snapshots.
-        for snapshot_epoch_id in missing_snapshots {
+        for snapshot_epoch_id in snapshto_persist_state.missing_snapshots {
             if snapshot_epoch_id == NULL_EPOCH {
                 continue;
             }

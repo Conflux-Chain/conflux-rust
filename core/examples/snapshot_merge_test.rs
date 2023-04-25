@@ -184,6 +184,7 @@ fn main() -> Result<(), Error> {
         .get_snapshot_by_epoch_id(
             &snapshot2_epoch,
             /* try_open = */ false,
+            true,
         )?
         .expect("exists");
     for (addr, account) in &accounts_map {

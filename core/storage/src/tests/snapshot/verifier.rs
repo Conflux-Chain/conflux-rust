@@ -494,9 +494,19 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
         unreachable!()
     }
 
+    fn get_epoch_id_from_snapshot_db_name(
+        &self, _snapshot_db_name: &str,
+    ) -> Result<EpochId> {
+        unreachable!()
+    }
+
+    fn is_temp_snapshot_db_path(&self, _dir_name: &str) -> bool {
+        unreachable!()
+    }
+
     fn scan_persist_state(
         &self, _snapshot_info_map: &HashMap<EpochId, SnapshotInfo>,
-    ) -> Result<(Vec<EpochId>, EpochId, u64)> {
+    ) -> Result<SnapshotPersistState> {
         unreachable!()
     }
 
@@ -511,7 +521,7 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
     }
 
     fn get_snapshot_by_epoch_id(
-        &self, _epoch_id: &EpochId, _try_open: bool,
+        &self, _epoch_id: &EpochId, _try_open: bool, _open_mpt_snapshot: bool,
     ) -> Result<Option<Arc<Self::SnapshotDb>>> {
         unreachable!()
     }
@@ -732,7 +742,7 @@ use crate::{
         KvdbIterIterator, OpenSnapshotMptTrait, SnapshotDbManagerTrait,
         SnapshotDbTrait, SnapshotInfo, SnapshotMptIteraterTrait,
         SnapshotMptNode, SnapshotMptTraitRead, SnapshotMptTraitReadAndIterate,
-        SnapshotMptTraitRw,
+        SnapshotMptTraitRw, SnapshotPersistState,
     },
     tests::{
         generate_keys, get_rng_for_test, snapshot::FakeSnapshotMptDb,

@@ -2,6 +2,14 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+pub struct SnapshotPersistState {
+    pub missing_snapshots: Vec<EpochId>,
+    pub max_epoch_id: EpochId,
+    pub max_epoch_height: u64,
+    pub temp_snapshot_db_existing: bool,
+    pub removed_snapshots: HashSet<EpochId>,
+}
+
 /// The trait for database manager of Snapshot.
 pub trait SnapshotDbManagerTrait {
     type SnapshotDb: SnapshotDbTrait<ValueType = Box<[u8]>>;
@@ -14,12 +22,16 @@ pub trait SnapshotDbManagerTrait {
     fn recovery_lastest_mpt_snapshot(
         &self, snapshot_epoch_id: &EpochId,
     ) -> Result<()>;
+    fn get_epoch_id_from_snapshot_db_name(
+        &self, snapshot_db_name: &str,
+    ) -> Result<EpochId>;
+    fn is_temp_snapshot_db_path(&self, dir_name: &str) -> bool;
 
     // Scan snapshot dir, remove extra files and return the list of missing
     // snapshots.
     fn scan_persist_state(
         &self, snapshot_info_map: &HashMap<EpochId, SnapshotInfo>,
-    ) -> Result<(Vec<EpochId>, EpochId, u64)> {
+    ) -> Result<SnapshotPersistState> {
         let mut missing_snapshots = HashMap::new();
         let mut all_snapshots = HashMap::new();
         for (snapshot_epoch_id, snapshot_info) in snapshot_info_map {
@@ -44,7 +56,10 @@ pub trait SnapshotDbManagerTrait {
         // Scan the snapshot dir. Remove extra files, and return the list of
         // missing snapshots.
         let mut max_epoch_height = 0;
-        let mut epoch_id = NULL_EPOCH;
+        let mut max_epoch_id = NULL_EPOCH;
+        let mut temp_snapshot_db_existing = false;
+        let mut removed_snapshots = HashSet::new();
+
         for entry in fs::read_dir(self.get_snapshot_dir())? {
             let entry = entry?;
             let path = entry.path();
@@ -63,6 +78,17 @@ pub trait SnapshotDbManagerTrait {
                     "Unexpected snapshot path {}, deleted.",
                     entry.path().display()
                 );
+
+                if self.is_temp_snapshot_db_path(dir_name) {
+                    temp_snapshot_db_existing = true;
+                } else {
+                    if let Ok(epoch_id) =
+                        self.get_epoch_id_from_snapshot_db_name(dir_name)
+                    {
+                        removed_snapshots.insert(epoch_id);
+                    }
+                }
+
                 fs::remove_dir_all(entry.path())?;
             } else {
                 if let Some((epoch, height)) =
@@ -70,7 +96,7 @@ pub trait SnapshotDbManagerTrait {
                 {
                     if height > max_epoch_height {
                         max_epoch_height = height;
-                        epoch_id = epoch;
+                        max_epoch_id = epoch;
                     }
                 }
             }
@@ -103,14 +129,16 @@ pub trait SnapshotDbManagerTrait {
             }
         }
 
-        Ok((
-            missing_snapshots
+        Ok(SnapshotPersistState {
+            missing_snapshots: missing_snapshots
                 .into_iter()
                 .map(|(_path_bytes, (snapshot_epoch_id, _))| snapshot_epoch_id)
                 .collect(),
-            epoch_id,
+            max_epoch_id,
             max_epoch_height,
-        ))
+            temp_snapshot_db_existing,
+            removed_snapshots,
+        })
     }
 
     fn new_snapshot_by_merging<'m>(
@@ -120,7 +148,7 @@ pub trait SnapshotDbManagerTrait {
         new_epoch_height: u64,
     ) -> Result<(RwLockWriteGuard<'m, PersistedSnapshotInfoMap>, SnapshotInfo)>;
     fn get_snapshot_by_epoch_id(
-        &self, epoch_id: &EpochId, try_open: bool,
+        &self, epoch_id: &EpochId, try_open: bool, open_mpt_snapshot: bool,
     ) -> Result<Option<Arc<Self::SnapshotDb>>>;
     fn destroy_snapshot(&self, snapshot_epoch_id: &EpochId) -> Result<()>;
 
@@ -142,7 +170,7 @@ use crate::impls::storage_manager::PersistedSnapshotInfoMap;
 use parking_lot::{RwLock, RwLockWriteGuard};
 use primitives::{EpochId, MerkleHash, NULL_EPOCH};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
     sync::Arc,

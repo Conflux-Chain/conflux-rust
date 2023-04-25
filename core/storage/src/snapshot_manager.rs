@@ -7,10 +7,13 @@ pub trait SnapshotManagerTrait: GetSnapshotDbManager {
     // FIXME: add check_make_register_snapshot_background into trait
 
     fn get_snapshot_by_epoch_id(
-        &self, epoch_id: &EpochId, try_open: bool,
+        &self, epoch_id: &EpochId, try_open: bool, open_mpt_snapshot: bool,
     ) -> Result<Option<Arc<Self::SnapshotDb>>> {
-        self.get_snapshot_db_manager()
-            .get_snapshot_by_epoch_id(epoch_id, try_open)
+        self.get_snapshot_db_manager().get_snapshot_by_epoch_id(
+            epoch_id,
+            try_open,
+            open_mpt_snapshot,
+        )
     }
 
     fn remove_old_pivot_snapshot(
