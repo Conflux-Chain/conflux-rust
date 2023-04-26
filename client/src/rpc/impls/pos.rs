@@ -15,9 +15,10 @@ use crate::{
             errors::check_rpc_address_network,
             pos::{
                 tx_type, Account, Block, BlockNumber, CommitteeState, Decision,
-                NodeLockStatus, PoSEpochReward, RpcCommittee, RpcTermData,
-                RpcTransactionStatus, RpcTransactionType, Signature, Status,
-                Transaction, VotePowerState,
+                EpochState as RpcEpochState, NodeLockStatus, PoSEpochReward,
+                RpcCommittee, RpcTermData, RpcTransactionStatus,
+                RpcTransactionType, Signature, Status, Transaction,
+                VotePowerState,
             },
             sign_call, Bytes, CallRequest, EpochNumber, RpcAddress,
         },
@@ -697,8 +698,10 @@ impl Pos for PosHandler {
 
     fn pos_get_epoch_state(
         &self, epoch: U64,
-    ) -> JsonRpcResult<Option<EpochState>> {
-        Ok(self.epoch_state_by_epoch_number(epoch.as_u64()))
+    ) -> JsonRpcResult<Option<RpcEpochState>> {
+        Ok(self
+            .epoch_state_by_epoch_number(epoch.as_u64())
+            .map(Into::into))
     }
 
     fn pos_get_ledger_info_by_epoch(
