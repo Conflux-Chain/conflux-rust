@@ -21,12 +21,12 @@ pub struct EpochState {
     vrf_seed: Bytes,
 }
 
-impl From<PrimitiveEpochState> for EpochState {
-    fn from(value: PrimitiveEpochState) -> Self {
+impl From<&PrimitiveEpochState> for EpochState {
+    fn from(value: &PrimitiveEpochState) -> Self {
         Self {
             epoch: value.epoch.into(),
-            verifier: value.verifier().clone().into(),
-            vrf_seed: value.vrf_seed.into(),
+            verifier: value.verifier().into(),
+            vrf_seed: value.vrf_seed.clone().into(),
         }
     }
 }
@@ -43,13 +43,13 @@ pub struct ValidatorVerifier {
     /// address_to_validator_info)
     total_voting_power: U64,
 }
-impl From<PrimitiveValidatorVerifier> for ValidatorVerifier {
-    fn from(value: PrimitiveValidatorVerifier) -> Self {
+
+impl From<&PrimitiveValidatorVerifier> for ValidatorVerifier {
+    fn from(value: &PrimitiveValidatorVerifier) -> Self {
         Self {
             address_to_validator_info: value
                 .address_to_validator_info()
-                .clone()
-                .into_iter()
+                .iter()
                 .map(|(k, v)| (k.to_u8().into(), v.into()))
                 .collect(),
             quorum_voting_power: value.quorum_voting_power().into(),
@@ -70,8 +70,9 @@ pub struct ValidatorConsensusInfo {
     vrf_public_key: Option<ConsensusVRFPublicKey>,
     voting_power: U64,
 }
-impl From<PrimitiveValidatorConsensusInfo> for ValidatorConsensusInfo {
-    fn from(value: PrimitiveValidatorConsensusInfo) -> Self {
+
+impl From<&PrimitiveValidatorConsensusInfo> for ValidatorConsensusInfo {
+    fn from(value: &PrimitiveValidatorConsensusInfo) -> Self {
         Self {
             public_key: value.public_key().clone(),
             vrf_public_key: value.vrf_public_key().clone(),

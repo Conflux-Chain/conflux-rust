@@ -8,6 +8,7 @@ mod block_number;
 mod committee;
 mod decision;
 mod epoch_state;
+mod ledger_info;
 mod node_lock_status;
 mod reward;
 mod status;
@@ -20,6 +21,7 @@ pub use self::{
     committee::{CommitteeState, NodeVotingPower, RpcCommittee, RpcTermData},
     decision::Decision,
     epoch_state::EpochState,
+    ledger_info::LedgerInfoWithSignatures,
     node_lock_status::{NodeLockStatus, VotePowerState},
     reward::{PoSEpochReward, Reward},
     status::Status,
