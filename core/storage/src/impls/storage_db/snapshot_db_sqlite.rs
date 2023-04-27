@@ -381,37 +381,24 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
 
         self.start_transaction()?;
         // TODO: what about multi-threading node load?
-        let mut mpt_to_modify = self.open_snapshot_mpt_owned()?;
-        let mut base_mpt;
+        if let Some(old_db) = old_snapshot_db {
+            let mut key_value_iter =
+                old_db.snapshot_mpt_iterator().unwrap().take();
+            let mut kv_iter =
+                key_value_iter.iter_range(&[], None).unwrap().take();
 
-        let mut mpt_merger = match old_snapshot_db {
-            Some(old_db) => {
-                if !self.is_mpt_table_in_current_db()
-                    && old_db.is_mpt_table_in_current_db()
-                {
-                    // When creating the MPT database for the first time, we
-                    // need to copy the MPT table.
-                    debug!("Copy mpt into new database");
-                    base_mpt = old_db.open_snapshot_mpt_as_owned()?;
-                    MptMerger::new(
-                        Some(
-                            &mut base_mpt
-                                as &mut dyn SnapshotMptTraitReadAndIterate,
-                        ),
-                        &mut mpt_to_modify as &mut dyn SnapshotMptTraitRw,
-                    )
-                } else {
-                    MptMerger::new(
-                        None,
-                        &mut mpt_to_modify as &mut dyn SnapshotMptTraitRw,
-                    )
-                }
+            let mut new_mpt_snapshot =
+                self.mpt_snapshot.as_ref().unwrap().write();
+            while let Some((access_key, expected_value)) = kv_iter.next()? {
+                new_mpt_snapshot.put(&access_key, &expected_value)?;
             }
-            _ => MptMerger::new(
-                None,
-                &mut mpt_to_modify as &mut dyn SnapshotMptTraitRw,
-            ),
-        };
+        }
+
+        let mut mpt_to_modify = self.open_snapshot_mpt_owned()?;
+        let mut mpt_merger = MptMerger::new(
+            None,
+            &mut mpt_to_modify as &mut dyn SnapshotMptTraitRw,
+        );
 
         let snapshot_root = mpt_merger.merge_insertion_deletion_separated(
             delete_keys_iter.iter_range(&[], None)?.take(),
@@ -522,6 +509,28 @@ impl SnapshotDbTrait for SnapshotDbSqlite {
             self.try_clone_connections()?,
             SNAPSHOT_DB_STATEMENTS.kvdb_statements.clone(),
         )))
+    }
+
+    fn snapshot_mpt_iterator(
+        &self,
+    ) -> Result<
+        Wrap<
+            Self::SnapshotKvdbIterType,
+            dyn KeyValueDbIterableTrait<
+                MptKeyValue,
+                [u8],
+                KvdbSqliteShardedIteratorTag,
+            >,
+        >,
+    > {
+        if self.mpt_table_in_current_db {
+            Ok(Wrap(KvdbSqliteSharded::new(
+                self.try_clone_connections()?,
+                SNAPSHOT_MPT_DB_STATEMENTS.mpt_statements.clone(),
+            )))
+        } else {
+            bail!("mpt_snapshot is not in current db");
+        }
     }
 }
 

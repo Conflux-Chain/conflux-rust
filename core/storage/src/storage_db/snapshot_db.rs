@@ -163,6 +163,19 @@ pub trait SnapshotDbTrait:
             >,
         >,
     >;
+
+    fn snapshot_mpt_iterator(
+        &self,
+    ) -> StorageResult<
+        Wrap<
+            Self::SnapshotKvdbIterType,
+            dyn KeyValueDbIterableTrait<
+                MptKeyValue,
+                [u8],
+                Self::SnapshotKvdbIterTraitTag,
+            >,
+        >,
+    >;
 }
 
 use crate::{

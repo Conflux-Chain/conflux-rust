@@ -58,6 +58,29 @@ impl KeyValueDbTypes for SnapshotMptDbSqlite {
     type ValueType = Box<[u8]>;
 }
 
+// For Snapshot MPT DB.
+impl KvdbSqliteShardedRefDestructureTrait for SnapshotMptDbSqlite {
+    fn destructure(
+        &self,
+    ) -> (Option<&[SqliteConnection]>, &KvdbSqliteStatements) {
+        (
+            self.maybe_db_connections.as_ref().map(|b| &**b),
+            &*SNAPSHOT_MPT_DB_STATEMENTS.mpt_statements,
+        )
+    }
+}
+
+impl KvdbSqliteShardedDestructureTrait for SnapshotMptDbSqlite {
+    fn destructure_mut(
+        &mut self,
+    ) -> (Option<&mut [SqliteConnection]>, &KvdbSqliteStatements) {
+        (
+            self.maybe_db_connections.as_mut().map(|b| &mut **b),
+            &*SNAPSHOT_MPT_DB_STATEMENTS.mpt_statements,
+        )
+    }
+}
+
 /// Automatically implement KeyValueDbTraitRead with the same code of
 /// KvdbSqlite.
 impl ReadImplFamily for SnapshotMptDbSqlite {
@@ -222,6 +245,24 @@ impl SnapshotMptDbSqlite {
     pub fn set_remove_on_last_close(&self) {
         self.remove_on_close.store(true, Ordering::Relaxed);
     }
+
+    pub fn snapshot_mpt_itertor(
+        &self,
+    ) -> Result<
+        Wrap<
+            KvdbSqliteSharded<<Self as KeyValueDbTypes>::ValueType>,
+            dyn KeyValueDbIterableTrait<
+                MptKeyValue,
+                [u8],
+                KvdbSqliteShardedIteratorTag,
+            >,
+        >,
+    > {
+        Ok(Wrap(KvdbSqliteSharded::new(
+            self.try_clone_connections()?,
+            SNAPSHOT_MPT_DB_STATEMENTS.mpt_statements.clone(),
+        )))
+    }
 }
 
 use parking_lot::RwLock;
@@ -240,10 +281,12 @@ use crate::{
         },
     },
     storage_db::{
-        KeyValueDbTypes, OpenSnapshotMptTrait, OwnedReadImplFamily,
-        ReadImplFamily, SingleWriterImplFamily, SnapshotMptDbValue,
+        KeyValueDbIterableTrait, KeyValueDbTypes, OpenSnapshotMptTrait,
+        OwnedReadImplFamily, ReadImplFamily, SingleWriterImplFamily,
+        SnapshotMptDbValue,
     },
-    SnapshotDbManagerSqlite, SqliteConnection,
+    utils::wrap::Wrap,
+    MptKeyValue, SnapshotDbManagerSqlite, SqliteConnection,
 };
 
 use std::{
@@ -256,5 +299,10 @@ use std::{
 };
 
 use super::{
-    snapshot_db_manager_sqlite::AlreadyOpenSnapshots, sqlite::SQLITE_NO_PARAM,
+    kvdb_sqlite_sharded::{
+        KvdbSqliteShardedDestructureTrait, KvdbSqliteShardedIteratorTag,
+        KvdbSqliteShardedRefDestructureTrait,
+    },
+    snapshot_db_manager_sqlite::AlreadyOpenSnapshots,
+    sqlite::SQLITE_NO_PARAM,
 };

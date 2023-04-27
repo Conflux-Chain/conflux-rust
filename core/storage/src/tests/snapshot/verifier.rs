@@ -464,6 +464,17 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
     > {
         Ok(Wrap(ArcMutexFakeSnapshotDbRef { r: self }))
     }
+
+    fn snapshot_mpt_iterator(
+        &self,
+    ) -> Result<
+        Wrap<
+            Self::SnapshotKvdbIterType,
+            dyn KeyValueDbIterableTrait<MptKeyValue, [u8], FakeSnapshotDb>,
+        >,
+    > {
+        Ok(Wrap(ArcMutexFakeSnapshotDbRef { r: self }))
+    }
 }
 
 #[derive(Default)]
