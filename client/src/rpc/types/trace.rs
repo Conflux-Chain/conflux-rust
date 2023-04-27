@@ -380,7 +380,7 @@ impl LocalizedBlockTrace {
 pub struct EpochTrace {
     cfx_traces: Vec<LocalizedTrace>,
     eth_traces: Vec<EthLocalizedTrace>,
-    mirror_address_map: HashMap<RpcAddress, H160>,
+    mirror_address_map: HashMap<H160, RpcAddress>,
 }
 
 impl EpochTrace {
@@ -392,8 +392,8 @@ impl EpochTrace {
             if let Action::Call(action) = &t.action {
                 if action.to.hex_address == *CROSS_SPACE_CONTRACT_ADDRESS {
                     mirror_address_map.insert(
-                        action.from.clone(),
                         evm_map(action.from.hex_address).address,
+                        action.from.clone(),
                     );
                 }
             }

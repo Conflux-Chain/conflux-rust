@@ -4,15 +4,12 @@
 
 use crate::rpc::types::{
     pos::{
-        Account, Block, BlockNumber, CommitteeState, PoSEpochReward, Status,
-        Transaction,
+        Account, Block, BlockNumber, CommitteeState, EpochState,
+        LedgerInfoWithSignatures, PoSEpochReward, Status, Transaction,
     },
     RpcAddress,
 };
 use cfx_types::{H256, U64};
-use diem_types::{
-    epoch_state::EpochState, ledger_info::LedgerInfoWithSignatures,
-};
 use jsonrpc_core::Result as JsonRpcResult;
 use jsonrpc_derive::rpc;
 
