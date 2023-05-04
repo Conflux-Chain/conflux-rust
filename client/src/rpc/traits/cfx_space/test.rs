@@ -69,7 +69,7 @@ pub trait TestRpc {
     #[rpc(name = "test_generatecustomblock")]
     fn generate_custom_block(
         &self, parent: H256, referees: Vec<H256>, raw: Bytes,
-        adaptive: Option<bool>,
+        adaptive: Option<bool>, custom: Option<Vec<Bytes>>,
     ) -> RpcResult<H256>;
 
     #[rpc(name = "test_generateblockwithfaketxs")]

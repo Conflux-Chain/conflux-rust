@@ -8,6 +8,7 @@ use crate::{
 };
 use cfx_types::{Address, Bloom, H256, KECCAK_EMPTY_BLOOM, U256};
 use malloc_size_of::{new_malloc_size_ops, MallocSizeOf, MallocSizeOfOps};
+use once_cell::sync::OnceCell;
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use std::{
     mem,
@@ -16,6 +17,7 @@ use std::{
 };
 
 const HEADER_LIST_MIN_LEN: usize = 13;
+pub static FIX_CUSTOM_ENCODING_HEIGHT: OnceCell<u64> = OnceCell::new();
 
 #[derive(Clone, Debug, Eq)]
 pub struct BlockHeaderRlpPart {
@@ -171,6 +173,9 @@ impl BlockHeader {
         self.timestamp = timestamp;
     }
 
+    /// Set the custom filed of the header.
+    pub fn set_custom(&mut self, custom: Vec<Bytes>) { self.custom = custom; }
+
     /// Compute the hash of the block.
     pub fn compute_hash(&mut self) -> H256 {
         let hash = self.hash();
@@ -226,7 +231,13 @@ impl BlockHeader {
         }
 
         for b in &self.custom {
-            stream.append_raw(b, 1);
+            if self.height
+                >= *FIX_CUSTOM_ENCODING_HEIGHT.get().expect("initialized")
+            {
+                stream.append(b);
+            } else {
+                stream.append_raw(b, 1);
+            }
         }
     }
 
@@ -257,7 +268,13 @@ impl BlockHeader {
             stream.append(&self.pos_reference);
         }
         for b in &self.custom {
-            stream.append_raw(b, 1);
+            if self.height
+                >= *FIX_CUSTOM_ENCODING_HEIGHT.get().expect("initialized")
+            {
+                stream.append(b);
+            } else {
+                stream.append_raw(b, 1);
+            }
         }
     }
 
@@ -292,7 +309,13 @@ impl BlockHeader {
         }
 
         for b in &self.custom {
-            stream.append_raw(b, 1);
+            if self.height
+                >= *FIX_CUSTOM_ENCODING_HEIGHT.get().expect("initialized")
+            {
+                stream.append(b);
+            } else {
+                stream.append_raw(b, 1);
+            }
         }
     }
 
@@ -321,7 +344,13 @@ impl BlockHeader {
         for i in
             (15 + rlp_part.pos_reference.is_some() as usize)..r.item_count()?
         {
-            rlp_part.custom.push(r.at(i)?.as_raw().to_vec())
+            if rlp_part.height
+                >= *FIX_CUSTOM_ENCODING_HEIGHT.get().expect("initialized")
+            {
+                rlp_part.custom.push(r.val_at(i)?);
+            } else {
+                rlp_part.custom.push(r.at(i)?.as_raw().to_vec());
+            }
         }
 
         let mut header = BlockHeader {
@@ -579,7 +608,13 @@ impl Decodable for BlockHeader {
         for i in
             (14 + rlp_part.pos_reference.is_some() as usize)..r.item_count()?
         {
-            rlp_part.custom.push(r.at(i)?.as_raw().to_vec())
+            if rlp_part.height
+                >= *FIX_CUSTOM_ENCODING_HEIGHT.get().expect("initialized")
+            {
+                rlp_part.custom.push(r.val_at(i)?);
+            } else {
+                rlp_part.custom.push(r.at(i)?.as_raw().to_vec());
+            }
         }
 
         let mut header = BlockHeader {
