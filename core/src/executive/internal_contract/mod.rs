@@ -15,7 +15,9 @@ pub use self::{
     contracts::cross_space::{is_call_create_sig, is_withdraw_sig},
     impls::{
         admin::suicide,
-        cross_space::{build_bloom_and_recover_phantom, PhantomTransaction},
+        cross_space::{
+            build_bloom_and_recover_phantom, evm_map, PhantomTransaction,
+        },
         params_control::{
             get_settled_param_vote_count, get_settled_pos_staking_for_votes,
             settle_current_votes, AllParamsVoteCount, ParamVoteCount,

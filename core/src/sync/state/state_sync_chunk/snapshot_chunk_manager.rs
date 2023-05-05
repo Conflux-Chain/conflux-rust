@@ -12,6 +12,7 @@ use cfx_storage::{
 };
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
 use network::node_table::NodeId;
+use primitives::MerkleHash;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     fmt::{Debug, Formatter},
@@ -21,7 +22,7 @@ use std::{
 pub struct SnapshotChunkManager {
     pub snapshot_candidate: SnapshotSyncCandidate,
     snapshot_info: SnapshotInfo,
-
+    parent_snapshot_info: Option<SnapshotInfo>,
     active_peers: HashSet<NodeId>,
     pending_chunks: VecDeque<ChunkKey>,
     downloading_chunks: HashMap<ChunkKey, DownloadingChunkStatus>,
@@ -30,14 +31,17 @@ pub struct SnapshotChunkManager {
     config: SnapshotChunkConfig,
 
     restorer: Restorer,
+    intermediate_trie_root_merkle: MerkleHash,
 }
 
 impl SnapshotChunkManager {
     pub fn new_and_start(
         ctx: &Context, snapshot_candidate: SnapshotSyncCandidate,
-        snapshot_info: SnapshotInfo, chunk_boundaries: Vec<Vec<u8>>,
-        chunk_boundary_proofs: Vec<TrieProof>, active_peers: HashSet<NodeId>,
-        config: SnapshotChunkConfig,
+        snapshot_info: SnapshotInfo,
+        parent_snapshot_info: Option<SnapshotInfo>,
+        chunk_boundaries: Vec<Vec<u8>>, chunk_boundary_proofs: Vec<TrieProof>,
+        active_peers: HashSet<NodeId>, config: SnapshotChunkConfig,
+        intermediate_trie_root_merkle: MerkleHash,
     ) -> StorageResult<Self>
     {
         let mut restorer = Restorer::new(
@@ -66,6 +70,7 @@ impl SnapshotChunkManager {
         let mut chunk_manager = Self {
             snapshot_candidate,
             snapshot_info,
+            parent_snapshot_info,
             active_peers,
             pending_chunks: chunks.into(),
             downloading_chunks: Default::default(),
@@ -73,6 +78,7 @@ impl SnapshotChunkManager {
             num_downloaded: 0,
             config,
             restorer,
+            intermediate_trie_root_merkle,
         };
         chunk_manager.request_chunks(ctx);
         Ok(chunk_manager)
@@ -114,6 +120,8 @@ impl SnapshotChunkManager {
             self.restorer.finalize_restoration(
                 ctx.manager.graph.data_man.storage_manager.clone(),
                 self.snapshot_info.clone(),
+                self.parent_snapshot_info.clone(),
+                self.intermediate_trie_root_merkle.clone(),
             )?;
             return Ok(true);
         }

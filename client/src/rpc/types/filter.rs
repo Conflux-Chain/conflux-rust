@@ -177,9 +177,25 @@ impl CfxRpcLogFilter {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RevertTo {
+    pub revert_to: U256,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CfxFilterLog {
     Log(Log),
-    ChainReorg { revert_to: U256 },
+    ChainReorg(RevertTo),
+}
+
+impl Serialize for CfxFilterLog {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        match *self {
+            CfxFilterLog::Log(ref log) => log.serialize(s),
+            CfxFilterLog::ChainReorg(ref revert_to) => revert_to.serialize(s),
+        }
+    }
 }
 
 /// Results of the filter_changes RPC.
@@ -206,11 +222,13 @@ impl Serialize for CfxFilterChanges {
 
 #[cfg(test)]
 mod tests {
+    use crate::rpc::types::{filter::RevertTo, CfxFilterLog, Log};
+
     use super::{
         super::RpcAddress, CfxRpcLogFilter, EpochNumber, VariadicValue,
     };
     use cfx_addr::Network;
-    use cfx_types::{Space, H160, H256, U64};
+    use cfx_types::{Space, H160, H256, U256, U64};
     use primitives::{
         epoch::EpochNumber as PrimitiveEpochNumber,
         filter::{LogFilter as PrimitiveFilter, LogFilterParams},
@@ -489,5 +507,31 @@ mod tests {
             block_hash_filter.into_primitive(),
             Ok(primitive_block_hash_filter)
         );
+    }
+
+    #[test]
+    fn test_serialize_cfx_filter_log() {
+        let mut logs = vec![];
+        let log = Log {
+            address: RpcAddress::try_from_h160(H160::from_str("13990122638b9132ca29c723bdf037f1a891a70c").unwrap(), Network::Test).unwrap(),
+            topics: vec![
+                H256::from_str("a6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc").unwrap(),
+                H256::from_str("4861736852656700000000000000000000000000000000000000000000000000").unwrap(),
+            ],
+            data: vec![].into(),
+            block_hash: Some(H256::from_str("ed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5").unwrap()),
+            epoch_number: Some(U256::from(0x4510c)),
+            transaction_hash: Some(H256::default()),
+            transaction_index: Some(U256::default()),
+            transaction_log_index: Some(1.into()),
+            log_index: Some(U256::from(1)),
+        };
+
+        logs.push(CfxFilterLog::Log(log));
+        logs.push(CfxFilterLog::ChainReorg(RevertTo {
+            revert_to: U256::from(1),
+        }));
+        let serialized = serde_json::to_string(&logs).unwrap();
+        assert_eq!(serialized, r#"[{"address":"CFXTEST:TYPE.USER:AAK3WAKCPSF3CP0MFHDWHTTUG924VERHBUV9NMM3YC","topics":["0xa6697e974e6a320f454390be03f74955e8978f1a6971ea6730542e37b66179bc","0x4861736852656700000000000000000000000000000000000000000000000000"],"data":"0x","blockHash":"0xed76641c68a1c641aee09a94b3b471f4dc0316efe5ac19cf488e2674cf8d05b5","epochNumber":"0x4510c","transactionHash":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionIndex":"0x0","logIndex":"0x1","transactionLogIndex":"0x1"},{"revertTo":"0x1"}]"#);
     }
 }

@@ -1723,6 +1723,7 @@ impl TxReplayer {
                                     - Self::SNAPSHOT_EPOCHS_CAPACITY as u64)
                     },
                      */
+                    0,
                 )?;
         }
         self.block_height.set(block_height + 1);

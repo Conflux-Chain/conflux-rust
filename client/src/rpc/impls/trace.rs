@@ -12,8 +12,9 @@ use crate::{
                 BlockNumber, LocalizedTrace as EthLocalizedTrace,
                 Res as EthRes, TraceFilter as EthTraceFilter,
             },
-            Action as RpcAction, LocalizedTrace as RpcLocalizedTrace,
-            LocalizedTrace, TraceFilter as RpcTraceFilter,
+            Action as RpcAction, EpochNumber as RpcEpochNumber, EpochTrace,
+            LocalizedTrace as RpcLocalizedTrace, LocalizedTrace,
+            TraceFilter as RpcTraceFilter,
         },
         RpcResult,
     },
@@ -23,7 +24,8 @@ use cfx_types::{Space, H256};
 use cfxcore::{
     block_data_manager::DataVersionTuple,
     observer::trace_filter::TraceFilter as PrimitiveTraceFilter,
-    BlockDataManager, ConsensusGraph, SharedConsensusGraph,
+    BlockDataManager, ConsensusGraph, ConsensusGraphTrait,
+    SharedConsensusGraph,
 };
 use jsonrpc_core::{Error as JsonRpcError, Result as JsonRpcResult};
 use primitives::EpochNumber;
@@ -38,6 +40,7 @@ macro_rules! unwrap_or_return {
     };
 }
 
+#[derive(Clone)]
 pub struct TraceHandler {
     data_man: Arc<BlockDataManager>,
     consensus: SharedConsensusGraph,
@@ -193,6 +196,49 @@ impl TraceHandler {
                     })
             }))
     }
+
+    fn epoch_trace_impl(
+        &self, epoch_number: EpochNumber,
+    ) -> RpcResult<EpochTrace> {
+        // Make sure we use the same epoch_hash in two spaces. Using
+        // epoch_number cannot guarantee the atomicity.
+        let epoch_hash = self
+            .consensus
+            .get_hash_from_epoch_number(epoch_number.clone())?;
+
+        Ok(EpochTrace::new(
+            self.space_epoch_traces(Space::Native, epoch_hash)?,
+            to_eth_traces(
+                self.space_epoch_traces(Space::Ethereum, epoch_hash)?,
+            )?,
+        ))
+    }
+
+    fn space_epoch_traces(
+        &self, space: Space, epoch_hash: H256,
+    ) -> RpcResult<Vec<LocalizedTrace>> {
+        let consensus = self.consensus_graph();
+        let epoch = consensus
+            .get_block_epoch_number(&epoch_hash)
+            .ok_or(JsonRpcError::internal_error())?;
+        let mut trace_filter = PrimitiveTraceFilter::space_filter(space);
+        trace_filter.from_epoch = EpochNumber::Number(epoch);
+        trace_filter.to_epoch = EpochNumber::Number(epoch);
+        let block_traces = consensus.collect_traces_single_epoch(
+            &trace_filter,
+            epoch,
+            epoch_hash,
+        )?;
+        let traces = consensus
+            .filter_block_traces(&trace_filter, block_traces)?
+            .into_iter()
+            .map(|trace| {
+                RpcLocalizedTrace::from(trace, self.network)
+                    .expect("Local address conversion should succeed")
+            })
+            .collect();
+        Ok(traces)
+    }
 }
 
 impl Trace for TraceHandler {
@@ -213,6 +259,10 @@ impl Trace for TraceHandler {
         &self, tx_hash: H256,
     ) -> JsonRpcResult<Option<Vec<LocalizedTrace>>> {
         into_jsonrpc_result(self.transaction_trace_impl(&tx_hash))
+    }
+
+    fn epoch_traces(&self, epoch: RpcEpochNumber) -> JsonRpcResult<EpochTrace> {
+        into_jsonrpc_result(self.epoch_trace_impl(epoch.into_primitive()))
     }
 }
 
@@ -305,45 +355,7 @@ impl EthTrace for EthTraceHandler {
                 Some(traces) => traces,
             };
 
-        let mut eth_traces: Vec<EthLocalizedTrace> = Vec::new();
-        let mut stack_index = Vec::new();
-        let mut sublen_stack = Vec::new();
-
-        for trace in traces {
-            match &trace.action {
-                RpcAction::Call(_) | RpcAction::Create(_) => {
-                    if let Some(parent_subtraces) = sublen_stack.last_mut() {
-                        *parent_subtraces += 1;
-                    }
-
-                    sublen_stack.push(0);
-                    stack_index.push(eth_traces.len());
-
-                    eth_traces.push(trace.try_into().map_err(|e| {
-                        error!("eth trace conversion error: {:?}", e);
-                        JsonRpcError::internal_error()
-                    })?);
-                }
-                RpcAction::CallResult(_) | RpcAction::CreateResult(_) => {
-                    let index = stack_index
-                        .pop()
-                        .ok_or(JsonRpcError::internal_error())?;
-
-                    eth_traces[index].set_result(trace.action)?;
-
-                    eth_traces[index].subtraces =
-                        sublen_stack.pop().expect("stack_index matches");
-                }
-                RpcAction::InternalTransferAction(_) => {}
-            }
-        }
-
-        if !stack_index.is_empty() {
-            error!("eth::filter_traces: actions left unmatched");
-            bail!(JsonRpcError::internal_error());
-        }
-
-        Ok(Some(eth_traces))
+        Ok(Some(to_eth_traces(traces)?))
     }
 
     fn transaction_traces(
@@ -425,4 +437,47 @@ impl EthTrace for EthTraceHandler {
 
         Ok(Some(eth_traces))
     }
+}
+
+fn to_eth_traces(
+    traces: Vec<LocalizedTrace>,
+) -> JsonRpcResult<Vec<EthLocalizedTrace>> {
+    let mut eth_traces: Vec<EthLocalizedTrace> = Vec::new();
+    let mut stack_index = Vec::new();
+    let mut sublen_stack = Vec::new();
+
+    for trace in traces {
+        match &trace.action {
+            RpcAction::Call(_) | RpcAction::Create(_) => {
+                if let Some(parent_subtraces) = sublen_stack.last_mut() {
+                    *parent_subtraces += 1;
+                }
+
+                sublen_stack.push(0);
+                stack_index.push(eth_traces.len());
+
+                eth_traces.push(trace.try_into().map_err(|e| {
+                    error!("eth trace conversion error: {:?}", e);
+                    JsonRpcError::internal_error()
+                })?);
+            }
+            RpcAction::CallResult(_) | RpcAction::CreateResult(_) => {
+                let index =
+                    stack_index.pop().ok_or(JsonRpcError::internal_error())?;
+
+                eth_traces[index].set_result(trace.action)?;
+
+                eth_traces[index].subtraces =
+                    sublen_stack.pop().expect("stack_index matches");
+            }
+            RpcAction::InternalTransferAction(_) => {}
+        }
+    }
+
+    if !stack_index.is_empty() {
+        error!("eth::filter_traces: actions left unmatched");
+        bail!(JsonRpcError::internal_error());
+    }
+
+    Ok(eth_traces)
 }

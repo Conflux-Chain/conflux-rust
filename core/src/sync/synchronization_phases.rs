@@ -359,6 +359,8 @@ impl SynchronizationPhaseTrait for CatchUpCheckpointPhase {
             .get_cur_consensus_era_genesis_hash();
         let epoch_to_sync = sync_handler.graph.consensus.get_to_sync_epoch_id();
 
+        // FIXME: what happens if the snapshot before epoch_to_sync is
+        // corrupted?
         if let Some(commitment) = sync_handler
             .graph
             .data_man

@@ -14,7 +14,7 @@ use crate::rpc::{
         MAX_BLOCK_HISTORY_SIZE,
     },
     traits::cfx::CfxFilter,
-    types::{CfxFilterChanges, CfxFilterLog, CfxRpcLogFilter, Log},
+    types::{CfxFilterChanges, CfxFilterLog, CfxRpcLogFilter, Log, RevertTo},
 };
 use cfx_addr::Network;
 use cfx_types::{Space, H128, H256};
@@ -514,9 +514,9 @@ impl<T: Filterable + Send + Sync + 'static> CfxFilter for T {
                 }
 
                 if reorg_len > 0 {
-                    logs.push(CfxFilterLog::ChainReorg {
+                    logs.push(CfxFilterLog::ChainReorg(RevertTo {
                         revert_to: epochs.first().unwrap().0.into(),
-                    });
+                    }));
                 }
                 let data_man =
                     self.consensus_graph().get_data_manager().clone();

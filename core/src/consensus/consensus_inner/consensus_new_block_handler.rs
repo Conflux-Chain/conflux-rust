@@ -24,6 +24,7 @@ use cfx_storage::{storage_db::SnapshotKeptToProvideSyncStatus, StateIndex};
 use cfx_types::H256;
 use hibitset::{BitSet, BitSetLike, DrainableBitSet};
 use parking_lot::Mutex;
+use primitives::MERKLE_NULL_NODE;
 use std::{
     cmp::{max, min},
     collections::{BinaryHeap, HashMap, HashSet, VecDeque},
@@ -2016,8 +2017,25 @@ impl ConsensusNewBlockHandler {
             }
         }
 
+        if let Some(height) = self
+            .conf
+            .inner_conf
+            .force_recompute_height_during_construct_pivot
+        {
+            if height > inner.cur_era_stable_height {
+                let pivot_idx = inner.height_to_pivot_index(height);
+                debug!(
+                    "force recompute height during constructing pivot {}",
+                    pivot_idx
+                );
+                force_compute_index = min(force_compute_index, pivot_idx - 1);
+            }
+        }
+
         let mut pre_epoch_state_exist = true;
         let confirmed_epoch_num = meter.get_confirmed_epoch_num();
+        let mut previous_pivot_hash = start_hash;
+        let mut previous_compute = false;
 
         for pivot_index in start_pivot_index + 1..end_index {
             let pivot_arena_index = inner.pivot_chain[pivot_index];
@@ -2105,6 +2123,45 @@ impl ConsensusNewBlockHandler {
                 let reward_execution_info = self
                     .executor
                     .get_reward_execution_info(inner, pivot_arena_index);
+
+                let storage_manager =
+                    inner.data_man.storage_manager.get_storage_manager();
+                if !storage_manager
+                    .storage_conf
+                    .keep_snapshot_before_stable_checkpoint
+                    && !previous_compute
+                {
+                    let intermediate_trie_root_merkle = match *self
+                        .data_man
+                        .get_epoch_execution_commitment(&previous_pivot_hash)
+                    {
+                        Some(commitment) => {
+                            if height
+                                % storage_manager.get_snapshot_epoch_count()
+                                    as u64
+                                == 1
+                            {
+                                commitment
+                                    .state_root_with_aux_info
+                                    .state_root
+                                    .delta_root
+                            } else {
+                                commitment
+                                    .state_root_with_aux_info
+                                    .state_root
+                                    .intermediate_delta_root
+                            }
+                        }
+                        None => MERKLE_NULL_NODE,
+                    };
+
+                    debug!(
+                        "previous pivot hash {:?} intermediate trie root merkle for next pivot {:?}", previous_pivot_hash, intermediate_trie_root_merkle
+                    );
+                    *storage_manager.intermediate_trie_root_merkle.write() =
+                        Some(intermediate_trie_root_merkle);
+                }
+
                 self.executor.compute_epoch(
                     EpochExecutionTask::new(
                         pivot_arena_index,
@@ -2146,7 +2203,12 @@ impl ConsensusNewBlockHandler {
                             column!()
                         ));
                 }
+                previous_compute = true;
+            } else {
+                previous_compute = false;
             }
+
+            previous_pivot_hash = pivot_hash;
         }
     }
 

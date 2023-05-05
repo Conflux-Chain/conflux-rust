@@ -34,6 +34,7 @@ use futures::{
 };
 use network::node_table::NodeId;
 use std::{
+    collections::HashSet,
     sync::Arc,
     time::{Duration, SystemTime},
 };
@@ -61,6 +62,7 @@ pub(crate) async fn coordinator(
         LogEvent::Start
     ));
     let mut scheduled_broadcasts = FuturesUnordered::new();
+    let mut broadcasting_peers = HashSet::new();
 
     // Use a BoundedExecutor to restrict only `workers_available` concurrent
     // worker tasks that can process incoming transactions.
@@ -86,15 +88,15 @@ pub(crate) async fn coordinator(
             },
             (peer, backoff) = scheduled_broadcasts.select_next_some() => {
                 // diem_debug!("scheduled_broadcasts");
-                tasks::execute_broadcast(peer, backoff, &mut smp, &mut scheduled_broadcasts, executor.clone());
+                tasks::execute_broadcast(peer, backoff, &mut smp, &mut scheduled_broadcasts, &mut broadcasting_peers, executor.clone());
             },
             (peer, event) = network_receivers.network_events.select_next_some() => {
                 diem_debug!("network_events to scheduled_broadcasts");
                 match event {
                         NetworkEvent::PeerConnected => {
-                        if smp.peer_manager.add_peer(peer) {
+                        if smp.peer_manager.add_peer(peer) && !broadcasting_peers.contains(&peer) {
                             // Only spawn tx broadcast for new peers.
-                            tasks::execute_broadcast(peer, true, &mut smp, &mut scheduled_broadcasts, executor.clone());
+                            tasks::execute_broadcast(peer, true, &mut smp, &mut scheduled_broadcasts,&mut broadcasting_peers, executor.clone());
                         }
                     }
                     NetworkEvent::PeerDisconnected => {
