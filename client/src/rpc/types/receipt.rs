@@ -51,7 +51,8 @@ pub struct Receipt {
     pub to: Option<RpcAddress>,
     /// The gas used in the execution of the transaction.
     pub gas_used: U256,
-    /// The total gas used (not gas charged) in the block following execution of the transaction.
+    /// The total gas used (not gas charged) in the block following execution
+    /// of the transaction.
     pub accumulated_gas_used: Option<U256>,
     /// The gas fee charged in the execution of the transaction.
     pub gas_fee: U256,
@@ -101,32 +102,11 @@ impl Receipt {
             ..
         } = receipt;
 
-        let (address, action, space) = match transaction.unsigned
-    {
-        Transaction::Native(ref unsigned) => {
-            if Action::Create == unsigned.action
-            && outcome_status == TransactionOutcome::Success
-            {
-                let (created_address, _) = contract_address(
-                    CreateContractAddress::FromSenderNonceAndCodeHash,
-                    block_number.into(),
-                    &transaction.sender.with_native_space(),
-                    &unsigned.nonce,
-                    &unsigned.data,
-                );
-                let address = Some(RpcAddress::try_from_h160(
-                    created_address.address,
-                    network,
-                )?);
-                (address, unsigned.action.clone(), Space::Native)
-            } else {
-                (None, unsigned.action.clone(), Space::Native)
-            }
-        }
-        Transaction::Ethereum(ref unsigned) =>
-        {
-            if include_eth_receipt {
-                if Action::Create == unsigned.action && outcome_status == TransactionOutcome::Success {
+        let (address, action, space) = match transaction.unsigned {
+            Transaction::Native(ref unsigned) => {
+                if Action::Create == unsigned.action
+                    && outcome_status == TransactionOutcome::Success
+                {
                     let (created_address, _) = contract_address(
                         CreateContractAddress::FromSenderNonceAndCodeHash,
                         block_number.into(),
@@ -138,18 +118,36 @@ impl Receipt {
                         created_address.address,
                         network,
                     )?);
-                    (address, unsigned.action.clone(), Space::Ethereum)
+                    (address, unsigned.action.clone(), Space::Native)
                 } else {
-                    (None, unsigned.action.clone(), Space::Ethereum)
+                    (None, unsigned.action.clone(), Space::Native)
                 }
-        } else {
-        bail!(format!("Does not support EIP-155 transaction in Conflux space RPC. get_receipt for tx: {:?}",transaction));
-        }
-
-        }
-
-    };
-        
+            }
+            Transaction::Ethereum(ref unsigned) => {
+                if include_eth_receipt {
+                    if Action::Create == unsigned.action
+                        && outcome_status == TransactionOutcome::Success
+                    {
+                        let (created_address, _) = contract_address(
+                            CreateContractAddress::FromSenderNonceAndCodeHash,
+                            block_number.into(),
+                            &transaction.sender.with_native_space(),
+                            &unsigned.nonce,
+                            &unsigned.data,
+                        );
+                        let address = Some(RpcAddress::try_from_h160(
+                            created_address.address,
+                            network,
+                        )?);
+                        (address, unsigned.action.clone(), Space::Ethereum)
+                    } else {
+                        (None, unsigned.action.clone(), Space::Ethereum)
+                    }
+                } else {
+                    bail!(format!("Does not support EIP-155 transaction in Conflux space RPC. get_receipt for tx: {:?}",transaction));
+                }
+            }
+        };
 
         // this is an array, but it will only have at most one element:
         // the storage collateral of the sender address.
@@ -184,7 +182,13 @@ impl Receipt {
             contract_created: address,
             logs: logs
                 .into_iter()
-                .filter(|l| if include_eth_receipt {true } else {l.space == Space::Native})
+                .filter(|l| {
+                    if include_eth_receipt {
+                        true
+                    } else {
+                        l.space == Space::Native
+                    }
+                })
                 .map(|l| Log::try_from(l, network))
                 .collect::<Result<_, _>>()?,
             logs_bloom: log_bloom,

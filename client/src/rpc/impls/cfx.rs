@@ -769,8 +769,10 @@ impl RpcImpl {
     }
 
     fn construct_rpc_receipt(
-        &self, tx_index: TransactionIndex, exec_info: &BlockExecInfo,include_eth_receipt: bool,
-    ) -> RpcResult<Option<RpcReceipt>> {
+        &self, tx_index: TransactionIndex, exec_info: &BlockExecInfo,
+        include_eth_receipt: bool,
+    ) -> RpcResult<Option<RpcReceipt>>
+    {
         let id = tx_index.real_index;
 
         if id >= exec_info.block.transactions.len()
@@ -782,7 +784,9 @@ impl RpcImpl {
 
         let tx = &exec_info.block.transactions[id];
 
-        if !include_eth_receipt && (tx.space() == Space::Ethereum || tx_index.is_phantom) {
+        if !include_eth_receipt
+            && (tx.space() == Space::Ethereum || tx_index.is_phantom)
+        {
             return Ok(None);
         }
 
@@ -840,7 +844,8 @@ impl RpcImpl {
                 Some(res) => res,
             };
 
-        let receipt = self.construct_rpc_receipt(tx_index, &exec_info, false)?;
+        let receipt =
+            self.construct_rpc_receipt(tx_index, &exec_info, false)?;
         if let Some(r) = &receipt {
             // A skipped transaction is not available to clients if accessed by
             // its hash.
@@ -854,8 +859,10 @@ impl RpcImpl {
     }
 
     fn prepare_block_receipts(
-        &self, block_hash: H256, pivot_assumption: H256, include_eth_receipt: bool,
-    ) -> RpcResult<Option<Vec<RpcReceipt>>> {
+        &self, block_hash: H256, pivot_assumption: H256,
+        include_eth_receipt: bool,
+    ) -> RpcResult<Option<Vec<RpcReceipt>>>
+    {
         let exec_info = match self.get_block_execution_info(&block_hash)? {
             None => return Ok(None), // not executed
             Some(res) => res,
@@ -876,7 +883,13 @@ impl RpcImpl {
             .transactions
             .iter()
             .enumerate()
-            .filter(|(_, tx)| if include_eth_receipt { true } else {tx.space() == Space::Native})
+            .filter(|(_, tx)| {
+                if include_eth_receipt {
+                    true
+                } else {
+                    tx.space() == Space::Native
+                }
+            })
             .enumerate();
 
         for (new_index, (original_index, _)) in iter {
@@ -1626,7 +1639,11 @@ impl RpcImpl {
 
         for h in hashes {
             epoch_receipts.push(
-                match self.prepare_block_receipts(h, pivot_hash, include_eth_receipt.unwrap_or(false))? {
+                match self.prepare_block_receipts(
+                    h,
+                    pivot_hash,
+                    include_eth_receipt.unwrap_or(false),
+                )? {
                     None => return Ok(None), // not executed
                     Some(rs) => rs,
                 },
