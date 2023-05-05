@@ -96,7 +96,6 @@ impl Receipt {
             storage_collateralized,
             storage_released,
             storage_sponsor_paid,
-            ..
         } = receipt;
 
         let mut address = None;

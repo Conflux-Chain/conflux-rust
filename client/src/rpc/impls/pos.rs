@@ -639,6 +639,19 @@ impl PosHandler {
             }
         }
     }
+
+    fn ledger_info_by_block_number(
+        &self, block_number: BlockNumber,
+    ) -> Option<LedgerInfoWithSignatures> {
+        // TODO: Get hash without getting the block.
+        let block_hash = self.block_by_number(block_number)?.hash;
+        self.pos_handler
+            .pos_ledger_db()
+            .get_ledger_info_by_voted_block(
+                &HashValue::from_slice(block_hash.as_bytes()).unwrap(),
+            )
+            .ok()
+    }
 }
 
 fn map_votes(list: &StatusList) -> Vec<VotePowerState> {
@@ -710,6 +723,14 @@ impl Pos for PosHandler {
     ) -> JsonRpcResult<Option<RpcLedgerInfoWithSignatures>> {
         Ok(self
             .ledger_info_by_epoch(epoch.as_u64())
+            .map(|l| (&l).into()))
+    }
+
+    fn pos_get_ledger_info_by_block_number(
+        &self, number: BlockNumber,
+    ) -> JsonRpcResult<Option<RpcLedgerInfoWithSignatures>> {
+        Ok(self
+            .ledger_info_by_block_number(number)
             .map(|l| (&l).into()))
     }
 
