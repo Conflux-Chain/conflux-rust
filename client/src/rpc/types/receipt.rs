@@ -53,6 +53,7 @@ pub struct Receipt {
     pub gas_used: U256,
     /// The total gas used (not gas charged) in the block following execution
     /// of the transaction.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub accumulated_gas_used: Option<U256>,
     /// The gas fee charged in the execution of the transaction.
     pub gas_fee: U256,
@@ -78,6 +79,9 @@ pub struct Receipt {
     pub storage_collateralized: U64,
     // Storage collaterals released during the execution of the transaction.
     pub storage_released: Vec<StorageChange>,
+    /// Transaction space.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub space: Option<Space>,
 }
 
 impl Receipt {
@@ -87,6 +91,7 @@ impl Receipt {
         epoch_number: Option<u64>, block_number: u64,
         maybe_state_root: Option<H256>, tx_exec_error_msg: Option<String>,
         network: Network, include_eth_receipt: bool,
+        include_accumulated_gas_used: bool,
     ) -> Result<Receipt, String>
     {
         let PrimitiveReceipt {
@@ -129,9 +134,9 @@ impl Receipt {
                         && outcome_status == TransactionOutcome::Success
                     {
                         let (created_address, _) = contract_address(
-                            CreateContractAddress::FromSenderNonceAndCodeHash,
-                            block_number.into(),
-                            &transaction.sender.with_native_space(),
+                            CreateContractAddress::FromSenderNonce,
+                            0.into(),
+                            &transaction.sender.with_evm_space(),
                             &unsigned.nonce,
                             &unsigned.data,
                         );
@@ -169,7 +174,11 @@ impl Receipt {
             ),
             block_hash: transaction_index.block_hash.into(),
             gas_used: (accumulated_gas_used - prior_gas_used).into(),
-            accumulated_gas_used: Some(accumulated_gas_used.into()),
+            accumulated_gas_used: if include_accumulated_gas_used {
+                accumulated_gas_used.into()
+            } else {
+                None
+            },
             gas_fee: gas_fee.into(),
             from: RpcAddress::try_from_h160(transaction.sender, network)?,
             to: match &action {
@@ -203,6 +212,11 @@ impl Receipt {
                 .into_iter()
                 .map(|sc| StorageChange::try_from(sc, network))
                 .collect::<Result<_, _>>()?,
+            space: if include_eth_receipt {
+                Some(space)
+            } else {
+                None
+            },
         })
     }
 }

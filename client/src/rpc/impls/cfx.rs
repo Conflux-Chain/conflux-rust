@@ -694,6 +694,7 @@ impl RpcImpl {
                         tx_exec_error_msg,
                         *self.sync.network.get_network_type(),
                         false,
+                        false,
                     )?)
                 }
             };
@@ -770,7 +771,7 @@ impl RpcImpl {
 
     fn construct_rpc_receipt(
         &self, tx_index: TransactionIndex, exec_info: &BlockExecInfo,
-        include_eth_receipt: bool,
+        include_eth_receipt: bool, include_accumulated_gas_used: bool,
     ) -> RpcResult<Option<RpcReceipt>>
     {
         let id = tx_index.real_index;
@@ -814,6 +815,7 @@ impl RpcImpl {
             tx_exec_error_msg,
             *self.sync.network.get_network_type(),
             include_eth_receipt,
+            include_accumulated_gas_used,
         )?;
 
         Ok(Some(receipt))
@@ -845,7 +847,7 @@ impl RpcImpl {
             };
 
         let receipt =
-            self.construct_rpc_receipt(tx_index, &exec_info, false)?;
+            self.construct_rpc_receipt(tx_index, &exec_info, false, false)?;
         if let Some(r) = &receipt {
             // A skipped transaction is not available to clients if accessed by
             // its hash.
@@ -902,6 +904,7 @@ impl RpcImpl {
                 },
                 &exec_info,
                 include_eth_receipt,
+                true,
             )? {
                 rpc_receipts.push(receipt);
             }
@@ -1873,6 +1876,7 @@ impl RpcImpl {
                                                     )
                                                             },
                                                             network,
+                                                            false,
                                                             false,
                                                         )?,
                                                     ),
