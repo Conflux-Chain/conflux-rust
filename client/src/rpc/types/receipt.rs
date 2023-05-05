@@ -51,6 +51,8 @@ pub struct Receipt {
     pub to: Option<RpcAddress>,
     /// The gas used in the execution of the transaction.
     pub gas_used: U256,
+    /// The total gas used (not gas charged) in the block following execution of the transaction.
+    pub accumulated_gas_used: Option<U256>,
     /// The gas fee charged in the execution of the transaction.
     pub gas_fee: U256,
     /// Address of contract created if the transaction action is create.
@@ -83,7 +85,7 @@ impl Receipt {
         transaction_index: TransactionIndex, prior_gas_used: U256,
         epoch_number: Option<u64>, block_number: u64,
         maybe_state_root: Option<H256>, tx_exec_error_msg: Option<String>,
-        network: Network,
+        network: Network, include_eth_receipt: bool,
     ) -> Result<Receipt, String>
     {
         let PrimitiveReceipt {
@@ -99,29 +101,55 @@ impl Receipt {
             ..
         } = receipt;
 
-        let mut address = None;
-        let unsigned = if let Transaction::Native(ref unsigned) =
-            transaction.unsigned
-        {
-            unsigned
-        } else {
-            bail!(format!("Does not support EIP-155 transaction in Conflux space RPC. get_receipt for tx: {:?}",transaction));
-        };
-        if Action::Create == unsigned.action
+        let (address, action, space) = match transaction.unsigned
+    {
+        Transaction::Native(ref unsigned) => {
+            if Action::Create == unsigned.action
             && outcome_status == TransactionOutcome::Success
-        {
-            let (created_address, _) = contract_address(
-                CreateContractAddress::FromSenderNonceAndCodeHash,
-                block_number.into(),
-                &transaction.sender.with_native_space(),
-                &unsigned.nonce,
-                &unsigned.data,
-            );
-            address = Some(RpcAddress::try_from_h160(
-                created_address.address,
-                network,
-            )?);
+            {
+                let (created_address, _) = contract_address(
+                    CreateContractAddress::FromSenderNonceAndCodeHash,
+                    block_number.into(),
+                    &transaction.sender.with_native_space(),
+                    &unsigned.nonce,
+                    &unsigned.data,
+                );
+                let address = Some(RpcAddress::try_from_h160(
+                    created_address.address,
+                    network,
+                )?);
+                (address, unsigned.action.clone(), Space::Native)
+            } else {
+                (None, unsigned.action.clone(), Space::Native)
+            }
         }
+        Transaction::Ethereum(ref unsigned) =>
+        {
+            if include_eth_receipt {
+                if Action::Create == unsigned.action && outcome_status == TransactionOutcome::Success {
+                    let (created_address, _) = contract_address(
+                        CreateContractAddress::FromSenderNonceAndCodeHash,
+                        block_number.into(),
+                        &transaction.sender.with_native_space(),
+                        &unsigned.nonce,
+                        &unsigned.data,
+                    );
+                    let address = Some(RpcAddress::try_from_h160(
+                        created_address.address,
+                        network,
+                    )?);
+                    (address, unsigned.action.clone(), Space::Ethereum)
+                } else {
+                    (None, unsigned.action.clone(), Space::Ethereum)
+                }
+        } else {
+        bail!(format!("Does not support EIP-155 transaction in Conflux space RPC. get_receipt for tx: {:?}",transaction));
+        }
+
+        }
+
+    };
+        
 
         // this is an array, but it will only have at most one element:
         // the storage collateral of the sender address.
@@ -143,19 +171,20 @@ impl Receipt {
             ),
             block_hash: transaction_index.block_hash.into(),
             gas_used: (accumulated_gas_used - prior_gas_used).into(),
+            accumulated_gas_used: Some(accumulated_gas_used.into()),
             gas_fee: gas_fee.into(),
             from: RpcAddress::try_from_h160(transaction.sender, network)?,
-            to: match &unsigned.action {
+            to: match &action {
                 Action::Create => None,
                 Action::Call(address) => {
                     Some(RpcAddress::try_from_h160(address.clone(), network)?)
                 }
             },
-            outcome_status: U64::from(outcome_status.in_space(Space::Native)),
+            outcome_status: U64::from(outcome_status.in_space(space)),
             contract_created: address,
             logs: logs
                 .into_iter()
-                .filter(|l| l.space == Space::Native)
+                .filter(|l| if include_eth_receipt {true } else {l.space == Space::Native})
                 .map(|l| Log::try_from(l, network))
                 .collect::<Result<_, _>>()?,
             logs_bloom: log_bloom,
