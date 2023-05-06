@@ -198,7 +198,7 @@ impl Receipt {
                         l.space == Space::Native
                     }
                 })
-                .map(|l| Log::try_from(l, network))
+                .map(|l| Log::try_from(l, network, include_eth_receipt))
                 .collect::<Result<_, _>>()?,
             logs_bloom: log_bloom,
             state_root: maybe_state_root
