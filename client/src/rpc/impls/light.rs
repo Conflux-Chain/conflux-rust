@@ -717,6 +717,8 @@ impl RpcImpl {
                 // Can not offer error_message from light node.
                 None,
                 *light.get_network_type(),
+                false,
+                false,
             )?;
 
             Ok(Some(receipt))
@@ -1250,7 +1252,7 @@ impl LocalRpc for DebugRpcImpl {
     not_supported! {
         fn consensus_graph_state(&self) -> JsonRpcResult<ConsensusGraphStates>;
         fn current_sync_phase(&self) -> JsonRpcResult<String>;
-        fn epoch_receipts(&self, epoch: BlockHashOrEpochNumber) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
+        fn epoch_receipts(&self, epoch: BlockHashOrEpochNumber, include_eth_recepits: Option<bool>) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
         fn epoch_receipt_proof_by_transaction(&self, block_hash: H256, tx_index_in_block: usize) -> JsonRpcResult<Option<String>>;
         fn sign_transaction(&self, tx: SendTxRequest, password: Option<String>) -> JsonRpcResult<String>;
         fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
