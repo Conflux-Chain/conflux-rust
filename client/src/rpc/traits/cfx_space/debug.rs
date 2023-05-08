@@ -110,6 +110,11 @@ pub trait LocalRpc {
         &self, epoch: BlockHashOrEpochNumber,
     ) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
 
+    #[rpc(name = "cfx_getEpochReceiptProofByTransaction")]
+    fn epoch_receipt_proof_by_transaction(
+        &self, block_hash: H256, tx_index_in_block: usize,
+    ) -> JsonRpcResult<Option<String>>;
+
     #[rpc(name = "cfx_getTransactionsByEpoch")]
     fn transactions_by_epoch(
         &self, epoch_number: U64,
