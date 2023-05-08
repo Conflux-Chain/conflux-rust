@@ -1682,18 +1682,12 @@ impl RpcImpl {
                 }
             };
 
-        let pivot =
-            match self.consensus.get_hash_from_epoch_number(epoch_number) {
-                Ok(hs) => hs,
-                Err(e) => {
-                    bail!(invalid_params(
-                        "block hash",
-                        format!("Unable to find pivot for {}: {}", epoch, e)
-                    ));
-                }
-            };
+        let pivot = epoch_hashes
+            .last()
+            .expect("epoch hashes should be not empty")
+            .clone();
 
-        let receipts = epoch_hashes
+        let epoch_receipts = epoch_hashes
             .into_iter()
             .map(|h| {
                 self.consensus
@@ -1702,7 +1696,7 @@ impl RpcImpl {
                         &h, &pivot, false, /* update_pivot_assumption */
                         false, /* update_cache */
                     )
-                    .map(|res| (*res.block_receipts).clone())
+                    .map(|res| Arc::new((*res.block_receipts).clone()))
                     .ok_or_else(|| {
                         invalid_params(
                             "block hash",
@@ -1711,9 +1705,6 @@ impl RpcImpl {
                     })
             })
             .collect::<Result<Vec<_>, _>>()?;
-
-        let epoch_receipts =
-            receipts.iter().cloned().map(Arc::new).collect::<Vec<_>>();
 
         let epoch_receipt_proof = compute_epoch_receipt_proof(
             &epoch_receipts,
