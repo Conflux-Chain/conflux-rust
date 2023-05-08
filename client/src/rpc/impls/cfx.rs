@@ -693,6 +693,8 @@ impl RpcImpl {
                         maybe_state_root,
                         tx_exec_error_msg,
                         *self.sync.network.get_network_type(),
+                        false,
+                        false,
                     )?)
                 }
             };
@@ -769,7 +771,9 @@ impl RpcImpl {
 
     fn construct_rpc_receipt(
         &self, tx_index: TransactionIndex, exec_info: &BlockExecInfo,
-    ) -> RpcResult<Option<RpcReceipt>> {
+        include_eth_receipt: bool, include_accumulated_gas_used: bool,
+    ) -> RpcResult<Option<RpcReceipt>>
+    {
         let id = tx_index.real_index;
 
         if id >= exec_info.block.transactions.len()
@@ -781,7 +785,9 @@ impl RpcImpl {
 
         let tx = &exec_info.block.transactions[id];
 
-        if tx.space() == Space::Ethereum || tx_index.is_phantom {
+        if !include_eth_receipt
+            && (tx.space() == Space::Ethereum || tx_index.is_phantom)
+        {
             return Ok(None);
         }
 
@@ -808,6 +814,8 @@ impl RpcImpl {
             exec_info.maybe_state_root.clone(),
             tx_exec_error_msg,
             *self.sync.network.get_network_type(),
+            include_eth_receipt,
+            include_accumulated_gas_used,
         )?;
 
         Ok(Some(receipt))
@@ -838,7 +846,8 @@ impl RpcImpl {
                 Some(res) => res,
             };
 
-        let receipt = self.construct_rpc_receipt(tx_index, &exec_info)?;
+        let receipt =
+            self.construct_rpc_receipt(tx_index, &exec_info, false, false)?;
         if let Some(r) = &receipt {
             // A skipped transaction is not available to clients if accessed by
             // its hash.
@@ -853,7 +862,9 @@ impl RpcImpl {
 
     fn prepare_block_receipts(
         &self, block_hash: H256, pivot_assumption: H256,
-    ) -> RpcResult<Option<Vec<RpcReceipt>>> {
+        include_eth_receipt: bool,
+    ) -> RpcResult<Option<Vec<RpcReceipt>>>
+    {
         let exec_info = match self.get_block_execution_info(&block_hash)? {
             None => return Ok(None), // not executed
             Some(res) => res,
@@ -874,7 +885,13 @@ impl RpcImpl {
             .transactions
             .iter()
             .enumerate()
-            .filter(|(_, tx)| tx.space() == Space::Native)
+            .filter(|(_, tx)| {
+                if include_eth_receipt {
+                    true
+                } else {
+                    tx.space() == Space::Native
+                }
+            })
             .enumerate();
 
         for (new_index, (original_index, _)) in iter {
@@ -886,6 +903,8 @@ impl RpcImpl {
                     rpc_index: Some(new_index),
                 },
                 &exec_info,
+                include_eth_receipt,
+                true,
             )? {
                 rpc_receipts.push(receipt);
             }
@@ -1575,7 +1594,7 @@ impl RpcImpl {
     }
 
     fn epoch_receipts(
-        &self, epoch: BlockHashOrEpochNumber,
+        &self, epoch: BlockHashOrEpochNumber, include_eth_receipt: Option<bool>,
     ) -> RpcResult<Option<Vec<Vec<RpcReceipt>>>> {
         info!("RPC Request: cfx_getEpochReceipts({:?})", epoch);
 
@@ -1623,7 +1642,11 @@ impl RpcImpl {
 
         for h in hashes {
             epoch_receipts.push(
-                match self.prepare_block_receipts(h, pivot_hash)? {
+                match self.prepare_block_receipts(
+                    h,
+                    pivot_hash,
+                    include_eth_receipt.unwrap_or(false),
+                )? {
                     None => return Ok(None), // not executed
                     Some(rs) => rs,
                 },
@@ -1853,6 +1876,8 @@ impl RpcImpl {
                                                     )
                                                             },
                                                             network,
+                                                            false,
+                                                            false,
                                                         )?,
                                                     ),
                                                 ),
@@ -2102,7 +2127,7 @@ impl LocalRpc for LocalRpcImpl {
         to self.rpc_impl {
             fn current_sync_phase(&self) -> JsonRpcResult<String>;
             fn consensus_graph_state(&self) -> JsonRpcResult<ConsensusGraphStates>;
-            fn epoch_receipts(&self, epoch: BlockHashOrEpochNumber) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
+            fn epoch_receipts(&self, epoch: BlockHashOrEpochNumber, include_eth_recepits: Option<bool>,) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
             fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
             fn send_transaction(
                 &self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<H256>;
