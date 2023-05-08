@@ -18,6 +18,7 @@ use cfxcore::{
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     state_exposer::STATE_EXPOSER,
+    verification::compute_epoch_receipt_proof,
     vm, ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
@@ -1660,6 +1661,84 @@ impl RpcImpl {
         Ok(Some(epoch_receipts))
     }
 
+    fn epoch_receipt_proof_by_transaction(
+        &self, block_hash: H256, tx_index_in_block: usize,
+    ) -> JsonRpcResult<Option<String>> {
+        let epoch = match self.consensus.get_block_epoch_number(&block_hash) {
+            Some(epoch) => epoch,
+            None => {
+                bail!(invalid_params(
+                    "block hash",
+                    format!(
+                        "Unable to get epoch number for block {:?}",
+                        block_hash
+                    )
+                ));
+            }
+        };
+
+        let epoch_number = primitives::EpochNumber::Number(epoch);
+        let epoch_hashes = match self
+            .consensus
+            .get_block_hashes_by_epoch(epoch_number.clone())
+        {
+            Ok(hs) => hs,
+            Err(e) => {
+                bail!(invalid_params(
+                    "block hash",
+                    format!("Unable to find epoch hashes for {}: {}", epoch, e)
+                ));
+            }
+        };
+
+        let block_index_in_epoch =
+            match epoch_hashes.iter().position(|h| *h == block_hash) {
+                Some(id) => id,
+                None => {
+                    bail!(invalid_params(
+                        "block hash",
+                        format!(
+                            "Unable to find block {:?} in epoch {}",
+                            block_hash, epoch
+                        )
+                    ));
+                }
+            };
+
+        let pivot = epoch_hashes
+            .last()
+            .expect("epoch hashes should be not empty")
+            .clone();
+
+        let epoch_receipts = epoch_hashes
+            .into_iter()
+            .map(|h| {
+                self.consensus
+                    .get_data_manager()
+                    .block_execution_result_by_hash_with_epoch(
+                        &h, &pivot, false, /* update_pivot_assumption */
+                        false, /* update_cache */
+                    )
+                    .map(|res| Arc::new((*res.block_receipts).clone()))
+                    .ok_or_else(|| {
+                        invalid_params(
+                            "block hash",
+                            format!("Unable to find recepits for {}", h),
+                        )
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let epoch_receipt_proof = compute_epoch_receipt_proof(
+            &epoch_receipts,
+            block_index_in_epoch,
+            tx_index_in_block,
+        );
+
+        let proof = rlp::encode(&epoch_receipt_proof);
+        Ok(Some(format!("0x{}", proof.to_hex::<String>())))
+    }
+
     fn transactions_by_epoch(
         &self, epoch_number: U64,
     ) -> JsonRpcResult<Vec<WrapTransaction>> {
@@ -2128,6 +2207,7 @@ impl LocalRpc for LocalRpcImpl {
             fn current_sync_phase(&self) -> JsonRpcResult<String>;
             fn consensus_graph_state(&self) -> JsonRpcResult<ConsensusGraphStates>;
             fn epoch_receipts(&self, epoch: BlockHashOrEpochNumber, include_eth_recepits: Option<bool>,) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
+            fn epoch_receipt_proof_by_transaction(&self, block_hash: H256, tx_index_in_block: usize) -> JsonRpcResult<Option<String>>;
             fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
             fn send_transaction(
                 &self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<H256>;
