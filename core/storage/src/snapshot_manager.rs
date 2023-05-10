@@ -8,7 +8,7 @@ pub trait SnapshotManagerTrait: GetSnapshotDbManager {
 
     fn get_snapshot_by_epoch_id(
         &self, epoch_id: &EpochId, try_open: bool, open_mpt_snapshot: bool,
-    ) -> Result<Option<Arc<Self::SnapshotDb>>> {
+    ) -> Result<Option<Self::SnapshotDb>> {
         self.get_snapshot_db_manager().get_snapshot_by_epoch_id(
             epoch_id,
             try_open,
@@ -39,4 +39,3 @@ use super::{
     storage_db::{snapshot_db::*, snapshot_db_manager::*},
 };
 use primitives::EpochId;
-use std::sync::Arc;

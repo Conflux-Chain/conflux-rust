@@ -2177,10 +2177,10 @@ impl ConsensusNewBlockHandler {
             (
                 temp_snapshot_db_existing,
                 removed_snapshots,
-                latest_snapshot_epoch_height,
+                max(latest_snapshot_epoch_height, inner.cur_era_stable_height),
             )
         } else {
-            (false, HashSet::new(), 0)
+            (false, HashSet::new(), inner.cur_era_stable_height)
         };
 
         // The upcoming snapshot is not ready, we need to trigger the

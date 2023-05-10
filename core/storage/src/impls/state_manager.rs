@@ -7,7 +7,7 @@ pub type SnapshotDbManager = SnapshotDbManagerSqlite;
 pub type SnapshotDb = <SnapshotDbManager as SnapshotDbManagerTrait>::SnapshotDb;
 
 pub struct StateTrees {
-    pub snapshot_db: Arc<SnapshotDb>,
+    pub snapshot_db: SnapshotDb,
     pub snapshot_epoch_id: EpochId,
     pub snapshot_merkle_root: MerkleHash,
     /// None means that the intermediate_trie is empty, or in a special
@@ -86,7 +86,7 @@ impl StateManager {
     /// it's calculated for the state_trees.
     #[inline]
     pub fn get_state_trees_internal(
-        snapshot_db: Arc<SnapshotDb>, snapshot_epoch_id: &EpochId,
+        snapshot_db: SnapshotDb, snapshot_epoch_id: &EpochId,
         snapshot_merkle_root: MerkleHash,
         maybe_intermediate_trie: Option<Arc<DeltaMpt>>,
         maybe_intermediate_trie_key_padding: Option<&DeltaMptKeyPadding>,

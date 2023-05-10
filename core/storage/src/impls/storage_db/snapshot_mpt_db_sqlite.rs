@@ -4,7 +4,7 @@
 
 pub struct SnapshotMptDbSqlite {
     maybe_db_connections: Option<Box<[SqliteConnection]>>,
-    already_open_snapshots: AlreadyOpenSnapshots<RwLock<Self>>,
+    already_open_snapshots: AlreadyOpenSnapshots<Self>,
     open_semaphore: Arc<Semaphore>,
     path: PathBuf,
     remove_on_close: AtomicBool,
@@ -148,6 +148,84 @@ impl<'db> OpenSnapshotMptTrait<'db> for SnapshotMptDbSqlite {
     }
 }
 
+impl SnapshotDbTrait for SnapshotMptDbSqlite {
+    type SnapshotKvdbIterTraitTag = KvdbSqliteShardedIteratorTag;
+    type SnapshotKvdbIterType =
+        KvdbSqliteSharded<<Self as KeyValueDbTypes>::ValueType>;
+
+    fn get_null_snapshot() -> Self { unreachable!() }
+
+    fn open(
+        _snapshot_path: &Path, _readonly: bool,
+        _already_open_snapshots: &AlreadyOpenSnapshots<Self>,
+        _open_semaphore: &Arc<Semaphore>,
+    ) -> Result<SnapshotMptDbSqlite>
+    {
+        unreachable!()
+    }
+
+    fn create(
+        _snapshot_path: &Path,
+        _already_open_snapshots: &AlreadyOpenSnapshots<Self>,
+        _open_snapshots_semaphore: &Arc<Semaphore>,
+        _mpt_table_in_current_db: bool,
+    ) -> Result<SnapshotMptDbSqlite>
+    {
+        unreachable!()
+    }
+
+    fn direct_merge(
+        &mut self, _old_snapshot_db: Option<&Arc<SnapshotMptDbSqlite>>,
+        _mpt_snapshot: &mut Option<SnapshotMptDbSqlite>,
+    ) -> Result<MerkleHash>
+    {
+        unreachable!()
+    }
+
+    fn copy_and_merge(
+        &mut self, _old_snapshot_db: &Arc<SnapshotMptDbSqlite>,
+        _mpt_snapshot_db: &mut Option<SnapshotMptDbSqlite>,
+    ) -> Result<MerkleHash>
+    {
+        unreachable!()
+    }
+
+    fn start_transaction(&mut self) -> Result<()> {
+        if let Some(connections) = self.maybe_db_connections.as_mut() {
+            for connection in connections.iter_mut() {
+                connection.execute("BEGIN IMMEDIATE", SQLITE_NO_PARAM)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn commit_transaction(&mut self) -> Result<()> {
+        if let Some(connections) = self.maybe_db_connections.as_mut() {
+            for connection in connections.iter_mut() {
+                connection.execute("COMMIT", SQLITE_NO_PARAM)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn is_mpt_table_in_current_db(&self) -> bool { unreachable!() }
+
+    fn snapshot_kv_iterator(
+        &self,
+    ) -> Result<
+        Wrap<
+            Self::SnapshotKvdbIterType,
+            dyn KeyValueDbIterableTrait<
+                MptKeyValue,
+                [u8],
+                KvdbSqliteShardedIteratorTag,
+            >,
+        >,
+    > {
+        unreachable!()
+    }
+}
+
 impl SnapshotMptDbSqlite {
     fn try_clone_connections(&self) -> Result<Option<Box<[SqliteConnection]>>> {
         match &self.maybe_db_connections {
@@ -165,7 +243,7 @@ impl SnapshotMptDbSqlite {
 
     pub fn open(
         snapshot_path: &Path, readonly: bool,
-        already_open_snapshots: &AlreadyOpenSnapshots<RwLock<Self>>,
+        already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         open_semaphore: &Arc<Semaphore>,
         latest_mpt_snapshot_semaphore: Option<Arc<Semaphore>>,
     ) -> Result<SnapshotMptDbSqlite>
@@ -189,7 +267,7 @@ impl SnapshotMptDbSqlite {
 
     pub fn create(
         snapshot_path: &Path,
-        already_open_snapshots: &AlreadyOpenSnapshots<RwLock<Self>>,
+        already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         open_snapshots_semaphore: &Arc<Semaphore>,
         latest_mpt_snapshot_semaphore: Option<Arc<Semaphore>>,
     ) -> Result<SnapshotMptDbSqlite>
@@ -224,24 +302,6 @@ impl SnapshotMptDbSqlite {
         }
     }
 
-    pub fn start_transaction(&mut self) -> Result<()> {
-        if let Some(connections) = self.maybe_db_connections.as_mut() {
-            for connection in connections.iter_mut() {
-                connection.execute("BEGIN IMMEDIATE", SQLITE_NO_PARAM)?;
-            }
-        }
-        Ok(())
-    }
-
-    pub fn commit_transaction(&mut self) -> Result<()> {
-        if let Some(connections) = self.maybe_db_connections.as_mut() {
-            for connection in connections.iter_mut() {
-                connection.execute("COMMIT", SQLITE_NO_PARAM)?;
-            }
-        }
-        Ok(())
-    }
-
     pub fn set_remove_on_last_close(&self) {
         self.remove_on_close.store(true, Ordering::Relaxed);
     }
@@ -265,7 +325,7 @@ impl SnapshotMptDbSqlite {
     }
 }
 
-use parking_lot::RwLock;
+use primitives::MerkleHash;
 use tokio::sync::Semaphore;
 
 use crate::{
@@ -283,7 +343,7 @@ use crate::{
     storage_db::{
         KeyValueDbIterableTrait, KeyValueDbTypes, OpenSnapshotMptTrait,
         OwnedReadImplFamily, ReadImplFamily, SingleWriterImplFamily,
-        SnapshotMptDbValue,
+        SnapshotDbTrait, SnapshotMptDbValue,
     },
     utils::wrap::Wrap,
     MptKeyValue, SnapshotDbManagerSqlite, SqliteConnection,

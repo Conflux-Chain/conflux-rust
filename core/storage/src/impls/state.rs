@@ -7,7 +7,7 @@ pub type ChildrenMerkleMap =
 
 pub struct State {
     manager: Arc<StateManager>,
-    snapshot_db: Arc<SnapshotDb>,
+    snapshot_db: SnapshotDb,
     snapshot_epoch_id: EpochId,
     snapshot_merkle_root: MerkleHash,
     maybe_intermediate_trie: Option<Arc<DeltaMpt>>,

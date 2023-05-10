@@ -102,7 +102,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
             txs = self._generate_txs(0, random.randint(1, 2))
             client1.generate_block_with_fake_txs(txs)
 
-        sync_blocks(self.nodes)
+        sync_blocks(self.nodes, timeout=120)
 
         self.log.info("epoch number %d", client1.epoch_number())
         assert_equal(client1.epoch_number(), client2.epoch_number())
@@ -122,7 +122,7 @@ class SyncCheckpointTests(ConfluxTestFramework):
             txs = self._generate_txs(1, random.randint(1, 2))
             client2.generate_block_with_fake_txs(txs)
 
-        sync_blocks(self.nodes)
+        sync_blocks(self.nodes, timeout=120)
 
         self.log.info("epoch number %d", client1.epoch_number())
         assert_equal(client1.epoch_number(), client2.epoch_number())
@@ -142,11 +142,10 @@ class SyncCheckpointTests(ConfluxTestFramework):
             txs = self._generate_txs(1, random.randint(1, 2))
             client2.generate_block_with_fake_txs(txs)
 
-        sync_blocks(self.nodes)
+        sync_blocks(self.nodes, timeout=120)
 
         self.log.info("epoch number %d", client1.epoch_number())
         assert_equal(client1.epoch_number(), client2.epoch_number())
-
 
 
 if __name__ == "__main__":

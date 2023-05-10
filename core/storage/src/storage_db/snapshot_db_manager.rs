@@ -2,6 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+#[derive(Debug)]
 pub struct SnapshotPersistState {
     pub missing_snapshots: Vec<EpochId>,
     pub max_epoch_id: EpochId,
@@ -10,9 +11,26 @@ pub struct SnapshotPersistState {
     pub removed_snapshots: HashSet<EpochId>,
 }
 
+pub trait SnapshotDbWriteableTrait: KeyValueDbTypes {
+    type SnapshotDbBorrowMutType: SnapshotMptTraitRw;
+
+    fn start_transaction(&mut self) -> Result<()>;
+
+    fn commit_transaction(&mut self) -> Result<()>;
+
+    fn put_kv(
+        &mut self, key: &[u8], value: &<Self::ValueType as DbValueType>::Type,
+    ) -> Result<Option<Option<Self::ValueType>>>;
+
+    fn open_snapshot_mpt_owned(
+        &mut self,
+    ) -> Result<Self::SnapshotDbBorrowMutType>;
+}
+
 /// The trait for database manager of Snapshot.
 pub trait SnapshotDbManagerTrait {
     type SnapshotDb: SnapshotDbTrait<ValueType = Box<[u8]>>;
+    type SnapshotDbWrite: SnapshotDbWriteableTrait<ValueType = Box<[u8]>>;
 
     fn get_snapshot_dir(&self) -> &Path;
     fn get_snapshot_db_name(&self, snapshot_epoch_id: &EpochId) -> String;
@@ -149,13 +167,13 @@ pub trait SnapshotDbManagerTrait {
     ) -> Result<(RwLockWriteGuard<'m, PersistedSnapshotInfoMap>, SnapshotInfo)>;
     fn get_snapshot_by_epoch_id(
         &self, epoch_id: &EpochId, try_open: bool, open_mpt_snapshot: bool,
-    ) -> Result<Option<Arc<Self::SnapshotDb>>>;
+    ) -> Result<Option<Self::SnapshotDb>>;
     fn destroy_snapshot(&self, snapshot_epoch_id: &EpochId) -> Result<()>;
 
     fn new_temp_snapshot_for_full_sync(
         &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
         new_epoch_height: u64,
-    ) -> Result<Self::SnapshotDb>;
+    ) -> Result<Self::SnapshotDbWrite>;
     fn finalize_full_sync_snapshot<'m>(
         &self, snapshot_epoch_id: &EpochId, merkle_root: &MerkleHash,
         snapshot_info_map_rwlock: &'m RwLock<PersistedSnapshotInfoMap>,
@@ -165,6 +183,7 @@ pub trait SnapshotDbManagerTrait {
 use super::{
     super::impls::{delta_mpt::DeltaMptIterator, errors::*},
     snapshot_db::*,
+    DbValueType, KeyValueDbTypes, SnapshotMptTraitRw,
 };
 use crate::impls::storage_manager::PersistedSnapshotInfoMap;
 use parking_lot::{RwLock, RwLockWriteGuard};
@@ -173,5 +192,4 @@ use std::{
     collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
-    sync::Arc,
 };

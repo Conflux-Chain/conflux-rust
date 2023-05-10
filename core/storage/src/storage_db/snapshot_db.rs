@@ -125,7 +125,6 @@ pub trait SnapshotDbTrait:
         snapshot_path: &Path, readonly: bool,
         already_open_snapshots: &AlreadyOpenSnapshots<Self>,
         open_semaphore: &Arc<Semaphore>,
-        mpt_snapshot: Option<Arc<RwLock<SnapshotMptDbSqlite>>>,
     ) -> StorageResult<Self>;
 
     /// Store already_open_snapshots and open_semaphore to update
@@ -134,37 +133,26 @@ pub trait SnapshotDbTrait:
     fn create(
         snapshot_path: &Path,
         already_open_snapshots: &AlreadyOpenSnapshots<Self>,
-        open_semaphore: &Arc<Semaphore>,
-        mpt_snapshot: Option<Arc<RwLock<SnapshotMptDbSqlite>>>,
-        mpt_table_in_current_db: bool,
+        open_semaphore: &Arc<Semaphore>, mpt_table_in_current_db: bool,
     ) -> StorageResult<Self>;
 
     fn direct_merge(
-        &mut self, old_snapshot_db: Option<&Self>,
+        &mut self, old_snapshot_db: Option<&Arc<Self>>,
+        mpt_snapshot: &mut Option<SnapshotMptDbSqlite>,
     ) -> StorageResult<MerkleHash>;
 
     fn copy_and_merge(
-        &mut self, old_snapshot_db: &Self,
+        &mut self, old_snapshot_db: &Arc<Self>,
+        mpt_snapshot_db: &mut Option<SnapshotMptDbSqlite>,
     ) -> StorageResult<MerkleHash>;
 
     fn start_transaction(&mut self) -> StorageResult<()>;
 
     fn commit_transaction(&mut self) -> StorageResult<()>;
 
-    fn snapshot_kv_iterator(
-        &self,
-    ) -> StorageResult<
-        Wrap<
-            Self::SnapshotKvdbIterType,
-            dyn KeyValueDbIterableTrait<
-                MptKeyValue,
-                [u8],
-                Self::SnapshotKvdbIterTraitTag,
-            >,
-        >,
-    >;
+    fn is_mpt_table_in_current_db(&self) -> bool;
 
-    fn snapshot_mpt_iterator(
+    fn snapshot_kv_iterator(
         &self,
     ) -> StorageResult<
         Wrap<
@@ -195,7 +183,6 @@ use crate::{
 };
 use derivative::Derivative;
 use malloc_size_of_derive::MallocSizeOf as DeriveMallocSizeOf;
-use parking_lot::RwLock;
 use primitives::{EpochId, MerkleHash, MERKLE_NULL_NODE, NULL_EPOCH};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use rlp_derive::{RlpDecodable, RlpEncodable};

@@ -322,9 +322,7 @@ impl StorageManager {
         &self, snapshot_epoch_id: &EpochId, try_open: bool,
         open_mpt_snapshot: bool,
     ) -> Result<
-        Option<
-            GuardedValue<RwLockReadGuard<Vec<SnapshotInfo>>, Arc<SnapshotDb>>,
-        >,
+        Option<GuardedValue<RwLockReadGuard<Vec<SnapshotInfo>>, SnapshotDb>>,
     >
     {
         // Make sure that the snapshot info is ready at the same time of the
@@ -1347,25 +1345,27 @@ impl StorageManager {
             .push(SnapshotInfo::genesis_snapshot_info());
 
         // Persist state loaded.
-        let snapshto_persist_state = self
+        let snapshot_persist_state = self
             .snapshot_manager
             .get_snapshot_db_manager()
             .scan_persist_state(snapshot_info_map.get_map())?;
 
+        debug!("snapshot persist state {:?}", snapshot_persist_state);
+
         *self.persist_state_from_initialization.write() = Some((
-            snapshto_persist_state.temp_snapshot_db_existing,
-            snapshto_persist_state.removed_snapshots,
-            snapshto_persist_state.max_epoch_height,
+            snapshot_persist_state.temp_snapshot_db_existing,
+            snapshot_persist_state.removed_snapshots,
+            snapshot_persist_state.max_epoch_height,
         ));
         self.snapshot_manager
             .get_snapshot_db_manager()
             .update_latest_snapshot_id(
-                snapshto_persist_state.max_epoch_id,
-                snapshto_persist_state.max_epoch_height,
+                snapshot_persist_state.max_epoch_id,
+                snapshot_persist_state.max_epoch_height,
             );
 
         // Remove missing snapshots.
-        for snapshot_epoch_id in snapshto_persist_state.missing_snapshots {
+        for snapshot_epoch_id in snapshot_persist_state.missing_snapshots {
             if snapshot_epoch_id == NULL_EPOCH {
                 continue;
             }
@@ -1575,7 +1575,7 @@ use crate::{
                 kvdb_sqlite_iter_range_impl, KvdbSqliteDestructureTrait,
                 KvdbSqliteStatements,
             },
-            snapshot_db_sqlite::test_lib::check_key_value_load,
+            snapshot_kv_db_sqlite::test_lib::check_key_value_load,
         },
         storage_manager::snapshot_manager::SnapshotManager,
     },
