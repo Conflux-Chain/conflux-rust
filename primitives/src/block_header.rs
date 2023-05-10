@@ -17,7 +17,8 @@ use std::{
 };
 
 const HEADER_LIST_MIN_LEN: usize = 13;
-/// The height to start fixing the wrong encoding/decoding of the `custom` field.
+/// The height to start fixing the wrong encoding/decoding of the `custom`
+/// field.
 pub static CIP112_TRANSITION_HEIGHT: OnceCell<u64> = OnceCell::new();
 
 #[derive(Clone, Debug, Eq)]
