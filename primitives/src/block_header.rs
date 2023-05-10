@@ -17,7 +17,8 @@ use std::{
 };
 
 const HEADER_LIST_MIN_LEN: usize = 13;
-pub static FIX_CUSTOM_ENCODING_HEIGHT: OnceCell<u64> = OnceCell::new();
+/// The height to start fixing the wrong encoding/decoding of the `custom` field.
+pub static CIP112_TRANSITION_HEIGHT: OnceCell<u64> = OnceCell::new();
 
 #[derive(Clone, Debug, Eq)]
 pub struct BlockHeaderRlpPart {
@@ -232,7 +233,7 @@ impl BlockHeader {
 
         for b in &self.custom {
             if self.height
-                >= *FIX_CUSTOM_ENCODING_HEIGHT.get().expect("initialized")
+                >= *CIP112_TRANSITION_HEIGHT.get().expect("initialized")
             {
                 stream.append(b);
             } else {
@@ -269,7 +270,7 @@ impl BlockHeader {
         }
         for b in &self.custom {
             if self.height
-                >= *FIX_CUSTOM_ENCODING_HEIGHT.get().expect("initialized")
+                >= *CIP112_TRANSITION_HEIGHT.get().expect("initialized")
             {
                 stream.append(b);
             } else {
@@ -310,7 +311,7 @@ impl BlockHeader {
 
         for b in &self.custom {
             if self.height
-                >= *FIX_CUSTOM_ENCODING_HEIGHT.get().expect("initialized")
+                >= *CIP112_TRANSITION_HEIGHT.get().expect("initialized")
             {
                 stream.append(b);
             } else {
@@ -345,7 +346,7 @@ impl BlockHeader {
             (15 + rlp_part.pos_reference.is_some() as usize)..r.item_count()?
         {
             if rlp_part.height
-                >= *FIX_CUSTOM_ENCODING_HEIGHT.get().expect("initialized")
+                >= *CIP112_TRANSITION_HEIGHT.get().expect("initialized")
             {
                 rlp_part.custom.push(r.val_at(i)?);
             } else {
@@ -609,7 +610,7 @@ impl Decodable for BlockHeader {
             (14 + rlp_part.pos_reference.is_some() as usize)..r.item_count()?
         {
             if rlp_part.height
-                >= *FIX_CUSTOM_ENCODING_HEIGHT.get().expect("initialized")
+                >= *CIP112_TRANSITION_HEIGHT.get().expect("initialized")
             {
                 rlp_part.custom.push(r.val_at(i)?);
             } else {

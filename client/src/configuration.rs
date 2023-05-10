@@ -46,7 +46,7 @@ use diem_types::term_state::{
 };
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
-use primitives::block_header::FIX_CUSTOM_ENCODING_HEIGHT;
+use primitives::block_header::CIP112_TRANSITION_HEIGHT;
 use txgen::TransactionGeneratorConfig;
 
 use crate::rpc::{
@@ -156,7 +156,7 @@ build_config! {
         (cip90_transition_number,(Option<u64>),None)
         (cip105_transition_number, (Option<u64>), None)
         (sigma_fix_transition_number, (Option<u64>), None)
-        (fix_custom_encoding_transition_height, (Option<u64>), None)
+        (cip112_transition_height, (Option<u64>), None)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (params_dao_vote_period, (u64), DAO_PARAMETER_VOTE_PERIOD)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
@@ -413,13 +413,8 @@ impl Configuration {
             config.raw_conf.node_type = Some(NodeType::Light);
         }
 
-        FIX_CUSTOM_ENCODING_HEIGHT
-            .set(
-                config
-                    .raw_conf
-                    .fix_custom_encoding_transition_height
-                    .unwrap_or(u64::MAX),
-            )
+        CIP112_TRANSITION_HEIGHT
+            .set(config.raw_conf.cip112_transition_height.unwrap_or(u64::MAX))
             .expect("called once");
 
         Ok(config)
