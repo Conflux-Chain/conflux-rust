@@ -124,9 +124,9 @@ class PhantomTransactionTest(Web3Base):
             "subtraces": 0,
             "traceAddress": [],
             "blockHash": phantom0["blockHash"],
-            "blockNumber": int(phantom0["blockNumber"], 16),
+            "blockNumber": phantom0["blockNumber"],
             "transactionHash": phantom0["hash"],
-            "transactionPosition": int(phantom0["transactionIndex"], 16),
+            "transactionPosition": phantom0["transactionIndex"],
             "valid": True,
         }])
 
@@ -160,9 +160,9 @@ class PhantomTransactionTest(Web3Base):
             "subtraces": 1,
             "traceAddress": [],
             "blockHash": phantom1["blockHash"],
-            "blockNumber": int(phantom1["blockNumber"], 16),
+            "blockNumber": phantom1["blockNumber"],
             "transactionHash": phantom1["hash"],
-            "transactionPosition": int(phantom1["transactionIndex"], 16),
+            "transactionPosition": phantom1["transactionIndex"],
             "valid": True,
         }, {
             "type": "call",
@@ -181,9 +181,9 @@ class PhantomTransactionTest(Web3Base):
             "subtraces": 0,
             "traceAddress": [],
             "blockHash": block["hash"],
-            "blockNumber": int(block["number"], 16),
+            "blockNumber": block["number"],
             "transactionHash": phantom_txs[1]["hash"],
-            "transactionPosition": int(phantom1["transactionIndex"], 16),
+            "transactionPosition": phantom1["transactionIndex"],
             "valid": True,
         }])
 
@@ -276,9 +276,9 @@ class PhantomTransactionTest(Web3Base):
             "subtraces": 0,
             "traceAddress": [],
             "blockHash": phantom0["blockHash"],
-            "blockNumber": int(phantom0["blockNumber"], 16),
+            "blockNumber": phantom0["blockNumber"],
             "transactionHash": phantom0["hash"],
-            "transactionPosition": int(phantom0["transactionIndex"], 16),
+            "transactionPosition": phantom0["transactionIndex"],
             "valid": True,
         }])
 
@@ -316,9 +316,9 @@ class PhantomTransactionTest(Web3Base):
             "subtraces": 0,
             "traceAddress": [],
             "blockHash": phantom1["blockHash"],
-            "blockNumber": int(phantom1["blockNumber"], 16),
+            "blockNumber": phantom1["blockNumber"],
             "transactionHash": phantom1["hash"],
-            "transactionPosition": int(phantom1["transactionIndex"], 16),
+            "transactionPosition": phantom1["transactionIndex"],
             "valid": True,
         }])
 
@@ -379,9 +379,9 @@ class PhantomTransactionTest(Web3Base):
             "subtraces": 0,
             "traceAddress": [],
             "blockHash": phantom0["blockHash"],
-            "blockNumber": int(phantom0["blockNumber"], 16),
+            "blockNumber": phantom0["blockNumber"],
             "transactionHash": phantom0["hash"],
-            "transactionPosition": int(phantom0["transactionIndex"], 16),
+            "transactionPosition": phantom0["transactionIndex"],
             "valid": True,
         }])
 
@@ -416,9 +416,9 @@ class PhantomTransactionTest(Web3Base):
             "subtraces": 0,
             "traceAddress": [],
             "blockHash": phantom1["blockHash"],
-            "blockNumber": int(phantom1["blockNumber"], 16),
+            "blockNumber": phantom1["blockNumber"],
             "transactionHash": phantom1["hash"],
-            "transactionPosition": int(phantom1["transactionIndex"], 16),
+            "transactionPosition": phantom1["transactionIndex"],
             "valid": True,
         }])
 
@@ -517,9 +517,9 @@ class PhantomTransactionTest(Web3Base):
             "subtraces": 0,
             "traceAddress": [],
             "blockHash": phantom0["blockHash"],
-            "blockNumber": int(phantom0["blockNumber"], 16),
+            "blockNumber": phantom0["blockNumber"],
             "transactionHash": phantom0["hash"],
-            "transactionPosition": int(phantom0["transactionIndex"], 16),
+            "transactionPosition": phantom0["transactionIndex"],
             "valid": True,
         }])
 
