@@ -266,7 +266,13 @@ fn setup_rpc_apis(
                         )
                         .to_delegate();
 
-                        handler.extend_with(filter_client);
+                        extend_with_interceptor(
+                            &mut handler,
+                            &rpc.config,
+                            filter_client,
+                            throttling_conf,
+                            throttling_section,
+                        );
                     }
                 }
             }
@@ -309,7 +315,13 @@ fn setup_rpc_apis(
                         )
                         .to_delegate();
 
-                        handler.extend_with(filter_client);
+                        extend_with_interceptor(
+                            &mut handler,
+                            &rpc.config,
+                            filter_client,
+                            throttling_conf,
+                            throttling_section,
+                        );
                     }
                 }
             }
@@ -319,10 +331,24 @@ fn setup_rpc_apis(
                         .to_delegate(),
                 );
             }
-            Api::Pubsub => handler.extend_with(pubsub.clone().to_delegate()),
+            Api::Pubsub => {
+                extend_with_interceptor(
+                    &mut handler,
+                    &rpc.config,
+                    pubsub.clone().to_delegate(),
+                    throttling_conf,
+                    throttling_section,
+                );
+            }
             Api::EthPubsub => {
                 info!("Add EVM pubsub");
-                handler.extend_with(eth_pubsub.clone().to_delegate());
+                extend_with_interceptor(
+                    &mut handler,
+                    &rpc.config,
+                    eth_pubsub.clone().to_delegate(),
+                    throttling_conf,
+                    throttling_section,
+                );
             }
             Api::Test => {
                 handler.extend_with(

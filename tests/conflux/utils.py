@@ -1,3 +1,5 @@
+import re
+
 import sha3 as _sha3
 from py_ecc.secp256k1 import privtopub, ecdsa_raw_sign, ecdsa_raw_recover
 import rlp
@@ -596,3 +598,17 @@ class bcolors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+
+def to_snake(s):
+    return re.sub(r'(?<!^)(?=[A-Z])', '_', s).lower()
+
+def t_dict(d):
+    if isinstance(d, list):
+        return [t_dict(i) if isinstance(i, (dict, list)) else i for i in d]
+    return {to_snake(a):t_dict(b) if isinstance(b, (dict, list)) else try_decode_int(b) for a, b in d.items()}
+
+def try_decode_int(x):
+    if is_numeric(x) or x.startswith("0x"):
+        return parse_as_int(x)
+    else:
+        return x

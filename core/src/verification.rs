@@ -27,6 +27,7 @@ use primitives::{
     SignedTransaction, Transaction, TransactionWithSignature,
 };
 use rlp::Encodable;
+use rlp_derive::{RlpDecodable, RlpEncodable};
 use std::{collections::HashSet, convert::TryInto, sync::Arc};
 use unexpected::{Mismatch, OutOfBounds};
 
@@ -115,6 +116,7 @@ pub fn compute_receipts_root(
     simple_mpt_merkle_root(&mut epoch_receipts_trie(epoch_receipts))
 }
 
+#[derive(Clone, Debug, RlpEncodable, RlpDecodable, Default, PartialEq)]
 pub struct EpochReceiptProof {
     pub block_index_proof: TrieProof,
     pub block_receipt_proof: TrieProof,
@@ -737,4 +739,61 @@ impl<'a> VerifyTxMode<'a> {
             false
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::verification::EpochReceiptProof;
+    use cfx_storage::{
+        CompressedPathRaw, TrieProof, TrieProofNode, VanillaChildrenTable,
+    };
+
+    #[test]
+    fn test_rlp_epoch_receipt_proof() {
+        let proof = EpochReceiptProof::default();
+        assert_eq!(proof, rlp::decode(&rlp::encode(&proof)).unwrap());
+
+        let node1 = TrieProofNode::new(
+            Default::default(),
+            Some(Box::new([0x03, 0x04, 0x05])),
+            CompressedPathRaw::new(
+                &[0x00, 0x01, 0x02],
+                CompressedPathRaw::first_nibble_mask(),
+            ),
+            /* path_without_first_nibble = */ true,
+        );
+
+        let root_node = {
+            let mut children_table = VanillaChildrenTable::default();
+            unsafe {
+                *children_table.get_child_mut_unchecked(2) =
+                    *node1.get_merkle();
+                *children_table.get_children_count_mut() = 1;
+            }
+            TrieProofNode::new(
+                children_table,
+                None,
+                CompressedPathRaw::default(),
+                /* path_without_first_nibble = */ false,
+            )
+        };
+        let nodes = [root_node, node1]
+            .iter()
+            .cloned()
+            .cycle()
+            .take(20)
+            .collect();
+        let proof = TrieProof::new(nodes).unwrap();
+
+        let epoch_proof = EpochReceiptProof {
+            block_index_proof: proof.clone(),
+            block_receipt_proof: proof,
+        };
+
+        assert_eq!(
+            epoch_proof,
+            rlp::decode(&rlp::encode(&epoch_proof)).unwrap()
+        );
+    }
+
 }
