@@ -1662,8 +1662,24 @@ impl RpcImpl {
     }
 
     fn epoch_receipt_proof_by_transaction(
-        &self, block_hash: H256, tx_index_in_block: usize,
+        &self, tx_hash: H256,
     ) -> JsonRpcResult<Option<String>> {
+        let (block_hash, tx_index_in_block) =
+            match self.consensus.get_transaction_info_by_hash(&tx_hash) {
+                None => {
+                    bail!(invalid_params(
+                        "transactions hash",
+                        format!(
+                            "Unable to get transaction info for hash {:?}",
+                            tx_hash
+                        )
+                    ));
+                }
+                Some((_, TransactionInfo { tx_index, .. })) => {
+                    (tx_index.block_hash, tx_index.real_index)
+                }
+            };
+
         let epoch = match self.consensus.get_block_epoch_number(&block_hash) {
             Some(epoch) => epoch,
             None => {
@@ -2207,7 +2223,7 @@ impl LocalRpc for LocalRpcImpl {
             fn current_sync_phase(&self) -> JsonRpcResult<String>;
             fn consensus_graph_state(&self) -> JsonRpcResult<ConsensusGraphStates>;
             fn epoch_receipts(&self, epoch: BlockHashOrEpochNumber, include_eth_recepits: Option<bool>,) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
-            fn epoch_receipt_proof_by_transaction(&self, block_hash: H256, tx_index_in_block: usize) -> JsonRpcResult<Option<String>>;
+            fn epoch_receipt_proof_by_transaction(&self, tx_hash: H256) -> JsonRpcResult<Option<String>>;
             fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
             fn send_transaction(
                 &self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<H256>;
