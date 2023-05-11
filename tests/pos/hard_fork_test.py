@@ -50,7 +50,7 @@ class HardforkTest(ConfluxTestFramework):
         self.conf_parameters["pos_out_queue_locked_views"] = 60
         self.conf_parameters["sigma_fix_transition_number"] = 1000000
         self.conf_parameters["tanzanite_transition_height"] = 100
-        self.conf_parameters["fix_custom_encoding_transition_height"] = 100
+        self.conf_parameters["cip112_transition_height"] = 100
         self.rpc_timewait = 6000
 
     def setup_nodes(self):
