@@ -17,10 +17,13 @@ pub use amt::*;
 #[cfg(not(any(
     feature = "lvmt-storage",
     feature = "mpt-storage",
-    feature = "raw-storage"
+    feature = "raw-storage",
+    feature = "rain-storage"
 )))]
 pub use delta_mpt::*;
 #[cfg(feature = "mpt-storage")]
 pub use mpt::*;
+#[cfg(feature = "rain-storage")]
+pub use mpt::{self as rain, *};
 #[cfg(feature = "raw-storage")]
 pub use raw::*;

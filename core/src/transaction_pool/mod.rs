@@ -691,6 +691,14 @@ impl TransactionPool {
                     || total_size > block_size_limit
                     || total_gas > block_gas_limit
                 {
+                    // info!(
+                    //     "[lvmt] txs {}, size {}/{}, gas {}/{}",
+                    //     txs.len(),
+                    //     total_size,
+                    //     block_size_limit,
+                    //     total_gas,
+                    //     block_gas_limit
+                    // );
                     queue.push_front(tx);
                     break;
                 } else {
@@ -872,7 +880,11 @@ impl TransactionPool {
             - 1;
 
         let target_gas_limit = self.config.target_block_gas_limit.into();
-        let self_gas_limit = min(max(target_gas_limit, gas_lower), gas_upper);
+        let self_gas_limit = if cfg!(feature = "storage-dev") {
+            target_gas_limit
+        } else {
+            min(max(target_gas_limit, gas_lower), gas_upper)
+        };
 
         let transactions_from_pool = self.pack_transactions(
             num_txs,

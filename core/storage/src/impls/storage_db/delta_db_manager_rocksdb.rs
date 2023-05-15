@@ -11,7 +11,7 @@ impl DeltaDbManagerRocksdb {
     const DELTA_DB_ROCKSDB_DIR_PREFIX: &'static str = "rocksdb_";
     const ROCKSDB_CONFIG: DatabaseConfig = DatabaseConfig {
         max_open_files: 512,
-        memory_budget: None,
+        memory_budget: Some(4096),
         compaction: CompactionProfile {
             initial_file_size: 512 * 1048576 as u64,
             block_size: 16 * 1024,

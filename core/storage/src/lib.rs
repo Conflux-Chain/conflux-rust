@@ -38,6 +38,8 @@ mod amt_impls;
 mod impls;
 #[cfg(feature = "mpt-storage")]
 mod mpt_impls;
+#[cfg(feature = "rain-storage")]
+mod rain_impls;
 #[cfg(feature = "raw-storage")]
 mod raw_impls;
 
@@ -97,6 +99,18 @@ pub use self::amt_impls::{
 };
 #[cfg(feature = "mpt-storage")]
 pub use self::mpt_impls::{
+    config::storage_dir,
+    config::storage_manager::StorageConfiguration,
+    proof_type::{StateProof, StorageRootProof},
+    state::State as StorageState,
+    state_index::StateIndex,
+    state_manager::StateManager as StorageManager,
+    state_trait::StateManagerTrait as StorageManagerTrait,
+    state_trait::StateTrait as StorageStateTrait,
+    state_trait::StateTraitExt as StorageStateTraitExt,
+};
+#[cfg(feature = "rain-storage")]
+pub use self::rain_impls::{
     config::storage_dir,
     config::storage_manager::StorageConfiguration,
     proof_type::{StateProof, StorageRootProof},

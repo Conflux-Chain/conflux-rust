@@ -29,8 +29,7 @@ class BlockGenThread(threading.Thread):
 
                 r = self.local_random.randint(0, len(self.nodes) - 1)
                 self.log.debug("choose %d to generate block", r)
-                h = self.clients[r].generate_block(self.num_txs)
-
+                h = self.clients[r].generate_block(self.num_txs, block_size_limit_bytes = 5 * 1024 * 1024)
                 self.log.debug("%s generate block %s", r, h)
             except Exception as e:
                 self.log.info("Node[%d] fails to generate blocks", r)

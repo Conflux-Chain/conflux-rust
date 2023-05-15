@@ -44,12 +44,13 @@ strfmt = "0.1"
 tokio = { version = "0.2", features = ["full"] }
 backtrace = "0.3"
 
-lvmt-db = { git = "https://github.com/ChenxingLi/authenticated-storage-benchmarks.git", rev = "1f42d73", optional = true, features = ["large_lvmt"] }
-parity-journaldb = { git = "https://github.com/ChenxingLi/authenticated-storage-benchmarks.git", rev = "1f42d73", optional = true  }
-blake2-hasher = { git = "https://github.com/ChenxingLi/authenticated-storage-benchmarks.git", rev = "1f42d73", optional = true }
+lvmt-db = { git = "https://github.com/ChenxingLi/authenticated-storage-benchmarks.git", rev = "858f92c", optional = true, features = ["large_lvmt"] }
+parity-journaldb = { git = "https://github.com/ChenxingLi/authenticated-storage-benchmarks.git", rev = "858f92c", optional = true  }
+blake2-hasher = { git = "https://github.com/ChenxingLi/authenticated-storage-benchmarks.git", rev = "858f92c", optional = true }
 trie-db= {version="0.11.0", optional = true}
 keccak-hasher = { git="https://github.com/openethereum/openethereum.git", rev="2ae2949", optional=true }
-patricia-trie-ethereum = { git="https://github.com/ChenxingLi/authenticated-storage-benchmarks.git", rev = "1f42d73", optional=true }
+patricia-trie-ethereum = { git="https://github.com/ChenxingLi/authenticated-storage-benchmarks.git", rev = "858f92c", optional=true }
+rainblock-trie = { git = "https://github.com/ChenxingLi/authenticated-storage-benchmarks.git", rev = "858f92c", optional = true}
 
 metrics = {path="../../util/metrics"}
 profile = {path="../../util/profile"}
@@ -71,4 +72,5 @@ storage-dev = ["profile/timer-metrics"]
 lvmt-storage = ["storage-dev","lvmt-db"]
 mpt-storage = ["storage-dev", "parity-journaldb", "trie-db", "keccak-hasher","patricia-trie-ethereum"]
 raw-storage = ["storage-dev"]
+rain-storage = ["storage-dev", "rainblock-trie", "parity-journaldb", "patricia-trie-ethereum", "trie-db"]
 light-hash = ["blake2-hasher", "parity-journaldb/light-hash"]

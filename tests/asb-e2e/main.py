@@ -22,7 +22,7 @@ if LIGHT_HASH is not None:
 
     if STORAGE == "lvmt":
         GENESIS_ROOT = "0x2656c8cf5e759be06784c0cb950500598b6ca3078ed6e0a9c3a3ad8583cbae2f"
-    elif STORAGE == "mpt":
+    elif STORAGE == "mpt" or STORAGE == "rain":
         GENESIS_ROOT = "0x56c994b4077b9316235adff36b460400e605b26f324fa03fb24d32176bfa0162"
     elif STORAGE == "raw":
         GENESIS_ROOT = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
@@ -31,7 +31,7 @@ if LIGHT_HASH is not None:
 else:
     if STORAGE == "lvmt":
         GENESIS_ROOT = "0x7127c2c33112eb83a3b01668026381ced16a42ae6e7a94a31b7e6b732ba78b08"
-    elif STORAGE == "mpt":
+    elif STORAGE == "mpt" or STORAGE == "rain":
         GENESIS_ROOT = "0x05b1ba2c15838e58b054ced4497db8bca54053a018f54a5ae5283bcf6a34d5cb"
     elif STORAGE == "raw":
         GENESIS_ROOT = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
@@ -48,6 +48,8 @@ elif STORAGE == "mpt":
     BINARY = os.path.join(BASE_PATH, "target/mpt-db/release/conflux")
 elif STORAGE == "raw":
     BINARY = os.path.join(BASE_PATH, "target/raw-db/release/conflux")
+elif STORAGE == "rain":
+    BINARY = os.path.join(BASE_PATH, "target/rain-db/release/conflux")
 else:
     BINARY = os.path.join(BASE_PATH, "target/release/conflux")
 
@@ -91,6 +93,7 @@ class SingleBench(ConfluxTestFramework):
             storage_delta_mpts_slab_idle_size=2_000_000,
             persist_tx_index="false",
             persist_block_number_index="false",
+            target_block_gas_limit=4_000_000_000
         )
         if SHARD_SIZE is not None:
             self.conf_parameters["amt_shard_size"] = SHARD_SIZE
@@ -173,8 +176,8 @@ class SingleBench(ConfluxTestFramework):
         for p2p in p2p_connections:
             p2p.wait_for_status()
 
-        num_txs = 10000
-        interval_fixed = 0.02
+        num_txs = 20000
+        interval_fixed = 0.25
 
         block_gen_thread = BlockGenThread([self.node], self.log, num_txs=num_txs, interval_fixed=interval_fixed)
         block_gen_thread.start()

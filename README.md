@@ -100,7 +100,9 @@ Follow the steps below to build the project:
     ./run_bench.sh
     ```
     
-    The results will be saved in the `experiment_data/metrics/osdi23` directory. You can also tailor the evaluation by modifying compile features and script options. Refer to the guidance below for further information.
+    This [instruction](#running-experiments-with-memory-constraints) can help you apply the memory limit constraint for evaluation tasks. The results will be saved in the `experiment_data/metrics/osdi23` directory. You can also tailor the evaluation by modifying compile features and script options. Refer to the guidance below for further information.
+
+12. Use [asb-plotter](https://github.com/ChenxingLi/asb-plotter) to parse the experiment traces and plot figures.
     
 Also you can customize the evaluation by compiling the node with different features and run the evaluation script with different options to suit your requirements. 
 
@@ -123,7 +125,9 @@ By default, the authenticated storage used in Conflux mainnet is Layered Merkle 
 The default authenticated storage is Layered Merkle Patricia Tries (LMPTs)[2], which is used in Conflux mainnet. Specify one if the following authenticated storage by enabling corresponding feature. 
 - `raw-storage`: No authenticated storage; writes changes directly to the backend.
 - `lvmt-storage`: The [multi-Layer Versioned Multipoint Trie (LVMT)](https://github.com/ChenxingLi/authenticated-storage-benchmarks/tree/master/asb-authdb/lvmt-db)[1] in our new work.
+- `rain-storage`: A modified version of [RainBlock's MPT](https://github.com/RainBlock/merkle-patricia-tree) [3], which stores the bottom layers locally on storage instead of using a distributed in-memory system as in the original work
 - `mpt-storage`: [OpenEthereum's MPT implementation](https://github.com/openethereum/openethereum/tree/main/crates/db/patricia-trie-ethereum).
+
 
 This program offers additional features for building Conflux-rust:
 
@@ -146,10 +150,11 @@ Set the `CONFLUX_DEV_STORAGE` environment variable to evaluate with different au
 
 - `raw`: No authenticated storage; writes changes directly to the backend.
 - `lvmt`: The [multi-Layer Versioned Multipoint Trie (LVMT)](https://github.com/ChenxingLi/authenticated-storage-benchmarks/tree/master/asb-authdb/lvmt-db)[1] in our new work.
+- `rain`: A modified version of [RainBlock's MPT](https://github.com/RainBlock/merkle-patricia-tree) [3], which stores the bottom layers locally on storage instead of using a distributed in-memory system as in the original work
 - `mpt`: [OpenEthereum's MPT implementation](https://github.com/openethereum/openethereum/tree/main/crates/db/patricia-trie-ethereum).
 - `lmpts`: The Layered Merkle Patricia Tries (LMPTs)[2] used in Conflux.
 
-For `raw`, `lvmt`, `mpt`, and `lmpts`, the Conflux full node binary will be loaded from `target/raw-db`, `target/lvmt-db`, `target/mpt-db`, and `target` (default path of rust). When manually conducting evaluations for the first three cases, use `--target-dir <path>` in compilation.
+For `raw`, `lvmt`, `rain`, `mpt`, and `lmpts`, the Conflux full node binary will be loaded from `target/raw-db`, `target/lvmt-db`, `target/rain-db`, `target/mpt-db`, and `target` (default path of rust). When manually conducting evaluations for the first four cases, use `--target-dir <path>` in compilation.
 
 **Note:** When using LVMT for the first time, it may take anywhere from minutes to hours to initialize the cryptography parameters. Alternatively, you can [download the generated cryptography parameters](https://drive.google.com/file/d/1pHiHpZ4eNee17C63tSDEvmcEVtv23-jK/view?usp=sharing) and place the files in the folder `./pp`.
 
@@ -170,12 +175,81 @@ For LVMT, configure the number of shards in proof sharding by setting the enviro
 - `--port-min <port>`: The program will use several sequential TCP ports. This argument specifies the first occupied port.
 - `--metric-folder <dir>`: Evaluation results will be written to `experiment_data/metrics/<dir>`.
 
+## Running Experiments with Memory Constraints
+
+Our paper's experiments were conducted with a memory limit of 16GB. If you don't have a machine with exactly 16GB of memory, you'll need to limit the memory through cgroup, Docker, or some other method. Below is a solution using cgroup, **assuming you have sudo privileges on the system.**
+
+### Install CGroup and Set Memory Limit
+
+Firstly, you need to install cgroup on your system. On Ubuntu, you can do this using the following command:
+
+```bash
+sudo apt-get install cgroup-bin
+```
+
+Then, create a cgroup named `lvmt` with a memory limit of 16GB:
+
+```bash
+sudo cgcreate -g memory:/lvmt-e2e
+sudo cgset -r memory.limit_in_bytes=$((16*1024*1024*1024)) lvmt-e2e
+```
+
+### Configure Sudo Permissions
+
+Next, ensure that `cgclassify` and `sysctl` can be run with sudo command without requiring a password. You can achieve this by adding the following lines to your sudoers:
+
+```bash
+<your_username> ALL=NOPASSWD: /usr/bin/cgclassify
+<your_username> ALL=NOPASSWD: /sbin/sysctl
+```
+
+Replace `<your_username>` with your actual username. You can edit the sudoers file using `sudo visudo`, or use `vim` as your editor by:
+
+```bash
+sudo update-alternatives --set editor /usr/bin/vim.basic
+sudo visudo
+```
+
+### Create and Configure the Shell Script
+
+Create a shell script with the following content:
+
+```bash
+#!/bin/bash
+
+# Classify the current shell into the 'lvmt' memory cgroup
+sudo cgclassify -g memory:/lvmt-e2e $$
+COMMAND=$@
+
+bash -c "$COMMAND"
+# Alternatively, if you want to load your custom environment 
+# (e.g., defined in .zprofile) before executing the command, 
+# run the following line instead.
+# bash -c "source ~/.zprofile && $COMMAND"
+```
+
+This script allows you to execute a task with a constrained memory limit under regular user mode rather than a superuser mode.
+
+Make sure to give this script execute permissions:
+
+```
+chmod +x <your_script.sh>
+```
+
+### Modify the Preconfigured Run Script
+
+Edit the `run.sh` file to replace the `alias cgrun` with the path to the script you created in the previous step, e.g., `alias cgrun="/path/to/your_script.sh"`. 
+
+This setup will ensure that your experiments run with a memory constraint of 16GB, closely replicating the conditions of the experiments in our paper.
+
+
 ## References
 
-[1] Chenxing Li, Sidi Mohamed Beillahi, Guang Yang, Ming Wu, Wei Xu, and Fan Long. "LVMT: An Efﬁcient Authenticated Storage for Blockchain". Conditionally accepted by USENIX Symposium on Operating Systems Design and Implementation (OSDI). 2023.
+[1] Chenxing Li, Sidi Mohamed Beillahi, Guang Yang, Ming Wu, Wei Xu, and Fan Long. "LVMT: An Efﬁcient Authenticated Storage for Blockchain". In *2023 USENIX Symposium on Operating Systems Design and Implementation (OSDI)*. 2023.
 
 [2] Choi, Jemin Andrew, Sidi Mohamed Beillahi, Peilun Li, Andreas Veneris, and Fan Long. "LMPTs: Eliminating Storage Bottlenecks for Processing Blockchain Transactions." In *2022 IEEE International Conference on Blockchain and Cryptocurrency (ICBC)*, pp. 1-9. IEEE, 2022.
 
+[3] Ponnapalli, Soujanya, Aashaka Shah, Souvik Banerjee, Dahlia Malkhi, Amy Tai, Vijay Chidambaram, and Michael Wei. "RainBlock: Faster Transaction Processing in Public Blockchains." In *USENIX Annual Technical Conference*, pp. 333-347. 2021.
 ## License
 
 [GNU General Public License v3.0](https://github.com/Conflux-Chain/conflux-rust/blob/master/LICENSE)

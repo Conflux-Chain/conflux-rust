@@ -86,6 +86,7 @@ jemalloc-global = ["jemallocator", "malloc_size_of/jemalloc-global"]
 lvmt-storage = ["cfxcore/lvmt-storage", "client/storage-dev"]
 mpt-storage = ["cfxcore/mpt-storage", "client/storage-dev"]
 raw-storage = ["cfxcore/raw-storage", "client/storage-dev"]
+rain-storage = ["cfxcore/rain-storage", "client/storage-dev"]
 pprof-profile = ["profile/pprof-metrics"]
 
 

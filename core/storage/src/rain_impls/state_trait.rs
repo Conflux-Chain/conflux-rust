@@ -1,0 +1,86 @@
+// Copyright 2019 Conflux Foundation. All rights reserved.
+// Conflux is free software and distributed under GNU General Public License.
+// See http://www.gnu.org/licenses/
+
+/// A block defines a list of transactions that it sees and the sequence of
+/// the transactions (ledger). At the view of a block, after all
+/// transactions being executed, the data associated with all addresses is
+/// a State after the epoch defined by the block.
+///
+/// A writable state is copy-on-write reference to the base state in the
+/// state manager. State is supposed to be owned by single user.
+use crate::{impls::errors::*, utils::access_mode, MptKeyValue};
+use primitives::{EpochId, StaticBool, StorageKey};
+
+pub use super::{
+    config::storage_manager::StorageConfiguration,
+    proof_type::{StateProof, StorageRootProof},
+    state::State,
+    state_index::StateIndex,
+    state_manager::StateManager,
+};
+use cfx_storage_primitives::rain::{StateRootWithAuxInfo, StorageRoot};
+
+use std::sync::Arc;
+
+pub type WithProof = primitives::static_bool::Yes;
+pub type NoProof = primitives::static_bool::No;
+
+// The trait is created to separate the implementation to another file, and the
+// concrete struct is put into inner mod, because the implementation is
+// anticipated to be too complex to present in the same file of the API.
+pub trait StateTrait {
+    // Actions.
+    fn get(&self, access_key: StorageKey) -> Result<Option<Box<[u8]>>>;
+    fn set(&mut self, access_key: StorageKey, value: Box<[u8]>) -> Result<()>;
+    fn delete(&mut self, access_key: StorageKey) -> Result<()>;
+    fn delete_test_only(
+        &mut self, access_key: StorageKey,
+    ) -> Result<Option<Box<[u8]>>>;
+    // Delete everything prefixed by access_key and return deleted key value
+    // pairs.
+    fn delete_all<AM: access_mode::AccessMode>(
+        &mut self, access_key_prefix: StorageKey,
+    ) -> Result<Option<Vec<MptKeyValue>>>;
+
+    // Finalize
+    /// It's costly to compute state root however it's only necessary to compute
+    /// state root once before committing.
+    fn compute_state_root(&mut self) -> Result<StateRootWithAuxInfo>;
+    fn get_state_root(&self) -> Result<StateRootWithAuxInfo>;
+    fn commit(&mut self, epoch: EpochId) -> Result<StateRootWithAuxInfo>;
+}
+
+pub trait StateTraitExt {
+    fn get_with_proof(
+        &self, access_key: StorageKey,
+    ) -> Result<(Option<Box<[u8]>>, StateProof)>;
+
+    /// Compute the merkle of the node under `access_key` in all tries.
+    /// Node merkle is computed on the value and children hashes, ignoring the
+    /// compressed path.
+    fn get_node_merkle_all_versions<WithProof: StaticBool>(
+        &self, access_key: StorageKey,
+    ) -> Result<(StorageRoot, StorageRootProof)>;
+}
+
+// StateManager is the single entry-point to access State for any epoch.
+// StateManager manages internal mutability and is thread-safe.
+
+// The trait is created to separate the implementation to another file, and the
+// concrete struct is put into inner mod, because the implementation is
+// anticipated to be too complex to present in the same file of the API.
+pub trait StateManagerTrait {
+    /// At the boundary of snapshot, getting a state for new epoch will switch
+    /// to new Delta MPT, but it's unnecessary getting a no-commit state.
+    ///
+    /// With try_open == true, the call fails immediately when the max number of
+    /// snapshot open is reached.
+    fn get_state_no_commit(
+        self: &Arc<Self>, epoch_id: StateIndex, try_open: bool,
+    ) -> Result<Option<State>>;
+    fn get_state_for_next_epoch(
+        self: &Arc<Self>, parent_epoch_id: StateIndex,
+    ) -> Result<Option<State>>;
+    fn get_state_for_genesis_write(self: &Arc<Self>) -> State;
+}

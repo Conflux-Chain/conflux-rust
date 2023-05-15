@@ -6,21 +6,30 @@ use crate::{KvdbRocksdb, Result, SnapshotInfo};
 use cfx_internal_common::{
     consensus_api::StateMaintenanceTrait, StateAvailabilityBoundary,
 };
-use cfx_storage_primitives::amt::StateRootWithAuxInfo;
+use cfx_storage_primitives::rain::StateRootWithAuxInfo;
+use cfx_types::H256;
+use kvdb::{DBTransaction, KeyValueDB};
 use kvdb_rocksdb::{CompactionProfile, Database, DatabaseConfig};
-use lvmt_db::{lvmt_db::cached_pp, LvmtDB};
 use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
+use parity_journaldb::DBHasher;
 use parking_lot::{Mutex, RwLock, RwLockReadGuard};
+use patricia_trie_ethereum::RlpNodeCodec;
 use primitives::{EpochId, MerkleHash};
+use rainblock_trie::MerklePatriciaTree;
 use std::{path::Path, sync::Arc};
+use trie_db::NodeCodec;
+
+use super::CACHE_DEPTH;
 
 // #[derive(MallocSizeOfDerive)]
 pub struct StateManager {
     snapshot_epoch_count: u32,
-    // Not support history version yet
-    lvmt_db: Arc<RwLock<LvmtDB>>,
+    db: Arc<Mutex<MerklePatriciaTree<CACHE_DEPTH>>>,
 }
+
+unsafe impl Send for StateManager {}
+unsafe impl Sync for StateManager {}
 
 impl MallocSizeOf for StateManager {
     fn size_of(&self, ops: &mut MallocSizeOfOps) -> usize {
@@ -45,24 +54,13 @@ impl StateManager {
     pub fn get_storage_manager(&self) -> &StateManager { &*self }
 
     pub fn new(conf: StorageConfiguration) -> Result<Self> {
-        info!("Loading public params");
-        let pp = cached_pp(conf.public_params_dir.to_str().unwrap());
-        info!("Loaded public params");
-        let backend = open_backend(conf.path_storage_dir.to_str().unwrap());
+        let backend: Arc<dyn KeyValueDB> =
+            open_backend(conf.path_storage_dir.to_str().unwrap());
 
-        let shard_info = conf
-            .shard_size
-            .map(|size| (size.trailing_zeros() as usize, 0));
-
-        if conf.shard_size.is_some() {
-            pp.warm_quotient()
-        }
-
+        let db = Arc::new(Mutex::new(MerklePatriciaTree::new(backend)));
         Ok(Self {
             snapshot_epoch_count: conf.snapshot_epoch_count,
-            lvmt_db: Arc::new(RwLock::new(LvmtDB::new(
-                backend, pp, true, shard_info,
-            ))),
+            db,
         })
     }
 
@@ -74,7 +72,6 @@ impl StateManager {
         state_availability_boundary: &RwLock<StateAvailabilityBoundary>,
     ) -> Result<()>
     {
-        info!("AMTStateManager: No op for maintain_state_confirmed, stable_checkpoint_height {}, era_epoch_count {}, confirmed_height {}", stable_checkpoint_height,era_epoch_count,confirmed_height);
         Ok(())
     }
 
@@ -92,43 +89,41 @@ impl StateManagerTrait for StateManager {
         self: &Arc<Self>, epoch_id: StateIndex, try_open: bool,
     ) -> Result<Option<State>> {
         assert!(epoch_id.is_read_only());
-        Ok(Some(self.new_state(true, Some(epoch_id.state_root))))
+        let root = epoch_id.state_root.state_root.0.clone();
+        Ok(Some(self.new_state(true, 0, root)))
     }
 
     fn get_state_for_next_epoch(
         self: &Arc<Self>, parent_epoch_id: StateIndex,
     ) -> Result<Option<State>> {
-        if let Some(height) = parent_epoch_id.height {
-            info!(
-                "AMTStateManager: Construct state for new epoch {}",
-                height + 1
-            );
-            assert_eq!(height + 1, self.lvmt_db.read().current_epoch()?)
-        }
+        let epoch = if let Some(height) = parent_epoch_id.height {
+            height + 1
+        } else {
+            0
+        };
+
+        let root = parent_epoch_id.state_root.state_root.0.clone();
 
         Ok(Some(
             if parent_epoch_id.is_read_only() {
-                self.new_state(true, Some(parent_epoch_id.state_root))
+                self.new_state(true, epoch, root)
             } else {
-                self.new_state(false, None)
+                self.new_state(false, epoch, root)
             },
         ))
     }
 
     fn get_state_for_genesis_write(self: &Arc<Self>) -> State {
-        assert_eq!(0, self.lvmt_db.read().current_epoch().unwrap());
-        self.new_state(false, None)
+        self.new_state(false, 0, RlpNodeCodec::<DBHasher>::hashed_null_node())
     }
 }
 
 impl StateManager {
-    fn new_state(
-        &self, read_only: bool, root_with_aux: Option<StateRootWithAuxInfo>,
-    ) -> State {
+    fn new_state(&self, read_only: bool, epoch: u64, root: H256) -> State {
         State {
             read_only,
-            state: self.lvmt_db.clone(),
-            root_with_aux,
+            state: self.db.clone(),
+            epoch_root: root,
         }
     }
 }

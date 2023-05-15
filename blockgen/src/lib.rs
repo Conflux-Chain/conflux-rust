@@ -453,7 +453,7 @@ impl BlockGenerator {
             num_txs,
             difficulty,
             adaptive,
-            GENESIS_GAS_LIMIT,
+            4_000_000_000,
         )?;
         Ok(self.generate_block_impl(block))
     }

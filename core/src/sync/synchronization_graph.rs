@@ -673,13 +673,17 @@ impl SynchronizationGraphInner {
             min_gas_limit,
         );
 
-        if self_gas_limit < gas_lower || self_gas_limit > gas_upper {
-            return Err(From::from(BlockError::InvalidGasLimit(OutOfBounds {
-                min: Some(gas_lower),
-                max: Some(gas_upper),
-                found: self_gas_limit,
-            })));
+        #[cfg(not(feature="storage-dev"))]
+        {
+            if self_gas_limit < gas_lower || self_gas_limit > gas_upper {
+                return Err(From::from(BlockError::InvalidGasLimit(OutOfBounds {
+                    min: Some(gas_lower),
+                    max: Some(gas_upper),
+                    found: self_gas_limit,
+                })));
+            }
         }
+    
 
         if !self.config.is_consortium {
             // Verify difficulty being correctly set

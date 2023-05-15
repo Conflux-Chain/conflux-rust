@@ -9,14 +9,16 @@ def send_transaction_with_goodput(encoded_transactions, send, node, base=0, log=
 
     tasks = enumerate(encoded_transactions)
     i, encoded = next(tasks)
-    size = 0
+    size = base
     complete = False
 
+    time.sleep(1)
+
     while not complete:
-        time.sleep(1)
+        round_start = time.time()
         goodtps = int(node.getgoodput())
         log(f"Current goodput: {goodtps}")
-        while encoded.length + base < int(goodtps) + 50000:
+        while encoded.length + size < int(goodtps) + 80000:
             send(i, encoded)
             size += encoded.length
             try:
@@ -25,11 +27,14 @@ def send_transaction_with_goodput(encoded_transactions, send, node, base=0, log=
                 complete = True
                 break
 
-        log(f"Sent {base} transactions (in total)")
+        round_elapsed = time.time() - round_start
+        # log(f"Sent {size} transactions (in total)")
+        if round_elapsed < 1:
+            time.sleep(1-round_elapsed)
 
     time_used = time.time() - start_time
     log(f"Time used: {time_used}")
-    return size
+    return size - base
 
 
 def wait_transaction_with_goodput(target, node, log=print):

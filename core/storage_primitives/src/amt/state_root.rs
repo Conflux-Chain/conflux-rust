@@ -1,11 +1,11 @@
 use crate::key_value::MERKLE_NULL_NODE;
+use cfx_primitives::MerkleHash;
+use cfx_types::H256;
+use keccak_hash::keccak;
 use lvmt_db::{
     serde::{MyFromBytes, MyToBytes},
     LvmtRoot,
 };
-use cfx_primitives::MerkleHash;
-use cfx_types::H256;
-use keccak_hash::keccak;
 
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
@@ -58,8 +58,9 @@ impl Decodable for StateRoot {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         let serialized_lvmt_root: Vec<u8> = rlp.val_at(0).unwrap();
         let static_root = rlp.val_at(1).unwrap();
-        let lvmt_root = LvmtRoot::from_bytes_consensus(&serialized_lvmt_root)
-            .map_err(|_| DecoderError::Custom("Curve serialize error"))?;
+        let lvmt_root =
+            LvmtRoot::from_bytes_consensus(&serialized_lvmt_root)
+                .map_err(|_| DecoderError::Custom("Curve serialize error"))?;
         Ok(StateRoot {
             lvmt_root,
             static_root,

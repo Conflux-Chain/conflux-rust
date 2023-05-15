@@ -23,7 +23,7 @@ pub mod consensus {
     // At Conflux MainNet Launch there are approximately 2 blocks per epoch,
     // with 1k TPS, and 2 blocks per second, a DeltaMPT contains data for
     // around 2 million transaction.
-    pub const SNAPSHOT_EPOCHS_CAPACITY: u32 = 2000;
+    pub const SNAPSHOT_EPOCHS_CAPACITY: u32 = 100;
 
     pub const NULL: usize = !0;
     pub const NULLU64: u64 = !0;
@@ -178,7 +178,12 @@ pub mod block {
     // second. This would allow us to have 2000 simple payment transactions
     // per block. With two blocks per second, we will have 4000TPS at the
     // peak with only simple payment, which is good enough for now.
-    pub const MAX_BLOCK_SIZE_IN_BYTES: usize = 200 * 1024;
+    pub const MAX_BLOCK_SIZE_IN_BYTES: usize = if cfg!(feature = "storage-dev")
+    {
+        5 * 1024 * 1024
+    } else {
+        200 * 1024
+    };
     // The maximum number of transactions to be packed in a block given
     // `MAX_BLOCK_SIZE_IN_BYTES`, assuming 50-byte transactions.
     pub const ESTIMATED_MAX_BLOCK_SIZE_IN_TRANSACTION_COUNT: usize = 4096;
