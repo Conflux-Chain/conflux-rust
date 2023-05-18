@@ -1749,20 +1749,32 @@ impl RpcImpl {
             .get_block_hashes_by_epoch(primitives::EpochNumber::Number(
                 epoch_number.as_u64(),
             ))
-            .map_err(|e| JsonRpcError::invalid_params(format!("Could not get block hashes by epoch {}", e)))?;
+            .map_err(|e| {
+                JsonRpcError::invalid_params(format!(
+                    "Could not get block hashes by epoch {}",
+                    e
+                ))
+            })?;
 
         let blocks = match self
             .consensus
             .get_data_manager()
             .blocks_by_hash_list(&block_hashs, false)
         {
-            None => return Err(JsonRpcError::invalid_params(format!("Could not get blocks for hashs {:?}", block_hashs))),
+            None => {
+                return Err(JsonRpcError::invalid_params(format!(
+                    "Could not get blocks for hashs {:?}",
+                    block_hashs
+                )))
+            }
             Some(b) => b,
         };
 
         let pivot = match blocks.last() {
             Some(p) => p,
-            None => return Err(JsonRpcError::invalid_params("blocks is empty")),
+            None => {
+                return Err(JsonRpcError::invalid_params("blocks is empty"))
+            }
         };
 
         self.get_transactions(&blocks, pivot, epoch_number.as_u64())
@@ -1774,7 +1786,12 @@ impl RpcImpl {
         debug!("cfx_getTransactionsByBlock {}", block_hash);
 
         let epoch_number = match self.get_block_epoch_number(&block_hash) {
-            None => return Err(JsonRpcError::invalid_params(format!("Counld not get epoch for block {}", block_hash))),
+            None => {
+                return Err(JsonRpcError::invalid_params(format!(
+                    "Counld not get epoch for block {}",
+                    block_hash
+                )))
+            }
             Some(n) => n,
         };
 
@@ -1783,20 +1800,32 @@ impl RpcImpl {
             .get_block_hashes_by_epoch(primitives::EpochNumber::Number(
                 epoch_number,
             ))
-            .map_err(|e| JsonRpcError::invalid_params(format!("Could not get block hashes by epoch {}", e)))?;
+            .map_err(|e| {
+                JsonRpcError::invalid_params(format!(
+                    "Could not get block hashes by epoch {}",
+                    e
+                ))
+            })?;
 
         let blocks = match self
             .consensus
             .get_data_manager()
             .blocks_by_hash_list(&block_hashs, false)
         {
-            None => return Err(JsonRpcError::invalid_params(format!("Counld not get blocks for hashs {:?}", block_hashs))),
+            None => {
+                return Err(JsonRpcError::invalid_params(format!(
+                    "Counld not get blocks for hashs {:?}",
+                    block_hashs
+                )))
+            }
             Some(b) => b,
         };
 
         let pivot = match blocks.last() {
             Some(p) => p,
-            None => return Err(JsonRpcError::invalid_params("blocks is empty")),
+            None => {
+                return Err(JsonRpcError::invalid_params("blocks is empty"))
+            }
         };
 
         let mut block = vec![];
@@ -1812,16 +1841,11 @@ impl RpcImpl {
 
     fn get_transactions(
         &self, blocks: &Vec<Arc<Block>>, pivot: &Arc<Block>, epoch_number: u64,
-    ) -> JsonRpcResult<Vec<WrapTransaction>>
-    {
+    ) -> JsonRpcResult<Vec<WrapTransaction>> {
         let mut transactions = vec![];
 
         for b in blocks.into_iter() {
-            match self.get_transactions_for_block(
-                b,
-                pivot,
-                epoch_number,
-            ) {
+            match self.get_transactions_for_block(b, pivot, epoch_number) {
                 Ok(mut txs) => {
                     transactions.append(&mut txs);
                 }
@@ -1834,8 +1858,7 @@ impl RpcImpl {
 
     fn get_transactions_for_block(
         &self, b: &Arc<Block>, pivot: &Arc<Block>, epoch_number: u64,
-    ) -> Result<Vec<WrapTransaction>, String>
-    {
+    ) -> Result<Vec<WrapTransaction>, String> {
         let maybe_state_root = self
             .consensus
             .get_data_manager()
