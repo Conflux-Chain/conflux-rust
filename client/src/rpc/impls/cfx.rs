@@ -1749,23 +1749,23 @@ impl RpcImpl {
             .get_block_hashes_by_epoch(primitives::EpochNumber::Number(
                 epoch_number.as_u64(),
             ))
-            .map_err(|_| JsonRpcError::internal_error())?;
+            .map_err(|e| JsonRpcError::invalid_params(format!("Could not get block hashes by epoch {}", e)))?;
 
         let blocks = match self
             .consensus
             .get_data_manager()
             .blocks_by_hash_list(&block_hashs, false)
         {
-            None => return Ok(vec![]),
+            None => return Err(JsonRpcError::invalid_params(format!("Could not get blocks for hashs {:?}", block_hashs))),
             Some(b) => b,
         };
 
         let pivot = match blocks.last() {
             Some(p) => p,
-            None => return Err(JsonRpcError::internal_error()),
+            None => return Err(JsonRpcError::invalid_params("blocks is empty")),
         };
 
-        self.get_transactions(&blocks, pivot, true, epoch_number.as_u64())
+        self.get_transactions(&blocks, pivot, epoch_number.as_u64())
     }
 
     fn transactions_by_block(
@@ -1774,7 +1774,7 @@ impl RpcImpl {
         debug!("cfx_getTransactionsByBlock {}", block_hash);
 
         let epoch_number = match self.get_block_epoch_number(&block_hash) {
-            None => return Ok(vec![]),
+            None => return Err(JsonRpcError::invalid_params(format!("Counld not get epoch for block {}", block_hash))),
             Some(n) => n,
         };
 
@@ -1783,26 +1783,20 @@ impl RpcImpl {
             .get_block_hashes_by_epoch(primitives::EpochNumber::Number(
                 epoch_number,
             ))
-            .map_err(|_| JsonRpcError::internal_error())?;
+            .map_err(|e| JsonRpcError::invalid_params(format!("Could not get block hashes by epoch {}", e)))?;
 
         let blocks = match self
             .consensus
             .get_data_manager()
             .blocks_by_hash_list(&block_hashs, false)
         {
-            None => return Ok(vec![]),
+            None => return Err(JsonRpcError::invalid_params(format!("Counld not get blocks for hashs {:?}", block_hashs))),
             Some(b) => b,
         };
 
         let pivot = match blocks.last() {
             Some(p) => p,
-            None => return Err(JsonRpcError::internal_error()),
-        };
-
-        let include_eth_tx = if block_hash == pivot.hash() {
-            true
-        } else {
-            false
+            None => return Err(JsonRpcError::invalid_params("blocks is empty")),
         };
 
         let mut block = vec![];
@@ -1813,12 +1807,11 @@ impl RpcImpl {
             }
         }
 
-        self.get_transactions(&block, pivot, include_eth_tx, epoch_number)
+        self.get_transactions(&block, pivot, epoch_number)
     }
 
     fn get_transactions(
-        &self, blocks: &Vec<Arc<Block>>, pivot: &Arc<Block>,
-        include_eth_tx: bool, epoch_number: u64,
+        &self, blocks: &Vec<Arc<Block>>, pivot: &Arc<Block>, epoch_number: u64,
     ) -> JsonRpcResult<Vec<WrapTransaction>>
     {
         let mut transactions = vec![];
@@ -1828,7 +1821,6 @@ impl RpcImpl {
                 b,
                 pivot,
                 epoch_number,
-                include_eth_tx,
             ) {
                 Ok(mut txs) => {
                     transactions.append(&mut txs);
@@ -1842,7 +1834,6 @@ impl RpcImpl {
 
     fn get_transactions_for_block(
         &self, b: &Arc<Block>, pivot: &Arc<Block>, epoch_number: u64,
-        include_eth_tx: bool,
     ) -> Result<Vec<WrapTransaction>, String>
     {
         let maybe_state_root = self
@@ -1875,10 +1866,6 @@ impl RpcImpl {
 
                     match tx.space() {
                         Space::Ethereum => {
-                            if !include_eth_tx {
-                                continue;
-                            }
-
                             let status = receipt
                                 .outcome_status
                                 .in_space(Space::Ethereum);
@@ -1985,10 +1972,6 @@ impl RpcImpl {
                 for (_, tx) in b.transactions.iter().enumerate() {
                     match tx.space() {
                         Space::Ethereum => {
-                            if !include_eth_tx {
-                                continue;
-                            }
-
                             res.push(WrapTransaction::EthTransaction(
                                 EthTransaction::from_signed(
                                     tx,
