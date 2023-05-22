@@ -189,13 +189,18 @@ impl EpochManager {
         &self, time_service: Arc<dyn TimeService>,
         timeout_sender: channel::Sender<(u64, Round)>,
         proposal_timeout_sender: channel::Sender<(u64, Round)>,
-        new_round_timeout_sender: channel::Sender<(u64, Round)>,
+        new_round_timeout_sender: channel::Sender<(u64, Round)>, epoch: u64,
     ) -> RoundState
     {
         // 1.5^6 ~= 11
         // Timeout goes from initial_timeout to initial_timeout*11 in 6 steps
+        let base_interval = Duration::from_millis(if epoch < self.config.round_initial_timeout_ms {
+            self.config.round_initial_timeout_ms
+        } else {
+            self.config.hard_fork_round_initial_timeout_ms
+        });
         let time_interval = Box::new(ExponentialTimeInterval::new(
-            Duration::from_millis(self.config.round_initial_timeout_ms),
+            base_interval,
             1.2,
             6,
         ));

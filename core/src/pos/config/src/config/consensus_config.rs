@@ -29,6 +29,9 @@ pub struct ConsensusConfig {
     // response (in milliseconds)
     pub mempool_txn_pull_timeout_ms: u64,
     pub round_initial_timeout_ms: u64,
+    pub hard_fork_round_initial_timeout_ms: u64,
+    pub hard_fork_epoch: u64,
+
     pub proposer_type: ConsensusProposerType,
     pub safety_rules: SafetyRulesConfig,
     // Only sync committed transactions but not vote for any pending blocks.
@@ -53,7 +56,9 @@ impl Default for ConsensusConfig {
             mempool_executed_txn_timeout_ms: 1000,
             // TODO(lpl): Decide value.
             // 60 epochs should have been generated in 4 minutes.
-            round_initial_timeout_ms: 240_000,
+            round_initial_timeout_ms: 60_000,
+            hard_fork_round_initial_timeout_ms: 30_000,
+            hard_fork_epoch: u64::MAX,
             proposer_type: ConsensusProposerType::VrfProposer,
             safety_rules: SafetyRulesConfig::default(),
             sync_only: false,
