@@ -671,7 +671,7 @@ impl Eth for EthHandler {
         if tx.recover_public().is_err() {
             bail!(invalid_params(
                 "tx",
-                "Can not recover pubkey for Ethereum like tx"
+                "Can not recover pubkey for Ethereum like tx. Conflux eSpace only supports EIP-155 rather than EIP-1559 or other format transactions."
             ));
         }
 
