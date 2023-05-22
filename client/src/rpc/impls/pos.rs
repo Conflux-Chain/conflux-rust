@@ -15,6 +15,8 @@ use crate::{
             errors::check_rpc_address_network,
             pos::{
                 tx_type, Account, Block, BlockNumber, CommitteeState, Decision,
+                EpochState as RpcEpochState,
+                LedgerInfoWithSignatures as RpcLedgerInfoWithSignatures,
                 NodeLockStatus, PoSEpochReward, RpcCommittee, RpcTermData,
                 RpcTransactionStatus, RpcTransactionType, Signature, Status,
                 Transaction, VotePowerState,
@@ -637,6 +639,19 @@ impl PosHandler {
             }
         }
     }
+
+    fn ledger_info_by_block_number(
+        &self, block_number: BlockNumber,
+    ) -> Option<LedgerInfoWithSignatures> {
+        // TODO: Get hash without getting the block.
+        let block_hash = self.block_by_number(block_number)?.hash;
+        self.pos_handler
+            .pos_ledger_db()
+            .get_ledger_info_by_voted_block(
+                &HashValue::from_slice(block_hash.as_bytes()).unwrap(),
+            )
+            .ok()
+    }
 }
 
 fn map_votes(list: &StatusList) -> Vec<VotePowerState> {
@@ -697,25 +712,36 @@ impl Pos for PosHandler {
 
     fn pos_get_epoch_state(
         &self, epoch: U64,
-    ) -> JsonRpcResult<Option<EpochState>> {
-        Ok(self.epoch_state_by_epoch_number(epoch.as_u64()))
+    ) -> JsonRpcResult<Option<RpcEpochState>> {
+        Ok(self
+            .epoch_state_by_epoch_number(epoch.as_u64())
+            .map(|e| (&e).into()))
     }
 
     fn pos_get_ledger_info_by_epoch(
         &self, epoch: U64,
-    ) -> JsonRpcResult<Option<LedgerInfoWithSignatures>> {
-        Ok(self.ledger_info_by_epoch(epoch.as_u64()))
+    ) -> JsonRpcResult<Option<RpcLedgerInfoWithSignatures>> {
+        Ok(self
+            .ledger_info_by_epoch(epoch.as_u64())
+            .map(|l| (&l).into()))
+    }
+
+    fn pos_get_ledger_info_by_block_number(
+        &self, number: BlockNumber,
+    ) -> JsonRpcResult<Option<RpcLedgerInfoWithSignatures>> {
+        Ok(self
+            .ledger_info_by_block_number(number)
+            .map(|l| (&l).into()))
     }
 
     fn pos_get_ledger_infos_by_epoch(
         &self, start_epoch: U64, end_epoch: U64,
-    ) -> JsonRpcResult<Vec<LedgerInfoWithSignatures>> {
-        Ok(
-            self.ledger_infos_by_epoch(
-                start_epoch.as_u64(),
-                end_epoch.as_u64(),
-            ),
-        )
+    ) -> JsonRpcResult<Vec<RpcLedgerInfoWithSignatures>> {
+        Ok(self
+            .ledger_infos_by_epoch(start_epoch.as_u64(), end_epoch.as_u64())
+            .iter()
+            .map(|l| l.into())
+            .collect())
     }
 
     fn pos_get_rewards_by_epoch(

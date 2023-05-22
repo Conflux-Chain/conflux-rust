@@ -108,14 +108,20 @@ pub trait LocalRpc {
     #[rpc(name = "cfx_getEpochReceipts")]
     fn epoch_receipts(
         &self, epoch: BlockHashOrEpochNumber,
+        include_eth_recepits: Option<bool>,
     ) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
 
-    #[rpc(name = "cfx_getTransactionsByEpoch")]
+    #[rpc(name = "debug_getEpochReceiptProofByTransaction")]
+    fn epoch_receipt_proof_by_transaction(
+        &self, tx_hash: H256,
+    ) -> JsonRpcResult<Option<String>>;
+
+    #[rpc(name = "debug_getTransactionsByEpoch")]
     fn transactions_by_epoch(
         &self, epoch_number: U64,
     ) -> JsonRpcResult<Vec<WrapTransaction>>;
 
-    #[rpc(name = "cfx_getTransactionsByBlock")]
+    #[rpc(name = "debug_getTransactionsByBlock")]
     fn transactions_by_block(
         &self, block_hash: H256,
     ) -> JsonRpcResult<Vec<WrapTransaction>>;
