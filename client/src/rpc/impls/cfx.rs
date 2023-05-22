@@ -1742,7 +1742,7 @@ impl RpcImpl {
     fn transactions_by_epoch(
         &self, epoch_number: U64,
     ) -> JsonRpcResult<Vec<WrapTransaction>> {
-        debug!("cfx_getTransactionsByEpoch {}", epoch_number);
+        debug!("debug_getTransactionsByEpoch {}", epoch_number);
 
         let block_hashs = self
             .consensus
@@ -1783,7 +1783,7 @@ impl RpcImpl {
     fn transactions_by_block(
         &self, block_hash: H256,
     ) -> JsonRpcResult<Vec<WrapTransaction>> {
-        debug!("cfx_getTransactionsByBlock {}", block_hash);
+        debug!("debug_getTransactionsByBlock {}", block_hash);
 
         let epoch_number = match self.get_block_epoch_number(&block_hash) {
             None => {
