@@ -360,15 +360,19 @@ impl SnapshotDbTrait for SnapshotKvDbSqlite {
                 key_value_iter.iter_range(&[], None).unwrap().take();
 
             let new_mpt_snapshot = mpt_snapshot.as_mut().unwrap();
+            new_mpt_snapshot.start_transaction()?;
             while let Some((access_key, expected_value)) = kv_iter.next()? {
                 new_mpt_snapshot.put(&access_key, &expected_value)?;
             }
+            new_mpt_snapshot.commit_transaction()?;
         }
 
         let mut mpt_to_modify = if self.is_mpt_table_in_current_db() {
             self.open_snapshot_mpt_owned()?
         } else {
-            mpt_snapshot.as_mut().unwrap().open_snapshot_mpt_owned()?
+            let mpt = mpt_snapshot.as_mut().unwrap();
+            mpt.start_transaction()?;
+            mpt.open_snapshot_mpt_owned()?
         };
 
         let mut mpt_merger = MptMerger::new(
@@ -381,6 +385,10 @@ impl SnapshotDbTrait for SnapshotKvDbSqlite {
             set_keys_iter.iter_range(&[], None)?.take(),
         )?;
         self.commit_transaction()?;
+
+        if !self.is_mpt_table_in_current_db() {
+            mpt_snapshot.as_mut().unwrap().commit_transaction()?;
+        }
 
         Ok(snapshot_root)
     }
@@ -414,10 +422,9 @@ impl SnapshotDbTrait for SnapshotKvDbSqlite {
         let mut save_as_mpt = if self.is_mpt_table_in_current_db() {
             self.open_snapshot_mpt_owned()?
         } else {
-            mpt_snapshot_db
-                .as_mut()
-                .unwrap()
-                .open_snapshot_mpt_owned()?
+            let mpt = mpt_snapshot_db.as_mut().unwrap();
+            mpt.start_transaction()?;
+            mpt.open_snapshot_mpt_owned()?
         };
 
         let mut mpt_merger = if old_snapshot_db.is_mpt_table_in_current_db() {
@@ -439,6 +446,10 @@ impl SnapshotDbTrait for SnapshotKvDbSqlite {
             set_keys_iter.iter_range(&[], None)?.take(),
         )?;
         self.commit_transaction()?;
+
+        if !self.is_mpt_table_in_current_db() {
+            mpt_snapshot_db.as_mut().unwrap().commit_transaction()?;
+        }
 
         Ok(snapshot_root)
     }
@@ -464,6 +475,10 @@ impl SnapshotDbTrait for SnapshotKvDbSqlite {
     }
 
     fn is_mpt_table_in_current_db(&self) -> bool {
+        debug!(
+            "is_mpt_table_in_current_db {}",
+            self.mpt_table_in_current_db
+        );
         self.mpt_table_in_current_db
     }
 

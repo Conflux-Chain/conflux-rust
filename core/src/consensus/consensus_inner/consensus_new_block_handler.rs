@@ -2276,6 +2276,11 @@ impl ConsensusNewBlockHandler {
                     .get_snapshot_manager()
                     .get_snapshot_db_manager();
 
+                snapshot_db_manager.update_latest_snapshot_id(
+                    era_pivot_hash.clone(),
+                    era_pivot_epoch_height,
+                );
+
                 // use ear snapshot replace latest
                 snapshot_db_manager
                     .recovery_lastest_mpt_snapshot(&era_pivot_hash)
