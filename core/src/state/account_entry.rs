@@ -5,7 +5,7 @@
 use crate::{
     bytes::Bytes,
     hash::{keccak, KECCAK_EMPTY},
-    state::{AccountEntryProtectedMethods, StateGeneric},
+    state::{AccountEntryProtectedMethods, State},
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::{
@@ -1022,7 +1022,7 @@ impl OverlayAccount {
     }
 
     pub fn commit(
-        &mut self, state: &mut StateGeneric, address: &AddressWithSpace,
+        &mut self, state: &mut State, address: &AddressWithSpace,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()>
     {

@@ -9,7 +9,9 @@ use std::{
 
 use num::integer::Roots;
 use parking_lot::{
-    MappedRwLockWriteGuard, RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard,
+    lock_api::{MappedRwLockReadGuard, RwLockReadGuard},
+    MappedRwLockWriteGuard, RawRwLock, RwLock, RwLockUpgradableReadGuard,
+    RwLockWriteGuard,
 };
 
 use cfx_bytes::Bytes;
@@ -72,6 +74,23 @@ pub mod prefetcher;
 mod state_tests;
 mod substate;
 
+pub type AccountReadGuard<'a> =
+    MappedRwLockReadGuard<'a, RawRwLock, OverlayAccount>;
+
+macro_rules! try_loaded {
+    ($expr:expr) => {
+        match $expr {
+            Err(e) => {
+                return Err(e);
+            }
+            Ok(None) => {
+                return Ok(Default::default());
+            }
+            Ok(Some(v)) => v,
+        }
+    };
+}
+
 #[derive(Copy, Clone)]
 pub enum RequireCache {
     None,
@@ -107,9 +126,7 @@ struct WorldStatistics {
     converted_storage_points: U256,
 }
 
-pub type State = StateGeneric;
-
-pub struct StateGeneric {
+pub struct State {
     db: StateDb,
 
     // Only created once for txpool notification.
@@ -127,7 +144,7 @@ pub struct StateGeneric {
     checkpoints: RwLock<Vec<HashMap<AddressWithSpace, Option<AccountEntry>>>>,
 }
 
-impl StateGeneric {
+impl State {
     /// Collects the cache (`ownership_change` in `OverlayAccount`) of storage
     /// change and write to substate.
     /// It is idempotent. But its execution is costly.
@@ -319,7 +336,7 @@ impl StateGeneric {
     }
 }
 
-impl StateGeneric {
+impl State {
     /// Calculate the secondary reward for the next block number.
     pub fn bump_block_number_accumulate_interest(&mut self) {
         assert!(self.world_statistics_checkpoints.get_mut().is_empty());
@@ -459,14 +476,9 @@ impl StateGeneric {
         assert!(contract.space == Space::Native || admin.is_zero());
         // Check if the new contract is deployed on a killed contract in the
         // same block.
-        let invalidated_storage = self.ensure_account_loaded(
-            contract,
-            RequireCache::None,
-            |maybe_overlay| {
-                maybe_overlay
-                    .map_or(false, |overlay| overlay.invalidated_storage())
-            },
-        )?;
+        let invalidated_storage = self
+            .read_account(contract)?
+            .map_or(false, |overlay| overlay.invalidated_storage());
         Self::update_cache(
             self.cache.get_mut(),
             self.checkpoints.get_mut(),
@@ -487,9 +499,8 @@ impl StateGeneric {
     }
 
     pub fn balance(&self, address: &AddressWithSpace) -> DbResult<U256> {
-        self.ensure_account_loaded(address, RequireCache::None, |acc| {
-            acc.map_or(U256::zero(), |account| *account.balance())
-        })
+        let acc = try_loaded!(self.read_account(address));
+        Ok(*acc.balance())
     }
 
     pub fn is_contract_with_code(
@@ -500,37 +511,23 @@ impl StateGeneric {
         {
             return Ok(false);
         }
-        self.ensure_account_loaded(address, RequireCache::None, |acc| {
-            acc.map_or(false, |acc| acc.code_hash() != KECCAK_EMPTY)
-        })
+
+        let acc = try_loaded!(self.read_account(address));
+        Ok(acc.code_hash() != KECCAK_EMPTY)
     }
 
     pub fn sponsor_for_gas(
         &self, address: &Address,
     ) -> DbResult<Option<Address>> {
-        self.ensure_account_loaded(
-            &address.with_native_space(),
-            RequireCache::None,
-            |acc| {
-                acc.map_or(None, |acc| {
-                    maybe_address(&acc.sponsor_info().sponsor_for_gas)
-                })
-            },
-        )
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(maybe_address(&acc.sponsor_info().sponsor_for_gas))
     }
 
     pub fn sponsor_for_collateral(
         &self, address: &Address,
     ) -> DbResult<Option<Address>> {
-        self.ensure_account_loaded(
-            &address.with_native_space(),
-            RequireCache::None,
-            |acc| {
-                acc.map_or(None, |acc| {
-                    maybe_address(&acc.sponsor_info().sponsor_for_collateral)
-                })
-            },
-        )
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(maybe_address(&acc.sponsor_info().sponsor_for_collateral))
     }
 
     pub fn set_sponsor_for_gas(
@@ -581,66 +578,37 @@ impl StateGeneric {
     pub fn sponsor_info(
         &self, address: &Address,
     ) -> DbResult<Option<SponsorInfo>> {
-        self.ensure_account_loaded(
-            &address.with_native_space(),
-            RequireCache::None,
-            |maybe_acc| maybe_acc.map(|acc| acc.sponsor_info().clone()),
-        )
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(Some(acc.sponsor_info().clone()))
     }
 
     pub fn sponsor_gas_bound(&self, address: &Address) -> DbResult<U256> {
-        self.ensure_account_loaded(
-            &address.with_native_space(),
-            RequireCache::None,
-            |acc| {
-                acc.map_or(U256::zero(), |acc| {
-                    acc.sponsor_info().sponsor_gas_bound
-                })
-            },
-        )
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(acc.sponsor_info().sponsor_gas_bound)
     }
 
     pub fn sponsor_balance_for_gas(&self, address: &Address) -> DbResult<U256> {
-        self.ensure_account_loaded(
-            &address.with_native_space(),
-            RequireCache::None,
-            |acc| {
-                acc.map_or(U256::zero(), |acc| {
-                    acc.sponsor_info().sponsor_balance_for_gas
-                })
-            },
-        )
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(acc.sponsor_info().sponsor_balance_for_gas)
     }
 
     pub fn sponsor_balance_for_collateral(
         &self, address: &Address,
     ) -> DbResult<U256> {
-        self.ensure_account_loaded(
-            &address.with_native_space(),
-            RequireCache::None,
-            |acc| {
-                acc.map_or(U256::zero(), |acc| {
-                    acc.sponsor_info().sponsor_balance_for_collateral
-                })
-            },
-        )
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(acc.sponsor_info().sponsor_balance_for_collateral)
     }
 
     pub fn avaliable_storage_point_for_collateral(
         &self, address: &Address,
     ) -> DbResult<U256> {
-        self.ensure_account_loaded(
-            &address.with_native_space(),
-            RequireCache::None,
-            |acc| {
-                acc.map_or(U256::zero(), |acc| {
-                    acc.sponsor_info()
-                        .storage_points
-                        .as_ref()
-                        .map_or(U256::zero(), |x| x.unused)
-                })
-            },
-        )
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(acc
+            .sponsor_info()
+            .storage_points
+            .as_ref()
+            .map(|points| points.unused)
+            .unwrap_or_default())
     }
 
     pub fn set_admin(
@@ -694,23 +662,9 @@ impl StateGeneric {
     pub fn check_commission_privilege(
         &self, contract_address: &Address, user: &Address,
     ) -> DbResult<bool> {
-        match self.ensure_account_loaded(
-            &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS.with_native_space(),
-            RequireCache::None,
-            |acc| {
-                acc.map_or(Ok(false), |acc| {
-                    acc.check_commission_privilege(
-                        &self.db,
-                        contract_address,
-                        user,
-                    )
-                })
-            },
-        ) {
-            Ok(Ok(bool)) => Ok(bool),
-            Ok(Err(e)) => Err(e),
-            Err(e) => Err(e),
-        }
+        let acc = try_loaded!(self
+            .read_native_account(&*SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS));
+        acc.check_commission_privilege(&self.db, contract_address, user)
     }
 
     pub fn add_commission_privilege(
@@ -750,9 +704,8 @@ impl StateGeneric {
     // TODO: maybe return error for reserved address? Not sure where is the best
     //  place to do the check.
     pub fn nonce(&self, address: &AddressWithSpace) -> DbResult<U256> {
-        self.ensure_account_loaded(address, RequireCache::None, |acc| {
-            acc.map_or(U256::zero(), |account| *account.nonce())
-        })
+        let acc = try_loaded!(self.read_account(address));
+        Ok(*acc.nonce())
     }
 
     pub fn init_code(
@@ -765,129 +718,92 @@ impl StateGeneric {
     pub fn code_hash(
         &self, address: &AddressWithSpace,
     ) -> DbResult<Option<H256>> {
-        self.ensure_account_loaded(address, RequireCache::None, |acc| {
-            acc.and_then(|acc| Some(acc.code_hash()))
-        })
+        let acc = try_loaded!(self.read_account(address));
+        Ok(Some(acc.code_hash()))
     }
 
     pub fn code_size(
         &self, address: &AddressWithSpace,
     ) -> DbResult<Option<usize>> {
-        self.ensure_account_loaded(address, RequireCache::Code, |acc| {
-            acc.and_then(|acc| acc.code_size())
-        })
+        let acc =
+            try_loaded!(self.read_account_ext(address, RequireCache::Code));
+        Ok(acc.code_size())
     }
 
     pub fn code_owner(
         &self, address: &AddressWithSpace,
     ) -> DbResult<Option<Address>> {
         address.assert_native();
-        self.ensure_account_loaded(address, RequireCache::Code, |acc| {
-            acc.as_ref().map_or(None, |acc| acc.code_owner())
-        })
+        let acc =
+            try_loaded!(self.read_account_ext(address, RequireCache::Code));
+        Ok(acc.code_owner())
     }
 
     pub fn code(
         &self, address: &AddressWithSpace,
     ) -> DbResult<Option<Arc<Vec<u8>>>> {
-        self.ensure_account_loaded(address, RequireCache::Code, |acc| {
-            acc.as_ref().map_or(None, |acc| acc.code())
-        })
+        let acc =
+            try_loaded!(self.read_account_ext(address, RequireCache::Code));
+        Ok(acc.code())
     }
 
     pub fn staking_balance(&self, address: &Address) -> DbResult<U256> {
-        self.ensure_account_loaded(
-            &address.with_native_space(),
-            RequireCache::None,
-            |acc| {
-                acc.map_or(U256::zero(), |account| *account.staking_balance())
-            },
-        )
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(*acc.staking_balance())
     }
 
     pub fn collateral_for_storage(&self, address: &Address) -> DbResult<U256> {
-        self.ensure_account_loaded(
-            &address.with_native_space(),
-            RequireCache::None,
-            |acc| {
-                acc.map_or(U256::zero(), |account| {
-                    account.collateral_for_storage()
-                })
-            },
-        )
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(acc.collateral_for_storage())
     }
 
     pub fn token_collateral_for_storage(
         &self, address: &Address,
     ) -> DbResult<U256> {
-        self.ensure_account_loaded(
-            &address.with_native_space(),
-            RequireCache::None,
-            |acc| {
-                acc.map_or(U256::zero(), |account| {
-                    account.token_collateral_for_storage()
-                })
-            },
-        )
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(acc.token_collateral_for_storage())
     }
 
     pub fn admin(&self, address: &Address) -> DbResult<Address> {
-        self.ensure_account_loaded(
-            &address.with_native_space(),
-            RequireCache::None,
-            |acc| acc.map_or(Address::zero(), |acc| *acc.admin()),
-        )
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(*acc.admin())
     }
 
     pub fn withdrawable_staking_balance(
         &self, address: &Address, current_block_number: u64,
     ) -> DbResult<U256> {
-        self.ensure_account_loaded(
+        let acc = try_loaded!(self.read_account_ext(
             &address.with_native_space(),
             RequireCache::VoteStakeList,
-            |acc| {
-                acc.map_or(U256::zero(), |acc| {
-                    acc.withdrawable_staking_balance(current_block_number)
-                })
-            },
-        )
+        ));
+        Ok(acc.withdrawable_staking_balance(current_block_number))
     }
 
     pub fn locked_staking_balance_at_block_number(
         &self, address: &Address, block_number: u64,
     ) -> DbResult<U256> {
-        self.ensure_account_loaded(
+        let acc = try_loaded!(self.read_account_ext(
             &address.with_native_space(),
             RequireCache::VoteStakeList,
-            |acc| {
-                acc.map_or(U256::zero(), |acc| {
-                    acc.staking_balance()
-                        - acc.withdrawable_staking_balance(block_number)
-                })
-            },
-        )
+        ));
+        Ok(acc.staking_balance()
+            - acc.withdrawable_staking_balance(block_number))
     }
 
     pub fn deposit_list_length(&self, address: &Address) -> DbResult<usize> {
-        self.ensure_account_loaded(
+        let acc = try_loaded!(self.read_account_ext(
             &address.with_native_space(),
-            RequireCache::DepositList,
-            |acc| {
-                acc.map_or(0, |acc| acc.deposit_list().map_or(0, |l| l.len()))
-            },
-        )
+            RequireCache::DepositList
+        ));
+        Ok(acc.deposit_list().map_or(0, |l| l.len()))
     }
 
     pub fn vote_stake_list_length(&self, address: &Address) -> DbResult<usize> {
-        self.ensure_account_loaded(
+        let acc = try_loaded!(self.read_account_ext(
             &address.with_native_space(),
-            RequireCache::VoteStakeList,
-            |acc| {
-                acc.map_or(0, |acc| {
-                    acc.vote_stake_list().map_or(0, |l| l.len())
-                })
-            },
-        )
+            RequireCache::VoteStakeList
+        ));
+        Ok(acc.vote_stake_list().map_or(0, |l| l.len()))
     }
 
     // This is a special implementation to fix the bug in function
@@ -1154,27 +1070,21 @@ impl StateGeneric {
     }
 
     pub fn exists(&self, address: &AddressWithSpace) -> DbResult<bool> {
-        self.ensure_account_loaded(address, RequireCache::None, |acc| {
-            acc.is_some()
-        })
+        Ok(self.read_account(address)?.is_some())
     }
 
     pub fn exists_and_not_null(
         &self, address: &AddressWithSpace,
     ) -> DbResult<bool> {
-        self.ensure_account_loaded(address, RequireCache::None, |acc| {
-            acc.map_or(false, |acc| !acc.is_null())
-        })
+        let acc = try_loaded!(self.read_account(address));
+        Ok(!acc.is_null())
     }
 
     pub fn storage_at(
         &self, address: &AddressWithSpace, key: &[u8],
     ) -> DbResult<U256> {
-        self.ensure_account_loaded(address, RequireCache::None, |acc| {
-            acc.map_or(Ok(U256::zero()), |account| {
-                account.storage_at(&self.db, key)
-            })
-        })?
+        let acc = try_loaded!(self.read_account(address));
+        acc.storage_at(&self.db, key)
     }
 
     pub fn set_storage(
@@ -1249,19 +1159,13 @@ impl StateGeneric {
     }
 
     pub fn get_system_storage_opt(&self, key: &[u8]) -> DbResult<Option<U256>> {
-        self.ensure_account_loaded(
-            &SYSTEM_STORAGE_ADDRESS.with_native_space(),
-            RequireCache::None,
-            |acc| {
-                acc.map_or(Ok(None), |account| {
-                    account.storage_opt_at(&self.db, key)
-                })
-            },
-        )?
+        let acc =
+            try_loaded!(self.read_native_account(&*SYSTEM_STORAGE_ADDRESS));
+        acc.storage_opt_at(&self.db, key)
     }
 }
 
-impl StateGeneric {
+impl State {
     /// Create a recoverable checkpoint of this state. Return the checkpoint
     /// index. The checkpoint records any old value which is alive at the
     /// creation time of the checkpoint and updated after that and before
@@ -1330,7 +1234,7 @@ impl StateGeneric {
     }
 }
 
-impl StateGeneric {
+impl State {
     pub fn new(db: StateDb) -> DbResult<Self> {
         let annual_interest_rate = db.get_annual_interest_rate()?;
         let accumulate_interest_rate = db.get_accumulate_interest_rate()?;
@@ -1409,7 +1313,7 @@ impl StateGeneric {
             }
         };
 
-        Ok(StateGeneric {
+        Ok(State {
             db,
             cache: Default::default(),
             world_statistics_checkpoints: Default::default(),
@@ -1530,14 +1434,9 @@ impl StateGeneric {
     pub fn new_contract(
         &mut self, contract: &AddressWithSpace, balance: U256, nonce: U256,
     ) -> DbResult<()> {
-        let invalidated_storage = self.ensure_account_loaded(
-            contract,
-            RequireCache::None,
-            |maybe_overlay| {
-                maybe_overlay
-                    .map_or(false, |overlay| overlay.invalidated_storage())
-            },
-        )?;
+        let invalidated_storage = self
+            .read_account(contract)?
+            .map_or(false, |acc| acc.invalidated_storage());
         Self::update_cache(
             self.cache.get_mut(),
             self.checkpoints.get_mut(),
@@ -1942,23 +1841,9 @@ impl StateGeneric {
 
     /// Return whether or not the address exists.
     pub fn try_load(&self, address: &AddressWithSpace) -> DbResult<bool> {
-        match self.ensure_account_loaded(address, RequireCache::None, |maybe| {
-            maybe.is_some()
-        }) {
-            Err(e) => Err(e),
-            Ok(false) => Ok(false),
-            Ok(true) => {
-                // Try to load the code.
-                match self.ensure_account_loaded(
-                    address,
-                    RequireCache::Code,
-                    |_| (),
-                ) {
-                    Ok(()) => Ok(true),
-                    Err(e) => Err(e),
-                }
-            }
-        }
+        let _ = try_loaded!(self.read_account(address));
+        let _ = try_loaded!(self.read_account_ext(address, RequireCache::Code));
+        Ok(true)
     }
 
     // FIXME: rewrite this method before enable it for the first time, because
@@ -2115,19 +2000,40 @@ impl StateGeneric {
         }
     }
 
-    pub fn ensure_account_loaded<F, U>(
-        &self, address: &AddressWithSpace, require: RequireCache, f: F,
-    ) -> DbResult<U>
-    where F: Fn(Option<&OverlayAccount>) -> U {
+    fn read_native_account<'a>(
+        &'a self, address: &Address,
+    ) -> DbResult<Option<AccountReadGuard<'a>>> {
+        self.read_account(&address.with_native_space())
+    }
+
+    fn read_account<'a>(
+        &'a self, address: &AddressWithSpace,
+    ) -> DbResult<Option<AccountReadGuard<'a>>> {
+        self.read_account_ext(address, RequireCache::None)
+    }
+
+    pub fn read_account_ext<'a>(
+        &'a self, address: &AddressWithSpace, require: RequireCache,
+    ) -> DbResult<Option<AccountReadGuard<'a>>> {
+        let as_account_guard = |guard| {
+            MappedRwLockReadGuard::map(guard, |entry: &AccountEntry| {
+                entry.account.as_ref().unwrap()
+            })
+        };
+
         // Return immediately when there is no need to have db operation.
-        if let Some(maybe_acc) = self.cache.read().get(address) {
-            if let Some(account) = &maybe_acc.account {
+        if let Ok(guard) =
+            RwLockReadGuard::try_map(self.cache.read(), |cache| {
+                cache.get(address)
+            })
+        {
+            if let Some(account) = &guard.account {
                 let needs_update = Self::needs_update(require, account);
                 if !needs_update {
-                    return Ok(f(Some(account)));
+                    return Ok(Some(as_account_guard(guard)));
                 }
             } else {
-                return Ok(f(None));
+                return Ok(None);
             }
         }
 
@@ -2169,9 +2075,16 @@ impl StateGeneric {
             }
         }
 
-        Ok(f(cache
-            .get(address)
-            .and_then(|entry| entry.account.as_ref())))
+        let entry_guard = RwLockReadGuard::map(
+            RwLockWriteGuard::downgrade(cache_write_lock),
+            |cache| cache.get(address).unwrap(),
+        );
+
+        Ok(if entry_guard.account.is_some() {
+            Some(as_account_guard(entry_guard))
+        } else {
+            None
+        })
     }
 
     fn require_exists(
