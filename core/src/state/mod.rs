@@ -28,7 +28,7 @@ use cfx_parameters::{
 use cfx_state::{
     maybe_address,
     state_trait::{AsStateOpsTrait, CheckpointTrait, StateOpsTrait},
-    CleanupMode, CollateralCheckResult, StateTrait, SubstateTrait,
+    CleanupMode, CollateralCheckResult, StateTrait,
 };
 use cfx_statedb::{
     ErrorKind as DbErrorKind, Result as DbResult, StateDbExt,
@@ -1422,7 +1422,7 @@ impl StateGeneric {
 
     /// Charges or refund storage collateral and update `total_storage_tokens`.
     fn settle_collateral_for_address(
-        &mut self, addr: &Address, substate: &dyn SubstateTrait,
+        &mut self, addr: &Address, substate: &Substate,
         tracer: &mut dyn StateTracer, spec: &Spec, dry_run_no_charge: bool,
     ) -> DbResult<CollateralCheckResult>
     {

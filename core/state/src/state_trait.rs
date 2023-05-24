@@ -3,7 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 pub trait StateTrait: CheckpointTrait + AsStateOpsTrait {
-    type Substate: SubstateTrait;
+    type Substate;
     type Spec;
 
     /// Collects the cache (`ownership_change` in `OverlayAccount`) of storage
@@ -311,7 +311,7 @@ pub trait CheckpointTrait: StateOpsTrait {
 }
 
 use super::{CleanupMode, CollateralCheckResult};
-use crate::{substate_trait::SubstateTrait, tracer::StateTracer};
+use crate::tracer::StateTracer;
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };

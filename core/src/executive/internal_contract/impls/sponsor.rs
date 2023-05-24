@@ -5,10 +5,10 @@
 use crate::{
     internal_bail,
     observer::{AddressPocket, VmObserve},
-    state::cleanup_mode,
+    state::{cleanup_mode, Substate},
     vm::{self, ActionParams, Spec},
 };
-use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
+use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{Address, AddressSpaceUtil, U256};
 
 use super::super::components::InternalRefContext;
@@ -36,7 +36,7 @@ pub fn set_sponsor_for_gas(
     let (spec, state, substate): (
         &Spec,
         &mut dyn StateOpsTrait,
-        &mut dyn SubstateTrait,
+        &mut Substate,
     ) = (context.spec, context.state, context.substate);
 
     let sponsor_balance = state.balance(&params.address.with_native_space())?;
@@ -155,7 +155,7 @@ pub fn set_sponsor_for_collateral(
     let (spec, state, substate): (
         &Spec,
         &mut dyn StateOpsTrait,
-        &mut dyn SubstateTrait,
+        &mut Substate,
     ) = (context.spec, context.state, context.substate);
 
     let sponsor_balance = state.balance(&params.address.with_native_space())?;

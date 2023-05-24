@@ -13,7 +13,6 @@ use cfx_parameters::{
     internal_contract_addresses::SYSTEM_STORAGE_ADDRESS,
     staking::COLLATERAL_UNITS_PER_STORAGE_KEY,
 };
-use cfx_state::SubstateTrait;
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
 #[cfg(test)]
 use cfx_types::AddressSpaceUtil;
@@ -27,6 +26,8 @@ use primitives::{
     StorageValue, VoteStakeList,
 };
 use std::{collections::HashMap, sync::Arc};
+
+use super::Substate;
 
 lazy_static! {
     static ref COMMISSION_PRIVILEGE_STORAGE_VALUE: U256 = U256::one();
@@ -978,7 +979,7 @@ impl OverlayAccount {
     /// execution. The second value means the number of keys released by this
     /// account in current execution.
     pub fn commit_ownership_change(
-        &mut self, db: &StateDbGeneric, substate: &mut dyn SubstateTrait,
+        &mut self, db: &StateDbGeneric, substate: &mut Substate,
     ) -> DbResult<()> {
         self.address.assert_native();
         if self.invalidated_storage {

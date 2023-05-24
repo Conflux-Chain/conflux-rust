@@ -11,7 +11,7 @@ use crate::{
     bytes::Bytes,
     machine::Machine,
     observer::VmObserve,
-    state::CallStackInfo,
+    state::{CallStackInfo, Substate},
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
         ContractCreateResult, CreateContractAddress, CreateType, Env, Error,
@@ -21,7 +21,7 @@ use crate::{
 use cfx_parameters::staking::{
     code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
-use cfx_state::{StateTrait, SubstateMngTrait, SubstateTrait};
+use cfx_state::StateTrait;
 use cfx_types::{
     Address, AddressSpaceUtil, AddressWithSpace, Space, H256, U256,
 };
@@ -62,17 +62,16 @@ impl OriginInfo {
 pub struct Context<
     'a, /* Lifetime of transaction executive. */
     'b, /* Lifetime of call-create executive. */
-    Substate: SubstateTrait,
 > {
     state: &'b mut dyn StateTrait<Substate = Substate, Spec = Spec>,
     callstack: &'b mut CallStackInfo,
-    local_part: &'b mut LocalContext<'a, Substate>,
+    local_part: &'b mut LocalContext<'a>,
 }
 
 /// The `LocalContext` only contains the parameters can be owned by an
 /// executive. It will be never change during the lifetime of its corresponding
 /// executive.
-pub struct LocalContext<'a, Substate: SubstateTrait> {
+pub struct LocalContext<'a> {
     pub space: Space,
     pub env: &'a Env,
     pub depth: usize,
@@ -84,7 +83,7 @@ pub struct LocalContext<'a, Substate: SubstateTrait> {
     pub static_flag: bool,
 }
 
-impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
+impl<'a, 'b> LocalContext<'a> {
     pub fn new(
         space: Space, env: &'a Env, machine: &'a Machine, spec: &'a Spec,
         depth: usize, origin: OriginInfo, substate: Substate, is_create: bool,
@@ -112,7 +111,7 @@ impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
         &'b mut self,
         state: &'b mut dyn StateTrait<Substate = Substate, Spec = Spec>,
         callstack: &'b mut CallStackInfo,
-    ) -> Context<'a, 'b, Substate>
+    ) -> Context<'a, 'b>
     {
         Context {
             state,
@@ -122,9 +121,7 @@ impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
     }
 }
 
-impl<'a, 'b, Substate: SubstateMngTrait> ContextTrait
-    for Context<'a, 'b, Substate>
-{
+impl<'a, 'b> ContextTrait for Context<'a, 'b> {
     fn storage_at(&self, key: &Vec<u8>) -> vm::Result<U256> {
         let caller = AddressWithSpace {
             address: self.local_part.origin.address,
@@ -380,7 +377,7 @@ impl<'a, 'b, Substate: SubstateMngTrait> ContextTrait
         }
 
         let address = self.local_part.origin.address.clone();
-        self.local_part.substate.logs_mut().push(LogEntry {
+        self.local_part.substate.logs.push(LogEntry {
             address,
             topics,
             data: data.to_vec(),
@@ -549,9 +546,7 @@ mod tests {
         vm::{Context as ContextTrait, Env, Spec},
     };
     use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
-    use cfx_state::{
-        state_trait::StateOpsTrait, substate_trait::SubstateMngTrait,
-    };
+    use cfx_state::state_trait::StateOpsTrait;
     use cfx_storage::{
         new_storage_manager_for_testing, tests::FakeStateManager,
     };
