@@ -2,7 +2,6 @@ use crate::{
     evm::Spec, executive::InternalContractMap,
     spec::genesis::initialize_internal_contract_accounts, state::State,
 };
-use cfx_state::StateTrait;
 use cfx_statedb::StateDb;
 use cfx_storage::{StateIndex, StorageManager, StorageManagerTrait};
 use primitives::EpochId;

@@ -25,7 +25,7 @@ use cfx_internal_common::{
 use cfx_parameters::{
     consensus::*, consensus_internal::CIP107_STORAGE_POINT_PROP_INIT,
 };
-use cfx_state::{state_trait::*, CleanupMode};
+use cfx_state::CleanupMode;
 use cfx_statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb};
 use cfx_storage::{
     defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,

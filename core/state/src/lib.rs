@@ -8,10 +8,7 @@ pub(self) mod cache_object;
 pub mod state;
 #[cfg(feature = "new_state_impl")]
 pub(self) mod state_object_cache;
-pub mod state_trait;
 pub mod tracer;
-
-pub use state_trait::StateTrait;
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum CollateralCheckResult {

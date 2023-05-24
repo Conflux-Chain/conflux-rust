@@ -25,11 +25,7 @@ use cfx_parameters::{
     },
     staking::*,
 };
-use cfx_state::{
-    maybe_address,
-    state_trait::{AsStateOpsTrait, CheckpointTrait, StateOpsTrait},
-    CleanupMode, CollateralCheckResult, StateTrait,
-};
+use cfx_state::{maybe_address, CleanupMode, CollateralCheckResult};
 use cfx_statedb::{
     ErrorKind as DbErrorKind, Result as DbResult, StateDbExt,
     StateDbGeneric as StateDb,
@@ -131,14 +127,11 @@ pub struct StateGeneric {
     checkpoints: RwLock<Vec<HashMap<AddressWithSpace, Option<AccountEntry>>>>,
 }
 
-impl StateTrait for StateGeneric {
-    type Spec = Spec;
-    type Substate = Substate;
-
+impl StateGeneric {
     /// Collects the cache (`ownership_change` in `OverlayAccount`) of storage
     /// change and write to substate.
     /// It is idempotent. But its execution is costly.
-    fn collect_ownership_changed(
+    pub fn collect_ownership_changed(
         &mut self, substate: &mut Substate,
     ) -> DbResult<()> {
         if let Some(checkpoint) = self.checkpoints.get_mut().last() {
@@ -164,7 +157,7 @@ impl StateTrait for StateGeneric {
     /// The suicided addresses are skimmed because their collateral have been
     /// checked out. This function should only be called in post-processing
     /// of a transaction.
-    fn settle_collateral_for_all(
+    pub fn settle_collateral_for_all(
         &mut self, substate: &Substate, tracer: &mut dyn StateTracer,
         spec: &Spec, dry_run_no_charge: bool,
     ) -> DbResult<CollateralCheckResult>
@@ -186,7 +179,7 @@ impl StateTrait for StateGeneric {
 
     // TODO: This function can only be called after VM execution. There are some
     // test cases breaks this assumption, which will be fixed in a separated PR.
-    fn collect_and_settle_collateral(
+    pub fn collect_and_settle_collateral(
         &mut self, original_sender: &Address, storage_limit: &U256,
         substate: &mut Substate, tracer: &mut dyn StateTracer, spec: &Spec,
         dry_run_no_charge: bool,
@@ -209,7 +202,7 @@ impl StateTrait for StateGeneric {
         Ok(res)
     }
 
-    fn record_storage_and_whitelist_entries_release(
+    pub fn record_storage_and_whitelist_entries_release(
         &mut self, address: &Address, substate: &mut Substate,
     ) -> DbResult<()> {
         self.remove_whitelists_for_contract::<access_mode::Write>(address)?;
@@ -279,7 +272,7 @@ impl StateTrait for StateGeneric {
     }
 
     // It's guaranteed that the second call of this method is a no-op.
-    fn compute_state_root(
+    pub fn compute_state_root(
         &mut self, mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<StateRootWithAuxInfo> {
         debug!("state.compute_state_root");
@@ -315,7 +308,7 @@ impl StateTrait for StateGeneric {
         self.db.compute_state_root(debug_record)
     }
 
-    fn commit(
+    pub fn commit(
         &mut self, epoch_id: EpochId,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<StateRootWithAuxInfo>
@@ -326,9 +319,9 @@ impl StateTrait for StateGeneric {
     }
 }
 
-impl StateOpsTrait for StateGeneric {
+impl StateGeneric {
     /// Calculate the secondary reward for the next block number.
-    fn bump_block_number_accumulate_interest(&mut self) {
+    pub fn bump_block_number_accumulate_interest(&mut self) {
         assert!(self.world_statistics_checkpoints.get_mut().is_empty());
         self.world_statistics.accumulate_interest_rate =
             self.world_statistics.accumulate_interest_rate
@@ -337,7 +330,7 @@ impl StateOpsTrait for StateGeneric {
                 / *INTEREST_RATE_PER_BLOCK_SCALE;
     }
 
-    fn secondary_reward(&self) -> U256 {
+    pub fn secondary_reward(&self) -> U256 {
         assert!(self.world_statistics_checkpoints.read().is_empty());
         let secondary_reward = self.world_statistics.total_storage_tokens
             * self.world_statistics.interest_rate_per_block
@@ -347,7 +340,7 @@ impl StateOpsTrait for StateGeneric {
         secondary_reward
     }
 
-    fn pow_base_reward(&self) -> U256 {
+    pub fn pow_base_reward(&self) -> U256 {
         self.db
             .get_pow_base_reward()
             .expect("no db error")
@@ -355,36 +348,36 @@ impl StateOpsTrait for StateGeneric {
     }
 
     /// Maintain `total_issued_tokens`.
-    fn add_total_issued(&mut self, v: U256) {
+    pub fn add_total_issued(&mut self, v: U256) {
         assert!(self.world_statistics_checkpoints.get_mut().is_empty());
         self.world_statistics.total_issued_tokens += v;
     }
 
     /// Maintain `total_issued_tokens`. This is only used in the extremely
     /// unlikely case that there are a lot of partial invalid blocks.
-    fn subtract_total_issued(&mut self, v: U256) {
+    pub fn subtract_total_issued(&mut self, v: U256) {
         self.world_statistics.total_issued_tokens =
             self.world_statistics.total_issued_tokens.saturating_sub(v);
     }
 
-    fn add_total_pos_staking(&mut self, v: U256) {
+    pub fn add_total_pos_staking(&mut self, v: U256) {
         self.world_statistics.total_pos_staking_tokens += v;
     }
 
-    fn add_total_evm_tokens(&mut self, v: U256) {
+    pub fn add_total_evm_tokens(&mut self, v: U256) {
         if !v.is_zero() {
             self.world_statistics.total_evm_tokens += v;
         }
     }
 
-    fn subtract_total_evm_tokens(&mut self, v: U256) {
+    pub fn subtract_total_evm_tokens(&mut self, v: U256) {
         if !v.is_zero() {
             self.world_statistics.total_evm_tokens =
                 self.world_statistics.total_evm_tokens.saturating_sub(v);
         }
     }
 
-    fn inc_distributable_pos_interest(
+    pub fn inc_distributable_pos_interest(
         &mut self, current_block_number: u64,
     ) -> DbResult<()> {
         assert!(self.world_statistics_checkpoints.get_mut().is_empty());
@@ -424,7 +417,7 @@ impl StateOpsTrait for StateGeneric {
     /// Distribute PoS interest to the PoS committee according to their reward
     /// points. Return the rewarded PoW accounts and their rewarded
     /// interest.
-    fn distribute_pos_interest<'a>(
+    pub fn distribute_pos_interest<'a>(
         &mut self, pos_points: Box<dyn Iterator<Item = (&'a H256, u64)> + 'a>,
         account_start_nonce: U256, current_block_number: u64,
     ) -> DbResult<Vec<(Address, H256, U256)>>
@@ -458,7 +451,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(account_rewards)
     }
 
-    fn new_contract_with_admin(
+    pub fn new_contract_with_admin(
         &mut self, contract: &AddressWithSpace, admin: &Address, balance: U256,
         nonce: U256, storage_layout: Option<StorageLayout>, cip107: bool,
     ) -> DbResult<()>
@@ -493,13 +486,13 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn balance(&self, address: &AddressWithSpace) -> DbResult<U256> {
+    pub fn balance(&self, address: &AddressWithSpace) -> DbResult<U256> {
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |account| *account.balance())
         })
     }
 
-    fn is_contract_with_code(
+    pub fn is_contract_with_code(
         &self, address: &AddressWithSpace,
     ) -> DbResult<bool> {
         if address.space == Space::Native
@@ -512,7 +505,9 @@ impl StateOpsTrait for StateGeneric {
         })
     }
 
-    fn sponsor_for_gas(&self, address: &Address) -> DbResult<Option<Address>> {
+    pub fn sponsor_for_gas(
+        &self, address: &Address,
+    ) -> DbResult<Option<Address>> {
         self.ensure_account_loaded(
             &address.with_native_space(),
             RequireCache::None,
@@ -524,7 +519,7 @@ impl StateOpsTrait for StateGeneric {
         )
     }
 
-    fn sponsor_for_collateral(
+    pub fn sponsor_for_collateral(
         &self, address: &Address,
     ) -> DbResult<Option<Address>> {
         self.ensure_account_loaded(
@@ -538,7 +533,7 @@ impl StateOpsTrait for StateGeneric {
         )
     }
 
-    fn set_sponsor_for_gas(
+    pub fn set_sponsor_for_gas(
         &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
         upper_bound: &U256,
     ) -> DbResult<()>
@@ -555,7 +550,7 @@ impl StateOpsTrait for StateGeneric {
         }
     }
 
-    fn set_sponsor_for_collateral(
+    pub fn set_sponsor_for_collateral(
         &mut self, address: &Address, sponsor: &Address,
         sponsor_balance: &U256, is_cip107: bool,
     ) -> DbResult<U256>
@@ -583,7 +578,9 @@ impl StateOpsTrait for StateGeneric {
         Ok(converted_storage_points)
     }
 
-    fn sponsor_info(&self, address: &Address) -> DbResult<Option<SponsorInfo>> {
+    pub fn sponsor_info(
+        &self, address: &Address,
+    ) -> DbResult<Option<SponsorInfo>> {
         self.ensure_account_loaded(
             &address.with_native_space(),
             RequireCache::None,
@@ -591,7 +588,7 @@ impl StateOpsTrait for StateGeneric {
         )
     }
 
-    fn sponsor_gas_bound(&self, address: &Address) -> DbResult<U256> {
+    pub fn sponsor_gas_bound(&self, address: &Address) -> DbResult<U256> {
         self.ensure_account_loaded(
             &address.with_native_space(),
             RequireCache::None,
@@ -603,7 +600,7 @@ impl StateOpsTrait for StateGeneric {
         )
     }
 
-    fn sponsor_balance_for_gas(&self, address: &Address) -> DbResult<U256> {
+    pub fn sponsor_balance_for_gas(&self, address: &Address) -> DbResult<U256> {
         self.ensure_account_loaded(
             &address.with_native_space(),
             RequireCache::None,
@@ -615,7 +612,7 @@ impl StateOpsTrait for StateGeneric {
         )
     }
 
-    fn sponsor_balance_for_collateral(
+    pub fn sponsor_balance_for_collateral(
         &self, address: &Address,
     ) -> DbResult<U256> {
         self.ensure_account_loaded(
@@ -629,7 +626,7 @@ impl StateOpsTrait for StateGeneric {
         )
     }
 
-    fn avaliable_storage_point_for_collateral(
+    pub fn avaliable_storage_point_for_collateral(
         &self, address: &Address,
     ) -> DbResult<U256> {
         self.ensure_account_loaded(
@@ -646,7 +643,7 @@ impl StateOpsTrait for StateGeneric {
         )
     }
 
-    fn set_admin(
+    pub fn set_admin(
         &mut self, contract_address: &Address, admin: &Address,
     ) -> DbResult<()> {
         self.require_exists(&contract_address.with_native_space(), false)?
@@ -654,7 +651,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn sub_sponsor_balance_for_gas(
+    pub fn sub_sponsor_balance_for_gas(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
@@ -664,7 +661,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn add_sponsor_balance_for_gas(
+    pub fn add_sponsor_balance_for_gas(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
@@ -674,7 +671,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn sub_sponsor_balance_for_collateral(
+    pub fn sub_sponsor_balance_for_collateral(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
@@ -684,7 +681,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn add_sponsor_balance_for_collateral(
+    pub fn add_sponsor_balance_for_collateral(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
@@ -694,7 +691,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn check_commission_privilege(
+    pub fn check_commission_privilege(
         &self, contract_address: &Address, user: &Address,
     ) -> DbResult<bool> {
         match self.ensure_account_loaded(
@@ -716,7 +713,7 @@ impl StateOpsTrait for StateGeneric {
         }
     }
 
-    fn add_commission_privilege(
+    pub fn add_commission_privilege(
         &mut self, contract_address: Address, contract_owner: Address,
         user: Address,
     ) -> DbResult<()>
@@ -734,7 +731,7 @@ impl StateOpsTrait for StateGeneric {
         ))
     }
 
-    fn remove_commission_privilege(
+    pub fn remove_commission_privilege(
         &mut self, contract_address: Address, contract_owner: Address,
         user: Address,
     ) -> DbResult<()>
@@ -752,32 +749,36 @@ impl StateOpsTrait for StateGeneric {
 
     // TODO: maybe return error for reserved address? Not sure where is the best
     //  place to do the check.
-    fn nonce(&self, address: &AddressWithSpace) -> DbResult<U256> {
+    pub fn nonce(&self, address: &AddressWithSpace) -> DbResult<U256> {
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.map_or(U256::zero(), |account| *account.nonce())
         })
     }
 
-    fn init_code(
+    pub fn init_code(
         &mut self, address: &AddressWithSpace, code: Bytes, owner: Address,
     ) -> DbResult<()> {
         self.require_exists(address, false)?.init_code(code, owner);
         Ok(())
     }
 
-    fn code_hash(&self, address: &AddressWithSpace) -> DbResult<Option<H256>> {
+    pub fn code_hash(
+        &self, address: &AddressWithSpace,
+    ) -> DbResult<Option<H256>> {
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.and_then(|acc| Some(acc.code_hash()))
         })
     }
 
-    fn code_size(&self, address: &AddressWithSpace) -> DbResult<Option<usize>> {
+    pub fn code_size(
+        &self, address: &AddressWithSpace,
+    ) -> DbResult<Option<usize>> {
         self.ensure_account_loaded(address, RequireCache::Code, |acc| {
             acc.and_then(|acc| acc.code_size())
         })
     }
 
-    fn code_owner(
+    pub fn code_owner(
         &self, address: &AddressWithSpace,
     ) -> DbResult<Option<Address>> {
         address.assert_native();
@@ -786,7 +787,7 @@ impl StateOpsTrait for StateGeneric {
         })
     }
 
-    fn code(
+    pub fn code(
         &self, address: &AddressWithSpace,
     ) -> DbResult<Option<Arc<Vec<u8>>>> {
         self.ensure_account_loaded(address, RequireCache::Code, |acc| {
@@ -794,7 +795,7 @@ impl StateOpsTrait for StateGeneric {
         })
     }
 
-    fn staking_balance(&self, address: &Address) -> DbResult<U256> {
+    pub fn staking_balance(&self, address: &Address) -> DbResult<U256> {
         self.ensure_account_loaded(
             &address.with_native_space(),
             RequireCache::None,
@@ -804,7 +805,7 @@ impl StateOpsTrait for StateGeneric {
         )
     }
 
-    fn collateral_for_storage(&self, address: &Address) -> DbResult<U256> {
+    pub fn collateral_for_storage(&self, address: &Address) -> DbResult<U256> {
         self.ensure_account_loaded(
             &address.with_native_space(),
             RequireCache::None,
@@ -816,7 +817,7 @@ impl StateOpsTrait for StateGeneric {
         )
     }
 
-    fn token_collateral_for_storage(
+    pub fn token_collateral_for_storage(
         &self, address: &Address,
     ) -> DbResult<U256> {
         self.ensure_account_loaded(
@@ -830,7 +831,7 @@ impl StateOpsTrait for StateGeneric {
         )
     }
 
-    fn admin(&self, address: &Address) -> DbResult<Address> {
+    pub fn admin(&self, address: &Address) -> DbResult<Address> {
         self.ensure_account_loaded(
             &address.with_native_space(),
             RequireCache::None,
@@ -838,7 +839,7 @@ impl StateOpsTrait for StateGeneric {
         )
     }
 
-    fn withdrawable_staking_balance(
+    pub fn withdrawable_staking_balance(
         &self, address: &Address, current_block_number: u64,
     ) -> DbResult<U256> {
         self.ensure_account_loaded(
@@ -852,7 +853,7 @@ impl StateOpsTrait for StateGeneric {
         )
     }
 
-    fn locked_staking_balance_at_block_number(
+    pub fn locked_staking_balance_at_block_number(
         &self, address: &Address, block_number: u64,
     ) -> DbResult<U256> {
         self.ensure_account_loaded(
@@ -867,7 +868,7 @@ impl StateOpsTrait for StateGeneric {
         )
     }
 
-    fn deposit_list_length(&self, address: &Address) -> DbResult<usize> {
+    pub fn deposit_list_length(&self, address: &Address) -> DbResult<usize> {
         self.ensure_account_loaded(
             &address.with_native_space(),
             RequireCache::DepositList,
@@ -877,7 +878,7 @@ impl StateOpsTrait for StateGeneric {
         )
     }
 
-    fn vote_stake_list_length(&self, address: &Address) -> DbResult<usize> {
+    pub fn vote_stake_list_length(&self, address: &Address) -> DbResult<usize> {
         self.ensure_account_loaded(
             &address.with_native_space(),
             RequireCache::VoteStakeList,
@@ -891,7 +892,7 @@ impl StateOpsTrait for StateGeneric {
 
     // This is a special implementation to fix the bug in function
     // `clean_account` while not changing the genesis result.
-    fn genesis_special_clean_account(
+    pub fn genesis_special_clean_account(
         &mut self, address: &Address,
     ) -> DbResult<()> {
         let address = address.with_native_space();
@@ -902,13 +903,15 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn clean_account(&mut self, address: &AddressWithSpace) -> DbResult<()> {
+    pub fn clean_account(
+        &mut self, address: &AddressWithSpace,
+    ) -> DbResult<()> {
         *&mut *self.require_or_new_basic_account(address, &U256::zero())? =
             OverlayAccount::from_loaded(address, Account::new_empty(address));
         Ok(())
     }
 
-    fn inc_nonce(
+    pub fn inc_nonce(
         &mut self, address: &AddressWithSpace, account_start_nonce: &U256,
     ) -> DbResult<()> {
         self.require_or_new_basic_account(address, account_start_nonce)
@@ -918,8 +921,8 @@ impl StateOpsTrait for StateGeneric {
     // TODO: This implementation will fail
     // tests::load_chain_tests::test_load_chain. We need to figure out why.
     //
-    // fn clean_account(&mut self, address: &AddressWithSpace) -> DbResult<()> {
-    //     Self::update_cache(
+    // pub fn clean_account(&mut self, address: &AddressWithSpace) ->
+    // DbResult<()> {     Self::update_cache(
     //         self.cache.get_mut(),
     //         self.checkpoints.get_mut(),
     //         address,
@@ -928,14 +931,14 @@ impl StateOpsTrait for StateGeneric {
     //     Ok(())
     // }
 
-    fn set_nonce(
+    pub fn set_nonce(
         &mut self, address: &AddressWithSpace, nonce: &U256,
     ) -> DbResult<()> {
         self.require_or_new_basic_account(address, nonce)
             .map(|mut x| x.set_nonce(&nonce))
     }
 
-    fn sub_balance(
+    pub fn sub_balance(
         &mut self, address: &AddressWithSpace, by: &U256,
         cleanup_mode: &mut CleanupMode,
     ) -> DbResult<()>
@@ -952,7 +955,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn add_balance(
+    pub fn add_balance(
         &mut self, address: &AddressWithSpace, by: &U256,
         cleanup_mode: CleanupMode, account_start_nonce: U256,
     ) -> DbResult<()>
@@ -976,7 +979,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn add_pos_interest(
+    pub fn add_pos_interest(
         &mut self, address: &Address, interest: &U256,
         cleanup_mode: CleanupMode, account_start_nonce: U256,
     ) -> DbResult<()>
@@ -994,7 +997,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn transfer_balance(
+    pub fn transfer_balance(
         &mut self, from: &AddressWithSpace, to: &AddressWithSpace, by: &U256,
         mut cleanup_mode: CleanupMode, account_start_nonce: U256,
     ) -> DbResult<()>
@@ -1004,7 +1007,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn deposit(
+    pub fn deposit(
         &mut self, address: &Address, amount: &U256, current_block_number: u64,
         cip_97: bool,
     ) -> DbResult<()>
@@ -1030,7 +1033,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn withdraw(
+    pub fn withdraw(
         &mut self, address: &Address, amount: &U256, cip_97: bool,
     ) -> DbResult<U256> {
         let address = address.with_native_space();
@@ -1058,7 +1061,7 @@ impl StateOpsTrait for StateGeneric {
         }
     }
 
-    fn vote_lock(
+    pub fn vote_lock(
         &mut self, address: &Address, amount: &U256, unlock_block_number: u64,
     ) -> DbResult<()> {
         let address = address.with_native_space();
@@ -1074,7 +1077,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn remove_expired_vote_stake_info(
+    pub fn remove_expired_vote_stake_info(
         &mut self, address: &Address, current_block_number: u64,
     ) -> DbResult<()> {
         let address = address.with_native_space();
@@ -1088,43 +1091,45 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn total_issued_tokens(&self) -> U256 {
+    pub fn total_issued_tokens(&self) -> U256 {
         self.world_statistics.total_issued_tokens
     }
 
-    fn total_staking_tokens(&self) -> U256 {
+    pub fn total_staking_tokens(&self) -> U256 {
         self.world_statistics.total_staking_tokens
     }
 
-    fn total_storage_tokens(&self) -> U256 {
+    pub fn total_storage_tokens(&self) -> U256 {
         self.world_statistics.total_storage_tokens
     }
 
-    fn total_espace_tokens(&self) -> U256 {
+    pub fn total_espace_tokens(&self) -> U256 {
         self.world_statistics.total_evm_tokens
     }
 
-    fn used_storage_points(&self) -> U256 {
+    pub fn used_storage_points(&self) -> U256 {
         self.world_statistics.used_storage_points
     }
 
-    fn converted_storage_points(&self) -> U256 {
+    pub fn converted_storage_points(&self) -> U256 {
         self.world_statistics.converted_storage_points
     }
 
-    fn total_pos_staking_tokens(&self) -> U256 {
+    pub fn total_pos_staking_tokens(&self) -> U256 {
         self.world_statistics.total_pos_staking_tokens
     }
 
-    fn distributable_pos_interest(&self) -> U256 {
+    pub fn distributable_pos_interest(&self) -> U256 {
         self.world_statistics.distributable_pos_interest
     }
 
-    fn last_distribute_block(&self) -> u64 {
+    pub fn last_distribute_block(&self) -> u64 {
         self.world_statistics.last_distribute_block
     }
 
-    fn remove_contract(&mut self, address: &AddressWithSpace) -> DbResult<()> {
+    pub fn remove_contract(
+        &mut self, address: &AddressWithSpace,
+    ) -> DbResult<()> {
         if address.space == Space::Native {
             let removed_whitelist = self
                 .remove_whitelists_for_contract::<access_mode::Write>(
@@ -1148,13 +1153,13 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn exists(&self, address: &AddressWithSpace) -> DbResult<bool> {
+    pub fn exists(&self, address: &AddressWithSpace) -> DbResult<bool> {
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
             acc.is_some()
         })
     }
 
-    fn exists_and_not_null(
+    pub fn exists_and_not_null(
         &self, address: &AddressWithSpace,
     ) -> DbResult<bool> {
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
@@ -1162,7 +1167,7 @@ impl StateOpsTrait for StateGeneric {
         })
     }
 
-    fn storage_at(
+    pub fn storage_at(
         &self, address: &AddressWithSpace, key: &[u8],
     ) -> DbResult<U256> {
         self.ensure_account_loaded(address, RequireCache::None, |acc| {
@@ -1172,7 +1177,7 @@ impl StateOpsTrait for StateGeneric {
         })?
     }
 
-    fn set_storage(
+    pub fn set_storage(
         &mut self, address: &AddressWithSpace, key: Vec<u8>, value: U256,
         owner: Address,
     ) -> DbResult<()>
@@ -1184,7 +1189,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn update_pos_status(
+    pub fn update_pos_status(
         &mut self, identifier: H256, number: u64,
     ) -> DbResult<()> {
         let old_value = self.storage_at(
@@ -1210,7 +1215,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn pos_locked_staking(&self, address: &Address) -> DbResult<U256> {
+    pub fn pos_locked_staking(&self, address: &Address) -> DbResult<U256> {
         let identifier = BigEndianHash::from_uint(&self.storage_at(
             &POS_REGISTER_CONTRACT_ADDRESS.with_native_space(),
             &pos_internal_entries::identifier_entry(address),
@@ -1224,9 +1229,9 @@ impl StateOpsTrait for StateGeneric {
         Ok(*POS_VOTE_PRICE * current_value.locked())
     }
 
-    fn read_vote(&self, _address: &Address) -> DbResult<Vec<u8>> { todo!() }
+    pub fn read_vote(&self, _address: &Address) -> DbResult<Vec<u8>> { todo!() }
 
-    fn set_system_storage(
+    pub fn set_system_storage(
         &mut self, key: Vec<u8>, value: U256,
     ) -> DbResult<()> {
         self.set_storage(
@@ -1239,11 +1244,11 @@ impl StateOpsTrait for StateGeneric {
         )
     }
 
-    fn get_system_storage(&self, key: &[u8]) -> DbResult<U256> {
+    pub fn get_system_storage(&self, key: &[u8]) -> DbResult<U256> {
         self.storage_at(&SYSTEM_STORAGE_ADDRESS.with_native_space(), key)
     }
 
-    fn get_system_storage_opt(&self, key: &[u8]) -> DbResult<Option<U256>> {
+    pub fn get_system_storage_opt(&self, key: &[u8]) -> DbResult<Option<U256>> {
         self.ensure_account_loaded(
             &SYSTEM_STORAGE_ADDRESS.with_native_space(),
             RequireCache::None,
@@ -1256,12 +1261,12 @@ impl StateOpsTrait for StateGeneric {
     }
 }
 
-impl CheckpointTrait for StateGeneric {
+impl StateGeneric {
     /// Create a recoverable checkpoint of this state. Return the checkpoint
     /// index. The checkpoint records any old value which is alive at the
     /// creation time of the checkpoint and updated after that and before
     /// the creation of the next checkpoint.
-    fn checkpoint(&mut self) -> usize {
+    pub fn checkpoint(&mut self) -> usize {
         self.world_statistics_checkpoints
             .get_mut()
             .push(self.world_statistics.clone());
@@ -1275,7 +1280,7 @@ impl CheckpointTrait for StateGeneric {
     /// Caller should make sure the function
     /// `collect_ownership_changed()` was called before calling
     /// this function.
-    fn discard_checkpoint(&mut self) {
+    pub fn discard_checkpoint(&mut self) {
         // merge with previous checkpoint
         let last = self.checkpoints.get_mut().pop();
         if let Some(mut checkpoint) = last {
@@ -1293,7 +1298,7 @@ impl CheckpointTrait for StateGeneric {
     }
 
     /// Revert to the last checkpoint and discard it.
-    fn revert_to_checkpoint(&mut self) {
+    pub fn revert_to_checkpoint(&mut self) {
         if let Some(mut checkpoint) = self.checkpoints.get_mut().pop() {
             self.world_statistics = self
                 .world_statistics_checkpoints
@@ -1323,12 +1328,6 @@ impl CheckpointTrait for StateGeneric {
             }
         }
     }
-}
-
-impl AsStateOpsTrait for StateGeneric {
-    fn as_state_ops(&self) -> &dyn StateOpsTrait { self }
-
-    fn as_mut_state_ops(&mut self) -> &mut dyn StateOpsTrait { self }
 }
 
 impl StateGeneric {

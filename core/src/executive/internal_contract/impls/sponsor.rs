@@ -5,10 +5,9 @@
 use crate::{
     internal_bail,
     observer::{AddressPocket, VmObserve},
-    state::{cleanup_mode, Substate},
+    state::{cleanup_mode, State, Substate},
     vm::{self, ActionParams, Spec},
 };
-use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{Address, AddressSpaceUtil, U256};
 
 use super::super::components::InternalRefContext;
@@ -33,11 +32,8 @@ pub fn set_sponsor_for_gas(
         internal_bail!("not allowed to sponsor non-contract account");
     }
 
-    let (spec, state, substate): (
-        &Spec,
-        &mut dyn StateOpsTrait,
-        &mut Substate,
-    ) = (context.spec, context.state, context.substate);
+    let (spec, state, substate): (&Spec, &mut State, &mut Substate) =
+        (context.spec, context.state, context.substate);
 
     let sponsor_balance = state.balance(&params.address.with_native_space())?;
 
@@ -152,11 +148,8 @@ pub fn set_sponsor_for_collateral(
         internal_bail!("not allowed to sponsor non-contract account");
     }
 
-    let (spec, state, substate): (
-        &Spec,
-        &mut dyn StateOpsTrait,
-        &mut Substate,
-    ) = (context.spec, context.state, context.substate);
+    let (spec, state, substate): (&Spec, &mut State, &mut Substate) =
+        (context.spec, context.state, context.substate);
 
     let sponsor_balance = state.balance(&params.address.with_native_space())?;
 
@@ -250,7 +243,7 @@ pub fn set_sponsor_for_collateral(
 /// `addPrivilegeByAdmin(address,address[])`.
 pub fn add_privilege(
     contract: Address, addresses: Vec<Address>, params: &ActionParams,
-    state: &mut dyn StateOpsTrait,
+    state: &mut State,
 ) -> vm::Result<()>
 {
     for user_addr in addresses {
@@ -268,7 +261,7 @@ pub fn add_privilege(
 /// `removePrivilegeByAdmin(address,address[])`.
 pub fn remove_privilege(
     contract: Address, addresses: Vec<Address>, params: &ActionParams,
-    state: &mut dyn StateOpsTrait,
+    state: &mut State,
 ) -> vm::Result<()>
 {
     for user_addr in addresses {

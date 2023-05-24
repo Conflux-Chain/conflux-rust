@@ -23,10 +23,7 @@ use cfx_parameters::{
     },
     staking::*,
 };
-use cfx_state::{
-    state_trait::{CheckpointTrait, StateOpsTrait},
-    CleanupMode, CollateralCheckResult, StateTrait,
-};
+use cfx_state::{CleanupMode, CollateralCheckResult};
 use cfx_statedb::StateDb;
 use cfx_storage::{
     state_manager::StateManagerTrait, tests::new_state_manager_for_unit_test,

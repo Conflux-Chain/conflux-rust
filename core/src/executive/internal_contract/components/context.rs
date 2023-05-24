@@ -1,8 +1,7 @@
 use crate::{
-    state::{CallStackInfo, Substate},
+    state::{CallStackInfo, State, Substate},
     vm::{self, ActionParams, Env, Spec},
 };
-use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, H256, U256,
@@ -16,7 +15,7 @@ pub struct InternalRefContext<'a> {
     pub env: &'a Env,
     pub spec: &'a Spec,
     pub callstack: &'a mut CallStackInfo,
-    pub state: &'a mut dyn StateOpsTrait,
+    pub state: &'a mut State,
     pub substate: &'a mut Substate,
     pub static_flag: bool,
     pub depth: usize,

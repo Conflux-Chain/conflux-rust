@@ -12,11 +12,10 @@ use crate::{
         },
     },
     internal_bail,
-    state::power_two_fractional,
+    state::{power_two_fractional, State},
     vm::{self, ActionParams, Spec},
 };
 use cfx_parameters::consensus_internal::DAO_MIN_VOTE_PERCENTAGE;
-use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, U256, U512};
 use lazy_static::lazy_static;
@@ -321,8 +320,8 @@ impl ParamVoteCount {
         }
     }
 
-    pub fn from_state<T: StateOpsTrait, U: AsRef<[u8]>>(
-        state: &T, slot_entry: &[U; 3],
+    pub fn from_state<U: AsRef<[u8]>>(
+        state: &State, slot_entry: &[U; 3],
     ) -> DbResult<Self> {
         Ok(ParamVoteCount {
             unchange: state.get_system_storage(
@@ -407,8 +406,8 @@ pub struct AllParamsVoteCount {
 
 /// If the vote counts are not initialized, all counts will be zero, and the
 /// parameters will be unchanged.
-pub fn get_settled_param_vote_count<T: StateOpsTrait>(
-    state: &T,
+pub fn get_settled_param_vote_count(
+    state: &State,
 ) -> DbResult<AllParamsVoteCount> {
     let pow_base_reward = ParamVoteCount::from_state(
         state,
@@ -429,16 +428,14 @@ pub fn get_settled_param_vote_count<T: StateOpsTrait>(
     })
 }
 
-pub fn get_settled_pos_staking_for_votes<T: StateOpsTrait>(
-    state: &T,
-) -> DbResult<U256> {
+pub fn get_settled_pos_staking_for_votes(state: &State) -> DbResult<U256> {
     state.get_system_storage(&settled_pos_staking_for_votes())
 }
 
 /// Move the next vote counts into settled and reset the counts.
 /// `set_pos_staking` is for compatibility with the Testnet.
-pub fn settle_current_votes<T: StateOpsTrait>(
-    state: &mut T, set_pos_staking: bool,
+pub fn settle_current_votes(
+    state: &mut State, set_pos_staking: bool,
 ) -> DbResult<()> {
     // Here using `PARAMETER_INDEX_MAX` without knowing the block_number is okay
     // because if the new parameters have not been enabled, their votes will

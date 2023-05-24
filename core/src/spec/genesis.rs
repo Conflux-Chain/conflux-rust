@@ -22,7 +22,7 @@ use cfx_parameters::{
     },
     staking::POS_VOTE_PRICE,
 };
-use cfx_state::{state_trait::*, CleanupMode};
+use cfx_state::CleanupMode;
 use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{StorageManager, StorageManagerTrait};
 use cfx_types::{
@@ -125,10 +125,8 @@ pub fn load_secrets_file(
 }
 
 pub fn initialize_internal_contract_accounts(
-    state: &mut dyn StateOpsTrait, addresses: &[Address],
-    contract_start_nonce: U256,
-)
-{
+    state: &mut State, addresses: &[Address], contract_start_nonce: U256,
+) {
     || -> DbResult<()> {
         {
             for address in addresses {

@@ -11,7 +11,7 @@ use crate::{
     bytes::Bytes,
     machine::Machine,
     observer::VmObserve,
-    state::{CallStackInfo, Substate},
+    state::{CallStackInfo, State, Substate},
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
         ContractCreateResult, CreateContractAddress, CreateType, Env, Error,
@@ -21,7 +21,6 @@ use crate::{
 use cfx_parameters::staking::{
     code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
-use cfx_state::StateTrait;
 use cfx_types::{
     Address, AddressSpaceUtil, AddressWithSpace, Space, H256, U256,
 };
@@ -63,7 +62,7 @@ pub struct Context<
     'a, /* Lifetime of transaction executive. */
     'b, /* Lifetime of call-create executive. */
 > {
-    state: &'b mut dyn StateTrait<Substate = Substate, Spec = Spec>,
+    state: &'b mut State,
     callstack: &'b mut CallStackInfo,
     local_part: &'b mut LocalContext<'a>,
 }
@@ -108,11 +107,8 @@ impl<'a, 'b> LocalContext<'a> {
     /// State`), the executive should activate `LocalContext` by passing in
     /// these parameters.
     pub fn activate(
-        &'b mut self,
-        state: &'b mut dyn StateTrait<Substate = Substate, Spec = Spec>,
-        callstack: &'b mut CallStackInfo,
-    ) -> Context<'a, 'b>
-    {
+        &'b mut self, state: &'b mut State, callstack: &'b mut CallStackInfo,
+    ) -> Context<'a, 'b> {
         Context {
             state,
             local_part: self,
@@ -129,7 +125,7 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
         };
         self.local_part
             .substate
-            .storage_at(self.state.as_state_ops(), &caller, key)
+            .storage_at(self.state, &caller, key)
             .map_err(Into::into)
     }
 
@@ -144,7 +140,7 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
             self.local_part
                 .substate
                 .set_storage(
-                    self.state.as_mut_state_ops(),
+                    self.state,
                     &caller,
                     key,
                     value,
@@ -465,7 +461,7 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
                 .address
                 .with_space(self.local_part.space),
             &refund_address.with_space(self.local_part.space),
-            self.state.as_mut_state_ops(),
+            self.state,
             &self.local_part.spec,
             &mut self.local_part.substate,
             tracer,
@@ -526,7 +522,7 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
             env: self.local_part.env,
             spec: self.local_part.spec,
             callstack: self.callstack,
-            state: self.state.as_mut_state_ops(),
+            state: self.state,
             substate: &mut self.local_part.substate,
             static_flag: self.local_part.static_flag,
             depth: self.local_part.depth,
@@ -546,7 +542,6 @@ mod tests {
         vm::{Context as ContextTrait, Env, Spec},
     };
     use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
-    use cfx_state::state_trait::StateOpsTrait;
     use cfx_storage::{
         new_storage_manager_for_testing, tests::FakeStateManager,
     };

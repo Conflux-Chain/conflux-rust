@@ -19,7 +19,7 @@ use crate::{
     observer::{
         tracer::ExecutiveTracer, AddressPocket, GasMan, StateTracer, VmObserve,
     },
-    state::{cleanup_mode, CallStackInfo, Substate},
+    state::{cleanup_mode, CallStackInfo, State, Substate},
     verification::VerificationConfig,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress,
@@ -29,9 +29,7 @@ use crate::{
     vm_factory::VmFactory,
 };
 use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
-use cfx_state::{
-    state_trait::StateOpsTrait, CleanupMode, CollateralCheckResult, StateTrait,
-};
+use cfx_state::{CleanupMode, CollateralCheckResult};
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
@@ -492,7 +490,7 @@ impl<'a> CallCreateExecutive<'a> {
     }
 
     fn transfer_exec_balance(
-        params: &ActionParams, spec: &Spec, state: &mut dyn StateOpsTrait,
+        params: &ActionParams, spec: &Spec, state: &mut State,
         substate: &mut Substate, account_start_nonce: U256,
     ) -> DbResult<()>
     {
@@ -518,7 +516,7 @@ impl<'a> CallCreateExecutive<'a> {
     }
 
     fn transfer_exec_balance_and_init_contract(
-        params: &ActionParams, spec: &Spec, state: &mut dyn StateOpsTrait,
+        params: &ActionParams, spec: &Spec, state: &mut State,
         substate: &mut Substate, storage_layout: Option<StorageLayout>,
         contract_start_nonce: U256,
     ) -> DbResult<()>
@@ -573,8 +571,7 @@ impl<'a> CallCreateExecutive<'a> {
     /// its parent and settles down bytecode for newly created contract. If the
     /// execution fails, this function reverts state and drops substate.
     fn process_return(
-        mut self, result: vm::Result<GasLeft>,
-        state: &mut dyn StateTrait<Substate = Substate, Spec = Spec>,
+        mut self, result: vm::Result<GasLeft>, state: &mut State,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
         tracer: &mut dyn VmObserve,
     ) -> DbResult<vm::Result<ExecutiveResult>>
@@ -638,9 +635,8 @@ impl<'a> CallCreateExecutive<'a> {
     /// resume trap error is returned. The caller is then expected to call
     /// `resume` to continue the execution.
     pub fn exec(
-        mut self, state: &mut dyn StateTrait<Substate = Substate, Spec = Spec>,
-        parent_substate: &mut Substate, callstack: &mut CallStackInfo,
-        tracer: &mut dyn VmObserve,
+        mut self, state: &mut State, parent_substate: &mut Substate,
+        callstack: &mut CallStackInfo, tracer: &mut dyn VmObserve,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult>>
     {
         let status =
@@ -684,7 +680,7 @@ impl<'a> CallCreateExecutive<'a> {
             Self::transfer_exec_balance_and_init_contract(
                 &params,
                 spec,
-                state.as_mut_state_ops(),
+                state,
                 // It is a bug in the Parity version.
                 &mut self.context.substate,
                 Some(STORAGE_LAYOUT_REGULAR_V0),
@@ -694,7 +690,7 @@ impl<'a> CallCreateExecutive<'a> {
             Self::transfer_exec_balance(
                 &params,
                 spec,
-                state.as_mut_state_ops(),
+                state,
                 &mut self.context.substate,
                 spec.account_start_nonce,
             )?
@@ -725,8 +721,7 @@ impl<'a> CallCreateExecutive<'a> {
     }
 
     pub fn resume(
-        mut self, result: vm::Result<ExecutiveResult>,
-        state: &mut dyn StateTrait<Substate = Substate, Spec = Spec>,
+        mut self, result: vm::Result<ExecutiveResult>, state: &mut State,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
         tracer: &mut dyn VmObserve,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult>>
@@ -772,8 +767,7 @@ impl<'a> CallCreateExecutive<'a> {
 
     #[inline]
     fn process_output(
-        self, output: ExecTrapResult<GasLeft>,
-        state: &mut dyn StateTrait<Substate = Substate, Spec = Spec>,
+        self, output: ExecTrapResult<GasLeft>, state: &mut State,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
         tracer: &mut dyn VmObserve,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult>>
@@ -801,8 +795,8 @@ impl<'a> CallCreateExecutive<'a> {
     /// traps and sub-level tracing. The caller is expected to handle
     /// current-level tracing.
     pub fn consume(
-        self, state: &'a mut dyn StateTrait<Substate = Substate, Spec = Spec>,
-        top_substate: &mut Substate, tracer: &mut dyn VmObserve,
+        self, state: &'a mut State, top_substate: &mut Substate,
+        tracer: &mut dyn VmObserve,
     ) -> DbResult<vm::Result<FinalizationResult>>
     {
         let mut callstack = CallStackInfo::new();
@@ -941,7 +935,7 @@ pub type Executive<'a> = ExecutiveGeneric<'a>;
 
 /// Transaction executor.
 pub struct ExecutiveGeneric<'a> {
-    pub state: &'a mut dyn StateTrait<Substate = Substate, Spec = Spec>,
+    pub state: &'a mut State,
     env: &'a Env,
     machine: &'a Machine,
     spec: &'a Spec,
@@ -976,8 +970,8 @@ pub fn gas_required_for(is_create: bool, data: &[u8], spec: &Spec) -> u64 {
 impl<'a> ExecutiveGeneric<'a> {
     /// Basic constructor.
     pub fn new(
-        state: &'a mut dyn StateTrait<Substate = Substate, Spec = Spec>,
-        env: &'a Env, machine: &'a Machine, spec: &'a Spec,
+        state: &'a mut State, env: &'a Env, machine: &'a Machine,
+        spec: &'a Spec,
     ) -> Self
     {
         ExecutiveGeneric {

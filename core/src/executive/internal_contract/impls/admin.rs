@@ -4,10 +4,9 @@
 
 use crate::{
     observer::{AddressPocket, VmObserve},
-    state::{cleanup_mode, Substate},
+    state::{cleanup_mode, State, Substate},
     vm::{self, ActionParams, Spec},
 };
-use cfx_state::state_trait::StateOpsTrait;
 use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
     Space, U256,
@@ -28,7 +27,7 @@ fn available_admin_address(_spec: &Spec, address: &Address) -> bool {
 ///   4. kill the contract
 pub fn suicide(
     contract_address: &AddressWithSpace, refund_address: &AddressWithSpace,
-    state: &mut dyn StateOpsTrait, spec: &Spec, substate: &mut Substate,
+    state: &mut State, spec: &Spec, substate: &mut Substate,
     tracer: &mut dyn VmObserve, account_start_nonce: U256,
 ) -> vm::Result<()>
 {
@@ -115,9 +114,8 @@ pub fn set_admin(
 /// Implementation of `destroy(address)`.
 /// The input should consist of 20 bytes `contract_address`
 pub fn destroy(
-    contract_address: Address, params: &ActionParams,
-    state: &mut dyn StateOpsTrait, spec: &Spec, substate: &mut Substate,
-    tracer: &mut dyn VmObserve,
+    contract_address: Address, params: &ActionParams, state: &mut State,
+    spec: &Spec, substate: &mut Substate, tracer: &mut dyn VmObserve,
 ) -> vm::Result<()>
 {
     debug!("contract_address={:?}", contract_address);

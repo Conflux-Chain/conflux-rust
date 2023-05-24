@@ -57,7 +57,6 @@ use cfx_parameters::{
         GAS_PRICE_TRANSACTION_SAMPLE_SIZE,
     },
 };
-use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::StateDb;
 use cfx_storage::{
     state::StateTrait, state_manager::StateManagerTrait, StorageState,
