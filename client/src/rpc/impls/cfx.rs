@@ -18,7 +18,7 @@ use cfxcore::{
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     state_exposer::STATE_EXPOSER,
-    verification::compute_epoch_receipt_proof,
+    verification::{compute_epoch_receipt_proof, EpochReceiptProof},
     vm, ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
@@ -1663,7 +1663,7 @@ impl RpcImpl {
 
     fn epoch_receipt_proof_by_transaction(
         &self, tx_hash: H256,
-    ) -> JsonRpcResult<Option<String>> {
+    ) -> JsonRpcResult<Option<EpochReceiptProof>> {
         let (block_hash, tx_index_in_block) =
             match self.consensus.get_transaction_info_by_hash(&tx_hash) {
                 None => {
@@ -1751,8 +1751,7 @@ impl RpcImpl {
             tx_index_in_block,
         );
 
-        let proof = rlp::encode(&epoch_receipt_proof);
-        Ok(Some(format!("0x{}", proof.to_hex::<String>())))
+        Ok(Some(epoch_receipt_proof))
     }
 
     fn transactions_by_epoch(
@@ -2229,7 +2228,7 @@ impl LocalRpc for LocalRpcImpl {
             fn current_sync_phase(&self) -> JsonRpcResult<String>;
             fn consensus_graph_state(&self) -> JsonRpcResult<ConsensusGraphStates>;
             fn epoch_receipts(&self, epoch: BlockHashOrEpochNumber, include_eth_recepits: Option<bool>,) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
-            fn epoch_receipt_proof_by_transaction(&self, tx_hash: H256) -> JsonRpcResult<Option<String>>;
+            fn epoch_receipt_proof_by_transaction(&self, tx_hash: H256) -> JsonRpcResult<Option<EpochReceiptProof>>;
             fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
             fn send_transaction(
                 &self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<H256>;
