@@ -102,7 +102,7 @@ impl PowHandler {
         let from_epoch = (start_epoch + 1).into();
         let to_epoch = end_epoch.into();
         let mut params = LogFilterParams::default();
-        params.address = Some(vec![*POS_REGISTER_CONTRACT_ADDRESS]);
+        params.address = Some(vec![POS_REGISTER_CONTRACT_ADDRESS]);
         params.trusted = true;
         let log_filter = LogFilter::EpochLogFilter {
             from_epoch,

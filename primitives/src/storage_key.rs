@@ -66,27 +66,27 @@ pub struct StorageKeyWithSpace<'a> {
 }
 
 impl<'a> StorageKey<'a> {
-    pub fn with_space(self, space: Space) -> StorageKeyWithSpace<'a> {
+    pub const fn with_space(self, space: Space) -> StorageKeyWithSpace<'a> {
         StorageKeyWithSpace { key: self, space }
     }
 
-    pub fn with_native_space(self) -> StorageKeyWithSpace<'a> {
+    pub const fn with_native_space(self) -> StorageKeyWithSpace<'a> {
         self.with_space(Space::Native)
     }
 
-    pub fn with_evm_space(self) -> StorageKeyWithSpace<'a> {
+    pub const fn with_evm_space(self) -> StorageKeyWithSpace<'a> {
         self.with_space(Space::Ethereum)
     }
 
-    pub fn new_account_key(address: &'a Address) -> Self {
+    pub const fn new_account_key(address: &'a Address) -> Self {
         StorageKey::AccountKey(&address.0)
     }
 
-    pub fn new_storage_root_key(address: &'a Address) -> Self {
+    pub const fn new_storage_root_key(address: &'a Address) -> Self {
         StorageKey::StorageRootKey(&address.0)
     }
 
-    pub fn new_storage_key(
+    pub const fn new_storage_key(
         address: &'a Address, storage_key: &'a [u8],
     ) -> Self {
         StorageKey::StorageKey {

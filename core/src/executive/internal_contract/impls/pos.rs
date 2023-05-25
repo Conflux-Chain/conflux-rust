@@ -270,7 +270,7 @@ pub fn address_to_identifier(
 }
 
 pub fn decode_register_info(event: &LogEntry) -> Option<StakingEvent> {
-    if event.address != *POS_REGISTER_CONTRACT_ADDRESS {
+    if event.address != POS_REGISTER_CONTRACT_ADDRESS {
         return None;
     }
 
