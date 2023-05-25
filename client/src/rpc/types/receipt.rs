@@ -81,7 +81,7 @@ pub struct Receipt {
     pub storage_released: Vec<StorageChange>,
     /// Transaction space.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub space: Option<Space>,
+    pub space: Option<String>,
 }
 
 impl Receipt {
@@ -212,7 +212,7 @@ impl Receipt {
                 .map(|sc| StorageChange::try_from(sc, network))
                 .collect::<Result<_, _>>()?,
             space: if include_eth_receipt {
-                Some(space)
+                Some(space.into())
             } else {
                 None
             },
