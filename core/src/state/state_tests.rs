@@ -54,7 +54,6 @@ fn checkpoint_basic() {
             &address_with_space,
             &U256::from(1069u64),
             CleanupMode::NoEmpty,
-            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
     state
@@ -80,15 +79,10 @@ fn checkpoint_basic() {
             &address_with_space,
             &U256::from(1u64),
             CleanupMode::NoEmpty,
-            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
     state
-        .sub_collateral_for_storage(
-            &address,
-            &U256::from(1000),
-            Spec::new_spec_for_test().account_start_nonce,
-        )
+        .sub_collateral_for_storage(&address, &U256::from(1000))
         .unwrap();
     assert_eq!(
         state.collateral_for_storage(&address).unwrap(),
@@ -131,7 +125,6 @@ fn checkpoint_nested() {
             &address_with_space,
             &U256::from(1069u64),
             CleanupMode::NoEmpty,
-            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
     state
@@ -176,7 +169,7 @@ fn checkpoint_revert_to_get_storage_at() {
     let c0 = state.checkpoint();
     let c1 = state.checkpoint();
     state
-        .new_contract_with_code(&address_with_space, U256::zero(), U256::one())
+        .new_contract_with_code(&address_with_space, U256::zero())
         .unwrap();
     state
         .set_storage(&address_with_space, key.clone(), U256::one(), address)
@@ -231,9 +224,7 @@ fn checkpoint_from_empty_get_storage_at() {
 
     let c0 = state.checkpoint();
     substates.push(Substate::new());
-    state
-        .new_contract_with_code(&a_s, U256::zero(), U256::zero())
-        .unwrap();
+    state.new_contract_with_code(&a_s, U256::zero()).unwrap();
     state
         .set_sponsor_for_collateral(
             &a,
@@ -484,7 +475,6 @@ fn checkpoint_get_storage_at() {
             &a_s,
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)),
             CleanupMode::NoEmpty,
-            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
     assert_eq!(
@@ -493,18 +483,13 @@ fn checkpoint_get_storage_at() {
     );
 
     state
-        .new_contract_with_code(&contract_a_s, U256::zero(), U256::zero())
+        .new_contract_with_code(&contract_a_s, U256::zero())
         .unwrap();
 
     state
         .set_storage(&contract_a_s, k.clone(), U256::from(0xffff), a)
         .unwrap();
-    state
-        .inc_nonce(
-            &contract_a_s,
-            &Spec::new_spec_for_test().account_start_nonce,
-        )
-        .unwrap();
+    state.inc_nonce(&contract_a_s).unwrap();
     assert_eq!(
         state
             .collect_and_settle_collateral(
@@ -573,7 +558,7 @@ fn checkpoint_get_storage_at() {
     let c0 = state.checkpoint();
     substates.push(Substate::new());
     state
-        .new_contract_with_code(&contract_a_s, U256::zero(), U256::zero())
+        .new_contract_with_code(&contract_a_s, U256::zero())
         .unwrap();
     state
         .set_sponsor_for_collateral(
@@ -879,11 +864,7 @@ fn kill_account_with_checkpoints() {
     // Need the checkpoint for ownership commitment.
     state_0.checkpoint();
     state_0
-        .new_contract_with_code(
-            &a_s,
-            *COLLATERAL_DRIPS_PER_STORAGE_KEY,
-            U256::one(),
-        )
+        .new_contract_with_code(&a_s, *COLLATERAL_DRIPS_PER_STORAGE_KEY)
         .unwrap();
     state_0
         .set_storage(&a_s, k.clone(), U256::one(), a)
@@ -919,9 +900,7 @@ fn kill_account_with_checkpoints() {
     // The account is killed. The storage should be empty.
     // assert_eq!(state.storage_at(&a, &k).unwrap(), U256::zero());
     // The new contract in the same place should have empty storage.
-    state
-        .new_contract_with_code(&a_s, U256::zero(), U256::one())
-        .unwrap();
+    state.new_contract_with_code(&a_s, U256::zero()).unwrap();
     assert_eq!(state.storage_at(&a_s, &k).unwrap(), U256::zero());
 
     // Commit the state and repeat the assertion.
@@ -936,9 +915,7 @@ fn kill_account_with_checkpoints() {
     state.remove_contract(&a_s).unwrap();
     // The new contract in the same place should have empty storage.
     state.checkpoint();
-    state
-        .new_contract_with_code(&a_s, U256::zero(), U256::one())
-        .unwrap();
+    state.new_contract_with_code(&a_s, U256::zero()).unwrap();
     // The new contract in the same place should have empty storage.
     assert_eq!(state.storage_at(&a_s, &k).unwrap(), U256::zero());
     state.revert_to_checkpoint();
@@ -956,10 +933,7 @@ fn check_result_of_simple_payment_to_killed_account() {
     let sender_addr = DEV_GENESIS_KEY_PAIR.address();
     let sender_addr_s = sender_addr.with_native_space();
     state_0
-        .require_or_new_basic_account(
-            &sender_addr_s,
-            &Spec::new_spec_for_test().account_start_nonce,
-        )
+        .require_or_new_basic_account(&sender_addr_s)
         .unwrap()
         .add_balance(&ONE_CFX_IN_DRIP.into());
     let mut a = Address::zero();
@@ -971,9 +945,7 @@ fn check_result_of_simple_payment_to_killed_account() {
     let k = u256_to_vec(&U256::from(0));
     // Need the checkpoint for ownership commitment.
     state_0.checkpoint();
-    state_0
-        .new_contract(&a_s, U256::zero(), U256::one())
-        .unwrap();
+    state_0.new_contract(&a_s, U256::zero()).unwrap();
     state_0.init_code(&a_s, code, sender_addr).unwrap();
     state_0
         .set_storage(&a_s, k.clone(), U256::one(), sender_addr)
@@ -1010,7 +982,6 @@ fn check_result_of_simple_payment_to_killed_account() {
             &a_s,
             &U256::one(),
             CleanupMode::NoEmpty,
-            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
     let epoch_id = EpochId::from_uint(&U256::from(2));
@@ -1037,25 +1008,13 @@ fn create_contract_fail() {
     let a_s = a.with_native_space();
 
     state.checkpoint(); // c1
+    state.new_contract_with_code(&a_s, U256::zero()).unwrap();
     state
-        .new_contract_with_code(&a_s, U256::zero(), U256::zero())
-        .unwrap();
-    state
-        .add_balance(
-            &a_s,
-            &U256::from(1),
-            CleanupMode::ForceCreate,
-            Spec::new_spec_for_test().account_start_nonce,
-        )
+        .add_balance(&a_s, &U256::from(1), CleanupMode::ForceCreate)
         .unwrap();
     state.checkpoint(); // c2
     state
-        .add_balance(
-            &a_s,
-            &U256::from(1),
-            CleanupMode::ForceCreate,
-            Spec::new_spec_for_test().account_start_nonce,
-        )
+        .add_balance(&a_s, &U256::from(1), CleanupMode::ForceCreate)
         .unwrap();
     assert_eq!(
         state
@@ -1102,7 +1061,6 @@ fn create_contract_fail_previous_storage() {
             &a_s,
             &COLLATERAL_DRIPS_PER_STORAGE_KEY,
             CleanupMode::NoEmpty,
-            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
     assert_eq!(state.total_storage_tokens(), U256::from(0));
@@ -1113,7 +1071,7 @@ fn create_contract_fail_previous_storage() {
     );
 
     state
-        .new_contract_with_code(&contract_addr_s, U256::zero(), U256::one())
+        .new_contract_with_code(&contract_addr_s, U256::zero())
         .unwrap();
     state
         .set_storage(&contract_addr_s, k.clone(), U256::from(0xffff), a)
@@ -1178,16 +1136,9 @@ fn create_contract_fail_previous_storage() {
     state.remove_contract(&a_s).unwrap();
     // parking_lot::lock_api::MappedRwLockWriteGuard must be used, so we drop()
     // it.
-    drop(
-        state
-            .require_or_new_basic_account(
-                &a_s,
-                &Spec::new_spec_for_test().account_start_nonce,
-            )
-            .unwrap(),
-    );
+    drop(state.require_or_new_basic_account(&a_s).unwrap());
     state
-        .new_contract_with_code(&contract_addr_s, U256::zero(), U256::zero())
+        .new_contract_with_code(&contract_addr_s, U256::zero())
         .unwrap();
     state.checkpoint(); // c2
     substates.push(Substate::new());
@@ -1249,14 +1200,12 @@ fn test_automatic_collateral_normal_account() {
             &normal_account_s,
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)),
             CleanupMode::NoEmpty,
-            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
     state
         .new_contract_with_code(
             &contract_account_s,
             *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2),
-            U256::zero(),
         )
         .unwrap();
 
@@ -1577,7 +1526,7 @@ fn test_automatic_collateral_contract_account() {
     substates.push(Substate::new());
 
     state
-        .new_contract_with_code(&contract_account_s, U256::zero(), U256::zero())
+        .new_contract_with_code(&contract_account_s, U256::zero())
         .unwrap();
     state
         .set_sponsor_for_collateral(

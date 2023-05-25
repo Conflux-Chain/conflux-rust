@@ -125,7 +125,7 @@ pub fn load_secrets_file(
 }
 
 pub fn initialize_internal_contract_accounts(
-    state: &mut State, addresses: &[Address], contract_start_nonce: U256,
+    state: &mut State, addresses: &[Address],
 ) {
     || -> DbResult<()> {
         {
@@ -134,7 +134,6 @@ pub fn initialize_internal_contract_accounts(
                     &address.with_native_space(),
                     /* No admin; admin = */ &Address::zero(),
                     /* balance = */ U256::zero(),
-                    contract_start_nonce,
                     Some(STORAGE_LAYOUT_REGULAR_V0),
                     false,
                 )?;
@@ -196,17 +195,11 @@ pub fn genesis_block(
     initialize_internal_contract_accounts(
         &mut state,
         machine.internal_contracts().initialized_at_genesis(),
-        machine.spec(0).contract_start_nonce,
     );
     trace!("genesis_accounts: {:?}", genesis_accounts);
     for (addr, balance) in genesis_accounts {
         state
-            .add_balance(
-                &addr,
-                &balance,
-                CleanupMode::NoEmpty,
-                /* account_start_nonce = */ U256::zero(),
-            )
+            .add_balance(&addr, &balance, CleanupMode::NoEmpty)
             .unwrap();
         state.add_total_issued(balance);
         if addr.space == Space::Ethereum {
@@ -234,7 +227,6 @@ pub fn genesis_block(
             &genesis_account_address,
             &genesis_account_init_balance,
             CleanupMode::NoEmpty,
-            /* account_start_nonce = */ U256::zero(),
         )
         .unwrap();
 
@@ -428,7 +420,6 @@ pub fn genesis_block(
                     &(stake_balance
                         + U256::from(ONE_CFX_IN_DRIP) * U256::from(20)),
                     CleanupMode::NoEmpty,
-                    /* account_start_nonce = */ U256::zero(),
                 )
                 .unwrap();
             state

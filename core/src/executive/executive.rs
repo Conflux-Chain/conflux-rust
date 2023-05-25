@@ -491,7 +491,7 @@ impl<'a> CallCreateExecutive<'a> {
 
     fn transfer_exec_balance(
         params: &ActionParams, spec: &Spec, state: &mut State,
-        substate: &mut Substate, account_start_nonce: U256,
+        substate: &mut Substate,
     ) -> DbResult<()>
     {
         let sender = AddressWithSpace {
@@ -508,7 +508,6 @@ impl<'a> CallCreateExecutive<'a> {
                 &receiver,
                 &val,
                 cleanup_mode(substate, &spec),
-                account_start_nonce,
             )?;
         }
 
@@ -518,7 +517,6 @@ impl<'a> CallCreateExecutive<'a> {
     fn transfer_exec_balance_and_init_contract(
         params: &ActionParams, spec: &Spec, state: &mut State,
         substate: &mut Substate, storage_layout: Option<StorageLayout>,
-        contract_start_nonce: U256,
     ) -> DbResult<()>
     {
         let sender = AddressWithSpace {
@@ -543,16 +541,10 @@ impl<'a> CallCreateExecutive<'a> {
             } else {
                 Address::zero()
             };
-            let nonce = if params.space == Space::Native {
-                contract_start_nonce
-            } else {
-                U256::from(1)
-            };
             state.new_contract_with_admin(
                 &receiver,
                 &admin,
                 val.saturating_add(prev_balance),
-                nonce,
                 storage_layout,
                 spec.cip107,
             )?;
@@ -684,7 +676,6 @@ impl<'a> CallCreateExecutive<'a> {
                 // It is a bug in the Parity version.
                 &mut self.context.substate,
                 Some(STORAGE_LAYOUT_REGULAR_V0),
-                spec.contract_start_nonce,
             )?
         } else {
             Self::transfer_exec_balance(
@@ -692,7 +683,6 @@ impl<'a> CallCreateExecutive<'a> {
                 spec,
                 state,
                 &mut self.context.substate,
-                spec.account_start_nonce,
             )?
         };
 
@@ -1051,7 +1041,6 @@ impl<'a> ExecutiveGeneric<'a> {
                 &random_hex.with_space(tx.space()),
                 &balance_inc,
                 CleanupMode::NoEmpty,
-                self.spec.account_start_nonce,
             )?;
             // Make sure statistics are also correct and will not violate any
             // underlying assumptions.
@@ -1514,8 +1503,7 @@ impl<'a> ExecutiveGeneric<'a> {
                     ToRepackError::SenderDoesNotExist,
                 ));
             }
-            self.state
-                .inc_nonce(&sender, &self.spec.account_start_nonce)?;
+            self.state.inc_nonce(&sender)?;
             self.state.sub_balance(
                 &sender,
                 &actual_gas_cost,
@@ -1551,8 +1539,7 @@ impl<'a> ExecutiveGeneric<'a> {
             // account does not exist (since she may be sponsored). Transaction
             // execution is guaranteed. Note that inc_nonce() will create a
             // new account if the account does not exist.
-            self.state
-                .inc_nonce(&sender, &self.spec.account_start_nonce)?;
+            self.state.inc_nonce(&sender)?;
         }
 
         // Subtract the transaction fee from sender or contract.
@@ -1840,7 +1827,6 @@ impl<'a> ExecutiveGeneric<'a> {
                     &sponsor_address.with_native_space(),
                     &sponsor_balance_for_gas,
                     cleanup_mode(&mut substate, self.spec),
-                    self.spec.account_start_nonce,
                 )?;
                 self.state.sub_sponsor_balance_for_gas(
                     contract_address,
@@ -1858,7 +1844,6 @@ impl<'a> ExecutiveGeneric<'a> {
                     &sponsor_address.with_native_space(),
                     &sponsor_balance_for_collateral,
                     cleanup_mode(&mut substate, self.spec),
-                    self.spec.account_start_nonce,
                 )?;
                 self.state.sub_sponsor_balance_for_collateral(
                     contract_address,
@@ -1948,7 +1933,6 @@ impl<'a> ExecutiveGeneric<'a> {
                 &tx.sender(),
                 &refund_value,
                 cleanup_mode(&mut substate, self.spec),
-                self.spec.account_start_nonce,
             )?;
         };
 

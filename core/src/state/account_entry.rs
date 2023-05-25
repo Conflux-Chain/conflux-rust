@@ -154,13 +154,11 @@ impl OverlayAccount {
 
     /// Create an OverlayAccount of basic account when the account doesn't exist
     /// before.
-    pub fn new_basic(
-        address: &AddressWithSpace, balance: U256, nonce: U256,
-    ) -> Self {
+    pub fn new_basic(address: &AddressWithSpace, balance: U256) -> Self {
         OverlayAccount {
             address: address.clone(),
             balance,
-            nonce,
+            nonce: U256::zero(),
             admin: Address::zero(),
             sponsor_info: Default::default(),
             storage_value_read_cache: Default::default(),
@@ -210,14 +208,13 @@ impl OverlayAccount {
     /// exist before.
     #[cfg(test)]
     pub fn new_contract(
-        address: &Address, balance: U256, nonce: U256,
-        invalidated_storage: bool, storage_layout: Option<StorageLayout>,
+        address: &Address, balance: U256, invalidated_storage: bool,
+        storage_layout: Option<StorageLayout>,
     ) -> Self
     {
         Self::new_contract_with_admin(
             &address.with_native_space(),
             balance,
-            nonce,
             &Address::zero(),
             invalidated_storage,
             storage_layout,
@@ -228,9 +225,9 @@ impl OverlayAccount {
     /// Create an OverlayAccount of contract account when the account doesn't
     /// exist before.
     pub fn new_contract_with_admin(
-        address: &AddressWithSpace, balance: U256, nonce: U256,
-        admin: &Address, invalidated_storage: bool,
-        storage_layout: Option<StorageLayout>, cip107: bool,
+        address: &AddressWithSpace, balance: U256, admin: &Address,
+        invalidated_storage: bool, storage_layout: Option<StorageLayout>,
+        cip107: bool,
     ) -> Self
     {
         let sponsor_info = if cip107 && address.space == Space::Native {
@@ -244,7 +241,7 @@ impl OverlayAccount {
         OverlayAccount {
             address: address.clone(),
             balance,
-            nonce,
+            nonce: U256::one(),
             admin: admin.clone(),
             sponsor_info,
             storage_value_read_cache: Default::default(),
@@ -1277,10 +1274,6 @@ mod tests {
             Address::from_str("1000000000000000000000000000000000000000")
                 .unwrap()
                 .with_native_space();
-        let contract_addr =
-            Address::from_str("8000000000000000000000000000000000000000")
-                .unwrap()
-                .with_native_space();
         let builtin_addr =
             Address::from_str("0000000000000000000000000000000000000000")
                 .unwrap()
@@ -1289,18 +1282,9 @@ mod tests {
         test_account_is_default(&mut OverlayAccount::new_basic(
             &normal_addr,
             U256::zero(),
-            U256::zero(),
-        ));
-        test_account_is_default(&mut OverlayAccount::new_contract(
-            &contract_addr.address,
-            U256::zero(),
-            U256::zero(),
-            false,
-            /* storage_layout = */ None,
         ));
         test_account_is_default(&mut OverlayAccount::new_basic(
             &builtin_addr,
-            U256::zero(),
             U256::zero(),
         ));
     }

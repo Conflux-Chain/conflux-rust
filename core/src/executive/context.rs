@@ -258,13 +258,7 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
             if !self.local_part.spec.keep_unsigned_nonce
                 || params.sender != UNSIGNED_SENDER
             {
-                self.state.inc_nonce(
-                    &caller,
-                    // The sender of a CREATE call is guaranteed to exist,
-                    // therefore the start_nonce below
-                    // doesn't matter.
-                    &self.local_part.spec.contract_start_nonce,
-                )?;
+                self.state.inc_nonce(&caller)?;
             }
         }
 
@@ -447,9 +441,7 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
 
     fn suicide(
         &mut self, refund_address: &Address, tracer: &mut dyn VmObserve,
-        account_start_nonce: U256,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         if self.is_static_or_reentrancy() {
             return Err(vm::Error::MutableCallInStaticContext);
         }
@@ -465,7 +457,6 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
             &self.local_part.spec,
             &mut self.local_part.substate,
             tracer,
-            account_start_nonce,
         )
     }
 
@@ -808,11 +799,7 @@ mod tests {
         origin.address = contract_address;
         let contract_address_w_space = contract_address.with_native_space();
         state
-            .new_contract_with_code(
-                &contract_address_w_space,
-                U256::zero(),
-                U256::one(),
-            )
+            .new_contract_with_code(&contract_address_w_space, U256::zero())
             .expect(&concat!(file!(), ":", line!(), ":", column!()));
         state
             .init_code(
@@ -838,12 +825,7 @@ mod tests {
             );
             let mut ctx = lctx.activate(state, &mut callstack);
             let mut tracer = ();
-            ctx.suicide(
-                &refund_account,
-                &mut tracer,
-                setup.machine.spec(setup.env.number).account_start_nonce,
-            )
-            .unwrap();
+            ctx.suicide(&refund_account, &mut tracer).unwrap();
             assert_eq!(lctx.substate.suicides.len(), 1);
         }
     }

@@ -16,7 +16,6 @@ use super::super::components::InternalRefContext;
 pub fn set_sponsor_for_gas(
     contract_address: Address, upper_bound: U256, params: &ActionParams,
     context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
-    account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
@@ -78,7 +77,6 @@ pub fn set_sponsor_for_gas(
                 &prev_sponsor.as_ref().unwrap().with_native_space(),
                 &prev_sponsor_balance,
                 cleanup_mode(substate, &spec),
-                account_start_nonce,
             )?;
         }
         tracer.trace_internal_transfer(
@@ -132,7 +130,6 @@ pub fn set_sponsor_for_gas(
 pub fn set_sponsor_for_collateral(
     contract_address: Address, params: &ActionParams,
     context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
-    account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
@@ -190,7 +187,6 @@ pub fn set_sponsor_for_collateral(
                 &prev_sponsor.with_native_space(),
                 &(prev_sponsor_balance + collateral_for_storage),
                 cleanup_mode(substate, &spec),
-                account_start_nonce,
             )?;
         } else {
             assert_eq!(collateral_for_storage, U256::zero());

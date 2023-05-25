@@ -273,7 +273,6 @@ impl SimpleExecutionTrait for DeployEip1820 {
             &address,
             /* admin */ &Address::zero(),
             /* balance */ U256::zero(),
-            /* nonce */ U256::one(),
             Some(STORAGE_LAYOUT_REGULAR_V0),
             context.spec.cip107,
         )?;

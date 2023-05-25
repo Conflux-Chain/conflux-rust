@@ -436,7 +436,7 @@ impl State {
     /// interest.
     pub fn distribute_pos_interest<'a>(
         &mut self, pos_points: Box<dyn Iterator<Item = (&'a H256, u64)> + 'a>,
-        account_start_nonce: U256, current_block_number: u64,
+        current_block_number: u64,
     ) -> DbResult<Vec<(Address, H256, U256)>>
     {
         assert!(self.world_statistics_checkpoints.get_mut().is_empty());
@@ -459,7 +459,6 @@ impl State {
                 &interest,
                 CleanupMode::ForceCreate, /* Same as distributing block
                                            * reward. */
-                account_start_nonce,
             )?;
         }
         self.world_statistics.distributable_pos_interest = U256::zero();
@@ -470,7 +469,7 @@ impl State {
 
     pub fn new_contract_with_admin(
         &mut self, contract: &AddressWithSpace, admin: &Address, balance: U256,
-        nonce: U256, storage_layout: Option<StorageLayout>, cip107: bool,
+        storage_layout: Option<StorageLayout>, cip107: bool,
     ) -> DbResult<()>
     {
         assert!(contract.space == Space::Native || admin.is_zero());
@@ -487,7 +486,6 @@ impl State {
                 OverlayAccount::new_contract_with_admin(
                     contract,
                     balance,
-                    nonce,
                     admin,
                     invalidated_storage,
                     storage_layout,
@@ -814,7 +812,7 @@ impl State {
         let address = address.with_native_space();
         let mut account = Account::new_empty(&address);
         account.code_hash = H256::default();
-        *&mut *self.require_or_new_basic_account(&address, &U256::zero())? =
+        *&mut *self.require_or_new_basic_account(&address)? =
             OverlayAccount::from_loaded(&address, account);
         Ok(())
     }
@@ -822,15 +820,13 @@ impl State {
     pub fn clean_account(
         &mut self, address: &AddressWithSpace,
     ) -> DbResult<()> {
-        *&mut *self.require_or_new_basic_account(address, &U256::zero())? =
+        *&mut *self.require_or_new_basic_account(address)? =
             OverlayAccount::from_loaded(address, Account::new_empty(address));
         Ok(())
     }
 
-    pub fn inc_nonce(
-        &mut self, address: &AddressWithSpace, account_start_nonce: &U256,
-    ) -> DbResult<()> {
-        self.require_or_new_basic_account(address, account_start_nonce)
+    pub fn inc_nonce(&mut self, address: &AddressWithSpace) -> DbResult<()> {
+        self.require_or_new_basic_account(address)
             .map(|mut x| x.inc_nonce())
     }
 
@@ -850,7 +846,7 @@ impl State {
     pub fn set_nonce(
         &mut self, address: &AddressWithSpace, nonce: &U256,
     ) -> DbResult<()> {
-        self.require_or_new_basic_account(address, nonce)
+        self.require_or_new_basic_account(address)
             .map(|mut x| x.set_nonce(&nonce))
     }
 
@@ -873,7 +869,7 @@ impl State {
 
     pub fn add_balance(
         &mut self, address: &AddressWithSpace, by: &U256,
-        cleanup_mode: CleanupMode, account_start_nonce: U256,
+        cleanup_mode: CleanupMode,
     ) -> DbResult<()>
     {
         let exists = self.exists(address)?;
@@ -883,8 +879,7 @@ impl State {
         if !by.is_zero()
             || (cleanup_mode == CleanupMode::ForceCreate && !exists)
         {
-            self.require_or_new_basic_account(address, &account_start_nonce)?
-                .add_balance(by);
+            self.require_or_new_basic_account(address)?.add_balance(by);
         }
 
         if let CleanupMode::TrackTouched(set) = cleanup_mode {
@@ -897,29 +892,24 @@ impl State {
 
     pub fn add_pos_interest(
         &mut self, address: &Address, interest: &U256,
-        cleanup_mode: CleanupMode, account_start_nonce: U256,
+        cleanup_mode: CleanupMode,
     ) -> DbResult<()>
     {
         let address = address.with_native_space();
         self.add_total_issued(*interest);
-        self.add_balance(
-            &address,
-            interest,
-            cleanup_mode,
-            account_start_nonce,
-        )?;
-        self.require_or_new_basic_account(&address, &account_start_nonce)?
+        self.add_balance(&address, interest, cleanup_mode)?;
+        self.require_or_new_basic_account(&address)?
             .record_interest_receive(interest);
         Ok(())
     }
 
     pub fn transfer_balance(
         &mut self, from: &AddressWithSpace, to: &AddressWithSpace, by: &U256,
-        mut cleanup_mode: CleanupMode, account_start_nonce: U256,
+        mut cleanup_mode: CleanupMode,
     ) -> DbResult<()>
     {
         self.sub_balance(from, by, &mut cleanup_mode)?;
-        self.add_balance(to, by, cleanup_mode, account_start_nonce)?;
+        self.add_balance(to, by, cleanup_mode)?;
         Ok(())
     }
 
@@ -1345,7 +1335,7 @@ impl State {
             && (!sub.is_zero() || !inc.is_zero())
         {
             let (converted_point_from_balance, converted_point_from_collateral) =
-                self.initialize_cip107(addr, spec.account_start_nonce)?;
+                self.initialize_cip107(addr)?;
             if !converted_point_from_balance.is_zero() {
                 tracer.trace_internal_transfer(
                     /* from */
@@ -1366,11 +1356,8 @@ impl State {
         }
 
         if !sub.is_zero() {
-            let storage_point_refund = self.sub_collateral_for_storage(
-                addr,
-                &sub,
-                spec.account_start_nonce,
-            )?;
+            let storage_point_refund =
+                self.sub_collateral_for_storage(addr, &sub)?;
             tracer.trace_internal_transfer(
                 /* from */ AddressPocket::StorageCollateral(*addr),
                 /* to */
@@ -1432,7 +1419,7 @@ impl State {
 
     #[cfg(test)]
     pub fn new_contract(
-        &mut self, contract: &AddressWithSpace, balance: U256, nonce: U256,
+        &mut self, contract: &AddressWithSpace, balance: U256,
     ) -> DbResult<()> {
         let invalidated_storage = self
             .read_account(contract)?
@@ -1444,7 +1431,6 @@ impl State {
             AccountEntry::new_dirty(Some(OverlayAccount::new_contract(
                 &contract.address,
                 balance,
-                nonce,
                 invalidated_storage,
                 Some(STORAGE_LAYOUT_REGULAR_V0),
             ))),
@@ -1454,9 +1440,9 @@ impl State {
 
     #[cfg(test)]
     pub fn new_contract_with_code(
-        &mut self, contract: &AddressWithSpace, balance: U256, nonce: U256,
+        &mut self, contract: &AddressWithSpace, balance: U256,
     ) -> DbResult<()> {
-        self.new_contract(contract, balance, nonce)?;
+        self.new_contract(contract, balance)?;
         self.init_code(&contract, vec![0x12, 0x34], Address::zero())?;
         Ok(())
     }
@@ -1480,17 +1466,14 @@ impl State {
     }
 
     fn sub_collateral_for_storage(
-        &mut self, address: &Address, by: &U256, account_start_nonce: U256,
+        &mut self, address: &Address, by: &U256,
     ) -> DbResult<U256> {
         let collateral = self.token_collateral_for_storage(address)?;
         let refundable = if by > &collateral { &collateral } else { by };
         let burnt = *by - *refundable;
         let storage_point_refund = if !refundable.is_zero() {
-            self.require_or_new_basic_account(
-                &address.with_native_space(),
-                &account_start_nonce,
-            )?
-            .sub_collateral_for_storage(refundable)
+            self.require_or_new_basic_account(&address.with_native_space())?
+                .sub_collateral_for_storage(refundable)
         } else {
             U256::zero()
         };
@@ -1504,15 +1487,13 @@ impl State {
     }
 
     fn initialize_cip107(
-        &mut self, address: &Address, account_start_nonce: U256,
+        &mut self, address: &Address,
     ) -> DbResult<(U256, U256)> {
         let prop = self.storage_point_prop()?;
         let init_result = {
             debug!("Check initialize CIP-107");
-            let account = &mut *self.require_or_new_basic_account(
-                &address.with_native_space(),
-                &account_start_nonce,
-            )?;
+            let account = &mut *self
+                .require_or_new_basic_account(&address.with_native_space())?;
             if !account.is_cip_107_initialized() {
                 Some(account.initialize_cip107(prop))
             } else {
@@ -2099,7 +2080,7 @@ impl State {
     }
 
     fn require_or_new_basic_account(
-        &self, address: &AddressWithSpace, account_start_nonce: &U256,
+        &self, address: &AddressWithSpace,
     ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>> {
         self.require_or_set(address, false, |address| {
             // It is guaranteed that the address is valid.
@@ -2110,11 +2091,7 @@ impl State {
             // use new_basic() to create a *stub* there. Because the contract
             // serialization is a super-set of the normal address
             // serialization, this should just work.
-            Ok(OverlayAccount::new_basic(
-                address,
-                U256::zero(),
-                account_start_nonce.into(),
-            ))
+            Ok(OverlayAccount::new_basic(address, U256::zero()))
         })
     }
 

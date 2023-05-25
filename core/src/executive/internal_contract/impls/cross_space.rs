@@ -306,7 +306,6 @@ pub fn call_to_evmcore(
         &mapped_sender,
         &value,
         cleanup_mode(context.substate, context.spec),
-        context.spec.account_start_nonce,
     )?;
     context.state.add_total_evm_tokens(value);
     tracer.trace_internal_transfer(
@@ -340,9 +339,7 @@ pub fn call_to_evmcore(
 
     if call_type == CallType::Call {
         let nonce = context.state.nonce(&mapped_sender)?;
-        context
-            .state
-            .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
+        context.state.inc_nonce(&mapped_sender)?;
         CallEvent::log(
             &(mapped_sender.address.0, address.address.0),
             &(value, nonce, data),
@@ -386,7 +383,6 @@ pub fn create_to_evmcore(
         &mapped_sender,
         &value,
         cleanup_mode(context.substate, context.spec),
-        context.spec.account_start_nonce,
     )?;
     context.state.add_total_evm_tokens(value);
     tracer.trace_internal_transfer(
@@ -430,9 +426,7 @@ pub fn create_to_evmcore(
     };
 
     let nonce = context.state.nonce(&mapped_sender)?;
-    context
-        .state
-        .inc_nonce(&mapped_sender, &context.spec.account_start_nonce)?;
+    context.state.inc_nonce(&mapped_sender)?;
     CreateEvent::log(
         &(mapped_sender.address.0, address.0),
         &(value, nonce, init),
@@ -466,7 +460,6 @@ pub fn withdraw_from_evmcore(
         &sender.with_native_space(),
         &value,
         cleanup_mode(context.substate, context.spec),
-        context.spec.account_start_nonce,
     )?;
     context.state.subtract_total_evm_tokens(value);
     tracer.trace_internal_transfer(
@@ -476,9 +469,7 @@ pub fn withdraw_from_evmcore(
     );
 
     let nonce = context.state.nonce(&mapped_address)?;
-    context
-        .state
-        .inc_nonce(&mapped_address, &context.spec.account_start_nonce)?;
+    context.state.inc_nonce(&mapped_address)?;
     WithdrawEvent::log(
         &(mapped_address.address.0, sender),
         &(value, nonce),

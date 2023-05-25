@@ -9,7 +9,7 @@ use crate::{
 };
 use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
-    Space, U256,
+    Space,
 };
 
 use super::super::components::InternalRefContext;
@@ -28,7 +28,7 @@ fn available_admin_address(_spec: &Spec, address: &Address) -> bool {
 pub fn suicide(
     contract_address: &AddressWithSpace, refund_address: &AddressWithSpace,
     state: &mut State, spec: &Spec, substate: &mut Substate,
-    tracer: &mut dyn VmObserve, account_start_nonce: U256,
+    tracer: &mut dyn VmObserve,
 ) -> vm::Result<()>
 {
     substate.suicides.insert(contract_address.clone());
@@ -65,7 +65,6 @@ pub fn suicide(
             refund_address,
             &balance,
             cleanup_mode(substate, spec),
-            account_start_nonce,
         )?;
     }
 
@@ -130,7 +129,6 @@ pub fn destroy(
             spec,
             substate,
             tracer,
-            spec.account_start_nonce,
         )
     } else {
         Ok(())
