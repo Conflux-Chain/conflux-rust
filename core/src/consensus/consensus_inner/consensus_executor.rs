@@ -25,7 +25,7 @@ use cfx_internal_common::{
 use cfx_parameters::{
     consensus::*, consensus_internal::CIP107_STORAGE_POINT_PROP_INIT,
 };
-use cfx_state::{state_trait::*, CleanupMode};
+use cfx_state::CleanupMode;
 use cfx_statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDb};
 use cfx_storage::{
     defaults::DEFAULT_EXECUTION_PREFETCH_THREADS, StateIndex,
@@ -1133,9 +1133,6 @@ impl ConsensusExecutionHandler {
                 let account_rewards = state
                     .distribute_pos_interest(
                         Box::new(reward_event.rewards()),
-                        self.machine
-                            .spec(current_block_number)
-                            .account_start_nonce,
                         current_block_number,
                     )
                     .expect("db error");
@@ -1291,7 +1288,6 @@ impl ConsensusExecutionHandler {
             initialize_internal_contract_accounts(
                 state,
                 self.machine.internal_contracts().initialized_at(env.number),
-                spec.contract_start_nonce,
             );
             block_number += 1;
 
@@ -1845,7 +1841,6 @@ impl ConsensusExecutionHandler {
                         &address.with_native_space(),
                         &reward,
                         CleanupMode::ForceCreate,
-                        spec.account_start_nonce,
                     )
                     .unwrap();
             }

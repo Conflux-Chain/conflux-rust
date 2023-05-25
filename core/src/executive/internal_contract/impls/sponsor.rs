@@ -5,10 +5,9 @@
 use crate::{
     internal_bail,
     observer::{AddressPocket, VmObserve},
-    state::cleanup_mode,
+    state::{cleanup_mode, State, Substate},
     vm::{self, ActionParams, Spec},
 };
-use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{Address, AddressSpaceUtil, U256};
 
 use super::super::components::InternalRefContext;
@@ -17,7 +16,6 @@ use super::super::components::InternalRefContext;
 pub fn set_sponsor_for_gas(
     contract_address: Address, upper_bound: U256, params: &ActionParams,
     context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
-    account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
@@ -33,11 +31,8 @@ pub fn set_sponsor_for_gas(
         internal_bail!("not allowed to sponsor non-contract account");
     }
 
-    let (spec, state, substate): (
-        &Spec,
-        &mut dyn StateOpsTrait,
-        &mut dyn SubstateTrait,
-    ) = (context.spec, context.state, context.substate);
+    let (spec, state, substate): (&Spec, &mut State, &mut Substate) =
+        (context.spec, context.state, context.substate);
 
     let sponsor_balance = state.balance(&params.address.with_native_space())?;
 
@@ -82,7 +77,6 @@ pub fn set_sponsor_for_gas(
                 &prev_sponsor.as_ref().unwrap().with_native_space(),
                 &prev_sponsor_balance,
                 cleanup_mode(substate, &spec),
-                account_start_nonce,
             )?;
         }
         tracer.trace_internal_transfer(
@@ -136,7 +130,6 @@ pub fn set_sponsor_for_gas(
 pub fn set_sponsor_for_collateral(
     contract_address: Address, params: &ActionParams,
     context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
-    account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
@@ -152,11 +145,8 @@ pub fn set_sponsor_for_collateral(
         internal_bail!("not allowed to sponsor non-contract account");
     }
 
-    let (spec, state, substate): (
-        &Spec,
-        &mut dyn StateOpsTrait,
-        &mut dyn SubstateTrait,
-    ) = (context.spec, context.state, context.substate);
+    let (spec, state, substate): (&Spec, &mut State, &mut Substate) =
+        (context.spec, context.state, context.substate);
 
     let sponsor_balance = state.balance(&params.address.with_native_space())?;
 
@@ -197,7 +187,6 @@ pub fn set_sponsor_for_collateral(
                 &prev_sponsor.with_native_space(),
                 &(prev_sponsor_balance + collateral_for_storage),
                 cleanup_mode(substate, &spec),
-                account_start_nonce,
             )?;
         } else {
             assert_eq!(collateral_for_storage, U256::zero());
@@ -250,7 +239,7 @@ pub fn set_sponsor_for_collateral(
 /// `addPrivilegeByAdmin(address,address[])`.
 pub fn add_privilege(
     contract: Address, addresses: Vec<Address>, params: &ActionParams,
-    state: &mut dyn StateOpsTrait,
+    state: &mut State,
 ) -> vm::Result<()>
 {
     for user_addr in addresses {
@@ -268,7 +257,7 @@ pub fn add_privilege(
 /// `removePrivilegeByAdmin(address,address[])`.
 pub fn remove_privilege(
     contract: Address, addresses: Vec<Address>, params: &ActionParams,
-    state: &mut dyn StateOpsTrait,
+    state: &mut State,
 ) -> vm::Result<()>
 {
     for user_addr in addresses {

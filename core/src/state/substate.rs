@@ -3,11 +3,11 @@
 // See http://www.gnu.org/licenses/
 
 use super::CleanupMode;
-use crate::evm::{CleanDustMode, Spec};
-use cfx_parameters::internal_contract_addresses::ADMIN_CONTROL_CONTRACT_ADDRESS;
-use cfx_state::{
-    state_trait::StateOpsTrait, substate_trait::SubstateMngTrait, SubstateTrait,
+use crate::{
+    evm::{CleanDustMode, Spec},
+    state::State,
 };
+use cfx_parameters::internal_contract_addresses::ADMIN_CONTROL_CONTRACT_ADDRESS;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, U256};
 use primitives::LogEntry;
@@ -125,8 +125,8 @@ pub struct Substate {
     pub contracts_created: Vec<AddressWithSpace>,
 }
 
-impl SubstateMngTrait for Substate {
-    fn accrue(&mut self, s: Self) {
+impl Substate {
+    pub fn accrue(&mut self, s: Self) {
         self.suicides.extend(s.suicides);
         self.touched.extend(s.touched);
         self.logs.extend(s.logs);
@@ -139,11 +139,11 @@ impl SubstateMngTrait for Substate {
         }
     }
 
-    fn new() -> Self { Substate::default() }
+    pub fn new() -> Self { Substate::default() }
 }
 
-impl SubstateTrait for Substate {
-    fn get_collateral_change(&self, address: &Address) -> (u64, u64) {
+impl Substate {
+    pub fn get_collateral_change(&self, address: &Address) -> (u64, u64) {
         let inc = self
             .storage_collateralized
             .get(address)
@@ -157,52 +157,38 @@ impl SubstateTrait for Substate {
         }
     }
 
-    fn logs(&self) -> &[LogEntry] { &self.logs }
-
-    fn logs_mut(&mut self) -> &mut Vec<LogEntry> { &mut self.logs }
-
     // Let VM access storage from substate so that storage ownership can be
     // maintained without help from state.
-    fn storage_at(
-        &self, state: &dyn StateOpsTrait, address: &AddressWithSpace,
-        key: &[u8],
-    ) -> DbResult<U256>
-    {
+    pub fn storage_at(
+        &self, state: &State, address: &AddressWithSpace, key: &[u8],
+    ) -> DbResult<U256> {
         state.storage_at(address, key)
     }
 
     // Let VM access storage from substate so that storage ownership can be
     // maintained without help from state.
-    fn set_storage(
-        &mut self, state: &mut dyn StateOpsTrait, address: &AddressWithSpace,
-        key: Vec<u8>, value: U256, owner: Address,
+    pub fn set_storage(
+        &mut self, state: &mut State, address: &AddressWithSpace, key: Vec<u8>,
+        value: U256, owner: Address,
     ) -> DbResult<()>
     {
         state.set_storage(address, key, value, owner)
     }
 
-    fn record_storage_occupy(&mut self, address: &Address, collaterals: u64) {
+    pub fn record_storage_occupy(
+        &mut self, address: &Address, collaterals: u64,
+    ) {
         *self.storage_collateralized.entry(*address).or_insert(0) +=
             collaterals;
     }
 
-    fn touched(&mut self) -> &mut HashSet<AddressWithSpace> {
-        &mut self.touched
-    }
-
-    fn contracts_created(&self) -> &[AddressWithSpace] {
-        &self.contracts_created
-    }
-
-    fn contracts_created_mut(&mut self) -> &mut Vec<AddressWithSpace> {
-        &mut self.contracts_created
-    }
-
-    fn record_storage_release(&mut self, address: &Address, collaterals: u64) {
+    pub fn record_storage_release(
+        &mut self, address: &Address, collaterals: u64,
+    ) {
         *self.storage_released.entry(*address).or_insert(0) += collaterals;
     }
 
-    fn keys_for_collateral_changed(&self) -> HashSet<&Address> {
+    pub fn keys_for_collateral_changed(&self) -> HashSet<&Address> {
         let affected_address1: HashSet<_> =
             self.storage_collateralized.keys().collect();
         let affected_address2: HashSet<_> =
@@ -212,17 +198,11 @@ impl SubstateTrait for Substate {
             .cloned()
             .collect()
     }
-
-    fn suicides(&self) -> &HashSet<AddressWithSpace> { &self.suicides }
-
-    fn suicides_mut(&mut self) -> &mut HashSet<AddressWithSpace> {
-        &mut self.suicides
-    }
 }
 
 /// Get the cleanup mode object from this.
 pub fn cleanup_mode<'a>(
-    substate: &'a mut dyn SubstateTrait, spec: &Spec,
+    substate: &'a mut Substate, spec: &Spec,
 ) -> CleanupMode<'a> {
     match (
         spec.kill_dust != CleanDustMode::Off,
@@ -232,7 +212,7 @@ pub fn cleanup_mode<'a>(
         (false, false, _) => CleanupMode::ForceCreate,
         (false, true, false) => CleanupMode::NoEmpty,
         (false, true, true) | (true, _, _) => {
-            CleanupMode::TrackTouched(substate.touched())
+            CleanupMode::TrackTouched(&mut substate.touched)
         }
     }
 }
@@ -241,7 +221,6 @@ pub fn cleanup_mode<'a>(
 mod tests {
     use super::CallStackInfo;
     use crate::state::Substate;
-    use cfx_state::substate_trait::SubstateMngTrait;
     use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, Space};
     use primitives::LogEntry;
 

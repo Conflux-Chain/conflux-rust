@@ -8,7 +8,6 @@ use crate::rpc::types::{
     TokenSupplyInfo, VoteParamsInfo, WrapTransaction,
 };
 use blockgen::BlockGenerator;
-use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::StateDbExt;
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H256, H520, U128, U256,

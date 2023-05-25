@@ -215,9 +215,7 @@ impl Context for MockContext {
 
     fn suicide(
         &mut self, refund_address: &Address, _: &mut dyn VmObserve,
-        _account_start_nonce: U256,
-    ) -> Result<()>
-    {
+    ) -> Result<()> {
         if !refund_address.is_genesis_valid_address() {
             return Err(Error::InvalidAddress(*refund_address));
         }
