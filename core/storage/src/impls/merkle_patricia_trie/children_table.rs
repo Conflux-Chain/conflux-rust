@@ -168,6 +168,57 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
     }
 }
 
+impl<NodeRefT: NodeRefTrait + Serialize> Serialize
+    for VanillaChildrenTable<NodeRefT>
+{
+    fn serialize<S>(
+        &self, serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error>
+    where S: Serializer {
+        let seq = if self.children_count == 0 {
+            serializer.serialize_seq(Some(0))?
+        } else {
+            let mut seq = serializer.serialize_seq(Some(self.table.len()))?;
+            for element in self.table.iter() {
+                seq.serialize_element(element)?;
+            }
+            seq
+        };
+
+        seq.end()
+    }
+}
+
+impl<'a, NodeRefT: 'static + NodeRefTrait + Deserialize<'a>> Deserialize<'a>
+    for VanillaChildrenTable<NodeRefT>
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
+{
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where D: Deserializer<'a> {
+        let nodes: Vec<NodeRefT> = Deserialize::deserialize(deserializer)?;
+
+        if nodes.len() == 0 {
+            Ok(Default::default())
+        } else {
+            let mut table_uninit: MaybeUninit<[NodeRefT; CHILDREN_COUNT]> =
+                MaybeUninit::uninit();
+            let table = unsafe { &mut *table_uninit.as_mut_ptr() };
+            let mut children_count = 0;
+            for i in 0..16 {
+                (*table)[i] = nodes[i];
+                if !(*table)[i].eq(ChildrenTableItem::<NodeRefT>::no_child()) {
+                    children_count += 1;
+                }
+            }
+
+            Ok(VanillaChildrenTable {
+                table: unsafe { table_uninit.assume_init() },
+                children_count,
+            })
+        }
+    }
+}
+
 pub struct VanillaChildrenTableIterator<'a, NodeRefT: NodeRefTrait> {
     next_child_index: u8,
     table: &'a [NodeRefT; CHILDREN_COUNT],
@@ -864,6 +915,9 @@ use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use malloc_size_of_derive::MallocSizeOf as MallocSizeOfDerive;
 use primitives::{MerkleHash, MERKLE_NULL_NODE};
 use rlp::*;
+use serde::{
+    ser::SerializeSeq, Deserialize, Deserializer, Serialize, Serializer,
+};
 use std::{
     fmt::*,
     marker::PhantomData,

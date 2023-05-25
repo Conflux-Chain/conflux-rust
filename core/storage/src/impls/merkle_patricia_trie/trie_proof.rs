@@ -18,7 +18,7 @@ struct ParentInfo {
     child_index: u8,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct TrieProofNode(VanillaTrieNode<MerkleHash>);
 
 impl TrieProofNode {
@@ -365,6 +365,34 @@ impl Decodable for TrieProof {
     }
 }
 
+impl Serialize for TrieProof {
+    fn serialize<S>(
+        &self, serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error>
+    where S: Serializer {
+        let mut seq = serializer.serialize_seq(Some(self.nodes.len()))?;
+        for element in self.nodes.iter() {
+            seq.serialize_element(element)?;
+        }
+        seq.end()
+    }
+}
+
+impl<'a> Deserialize<'a> for TrieProof {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where D: Deserializer<'a> {
+        let nodes: Vec<TrieProofNode> = Deserialize::deserialize(deserializer)?;
+        if nodes.len() > Self::MAX_NODES {
+            return Err(de::Error::custom("TrieProof too long."));
+        }
+
+        match Self::new(nodes) {
+            Err(_) => Err(de::Error::custom("Invalid TrieProof")),
+            Ok(proof) => Ok(proof),
+        }
+    }
+}
+
 // FIXME: in rlp encode / decode, children_count and merkle_hash should be
 // omitted.
 impl Encodable for TrieProofNode {
@@ -402,6 +430,9 @@ use crate::{
 use cfx_types::H256;
 use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
 use rlp::*;
+use serde::{
+    de, ser::SerializeSeq, Deserialize, Deserializer, Serialize, Serializer,
+};
 use std::{
     collections::{hash_map::RandomState, HashMap},
     ops::{Deref, DerefMut},
