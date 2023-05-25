@@ -4,7 +4,7 @@
 
 use crate::rpc::types::{Bytes, RpcAddress};
 use cfx_addr::Network;
-use cfx_types::{H256, U256};
+use cfx_types::{Space, H256, U256};
 use primitives::log_entry::{LocalizedLogEntry, LogEntry};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
@@ -45,7 +45,7 @@ pub struct Log {
 
     /// Log space
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub space: Option<String>,
+    pub space: Option<Space>,
 }
 
 impl Log {
@@ -79,11 +79,7 @@ impl Log {
             transaction_index: None,
             log_index: None,
             transaction_log_index: None,
-            space: if include_space {
-                Some(e.space.into())
-            } else {
-                None
-            },
+            space: if include_space { Some(e.space) } else { None },
         })
     }
 }
@@ -113,7 +109,7 @@ mod tests {
             transaction_index: Some(U256::default()),
             transaction_log_index: Some(1.into()),
             log_index: Some(U256::from(1)),
-            space: Some(Space::Native.into()),
+            space: Some(Space::Native),
         };
 
         let serialized = serde_json::to_string(&log).unwrap();
