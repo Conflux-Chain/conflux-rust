@@ -564,28 +564,19 @@ impl<'a> CallCreateExecutive<'a> {
     /// execution fails, this function reverts state and drops substate.
     fn process_return(
         mut self, result: vm::Result<GasLeft>, state: &mut State,
-        parent_substate: &mut Substate, callstack: &mut CallStackInfo,
-        tracer: &mut dyn VmObserve,
+        callstack: &mut CallStackInfo, tracer: &mut dyn VmObserve,
     ) -> DbResult<vm::Result<ExecutiveResult>>
     {
         let context = self.context.activate(state, callstack);
         // The post execution task in spec is completed here.
         let finalized_result = result.finalize(context);
-        let executive_result = finalized_result
-            .map(|result| ExecutiveResult::new(result, self.create_address));
+        let finalized_result = vm::separate_out_db_error(finalized_result)?;
 
         self.status = ExecutiveStatus::Done;
 
-        let executive_result = vm::separate_out_db_error(executive_result)?;
-
-        if self.context.is_create {
-            tracer.record_create_result(&executive_result);
-        } else {
-            tracer.record_call_result(&executive_result);
-        }
-
         let apply_state =
-            executive_result.as_ref().map_or(false, |r| r.apply_state);
+            finalized_result.as_ref().map_or(false, |r| r.apply_state);
+        let maybe_substate;
         if apply_state {
             let mut substate = self.context.substate;
             state.collect_ownership_changed(&mut substate)?; /* only fail for db error. */
@@ -594,13 +585,23 @@ impl<'a> CallCreateExecutive<'a> {
                     .contracts_created
                     .push(create_address.with_space(self.context.space));
             }
-
+            maybe_substate = Some(substate);
             state.discard_checkpoint();
-            // See my comments in resume function.
-            parent_substate.accrue(substate);
         } else {
+            maybe_substate = None;
             state.revert_to_checkpoint();
         }
+
+        let create_address = self.create_address;
+        let executive_result = finalized_result.map(|result| {
+            ExecutiveResult::new(result, create_address, maybe_substate)
+        });
+        if self.context.is_create {
+            tracer.record_create_result(&executive_result);
+        } else {
+            tracer.record_call_result(&executive_result);
+        }
+
         callstack.pop();
 
         Ok(executive_result)
@@ -627,8 +628,8 @@ impl<'a> CallCreateExecutive<'a> {
     /// resume trap error is returned. The caller is then expected to call
     /// `resume` to continue the execution.
     pub fn exec(
-        mut self, state: &mut State, parent_substate: &mut Substate,
-        callstack: &mut CallStackInfo, tracer: &mut dyn VmObserve,
+        mut self, state: &mut State, callstack: &mut CallStackInfo,
+        tracer: &mut dyn VmObserve,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult>>
     {
         let status =
@@ -707,28 +708,18 @@ impl<'a> CallCreateExecutive<'a> {
         let output = exec.exec(&mut context, tracer);
 
         // Post execution.
-        self.process_output(output, state, parent_substate, callstack, tracer)
+        self.process_output(output, state, callstack, tracer)
     }
 
     pub fn resume(
-        mut self, result: vm::Result<ExecutiveResult>, state: &mut State,
-        parent_substate: &mut Substate, callstack: &mut CallStackInfo,
-        tracer: &mut dyn VmObserve,
+        mut self, mut result: vm::Result<ExecutiveResult>, state: &mut State,
+        callstack: &mut CallStackInfo, tracer: &mut dyn VmObserve,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult>>
     {
         let status =
             std::mem::replace(&mut self.status, ExecutiveStatus::Running);
 
-        // TODO: Substate from sub-call should have been merged here by
-        // specification. But we have merged it in function `process_return`.
-        // If we put `substate.accrue` back to here, we can save the maintenance
-        // for `parent_substate` in `exec`, `resume`, `process_return` and
-        // `consume`. It will also make the implementation with
-        // specification: substate is in return value and its caller's duty to
-        // merge callee's substate. However, Substate is a trait
-        // currently, such change will make too many functions has generic
-        // parameters or trait parameter. So I put off this plan until
-        // substate is no longer a trait.
+        accrue_substate(self.unconfirmed_substate(), &mut result);
 
         // Process resume tasks, which is defined in Instruction Set
         // Specification of tech-specification.
@@ -752,28 +743,21 @@ impl<'a> CallCreateExecutive<'a> {
         let output = exec.exec(&mut context, tracer);
 
         // Post execution.
-        self.process_output(output, state, parent_substate, callstack, tracer)
+        self.process_output(output, state, callstack, tracer)
     }
 
     #[inline]
     fn process_output(
         self, output: ExecTrapResult<GasLeft>, state: &mut State,
-        parent_substate: &mut Substate, callstack: &mut CallStackInfo,
-        tracer: &mut dyn VmObserve,
+        callstack: &mut CallStackInfo, tracer: &mut dyn VmObserve,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult>>
     {
         // Convert the `ExecTrapResult` (result of evm) to `ExecutiveTrapResult`
         // (result of self).
         let trap_result = match output {
-            TrapResult::Return(result) => {
-                TrapResult::Return(self.process_return(
-                    result,
-                    state,
-                    parent_substate,
-                    callstack,
-                    tracer,
-                )?)
-            }
+            TrapResult::Return(result) => TrapResult::Return(
+                self.process_return(result, state, callstack, tracer)?,
+            ),
             TrapResult::SubCallCreate(trap_err) => {
                 TrapResult::SubCallCreate(self.process_trap(trap_err))
             }
@@ -792,50 +776,26 @@ impl<'a> CallCreateExecutive<'a> {
         let mut callstack = CallStackInfo::new();
         let mut executive_stack: Vec<Self> = Vec::new();
 
-        let mut last_res =
-            self.exec(state, top_substate, &mut callstack, tracer)?;
+        let mut last_res = self.exec(state, &mut callstack, tracer)?;
 
         loop {
-            match last_res {
-                TrapResult::Return(result) => {
+            last_res = match last_res {
+                TrapResult::Return(mut result) => {
                     let parent = match executive_stack.pop() {
                         Some(x) => x,
                         None => {
-                            return Ok(result.map(|result| result.into()));
+                            accrue_substate(top_substate, &mut result);
+                            return Ok(result.map(Into::into));
                         }
                     };
 
-                    let parent_substate = executive_stack
-                        .last_mut()
-                        .map_or(&mut *top_substate, |parent| {
-                            parent.unconfirmed_substate()
-                        });
-
-                    last_res = parent.resume(
-                        result,
-                        state,
-                        parent_substate,
-                        &mut callstack,
-                        tracer,
-                    )?;
+                    parent.resume(result, state, &mut callstack, tracer)?
                 }
                 TrapResult::SubCallCreate(trap_err) => {
                     let (callee, caller) = Self::from_trap_error(trap_err);
                     executive_stack.push(caller);
 
-                    let parent_substate = executive_stack
-                        .last_mut()
-                        .expect(
-                            "Last executive is `caller`, it will never be None",
-                        )
-                        .unconfirmed_substate();
-
-                    last_res = callee.exec(
-                        state,
-                        parent_substate,
-                        &mut callstack,
-                        tracer,
-                    )?;
+                    callee.exec(state, &mut callstack, tracer)?
                 }
             }
         }
@@ -874,6 +834,16 @@ impl<'a> CallCreateExecutive<'a> {
     }
 }
 
+pub fn accrue_substate(
+    parent_substate: &mut Substate, result: &mut vm::Result<ExecutiveResult>,
+) {
+    if let Ok(frame_return) = result {
+        if let Some(substate) = std::mem::take(&mut frame_return.substate) {
+            parent_substate.accrue(substate);
+        }
+    }
+}
+
 /// The result contains more data than finalization result.
 #[derive(Debug)]
 pub struct ExecutiveResult {
@@ -887,6 +857,8 @@ pub struct ExecutiveResult {
     pub return_data: ReturnData,
     /// Create address.
     pub create_address: Option<Address>,
+    /// Substate.
+    pub substate: Option<Substate>,
 }
 
 impl Into<FinalizationResult> for ExecutiveResult {
@@ -903,13 +875,16 @@ impl Into<FinalizationResult> for ExecutiveResult {
 impl ExecutiveResult {
     fn new(
         result: FinalizationResult, create_address: Option<Address>,
-    ) -> Self {
+        substate: Option<Substate>,
+    ) -> Self
+    {
         ExecutiveResult {
             space: result.space,
             gas_left: result.gas_left,
             apply_state: result.apply_state,
             return_data: result.return_data,
             create_address,
+            substate,
         }
     }
 }
