@@ -542,7 +542,7 @@ pub fn register_transaction(
     tx.nonce = 0.into();
     tx.data = call_data;
     tx.value = U256::zero();
-    tx.action = Action::Call(*POS_REGISTER_CONTRACT_ADDRESS);
+    tx.action = Action::Call(POS_REGISTER_CONTRACT_ADDRESS);
     tx.chain_id = genesis_chain_id;
     tx.gas = 200000.into();
     tx.gas_price = 1.into();

@@ -19,10 +19,7 @@ use crate::{
 use cfx_addr::Network;
 use cfx_parameters::{
     consensus::DEFERRED_STATE_EPOCH_COUNT,
-    internal_contract_addresses::{
-        SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-        STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-    },
+    internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
     light::{
         GAS_PRICE_BATCH_SIZE, GAS_PRICE_BLOCK_SAMPLE_SIZE,
         GAS_PRICE_TRANSACTION_SAMPLE_SIZE, LOG_FILTERING_LOOKAHEAD,
@@ -30,10 +27,7 @@ use cfx_parameters::{
         TRANSACTION_COUNT_PER_BLOCK_WATER_LINE_MEDIUM,
     },
 };
-use cfx_statedb::{
-    ACCUMULATE_INTEREST_RATE_KEY, DISTRIBUTABLE_POS_INTEREST_KEY,
-    INTEREST_RATE_KEY, LAST_DISTRIBUTE_BLOCK_KEY, TOTAL_POS_STAKING_TOKENS_KEY,
-};
+use cfx_statedb::global_params::{self, GlobalParamKey};
 use cfx_types::{
     address_util::AddressUtil, AllChainID, BigEndianHash, Bloom, H160, H256,
     KECCAK_EMPTY_BLOOM, U256,
@@ -566,12 +560,7 @@ impl QueryService {
 
         let epoch = self.get_height_from_epoch_number(epoch)?;
 
-        let key = StorageKey::new_storage_key(
-            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-            INTEREST_RATE_KEY,
-        )
-        .with_native_space()
-        .to_key_bytes();
+        let key = global_params::InterestRate::STORAGE_KEY.to_key_bytes();
 
         self.retrieve_state_entry::<U256>(epoch, key)
             .await
@@ -585,12 +574,8 @@ impl QueryService {
 
         let epoch = self.get_height_from_epoch_number(epoch)?;
 
-        let key = StorageKey::new_storage_key(
-            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-            ACCUMULATE_INTEREST_RATE_KEY,
-        )
-        .with_native_space()
-        .to_key_bytes();
+        let key =
+            global_params::AccumulateInterestRate::STORAGE_KEY.to_key_bytes();
 
         self.retrieve_state_entry::<U256>(epoch, key)
             .await
@@ -604,24 +589,11 @@ impl QueryService {
 
         let epoch = self.get_height_from_epoch_number(epoch)?;
 
-        let key1 = StorageKey::new_storage_key(
-            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-            TOTAL_POS_STAKING_TOKENS_KEY,
-        )
-        .with_native_space()
-        .to_key_bytes();
-        let key2 = StorageKey::new_storage_key(
-            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-            DISTRIBUTABLE_POS_INTEREST_KEY,
-        )
-        .with_native_space()
-        .to_key_bytes();
-        let key3 = StorageKey::new_storage_key(
-            &STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-            LAST_DISTRIBUTE_BLOCK_KEY,
-        )
-        .with_native_space()
-        .to_key_bytes();
+        let key1 = global_params::TotalPosStaking::STORAGE_KEY.to_key_bytes();
+        let key2 =
+            global_params::DistributablePoSInterest::STORAGE_KEY.to_key_bytes();
+        let key3 =
+            global_params::LastDistributeBlock::STORAGE_KEY.to_key_bytes();
 
         let total_pos_staking = try_join!(
             self.retrieve_state_entry::<U256>(epoch, key1),

@@ -775,7 +775,7 @@ impl OverlayAccount {
         Arc::make_mut(&mut self.storage_value_write_cache)
             .insert(key.clone(), value);
         if self.address.space == Space::Ethereum
-            || self.address.address == *SYSTEM_STORAGE_ADDRESS
+            || self.address.address == SYSTEM_STORAGE_ADDRESS
         {
             return;
         }
@@ -879,7 +879,7 @@ impl OverlayAccount {
         assert!(!storage_owner_lv2_write_cache.contains_key(key));
         let cache_ownership = cache_ownership
             && address.space == Space::Native
-            && address.address != *SYSTEM_STORAGE_ADDRESS;
+            && address.address != SYSTEM_STORAGE_ADDRESS;
 
         if let Some(value) = db.get::<StorageValue>(
             StorageKey::new_storage_key(&address.address, key.as_ref())
@@ -982,7 +982,7 @@ impl OverlayAccount {
         if self.invalidated_storage {
             return Ok(());
         }
-        if self.address.address == *SYSTEM_STORAGE_ADDRESS {
+        if self.address.address == SYSTEM_STORAGE_ADDRESS {
             return Ok(());
         }
         let storage_owner_lv1_write_cache: Vec<_> =
@@ -1056,7 +1056,7 @@ impl OverlayAccount {
                 }
                 false => {
                     let owner = if self.address.space == Space::Ethereum
-                        || self.address.address == *SYSTEM_STORAGE_ADDRESS
+                        || self.address.address == SYSTEM_STORAGE_ADDRESS
                     {
                         None
                     } else {

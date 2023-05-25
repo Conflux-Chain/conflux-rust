@@ -7,7 +7,6 @@ use std::{
     sync::Arc,
 };
 
-use num::integer::Roots;
 use parking_lot::{
     lock_api::{MappedRwLockReadGuard, RwLockReadGuard},
     MappedRwLockWriteGuard, RawRwLock, RwLock, RwLockUpgradableReadGuard,
@@ -18,6 +17,7 @@ use cfx_bytes::Bytes;
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };
+use cfx_math::sqrt_u256;
 use cfx_parameters::{
     consensus::ONE_UCFX_IN_DRIP,
     consensus_internal::MINING_REWARD_TANZANITE_IN_UCFX,
@@ -29,6 +29,12 @@ use cfx_parameters::{
 };
 use cfx_state::{maybe_address, CleanupMode, CollateralCheckResult};
 use cfx_statedb::{
+    global_params::{
+        AccumulateInterestRate, ConvertedStoragePoint,
+        DistributablePoSInterest, InterestRate, LastDistributeBlock,
+        PowBaseReward, TotalEvmToken, TotalIssued, TotalPosStaking,
+        TotalStaking, TotalStorage, UsedStoragePoint,
+    },
     ErrorKind as DbErrorKind, Result as DbResult, StateDbExt,
     StateDbGeneric as StateDb,
 };
@@ -99,31 +105,61 @@ pub enum RequireCache {
     VoteStakeList,
 }
 
+use cfx_statedb::{
+    for_all_global_param_keys,
+    global_params::{self, GlobalParamKey, TOTAL_GLOBAL_PARAMS},
+};
 #[derive(Copy, Clone, Debug)]
-struct WorldStatistics {
-    // This is the total number of CFX issued.
-    total_issued_tokens: U256,
-    // This is the total number of CFX used as staking.
-    total_staking_tokens: U256,
-    // This is the total number of CFX used as collateral.
-    // This field should never be read during tx execution. (Can be updated)
-    total_storage_tokens: U256,
-    // This is the interest rate per block.
-    interest_rate_per_block: U256,
-    // This is the accumulated interest rate.
-    accumulate_interest_rate: U256,
-    // This is the total number of CFX used for pos staking.
-    total_pos_staking_tokens: U256,
-    // This is the total distributable interest.
-    distributable_pos_interest: U256,
-    // This is the block number of last .
-    last_distribute_block: u64,
-    // This is the tokens in the EVM space.
-    total_evm_tokens: U256,
-    // This is the amount of using storage points (in terms of Drip)
-    used_storage_points: U256,
-    // This is the amount of converted storage points (in terms of Drip)
-    converted_storage_points: U256,
+pub struct GlobalStat([U256; TOTAL_GLOBAL_PARAMS]);
+
+impl GlobalStat {
+    fn new() -> Self {
+        let mut ans = <[U256; TOTAL_GLOBAL_PARAMS]>::default();
+        ans[InterestRate::ID] = *INITIAL_INTEREST_RATE_PER_BLOCK;
+        ans[AccumulateInterestRate::ID] = *ACCUMULATED_INTEREST_RATE_SCALE;
+        GlobalStat(ans)
+    }
+
+    fn loaded(db: &StateDb) -> DbResult<Self> {
+        let mut ans = Default::default();
+        fn load_value<T: GlobalParamKey>(
+            ans: &mut [U256; TOTAL_GLOBAL_PARAMS], db: &StateDb,
+        ) -> DbResult<()> {
+            let loaded = db.get_global_param::<T>()?;
+            ans[T::ID] = T::into_vm_value(loaded);
+            Ok(())
+        }
+        use global_params::*;
+        for_all_global_param_keys! {
+            load_value::<Key>(&mut ans, db)?;
+        }
+        Ok(GlobalStat(ans))
+    }
+
+    fn commit(
+        &self, db: &mut StateDb,
+        mut debug_record: Option<&mut ComputeEpochDebugRecord>,
+    ) -> DbResult<()>
+    {
+        fn commit_param<T: GlobalParamKey>(
+            ans: &[U256; TOTAL_GLOBAL_PARAMS], db: &mut StateDb,
+            debug_record: Option<&mut ComputeEpochDebugRecord>,
+        ) -> DbResult<()>
+        {
+            let value = T::from_vm_value(ans[T::ID]);
+            db.set_global_param::<T>(&value, debug_record)?;
+            Ok(())
+        }
+        use global_params::*;
+        for_all_global_param_keys! {
+            commit_param::<Key>(&self.0, db, debug_record.as_deref_mut())?;
+        }
+        Ok(())
+    }
+
+    fn get<T: GlobalParamKey>(&self) -> U256 { self.0[T::ID] }
+
+    fn val<T: GlobalParamKey>(&mut self) -> &mut U256 { &mut self.0[T::ID] }
 }
 
 pub struct State {
@@ -137,10 +173,10 @@ pub struct State {
     // Contains the changes to the states and some unchanged state entries.
     cache: RwLock<HashMap<AddressWithSpace, AccountEntry>>,
     // TODO: try not to make it special?
-    world_statistics: WorldStatistics,
+    global_stat: GlobalStat,
 
     // Checkpoint to the changes.
-    world_statistics_checkpoints: RwLock<Vec<WorldStatistics>>,
+    global_stat_checkpoints: RwLock<Vec<GlobalStat>>,
     checkpoints: RwLock<Vec<HashMap<AddressWithSpace, Option<AccountEntry>>>>,
 }
 
@@ -295,7 +331,7 @@ impl State {
         debug!("state.compute_state_root");
 
         assert!(self.checkpoints.get_mut().is_empty());
-        assert!(self.world_statistics_checkpoints.get_mut().is_empty());
+        assert!(self.global_stat_checkpoints.get_mut().is_empty());
 
         let mut sorted_dirty_accounts =
             self.cache.get_mut().drain().collect::<Vec<_>>();
@@ -339,18 +375,18 @@ impl State {
 impl State {
     /// Calculate the secondary reward for the next block number.
     pub fn bump_block_number_accumulate_interest(&mut self) {
-        assert!(self.world_statistics_checkpoints.get_mut().is_empty());
-        self.world_statistics.accumulate_interest_rate =
-            self.world_statistics.accumulate_interest_rate
-                * (*INTEREST_RATE_PER_BLOCK_SCALE
-                    + self.world_statistics.interest_rate_per_block)
-                / *INTEREST_RATE_PER_BLOCK_SCALE;
+        assert!(self.global_stat_checkpoints.get_mut().is_empty());
+        let accumulate_interest_rate =
+            self.global_stat.val::<AccumulateInterestRate>();
+        *accumulate_interest_rate = *accumulate_interest_rate
+            * (*INTEREST_RATE_PER_BLOCK_SCALE + *accumulate_interest_rate)
+            / *INTEREST_RATE_PER_BLOCK_SCALE;
     }
 
     pub fn secondary_reward(&self) -> U256 {
-        assert!(self.world_statistics_checkpoints.read().is_empty());
-        let secondary_reward = self.world_statistics.total_storage_tokens
-            * self.world_statistics.interest_rate_per_block
+        assert!(self.global_stat_checkpoints.read().is_empty());
+        let secondary_reward = self.global_stat.get::<TotalStorage>()
+            * self.global_stat.get::<InterestRate>()
             / *INTEREST_RATE_PER_BLOCK_SCALE;
         // TODO: the interest from tokens other than storage and staking should
         // send to public fund.
@@ -359,53 +395,54 @@ impl State {
 
     pub fn pow_base_reward(&self) -> U256 {
         self.db
-            .get_pow_base_reward()
+            .get_global_param_opt::<PowBaseReward>()
             .expect("no db error")
             .expect("initialized")
     }
 
     /// Maintain `total_issued_tokens`.
     pub fn add_total_issued(&mut self, v: U256) {
-        assert!(self.world_statistics_checkpoints.get_mut().is_empty());
-        self.world_statistics.total_issued_tokens += v;
+        assert!(self.global_stat_checkpoints.get_mut().is_empty());
+        *self.global_stat.val::<TotalIssued>() += v;
     }
 
     /// Maintain `total_issued_tokens`. This is only used in the extremely
     /// unlikely case that there are a lot of partial invalid blocks.
     pub fn subtract_total_issued(&mut self, v: U256) {
-        self.world_statistics.total_issued_tokens =
-            self.world_statistics.total_issued_tokens.saturating_sub(v);
+        *self.global_stat.val::<TotalIssued>() =
+            self.global_stat.get::<TotalIssued>().saturating_sub(v);
     }
 
     pub fn add_total_pos_staking(&mut self, v: U256) {
-        self.world_statistics.total_pos_staking_tokens += v;
+        *self.global_stat.val::<TotalPosStaking>() += v;
     }
 
     pub fn add_total_evm_tokens(&mut self, v: U256) {
         if !v.is_zero() {
-            self.world_statistics.total_evm_tokens += v;
+            *self.global_stat.val::<TotalEvmToken>() += v;
         }
     }
 
     pub fn subtract_total_evm_tokens(&mut self, v: U256) {
         if !v.is_zero() {
-            self.world_statistics.total_evm_tokens =
-                self.world_statistics.total_evm_tokens.saturating_sub(v);
+            *self.global_stat.val::<TotalEvmToken>() =
+                self.global_stat.get::<TotalEvmToken>().saturating_sub(v);
         }
     }
 
     pub fn inc_distributable_pos_interest(
         &mut self, current_block_number: u64,
     ) -> DbResult<()> {
-        assert!(self.world_statistics_checkpoints.get_mut().is_empty());
+        assert!(self.global_stat_checkpoints.get_mut().is_empty());
 
         if current_block_number
-            > self.world_statistics.last_distribute_block + BLOCKS_PER_HOUR
+            > self.global_stat.get::<LastDistributeBlock>().as_u64()
+                + BLOCKS_PER_HOUR
         {
             return Ok(());
         }
 
-        if self.world_statistics.total_pos_staking_tokens.is_zero() {
+        if self.global_stat.get::<TotalPosStaking>().is_zero() {
             return Ok(());
         }
 
@@ -414,19 +451,20 @@ impl State {
             - self.balance(&genesis_contract_address_four_year())?
             - self.balance(&genesis_contract_address_two_year())?;
         let total_pos_staking_tokens =
-            self.world_statistics.total_pos_staking_tokens;
+            self.global_stat.get::<TotalPosStaking>();
 
         // The `interest_amount` exactly equals to the floor of
         // pos_amount * 4% / blocks_per_year / sqrt(pos_amount/total_issued)
+        let interest_rate_per_block = self.global_stat.get::<InterestRate>();
         let interest_amount = sqrt_u256(
             total_circulating_tokens
                 * total_pos_staking_tokens
-                * self.world_statistics.interest_rate_per_block
-                * self.world_statistics.interest_rate_per_block,
+                * interest_rate_per_block
+                * interest_rate_per_block,
         ) / (BLOCKS_PER_YEAR
             * INVERSE_INTEREST_RATE
             * INITIAL_INTEREST_RATE_PER_BLOCK.as_u64());
-        self.world_statistics.distributable_pos_interest += interest_amount;
+        *self.global_stat.val::<DistributablePoSInterest>() += interest_amount;
 
         Ok(())
     }
@@ -439,10 +477,10 @@ impl State {
         current_block_number: u64,
     ) -> DbResult<Vec<(Address, H256, U256)>>
     {
-        assert!(self.world_statistics_checkpoints.get_mut().is_empty());
+        assert!(self.global_stat_checkpoints.get_mut().is_empty());
 
         let distributable_pos_interest =
-            self.world_statistics.distributable_pos_interest;
+            self.global_stat.get::<DistributablePoSInterest>();
 
         let mut account_rewards = Vec::new();
         for (identifier, points) in pos_points {
@@ -461,8 +499,9 @@ impl State {
                                            * reward. */
             )?;
         }
-        self.world_statistics.distributable_pos_interest = U256::zero();
-        self.world_statistics.last_distribute_block = current_block_number;
+        *self.global_stat.val::<DistributablePoSInterest>() = U256::zero();
+        *self.global_stat.val::<LastDistributeBlock>() =
+            U256::from(current_block_number);
 
         Ok(account_rewards)
     }
@@ -567,8 +606,8 @@ impl State {
             .map(|mut x| {
                 x.set_sponsor_for_collateral(sponsor, sponsor_balance, prop)
             })?;
-        self.world_statistics.total_issued_tokens -= converted_storage_points;
-        self.world_statistics.converted_storage_points +=
+        *self.global_stat.val::<TotalIssued>() -= converted_storage_points;
+        *self.global_stat.val::<ConvertedStoragePoint>() +=
             converted_storage_points;
         Ok(converted_storage_points)
     }
@@ -661,7 +700,7 @@ impl State {
         &self, contract_address: &Address, user: &Address,
     ) -> DbResult<bool> {
         let acc = try_loaded!(self
-            .read_native_account(&*SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS));
+            .read_native_account(&SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS));
         acc.check_commission_privilege(&self.db, contract_address, user)
     }
 
@@ -929,12 +968,12 @@ impl State {
                 )?;
                 account.deposit(
                     *amount,
-                    self.world_statistics.accumulate_interest_rate,
+                    self.global_stat.get::<AccumulateInterestRate>(),
                     current_block_number,
                     cip_97,
                 );
             }
-            self.world_statistics.total_staking_tokens += *amount;
+            *self.global_stat.val::<TotalStaking>() += *amount;
         }
         Ok(())
     }
@@ -954,13 +993,13 @@ impl State {
                 )?;
                 interest = account.withdraw(
                     *amount,
-                    self.world_statistics.accumulate_interest_rate,
+                    self.global_stat.get::<AccumulateInterestRate>(),
                     cip_97,
                 );
             }
             // the interest will be put in balance.
-            self.world_statistics.total_issued_tokens += interest;
-            self.world_statistics.total_staking_tokens -= *amount;
+            *self.global_stat.val::<TotalIssued>() += interest;
+            *self.global_stat.val::<TotalStaking>() -= *amount;
             Ok(interest)
         } else {
             Ok(U256::zero())
@@ -998,39 +1037,39 @@ impl State {
     }
 
     pub fn total_issued_tokens(&self) -> U256 {
-        self.world_statistics.total_issued_tokens
+        self.global_stat.get::<TotalIssued>()
     }
 
     pub fn total_staking_tokens(&self) -> U256 {
-        self.world_statistics.total_staking_tokens
+        self.global_stat.get::<TotalStaking>()
     }
 
     pub fn total_storage_tokens(&self) -> U256 {
-        self.world_statistics.total_storage_tokens
+        self.global_stat.get::<TotalStorage>()
     }
 
     pub fn total_espace_tokens(&self) -> U256 {
-        self.world_statistics.total_evm_tokens
+        self.global_stat.get::<TotalEvmToken>()
     }
 
     pub fn used_storage_points(&self) -> U256 {
-        self.world_statistics.used_storage_points
+        self.global_stat.get::<UsedStoragePoint>()
     }
 
     pub fn converted_storage_points(&self) -> U256 {
-        self.world_statistics.converted_storage_points
+        self.global_stat.get::<ConvertedStoragePoint>()
     }
 
     pub fn total_pos_staking_tokens(&self) -> U256 {
-        self.world_statistics.total_pos_staking_tokens
+        self.global_stat.get::<TotalPosStaking>()
     }
 
     pub fn distributable_pos_interest(&self) -> U256 {
-        self.world_statistics.distributable_pos_interest
+        self.global_stat.get::<DistributablePoSInterest>()
     }
 
     pub fn last_distribute_block(&self) -> u64 {
-        self.world_statistics.last_distribute_block
+        self.global_stat.get::<LastDistributeBlock>().as_u64()
     }
 
     pub fn remove_contract(
@@ -1110,7 +1149,7 @@ impl State {
             &pos_internal_entries::index_entry(&identifier),
             status.into(),
         )?;
-        self.world_statistics.total_pos_staking_tokens -=
+        *self.global_stat.val::<TotalPosStaking>() -=
             *POS_VOTE_PRICE * new_unlocked;
         Ok(())
     }
@@ -1150,7 +1189,7 @@ impl State {
 
     pub fn get_system_storage_opt(&self, key: &[u8]) -> DbResult<Option<U256>> {
         let acc =
-            try_loaded!(self.read_native_account(&*SYSTEM_STORAGE_ADDRESS));
+            try_loaded!(self.read_native_account(&SYSTEM_STORAGE_ADDRESS));
         acc.storage_opt_at(&self.db, key)
     }
 }
@@ -1161,9 +1200,9 @@ impl State {
     /// creation time of the checkpoint and updated after that and before
     /// the creation of the next checkpoint.
     pub fn checkpoint(&mut self) -> usize {
-        self.world_statistics_checkpoints
+        self.global_stat_checkpoints
             .get_mut()
-            .push(self.world_statistics.clone());
+            .push(self.global_stat.clone());
         let checkpoints = self.checkpoints.get_mut();
         let index = checkpoints.len();
         checkpoints.push(HashMap::new());
@@ -1178,7 +1217,7 @@ impl State {
         // merge with previous checkpoint
         let last = self.checkpoints.get_mut().pop();
         if let Some(mut checkpoint) = last {
-            self.world_statistics_checkpoints.get_mut().pop();
+            self.global_stat_checkpoints.get_mut().pop();
             if let Some(ref mut prev) = self.checkpoints.get_mut().last_mut() {
                 if prev.is_empty() {
                     **prev = checkpoint;
@@ -1194,8 +1233,8 @@ impl State {
     /// Revert to the last checkpoint and discard it.
     pub fn revert_to_checkpoint(&mut self) {
         if let Some(mut checkpoint) = self.checkpoints.get_mut().pop() {
-            self.world_statistics = self
-                .world_statistics_checkpoints
+            self.global_stat = self
+                .global_stat_checkpoints
                 .get_mut()
                 .pop()
                 .expect("staking_state_checkpoint should exist");
@@ -1226,89 +1265,35 @@ impl State {
 
 impl State {
     pub fn new(db: StateDb) -> DbResult<Self> {
-        let annual_interest_rate = db.get_annual_interest_rate()?;
-        let accumulate_interest_rate = db.get_accumulate_interest_rate()?;
-        let total_issued_tokens = db.get_total_issued_tokens()?;
-        let total_staking_tokens = db.get_total_staking_tokens()?;
-        let total_storage_tokens = db.get_total_storage_tokens()?;
-        let total_pos_staking_tokens = db.get_total_pos_staking_tokens()?;
-        let distributable_pos_interest = db.get_distributable_pos_interest()?;
-        let last_distribute_block = db.get_last_distribute_block()?;
-        let total_evm_tokens = db.get_total_evm_tokens()?;
-        let used_storage_points = db.get_used_storage_points()?;
-        let converted_storage_points = db.get_converted_storage_points()?;
+        let initialized = db.is_initialized()?;
 
-        let world_stat = if db.is_initialized()? {
-            WorldStatistics {
-                total_issued_tokens,
-                total_staking_tokens,
-                total_storage_tokens,
-                interest_rate_per_block: annual_interest_rate
-                    / U256::from(BLOCKS_PER_YEAR),
-                accumulate_interest_rate,
-                total_pos_staking_tokens,
-                distributable_pos_interest,
-                last_distribute_block,
-                total_evm_tokens,
-                used_storage_points,
-                converted_storage_points,
-            }
+        let world_stat = if initialized {
+            GlobalStat::loaded(&db)?
         } else {
             // If db is not initialized, all the loaded value should be zero.
-            assert!(
-                annual_interest_rate.is_zero(),
-                "annual_interest_rate is non-zero when db is un-init"
-            );
-            assert!(
-                accumulate_interest_rate.is_zero(),
-                "accumulate_interest_rate is non-zero when db is un-init"
-            );
-            assert!(
-                total_issued_tokens.is_zero(),
-                "total_issued_tokens is non-zero when db is un-init"
-            );
-            assert!(
-                total_staking_tokens.is_zero(),
-                "total_staking_tokens is non-zero when db is un-init"
-            );
-            assert!(
-                total_storage_tokens.is_zero(),
-                "total_storage_tokens is non-zero when db is un-init"
-            );
-            assert!(
-                total_pos_staking_tokens.is_zero(),
-                "total_pos_staking_tokens is non-zero when db is un-init"
-            );
-            assert!(
-                distributable_pos_interest.is_zero(),
-                "distributable_pos_interest is non-zero when db is un-init"
-            );
-            assert!(
-                last_distribute_block == 0,
-                "last_distribute_block is non-zero when db is un-init"
-            );
-
-            WorldStatistics {
-                total_issued_tokens: U256::default(),
-                total_staking_tokens: U256::default(),
-                total_storage_tokens: U256::default(),
-                interest_rate_per_block: *INITIAL_INTEREST_RATE_PER_BLOCK,
-                accumulate_interest_rate: *ACCUMULATED_INTEREST_RATE_SCALE,
-                total_pos_staking_tokens: U256::default(),
-                distributable_pos_interest: U256::default(),
-                last_distribute_block: u64::default(),
-                total_evm_tokens: U256::default(),
-                used_storage_points: U256::default(),
-                converted_storage_points: U256::default(),
+            fn assert_zero_global_params<T: GlobalParamKey>(
+                db: &StateDb,
+            ) -> DbResult<()> {
+                assert!(
+                    db.get_global_param::<T>()?.is_zero(),
+                    "{:x?} is non-zero when db is un-init",
+                    T::STORAGE_KEY
+                );
+                Ok(())
             }
+            use global_params::*;
+            for_all_global_param_keys! {
+                assert_zero_global_params::<Key>(&db)?;
+            }
+            GlobalStat::new()
         };
 
         Ok(State {
             db,
             cache: Default::default(),
-            world_statistics_checkpoints: Default::default(),
+            global_stat_checkpoints: Default::default(),
             checkpoints: Default::default(),
-            world_statistics: world_stat,
+            global_stat: world_stat,
             accounts_to_notify: Default::default(),
         })
     }
@@ -1456,9 +1441,8 @@ impl State {
             let storage_point_used = self
                 .require_exists(&address.with_native_space(), false)?
                 .add_collateral_for_storage(by);
-            self.world_statistics.total_storage_tokens +=
-                *by - storage_point_used;
-            self.world_statistics.used_storage_points += storage_point_used;
+            *self.global_stat.val::<TotalStorage>() += *by - storage_point_used;
+            *self.global_stat.val::<UsedStoragePoint>() += storage_point_used;
             storage_point_used
         } else {
             U256::zero()
@@ -1478,10 +1462,9 @@ impl State {
             U256::zero()
         };
 
-        self.world_statistics.total_storage_tokens -=
-            *by - storage_point_refund;
-        self.world_statistics.used_storage_points -= storage_point_refund;
-        self.world_statistics.total_issued_tokens -= burnt;
+        *self.global_stat.val::<TotalStorage>() -= *by - storage_point_refund;
+        *self.global_stat.val::<UsedStoragePoint>() -= storage_point_refund;
+        *self.global_stat.val::<TotalIssued>() -= burnt;
 
         Ok(storage_point_refund)
     }
@@ -1507,13 +1490,13 @@ impl State {
             changed_storage_points,
         )) = init_result
         {
-            self.world_statistics.total_issued_tokens -=
+            *self.global_stat.val::<TotalIssued>() -=
                 burnt_balance_from_balance + burnt_balance_from_collateral;
-            self.world_statistics.total_storage_tokens -=
+            *self.global_stat.val::<TotalStorage>() -=
                 burnt_balance_from_collateral;
-            self.world_statistics.used_storage_points +=
+            *self.global_stat.val::<UsedStoragePoint>() +=
                 burnt_balance_from_collateral;
-            self.world_statistics.converted_storage_points =
+            *self.global_stat.val::<ConvertedStoragePoint>() =
                 changed_storage_points;
             return Ok((
                 burnt_balance_from_balance,
@@ -1571,8 +1554,8 @@ impl State {
         );
         debug!(
             "before pos interest: {} base_reward:{:?}",
-            self.world_statistics.interest_rate_per_block,
-            self.db.get_pow_base_reward()?
+            *self.global_stat.val::<InterestRate>(),
+            self.db.get_global_param_opt::<PowBaseReward>()?
         );
 
         // If pos_staking has not been set before, this will be zero and the
@@ -1581,17 +1564,17 @@ impl State {
         let pos_staking_for_votes = get_settled_pos_staking_for_votes(self)?;
         // If the internal contract is just initialized, all votes are zero and
         // the parameters remain unchanged.
-        self.world_statistics.interest_rate_per_block =
+        *self.global_stat.val::<InterestRate>() =
             vote_count.pos_reward_interest.compute_next_params(
-                self.world_statistics.interest_rate_per_block,
+                *self.global_stat.val::<InterestRate>(),
                 pos_staking_for_votes,
             );
 
         // Initialize or update PoW base reward.
-        match self.db.get_pow_base_reward()? {
+        match self.db.get_global_param_opt::<PowBaseReward>()? {
             Some(old_pow_base_reward) => {
-                self.db.set_pow_base_reward(
-                    vote_count.pow_base_reward.compute_next_params(
+                self.db.set_global_param::<PowBaseReward>(
+                    &vote_count.pow_base_reward.compute_next_params(
                         old_pow_base_reward,
                         pos_staking_for_votes,
                     ),
@@ -1599,8 +1582,9 @@ impl State {
                 )?;
             }
             None => {
-                self.db.set_pow_base_reward(
-                    (MINING_REWARD_TANZANITE_IN_UCFX * ONE_UCFX_IN_DRIP).into(),
+                self.db.set_global_param::<PowBaseReward>(
+                    &(MINING_REWARD_TANZANITE_IN_UCFX * ONE_UCFX_IN_DRIP)
+                        .into(),
                     None,
                 )?;
             }
@@ -1622,8 +1606,8 @@ impl State {
         }
         debug!(
             "pos interest: {} base_reward:{:?}",
-            self.world_statistics.interest_rate_per_block,
-            self.db.get_pow_base_reward()?
+            self.global_stat.get::<InterestRate>(),
+            self.db.get_global_param_opt::<PowBaseReward>()?
         );
 
         settle_current_votes(self, set_pos_staking)?;
@@ -1632,54 +1616,9 @@ impl State {
     }
 
     fn commit_world_statistics(
-        &mut self, mut debug_record: Option<&mut ComputeEpochDebugRecord>,
+        &mut self, debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()> {
-        self.db.set_annual_interest_rate(
-            &(self.world_statistics.interest_rate_per_block
-                * U256::from(BLOCKS_PER_YEAR)),
-            debug_record.as_deref_mut(),
-        )?;
-        self.db.set_accumulate_interest_rate(
-            &self.world_statistics.accumulate_interest_rate,
-            debug_record.as_deref_mut(),
-        )?;
-        self.db.set_total_issued_tokens(
-            &self.world_statistics.total_issued_tokens,
-            debug_record.as_deref_mut(),
-        )?;
-        self.db.set_total_staking_tokens(
-            &self.world_statistics.total_staking_tokens,
-            debug_record.as_deref_mut(),
-        )?;
-        self.db.set_total_storage_tokens(
-            &self.world_statistics.total_storage_tokens,
-            debug_record.as_deref_mut(),
-        )?;
-        self.db.set_total_pos_staking_tokens(
-            &self.world_statistics.total_pos_staking_tokens,
-            debug_record.as_deref_mut(),
-        )?;
-        self.db.set_distributable_pos_interest(
-            &self.world_statistics.distributable_pos_interest,
-            debug_record.as_deref_mut(),
-        )?;
-        self.db.set_last_distribute_block(
-            self.world_statistics.last_distribute_block,
-            debug_record.as_deref_mut(),
-        )?;
-        self.db.set_total_evm_tokens(
-            &self.world_statistics.total_evm_tokens,
-            debug_record.as_deref_mut(),
-        )?;
-        self.db.set_used_storage_points(
-            &self.world_statistics.used_storage_points,
-            debug_record.as_deref_mut(),
-        )?;
-        self.db.set_converted_storage_points(
-            &self.world_statistics.converted_storage_points,
-            debug_record,
-        )?;
-        Ok(())
+        self.global_stat.commit(&mut self.db, debug_record)
     }
 
     /// Assume that only contract with zero `collateral_for_storage` will be
@@ -2158,33 +2097,9 @@ impl State {
     #[cfg(any(test, feature = "testonly_code"))]
     pub fn clear(&mut self) {
         assert!(self.checkpoints.get_mut().is_empty());
-        assert!(self.world_statistics_checkpoints.get_mut().is_empty());
+        assert!(self.global_stat_checkpoints.get_mut().is_empty());
         self.cache.get_mut().clear();
-        self.world_statistics.interest_rate_per_block =
-            self.db.get_annual_interest_rate().expect("no db error")
-                / U256::from(BLOCKS_PER_YEAR);
-        self.world_statistics.accumulate_interest_rate =
-            self.db.get_accumulate_interest_rate().expect("no db error");
-        self.world_statistics.total_issued_tokens =
-            self.db.get_total_issued_tokens().expect("no db error");
-        self.world_statistics.total_staking_tokens =
-            self.db.get_total_staking_tokens().expect("no db error");
-        self.world_statistics.total_storage_tokens =
-            self.db.get_total_storage_tokens().expect("no db error");
-        self.world_statistics.total_pos_staking_tokens =
-            self.db.get_total_pos_staking_tokens().expect("no db error");
-        self.world_statistics.distributable_pos_interest = self
-            .db
-            .get_distributable_pos_interest()
-            .expect("no db error");
-        self.world_statistics.last_distribute_block =
-            self.db.get_last_distribute_block().expect("no db error");
-        self.world_statistics.total_evm_tokens =
-            self.db.get_total_evm_tokens().expect("no db error");
-        self.world_statistics.used_storage_points =
-            self.db.get_used_storage_points().expect("no db error");
-        self.world_statistics.converted_storage_points =
-            self.db.get_converted_storage_points().expect("no db error");
+        self.global_stat = GlobalStat::loaded(&self.db).expect("no db error");
     }
 }
 
@@ -2196,61 +2111,4 @@ trait AccountEntryProtectedMethods {
     fn code_size(&self) -> Option<usize>;
     fn code(&self) -> Option<Arc<Bytes>>;
     fn code_owner(&self) -> Option<Address>;
-}
-
-fn sqrt_u256(input: U256) -> U256 {
-    let bits = input.bits();
-    if bits <= 64 {
-        return input.as_u64().sqrt().into();
-    }
-
-    /************************************************************
-     ** Step 1: pick the most significant 64 bits and estimate an
-     ** approximate root.
-     ************************************************************
-     **/
-    let significant_bits = 64 - bits % 2;
-    // The `rest_bits` must be even number.
-    let rest_bits = bits - significant_bits;
-    // The `input >> rest_bits` has `significant_bits`
-    let significant_word = (input >> rest_bits).as_u64();
-    // The `init_root` is slightly larger than the correct root.
-    let init_root =
-        U256::from(significant_word.sqrt() + 1u64) << (rest_bits / 2);
-
-    /******************************************************************
-     ** Step 2: use the Newton's method to estimate the accurate value.
-     ******************************************************************
-     **/
-    let mut root = init_root;
-    // Will iterate for at most 4 rounds.
-    while root * root > input {
-        root = (input / root + root) / 2;
-    }
-
-    root
-}
-
-// TODO: move to a util module.
-pub fn power_two_fractional(ratio: u64, increase: bool, precision: u8) -> U256 {
-    assert!(precision <= 127);
-
-    let mut base = U256::one();
-    base <<= 254usize;
-
-    for i in 0..64u64 {
-        if ratio & (1 << i) != 0 {
-            if increase {
-                base <<= 1usize;
-            } else {
-                base >>= 1usize;
-            }
-        }
-        base = sqrt_u256(base);
-        base <<= 127usize;
-    }
-
-    base >>= (254 - precision) as usize;
-    // Computing error < 5.2 * 2 ^ -127
-    base
 }
