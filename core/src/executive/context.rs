@@ -64,7 +64,7 @@ pub struct Context<
     'b, /* Lifetime of call-create executive. */
     Substate: SubstateTrait,
 > {
-    state: &'b mut dyn StateTrait<Substate = Substate>,
+    state: &'b mut dyn StateTrait<Substate = Substate, Spec = Spec>,
     callstack: &'b mut CallStackInfo,
     local_part: &'b mut LocalContext<'a, Substate>,
 }
@@ -109,7 +109,8 @@ impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
     /// State`), the executive should activate `LocalContext` by passing in
     /// these parameters.
     pub fn activate(
-        &'b mut self, state: &'b mut dyn StateTrait<Substate = Substate>,
+        &'b mut self,
+        state: &'b mut dyn StateTrait<Substate = Substate, Spec = Spec>,
         callstack: &'b mut CallStackInfo,
     ) -> Context<'a, 'b, Substate>
     {

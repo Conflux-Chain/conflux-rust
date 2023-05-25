@@ -143,7 +143,7 @@ fn test_sender_balance() {
                 &storage_limit_in_drip,
                 &mut substate,
                 &mut tracer,
-                spec.account_start_nonce,
+                &spec,
                 false,
             )
             .unwrap()
@@ -410,7 +410,7 @@ fn test_call_to_create() {
                 &storage_limit_in_drip,
                 &mut substate,
                 &mut tracer,
-                spec.account_start_nonce,
+                &spec,
                 false,
             )
             .unwrap()
@@ -1018,6 +1018,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             U256::zero(),
             U256::one(),
             Some(STORAGE_LAYOUT_REGULAR_V0),
+            false,
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state.init_code(&address, code.clone(), sender).unwrap();
@@ -1040,7 +1041,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &0.into(),
             &mut Substate::new(),
             &mut (),
-            spec.account_start_nonce,
+            &spec,
             false,
         )
         .unwrap();
@@ -1082,6 +1083,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             U256::zero(),
             U256::one(),
             Some(STORAGE_LAYOUT_REGULAR_V0),
+            false,
         )
         .unwrap();
     state.init_code(&address, code, sender).unwrap();
@@ -1115,7 +1117,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &0.into(),
             &mut Substate::new(),
             &mut (),
-            spec.account_start_nonce,
+            &spec,
             false,
         )
         .unwrap();
@@ -1193,6 +1195,7 @@ fn test_commission_privilege() {
             U256::zero(),
             U256::one(),
             Some(STORAGE_LAYOUT_REGULAR_V0),
+            false,
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state.init_code(&address, code, sender).unwrap();
@@ -1575,6 +1578,7 @@ fn test_storage_commission_privilege() {
             U256::zero(),
             U256::one(),
             Some(STORAGE_LAYOUT_REGULAR_V0),
+            false,
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state.init_code(&address, code, sender.address()).unwrap();
@@ -1626,6 +1630,7 @@ fn test_storage_commission_privilege() {
             &address.address,
             &sender.address(),
             &COLLATERAL_DRIPS_PER_STORAGE_KEY,
+            false,
         )
         .unwrap();
     assert_eq!(
@@ -1701,8 +1706,8 @@ fn test_storage_commission_privilege() {
                 &U256::MAX,
                 &mut substate,
                 &mut (),
-                spec.account_start_nonce,
-                false
+                &spec,
+                false,
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -2037,7 +2042,7 @@ fn test_storage_commission_privilege() {
                 &U256::MAX,
                 &mut substate,
                 &mut (),
-                spec.account_start_nonce,
+                &spec,
                 false
             )
             .unwrap(),

@@ -557,6 +557,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                 val.saturating_add(prev_balance),
                 nonce,
                 storage_layout,
+                spec.cip107,
             )?;
         } else {
             // In contract creation, the `params.value` should never be
@@ -574,7 +575,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// execution fails, this function reverts state and drops substate.
     fn process_return(
         mut self, result: vm::Result<GasLeft>,
-        state: &mut dyn StateTrait<Substate = Substate>,
+        state: &mut dyn StateTrait<Substate = Substate, Spec = Spec>,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
         tracer: &mut dyn VmObserve,
     ) -> DbResult<vm::Result<ExecutiveResult>>
@@ -638,7 +639,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// resume trap error is returned. The caller is then expected to call
     /// `resume` to continue the execution.
     pub fn exec(
-        mut self, state: &mut dyn StateTrait<Substate = Substate>,
+        mut self, state: &mut dyn StateTrait<Substate = Substate, Spec = Spec>,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
         tracer: &mut dyn VmObserve,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
@@ -726,7 +727,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
 
     pub fn resume(
         mut self, result: vm::Result<ExecutiveResult>,
-        state: &mut dyn StateTrait<Substate = Substate>,
+        state: &mut dyn StateTrait<Substate = Substate, Spec = Spec>,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
         tracer: &mut dyn VmObserve,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
@@ -773,7 +774,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     #[inline]
     fn process_output(
         self, output: ExecTrapResult<GasLeft>,
-        state: &mut dyn StateTrait<Substate = Substate>,
+        state: &mut dyn StateTrait<Substate = Substate, Spec = Spec>,
         parent_substate: &mut Substate, callstack: &mut CallStackInfo,
         tracer: &mut dyn VmObserve,
     ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
@@ -801,7 +802,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// traps and sub-level tracing. The caller is expected to handle
     /// current-level tracing.
     pub fn consume(
-        self, state: &'a mut dyn StateTrait<Substate = Substate>,
+        self, state: &'a mut dyn StateTrait<Substate = Substate, Spec = Spec>,
         top_substate: &mut Substate, tracer: &mut dyn VmObserve,
     ) -> DbResult<vm::Result<FinalizationResult>>
     {
@@ -948,7 +949,7 @@ pub type Executive<'a> = ExecutiveGeneric<'a, Substate>;
 
 /// Transaction executor.
 pub struct ExecutiveGeneric<'a, Substate: SubstateTrait> {
-    pub state: &'a mut dyn StateTrait<Substate = Substate>,
+    pub state: &'a mut dyn StateTrait<Substate = Substate, Spec = Spec>,
     env: &'a Env,
     machine: &'a Machine,
     spec: &'a Spec,
@@ -983,8 +984,8 @@ pub fn gas_required_for(is_create: bool, data: &[u8], spec: &Spec) -> u64 {
 impl<'a, Substate: SubstateMngTrait> ExecutiveGeneric<'a, Substate> {
     /// Basic constructor.
     pub fn new(
-        state: &'a mut dyn StateTrait<Substate = Substate>, env: &'a Env,
-        machine: &'a Machine, spec: &'a Spec,
+        state: &'a mut dyn StateTrait<Substate = Substate, Spec = Spec>,
+        env: &'a Env, machine: &'a Machine, spec: &'a Spec,
     ) -> Self
     {
         ExecutiveGeneric {
@@ -1330,7 +1331,10 @@ impl<'a, Substate: SubstateMngTrait> ExecutiveGeneric<'a, Substate> {
             gas_sponsor_eligible && sponsor_balance_for_gas >= gas_cost;
 
         let sponsor_balance_for_storage =
-            self.state.sponsor_balance_for_collateral(&code_address)?;
+            self.state.sponsor_balance_for_collateral(&code_address)?
+                + self
+                    .state
+                    .avaliable_storage_point_for_collateral(&code_address)?;
         let storage_sponsored = match settings.charge_collateral {
             ChargeCollateral::Normal => {
                 storage_sponsor_eligible
@@ -1730,7 +1734,7 @@ impl<'a, Substate: SubstateMngTrait> ExecutiveGeneric<'a, Substate> {
                         &total_storage_limit,
                         &mut substate,
                         observer.as_state_tracer(),
-                        self.spec.account_start_nonce,
+                        &self.spec,
                         dry_run_no_charge,
                     )?
                     .into_vm_result()
@@ -1788,7 +1792,7 @@ impl<'a, Substate: SubstateMngTrait> ExecutiveGeneric<'a, Substate> {
     // post-processing.
     fn kill_process(
         &mut self, suicides: &HashSet<AddressWithSpace>,
-        tracer: &mut dyn StateTracer,
+        tracer: &mut dyn StateTracer, spec: &Spec,
     ) -> DbResult<Substate>
     {
         let mut substate = Substate::new();
@@ -1818,9 +1822,7 @@ impl<'a, Substate: SubstateMngTrait> ExecutiveGeneric<'a, Substate> {
         }
 
         let res = self.state.settle_collateral_for_all(
-            &substate,
-            tracer,
-            self.spec.account_start_nonce,
+            &substate, tracer, spec,
             // Kill process does not occupy new storage entries.
             false,
         )?;
@@ -1970,8 +1972,11 @@ impl<'a, Substate: SubstateMngTrait> ExecutiveGeneric<'a, Substate> {
 
         // perform suicides
 
-        let subsubstate = self
-            .kill_process(&substate.suicides(), observer.as_state_tracer())?;
+        let subsubstate = self.kill_process(
+            &substate.suicides(),
+            observer.as_state_tracer(),
+            &self.spec,
+        )?;
         substate.accrue(subsubstate);
 
         // TODO should be added back after enabling dust collection

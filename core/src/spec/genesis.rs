@@ -138,6 +138,7 @@ pub fn initialize_internal_contract_accounts(
                     /* balance = */ U256::zero(),
                     contract_start_nonce,
                     Some(STORAGE_LAYOUT_REGULAR_V0),
+                    false,
                 )?;
             }
             Ok(())

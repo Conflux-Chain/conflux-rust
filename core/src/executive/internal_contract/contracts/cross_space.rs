@@ -275,6 +275,7 @@ impl SimpleExecutionTrait for DeployEip1820 {
             /* balance */ U256::zero(),
             /* nonce */ U256::one(),
             Some(STORAGE_LAYOUT_REGULAR_V0),
+            context.spec.cip107,
         )?;
         context.state.init_code(
             &address,

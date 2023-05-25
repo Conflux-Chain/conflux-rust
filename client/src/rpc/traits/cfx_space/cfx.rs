@@ -9,8 +9,8 @@ use crate::rpc::types::{
     CheckBalanceAgainstTransactionResponse, EpochNumber,
     EstimateGasAndCollateralResponse, Log as RpcLog, PoSEconomics,
     Receipt as RpcReceipt, RewardInfo as RpcRewardInfo, RpcAddress,
-    SponsorInfo, Status as RpcStatus, TokenSupplyInfo, Transaction,
-    VoteParamsInfo,
+    SponsorInfo, Status as RpcStatus, StorageCollateralInfo, TokenSupplyInfo,
+    Transaction, VoteParamsInfo,
 };
 use cfx_types::{H128, H256, U256, U64};
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
@@ -267,6 +267,12 @@ pub trait Cfx {
     fn get_supply_info(
         &self, epoch_number: Option<EpochNumber>,
     ) -> JsonRpcResult<TokenSupplyInfo>;
+
+    /// Return information about total token supply.
+    #[rpc(name = "cfx_getCollateralInfo")]
+    fn get_collateral_info(
+        &self, epoch_number: Option<EpochNumber>,
+    ) -> JsonRpcResult<StorageCollateralInfo>;
 
     #[rpc(name = "cfx_getPoSRewardByEpoch")]
     fn get_pos_reward_by_epoch(

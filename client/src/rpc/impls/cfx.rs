@@ -66,14 +66,16 @@ use crate::{
             EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
             PackedOrExecuted, Receipt as RpcReceipt,
             RewardInfo as RpcRewardInfo, SendTxRequest, Status as RpcStatus,
-            SyncGraphStates, Transaction as RpcTransaction,
+            StorageCollateralInfo, SyncGraphStates,
+            Transaction as RpcTransaction,
         },
         RpcResult,
     },
 };
 use cfx_addr::Network;
 use cfx_parameters::{
-    consensus_internal::REWARD_EPOCH_COUNT, staking::BLOCKS_PER_YEAR,
+    consensus_internal::REWARD_EPOCH_COUNT,
+    staking::{BLOCKS_PER_YEAR, DRIPS_PER_STORAGE_COLLATERAL_UNIT},
 };
 use cfx_storage::state::StateDbGetOriginalMethods;
 use cfxcore::{
@@ -1528,6 +1530,26 @@ impl RpcImpl {
         })
     }
 
+    pub fn get_collateral_info(
+        &self, epoch: Option<EpochNumber>,
+    ) -> RpcResult<StorageCollateralInfo> {
+        let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
+        let state = State::new(
+            self.consensus
+                .get_state_db_by_epoch_number(epoch, "epoch")?,
+        )?;
+        let total_storage_tokens = state.total_storage_tokens();
+        let converted_storage_points = state.converted_storage_points()
+            / *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+        let used_storage_points =
+            state.used_storage_points() / *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+        Ok(StorageCollateralInfo {
+            total_storage_tokens,
+            converted_storage_points,
+            used_storage_points,
+        })
+    }
+
     pub fn get_vote_params(
         &self, epoch: Option<EpochNumber>,
     ) -> RpcResult<VoteParamsInfo> {
@@ -2112,6 +2134,7 @@ impl Cfx for CfxHandler {
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
             fn storage_root(&self, address: RpcAddress, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
+            fn get_collateral_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<StorageCollateralInfo>;
             fn get_vote_params(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<VoteParamsInfo>;
         }
     }

@@ -50,7 +50,8 @@ use primitives::{
 use crate::{
     executive::internal_contract::{
         get_settled_param_vote_count, get_settled_pos_staking_for_votes,
-        pos_internal_entries, settle_current_votes, IndexStatus,
+        pos_internal_entries, settle_current_votes, storage_point_prop,
+        IndexStatus,
     },
     hash::KECCAK_EMPTY,
     observer::{AddressPocket, StateTracer},
@@ -58,6 +59,7 @@ use crate::{
         genesis_contract_address_four_year, genesis_contract_address_two_year,
     },
     transaction_pool::SharedTransactionPool,
+    vm::Spec,
 };
 
 use self::account_entry::{AccountEntry, AccountState};
@@ -103,6 +105,10 @@ struct WorldStatistics {
     last_distribute_block: u64,
     // This is the tokens in the EVM space.
     total_evm_tokens: U256,
+    // This is the amount of using storage points (in terms of Drip)
+    used_storage_points: U256,
+    // This is the amount of converted storage points (in terms of Drip)
+    converted_storage_points: U256,
 }
 
 pub type State = StateGeneric;
@@ -126,6 +132,7 @@ pub struct StateGeneric {
 }
 
 impl StateTrait for StateGeneric {
+    type Spec = Spec;
     type Substate = Substate;
 
     /// Collects the cache (`ownership_change` in `OverlayAccount`) of storage
@@ -159,7 +166,7 @@ impl StateTrait for StateGeneric {
     /// of a transaction.
     fn settle_collateral_for_all(
         &mut self, substate: &Substate, tracer: &mut dyn StateTracer,
-        account_start_nonce: U256, dry_run_no_charge: bool,
+        spec: &Spec, dry_run_no_charge: bool,
     ) -> DbResult<CollateralCheckResult>
     {
         for address in substate.keys_for_collateral_changed().iter() {
@@ -167,7 +174,7 @@ impl StateTrait for StateGeneric {
                 &address,
                 substate,
                 tracer,
-                account_start_nonce,
+                spec,
                 dry_run_no_charge,
             )? {
                 CollateralCheckResult::Valid => {}
@@ -181,15 +188,15 @@ impl StateTrait for StateGeneric {
     // test cases breaks this assumption, which will be fixed in a separated PR.
     fn collect_and_settle_collateral(
         &mut self, original_sender: &Address, storage_limit: &U256,
-        substate: &mut Substate, tracer: &mut dyn StateTracer,
-        account_start_nonce: U256, dry_run_no_charge: bool,
+        substate: &mut Substate, tracer: &mut dyn StateTracer, spec: &Spec,
+        dry_run_no_charge: bool,
     ) -> DbResult<CollateralCheckResult>
     {
         self.collect_ownership_changed(substate)?;
         let res = match self.settle_collateral_for_all(
             substate,
             tracer,
-            account_start_nonce,
+            spec,
             dry_run_no_charge,
         )? {
             CollateralCheckResult::Valid => self.check_storage_limit(
@@ -453,7 +460,7 @@ impl StateOpsTrait for StateGeneric {
 
     fn new_contract_with_admin(
         &mut self, contract: &AddressWithSpace, admin: &Address, balance: U256,
-        nonce: U256, storage_layout: Option<StorageLayout>,
+        nonce: U256, storage_layout: Option<StorageLayout>, cip107: bool,
     ) -> DbResult<()>
     {
         assert!(contract.space == Space::Native || admin.is_zero());
@@ -479,6 +486,7 @@ impl StateOpsTrait for StateGeneric {
                     admin,
                     invalidated_storage,
                     storage_layout,
+                    cip107,
                 ),
             )),
         );
@@ -548,19 +556,31 @@ impl StateOpsTrait for StateGeneric {
     }
 
     fn set_sponsor_for_collateral(
-        &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
-    ) -> DbResult<()> {
-        if *sponsor != self.sponsor_for_collateral(address)?.unwrap_or_default()
-            || *sponsor_balance
-                != self.sponsor_balance_for_collateral(address)?
+        &mut self, address: &Address, sponsor: &Address,
+        sponsor_balance: &U256, is_cip107: bool,
+    ) -> DbResult<U256>
+    {
+        if *sponsor == self.sponsor_for_collateral(address)?.unwrap_or_default()
+            && *sponsor_balance
+                == self.sponsor_balance_for_collateral(address)?
         {
-            self.require_exists(&address.with_native_space(), false)
-                .map(|mut x| {
-                    x.set_sponsor_for_collateral(sponsor, sponsor_balance)
-                })
-        } else {
-            Ok(())
+            return Ok(U256::zero());
         }
+
+        let prop = if is_cip107 {
+            self.storage_point_prop()?
+        } else {
+            U256::zero()
+        };
+        let converted_storage_points = self
+            .require_exists(&address.with_native_space(), false)
+            .map(|mut x| {
+                x.set_sponsor_for_collateral(sponsor, sponsor_balance, prop)
+            })?;
+        self.world_statistics.total_issued_tokens -= converted_storage_points;
+        self.world_statistics.converted_storage_points +=
+            converted_storage_points;
+        Ok(converted_storage_points)
     }
 
     fn sponsor_info(&self, address: &Address) -> DbResult<Option<SponsorInfo>> {
@@ -604,6 +624,23 @@ impl StateOpsTrait for StateGeneric {
             |acc| {
                 acc.map_or(U256::zero(), |acc| {
                     acc.sponsor_info().sponsor_balance_for_collateral
+                })
+            },
+        )
+    }
+
+    fn avaliable_storage_point_for_collateral(
+        &self, address: &Address,
+    ) -> DbResult<U256> {
+        self.ensure_account_loaded(
+            &address.with_native_space(),
+            RequireCache::None,
+            |acc| {
+                acc.map_or(U256::zero(), |acc| {
+                    acc.sponsor_info()
+                        .storage_points
+                        .as_ref()
+                        .map_or(U256::zero(), |x| x.unused)
                 })
             },
         )
@@ -773,7 +810,21 @@ impl StateOpsTrait for StateGeneric {
             RequireCache::None,
             |acc| {
                 acc.map_or(U256::zero(), |account| {
-                    *account.collateral_for_storage()
+                    account.collateral_for_storage()
+                })
+            },
+        )
+    }
+
+    fn token_collateral_for_storage(
+        &self, address: &Address,
+    ) -> DbResult<U256> {
+        self.ensure_account_loaded(
+            &address.with_native_space(),
+            RequireCache::None,
+            |acc| {
+                acc.map_or(U256::zero(), |account| {
+                    account.token_collateral_for_storage()
                 })
             },
         )
@@ -857,6 +908,13 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
+    fn inc_nonce(
+        &mut self, address: &AddressWithSpace, account_start_nonce: &U256,
+    ) -> DbResult<()> {
+        self.require_or_new_basic_account(address, account_start_nonce)
+            .map(|mut x| x.inc_nonce())
+    }
+
     // TODO: This implementation will fail
     // tests::load_chain_tests::test_load_chain. We need to figure out why.
     //
@@ -869,13 +927,6 @@ impl StateOpsTrait for StateGeneric {
     //     );
     //     Ok(())
     // }
-
-    fn inc_nonce(
-        &mut self, address: &AddressWithSpace, account_start_nonce: &U256,
-    ) -> DbResult<()> {
-        self.require_or_new_basic_account(address, account_start_nonce)
-            .map(|mut x| x.inc_nonce())
-    }
 
     fn set_nonce(
         &mut self, address: &AddressWithSpace, nonce: &U256,
@@ -901,24 +952,6 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn add_pos_interest(
-        &mut self, address: &Address, interest: &U256,
-        cleanup_mode: CleanupMode, account_start_nonce: U256,
-    ) -> DbResult<()>
-    {
-        let address = address.with_native_space();
-        self.add_total_issued(*interest);
-        self.add_balance(
-            &address,
-            interest,
-            cleanup_mode,
-            account_start_nonce,
-        )?;
-        self.require_or_new_basic_account(&address, &account_start_nonce)?
-            .record_interest_receive(interest);
-        Ok(())
-    }
-
     fn add_balance(
         &mut self, address: &AddressWithSpace, by: &U256,
         cleanup_mode: CleanupMode, account_start_nonce: U256,
@@ -940,6 +973,24 @@ impl StateOpsTrait for StateGeneric {
                 set.insert(*address);
             }
         }
+        Ok(())
+    }
+
+    fn add_pos_interest(
+        &mut self, address: &Address, interest: &U256,
+        cleanup_mode: CleanupMode, account_start_nonce: U256,
+    ) -> DbResult<()>
+    {
+        let address = address.with_native_space();
+        self.add_total_issued(*interest);
+        self.add_balance(
+            &address,
+            interest,
+            cleanup_mode,
+            account_start_nonce,
+        )?;
+        self.require_or_new_basic_account(&address, &account_start_nonce)?
+            .record_interest_receive(interest);
         Ok(())
     }
 
@@ -1041,16 +1092,24 @@ impl StateOpsTrait for StateGeneric {
         self.world_statistics.total_issued_tokens
     }
 
-    fn total_espace_tokens(&self) -> U256 {
-        self.world_statistics.total_evm_tokens
-    }
-
     fn total_staking_tokens(&self) -> U256 {
         self.world_statistics.total_staking_tokens
     }
 
     fn total_storage_tokens(&self) -> U256 {
         self.world_statistics.total_storage_tokens
+    }
+
+    fn total_espace_tokens(&self) -> U256 {
+        self.world_statistics.total_evm_tokens
+    }
+
+    fn used_storage_points(&self) -> U256 {
+        self.world_statistics.used_storage_points
+    }
+
+    fn converted_storage_points(&self) -> U256 {
+        self.world_statistics.converted_storage_points
     }
 
     fn total_pos_staking_tokens(&self) -> U256 {
@@ -1125,20 +1184,6 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn pos_locked_staking(&self, address: &Address) -> DbResult<U256> {
-        let identifier = BigEndianHash::from_uint(&self.storage_at(
-            &POS_REGISTER_CONTRACT_ADDRESS.with_native_space(),
-            &pos_internal_entries::identifier_entry(address),
-        )?);
-        let current_value: IndexStatus = self
-            .storage_at(
-                &POS_REGISTER_CONTRACT_ADDRESS.with_native_space(),
-                &pos_internal_entries::index_entry(&identifier),
-            )?
-            .into();
-        Ok(*POS_VOTE_PRICE * current_value.locked())
-    }
-
     fn update_pos_status(
         &mut self, identifier: H256, number: u64,
     ) -> DbResult<()> {
@@ -1165,6 +1210,20 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
+    fn pos_locked_staking(&self, address: &Address) -> DbResult<U256> {
+        let identifier = BigEndianHash::from_uint(&self.storage_at(
+            &POS_REGISTER_CONTRACT_ADDRESS.with_native_space(),
+            &pos_internal_entries::identifier_entry(address),
+        )?);
+        let current_value: IndexStatus = self
+            .storage_at(
+                &POS_REGISTER_CONTRACT_ADDRESS.with_native_space(),
+                &pos_internal_entries::index_entry(&identifier),
+            )?
+            .into();
+        Ok(*POS_VOTE_PRICE * current_value.locked())
+    }
+
     fn read_vote(&self, _address: &Address) -> DbResult<Vec<u8>> { todo!() }
 
     fn set_system_storage(
@@ -1182,6 +1241,18 @@ impl StateOpsTrait for StateGeneric {
 
     fn get_system_storage(&self, key: &[u8]) -> DbResult<U256> {
         self.storage_at(&SYSTEM_STORAGE_ADDRESS.with_native_space(), key)
+    }
+
+    fn get_system_storage_opt(&self, key: &[u8]) -> DbResult<Option<U256>> {
+        self.ensure_account_loaded(
+            &SYSTEM_STORAGE_ADDRESS.with_native_space(),
+            RequireCache::None,
+            |acc| {
+                acc.map_or(Ok(None), |account| {
+                    account.storage_opt_at(&self.db, key)
+                })
+            },
+        )?
     }
 }
 
@@ -1271,6 +1342,8 @@ impl StateGeneric {
         let distributable_pos_interest = db.get_distributable_pos_interest()?;
         let last_distribute_block = db.get_last_distribute_block()?;
         let total_evm_tokens = db.get_total_evm_tokens()?;
+        let used_storage_points = db.get_used_storage_points()?;
+        let converted_storage_points = db.get_converted_storage_points()?;
 
         let world_stat = if db.is_initialized()? {
             WorldStatistics {
@@ -1284,6 +1357,8 @@ impl StateGeneric {
                 distributable_pos_interest,
                 last_distribute_block,
                 total_evm_tokens,
+                used_storage_points,
+                converted_storage_points,
             }
         } else {
             // If db is not initialized, all the loaded value should be zero.
@@ -1330,6 +1405,8 @@ impl StateGeneric {
                 distributable_pos_interest: U256::default(),
                 last_distribute_block: u64::default(),
                 total_evm_tokens: U256::default(),
+                used_storage_points: U256::default(),
+                converted_storage_points: U256::default(),
             }
         };
 
@@ -1346,8 +1423,7 @@ impl StateGeneric {
     /// Charges or refund storage collateral and update `total_storage_tokens`.
     fn settle_collateral_for_address(
         &mut self, addr: &Address, substate: &dyn SubstateTrait,
-        tracer: &mut dyn StateTracer, account_start_nonce: U256,
-        dry_run_no_charge: bool,
+        tracer: &mut dyn StateTracer, spec: &Spec, dry_run_no_charge: bool,
     ) -> DbResult<CollateralCheckResult>
     {
         let addr_with_space = addr.with_native_space();
@@ -1360,7 +1436,38 @@ impl StateGeneric {
 
         let is_contract = self.is_contract_with_code(&addr_with_space)?;
 
+        // Initialize CIP-107
+        if spec.cip107
+            && addr.is_contract_address()
+            && (!sub.is_zero() || !inc.is_zero())
+        {
+            let (converted_point_from_balance, converted_point_from_collateral) =
+                self.initialize_cip107(addr, spec.account_start_nonce)?;
+            if !converted_point_from_balance.is_zero() {
+                tracer.trace_internal_transfer(
+                    /* from */
+                    AddressPocket::SponsorBalanceForStorage(*addr),
+                    /* to */
+                    AddressPocket::MintBurn,
+                    converted_point_from_balance,
+                );
+            }
+            if !converted_point_from_collateral.is_zero() {
+                tracer.trace_internal_transfer(
+                    /* from */ AddressPocket::StorageCollateral(*addr),
+                    /* to */
+                    AddressPocket::MintBurn,
+                    converted_point_from_collateral,
+                );
+            }
+        }
+
         if !sub.is_zero() {
+            let storage_point_refund = self.sub_collateral_for_storage(
+                addr,
+                &sub,
+                spec.account_start_nonce,
+            )?;
             tracer.trace_internal_transfer(
                 /* from */ AddressPocket::StorageCollateral(*addr),
                 /* to */
@@ -1369,13 +1476,13 @@ impl StateGeneric {
                 } else {
                     AddressPocket::Balance(addr.with_native_space())
                 },
-                sub,
+                sub - storage_point_refund,
             );
-            self.sub_collateral_for_storage(addr, &sub, account_start_nonce)?;
         }
         if !inc.is_zero() && !dry_run_no_charge {
             let balance = if is_contract {
                 self.sponsor_balance_for_collateral(addr)?
+                    + self.avaliable_storage_point_for_collateral(addr)?
             } else {
                 self.balance(&addr_with_space)?
             };
@@ -1386,6 +1493,9 @@ impl StateGeneric {
                     got: balance,
                 });
             }
+
+            let storage_point_used =
+                self.add_collateral_for_storage(addr, &inc)?;
             tracer.trace_internal_transfer(
                 /* from */
                 if is_contract {
@@ -1394,10 +1504,8 @@ impl StateGeneric {
                     AddressPocket::Balance(addr.with_native_space())
                 },
                 /* to */ AddressPocket::StorageCollateral(*addr),
-                inc,
+                inc - storage_point_used,
             );
-
-            self.add_collateral_for_storage(addr, &inc)?;
         }
         Ok(CollateralCheckResult::Valid)
     }
@@ -1459,32 +1567,82 @@ impl StateGeneric {
     /// sufficient enough.
     fn add_collateral_for_storage(
         &mut self, address: &Address, by: &U256,
-    ) -> DbResult<()> {
-        if !by.is_zero() {
-            self.require_exists(&address.with_native_space(), false)?
+    ) -> DbResult<U256> {
+        Ok(if !by.is_zero() {
+            let storage_point_used = self
+                .require_exists(&address.with_native_space(), false)?
                 .add_collateral_for_storage(by);
-            self.world_statistics.total_storage_tokens += *by;
-        }
-        Ok(())
+            self.world_statistics.total_storage_tokens +=
+                *by - storage_point_used;
+            self.world_statistics.used_storage_points += storage_point_used;
+            storage_point_used
+        } else {
+            U256::zero()
+        })
     }
 
     fn sub_collateral_for_storage(
         &mut self, address: &Address, by: &U256, account_start_nonce: U256,
-    ) -> DbResult<()> {
-        let collateral = self.collateral_for_storage(address)?;
+    ) -> DbResult<U256> {
+        let collateral = self.token_collateral_for_storage(address)?;
         let refundable = if by > &collateral { &collateral } else { by };
         let burnt = *by - *refundable;
-        if !refundable.is_zero() {
+        let storage_point_refund = if !refundable.is_zero() {
             self.require_or_new_basic_account(
                 &address.with_native_space(),
                 &account_start_nonce,
             )?
-            .sub_collateral_for_storage(refundable);
-        }
-        self.world_statistics.total_storage_tokens -= *by;
+            .sub_collateral_for_storage(refundable)
+        } else {
+            U256::zero()
+        };
+
+        self.world_statistics.total_storage_tokens -=
+            *by - storage_point_refund;
+        self.world_statistics.used_storage_points -= storage_point_refund;
         self.world_statistics.total_issued_tokens -= burnt;
 
-        Ok(())
+        Ok(storage_point_refund)
+    }
+
+    fn initialize_cip107(
+        &mut self, address: &Address, account_start_nonce: U256,
+    ) -> DbResult<(U256, U256)> {
+        let prop = self.storage_point_prop()?;
+        let init_result = {
+            debug!("Check initialize CIP-107");
+            let account = &mut *self.require_or_new_basic_account(
+                &address.with_native_space(),
+                &account_start_nonce,
+            )?;
+            if !account.is_cip_107_initialized() {
+                Some(account.initialize_cip107(prop))
+            } else {
+                None
+            }
+        };
+
+        if let Some((
+            burnt_balance_from_balance,
+            burnt_balance_from_collateral,
+            changed_storage_points,
+        )) = init_result
+        {
+            self.world_statistics.total_issued_tokens -=
+                burnt_balance_from_balance + burnt_balance_from_collateral;
+            self.world_statistics.total_storage_tokens -=
+                burnt_balance_from_collateral;
+            self.world_statistics.used_storage_points +=
+                burnt_balance_from_collateral;
+            self.world_statistics.converted_storage_points =
+                changed_storage_points;
+            return Ok((
+                burnt_balance_from_balance,
+                burnt_balance_from_collateral,
+            ));
+        } else {
+            return Ok((U256::zero(), U256::zero()));
+        }
     }
 
     #[allow(dead_code)]
@@ -1549,6 +1707,8 @@ impl StateGeneric {
                 self.world_statistics.interest_rate_per_block,
                 pos_staking_for_votes,
             );
+
+        // Initialize or update PoW base reward.
         match self.db.get_pow_base_reward()? {
             Some(old_pow_base_reward) => {
                 self.db.set_pow_base_reward(
@@ -1565,6 +1725,21 @@ impl StateGeneric {
                     None,
                 )?;
             }
+        }
+
+        // Only write storage_collateral_refund_ratio if it has been set in the
+        // db. This keeps the state unchanged before cip107 is enabled.
+        if let Some(old_storage_point_prop) =
+            self.get_system_storage_opt(&storage_point_prop())?
+        {
+            debug!("old_storage_point_prop: {}", old_storage_point_prop);
+            self.set_system_storage(
+                storage_point_prop().to_vec(),
+                vote_count.storage_point_prop.compute_next_params(
+                    old_storage_point_prop,
+                    pos_staking_for_votes,
+                ),
+            )?;
         }
         debug!(
             "pos interest: {} base_reward:{:?}",
@@ -1615,6 +1790,14 @@ impl StateGeneric {
         )?;
         self.db.set_total_evm_tokens(
             &self.world_statistics.total_evm_tokens,
+            debug_record.as_deref_mut(),
+        )?;
+        self.db.set_used_storage_points(
+            &self.world_statistics.used_storage_points,
+            debug_record.as_deref_mut(),
+        )?;
+        self.db.set_converted_storage_points(
+            &self.world_statistics.converted_storage_points,
             debug_record,
         )?;
         Ok(())
@@ -2079,6 +2262,10 @@ impl StateGeneric {
         }))
     }
 
+    fn storage_point_prop(&self) -> DbResult<U256> {
+        Ok(self.get_system_storage(&storage_point_prop())?)
+    }
+
     #[cfg(any(test, feature = "testonly_code"))]
     pub fn clear(&mut self) {
         assert!(self.checkpoints.get_mut().is_empty());
@@ -2105,6 +2292,10 @@ impl StateGeneric {
             self.db.get_last_distribute_block().expect("no db error");
         self.world_statistics.total_evm_tokens =
             self.db.get_total_evm_tokens().expect("no db error");
+        self.world_statistics.used_storage_points =
+            self.db.get_used_storage_points().expect("no db error");
+        self.world_statistics.converted_storage_points =
+            self.db.get_converted_storage_points().expect("no db error");
     }
 }
 
