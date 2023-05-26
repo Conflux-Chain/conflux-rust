@@ -22,7 +22,7 @@
 
 use crate::spec::CommonParams;
 use cfx_parameters::consensus_internal::DAO_PARAMETER_VOTE_PERIOD;
-use cfx_types::{address_util::AddressUtil, Address, U256};
+use cfx_types::{address_util::AddressUtil, Address};
 use primitives::BlockNumber;
 
 /// Definition of the cost spec and other parameterisations for the VM.
@@ -129,10 +129,6 @@ pub struct Spec {
     pub keep_unsigned_nonce: bool,
     /// Wasm extra specs, if wasm activated
     pub wasm: Option<WasmCosts>,
-    /// Start nonce for a new contract
-    pub contract_start_nonce: U256,
-    /// Start nonce for a new account
-    pub account_start_nonce: U256,
     /// The magnification of gas storage occupying related operaions.
     pub evm_gas_ratio: usize,
     /// CIP-43: Introduce Finality via Voting Among Staked
@@ -160,6 +156,8 @@ pub struct Spec {
     /// CIP-105: Minimal DAO votes requirement based on PoS votes.
     pub cip105: bool,
     pub cip_sigma_fix: bool,
+    /// CIP-107: Reduce storage collateral refund.
+    pub cip107: bool,
     pub params_dao_vote_period: u64,
 }
 
@@ -279,11 +277,6 @@ impl Spec {
             no_empty: true,
             kill_empty: true,
             blockhash_gas: 20,
-            contract_start_nonce: U256([1, 0, 0, 0]),
-            /* If `no_empty` is
-             * false, it
-             * should be 0. */
-            account_start_nonce: U256([0, 0, 0, 0]),
             kill_dust: CleanDustMode::Off,
             keep_unsigned_nonce: false,
             wasm: None,
@@ -303,6 +296,7 @@ impl Spec {
             cip98: false,
             cip105: false,
             cip_sigma_fix: false,
+            cip107: false,
         }
     }
 
@@ -326,6 +320,7 @@ impl Spec {
         spec.cip105 = number >= params.transition_numbers.cip105;
         spec.cip_sigma_fix = number >= params.transition_numbers.cip_sigma_fix;
         spec.params_dao_vote_period = params.params_dao_vote_period;
+        spec.cip107 = number >= params.transition_numbers.cip107;
         spec
     }
 

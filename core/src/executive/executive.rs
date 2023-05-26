@@ -19,7 +19,7 @@ use crate::{
     observer::{
         tracer::ExecutiveTracer, AddressPocket, GasMan, StateTracer, VmObserve,
     },
-    state::{cleanup_mode, CallStackInfo, Substate},
+    state::{cleanup_mode, CallStackInfo, State, Substate},
     verification::VerificationConfig,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress,
@@ -29,10 +29,7 @@ use crate::{
     vm_factory::VmFactory,
 };
 use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
-use cfx_state::{
-    state_trait::StateOpsTrait, substate_trait::SubstateMngTrait, CleanupMode,
-    CollateralCheckResult, StateTrait, SubstateTrait,
-};
+use cfx_state::{CleanupMode, CollateralCheckResult};
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
@@ -329,8 +326,8 @@ enum CallCreateExecutiveKind<'a> {
     ExecCreate,
 }
 
-pub struct CallCreateExecutive<'a, Substate: SubstateMngTrait> {
-    context: LocalContext<'a, Substate>,
+pub struct CallCreateExecutive<'a> {
+    context: LocalContext<'a>,
     factory: &'a VmFactory,
     status: ExecutiveStatus,
     create_address: Option<Address>,
@@ -345,7 +342,7 @@ pub enum ExecutiveStatus {
     Done,
 }
 
-impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
+impl<'a> CallCreateExecutive<'a> {
     /// Create a new call executive using raw data.
     pub fn new_call_raw(
         params: ActionParams, env: &'a Env, machine: &'a Machine,
@@ -493,8 +490,8 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     }
 
     fn transfer_exec_balance(
-        params: &ActionParams, spec: &Spec, state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait, account_start_nonce: U256,
+        params: &ActionParams, spec: &Spec, state: &mut State,
+        substate: &mut Substate,
     ) -> DbResult<()>
     {
         let sender = AddressWithSpace {
@@ -511,7 +508,6 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
                 &receiver,
                 &val,
                 cleanup_mode(substate, &spec),
-                account_start_nonce,
             )?;
         }
 
@@ -519,9 +515,8 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     }
 
     fn transfer_exec_balance_and_init_contract(
-        params: &ActionParams, spec: &Spec, state: &mut dyn StateOpsTrait,
-        substate: &mut dyn SubstateTrait,
-        storage_layout: Option<StorageLayout>, contract_start_nonce: U256,
+        params: &ActionParams, spec: &Spec, state: &mut State,
+        substate: &mut Substate, storage_layout: Option<StorageLayout>,
     ) -> DbResult<()>
     {
         let sender = AddressWithSpace {
@@ -546,17 +541,12 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
             } else {
                 Address::zero()
             };
-            let nonce = if params.space == Space::Native {
-                contract_start_nonce
-            } else {
-                U256::from(1)
-            };
             state.new_contract_with_admin(
                 &receiver,
                 &admin,
                 val.saturating_add(prev_balance),
-                nonce,
                 storage_layout,
+                spec.cip107,
             )?;
         } else {
             // In contract creation, the `params.value` should never be
@@ -573,45 +563,45 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// its parent and settles down bytecode for newly created contract. If the
     /// execution fails, this function reverts state and drops substate.
     fn process_return(
-        mut self, result: vm::Result<GasLeft>,
-        state: &mut dyn StateTrait<Substate = Substate>,
-        parent_substate: &mut Substate, callstack: &mut CallStackInfo,
-        tracer: &mut dyn VmObserve,
+        mut self, result: vm::Result<GasLeft>, state: &mut State,
+        callstack: &mut CallStackInfo, tracer: &mut dyn VmObserve,
     ) -> DbResult<vm::Result<ExecutiveResult>>
     {
         let context = self.context.activate(state, callstack);
         // The post execution task in spec is completed here.
         let finalized_result = result.finalize(context);
-        let executive_result = finalized_result
-            .map(|result| ExecutiveResult::new(result, self.create_address));
+        let finalized_result = vm::separate_out_db_error(finalized_result)?;
 
         self.status = ExecutiveStatus::Done;
 
-        let executive_result = vm::separate_out_db_error(executive_result)?;
+        let apply_state =
+            finalized_result.as_ref().map_or(false, |r| r.apply_state);
+        let maybe_substate;
+        if apply_state {
+            let mut substate = self.context.substate;
+            state.collect_ownership_changed(&mut substate)?; /* only fail for db error. */
+            if let Some(create_address) = self.create_address {
+                substate
+                    .contracts_created
+                    .push(create_address.with_space(self.context.space));
+            }
+            maybe_substate = Some(substate);
+            state.discard_checkpoint();
+        } else {
+            maybe_substate = None;
+            state.revert_to_checkpoint();
+        }
 
+        let create_address = self.create_address;
+        let executive_result = finalized_result.map(|result| {
+            ExecutiveResult::new(result, create_address, maybe_substate)
+        });
         if self.context.is_create {
             tracer.record_create_result(&executive_result);
         } else {
             tracer.record_call_result(&executive_result);
         }
 
-        let apply_state =
-            executive_result.as_ref().map_or(false, |r| r.apply_state);
-        if apply_state {
-            let mut substate = self.context.substate;
-            state.collect_ownership_changed(&mut substate)?; /* only fail for db error. */
-            if let Some(create_address) = self.create_address {
-                substate
-                    .contracts_created_mut()
-                    .push(create_address.with_space(self.context.space));
-            }
-
-            state.discard_checkpoint();
-            // See my comments in resume function.
-            parent_substate.accrue(substate);
-        } else {
-            state.revert_to_checkpoint();
-        }
         callstack.pop();
 
         Ok(executive_result)
@@ -621,7 +611,7 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// outputs a trap error with sub-call parameters and return point.
     fn process_trap(
         mut self, trap_err: ExecTrapError,
-    ) -> ExecutiveTrapError<'a, Substate> {
+    ) -> ExecutiveTrapError<'a> {
         match trap_err {
             TrapError::Call(subparams, resume) => {
                 self.status = ExecutiveStatus::ResumeCall(resume);
@@ -638,10 +628,9 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// resume trap error is returned. The caller is then expected to call
     /// `resume` to continue the execution.
     pub fn exec(
-        mut self, state: &mut dyn StateTrait<Substate = Substate>,
-        parent_substate: &mut Substate, callstack: &mut CallStackInfo,
+        mut self, state: &mut State, callstack: &mut CallStackInfo,
         tracer: &mut dyn VmObserve,
-    ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
+    ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult>>
     {
         let status =
             std::mem::replace(&mut self.status, ExecutiveStatus::Running);
@@ -684,19 +673,17 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
             Self::transfer_exec_balance_and_init_contract(
                 &params,
                 spec,
-                state.as_mut_state_ops(),
+                state,
                 // It is a bug in the Parity version.
                 &mut self.context.substate,
                 Some(STORAGE_LAYOUT_REGULAR_V0),
-                spec.contract_start_nonce,
             )?
         } else {
             Self::transfer_exec_balance(
                 &params,
                 spec,
-                state.as_mut_state_ops(),
+                state,
                 &mut self.context.substate,
-                spec.account_start_nonce,
             )?
         };
 
@@ -721,29 +708,18 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         let output = exec.exec(&mut context, tracer);
 
         // Post execution.
-        self.process_output(output, state, parent_substate, callstack, tracer)
+        self.process_output(output, state, callstack, tracer)
     }
 
     pub fn resume(
-        mut self, result: vm::Result<ExecutiveResult>,
-        state: &mut dyn StateTrait<Substate = Substate>,
-        parent_substate: &mut Substate, callstack: &mut CallStackInfo,
-        tracer: &mut dyn VmObserve,
-    ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
+        mut self, mut result: vm::Result<ExecutiveResult>, state: &mut State,
+        callstack: &mut CallStackInfo, tracer: &mut dyn VmObserve,
+    ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult>>
     {
         let status =
             std::mem::replace(&mut self.status, ExecutiveStatus::Running);
 
-        // TODO: Substate from sub-call should have been merged here by
-        // specification. But we have merged it in function `process_return`.
-        // If we put `substate.accrue` back to here, we can save the maintenance
-        // for `parent_substate` in `exec`, `resume`, `process_return` and
-        // `consume`. It will also make the implementation with
-        // specification: substate is in return value and its caller's duty to
-        // merge callee's substate. However, Substate is a trait
-        // currently, such change will make too many functions has generic
-        // parameters or trait parameter. So I put off this plan until
-        // substate is no longer a trait.
+        accrue_substate(self.unconfirmed_substate(), &mut result);
 
         // Process resume tasks, which is defined in Instruction Set
         // Specification of tech-specification.
@@ -767,29 +743,21 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
         let output = exec.exec(&mut context, tracer);
 
         // Post execution.
-        self.process_output(output, state, parent_substate, callstack, tracer)
+        self.process_output(output, state, callstack, tracer)
     }
 
     #[inline]
     fn process_output(
-        self, output: ExecTrapResult<GasLeft>,
-        state: &mut dyn StateTrait<Substate = Substate>,
-        parent_substate: &mut Substate, callstack: &mut CallStackInfo,
-        tracer: &mut dyn VmObserve,
-    ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult, Substate>>
+        self, output: ExecTrapResult<GasLeft>, state: &mut State,
+        callstack: &mut CallStackInfo, tracer: &mut dyn VmObserve,
+    ) -> DbResult<ExecutiveTrapResult<'a, ExecutiveResult>>
     {
         // Convert the `ExecTrapResult` (result of evm) to `ExecutiveTrapResult`
         // (result of self).
         let trap_result = match output {
-            TrapResult::Return(result) => {
-                TrapResult::Return(self.process_return(
-                    result,
-                    state,
-                    parent_substate,
-                    callstack,
-                    tracer,
-                )?)
-            }
+            TrapResult::Return(result) => TrapResult::Return(
+                self.process_return(result, state, callstack, tracer)?,
+            ),
             TrapResult::SubCallCreate(trap_err) => {
                 TrapResult::SubCallCreate(self.process_trap(trap_err))
             }
@@ -801,66 +769,40 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     /// traps and sub-level tracing. The caller is expected to handle
     /// current-level tracing.
     pub fn consume(
-        self, state: &'a mut dyn StateTrait<Substate = Substate>,
-        top_substate: &mut Substate, tracer: &mut dyn VmObserve,
+        self, state: &'a mut State, top_substate: &mut Substate,
+        tracer: &mut dyn VmObserve,
     ) -> DbResult<vm::Result<FinalizationResult>>
     {
         let mut callstack = CallStackInfo::new();
         let mut executive_stack: Vec<Self> = Vec::new();
 
-        let mut last_res =
-            self.exec(state, top_substate, &mut callstack, tracer)?;
+        let mut last_res = self.exec(state, &mut callstack, tracer)?;
 
         loop {
-            match last_res {
-                TrapResult::Return(result) => {
+            last_res = match last_res {
+                TrapResult::Return(mut result) => {
                     let parent = match executive_stack.pop() {
                         Some(x) => x,
                         None => {
-                            return Ok(result.map(|result| result.into()));
+                            accrue_substate(top_substate, &mut result);
+                            return Ok(result.map(Into::into));
                         }
                     };
 
-                    let parent_substate = executive_stack
-                        .last_mut()
-                        .map_or(&mut *top_substate, |parent| {
-                            parent.unconfirmed_substate()
-                        });
-
-                    last_res = parent.resume(
-                        result,
-                        state,
-                        parent_substate,
-                        &mut callstack,
-                        tracer,
-                    )?;
+                    parent.resume(result, state, &mut callstack, tracer)?
                 }
                 TrapResult::SubCallCreate(trap_err) => {
                     let (callee, caller) = Self::from_trap_error(trap_err);
                     executive_stack.push(caller);
 
-                    let parent_substate = executive_stack
-                        .last_mut()
-                        .expect(
-                            "Last executive is `caller`, it will never be None",
-                        )
-                        .unconfirmed_substate();
-
-                    last_res = callee.exec(
-                        state,
-                        parent_substate,
-                        &mut callstack,
-                        tracer,
-                    )?;
+                    callee.exec(state, &mut callstack, tracer)?
                 }
             }
         }
     }
 
     /// Output callee executive and caller executive from trap kind error.
-    pub fn from_trap_error(
-        trap_err: ExecutiveTrapError<'a, Substate>,
-    ) -> (Self, Self) {
+    pub fn from_trap_error(trap_err: ExecutiveTrapError<'a>) -> (Self, Self) {
         match trap_err {
             TrapError::Call(params, parent) => (
                 /* callee */
@@ -892,6 +834,16 @@ impl<'a, Substate: SubstateMngTrait> CallCreateExecutive<'a, Substate> {
     }
 }
 
+pub fn accrue_substate(
+    parent_substate: &mut Substate, result: &mut vm::Result<ExecutiveResult>,
+) {
+    if let Ok(frame_return) = result {
+        if let Some(substate) = std::mem::take(&mut frame_return.substate) {
+            parent_substate.accrue(substate);
+        }
+    }
+}
+
 /// The result contains more data than finalization result.
 #[derive(Debug)]
 pub struct ExecutiveResult {
@@ -905,6 +857,8 @@ pub struct ExecutiveResult {
     pub return_data: ReturnData,
     /// Create address.
     pub create_address: Option<Address>,
+    /// Substate.
+    pub substate: Option<Substate>,
 }
 
 impl Into<FinalizationResult> for ExecutiveResult {
@@ -921,34 +875,32 @@ impl Into<FinalizationResult> for ExecutiveResult {
 impl ExecutiveResult {
     fn new(
         result: FinalizationResult, create_address: Option<Address>,
-    ) -> Self {
+        substate: Option<Substate>,
+    ) -> Self
+    {
         ExecutiveResult {
             space: result.space,
             gas_left: result.gas_left,
             apply_state: result.apply_state,
             return_data: result.return_data,
             create_address,
+            substate,
         }
     }
 }
 
 /// Trap result returned by executive.
-pub type ExecutiveTrapResult<'a, T, Substate> = vm::TrapResult<
-    T,
-    CallCreateExecutive<'a, Substate>,
-    CallCreateExecutive<'a, Substate>,
->;
+pub type ExecutiveTrapResult<'a, T> =
+    vm::TrapResult<T, CallCreateExecutive<'a>, CallCreateExecutive<'a>>;
 
-pub type ExecutiveTrapError<'a, Substate> = vm::TrapError<
-    CallCreateExecutive<'a, Substate>,
-    CallCreateExecutive<'a, Substate>,
->;
+pub type ExecutiveTrapError<'a> =
+    vm::TrapError<CallCreateExecutive<'a>, CallCreateExecutive<'a>>;
 
-pub type Executive<'a> = ExecutiveGeneric<'a, Substate>;
+pub type Executive<'a> = ExecutiveGeneric<'a>;
 
 /// Transaction executor.
-pub struct ExecutiveGeneric<'a, Substate: SubstateTrait> {
-    pub state: &'a mut dyn StateTrait<Substate = Substate>,
+pub struct ExecutiveGeneric<'a> {
+    pub state: &'a mut State,
     env: &'a Env,
     machine: &'a Machine,
     spec: &'a Spec,
@@ -980,11 +932,11 @@ pub fn gas_required_for(is_create: bool, data: &[u8], spec: &Spec) -> u64 {
     )
 }
 
-impl<'a, Substate: SubstateMngTrait> ExecutiveGeneric<'a, Substate> {
+impl<'a> ExecutiveGeneric<'a> {
     /// Basic constructor.
     pub fn new(
-        state: &'a mut dyn StateTrait<Substate = Substate>, env: &'a Env,
-        machine: &'a Machine, spec: &'a Spec,
+        state: &'a mut State, env: &'a Env, machine: &'a Machine,
+        spec: &'a Spec,
     ) -> Self
     {
         ExecutiveGeneric {
@@ -1064,7 +1016,6 @@ impl<'a, Substate: SubstateMngTrait> ExecutiveGeneric<'a, Substate> {
                 &random_hex.with_space(tx.space()),
                 &balance_inc,
                 CleanupMode::NoEmpty,
-                self.spec.account_start_nonce,
             )?;
             // Make sure statistics are also correct and will not violate any
             // underlying assumptions.
@@ -1330,7 +1281,10 @@ impl<'a, Substate: SubstateMngTrait> ExecutiveGeneric<'a, Substate> {
             gas_sponsor_eligible && sponsor_balance_for_gas >= gas_cost;
 
         let sponsor_balance_for_storage =
-            self.state.sponsor_balance_for_collateral(&code_address)?;
+            self.state.sponsor_balance_for_collateral(&code_address)?
+                + self
+                    .state
+                    .avaliable_storage_point_for_collateral(&code_address)?;
         let storage_sponsored = match settings.charge_collateral {
             ChargeCollateral::Normal => {
                 storage_sponsor_eligible
@@ -1524,8 +1478,7 @@ impl<'a, Substate: SubstateMngTrait> ExecutiveGeneric<'a, Substate> {
                     ToRepackError::SenderDoesNotExist,
                 ));
             }
-            self.state
-                .inc_nonce(&sender, &self.spec.account_start_nonce)?;
+            self.state.inc_nonce(&sender)?;
             self.state.sub_balance(
                 &sender,
                 &actual_gas_cost,
@@ -1561,8 +1514,7 @@ impl<'a, Substate: SubstateMngTrait> ExecutiveGeneric<'a, Substate> {
             // account does not exist (since she may be sponsored). Transaction
             // execution is guaranteed. Note that inc_nonce() will create a
             // new account if the account does not exist.
-            self.state
-                .inc_nonce(&sender, &self.spec.account_start_nonce)?;
+            self.state.inc_nonce(&sender)?;
         }
 
         // Subtract the transaction fee from sender or contract.
@@ -1730,7 +1682,7 @@ impl<'a, Substate: SubstateMngTrait> ExecutiveGeneric<'a, Substate> {
                         &total_storage_limit,
                         &mut substate,
                         observer.as_state_tracer(),
-                        self.spec.account_start_nonce,
+                        &self.spec,
                         dry_run_no_charge,
                     )?
                     .into_vm_result()
@@ -1788,7 +1740,7 @@ impl<'a, Substate: SubstateMngTrait> ExecutiveGeneric<'a, Substate> {
     // post-processing.
     fn kill_process(
         &mut self, suicides: &HashSet<AddressWithSpace>,
-        tracer: &mut dyn StateTracer,
+        tracer: &mut dyn StateTracer, spec: &Spec,
     ) -> DbResult<Substate>
     {
         let mut substate = Substate::new();
@@ -1818,9 +1770,7 @@ impl<'a, Substate: SubstateMngTrait> ExecutiveGeneric<'a, Substate> {
         }
 
         let res = self.state.settle_collateral_for_all(
-            &substate,
-            tracer,
-            self.spec.account_start_nonce,
+            &substate, tracer, spec,
             // Kill process does not occupy new storage entries.
             false,
         )?;
@@ -1852,7 +1802,6 @@ impl<'a, Substate: SubstateMngTrait> ExecutiveGeneric<'a, Substate> {
                     &sponsor_address.with_native_space(),
                     &sponsor_balance_for_gas,
                     cleanup_mode(&mut substate, self.spec),
-                    self.spec.account_start_nonce,
                 )?;
                 self.state.sub_sponsor_balance_for_gas(
                     contract_address,
@@ -1870,7 +1819,6 @@ impl<'a, Substate: SubstateMngTrait> ExecutiveGeneric<'a, Substate> {
                     &sponsor_address.with_native_space(),
                     &sponsor_balance_for_collateral,
                     cleanup_mode(&mut substate, self.spec),
-                    self.spec.account_start_nonce,
                 )?;
                 self.state.sub_sponsor_balance_for_collateral(
                     contract_address,
@@ -1960,7 +1908,6 @@ impl<'a, Substate: SubstateMngTrait> ExecutiveGeneric<'a, Substate> {
                 &tx.sender(),
                 &refund_value,
                 cleanup_mode(&mut substate, self.spec),
-                self.spec.account_start_nonce,
             )?;
         };
 
@@ -1970,8 +1917,11 @@ impl<'a, Substate: SubstateMngTrait> ExecutiveGeneric<'a, Substate> {
 
         // perform suicides
 
-        let subsubstate = self
-            .kill_process(&substate.suicides(), observer.as_state_tracer())?;
+        let subsubstate = self.kill_process(
+            &substate.suicides,
+            observer.as_state_tracer(),
+            &self.spec,
+        )?;
         substate.accrue(subsubstate);
 
         // TODO should be added back after enabling dust collection
@@ -2050,8 +2000,8 @@ impl<'a, Substate: SubstateMngTrait> ExecutiveGeneric<'a, Substate> {
                     gas_charged,
                     fee: fees_value,
                     gas_sponsor_paid: refund_receiver.is_some(),
-                    logs: substate.logs().to_vec(),
-                    contracts_created: substate.contracts_created().to_vec(),
+                    logs: substate.logs.to_vec(),
+                    contracts_created: substate.contracts_created.to_vec(),
                     storage_sponsor_paid,
                     storage_collateralized,
                     storage_released,

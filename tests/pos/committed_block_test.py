@@ -25,7 +25,6 @@ class PosCommittedBlockTest(DefaultConfluxTestFramework):
         client = RpcClient(self.nodes[0])
         # wait for the first epoch to end
         wait_until(lambda: client.pos_status()["latestVoted"] is not None)
-        print(client.pos_status())
         wait_until(lambda: int(client.pos_status()["latestCommitted"], 0) >= 8)
         self.log.info("wait for empty rounds")
         self.stop_node(2)
@@ -34,19 +33,16 @@ class PosCommittedBlockTest(DefaultConfluxTestFramework):
         self.start_node(2)
         self.start_node(3)
         self.log.info("restarts")
-        print(client.pos_status())
         # wait for the next epoch
         wait_until(lambda: int(client.pos_status()["epoch"], 0) == 2)
         parent = client.pos_get_block(2)["hash"]
         for v in range(3, 11):
-            print(v)
             b = client.pos_get_block(v)
             assert_equal(b["parentHash"], parent)
             parent = b["hash"]
         wait_until(lambda: int(client.pos_status()["epoch"], 0) == 3)
         parent = client.pos_get_block(11)["hash"]
         for v in range(12, 21):
-            print(v)
             b = client.pos_get_block(v)
             assert_equal(b["parentHash"], parent)
             parent = b["hash"]

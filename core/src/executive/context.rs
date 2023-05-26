@@ -11,7 +11,7 @@ use crate::{
     bytes::Bytes,
     machine::Machine,
     observer::VmObserve,
-    state::CallStackInfo,
+    state::{CallStackInfo, State, Substate},
     vm::{
         self, ActionParams, ActionValue, CallType, Context as ContextTrait,
         ContractCreateResult, CreateContractAddress, CreateType, Env, Error,
@@ -21,7 +21,6 @@ use crate::{
 use cfx_parameters::staking::{
     code_collateral_units, DRIPS_PER_STORAGE_COLLATERAL_UNIT,
 };
-use cfx_state::{StateTrait, SubstateMngTrait, SubstateTrait};
 use cfx_types::{
     Address, AddressSpaceUtil, AddressWithSpace, Space, H256, U256,
 };
@@ -62,17 +61,16 @@ impl OriginInfo {
 pub struct Context<
     'a, /* Lifetime of transaction executive. */
     'b, /* Lifetime of call-create executive. */
-    Substate: SubstateTrait,
 > {
-    state: &'b mut dyn StateTrait<Substate = Substate>,
+    state: &'b mut State,
     callstack: &'b mut CallStackInfo,
-    local_part: &'b mut LocalContext<'a, Substate>,
+    local_part: &'b mut LocalContext<'a>,
 }
 
 /// The `LocalContext` only contains the parameters can be owned by an
 /// executive. It will be never change during the lifetime of its corresponding
 /// executive.
-pub struct LocalContext<'a, Substate: SubstateTrait> {
+pub struct LocalContext<'a> {
     pub space: Space,
     pub env: &'a Env,
     pub depth: usize,
@@ -84,7 +82,7 @@ pub struct LocalContext<'a, Substate: SubstateTrait> {
     pub static_flag: bool,
 }
 
-impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
+impl<'a, 'b> LocalContext<'a> {
     pub fn new(
         space: Space, env: &'a Env, machine: &'a Machine, spec: &'a Spec,
         depth: usize, origin: OriginInfo, substate: Substate, is_create: bool,
@@ -109,10 +107,8 @@ impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
     /// State`), the executive should activate `LocalContext` by passing in
     /// these parameters.
     pub fn activate(
-        &'b mut self, state: &'b mut dyn StateTrait<Substate = Substate>,
-        callstack: &'b mut CallStackInfo,
-    ) -> Context<'a, 'b, Substate>
-    {
+        &'b mut self, state: &'b mut State, callstack: &'b mut CallStackInfo,
+    ) -> Context<'a, 'b> {
         Context {
             state,
             local_part: self,
@@ -121,9 +117,7 @@ impl<'a, 'b, Substate: SubstateTrait> LocalContext<'a, Substate> {
     }
 }
 
-impl<'a, 'b, Substate: SubstateMngTrait> ContextTrait
-    for Context<'a, 'b, Substate>
-{
+impl<'a, 'b> ContextTrait for Context<'a, 'b> {
     fn storage_at(&self, key: &Vec<u8>) -> vm::Result<U256> {
         let caller = AddressWithSpace {
             address: self.local_part.origin.address,
@@ -131,7 +125,7 @@ impl<'a, 'b, Substate: SubstateMngTrait> ContextTrait
         };
         self.local_part
             .substate
-            .storage_at(self.state.as_state_ops(), &caller, key)
+            .storage_at(self.state, &caller, key)
             .map_err(Into::into)
     }
 
@@ -146,7 +140,7 @@ impl<'a, 'b, Substate: SubstateMngTrait> ContextTrait
             self.local_part
                 .substate
                 .set_storage(
-                    self.state.as_mut_state_ops(),
+                    self.state,
                     &caller,
                     key,
                     value,
@@ -264,13 +258,7 @@ impl<'a, 'b, Substate: SubstateMngTrait> ContextTrait
             if !self.local_part.spec.keep_unsigned_nonce
                 || params.sender != UNSIGNED_SENDER
             {
-                self.state.inc_nonce(
-                    &caller,
-                    // The sender of a CREATE call is guaranteed to exist,
-                    // therefore the start_nonce below
-                    // doesn't matter.
-                    &self.local_part.spec.contract_start_nonce,
-                )?;
+                self.state.inc_nonce(&caller)?;
             }
         }
 
@@ -379,7 +367,7 @@ impl<'a, 'b, Substate: SubstateMngTrait> ContextTrait
         }
 
         let address = self.local_part.origin.address.clone();
-        self.local_part.substate.logs_mut().push(LogEntry {
+        self.local_part.substate.logs.push(LogEntry {
             address,
             topics,
             data: data.to_vec(),
@@ -453,9 +441,7 @@ impl<'a, 'b, Substate: SubstateMngTrait> ContextTrait
 
     fn suicide(
         &mut self, refund_address: &Address, tracer: &mut dyn VmObserve,
-        account_start_nonce: U256,
-    ) -> vm::Result<()>
-    {
+    ) -> vm::Result<()> {
         if self.is_static_or_reentrancy() {
             return Err(vm::Error::MutableCallInStaticContext);
         }
@@ -467,11 +453,10 @@ impl<'a, 'b, Substate: SubstateMngTrait> ContextTrait
                 .address
                 .with_space(self.local_part.space),
             &refund_address.with_space(self.local_part.space),
-            self.state.as_mut_state_ops(),
+            self.state,
             &self.local_part.spec,
             &mut self.local_part.substate,
             tracer,
-            account_start_nonce,
         )
     }
 
@@ -528,7 +513,7 @@ impl<'a, 'b, Substate: SubstateMngTrait> ContextTrait
             env: self.local_part.env,
             spec: self.local_part.spec,
             callstack: self.callstack,
-            state: self.state.as_mut_state_ops(),
+            state: self.state,
             substate: &mut self.local_part.substate,
             static_flag: self.local_part.static_flag,
             depth: self.local_part.depth,
@@ -548,9 +533,6 @@ mod tests {
         vm::{Context as ContextTrait, Env, Spec},
     };
     use cfx_parameters::consensus::TRANSACTION_DEFAULT_EPOCH_BOUND;
-    use cfx_state::{
-        state_trait::StateOpsTrait, substate_trait::SubstateMngTrait,
-    };
     use cfx_storage::{
         new_storage_manager_for_testing, tests::FakeStateManager,
     };
@@ -817,11 +799,7 @@ mod tests {
         origin.address = contract_address;
         let contract_address_w_space = contract_address.with_native_space();
         state
-            .new_contract_with_code(
-                &contract_address_w_space,
-                U256::zero(),
-                U256::one(),
-            )
+            .new_contract_with_code(&contract_address_w_space, U256::zero())
             .expect(&concat!(file!(), ":", line!(), ":", column!()));
         state
             .init_code(
@@ -847,12 +825,7 @@ mod tests {
             );
             let mut ctx = lctx.activate(state, &mut callstack);
             let mut tracer = ();
-            ctx.suicide(
-                &refund_account,
-                &mut tracer,
-                setup.machine.spec(setup.env.number).account_start_nonce,
-            )
-            .unwrap();
+            ctx.suicide(&refund_account, &mut tracer).unwrap();
             assert_eq!(lctx.substate.suicides.len(), 1);
         }
     }

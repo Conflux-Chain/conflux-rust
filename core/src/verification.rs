@@ -28,6 +28,7 @@ use primitives::{
 };
 use rlp::Encodable;
 use rlp_derive::{RlpDecodable, RlpEncodable};
+use serde_derive::{Deserialize, Serialize};
 use std::{collections::HashSet, convert::TryInto, sync::Arc};
 use unexpected::{Mismatch, OutOfBounds};
 
@@ -116,7 +117,16 @@ pub fn compute_receipts_root(
     simple_mpt_merkle_root(&mut epoch_receipts_trie(epoch_receipts))
 }
 
-#[derive(Clone, Debug, RlpEncodable, RlpDecodable, Default, PartialEq)]
+#[derive(
+    Clone,
+    Debug,
+    RlpEncodable,
+    RlpDecodable,
+    Default,
+    PartialEq,
+    Serialize,
+    Deserialize,
+)]
 pub struct EpochReceiptProof {
     pub block_index_proof: TrieProof,
     pub block_receipt_proof: TrieProof,
@@ -753,6 +763,11 @@ mod tests {
         let proof = EpochReceiptProof::default();
         assert_eq!(proof, rlp::decode(&rlp::encode(&proof)).unwrap());
 
+        let serialized = serde_json::to_string(&proof).unwrap();
+        let deserialized: EpochReceiptProof =
+            serde_json::from_str(&serialized).unwrap();
+        assert_eq!(proof, deserialized);
+
         let node1 = TrieProofNode::new(
             Default::default(),
             Some(Box::new([0x03, 0x04, 0x05])),
@@ -794,6 +809,11 @@ mod tests {
             epoch_proof,
             rlp::decode(&rlp::encode(&epoch_proof)).unwrap()
         );
+
+        let serialized = serde_json::to_string(&epoch_proof).unwrap();
+        let deserialized: EpochReceiptProof =
+            serde_json::from_str(&serialized).unwrap();
+        assert_eq!(epoch_proof, deserialized);
     }
 
 }

@@ -11,6 +11,7 @@ use cfxcore::{
         self, query_service::TxInfo, Error as LightError, ErrorKind,
     },
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
+    verification::EpochReceiptProof,
     ConsensusGraph, LightQueryService, PeerInfo, SharedConsensusGraph,
 };
 use cfxcore_accounts::AccountProvider;
@@ -44,8 +45,8 @@ use crate::{
             EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
             PoSEconomics, Receipt as RpcReceipt, RewardInfo as RpcRewardInfo,
             RpcAddress, SendTxRequest, SponsorInfo, Status as RpcStatus,
-            SyncGraphStates, TokenSupplyInfo, Transaction as RpcTransaction,
-            VoteParamsInfo, WrapTransaction,
+            StorageCollateralInfo, SyncGraphStates, TokenSupplyInfo,
+            Transaction as RpcTransaction, VoteParamsInfo, WrapTransaction,
         },
         RpcBoxFuture, RpcResult,
     },
@@ -1146,6 +1147,7 @@ impl Cfx for CfxHandler {
         fn estimate_gas_and_collateral(&self, request: CallRequest, epoch_num: Option<EpochNumber>) -> JsonRpcResult<EstimateGasAndCollateralResponse>;
         fn get_block_reward_info(&self, num: EpochNumber) -> JsonRpcResult<Vec<RpcRewardInfo>>;
         fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
+        fn get_collateral_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<StorageCollateralInfo>;
         fn get_vote_params(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<VoteParamsInfo>;
         fn get_pos_reward_by_epoch(&self, epoch: EpochNumber) -> JsonRpcResult<Option<PoSEpochReward>>;
     }
@@ -1253,7 +1255,7 @@ impl LocalRpc for DebugRpcImpl {
         fn consensus_graph_state(&self) -> JsonRpcResult<ConsensusGraphStates>;
         fn current_sync_phase(&self) -> JsonRpcResult<String>;
         fn epoch_receipts(&self, epoch: BlockHashOrEpochNumber, include_eth_recepits: Option<bool>) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
-        fn epoch_receipt_proof_by_transaction(&self, tx_hash: H256) -> JsonRpcResult<Option<String>>;
+        fn epoch_receipt_proof_by_transaction(&self, tx_hash: H256) -> JsonRpcResult<Option<EpochReceiptProof>>;
         fn sign_transaction(&self, tx: SendTxRequest, password: Option<String>) -> JsonRpcResult<String>;
         fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
         fn transactions_by_epoch(&self, epoch_number: U64) -> JsonRpcResult<Vec<WrapTransaction>>;
