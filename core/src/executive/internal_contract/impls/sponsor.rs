@@ -5,10 +5,9 @@
 use crate::{
     internal_bail,
     observer::{AddressPocket, VmObserve},
-    state::cleanup_mode,
+    state::{cleanup_mode, State, Substate},
     vm::{self, ActionParams, Spec},
 };
-use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{Address, AddressSpaceUtil, U256};
 
 use super::super::components::InternalRefContext;
@@ -17,7 +16,6 @@ use super::super::components::InternalRefContext;
 pub fn set_sponsor_for_gas(
     contract_address: Address, upper_bound: U256, params: &ActionParams,
     context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
-    account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
@@ -33,11 +31,8 @@ pub fn set_sponsor_for_gas(
         internal_bail!("not allowed to sponsor non-contract account");
     }
 
-    let (spec, state, substate): (
-        &Spec,
-        &mut dyn StateOpsTrait,
-        &mut dyn SubstateTrait,
-    ) = (context.spec, context.state, context.substate);
+    let (spec, state, substate): (&Spec, &mut State, &mut Substate) =
+        (context.spec, context.state, context.substate);
 
     let sponsor_balance = state.balance(&params.address.with_native_space())?;
 
@@ -82,7 +77,6 @@ pub fn set_sponsor_for_gas(
                 &prev_sponsor.as_ref().unwrap().with_native_space(),
                 &prev_sponsor_balance,
                 cleanup_mode(substate, &spec),
-                account_start_nonce,
             )?;
         }
         tracer.trace_internal_transfer(
@@ -136,7 +130,6 @@ pub fn set_sponsor_for_gas(
 pub fn set_sponsor_for_collateral(
     contract_address: Address, params: &ActionParams,
     context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
-    account_start_nonce: U256,
 ) -> vm::Result<()>
 {
     let sponsor = &params.sender;
@@ -152,11 +145,8 @@ pub fn set_sponsor_for_collateral(
         internal_bail!("not allowed to sponsor non-contract account");
     }
 
-    let (spec, state, substate): (
-        &Spec,
-        &mut dyn StateOpsTrait,
-        &mut dyn SubstateTrait,
-    ) = (context.spec, context.state, context.substate);
+    let (spec, state, substate): (&Spec, &mut State, &mut Substate) =
+        (context.spec, context.state, context.substate);
 
     let sponsor_balance = state.balance(&params.address.with_native_space())?;
 
@@ -168,11 +158,11 @@ pub fn set_sponsor_for_collateral(
     let prev_sponsor_balance =
         state.sponsor_balance_for_collateral(&contract_address)?;
     let collateral_for_storage =
-        state.collateral_for_storage(&contract_address)?;
+        state.token_collateral_for_storage(&contract_address)?;
     // If previous sponsor is not the same as current sponsor, we should try
     // to replace the sponsor. Otherwise, we should try to charge
     // `sponsor_balance`.
-    if prev_sponsor.as_ref().map_or_else(
+    let converted_storage_point = if prev_sponsor.as_ref().map_or_else(
         || !sponsor.is_zero(),
         |prev_sponsor| prev_sponsor != sponsor,
     ) {
@@ -197,7 +187,6 @@ pub fn set_sponsor_for_collateral(
                 &prev_sponsor.with_native_space(),
                 &(prev_sponsor_balance + collateral_for_storage),
                 cleanup_mode(substate, &spec),
-                account_start_nonce,
             )?;
         } else {
             assert_eq!(collateral_for_storage, U256::zero());
@@ -216,7 +205,8 @@ pub fn set_sponsor_for_collateral(
             &contract_address,
             sponsor,
             &(sponsor_balance - collateral_for_storage),
-        )?;
+            spec.cip107,
+        )?
     } else {
         tracer.trace_internal_transfer(
             AddressPocket::Balance(params.address.with_space(params.space)),
@@ -232,7 +222,15 @@ pub fn set_sponsor_for_collateral(
             &contract_address,
             sponsor,
             &(sponsor_balance + prev_sponsor_balance),
-        )?;
+            spec.cip107,
+        )?
+    };
+    if !converted_storage_point.is_zero() {
+        tracer.trace_internal_transfer(
+            AddressPocket::SponsorBalanceForStorage(contract_address),
+            AddressPocket::MintBurn,
+            converted_storage_point,
+        );
     }
     Ok(())
 }
@@ -241,7 +239,7 @@ pub fn set_sponsor_for_collateral(
 /// `addPrivilegeByAdmin(address,address[])`.
 pub fn add_privilege(
     contract: Address, addresses: Vec<Address>, params: &ActionParams,
-    state: &mut dyn StateOpsTrait,
+    state: &mut State,
 ) -> vm::Result<()>
 {
     for user_addr in addresses {
@@ -259,7 +257,7 @@ pub fn add_privilege(
 /// `removePrivilegeByAdmin(address,address[])`.
 pub fn remove_privilege(
     contract: Address, addresses: Vec<Address>, params: &ActionParams,
-    state: &mut dyn StateOpsTrait,
+    state: &mut State,
 ) -> vm::Result<()>
 {
     for user_addr in addresses {

@@ -259,6 +259,7 @@ impl PosLedgerDB {
             COMMITTED_BLOCK_CF_NAME,
             COMMITTED_BLOCK_BY_VIEW_CF_NAME,
             LEDGER_INFO_BY_VOTED_BLOCK_CF_NAME,
+            BLOCK_BY_EPOCH_AND_ROUND_CF_NAME,
         ]
     }
 
@@ -1071,6 +1072,13 @@ impl DBReaderForPoW for PosLedgerDB {
         &self, block_id: &HashValue,
     ) -> Result<LedgerInfoWithSignatures> {
         self.ledger_store.get_ledger_info_by_voted_block(block_id)
+    }
+
+    fn get_block_hash_by_epoch_and_round(
+        &self, epoch: u64, round: u64,
+    ) -> Result<HashValue> {
+        self.ledger_store
+            .get_block_hash_by_epoch_and_round(epoch, round)
     }
 }
 

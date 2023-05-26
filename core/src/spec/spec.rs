@@ -23,8 +23,6 @@ use std::collections::BTreeMap;
 
 #[derive(Debug)]
 pub struct CommonParams {
-    /// Account start nonce.
-    pub account_start_nonce: U256,
     /// Maximum size of extra data.
     pub maximum_extra_data_size: usize,
     /// Network id.
@@ -88,6 +86,8 @@ pub struct TransitionsBlockNumber {
     pub cip98: BlockNumber,
     /// CIP-105: PoS staking based minimal votes.
     pub cip105: BlockNumber,
+    /// CIP-107: Reduce the refunded storage collateral.
+    pub cip107: BlockNumber,
     pub cip_sigma_fix: BlockNumber,
 }
 
@@ -112,7 +112,6 @@ impl Default for CommonParams {
         let mut base_block_rewards = BTreeMap::new();
         base_block_rewards.insert(0, INITIAL_BASE_MINING_REWARD_IN_UCFX.into());
         CommonParams {
-            account_start_nonce: 0x00.into(),
             maximum_extra_data_size: 0x20,
             network_id: 0x1,
             chain_id: ChainIdParamsInner::new_simple(AllChainID::new(1, 1)),

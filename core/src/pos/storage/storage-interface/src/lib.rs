@@ -543,4 +543,8 @@ pub trait DBReaderForPoW: Send + Sync + DbReader {
     fn get_ledger_info_by_voted_block(
         &self, block_id: &HashValue,
     ) -> Result<LedgerInfoWithSignatures>;
+
+    fn get_block_hash_by_epoch_and_round(
+        &self, epoch: u64, round: u64,
+    ) -> Result<HashValue>;
 }

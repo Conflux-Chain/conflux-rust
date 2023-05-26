@@ -30,6 +30,7 @@ pub use self::space_util::AddressSpaceUtil;
     Serialize,
     Deserialize,
 )]
+#[serde(rename_all = "lowercase")]
 pub enum Space {
     Native,
     Ethereum,
