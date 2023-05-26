@@ -40,6 +40,7 @@ use crate::{
     change_set::ChangeSet,
     errors::DiemDbError,
     schema::{
+        block_by_epoch_and_round::BlockByEpochAndRoundSchema,
         committed_block::CommittedBlockSchema,
         committed_block_by_view::CommittedBlockByViewSchema,
         epoch_by_version::EpochByVersionSchema, ledger_info::LedgerInfoSchema,
@@ -438,6 +439,7 @@ impl LedgerStore {
     ) -> Result<()>
     {
         let ledger_info = ledger_info_with_sigs.ledger_info();
+        diem_debug!("put_ledger_info: {:?}", ledger_info);
 
         if ledger_info.ends_epoch() {
             // This is the last version of the current epoch, update the epoch
@@ -523,6 +525,10 @@ impl LedgerStore {
     ) -> Result<()> {
         diem_trace!("put_committed_block {:?}", block);
         cs.batch.put::<CommittedBlockSchema>(&block.hash, block)?;
+        cs.batch.put::<BlockByEpochAndRoundSchema>(
+            &(block.epoch, block.round),
+            &block.hash,
+        )?;
         if !block.is_skipped {
             cs.batch
                 .put::<CommittedBlockByViewSchema>(&block.view, &block.hash)?;
@@ -577,6 +583,20 @@ impl LedgerStore {
                 DiemDbError::NotFound(format!(
                     "committed block of view {}",
                     view
+                ))
+                .into()
+            })
+    }
+
+    pub fn get_block_hash_by_epoch_and_round(
+        &self, epoch: u64, round: u64,
+    ) -> Result<HashValue> {
+        self.db
+            .get::<BlockByEpochAndRoundSchema>(&(epoch, round))?
+            .ok_or_else(|| {
+                DiemDbError::NotFound(format!(
+                    "committed block of epoch {} round {}",
+                    epoch, round
                 ))
                 .into()
             })
