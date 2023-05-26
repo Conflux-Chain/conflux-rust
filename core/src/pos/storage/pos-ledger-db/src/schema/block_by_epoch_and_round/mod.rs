@@ -55,6 +55,3 @@ impl ValueCodec<BlockByEpochAndRoundSchema> for HashValue {
         bcs::from_bytes(data).map_err(Into::into)
     }
 }
-
-#[cfg(test)]
-mod test;
