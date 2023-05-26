@@ -1,8 +1,7 @@
 use crate::{
-    evm::Spec, executive::InternalContractMap,
+    executive::InternalContractMap,
     spec::genesis::initialize_internal_contract_accounts, state::State,
 };
-use cfx_state::StateTrait;
 use cfx_statedb::StateDb;
 use cfx_storage::{StateIndex, StorageManager, StorageManagerTrait};
 use primitives::EpochId;
@@ -19,7 +18,6 @@ pub fn get_state_for_genesis_write(
     initialize_internal_contract_accounts(
         &mut state,
         InternalContractMap::initialize_for_test().as_slice(),
-        Spec::new_spec_for_test().contract_start_nonce,
     );
     let genesis_epoch_id = EpochId::default();
     state

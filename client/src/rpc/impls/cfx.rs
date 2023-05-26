@@ -8,7 +8,6 @@ use crate::rpc::types::{
     TokenSupplyInfo, VoteParamsInfo, WrapTransaction,
 };
 use blockgen::BlockGenerator;
-use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::StateDbExt;
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H256, H520, U128, U256,
@@ -18,7 +17,7 @@ use cfxcore::{
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     state_exposer::STATE_EXPOSER,
-    verification::compute_epoch_receipt_proof,
+    verification::{compute_epoch_receipt_proof, EpochReceiptProof},
     vm, ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
@@ -66,14 +65,16 @@ use crate::{
             EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
             PackedOrExecuted, Receipt as RpcReceipt,
             RewardInfo as RpcRewardInfo, SendTxRequest, Status as RpcStatus,
-            SyncGraphStates, Transaction as RpcTransaction,
+            StorageCollateralInfo, SyncGraphStates,
+            Transaction as RpcTransaction,
         },
         RpcResult,
     },
 };
 use cfx_addr::Network;
 use cfx_parameters::{
-    consensus_internal::REWARD_EPOCH_COUNT, staking::BLOCKS_PER_YEAR,
+    consensus_internal::REWARD_EPOCH_COUNT,
+    staking::{BLOCKS_PER_YEAR, DRIPS_PER_STORAGE_COLLATERAL_UNIT},
 };
 use cfx_storage::state::StateDbGetOriginalMethods;
 use cfxcore::{
@@ -1528,6 +1529,26 @@ impl RpcImpl {
         })
     }
 
+    pub fn get_collateral_info(
+        &self, epoch: Option<EpochNumber>,
+    ) -> RpcResult<StorageCollateralInfo> {
+        let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
+        let state = State::new(
+            self.consensus
+                .get_state_db_by_epoch_number(epoch, "epoch")?,
+        )?;
+        let total_storage_tokens = state.total_storage_tokens();
+        let converted_storage_points = state.converted_storage_points()
+            / *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+        let used_storage_points =
+            state.used_storage_points() / *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+        Ok(StorageCollateralInfo {
+            total_storage_tokens,
+            converted_storage_points,
+            used_storage_points,
+        })
+    }
+
     pub fn get_vote_params(
         &self, epoch: Option<EpochNumber>,
     ) -> RpcResult<VoteParamsInfo> {
@@ -1663,7 +1684,7 @@ impl RpcImpl {
 
     fn epoch_receipt_proof_by_transaction(
         &self, tx_hash: H256,
-    ) -> JsonRpcResult<Option<String>> {
+    ) -> JsonRpcResult<Option<EpochReceiptProof>> {
         let (block_hash, tx_index_in_block) =
             match self.consensus.get_transaction_info_by_hash(&tx_hash) {
                 None => {
@@ -1751,8 +1772,7 @@ impl RpcImpl {
             tx_index_in_block,
         );
 
-        let proof = rlp::encode(&epoch_receipt_proof);
-        Ok(Some(format!("0x{}", proof.to_hex::<String>())))
+        Ok(Some(epoch_receipt_proof))
     }
 
     fn transactions_by_epoch(
@@ -2112,6 +2132,7 @@ impl Cfx for CfxHandler {
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
             fn storage_root(&self, address: RpcAddress, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
+            fn get_collateral_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<StorageCollateralInfo>;
             fn get_vote_params(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<VoteParamsInfo>;
         }
     }
@@ -2229,7 +2250,7 @@ impl LocalRpc for LocalRpcImpl {
             fn current_sync_phase(&self) -> JsonRpcResult<String>;
             fn consensus_graph_state(&self) -> JsonRpcResult<ConsensusGraphStates>;
             fn epoch_receipts(&self, epoch: BlockHashOrEpochNumber, include_eth_recepits: Option<bool>,) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
-            fn epoch_receipt_proof_by_transaction(&self, tx_hash: H256) -> JsonRpcResult<Option<String>>;
+            fn epoch_receipt_proof_by_transaction(&self, tx_hash: H256) -> JsonRpcResult<Option<EpochReceiptProof>>;
             fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
             fn send_transaction(
                 &self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<H256>;
