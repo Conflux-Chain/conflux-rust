@@ -50,9 +50,12 @@ pub struct PubSubClient {
     handler: Arc<ChainNotificationHandler>,
     heads_subscribers: Arc<RwLock<Subscribers<Client>>>,
     logs_subscribers: Arc<RwLock<Subscribers<(Client, LogFilter)>>>,
+    pending_transactions_subscribers: Arc<RwLock<Subscribers<Client>>>,
     epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
+    new_block_hashes: Arc<Channel<H256>>,
     consensus: SharedConsensusGraph,
     heads_loop_started: Arc<RwLock<bool>>,
+    pending_transactions_loop_started: Arc<RwLock<bool>>,
 }
 
 impl PubSubClient {
@@ -64,6 +67,7 @@ impl PubSubClient {
     {
         let heads_subscribers = Arc::new(RwLock::new(Subscribers::default()));
         let logs_subscribers = Arc::new(RwLock::new(Subscribers::default()));
+        let pending_transactions_subscribers     = Arc::new(RwLock::new(Subscribers::default()));
 
         let handler = Arc::new(ChainNotificationHandler {
             executor,
@@ -76,9 +80,12 @@ impl PubSubClient {
             handler,
             heads_subscribers,
             logs_subscribers,
+            pending_transactions_subscribers,
+            new_block_hashes: notifications.new_block_hashes.clone(),
             epochs_ordered: notifications.epochs_ordered.clone(),
             consensus: consensus.clone(),
             heads_loop_started: Arc::new(RwLock::new(false)),
+            pending_transactions_loop_started: Arc::new(RwLock::new(false)),
         }
     }
 
@@ -89,6 +96,32 @@ impl PubSubClient {
 
     pub fn epochs_ordered(&self) -> Arc<Channel<(u64, Vec<H256>)>> {
         self.epochs_ordered.clone()
+    }
+
+    fn start_newPendingTransactions_loop(&self) {
+        let mut loop_started = self.pending_transactions_loop_started.write();
+        if *loop_started {
+            return;
+        }
+    
+        debug!("start_pending_transactions_loop");
+        *loop_started = true;
+    
+        let pending_tx_subscribers: Arc<parking_lot::lock_api::RwLock<parking_lot::RawRwLock, Subscribers<Sink<pubsub::Result>>>> = self.pending_transactions_subscribers.clone();
+    
+        let mut receiver = self.new_block_hashes.subscribe();
+    
+        let fut = async move {
+            while let Some(new_tx) = receiver.recv().await {
+                debug!("new_pending_transactions_loop: {:?}", new_tx);
+    
+                // publish new pending transaction
+                // pending_tx_subscribers.notify(new_tx);
+            }
+        };
+    
+        let fut = fut.unit_error().boxed().compat();
+        self.handler.executor.spawn(fut);
     }
 
     fn start_heads_loop(&self) {
@@ -542,6 +575,13 @@ impl PubSub for PubSubClient {
     )
     {
         let error = match (kind, params) {
+             // --------- newPendingTransactions ---------
+            (pubsub::Kind::NewPendingTransactions, None) => {
+                info!("eth pubsub newPendingTransactions");
+                self.pending_transactions_subscribers.write().push(subscriber);
+                self.start_newPendingTransactions_loop();
+                return;
+            }
             // --------- newHeads ---------
             (pubsub::Kind::NewHeads, None) => {
                 info!("eth pubsub newheads");
