@@ -29,8 +29,8 @@ pub struct ConsensusConfig {
     // response (in milliseconds)
     pub mempool_txn_pull_timeout_ms: u64,
     pub round_initial_timeout_ms: u64,
-    pub hard_fork_round_initial_timeout_ms: u64,
-    pub hard_fork_epoch: u64,
+    pub cip113_round_initial_timeout_ms: u64,
+    pub cip113_transition_epoch: u64,
 
     pub proposer_type: ConsensusProposerType,
     pub safety_rules: SafetyRulesConfig,
@@ -57,8 +57,8 @@ impl Default for ConsensusConfig {
             // TODO(lpl): Decide value.
             // 60 epochs should have been generated in 4 minutes.
             round_initial_timeout_ms: 60_000,
-            hard_fork_round_initial_timeout_ms: 30_000,
-            hard_fork_epoch: u64::MAX,
+            cip113_round_initial_timeout_ms: 30_000,
+            cip113_transition_epoch: u64::MAX,
             proposer_type: ConsensusProposerType::VrfProposer,
             safety_rules: SafetyRulesConfig::default(),
             sync_only: false,
