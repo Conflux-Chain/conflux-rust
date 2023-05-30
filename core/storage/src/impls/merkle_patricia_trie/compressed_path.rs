@@ -366,10 +366,14 @@ impl Serialize for CompressedPathRaw {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
         let path_mask = self.path_mask();
+        let path_mask = format!("0x{:x}", path_mask);
         let path_slice = self.path_slice();
         let mut struc = serializer.serialize_struct("CompressedPathRaw", 2)?;
         struc.serialize_field("pathMask", &path_mask)?;
-        struc.serialize_field("pathSlice", path_slice)?;
+        struc.serialize_field(
+            "pathSlice",
+            &("0x".to_owned() + path_slice.to_hex::<String>().as_ref()),
+        )?;
 
         struc.end()
     }
@@ -453,10 +457,31 @@ impl<'a> Visitor<'a> for CompressedPathRawVisitor {
             }
         }
 
-        let path_mask =
+        let path_mask: String =
             path_mask.ok_or_else(|| de::Error::missing_field("pathMask"))?;
-        let path_slice =
+
+        let path_mask = if let Some(s) = path_mask.strip_prefix("0x") {
+            u8::from_str_radix(&s, 16).map_err(|e| {
+                de::Error::custom(format!("pathMask: invalid hex: {}", e))
+            })?
+        } else {
+            return Err(de::Error::custom(
+                "pathMask: invalid format. Expected a 0x-prefixed hex string",
+            ));
+        };
+
+        let path_slice: String =
             path_slice.ok_or_else(|| de::Error::missing_field("pathSlice"))?;
+
+        let path_slice: Vec<u8> = if let (Some(s), true) =
+            (path_slice.strip_prefix("0x"), path_slice.len() & 1 == 0)
+        {
+            FromHex::from_hex(s).map_err(|e| {
+                de::Error::custom(format!("pathSlice: invalid hex: {}", e))
+            })?
+        } else {
+            return Err(de::Error::custom("pathSlice: invalid format. Expected a 0x-prefixed hex string with even length"));
+        };
 
         Ok((path_mask, path_slice))
     }
@@ -502,6 +527,7 @@ impl<'a> Borrow<dyn CompressedPathTrait + 'a> for CompressedPathRaw {
 
 use super::maybe_in_place_byte_array::*;
 use rlp::*;
+use rustc_hex::{FromHex, ToHex};
 use serde::{
     de::{self, MapAccess, Visitor},
     ser::SerializeStruct,
