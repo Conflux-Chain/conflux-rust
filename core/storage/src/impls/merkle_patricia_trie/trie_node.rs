@@ -281,10 +281,16 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
     where S: Serializer {
         let mut state = serializer.serialize_struct("VanillaTrieNode", 4)?;
         state.serialize_field("compressedPath", &self.compressed_path)?;
-        state.serialize_field(
-            "mptValue",
-            &self.value_as_slice().into_option(),
-        )?;
+
+        let val = match &self.mpt_value {
+            MptValue::None => None,
+            MptValue::TombStone => Some("".to_owned()),
+            MptValue::Some(v) => {
+                Some("0x".to_owned() + v.as_ref().to_hex::<String>().as_ref())
+            }
+        };
+
+        state.serialize_field("mptValue", &val)?;
         state
             .serialize_field("childrenTable", self.get_children_table_ref())?;
         state.serialize_field("merkleHash", self.get_merkle())?;
@@ -401,8 +407,28 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
 
         let compressed_path = compressed_path
             .ok_or_else(|| de::Error::missing_field("compressedPath"))?;
-        let mpt_value: Option<Vec<u8>> =
+        let mpt_value: Option<String> =
             mpt_value.ok_or_else(|| de::Error::missing_field("mptValue"))?;
+        let mpt_value: Option<Vec<u8>> = match mpt_value {
+            Some(v) => {
+                if v.is_empty() {
+                    Some(vec![])
+                } else if let (Some(s), true) =
+                    (v.strip_prefix("0x"), v.len() & 1 == 0)
+                {
+                    Some(FromHex::from_hex(s).map_err(|e| {
+                        de::Error::custom(format!(
+                            "mptValue: invalid hex: {}",
+                            e
+                        ))
+                    })?)
+                } else {
+                    return Err(de::Error::custom("mptValue: invalid format. Expected a 0x-prefixed hex string with even length"));
+                }
+            }
+            _ => None,
+        };
+
         let children_table = children_table
             .ok_or_else(|| de::Error::missing_field("childrenTable"))?;
         let merkle_hash = merkle_hash
@@ -426,6 +452,7 @@ use super::{
 };
 use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
 use rlp::*;
+use rustc_hex::{FromHex, ToHex};
 use serde::{
     de::{self, MapAccess, Visitor},
     ser::SerializeStruct,
