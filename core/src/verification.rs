@@ -127,6 +127,7 @@ pub fn compute_receipts_root(
     Serialize,
     Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 pub struct EpochReceiptProof {
     pub block_index_proof: TrieProof,
     pub block_receipt_proof: TrieProof,
@@ -811,6 +812,7 @@ mod tests {
         );
 
         let serialized = serde_json::to_string(&epoch_proof).unwrap();
+        println!("{}", serialized);
         let deserialized: EpochReceiptProof =
             serde_json::from_str(&serialized).unwrap();
         assert_eq!(epoch_proof, deserialized);
