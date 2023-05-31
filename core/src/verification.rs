@@ -127,6 +127,7 @@ pub fn compute_receipts_root(
     Serialize,
     Deserialize,
 )]
+#[serde(rename_all = "camelCase")]
 pub struct EpochReceiptProof {
     pub block_index_proof: TrieProof,
     pub block_receipt_proof: TrieProof,
