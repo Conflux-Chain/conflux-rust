@@ -812,7 +812,6 @@ mod tests {
         );
 
         let serialized = serde_json::to_string(&epoch_proof).unwrap();
-        println!("{}", serialized);
         let deserialized: EpochReceiptProof =
             serde_json::from_str(&serialized).unwrap();
         assert_eq!(epoch_proof, deserialized);
