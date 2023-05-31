@@ -195,7 +195,7 @@ impl EpochManager {
         // 1.5^6 ~= 11
         // Timeout goes from initial_timeout to initial_timeout*11 in 6 steps
         let base_interval = Duration::from_millis(
-            if epoch < self.config.round_initial_timeout_ms {
+            if epoch < self.config.cip113_transition_epoch {
                 self.config.round_initial_timeout_ms
             } else {
                 self.config.cip113_round_initial_timeout_ms
