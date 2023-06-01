@@ -273,15 +273,15 @@ impl SimpleExecutionTrait for DeployEip1820 {
             &address,
             /* admin */ &Address::zero(),
             /* balance */ U256::zero(),
-            /* nonce */ U256::one(),
             Some(STORAGE_LAYOUT_REGULAR_V0),
+            context.spec.cip107,
         )?;
         context.state.init_code(
             &address,
             eip_1820::BYTE_CODE.clone(),
             Address::zero(),
         )?;
-        context.substate.contracts_created_mut().push(address);
+        context.substate.contracts_created.push(address);
         Ok(())
     }
 }

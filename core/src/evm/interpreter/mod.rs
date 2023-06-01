@@ -992,11 +992,7 @@ impl<Cost: CostType> Interpreter<Cost> {
             instructions::SUICIDE => {
                 let address = self.stack.pop_back();
                 let refund_address = u256_to_address(&address);
-                context.suicide(
-                    &refund_address,
-                    tracer,
-                    context.spec().account_start_nonce,
-                )?;
+                context.suicide(&refund_address, tracer)?;
                 return Ok(InstructionResult::StopExecution);
             }
             instructions::LOG0

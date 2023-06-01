@@ -23,7 +23,7 @@ class EvmTx2ReceiptTest(Web3Base):
 
         x = b32_address_to_hex("NET10:TYPE.USER:AAR8JZYBZV0FHZREAV49SYXNZUT8S0JT1ASMXX99XH")
         y = b32_address_to_hex('NET10:TYPE.BUILTIN:AAEJUAAAAAAAAAAAAAAAAAAAAAAAAAAAA27GYVFYR7')
-        ret = self.nodes[0].cfx_getTransactionsByEpoch("0x1")
+        ret = self.nodes[0].debug_getTransactionsByEpoch("0x1")
         assert_equal(len(ret), 1)
 
         nonce = self.w3.eth.getTransactionCount(self.evmAccount.address)
@@ -53,8 +53,8 @@ class EvmTx2ReceiptTest(Web3Base):
         # eth_call with zero sender should work (#2472)
         self.nodes[0].eth_call({ "from": "0x0000000000000000000000000000000000000000" })
 
-        ret1 = self.nodes[0].cfx_getTransactionsByEpoch(hex(receipt["blockNumber"]))
-        ret2 = self.nodes[0].cfx_getTransactionsByBlock(encode_hex_0x(tx["blockHash"]))
+        ret1 = self.nodes[0].debug_getTransactionsByEpoch(hex(receipt["blockNumber"]))
+        ret2 = self.nodes[0].debug_getTransactionsByBlock(encode_hex_0x(tx["blockHash"]))
         assert_equal(len(ret1), 1)
         assert_equal(len(ret2), 1)
         assert_equal(ret1[0], ret2[0])

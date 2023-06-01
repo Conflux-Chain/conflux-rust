@@ -4,13 +4,6 @@
 
 use std::convert::TryInto;
 
-use crate::internal_bail;
-use cfx_parameters::consensus_internal::DAO_MIN_VOTE_PERCENTAGE;
-use cfx_state::state_trait::StateOpsTrait;
-use cfx_statedb::Result as DbResult;
-use cfx_types::{Address, U256, U512};
-use lazy_static::lazy_static;
-
 use crate::{
     executive::internal_contract::{
         components::SolidityEventTrait,
@@ -18,14 +11,20 @@ use crate::{
             current_pos_staking_for_votes, settled_pos_staking_for_votes,
         },
     },
-    state::power_two_fractional,
+    internal_bail,
+    state::{power_two_fractional, State},
     vm::{self, ActionParams, Spec},
 };
+use cfx_parameters::consensus_internal::DAO_MIN_VOTE_PERCENTAGE;
+use cfx_statedb::Result as DbResult;
+use cfx_types::{Address, U256, U512};
+use lazy_static::lazy_static;
 
 use super::super::{
     components::InternalRefContext, contracts::params_control::*,
     impls::staking::get_vote_power,
 };
+pub use system_storage_key::storage_point_prop;
 
 pub fn cast_vote(
     address: Address, version: u64, votes: Vec<Vote>, params: &ActionParams,
@@ -52,7 +51,7 @@ pub fn cast_vote(
 
     let mut vote_counts = [None; PARAMETER_INDEX_MAX];
     for vote in votes {
-        if vote.index >= PARAMETER_INDEX_MAX as u16 {
+        if vote.index >= params_index_max(context.spec) as u16 {
             internal_bail!("invalid vote index or opt_index");
         }
         let entry = &mut vote_counts[vote.index as usize];
@@ -72,7 +71,7 @@ pub fn cast_vote(
         // If this is the first vote in the version, even for the not-voted
         // parameters, we still reset the account's votes from previous
         // versions.
-        for index in 0..PARAMETER_INDEX_MAX {
+        for index in 0..params_index_max(context.spec) {
             if vote_counts[index].is_none() {
                 vote_counts[index] = Some([U256::zero(); OPTION_INDEX_MAX]);
             }
@@ -86,7 +85,7 @@ pub fn cast_vote(
         context.state,
     )?;
     debug!("vote_power:{}", vote_power);
-    for index in 0..PARAMETER_INDEX_MAX {
+    for index in 0..params_index_max(context.spec) {
         if vote_counts[index].is_none() {
             continue;
         }
@@ -194,7 +193,7 @@ pub fn read_vote(
     let deprecated_vote = version != current_voting_version;
 
     let mut votes_list = Vec::new();
-    for index in 0..PARAMETER_INDEX_MAX {
+    for index in 0..params_index_max(context.spec) {
         let mut param_vote = [U256::zero(); OPTION_INDEX_MAX];
         if !deprecated_vote {
             for opt_index in 0..OPTION_INDEX_MAX {
@@ -236,7 +235,7 @@ pub fn total_votes(
     };
 
     let mut answer = vec![];
-    for x in 0..PARAMETER_INDEX_MAX {
+    for x in 0..params_index_max(context.spec) {
         let slot_entry = &votes_entries[x];
         answer.push(Vote {
             index: x as u16,
@@ -321,8 +320,8 @@ impl ParamVoteCount {
         }
     }
 
-    pub fn from_state<T: StateOpsTrait, U: AsRef<[u8]>>(
-        state: &T, slot_entry: &[U; 3],
+    pub fn from_state<U: AsRef<[u8]>>(
+        state: &State, slot_entry: &[U; 3],
     ) -> DbResult<Self> {
         Ok(ParamVoteCount {
             unchange: state.get_system_storage(
@@ -402,12 +401,13 @@ impl ParamVoteCount {
 pub struct AllParamsVoteCount {
     pub pow_base_reward: ParamVoteCount,
     pub pos_reward_interest: ParamVoteCount,
+    pub storage_point_prop: ParamVoteCount,
 }
 
 /// If the vote counts are not initialized, all counts will be zero, and the
 /// parameters will be unchanged.
-pub fn get_settled_param_vote_count<T: StateOpsTrait>(
-    state: &T,
+pub fn get_settled_param_vote_count(
+    state: &State,
 ) -> DbResult<AllParamsVoteCount> {
     let pow_base_reward = ParamVoteCount::from_state(
         state,
@@ -417,23 +417,29 @@ pub fn get_settled_param_vote_count<T: StateOpsTrait>(
         state,
         &SETTLED_VOTES_ENTRIES[POS_REWARD_INTEREST_RATE_INDEX as usize],
     )?;
+    let storage_point_prop = ParamVoteCount::from_state(
+        state,
+        &SETTLED_VOTES_ENTRIES[STORAGE_POINT_PROP_INDEX as usize],
+    )?;
     Ok(AllParamsVoteCount {
         pow_base_reward,
         pos_reward_interest,
+        storage_point_prop,
     })
 }
 
-pub fn get_settled_pos_staking_for_votes<T: StateOpsTrait>(
-    state: &T,
-) -> DbResult<U256> {
+pub fn get_settled_pos_staking_for_votes(state: &State) -> DbResult<U256> {
     state.get_system_storage(&settled_pos_staking_for_votes())
 }
 
 /// Move the next vote counts into settled and reset the counts.
 /// `set_pos_staking` is for compatibility with the Testnet.
-pub fn settle_current_votes<T: StateOpsTrait>(
-    state: &mut T, set_pos_staking: bool,
+pub fn settle_current_votes(
+    state: &mut State, set_pos_staking: bool,
 ) -> DbResult<()> {
+    // Here using `PARAMETER_INDEX_MAX` without knowing the block_number is okay
+    // because if the new parameters have not been enabled, their votes will
+    // be zero and setting them will be no-op.
     for index in 0..PARAMETER_INDEX_MAX {
         for opt_index in 0..OPTION_INDEX_MAX {
             let vote_count = state
@@ -461,6 +467,14 @@ pub fn settle_current_votes<T: StateOpsTrait>(
         )?;
     }
     Ok(())
+}
+
+pub fn params_index_max(spec: &Spec) -> usize {
+    if spec.cip107 {
+        PARAMETER_INDEX_MAX
+    } else {
+        PARAMETER_INDEX_MAX - 1
+    }
 }
 
 /// Solidity variable sequences.
@@ -496,7 +510,7 @@ mod storage_key {
     pub fn votes(
         address: &Address, index: usize, opt_index: usize,
     ) -> [u8; 32] {
-        const TOPIC_OFFSET: [usize; 2] = [1, 2];
+        const TOPIC_OFFSET: [usize; 3] = [1, 2, 3];
 
         // Position of `votes`
         let base = U256::from(VOTES_SLOT);
@@ -540,6 +554,7 @@ mod system_storage_key {
     const SETTLED_VOTES_SLOT: usize = 1;
     const CURRENT_POS_STAKING_SLOT: usize = 2;
     const SETTLED_POS_STAKING_SLOT: usize = 3;
+    const STORAGE_POINT_PROP_SLOT: usize = 4;
 
     fn vote_stats(base: U256, index: usize, opt_index: usize) -> U256 {
         // Position of `.<topic>` (static slot)
@@ -582,9 +597,16 @@ mod system_storage_key {
     }
 
     pub(super) fn settled_pos_staking_for_votes() -> [u8; 32] {
-        // Position of `current_pos_staking` (static slot)
+        // Position of `settled_pos_staking` (static slot)
         let base = base_slot(*PARAMS_CONTROL_CONTRACT_ADDRESS)
             + U256::from(SETTLED_POS_STAKING_SLOT);
+        u256_to_array(base)
+    }
+
+    pub fn storage_point_prop() -> [u8; 32] {
+        // Position of `storage_point_prop` (static slot)
+        let base = base_slot(*PARAMS_CONTROL_CONTRACT_ADDRESS)
+            + U256::from(STORAGE_POINT_PROP_SLOT);
         u256_to_array(base)
     }
 }

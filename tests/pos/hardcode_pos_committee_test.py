@@ -47,6 +47,9 @@ class HardcodePosCommitteeTest(DefaultConfluxTestFramework):
         committee = self.nodes[0].pos_getCommittee(int_to_hex(3 * 10 + 1))
         assert_equal(len(committee["currentCommittee"]["nodes"]), 4)
 
+        last_round = client.node.pos_getLedgerInfoByEpoch(int_to_hex(1))["ledgerInfo"]["commitInfo"]["round"]
+        assert_equal(client.node.pos_getLedgerInfoByEpochAndRound(int_to_hex(1), last_round)["ledgerInfo"]["commitInfo"]["nextEpochState"]["epoch"], "0x2")
+
 
 if __name__ == '__main__':
     HardcodePosCommitteeTest().main()

@@ -62,6 +62,16 @@ pub trait Pos {
         &self, epoch: U64,
     ) -> JsonRpcResult<Option<LedgerInfoWithSignatures>>;
 
+    #[rpc(name = "pos_getLedgerInfoByBlockNumber")]
+    fn pos_get_ledger_info_by_block_number(
+        &self, number: BlockNumber,
+    ) -> JsonRpcResult<Option<LedgerInfoWithSignatures>>;
+
+    #[rpc(name = "pos_getLedgerInfoByEpochAndRound")]
+    fn pos_get_ledger_info_by_epoch_and_round(
+        &self, epoch: U64, round: U64,
+    ) -> JsonRpcResult<Option<LedgerInfoWithSignatures>>;
+
     // debug rpc
     #[rpc(name = "pos_getLedgerInfosByEpoch")]
     fn pos_get_ledger_infos_by_epoch(

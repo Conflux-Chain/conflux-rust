@@ -9,7 +9,9 @@ use std::{
 
 use num::integer::Roots;
 use parking_lot::{
-    MappedRwLockWriteGuard, RwLock, RwLockUpgradableReadGuard, RwLockWriteGuard,
+    lock_api::{MappedRwLockReadGuard, RwLockReadGuard},
+    MappedRwLockWriteGuard, RawRwLock, RwLock, RwLockUpgradableReadGuard,
+    RwLockWriteGuard,
 };
 
 use cfx_bytes::Bytes;
@@ -25,11 +27,7 @@ use cfx_parameters::{
     },
     staking::*,
 };
-use cfx_state::{
-    maybe_address,
-    state_trait::{AsStateOpsTrait, CheckpointTrait, StateOpsTrait},
-    CleanupMode, CollateralCheckResult, StateTrait, SubstateTrait,
-};
+use cfx_state::{maybe_address, CleanupMode, CollateralCheckResult};
 use cfx_statedb::{
     ErrorKind as DbErrorKind, Result as DbResult, StateDbExt,
     StateDbGeneric as StateDb,
@@ -50,7 +48,8 @@ use primitives::{
 use crate::{
     executive::internal_contract::{
         get_settled_param_vote_count, get_settled_pos_staking_for_votes,
-        pos_internal_entries, settle_current_votes, IndexStatus,
+        pos_internal_entries, settle_current_votes, storage_point_prop,
+        IndexStatus,
     },
     hash::KECCAK_EMPTY,
     observer::{AddressPocket, StateTracer},
@@ -58,6 +57,7 @@ use crate::{
         genesis_contract_address_four_year, genesis_contract_address_two_year,
     },
     transaction_pool::SharedTransactionPool,
+    vm::Spec,
 };
 
 use self::account_entry::{AccountEntry, AccountState};
@@ -73,6 +73,23 @@ pub mod prefetcher;
 #[cfg(test)]
 mod state_tests;
 mod substate;
+
+pub type AccountReadGuard<'a> =
+    MappedRwLockReadGuard<'a, RawRwLock, OverlayAccount>;
+
+macro_rules! try_loaded {
+    ($expr:expr) => {
+        match $expr {
+            Err(e) => {
+                return Err(e);
+            }
+            Ok(None) => {
+                return Ok(Default::default());
+            }
+            Ok(Some(v)) => v,
+        }
+    };
+}
 
 #[derive(Copy, Clone)]
 pub enum RequireCache {
@@ -103,11 +120,13 @@ struct WorldStatistics {
     last_distribute_block: u64,
     // This is the tokens in the EVM space.
     total_evm_tokens: U256,
+    // This is the amount of using storage points (in terms of Drip)
+    used_storage_points: U256,
+    // This is the amount of converted storage points (in terms of Drip)
+    converted_storage_points: U256,
 }
 
-pub type State = StateGeneric;
-
-pub struct StateGeneric {
+pub struct State {
     db: StateDb,
 
     // Only created once for txpool notification.
@@ -125,13 +144,11 @@ pub struct StateGeneric {
     checkpoints: RwLock<Vec<HashMap<AddressWithSpace, Option<AccountEntry>>>>,
 }
 
-impl StateTrait for StateGeneric {
-    type Substate = Substate;
-
+impl State {
     /// Collects the cache (`ownership_change` in `OverlayAccount`) of storage
     /// change and write to substate.
     /// It is idempotent. But its execution is costly.
-    fn collect_ownership_changed(
+    pub fn collect_ownership_changed(
         &mut self, substate: &mut Substate,
     ) -> DbResult<()> {
         if let Some(checkpoint) = self.checkpoints.get_mut().last() {
@@ -157,9 +174,9 @@ impl StateTrait for StateGeneric {
     /// The suicided addresses are skimmed because their collateral have been
     /// checked out. This function should only be called in post-processing
     /// of a transaction.
-    fn settle_collateral_for_all(
+    pub fn settle_collateral_for_all(
         &mut self, substate: &Substate, tracer: &mut dyn StateTracer,
-        account_start_nonce: U256, dry_run_no_charge: bool,
+        spec: &Spec, dry_run_no_charge: bool,
     ) -> DbResult<CollateralCheckResult>
     {
         for address in substate.keys_for_collateral_changed().iter() {
@@ -167,7 +184,7 @@ impl StateTrait for StateGeneric {
                 &address,
                 substate,
                 tracer,
-                account_start_nonce,
+                spec,
                 dry_run_no_charge,
             )? {
                 CollateralCheckResult::Valid => {}
@@ -179,17 +196,17 @@ impl StateTrait for StateGeneric {
 
     // TODO: This function can only be called after VM execution. There are some
     // test cases breaks this assumption, which will be fixed in a separated PR.
-    fn collect_and_settle_collateral(
+    pub fn collect_and_settle_collateral(
         &mut self, original_sender: &Address, storage_limit: &U256,
-        substate: &mut Substate, tracer: &mut dyn StateTracer,
-        account_start_nonce: U256, dry_run_no_charge: bool,
+        substate: &mut Substate, tracer: &mut dyn StateTracer, spec: &Spec,
+        dry_run_no_charge: bool,
     ) -> DbResult<CollateralCheckResult>
     {
         self.collect_ownership_changed(substate)?;
         let res = match self.settle_collateral_for_all(
             substate,
             tracer,
-            account_start_nonce,
+            spec,
             dry_run_no_charge,
         )? {
             CollateralCheckResult::Valid => self.check_storage_limit(
@@ -202,7 +219,7 @@ impl StateTrait for StateGeneric {
         Ok(res)
     }
 
-    fn record_storage_and_whitelist_entries_release(
+    pub fn record_storage_and_whitelist_entries_release(
         &mut self, address: &Address, substate: &mut Substate,
     ) -> DbResult<()> {
         self.remove_whitelists_for_contract::<access_mode::Write>(address)?;
@@ -272,7 +289,7 @@ impl StateTrait for StateGeneric {
     }
 
     // It's guaranteed that the second call of this method is a no-op.
-    fn compute_state_root(
+    pub fn compute_state_root(
         &mut self, mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<StateRootWithAuxInfo> {
         debug!("state.compute_state_root");
@@ -308,7 +325,7 @@ impl StateTrait for StateGeneric {
         self.db.compute_state_root(debug_record)
     }
 
-    fn commit(
+    pub fn commit(
         &mut self, epoch_id: EpochId,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<StateRootWithAuxInfo>
@@ -319,9 +336,9 @@ impl StateTrait for StateGeneric {
     }
 }
 
-impl StateOpsTrait for StateGeneric {
+impl State {
     /// Calculate the secondary reward for the next block number.
-    fn bump_block_number_accumulate_interest(&mut self) {
+    pub fn bump_block_number_accumulate_interest(&mut self) {
         assert!(self.world_statistics_checkpoints.get_mut().is_empty());
         self.world_statistics.accumulate_interest_rate =
             self.world_statistics.accumulate_interest_rate
@@ -330,7 +347,7 @@ impl StateOpsTrait for StateGeneric {
                 / *INTEREST_RATE_PER_BLOCK_SCALE;
     }
 
-    fn secondary_reward(&self) -> U256 {
+    pub fn secondary_reward(&self) -> U256 {
         assert!(self.world_statistics_checkpoints.read().is_empty());
         let secondary_reward = self.world_statistics.total_storage_tokens
             * self.world_statistics.interest_rate_per_block
@@ -340,7 +357,7 @@ impl StateOpsTrait for StateGeneric {
         secondary_reward
     }
 
-    fn pow_base_reward(&self) -> U256 {
+    pub fn pow_base_reward(&self) -> U256 {
         self.db
             .get_pow_base_reward()
             .expect("no db error")
@@ -348,36 +365,36 @@ impl StateOpsTrait for StateGeneric {
     }
 
     /// Maintain `total_issued_tokens`.
-    fn add_total_issued(&mut self, v: U256) {
+    pub fn add_total_issued(&mut self, v: U256) {
         assert!(self.world_statistics_checkpoints.get_mut().is_empty());
         self.world_statistics.total_issued_tokens += v;
     }
 
     /// Maintain `total_issued_tokens`. This is only used in the extremely
     /// unlikely case that there are a lot of partial invalid blocks.
-    fn subtract_total_issued(&mut self, v: U256) {
+    pub fn subtract_total_issued(&mut self, v: U256) {
         self.world_statistics.total_issued_tokens =
             self.world_statistics.total_issued_tokens.saturating_sub(v);
     }
 
-    fn add_total_pos_staking(&mut self, v: U256) {
+    pub fn add_total_pos_staking(&mut self, v: U256) {
         self.world_statistics.total_pos_staking_tokens += v;
     }
 
-    fn add_total_evm_tokens(&mut self, v: U256) {
+    pub fn add_total_evm_tokens(&mut self, v: U256) {
         if !v.is_zero() {
             self.world_statistics.total_evm_tokens += v;
         }
     }
 
-    fn subtract_total_evm_tokens(&mut self, v: U256) {
+    pub fn subtract_total_evm_tokens(&mut self, v: U256) {
         if !v.is_zero() {
             self.world_statistics.total_evm_tokens =
                 self.world_statistics.total_evm_tokens.saturating_sub(v);
         }
     }
 
-    fn inc_distributable_pos_interest(
+    pub fn inc_distributable_pos_interest(
         &mut self, current_block_number: u64,
     ) -> DbResult<()> {
         assert!(self.world_statistics_checkpoints.get_mut().is_empty());
@@ -417,9 +434,9 @@ impl StateOpsTrait for StateGeneric {
     /// Distribute PoS interest to the PoS committee according to their reward
     /// points. Return the rewarded PoW accounts and their rewarded
     /// interest.
-    fn distribute_pos_interest<'a>(
+    pub fn distribute_pos_interest<'a>(
         &mut self, pos_points: Box<dyn Iterator<Item = (&'a H256, u64)> + 'a>,
-        account_start_nonce: U256, current_block_number: u64,
+        current_block_number: u64,
     ) -> DbResult<Vec<(Address, H256, U256)>>
     {
         assert!(self.world_statistics_checkpoints.get_mut().is_empty());
@@ -442,7 +459,6 @@ impl StateOpsTrait for StateGeneric {
                 &interest,
                 CleanupMode::ForceCreate, /* Same as distributing block
                                            * reward. */
-                account_start_nonce,
             )?;
         }
         self.world_statistics.distributable_pos_interest = U256::zero();
@@ -451,22 +467,17 @@ impl StateOpsTrait for StateGeneric {
         Ok(account_rewards)
     }
 
-    fn new_contract_with_admin(
+    pub fn new_contract_with_admin(
         &mut self, contract: &AddressWithSpace, admin: &Address, balance: U256,
-        nonce: U256, storage_layout: Option<StorageLayout>,
+        storage_layout: Option<StorageLayout>, cip107: bool,
     ) -> DbResult<()>
     {
         assert!(contract.space == Space::Native || admin.is_zero());
         // Check if the new contract is deployed on a killed contract in the
         // same block.
-        let invalidated_storage = self.ensure_account_loaded(
-            contract,
-            RequireCache::None,
-            |maybe_overlay| {
-                maybe_overlay
-                    .map_or(false, |overlay| overlay.invalidated_storage())
-            },
-        )?;
+        let invalidated_storage = self
+            .read_account(contract)?
+            .map_or(false, |overlay| overlay.invalidated_storage());
         Self::update_cache(
             self.cache.get_mut(),
             self.checkpoints.get_mut(),
@@ -475,23 +486,22 @@ impl StateOpsTrait for StateGeneric {
                 OverlayAccount::new_contract_with_admin(
                     contract,
                     balance,
-                    nonce,
                     admin,
                     invalidated_storage,
                     storage_layout,
+                    cip107,
                 ),
             )),
         );
         Ok(())
     }
 
-    fn balance(&self, address: &AddressWithSpace) -> DbResult<U256> {
-        self.ensure_account_loaded(address, RequireCache::None, |acc| {
-            acc.map_or(U256::zero(), |account| *account.balance())
-        })
+    pub fn balance(&self, address: &AddressWithSpace) -> DbResult<U256> {
+        let acc = try_loaded!(self.read_account(address));
+        Ok(*acc.balance())
     }
 
-    fn is_contract_with_code(
+    pub fn is_contract_with_code(
         &self, address: &AddressWithSpace,
     ) -> DbResult<bool> {
         if address.space == Space::Native
@@ -499,38 +509,26 @@ impl StateOpsTrait for StateGeneric {
         {
             return Ok(false);
         }
-        self.ensure_account_loaded(address, RequireCache::None, |acc| {
-            acc.map_or(false, |acc| acc.code_hash() != KECCAK_EMPTY)
-        })
+
+        let acc = try_loaded!(self.read_account(address));
+        Ok(acc.code_hash() != KECCAK_EMPTY)
     }
 
-    fn sponsor_for_gas(&self, address: &Address) -> DbResult<Option<Address>> {
-        self.ensure_account_loaded(
-            &address.with_native_space(),
-            RequireCache::None,
-            |acc| {
-                acc.map_or(None, |acc| {
-                    maybe_address(&acc.sponsor_info().sponsor_for_gas)
-                })
-            },
-        )
-    }
-
-    fn sponsor_for_collateral(
+    pub fn sponsor_for_gas(
         &self, address: &Address,
     ) -> DbResult<Option<Address>> {
-        self.ensure_account_loaded(
-            &address.with_native_space(),
-            RequireCache::None,
-            |acc| {
-                acc.map_or(None, |acc| {
-                    maybe_address(&acc.sponsor_info().sponsor_for_collateral)
-                })
-            },
-        )
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(maybe_address(&acc.sponsor_info().sponsor_for_gas))
     }
 
-    fn set_sponsor_for_gas(
+    pub fn sponsor_for_collateral(
+        &self, address: &Address,
+    ) -> DbResult<Option<Address>> {
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(maybe_address(&acc.sponsor_info().sponsor_for_collateral))
+    }
+
+    pub fn set_sponsor_for_gas(
         &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
         upper_bound: &U256,
     ) -> DbResult<()>
@@ -547,69 +545,71 @@ impl StateOpsTrait for StateGeneric {
         }
     }
 
-    fn set_sponsor_for_collateral(
-        &self, address: &Address, sponsor: &Address, sponsor_balance: &U256,
-    ) -> DbResult<()> {
-        if *sponsor != self.sponsor_for_collateral(address)?.unwrap_or_default()
-            || *sponsor_balance
-                != self.sponsor_balance_for_collateral(address)?
+    pub fn set_sponsor_for_collateral(
+        &mut self, address: &Address, sponsor: &Address,
+        sponsor_balance: &U256, is_cip107: bool,
+    ) -> DbResult<U256>
+    {
+        if *sponsor == self.sponsor_for_collateral(address)?.unwrap_or_default()
+            && *sponsor_balance
+                == self.sponsor_balance_for_collateral(address)?
         {
-            self.require_exists(&address.with_native_space(), false)
-                .map(|mut x| {
-                    x.set_sponsor_for_collateral(sponsor, sponsor_balance)
-                })
-        } else {
-            Ok(())
+            return Ok(U256::zero());
         }
+
+        let prop = if is_cip107 {
+            self.storage_point_prop()?
+        } else {
+            U256::zero()
+        };
+        let converted_storage_points = self
+            .require_exists(&address.with_native_space(), false)
+            .map(|mut x| {
+                x.set_sponsor_for_collateral(sponsor, sponsor_balance, prop)
+            })?;
+        self.world_statistics.total_issued_tokens -= converted_storage_points;
+        self.world_statistics.converted_storage_points +=
+            converted_storage_points;
+        Ok(converted_storage_points)
     }
 
-    fn sponsor_info(&self, address: &Address) -> DbResult<Option<SponsorInfo>> {
-        self.ensure_account_loaded(
-            &address.with_native_space(),
-            RequireCache::None,
-            |maybe_acc| maybe_acc.map(|acc| acc.sponsor_info().clone()),
-        )
+    pub fn sponsor_info(
+        &self, address: &Address,
+    ) -> DbResult<Option<SponsorInfo>> {
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(Some(acc.sponsor_info().clone()))
     }
 
-    fn sponsor_gas_bound(&self, address: &Address) -> DbResult<U256> {
-        self.ensure_account_loaded(
-            &address.with_native_space(),
-            RequireCache::None,
-            |acc| {
-                acc.map_or(U256::zero(), |acc| {
-                    acc.sponsor_info().sponsor_gas_bound
-                })
-            },
-        )
+    pub fn sponsor_gas_bound(&self, address: &Address) -> DbResult<U256> {
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(acc.sponsor_info().sponsor_gas_bound)
     }
 
-    fn sponsor_balance_for_gas(&self, address: &Address) -> DbResult<U256> {
-        self.ensure_account_loaded(
-            &address.with_native_space(),
-            RequireCache::None,
-            |acc| {
-                acc.map_or(U256::zero(), |acc| {
-                    acc.sponsor_info().sponsor_balance_for_gas
-                })
-            },
-        )
+    pub fn sponsor_balance_for_gas(&self, address: &Address) -> DbResult<U256> {
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(acc.sponsor_info().sponsor_balance_for_gas)
     }
 
-    fn sponsor_balance_for_collateral(
+    pub fn sponsor_balance_for_collateral(
         &self, address: &Address,
     ) -> DbResult<U256> {
-        self.ensure_account_loaded(
-            &address.with_native_space(),
-            RequireCache::None,
-            |acc| {
-                acc.map_or(U256::zero(), |acc| {
-                    acc.sponsor_info().sponsor_balance_for_collateral
-                })
-            },
-        )
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(acc.sponsor_info().sponsor_balance_for_collateral)
     }
 
-    fn set_admin(
+    pub fn avaliable_storage_point_for_collateral(
+        &self, address: &Address,
+    ) -> DbResult<U256> {
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(acc
+            .sponsor_info()
+            .storage_points
+            .as_ref()
+            .map(|points| points.unused)
+            .unwrap_or_default())
+    }
+
+    pub fn set_admin(
         &mut self, contract_address: &Address, admin: &Address,
     ) -> DbResult<()> {
         self.require_exists(&contract_address.with_native_space(), false)?
@@ -617,7 +617,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn sub_sponsor_balance_for_gas(
+    pub fn sub_sponsor_balance_for_gas(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
@@ -627,7 +627,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn add_sponsor_balance_for_gas(
+    pub fn add_sponsor_balance_for_gas(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
@@ -637,7 +637,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn sub_sponsor_balance_for_collateral(
+    pub fn sub_sponsor_balance_for_collateral(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
@@ -647,7 +647,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn add_sponsor_balance_for_collateral(
+    pub fn add_sponsor_balance_for_collateral(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<()> {
         if !by.is_zero() {
@@ -657,29 +657,15 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn check_commission_privilege(
+    pub fn check_commission_privilege(
         &self, contract_address: &Address, user: &Address,
     ) -> DbResult<bool> {
-        match self.ensure_account_loaded(
-            &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS.with_native_space(),
-            RequireCache::None,
-            |acc| {
-                acc.map_or(Ok(false), |acc| {
-                    acc.check_commission_privilege(
-                        &self.db,
-                        contract_address,
-                        user,
-                    )
-                })
-            },
-        ) {
-            Ok(Ok(bool)) => Ok(bool),
-            Ok(Err(e)) => Err(e),
-            Err(e) => Err(e),
-        }
+        let acc = try_loaded!(self
+            .read_native_account(&*SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS));
+        acc.check_commission_privilege(&self.db, contract_address, user)
     }
 
-    fn add_commission_privilege(
+    pub fn add_commission_privilege(
         &mut self, contract_address: Address, contract_owner: Address,
         user: Address,
     ) -> DbResult<()>
@@ -697,7 +683,7 @@ impl StateOpsTrait for StateGeneric {
         ))
     }
 
-    fn remove_commission_privilege(
+    pub fn remove_commission_privilege(
         &mut self, contract_address: Address, contract_owner: Address,
         user: Address,
     ) -> DbResult<()>
@@ -715,153 +701,140 @@ impl StateOpsTrait for StateGeneric {
 
     // TODO: maybe return error for reserved address? Not sure where is the best
     //  place to do the check.
-    fn nonce(&self, address: &AddressWithSpace) -> DbResult<U256> {
-        self.ensure_account_loaded(address, RequireCache::None, |acc| {
-            acc.map_or(U256::zero(), |account| *account.nonce())
-        })
+    pub fn nonce(&self, address: &AddressWithSpace) -> DbResult<U256> {
+        let acc = try_loaded!(self.read_account(address));
+        Ok(*acc.nonce())
     }
 
-    fn init_code(
+    pub fn init_code(
         &mut self, address: &AddressWithSpace, code: Bytes, owner: Address,
     ) -> DbResult<()> {
         self.require_exists(address, false)?.init_code(code, owner);
         Ok(())
     }
 
-    fn code_hash(&self, address: &AddressWithSpace) -> DbResult<Option<H256>> {
-        self.ensure_account_loaded(address, RequireCache::None, |acc| {
-            acc.and_then(|acc| Some(acc.code_hash()))
-        })
+    pub fn code_hash(
+        &self, address: &AddressWithSpace,
+    ) -> DbResult<Option<H256>> {
+        let acc = try_loaded!(self.read_account(address));
+        Ok(Some(acc.code_hash()))
     }
 
-    fn code_size(&self, address: &AddressWithSpace) -> DbResult<Option<usize>> {
-        self.ensure_account_loaded(address, RequireCache::Code, |acc| {
-            acc.and_then(|acc| acc.code_size())
-        })
+    pub fn code_size(
+        &self, address: &AddressWithSpace,
+    ) -> DbResult<Option<usize>> {
+        let acc =
+            try_loaded!(self.read_account_ext(address, RequireCache::Code));
+        Ok(acc.code_size())
     }
 
-    fn code_owner(
+    pub fn code_owner(
         &self, address: &AddressWithSpace,
     ) -> DbResult<Option<Address>> {
         address.assert_native();
-        self.ensure_account_loaded(address, RequireCache::Code, |acc| {
-            acc.as_ref().map_or(None, |acc| acc.code_owner())
-        })
+        let acc =
+            try_loaded!(self.read_account_ext(address, RequireCache::Code));
+        Ok(acc.code_owner())
     }
 
-    fn code(
+    pub fn code(
         &self, address: &AddressWithSpace,
     ) -> DbResult<Option<Arc<Vec<u8>>>> {
-        self.ensure_account_loaded(address, RequireCache::Code, |acc| {
-            acc.as_ref().map_or(None, |acc| acc.code())
-        })
+        let acc =
+            try_loaded!(self.read_account_ext(address, RequireCache::Code));
+        Ok(acc.code())
     }
 
-    fn staking_balance(&self, address: &Address) -> DbResult<U256> {
-        self.ensure_account_loaded(
-            &address.with_native_space(),
-            RequireCache::None,
-            |acc| {
-                acc.map_or(U256::zero(), |account| *account.staking_balance())
-            },
-        )
+    pub fn staking_balance(&self, address: &Address) -> DbResult<U256> {
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(*acc.staking_balance())
     }
 
-    fn collateral_for_storage(&self, address: &Address) -> DbResult<U256> {
-        self.ensure_account_loaded(
-            &address.with_native_space(),
-            RequireCache::None,
-            |acc| {
-                acc.map_or(U256::zero(), |account| {
-                    *account.collateral_for_storage()
-                })
-            },
-        )
+    pub fn collateral_for_storage(&self, address: &Address) -> DbResult<U256> {
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(acc.collateral_for_storage())
     }
 
-    fn admin(&self, address: &Address) -> DbResult<Address> {
-        self.ensure_account_loaded(
-            &address.with_native_space(),
-            RequireCache::None,
-            |acc| acc.map_or(Address::zero(), |acc| *acc.admin()),
-        )
+    pub fn token_collateral_for_storage(
+        &self, address: &Address,
+    ) -> DbResult<U256> {
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(acc.token_collateral_for_storage())
     }
 
-    fn withdrawable_staking_balance(
+    pub fn admin(&self, address: &Address) -> DbResult<Address> {
+        let acc = try_loaded!(self.read_native_account(address));
+        Ok(*acc.admin())
+    }
+
+    pub fn withdrawable_staking_balance(
         &self, address: &Address, current_block_number: u64,
     ) -> DbResult<U256> {
-        self.ensure_account_loaded(
+        let acc = try_loaded!(self.read_account_ext(
             &address.with_native_space(),
             RequireCache::VoteStakeList,
-            |acc| {
-                acc.map_or(U256::zero(), |acc| {
-                    acc.withdrawable_staking_balance(current_block_number)
-                })
-            },
-        )
+        ));
+        Ok(acc.withdrawable_staking_balance(current_block_number))
     }
 
-    fn locked_staking_balance_at_block_number(
+    pub fn locked_staking_balance_at_block_number(
         &self, address: &Address, block_number: u64,
     ) -> DbResult<U256> {
-        self.ensure_account_loaded(
+        let acc = try_loaded!(self.read_account_ext(
             &address.with_native_space(),
             RequireCache::VoteStakeList,
-            |acc| {
-                acc.map_or(U256::zero(), |acc| {
-                    acc.staking_balance()
-                        - acc.withdrawable_staking_balance(block_number)
-                })
-            },
-        )
+        ));
+        Ok(acc.staking_balance()
+            - acc.withdrawable_staking_balance(block_number))
     }
 
-    fn deposit_list_length(&self, address: &Address) -> DbResult<usize> {
-        self.ensure_account_loaded(
+    pub fn deposit_list_length(&self, address: &Address) -> DbResult<usize> {
+        let acc = try_loaded!(self.read_account_ext(
             &address.with_native_space(),
-            RequireCache::DepositList,
-            |acc| {
-                acc.map_or(0, |acc| acc.deposit_list().map_or(0, |l| l.len()))
-            },
-        )
+            RequireCache::DepositList
+        ));
+        Ok(acc.deposit_list().map_or(0, |l| l.len()))
     }
 
-    fn vote_stake_list_length(&self, address: &Address) -> DbResult<usize> {
-        self.ensure_account_loaded(
+    pub fn vote_stake_list_length(&self, address: &Address) -> DbResult<usize> {
+        let acc = try_loaded!(self.read_account_ext(
             &address.with_native_space(),
-            RequireCache::VoteStakeList,
-            |acc| {
-                acc.map_or(0, |acc| {
-                    acc.vote_stake_list().map_or(0, |l| l.len())
-                })
-            },
-        )
+            RequireCache::VoteStakeList
+        ));
+        Ok(acc.vote_stake_list().map_or(0, |l| l.len()))
     }
 
     // This is a special implementation to fix the bug in function
     // `clean_account` while not changing the genesis result.
-    fn genesis_special_clean_account(
+    pub fn genesis_special_clean_account(
         &mut self, address: &Address,
     ) -> DbResult<()> {
         let address = address.with_native_space();
         let mut account = Account::new_empty(&address);
         account.code_hash = H256::default();
-        *&mut *self.require_or_new_basic_account(&address, &U256::zero())? =
+        *&mut *self.require_or_new_basic_account(&address)? =
             OverlayAccount::from_loaded(&address, account);
         Ok(())
     }
 
-    fn clean_account(&mut self, address: &AddressWithSpace) -> DbResult<()> {
-        *&mut *self.require_or_new_basic_account(address, &U256::zero())? =
+    pub fn clean_account(
+        &mut self, address: &AddressWithSpace,
+    ) -> DbResult<()> {
+        *&mut *self.require_or_new_basic_account(address)? =
             OverlayAccount::from_loaded(address, Account::new_empty(address));
         Ok(())
+    }
+
+    pub fn inc_nonce(&mut self, address: &AddressWithSpace) -> DbResult<()> {
+        self.require_or_new_basic_account(address)
+            .map(|mut x| x.inc_nonce())
     }
 
     // TODO: This implementation will fail
     // tests::load_chain_tests::test_load_chain. We need to figure out why.
     //
-    // fn clean_account(&mut self, address: &AddressWithSpace) -> DbResult<()> {
-    //     Self::update_cache(
+    // pub fn clean_account(&mut self, address: &AddressWithSpace) ->
+    // DbResult<()> {     Self::update_cache(
     //         self.cache.get_mut(),
     //         self.checkpoints.get_mut(),
     //         address,
@@ -870,21 +843,14 @@ impl StateOpsTrait for StateGeneric {
     //     Ok(())
     // }
 
-    fn inc_nonce(
-        &mut self, address: &AddressWithSpace, account_start_nonce: &U256,
-    ) -> DbResult<()> {
-        self.require_or_new_basic_account(address, account_start_nonce)
-            .map(|mut x| x.inc_nonce())
-    }
-
-    fn set_nonce(
+    pub fn set_nonce(
         &mut self, address: &AddressWithSpace, nonce: &U256,
     ) -> DbResult<()> {
-        self.require_or_new_basic_account(address, nonce)
+        self.require_or_new_basic_account(address)
             .map(|mut x| x.set_nonce(&nonce))
     }
 
-    fn sub_balance(
+    pub fn sub_balance(
         &mut self, address: &AddressWithSpace, by: &U256,
         cleanup_mode: &mut CleanupMode,
     ) -> DbResult<()>
@@ -901,27 +867,9 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn add_pos_interest(
-        &mut self, address: &Address, interest: &U256,
-        cleanup_mode: CleanupMode, account_start_nonce: U256,
-    ) -> DbResult<()>
-    {
-        let address = address.with_native_space();
-        self.add_total_issued(*interest);
-        self.add_balance(
-            &address,
-            interest,
-            cleanup_mode,
-            account_start_nonce,
-        )?;
-        self.require_or_new_basic_account(&address, &account_start_nonce)?
-            .record_interest_receive(interest);
-        Ok(())
-    }
-
-    fn add_balance(
+    pub fn add_balance(
         &mut self, address: &AddressWithSpace, by: &U256,
-        cleanup_mode: CleanupMode, account_start_nonce: U256,
+        cleanup_mode: CleanupMode,
     ) -> DbResult<()>
     {
         let exists = self.exists(address)?;
@@ -931,8 +879,7 @@ impl StateOpsTrait for StateGeneric {
         if !by.is_zero()
             || (cleanup_mode == CleanupMode::ForceCreate && !exists)
         {
-            self.require_or_new_basic_account(address, &account_start_nonce)?
-                .add_balance(by);
+            self.require_or_new_basic_account(address)?.add_balance(by);
         }
 
         if let CleanupMode::TrackTouched(set) = cleanup_mode {
@@ -943,17 +890,30 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn transfer_balance(
-        &mut self, from: &AddressWithSpace, to: &AddressWithSpace, by: &U256,
-        mut cleanup_mode: CleanupMode, account_start_nonce: U256,
+    pub fn add_pos_interest(
+        &mut self, address: &Address, interest: &U256,
+        cleanup_mode: CleanupMode,
     ) -> DbResult<()>
     {
-        self.sub_balance(from, by, &mut cleanup_mode)?;
-        self.add_balance(to, by, cleanup_mode, account_start_nonce)?;
+        let address = address.with_native_space();
+        self.add_total_issued(*interest);
+        self.add_balance(&address, interest, cleanup_mode)?;
+        self.require_or_new_basic_account(&address)?
+            .record_interest_receive(interest);
         Ok(())
     }
 
-    fn deposit(
+    pub fn transfer_balance(
+        &mut self, from: &AddressWithSpace, to: &AddressWithSpace, by: &U256,
+        mut cleanup_mode: CleanupMode,
+    ) -> DbResult<()>
+    {
+        self.sub_balance(from, by, &mut cleanup_mode)?;
+        self.add_balance(to, by, cleanup_mode)?;
+        Ok(())
+    }
+
+    pub fn deposit(
         &mut self, address: &Address, amount: &U256, current_block_number: u64,
         cip_97: bool,
     ) -> DbResult<()>
@@ -979,7 +939,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn withdraw(
+    pub fn withdraw(
         &mut self, address: &Address, amount: &U256, cip_97: bool,
     ) -> DbResult<U256> {
         let address = address.with_native_space();
@@ -1007,7 +967,7 @@ impl StateOpsTrait for StateGeneric {
         }
     }
 
-    fn vote_lock(
+    pub fn vote_lock(
         &mut self, address: &Address, amount: &U256, unlock_block_number: u64,
     ) -> DbResult<()> {
         let address = address.with_native_space();
@@ -1023,7 +983,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn remove_expired_vote_stake_info(
+    pub fn remove_expired_vote_stake_info(
         &mut self, address: &Address, current_block_number: u64,
     ) -> DbResult<()> {
         let address = address.with_native_space();
@@ -1037,35 +997,45 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn total_issued_tokens(&self) -> U256 {
+    pub fn total_issued_tokens(&self) -> U256 {
         self.world_statistics.total_issued_tokens
     }
 
-    fn total_espace_tokens(&self) -> U256 {
-        self.world_statistics.total_evm_tokens
-    }
-
-    fn total_staking_tokens(&self) -> U256 {
+    pub fn total_staking_tokens(&self) -> U256 {
         self.world_statistics.total_staking_tokens
     }
 
-    fn total_storage_tokens(&self) -> U256 {
+    pub fn total_storage_tokens(&self) -> U256 {
         self.world_statistics.total_storage_tokens
     }
 
-    fn total_pos_staking_tokens(&self) -> U256 {
+    pub fn total_espace_tokens(&self) -> U256 {
+        self.world_statistics.total_evm_tokens
+    }
+
+    pub fn used_storage_points(&self) -> U256 {
+        self.world_statistics.used_storage_points
+    }
+
+    pub fn converted_storage_points(&self) -> U256 {
+        self.world_statistics.converted_storage_points
+    }
+
+    pub fn total_pos_staking_tokens(&self) -> U256 {
         self.world_statistics.total_pos_staking_tokens
     }
 
-    fn distributable_pos_interest(&self) -> U256 {
+    pub fn distributable_pos_interest(&self) -> U256 {
         self.world_statistics.distributable_pos_interest
     }
 
-    fn last_distribute_block(&self) -> u64 {
+    pub fn last_distribute_block(&self) -> u64 {
         self.world_statistics.last_distribute_block
     }
 
-    fn remove_contract(&mut self, address: &AddressWithSpace) -> DbResult<()> {
+    pub fn remove_contract(
+        &mut self, address: &AddressWithSpace,
+    ) -> DbResult<()> {
         if address.space == Space::Native {
             let removed_whitelist = self
                 .remove_whitelists_for_contract::<access_mode::Write>(
@@ -1089,31 +1059,25 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn exists(&self, address: &AddressWithSpace) -> DbResult<bool> {
-        self.ensure_account_loaded(address, RequireCache::None, |acc| {
-            acc.is_some()
-        })
+    pub fn exists(&self, address: &AddressWithSpace) -> DbResult<bool> {
+        Ok(self.read_account(address)?.is_some())
     }
 
-    fn exists_and_not_null(
+    pub fn exists_and_not_null(
         &self, address: &AddressWithSpace,
     ) -> DbResult<bool> {
-        self.ensure_account_loaded(address, RequireCache::None, |acc| {
-            acc.map_or(false, |acc| !acc.is_null())
-        })
+        let acc = try_loaded!(self.read_account(address));
+        Ok(!acc.is_null())
     }
 
-    fn storage_at(
+    pub fn storage_at(
         &self, address: &AddressWithSpace, key: &[u8],
     ) -> DbResult<U256> {
-        self.ensure_account_loaded(address, RequireCache::None, |acc| {
-            acc.map_or(Ok(U256::zero()), |account| {
-                account.storage_at(&self.db, key)
-            })
-        })?
+        let acc = try_loaded!(self.read_account(address));
+        acc.storage_at(&self.db, key)
     }
 
-    fn set_storage(
+    pub fn set_storage(
         &mut self, address: &AddressWithSpace, key: Vec<u8>, value: U256,
         owner: Address,
     ) -> DbResult<()>
@@ -1125,21 +1089,7 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn pos_locked_staking(&self, address: &Address) -> DbResult<U256> {
-        let identifier = BigEndianHash::from_uint(&self.storage_at(
-            &POS_REGISTER_CONTRACT_ADDRESS.with_native_space(),
-            &pos_internal_entries::identifier_entry(address),
-        )?);
-        let current_value: IndexStatus = self
-            .storage_at(
-                &POS_REGISTER_CONTRACT_ADDRESS.with_native_space(),
-                &pos_internal_entries::index_entry(&identifier),
-            )?
-            .into();
-        Ok(*POS_VOTE_PRICE * current_value.locked())
-    }
-
-    fn update_pos_status(
+    pub fn update_pos_status(
         &mut self, identifier: H256, number: u64,
     ) -> DbResult<()> {
         let old_value = self.storage_at(
@@ -1165,9 +1115,23 @@ impl StateOpsTrait for StateGeneric {
         Ok(())
     }
 
-    fn read_vote(&self, _address: &Address) -> DbResult<Vec<u8>> { todo!() }
+    pub fn pos_locked_staking(&self, address: &Address) -> DbResult<U256> {
+        let identifier = BigEndianHash::from_uint(&self.storage_at(
+            &POS_REGISTER_CONTRACT_ADDRESS.with_native_space(),
+            &pos_internal_entries::identifier_entry(address),
+        )?);
+        let current_value: IndexStatus = self
+            .storage_at(
+                &POS_REGISTER_CONTRACT_ADDRESS.with_native_space(),
+                &pos_internal_entries::index_entry(&identifier),
+            )?
+            .into();
+        Ok(*POS_VOTE_PRICE * current_value.locked())
+    }
 
-    fn set_system_storage(
+    pub fn read_vote(&self, _address: &Address) -> DbResult<Vec<u8>> { todo!() }
+
+    pub fn set_system_storage(
         &mut self, key: Vec<u8>, value: U256,
     ) -> DbResult<()> {
         self.set_storage(
@@ -1180,17 +1144,23 @@ impl StateOpsTrait for StateGeneric {
         )
     }
 
-    fn get_system_storage(&self, key: &[u8]) -> DbResult<U256> {
+    pub fn get_system_storage(&self, key: &[u8]) -> DbResult<U256> {
         self.storage_at(&SYSTEM_STORAGE_ADDRESS.with_native_space(), key)
+    }
+
+    pub fn get_system_storage_opt(&self, key: &[u8]) -> DbResult<Option<U256>> {
+        let acc =
+            try_loaded!(self.read_native_account(&*SYSTEM_STORAGE_ADDRESS));
+        acc.storage_opt_at(&self.db, key)
     }
 }
 
-impl CheckpointTrait for StateGeneric {
+impl State {
     /// Create a recoverable checkpoint of this state. Return the checkpoint
     /// index. The checkpoint records any old value which is alive at the
     /// creation time of the checkpoint and updated after that and before
     /// the creation of the next checkpoint.
-    fn checkpoint(&mut self) -> usize {
+    pub fn checkpoint(&mut self) -> usize {
         self.world_statistics_checkpoints
             .get_mut()
             .push(self.world_statistics.clone());
@@ -1204,7 +1174,7 @@ impl CheckpointTrait for StateGeneric {
     /// Caller should make sure the function
     /// `collect_ownership_changed()` was called before calling
     /// this function.
-    fn discard_checkpoint(&mut self) {
+    pub fn discard_checkpoint(&mut self) {
         // merge with previous checkpoint
         let last = self.checkpoints.get_mut().pop();
         if let Some(mut checkpoint) = last {
@@ -1222,7 +1192,7 @@ impl CheckpointTrait for StateGeneric {
     }
 
     /// Revert to the last checkpoint and discard it.
-    fn revert_to_checkpoint(&mut self) {
+    pub fn revert_to_checkpoint(&mut self) {
         if let Some(mut checkpoint) = self.checkpoints.get_mut().pop() {
             self.world_statistics = self
                 .world_statistics_checkpoints
@@ -1254,13 +1224,7 @@ impl CheckpointTrait for StateGeneric {
     }
 }
 
-impl AsStateOpsTrait for StateGeneric {
-    fn as_state_ops(&self) -> &dyn StateOpsTrait { self }
-
-    fn as_mut_state_ops(&mut self) -> &mut dyn StateOpsTrait { self }
-}
-
-impl StateGeneric {
+impl State {
     pub fn new(db: StateDb) -> DbResult<Self> {
         let annual_interest_rate = db.get_annual_interest_rate()?;
         let accumulate_interest_rate = db.get_accumulate_interest_rate()?;
@@ -1271,6 +1235,8 @@ impl StateGeneric {
         let distributable_pos_interest = db.get_distributable_pos_interest()?;
         let last_distribute_block = db.get_last_distribute_block()?;
         let total_evm_tokens = db.get_total_evm_tokens()?;
+        let used_storage_points = db.get_used_storage_points()?;
+        let converted_storage_points = db.get_converted_storage_points()?;
 
         let world_stat = if db.is_initialized()? {
             WorldStatistics {
@@ -1284,6 +1250,8 @@ impl StateGeneric {
                 distributable_pos_interest,
                 last_distribute_block,
                 total_evm_tokens,
+                used_storage_points,
+                converted_storage_points,
             }
         } else {
             // If db is not initialized, all the loaded value should be zero.
@@ -1330,10 +1298,12 @@ impl StateGeneric {
                 distributable_pos_interest: U256::default(),
                 last_distribute_block: u64::default(),
                 total_evm_tokens: U256::default(),
+                used_storage_points: U256::default(),
+                converted_storage_points: U256::default(),
             }
         };
 
-        Ok(StateGeneric {
+        Ok(State {
             db,
             cache: Default::default(),
             world_statistics_checkpoints: Default::default(),
@@ -1345,9 +1315,8 @@ impl StateGeneric {
 
     /// Charges or refund storage collateral and update `total_storage_tokens`.
     fn settle_collateral_for_address(
-        &mut self, addr: &Address, substate: &dyn SubstateTrait,
-        tracer: &mut dyn StateTracer, account_start_nonce: U256,
-        dry_run_no_charge: bool,
+        &mut self, addr: &Address, substate: &Substate,
+        tracer: &mut dyn StateTracer, spec: &Spec, dry_run_no_charge: bool,
     ) -> DbResult<CollateralCheckResult>
     {
         let addr_with_space = addr.with_native_space();
@@ -1360,7 +1329,35 @@ impl StateGeneric {
 
         let is_contract = self.is_contract_with_code(&addr_with_space)?;
 
+        // Initialize CIP-107
+        if spec.cip107
+            && addr.is_contract_address()
+            && (!sub.is_zero() || !inc.is_zero())
+        {
+            let (converted_point_from_balance, converted_point_from_collateral) =
+                self.initialize_cip107(addr)?;
+            if !converted_point_from_balance.is_zero() {
+                tracer.trace_internal_transfer(
+                    /* from */
+                    AddressPocket::SponsorBalanceForStorage(*addr),
+                    /* to */
+                    AddressPocket::MintBurn,
+                    converted_point_from_balance,
+                );
+            }
+            if !converted_point_from_collateral.is_zero() {
+                tracer.trace_internal_transfer(
+                    /* from */ AddressPocket::StorageCollateral(*addr),
+                    /* to */
+                    AddressPocket::MintBurn,
+                    converted_point_from_collateral,
+                );
+            }
+        }
+
         if !sub.is_zero() {
+            let storage_point_refund =
+                self.sub_collateral_for_storage(addr, &sub)?;
             tracer.trace_internal_transfer(
                 /* from */ AddressPocket::StorageCollateral(*addr),
                 /* to */
@@ -1369,13 +1366,13 @@ impl StateGeneric {
                 } else {
                     AddressPocket::Balance(addr.with_native_space())
                 },
-                sub,
+                sub - storage_point_refund,
             );
-            self.sub_collateral_for_storage(addr, &sub, account_start_nonce)?;
         }
         if !inc.is_zero() && !dry_run_no_charge {
             let balance = if is_contract {
                 self.sponsor_balance_for_collateral(addr)?
+                    + self.avaliable_storage_point_for_collateral(addr)?
             } else {
                 self.balance(&addr_with_space)?
             };
@@ -1386,6 +1383,9 @@ impl StateGeneric {
                     got: balance,
                 });
             }
+
+            let storage_point_used =
+                self.add_collateral_for_storage(addr, &inc)?;
             tracer.trace_internal_transfer(
                 /* from */
                 if is_contract {
@@ -1394,10 +1394,8 @@ impl StateGeneric {
                     AddressPocket::Balance(addr.with_native_space())
                 },
                 /* to */ AddressPocket::StorageCollateral(*addr),
-                inc,
+                inc - storage_point_used,
             );
-
-            self.add_collateral_for_storage(addr, &inc)?;
         }
         Ok(CollateralCheckResult::Valid)
     }
@@ -1421,16 +1419,11 @@ impl StateGeneric {
 
     #[cfg(test)]
     pub fn new_contract(
-        &mut self, contract: &AddressWithSpace, balance: U256, nonce: U256,
+        &mut self, contract: &AddressWithSpace, balance: U256,
     ) -> DbResult<()> {
-        let invalidated_storage = self.ensure_account_loaded(
-            contract,
-            RequireCache::None,
-            |maybe_overlay| {
-                maybe_overlay
-                    .map_or(false, |overlay| overlay.invalidated_storage())
-            },
-        )?;
+        let invalidated_storage = self
+            .read_account(contract)?
+            .map_or(false, |acc| acc.invalidated_storage());
         Self::update_cache(
             self.cache.get_mut(),
             self.checkpoints.get_mut(),
@@ -1438,7 +1431,6 @@ impl StateGeneric {
             AccountEntry::new_dirty(Some(OverlayAccount::new_contract(
                 &contract.address,
                 balance,
-                nonce,
                 invalidated_storage,
                 Some(STORAGE_LAYOUT_REGULAR_V0),
             ))),
@@ -1448,9 +1440,9 @@ impl StateGeneric {
 
     #[cfg(test)]
     pub fn new_contract_with_code(
-        &mut self, contract: &AddressWithSpace, balance: U256, nonce: U256,
+        &mut self, contract: &AddressWithSpace, balance: U256,
     ) -> DbResult<()> {
-        self.new_contract(contract, balance, nonce)?;
+        self.new_contract(contract, balance)?;
         self.init_code(&contract, vec![0x12, 0x34], Address::zero())?;
         Ok(())
     }
@@ -1459,32 +1451,77 @@ impl StateGeneric {
     /// sufficient enough.
     fn add_collateral_for_storage(
         &mut self, address: &Address, by: &U256,
-    ) -> DbResult<()> {
-        if !by.is_zero() {
-            self.require_exists(&address.with_native_space(), false)?
+    ) -> DbResult<U256> {
+        Ok(if !by.is_zero() {
+            let storage_point_used = self
+                .require_exists(&address.with_native_space(), false)?
                 .add_collateral_for_storage(by);
-            self.world_statistics.total_storage_tokens += *by;
-        }
-        Ok(())
+            self.world_statistics.total_storage_tokens +=
+                *by - storage_point_used;
+            self.world_statistics.used_storage_points += storage_point_used;
+            storage_point_used
+        } else {
+            U256::zero()
+        })
     }
 
     fn sub_collateral_for_storage(
-        &mut self, address: &Address, by: &U256, account_start_nonce: U256,
-    ) -> DbResult<()> {
-        let collateral = self.collateral_for_storage(address)?;
+        &mut self, address: &Address, by: &U256,
+    ) -> DbResult<U256> {
+        let collateral = self.token_collateral_for_storage(address)?;
         let refundable = if by > &collateral { &collateral } else { by };
         let burnt = *by - *refundable;
-        if !refundable.is_zero() {
-            self.require_or_new_basic_account(
-                &address.with_native_space(),
-                &account_start_nonce,
-            )?
-            .sub_collateral_for_storage(refundable);
-        }
-        self.world_statistics.total_storage_tokens -= *by;
+        let storage_point_refund = if !refundable.is_zero() {
+            self.require_or_new_basic_account(&address.with_native_space())?
+                .sub_collateral_for_storage(refundable)
+        } else {
+            U256::zero()
+        };
+
+        self.world_statistics.total_storage_tokens -=
+            *by - storage_point_refund;
+        self.world_statistics.used_storage_points -= storage_point_refund;
         self.world_statistics.total_issued_tokens -= burnt;
 
-        Ok(())
+        Ok(storage_point_refund)
+    }
+
+    fn initialize_cip107(
+        &mut self, address: &Address,
+    ) -> DbResult<(U256, U256)> {
+        let prop = self.storage_point_prop()?;
+        let init_result = {
+            debug!("Check initialize CIP-107");
+            let account = &mut *self
+                .require_or_new_basic_account(&address.with_native_space())?;
+            if !account.is_cip_107_initialized() {
+                Some(account.initialize_cip107(prop))
+            } else {
+                None
+            }
+        };
+
+        if let Some((
+            burnt_balance_from_balance,
+            burnt_balance_from_collateral,
+            changed_storage_points,
+        )) = init_result
+        {
+            self.world_statistics.total_issued_tokens -=
+                burnt_balance_from_balance + burnt_balance_from_collateral;
+            self.world_statistics.total_storage_tokens -=
+                burnt_balance_from_collateral;
+            self.world_statistics.used_storage_points +=
+                burnt_balance_from_collateral;
+            self.world_statistics.converted_storage_points =
+                changed_storage_points;
+            return Ok((
+                burnt_balance_from_balance,
+                burnt_balance_from_collateral,
+            ));
+        } else {
+            return Ok((U256::zero(), U256::zero()));
+        }
     }
 
     #[allow(dead_code)]
@@ -1549,6 +1586,8 @@ impl StateGeneric {
                 self.world_statistics.interest_rate_per_block,
                 pos_staking_for_votes,
             );
+
+        // Initialize or update PoW base reward.
         match self.db.get_pow_base_reward()? {
             Some(old_pow_base_reward) => {
                 self.db.set_pow_base_reward(
@@ -1565,6 +1604,21 @@ impl StateGeneric {
                     None,
                 )?;
             }
+        }
+
+        // Only write storage_collateral_refund_ratio if it has been set in the
+        // db. This keeps the state unchanged before cip107 is enabled.
+        if let Some(old_storage_point_prop) =
+            self.get_system_storage_opt(&storage_point_prop())?
+        {
+            debug!("old_storage_point_prop: {}", old_storage_point_prop);
+            self.set_system_storage(
+                storage_point_prop().to_vec(),
+                vote_count.storage_point_prop.compute_next_params(
+                    old_storage_point_prop,
+                    pos_staking_for_votes,
+                ),
+            )?;
         }
         debug!(
             "pos interest: {} base_reward:{:?}",
@@ -1615,6 +1669,14 @@ impl StateGeneric {
         )?;
         self.db.set_total_evm_tokens(
             &self.world_statistics.total_evm_tokens,
+            debug_record.as_deref_mut(),
+        )?;
+        self.db.set_used_storage_points(
+            &self.world_statistics.used_storage_points,
+            debug_record.as_deref_mut(),
+        )?;
+        self.db.set_converted_storage_points(
+            &self.world_statistics.converted_storage_points,
             debug_record,
         )?;
         Ok(())
@@ -1760,23 +1822,9 @@ impl StateGeneric {
 
     /// Return whether or not the address exists.
     pub fn try_load(&self, address: &AddressWithSpace) -> DbResult<bool> {
-        match self.ensure_account_loaded(address, RequireCache::None, |maybe| {
-            maybe.is_some()
-        }) {
-            Err(e) => Err(e),
-            Ok(false) => Ok(false),
-            Ok(true) => {
-                // Try to load the code.
-                match self.ensure_account_loaded(
-                    address,
-                    RequireCache::Code,
-                    |_| (),
-                ) {
-                    Ok(()) => Ok(true),
-                    Err(e) => Err(e),
-                }
-            }
-        }
+        let _ = try_loaded!(self.read_account(address));
+        let _ = try_loaded!(self.read_account_ext(address, RequireCache::Code));
+        Ok(true)
     }
 
     // FIXME: rewrite this method before enable it for the first time, because
@@ -1933,19 +1981,40 @@ impl StateGeneric {
         }
     }
 
-    pub fn ensure_account_loaded<F, U>(
-        &self, address: &AddressWithSpace, require: RequireCache, f: F,
-    ) -> DbResult<U>
-    where F: Fn(Option<&OverlayAccount>) -> U {
+    fn read_native_account<'a>(
+        &'a self, address: &Address,
+    ) -> DbResult<Option<AccountReadGuard<'a>>> {
+        self.read_account(&address.with_native_space())
+    }
+
+    fn read_account<'a>(
+        &'a self, address: &AddressWithSpace,
+    ) -> DbResult<Option<AccountReadGuard<'a>>> {
+        self.read_account_ext(address, RequireCache::None)
+    }
+
+    pub fn read_account_ext<'a>(
+        &'a self, address: &AddressWithSpace, require: RequireCache,
+    ) -> DbResult<Option<AccountReadGuard<'a>>> {
+        let as_account_guard = |guard| {
+            MappedRwLockReadGuard::map(guard, |entry: &AccountEntry| {
+                entry.account.as_ref().unwrap()
+            })
+        };
+
         // Return immediately when there is no need to have db operation.
-        if let Some(maybe_acc) = self.cache.read().get(address) {
-            if let Some(account) = &maybe_acc.account {
+        if let Ok(guard) =
+            RwLockReadGuard::try_map(self.cache.read(), |cache| {
+                cache.get(address)
+            })
+        {
+            if let Some(account) = &guard.account {
                 let needs_update = Self::needs_update(require, account);
                 if !needs_update {
-                    return Ok(f(Some(account)));
+                    return Ok(Some(as_account_guard(guard)));
                 }
             } else {
-                return Ok(f(None));
+                return Ok(None);
             }
         }
 
@@ -1987,9 +2056,16 @@ impl StateGeneric {
             }
         }
 
-        Ok(f(cache
-            .get(address)
-            .and_then(|entry| entry.account.as_ref())))
+        let entry_guard = RwLockReadGuard::map(
+            RwLockWriteGuard::downgrade(cache_write_lock),
+            |cache| cache.get(address).unwrap(),
+        );
+
+        Ok(if entry_guard.account.is_some() {
+            Some(as_account_guard(entry_guard))
+        } else {
+            None
+        })
     }
 
     fn require_exists(
@@ -2004,7 +2080,7 @@ impl StateGeneric {
     }
 
     fn require_or_new_basic_account(
-        &self, address: &AddressWithSpace, account_start_nonce: &U256,
+        &self, address: &AddressWithSpace,
     ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>> {
         self.require_or_set(address, false, |address| {
             // It is guaranteed that the address is valid.
@@ -2015,11 +2091,7 @@ impl StateGeneric {
             // use new_basic() to create a *stub* there. Because the contract
             // serialization is a super-set of the normal address
             // serialization, this should just work.
-            Ok(OverlayAccount::new_basic(
-                address,
-                U256::zero(),
-                account_start_nonce.into(),
-            ))
+            Ok(OverlayAccount::new_basic(address, U256::zero()))
         })
     }
 
@@ -2079,6 +2151,10 @@ impl StateGeneric {
         }))
     }
 
+    fn storage_point_prop(&self) -> DbResult<U256> {
+        Ok(self.get_system_storage(&storage_point_prop())?)
+    }
+
     #[cfg(any(test, feature = "testonly_code"))]
     pub fn clear(&mut self) {
         assert!(self.checkpoints.get_mut().is_empty());
@@ -2105,6 +2181,10 @@ impl StateGeneric {
             self.db.get_last_distribute_block().expect("no db error");
         self.world_statistics.total_evm_tokens =
             self.db.get_total_evm_tokens().expect("no db error");
+        self.world_statistics.used_storage_points =
+            self.db.get_used_storage_points().expect("no db error");
+        self.world_statistics.converted_storage_points =
+            self.db.get_converted_storage_points().expect("no db error");
     }
 }
 

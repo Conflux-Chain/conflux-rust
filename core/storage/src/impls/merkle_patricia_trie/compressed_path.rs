@@ -362,6 +362,131 @@ impl Decodable for CompressedPathRaw {
     }
 }
 
+impl Serialize for CompressedPathRaw {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        let path_mask = self.path_mask();
+        let path_mask = format!("0x{:x}", path_mask);
+        let path_slice = self.path_slice();
+        let mut struc = serializer.serialize_struct("CompressedPathRaw", 2)?;
+        struc.serialize_field("pathMask", &path_mask)?;
+        struc.serialize_field(
+            "pathSlice",
+            &("0x".to_owned() + path_slice.to_hex::<String>().as_ref()),
+        )?;
+
+        struc.end()
+    }
+}
+
+impl<'a> Deserialize<'a> for CompressedPathRaw {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: Deserializer<'a> {
+        let (path_mask, path_slice) = deserializer.deserialize_struct(
+            "CompressedPathRaw",
+            FIELDS,
+            CompressedPathRawVisitor,
+        )?;
+
+        Ok(CompressedPathRaw::new(&path_slice[..], path_mask))
+    }
+}
+
+const FIELDS: &'static [&'static str] = &["pathMask", "pathSlice"];
+
+enum Field {
+    Mask,
+    Slice,
+}
+
+impl<'de> Deserialize<'de> for Field {
+    fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
+    where D: Deserializer<'de> {
+        struct FieldVisitor;
+
+        impl<'de> Visitor<'de> for FieldVisitor {
+            type Value = Field;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("`pathMask` or `pathSlice`")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Field, E>
+            where E: de::Error {
+                match value {
+                    "pathMask" => Ok(Field::Mask),
+                    "pathSlice" => Ok(Field::Slice),
+                    _ => Err(de::Error::unknown_field(value, FIELDS)),
+                }
+            }
+        }
+
+        deserializer.deserialize_identifier(FieldVisitor)
+    }
+}
+
+struct CompressedPathRawVisitor;
+impl<'a> Visitor<'a> for CompressedPathRawVisitor {
+    type Value = (u8, Vec<u8>);
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "Struct CompressedPath")
+    }
+
+    fn visit_map<V>(self, mut visitor: V) -> Result<Self::Value, V::Error>
+    where V: MapAccess<'a> {
+        let mut path_mask = None;
+        let mut path_slice = None;
+
+        while let Some(key) = visitor.next_key()? {
+            match key {
+                Field::Mask => {
+                    if path_mask.is_some() {
+                        return Err(de::Error::duplicate_field("pathMask"));
+                    }
+
+                    path_mask = Some(visitor.next_value()?);
+                }
+                Field::Slice => {
+                    if path_slice.is_some() {
+                        return Err(de::Error::duplicate_field("pathSlice"));
+                    }
+
+                    path_slice = Some(visitor.next_value()?);
+                }
+            }
+        }
+
+        let path_mask: String =
+            path_mask.ok_or_else(|| de::Error::missing_field("pathMask"))?;
+
+        let path_mask = if let Some(s) = path_mask.strip_prefix("0x") {
+            u8::from_str_radix(&s, 16).map_err(|e| {
+                de::Error::custom(format!("pathMask: invalid hex: {}", e))
+            })?
+        } else {
+            return Err(de::Error::custom(
+                "pathMask: invalid format. Expected a 0x-prefixed hex string",
+            ));
+        };
+
+        let path_slice: String =
+            path_slice.ok_or_else(|| de::Error::missing_field("pathSlice"))?;
+
+        let path_slice: Vec<u8> = if let (Some(s), true) =
+            (path_slice.strip_prefix("0x"), path_slice.len() & 1 == 0)
+        {
+            FromHex::from_hex(s).map_err(|e| {
+                de::Error::custom(format!("pathSlice: invalid hex: {}", e))
+            })?
+        } else {
+            return Err(de::Error::custom("pathSlice: invalid format. Expected a 0x-prefixed hex string with even length"));
+        };
+
+        Ok((path_mask, path_slice))
+    }
+}
+
 impl PartialEq<Self> for CompressedPathRaw {
     fn eq(&self, other: &Self) -> bool { self.as_ref().eq(&other.as_ref()) }
 }
@@ -402,9 +527,16 @@ impl<'a> Borrow<dyn CompressedPathTrait + 'a> for CompressedPathRaw {
 
 use super::maybe_in_place_byte_array::*;
 use rlp::*;
+use rustc_hex::{FromHex, ToHex};
+use serde::{
+    de::{self, MapAccess, Visitor},
+    ser::SerializeStruct,
+    Deserialize, Deserializer, Serialize, Serializer,
+};
+
 use std::{
     borrow::Borrow,
-    fmt::{Debug, Error, Formatter},
+    fmt::{self, Debug, Error, Formatter},
     hash::{Hash, Hasher},
     result::Result,
 };

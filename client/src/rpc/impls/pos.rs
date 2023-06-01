@@ -639,6 +639,37 @@ impl PosHandler {
             }
         }
     }
+
+    fn ledger_info_by_block_number(
+        &self, block_number: BlockNumber,
+    ) -> Option<LedgerInfoWithSignatures> {
+        // TODO: Get hash without getting the block.
+        let block_hash = self.block_by_number(block_number.clone())?.hash;
+        debug!(
+            "ledger_info_by_block_number {:?} {:?}",
+            block_number, block_hash
+        );
+        self.pos_handler
+            .pos_ledger_db()
+            .get_block_ledger_info(
+                &HashValue::from_slice(block_hash.as_bytes()).unwrap(),
+            )
+            .ok()
+    }
+
+    fn ledger_info_by_epoch_and_round(
+        &self, epoch: u64, round: u64,
+    ) -> Option<LedgerInfoWithSignatures> {
+        let block_hash = self
+            .pos_handler
+            .pos_ledger_db()
+            .get_block_hash_by_epoch_and_round(epoch, round)
+            .ok()?;
+        self.pos_handler
+            .pos_ledger_db()
+            .get_block_ledger_info(&block_hash)
+            .ok()
+    }
 }
 
 fn map_votes(list: &StatusList) -> Vec<VotePowerState> {
@@ -710,6 +741,22 @@ impl Pos for PosHandler {
     ) -> JsonRpcResult<Option<RpcLedgerInfoWithSignatures>> {
         Ok(self
             .ledger_info_by_epoch(epoch.as_u64())
+            .map(|l| (&l).into()))
+    }
+
+    fn pos_get_ledger_info_by_block_number(
+        &self, number: BlockNumber,
+    ) -> JsonRpcResult<Option<RpcLedgerInfoWithSignatures>> {
+        Ok(self
+            .ledger_info_by_block_number(number)
+            .map(|l| (&l).into()))
+    }
+
+    fn pos_get_ledger_info_by_epoch_and_round(
+        &self, epoch: U64, round: U64,
+    ) -> JsonRpcResult<Option<RpcLedgerInfoWithSignatures>> {
+        Ok(self
+            .ledger_info_by_epoch_and_round(epoch.as_u64(), round.as_u64())
             .map(|l| (&l).into()))
     }
 

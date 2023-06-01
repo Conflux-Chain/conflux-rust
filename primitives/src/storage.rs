@@ -2,10 +2,15 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use std::{convert::TryFrom, fmt, marker::PhantomData};
+
 use cfx_types::{Address, H256, U256};
 use rlp::*;
 use rlp_derive::{RlpDecodable, RlpEncodable};
-use serde::{Serialize, Serializer};
+use serde::{
+    de::{self, Visitor},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum MptValue<ValueType> {
@@ -22,6 +27,52 @@ impl<ValueType: Serialize> Serialize for MptValue<ValueType> {
             MptValue::Some(h) => serializer.serialize_some(h),
             MptValue::TombStone => serializer.serialize_str("TOMBSTONE"),
         }
+    }
+}
+
+impl<'a, ValueType: Deserialize<'a> + From<String>> Deserialize<'a>
+    for MptValue<ValueType>
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: Deserializer<'a> {
+        deserializer.deserialize_any(MptValueVisitor {
+            marker: PhantomData,
+        })
+    }
+}
+
+struct MptValueVisitor<ValueType> {
+    marker: PhantomData<ValueType>,
+}
+
+impl<'a, ValueType> Visitor<'a> for MptValueVisitor<ValueType>
+where ValueType: Deserialize<'a> + TryFrom<String>
+{
+    type Value = MptValue<ValueType>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "`MptValue`")
+    }
+
+    fn visit_unit<E>(self) -> Result<Self::Value, E>
+    where E: de::Error {
+        Ok(MptValue::None)
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    where E: de::Error {
+        match value {
+            "TOMBSTONE" => Ok(MptValue::TombStone),
+            s => match ValueType::try_from(String::from(s)) {
+                Ok(v) => Ok(MptValue::Some(v)),
+                _ => Err(de::Error::custom("unknown value")),
+            },
+        }
+    }
+
+    fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+    where E: de::Error {
+        self.visit_str(value.as_ref())
     }
 }
 

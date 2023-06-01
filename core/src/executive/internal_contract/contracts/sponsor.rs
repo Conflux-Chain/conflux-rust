@@ -54,14 +54,7 @@ impl SimpleExecutionTrait for SetSponsorForGas {
         context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
-        set_sponsor_for_gas(
-            inputs.0,
-            inputs.1,
-            params,
-            context,
-            tracer,
-            context.spec.account_start_nonce,
-        )
+        set_sponsor_for_gas(inputs.0, inputs.1, params, context, tracer)
     }
 }
 
@@ -76,13 +69,7 @@ impl SimpleExecutionTrait for SetSponsorForCollateral {
         context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
-        set_sponsor_for_collateral(
-            input,
-            params,
-            context,
-            tracer,
-            context.spec.account_start_nonce,
-        )
+        set_sponsor_for_collateral(input, params, context, tracer)
     }
 }
 

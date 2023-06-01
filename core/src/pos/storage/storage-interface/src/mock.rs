@@ -163,4 +163,10 @@ impl DBReaderForPoW for MockDbReader {
     ) -> Result<LedgerInfoWithSignatures> {
         todo!()
     }
+
+    fn get_block_hash_by_epoch_and_round(
+        &self, _epoch: u64, _round: u64,
+    ) -> Result<HashValue> {
+        todo!()
+    }
 }
