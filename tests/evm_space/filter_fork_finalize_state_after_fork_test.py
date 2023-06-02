@@ -34,11 +34,14 @@ class FilterForkTest(DefaultConfluxTestFramework):
         self.conf_parameters["anticone_penalty_ratio"] = "10"
         # No auto timeout.
         self.pos_parameters["round_time_ms"] = 1000000000
+        self.conf_parameters["pos_reference_enable_height"] = 10
 
     async def run_async(self):
         clients = []
         for node in self.nodes:
             clients.append(RpcClient(node))
+        clients[0].generate_empty_blocks(10)
+        sync_blocks(self.nodes)
 
         # Initialize pos_consensus_blocks
         for _ in range(4):
@@ -59,7 +62,7 @@ class FilterForkTest(DefaultConfluxTestFramework):
 
         # query block
         filter_blocks = self.nodes[0].eth_getFilterChanges(filter)
-        assert_equal(len(filter_blocks), 0)
+        assert_equal(len(filter_blocks), 4)
 
         blocks.extend(clients[0].generate_empty_blocks(6))
         filter_blocks = self.nodes[0].eth_getFilterChanges(filter)
