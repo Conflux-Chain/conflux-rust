@@ -52,10 +52,10 @@ pub struct PubSubClient {
     logs_subscribers: Arc<RwLock<Subscribers<(Client, LogFilter)>>>,
     pending_transactions_subscribers: Arc<RwLock<Subscribers<Client>>>,
     epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
-    new_block_hashes: Arc<Channel<H256>>,
     consensus: SharedConsensusGraph,
     heads_loop_started: Arc<RwLock<bool>>,
     pending_transactions_loop_started: Arc<RwLock<bool>>,
+    new_pending_transactions: Arc<Channel<H256>>,
 }
 
 impl PubSubClient {
@@ -74,6 +74,7 @@ impl PubSubClient {
             consensus: consensus.clone(),
             data_man: consensus.get_data_manager().clone(),
             heads_subscribers: heads_subscribers.clone(),
+            pending_transactions_subscribers: pending_transactions_subscribers.clone()
         });
 
         PubSubClient {
@@ -81,9 +82,9 @@ impl PubSubClient {
             heads_subscribers,
             logs_subscribers,
             pending_transactions_subscribers,
-            new_block_hashes: notifications.new_block_hashes.clone(),
             epochs_ordered: notifications.epochs_ordered.clone(),
             consensus: consensus.clone(),
+            new_pending_transactions: notifications.new_pending_transactions.clone(),
             heads_loop_started: Arc::new(RwLock::new(false)),
             pending_transactions_loop_started: Arc::new(RwLock::new(false)),
         }
@@ -98,7 +99,7 @@ impl PubSubClient {
         self.epochs_ordered.clone()
     }
 
-    fn start_newPendingTransactions_loop(&self) {
+    fn start_new_pending_transactions_loop(&self) {
         let mut loop_started = self.pending_transactions_loop_started.write();
         if *loop_started {
             return;
@@ -107,16 +108,15 @@ impl PubSubClient {
         debug!("start_pending_transactions_loop");
         *loop_started = true;
     
-        let pending_tx_subscribers: Arc<parking_lot::lock_api::RwLock<parking_lot::RawRwLock, Subscribers<Sink<pubsub::Result>>>> = self.pending_transactions_subscribers.clone();
+        let mut receiver = self.new_pending_transactions.subscribe();
     
-        let mut receiver = self.new_block_hashes.subscribe();
-    
+        let handler_clone = self.handler.clone();
+
         let fut = async move {
             while let Some(new_tx) = receiver.recv().await {
                 debug!("new_pending_transactions_loop: {:?}", new_tx);
     
-                // publish new pending transaction
-                // pending_tx_subscribers.notify(new_tx);
+                handler_clone.notify_new_pending_transaction(new_tx);
             }
         };
     
@@ -265,6 +265,7 @@ pub struct ChainNotificationHandler {
     consensus: SharedConsensusGraph,
     data_man: Arc<BlockDataManager>,
     heads_subscribers: Arc<RwLock<Subscribers<Client>>>,
+    pending_transactions_subscribers: Arc<RwLock<Subscribers<Client>>>,
 }
 
 impl ChainNotificationHandler {
@@ -285,6 +286,28 @@ impl ChainNotificationHandler {
 
         // convert futures01::Future into std::Future so that we can await
         let _ = fut.compat().await;
+    }
+
+    // notify each subscriber about new pending transaction `hash` concurrently
+    fn notify_new_pending_transaction(&self, hash: H256) {
+        info!("notify_new_pending_transaction({:?})", hash);
+
+        let subscribers = self.pending_transactions_subscribers.read();
+
+        // do not retrieve anything unnecessarily
+        if subscribers.is_empty() {
+            debug!("No subscribers for pending transactions");
+            return;
+        }
+
+        debug!("Notify {}", hash);
+        for subscriber in subscribers.values() {
+            Self::notify(
+                &self.executor,
+                subscriber,
+                pubsub::Result::TransactionHash(hash),
+            );
+        }
     }
 
     // notify each subscriber about header `hash` concurrently
@@ -579,7 +602,7 @@ impl PubSub for PubSubClient {
             (pubsub::Kind::NewPendingTransactions, None) => {
                 info!("eth pubsub newPendingTransactions");
                 self.pending_transactions_subscribers.write().push(subscriber);
-                self.start_newPendingTransactions_loop();
+                self.start_new_pending_transactions_loop();
                 return;
             }
             // --------- newHeads ---------

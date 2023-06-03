@@ -113,6 +113,7 @@ pub struct Notifications {
     pub new_block_hashes: Arc<Channel<H256>>,
     pub epochs_ordered: Arc<Channel<(u64, Vec<H256>)>>,
     pub blame_verification_results: Arc<Channel<(u64, Option<u64>)>>, /* <height, witness> */
+    pub new_pending_transactions: Arc<Channel<H256>>,
 }
 
 impl Notifications {
@@ -123,6 +124,7 @@ impl Notifications {
             blame_verification_results: Arc::new(Channel::new(
                 "blame-verification-results",
             )),
+            new_pending_transactions: Arc::new(Channel::new("new-pending-transactions")),
         })
     }
 }
