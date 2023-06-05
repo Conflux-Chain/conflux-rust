@@ -5054,6 +5054,7 @@ dependencies = [
  "lazy_static",
  "log",
  "malloc_size_of",
+ "once_cell",
  "rand 0.7.3",
  "rlp",
  "rlp_derive",

@@ -4,6 +4,8 @@
 # source: https://stackoverflow.com/a/11158224
 import os, sys
 
+import rlp
+
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 import eth_utils
@@ -47,6 +49,8 @@ class HardforkTest(ConfluxTestFramework):
         self.conf_parameters["pos_in_queue_locked_views"] = 60
         self.conf_parameters["pos_out_queue_locked_views"] = 60
         self.conf_parameters["sigma_fix_transition_number"] = 1000000
+        self.conf_parameters["tanzanite_transition_height"] = 100
+        self.conf_parameters["cip112_transition_height"] = 100
         self.rpc_timewait = 6000
 
     def setup_nodes(self):
@@ -108,6 +112,10 @@ class HardforkTest(ConfluxTestFramework):
         client.generate_empty_blocks(400)
         sync_blocks(self.nodes)
         time.sleep(2)
+        parent_hash = client.best_block_hash()
+        for _ in range(100):
+            parent_hash = client.node.test_generatecustomblock(parent_hash, [], eth_utils.encode_hex(rlp.encode([])), False, ["0x01", "0x8804"])
+        sync_blocks(self.nodes)
 
         # Check if stopped node will be retired
         STOP_INDEX = 0

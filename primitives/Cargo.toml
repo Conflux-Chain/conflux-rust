@@ -20,6 +20,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_derive = "1.0"
 siphasher = "0.3"
 unexpected = { git = "https://github.com/Conflux-Chain/conflux-parity-deps.git", rev = "1597a9cab02343eb2322ca0ac58d39b64e3f42d1"  }
+once_cell = "1.17.1"
 
 [dev-dependencies]
 criterion = "0.3"

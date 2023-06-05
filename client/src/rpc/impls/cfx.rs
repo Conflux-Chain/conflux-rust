@@ -1004,7 +1004,7 @@ impl RpcImpl {
 
     fn generate_custom_block(
         &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes,
-        adaptive: Option<bool>,
+        adaptive: Option<bool>, custom: Option<Vec<Bytes>>,
     ) -> RpcResult<H256>
     {
         info!("RPC Request: generate_custom_block()");
@@ -1016,6 +1016,7 @@ impl RpcImpl {
             referee,
             transactions,
             adaptive.unwrap_or(false),
+            custom.map(|list| list.into_iter().map(|bytes| bytes.0).collect()),
         )?)
     }
 
@@ -2188,7 +2189,7 @@ impl TestRpc for TestRpcImpl {
                 &self, raw_txs_without_data: Bytes, adaptive: Option<bool>, tx_data_len: Option<usize>)
                 -> JsonRpcResult<H256>;
             fn generate_custom_block(
-                &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes, adaptive: Option<bool>)
+                &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes, adaptive: Option<bool>, custom: Option<Vec<Bytes>>)
                 -> JsonRpcResult<H256>;
             fn get_pivot_chain_and_weight(&self, height_range: Option<(u64, u64)>) -> JsonRpcResult<Vec<(H256, U256)>>;
             fn get_executed_info(&self, block_hash: H256) -> JsonRpcResult<(H256, H256)> ;
