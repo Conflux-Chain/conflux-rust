@@ -159,6 +159,8 @@ impl GlobalStat {
 
     fn get<T: GlobalParamKey>(&self) -> U256 { self.0[T::ID] }
 
+    fn re<T: GlobalParamKey>(&self) -> &U256 { &self.0[T::ID] }
+
     fn val<T: GlobalParamKey>(&mut self) -> &mut U256 { &mut self.0[T::ID] }
 }
 
@@ -376,17 +378,18 @@ impl State {
     /// Calculate the secondary reward for the next block number.
     pub fn bump_block_number_accumulate_interest(&mut self) {
         assert!(self.global_stat_checkpoints.get_mut().is_empty());
+        let interset_rate_per_block = self.global_stat.get::<InterestRate>();
         let accumulate_interest_rate =
             self.global_stat.val::<AccumulateInterestRate>();
         *accumulate_interest_rate = *accumulate_interest_rate
-            * (*INTEREST_RATE_PER_BLOCK_SCALE + *accumulate_interest_rate)
+            * (*INTEREST_RATE_PER_BLOCK_SCALE + interset_rate_per_block)
             / *INTEREST_RATE_PER_BLOCK_SCALE;
     }
 
     pub fn secondary_reward(&self) -> U256 {
         assert!(self.global_stat_checkpoints.read().is_empty());
-        let secondary_reward = self.global_stat.get::<TotalStorage>()
-            * self.global_stat.get::<InterestRate>()
+        let secondary_reward = *self.global_stat.re::<TotalStorage>()
+            * *self.global_stat.re::<InterestRate>()
             / *INTEREST_RATE_PER_BLOCK_SCALE;
         // TODO: the interest from tokens other than storage and staking should
         // send to public fund.
@@ -394,10 +397,9 @@ impl State {
     }
 
     pub fn pow_base_reward(&self) -> U256 {
-        self.db
-            .get_global_param_opt::<PowBaseReward>()
-            .expect("no db error")
-            .expect("initialized")
+        let base_reward = self.global_stat.get::<PowBaseReward>();
+        assert!(!base_reward.is_zero());
+        base_reward
     }
 
     /// Maintain `total_issued_tokens`.
@@ -410,7 +412,7 @@ impl State {
     /// unlikely case that there are a lot of partial invalid blocks.
     pub fn subtract_total_issued(&mut self, v: U256) {
         *self.global_stat.val::<TotalIssued>() =
-            self.global_stat.get::<TotalIssued>().saturating_sub(v);
+            self.global_stat.re::<TotalIssued>().saturating_sub(v);
     }
 
     pub fn add_total_pos_staking(&mut self, v: U256) {
@@ -426,7 +428,7 @@ impl State {
     pub fn subtract_total_evm_tokens(&mut self, v: U256) {
         if !v.is_zero() {
             *self.global_stat.val::<TotalEvmToken>() =
-                self.global_stat.get::<TotalEvmToken>().saturating_sub(v);
+                self.global_stat.re::<TotalEvmToken>().saturating_sub(v);
         }
     }
 
@@ -436,13 +438,13 @@ impl State {
         assert!(self.global_stat_checkpoints.get_mut().is_empty());
 
         if current_block_number
-            > self.global_stat.get::<LastDistributeBlock>().as_u64()
+            > self.global_stat.re::<LastDistributeBlock>().as_u64()
                 + BLOCKS_PER_HOUR
         {
             return Ok(());
         }
 
-        if self.global_stat.get::<TotalPosStaking>().is_zero() {
+        if self.global_stat.re::<TotalPosStaking>().is_zero() {
             return Ok(());
         }
 
@@ -450,17 +452,16 @@ impl State {
             - self.balance(&Address::zero().with_native_space())?
             - self.balance(&genesis_contract_address_four_year())?
             - self.balance(&genesis_contract_address_two_year())?;
-        let total_pos_staking_tokens =
-            self.global_stat.get::<TotalPosStaking>();
+        let total_pos_staking_tokens = self.global_stat.re::<TotalPosStaking>();
 
         // The `interest_amount` exactly equals to the floor of
         // pos_amount * 4% / blocks_per_year / sqrt(pos_amount/total_issued)
-        let interest_rate_per_block = self.global_stat.get::<InterestRate>();
+        let interest_rate_per_block = self.global_stat.re::<InterestRate>();
         let interest_amount = sqrt_u256(
             total_circulating_tokens
-                * total_pos_staking_tokens
-                * interest_rate_per_block
-                * interest_rate_per_block,
+                * *total_pos_staking_tokens
+                * *interest_rate_per_block
+                * *interest_rate_per_block,
         ) / (BLOCKS_PER_YEAR
             * INVERSE_INTEREST_RATE
             * INITIAL_INTEREST_RATE_PER_BLOCK.as_u64());
@@ -1069,7 +1070,7 @@ impl State {
     }
 
     pub fn last_distribute_block(&self) -> u64 {
-        self.global_stat.get::<LastDistributeBlock>().as_u64()
+        self.global_stat.re::<LastDistributeBlock>().as_u64()
     }
 
     pub fn remove_contract(
@@ -1553,9 +1554,9 @@ impl State {
             vote_count
         );
         debug!(
-            "before pos interest: {} base_reward:{:?}",
-            *self.global_stat.val::<InterestRate>(),
-            self.db.get_global_param_opt::<PowBaseReward>()?
+            "before pos interest: {} base_reward:{}",
+            self.global_stat.re::<InterestRate>(),
+            self.global_stat.re::<PowBaseReward>()
         );
 
         // If pos_staking has not been set before, this will be zero and the
@@ -1571,23 +1572,14 @@ impl State {
             );
 
         // Initialize or update PoW base reward.
-        match self.db.get_global_param_opt::<PowBaseReward>()? {
-            Some(old_pow_base_reward) => {
-                self.db.set_global_param::<PowBaseReward>(
-                    &vote_count.pow_base_reward.compute_next_params(
-                        old_pow_base_reward,
-                        pos_staking_for_votes,
-                    ),
-                    None,
-                )?;
-            }
-            None => {
-                self.db.set_global_param::<PowBaseReward>(
-                    &(MINING_REWARD_TANZANITE_IN_UCFX * ONE_UCFX_IN_DRIP)
-                        .into(),
-                    None,
-                )?;
-            }
+        let pow_base_reward = self.global_stat.val::<PowBaseReward>();
+        if !pow_base_reward.is_zero() {
+            *pow_base_reward = vote_count
+                .pow_base_reward
+                .compute_next_params(*pow_base_reward, pos_staking_for_votes);
+        } else {
+            *pow_base_reward =
+                (MINING_REWARD_TANZANITE_IN_UCFX * ONE_UCFX_IN_DRIP).into();
         }
 
         // Only write storage_collateral_refund_ratio if it has been set in the
@@ -1605,9 +1597,9 @@ impl State {
             )?;
         }
         debug!(
-            "pos interest: {} base_reward:{:?}",
-            self.global_stat.get::<InterestRate>(),
-            self.db.get_global_param_opt::<PowBaseReward>()?
+            "pos interest: {} base_reward: {}",
+            self.global_stat.re::<InterestRate>(),
+            self.global_stat.re::<PowBaseReward>()
         );
 
         settle_current_votes(self, set_pos_staking)?;
