@@ -1287,6 +1287,10 @@ impl Configuration {
             .raw_conf
             .dao_vote_transition_height
             .unwrap_or(non_genesis_default_transition_time);
+        params.transition_heights.cip112 = self
+            .raw_conf
+            .cip112_transition_height
+            .unwrap_or(default_transition_time);
         params.params_dao_vote_period = self.raw_conf.params_dao_vote_period;
 
         let mut base_block_rewards = BTreeMap::new();
