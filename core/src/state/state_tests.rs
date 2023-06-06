@@ -2,12 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{CleanupMode, CollateralCheckResult, State, Substate};
+use super::{CleanupMode, State, Substate};
 use crate::{
     spec::genesis::DEV_GENESIS_KEY_PAIR,
     test_helpers::get_state_for_genesis_write, vm::Spec,
 };
 use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
+use cfx_state::CollateralCheckResult;
 use cfx_statedb::StateDb;
 use cfx_storage::{
     tests::new_state_manager_for_unit_test, StateIndex, StorageManager,

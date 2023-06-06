@@ -17,6 +17,10 @@ pub enum CollateralCheckResult {
     Valid,
 }
 
+impl CollateralCheckResult {
+    pub fn ok(&self) -> bool { *self == CollateralCheckResult::Valid }
+}
+
 /// Mode of dealing with null accounts.
 #[derive(PartialEq)]
 pub enum CleanupMode<'a> {
