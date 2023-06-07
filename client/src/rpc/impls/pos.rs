@@ -182,7 +182,7 @@ impl PosHandler {
         let call_request = CallRequest {
             from: None,
             to: Some(RpcAddress::try_from_h160(
-                *POS_REGISTER_CONTRACT_ADDRESS,
+                POS_REGISTER_CONTRACT_ADDRESS,
                 self.network_type,
             )?),
             gas_price: None,

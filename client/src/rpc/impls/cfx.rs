@@ -8,7 +8,13 @@ use crate::rpc::types::{
     TokenSupplyInfo, VoteParamsInfo, WrapTransaction,
 };
 use blockgen::BlockGenerator;
-use cfx_statedb::StateDbExt;
+use cfx_statedb::{
+    global_params::{
+        AccumulateInterestRate, DistributablePoSInterest, InterestRate,
+        LastDistributeBlock, PowBaseReward, TotalPosStaking,
+    },
+    StateDbExt,
+};
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H256, H520, U128, U256,
     U64,
@@ -409,7 +415,7 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
 
-        Ok(state_db.get_annual_interest_rate()?.into())
+        Ok(state_db.get_global_param::<InterestRate>()?.into())
     }
 
     /// Returns accumulate interest rate of the given epoch
@@ -421,7 +427,9 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
 
-        Ok(state_db.get_accumulate_interest_rate()?.into())
+        Ok(state_db
+            .get_global_param::<AccumulateInterestRate>()?
+            .into())
     }
 
     /// Returns accumulate interest rate of the given epoch
@@ -435,11 +443,11 @@ impl RpcImpl {
 
         Ok(PoSEconomics {
             total_pos_staking_tokens: state_db
-                .get_total_pos_staking_tokens()?,
+                .get_global_param::<TotalPosStaking>()?,
             distributable_pos_interest: state_db
-                .get_distributable_pos_interest()?,
+                .get_global_param::<DistributablePoSInterest>()?,
             last_distribute_block: U64::from(
-                state_db.get_last_distribute_block()?,
+                state_db.get_global_param::<LastDistributeBlock>()?.as_u64(),
             ),
         })
     }
@@ -1557,10 +1565,9 @@ impl RpcImpl {
         let state_db = self
             .consensus
             .get_state_db_by_epoch_number(epoch, "epoch_num")?;
-        let interest_rate =
-            state_db.get_annual_interest_rate()? / U256::from(BLOCKS_PER_YEAR);
-        let pow_base_reward =
-            state_db.get_pow_base_reward()?.unwrap_or_default();
+        let interest_rate = state_db.get_global_param::<InterestRate>()?
+            / U256::from(BLOCKS_PER_YEAR);
+        let pow_base_reward = state_db.get_global_param::<PowBaseReward>()?;
 
         Ok(VoteParamsInfo {
             pow_base_reward,

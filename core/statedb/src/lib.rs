@@ -8,6 +8,7 @@ extern crate error_chain;
 extern crate log;
 
 mod error;
+pub mod global_params;
 mod statedb_ext;
 
 #[cfg(test)]
@@ -16,13 +17,7 @@ mod tests;
 pub use self::{
     error::{Error, ErrorKind, Result},
     impls::{StateDb as StateDbGeneric, StateDbCheckpointMethods},
-    statedb_ext::{
-        StateDbExt, ACCUMULATE_INTEREST_RATE_KEY,
-        DISTRIBUTABLE_POS_INTEREST_KEY, INTEREST_RATE_KEY,
-        LAST_DISTRIBUTE_BLOCK_KEY, TOTAL_BANK_TOKENS_KEY,
-        TOTAL_POS_STAKING_TOKENS_KEY, TOTAL_STORAGE_TOKENS_KEY,
-        TOTAL_TOKENS_KEY,
-    },
+    statedb_ext::StateDbExt,
 };
 pub type StateDb = StateDbGeneric;
 

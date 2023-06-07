@@ -563,7 +563,7 @@ pub fn build_bloom_and_recover_phantom(
     for log in logs.iter() {
         let log_bloom = log.bloom();
         all_bloom.accrue_bloom(&log_bloom);
-        if log.address == *CROSS_SPACE_CONTRACT_ADDRESS {
+        if log.address == CROSS_SPACE_CONTRACT_ADDRESS {
             let event_sig = log.topics.first().unwrap();
             if event_sig == &CallEvent::EVENT_SIG
                 || event_sig == &CreateEvent::EVENT_SIG
