@@ -14,11 +14,7 @@ use primitives::{
 };
 use std::collections::HashMap;
 
-use crate::{
-    executive::internal_contract::storage_point_prop, state::Substate,
-};
-
-use super::super::State;
+use super::{internal_contract::storage_point_prop, substate::Substate, State};
 
 impl State {
     pub fn sponsor_info(

@@ -3,15 +3,14 @@ use cfx_parameters::staking::{
     ACCUMULATED_INTEREST_RATE_SCALE, INITIAL_INTEREST_RATE_PER_BLOCK,
 };
 use cfx_statedb::{
-    global_params::{AccumulateInterestRate, InterestRate},
+    for_all_global_param_keys,
+    global_params::{
+        self, AccumulateInterestRate, GlobalParamKey, InterestRate,
+        TOTAL_GLOBAL_PARAMS,
+    },
     Result as DbResult, StateDbExt, StateDbGeneric as StateDb,
 };
 use cfx_types::U256;
-
-use cfx_statedb::{
-    for_all_global_param_keys,
-    global_params::{self, GlobalParamKey, TOTAL_GLOBAL_PARAMS},
-};
 
 #[derive(Copy, Clone, Debug)]
 pub(super) struct GlobalStat([U256; TOTAL_GLOBAL_PARAMS]);

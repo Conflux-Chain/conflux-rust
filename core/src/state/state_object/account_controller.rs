@@ -1,16 +1,15 @@
+use super::{
+    account_entry::{AccountEntry, OverlayAccount},
+    State,
+};
 use cfx_statedb::Result as DbResult;
-use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, H256, U256};
-use primitives::Account;
-
-use super::account_entry::{AccountEntry, OverlayAccount};
-
 use cfx_storage::utils::access_mode;
-use cfx_types::Space;
+use cfx_types::{
+    Address, AddressSpaceUtil, AddressWithSpace, Space, H256, U256,
+};
 #[cfg(test)]
 use primitives::storage::STORAGE_LAYOUT_REGULAR_V0;
-use primitives::StorageLayout;
-
-use super::State;
+use primitives::{Account, StorageLayout};
 
 impl State {
     pub fn new_contract_with_admin(

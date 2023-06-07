@@ -1,18 +1,14 @@
-use std::sync::Arc;
-
+use super::{AccountEntryProtectedMethods, RequireCache, State};
+use crate::hash::KECCAK_EMPTY;
 use cfx_bytes::Bytes;
 use cfx_state::CleanupMode;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
     address_util::AddressUtil, Address, AddressWithSpace, Space, H256, U256,
 };
-
-use crate::hash::KECCAK_EMPTY;
-
-use super::{AccountEntryProtectedMethods, RequireCache, State};
-
 #[cfg(test)]
 use primitives::StorageLayout;
+use std::sync::Arc;
 
 impl State {
     pub fn exists(&self, address: &AddressWithSpace) -> DbResult<bool> {

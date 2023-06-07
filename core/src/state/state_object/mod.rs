@@ -1,19 +1,17 @@
-use cfx_statedb::Result as DbResult;
-use cfx_types::AddressWithSpace;
-use primitives::Account;
-
+use self::cache_layer::RequireCache;
 use super::{
     account_entry::{self, AccountEntry},
-    substate, AccountEntryProtectedMethods, GlobalStat,
+    global_stat::GlobalStat,
+    substate, AccountEntryProtectedMethods,
 };
-
+use crate::{executive::internal_contract, vm::Spec};
+use cfx_state::tracer::StateTracer;
+use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric as StateDb};
+use cfx_types::AddressWithSpace;
+use parking_lot::RwLock;
+use primitives::Account;
 use std::collections::HashMap;
 
-use parking_lot::RwLock;
-
-use cfx_statedb::{StateDbExt, StateDbGeneric as StateDb};
-
-use self::cache_layer::RequireCache;
 pub use self::{
     collateral::settle_collateral_for_all,
     pos::{distribute_pos_interest, update_pos_status},

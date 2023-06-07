@@ -1,17 +1,11 @@
-use cfx_statedb::Result as DbResult;
-use cfx_types::AddressWithSpace;
-
-use super::account_entry::AccountState;
-
+use super::{account_entry::AccountState, State};
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };
-
+use cfx_statedb::Result as DbResult;
 use cfx_storage::utils::access_mode;
-
+use cfx_types::AddressWithSpace;
 use primitives::{Account, EpochId, StorageKey};
-
-use super::State;
 
 impl State {
     // It's guaranteed that the second call of this method is a no-op.

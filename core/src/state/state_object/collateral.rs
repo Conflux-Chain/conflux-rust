@@ -1,11 +1,4 @@
-use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-use cfx_statedb::{global_params::*, Result as DbResult};
-use cfx_types::{
-    address_util::AddressUtil, Address, AddressSpaceUtil, Space, U256,
-};
-
-use cfx_state::CollateralCheckResult;
-
+use super::{substate::Substate, Spec, State, StateTracer};
 use crate::{
     executive::internal_contract::storage_point_prop,
     state::trace::{
@@ -13,8 +6,12 @@ use crate::{
         trace_refund_collateral,
     },
 };
-
-use super::super::{Spec, State, StateTracer, Substate};
+use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+use cfx_state::CollateralCheckResult;
+use cfx_statedb::{global_params::*, Result as DbResult};
+use cfx_types::{
+    address_util::AddressUtil, Address, AddressSpaceUtil, Space, U256,
+};
 
 impl State {
     pub fn collateral_for_storage(&self, address: &Address) -> DbResult<U256> {

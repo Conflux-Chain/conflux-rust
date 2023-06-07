@@ -1,9 +1,7 @@
+use super::State;
 use cfx_parameters::internal_contract_addresses::SYSTEM_STORAGE_ADDRESS;
 use cfx_statedb::Result as DbResult;
-
 use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, U256};
-
-use super::State;
 
 // System Storages
 impl State {

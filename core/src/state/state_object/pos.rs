@@ -2,6 +2,8 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use super::State;
+use crate::executive::internal_contract::{pos_internal_entries, IndexStatus};
 use cfx_math::sqrt_u256;
 use cfx_parameters::{
     internal_contract_addresses::POS_REGISTER_CONTRACT_ADDRESS, staking::*,
@@ -14,13 +16,8 @@ use cfx_statedb::{
     },
     Result as DbResult,
 };
-
 use cfx_types::{Address, AddressSpaceUtil, BigEndianHash, H256, U256};
 use diem_types::term_state::MAX_TERM_POINTS;
-
-use crate::executive::internal_contract::{pos_internal_entries, IndexStatus};
-
-use super::super::State;
 
 impl State {
     pub fn inc_distributable_pos_interest(

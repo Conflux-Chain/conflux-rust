@@ -1,3 +1,10 @@
+use super::{
+    internal_contract::{
+        get_settled_param_vote_count, get_settled_pos_staking_for_votes,
+        settle_current_votes, storage_point_prop,
+    },
+    AccountEntryProtectedMethods, RequireCache, State,
+};
 use cfx_parameters::{
     consensus::ONE_UCFX_IN_DRIP,
     consensus_internal::MINING_REWARD_TANZANITE_IN_UCFX,
@@ -9,13 +16,6 @@ use cfx_statedb::{
     Result as DbResult,
 };
 use cfx_types::{Address, AddressSpaceUtil, U256};
-
-use crate::executive::internal_contract::{
-    get_settled_param_vote_count, get_settled_pos_staking_for_votes,
-    settle_current_votes, storage_point_prop,
-};
-
-use super::{AccountEntryProtectedMethods, RequireCache, State};
 
 // Staking balance
 

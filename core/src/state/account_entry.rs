@@ -2,10 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use super::Substate;
 use crate::{
     bytes::Bytes,
     hash::{keccak, KECCAK_EMPTY},
-    state::{AccountEntryProtectedMethods},
+    state::AccountEntryProtectedMethods,
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::{
@@ -26,8 +27,6 @@ use primitives::{
     StorageValue, VoteStakeList,
 };
 use std::{collections::HashMap, sync::Arc};
-
-use super::Substate;
 
 lazy_static! {
     static ref COMMISSION_PRIVILEGE_STORAGE_VALUE: U256 = U256::one();

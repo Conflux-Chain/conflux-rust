@@ -1,12 +1,10 @@
-use cfx_parameters::staking::INTEREST_RATE_PER_BLOCK_SCALE;
-use cfx_statedb::{global_params::*, Result as DbResult};
-use cfx_types::{Address, AddressSpaceUtil, U256};
-
+use super::State;
 use crate::spec::genesis::{
     genesis_contract_address_four_year, genesis_contract_address_two_year,
 };
-
-use super::super::State;
+use cfx_parameters::staking::INTEREST_RATE_PER_BLOCK_SCALE;
+use cfx_statedb::{global_params::*, Result as DbResult};
+use cfx_types::{Address, AddressSpaceUtil, U256};
 impl State {
     /// Calculate the secondary reward for the next block number.
     pub fn bump_block_number_accumulate_interest(&mut self) {

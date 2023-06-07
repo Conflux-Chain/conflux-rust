@@ -1,8 +1,5 @@
-use super::GlobalStat;
-
-use std::collections::{hash_map::Entry, HashMap};
-
 use super::State;
+use std::collections::{hash_map::Entry, HashMap};
 
 impl State {
     /// Create a recoverable checkpoint of this state. Return the checkpoint
@@ -74,6 +71,8 @@ impl State {
 
     #[cfg(any(test, feature = "testonly_code"))]
     pub fn clear(&mut self) {
+        use super::GlobalStat;
+
         assert!(self.checkpoints.get_mut().is_empty());
         assert!(self.global_stat_checkpoints.get_mut().is_empty());
         self.cache.get_mut().clear();

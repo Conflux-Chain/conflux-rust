@@ -2,38 +2,27 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use std::sync::Arc;
-
 use cfx_bytes::Bytes;
 use cfx_state::CleanupMode;
 use cfx_types::Address;
-
 use primitives::{DepositList, VoteStakeList};
+use std::sync::Arc;
 
+pub use account_entry::COMMISSION_PRIVILEGE_SPECIAL_KEY;
 pub use state_object::{
     distribute_pos_interest, initialize_or_update_dao_voted_params,
-    settle_collateral_for_all, update_pos_status,
+    settle_collateral_for_all, update_pos_status, State,
 };
-
-use crate::{observer::StateTracer, vm::Spec};
-
-pub use self::{
-    account_entry::{OverlayAccount, COMMISSION_PRIVILEGE_SPECIAL_KEY},
-    substate::{cleanup_mode, CallStackInfo, Substate},
-};
+pub use substate::{cleanup_mode, CallStackInfo, Substate};
 
 mod account_entry;
 #[cfg(test)]
 mod account_entry_tests;
+mod global_stat;
 pub mod prefetcher;
 mod state_object;
 mod substate;
 mod trace;
-
-mod global_stat;
-use global_stat::GlobalStat;
-
-pub use state_object::State;
 
 /// Methods that are intentionally kept private because the fields may not have
 /// been loaded from db.
