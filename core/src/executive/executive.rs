@@ -1082,12 +1082,12 @@ impl<'a> ExecutiveGeneric<'a> {
                     .map_or(false, |x| !x.is_zero());
 
                 if has_sponsor
-                    && (self.state.check_commission_privilege(
-                        &to,
-                        &tx.sender().address,
-                    )? || self
+                    && (self
                         .state
-                        .check_commission_privilege(&to, &Address::zero())?)
+                        .check_contract_whitelist(&to, &tx.sender().address)?
+                        || self
+                            .state
+                            .check_contract_whitelist(&to, &Address::zero())?)
                 {
                     sponsor_for_collateral_eligible = true;
 
@@ -1255,10 +1255,10 @@ impl<'a> ExecutiveGeneric<'a> {
                 .is_contract_with_code(&address.with_native_space())?
             {
                 code_address = *address;
-                if self.state.check_commission_privilege(
-                    &code_address,
-                    &sender.address,
-                )? {
+                if self
+                    .state
+                    .check_contract_whitelist(&code_address, &sender.address)?
+                {
                     // No need to check for gas sponsor account existence.
                     gas_sponsor_eligible = gas_cost
                         <= U512::from(

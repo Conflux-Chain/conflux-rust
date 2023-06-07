@@ -243,7 +243,7 @@ pub fn add_privilege(
 ) -> vm::Result<()>
 {
     for user_addr in addresses {
-        state.add_commission_privilege(
+        state.add_to_contract_whitelist(
             contract,
             params.storage_owner,
             user_addr,
@@ -261,7 +261,7 @@ pub fn remove_privilege(
 ) -> vm::Result<()>
 {
     for user_addr in addresses {
-        state.remove_commission_privilege(
+        state.remove_from_contract_whitelist(
             contract,
             params.storage_owner,
             user_addr,

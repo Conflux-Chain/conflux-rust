@@ -264,7 +264,7 @@ impl SingleMptState {
     fn delete_all_impl<AM: access_mode::AccessMode>(
         &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> Result<Option<Vec<MptKeyValue>>> {
-        if AM::is_read_only() {
+        if AM::READ_ONLY {
             self.ensure_temp_slab_for_db_load();
         } else {
             self.pre_modification();
@@ -273,7 +273,7 @@ impl SingleMptState {
         // Retrieve and delete key/value pairs from delta trie
         let trie_kvs = {
             let key_prefix = access_key_prefix.to_key_bytes();
-            let deleted = if AM::is_read_only() {
+            let deleted = if AM::READ_ONLY {
                 SubTrieVisitor::new(
                     &self.trie,
                     self.trie_root.clone(),

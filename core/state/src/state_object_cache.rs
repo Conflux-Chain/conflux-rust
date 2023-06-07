@@ -268,7 +268,7 @@ impl StateObjectCache {
         )
     }
 
-    pub fn require_or_new_basic_account<'a, StateDb: StateDbOps>(
+    pub fn write_account_or_new<'a, StateDb: StateDbOps>(
         &'a self, address: &Address, db: &'a mut StateDb,
         account_start_nonce: &U256,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,

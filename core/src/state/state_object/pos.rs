@@ -29,18 +29,19 @@ impl State {
         assert!(self.global_stat_checkpoints.get_mut().is_empty());
 
         let next_distribute_block =
-            self.global_stat.re::<LastDistributeBlock>().as_u64()
+            self.global_stat.refr::<LastDistributeBlock>().as_u64()
                 + BLOCKS_PER_HOUR;
 
         noop_if!(current_block_number > next_distribute_block);
-        noop_if!(self.global_stat.re::<TotalPosStaking>().is_zero());
+        noop_if!(self.global_stat.refr::<TotalPosStaking>().is_zero());
 
         let total_circulating_tokens = self.total_circulating_tokens()?;
-        let total_pos_staking_tokens = self.global_stat.re::<TotalPosStaking>();
+        let total_pos_staking_tokens =
+            self.global_stat.refr::<TotalPosStaking>();
 
         // The `interest_amount` exactly equals to the floor of
         // pos_amount * 4% / blocks_per_year / sqrt(pos_amount/total_issued)
-        let interest_rate_per_block = self.global_stat.re::<InterestRate>();
+        let interest_rate_per_block = self.global_stat.refr::<InterestRate>();
         let interest_amount = sqrt_u256(
             total_circulating_tokens
                 * *total_pos_staking_tokens
@@ -66,6 +67,19 @@ impl State {
             )?
             .into();
         Ok(*POS_VOTE_PRICE * current_value.locked())
+    }
+
+    pub fn add_pos_interest(
+        &mut self, address: &Address, interest: &U256,
+        cleanup_mode: CleanupMode,
+    ) -> DbResult<()>
+    {
+        let address = address.with_native_space();
+        self.add_total_issued(*interest);
+        self.add_balance(&address, interest, cleanup_mode)?;
+        self.write_account_or_new_lock(&address)?
+            .record_interest_receive(interest);
+        Ok(())
     }
 }
 
@@ -117,12 +131,12 @@ pub fn update_pos_status(
     status.set_unlocked(number);
     // .expect("Incorrect unlock information");
     state
-        .write_native_account(&POS_REGISTER_CONTRACT_ADDRESS)?
+        .write_native_account_lock(&POS_REGISTER_CONTRACT_ADDRESS)?
         .change_storage_value(
             &state.db,
             &pos_internal_entries::index_entry(&identifier),
             status.into(),
         )?;
-    state.sub_total_pos_staking_tokens(*POS_VOTE_PRICE * new_unlocked);
+    state.sub_total_pos_staking(*POS_VOTE_PRICE * new_unlocked);
     Ok(())
 }

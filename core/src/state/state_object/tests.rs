@@ -2,13 +2,13 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{CleanupMode, State, Substate};
+use super::{substate::Substate, State};
 use crate::{
     spec::genesis::DEV_GENESIS_KEY_PAIR,
     test_helpers::get_state_for_genesis_write, vm::Spec,
 };
 use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
-use cfx_state::CollateralCheckResult;
+use cfx_state::{CleanupMode, CollateralCheckResult};
 use cfx_statedb::StateDb;
 use cfx_storage::{
     tests::new_state_manager_for_unit_test, StateIndex, StorageManager,
@@ -875,7 +875,7 @@ fn kill_account_with_checkpoints() {
         .unwrap();
     // We don't charge the collateral in this test.
     state_0
-        .require_exists(&a_s, /* require_code = */ false)
+        .write_account_lock(&a_s)
         .unwrap()
         .commit_ownership_change(&state_0.db, &mut Substate::new())
         .unwrap();
@@ -934,7 +934,7 @@ fn check_result_of_simple_payment_to_killed_account() {
     let sender_addr = DEV_GENESIS_KEY_PAIR.address();
     let sender_addr_s = sender_addr.with_native_space();
     state_0
-        .require_or_new_basic_account(&sender_addr_s)
+        .write_account_or_new_lock(&sender_addr_s)
         .unwrap()
         .add_balance(&ONE_CFX_IN_DRIP.into());
     let mut a = Address::zero();
@@ -956,7 +956,7 @@ fn check_result_of_simple_payment_to_killed_account() {
         .unwrap();
     // We don't charge the collateral in this test.
     state_0
-        .require_exists(&a_s, /* require_code = */ false)
+        .write_account_lock(&a_s)
         .unwrap()
         .commit_ownership_change(&state_0.db, &mut Substate::new())
         .unwrap();
@@ -1137,7 +1137,7 @@ fn create_contract_fail_previous_storage() {
     state.remove_contract(&a_s).unwrap();
     // parking_lot::lock_api::MappedRwLockWriteGuard must be used, so we drop()
     // it.
-    drop(state.require_or_new_basic_account(&a_s).unwrap());
+    drop(state.write_account_or_new_lock(&a_s).unwrap());
     state
         .new_contract_with_code(&contract_addr_s, U256::zero())
         .unwrap();

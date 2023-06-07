@@ -1,5 +1,3 @@
-use crate::executive::internal_contract::storage_point_prop;
-
 use cfx_parameters::staking::INTEREST_RATE_PER_BLOCK_SCALE;
 use cfx_statedb::{global_params::*, Result as DbResult};
 use cfx_types::{Address, AddressSpaceUtil, U256};
@@ -23,8 +21,8 @@ impl State {
 
     pub fn secondary_reward(&self) -> U256 {
         assert!(self.global_stat_checkpoints.read().is_empty());
-        let secondary_reward = *self.global_stat.re::<TotalStorage>()
-            * *self.global_stat.re::<InterestRate>()
+        let secondary_reward = *self.global_stat.refr::<TotalStorage>()
+            * *self.global_stat.refr::<InterestRate>()
             / *INTEREST_RATE_PER_BLOCK_SCALE;
         // TODO: the interest from tokens other than storage and staking should
         // send to public fund.
@@ -37,6 +35,10 @@ impl State {
         base_reward
     }
 
+    pub fn total_issued_tokens(&self) -> U256 {
+        self.global_stat.get::<TotalIssued>()
+    }
+
     /// Maintain `total_issued_tokens`.
     pub fn add_total_issued(&mut self, v: U256) {
         assert!(self.global_stat_checkpoints.get_mut().is_empty());
@@ -47,7 +49,7 @@ impl State {
     /// unlikely case that there are a lot of partial invalid blocks.
     pub fn sub_total_issued(&mut self, v: U256) {
         *self.global_stat.val::<TotalIssued>() =
-            self.global_stat.re::<TotalIssued>().saturating_sub(v);
+            self.global_stat.refr::<TotalIssued>().saturating_sub(v);
     }
 
     pub fn add_total_pos_staking(&mut self, v: U256) {
@@ -60,11 +62,7 @@ impl State {
 
     pub fn sub_total_evm_tokens(&mut self, v: U256) {
         *self.global_stat.val::<TotalEvmToken>() =
-            self.global_stat.re::<TotalEvmToken>().saturating_sub(v);
-    }
-
-    pub fn total_issued_tokens(&self) -> U256 {
-        self.global_stat.get::<TotalIssued>()
+            self.global_stat.refr::<TotalEvmToken>().saturating_sub(v);
     }
 
     pub fn total_staking_tokens(&self) -> U256 {
@@ -91,9 +89,9 @@ impl State {
         self.global_stat.get::<TotalPosStaking>()
     }
 
-    pub fn sub_total_pos_staking_tokens(&mut self, v: U256) {
+    pub fn sub_total_pos_staking(&mut self, v: U256) {
         *self.global_stat.val::<TotalPosStaking>() =
-            self.global_stat.re::<TotalPosStaking>().saturating_sub(v)
+            self.global_stat.refr::<TotalPosStaking>().saturating_sub(v)
     }
 
     pub fn distributable_pos_interest(&self) -> U256 {
@@ -101,7 +99,7 @@ impl State {
     }
 
     pub fn last_distribute_block(&self) -> u64 {
-        self.global_stat.re::<LastDistributeBlock>().as_u64()
+        self.global_stat.refr::<LastDistributeBlock>().as_u64()
     }
 
     pub fn total_circulating_tokens(&self) -> DbResult<U256> {
@@ -109,10 +107,6 @@ impl State {
             - self.balance(&Address::zero().with_native_space())?
             - self.balance(&genesis_contract_address_four_year())?
             - self.balance(&genesis_contract_address_two_year())?)
-    }
-
-    pub fn storage_point_prop(&self) -> DbResult<U256> {
-        Ok(self.get_system_storage(&storage_point_prop())?)
     }
 
     pub fn reset_pos_distribute_info(&mut self, current_block_number: u64) {

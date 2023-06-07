@@ -196,7 +196,7 @@ mod impls {
             let key_bytes = key_prefix.to_key_bytes();
             if let Some(record) = debug_record {
                 record.state_ops.push(StateOp::StorageLevelOp {
-                    op_name: if AM::is_read_only() {
+                    op_name: if AM::READ_ONLY {
                         "iterate"
                     } else {
                         "delete_all"
@@ -230,7 +230,7 @@ mod impls {
                         k.clone(),
                         (&**v.current_value.as_ref().unwrap()).into(),
                     ));
-                    if !AM::is_read_only() {
+                    if !AM::READ_ONLY {
                         v.current_value = None;
                     }
                 }
@@ -250,7 +250,7 @@ mod impls {
                     };
                     if was_vacant {
                         deleted_kvs.push((k.clone(), v.clone()));
-                        if !AM::is_read_only() {
+                        if !AM::READ_ONLY {
                             entry.or_insert(EntryValue::new_modified(
                                 Some((&**v).into()),
                                 None,
@@ -261,7 +261,7 @@ mod impls {
             }
 
             // update latest checkpoint if necessary
-            if !AM::is_read_only() {
+            if !AM::READ_ONLY {
                 for (k, v) in &deleted_kvs {
                     let v: Value = Some(v.clone().into());
                     self.update_checkpoint(k, Some(v));

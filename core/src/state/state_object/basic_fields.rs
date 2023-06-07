@@ -9,25 +9,25 @@ use cfx_types::{
 
 use crate::hash::KECCAK_EMPTY;
 
-use super::super::{AccountEntryProtectedMethods, RequireCache, State};
+use super::{AccountEntryProtectedMethods, RequireCache, State};
 
 #[cfg(test)]
 use primitives::StorageLayout;
 
 impl State {
     pub fn exists(&self, address: &AddressWithSpace) -> DbResult<bool> {
-        Ok(self.read_account(address)?.is_some())
+        Ok(self.read_account_lock(address)?.is_some())
     }
 
     pub fn exists_and_not_null(
         &self, address: &AddressWithSpace,
     ) -> DbResult<bool> {
-        let acc = try_loaded!(self.read_account(address));
+        let acc = try_loaded!(self.read_account_lock(address));
         Ok(!acc.is_null())
     }
 
     pub fn balance(&self, address: &AddressWithSpace) -> DbResult<U256> {
-        let acc = try_loaded!(self.read_account(address));
+        let acc = try_loaded!(self.read_account_lock(address));
         Ok(*acc.balance())
     }
 
@@ -43,7 +43,7 @@ impl State {
         if !by.is_zero()
             || (cleanup_mode == CleanupMode::ForceCreate && !exists)
         {
-            self.require_or_new_basic_account(address)?.add_balance(by);
+            self.write_account_or_new_lock(address)?.add_balance(by);
         }
 
         // TODO: consider remove touched
@@ -61,7 +61,7 @@ impl State {
     ) -> DbResult<()>
     {
         if !by.is_zero() {
-            self.require_exists(address, false)?.sub_balance(by);
+            self.write_account_lock(address)?.sub_balance(by);
         }
 
         if let CleanupMode::TrackTouched(ref mut set) = *cleanup_mode {
@@ -83,20 +83,19 @@ impl State {
     }
 
     pub fn nonce(&self, address: &AddressWithSpace) -> DbResult<U256> {
-        let acc = try_loaded!(self.read_account(address));
+        let acc = try_loaded!(self.read_account_lock(address));
         Ok(*acc.nonce())
     }
 
     pub fn inc_nonce(&mut self, address: &AddressWithSpace) -> DbResult<()> {
-        self.require_or_new_basic_account(address)?.inc_nonce();
+        self.write_account_or_new_lock(address)?.inc_nonce();
         Ok(())
     }
 
     pub fn set_nonce(
         &mut self, address: &AddressWithSpace, nonce: &U256,
     ) -> DbResult<()> {
-        self.require_or_new_basic_account(address)?
-            .set_nonce(&nonce);
+        self.write_account_or_new_lock(address)?.set_nonce(&nonce);
         Ok(())
     }
 
@@ -109,22 +108,23 @@ impl State {
             return Ok(false);
         }
 
-        let acc = try_loaded!(self.read_account(address));
+        let acc = try_loaded!(self.read_account_lock(address));
         Ok(acc.code_hash() != KECCAK_EMPTY)
     }
 
     pub fn code_hash(
         &self, address: &AddressWithSpace,
     ) -> DbResult<Option<H256>> {
-        let acc = try_loaded!(self.read_account(address));
+        let acc = try_loaded!(self.read_account_lock(address));
         Ok(Some(acc.code_hash()))
     }
 
     pub fn code_size(
         &self, address: &AddressWithSpace,
     ) -> DbResult<Option<usize>> {
-        let acc =
-            try_loaded!(self.read_account_ext(address, RequireCache::Code));
+        let acc = try_loaded!(
+            self.read_account_ext_lock(address, RequireCache::Code)
+        );
         Ok(acc.code_size())
     }
 
@@ -132,43 +132,47 @@ impl State {
         &self, address: &AddressWithSpace,
     ) -> DbResult<Option<Address>> {
         address.assert_native();
-        let acc =
-            try_loaded!(self.read_account_ext(address, RequireCache::Code));
+        let acc = try_loaded!(
+            self.read_account_ext_lock(address, RequireCache::Code)
+        );
         Ok(acc.code_owner())
     }
 
     pub fn code(
         &self, address: &AddressWithSpace,
     ) -> DbResult<Option<Arc<Vec<u8>>>> {
-        let acc =
-            try_loaded!(self.read_account_ext(address, RequireCache::Code));
+        let acc = try_loaded!(
+            self.read_account_ext_lock(address, RequireCache::Code)
+        );
         Ok(acc.code())
     }
 
     pub fn init_code(
         &mut self, address: &AddressWithSpace, code: Bytes, owner: Address,
     ) -> DbResult<()> {
-        self.write_account(address)?.init_code(code, owner);
+        self.write_account_lock(address)?.init_code(code, owner);
         Ok(())
     }
 
     pub fn admin(&self, address: &Address) -> DbResult<Address> {
-        let acc = try_loaded!(self.read_native_account(address));
+        let acc = try_loaded!(self.read_native_account_lock(address));
         Ok(*acc.admin())
     }
 
     pub fn set_admin(
         &mut self, contract_address: &Address, admin: &Address,
     ) -> DbResult<()> {
-        self.write_native_account(&contract_address)?
+        self.write_native_account_lock(&contract_address)?
             .set_admin(admin);
         Ok(())
     }
 
     /// Return whether or not the address exists.
     pub fn try_load(&self, address: &AddressWithSpace) -> DbResult<bool> {
-        let _ = try_loaded!(self.read_account(address));
-        let _ = try_loaded!(self.read_account_ext(address, RequireCache::Code));
+        let _ = try_loaded!(self.read_account_lock(address));
+        let _ = try_loaded!(
+            self.read_account_ext_lock(address, RequireCache::Code)
+        );
         Ok(true)
     }
 
@@ -176,7 +180,7 @@ impl State {
     pub fn set_storage_layout(
         &mut self, address: &AddressWithSpace, layout: StorageLayout,
     ) -> DbResult<()> {
-        self.write_account(address)?.set_storage_layout(layout);
+        self.write_account_lock(address)?.set_storage_layout(layout);
         Ok(())
     }
 }

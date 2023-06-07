@@ -1,43 +1,54 @@
+use std::collections::HashMap;
+
 use super::State;
 
 use parking_lot::{
-    lock_api::{MappedRwLockReadGuard, RwLockReadGuard},
-    MappedRwLockWriteGuard, RawRwLock, RwLockUpgradableReadGuard,
-    RwLockWriteGuard,
+    MappedRwLockReadGuard, MappedRwLockWriteGuard, RwLockReadGuard,
+    RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
 
 use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, U256};
 
-use cfx_statedb::{ErrorKind as DbErrorKind, Result as DbResult, StateDbExt};
+use cfx_statedb::{
+    ErrorKind as DbErrorKind, Result as DbResult, StateDb, StateDbExt,
+};
 
 use super::{
     account_entry::{AccountEntry, AccountState},
-    AccountEntryProtectedMethods, RequireCache,
+    AccountEntryProtectedMethods,
 };
 pub use super::{
     account_entry::{OverlayAccount, COMMISSION_PRIVILEGE_SPECIAL_KEY},
     substate::{cleanup_mode, CallStackInfo, Substate},
 };
 
-pub type AccountReadGuard<'a> =
-    MappedRwLockReadGuard<'a, RawRwLock, OverlayAccount>;
+pub type AccountReadGuard<'a> = MappedRwLockReadGuard<'a, OverlayAccount>;
+pub type AccountWriteGuard<'a> = MappedRwLockWriteGuard<'a, OverlayAccount>;
+
+#[derive(Copy, Clone)]
+pub enum RequireCache {
+    None,
+    Code,
+    DepositList,
+    VoteStakeList,
+}
 
 impl State {
-    pub(super) fn read_native_account<'a>(
-        &'a self, address: &Address,
-    ) -> DbResult<Option<AccountReadGuard<'a>>> {
-        self.read_account(&address.with_native_space())
+    pub(super) fn read_account_lock(
+        &self, address: &AddressWithSpace,
+    ) -> DbResult<Option<AccountReadGuard>> {
+        self.read_account_ext_lock(address, RequireCache::None)
     }
 
-    pub(super) fn read_account<'a>(
-        &'a self, address: &AddressWithSpace,
-    ) -> DbResult<Option<AccountReadGuard<'a>>> {
-        self.read_account_ext(address, RequireCache::None)
+    pub(super) fn read_native_account_lock(
+        &self, address: &Address,
+    ) -> DbResult<Option<AccountReadGuard>> {
+        self.read_account_lock(&address.with_native_space())
     }
 
-    pub(super) fn read_account_ext<'a>(
-        &'a self, address: &AddressWithSpace, require: RequireCache,
-    ) -> DbResult<Option<AccountReadGuard<'a>>> {
+    pub(super) fn read_account_ext_lock(
+        &self, address: &AddressWithSpace, require: RequireCache,
+    ) -> DbResult<Option<AccountReadGuard>> {
         let as_account_guard = |guard| {
             MappedRwLockReadGuard::map(guard, |entry: &AccountEntry| {
                 entry.account.as_ref().unwrap()
@@ -51,7 +62,7 @@ impl State {
             })
         {
             if let Some(account) = &guard.account {
-                let needs_update = Self::needs_update(require, account);
+                let needs_update = Self::should_update_cache(require, account);
                 if !needs_update {
                     return Ok(Some(as_account_guard(guard)));
                 }
@@ -73,7 +84,9 @@ impl State {
                     .get_account(address)?
                     .map(|acc| OverlayAccount::from_loaded(address, acc));
                 if let Some(account) = &mut maybe_loaded_acc {
-                    Self::update_account_cache(require, account, &self.db)?;
+                    Self::should_update_account_cache(
+                        require, account, &self.db,
+                    )?;
                 }
                 let mut cache_write_lock =
                     RwLockUpgradableReadGuard::upgrade(upgradable_lock);
@@ -90,7 +103,8 @@ impl State {
         let cache = &mut *cache_write_lock;
         let account = cache.get_mut(address).unwrap();
         if let Some(maybe_acc) = &mut account.account {
-            if !Self::update_account_cache(require, maybe_acc, &self.db)? {
+            if !Self::should_update_account_cache(require, maybe_acc, &self.db)?
+            {
                 return Err(DbErrorKind::IncompleteDatabase(
                     maybe_acc.address().address.clone(),
                 )
@@ -110,7 +124,9 @@ impl State {
         })
     }
 
-    fn needs_update(require: RequireCache, account: &OverlayAccount) -> bool {
+    fn should_update_cache(
+        require: RequireCache, account: &OverlayAccount,
+    ) -> bool {
         trace!("update_account_cache account={:?}", account);
         match require {
             RequireCache::None => false,
@@ -122,40 +138,46 @@ impl State {
 }
 
 impl State {
-    pub(super) fn write_account_ext(
+    pub fn write_account_lock(
+        &self, address: &AddressWithSpace,
+    ) -> DbResult<AccountWriteGuard> {
+        self.require_exists(address, false)
+    }
+
+    pub(super) fn write_native_account_lock(
+        &self, address: &Address,
+    ) -> DbResult<AccountWriteGuard> {
+        self.write_account_lock(&address.with_native_space())
+    }
+
+    pub(super) fn write_account_ext_lock(
         &self, address: &AddressWithSpace, require: RequireCache,
-    ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>> {
+    ) -> DbResult<AccountWriteGuard> {
         Ok(match require {
             RequireCache::None => self.require_exists(address, false)?,
             RequireCache::Code => self.require_exists(address, true)?,
             RequireCache::DepositList => {
                 let mut acc = self.require_exists(address, false)?;
-                acc.cache_staking_info(true, false, &self.db)?;
+                acc.cache_ext_fields(true, false, &self.db)?;
                 acc
             }
             RequireCache::VoteStakeList => {
                 let mut acc = self.require_exists(address, false)?;
-                acc.cache_staking_info(false, true, &self.db)?;
+                acc.cache_ext_fields(false, true, &self.db)?;
                 acc
             }
         })
     }
 
-    pub(super) fn write_account(
+    pub(super) fn write_account_or_new_lock(
         &self, address: &AddressWithSpace,
-    ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>> {
-        self.require_exists(address, false)
+    ) -> DbResult<AccountWriteGuard> {
+        self.require_or_new_basic_account(address)
     }
 
-    pub(super) fn write_native_account(
-        &self, address: &Address,
-    ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>> {
-        self.write_account(&address.with_native_space())
-    }
-
-    pub(super) fn require_exists(
+    fn require_exists(
         &self, address: &AddressWithSpace, require_code: bool,
-    ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>> {
+    ) -> DbResult<AccountWriteGuard> {
         fn no_account_is_an_error(
             address: &AddressWithSpace,
         ) -> DbResult<OverlayAccount> {
@@ -164,9 +186,9 @@ impl State {
         self.require_or_set(address, require_code, no_account_is_an_error)
     }
 
-    pub(super) fn require_or_new_basic_account(
+    fn require_or_new_basic_account(
         &self, address: &AddressWithSpace,
-    ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>> {
+    ) -> DbResult<AccountWriteGuard> {
         self.require_or_set(address, false, |address| {
             // It is guaranteed that the address is valid.
 
@@ -182,7 +204,7 @@ impl State {
 
     fn require_or_set<F>(
         &self, address: &AddressWithSpace, require_code: bool, default: F,
-    ) -> DbResult<MappedRwLockWriteGuard<OverlayAccount>>
+    ) -> DbResult<AccountWriteGuard>
     where F: FnOnce(&AddressWithSpace) -> DbResult<OverlayAccount> {
         let mut cache;
         if !self.cache.read().contains_key(address) {
@@ -215,7 +237,7 @@ impl State {
         }
 
         if require_code {
-            if !Self::update_account_cache(
+            if !Self::should_update_account_cache(
                 RequireCache::Code,
                 entry
                     .account
@@ -234,5 +256,41 @@ impl State {
                 .as_mut()
                 .expect("Required account must exist.")
         }))
+    }
+}
+
+impl State {
+    fn insert_cache_if_fresh_account(
+        cache: &mut HashMap<AddressWithSpace, AccountEntry>,
+        address: &AddressWithSpace, maybe_account: Option<OverlayAccount>,
+    ) -> bool
+    {
+        if !cache.contains_key(address) {
+            cache.insert(*address, AccountEntry::new_clean(maybe_account));
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Load required account data from the databases. Returns whether the
+    /// cache succeeds.
+    fn should_update_account_cache(
+        require: RequireCache, account: &mut OverlayAccount, db: &StateDb,
+    ) -> DbResult<bool> {
+        match require {
+            RequireCache::None => Ok(true),
+            RequireCache::Code => account.cache_code(db),
+            RequireCache::DepositList => account.cache_ext_fields(
+                true,  /* cache_deposit_list */
+                false, /* cache_vote_list */
+                db,
+            ),
+            RequireCache::VoteStakeList => account.cache_ext_fields(
+                false, /* cache_deposit_list */
+                true,  /* cache_vote_list */
+                db,
+            ),
+        }
     }
 }

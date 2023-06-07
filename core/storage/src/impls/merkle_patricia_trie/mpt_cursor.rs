@@ -158,7 +158,7 @@ impl<Mpt: GetReadMpt, PathNode: PathNodeTrait<Mpt>> MptCursor<Mpt, PathNode> {
                     }
                 } else {
                     // PathDiverted
-                    if AM::is_read_only() {
+                    if AM::READ_ONLY {
                         Ok(CursorPopNodesTerminal::PathDiverted(
                             WalkStop::path_diverted_uninitialized(),
                         ))

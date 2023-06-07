@@ -6,30 +6,33 @@ use cfx_types::{
 
 use cfx_state::CollateralCheckResult;
 
-use crate::state::trace::{
-    trace_convert_stroage_points, trace_occupy_collateral,
-    trace_refund_collateral,
+use crate::{
+    executive::internal_contract::storage_point_prop,
+    state::trace::{
+        trace_convert_stroage_points, trace_occupy_collateral,
+        trace_refund_collateral,
+    },
 };
 
 use super::super::{Spec, State, StateTracer, Substate};
 
 impl State {
     pub fn collateral_for_storage(&self, address: &Address) -> DbResult<U256> {
-        let acc = try_loaded!(self.read_native_account(address));
+        let acc = try_loaded!(self.read_native_account_lock(address));
         Ok(acc.collateral_for_storage())
     }
 
     pub fn token_collateral_for_storage(
         &self, address: &Address,
     ) -> DbResult<U256> {
-        let acc = try_loaded!(self.read_native_account(address));
+        let acc = try_loaded!(self.read_native_account_lock(address));
         Ok(acc.token_collateral_for_storage())
     }
 
     pub fn avaliable_storage_point_for_collateral(
         &self, address: &Address,
     ) -> DbResult<U256> {
-        let acc = try_loaded!(self.read_native_account(address));
+        let acc = try_loaded!(self.read_native_account_lock(address));
         Ok(acc
             .sponsor_info()
             .storage_points
@@ -43,26 +46,26 @@ impl State {
     pub fn add_collateral_for_storage(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<U256> {
-        Ok(if !by.is_zero() {
-            let storage_point_used = self
-                .require_exists(&address.with_native_space(), false)?
-                .add_collateral_for_storage(by);
-            *self.global_stat.val::<TotalStorage>() += *by - storage_point_used;
-            *self.global_stat.val::<UsedStoragePoint>() += storage_point_used;
-            storage_point_used
-        } else {
-            U256::zero()
-        })
+        noop_if!(by.is_zero());
+
+        let storage_point_used = self
+            .write_native_account_lock(&address)?
+            .add_collateral_for_storage(by);
+        *self.global_stat.val::<TotalStorage>() += *by - storage_point_used;
+        *self.global_stat.val::<UsedStoragePoint>() += storage_point_used;
+        Ok(storage_point_used)
     }
 
     pub fn sub_collateral_for_storage(
         &mut self, address: &Address, by: &U256,
     ) -> DbResult<U256> {
+        noop_if!(by.is_zero());
+
         let collateral = self.token_collateral_for_storage(address)?;
         let refundable = if by > &collateral { &collateral } else { by };
         let burnt = *by - *refundable;
         let storage_point_refund = if !refundable.is_zero() {
-            self.require_or_new_basic_account(&address.with_native_space())?
+            self.write_account_or_new_lock(&address.with_native_space())?
                 .sub_collateral_for_storage(refundable)
         } else {
             U256::zero()
@@ -70,7 +73,7 @@ impl State {
 
         *self.global_stat.val::<TotalStorage>() -= *by - storage_point_refund;
         *self.global_stat.val::<UsedStoragePoint>() -= storage_point_refund;
-        *self.global_stat.val::<TotalIssued>() -= burnt;
+        self.sub_total_issued(burnt);
 
         Ok(storage_point_refund)
     }
@@ -138,9 +141,9 @@ impl State {
     ) -> DbResult<(U256, U256)> {
         debug!("Check initialize CIP-107");
 
-        let prop: U256 = self.storage_point_prop()?;
+        let prop: U256 = self.get_system_storage(&storage_point_prop())?;
         let mut account =
-            self.require_or_new_basic_account(&address.with_native_space())?;
+            self.write_account_or_new_lock(&address.with_native_space())?;
         noop_if!(account.is_cip_107_initialized());
 
         let (from_balance, from_collateral) = account.initialize_cip107(prop);

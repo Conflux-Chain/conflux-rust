@@ -40,6 +40,25 @@ impl GlobalStat {
         Ok(GlobalStat(ans))
     }
 
+    pub fn assert_non_inited(db: &StateDb) -> DbResult<()> {
+        // If db is not initialized, all the loaded value should be zero.
+        fn assert_zero_global_params<T: GlobalParamKey>(
+            db: &StateDb,
+        ) -> DbResult<()> {
+            assert!(
+                db.get_global_param::<T>()?.is_zero(),
+                "{:x?} is non-zero when db is un-init",
+                T::STORAGE_KEY
+            );
+            Ok(())
+        }
+        use global_params::*;
+        for_all_global_param_keys! {
+            assert_zero_global_params::<Key>(&db)?;
+        }
+        Ok(())
+    }
+
     pub fn commit(
         &self, db: &mut StateDb,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
@@ -63,7 +82,7 @@ impl GlobalStat {
 
     pub fn get<T: GlobalParamKey>(&self) -> U256 { self.0[T::ID] }
 
-    pub fn re<T: GlobalParamKey>(&self) -> &U256 { &self.0[T::ID] }
+    pub fn refr<T: GlobalParamKey>(&self) -> &U256 { &self.0[T::ID] }
 
     pub fn val<T: GlobalParamKey>(&mut self) -> &mut U256 { &mut self.0[T::ID] }
 }

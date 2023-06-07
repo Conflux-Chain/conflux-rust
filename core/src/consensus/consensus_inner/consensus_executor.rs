@@ -1148,12 +1148,22 @@ impl ConsensusExecutionHandler {
         let state_root;
         if on_local_pivot {
             state_root = state
-                .commit_and_notify(
-                    *epoch_hash,
-                    &self.tx_pool,
-                    debug_record.as_deref_mut(),
-                )
+                .commit(*epoch_hash, debug_record.as_deref_mut())
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
+            {
+                debug!("Notify epoch[{}]", epoch_hash);
+
+                // TODO: use channel to deliver the message.
+                let txpool_clone = self.tx_pool.clone();
+                let accounts_for_txpool = state.accounts_for_txpool();
+                std::thread::Builder::new()
+                    .name("txpool_update_state".into())
+                    .spawn(move || {
+                        txpool_clone
+                            .notify_modified_accounts(accounts_for_txpool);
+                    })
+                    .expect("can not notify tx pool to start state");
+            }
             self.tx_pool
                 .set_best_executed_epoch(StateIndex::new_for_readonly(
                     epoch_hash,
