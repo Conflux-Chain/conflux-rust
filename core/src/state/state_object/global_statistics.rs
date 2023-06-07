@@ -39,7 +39,6 @@ impl State {
 
     /// Maintain `total_issued_tokens`.
     pub fn add_total_issued(&mut self, v: U256) {
-        assert!(self.global_stat_checkpoints.get_mut().is_empty());
         *self.global_stat.val::<TotalIssued>() += v;
     }
 
