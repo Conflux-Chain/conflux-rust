@@ -1,24 +1,54 @@
-
-
-
-use cfx_parameters::{
-    consensus::ONE_CFX_IN_DRIP,
-};
-
-#[cfg(test)]
-use cfx_types::AddressSpaceUtil;
-use cfx_types::{
-    U256,
-};
-
-use primitives::{
-    account::StoragePoints,
-};
-
+use cfx_parameters::consensus::ONE_CFX_IN_DRIP;
+use cfx_types::U256;
+use primitives::account::StoragePoints;
 
 use super::OverlayAccount;
 
 impl OverlayAccount {
+    /// The collateral of an account, including the token collateral and the
+    /// storage point collateral
+    pub fn collateral_for_storage(&self) -> U256 {
+        self.address.assert_native();
+        self.token_collateral_for_storage()
+            + self.storage_point_collateral_for_storage()
+    }
+
+    pub fn token_collateral_for_storage(&self) -> U256 {
+        self.address.assert_native();
+        self.collateral_for_storage
+    }
+
+    pub fn storage_point_collateral_for_storage(&self) -> U256 {
+        self.address.assert_native();
+        self.sponsor_info
+            .storage_points
+            .as_ref()
+            .map_or(U256::zero(), |x| x.used)
+    }
+
+    pub fn add_collateral_for_storage(&mut self, by: &U256) -> U256 {
+        self.address.assert_native();
+        if self.is_contract() {
+            self.charge_for_sponsored_collateral(*by)
+        } else {
+            self.sub_balance(by);
+            self.collateral_for_storage += *by;
+            U256::zero()
+        }
+    }
+
+    pub fn sub_collateral_for_storage(&mut self, by: &U256) -> U256 {
+        self.address.assert_native();
+        assert!(self.collateral_for_storage >= *by);
+        if self.is_contract() {
+            self.refund_for_sponsored_collateral(*by)
+        } else {
+            self.add_balance(by);
+            self.collateral_for_storage -= *by;
+            U256::zero()
+        }
+    }
+
     fn charge_for_sponsored_collateral(&mut self, by: U256) -> U256 {
         assert!(self.is_contract());
         let charge_from_balance =
@@ -63,44 +93,6 @@ impl OverlayAccount {
         self.collateral_for_storage -= refund_from_balance;
 
         refund_from_points
-    }
-
-    pub fn add_collateral_for_storage(&mut self, by: &U256) -> U256 {
-        self.address.assert_native();
-        if self.is_contract() {
-            self.charge_for_sponsored_collateral(*by)
-        } else {
-            self.sub_balance(by);
-            self.collateral_for_storage += *by;
-            U256::zero()
-        }
-    }
-
-    pub fn sub_collateral_for_storage(&mut self, by: &U256) -> U256 {
-        self.address.assert_native();
-        assert!(self.collateral_for_storage >= *by);
-        if self.is_contract() {
-            self.refund_for_sponsored_collateral(*by)
-        } else {
-            self.add_balance(by);
-            self.collateral_for_storage -= *by;
-            U256::zero()
-        }
-    }
-
-    pub fn collateral_for_storage(&self) -> U256 {
-        self.address.assert_native();
-        self.collateral_for_storage
-            + self
-                .sponsor_info
-                .storage_points
-                .as_ref()
-                .map_or(U256::zero(), |x| x.used)
-    }
-
-    pub fn token_collateral_for_storage(&self) -> U256 {
-        self.address.assert_native();
-        self.collateral_for_storage
     }
 
     pub fn is_cip_107_initialized(&self) -> bool {

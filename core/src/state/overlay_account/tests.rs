@@ -15,6 +15,42 @@ use primitives::{
     SponsorInfo, VoteStakeList,
 };
 
+use crate::test_helpers::get_state_for_genesis_write;
+use primitives::is_default::IsDefault;
+use std::str::FromStr;
+
+fn test_account_is_default(account: &mut OverlayAccount) {
+    let storage_manager = new_state_manager_for_unit_test();
+    let state = get_state_for_genesis_write(&storage_manager);
+
+    assert!(account.as_account().is_default());
+
+    account.cache_ext_fields(true, true, &state.db).unwrap();
+    assert!(account.vote_stake_list().unwrap().is_default());
+    assert!(account.deposit_list().unwrap().is_default());
+}
+
+#[test]
+fn new_overlay_account_is_default() {
+    let normal_addr =
+        Address::from_str("1000000000000000000000000000000000000000")
+            .unwrap()
+            .with_native_space();
+    let builtin_addr =
+        Address::from_str("0000000000000000000000000000000000000000")
+            .unwrap()
+            .with_native_space();
+
+    test_account_is_default(&mut OverlayAccount::new_basic(
+        &normal_addr,
+        U256::zero(),
+    ));
+    test_account_is_default(&mut OverlayAccount::new_basic(
+        &builtin_addr,
+        U256::zero(),
+    ));
+}
+
 #[test]
 fn test_overlay_account_create() {
     let mut address = Address::random();
@@ -718,22 +754,22 @@ fn test_clone_overwrite() {
 
     overlay_account1.set_storage(vec![0; 32], U256::zero(), address);
     assert_eq!(account1, overlay_account1.as_account());
-    assert_eq!(overlay_account1.storage_value_write_cache().len(), 1);
-    assert_eq!(overlay_account1.storage_owner_lv1_write_cache().len(), 1);
+    assert_eq!(overlay_account1.storage_value_write_cache.len(), 1);
+    assert_eq!(overlay_account1.storage_owner_lv1_write_cache.len(), 1);
     let overlay_account = overlay_account1.clone_basic();
     assert_eq!(account1, overlay_account.as_account());
-    assert_eq!(overlay_account.storage_value_write_cache().len(), 0);
-    assert_eq!(overlay_account.storage_owner_lv1_write_cache().len(), 0);
+    assert_eq!(overlay_account.storage_value_write_cache.len(), 0);
+    assert_eq!(overlay_account.storage_owner_lv1_write_cache.len(), 0);
     let overlay_account = overlay_account1.clone_dirty();
     assert_eq!(account1, overlay_account.as_account());
-    assert_eq!(overlay_account.storage_value_write_cache().len(), 1);
-    assert_eq!(overlay_account.storage_owner_lv1_write_cache().len(), 1);
+    assert_eq!(overlay_account.storage_value_write_cache.len(), 1);
+    assert_eq!(overlay_account.storage_owner_lv1_write_cache.len(), 1);
 
     overlay_account2.set_storage(vec![0; 32], U256::zero(), address);
     overlay_account2.set_storage(vec![1; 32], U256::zero(), address);
     overlay_account1.overwrite_with(overlay_account2);
     assert_ne!(account1, overlay_account1.as_account());
     assert_eq!(account2, overlay_account1.as_account());
-    assert_eq!(overlay_account1.storage_value_write_cache().len(), 2);
-    assert_eq!(overlay_account1.storage_owner_lv1_write_cache().len(), 2);
+    assert_eq!(overlay_account1.storage_value_write_cache.len(), 2);
+    assert_eq!(overlay_account1.storage_owner_lv1_write_cache.len(), 2);
 }

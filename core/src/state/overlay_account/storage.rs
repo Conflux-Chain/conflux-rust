@@ -1,21 +1,15 @@
-use super::{Substate};
+use super::Substate;
 
-
+#[cfg(test)]
+use super::StorageLayout;
 use cfx_parameters::{
     internal_contract_addresses::SYSTEM_STORAGE_ADDRESS,
     staking::COLLATERAL_UNITS_PER_STORAGE_KEY,
 };
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
-#[cfg(test)]
-use super::StorageLayout;
-use cfx_types::{
-    Address, AddressWithSpace, Space, U256,
-};
+use cfx_types::{Address, AddressWithSpace, Space, U256};
 
-use primitives::{
-    StorageKey,
-    StorageValue,
-};
+use primitives::{StorageKey, StorageValue};
 use std::{collections::HashMap, sync::Arc};
 
 use super::OverlayAccount;
@@ -36,16 +30,6 @@ impl OverlayAccount {
         } else {
             lv1_write_cache.insert(key, Some(owner));
         }
-    }
-
-    #[cfg(test)]
-    pub fn storage_layout_change(&self) -> Option<&StorageLayout> {
-        self.storage_layout_change.as_ref()
-    }
-
-    #[cfg(test)]
-    pub fn set_storage_layout(&mut self, layout: StorageLayout) {
-        self.storage_layout_change = Some(layout);
     }
 
     pub fn cached_storage_at(&self, key: &[u8]) -> Option<U256> {
@@ -237,14 +221,18 @@ impl OverlayAccount {
         Ok(())
     }
 
-    pub fn storage_value_write_cache(&self) -> &HashMap<Vec<u8>, U256> {
-        &self.storage_value_write_cache
+    #[cfg(test)]
+    pub fn storage_layout_change(&self) -> Option<&StorageLayout> {
+        self.storage_layout_change.as_ref()
     }
 
     #[cfg(test)]
-    pub fn storage_owner_lv1_write_cache(
-        &self,
-    ) -> &HashMap<Vec<u8>, Option<Address>> {
-        &self.storage_owner_lv1_write_cache
+    pub fn set_storage_layout(&mut self, layout: StorageLayout) {
+        self.storage_layout_change = Some(layout);
+    }
+
+    // TODO: consider remove this function
+    pub fn storage_value_write_cache(&self) -> &HashMap<Vec<u8>, U256> {
+        &self.storage_value_write_cache
     }
 }

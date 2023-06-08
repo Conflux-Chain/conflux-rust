@@ -1,21 +1,7 @@
-
-
-
-
-use cfx_parameters::{
-    consensus::ONE_CFX_IN_DRIP,
-};
-use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
-#[cfg(test)]
-use cfx_types::AddressSpaceUtil;
-use cfx_types::{
-    Address, U256,
-};
-
-use primitives::{
-    SponsorInfo,
-};
-
+use cfx_parameters::consensus::ONE_CFX_IN_DRIP;
+use cfx_statedb::{Result as DbResult, StateDbGeneric};
+use cfx_types::{Address, U256};
+use primitives::SponsorInfo;
 
 use super::OverlayAccount;
 
@@ -61,26 +47,26 @@ impl OverlayAccount {
         }
     }
 
+    pub fn add_sponsor_balance_for_gas(&mut self, by: &U256) {
+        self.address.assert_native();
+        self.sponsor_info.sponsor_balance_for_gas += *by;
+    }
+
     pub fn sub_sponsor_balance_for_gas(&mut self, by: &U256) {
         self.address.assert_native();
         assert!(self.sponsor_info.sponsor_balance_for_gas >= *by);
         self.sponsor_info.sponsor_balance_for_gas -= *by;
     }
 
-    pub fn add_sponsor_balance_for_gas(&mut self, by: &U256) {
+    pub fn add_sponsor_balance_for_collateral(&mut self, by: &U256) {
         self.address.assert_native();
-        self.sponsor_info.sponsor_balance_for_gas += *by;
+        self.sponsor_info.sponsor_balance_for_collateral += *by;
     }
 
     pub fn sub_sponsor_balance_for_collateral(&mut self, by: &U256) {
         self.address.assert_native();
         assert!(self.sponsor_info.sponsor_balance_for_collateral >= *by);
         self.sponsor_info.sponsor_balance_for_collateral -= *by;
-    }
-
-    pub fn add_sponsor_balance_for_collateral(&mut self, by: &U256) {
-        self.address.assert_native();
-        self.sponsor_info.sponsor_balance_for_collateral += *by;
     }
 
     pub fn check_contract_whitelist(

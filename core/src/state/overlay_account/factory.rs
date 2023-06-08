@@ -3,7 +3,7 @@ use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, Space, U256};
 use parking_lot::RwLock;
 use primitives::{Account, SponsorInfo, StorageLayout};
 
-use super::{OverlayAccount, AccountEntry};
+use super::{AccountEntry, OverlayAccount};
 
 impl Default for OverlayAccount {
     fn default() -> Self {

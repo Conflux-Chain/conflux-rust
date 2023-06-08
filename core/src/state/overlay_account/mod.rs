@@ -7,22 +7,18 @@ mod tests;
 
 mod basic;
 mod collateral;
+mod commit;
 mod factory;
 mod sponsor;
 mod staking;
 mod storage;
-mod commit;
 
 use super::{
     account_entry::AccountEntry, substate::Substate,
     AccountEntryProtectedMethods,
 };
 
-use crate::{
-    bytes::Bytes,
-    hash::{KECCAK_EMPTY},
-};
-
+use crate::{bytes::Bytes, hash::KECCAK_EMPTY};
 
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
 #[cfg(test)]
@@ -32,7 +28,8 @@ use cfx_types::{
 };
 use parking_lot::RwLock;
 use primitives::{
-    is_default::IsDefault, CodeInfo, DepositList, SponsorInfo, StorageLayout, VoteStakeList,
+    is_default::IsDefault, CodeInfo, DepositList, SponsorInfo, StorageLayout,
+    VoteStakeList,
 };
 use std::{collections::HashMap, sync::Arc};
 
@@ -127,7 +124,6 @@ pub struct OverlayAccount {
     invalidated_storage: bool,
 }
 
-
 impl OverlayAccount {
     pub fn is_contract(&self) -> bool {
         self.code_hash != KECCAK_EMPTY || self.is_newly_created_contract
@@ -200,7 +196,6 @@ impl OverlayAccount {
         }
         Ok(true)
     }
-
 }
 
 impl AccountEntryProtectedMethods for OverlayAccount {
