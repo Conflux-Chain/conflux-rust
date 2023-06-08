@@ -46,6 +46,7 @@ use diem_types::term_state::{
 };
 use metrics::MetricsConfiguration;
 use network::DiscoveryConfiguration;
+use primitives::block_header::CIP112_TRANSITION_HEIGHT;
 use txgen::TransactionGeneratorConfig;
 
 use crate::rpc::{
@@ -156,6 +157,7 @@ build_config! {
         (cip105_transition_number, (Option<u64>), Some(122700000))
         (sigma_fix_transition_number, (Option<u64>), Some(125360000))
         (cip107_transition_number, (Option<u64>), None)
+        (cip112_transition_height, (Option<u64>), None)
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (params_dao_vote_period, (u64), DAO_PARAMETER_VOTE_PERIOD)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
@@ -322,6 +324,8 @@ build_config! {
         (vrf_proposal_threshold, (U256), U256::from_str("1111111111111100000000000000000000000000000000000000000000000000").unwrap())
         // Deferred epoch count before a confirmed epoch.
         (pos_pivot_decision_defer_epoch_count, (u64), 50)
+        (cip113_pivot_decision_defer_epoch_count, (u64), 20)
+        (cip113_transition_height, (u64), u64::MAX)
         (pos_reference_enable_height, (u64), 55665000)
         (pos_initial_nodes_path, (String), "./pos_config/initial_nodes.json".to_string())
         (pos_private_key_path, (String), "./pos_config/pos_key".to_string())
@@ -411,6 +415,10 @@ impl Configuration {
         } else if matches.is_present("light") {
             config.raw_conf.node_type = Some(NodeType::Light);
         }
+
+        CIP112_TRANSITION_HEIGHT
+            .set(config.raw_conf.cip112_transition_height.unwrap_or(u64::MAX))
+            .expect("called once");
 
         Ok(config)
     }
@@ -580,6 +588,8 @@ impl Configuration {
                 enable_optimistic_execution,
                 enable_state_expose: self.raw_conf.enable_state_expose,
                 pos_pivot_decision_defer_epoch_count: self.raw_conf.pos_pivot_decision_defer_epoch_count,
+                cip113_pivot_decision_defer_epoch_count: self.raw_conf.cip113_pivot_decision_defer_epoch_count,
+                cip113_transition_height: self.raw_conf.cip113_transition_height,
                 debug_dump_dir_invalid_state_root: if self
                     .raw_conf
                     .debug_invalid_state_root
@@ -1279,6 +1289,8 @@ impl Configuration {
             .raw_conf
             .dao_vote_transition_height
             .unwrap_or(non_genesis_default_transition_time);
+        params.transition_heights.cip112 =
+            *CIP112_TRANSITION_HEIGHT.get().expect("initialized");
         params.params_dao_vote_period = self.raw_conf.params_dao_vote_period;
 
         let mut base_block_rewards = BTreeMap::new();

@@ -7,6 +7,7 @@ use cfx_internal_common::{ChainIdParams, ChainIdParamsInner};
 use cfx_parameters::{
     block::{EVM_TRANSACTION_BLOCK_RATIO, EVM_TRANSACTION_GAS_RATIO},
     consensus::{
+        CIP112_HEADER_CUSTOM_FIRST_ELEMENT,
         DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT, ONE_UCFX_IN_DRIP,
         TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT,
         TESTNET_FIX_HEADER_CUSTOM_FIRST_ELEMENT, TESTNET_FIX_HEIGHT,
@@ -105,6 +106,8 @@ pub struct TransitionsEpochHeight {
     pub cip90a: BlockHeight,
     /// CIP94 Hardfork enable heights.
     pub cip94: BlockHeight,
+    /// CIP112 header custom encoding.
+    pub cip112: BlockHeight,
 }
 
 impl Default for CommonParams {
@@ -158,8 +161,12 @@ impl CommonParams {
             && height < TESTNET_FIX_POS_HEIGHT
         {
             Some(vec![TESTNET_FIX_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
-        } else if height >= TESTNET_FIX_POS_HEIGHT {
+        } else if height >= TESTNET_FIX_POS_HEIGHT
+            && height < self.transition_heights.cip112
+        {
             Some(vec![TESTNET_FIX_POS_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
+        } else if height >= self.transition_heights.cip112 {
+            Some(vec![CIP112_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
         } else {
             None
         }

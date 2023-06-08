@@ -53,6 +53,7 @@ pub mod consensus {
     pub const TESTNET_FIX_POS_HEIGHT: u64 = 103400000;
     pub const TESTNET_FIX_POS_POS_REFERENCE: &str =
         "18a6b9c237f025e934a1633bae0cc084f81a457e3be75300447e857c3bc89d82";
+    pub const CIP112_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [5];
 }
 
 pub mod consensus_internal {

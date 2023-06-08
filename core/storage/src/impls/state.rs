@@ -815,7 +815,7 @@ impl State {
     fn delete_all_impl<AM: access_mode::AccessMode>(
         &mut self, access_key_prefix: StorageKeyWithSpace,
     ) -> Result<Option<Vec<MptKeyValue>>> {
-        if AM::is_read_only() {
+        if AM::READ_ONLY {
             self.ensure_temp_slab_for_db_load();
         } else {
             self.pre_modification();
@@ -827,7 +827,7 @@ impl State {
             Some(old_root_node) => {
                 let delta_mpt_key_prefix = access_key_prefix
                     .to_delta_mpt_key_bytes(&self.delta_trie_key_padding);
-                let deleted = if AM::is_read_only() {
+                let deleted = if AM::READ_ONLY {
                     SubTrieVisitor::new(
                         &self.delta_trie,
                         old_root_node.clone(),
@@ -915,7 +915,7 @@ impl State {
             for (k, v) in kvs {
                 let storage_key = StorageKeyWithSpace::from_delta_mpt_key(&k);
                 // Only delete non-empty keys.
-                if v.len() > 0 && !AM::is_read_only() {
+                if v.len() > 0 && !AM::READ_ONLY {
                     self.delete(storage_key)?;
                 }
                 let k = storage_key.to_key_bytes();
@@ -933,7 +933,7 @@ impl State {
         for (k, v) in snapshot_kvs {
             let storage_key =
                 StorageKeyWithSpace::from_key_bytes::<SkipInputCheck>(&k);
-            if !AM::is_read_only() {
+            if !AM::READ_ONLY {
                 self.delete(storage_key)?;
             }
             if !deleted_keys.contains(&k) {

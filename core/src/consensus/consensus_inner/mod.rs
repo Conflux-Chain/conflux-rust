@@ -80,11 +80,26 @@ pub struct ConsensusInnerConfig {
     /// The deferred epoch count before a confirmed epoch.
     pub pos_pivot_decision_defer_epoch_count: u64,
 
+    pub cip113_pivot_decision_defer_epoch_count: u64,
+    pub cip113_transition_height: u64,
+
     /// If we hit invalid state root, we will dump the information into a
     /// directory specified here. This is useful for testing.
     pub debug_dump_dir_invalid_state_root: Option<String>,
     pub debug_invalid_state_root_epoch: Option<H256>,
     pub force_recompute_height_during_construct_pivot: Option<u64>,
+}
+
+impl ConsensusInnerConfig {
+    pub fn pos_pivot_decision_defer_epoch_count(
+        &self, confirmed_height: u64,
+    ) -> u64 {
+        if confirmed_height >= self.cip113_transition_height {
+            self.cip113_pivot_decision_defer_epoch_count
+        } else {
+            self.pos_pivot_decision_defer_epoch_count
+        }
+    }
 }
 
 #[derive(Copy, Clone, DeriveMallocSizeOf)]
@@ -3842,7 +3857,8 @@ impl ConsensusGraphInner {
                 // choose the latest block as a new pivot
                 // decision.
                 let new_decision_height = (confirmed_height.saturating_sub(
-                    self.inner_conf.pos_pivot_decision_defer_epoch_count,
+                    self.inner_conf
+                        .pos_pivot_decision_defer_epoch_count(confirmed_height),
                 )) / POS_TERM_EPOCHS
                     * POS_TERM_EPOCHS;
                 if new_decision_height <= self.cur_era_genesis_height {
@@ -3869,7 +3885,9 @@ impl ConsensusGraphInner {
                     let new_decision_height =
                         (confirmed_height.saturating_sub(
                             self.inner_conf
-                                .pos_pivot_decision_defer_epoch_count,
+                                .pos_pivot_decision_defer_epoch_count(
+                                    confirmed_height,
+                                ),
                         )) / POS_TERM_EPOCHS
                             * POS_TERM_EPOCHS;
                     if new_decision_height <= parent_decision_height {

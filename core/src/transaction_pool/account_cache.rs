@@ -36,7 +36,6 @@ impl AccountCache {
     pub fn check_commission_privilege(
         &self, contract_address: &Address, user: &Address,
     ) -> DbResult<bool> {
-        self.state
-            .check_commission_privilege(contract_address, user)
+        self.state.check_contract_whitelist(contract_address, user)
     }
 }

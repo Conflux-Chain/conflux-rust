@@ -8,6 +8,7 @@ extern crate error_chain;
 extern crate log;
 
 mod error;
+pub mod global_params;
 mod statedb_ext;
 
 #[cfg(test)]
@@ -16,13 +17,7 @@ mod tests;
 pub use self::{
     error::{Error, ErrorKind, Result},
     impls::{StateDb as StateDbGeneric, StateDbCheckpointMethods},
-    statedb_ext::{
-        StateDbExt, ACCUMULATE_INTEREST_RATE_KEY,
-        DISTRIBUTABLE_POS_INTEREST_KEY, INTEREST_RATE_KEY,
-        LAST_DISTRIBUTE_BLOCK_KEY, TOTAL_BANK_TOKENS_KEY,
-        TOTAL_POS_STAKING_TOKENS_KEY, TOTAL_STORAGE_TOKENS_KEY,
-        TOTAL_TOKENS_KEY,
-    },
+    statedb_ext::StateDbExt,
 };
 pub type StateDb = StateDbGeneric;
 
@@ -201,7 +196,7 @@ mod impls {
             let key_bytes = key_prefix.to_key_bytes();
             if let Some(record) = debug_record {
                 record.state_ops.push(StateOp::StorageLevelOp {
-                    op_name: if AM::is_read_only() {
+                    op_name: if AM::READ_ONLY {
                         "iterate"
                     } else {
                         "delete_all"
@@ -235,7 +230,7 @@ mod impls {
                         k.clone(),
                         (&**v.current_value.as_ref().unwrap()).into(),
                     ));
-                    if !AM::is_read_only() {
+                    if !AM::READ_ONLY {
                         v.current_value = None;
                     }
                 }
@@ -255,7 +250,7 @@ mod impls {
                     };
                     if was_vacant {
                         deleted_kvs.push((k.clone(), v.clone()));
-                        if !AM::is_read_only() {
+                        if !AM::READ_ONLY {
                             entry.or_insert(EntryValue::new_modified(
                                 Some((&**v).into()),
                                 None,
@@ -266,7 +261,7 @@ mod impls {
             }
 
             // update latest checkpoint if necessary
-            if !AM::is_read_only() {
+            if !AM::READ_ONLY {
                 for (k, v) in &deleted_kvs {
                     let v: Value = Some(v.clone().into());
                     self.update_checkpoint(k, Some(v));
