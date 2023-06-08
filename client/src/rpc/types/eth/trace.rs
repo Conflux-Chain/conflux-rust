@@ -1,7 +1,7 @@
 use crate::rpc::types::{
     Action as RpcCfxAction, Bytes, LocalizedTrace as RpcCfxLocalizedTrace,
 };
-use cfx_types::{H160, H256, U256, U64};
+use cfx_types::{H160, H256, U256};
 use cfxcore::{
     observer::trace::Outcome,
     vm::{CallType as CfxCallType, CreateType as CfxCreateType},
@@ -180,15 +180,15 @@ pub struct LocalizedTrace {
     /// Result
     pub result: Res,
     /// Trace address
-    pub trace_address: Vec<U64>,
+    pub trace_address: Vec<usize>,
     /// Subtraces
-    pub subtraces: U64,
+    pub subtraces: usize,
     /// Transaction position
-    pub transaction_position: Option<U64>,
+    pub transaction_position: Option<usize>,
     /// Transaction hash
     pub transaction_hash: Option<H256>,
     /// Block Number
-    pub block_number: U64,
+    pub block_number: u64,
     /// Block Hash
     pub block_hash: H256,
     /// Valid
@@ -249,16 +249,17 @@ impl TryFrom<RpcCfxLocalizedTrace> for LocalizedTrace {
             action: cfx_trace.action.try_into()?,
             result: Res::None,
             trace_address: vec![],
-            subtraces: 0.into(),
+            subtraces: 0,
             // note: `as_usize` will panic on overflow,
             // however, this should not happen for tx position
-            transaction_position: cfx_trace.transaction_position,
+            transaction_position: cfx_trace
+                .transaction_position
+                .map(|x| x.as_usize()),
             transaction_hash: cfx_trace.transaction_hash,
             block_number: cfx_trace
                 .epoch_number
                 .map(|en| en.as_u64())
-                .unwrap_or(0)
-                .into(),
+                .unwrap_or(0),
             block_hash: cfx_trace.epoch_hash.unwrap_or_default(),
             valid: cfx_trace.valid,
         })
