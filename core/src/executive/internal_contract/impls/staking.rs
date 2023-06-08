@@ -9,8 +9,7 @@ use crate::{
     state::State,
     vm::{self, ActionParams, Env},
 };
-use cfx_parameters::consensus::ONE_CFX_IN_DRIP;
-use cfx_parameters::staking::BLOCKS_PER_HOUR;
+use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::BLOCKS_PER_HOUR};
 use cfx_types::{Address, AddressSpaceUtil, U256};
 
 /// Implementation of `deposit(uint256)`.

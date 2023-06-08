@@ -887,7 +887,7 @@ pub fn recover_phantom_traces(
                 call_type: CallType::Call,
                 input,
                 ..
-            }) if to == *CROSS_SPACE_CONTRACT_ADDRESS
+            }) if to == CROSS_SPACE_CONTRACT_ADDRESS
                 && trace.valid
                 && is_call_create_sig(&input[0..4]) =>
             {
@@ -906,7 +906,7 @@ pub fn recover_phantom_traces(
                 call_type: CallType::Call,
                 input,
                 ..
-            }) if to == *CROSS_SPACE_CONTRACT_ADDRESS
+            }) if to == CROSS_SPACE_CONTRACT_ADDRESS
                 && trace.valid
                 && is_withdraw_sig(&input[0..4]) =>
             {

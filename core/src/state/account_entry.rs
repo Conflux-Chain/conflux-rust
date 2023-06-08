@@ -2,10 +2,11 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
+use super::Substate;
 use crate::{
     bytes::Bytes,
     hash::{keccak, KECCAK_EMPTY},
-    state::{AccountEntryProtectedMethods, State},
+    state::AccountEntryProtectedMethods,
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::{
@@ -13,7 +14,7 @@ use cfx_parameters::{
     internal_contract_addresses::SYSTEM_STORAGE_ADDRESS,
     staking::COLLATERAL_UNITS_PER_STORAGE_KEY,
 };
-use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
+use cfx_statedb::{Result as DbResult, StateDb, StateDbExt, StateDbGeneric};
 #[cfg(test)]
 use cfx_types::AddressSpaceUtil;
 use cfx_types::{
@@ -26,8 +27,6 @@ use primitives::{
     StorageValue, VoteStakeList,
 };
 use std::{collections::HashMap, sync::Arc};
-
-use super::Substate;
 
 lazy_static! {
     static ref COMMISSION_PRIVILEGE_STORAGE_VALUE: U256 = U256::one();
@@ -276,6 +275,10 @@ impl OverlayAccount {
         account
     }
 
+    pub fn into_dirty_entry(self) -> AccountEntry {
+        AccountEntry::new_dirty(Some(self))
+    }
+
     pub fn is_contract(&self) -> bool {
         self.code_hash != KECCAK_EMPTY || self.is_newly_created_contract
     }
@@ -364,7 +367,7 @@ impl OverlayAccount {
         self.admin = admin.clone();
     }
 
-    pub fn check_commission_privilege(
+    pub fn check_contract_whitelist(
         &self, db: &StateDbGeneric, contract_address: &Address, user: &Address,
     ) -> DbResult<bool> {
         let mut special_key = Vec::with_capacity(Address::len_bytes() * 2);
@@ -384,7 +387,7 @@ impl OverlayAccount {
 
     /// Add commission privilege of `contract_address` to `user`.
     /// We set the value to some nonzero value which will be persisted in db.
-    pub fn add_commission_privilege(
+    pub fn add_to_contract_whitelist(
         &mut self, contract_address: Address, contract_owner: Address,
         user: Address,
     )
@@ -402,7 +405,7 @@ impl OverlayAccount {
     /// Remove commission privilege of `contract_address` from `user`.
     /// We set the value to zero, and the key/value will be released at commit
     /// phase.
-    pub fn remove_commission_privilege(
+    pub fn remove_from_contract_whitelist(
         &mut self, contract_address: Address, contract_owner: Address,
         user: Address,
     )
@@ -418,7 +421,7 @@ impl OverlayAccount {
     }
 
     /// When CIP 107 is activated, half of the storage will coverte
-    pub fn initialize_cip107(&mut self, prop: U256) -> (U256, U256, U256) {
+    pub fn initialize_cip107(&mut self, prop: U256) -> (U256, U256) {
         assert!(self.is_contract());
         let total_collateral = self.sponsor_info.sponsor_balance_for_collateral
             + self.collateral_for_storage;
@@ -447,11 +450,7 @@ impl OverlayAccount {
         }
         self.sponsor_info.storage_points = Some(storage_points);
 
-        return (
-            burnt_balance_from_balance,
-            burnt_balance_from_collateral,
-            changed_storage_points,
-        );
+        return (burnt_balance_from_balance, burnt_balance_from_collateral);
     }
 
     fn charge_for_sponsored_collateral(&mut self, by: U256) -> U256 {
@@ -708,7 +707,7 @@ impl OverlayAccount {
         }
     }
 
-    pub fn cache_staking_info(
+    pub fn cache_ext_fields(
         &mut self, cache_deposit_list: bool, cache_vote_list: bool,
         db: &StateDbGeneric,
     ) -> DbResult<bool>
@@ -775,7 +774,7 @@ impl OverlayAccount {
         Arc::make_mut(&mut self.storage_value_write_cache)
             .insert(key.clone(), value);
         if self.address.space == Space::Ethereum
-            || self.address.address == *SYSTEM_STORAGE_ADDRESS
+            || self.address.address == SYSTEM_STORAGE_ADDRESS
         {
             return;
         }
@@ -879,7 +878,7 @@ impl OverlayAccount {
         assert!(!storage_owner_lv2_write_cache.contains_key(key));
         let cache_ownership = cache_ownership
             && address.space == Space::Native
-            && address.address != *SYSTEM_STORAGE_ADDRESS;
+            && address.address != SYSTEM_STORAGE_ADDRESS;
 
         if let Some(value) = db.get::<StorageValue>(
             StorageKey::new_storage_key(&address.address, key.as_ref())
@@ -982,7 +981,7 @@ impl OverlayAccount {
         if self.invalidated_storage {
             return Ok(());
         }
-        if self.address.address == *SYSTEM_STORAGE_ADDRESS {
+        if self.address.address == SYSTEM_STORAGE_ADDRESS {
             return Ok(());
         }
         let storage_owner_lv1_write_cache: Vec<_> =
@@ -1019,7 +1018,7 @@ impl OverlayAccount {
     }
 
     pub fn commit(
-        &mut self, state: &mut State, address: &AddressWithSpace,
+        &mut self, db: &mut StateDb, address: &AddressWithSpace,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()>
     {
@@ -1034,13 +1033,6 @@ impl OverlayAccount {
         );
         assert_eq!(Arc::strong_count(&self.storage_value_write_cache), 1);
 
-        if self.invalidated_storage() {
-            state.recycle_storage(
-                vec![self.address],
-                debug_record.as_deref_mut(),
-            )?;
-        }
-
         assert!(self.storage_owner_lv1_write_cache.is_empty());
 
         let storage_owner_lv2_write_cache =
@@ -1051,12 +1043,10 @@ impl OverlayAccount {
                 StorageKey::new_storage_key(&self.address.address, k.as_ref())
                     .with_space(self.address.space);
             match v.is_zero() {
-                true => {
-                    state.db.delete(address_key, debug_record.as_deref_mut())?
-                }
+                true => db.delete(address_key, debug_record.as_deref_mut())?,
                 false => {
                     let owner = if self.address.space == Space::Ethereum
-                        || self.address.address == *SYSTEM_STORAGE_ADDRESS
+                        || self.address.address == SYSTEM_STORAGE_ADDRESS
                     {
                         None
                     } else {
@@ -1071,7 +1061,7 @@ impl OverlayAccount {
                         }
                     };
 
-                    state.db.set::<StorageValue>(
+                    db.set::<StorageValue>(
                         address_key,
                         &StorageValue { value: v, owner },
                         debug_record.as_deref_mut(),
@@ -1086,7 +1076,7 @@ impl OverlayAccount {
                 &self.code_hash,
             )
             .with_space(self.address.space);
-            state.db.set::<CodeInfo>(
+            db.set::<CodeInfo>(
                 storage_key,
                 code_info,
                 debug_record.as_deref_mut(),
@@ -1098,7 +1088,7 @@ impl OverlayAccount {
             let storage_key =
                 StorageKey::new_deposit_list_key(&self.address.address)
                     .with_space(self.address.space);
-            state.db.set::<DepositList>(
+            db.set::<DepositList>(
                 storage_key,
                 deposit_list,
                 debug_record.as_deref_mut(),
@@ -1110,7 +1100,7 @@ impl OverlayAccount {
             let storage_key =
                 StorageKey::new_vote_list_key(&self.address.address)
                     .with_space(self.address.space);
-            state.db.set::<VoteStakeList>(
+            db.set::<VoteStakeList>(
                 storage_key,
                 vote_stake_list,
                 debug_record.as_deref_mut(),
@@ -1118,14 +1108,14 @@ impl OverlayAccount {
         }
 
         if let Some(layout) = self.storage_layout_change.clone() {
-            state.db.set_storage_layout(
+            db.set_storage_layout(
                 &self.address,
                 layout,
                 debug_record.as_deref_mut(),
             )?;
         }
 
-        state.db.set::<Account>(
+        db.set::<Account>(
             StorageKey::new_account_key(&address.address)
                 .with_space(address.space),
             &self.as_account(),
@@ -1212,6 +1202,7 @@ impl AccountEntry {
         }
     }
 
+    #[allow(unused)]
     pub fn exists_and_is_null(&self) -> bool {
         self.account.as_ref().map_or(false, |acc| acc.is_null())
     }
@@ -1263,7 +1254,7 @@ mod tests {
 
         assert!(account.as_account().is_default());
 
-        account.cache_staking_info(true, true, &state.db).unwrap();
+        account.cache_ext_fields(true, true, &state.db).unwrap();
         assert!(account.vote_stake_list().unwrap().is_default());
         assert!(account.deposit_list().unwrap().is_default());
     }

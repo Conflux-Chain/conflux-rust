@@ -1004,7 +1004,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
         .unwrap();
 
     state
-        .add_commission_privilege(address.address, sender, Default::default())
+        .add_to_contract_whitelist(address.address, sender, Default::default())
         .unwrap();
     let epoch_id = EpochId::from_uint(&U256::from(1));
     state
@@ -1036,13 +1036,13 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
     assert_eq!(
         true,
         state
-            .check_commission_privilege(&address.address, &sender)
+            .check_contract_whitelist(&address.address, &sender)
             .unwrap()
     );
     assert_eq!(
         true,
         state
-            .check_commission_privilege(&address.address, &Default::default())
+            .check_contract_whitelist(&address.address, &Default::default())
             .unwrap()
     );
     let epoch_id = EpochId::from_uint(&U256::from(2));
@@ -1067,18 +1067,18 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
         .unwrap();
     let whitelisted_caller = Address::random();
     state
-        .add_commission_privilege(address.address, sender, whitelisted_caller)
+        .add_to_contract_whitelist(address.address, sender, whitelisted_caller)
         .unwrap();
     assert_eq!(
         true,
         state
-            .check_commission_privilege(&address.address, &whitelisted_caller)
+            .check_contract_whitelist(&address.address, &whitelisted_caller)
             .unwrap()
     );
     assert_eq!(
         false,
         state
-            .check_commission_privilege(&address.address, &Default::default())
+            .check_contract_whitelist(&address.address, &Default::default())
             .unwrap()
     );
     state
@@ -1109,13 +1109,13 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
     assert_eq!(
         true,
         state
-            .check_commission_privilege(&address.address, &whitelisted_caller)
+            .check_contract_whitelist(&address.address, &whitelisted_caller)
             .unwrap()
     );
     assert_eq!(
         false,
         state
-            .check_commission_privilege(&address.address, &Default::default())
+            .check_contract_whitelist(&address.address, &Default::default())
             .unwrap()
     );
 }
@@ -1228,19 +1228,19 @@ fn test_commission_privilege() {
         .unwrap();
     // add commission privilege to caller1 and caller2
     state
-        .add_commission_privilege(address.address, sender, caller1.address())
+        .add_to_contract_whitelist(address.address, sender, caller1.address())
         .unwrap();
     state
-        .add_commission_privilege(address.address, sender, caller2.address())
+        .add_to_contract_whitelist(address.address, sender, caller2.address())
         .unwrap();
     assert!(state
-        .check_commission_privilege(&address.address, &caller1.address())
+        .check_contract_whitelist(&address.address, &caller1.address())
         .unwrap());
     assert!(state
-        .check_commission_privilege(&address.address, &caller2.address())
+        .check_contract_whitelist(&address.address, &caller2.address())
         .unwrap());
     assert!(!state
-        .check_commission_privilege(&address.address, &caller3.address())
+        .check_contract_whitelist(&address.address, &caller3.address())
         .unwrap());
     state
         .set_sponsor_for_gas(
@@ -1451,10 +1451,10 @@ fn test_commission_privilege() {
 
     // add commission privilege to caller3
     state
-        .add_commission_privilege(address.address, sender, caller3.address())
+        .add_to_contract_whitelist(address.address, sender, caller3.address())
         .unwrap();
     assert!(state
-        .check_commission_privilege(&address.address, &caller3.address())
+        .check_contract_whitelist(&address.address, &caller3.address())
         .unwrap());
     // call with commission privilege and enough commission balance
     let tx = Transaction::from(NativeTransaction {
@@ -1646,14 +1646,14 @@ fn test_storage_commission_privilege() {
     let mut substate = Substate::new();
     state.checkpoint();
     state
-        .add_commission_privilege(
+        .add_to_contract_whitelist(
             address.address,
             sender.address(),
             caller1.address(),
         )
         .unwrap();
     state
-        .add_commission_privilege(
+        .add_to_contract_whitelist(
             address.address,
             sender.address(),
             caller2.address(),
@@ -1691,13 +1691,13 @@ fn test_storage_commission_privilege() {
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(3),
     );
     assert!(state
-        .check_commission_privilege(&address.address, &caller1.address())
+        .check_contract_whitelist(&address.address, &caller1.address())
         .unwrap());
     assert!(state
-        .check_commission_privilege(&address.address, &caller2.address())
+        .check_contract_whitelist(&address.address, &caller2.address())
         .unwrap());
     assert!(!state
-        .check_commission_privilege(&address.address, &caller3.address())
+        .check_contract_whitelist(&address.address, &caller3.address())
         .unwrap());
 
     // caller3 call with no privilege
@@ -1988,7 +1988,7 @@ fn test_storage_commission_privilege() {
     // remove privilege from caller1
     state.checkpoint();
     state
-        .remove_commission_privilege(
+        .remove_from_contract_whitelist(
             address.address,
             sender.address(),
             caller1.address(),
@@ -2032,7 +2032,7 @@ fn test_storage_commission_privilege() {
     );
 
     assert!(!state
-        .check_commission_privilege(&address.address, &caller1.address())
+        .check_contract_whitelist(&address.address, &caller1.address())
         .unwrap());
 
     assert_eq!(

@@ -38,18 +38,18 @@ pub fn to_key_prefix_iter_upper_bound(key_prefix: &[u8]) -> Option<Vec<u8>> {
 
 pub mod access_mode {
     pub trait AccessMode {
-        fn is_read_only() -> bool;
+        const READ_ONLY: bool;
     }
 
-    pub struct Read {}
-    pub struct Write {}
+    pub struct Read;
+    pub struct Write;
 
     impl AccessMode for Read {
-        fn is_read_only() -> bool { return true; }
+        const READ_ONLY: bool = true;
     }
 
     impl AccessMode for Write {
-        fn is_read_only() -> bool { return false; }
+        const READ_ONLY: bool = false;
     }
 }
 

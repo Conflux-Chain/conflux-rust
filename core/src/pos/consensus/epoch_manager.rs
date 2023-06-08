@@ -189,16 +189,20 @@ impl EpochManager {
         &self, time_service: Arc<dyn TimeService>,
         timeout_sender: channel::Sender<(u64, Round)>,
         proposal_timeout_sender: channel::Sender<(u64, Round)>,
-        new_round_timeout_sender: channel::Sender<(u64, Round)>,
+        new_round_timeout_sender: channel::Sender<(u64, Round)>, epoch: u64,
     ) -> RoundState
     {
         // 1.5^6 ~= 11
         // Timeout goes from initial_timeout to initial_timeout*11 in 6 steps
-        let time_interval = Box::new(ExponentialTimeInterval::new(
-            Duration::from_millis(self.config.round_initial_timeout_ms),
-            1.2,
-            6,
-        ));
+        let base_interval = Duration::from_millis(
+            if epoch < self.config.cip113_transition_epoch {
+                self.config.round_initial_timeout_ms
+            } else {
+                self.config.cip113_round_initial_timeout_ms
+            },
+        );
+        let time_interval =
+            Box::new(ExponentialTimeInterval::new(base_interval, 1.2, 6));
         RoundState::new(
             time_interval,
             time_service,
@@ -453,6 +457,7 @@ impl EpochManager {
             self.timeout_sender.clone(),
             self.proposal_timeout_sender.clone(),
             self.new_round_timeout_sender.clone(),
+            epoch,
         );
 
         diem_info!(epoch = epoch, "Create ProposerElection");
