@@ -318,10 +318,10 @@ impl EthTrace for EthTraceHandler {
                     .map_err(|_| JsonRpcError::internal_error())?,
                     result: EthRes::None,
                     trace_address: vec![],
-                    subtraces: subtraces.into(),
-                    transaction_position: Some(idx.into()),
+                    subtraces,
+                    transaction_position: Some(idx),
                     transaction_hash: Some(tx_hash),
-                    block_number: block_number.into(),
+                    block_number,
                     block_hash,
                     // action and its result should have the same `valid`.
                     valid: action.valid,
@@ -418,10 +418,10 @@ impl EthTrace for EthTraceHandler {
                 .map_err(|_| JsonRpcError::internal_error())?,
                 result: EthRes::None,
                 trace_address: vec![],
-                subtraces: subtraces.into(),
-                transaction_position: Some(id.into()),
+                subtraces,
+                transaction_position: Some(id),
                 transaction_hash: Some(tx.hash()),
-                block_number: epoch_num.into(),
+                block_number: epoch_num,
                 block_hash: phantom_block.pivot_header.hash(),
                 // action and its result should have the same `valid`.
                 valid: action.valid,
@@ -468,7 +468,7 @@ fn to_eth_traces(
                 eth_traces[index].set_result(trace.action)?;
 
                 eth_traces[index].subtraces =
-                    sublen_stack.pop().expect("stack_index matches").into();
+                    sublen_stack.pop().expect("stack_index matches");
             }
             RpcAction::InternalTransferAction(_) => {}
         }

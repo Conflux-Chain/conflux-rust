@@ -1,4 +1,16 @@
 # JSON-RPC CHANGELOG
+## v2.2.5
+- Use hex format for `pos` RPC data.
+- Add RPC `pos_getLedgerInfoByBlockNumber` and `pos_getLedgerInfoByEpochAndRound` to get PoS ledger infos.
+- Add `cfx_getEpochReceiptProofByTransaction` to get epoch receipt proof.
+- Add `include_eth_recepits` option (default to false) for `cfx_getEpochReceipts`.
+
+## v2.2.4
+- Update the `Log` data format returned by cfx filter RPCs.
+- Implement `trace_epoch` in the core space RPC endpoint to return traces of two spaces in an epoch.
+
+## v2.2.3
+- Add debug RPCs `cfx_getTransactionsByEpoch` and `cfx_getTransactionsByBlock` to get the original transactions in both spaces atomically. This is only available in the local RPC port and phantom transactions will not be returned.
 
 ## v2.2.2
 
