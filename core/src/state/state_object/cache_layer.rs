@@ -1,6 +1,6 @@
 use super::{
-    account_entry::{AccountEntry, AccountState, OverlayAccount},
-    AccountEntryProtectedMethods, State,
+    AccountEntry, AccountEntryProtectedMethods, AccountState, OverlayAccount,
+    State,
 };
 use cfx_statedb::{
     ErrorKind as DbErrorKind, Result as DbResult, StateDb, StateDbExt,

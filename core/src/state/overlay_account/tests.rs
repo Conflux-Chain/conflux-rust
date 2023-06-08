@@ -2,7 +2,7 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::account_entry::OverlayAccount;
+use super::OverlayAccount;
 use crate::{hash::KECCAK_EMPTY, state::AccountEntryProtectedMethods};
 use cfx_parameters::staking::*;
 use cfx_statedb::StateDb;
