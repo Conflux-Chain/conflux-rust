@@ -168,9 +168,9 @@ pub fn initialize_or_update_dao_voted_params(
     // Only write storage_collateral_refund_ratio if it has been set in the
     // db. This keeps the state unchanged before cip107 is enabled.
     // TODO: better way in check if cip107 encabled.
-    if let Some(old_storage_point_prop) =
-        state.get_system_storage_opt(&storage_point_prop())?
-    {
+    let old_storage_point_prop =
+        state.get_system_storage(&storage_point_prop())?;
+    if !old_storage_point_prop.is_zero() {
         debug!("old_storage_point_prop: {}", old_storage_point_prop);
         state.set_system_storage(
             storage_point_prop().to_vec(),

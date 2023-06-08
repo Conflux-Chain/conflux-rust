@@ -22,12 +22,6 @@ impl State {
         )
     }
 
-    pub fn get_system_storage_opt(&self, key: &[u8]) -> DbResult<Option<U256>> {
-        let acc =
-            try_loaded!(self.read_native_account_lock(&SYSTEM_STORAGE_ADDRESS));
-        acc.storage_opt_at(&self.db, key)
-    }
-
     pub fn storage_at(
         &self, address: &AddressWithSpace, key: &[u8],
     ) -> DbResult<U256> {
