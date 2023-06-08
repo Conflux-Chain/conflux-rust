@@ -1380,7 +1380,7 @@ impl RpcImpl {
         let user_account = state_db.get_account(&account_addr)?;
         let contract_account = state_db.get_account(&contract_addr)?;
         let state = State::new(state_db)?;
-        let is_sponsored = state.check_commission_privilege(
+        let is_sponsored = state.check_contract_whitelist(
             &contract_addr.address,
             &account_addr.address,
         )?;

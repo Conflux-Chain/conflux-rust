@@ -179,7 +179,7 @@ fn test_deposit_and_withdraw() {
     let mut overlay_account =
         OverlayAccount::from_loaded(&address_with_space, account);
     overlay_account
-        .cache_staking_info(
+        .cache_ext_fields(
             true, /* cache_deposit_list */
             true, /* cache_vote_list */
             &db,
@@ -473,7 +473,7 @@ fn init_test_account() -> OverlayAccount {
     let mut overlay_account =
         OverlayAccount::from_loaded(&address_with_space, account.clone());
     overlay_account
-        .cache_staking_info(
+        .cache_ext_fields(
             true, /* cache_deposit_list */
             true, /* cache_vote_list */
             &db,

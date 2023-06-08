@@ -226,7 +226,7 @@ impl SimpleExecutionTrait for IsWhitelisted {
     ) -> vm::Result<bool>
     {
         if context.is_contract_address(&contract)? {
-            Ok(context.state.check_commission_privilege(&contract, &user)?)
+            Ok(context.state.check_contract_whitelist(&contract, &user)?)
         } else {
             Ok(false)
         }
@@ -247,7 +247,7 @@ impl SimpleExecutionTrait for IsAllWhitelisted {
         if context.is_contract_address(&contract)? {
             Ok(context
                 .state
-                .check_commission_privilege(&contract, &Address::zero())?)
+                .check_contract_whitelist(&contract, &Address::zero())?)
         } else {
             Ok(false)
         }

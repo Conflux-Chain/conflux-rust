@@ -461,7 +461,7 @@ pub fn withdraw_from_evmcore(
         &value,
         cleanup_mode(context.substate, context.spec),
     )?;
-    context.state.subtract_total_evm_tokens(value);
+    context.state.sub_total_evm_tokens(value);
     tracer.trace_internal_transfer(
         AddressPocket::Balance(mapped_address),
         AddressPocket::Balance(sender.with_native_space()),
