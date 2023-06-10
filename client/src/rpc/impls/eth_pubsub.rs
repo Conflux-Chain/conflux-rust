@@ -114,7 +114,7 @@ impl PubSubClient {
 
         let fut = async move {
             while let Some(new_tx) = receiver.recv().await {
-                debug!("new_pending_transactions_loop: {:?}", new_tx);
+                trace!("new_pending_transactions_loop: {:?}", new_tx);
     
                 handler_clone.notify_new_pending_transaction(new_tx);
             }
@@ -290,13 +290,13 @@ impl ChainNotificationHandler {
 
     // notify each subscriber about new pending transaction `hash` concurrently
     fn notify_new_pending_transaction(&self, hash: H256) {
-        info!("notify_new_pending_transaction({:?})", hash);
+        trace!("notify_new_pending_transaction({:?})", hash);
 
         let subscribers = self.pending_transactions_subscribers.read();
 
         // do not retrieve anything unnecessarily
         if subscribers.is_empty() {
-            debug!("No subscribers for pending transactions");
+            trace!("No subscribers for pending transactions");
             return;
         }
 
