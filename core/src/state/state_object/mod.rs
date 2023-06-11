@@ -1,23 +1,3 @@
-use self::cache_layer::RequireCache;
-use super::{
-    account_entry::{self, AccountEntry},
-    global_stat::GlobalStat,
-    substate, AccountEntryProtectedMethods,
-};
-use crate::{executive::internal_contract, vm::Spec};
-use cfx_state::tracer::StateTracer;
-use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric as StateDb};
-use cfx_types::AddressWithSpace;
-use parking_lot::RwLock;
-use primitives::Account;
-use std::collections::HashMap;
-
-pub use self::{
-    collateral::settle_collateral_for_all,
-    pos::{distribute_pos_interest, update_pos_status},
-    staking::initialize_or_update_dao_voted_params,
-};
-
 macro_rules! try_loaded {
     ($expr:expr) => {
         match $expr {
@@ -53,6 +33,27 @@ mod staking;
 mod storage_entry;
 #[cfg(test)]
 mod tests;
+
+use self::cache_layer::RequireCache;
+use super::{
+    account_entry::{AccountEntry, AccountState},
+    global_stat::GlobalStat,
+    overlay_account::OverlayAccount,
+    substate, AccountEntryProtectedMethods,
+};
+use crate::{executive::internal_contract, vm::Spec};
+use cfx_state::tracer::StateTracer;
+use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric as StateDb};
+use cfx_types::AddressWithSpace;
+use parking_lot::RwLock;
+use primitives::Account;
+use std::collections::HashMap;
+
+pub use self::{
+    collateral::settle_collateral_for_all,
+    pos::{distribute_pos_interest, update_pos_status},
+    staking::initialize_or_update_dao_voted_params,
+};
 
 pub struct State {
     pub(super) db: StateDb,

@@ -56,7 +56,7 @@ impl State {
         key: &Vec<u8>,
     ) -> DbResult<Option<U256>>
     {
-        use super::account_entry::AccountEntry;
+        use super::AccountEntry;
         use cfx_statedb::StateDbExt;
         use primitives::{StorageKey, StorageValue};
 
