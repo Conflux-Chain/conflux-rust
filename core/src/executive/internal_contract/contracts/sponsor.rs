@@ -106,7 +106,13 @@ impl SimpleExecutionTrait for AddPrivilege {
                     .into(),
             ));
         }
-        add_privilege(params.sender, addresses, params, context.state)
+        add_privilege(
+            params.sender,
+            addresses,
+            params,
+            context.state,
+            context.substate,
+        )
     }
 }
 
@@ -138,7 +144,13 @@ impl SimpleExecutionTrait for RemovePrivilege {
             ));
         }
 
-        remove_privilege(params.sender, addresses, params, context.state)
+        remove_privilege(
+            params.sender,
+            addresses,
+            params,
+            context.state,
+            context.substate,
+        )
     }
 }
 
@@ -285,7 +297,13 @@ impl SimpleExecutionTrait for AddPrivilegeByAdmin {
         if context.is_contract_address(&contract)?
             && &params.sender == &context.state.admin(&contract)?
         {
-            add_privilege(contract, addresses, params, context.state)?
+            add_privilege(
+                contract,
+                addresses,
+                params,
+                context.state,
+                context.substate,
+            )?
         }
         Ok(())
     }
@@ -316,7 +334,13 @@ impl SimpleExecutionTrait for RemovePrivilegeByAdmin {
         if context.is_contract_address(&contract)?
             && &params.sender == &context.state.admin(&contract)?
         {
-            remove_privilege(contract, addresses, params, context.state)?
+            remove_privilege(
+                contract,
+                addresses,
+                params,
+                context.state,
+                context.substate,
+            )?
         }
         Ok(())
     }

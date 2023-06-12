@@ -239,7 +239,7 @@ pub fn set_sponsor_for_collateral(
 /// `addPrivilegeByAdmin(address,address[])`.
 pub fn add_privilege(
     contract: Address, addresses: Vec<Address>, params: &ActionParams,
-    state: &mut State,
+    state: &mut State, substate: &mut Substate,
 ) -> vm::Result<()>
 {
     for user_addr in addresses {
@@ -247,6 +247,7 @@ pub fn add_privilege(
             contract,
             params.storage_owner,
             user_addr,
+            substate,
         )?;
     }
 
@@ -257,7 +258,7 @@ pub fn add_privilege(
 /// `removePrivilegeByAdmin(address,address[])`.
 pub fn remove_privilege(
     contract: Address, addresses: Vec<Address>, params: &ActionParams,
-    state: &mut State,
+    state: &mut State, substate: &mut Substate,
 ) -> vm::Result<()>
 {
     for user_addr in addresses {
@@ -265,6 +266,7 @@ pub fn remove_privilege(
             contract,
             params.storage_owner,
             user_addr,
+            substate,
         )?;
     }
     Ok(())

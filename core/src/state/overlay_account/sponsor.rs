@@ -3,6 +3,8 @@ use cfx_statedb::{Result as DbResult, StateDbGeneric};
 use cfx_types::{Address, U256};
 use primitives::SponsorInfo;
 
+use crate::state::Substate;
+
 use super::OverlayAccount;
 
 lazy_static! {
@@ -90,31 +92,33 @@ impl OverlayAccount {
     /// Add commission privilege of `contract_address` to `user`.
     /// We set the value to some nonzero value which will be persisted in db.
     pub fn add_to_contract_whitelist(
-        &mut self, contract_address: Address, contract_owner: Address,
-        user: Address,
-    )
+        &mut self, db: &StateDbGeneric, contract_address: Address,
+        user: Address, storage_owner: Address, substate: &mut Substate,
+    ) -> DbResult<()>
     {
         let mut key = Vec::with_capacity(Address::len_bytes() * 2);
         key.extend_from_slice(contract_address.as_bytes());
         key.extend_from_slice(user.as_bytes());
         self.set_storage(
+            db,
             key,
             COMMISSION_PRIVILEGE_STORAGE_VALUE.clone(),
-            contract_owner,
-        );
+            storage_owner,
+            substate,
+        )
     }
 
     /// Remove commission privilege of `contract_address` from `user`.
     /// We set the value to zero, and the key/value will be released at commit
     /// phase.
     pub fn remove_from_contract_whitelist(
-        &mut self, contract_address: Address, contract_owner: Address,
-        user: Address,
-    )
+        &mut self, db: &StateDbGeneric, contract_address: Address,
+        user: Address, storage_owner: Address, substate: &mut Substate,
+    ) -> DbResult<()>
     {
         let mut key = Vec::with_capacity(Address::len_bytes() * 2);
         key.extend_from_slice(contract_address.as_bytes());
         key.extend_from_slice(user.as_bytes());
-        self.set_storage(key, U256::zero(), contract_owner);
+        self.set_storage(db, key, U256::zero(), storage_owner, substate)
     }
 }

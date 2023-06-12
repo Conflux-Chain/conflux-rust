@@ -1,6 +1,5 @@
 use crate::hash::KECCAK_EMPTY;
 use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, Space, U256};
-use parking_lot::RwLock;
 use primitives::{Account, SponsorInfo, StorageLayout};
 
 use super::{AccountEntry, OverlayAccount};
@@ -13,10 +12,8 @@ impl Default for OverlayAccount {
             nonce: U256::zero(),
             admin: Address::zero(),
             sponsor_info: Default::default(),
-            storage_value_read_cache: Default::default(),
-            storage_value_write_cache: Default::default(),
-            storage_owner_lv2_write_cache: Default::default(),
-            storage_owner_lv1_write_cache: Default::default(),
+            storage_read_cache: Default::default(),
+            storage_write_cache: Default::default(),
             storage_layout_change: None,
             staking_balance: 0.into(),
             collateral_for_storage: 0.into(),
@@ -139,14 +136,8 @@ impl OverlayAccount {
 
     pub fn clone_dirty(&self) -> Self {
         let mut account = self.clone_basic();
-        account.storage_value_write_cache =
-            self.storage_value_write_cache.clone();
-        account.storage_value_read_cache =
-            self.storage_value_read_cache.clone();
-        account.storage_owner_lv2_write_cache =
-            RwLock::new(self.storage_owner_lv2_write_cache.read().clone());
-        account.storage_owner_lv1_write_cache =
-            self.storage_owner_lv1_write_cache.clone();
+        account.storage_write_cache = self.storage_write_cache.clone();
+        account.storage_read_cache = self.storage_read_cache.clone();
         account.storage_layout_change = self.storage_layout_change.clone();
         account
     }
@@ -158,12 +149,8 @@ impl OverlayAccount {
         self.sponsor_info = other.sponsor_info;
         self.code_hash = other.code_hash;
         self.code = other.code;
-        self.storage_value_read_cache = other.storage_value_read_cache;
-        self.storage_value_write_cache = other.storage_value_write_cache;
-        self.storage_owner_lv2_write_cache =
-            other.storage_owner_lv2_write_cache;
-        self.storage_owner_lv1_write_cache =
-            other.storage_owner_lv1_write_cache;
+        self.storage_read_cache = other.storage_read_cache;
+        self.storage_write_cache = other.storage_write_cache;
         self.storage_layout_change = other.storage_layout_change;
         self.staking_balance = other.staking_balance;
         self.collateral_for_storage = other.collateral_for_storage;

@@ -29,7 +29,7 @@ use cfx_types::{
 use parking_lot::RwLock;
 use primitives::{
     is_default::IsDefault, CodeInfo, DepositList, SponsorInfo, StorageLayout,
-    VoteStakeList,
+    StorageValue, VoteStakeList,
 };
 use std::{collections::HashMap, sync::Arc};
 
@@ -42,50 +42,11 @@ pub use sponsor::COMMISSION_PRIVILEGE_SPECIAL_KEY;
 pub struct OverlayAccount {
     address: AddressWithSpace,
 
-    // Balance of the account.
     balance: U256,
     // Nonce of the account,
     nonce: U256,
-
     // Administrator of the account
     admin: Address,
-
-    // This is the sponsor information of the contract.
-    sponsor_info: SponsorInfo,
-
-    // FIXME: there are changes, so no need to have cache for both storage and
-    // ownership
-
-    // This is a read cache for storage values of the current account in db.
-    // The underlying db will not change while computing transactions in an
-    // epoch. So all the contents in the read cache is always available.
-    storage_value_read_cache: Arc<RwLock<HashMap<Vec<u8>, U256>>>,
-    // This is a write cache for changing storage value in db. It will be
-    // written to db when committing overlay account.
-    storage_value_write_cache: Arc<HashMap<Vec<u8>, U256>>,
-
-    // This is a level 2 cache for storage ownership change of the current
-    // account. It will be written to db when committing overlay account.
-    //
-    // This cache contains intermediate result during transaction execution, it
-    // should never be shared among multiple threads. But we also need RwLock
-    // here because current implementation requires OverlayAccount: Send +
-    // Sync.
-    storage_owner_lv2_write_cache:
-        RwLock<Arc<HashMap<Vec<u8>, Option<Address>>>>,
-    // This is a level 1 cache for storage ownership change of the current
-    // account. It will be updated when executing EVM or calling
-    // `set_storage` function. It will be merged to level 2 cache at the
-    // end of message call or calling `collect_commit_changes`.
-    //
-    // This maintains the current owner of a
-    // specific key. If the owner is `None`, the value of current key is
-    // zero.
-    storage_owner_lv1_write_cache: Arc<HashMap<Vec<u8>, Option<Address>>>,
-
-    // Storage layout change.
-    storage_layout_change: Option<StorageLayout>,
-
     // This is the number of tokens used in staking.
     staking_balance: U256,
     // This is the number of tokens used as collateral for storage, which will
@@ -93,6 +54,18 @@ pub struct OverlayAccount {
     collateral_for_storage: U256,
     // This is the accumulated interest return.
     accumulated_interest_return: U256,
+    // This is the sponsor information of the contract.
+    sponsor_info: SponsorInfo,
+    // Code hash of the account.
+    code_hash: H256,
+    // Storage layout change.
+    storage_layout_change: Option<StorageLayout>,
+
+    storage_read_cache: Arc<RwLock<HashMap<Vec<u8>, StorageValue>>>,
+    // This is a write cache for changing storage value in db. It will be
+    // written to db when committing overlay account.
+    storage_write_cache: Arc<HashMap<Vec<u8>, StorageValue>>,
+
     // This is the list of deposit info, sorted in increasing order of
     // `deposit_time`.
     // If it is not `None`, which means it has been loaded from db.
@@ -102,9 +75,6 @@ pub struct OverlayAccount {
     // the `unlock_block_number` and `amount` is unique in the list.
     // If it is not `None`, which means it has been loaded from db.
     vote_stake_list: Option<VoteStakeList>,
-
-    // Code hash of the account.
-    code_hash: H256,
     // When code_hash isn't KECCAK_EMPTY, the code has been initialized for
     // the account. The code field can be None, which means that the code
     // has not been loaded from storage. When code_hash is KECCAK_EMPTY, this

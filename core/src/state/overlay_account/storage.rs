@@ -3,43 +3,153 @@ use super::Substate;
 #[cfg(test)]
 use super::StorageLayout;
 use cfx_parameters::{
-    internal_contract_addresses::SYSTEM_STORAGE_ADDRESS,
+    internal_contract_addresses::{
+        SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS, SYSTEM_STORAGE_ADDRESS,
+    },
     staking::COLLATERAL_UNITS_PER_STORAGE_KEY,
 };
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
-use cfx_types::{Address, AddressWithSpace, Space, U256};
+use cfx_types::{Address, Space, U256};
 
-use primitives::{StorageKey, StorageValue};
-use std::{collections::HashMap, sync::Arc};
+use primitives::{
+    SkipInputCheck, StorageKey, StorageKeyWithSpace, StorageValue,
+};
+use std::{collections::hash_map::Entry::*, sync::Arc};
 
 use super::OverlayAccount;
 
 impl OverlayAccount {
-    pub fn set_storage(&mut self, key: Vec<u8>, value: U256, owner: Address) {
-        Arc::make_mut(&mut self.storage_value_write_cache)
-            .insert(key.clone(), value);
-        if self.address.space == Space::Ethereum
-            || self.address.address == SYSTEM_STORAGE_ADDRESS
-        {
-            return;
+    pub fn set_storage(
+        &mut self, db: &StateDbGeneric, key: Vec<u8>, value: U256,
+        owner: Address, substate: &mut Substate,
+    ) -> DbResult<()>
+    {
+        let old_value = self.storage_entry_at(db, &key)?;
+        // Noop if the value does not change.
+        if old_value.value == value && !self.force_reset_owner() {
+            return Ok(());
         }
-        let lv1_write_cache =
-            Arc::make_mut(&mut self.storage_owner_lv1_write_cache);
-        if value.is_zero() {
-            lv1_write_cache.insert(key, None);
+
+        // Refund the collateral of old value
+        if let Some(old_owner) = old_value.owner {
+            substate.record_storage_release(
+                &old_owner,
+                COLLATERAL_UNITS_PER_STORAGE_KEY,
+            );
+        }
+
+        // Settle the collateral of new value
+        let new_owner = if self.should_have_owner(&key) && !value.is_zero() {
+            substate.record_storage_occupy(
+                &owner,
+                COLLATERAL_UNITS_PER_STORAGE_KEY,
+            );
+            Some(owner)
         } else {
-            lv1_write_cache.insert(key, Some(owner));
-        }
+            None
+        };
+
+        // Insert in cache
+        let new_entry = StorageValue {
+            owner: new_owner,
+            value,
+        };
+        Arc::make_mut(&mut self.storage_write_cache)
+            .insert(key.clone(), new_entry);
+        Ok(())
     }
 
-    pub fn cached_storage_at(&self, key: &[u8]) -> Option<U256> {
-        if let Some(value) = self.storage_value_write_cache.get(key) {
-            return Some(value.clone());
+    // In most cases, the ownership does not change if the set storage operation
+    // does not change the value. However, some implementations do not follow
+    // this rule. So we must deal with these special cases for backward
+    // compatible.
+    fn force_reset_owner(&self) -> bool {
+        self.address.space == Space::Native
+            && self.address.address
+                == SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS
+    }
+
+    #[cfg(test)]
+    pub fn set_storage_simple(&mut self, key: Vec<u8>, value: U256) {
+        Arc::make_mut(&mut self.storage_write_cache)
+            .insert(key.clone(), StorageValue { value, owner: None });
+    }
+
+    pub fn delete_storage_range(
+        &mut self, deletion_log: impl Iterator<Item = (Vec<u8>, Box<[u8]>)>,
+        key_prefix: &[u8], substate: &mut Substate,
+    ) -> DbResult<()>
+    {
+        assert_eq!(self.address.space, Space::Native);
+        let delete_all = key_prefix.is_empty();
+
+        // Its strong count should be 1 and will not cause memory copy,
+        // unless in test and gas estimation.
+        let write_cache = Arc::make_mut(&mut self.storage_write_cache);
+        for (k, v) in write_cache.iter_mut() {
+            if k.starts_with(key_prefix) && !v.value.is_zero() {
+                if let Some(old_owner) = v.owner {
+                    substate.record_storage_release(
+                        &old_owner,
+                        COLLATERAL_UNITS_PER_STORAGE_KEY,
+                    );
+                };
+                *v = StorageValue::default();
+            }
         }
-        if let Some(value) = self.storage_value_read_cache.read().get(key) {
-            return Some(value.clone());
+
+        for (key, raw_value) in deletion_log
+            .into_iter()
+            .filter_map(|(k, v)| Some((decode_storage_key(&k)?, v)))
+        {
+            match write_cache.entry(key.clone()) {
+                Vacant(entry) => {
+                    // Propogate the db changes to cache
+                    // However, if all keys are removed, we don't update
+                    // cache since it will be cleared later.
+                    if !delete_all {
+                        entry.insert(StorageValue::default());
+                    }
+                }
+                Occupied(_) => {
+                    // The key has been modified in cache, and the db holds
+                    // a deprecated version.
+                    // So we do nothing here.
+                    continue;
+                }
+            }
+            // Decode owner
+            let StorageValue { owner, value } =
+                rlp::decode::<StorageValue>(&raw_value)?;
+            assert!(!value.is_zero());
+            let owner = owner.unwrap_or(self.address.address);
+            substate.record_storage_release(
+                &owner,
+                COLLATERAL_UNITS_PER_STORAGE_KEY,
+            );
+        }
+
+        if delete_all {
+            write_cache.clear();
+            self.storage_read_cache.write().clear();
+            self.invalidated_storage = true;
+        }
+        Ok(())
+    }
+
+    fn cached_entry_at(&self, key: &[u8]) -> Option<StorageValue> {
+        if let Some(entry) = self.storage_write_cache.get(key) {
+            return Some(*entry);
+        }
+        if let Some(entry) = self.storage_read_cache.read().get(key) {
+            return Some(*entry);
         }
         None
+    }
+
+    #[cfg(test)]
+    pub fn cached_value_at(&self, key: &[u8]) -> Option<U256> {
+        self.cached_entry_at(key).map(|e| e.value)
     }
 
     // If a contract is removed, and then some one transfer balance to it,
@@ -48,173 +158,55 @@ impl OverlayAccount {
     pub fn storage_at(
         &self, db: &StateDbGeneric, key: &[u8],
     ) -> DbResult<U256> {
-        if let Some(value) = self.cached_storage_at(key) {
-            return Ok(value);
-        }
-        if self.fresh_storage() {
-            Ok(U256::zero())
-        } else {
-            Self::get_and_cache_storage(
-                &mut self.storage_value_read_cache.write(),
-                Arc::make_mut(&mut *self.storage_owner_lv2_write_cache.write()),
-                db,
-                &self.address,
-                key,
-                true, /* cache_ownership */
-            )
-        }
+        Ok(self.storage_entry_at(db, key)?.value)
     }
 
-    pub fn storage_opt_at(
+    // If a contract is removed, and then some one transfer balance to it,
+    // `storage_at` will return incorrect value. But this case should never
+    // happens.
+    pub fn storage_entry_at(
         &self, db: &StateDbGeneric, key: &[u8],
-    ) -> DbResult<Option<U256>> {
-        if let Some(value) = self.cached_storage_at(key) {
-            return Ok(Some(value));
-        }
-        if self.fresh_storage() {
-            Ok(None)
+    ) -> DbResult<StorageValue> {
+        Ok(if let Some(owner) = self.cached_entry_at(key) {
+            owner
+        } else if self.fresh_storage() {
+            StorageValue::default()
         } else {
-            Ok(db
-                .get::<StorageValue>(
-                    StorageKey::new_storage_key(
-                        &self.address.address,
-                        key.as_ref(),
-                    )
-                    .with_space(self.address.space),
-                )?
-                .map(|v| v.value))
-        }
+            self.get_and_cache_storage(db, key)?
+        })
     }
 
     fn get_and_cache_storage(
-        storage_value_read_cache: &mut HashMap<Vec<u8>, U256>,
-        storage_owner_lv2_write_cache: &mut HashMap<Vec<u8>, Option<Address>>,
-        db: &StateDbGeneric, address: &AddressWithSpace, key: &[u8],
-        cache_ownership: bool,
-    ) -> DbResult<U256>
-    {
-        assert!(!storage_owner_lv2_write_cache.contains_key(key));
-        let cache_ownership = cache_ownership
-            && address.space == Space::Native
-            && address.address != SYSTEM_STORAGE_ADDRESS;
-
-        if let Some(value) = db.get::<StorageValue>(
-            StorageKey::new_storage_key(&address.address, key.as_ref())
-                .with_space(address.space),
-        )? {
-            storage_value_read_cache.insert(key.to_vec(), value.value);
-            if cache_ownership {
-                storage_owner_lv2_write_cache.insert(
-                    key.to_vec(),
-                    Some(match value.owner {
-                        Some(owner) => owner,
-                        None => address.address,
-                    }),
-                );
-            }
-            Ok(value.value)
-        } else {
-            storage_value_read_cache.insert(key.to_vec(), U256::zero());
-            if cache_ownership {
-                storage_owner_lv2_write_cache.insert(key.to_vec(), None);
-            }
-            Ok(U256::zero())
+        &self, db: &StateDbGeneric, key: &[u8],
+    ) -> DbResult<StorageValue> {
+        let storage_key =
+            StorageKey::new_storage_key(&self.address.address, key.as_ref())
+                .with_space(self.address.space);
+        let StorageValue { mut owner, value } =
+            db.get::<StorageValue>(storage_key)?.unwrap_or_default();
+        if !value.is_zero() && owner.is_none() && self.should_have_owner(key) {
+            owner = Some(self.address.address)
         }
+        let storage_value = StorageValue { owner, value };
+        self.storage_read_cache
+            .write()
+            .insert(key.to_vec(), storage_value.clone());
+        Ok(storage_value)
     }
 
-    /// Return the owner of `key` before this execution. If it is `None`, it
-    /// means the value of the key is zero before this execution. Otherwise, the
-    /// value of the key is nonzero.
-    pub fn original_ownership_at(
-        &self, db: &StateDbGeneric, key: &Vec<u8>,
-    ) -> DbResult<Option<Address>> {
-        self.address.assert_native();
-        if let Some(value) = self.storage_owner_lv2_write_cache.read().get(key)
-        {
-            return Ok(value.clone());
-        }
-        if self.fresh_storage() {
-            return Ok(None);
-        }
-        let storage_value_read_cache =
-            &mut self.storage_value_read_cache.write();
-        let storage_owner_lv2_write_cache =
-            &mut *self.storage_owner_lv2_write_cache.write();
-        let storage_owner_lv2_write_cache =
-            Arc::make_mut(storage_owner_lv2_write_cache);
-        Self::get_and_cache_storage(
-            storage_value_read_cache,
-            storage_owner_lv2_write_cache,
-            db,
-            &self.address,
-            key,
-            true, /* cache_ownership */
-        )?;
-        Ok(storage_owner_lv2_write_cache
-            .get(key)
-            .expect("key exists")
-            .clone())
-    }
-
-    /// Return the storage change of each related account.
-    /// Each account is associated with a pair of `(usize, usize)`. The first
-    /// value means the number of keys occupied by this account in current
-    /// execution. The second value means the number of keys released by this
-    /// account in current execution.
-    pub fn commit_ownership_change(
-        &mut self, db: &StateDbGeneric, substate: &mut Substate,
-    ) -> DbResult<()> {
-        self.address.assert_native();
-        if self.invalidated_storage {
-            return Ok(());
-        }
-        if self.address.address == SYSTEM_STORAGE_ADDRESS {
-            return Ok(());
-        }
-        let storage_owner_lv1_write_cache: Vec<_> =
-            Arc::make_mut(&mut self.storage_owner_lv1_write_cache)
-                .drain()
-                .collect();
-        for (k, current_owner_opt) in storage_owner_lv1_write_cache {
-            // Get the owner of `k` before execution. If it is `None`, it means
-            // the value of the key is zero before execution. Otherwise, the
-            // value of the key is nonzero.
-            let original_ownership_opt = self.original_ownership_at(db, &k)?;
-            if original_ownership_opt != current_owner_opt {
-                if let Some(original_owner) = original_ownership_opt.as_ref() {
-                    // The key has released from previous owner.
-                    substate.record_storage_release(
-                        original_owner,
-                        COLLATERAL_UNITS_PER_STORAGE_KEY,
-                    );
-                }
-                if let Some(current_owner) = current_owner_opt.as_ref() {
-                    // The owner has occupied a new key.
-                    substate.record_storage_occupy(
-                        current_owner,
-                        COLLATERAL_UNITS_PER_STORAGE_KEY,
-                    );
-                }
-            }
-            // Commit ownership change to `storage_owner_lv2_write_cache`.
-            Arc::make_mut(self.storage_owner_lv2_write_cache.get_mut())
-                .insert(k, current_owner_opt);
-        }
-        assert!(self.storage_owner_lv1_write_cache.is_empty());
-        Ok(())
+    pub(super) fn should_have_owner(&self, _key: &[u8]) -> bool {
+        self.address.space == Space::Native
+            && self.address.address != SYSTEM_STORAGE_ADDRESS
     }
 
     pub fn change_storage_value(
         &mut self, db: &StateDbGeneric, key: &[u8], value: U256,
     ) -> DbResult<()> {
-        let current_value = self.storage_at(db, key)?;
-        if !current_value.is_zero() {
-            // Constraint requirement: if a key appears in value_write_cache, it
-            // must be in owner_lv2_write cache. Safety: since
-            // current value is non-zero, this key must appears in
-            // lv2_write_cache because `storage_at` loaded it.
-            Arc::make_mut(&mut self.storage_value_write_cache)
-                .insert(key.to_vec(), value);
+        let mut entry = self.storage_entry_at(db, key)?;
+        if !entry.value.is_zero() {
+            entry.value = value;
+            Arc::make_mut(&mut self.storage_write_cache)
+                .insert(key.to_vec(), entry);
         } else {
             warn!("Change storage value outside transaction fails: current value is zero, tx {:?}, key {:?}", self.address, key);
         }
@@ -230,9 +222,17 @@ impl OverlayAccount {
     pub fn set_storage_layout(&mut self, layout: StorageLayout) {
         self.storage_layout_change = Some(layout);
     }
+}
 
-    // TODO: consider remove this function
-    pub fn storage_value_write_cache(&self) -> &HashMap<Vec<u8>, U256> {
-        &self.storage_value_write_cache
+fn decode_storage_key(key: &Vec<u8>) -> Option<Vec<u8>> {
+    if let StorageKeyWithSpace {
+        key: StorageKey::StorageKey { storage_key, .. },
+        ..
+    } = StorageKeyWithSpace::from_key_bytes::<SkipInputCheck>(&key[..])
+    {
+        Some(storage_key.to_vec())
+    } else {
+        // Should be unreachable
+        None
     }
 }

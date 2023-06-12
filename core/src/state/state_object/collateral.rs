@@ -9,9 +9,7 @@ use crate::{
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
 use cfx_state::CollateralCheckResult;
 use cfx_statedb::{global_params::*, Result as DbResult};
-use cfx_types::{
-    address_util::AddressUtil, Address, AddressSpaceUtil, Space, U256,
-};
+use cfx_types::{address_util::AddressUtil, Address, AddressSpaceUtil, U256};
 
 impl State {
     pub fn collateral_for_storage(&self, address: &Address) -> DbResult<U256> {
@@ -75,30 +73,6 @@ impl State {
         Ok(storage_points_refund)
     }
 
-    /// Collects the cache (`ownership_change` in `OverlayAccount`) of storage
-    /// change and write to substate.
-    /// It is idempotent. But its execution is costly.
-    pub fn collect_ownership_changed(
-        &mut self, substate: &mut Substate,
-    ) -> DbResult<()> {
-        if let Some(checkpoint) = self.checkpoints.get_mut().last() {
-            for address in
-                checkpoint.keys().filter(|a| a.space == Space::Native)
-            {
-                if let Some(acc) = self
-                    .cache
-                    .get_mut()
-                    .get_mut(address)
-                    .filter(|x| x.is_dirty())
-                    .and_then(|maybe_acc| maybe_acc.account.as_mut())
-                {
-                    acc.commit_ownership_change(&self.db, substate)?;
-                }
-            }
-        }
-        Ok(())
-    }
-
     pub fn check_storage_limit(
         &self, original_sender: &Address, storage_limit: &U256, dry_run: bool,
     ) -> DbResult<CollateralCheckResult> {
@@ -117,20 +91,43 @@ impl State {
     // TODO: This function can only be called after VM execution. There are some
     // test cases breaks this assumption, which will be fixed in a separated PR.
     #[cfg(test)]
-    pub fn collect_and_settle_collateral(
-        &mut self, original_sender: &Address, storage_limit: &U256,
+    pub fn settle_collateral_and_check(
+        &mut self, storage_owner: &Address, storage_limit: &U256,
         substate: &mut Substate, tracer: &mut dyn StateTracer, spec: &Spec,
         dry_run: bool,
     ) -> DbResult<CollateralCheckResult>
     {
-        self.collect_ownership_changed(substate)?;
         let res =
             settle_collateral_for_all(self, substate, tracer, spec, dry_run)?;
         Ok(if res.ok() {
-            self.check_storage_limit(original_sender, storage_limit, dry_run)?
+            self.check_storage_limit(storage_owner, storage_limit, dry_run)?
         } else {
             res
         })
+    }
+
+    #[cfg(test)]
+    pub fn settle_collateral_and_assert(
+        &mut self, storage_owner: &Address, substate: &mut Substate,
+        should_success: bool,
+    ) -> DbResult<()>
+    {
+        let res = self.settle_collateral_and_check(
+            storage_owner,
+            &U256::MAX,
+            substate,
+            &mut (),
+            &Spec::new_spec_for_test(),
+            false,
+        )?;
+
+        if should_success {
+            assert_eq!(res, CollateralCheckResult::Valid);
+        } else {
+            assert_ne!(res, CollateralCheckResult::Valid);
+        }
+
+        Ok(())
     }
 
     fn initialize_cip107(

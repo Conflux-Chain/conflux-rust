@@ -51,13 +51,13 @@ impl<'a> InternalRefContext<'a> {
         &mut self, params: &ActionParams, key: Vec<u8>, value: U256,
     ) -> vm::Result<()> {
         let receiver = params.address.with_space(params.space);
-        self.substate
+        self.state
             .set_storage(
-                self.state,
                 &receiver,
                 key,
                 value,
                 params.storage_owner,
+                self.substate,
             )
             .map_err(|e| e.into())
     }
@@ -66,9 +66,7 @@ impl<'a> InternalRefContext<'a> {
         &mut self, params: &ActionParams, key: &[u8],
     ) -> DbResult<U256> {
         let receiver = params.address.with_space(params.space);
-        self.substate
-            .storage_at(self.state, &receiver, key)
-            .map_err(|e| e.into())
+        self.state.storage_at(&receiver, key).map_err(|e| e.into())
     }
 
     pub fn is_contract_address(&self, address: &Address) -> vm::Result<bool> {

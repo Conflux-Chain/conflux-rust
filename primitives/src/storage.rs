@@ -177,7 +177,7 @@ impl StorageLayout {
     }
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Copy, Debug)]
 pub struct StorageValue {
     pub value: U256,
     pub owner: Option<Address>,

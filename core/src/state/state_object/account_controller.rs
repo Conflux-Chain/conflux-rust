@@ -1,6 +1,5 @@
 use super::{AccountEntry, OverlayAccount, State};
 use cfx_statedb::Result as DbResult;
-use cfx_storage::utils::access_mode;
 use cfx_types::{
     Address, AddressSpaceUtil, AddressWithSpace, Space, H256, U256,
 };
@@ -36,19 +35,6 @@ impl State {
     pub fn remove_contract(
         &mut self, address: &AddressWithSpace,
     ) -> DbResult<()> {
-        if address.space == Space::Native {
-            let removed_whitelist = self
-                .clear_contract_whitelist::<access_mode::Write>(
-                    &address.address,
-                )?;
-
-            if !removed_whitelist.is_empty() {
-                error!(
-                "removed_whitelist here should be empty unless in unit tests."
-            );
-            }
-        }
-
         self.update_cache(
             address,
             OverlayAccount::new_removed(address).into_dirty_entry(),
