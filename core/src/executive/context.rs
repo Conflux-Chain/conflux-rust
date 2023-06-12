@@ -123,10 +123,7 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
             address: self.local_part.origin.address,
             space: self.local_part.space,
         };
-        self.local_part
-            .substate
-            .storage_at(self.state, &caller, key)
-            .map_err(Into::into)
+        self.state.storage_at(&caller, key).map_err(Into::into)
     }
 
     fn set_storage(&mut self, key: Vec<u8>, value: U256) -> vm::Result<()> {
@@ -137,14 +134,13 @@ impl<'a, 'b> ContextTrait for Context<'a, 'b> {
         if self.is_static_or_reentrancy() {
             Err(vm::Error::MutableCallInStaticContext)
         } else {
-            self.local_part
-                .substate
+            self.state
                 .set_storage(
-                    self.state,
                     &caller,
                     key,
                     value,
                     self.local_part.origin.storage_owner,
+                    &mut self.local_part.substate,
                 )
                 .map_err(Into::into)
         }

@@ -1,18 +1,12 @@
-use cfx_parameters::{
-    internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-    staking::COLLATERAL_UNITS_PER_STORAGE_KEY,
-};
+use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
 use cfx_state::maybe_address;
 use cfx_statedb::{
     global_params::{ConvertedStoragePoints, TotalIssued},
     Result as DbResult,
 };
 use cfx_storage::utils::access_mode;
-use cfx_types::{Address, AddressSpaceUtil, Space, U256};
-use primitives::{
-    SkipInputCheck, SponsorInfo, StorageKey, StorageKeyWithSpace, StorageValue,
-};
-use std::collections::HashMap;
+use cfx_types::{Address, U256};
+use primitives::{SponsorInfo, StorageKey};
 
 use super::{internal_contract::storage_point_prop, substate::Substate, State};
 
@@ -161,168 +155,93 @@ impl State {
     }
 
     pub fn add_to_contract_whitelist(
-        &mut self, contract_address: Address, contract_owner: Address,
-        user: Address,
+        &mut self, contract_address: Address, storage_owner: Address,
+        user: Address, substate: &mut Substate,
     ) -> DbResult<()>
     {
-        info!("add_commission_privilege contract_address: {:?}, contract_owner: {:?}, user: {:?}", contract_address, contract_owner, user);
+        info!(
+            "add_commission_privilege contract_address: {:?}, user: {:?}",
+            contract_address, user
+        );
 
         self.write_native_account_lock(
             &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
         )?
         .add_to_contract_whitelist(
+            &self.db,
             contract_address,
-            contract_owner,
             user,
-        );
+            storage_owner,
+            substate,
+        )?;
 
         Ok(())
     }
 
     pub fn remove_from_contract_whitelist(
-        &mut self, contract_address: Address, contract_owner: Address,
-        user: Address,
+        &mut self, contract_address: Address, storage_owner: Address,
+        user: Address, substate: &mut Substate,
     ) -> DbResult<()>
     {
         self.write_native_account_lock(
             &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
         )?
         .remove_from_contract_whitelist(
+            &self.db,
             contract_address,
-            contract_owner,
             user,
-        );
+            storage_owner,
+            substate,
+        )?;
         Ok(())
-    }
-
-    pub fn clear_contract_whitelist<AM: access_mode::AccessMode>(
-        &mut self, address: &Address,
-    ) -> DbResult<HashMap<Vec<u8>, Address>> {
-        let mut storage_owner_map = HashMap::new();
-        let key_values = self.db.delete_all::<AM>(
-            StorageKey::new_storage_key(
-                &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-                address.as_ref(),
-            )
-            .with_native_space(),
-            /* debug_record = */ None,
-        )?;
-        for (key, value) in &key_values {
-            if let StorageKeyWithSpace {
-                key: StorageKey::StorageKey { storage_key, .. },
-                space,
-            } =
-                StorageKeyWithSpace::from_key_bytes::<SkipInputCheck>(&key[..])
-            {
-                assert_eq!(space, Space::Native);
-                let storage_value =
-                    rlp::decode::<StorageValue>(value.as_ref())?;
-                let storage_owner = storage_value
-                    .owner
-                    .unwrap_or(SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS);
-                storage_owner_map.insert(storage_key.to_vec(), storage_owner);
-            }
-        }
-
-        let mut sponsor_internal_contract = self.write_native_account_lock(
-            &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-        )?;
-        // Then scan storage changes in cache.
-        for (key, _value) in
-            sponsor_internal_contract.storage_value_write_cache()
-        {
-            if key.starts_with(address.as_ref()) {
-                if let Some(storage_owner) = sponsor_internal_contract
-                    .original_ownership_at(&self.db, key)?
-                {
-                    storage_owner_map.insert(key.clone(), storage_owner);
-                } else {
-                    // The corresponding entry has been reset during transaction
-                    // execution, so we do not need to handle it now.
-                    storage_owner_map.remove(key);
-                }
-            }
-        }
-        if !AM::READ_ONLY {
-            // Note removal of all keys in storage_value_read_cache and
-            // storage_value_write_cache.
-            for (key, _storage_owner) in &storage_owner_map {
-                debug!("delete sponsor key {:?}", key);
-                sponsor_internal_contract.set_storage(
-                    key.clone(),
-                    U256::zero(),
-                    /* owner doesn't matter for 0 value */
-                    Address::zero(),
-                );
-            }
-        }
-
-        Ok(storage_owner_map)
     }
 
     pub fn record_storage_and_whitelist_entries_release(
         &mut self, address: &Address, substate: &mut Substate,
     ) -> DbResult<()> {
-        self.clear_contract_whitelist::<access_mode::Write>(address)?;
-
-        // Process collateral for removed storage.
-        // TODO: try to do it in a better way, e.g. first log the deletion
-        //  somewhere then apply the collateral change.
-
-        self.write_native_account_lock(
+        storage_range_deletion_for_account(
+            self,
             &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-        )?
-        .commit_ownership_change(&self.db, substate)?;
-
-        let account_cache_read_guard = self.cache.read();
-        let maybe_account = account_cache_read_guard
-            .get(&address.with_native_space())
-            .and_then(|acc| acc.account.as_ref());
-
-        let storage_key_value = self.db.delete_all::<access_mode::Read>(
-            StorageKey::new_storage_root_key(address).with_native_space(),
-            None,
+            address.as_ref(),
+            substate,
         )?;
-        for (key, value) in &storage_key_value {
-            if let StorageKeyWithSpace {
-                key: StorageKey::StorageKey { storage_key, .. },
-                space,
-            } =
-                StorageKeyWithSpace::from_key_bytes::<SkipInputCheck>(&key[..])
-            {
-                assert_eq!(space, Space::Native);
-                // Check if the key has been touched. We use the local
-                // information to find out if collateral refund is necessary
-                // for touched keys.
-                if maybe_account.map_or(true, |acc| {
-                    acc.storage_value_write_cache().get(storage_key).is_none()
-                }) {
-                    let storage_value =
-                        rlp::decode::<StorageValue>(value.as_ref())?;
-                    // Must native space
-                    let storage_owner =
-                        storage_value.owner.as_ref().unwrap_or(address);
-                    substate.record_storage_release(
-                        storage_owner,
-                        COLLATERAL_UNITS_PER_STORAGE_KEY,
-                    );
-                }
-            }
-        }
-
-        if let Some(acc) = maybe_account {
-            // The current value isn't important because it will be deleted.
-            for (key, _value) in acc.storage_value_write_cache() {
-                if let Some(storage_owner) =
-                    acc.original_ownership_at(&self.db, key)?
-                {
-                    substate.record_storage_release(
-                        &storage_owner,
-                        COLLATERAL_UNITS_PER_STORAGE_KEY,
-                    );
-                }
-            }
-        }
+        storage_range_deletion_for_account(self, address, &vec![], substate)?;
         Ok(())
     }
+
+    #[cfg(test)]
+    pub fn clear_contract_whitelist(
+        &mut self, address: &Address, substate: &mut Substate,
+    ) -> DbResult<()> {
+        storage_range_deletion_for_account(
+            self,
+            &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+            address.as_ref(),
+            substate,
+        )?;
+        Ok(())
+    }
+}
+
+fn storage_range_deletion_for_account(
+    state: &mut State, address: &Address, key_prefix: &[u8],
+    substate: &mut Substate,
+) -> DbResult<()>
+{
+    let delete_all = key_prefix.is_empty();
+
+    let storage_key_prefix = if delete_all {
+        StorageKey::new_storage_root_key(&address)
+    } else {
+        StorageKey::new_storage_key(&address, key_prefix)
+    }
+    .with_native_space();
+    let deletion_log = state
+        .db
+        .delete_all::<access_mode::Write>(storage_key_prefix, None)?
+        .into_iter();
+    state
+        .write_native_account_lock(address)?
+        .delete_storage_range(deletion_log, address.as_ref(), substate)?;
+    Ok(())
 }

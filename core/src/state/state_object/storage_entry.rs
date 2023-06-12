@@ -1,3 +1,5 @@
+use crate::state::Substate;
+
 use super::State;
 use cfx_parameters::internal_contract_addresses::SYSTEM_STORAGE_ADDRESS;
 use cfx_statedb::Result as DbResult;
@@ -12,13 +14,15 @@ impl State {
     pub fn set_system_storage(
         &mut self, key: Vec<u8>, value: U256,
     ) -> DbResult<()> {
+        // The system storage contract does not have owner, and thus does not
+        // require actual storage owner and substate which records ownership
+        // changes.
         self.set_storage(
             &SYSTEM_STORAGE_ADDRESS.with_native_space(),
             key,
             value,
-            // The system storage data have no owner, and this parameter is
-            // ignored.
-            Default::default(),
+            Address::zero(),
+            &mut Substate::new(),
         )
     }
 
@@ -31,13 +35,11 @@ impl State {
 
     pub fn set_storage(
         &mut self, address: &AddressWithSpace, key: Vec<u8>, value: U256,
-        owner: Address,
+        owner: Address, substate: &mut Substate,
     ) -> DbResult<()>
     {
-        noop_if!(self.storage_at(address, &key)? == value);
-
         self.write_account_lock(address)?
-            .set_storage(key, value, owner);
+            .set_storage(&self.db, key, value, owner, substate)?;
         Ok(())
     }
 }
@@ -75,7 +77,7 @@ impl State {
                         account: Some(ref account),
                         ..
                     })) => {
-                        if let Some(value) = account.cached_storage_at(key) {
+                        if let Some(value) = account.cached_value_at(key) {
                             return Ok(Some(value));
                         } else if account.is_newly_created_contract() {
                             return Ok(Some(U256::zero()));

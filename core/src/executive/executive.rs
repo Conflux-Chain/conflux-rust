@@ -581,7 +581,6 @@ impl<'a> CallCreateExecutive<'a> {
         let maybe_substate;
         if apply_state {
             let mut substate = self.context.substate;
-            state.collect_ownership_changed(&mut substate)?; /* only fail for db error. */
             if let Some(create_address) = self.create_address {
                 substate
                     .contracts_created
