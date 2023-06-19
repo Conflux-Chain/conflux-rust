@@ -37,7 +37,10 @@ use cfxcore::{
     SharedConsensusGraph,
 };
 use consensus_types::block::Block as ConsensusBlock;
-use diem_crypto::hash::HashValue;
+use diem_crypto::{
+    bls::{BLSPublicKey, UncompressedBLSPublicKey},
+    hash::HashValue,
+};
 use diem_types::{
     account_address::AccountAddress,
     epoch_state::EpochState,
@@ -781,5 +784,11 @@ impl Pos for PosHandler {
             })
             .unwrap_or(None);
         Ok(reward)
+    }
+
+    fn pos_to_uncompressed_pub_key(
+        &self, compressed_keys: Vec<BLSPublicKey>,
+    ) -> JsonRpcResult<Vec<UncompressedBLSPublicKey>> {
+        Ok(compressed_keys.into_iter().map(Into::into).collect())
     }
 }
