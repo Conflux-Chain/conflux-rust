@@ -43,8 +43,6 @@ pub trait StateDbExt {
     ) -> Result<Option<VoteStakeList>>;
 
     fn get_global_param<T: GlobalParamKey>(&self) -> Result<U256>;
-    fn get_global_param_opt<T: GlobalParamKey>(&self) -> Result<Option<U256>>;
-
     fn set_global_param<T: GlobalParamKey>(
         &mut self, value: &U256,
         debug_record: Option<&mut ComputeEpochDebugRecord>,
@@ -198,13 +196,8 @@ impl StateDbExt for StateDbGeneric {
         )
     }
 
-    fn get_global_param_opt<T: GlobalParamKey>(&self) -> Result<Option<U256>> {
-        let value_opt = self.get::<U256>(T::STORAGE_KEY)?;
-        Ok(value_opt)
-    }
-
     fn get_global_param<T: GlobalParamKey>(&self) -> Result<U256> {
-        Ok(self.get_global_param_opt::<T>()?.unwrap_or_default())
+        Ok(self.get::<U256>(T::STORAGE_KEY)?.unwrap_or_default())
     }
 
     fn set_global_param<T: GlobalParamKey>(
