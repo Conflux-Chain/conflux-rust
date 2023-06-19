@@ -185,7 +185,7 @@ impl ProposerElection for VrfProposer {
 
     /// Choose a proposal from all received proposal candidates to vote for.
     fn choose_proposal_to_vote(&self) -> Option<Block> {
-        let chosen_proposal = self.proposal_candidates.lock().take();
+        let chosen_proposal = self.proposal_candidates.lock().clone();
         diem_debug!(
             "choose_proposal_to_vote: {:?}, data={:?}",
             chosen_proposal,

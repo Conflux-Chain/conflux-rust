@@ -116,7 +116,7 @@ pub(super) fn walk<
 
     for i in 0..memcmp_len {
         if path_slice[i] != key[i] {
-            if AM::is_read_only() {
+            if AM::READ_ONLY {
                 return WalkStop::path_diverted_uninitialized();
             } else {
                 let matched_path: CompressedPathRaw;
@@ -175,7 +175,7 @@ pub(super) fn walk<
     if key.len() == memcmp_len {
         // Compressed path isn't fully consumed.
         if path_slice.len() > memcmp_len {
-            if AM::is_read_only() {
+            if AM::READ_ONLY {
                 return WalkStop::path_diverted_uninitialized();
             } else {
                 return WalkStop::PathDiverted {
@@ -222,7 +222,7 @@ pub(super) fn walk<
             ) != 0
             {
                 // Mismatch.
-                if AM::is_read_only() {
+                if AM::READ_ONLY {
                     return WalkStop::path_diverted_uninitialized();
                 } else {
                     return WalkStop::PathDiverted {

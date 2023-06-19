@@ -101,7 +101,7 @@ impl StateTracer for GasMan {
 impl VmObserve for GasMan {
     fn record_call(&mut self, params: &ActionParams) {
         let cross_space_internal =
-            params.code_address == *CROSS_SPACE_CONTRACT_ADDRESS;
+            params.code_address == CROSS_SPACE_CONTRACT_ADDRESS;
         self.record_call_create(&params.gas, cross_space_internal);
     }
 

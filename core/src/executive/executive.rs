@@ -19,7 +19,9 @@ use crate::{
     observer::{
         tracer::ExecutiveTracer, AddressPocket, GasMan, StateTracer, VmObserve,
     },
-    state::{cleanup_mode, CallStackInfo, State, Substate},
+    state::{
+        cleanup_mode, settle_collateral_for_all, CallStackInfo, State, Substate,
+    },
     verification::VerificationConfig,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress,
@@ -1080,12 +1082,12 @@ impl<'a> ExecutiveGeneric<'a> {
                     .map_or(false, |x| !x.is_zero());
 
                 if has_sponsor
-                    && (self.state.check_commission_privilege(
-                        &to,
-                        &tx.sender().address,
-                    )? || self
+                    && (self
                         .state
-                        .check_commission_privilege(&to, &Address::zero())?)
+                        .check_contract_whitelist(&to, &tx.sender().address)?
+                        || self
+                            .state
+                            .check_contract_whitelist(&to, &Address::zero())?)
                 {
                     sponsor_for_collateral_eligible = true;
 
@@ -1253,10 +1255,10 @@ impl<'a> ExecutiveGeneric<'a> {
                 .is_contract_with_code(&address.with_native_space())?
             {
                 code_address = *address;
-                if self.state.check_commission_privilege(
-                    &code_address,
-                    &sender.address,
-                )? {
+                if self
+                    .state
+                    .check_contract_whitelist(&code_address, &sender.address)?
+                {
                     // No need to check for gas sponsor account existence.
                     gas_sponsor_eligible = gas_cost
                         <= U512::from(
@@ -1490,7 +1492,7 @@ impl<'a> ExecutiveGeneric<'a> {
                 actual_gas_cost,
             );
             if tx.space() == Space::Ethereum {
-                self.state.subtract_total_evm_tokens(actual_gas_cost);
+                self.state.sub_total_evm_tokens(actual_gas_cost);
             }
 
             return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
@@ -1667,26 +1669,27 @@ impl<'a> ExecutiveGeneric<'a> {
         // Charge collateral and process the checkpoint.
         let (result, output) = {
             let res = res.and_then(|finalize_res| {
-                let dry_run_no_charge = !matches!(
+                let dry_run = !matches!(
                     check_settings.charge_collateral,
                     ChargeCollateral::Normal
                 );
 
                 // For a ethereum space tx, this function has no op.
-                // TODO: in fact, we don't need collect again here. But this is
-                // only the performance optimization and we put it in the later
-                // PR.
-                self.state
-                    .collect_and_settle_collateral(
+                let mut res = settle_collateral_for_all(
+                    &mut self.state,
+                    &substate,
+                    observer.as_state_tracer(),
+                    &self.spec,
+                    dry_run,
+                )?;
+                if res.ok() {
+                    res = self.state.check_storage_limit(
                         &sender.address,
                         &total_storage_limit,
-                        &mut substate,
-                        observer.as_state_tracer(),
-                        &self.spec,
-                        dry_run_no_charge,
-                    )?
-                    .into_vm_result()
-                    .and(Ok(finalize_res))
+                        dry_run,
+                    )?;
+                }
+                res.into_vm_result().and(Ok(finalize_res))
             });
             let out = match &res {
                 Ok(res) => {
@@ -1769,11 +1772,14 @@ impl<'a> ExecutiveGeneric<'a> {
             }
         }
 
-        let res = self.state.settle_collateral_for_all(
-            &substate, tracer, spec,
-            // Kill process does not occupy new storage entries.
+        let res = settle_collateral_for_all(
+            &mut self.state,
+            &substate,
+            tracer,
+            spec,
             false,
         )?;
+        // Kill process does not occupy new storage entries.
         // The storage recycling process should never occupy new collateral.
         assert_eq!(res, CollateralCheckResult::Valid);
 
@@ -1837,7 +1843,7 @@ impl<'a> ExecutiveGeneric<'a> {
                     AddressPocket::MintBurn,
                     staking_balance.clone(),
                 );
-                self.state.subtract_total_issued(staking_balance);
+                self.state.sub_total_issued(staking_balance);
             }
 
             let contract_balance = self.state.balance(contract_address)?;
@@ -1848,9 +1854,9 @@ impl<'a> ExecutiveGeneric<'a> {
             );
 
             self.state.remove_contract(contract_address)?;
-            self.state.subtract_total_issued(contract_balance);
+            self.state.sub_total_issued(contract_balance);
             if contract_address.space == Space::Ethereum {
-                self.state.subtract_total_evm_tokens(contract_balance);
+                self.state.sub_total_evm_tokens(contract_balance);
             }
         }
 
@@ -1912,7 +1918,7 @@ impl<'a> ExecutiveGeneric<'a> {
         };
 
         if tx.space() == Space::Ethereum {
-            self.state.subtract_total_evm_tokens(fees_value);
+            self.state.sub_total_evm_tokens(fees_value);
         }
 
         // perform suicides

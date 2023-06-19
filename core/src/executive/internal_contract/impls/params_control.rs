@@ -12,9 +12,10 @@ use crate::{
         },
     },
     internal_bail,
-    state::{power_two_fractional, State},
+    state::State,
     vm::{self, ActionParams, Spec},
 };
+use cfx_math::power_two_fractional;
 use cfx_parameters::consensus_internal::DAO_MIN_VOTE_PERCENTAGE;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, U256, U512};
@@ -569,7 +570,7 @@ mod system_storage_key {
 
     pub(super) fn current_votes(index: usize, opt_index: usize) -> [u8; 32] {
         // Position of `current_votes` (static slot)
-        let base = base_slot(*PARAMS_CONTROL_CONTRACT_ADDRESS)
+        let base = base_slot(PARAMS_CONTROL_CONTRACT_ADDRESS)
             + U256::from(CURRENT_VOTES_SLOT);
 
         // Position of `current_votes` (dynamic slot)
@@ -580,7 +581,7 @@ mod system_storage_key {
 
     pub(super) fn settled_votes(index: usize, opt_index: usize) -> [u8; 32] {
         // Position of `settled_votes` (static slot)
-        let base = base_slot(*PARAMS_CONTROL_CONTRACT_ADDRESS)
+        let base = base_slot(PARAMS_CONTROL_CONTRACT_ADDRESS)
             + U256::from(SETTLED_VOTES_SLOT);
 
         // Position of `settled_votes` (dynamic slot)
@@ -591,21 +592,21 @@ mod system_storage_key {
 
     pub(super) fn current_pos_staking_for_votes() -> [u8; 32] {
         // Position of `current_pos_staking` (static slot)
-        let base = base_slot(*PARAMS_CONTROL_CONTRACT_ADDRESS)
+        let base = base_slot(PARAMS_CONTROL_CONTRACT_ADDRESS)
             + U256::from(CURRENT_POS_STAKING_SLOT);
         u256_to_array(base)
     }
 
     pub(super) fn settled_pos_staking_for_votes() -> [u8; 32] {
         // Position of `settled_pos_staking` (static slot)
-        let base = base_slot(*PARAMS_CONTROL_CONTRACT_ADDRESS)
+        let base = base_slot(PARAMS_CONTROL_CONTRACT_ADDRESS)
             + U256::from(SETTLED_POS_STAKING_SLOT);
         u256_to_array(base)
     }
 
     pub fn storage_point_prop() -> [u8; 32] {
         // Position of `storage_point_prop` (static slot)
-        let base = base_slot(*PARAMS_CONTROL_CONTRACT_ADDRESS)
+        let base = base_slot(PARAMS_CONTROL_CONTRACT_ADDRESS)
             + U256::from(STORAGE_POINT_PROP_SLOT);
         u256_to_array(base)
     }

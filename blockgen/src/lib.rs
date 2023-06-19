@@ -564,6 +564,7 @@ impl BlockGenerator {
     pub fn generate_custom_block_with_parent(
         &self, parent_hash: H256, referee: Vec<H256>,
         transactions: Vec<Arc<SignedTransaction>>, adaptive: bool,
+        maybe_custom: Option<Vec<Vec<u8>>>,
     ) -> Result<H256, String>
     {
         let consensus_graph = self.consensus_graph();
@@ -572,7 +573,7 @@ impl BlockGenerator {
                 &parent_hash,
             )?;
 
-        let block = self.assemble_new_block_impl(
+        let mut block = self.assemble_new_block_impl(
             parent_hash,
             referee,
             state_blame_info,
@@ -582,6 +583,9 @@ impl BlockGenerator {
             Some(adaptive),
             self.get_pos_reference(&parent_hash),
         );
+        if let Some(custom) = maybe_custom {
+            block.block_header.set_custom(custom);
+        }
 
         Ok(self.generate_block_impl(block))
     }

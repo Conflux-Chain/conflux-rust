@@ -67,10 +67,11 @@ use crate::{
     rpc_errors::{invalid_params_check, Result as RpcResult},
     spec::genesis::initialize_internal_contract_accounts,
     state::{
+        distribute_pos_interest, initialize_or_update_dao_voted_params,
         prefetcher::{
             prefetch_accounts, ExecutionStatePrefetcher, PrefetchTaskHandle,
         },
-        State,
+        update_pos_status, State,
     },
     verification::{
         compute_receipts_root, VerificationConfig, VerifyTxLocalMode,
@@ -1119,8 +1120,7 @@ impl ConsensusExecutionHandler {
                 .get_unlock_nodes(current_pos_ref, parent_pos_ref)
             {
                 debug!("unlock node: {:?} {}", unlock_node_id, votes);
-                state
-                    .update_pos_status(unlock_node_id, votes)
+                update_pos_status(&mut state, unlock_node_id, votes)
                     .expect("db error");
             }
             if let Some((pos_epoch, reward_event)) = self
@@ -1130,9 +1130,10 @@ impl ConsensusExecutionHandler {
                 .and_then(|x| x.first())
             {
                 debug!("distribute_pos_interest: {:?}", reward_event);
-                let account_rewards = state
-                    .distribute_pos_interest(
-                        Box::new(reward_event.rewards()),
+                let account_rewards: Vec<(H160, H256, U256)> =
+                    distribute_pos_interest(
+                        &mut state,
+                        reward_event.rewards(),
                         current_block_number,
                     )
                     .expect("db error");
@@ -1147,12 +1148,22 @@ impl ConsensusExecutionHandler {
         let state_root;
         if on_local_pivot {
             state_root = state
-                .commit_and_notify(
-                    *epoch_hash,
-                    &self.tx_pool,
-                    debug_record.as_deref_mut(),
-                )
+                .commit(*epoch_hash, debug_record.as_deref_mut())
                 .expect(&concat!(file!(), ":", line!(), ":", column!()));
+            {
+                debug!("Notify epoch[{}]", epoch_hash);
+
+                // TODO: use channel to deliver the message.
+                let txpool_clone = self.tx_pool.clone();
+                let accounts_for_txpool = state.accounts_for_txpool();
+                std::thread::Builder::new()
+                    .name("txpool_update_state".into())
+                    .spawn(move || {
+                        txpool_clone
+                            .notify_modified_accounts(accounts_for_txpool);
+                    })
+                    .expect("can not notify tx pool to start state");
+            }
             self.tx_pool
                 .set_best_executed_epoch(StateIndex::new_for_readonly(
                     epoch_hash,
@@ -1865,7 +1876,7 @@ impl ConsensusExecutionHandler {
             state.add_total_issued(new_mint - burnt_fee);
         } else {
             // The very unlikely case
-            state.subtract_total_issued(burnt_fee - new_mint);
+            state.sub_total_issued(burnt_fee - new_mint);
         }
     }
 
@@ -2021,7 +2032,7 @@ impl ConsensusExecutionHandler {
         {
             let set_pos_staking =
                 block_number > self.machine.params().transition_numbers.cip105;
-            state.initialize_or_update_dao_voted_params(set_pos_staking)?;
+            initialize_or_update_dao_voted_params(state, set_pos_staking)?;
         }
 
         // Initialize old_storage_point_prop_ratio in the state.

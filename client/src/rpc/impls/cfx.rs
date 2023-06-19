@@ -8,7 +8,13 @@ use crate::rpc::types::{
     TokenSupplyInfo, VoteParamsInfo, WrapTransaction,
 };
 use blockgen::BlockGenerator;
-use cfx_statedb::StateDbExt;
+use cfx_statedb::{
+    global_params::{
+        AccumulateInterestRate, DistributablePoSInterest, InterestRate,
+        LastDistributeBlock, PowBaseReward, TotalPosStaking,
+    },
+    StateDbExt,
+};
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H256, H520, U128, U256,
     U64,
@@ -409,7 +415,7 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
 
-        Ok(state_db.get_annual_interest_rate()?.into())
+        Ok(state_db.get_global_param::<InterestRate>()?.into())
     }
 
     /// Returns accumulate interest rate of the given epoch
@@ -421,7 +427,9 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
 
-        Ok(state_db.get_accumulate_interest_rate()?.into())
+        Ok(state_db
+            .get_global_param::<AccumulateInterestRate>()?
+            .into())
     }
 
     /// Returns accumulate interest rate of the given epoch
@@ -435,11 +443,11 @@ impl RpcImpl {
 
         Ok(PoSEconomics {
             total_pos_staking_tokens: state_db
-                .get_total_pos_staking_tokens()?,
+                .get_global_param::<TotalPosStaking>()?,
             distributable_pos_interest: state_db
-                .get_distributable_pos_interest()?,
+                .get_global_param::<DistributablePoSInterest>()?,
             last_distribute_block: U64::from(
-                state_db.get_last_distribute_block()?,
+                state_db.get_global_param::<LastDistributeBlock>()?.as_u64(),
             ),
         })
     }
@@ -1004,7 +1012,7 @@ impl RpcImpl {
 
     fn generate_custom_block(
         &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes,
-        adaptive: Option<bool>,
+        adaptive: Option<bool>, custom: Option<Vec<Bytes>>,
     ) -> RpcResult<H256>
     {
         info!("RPC Request: generate_custom_block()");
@@ -1016,6 +1024,7 @@ impl RpcImpl {
             referee,
             transactions,
             adaptive.unwrap_or(false),
+            custom.map(|list| list.into_iter().map(|bytes| bytes.0).collect()),
         )?)
     }
 
@@ -1371,7 +1380,7 @@ impl RpcImpl {
         let user_account = state_db.get_account(&account_addr)?;
         let contract_account = state_db.get_account(&contract_addr)?;
         let state = State::new(state_db)?;
-        let is_sponsored = state.check_commission_privilege(
+        let is_sponsored = state.check_contract_whitelist(
             &contract_addr.address,
             &account_addr.address,
         )?;
@@ -1556,10 +1565,9 @@ impl RpcImpl {
         let state_db = self
             .consensus
             .get_state_db_by_epoch_number(epoch, "epoch_num")?;
-        let interest_rate =
-            state_db.get_annual_interest_rate()? / U256::from(BLOCKS_PER_YEAR);
-        let pow_base_reward =
-            state_db.get_pow_base_reward()?.unwrap_or_default();
+        let interest_rate = state_db.get_global_param::<InterestRate>()?
+            / U256::from(BLOCKS_PER_YEAR);
+        let pow_base_reward = state_db.get_global_param::<PowBaseReward>()?;
 
         Ok(VoteParamsInfo {
             pow_base_reward,
@@ -2188,7 +2196,7 @@ impl TestRpc for TestRpcImpl {
                 &self, raw_txs_without_data: Bytes, adaptive: Option<bool>, tx_data_len: Option<usize>)
                 -> JsonRpcResult<H256>;
             fn generate_custom_block(
-                &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes, adaptive: Option<bool>)
+                &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes, adaptive: Option<bool>, custom: Option<Vec<Bytes>>)
                 -> JsonRpcResult<H256>;
             fn get_pivot_chain_and_weight(&self, height_range: Option<(u64, u64)>) -> JsonRpcResult<Vec<(H256, U256)>>;
             fn get_executed_info(&self, block_hash: H256) -> JsonRpcResult<(H256, H256)> ;
