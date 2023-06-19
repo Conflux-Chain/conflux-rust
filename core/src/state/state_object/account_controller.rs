@@ -1,7 +1,4 @@
-use super::{
-    account_entry::{AccountEntry, OverlayAccount},
-    State,
-};
+use super::{AccountEntry, OverlayAccount, State};
 use cfx_statedb::Result as DbResult;
 use cfx_storage::utils::access_mode;
 use cfx_types::{

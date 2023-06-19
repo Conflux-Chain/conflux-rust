@@ -1,4 +1,4 @@
-use super::{account_entry::AccountState, State};
+use super::{AccountState, State};
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };
