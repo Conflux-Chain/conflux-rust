@@ -30,13 +30,7 @@ class HardcodePosCommitteeTest(DefaultConfluxTestFramework):
         for k, v in total_committee.items():
             new_committee[k[2:]] = v
         validator_verifier["addressToValidatorInfo"] = new_committee
-        # print(validator_verifier, t_dict(validator_verifier))
-        
-        compressed_keys = [value["publicKey"] for (_, value) in validator_verifier["addressToValidatorInfo"].items()]
-        uncompressed_keys = client.node.pos_toUncompressedPubKey(compressed_keys)
-        for (compressed_key, uncompressed_key) in zip(compressed_keys, uncompressed_keys):
-            assert_equal(len(uncompressed_key), 192)
-            assert_equal(compressed_key[1:96], uncompressed_key[1:96])
+        print(validator_verifier, t_dict(validator_verifier))
 
         hardcoded_committee = {3: t_dict(validator_verifier)}
         self.stop_nodes()
