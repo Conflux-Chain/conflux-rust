@@ -1,9 +1,8 @@
 use crate::rpc::types::Bytes;
 use cfx_types::{H256, U64};
-use diem_crypto::bls::deserialize_bls_public_key_unchecked;
+use diem_crypto::ValidCryptoMaterial;
 use diem_types::{
     epoch_state::EpochState as PrimitiveEpochState,
-    validator_config::{ConsensusPublicKey, ConsensusVRFPublicKey},
     validator_verifier::{
         ValidatorConsensusInfo as PrimitiveValidatorConsensusInfo,
         ValidatorVerifier as PrimitiveValidatorVerifier,
@@ -64,18 +63,29 @@ pub struct ValidatorConsensusInfo {
     // We always vote for our local EpochState, and EpochState is included in
     // the voted hash. Thus, if a malicious pubkey is provided here, its
     // LedgerInfo won't get a QC.
-    #[serde(deserialize_with = "deserialize_bls_public_key_unchecked")]
-    public_key: ConsensusPublicKey,
+    // #[serde(deserialize_with = "deserialize_bls_public_key_unchecked")]
+    /// Uncompressed BLS public key in 96 bytes.
+    public_key: Bytes,
     /// None if we do not need VRF.
-    vrf_public_key: Option<ConsensusVRFPublicKey>,
+    vrf_public_key: Option<Bytes>,
     voting_power: U64,
 }
 
 impl From<&PrimitiveValidatorConsensusInfo> for ValidatorConsensusInfo {
     fn from(value: &PrimitiveValidatorConsensusInfo) -> Self {
         Self {
-            public_key: value.public_key().clone(),
-            vrf_public_key: value.vrf_public_key().clone(),
+            public_key: value
+                .public_key()
+                .clone()
+                .raw()
+                .as_affine()
+                .to_uncompressed()
+                .to_vec()
+                .into(),
+            vrf_public_key: value
+                .vrf_public_key()
+                .clone()
+                .map(|k| k.to_bytes().into()),
             voting_power: value.voting_power().into(),
         }
     }
