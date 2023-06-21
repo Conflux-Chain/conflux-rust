@@ -611,7 +611,10 @@ def try_decode_int(x):
     if is_numeric(x):
         return parse_as_int(x)
 
-    if x.startswith("0x") and len(x) < 66:
+    if not x.startswith("0x"):
+        return x
+
+    if len(x) < 66:
         return parse_as_int(x)
 
-    return x
+    return x[2:]
