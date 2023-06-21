@@ -608,7 +608,10 @@ def t_dict(d):
     return {to_snake(a):t_dict(b) if isinstance(b, (dict, list)) else try_decode_int(b) for a, b in d.items()}
 
 def try_decode_int(x):
-    if is_numeric(x) or x.startswith("0x"):
+    if is_numeric(x):
         return parse_as_int(x)
-    else:
-        return x
+
+    if x.startswith("0x") and len(x) < 66:
+        return parse_as_int(x)
+
+    return x
