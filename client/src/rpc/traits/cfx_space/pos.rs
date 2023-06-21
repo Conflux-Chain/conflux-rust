@@ -10,7 +10,6 @@ use crate::rpc::types::{
     RpcAddress,
 };
 use cfx_types::{H256, U64};
-use diem_crypto::bls::{BLSPublicKey, UncompressedBLSPublicKey};
 use jsonrpc_core::Result as JsonRpcResult;
 use jsonrpc_derive::rpc;
 
@@ -83,9 +82,4 @@ pub trait Pos {
     fn pos_get_rewards_by_epoch(
         &self, epoch: U64,
     ) -> JsonRpcResult<Option<PoSEpochReward>>;
-
-    #[rpc(name = "pos_toUncompressedPubKey")]
-    fn pos_to_uncompressed_pub_key(
-        &self, compressed_keys: Vec<BLSPublicKey>,
-    ) -> JsonRpcResult<Vec<UncompressedBLSPublicKey>>;
 }

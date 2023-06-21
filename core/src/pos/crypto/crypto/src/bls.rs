@@ -380,24 +380,6 @@ impl From<BLSSignatureUnchecked> for BLSSignature {
     fn from(unchecked: BLSSignatureUnchecked) -> Self { Self(unchecked.0) }
 }
 
-/// Uncompressed BLS public key, for RPC only.
-#[derive(Clone)]
-pub struct UncompressedBLSPublicKey(RawPublicKey);
-
-impl Serialize for UncompressedBLSPublicKey {
-    fn serialize<S>(
-        &self, serializer: S,
-    ) -> std::result::Result<S::Ok, S::Error>
-    where S: serde::Serializer {
-        serializer
-            .serialize_str(&::hex::encode(self.0.as_affine().to_uncompressed()))
-    }
-}
-
-impl From<BLSPublicKey> for UncompressedBLSPublicKey {
-    fn from(value: BLSPublicKey) -> Self { UncompressedBLSPublicKey(value.0) }
-}
-
 /// Deserialize public key from local storage.
 pub fn deserialize_bls_public_key_unchecked<'de, D>(
     deserializer: D,
