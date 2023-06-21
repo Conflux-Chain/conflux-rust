@@ -1,12 +1,15 @@
-use crate::rpc::types::pos::{Decision, EpochState};
+use crate::rpc::types::{
+    pos::{Decision, EpochState},
+    Bytes,
+};
 use cfx_types::{H256, U64};
+use diem_crypto::ValidCryptoMaterial;
 use diem_types::{
     block_info::BlockInfo as PrimitiveBlockInfo,
     ledger_info::{
         LedgerInfo as PrimitiveLedgerInfo,
         LedgerInfoWithSignatures as PrimitiveLedgerInfoWithSignatures,
     },
-    validator_config::ConsensusSignature,
 };
 use std::collections::BTreeMap;
 
@@ -17,7 +20,9 @@ pub struct LedgerInfoWithSignatures {
     /// The validator is identified by its account address: in order to verify
     /// a signature one needs to retrieve the public key of the validator
     /// for the given epoch.
-    signatures: BTreeMap<H256, ConsensusSignature>,
+    ///
+    /// Value is uncompressed BLS signature in 192 bytes.
+    signatures: BTreeMap<H256, Bytes>,
 }
 
 impl From<&PrimitiveLedgerInfoWithSignatures> for LedgerInfoWithSignatures {
@@ -27,7 +32,7 @@ impl From<&PrimitiveLedgerInfoWithSignatures> for LedgerInfoWithSignatures {
             signatures: value
                 .signatures()
                 .iter()
-                .map(|(k, v)| (H256::from(k.to_u8()), v.clone()))
+                .map(|(k, v)| (H256::from(k.to_u8()), v.to_bytes().into()))
                 .collect(),
         }
     }
