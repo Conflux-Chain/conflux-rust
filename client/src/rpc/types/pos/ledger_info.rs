@@ -23,6 +23,10 @@ pub struct LedgerInfoWithSignatures {
     ///
     /// Value is uncompressed BLS signature in 192 bytes.
     signatures: BTreeMap<H256, Bytes>,
+    /// Validators with uncompressed BLS public key (in 96 bytes) if next epoch
+    /// state available. Generally, this is used to verify BLS signatures
+    /// at client side.
+    next_epoch_validators: Option<BTreeMap<H256, Bytes>>,
 }
 
 impl From<&PrimitiveLedgerInfoWithSignatures> for LedgerInfoWithSignatures {
@@ -34,6 +38,27 @@ impl From<&PrimitiveLedgerInfoWithSignatures> for LedgerInfoWithSignatures {
                 .iter()
                 .map(|(k, v)| (H256::from(k.to_u8()), v.to_bytes().into()))
                 .collect(),
+            next_epoch_validators: value.ledger_info().next_epoch_state().map(
+                |state| {
+                    state
+                        .verifier()
+                        .address_to_validator_info()
+                        .iter()
+                        .map(|(k, v)| {
+                            (
+                                H256::from(k.to_u8()),
+                                v.public_key()
+                                    .clone()
+                                    .raw()
+                                    .as_affine()
+                                    .to_uncompressed()
+                                    .to_vec()
+                                    .into(),
+                            )
+                        })
+                        .collect()
+                },
+            ),
         }
     }
 }
