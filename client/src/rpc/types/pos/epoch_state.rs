@@ -64,7 +64,7 @@ pub struct ValidatorConsensusInfo {
     // the voted hash. Thus, if a malicious pubkey is provided here, its
     // LedgerInfo won't get a QC.
     // #[serde(deserialize_with = "deserialize_bls_public_key_unchecked")]
-    /// Uncompressed BLS public key in 96 bytes.
+    /// Compressed BLS public key in 48 bytes for BCS serialization.
     public_key: Bytes,
     /// None if we do not need VRF.
     vrf_public_key: Option<Bytes>,
@@ -79,7 +79,7 @@ impl From<&PrimitiveValidatorConsensusInfo> for ValidatorConsensusInfo {
                 .clone()
                 .raw()
                 .as_affine()
-                .to_uncompressed()
+                .to_compressed()
                 .to_vec()
                 .into(),
             vrf_public_key: value
