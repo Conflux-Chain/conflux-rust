@@ -1286,7 +1286,7 @@ impl<'a> ExecutiveGeneric<'a> {
             self.state.sponsor_balance_for_collateral(&code_address)?
                 + self
                     .state
-                    .avaliable_storage_point_for_collateral(&code_address)?;
+                    .available_storage_points_for_collateral(&code_address)?;
         let storage_sponsored = match settings.charge_collateral {
             ChargeCollateral::Normal => {
                 storage_sponsor_eligible
