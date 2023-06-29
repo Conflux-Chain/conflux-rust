@@ -26,7 +26,7 @@ impl State {
         Ok(acc.token_collateral_for_storage())
     }
 
-    pub fn avaliable_storage_point_for_collateral(
+    pub fn available_storage_points_for_collateral(
         &self, address: &Address,
     ) -> DbResult<U256> {
         let acc = try_loaded!(self.read_native_account_lock(address));
@@ -45,12 +45,12 @@ impl State {
     ) -> DbResult<U256> {
         noop_if!(by.is_zero());
 
-        let storage_point_used = self
+        let storage_points_used = self
             .write_native_account_lock(&address)?
             .add_collateral_for_storage(by);
-        *self.global_stat.val::<TotalStorage>() += *by - storage_point_used;
-        *self.global_stat.val::<UsedStoragePoint>() += storage_point_used;
-        Ok(storage_point_used)
+        *self.global_stat.val::<TotalStorage>() += *by - storage_points_used;
+        *self.global_stat.val::<UsedStoragePoints>() += storage_points_used;
+        Ok(storage_points_used)
     }
 
     pub fn sub_collateral_for_storage(
@@ -61,18 +61,18 @@ impl State {
         let collateral = self.token_collateral_for_storage(address)?;
         let refundable = if by > &collateral { &collateral } else { by };
         let burnt = *by - *refundable;
-        let storage_point_refund = if !refundable.is_zero() {
+        let storage_points_refund = if !refundable.is_zero() {
             self.write_account_or_new_lock(&address.with_native_space())?
                 .sub_collateral_for_storage(refundable)
         } else {
             U256::zero()
         };
 
-        *self.global_stat.val::<TotalStorage>() -= *by - storage_point_refund;
-        *self.global_stat.val::<UsedStoragePoint>() -= storage_point_refund;
+        *self.global_stat.val::<TotalStorage>() -= *by - storage_points_refund;
+        *self.global_stat.val::<UsedStoragePoints>() -= storage_points_refund;
         self.sub_total_issued(burnt);
 
-        Ok(storage_point_refund)
+        Ok(storage_points_refund)
     }
 
     /// Collects the cache (`ownership_change` in `OverlayAccount`) of storage
@@ -182,14 +182,14 @@ fn settle_collateral_for_address(
     }
 
     if !sub.is_zero() {
-        let storage_point_refund =
+        let storage_points_refund =
             state.sub_collateral_for_storage(addr, &sub)?;
-        trace_refund_collateral(tracer, *addr, sub - storage_point_refund);
+        trace_refund_collateral(tracer, *addr, sub - storage_points_refund);
     }
     if !inc.is_zero() && !dry_run {
         let balance = if is_contract {
             state.sponsor_balance_for_collateral(addr)?
-                + state.avaliable_storage_point_for_collateral(addr)?
+                + state.available_storage_points_for_collateral(addr)?
         } else {
             state.balance(&addr_with_space)?
         };
@@ -201,9 +201,9 @@ fn settle_collateral_for_address(
             });
         }
 
-        let storage_point_used =
+        let storage_points_used =
             state.add_collateral_for_storage(addr, &inc)?;
-        trace_occupy_collateral(tracer, *addr, inc - storage_point_used);
+        trace_occupy_collateral(tracer, *addr, inc - storage_points_used);
     }
     Ok(CollateralCheckResult::Valid)
 }

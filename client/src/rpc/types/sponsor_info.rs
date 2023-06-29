@@ -22,9 +22,9 @@ pub struct SponsorInfo {
     /// This is the amount of tokens sponsor for collateral to the contract.
     pub sponsor_balance_for_collateral: U256,
     /// This is the amount of unused storage points (in terms of bytes).
-    pub avaliable_storage_point: U256,
+    pub available_storage_points: U256,
     /// This is the amount of used storage points (in terms of bytes).
-    pub used_storage_point: U256,
+    pub used_storage_points: U256,
 }
 
 impl SponsorInfo {
@@ -35,8 +35,8 @@ impl SponsorInfo {
             sponsor_gas_bound: Default::default(),
             sponsor_balance_for_gas: Default::default(),
             sponsor_balance_for_collateral: Default::default(),
-            avaliable_storage_point: Default::default(),
-            used_storage_point: Default::default(),
+            available_storage_points: Default::default(),
+            used_storage_points: Default::default(),
         })
     }
 
@@ -56,13 +56,13 @@ impl SponsorInfo {
             sponsor_balance_for_gas: sponsor_info.sponsor_balance_for_gas,
             sponsor_balance_for_collateral: sponsor_info
                 .sponsor_balance_for_collateral,
-            avaliable_storage_point: sponsor_info
+            available_storage_points: sponsor_info
                 .storage_points
                 .as_ref()
                 .map_or(U256::zero(), |x| {
                     x.unused / *DRIPS_PER_STORAGE_COLLATERAL_UNIT
                 }),
-            used_storage_point: sponsor_info
+            used_storage_points: sponsor_info
                 .storage_points
                 .as_ref()
                 .map_or(U256::zero(), |x| {
