@@ -3,7 +3,7 @@ description = "Conflux core library"
 homepage = "https://www.confluxnetwork.org"
 license = "GPL-3.0"
 name = "cfxcore"
-version = "2.2.5-2-testnet"
+version = "2.3.0-testnet"
 edition = "2018"
 
 [dependencies]
