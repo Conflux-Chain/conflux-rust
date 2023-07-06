@@ -1,4 +1,12 @@
 # JSON-RPC CHANGELOG
+
+## v2.3.0
+
+- Add `cfx_getCollateralInfo` to return chain collateral info.
+- `cfx_getSponsorInfo` return data add two more fields: `usedStoragePoints` and `availableStoragePoints`. 
+- Fix the hex encoding of PoS keys and signatures in pos RPCs.
+- Return both compressed and uncompressed BLS public keys in PoS ledger info
+
 ## v2.2.5
 - Use hex format for `pos` RPC data.
 - Add RPC `pos_getLedgerInfoByBlockNumber` and `pos_getLedgerInfoByEpochAndRound` to get PoS ledger infos.
