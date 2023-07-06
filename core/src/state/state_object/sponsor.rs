@@ -4,7 +4,7 @@ use cfx_parameters::{
 };
 use cfx_state::maybe_address;
 use cfx_statedb::{
-    global_params::{ConvertedStoragePoint, TotalIssued},
+    global_params::{ConvertedStoragePoints, TotalIssued},
     Result as DbResult,
 };
 use cfx_storage::utils::access_mode;
@@ -114,7 +114,7 @@ impl State {
             .set_sponsor_for_collateral(sponsor, sponsor_balance, prop);
 
         *self.global_stat.val::<TotalIssued>() -= converted_storage_points;
-        *self.global_stat.val::<ConvertedStoragePoint>() +=
+        *self.global_stat.val::<ConvertedStoragePoints>() +=
             converted_storage_points;
         Ok(converted_storage_points)
     }

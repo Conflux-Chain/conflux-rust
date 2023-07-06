@@ -75,11 +75,11 @@ impl State {
     }
 
     pub fn used_storage_points(&self) -> U256 {
-        self.global_stat.get::<UsedStoragePoint>()
+        self.global_stat.get::<UsedStoragePoints>()
     }
 
     pub fn converted_storage_points(&self) -> U256 {
-        self.global_stat.get::<ConvertedStoragePoint>()
+        self.global_stat.get::<ConvertedStoragePoints>()
     }
 
     pub fn total_pos_staking_tokens(&self) -> U256 {
@@ -118,8 +118,8 @@ impl State {
         *self.global_stat.val::<TotalIssued>() -=
             from_balance + from_collateral;
         *self.global_stat.val::<TotalStorage>() -= from_collateral;
-        *self.global_stat.val::<UsedStoragePoint>() += from_collateral;
-        *self.global_stat.val::<ConvertedStoragePoint>() +=
+        *self.global_stat.val::<UsedStoragePoints>() += from_collateral;
+        *self.global_stat.val::<ConvertedStoragePoints>() +=
             from_balance + from_collateral;
     }
 }
