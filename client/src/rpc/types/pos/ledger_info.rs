@@ -2,6 +2,7 @@ use crate::rpc::types::{
     pos::{Decision, EpochState},
     Bytes,
 };
+use bls_signatures::{self, Serialize};
 use cfx_types::{H256, U64};
 use diem_crypto::ValidCryptoMaterial;
 use diem_types::{
@@ -27,10 +28,19 @@ pub struct LedgerInfoWithSignatures {
     /// state available. Generally, this is used to verify BLS signatures
     /// at client side.
     next_epoch_validators: Option<BTreeMap<H256, Bytes>>,
+    /// Aggregated signature
+    aggregated_signature: Bytes,
 }
 
 impl From<&PrimitiveLedgerInfoWithSignatures> for LedgerInfoWithSignatures {
     fn from(value: &PrimitiveLedgerInfoWithSignatures) -> Self {
+        let signature_list: Vec<_> = value
+            .signatures()
+            .values()
+            .map(|v| v.clone().raw())
+            .collect();
+        let multi_sig = bls_signatures::aggregate(&signature_list)
+            .expect("only valid signatures");
         Self {
             ledger_info: value.ledger_info().into(),
             signatures: value
@@ -59,6 +69,7 @@ impl From<&PrimitiveLedgerInfoWithSignatures> for LedgerInfoWithSignatures {
                         .collect()
                 },
             ),
+            aggregated_signature: multi_sig.as_bytes().into(),
         }
     }
 }
