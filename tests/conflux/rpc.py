@@ -259,10 +259,10 @@ class RpcClient:
         return int(self.get_sponsor_info(addr, epoch)['sponsorGasBound'], 0)
     
     def get_unused_storage_points(self, addr: str, epoch: str = None) -> int:
-        return int(self.get_sponsor_info(addr, epoch)['avaliableStoragePoint'], 0)
+        return int(self.get_sponsor_info(addr, epoch)['availableStoragePoints'], 0)
     
     def get_used_storage_points(self, addr: str, epoch: str = None) -> int:
-        return int(self.get_sponsor_info(addr, epoch)['usedStoragePoint'], 0)
+        return int(self.get_sponsor_info(addr, epoch)['usedStoragePoints'], 0)
 
     def get_admin(self, addr: str, epoch: str = None) -> str:
         addr = hex_to_b32_address(addr)

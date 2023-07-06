@@ -26,8 +26,8 @@ macro_rules! for_all_global_param_keys {
         $f::<TotalStaking>($($args),*);
         $f::<TotalStorage>($($args),*);
         $f::<TotalEvmToken>($($args),*);
-        $f::<UsedStoragePoint>($($args),*);
-        $f::<ConvertedStoragePoint>($($args),*);
+        $f::<UsedStoragePoints>($($args),*);
+        $f::<ConvertedStoragePoints>($($args),*);
         $f::<TotalPosStaking>($($args),*);
         $f::<DistributablePoSInterest>($($args),*);
         $f::<LastDistributeBlock>($($args),*);
@@ -40,8 +40,8 @@ macro_rules! for_all_global_param_keys {
         $f::<TotalStaking>($($args),*)?;
         $f::<TotalStorage>($($args),*)?;
         $f::<TotalEvmToken>($($args),*)?;
-        $f::<UsedStoragePoint>($($args),*)?;
-        $f::<ConvertedStoragePoint>($($args),*)?;
+        $f::<UsedStoragePoints>($($args),*)?;
+        $f::<ConvertedStoragePoints>($($args),*)?;
         $f::<TotalPosStaking>($($args),*)?;
         $f::<DistributablePoSInterest>($($args),*)?;
         $f::<LastDistributeBlock>($($args),*)?;
@@ -89,21 +89,21 @@ impl GlobalParamKey for TotalEvmToken {
     const KEY: &'static [u8] = b"total_evm_tokens";
 }
 
-pub struct UsedStoragePoint;
-impl GlobalParamKey for UsedStoragePoint {
+pub struct UsedStoragePoints;
+impl GlobalParamKey for UsedStoragePoints {
     const ID: usize = TotalEvmToken::ID + 1;
     const KEY: &'static [u8] = b"used_storage_points";
 }
 
-pub struct ConvertedStoragePoint;
-impl GlobalParamKey for ConvertedStoragePoint {
-    const ID: usize = UsedStoragePoint::ID + 1;
+pub struct ConvertedStoragePoints;
+impl GlobalParamKey for ConvertedStoragePoints {
+    const ID: usize = UsedStoragePoints::ID + 1;
     const KEY: &'static [u8] = b"converted_storage_points_key";
 }
 
 pub struct TotalPosStaking;
 impl GlobalParamKey for TotalPosStaking {
-    const ID: usize = ConvertedStoragePoint::ID + 1;
+    const ID: usize = ConvertedStoragePoints::ID + 1;
     const KEY: &'static [u8] = b"total_pos_staking_tokens";
 }
 
