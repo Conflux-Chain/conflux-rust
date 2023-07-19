@@ -158,6 +158,8 @@ pub struct Spec {
     pub cip_sigma_fix: bool,
     /// CIP-107: Reduce storage collateral refund.
     pub cip107: bool,
+    /// CIP-118: Query Unused Storage Points in Internal Contract
+    pub cip118: bool,
     pub params_dao_vote_period: u64,
 }
 
@@ -297,6 +299,7 @@ impl Spec {
             cip105: false,
             cip_sigma_fix: false,
             cip107: false,
+            cip118: false,
         }
     }
 
@@ -321,6 +324,7 @@ impl Spec {
         spec.cip_sigma_fix = number >= params.transition_numbers.cip_sigma_fix;
         spec.params_dao_vote_period = params.params_dao_vote_period;
         spec.cip107 = number >= params.transition_numbers.cip107;
+        spec.cip118 = number >= params.transition_numbers.cip118;
         spec
     }
 
