@@ -88,6 +88,8 @@ pub struct TransitionsBlockNumber {
     /// CIP-107: Reduce the refunded storage collateral.
     pub cip107: BlockNumber,
     pub cip_sigma_fix: BlockNumber,
+    /// CIP-118: Query Unused Storage Points in Internal Contract
+    pub cip118: BlockNumber,
 }
 
 #[derive(Default, Debug, Clone)]
