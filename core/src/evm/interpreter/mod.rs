@@ -401,7 +401,8 @@ impl<Cost: CostType> Interpreter<Cost> {
             Some(result) => result,
             None => {
                 let opcode = self.reader.code[self.reader.position];
-                let instruction = Instruction::from_u8(opcode);
+                let instruction =
+                    Instruction::from_u8_versioned(opcode, context.spec());
                 self.reader.position += 1;
 
                 // TODO: make compile-time removable if too much of a
@@ -1013,6 +1014,9 @@ impl<Cost: CostType> Interpreter<Cost> {
                     .map(BigEndianHash::from_uint)
                     .collect();
                 context.log(topics, self.mem.read_slice(offset, size))?;
+            }
+            instructions::PUSH0 => {
+                self.stack.push(U256::zero());
             }
             instructions::PUSH1
             | instructions::PUSH2
