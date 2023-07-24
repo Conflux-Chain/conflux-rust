@@ -159,7 +159,7 @@ build_config! {
         (cip107_transition_number, (Option<u64>), Some(26110000))
         (cip112_transition_height, (Option<u64>), Some(22040000))
         (cip118_transition_number, (Option<u64>), Some(33500000))
-        (cip119_transition_number, (Option<u64>), None)
+        (cip119_transition_number, (Option<u64>), Some(34121600))
         (referee_bound, (usize), REFEREE_DEFAULT_BOUND)
         (params_dao_vote_period, (u64), 3600)
         (timer_chain_beta, (u64), TIMER_CHAIN_DEFAULT_BETA)
