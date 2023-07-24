@@ -90,6 +90,8 @@ pub struct TransitionsBlockNumber {
     pub cip_sigma_fix: BlockNumber,
     /// CIP-118: Query Unused Storage Points in Internal Contract
     pub cip118: BlockNumber,
+    /// CIP-119: PUSH0 instruction
+    pub cip119: BlockNumber,
 }
 
 #[derive(Default, Debug, Clone)]
