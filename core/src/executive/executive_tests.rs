@@ -4,7 +4,7 @@
 
 use super::{executive::*, Executed, ExecutionError};
 use crate::{
-    evm::FinalizationResult,
+    evm::{FinalizationResult, GasPriceTier},
     executive::{CollateralCheckResultToVmResult, ExecutionOutcome},
     machine::Machine,
     state::{State, Substate},
@@ -2121,4 +2121,127 @@ fn test_storage_commission_privilege() {
         state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
+}
+
+#[test]
+fn test_push0() {
+    let sender_addr =
+        Address::from_str("1d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+    let sender_with_space = sender_addr.with_native_space();
+    let contract_addr = contract_address(
+        CreateContractAddress::FromSenderNonceAndCodeHash,
+        /* block_number = */ 0.into(),
+        &sender_with_space,
+        &U256::zero(),
+        &[],
+    )
+    .0;
+
+    let mut params = ActionParams::default();
+    params.address = contract_addr.address;
+    params.sender = sender_addr;
+    params.original_sender = sender_addr;
+    params.storage_owner = sender_addr;
+    params.gas = U256::from(10000);
+    params.value = ActionValue::Transfer(U256::from(0));
+
+    let env = Env::default();
+    let machine = make_byzantium_machine(0);
+
+    let storage_manager = new_state_manager_for_unit_test();
+    let mut state = get_state_for_genesis_write(&storage_manager);
+
+    // Test case 1 in EIP-3855
+    {
+        let mut spec = machine.spec(env.number);
+        spec.cip119 = true;
+
+        // code:
+        //
+        // 5f - push0
+        let mut params = params.clone();
+        params.code = Some(Arc::new([0x5f].to_vec()));
+
+        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let FinalizationResult {
+            gas_left,
+            apply_state,
+            return_data: _,
+            ..
+        } = ex
+            .call(params, &mut Substate::new(), &mut ())
+            .expect("no db error")
+            .expect("no vm error");
+
+        let base_gas = spec.tier_step_gas[GasPriceTier::Base.idx()];
+        assert_eq!(gas_left, U256::from(10000 - base_gas));
+        assert_eq!(apply_state, true);
+    }
+
+    // Test case 2 in EIP-3855
+    {
+        let mut spec = machine.spec(env.number);
+        spec.cip119 = true;
+
+        // code:
+        //
+        // 5f * 1024 - push0 * 1024
+        let mut params = params.clone();
+        params.code = Some(Arc::new([0x5f; 1024].to_vec()));
+
+        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let FinalizationResult {
+            gas_left,
+            apply_state,
+            return_data: _,
+            ..
+        } = ex
+            .call(params, &mut Substate::new(), &mut ())
+            .expect("no db error")
+            .expect("no vm error");
+
+        let base_gas = spec.tier_step_gas[GasPriceTier::Base.idx()];
+        assert_eq!(gas_left, U256::from(10000 - base_gas * 1024));
+        assert_eq!(apply_state, true);
+    }
+
+    // Test case 2 in EIP-3855
+    {
+        let mut spec = machine.spec(env.number);
+        spec.cip119 = true;
+
+        // code:
+        //
+        // 5f * 1025 - push0 * 1025
+        let mut params = params.clone();
+        params.code = Some(Arc::new([0x5f; 1025].to_vec()));
+
+        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let error = ex
+            .call(params, &mut Substate::new(), &mut ())
+            .expect("no db error")
+            .expect_err("should fail");
+
+        assert!(matches!(error, vm::Error::OutOfStack { .. }));
+    }
+
+    // Before activation of EIP-3855 (CIP119)
+    {
+        let mut spec = machine.spec(env.number);
+        spec.cip119 = false;
+
+        // code:
+        //
+        // 5f - push0
+        let mut params = params.clone();
+        params.code = Some(Arc::new([0x5f; 1025].to_vec()));
+
+        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let error = ex
+            .call(params, &mut Substate::new(), &mut ())
+            .expect("no db error")
+            .expect_err("should fail");
+
+        assert!(matches!(error, vm::Error::BadInstruction { .. }));
+    }
 }
