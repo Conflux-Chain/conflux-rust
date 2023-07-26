@@ -2,10 +2,10 @@
 
 Conflux-rust is a Rust-based implementation of the Conflux protocol. It is fast and
 reliable. Please follow the [Conflux
-Documentation](https://developer.confluxnetwork.org/) to
-[build](https://developer.confluxnetwork.org/conflux-doc/docs/installation)
+Documentation](https://doc.confluxnetwork.org/) to
+[build](https://doc.confluxnetwork.org/docs/general/run-a-node/compiling-conflux-client)
 and
-[run](https://developer.confluxnetwork.org/conflux-doc/docs/get_started)
+[run](https://doc.confluxnetwork.org/docs/general/run-a-node/running-full-node)
 Conflux.
 
 ## Contribution
@@ -20,7 +20,7 @@ significant changes to the Conflux protocol, please submit a
 ## Unit Tests and Integration Tests
 
 Unit tests come together with the Rust code. They can be invoked via `cargo test --release --all`. See the
-[Getting Started](https://developer.confluxnetwork.org/conflux-doc/docs/get_started)
+[Getting Started](https://doc.confluxnetwork.org/docs/general/run-a-node/running-full-node)
 page for more information. Integration tests are Python test scripts with the
 `_test.py` suffix in the `tests` directory. To run these tests, first compile Conflux
 in _release_ mode using `cargo build --release`. Then, you can run all
