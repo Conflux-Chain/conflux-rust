@@ -21,6 +21,7 @@ use cfx_parameters::{
 use cfx_types::{AllChainID, U256, U512};
 use primitives::{block::BlockHeight, BlockNumber};
 use std::collections::BTreeMap;
+use cfx_parameters::consensus::{CIP119_HEADER_CUSTOM_FIRST_ELEMENT, TESTNET_CIP119_HEIGHT};
 
 #[derive(Debug)]
 pub struct CommonParams {
@@ -169,8 +170,12 @@ impl CommonParams {
             && height < self.transition_heights.cip112
         {
             Some(vec![TESTNET_FIX_POS_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
-        } else if height >= self.transition_heights.cip112 {
+        } else if height >= self.transition_heights.cip112
+            && height < TESTNET_CIP119_HEIGHT
+        {
             Some(vec![CIP112_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
+        } else if height >= TESTNET_CIP119_HEIGHT {
+            Some(vec![CIP119_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
         } else {
             None
         }
