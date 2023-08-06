@@ -58,7 +58,7 @@ impl Default for ConsensusConfig {
             // 60 epochs should have been generated in 4 minutes.
             round_initial_timeout_ms: 60_000,
             cip113_round_initial_timeout_ms: 30_000,
-            cip113_transition_epoch: u64::MAX,
+            cip113_transition_epoch: 12770,
             proposer_type: ConsensusProposerType::VrfProposer,
             safety_rules: SafetyRulesConfig::default(),
             sync_only: false,
