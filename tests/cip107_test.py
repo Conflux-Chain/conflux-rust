@@ -70,6 +70,7 @@ class CheckCollateral:
     def __init__(self, framework, account):
         self.rpc = framework.rpc
         self.client = framework.client
+        self.read_contract = framework.read_contract
         self.account = account
 
         self.total_collateral = None
@@ -134,6 +135,8 @@ class CheckCollateral:
             if actual_diff != expect_diff:
                 raise AssertionError(
                     f"Assert attribute {attr} failed: expected {expect_diff}, actual {actual_diff}: {old[attr]} --> {getattr(self, attr)}")
+        
+        assert_equal(self.account_unused_storage_point, int(self.read_contract(get_sponsor_contract().functions.getAvailableStoragePoints(self.account)),0))
 
     def __str__(self):
         return f'''
@@ -144,7 +147,6 @@ account_used_storage_point\t{self.account_used_storage_point / 64}
 account_unused_storage_point\t{self.account_unused_storage_point / 64}
 account_used_collateral\t{self.account_used_collateral / BASE * 16}
 account_unused_collateral\t{self.account_unused_collateral / BASE * 16}'''
-
 
 class StorageContract:
     def __init__(self, framework, seed=0):
@@ -192,6 +194,7 @@ class CIP107Test(ConfluxTestFramework):
         self.num_nodes = 1
         self.conf_parameters["executive_trace"] = "true"
         self.conf_parameters["cip107_transition_number"] = CIP107_NUMBER
+        self.conf_parameters["cip118_transition_number"] = 1
         self.conf_parameters["params_dao_vote_period"] = CIP104_PERIOD
         self.conf_parameters["dao_vote_transition_number"] = 1
         self.conf_parameters["dao_vote_transition_height"] = 1

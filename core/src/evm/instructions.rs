@@ -22,6 +22,8 @@
 
 pub use self::Instruction::*;
 
+use super::Spec;
+
 macro_rules! enum_with_from_u8 {
 	(
 		$( #[$enum_attr:meta] )*
@@ -189,6 +191,8 @@ enum_with_from_u8! {
         #[doc = "Jumps to a defined BEGINSUB subroutine."]
         JUMPSUB = 0x5e,
 
+        #[doc = "place zero item on stack (EIP-3855/CIP-119)"]
+        PUSH0 = 0x5f,
         #[doc = "place 1 byte item on stack"]
         PUSH1 = 0x60,
         #[doc = "place 2 byte item on stack"]
@@ -355,6 +359,14 @@ enum_with_from_u8! {
 impl Instruction {
     /// Returns true if given instruction is `PUSHN` instruction.
     pub fn is_push(&self) -> bool { *self >= PUSH1 && *self <= PUSH32 }
+
+    pub fn from_u8_versioned(value: u8, spec: &Spec) -> Option<Self> {
+        let mut instruction = Instruction::from_u8(value);
+        if instruction == Some(PUSH0) && !spec.cip119 {
+            instruction = None;
+        }
+        return instruction;
+    }
 
     /// Returns number of bytes to read for `PUSHN` instruction
     /// PUSH1 -> 1
@@ -532,6 +544,7 @@ lazy_static! {
         arr[MSIZE as usize] = Some(InstructionInfo::new("MSIZE", 0, 1, GasPriceTier::Base));
         arr[GAS as usize] = Some(InstructionInfo::new("GAS", 0, 1, GasPriceTier::Base));
         arr[JUMPDEST as usize] = Some(InstructionInfo::new("JUMPDEST", 0, 0, GasPriceTier::Special));
+        arr[PUSH0 as usize] = Some(InstructionInfo::new("PUSH0", 0, 1, GasPriceTier::Base));
         arr[PUSH1 as usize] = Some(InstructionInfo::new("PUSH1", 0, 1, GasPriceTier::VeryLow));
         arr[PUSH2 as usize] = Some(InstructionInfo::new("PUSH2", 0, 1, GasPriceTier::VeryLow));
         arr[PUSH3 as usize] = Some(InstructionInfo::new("PUSH3", 0, 1, GasPriceTier::VeryLow));
