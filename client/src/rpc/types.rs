@@ -23,6 +23,7 @@ mod receipt;
 mod reward_info;
 mod sponsor_info;
 mod status;
+mod storage_collateral_info;
 mod sync_graph_states;
 mod token_supply_info;
 mod trace;
@@ -52,6 +53,7 @@ pub use self::{
     reward_info::RewardInfo,
     sponsor_info::SponsorInfo,
     status::Status,
+    storage_collateral_info::StorageCollateralInfo,
     sync_graph_states::SyncGraphStates,
     token_supply_info::TokenSupplyInfo,
     trace::{

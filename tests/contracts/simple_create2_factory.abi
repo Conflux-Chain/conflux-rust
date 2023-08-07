@@ -1,0 +1,25 @@
+[
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "salt",
+				"type": "uint256"
+			},
+			{
+				"name": "initializationCode",
+				"type": "bytes"
+			}
+		],
+		"name": "callCreate2",
+		"outputs": [
+			{
+				"name": "deploymentAddress",
+				"type": "address"
+			}
+		],
+		"payable": true,
+		"stateMutability": "payable",
+		"type": "function"
+	}
+]

@@ -401,7 +401,8 @@ impl<Cost: CostType> Interpreter<Cost> {
             Some(result) => result,
             None => {
                 let opcode = self.reader.code[self.reader.position];
-                let instruction = Instruction::from_u8(opcode);
+                let instruction =
+                    Instruction::from_u8_versioned(opcode, context.spec());
                 self.reader.position += 1;
 
                 // TODO: make compile-time removable if too much of a
@@ -992,11 +993,7 @@ impl<Cost: CostType> Interpreter<Cost> {
             instructions::SUICIDE => {
                 let address = self.stack.pop_back();
                 let refund_address = u256_to_address(&address);
-                context.suicide(
-                    &refund_address,
-                    tracer,
-                    context.spec().account_start_nonce,
-                )?;
+                context.suicide(&refund_address, tracer)?;
                 return Ok(InstructionResult::StopExecution);
             }
             instructions::LOG0
@@ -1017,6 +1014,9 @@ impl<Cost: CostType> Interpreter<Cost> {
                     .map(BigEndianHash::from_uint)
                     .collect();
                 context.log(topics, self.mem.read_slice(offset, size))?;
+            }
+            instructions::PUSH0 => {
+                self.stack.push(U256::zero());
             }
             instructions::PUSH1
             | instructions::PUSH2

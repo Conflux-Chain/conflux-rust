@@ -7,6 +7,7 @@ use cfx_internal_common::{ChainIdParams, ChainIdParamsInner};
 use cfx_parameters::{
     block::{EVM_TRANSACTION_BLOCK_RATIO, EVM_TRANSACTION_GAS_RATIO},
     consensus::{
+        CIP112_HEADER_CUSTOM_FIRST_ELEMENT,
         DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT, ONE_UCFX_IN_DRIP,
         TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT,
     },
@@ -21,8 +22,6 @@ use std::collections::BTreeMap;
 
 #[derive(Debug)]
 pub struct CommonParams {
-    /// Account start nonce.
-    pub account_start_nonce: U256,
     /// Maximum size of extra data.
     pub maximum_extra_data_size: usize,
     /// Network id.
@@ -86,7 +85,13 @@ pub struct TransitionsBlockNumber {
     pub cip98: BlockNumber,
     /// CIP-105: PoS staking based minimal votes.
     pub cip105: BlockNumber,
+    /// CIP-107: Reduce the refunded storage collateral.
+    pub cip107: BlockNumber,
     pub cip_sigma_fix: BlockNumber,
+    /// CIP-118: Query Unused Storage Points in Internal Contract
+    pub cip118: BlockNumber,
+    /// CIP-119: PUSH0 instruction
+    pub cip119: BlockNumber,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -103,6 +108,8 @@ pub struct TransitionsEpochHeight {
     pub cip90a: BlockHeight,
     /// CIP94 Hardfork enable heights.
     pub cip94: BlockHeight,
+    /// CIP112 header custom encoding.
+    pub cip112: BlockHeight,
 }
 
 impl Default for CommonParams {
@@ -110,7 +117,6 @@ impl Default for CommonParams {
         let mut base_block_rewards = BTreeMap::new();
         base_block_rewards.insert(0, INITIAL_BASE_MINING_REWARD_IN_UCFX.into());
         CommonParams {
-            account_start_nonce: 0x00.into(),
             maximum_extra_data_size: 0x20,
             network_id: 0x1,
             chain_id: ChainIdParamsInner::new_simple(AllChainID::new(1, 1)),
@@ -149,8 +155,12 @@ impl CommonParams {
             && height < self.transition_heights.cip94
         {
             Some(vec![TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
-        } else if height >= self.transition_heights.cip94 {
+        } else if height >= self.transition_heights.cip94
+            && height < self.transition_heights.cip112
+        {
             Some(vec![DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
+        } else if height >= self.transition_heights.cip112 {
+            Some(vec![CIP112_HEADER_CUSTOM_FIRST_ELEMENT.to_vec()])
         } else {
             None
         }

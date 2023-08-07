@@ -147,7 +147,6 @@ pub trait Context {
     /// Address to which funds should be refunded.
     fn suicide(
         &mut self, refund_address: &Address, tracer: &mut dyn VmObserve,
-        account_start_nonce: U256,
     ) -> Result<()>;
 
     /// Returns specification.

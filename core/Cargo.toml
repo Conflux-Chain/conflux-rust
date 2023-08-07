@@ -3,7 +3,7 @@ description = "Conflux core library"
 homepage = "https://www.confluxnetwork.org"
 license = "GPL-3.0"
 name = "cfxcore"
-version = "2.2.4"
+version = "2.3.0"
 edition = "2018"
 
 [dependencies]
@@ -13,6 +13,7 @@ byteorder = "1.0"
 cfxkey = { path = "../accounts/cfxkey" }
 cfx-addr = { path = "../cfx_addr/rust" }
 cfx-bytes = { path = "../cfx_bytes" }
+cfx-math = { path = "../cfx_math"}
 cfx-internal-common = { path = "internal_common" }
 cfx-parameters = { path = "parameters" }
 cfx-statedb = { path = "statedb" }

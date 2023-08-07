@@ -48,9 +48,12 @@ pub mod consensus {
 
     pub const TANZANITE_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [1];
     pub const DAO_VOTE_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [2];
+    pub const CIP112_HEADER_CUSTOM_FIRST_ELEMENT: [u8; 1] = [3];
 }
 
 pub mod consensus_internal {
+    use crate::consensus::ONE_CFX_IN_DRIP;
+
     /// `REWARD_EPOCH_COUNT` needs to be larger than
     /// `ANTICONE_PENALTY_UPPER_EPOCH_COUNT`. If we cannot cache receipts of
     /// recent `REWARD_EPOCH_COUNT` epochs, the receipts will be loaded from
@@ -109,6 +112,9 @@ pub mod consensus_internal {
     // percentage of pos staking tokens.
     // The condition is checked against each voted parameter separately.
     pub const DAO_MIN_VOTE_PERCENTAGE: u64 = 5;
+
+    /// The initial storage point proportion after CIP107 is enabled.
+    pub const CIP107_STORAGE_POINT_PROP_INIT: u64 = ONE_CFX_IN_DRIP;
 }
 
 pub mod rpc {

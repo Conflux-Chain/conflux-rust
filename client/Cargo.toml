@@ -1,6 +1,6 @@
 [package]
 name = "client"
-version = "2.2.4"
+version = "2.3.0"
 edition = "2018"
 
 [dependencies]
@@ -97,6 +97,7 @@ rpassword = "5.0.1"
 static_assertions = "1.1.0"
 parity-version = {path = "../util/version"}
 solidity-abi = {path="../util/solidity-abi"}
+bls-signatures = {git = "https://github.com/Conflux-Chain/bls-signatures.git", rev = "e7d9119eb285607d5134d40efd89555c41d73160", default-features = false, features = ["multicore"]} 
 
 [dev-dependencies]
 criterion = "0.3"

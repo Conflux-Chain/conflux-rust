@@ -257,6 +257,12 @@ class RpcClient:
 
     def get_sponsor_gas_bound(self, addr: str, epoch: str = None) -> int:
         return int(self.get_sponsor_info(addr, epoch)['sponsorGasBound'], 0)
+    
+    def get_unused_storage_points(self, addr: str, epoch: str = None) -> int:
+        return int(self.get_sponsor_info(addr, epoch)['availableStoragePoints'], 0)
+    
+    def get_used_storage_points(self, addr: str, epoch: str = None) -> int:
+        return int(self.get_sponsor_info(addr, epoch)['usedStoragePoints'], 0)
 
     def get_admin(self, addr: str, epoch: str = None) -> str:
         addr = hex_to_b32_address(addr)
@@ -380,6 +386,8 @@ class RpcClient:
                         chain_id=DEFAULT_PY_TEST_CHAIN_ID):
         if priv_key is None:
             priv_key = default_config["GENESIS_PRI_KEY"]
+        elif priv_key == -1:
+            priv_key = default_config["GENESIS_PRI_KEY_2"]
 
         if sender is None:
             sender = encode_hex(priv_to_addr(priv_key))
@@ -507,6 +515,12 @@ class RpcClient:
             return self.node.cfx_getSupplyInfo()
         else:
             return self.node.cfx_getSupplyInfo(epoch)
+        
+    def get_collateral_info(self, epoch: str = None):
+        if epoch is None:
+            return self.node.cfx_getCollateralInfo()
+        else:
+            return self.node.cfx_getCollateralInfo(epoch)
 
     def get_params_from_vote(self, epoch: str = None):
         if epoch is None:

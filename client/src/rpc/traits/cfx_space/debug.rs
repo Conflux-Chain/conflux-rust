@@ -8,6 +8,7 @@ use crate::rpc::types::{
     Transaction as RpcTransaction, WrapTransaction,
 };
 use cfx_types::{H256, H520, U128, U64};
+use cfxcore::verification::EpochReceiptProof;
 use jsonrpc_core::{BoxFuture, Result as JsonRpcResult};
 use jsonrpc_derive::rpc;
 use network::{
@@ -108,14 +109,20 @@ pub trait LocalRpc {
     #[rpc(name = "cfx_getEpochReceipts")]
     fn epoch_receipts(
         &self, epoch: BlockHashOrEpochNumber,
+        include_eth_recepits: Option<bool>,
     ) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
 
-    #[rpc(name = "cfx_getTransactionsByEpoch")]
+    #[rpc(name = "debug_getEpochReceiptProofByTransaction")]
+    fn epoch_receipt_proof_by_transaction(
+        &self, tx_hash: H256,
+    ) -> JsonRpcResult<Option<EpochReceiptProof>>;
+
+    #[rpc(name = "debug_getTransactionsByEpoch")]
     fn transactions_by_epoch(
         &self, epoch_number: U64,
     ) -> JsonRpcResult<Vec<WrapTransaction>>;
 
-    #[rpc(name = "cfx_getTransactionsByBlock")]
+    #[rpc(name = "debug_getTransactionsByBlock")]
     fn transactions_by_block(
         &self, block_hash: H256,
     ) -> JsonRpcResult<Vec<WrapTransaction>>;

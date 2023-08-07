@@ -746,10 +746,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfx-math"
+version = "0.1.0"
+dependencies = [
+ "cfx-types",
+ "num",
+]
+
+[[package]]
 name = "cfx-parameters"
 version = "1.0.0"
 dependencies = [
  "cfx-types",
+ "hex-literal",
  "lazy_static",
 ]
 
@@ -864,7 +873,7 @@ dependencies = [
 
 [[package]]
 name = "cfxcore"
-version = "2.2.4"
+version = "2.3.0"
 dependencies = [
  "anyhow",
  "async-oneshot",
@@ -878,6 +887,7 @@ dependencies = [
  "cfx-addr",
  "cfx-bytes",
  "cfx-internal-common",
+ "cfx-math",
  "cfx-parameters",
  "cfx-state",
  "cfx-statedb",
@@ -1133,12 +1143,13 @@ dependencies = [
 
 [[package]]
 name = "client"
-version = "2.2.4"
+version = "2.3.0"
 dependencies = [
  "anyhow",
  "app_dirs",
  "bigdecimal",
  "blockgen",
+ "bls-signatures",
  "cached-pos-ledger-db",
  "cfx-addr",
  "cfx-bytes",
@@ -1262,7 +1273,7 @@ dependencies = [
 
 [[package]]
 name = "conflux"
-version = "2.2.4"
+version = "2.3.0"
 dependencies = [
  "app_dirs",
  "base64ct",
@@ -2998,6 +3009,12 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
+name = "hex-literal"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fe2267d4ed49bc07b63801559be28c718ea06c4738b7a03c94df7386d2cde46"
 
 [[package]]
 name = "hibitset"
@@ -5054,6 +5071,7 @@ dependencies = [
  "lazy_static",
  "log",
  "malloc_size_of",
+ "once_cell",
  "rand 0.7.3",
  "rlp",
  "rlp_derive",

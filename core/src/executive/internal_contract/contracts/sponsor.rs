@@ -3,7 +3,10 @@
 // See http://www.gnu.org/licenses/
 
 use super::{super::impls::sponsor::*, preludes::*};
-use cfx_parameters::internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
+use cfx_parameters::{
+    internal_contract_addresses::SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
+    staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT,
+};
 use cfx_types::{Address, U256};
 
 make_solidity_contract! {
@@ -23,7 +26,8 @@ fn generate_fn_table() -> SolFnTable {
         IsWhitelisted,
         IsAllWhitelisted,
         AddPrivilegeByAdmin,
-        RemovePrivilegeByAdmin
+        RemovePrivilegeByAdmin,
+        AvailableStoragePoints
     )
 }
 group_impl_is_active!(
@@ -43,6 +47,8 @@ group_impl_is_active!(
     RemovePrivilegeByAdmin,
 );
 
+group_impl_is_active!(|spec: &Spec| spec.cip118, AvailableStoragePoints);
+
 make_solidity_function! {
     struct SetSponsorForGas((Address, U256), "setSponsorForGas(address,uint256)");
 }
@@ -54,14 +60,7 @@ impl SimpleExecutionTrait for SetSponsorForGas {
         context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
-        set_sponsor_for_gas(
-            inputs.0,
-            inputs.1,
-            params,
-            context,
-            tracer,
-            context.spec.account_start_nonce,
-        )
+        set_sponsor_for_gas(inputs.0, inputs.1, params, context, tracer)
     }
 }
 
@@ -76,13 +75,7 @@ impl SimpleExecutionTrait for SetSponsorForCollateral {
         context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
     ) -> vm::Result<()>
     {
-        set_sponsor_for_collateral(
-            input,
-            params,
-            context,
-            tracer,
-            context.spec.account_start_nonce,
-        )
+        set_sponsor_for_collateral(input, params, context, tracer)
     }
 }
 
@@ -239,7 +232,7 @@ impl SimpleExecutionTrait for IsWhitelisted {
     ) -> vm::Result<bool>
     {
         if context.is_contract_address(&contract)? {
-            Ok(context.state.check_commission_privilege(&contract, &user)?)
+            Ok(context.state.check_contract_whitelist(&contract, &user)?)
         } else {
             Ok(false)
         }
@@ -260,7 +253,7 @@ impl SimpleExecutionTrait for IsAllWhitelisted {
         if context.is_contract_address(&contract)? {
             Ok(context
                 .state
-                .check_commission_privilege(&contract, &Address::zero())?)
+                .check_contract_whitelist(&contract, &Address::zero())?)
         } else {
             Ok(false)
         }
@@ -326,6 +319,28 @@ impl SimpleExecutionTrait for RemovePrivilegeByAdmin {
             remove_privilege(contract, addresses, params, context.state)?
         }
         Ok(())
+    }
+}
+
+make_solidity_function! {
+    struct AvailableStoragePoints(Address, "getAvailableStoragePoints(address)", U256);
+}
+impl_function_type!(AvailableStoragePoints, "query", gas: |spec: &Spec| spec.sload_gas);
+
+impl SimpleExecutionTrait for AvailableStoragePoints {
+    fn execute_inner(
+        &self, contract: Address, _: &ActionParams,
+        context: &mut InternalRefContext, _: &mut dyn VmObserve,
+    ) -> vm::Result<U256>
+    {
+        if context.is_contract_address(&contract)? {
+            Ok(context
+                .state
+                .available_storage_points_for_collateral(&contract)?
+                / *DRIPS_PER_STORAGE_COLLATERAL_UNIT)
+        } else {
+            Ok(U256::zero())
+        }
     }
 }
 

@@ -990,8 +990,7 @@ impl RequestManager {
         if let Some(unfinished_requests) =
             self.request_handler.remove_peer(peer)
         {
-            for mut msg in unfinished_requests {
-                msg.delay = None;
+            for msg in unfinished_requests {
                 self.resend_request_to_another_peer(io, &msg);
             }
         } else {

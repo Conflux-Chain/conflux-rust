@@ -9,7 +9,7 @@ import eth_utils
 import time
 
 from conflux.rpc import RpcClient
-from conflux.utils import int_to_hex, priv_to_addr
+from conflux.utils import int_to_hex, priv_to_addr, t_dict
 from test_framework.test_framework import DefaultConfluxTestFramework
 from test_framework.util import *
 
@@ -24,11 +24,15 @@ class HardcodePosCommitteeTest(DefaultConfluxTestFramework):
     def run_test(self):
         client = RpcClient(self.nodes[0])
         validator_verifier = self.nodes[0].pos_getEpochState("1")["verifier"]
-        total_committee = validator_verifier["address_to_validator_info"].copy()
-        new_committee = total_committee.copy()
-        new_committee.popitem()
-        validator_verifier["address_to_validator_info"] = new_committee
-        hardcoded_committee = {3: validator_verifier}
+        total_committee = validator_verifier["addressToValidatorInfo"].copy()
+        total_committee.popitem()
+        new_committee = {}
+        for k, v in total_committee.items():
+            new_committee[k[2:]] = v
+        validator_verifier["addressToValidatorInfo"] = new_committee
+        print(validator_verifier, t_dict(validator_verifier))
+
+        hardcoded_committee = {3: t_dict(validator_verifier)}
         self.stop_nodes()
         for i in range(self.num_nodes):
             set_node_pos_config(self.options.tmpdir, i, hardcoded_epoch_committee=hardcoded_committee)
@@ -43,6 +47,9 @@ class HardcodePosCommitteeTest(DefaultConfluxTestFramework):
         wait_until(lambda: int(client.pos_status()["latestCommitted"], 0) == 31)
         committee = self.nodes[0].pos_getCommittee(int_to_hex(3 * 10 + 1))
         assert_equal(len(committee["currentCommittee"]["nodes"]), 4)
+
+        last_round = client.node.pos_getLedgerInfoByEpoch(int_to_hex(1))["ledgerInfo"]["commitInfo"]["round"]
+        assert_equal(client.node.pos_getLedgerInfoByEpochAndRound(int_to_hex(1), last_round)["ledgerInfo"]["commitInfo"]["nextEpochState"]["epoch"], "0x2")
 
 
 if __name__ == '__main__':

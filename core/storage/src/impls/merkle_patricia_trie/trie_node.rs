@@ -271,6 +271,178 @@ where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
     }
 }
 
+impl<NodeRefT: 'static + NodeRefTrait + Serialize> Serialize
+    for VanillaTrieNode<NodeRefT>
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
+{
+    fn serialize<S>(
+        &self, serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error>
+    where S: Serializer {
+        let mut state = serializer.serialize_struct("VanillaTrieNode", 4)?;
+        state.serialize_field("compressedPath", &self.compressed_path)?;
+
+        let val = match &self.mpt_value {
+            MptValue::None => None,
+            MptValue::TombStone => Some("".to_owned()),
+            MptValue::Some(v) => {
+                Some("0x".to_owned() + v.as_ref().to_hex::<String>().as_ref())
+            }
+        };
+
+        state.serialize_field("mptValue", &val)?;
+        state
+            .serialize_field("childrenTable", self.get_children_table_ref())?;
+        state.serialize_field("merkleHash", self.get_merkle())?;
+        state.end()
+    }
+}
+
+impl<'a, NodeRefT: 'static + NodeRefTrait + Deserialize<'a>> Deserialize<'a>
+    for VanillaTrieNode<NodeRefT>
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
+{
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where D: Deserializer<'a> {
+        deserializer.deserialize_struct(
+            "VanillaTrieNode",
+            FIELDS,
+            VanillaTrieNodeVisitor {
+                marker: PhantomData,
+            },
+        )
+    }
+}
+
+const FIELDS: &'static [&'static str] =
+    &["compressedPath", "mptValue", "childrenTable", "merkleHash"];
+
+enum Field {
+    CompressedPath,
+    MptValue,
+    ChildrenTable,
+    MerkleHash,
+}
+
+impl<'de> Deserialize<'de> for Field {
+    fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
+    where D: Deserializer<'de> {
+        struct FieldVisitor;
+
+        impl<'de> Visitor<'de> for FieldVisitor {
+            type Value = Field;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("`compressedPath` or `mptValue` or `childrenTable` or `merkleHash`")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Field, E>
+            where E: de::Error {
+                match value {
+                    "compressedPath" => Ok(Field::CompressedPath),
+                    "mptValue" => Ok(Field::MptValue),
+                    "childrenTable" => Ok(Field::ChildrenTable),
+                    "merkleHash" => Ok(Field::MerkleHash),
+                    _ => Err(de::Error::unknown_field(value, FIELDS)),
+                }
+            }
+        }
+
+        deserializer.deserialize_identifier(FieldVisitor)
+    }
+}
+
+struct VanillaTrieNodeVisitor<NodeRefT> {
+    marker: PhantomData<NodeRefT>,
+}
+
+impl<'de, NodeRefT: 'static + NodeRefTrait + Deserialize<'de>> Visitor<'de>
+    for VanillaTrieNodeVisitor<NodeRefT>
+where ChildrenTableItem<NodeRefT>: DefaultChildrenItem<NodeRefT>
+{
+    type Value = VanillaTrieNode<NodeRefT>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("struct VanillaTrieNode")
+    }
+
+    fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+    where V: MapAccess<'de> {
+        let mut compressed_path = None;
+        let mut mpt_value = None;
+        let mut children_table = None;
+        let mut merkle_hash = None;
+        while let Some(key) = map.next_key()? {
+            match key {
+                Field::CompressedPath => {
+                    if compressed_path.is_some() {
+                        return Err(de::Error::duplicate_field(
+                            "compressedPath",
+                        ));
+                    }
+                    compressed_path = Some(map.next_value()?);
+                }
+                Field::MptValue => {
+                    if mpt_value.is_some() {
+                        return Err(de::Error::duplicate_field("mptValue"));
+                    }
+                    mpt_value = Some(map.next_value()?);
+                }
+                Field::ChildrenTable => {
+                    if children_table.is_some() {
+                        return Err(de::Error::duplicate_field(
+                            "childrenTable",
+                        ));
+                    }
+                    children_table = Some(map.next_value()?);
+                }
+                Field::MerkleHash => {
+                    if merkle_hash.is_some() {
+                        return Err(de::Error::duplicate_field("merkleHash"));
+                    }
+                    merkle_hash = Some(map.next_value()?);
+                }
+            }
+        }
+
+        let compressed_path = compressed_path
+            .ok_or_else(|| de::Error::missing_field("compressedPath"))?;
+        let mpt_value: Option<String> =
+            mpt_value.ok_or_else(|| de::Error::missing_field("mptValue"))?;
+        let mpt_value: Option<Vec<u8>> = match mpt_value {
+            Some(v) => {
+                if v.is_empty() {
+                    Some(vec![])
+                } else if let (Some(s), true) =
+                    (v.strip_prefix("0x"), v.len() & 1 == 0)
+                {
+                    Some(FromHex::from_hex(s).map_err(|e| {
+                        de::Error::custom(format!(
+                            "mptValue: invalid hex: {}",
+                            e
+                        ))
+                    })?)
+                } else {
+                    return Err(de::Error::custom("mptValue: invalid format. Expected a 0x-prefixed hex string with even length"));
+                }
+            }
+            _ => None,
+        };
+
+        let children_table = children_table
+            .ok_or_else(|| de::Error::missing_field("childrenTable"))?;
+        let merkle_hash = merkle_hash
+            .ok_or_else(|| de::Error::missing_field("merkleHash"))?;
+
+        Ok(VanillaTrieNode::new(
+            merkle_hash,
+            children_table,
+            mpt_value.map(|v| v.into_boxed_slice()),
+            compressed_path,
+        ))
+    }
+}
+
 use super::{
     super::super::utils::WrappedCreateFrom,
     children_table::*,
@@ -280,4 +452,10 @@ use super::{
 };
 use primitives::{MerkleHash, MptValue, MERKLE_NULL_NODE};
 use rlp::*;
-use std::vec::Vec;
+use rustc_hex::{FromHex, ToHex};
+use serde::{
+    de::{self, MapAccess, Visitor},
+    ser::SerializeStruct,
+    Deserialize, Deserializer, Serialize, Serializer,
+};
+use std::{fmt, marker::PhantomData, vec::Vec};

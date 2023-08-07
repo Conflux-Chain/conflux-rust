@@ -4,14 +4,13 @@
 
 use super::{executive::*, Executed, ExecutionError};
 use crate::{
-    evm::FinalizationResult,
+    evm::{FinalizationResult, GasPriceTier},
     executive::{CollateralCheckResultToVmResult, ExecutionOutcome},
     machine::Machine,
     state::{State, Substate},
     test_helpers::get_state_for_genesis_write,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress, Env,
-        Spec,
     },
     vm_factory::VmFactory,
 };
@@ -23,11 +22,7 @@ use cfx_parameters::{
     },
     staking::*,
 };
-use cfx_state::{
-    state_trait::{CheckpointTrait, StateOpsTrait},
-    substate_trait::SubstateMngTrait,
-    CleanupMode, CollateralCheckResult, StateTrait,
-};
+use cfx_state::{CleanupMode, CollateralCheckResult};
 use cfx_statedb::StateDb;
 use cfx_storage::{
     state_manager::StateManagerTrait, tests::new_state_manager_for_unit_test,
@@ -109,7 +104,6 @@ fn test_sender_balance() {
             &sender_with_space,
             &COLLATERAL_DRIPS_PER_STORAGE_KEY,
             CleanupMode::NoEmpty,
-            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
     state
@@ -117,7 +111,6 @@ fn test_sender_balance() {
             &sender_with_space,
             &U256::from(0x100u64),
             CleanupMode::NoEmpty,
-            Spec::new_spec_for_test().account_start_nonce,
         )
         .unwrap();
     assert_eq!(
@@ -143,7 +136,7 @@ fn test_sender_balance() {
                 &storage_limit_in_drip,
                 &mut substate,
                 &mut tracer,
-                spec.account_start_nonce,
+                &spec,
                 false,
             )
             .unwrap()
@@ -227,12 +220,7 @@ fn test_create_contract_out_of_depth() {
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
     state
-        .add_balance(
-            &sender_with_space,
-            &U256::from(100),
-            CleanupMode::NoEmpty,
-            spec.account_start_nonce,
-        )
+        .add_balance(&sender_with_space, &U256::from(100), CleanupMode::NoEmpty)
         .unwrap();
     let mut substate = Substate::new();
 
@@ -291,7 +279,6 @@ fn test_suicide_when_creation() {
             &sender_with_space,
             &U256::from(100_000),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce,
         )
         .unwrap();
     let mut substate = Substate::new();
@@ -379,14 +366,13 @@ fn test_call_to_create() {
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
     state
-        .new_contract_with_code(&address, U256::zero(), U256::one())
+        .new_contract_with_code(&address, U256::zero())
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state
         .add_balance(
             &sender_with_space,
             &(U256::from(100) + storage_limit_in_drip),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce,
         )
         .unwrap();
     assert_eq!(
@@ -410,7 +396,7 @@ fn test_call_to_create() {
                 &storage_limit_in_drip,
                 &mut substate,
                 &mut tracer,
-                spec.account_start_nonce,
+                &spec,
                 false,
             )
             .unwrap()
@@ -453,15 +439,10 @@ fn test_revert() {
             &sender_with_space,
             &U256::from_str("152d02c7e14af68000000").unwrap(),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce,
         )
         .unwrap();
     state
-        .new_contract_with_code(
-            &contract_address_with_space,
-            U256::zero(),
-            U256::one(),
-        )
+        .new_contract_with_code(&contract_address_with_space, U256::zero())
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state
         .commit(BigEndianHash::from_uint(&U256::from(1)), None)
@@ -538,7 +519,6 @@ fn test_keccak() {
             &sender_with_space,
             &U256::from_str("152d02c7e14af6800000").unwrap(),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce,
         )
         .unwrap();
     let mut substate = Substate::new();
@@ -581,12 +561,7 @@ fn test_not_enough_cash() {
     let storage_manager = new_state_manager_for_unit_test();
     let mut state = get_state_for_genesis_write(&storage_manager);
     state
-        .add_balance(
-            &sender,
-            &U256::from(100_017),
-            CleanupMode::NoEmpty,
-            spec.account_start_nonce,
-        )
+        .add_balance(&sender, &U256::from(100_017), CleanupMode::NoEmpty)
         .unwrap();
     let correct_cost = min(t.gas_price() * t.gas(), 100_017.into());
 
@@ -632,7 +607,6 @@ fn test_deposit_withdraw_lock() {
             &sender_with_space,
             &U256::from(2_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce,
         )
         .unwrap();
     state.add_total_issued(U256::from(2_000_000_000_000_000_000u64));
@@ -1016,8 +990,8 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &address,
             &sender,
             U256::zero(),
-            U256::one(),
             Some(STORAGE_LAYOUT_REGULAR_V0),
+            false,
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state.init_code(&address, code.clone(), sender).unwrap();
@@ -1026,12 +1000,11 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &sender_with_space,
             &U256::from(1_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce,
         )
         .unwrap();
 
     state
-        .add_commission_privilege(address.address, sender, Default::default())
+        .add_to_contract_whitelist(address.address, sender, Default::default())
         .unwrap();
     let epoch_id = EpochId::from_uint(&U256::from(1));
     state
@@ -1040,7 +1013,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &0.into(),
             &mut Substate::new(),
             &mut (),
-            spec.account_start_nonce,
+            &spec,
             false,
         )
         .unwrap();
@@ -1063,13 +1036,13 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
     assert_eq!(
         true,
         state
-            .check_commission_privilege(&address.address, &sender)
+            .check_contract_whitelist(&address.address, &sender)
             .unwrap()
     );
     assert_eq!(
         true,
         state
-            .check_commission_privilege(&address.address, &Default::default())
+            .check_contract_whitelist(&address.address, &Default::default())
             .unwrap()
     );
     let epoch_id = EpochId::from_uint(&U256::from(2));
@@ -1080,8 +1053,8 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &address,
             &sender,
             U256::zero(),
-            U256::one(),
             Some(STORAGE_LAYOUT_REGULAR_V0),
+            false,
         )
         .unwrap();
     state.init_code(&address, code, sender).unwrap();
@@ -1090,23 +1063,22 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &sender_with_space,
             &U256::from(1_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce,
         )
         .unwrap();
     let whitelisted_caller = Address::random();
     state
-        .add_commission_privilege(address.address, sender, whitelisted_caller)
+        .add_to_contract_whitelist(address.address, sender, whitelisted_caller)
         .unwrap();
     assert_eq!(
         true,
         state
-            .check_commission_privilege(&address.address, &whitelisted_caller)
+            .check_contract_whitelist(&address.address, &whitelisted_caller)
             .unwrap()
     );
     assert_eq!(
         false,
         state
-            .check_commission_privilege(&address.address, &Default::default())
+            .check_contract_whitelist(&address.address, &Default::default())
             .unwrap()
     );
     state
@@ -1115,7 +1087,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &0.into(),
             &mut Substate::new(),
             &mut (),
-            spec.account_start_nonce,
+            &spec,
             false,
         )
         .unwrap();
@@ -1137,13 +1109,13 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
     assert_eq!(
         true,
         state
-            .check_commission_privilege(&address.address, &whitelisted_caller)
+            .check_contract_whitelist(&address.address, &whitelisted_caller)
             .unwrap()
     );
     assert_eq!(
         false,
         state
-            .check_commission_privilege(&address.address, &Default::default())
+            .check_contract_whitelist(&address.address, &Default::default())
             .unwrap()
     );
 }
@@ -1191,8 +1163,8 @@ fn test_commission_privilege() {
             &address,
             &sender,
             U256::zero(),
-            U256::one(),
             Some(STORAGE_LAYOUT_REGULAR_V0),
+            false,
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state.init_code(&address, code, sender).unwrap();
@@ -1201,7 +1173,6 @@ fn test_commission_privilege() {
             &sender_with_space,
             &U256::from(1_000_000_000_000_000_000u64),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce,
         )
         .unwrap();
 
@@ -1239,7 +1210,6 @@ fn test_commission_privilege() {
             &caller1.address().with_native_space(),
             &U256::from(100_000),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce,
         )
         .unwrap();
     state
@@ -1247,7 +1217,6 @@ fn test_commission_privilege() {
             &caller2.address().with_native_space(),
             &U256::from(100_000),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce,
         )
         .unwrap();
     state
@@ -1255,24 +1224,23 @@ fn test_commission_privilege() {
             &caller3.address().with_native_space(),
             &U256::from(100_000),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce,
         )
         .unwrap();
     // add commission privilege to caller1 and caller2
     state
-        .add_commission_privilege(address.address, sender, caller1.address())
+        .add_to_contract_whitelist(address.address, sender, caller1.address())
         .unwrap();
     state
-        .add_commission_privilege(address.address, sender, caller2.address())
+        .add_to_contract_whitelist(address.address, sender, caller2.address())
         .unwrap();
     assert!(state
-        .check_commission_privilege(&address.address, &caller1.address())
+        .check_contract_whitelist(&address.address, &caller1.address())
         .unwrap());
     assert!(state
-        .check_commission_privilege(&address.address, &caller2.address())
+        .check_contract_whitelist(&address.address, &caller2.address())
         .unwrap());
     assert!(!state
-        .check_commission_privilege(&address.address, &caller3.address())
+        .check_contract_whitelist(&address.address, &caller3.address())
         .unwrap());
     state
         .set_sponsor_for_gas(
@@ -1483,10 +1451,10 @@ fn test_commission_privilege() {
 
     // add commission privilege to caller3
     state
-        .add_commission_privilege(address.address, sender, caller3.address())
+        .add_to_contract_whitelist(address.address, sender, caller3.address())
         .unwrap();
     assert!(state
-        .check_commission_privilege(&address.address, &caller3.address())
+        .check_contract_whitelist(&address.address, &caller3.address())
         .unwrap());
     // call with commission privilege and enough commission balance
     let tx = Transaction::from(NativeTransaction {
@@ -1573,8 +1541,8 @@ fn test_storage_commission_privilege() {
             &address,
             &sender.address(),
             U256::zero(),
-            U256::one(),
             Some(STORAGE_LAYOUT_REGULAR_V0),
+            false,
         )
         .expect(&concat!(file!(), ":", line!(), ":", column!()));
     state.init_code(&address, code, sender.address()).unwrap();
@@ -1584,7 +1552,6 @@ fn test_storage_commission_privilege() {
             &sender_with_space,
             &U256::from(2_000_000_000_000_075_000u64),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce,
         )
         .unwrap();
 
@@ -1626,6 +1593,7 @@ fn test_storage_commission_privilege() {
             &address.address,
             &sender.address(),
             &COLLATERAL_DRIPS_PER_STORAGE_KEY,
+            false,
         )
         .unwrap();
     assert_eq!(
@@ -1657,7 +1625,6 @@ fn test_storage_commission_privilege() {
             &caller1.address().with_native_space(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce,
         )
         .unwrap();
     state
@@ -1665,7 +1632,6 @@ fn test_storage_commission_privilege() {
             &caller2.address().with_native_space(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce,
         )
         .unwrap();
     state
@@ -1673,7 +1639,6 @@ fn test_storage_commission_privilege() {
             &caller3.address().with_native_space(),
             &(*COLLATERAL_DRIPS_PER_STORAGE_KEY + U256::from(1000_000)),
             CleanupMode::NoEmpty,
-            spec.account_start_nonce,
         )
         .unwrap();
 
@@ -1681,14 +1646,14 @@ fn test_storage_commission_privilege() {
     let mut substate = Substate::new();
     state.checkpoint();
     state
-        .add_commission_privilege(
+        .add_to_contract_whitelist(
             address.address,
             sender.address(),
             caller1.address(),
         )
         .unwrap();
     state
-        .add_commission_privilege(
+        .add_to_contract_whitelist(
             address.address,
             sender.address(),
             caller2.address(),
@@ -1701,8 +1666,8 @@ fn test_storage_commission_privilege() {
                 &U256::MAX,
                 &mut substate,
                 &mut (),
-                spec.account_start_nonce,
-                false
+                &spec,
+                false,
             )
             .unwrap(),
         CollateralCheckResult::Valid
@@ -1726,13 +1691,13 @@ fn test_storage_commission_privilege() {
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(3),
     );
     assert!(state
-        .check_commission_privilege(&address.address, &caller1.address())
+        .check_contract_whitelist(&address.address, &caller1.address())
         .unwrap());
     assert!(state
-        .check_commission_privilege(&address.address, &caller2.address())
+        .check_contract_whitelist(&address.address, &caller2.address())
         .unwrap());
     assert!(!state
-        .check_commission_privilege(&address.address, &caller3.address())
+        .check_contract_whitelist(&address.address, &caller3.address())
         .unwrap());
 
     // caller3 call with no privilege
@@ -2023,7 +1988,7 @@ fn test_storage_commission_privilege() {
     // remove privilege from caller1
     state.checkpoint();
     state
-        .remove_commission_privilege(
+        .remove_from_contract_whitelist(
             address.address,
             sender.address(),
             caller1.address(),
@@ -2037,7 +2002,7 @@ fn test_storage_commission_privilege() {
                 &U256::MAX,
                 &mut substate,
                 &mut (),
-                spec.account_start_nonce,
+                &spec,
                 false
             )
             .unwrap(),
@@ -2067,7 +2032,7 @@ fn test_storage_commission_privilege() {
     );
 
     assert!(!state
-        .check_commission_privilege(&address.address, &caller1.address())
+        .check_contract_whitelist(&address.address, &caller1.address())
         .unwrap());
 
     assert_eq!(
@@ -2156,4 +2121,127 @@ fn test_storage_commission_privilege() {
         state.total_storage_tokens(),
         *COLLATERAL_DRIPS_PER_STORAGE_KEY * U256::from(2)
     );
+}
+
+#[test]
+fn test_push0() {
+    let sender_addr =
+        Address::from_str("1d1722f3947def4cf144679da39c4c32bdc35681").unwrap();
+    let sender_with_space = sender_addr.with_native_space();
+    let contract_addr = contract_address(
+        CreateContractAddress::FromSenderNonceAndCodeHash,
+        /* block_number = */ 0.into(),
+        &sender_with_space,
+        &U256::zero(),
+        &[],
+    )
+    .0;
+
+    let mut params = ActionParams::default();
+    params.address = contract_addr.address;
+    params.sender = sender_addr;
+    params.original_sender = sender_addr;
+    params.storage_owner = sender_addr;
+    params.gas = U256::from(10000);
+    params.value = ActionValue::Transfer(U256::from(0));
+
+    let env = Env::default();
+    let machine = make_byzantium_machine(0);
+
+    let storage_manager = new_state_manager_for_unit_test();
+    let mut state = get_state_for_genesis_write(&storage_manager);
+
+    // Test case 1 in EIP-3855
+    {
+        let mut spec = machine.spec(env.number);
+        spec.cip119 = true;
+
+        // code:
+        //
+        // 5f - push0
+        let mut params = params.clone();
+        params.code = Some(Arc::new([0x5f].to_vec()));
+
+        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let FinalizationResult {
+            gas_left,
+            apply_state,
+            return_data: _,
+            ..
+        } = ex
+            .call(params, &mut Substate::new(), &mut ())
+            .expect("no db error")
+            .expect("no vm error");
+
+        let base_gas = spec.tier_step_gas[GasPriceTier::Base.idx()];
+        assert_eq!(gas_left, U256::from(10000 - base_gas));
+        assert_eq!(apply_state, true);
+    }
+
+    // Test case 2 in EIP-3855
+    {
+        let mut spec = machine.spec(env.number);
+        spec.cip119 = true;
+
+        // code:
+        //
+        // 5f * 1024 - push0 * 1024
+        let mut params = params.clone();
+        params.code = Some(Arc::new([0x5f; 1024].to_vec()));
+
+        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let FinalizationResult {
+            gas_left,
+            apply_state,
+            return_data: _,
+            ..
+        } = ex
+            .call(params, &mut Substate::new(), &mut ())
+            .expect("no db error")
+            .expect("no vm error");
+
+        let base_gas = spec.tier_step_gas[GasPriceTier::Base.idx()];
+        assert_eq!(gas_left, U256::from(10000 - base_gas * 1024));
+        assert_eq!(apply_state, true);
+    }
+
+    // Test case 2 in EIP-3855
+    {
+        let mut spec = machine.spec(env.number);
+        spec.cip119 = true;
+
+        // code:
+        //
+        // 5f * 1025 - push0 * 1025
+        let mut params = params.clone();
+        params.code = Some(Arc::new([0x5f; 1025].to_vec()));
+
+        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let error = ex
+            .call(params, &mut Substate::new(), &mut ())
+            .expect("no db error")
+            .expect_err("should fail");
+
+        assert!(matches!(error, vm::Error::OutOfStack { .. }));
+    }
+
+    // Before activation of EIP-3855 (CIP119)
+    {
+        let mut spec = machine.spec(env.number);
+        spec.cip119 = false;
+
+        // code:
+        //
+        // 5f - push0
+        let mut params = params.clone();
+        params.code = Some(Arc::new([0x5f; 1025].to_vec()));
+
+        let mut ex = Executive::new(&mut state, &env, &machine, &spec);
+        let error = ex
+            .call(params, &mut Substate::new(), &mut ())
+            .expect("no db error")
+            .expect_err("should fail");
+
+        assert!(matches!(error, vm::Error::BadInstruction { .. }));
+    }
 }

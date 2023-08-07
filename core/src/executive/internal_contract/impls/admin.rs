@@ -4,13 +4,12 @@
 
 use crate::{
     observer::{AddressPocket, VmObserve},
-    state::cleanup_mode,
+    state::{cleanup_mode, State, Substate},
     vm::{self, ActionParams, Spec},
 };
-use cfx_state::{state_trait::StateOpsTrait, SubstateTrait};
 use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
-    Space, U256,
+    Space,
 };
 
 use super::super::components::InternalRefContext;
@@ -28,12 +27,11 @@ fn available_admin_address(_spec: &Spec, address: &Address) -> bool {
 ///   4. kill the contract
 pub fn suicide(
     contract_address: &AddressWithSpace, refund_address: &AddressWithSpace,
-    state: &mut dyn StateOpsTrait, spec: &Spec,
-    substate: &mut dyn SubstateTrait, tracer: &mut dyn VmObserve,
-    account_start_nonce: U256,
+    state: &mut State, spec: &Spec, substate: &mut Substate,
+    tracer: &mut dyn VmObserve,
 ) -> vm::Result<()>
 {
-    substate.suicides_mut().insert(contract_address.clone());
+    substate.suicides.insert(contract_address.clone());
     let balance = state.balance(contract_address)?;
 
     if refund_address == contract_address
@@ -51,9 +49,9 @@ pub fn suicide(
             &balance,
             &mut cleanup_mode(substate, spec),
         )?;
-        state.subtract_total_issued(balance);
+        state.sub_total_issued(balance);
         if contract_address.space == Space::Ethereum {
-            state.subtract_total_evm_tokens(balance);
+            state.sub_total_evm_tokens(balance);
         }
     } else {
         trace!(target: "context", "Destroying {} -> {} (xfer: {})", contract_address.address, refund_address.address, balance);
@@ -67,7 +65,6 @@ pub fn suicide(
             refund_address,
             &balance,
             cleanup_mode(substate, spec),
-            account_start_nonce,
         )?;
     }
 
@@ -116,9 +113,8 @@ pub fn set_admin(
 /// Implementation of `destroy(address)`.
 /// The input should consist of 20 bytes `contract_address`
 pub fn destroy(
-    contract_address: Address, params: &ActionParams,
-    state: &mut dyn StateOpsTrait, spec: &Spec,
-    substate: &mut dyn SubstateTrait, tracer: &mut dyn VmObserve,
+    contract_address: Address, params: &ActionParams, state: &mut State,
+    spec: &Spec, substate: &mut Substate, tracer: &mut dyn VmObserve,
 ) -> vm::Result<()>
 {
     debug!("contract_address={:?}", contract_address);
@@ -133,7 +129,6 @@ pub fn destroy(
             spec,
             substate,
             tracer,
-            spec.account_start_nonce,
         )
     } else {
         Ok(())

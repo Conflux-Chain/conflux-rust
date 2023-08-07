@@ -68,7 +68,7 @@ make_solidity_function! {
     struct ReadVote(Address, "readVote(address)", Vec<Vote>);
 }
 
-impl_function_type!(ReadVote, "query", gas: |spec: &Spec| PARAMETER_INDEX_MAX * OPTION_INDEX_MAX * (spec.sload_gas + 2 * spec.sha3_gas));
+impl_function_type!(ReadVote, "query", gas: |spec: &Spec| params_index_max(spec) * OPTION_INDEX_MAX * (spec.sload_gas + 2 * spec.sha3_gas));
 
 impl SimpleExecutionTrait for ReadVote {
     fn execute_inner(
@@ -101,7 +101,7 @@ impl SimpleExecutionTrait for CurrentRound {
 make_solidity_function! {
     struct TotalVotes(u64, "totalVotes(uint64)", Vec<Vote>);
 }
-impl_function_type!(TotalVotes, "query", gas: |spec: &Spec| PARAMETER_INDEX_MAX * OPTION_INDEX_MAX * spec.sload_gas);
+impl_function_type!(TotalVotes, "query", gas: |spec: &Spec| params_index_max(spec) * OPTION_INDEX_MAX * spec.sload_gas);
 
 impl SimpleExecutionTrait for TotalVotes {
     fn execute_inner(
@@ -142,7 +142,8 @@ fn test_vote_abi_length() {
 
 pub const POW_BASE_REWARD_INDEX: u8 = 0;
 pub const POS_REWARD_INTEREST_RATE_INDEX: u8 = 1;
-pub const PARAMETER_INDEX_MAX: usize = 2;
+pub const STORAGE_POINT_PROP_INDEX: u8 = 2;
+pub const PARAMETER_INDEX_MAX: usize = 3;
 
 pub const OPTION_UNCHANGE_INDEX: u8 = 0;
 pub const OPTION_INCREASE_INDEX: u8 = 1;

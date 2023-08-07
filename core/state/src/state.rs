@@ -121,7 +121,7 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
 
     fn new_contract_with_admin(
         &mut self, _contract: &Address, _admin: &Address, _balance: U256,
-        _nonce: U256, _storage_layout: Option<StorageLayout>,
+        _nonce: U256, _storage_layout: Option<StorageLayout>, cip107: bool,
     ) -> Result<()>
     {
         unimplemented!()
@@ -760,14 +760,14 @@ impl<StateDbStorage: StorageStateTrait, Substate: SubstateMngTrait>
         )
     }
 
-    fn require_or_new_basic_account<'a>(
+    fn write_account_or_new<'a>(
         &'a mut self, address: &Address, account_start_nonce: &U256,
         debug_record: Option<&'a mut ComputeEpochDebugRecord>,
     ) -> Result<
         impl AsMut<ModifyAndUpdate<StateDbGeneric<StateDbStorage>, CachedAccount>>,
     >
     {
-        self.cache.require_or_new_basic_account(
+        self.cache.write_account_or_new(
             address,
             &mut self.db,
             account_start_nonce,

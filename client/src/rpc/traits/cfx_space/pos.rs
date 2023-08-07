@@ -4,15 +4,12 @@
 
 use crate::rpc::types::{
     pos::{
-        Account, Block, BlockNumber, CommitteeState, PoSEpochReward, Status,
-        Transaction,
+        Account, Block, BlockNumber, CommitteeState, EpochState,
+        LedgerInfoWithSignatures, PoSEpochReward, Status, Transaction,
     },
     RpcAddress,
 };
 use cfx_types::{H256, U64};
-use diem_types::{
-    epoch_state::EpochState, ledger_info::LedgerInfoWithSignatures,
-};
 use jsonrpc_core::Result as JsonRpcResult;
 use jsonrpc_derive::rpc;
 
@@ -63,6 +60,16 @@ pub trait Pos {
     #[rpc(name = "pos_getLedgerInfoByEpoch")]
     fn pos_get_ledger_info_by_epoch(
         &self, epoch: U64,
+    ) -> JsonRpcResult<Option<LedgerInfoWithSignatures>>;
+
+    #[rpc(name = "pos_getLedgerInfoByBlockNumber")]
+    fn pos_get_ledger_info_by_block_number(
+        &self, number: BlockNumber,
+    ) -> JsonRpcResult<Option<LedgerInfoWithSignatures>>;
+
+    #[rpc(name = "pos_getLedgerInfoByEpochAndRound")]
+    fn pos_get_ledger_info_by_epoch_and_round(
+        &self, epoch: U64, round: U64,
     ) -> JsonRpcResult<Option<LedgerInfoWithSignatures>>;
 
     // debug rpc

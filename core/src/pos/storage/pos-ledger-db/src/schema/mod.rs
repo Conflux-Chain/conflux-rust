@@ -15,6 +15,7 @@ use anyhow::{ensure, Result};
 
 use schemadb::ColumnFamilyName;
 
+pub(crate) mod block_by_epoch_and_round;
 pub(crate) mod committed_block;
 pub(crate) mod committed_block_by_view;
 pub(crate) mod epoch_by_version;
@@ -59,6 +60,8 @@ pub const COMMITTED_BLOCK_BY_VIEW_CF_NAME: ColumnFamilyName =
     "committed_block_by_view";
 pub const LEDGER_INFO_BY_VOTED_BLOCK_CF_NAME: ColumnFamilyName =
     "ledger_info_by_voted_block";
+pub const BLOCK_BY_EPOCH_AND_ROUND_CF_NAME: ColumnFamilyName =
+    "block_by_epoch_and_round";
 
 fn ensure_slice_len_eq(data: &[u8], len: usize) -> Result<()> {
     ensure!(

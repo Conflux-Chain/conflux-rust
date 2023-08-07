@@ -1422,9 +1422,6 @@ impl RoundManager {
         // This takes out the candidate, so we need to insert it back if it's
         // Some.
         let chosen = self.proposer_election.choose_proposal_to_vote();
-        if let Some(chosen) = chosen.clone() {
-            self.proposer_election.set_proposal_candidate(chosen);
-        }
         Ok(chosen)
     }
 

@@ -22,7 +22,7 @@ use cfx_parameters::{
     },
     staking::POS_VOTE_PRICE,
 };
-use cfx_state::{state_trait::*, CleanupMode};
+use cfx_state::CleanupMode;
 use cfx_statedb::{Result as DbResult, StateDb};
 use cfx_storage::{StorageManager, StorageManagerTrait};
 use cfx_types::{
@@ -125,10 +125,8 @@ pub fn load_secrets_file(
 }
 
 pub fn initialize_internal_contract_accounts(
-    state: &mut dyn StateOpsTrait, addresses: &[Address],
-    contract_start_nonce: U256,
-)
-{
+    state: &mut State, addresses: &[Address],
+) {
     || -> DbResult<()> {
         {
             for address in addresses {
@@ -136,8 +134,8 @@ pub fn initialize_internal_contract_accounts(
                     &address.with_native_space(),
                     /* No admin; admin = */ &Address::zero(),
                     /* balance = */ U256::zero(),
-                    contract_start_nonce,
                     Some(STORAGE_LAYOUT_REGULAR_V0),
+                    false,
                 )?;
             }
             Ok(())
@@ -197,17 +195,11 @@ pub fn genesis_block(
     initialize_internal_contract_accounts(
         &mut state,
         machine.internal_contracts().initialized_at_genesis(),
-        machine.spec(0).contract_start_nonce,
     );
     trace!("genesis_accounts: {:?}", genesis_accounts);
     for (addr, balance) in genesis_accounts {
         state
-            .add_balance(
-                &addr,
-                &balance,
-                CleanupMode::NoEmpty,
-                /* account_start_nonce = */ U256::zero(),
-            )
+            .add_balance(&addr, &balance, CleanupMode::NoEmpty)
             .unwrap();
         state.add_total_issued(balance);
         if addr.space == Space::Ethereum {
@@ -235,7 +227,6 @@ pub fn genesis_block(
             &genesis_account_address,
             &genesis_account_init_balance,
             CleanupMode::NoEmpty,
-            /* account_start_nonce = */ U256::zero(),
         )
         .unwrap();
 
@@ -429,7 +420,6 @@ pub fn genesis_block(
                     &(stake_balance
                         + U256::from(ONE_CFX_IN_DRIP) * U256::from(20)),
                     CleanupMode::NoEmpty,
-                    /* account_start_nonce = */ U256::zero(),
                 )
                 .unwrap();
             state
@@ -548,7 +538,7 @@ pub fn register_transaction(
     tx.nonce = 0.into();
     tx.data = call_data;
     tx.value = U256::zero();
-    tx.action = Action::Call(*POS_REGISTER_CONTRACT_ADDRESS);
+    tx.action = Action::Call(POS_REGISTER_CONTRACT_ADDRESS);
     tx.chain_id = genesis_chain_id;
     tx.gas = 200000.into();
     tx.gas_price = 1.into();

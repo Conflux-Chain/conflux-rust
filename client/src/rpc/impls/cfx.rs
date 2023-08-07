@@ -8,8 +8,13 @@ use crate::rpc::types::{
     TokenSupplyInfo, VoteParamsInfo, WrapTransaction,
 };
 use blockgen::BlockGenerator;
-use cfx_state::state_trait::StateOpsTrait;
-use cfx_statedb::StateDbExt;
+use cfx_statedb::{
+    global_params::{
+        AccumulateInterestRate, DistributablePoSInterest, InterestRate,
+        LastDistributeBlock, PowBaseReward, TotalPosStaking,
+    },
+    StateDbExt,
+};
 use cfx_types::{
     Address, AddressSpaceUtil, BigEndianHash, Space, H256, H520, U128, U256,
     U64,
@@ -18,6 +23,7 @@ use cfxcore::{
     executive::{ExecutionError, ExecutionOutcome, TxDropError},
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     state_exposer::STATE_EXPOSER,
+    verification::{compute_epoch_receipt_proof, EpochReceiptProof},
     vm, ConsensusGraph, ConsensusGraphTrait, PeerInfo, SharedConsensusGraph,
     SharedSynchronizationService, SharedTransactionPool,
 };
@@ -65,14 +71,16 @@ use crate::{
             EpochNumber, EstimateGasAndCollateralResponse, Log as RpcLog,
             PackedOrExecuted, Receipt as RpcReceipt,
             RewardInfo as RpcRewardInfo, SendTxRequest, Status as RpcStatus,
-            SyncGraphStates, Transaction as RpcTransaction,
+            StorageCollateralInfo, SyncGraphStates,
+            Transaction as RpcTransaction,
         },
         RpcResult,
     },
 };
 use cfx_addr::Network;
 use cfx_parameters::{
-    consensus_internal::REWARD_EPOCH_COUNT, staking::BLOCKS_PER_YEAR,
+    consensus_internal::REWARD_EPOCH_COUNT,
+    staking::{BLOCKS_PER_YEAR, DRIPS_PER_STORAGE_COLLATERAL_UNIT},
 };
 use cfx_storage::state::StateDbGetOriginalMethods;
 use cfxcore::{
@@ -407,7 +415,7 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
 
-        Ok(state_db.get_annual_interest_rate()?.into())
+        Ok(state_db.get_global_param::<InterestRate>()?.into())
     }
 
     /// Returns accumulate interest rate of the given epoch
@@ -419,7 +427,9 @@ impl RpcImpl {
             .consensus
             .get_state_db_by_epoch_number(epoch_num, "epoch_num")?;
 
-        Ok(state_db.get_accumulate_interest_rate()?.into())
+        Ok(state_db
+            .get_global_param::<AccumulateInterestRate>()?
+            .into())
     }
 
     /// Returns accumulate interest rate of the given epoch
@@ -433,11 +443,11 @@ impl RpcImpl {
 
         Ok(PoSEconomics {
             total_pos_staking_tokens: state_db
-                .get_total_pos_staking_tokens()?,
+                .get_global_param::<TotalPosStaking>()?,
             distributable_pos_interest: state_db
-                .get_distributable_pos_interest()?,
+                .get_global_param::<DistributablePoSInterest>()?,
             last_distribute_block: U64::from(
-                state_db.get_last_distribute_block()?,
+                state_db.get_global_param::<LastDistributeBlock>()?.as_u64(),
             ),
         })
     }
@@ -693,6 +703,8 @@ impl RpcImpl {
                         maybe_state_root,
                         tx_exec_error_msg,
                         *self.sync.network.get_network_type(),
+                        false,
+                        false,
                     )?)
                 }
             };
@@ -769,7 +781,9 @@ impl RpcImpl {
 
     fn construct_rpc_receipt(
         &self, tx_index: TransactionIndex, exec_info: &BlockExecInfo,
-    ) -> RpcResult<Option<RpcReceipt>> {
+        include_eth_receipt: bool, include_accumulated_gas_used: bool,
+    ) -> RpcResult<Option<RpcReceipt>>
+    {
         let id = tx_index.real_index;
 
         if id >= exec_info.block.transactions.len()
@@ -781,7 +795,9 @@ impl RpcImpl {
 
         let tx = &exec_info.block.transactions[id];
 
-        if tx.space() == Space::Ethereum || tx_index.is_phantom {
+        if !include_eth_receipt
+            && (tx.space() == Space::Ethereum || tx_index.is_phantom)
+        {
             return Ok(None);
         }
 
@@ -808,6 +824,8 @@ impl RpcImpl {
             exec_info.maybe_state_root.clone(),
             tx_exec_error_msg,
             *self.sync.network.get_network_type(),
+            include_eth_receipt,
+            include_accumulated_gas_used,
         )?;
 
         Ok(Some(receipt))
@@ -838,7 +856,8 @@ impl RpcImpl {
                 Some(res) => res,
             };
 
-        let receipt = self.construct_rpc_receipt(tx_index, &exec_info)?;
+        let receipt =
+            self.construct_rpc_receipt(tx_index, &exec_info, false, false)?;
         if let Some(r) = &receipt {
             // A skipped transaction is not available to clients if accessed by
             // its hash.
@@ -853,7 +872,9 @@ impl RpcImpl {
 
     fn prepare_block_receipts(
         &self, block_hash: H256, pivot_assumption: H256,
-    ) -> RpcResult<Option<Vec<RpcReceipt>>> {
+        include_eth_receipt: bool,
+    ) -> RpcResult<Option<Vec<RpcReceipt>>>
+    {
         let exec_info = match self.get_block_execution_info(&block_hash)? {
             None => return Ok(None), // not executed
             Some(res) => res,
@@ -874,7 +895,13 @@ impl RpcImpl {
             .transactions
             .iter()
             .enumerate()
-            .filter(|(_, tx)| tx.space() == Space::Native)
+            .filter(|(_, tx)| {
+                if include_eth_receipt {
+                    true
+                } else {
+                    tx.space() == Space::Native
+                }
+            })
             .enumerate();
 
         for (new_index, (original_index, _)) in iter {
@@ -886,6 +913,8 @@ impl RpcImpl {
                     rpc_index: Some(new_index),
                 },
                 &exec_info,
+                include_eth_receipt,
+                true,
             )? {
                 rpc_receipts.push(receipt);
             }
@@ -983,7 +1012,7 @@ impl RpcImpl {
 
     fn generate_custom_block(
         &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes,
-        adaptive: Option<bool>,
+        adaptive: Option<bool>, custom: Option<Vec<Bytes>>,
     ) -> RpcResult<H256>
     {
         info!("RPC Request: generate_custom_block()");
@@ -995,6 +1024,7 @@ impl RpcImpl {
             referee,
             transactions,
             adaptive.unwrap_or(false),
+            custom.map(|list| list.into_iter().map(|bytes| bytes.0).collect()),
         )?)
     }
 
@@ -1350,7 +1380,7 @@ impl RpcImpl {
         let user_account = state_db.get_account(&account_addr)?;
         let contract_account = state_db.get_account(&contract_addr)?;
         let state = State::new(state_db)?;
-        let is_sponsored = state.check_commission_privilege(
+        let is_sponsored = state.check_contract_whitelist(
             &contract_addr.address,
             &account_addr.address,
         )?;
@@ -1508,6 +1538,26 @@ impl RpcImpl {
         })
     }
 
+    pub fn get_collateral_info(
+        &self, epoch: Option<EpochNumber>,
+    ) -> RpcResult<StorageCollateralInfo> {
+        let epoch = epoch.unwrap_or(EpochNumber::LatestState).into();
+        let state = State::new(
+            self.consensus
+                .get_state_db_by_epoch_number(epoch, "epoch")?,
+        )?;
+        let total_storage_tokens = state.total_storage_tokens();
+        let converted_storage_points = state.converted_storage_points()
+            / *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+        let used_storage_points =
+            state.used_storage_points() / *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
+        Ok(StorageCollateralInfo {
+            total_storage_tokens,
+            converted_storage_points,
+            used_storage_points,
+        })
+    }
+
     pub fn get_vote_params(
         &self, epoch: Option<EpochNumber>,
     ) -> RpcResult<VoteParamsInfo> {
@@ -1515,10 +1565,9 @@ impl RpcImpl {
         let state_db = self
             .consensus
             .get_state_db_by_epoch_number(epoch, "epoch_num")?;
-        let interest_rate =
-            state_db.get_annual_interest_rate()? / U256::from(BLOCKS_PER_YEAR);
-        let pow_base_reward =
-            state_db.get_pow_base_reward()?.unwrap_or_default();
+        let interest_rate = state_db.get_global_param::<InterestRate>()?
+            / U256::from(BLOCKS_PER_YEAR);
+        let pow_base_reward = state_db.get_global_param::<PowBaseReward>()?;
 
         Ok(VoteParamsInfo {
             pow_base_reward,
@@ -1575,7 +1624,7 @@ impl RpcImpl {
     }
 
     fn epoch_receipts(
-        &self, epoch: BlockHashOrEpochNumber,
+        &self, epoch: BlockHashOrEpochNumber, include_eth_receipt: Option<bool>,
     ) -> RpcResult<Option<Vec<Vec<RpcReceipt>>>> {
         info!("RPC Request: cfx_getEpochReceipts({:?})", epoch);
 
@@ -1623,7 +1672,11 @@ impl RpcImpl {
 
         for h in hashes {
             epoch_receipts.push(
-                match self.prepare_block_receipts(h, pivot_hash)? {
+                match self.prepare_block_receipts(
+                    h,
+                    pivot_hash,
+                    include_eth_receipt.unwrap_or(false),
+                )? {
                     None => return Ok(None), // not executed
                     Some(rs) => rs,
                 },
@@ -1637,42 +1690,152 @@ impl RpcImpl {
         Ok(Some(epoch_receipts))
     }
 
+    fn epoch_receipt_proof_by_transaction(
+        &self, tx_hash: H256,
+    ) -> JsonRpcResult<Option<EpochReceiptProof>> {
+        let (block_hash, tx_index_in_block) =
+            match self.consensus.get_transaction_info_by_hash(&tx_hash) {
+                None => {
+                    bail!(invalid_params(
+                        "transactions hash",
+                        format!(
+                            "Unable to get transaction info for hash {:?}",
+                            tx_hash
+                        )
+                    ));
+                }
+                Some((_, TransactionInfo { tx_index, .. })) => {
+                    (tx_index.block_hash, tx_index.real_index)
+                }
+            };
+
+        let epoch = match self.consensus.get_block_epoch_number(&block_hash) {
+            Some(epoch) => epoch,
+            None => {
+                bail!(invalid_params(
+                    "block hash",
+                    format!(
+                        "Unable to get epoch number for block {:?}",
+                        block_hash
+                    )
+                ));
+            }
+        };
+
+        let epoch_number = primitives::EpochNumber::Number(epoch);
+        let epoch_hashes = match self
+            .consensus
+            .get_block_hashes_by_epoch(epoch_number.clone())
+        {
+            Ok(hs) => hs,
+            Err(e) => {
+                bail!(invalid_params(
+                    "block hash",
+                    format!("Unable to find epoch hashes for {}: {}", epoch, e)
+                ));
+            }
+        };
+
+        let block_index_in_epoch =
+            match epoch_hashes.iter().position(|h| *h == block_hash) {
+                Some(id) => id,
+                None => {
+                    bail!(invalid_params(
+                        "block hash",
+                        format!(
+                            "Unable to find block {:?} in epoch {}",
+                            block_hash, epoch
+                        )
+                    ));
+                }
+            };
+
+        let pivot = epoch_hashes
+            .last()
+            .expect("epoch hashes should be not empty")
+            .clone();
+
+        let epoch_receipts = epoch_hashes
+            .into_iter()
+            .map(|h| {
+                self.consensus
+                    .get_data_manager()
+                    .block_execution_result_by_hash_with_epoch(
+                        &h, &pivot, false, /* update_pivot_assumption */
+                        false, /* update_cache */
+                    )
+                    .map(|res| Arc::new((*res.block_receipts).clone()))
+                    .ok_or_else(|| {
+                        invalid_params(
+                            "block hash",
+                            format!("Unable to find recepits for {}", h),
+                        )
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let epoch_receipt_proof = compute_epoch_receipt_proof(
+            &epoch_receipts,
+            block_index_in_epoch,
+            tx_index_in_block,
+        );
+
+        Ok(Some(epoch_receipt_proof))
+    }
+
     fn transactions_by_epoch(
         &self, epoch_number: U64,
     ) -> JsonRpcResult<Vec<WrapTransaction>> {
-        debug!("cfx_getTransactionsByEpoch {}", epoch_number);
+        debug!("debug_getTransactionsByEpoch {}", epoch_number);
 
         let block_hashs = self
             .consensus
             .get_block_hashes_by_epoch(primitives::EpochNumber::Number(
                 epoch_number.as_u64(),
             ))
-            .map_err(|_| JsonRpcError::internal_error())?;
+            .map_err(|e| {
+                JsonRpcError::invalid_params(format!(
+                    "Could not get block hashes by epoch {}",
+                    e
+                ))
+            })?;
 
         let blocks = match self
             .consensus
             .get_data_manager()
             .blocks_by_hash_list(&block_hashs, false)
         {
-            None => return Ok(vec![]),
+            None => {
+                return Err(JsonRpcError::invalid_params(format!(
+                    "Could not get blocks for hashs {:?}",
+                    block_hashs
+                )))
+            }
             Some(b) => b,
         };
 
         let pivot = match blocks.last() {
             Some(p) => p,
-            None => return Err(JsonRpcError::internal_error()),
+            None => {
+                return Err(JsonRpcError::invalid_params("blocks is empty"))
+            }
         };
 
-        self.get_transactions(&blocks, pivot, true, epoch_number.as_u64())
+        self.get_transactions(&blocks, pivot, epoch_number.as_u64())
     }
 
     fn transactions_by_block(
         &self, block_hash: H256,
     ) -> JsonRpcResult<Vec<WrapTransaction>> {
-        debug!("cfx_getTransactionsByBlock {}", block_hash);
+        debug!("debug_getTransactionsByBlock {}", block_hash);
 
         let epoch_number = match self.get_block_epoch_number(&block_hash) {
-            None => return Ok(vec![]),
+            None => {
+                return Err(JsonRpcError::invalid_params(format!(
+                    "Counld not get epoch for block {}",
+                    block_hash
+                )))
+            }
             Some(n) => n,
         };
 
@@ -1681,26 +1844,32 @@ impl RpcImpl {
             .get_block_hashes_by_epoch(primitives::EpochNumber::Number(
                 epoch_number,
             ))
-            .map_err(|_| JsonRpcError::internal_error())?;
+            .map_err(|e| {
+                JsonRpcError::invalid_params(format!(
+                    "Could not get block hashes by epoch {}",
+                    e
+                ))
+            })?;
 
         let blocks = match self
             .consensus
             .get_data_manager()
             .blocks_by_hash_list(&block_hashs, false)
         {
-            None => return Ok(vec![]),
+            None => {
+                return Err(JsonRpcError::invalid_params(format!(
+                    "Counld not get blocks for hashs {:?}",
+                    block_hashs
+                )))
+            }
             Some(b) => b,
         };
 
         let pivot = match blocks.last() {
             Some(p) => p,
-            None => return Err(JsonRpcError::internal_error()),
-        };
-
-        let include_eth_tx = if block_hash == pivot.hash() {
-            true
-        } else {
-            false
+            None => {
+                return Err(JsonRpcError::invalid_params("blocks is empty"))
+            }
         };
 
         let mut block = vec![];
@@ -1711,23 +1880,16 @@ impl RpcImpl {
             }
         }
 
-        self.get_transactions(&block, pivot, include_eth_tx, epoch_number)
+        self.get_transactions(&block, pivot, epoch_number)
     }
 
     fn get_transactions(
-        &self, blocks: &Vec<Arc<Block>>, pivot: &Arc<Block>,
-        include_eth_tx: bool, epoch_number: u64,
-    ) -> JsonRpcResult<Vec<WrapTransaction>>
-    {
+        &self, blocks: &Vec<Arc<Block>>, pivot: &Arc<Block>, epoch_number: u64,
+    ) -> JsonRpcResult<Vec<WrapTransaction>> {
         let mut transactions = vec![];
 
         for b in blocks.into_iter() {
-            match self.get_transactions_for_block(
-                b,
-                pivot,
-                epoch_number,
-                include_eth_tx,
-            ) {
+            match self.get_transactions_for_block(b, pivot, epoch_number) {
                 Ok(mut txs) => {
                     transactions.append(&mut txs);
                 }
@@ -1740,9 +1902,7 @@ impl RpcImpl {
 
     fn get_transactions_for_block(
         &self, b: &Arc<Block>, pivot: &Arc<Block>, epoch_number: u64,
-        include_eth_tx: bool,
-    ) -> Result<Vec<WrapTransaction>, String>
-    {
+    ) -> Result<Vec<WrapTransaction>, String> {
         let maybe_state_root = self
             .consensus
             .get_data_manager()
@@ -1773,10 +1933,6 @@ impl RpcImpl {
 
                     match tx.space() {
                         Space::Ethereum => {
-                            if !include_eth_tx {
-                                continue;
-                            }
-
                             let status = receipt
                                 .outcome_status
                                 .in_space(Space::Ethereum);
@@ -1853,6 +2009,8 @@ impl RpcImpl {
                                                     )
                                                             },
                                                             network,
+                                                            false,
+                                                            false,
                                                         )?,
                                                     ),
                                                 ),
@@ -1881,10 +2039,6 @@ impl RpcImpl {
                 for (_, tx) in b.transactions.iter().enumerate() {
                     match tx.space() {
                         Space::Ethereum => {
-                            if !include_eth_tx {
-                                continue;
-                            }
-
                             res.push(WrapTransaction::EthTransaction(
                                 EthTransaction::from_signed(
                                     tx,
@@ -1986,6 +2140,7 @@ impl Cfx for CfxHandler {
             fn transaction_receipt(&self, tx_hash: H256) -> BoxFuture<Option<RpcReceipt>>;
             fn storage_root(&self, address: RpcAddress, epoch_num: Option<EpochNumber>) -> BoxFuture<Option<StorageRoot>>;
             fn get_supply_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<TokenSupplyInfo>;
+            fn get_collateral_info(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<StorageCollateralInfo>;
             fn get_vote_params(&self, epoch_num: Option<EpochNumber>) -> JsonRpcResult<VoteParamsInfo>;
         }
     }
@@ -2041,7 +2196,7 @@ impl TestRpc for TestRpcImpl {
                 &self, raw_txs_without_data: Bytes, adaptive: Option<bool>, tx_data_len: Option<usize>)
                 -> JsonRpcResult<H256>;
             fn generate_custom_block(
-                &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes, adaptive: Option<bool>)
+                &self, parent_hash: H256, referee: Vec<H256>, raw_txs: Bytes, adaptive: Option<bool>, custom: Option<Vec<Bytes>>)
                 -> JsonRpcResult<H256>;
             fn get_pivot_chain_and_weight(&self, height_range: Option<(u64, u64)>) -> JsonRpcResult<Vec<(H256, U256)>>;
             fn get_executed_info(&self, block_hash: H256) -> JsonRpcResult<(H256, H256)> ;
@@ -2102,7 +2257,8 @@ impl LocalRpc for LocalRpcImpl {
         to self.rpc_impl {
             fn current_sync_phase(&self) -> JsonRpcResult<String>;
             fn consensus_graph_state(&self) -> JsonRpcResult<ConsensusGraphStates>;
-            fn epoch_receipts(&self, epoch: BlockHashOrEpochNumber) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
+            fn epoch_receipts(&self, epoch: BlockHashOrEpochNumber, include_eth_recepits: Option<bool>,) -> JsonRpcResult<Option<Vec<Vec<RpcReceipt>>>>;
+            fn epoch_receipt_proof_by_transaction(&self, tx_hash: H256) -> JsonRpcResult<Option<EpochReceiptProof>>;
             fn sync_graph_state(&self) -> JsonRpcResult<SyncGraphStates>;
             fn send_transaction(
                 &self, tx: SendTxRequest, password: Option<String>) -> BoxFuture<H256>;

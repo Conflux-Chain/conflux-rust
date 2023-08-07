@@ -75,7 +75,7 @@ impl Into<VmActionType> for ActionType {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Call {
-    pub space: String,
+    pub space: Space,
     pub from: RpcAddress,
     pub to: RpcAddress,
     pub value: U256,
@@ -87,7 +87,7 @@ pub struct Call {
 impl Call {
     fn try_from(call: VmCall, network: Network) -> Result<Self, String> {
         Ok(Self {
-            space: call.space.into(),
+            space: call.space,
             from: RpcAddress::try_from_h160(call.from, network)?,
             to: RpcAddress::try_from_h160(call.to, network)?,
             value: call.value,
@@ -119,7 +119,7 @@ impl From<VmCallResult> for CallResult {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Create {
-    pub space: String,
+    pub space: Space,
     pub from: RpcAddress,
     pub value: U256,
     pub gas: U256,
@@ -130,7 +130,7 @@ pub struct Create {
 impl Create {
     fn try_from(create: VmCreate, network: Network) -> Result<Self, String> {
         Ok(Self {
-            space: create.space.into(),
+            space: create.space,
             from: RpcAddress::try_from_h160(create.from, network)?,
             value: create.value,
             gas: create.gas,
@@ -390,7 +390,7 @@ impl EpochTrace {
         let mut mirror_address_map = HashMap::new();
         for t in &cfx_traces {
             if let Action::Call(action) = &t.action {
-                if action.to.hex_address == *CROSS_SPACE_CONTRACT_ADDRESS {
+                if action.to.hex_address == CROSS_SPACE_CONTRACT_ADDRESS {
                     mirror_address_map.insert(
                         evm_map(action.from.hex_address).address,
                         action.from.clone(),

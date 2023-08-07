@@ -1,5 +1,25 @@
 # JSON-RPC CHANGELOG
 
+## v2.3.0
+
+- Add `cfx_getCollateralInfo` to return chain collateral info.
+- `cfx_getSponsorInfo` return data add two more fields: `usedStoragePoints` and `availableStoragePoints`. 
+- Fix the hex encoding of PoS keys and signatures in pos RPCs.
+- Return both compressed and uncompressed BLS public keys in PoS ledger info
+
+## v2.2.5
+- Use hex format for `pos` RPC data.
+- Add RPC `pos_getLedgerInfoByBlockNumber` and `pos_getLedgerInfoByEpochAndRound` to get PoS ledger infos.
+- Add `debug_getEpochReceiptProofByTransaction` to get epoch receipt proof.
+- Add `include_eth_recepits` option (default to false) for `cfx_getEpochReceipts`.
+
+## v2.2.4
+- Update the `Log` data format returned by cfx filter RPCs.
+- Implement `trace_epoch` in the core space RPC endpoint to return traces of two spaces in an epoch.
+
+## v2.2.3
+- Add debug RPCs `debug_getTransactionsByEpoch` and `debug_getTransactionsByBlock` to get the original transactions in both spaces atomically. This is only available in the local RPC port and phantom transactions will not be returned.
+
 ## v2.2.2
 
 - A new scheme for epoch parameter like [EIP-1898](https://eips.ethereum.org/EIPS/eip-1898), which has 3 optional fields:

@@ -2,7 +2,6 @@ use crate::{
     state::State,
     transaction_pool::transaction_pool_inner::TX_POOL_GET_STATE_TIMER,
 };
-use cfx_state::state_trait::StateOpsTrait;
 use cfx_statedb::Result as DbResult;
 use cfx_types::{Address, AddressWithSpace, U256};
 use metrics::MeterTimer;
@@ -37,7 +36,6 @@ impl AccountCache {
     pub fn check_commission_privilege(
         &self, contract_address: &Address, user: &Address,
     ) -> DbResult<bool> {
-        self.state
-            .check_commission_privilege(contract_address, user)
+        self.state.check_contract_whitelist(contract_address, user)
     }
 }
