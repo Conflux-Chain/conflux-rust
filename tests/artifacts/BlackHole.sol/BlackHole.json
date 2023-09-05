@@ -1,0 +1,20 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "BlackHole",
+  "sourceName": "contracts/BlackHole.sol",
+  "abi": [
+    {
+      "inputs": [],
+      "stateMutability": "payable",
+      "type": "constructor"
+    },
+    {
+      "stateMutability": "payable",
+      "type": "receive"
+    }
+  ],
+  "bytecode": "0x608060405260458060116000396000f3fe608060405236600a57005b600080fdfea2646970667358221220e8b06e4e210c901ac5bb652c9675f6ff407de64832d9d0ce6c0e50e3688a876d64736f6c63430008130033",
+  "deployedBytecode": "0x608060405236600a57005b600080fdfea2646970667358221220e8b06e4e210c901ac5bb652c9675f6ff407de64832d9d0ce6c0e50e3688a876d64736f6c63430008130033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}

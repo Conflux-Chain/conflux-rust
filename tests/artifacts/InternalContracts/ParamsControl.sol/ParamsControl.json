@@ -1,0 +1,197 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "ParamsControl",
+  "sourceName": "contracts/InternalContracts/ParamsControl.sol",
+  "abi": [
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint64",
+          "name": "vote_round",
+          "type": "uint64"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "addr",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "uint16",
+          "name": "topic_index",
+          "type": "uint16"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256[3]",
+          "name": "votes",
+          "type": "uint256[3]"
+        }
+      ],
+      "name": "CastVote",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint64",
+          "name": "vote_round",
+          "type": "uint64"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "addr",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "uint16",
+          "name": "topic_index",
+          "type": "uint16"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256[3]",
+          "name": "votes",
+          "type": "uint256[3]"
+        }
+      ],
+      "name": "RevokeVote",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint64",
+          "name": "vote_round",
+          "type": "uint64"
+        },
+        {
+          "components": [
+            {
+              "internalType": "uint16",
+              "name": "topic_index",
+              "type": "uint16"
+            },
+            {
+              "internalType": "uint256[3]",
+              "name": "votes",
+              "type": "uint256[3]"
+            }
+          ],
+          "internalType": "struct ParamsControl.Vote[]",
+          "name": "vote_data",
+          "type": "tuple[]"
+        }
+      ],
+      "name": "castVote",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "currentRound",
+      "outputs": [
+        {
+          "internalType": "uint64",
+          "name": "",
+          "type": "uint64"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint64",
+          "name": "",
+          "type": "uint64"
+        }
+      ],
+      "name": "posStakeForVotes",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "addr",
+          "type": "address"
+        }
+      ],
+      "name": "readVote",
+      "outputs": [
+        {
+          "components": [
+            {
+              "internalType": "uint16",
+              "name": "topic_index",
+              "type": "uint16"
+            },
+            {
+              "internalType": "uint256[3]",
+              "name": "votes",
+              "type": "uint256[3]"
+            }
+          ],
+          "internalType": "struct ParamsControl.Vote[]",
+          "name": "",
+          "type": "tuple[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint64",
+          "name": "vote_round",
+          "type": "uint64"
+        }
+      ],
+      "name": "totalVotes",
+      "outputs": [
+        {
+          "components": [
+            {
+              "internalType": "uint16",
+              "name": "topic_index",
+              "type": "uint16"
+            },
+            {
+              "internalType": "uint256[3]",
+              "name": "votes",
+              "type": "uint256[3]"
+            }
+          ],
+          "internalType": "struct ParamsControl.Vote[]",
+          "name": "",
+          "type": "tuple[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x",
+  "deployedBytecode": "0x",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}
