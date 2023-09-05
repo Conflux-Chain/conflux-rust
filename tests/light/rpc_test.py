@@ -10,6 +10,7 @@ from eth_utils import decode_hex
 from conflux.rpc import RpcClient
 from test_framework.test_framework import ConfluxTestFramework
 from test_framework.util import assert_equal, assert_greater_than, assert_is_hex_string, assert_raises_rpc_error, connect_nodes, sync_blocks, get_contract_instance
+from test_framework.contracts import cfx_contract
 from web3 import Web3
 
 FULLNODE0 = 0
@@ -20,7 +21,6 @@ ERA_EPOCH_COUNT = 100
 NUM_BLOCKS = 600
 NUM_TXS = 10
 BLAME_CHECK_OFFSET = 20
-CONTRACT_PATH = "../contracts/commission_privilege_test_bytecode.dat"
 
 class LightRPCTest(ConfluxTestFramework):
     def set_test_params(self):
@@ -161,9 +161,7 @@ class LightRPCTest(ConfluxTestFramework):
         self.block_d = block_d
 
         # deploy contract
-        bytecode_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), CONTRACT_PATH)
-        assert(os.path.isfile(bytecode_file))
-        bytecode = open(bytecode_file).read()
+        bytecode = cfx_contract("CommissionPrivilegeTest").bytecode.hex()
         receipt, contractAddr = self.deploy_contract(bytecode)
         self.log.info(f"contract deployed: {contractAddr}")
         self._setup_sponsor(contractAddr)

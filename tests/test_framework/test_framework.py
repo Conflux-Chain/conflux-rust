@@ -43,7 +43,6 @@ from .util import (
     wait_until,
 )
 
-
 class TestStatus(Enum):
     PASSED = 1
     FAILED = 2
@@ -212,6 +211,7 @@ class ConfluxTestFramework:
                     "--usecli specified but test does not support using CLI")
             self.setup_chain()
             self.setup_network()
+            self.before_test()
             self.run_test()
             success = TestStatus.PASSED
         except JSONRPCException as e:
@@ -457,6 +457,9 @@ class ConfluxTestFramework:
         for i in range(self.num_nodes):
             initialize_datadir(self.options.tmpdir, i, self.options.port_min, self.conf_parameters,
                                self.extra_conf_files)
+            
+    def before_test(self):
+        pass
 
     def wait_for_tx(self, all_txs, check_status=False):
         for tx in all_txs:
@@ -486,8 +489,7 @@ class ConfluxTestFramework:
             for i in receipts:
                 if int(i["outcomeStatus"], 0) != 0:
                     raise AssertionError("Receipt states the execution failes: {}".format(i))
-        return receipts
-
+        return receipts    
 
 class SkipTest(Exception):
     """This exception is raised to skip a test"""
