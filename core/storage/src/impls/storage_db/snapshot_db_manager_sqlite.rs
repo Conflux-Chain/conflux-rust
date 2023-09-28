@@ -399,10 +399,10 @@ impl SnapshotDbManagerSqlite {
                             );
                         }
                     }
-                    _ => {
+                    Err(e) => {
                         error!(
-                            "Defragmenting XFS files failed. Command {:?}",
-                            command
+                            "Defragmenting XFS files failed. Command {:?} \n Error {:?}",
+                            command, e
                         );
                     }
                 }
