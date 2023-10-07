@@ -1127,9 +1127,12 @@ impl<'a> ExecutiveGeneric<'a> {
         let mut executed = if !sponsor_for_collateral_eligible {
             sender_pay_executed
         } else {
-            let sponsor_balance_for_collateral =
-                self.state.sponsor_balance_for_collateral(
-                    native_to_contract.as_ref().unwrap(),
+            let contract_address = native_to_contract.as_ref().unwrap();
+            let sponsor_balance_for_collateral = self
+                .state
+                .sponsor_balance_for_collateral(contract_address)?
+                + self.state.available_storage_points_for_collateral(
+                    contract_address,
                 )?;
             let max_sponsor_storage_limit = (sponsor_balance_for_collateral
                 / *DRIPS_PER_STORAGE_COLLATERAL_UNIT)
