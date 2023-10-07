@@ -1061,17 +1061,15 @@ impl NetworkProtocolHandler for Provider {
         );
 
         // insert handshaking peer, wait for StatusPing
-        self.peers.insert(*node_id);
-        self.peers.get(node_id).unwrap().write().protocol_version =
-            peer_protocol_version;
-
-        let peer = self.peers.get(node_id).expect("peer not found");
-        if let Some(ref file) = self.throttling_config_file {
-            peer.write().throttling =
-                TokenBucketManager::load(file, Some("light_protocol"))
-                    .expect("invalid throttling configuration file");
-        }
-        peer.write().last_heartbeat = Instant::now();
+        self.peers.insert_with(*node_id, |peer| {
+            if let Some(ref file) = self.throttling_config_file {
+                peer.throttling =
+                    TokenBucketManager::load(file, Some("light_protocol"))
+                        .expect("invalid throttling configuration file");
+            }
+            peer.protocol_version = peer_protocol_version;
+            peer.last_heartbeat = Instant::now();
+        });
     }
 
     fn on_peer_disconnected(&self, _io: &dyn NetworkContext, peer: &NodeId) {

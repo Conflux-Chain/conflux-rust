@@ -63,6 +63,16 @@ where T: Default
             .or_insert(Arc::new(RwLock::new(T::default())));
     }
 
+    pub fn insert_with<F>(&self, peer: NodeId, f: F)
+    where F: FnOnce(&mut T) {
+        let peer_lock = {
+            let mut peers = self.0.write();
+            let entry = peers.entry(peer);
+            entry.or_insert(Arc::new(RwLock::new(T::default()))).clone()
+        };
+        f(&mut peer_lock.write());
+    }
+
     pub fn is_empty(&self) -> bool { self.0.read().is_empty() }
 
     pub fn contains(&self, peer: &NodeId) -> bool {
