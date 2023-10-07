@@ -1180,7 +1180,7 @@ impl ConsensusExecutionHandler {
                         .transact(transaction, options)?
                 };
                 if !matches!(r, ExecutionOutcome::Finished(_)) {
-                    panic!("Execution error {:?}", r);
+                    panic!("Execution error {:?}. \n transaction {:?}", r, transaction);
                 }
 
                 let gas_fee;

@@ -1,3 +1,7 @@
 [submodule "tests/extra-test-toolkits"]
 	path = tests/extra-test-toolkits
 	url = https://github.com/Conflux-Chain/conflux-rust-test-toolkits.git
+[submodule "tests/test_contracts"]
+	path = tests/test_contracts
+	url = https://github.com/Conflux-Chain/conflux-rust-dev-contracts.git
+	branch = asb-e2e

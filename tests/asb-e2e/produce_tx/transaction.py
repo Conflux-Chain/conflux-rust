@@ -1,23 +1,49 @@
 import pickle
-import sys
-import os
-
-sys.path.insert(1, os.path.dirname(os.path.dirname(sys.path[0])))
-
-from conflux.utils import priv_to_addr, encode_hex, decode_hex, normalize_key, ecsign
-from test_framework.blocktools import create_transaction, UnsignedTransaction, DEFAULT_PY_TEST_CHAIN_ID, Transaction
-from multiprocessing import Pool
-from test_framework.mininode import Transactions
+from enum import Enum
 import rlp
 import sha3
 
-import accounts
+from .framework import DEFAULT_PY_TEST_CHAIN_ID, Transactions
+from .account import get_account
 
+class CallType(Enum):
+    Transfer = 0
+    Call = 1
+    Create = 2
 
 class TxParam:
-    def __init__(self, sender_index, action=b'', value=0, gas_price=1, gas=21000, data=b'', storage_limit=0,
+    def __init__(self, sender_index, action=b'', value=0, gas_price=1, gas = None, data=b'', storage_limit = None,
                  epoch_height=0,
                  chain_id=DEFAULT_PY_TEST_CHAIN_ID):
+        if type(data) is str:
+            if len(data) >= 2 and data[:2] == "0x":
+                data = data[2:]
+            data = bytes.fromhex(data)
+
+        call_type = CallType.Transfer
+        if len(data) > 0:
+            call_type = CallType.Call
+
+        if len(action) == 0:
+            call_type = CallType.Create
+
+        if gas is None:
+            if call_type == CallType.Transfer:
+                gas = 21_000
+            elif call_type == CallType.Call:
+                gas = 300_000
+            elif call_type == CallType.Create:
+                gas = 13_000_000
+
+        if storage_limit is None:
+            if call_type == CallType.Transfer:
+                storage_limit = 0
+            elif call_type == CallType.Call:
+                storage_limit = 512
+            elif call_type == CallType.Create:
+                storage_limit = int(len(data) * 1.5)
+
+
         self.tx_args = dict(action=action,
                             value=value,
                             gas_price=gas_price,
@@ -27,13 +53,30 @@ class TxParam:
                             epoch_height=epoch_height,
                             chain_id=chain_id)
         self.sender_index = sender_index
-        self.sender = accounts.map[self.sender_index].address
-        self.privkey = accounts.map[self.sender_index].privkey
+        sender_account = get_account(self.sender_index)
+        self.sender = sender_account.address
+        self.privkey = sender_account.privkey
+
+    def set_gas(self, gas = None, storage_limit = None):
+        if gas is not None:
+            self.tx_args["gas"] = gas
+        
+        if storage_limit is not None:
+            self.tx_args["storage_limit"] = storage_limit
+
+    def set_value(self, value = 0, decimals = 18):
+        self.tx_args["value"] = value * (10 ** decimals)
 
     def assign_nonce(self):
-        self.tx_args["nonce"] = accounts.map[self.sender_index].get_and_inc_nonce()
+        if "nonce" in self.tx_args:
+            raise Exception("nonce has been inited")
+        
+        self.tx_args["nonce"] = get_account(self.sender_index).get_and_inc_nonce()
 
     def contract_address(self):
+        if "nonce" not in self.tx_args:
+            raise Exception("Have not assign nonce")
+        
         code_hash = sha3.keccak_256(self.tx_args["data"]).digest()
         address = self.sender
         nonce = self.tx_args["nonce"].to_bytes(32, 'little')

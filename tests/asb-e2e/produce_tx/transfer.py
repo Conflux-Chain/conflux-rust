@@ -1,12 +1,9 @@
-import sys
-import os
-
-sys.path.insert(1, os.path.dirname(os.path.dirname(sys.path[0])))
-
-from test_framework.util import random
-import accounts
-from transaction import TxParam
+import random
 from typing import List
+
+from .account import get_account
+from .transaction import TxParam
+
 
 
 def _transfer_sequential(from_list, to_list):
@@ -22,7 +19,7 @@ def _transfer_random(from_list, to_list, tx_num):
 
 def construct_tx_param(task, value):
     (from_index, to_index) = task
-    action = accounts.map[to_index].address
+    action = get_account(to_index).address
     return TxParam(from_index, action, value=value)
 
 
