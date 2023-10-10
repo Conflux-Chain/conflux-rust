@@ -20,7 +20,10 @@ use cfx_types::{
     U64,
 };
 use cfxcore::{
-    executive::{ExecutionError, ExecutionOutcome, TxDropError},
+    executive::{
+        internal_contract::storage_point_prop, ExecutionError,
+        ExecutionOutcome, TxDropError,
+    },
     rpc_errors::{account_result_to_rpc_result, invalid_params_check},
     state_exposer::STATE_EXPOSER,
     verification::{compute_epoch_receipt_proof, EpochReceiptProof},
@@ -1569,9 +1572,12 @@ impl RpcImpl {
             / U256::from(BLOCKS_PER_YEAR);
         let pow_base_reward = state_db.get_global_param::<PowBaseReward>()?;
 
+        let storage_point_prop =
+            state_db.get_system_storage(&storage_point_prop())?;
         Ok(VoteParamsInfo {
             pow_base_reward,
             interest_rate,
+            storage_point_prop,
         })
     }
 
