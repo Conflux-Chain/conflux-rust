@@ -44,11 +44,11 @@ impl SingleMptStorageManager {
             opened_mpt: Mutex::new(None),
         });
         let node_memory_manager = Arc::new(DeltaMptsNodeMemoryManager::new(
-            1_000_000,
-            10_000_000,
-            1_000_000,
-            1_000_000,
-            DeltaMptsCacheAlgorithm::new(10_000_000),
+            2_000_000,
+            20_000_000,
+            2_000_000,
+            2_000_000,
+            DeltaMptsCacheAlgorithm::new(20_000_000),
         ));
         let mpt = Arc::new(
             DeltaMpt::new_single_mpt(
