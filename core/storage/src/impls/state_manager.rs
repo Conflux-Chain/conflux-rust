@@ -53,6 +53,9 @@ impl StateManager {
                 conf.path_storage_dir.join("single_mpt"),
                 conf.single_mpt_space,
                 conf.full_state_start_height().expect("enabled"),
+                conf.single_mpt_cache_start_size,
+                conf.single_mpt_cache_size,
+                conf.single_mpt_slab_idle_size,
             ))
         } else {
             None

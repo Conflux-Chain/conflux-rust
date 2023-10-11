@@ -293,6 +293,9 @@ build_config! {
         (storage_delta_mpts_cache_start_size, (u32), cfx_storage::defaults::DEFAULT_DELTA_MPTS_CACHE_START_SIZE)
         (storage_delta_mpts_node_map_vec_size, (u32), cfx_storage::defaults::MAX_CACHED_TRIE_NODES_R_LFU_COUNTER)
         (storage_delta_mpts_slab_idle_size, (u32), cfx_storage::defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE)
+        (storage_single_mpt_cache_size, (u32), cfx_storage::defaults::DEFAULT_DELTA_MPTS_CACHE_SIZE * 2)
+        (storage_single_mpt_cache_start_size, (u32), cfx_storage::defaults::DEFAULT_DELTA_MPTS_CACHE_START_SIZE * 2)
+        (storage_single_mpt_slab_idle_size, (u32), cfx_storage::defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE * 2)
         (storage_max_open_snapshots, (u16), cfx_storage::defaults::DEFAULT_MAX_OPEN_SNAPSHOTS)
         (storage_max_open_mpt_count, (u32), cfx_storage::defaults::DEFAULT_MAX_OPEN_MPT)
         (strict_tx_index_gc, (bool), true)
@@ -739,6 +742,13 @@ impl Configuration {
             delta_mpts_slab_idle_size: self
                 .raw_conf
                 .storage_delta_mpts_slab_idle_size,
+            single_mpt_cache_start_size: self
+                .raw_conf
+                .storage_single_mpt_cache_start_size,
+            single_mpt_cache_size: self.raw_conf.storage_single_mpt_cache_size,
+            single_mpt_slab_idle_size: self
+                .raw_conf
+                .storage_single_mpt_slab_idle_size,
             max_open_snapshots: self.raw_conf.storage_max_open_snapshots,
             path_delta_mpts_dir: conflux_data_path
                 .join(&*storage_dir::DELTA_MPTS_DIR),
