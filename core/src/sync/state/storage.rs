@@ -256,6 +256,7 @@ impl RangedManifest {
         let snapshot_db = match snapshot_db_manager.get_snapshot_by_epoch_id(
             snapshot_epoch_id,
             /* try_open = */ true,
+            true,
         )? {
             Some(db) => db,
             None => {
@@ -380,6 +381,7 @@ impl Chunk {
         let snapshot_db = match snapshot_db_manager.get_snapshot_by_epoch_id(
             snapshot_epoch_id,
             /* try_open = */ true,
+            false,
         )? {
             Some(db) => db,
             None => {

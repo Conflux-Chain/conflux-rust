@@ -1597,6 +1597,7 @@ impl Drop for TxReplayer {
 impl TxReplayer {
     const EPOCH_TXS: u64 = 20000;
     const SNAPSHOT_EPOCHS_CAPACITY: u32 = 400;
+    const ERA_EPOCHS_CAPACITY: u64 = 20000;
 
     // const SNAPSHOT_EPOCHS_CAPACITY: u32 = 10;
 
@@ -1614,6 +1615,7 @@ impl TxReplayer {
         let mut storage_configuration = StorageConfiguration::new_default(
             &(conflux_data_dir.to_string() + "/"),
             Self::SNAPSHOT_EPOCHS_CAPACITY,
+            Self::ERA_EPOCHS_CAPACITY,
         );
         // Check data-integrity for snapshot mpt with 4 threads.
         if debug_snapshot_integrity {

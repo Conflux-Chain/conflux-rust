@@ -3,6 +3,7 @@
 // See http://www.gnu.org/licenses/
 
 const DB_PATH: &'static str = "unspecified";
+const MPT_DB_PATH: &'static str = "unspecified";
 
 #[test]
 fn check_snapshot_mpt_integrity() {
@@ -10,8 +11,12 @@ fn check_snapshot_mpt_integrity() {
         return;
     }
     let db_path = Path::new(DB_PATH);
-    let snapshot_db =
-        open_snapshot_db_for_testing(db_path, /* readonly = */ true).unwrap();
+    let snapshot_db = open_snapshot_db_for_testing(
+        db_path,
+        /* readonly = */ true,
+        Path::new(MPT_DB_PATH),
+    )
+    .unwrap();
     let mut key_value_iter = snapshot_db.snapshot_kv_iterator().unwrap().take();
     let total_kvs = check_key_value_load(
         &snapshot_db,
@@ -28,8 +33,12 @@ fn check_snapshot_mpt_root() {
         return;
     }
     let db_path = Path::new(DB_PATH);
-    let snapshot_db =
-        open_snapshot_db_for_testing(db_path, /* readonly = */ true).unwrap();
+    let snapshot_db = open_snapshot_db_for_testing(
+        db_path,
+        /* readonly = */ true,
+        Path::new(MPT_DB_PATH),
+    )
+    .unwrap();
     let mut key_value_iter = snapshot_db.snapshot_kv_iterator().unwrap().take();
     let mut kv_iter = key_value_iter.iter_range(&[], None).unwrap().take();
 
@@ -196,8 +205,12 @@ fn check_snapshot_mpt_by_iter() {
         return;
     }
     let db_path = Path::new(DB_PATH);
-    let snapshot_db =
-        open_snapshot_db_for_testing(db_path, /* readonly = */ true).unwrap();
+    let snapshot_db = open_snapshot_db_for_testing(
+        db_path,
+        /* readonly = */ true,
+        Path::new(MPT_DB_PATH),
+    )
+    .unwrap();
     verify_snapshot_db(&snapshot_db)
 }
 
@@ -205,7 +218,7 @@ use crate::{
     impls::{
         errors::*,
         merkle_patricia_trie::{mpt_cursor::*, MptMerger, *},
-        storage_db::snapshot_db_sqlite::test_lib::{
+        storage_db::snapshot_kv_db_sqlite::test_lib::{
             check_key_value_load, open_snapshot_db_for_testing,
         },
     },

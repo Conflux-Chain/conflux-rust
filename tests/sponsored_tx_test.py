@@ -7,18 +7,13 @@ from conflux.transactions import CONTRACT_DEFAULT_GAS, COLLATERAL_UNIT_IN_DRIP, 
 from conflux.utils import priv_to_addr
 from test_framework.block_gen_thread import BlockGenThread
 from test_framework.blocktools import create_transaction, encode_hex_0x, wait_for_initial_nonce_for_address
-from test_framework.test_framework import ConfluxTestFramework
+from test_framework.contracts import ConfluxTestFrameworkForContract
 from test_framework.mininode import *
 from test_framework.util import *
 from web3 import Web3
+from web3.contract import Contract
 
-class SponsoredTxTest(ConfluxTestFramework):
-    REQUEST_BASE = {
-        'gas': CONTRACT_DEFAULT_GAS,
-        'gasPrice': 1,
-        'chainId': 1,
-    }
-
+class SponsoredTxTest(ConfluxTestFrameworkForContract):
     def __init__(self):
         super().__init__()
 
@@ -29,22 +24,6 @@ class SponsoredTxTest(ConfluxTestFramework):
 
     def set_test_params(self):
         self.num_nodes = 1
-
-    def setup_network(self):
-        self.setup_nodes()
-        sync_blocks(self.nodes)
-
-    def get_nonce(self, sender, inc=True):
-        if sender not in self.nonce_map:
-            self.nonce_map[sender] = wait_for_initial_nonce_for_address(self.nodes[0], sender)
-        else:
-            self.nonce_map[sender] += 1
-        return self.nonce_map[sender]
-
-    def send_transaction(self, transaction, wait, check_status):
-        self.nodes[0].p2p.send_protocol_msg(Transactions(transactions=[transaction]))
-        if wait:
-            self.wait_for_tx([transaction], check_status)
 
     def call_contract_function(self, contract, name, args, sender_key, value=None,
                                contract_addr=None, wait=False,
@@ -81,76 +60,37 @@ class SponsoredTxTest(ConfluxTestFramework):
         return transaction
 
     def run_test(self):
-        sponsor_whitelist_contract_addr = Web3.toChecksumAddress("0888000000000000000000000000000000000001")
         collateral_per_storage_key = COLLATERAL_UNIT_IN_DRIP * 64
         upper_bound = 5 * 10 ** 7
-
-        file_dir = os.path.dirname(os.path.realpath(__file__))
-
-        control_contract_file_path =os.path.join(file_dir, "..", "internal_contract", "metadata", "SponsorWhitelistControl.json")
-        control_contract_dict = json.loads(open(control_contract_file_path, "r").read())
-
-        control_contract = get_contract_instance(contract_dict=control_contract_dict)
-
-        test_contract = get_contract_instance(
-            abi_file=os.path.join(file_dir, "contracts/commission_privilege_test_abi.json"),
-            bytecode_file=os.path.join(file_dir, "contracts/commission_privilege_test_bytecode.dat"),
-        )
-
-        start_p2p_connection(self.nodes)
+        gas = CONTRACT_DEFAULT_GAS
 
         self.log.info("Initializing contract")
-        genesis_key = self.genesis_priv_key
-        genesis_addr = encode_hex_0x(self.genesis_addr)
-        self.log.info("genesis_addr={}".format(genesis_addr))
-        nonce = 0
-        gas_price = 1
-        gas = CONTRACT_DEFAULT_GAS
-        block_gen_thread = BlockGenThread(self.nodes, self.log)
-        block_gen_thread.start()
-        self.tx_conf = {
-            "from": Web3.toChecksumAddress(genesis_addr),
-            "nonce": int_to_hex(nonce),
-            "gas": int_to_hex(gas),
-            "gasPrice": int_to_hex(gas_price),
-            "chainId": 0
-        }
+
+        control_contract = self.internal_contract("SponsorWhitelistControl")
+        test_contract = self.cfx_contract("CommissionPrivilegeTest")
+
+        client = self.client
+        genesis_addr = self.genesis_addr
+
+
+
 
         # Setup balance for node 0
-        node = self.nodes[0]
-        client = RpcClient(node)
         (addr1, priv_key1) = client.rand_account()
         self.log.info("addr1={}".format(addr1))
-        tx = client.new_tx(
-            sender=genesis_addr,
-            priv_key=genesis_key,
-            value=10 ** 6,
-            nonce=self.get_nonce(self.genesis_addr),
-            receiver=addr1)
-        client.send_tx(tx, True)
+        self.cfx_transfer(addr1, 10 ** 6, decimals=0)
         assert_equal(client.get_balance(addr1), 10 ** 6)
 
         # setup contract
-        transaction = self.call_contract_function(
-            contract=test_contract,
-            name="constructor",
-            args=[],
-            sender_key=self.genesis_priv_key,
-            storage_limit=20000)
-        contract_addr = self.wait_for_tx([transaction], True)[0]['contractCreated']
-        self.log.info("contract_addr={}".format(contract_addr))
+        test_contract: Contract = test_contract.deploy()
+        contract_addr = test_contract.address
+        self.log.info("contract_addr={}".format(test_contract.address))
         assert_equal(client.get_balance(contract_addr), 0)
+
 
         # sponsor the contract succeed
         b0 = client.get_balance(genesis_addr)
-        self.call_contract_function(
-            contract=control_contract,
-            name="setSponsorForGas",
-            args=[Web3.toChecksumAddress(contract_addr), upper_bound],
-            value=10 ** 18,
-            sender_key=self.genesis_priv_key,
-            contract_addr=sponsor_whitelist_contract_addr,
-            wait=True)
+        control_contract.functions.setSponsorForGas(contract_addr, upper_bound).cfx_transact(value = 1, gas = gas)
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), 10 ** 18)
         assert_equal(client.get_sponsor_for_gas(contract_addr), genesis_addr)
         assert_equal(client.get_sponsor_gas_bound(contract_addr), upper_bound)
@@ -159,66 +99,39 @@ class SponsoredTxTest(ConfluxTestFramework):
         # set privilege for addr1
         b0 = client.get_balance(genesis_addr)
         c0 = client.get_collateral_for_storage(genesis_addr)
-        transaction = self.call_contract_function(
-            contract=test_contract,
-            name="add",
-            args=[Web3.toChecksumAddress(addr1)],
-            sender_key=genesis_key,
-            contract_addr=contract_addr,
-            wait=True,
-            check_status=True,
-            storage_limit=64)
+        receipt = test_contract.functions.add(addr1).cfx_transact(storage_limit = 64, gas = gas)
         assert_equal(client.get_balance(genesis_addr), b0 - charged_of_huge_gas(gas) - collateral_per_storage_key)
         assert_equal(client.get_collateral_for_storage(genesis_addr), c0 + collateral_per_storage_key)
-        assert_equal(self.wait_for_tx([transaction], True)[0]['gasCoveredBySponsor'], False)
+        assert_equal(receipt['gasCoveredBySponsor'], False)
+
 
         # addr1 call contract with privilege without enough cfx for gas fee
         sb = client.get_sponsor_balance_for_gas(contract_addr)
         b1 = client.get_balance(addr1)
-        transaction = self.call_contract_function(
-            contract=test_contract,
-            name="foo",
-            args=[],
-            sender_key=priv_key1,
-            contract_addr=contract_addr,
-            wait=True,
-            check_status=True)
+        receipt = test_contract.functions.foo().cfx_transact(priv_key = priv_key1, storage_limit = 0, gas = gas)
         assert_equal(client.get_balance(addr1), b1)
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sb - charged_of_huge_gas(gas))
-        assert_equal(self.wait_for_tx([transaction], True)[0]['gasCoveredBySponsor'], True)
+        assert_equal(receipt['gasCoveredBySponsor'], True)
+
 
         # sponsor collateral for the contract succeed
         b0 = client.get_balance(genesis_addr)
-        self.call_contract_function(
-            contract=control_contract,
-            name="setSponsorForCollateral",
-            args=[Web3.toChecksumAddress(contract_addr)],
-            value=10 ** 18,  # 1 CFX = 1KB
-            sender_key=self.genesis_priv_key,
-            contract_addr=sponsor_whitelist_contract_addr,
-            wait=True)
+        control_contract.functions.setSponsorForCollateral(contract_addr).cfx_transact(value = 1, gas = gas)
         assert_equal(client.get_sponsor_balance_for_collateral(contract_addr), 10 ** 18)
         assert_equal(client.get_sponsor_for_collateral(contract_addr), genesis_addr)
         assert_equal(client.get_balance(genesis_addr), b0 - 10 ** 18 - charged_of_huge_gas(gas))
 
+
         # addr1 call contract with privilege without enough cfx for storage
         sb = client.get_sponsor_balance_for_gas(contract_addr)
         b1 = client.get_balance(addr1)
-        transaction = self.call_contract_function(
-            contract=test_contract,
-            name="foo",
-            args=[],
-            sender_key=priv_key1,
-            contract_addr=contract_addr,
-            wait=True,
-            check_status=True,
-            storage_limit=1024)
+        receipt = test_contract.functions.foo().cfx_transact(priv_key = priv_key1, storage_limit = 1024, gas = gas)
         assert_equal(client.get_balance(addr1), b1)
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sb - charged_of_huge_gas(gas))
-        assert_equal(self.wait_for_tx([transaction], True)[0]['storageCoveredBySponsor'], True)
+        assert_equal(receipt['storageCoveredBySponsor'], True)
 
         # addr1 call with larger storage limit, should be rejected for not enough balance
-        data = get_contract_function_data(test_contract, "foo", [])
+        data = test_contract.functions.foo().data()
         transaction = client.new_contract_tx(receiver=contract_addr, data_hex=encode_hex(data), priv_key=priv_key1,
                                              storage_limit=1025)
         # rejected for not enough balance
@@ -226,18 +139,13 @@ class SponsoredTxTest(ConfluxTestFramework):
         tx_info = self.nodes[0].txpool_txWithPoolInfo(transaction.hash_hex())
         assert_equal(tx_info['exist'], False)
 
+
         # send 1025 * 10 ** 18 // 1024 CFX to addr1
-        tx = client.new_tx(
-            sender=genesis_addr,
-            priv_key=genesis_key,
-            value=1025 * 10 ** 18 // 1024,
-            nonce=self.get_nonce(self.genesis_addr),
-            receiver=addr1)
-        client.send_tx(tx, True)
+        receipt = self.cfx_transfer(addr1, value = 1025 * 10 ** 18 // 1024, decimals = 0)
         assert_equal(client.get_balance(addr1), 10 ** 6 + 1025 * 10 ** 18 // 1024)
 
         client.send_tx(transaction, True)
-        assert_equal(self.wait_for_tx([transaction], True)[0]['storageCoveredBySponsor'], False)
+        assert_equal(receipt['storageCoveredBySponsor'], False)
         tx_info = self.nodes[0].txpool_txWithPoolInfo(transaction.hash_hex())
         # Now addr1 pays for storage collateral by itself.
         assert_equal(int(tx_info['local_nonce'], 16), 3)

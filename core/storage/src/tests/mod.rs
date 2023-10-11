@@ -72,6 +72,7 @@ impl FakeStateManager {
         let mut storage_conf = StorageConfiguration::new_default(
             &unit_test_data_dir,
             snapshot_epoch_count,
+            20000,
         );
         storage_conf.delta_mpts_cache_size = 20_000_000;
         storage_conf.delta_mpts_cache_start_size = 1_000_000;

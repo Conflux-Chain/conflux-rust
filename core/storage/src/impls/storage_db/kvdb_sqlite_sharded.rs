@@ -217,13 +217,40 @@ impl<ValueType> KvdbSqliteSharded<ValueType> {
         Ok(())
     }
 
+    pub fn check_if_table_exist(
+        connections: &mut Box<[SqliteConnection]>,
+        statements: &KvdbSqliteStatements,
+    ) -> Result<bool>
+    {
+        for connection in connections.iter_mut() {
+            if KvdbSqlite::<ValueType>::check_if_table_exist(
+                connection, statements,
+            )? {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
     pub fn drop_table(
         connections: &mut Box<[SqliteConnection]>,
         statements: &KvdbSqliteStatements,
     ) -> Result<()>
     {
         for connection in connections.iter_mut() {
-            KvdbSqlite::<ValueType>::drop_table(connection, statements)?
+            KvdbSqlite::<ValueType>::drop_table(connection, statements)?;
+        }
+        Ok(())
+    }
+
+    pub fn vacumm_db(
+        connections: &mut Box<[SqliteConnection]>,
+        statements: &KvdbSqliteStatements,
+    ) -> Result<()>
+    {
+        for connection in connections.iter_mut() {
+            KvdbSqlite::<ValueType>::vacuum_db(connection, statements)?
         }
         Ok(())
     }
