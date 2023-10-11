@@ -110,6 +110,9 @@ pub struct StorageConfiguration {
     pub delta_mpts_cache_size: u32,
     pub delta_mpts_node_map_vec_size: u32,
     pub delta_mpts_slab_idle_size: u32,
+    pub single_mpt_cache_start_size: u32,
+    pub single_mpt_cache_size: u32,
+    pub single_mpt_slab_idle_size: u32,
     pub max_open_snapshots: u16,
     pub path_delta_mpts_dir: PathBuf,
     pub path_storage_dir: PathBuf,
@@ -143,6 +146,11 @@ impl StorageConfiguration {
             delta_mpts_node_map_vec_size: defaults::DEFAULT_NODE_MAP_SIZE,
             delta_mpts_slab_idle_size:
                 defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE,
+            single_mpt_cache_start_size:
+                defaults::DEFAULT_DELTA_MPTS_CACHE_START_SIZE * 2,
+            single_mpt_cache_size: defaults::DEFAULT_DELTA_MPTS_CACHE_SIZE * 2,
+            single_mpt_slab_idle_size:
+                defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE * 2,
             max_open_snapshots: defaults::DEFAULT_MAX_OPEN_SNAPSHOTS,
             path_delta_mpts_dir: conflux_data_path
                 .join(&*storage_dir::DELTA_MPTS_DIR),
