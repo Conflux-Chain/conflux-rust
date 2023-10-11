@@ -176,6 +176,7 @@ impl LedgerInfo {
                 .get_state_no_commit_inner(
                     state_index,
                     /* try_open = */ true,
+                    true,
                 )
         });
 

@@ -54,6 +54,8 @@ pub struct ConsensusParam {
     // Only if we see problem dealing with attacks, consider rules like the
     // size of delta trie.
     pub snapshot_epoch_count: u32,
+
+    pub era_epoch_count: u64,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -121,17 +123,20 @@ pub struct StorageConfiguration {
     pub single_mpt_space: Option<Space>,
     pub cip90a: u64,
     pub keep_snapshot_before_stable_checkpoint: bool,
+    pub use_isolated_db_for_mpt_table: bool,
+    pub use_isolated_db_for_mpt_table_height: Option<u64>,
 }
 
 impl StorageConfiguration {
     pub fn new_default(
-        conflux_data_dir: &str, snapshot_epoch_count: u32,
+        conflux_data_dir: &str, snapshot_epoch_count: u32, era_epoch_count: u64,
     ) -> Self {
         let conflux_data_path = Path::new(conflux_data_dir);
         StorageConfiguration {
             additional_maintained_snapshot_count: 0,
             consensus_param: ConsensusParam {
                 snapshot_epoch_count,
+                era_epoch_count,
             },
             debug_snapshot_checker_threads:
                 defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS,
@@ -160,6 +165,8 @@ impl StorageConfiguration {
             single_mpt_space: None,
             cip90a: 0,
             keep_snapshot_before_stable_checkpoint: true,
+            use_isolated_db_for_mpt_table: false,
+            use_isolated_db_for_mpt_table_height: None,
         }
     }
 

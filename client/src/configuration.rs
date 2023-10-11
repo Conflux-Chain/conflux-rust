@@ -354,6 +354,16 @@ build_config! {
         (ln_num_waiting_headers_threshold, (Option<usize>), None)
         (keep_snapshot_before_stable_checkpoint, (bool), true)
         (force_recompute_height_during_construct_pivot, (Option<u64>), None)
+
+        // The snapshot database consists of two tables: snapshot_key_value and snapshot_mpt. However, the size of snapshot_mpt is significantly larger than that of snapshot_key_value.
+        // When the configuration parameter use_isolated_db_for_mpt_table is set to true, the snapshot_mpt table will be located in a separate database.
+        (use_isolated_db_for_mpt_table, (bool), false)
+        // The use_isolated_db_for_mpt_table_height parameter is utilized to determine when to enable the use_isolated_db_for_mpt_table option.
+        //  None: enabled since the next snapshot
+        //  u64: enabled since the specified height
+        (use_isolated_db_for_mpt_table_height, (Option<u64>), None)
+        // Recover the latest MPT snapshot from the era checkpoint
+        (recovery_latest_mpt_snapshot, (bool), false)
     }
     {
         // Development related section.
@@ -613,6 +623,8 @@ impl Configuration {
                     None => None,
                 },
                 force_recompute_height_during_construct_pivot: self.raw_conf.force_recompute_height_during_construct_pivot,
+                recovery_latest_mpt_snapshot: self.raw_conf.recovery_latest_mpt_snapshot,
+                use_isolated_db_for_mpt_table: self.raw_conf.use_isolated_db_for_mpt_table,
             },
             bench_mode: false,
             transaction_epoch_bound: self.raw_conf.transaction_epoch_bound,
@@ -710,6 +722,7 @@ impl Configuration {
                 } else {
                     SNAPSHOT_EPOCHS_CAPACITY
                 },
+                era_epoch_count: self.raw_conf.era_epoch_count,
             },
             debug_snapshot_checker_threads:
                 DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS,
@@ -757,6 +770,12 @@ impl Configuration {
             keep_snapshot_before_stable_checkpoint: self
                 .raw_conf
                 .keep_snapshot_before_stable_checkpoint,
+            use_isolated_db_for_mpt_table: self
+                .raw_conf
+                .use_isolated_db_for_mpt_table,
+            use_isolated_db_for_mpt_table_height: self
+                .raw_conf
+                .use_isolated_db_for_mpt_table_height,
         }
     }
 
