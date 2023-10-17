@@ -10,6 +10,7 @@ CFX = 10 ** 18
 
 class CIP97Test(ConfluxTestFrameworkForContract):
     def set_test_params(self):
+        super().set_test_params()
         self.num_nodes = 1
         self.conf_parameters["dao_vote_transition_number"] = 100
         self.conf_parameters["hydra_transition_number"] = 90

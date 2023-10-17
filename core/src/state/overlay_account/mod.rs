@@ -133,7 +133,7 @@ impl OverlayAccount {
         }
     }
 
-    fn fresh_storage(&self) -> bool {
+    pub fn fresh_storage(&self) -> bool {
         let builtin_address = self.address.space == Space::Native
             && self.address.address.is_builtin_address();
         (self.is_newly_created_contract && !builtin_address)

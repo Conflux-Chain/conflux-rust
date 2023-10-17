@@ -1772,6 +1772,8 @@ impl<'a> ExecutiveGeneric<'a> {
                     &mut substate,
                 )?;
             }
+
+            assert!(self.state.is_fresh_storage(address)?);
         }
 
         let res = settle_collateral_for_all(

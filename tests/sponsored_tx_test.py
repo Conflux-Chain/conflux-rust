@@ -23,41 +23,8 @@ class SponsoredTxTest(ConfluxTestFrameworkForContract):
         self.balance_map = {self.genesis_priv_key: default_config['TOTAL_COIN']}
 
     def set_test_params(self):
+        super().set_test_params()
         self.num_nodes = 1
-
-    def call_contract_function(self, contract, name, args, sender_key, value=None,
-                               contract_addr=None, wait=False,
-                               check_status=False,
-                               storage_limit=0,
-                               gas=None):
-        if contract_addr:
-            func = getattr(contract.functions, name)
-        else:
-            func = getattr(contract, name)
-        attrs = {
-            'nonce': self.get_nonce(priv_to_addr(sender_key)),
-            ** SponsoredTxTest.REQUEST_BASE
-        }
-        if contract_addr:
-            attrs['receiver'] = decode_hex(contract_addr)
-            attrs['to'] = contract_addr
-        else:
-            attrs['receiver'] = b''
-        tx_data = func(*args).buildTransaction(attrs)
-        tx_data['data'] = decode_hex(tx_data['data'])
-        tx_data['pri_key'] = sender_key
-        tx_data['gas_price'] = tx_data['gasPrice']
-        if value:
-            tx_data['value'] = value
-        tx_data.pop('gasPrice', None)
-        tx_data.pop('chainId', None)
-        tx_data.pop('to', None)
-        tx_data['storage_limit'] = storage_limit
-        if gas is not None:
-            tx_data['gas'] = gas
-        transaction = create_transaction(**tx_data)
-        self.send_transaction(transaction, wait, check_status)
-        return transaction
 
     def run_test(self):
         collateral_per_storage_key = COLLATERAL_UNIT_IN_DRIP * 64
@@ -71,8 +38,6 @@ class SponsoredTxTest(ConfluxTestFrameworkForContract):
 
         client = self.client
         genesis_addr = self.genesis_addr
-
-
 
 
         # Setup balance for node 0
@@ -92,7 +57,7 @@ class SponsoredTxTest(ConfluxTestFrameworkForContract):
         b0 = client.get_balance(genesis_addr)
         control_contract.functions.setSponsorForGas(contract_addr, upper_bound).cfx_transact(value = 1, gas = gas)
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), 10 ** 18)
-        assert_equal(client.get_sponsor_for_gas(contract_addr), genesis_addr)
+        assert_equal(client.get_sponsor_for_gas(contract_addr), genesis_addr.lower())
         assert_equal(client.get_sponsor_gas_bound(contract_addr), upper_bound)
         assert_equal(client.get_balance(genesis_addr), b0 - 10 ** 18 - charged_of_huge_gas(gas))
 
@@ -118,7 +83,7 @@ class SponsoredTxTest(ConfluxTestFrameworkForContract):
         b0 = client.get_balance(genesis_addr)
         control_contract.functions.setSponsorForCollateral(contract_addr).cfx_transact(value = 1, gas = gas)
         assert_equal(client.get_sponsor_balance_for_collateral(contract_addr), 10 ** 18)
-        assert_equal(client.get_sponsor_for_collateral(contract_addr), genesis_addr)
+        assert_equal(client.get_sponsor_for_collateral(contract_addr), genesis_addr.lower())
         assert_equal(client.get_balance(genesis_addr), b0 - 10 ** 18 - charged_of_huge_gas(gas))
 
 

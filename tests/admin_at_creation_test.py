@@ -7,8 +7,8 @@ from web3 import Web3
 
 class ClearAdminTest(ConfluxTestFrameworkForContract):
     def set_test_params(self):
+        super().set_test_params()
         self.num_nodes = 8
-        self.conf_parameters["executive_trace"] = "true"
 
     def setup_network(self):
         self.setup_nodes()
@@ -27,7 +27,7 @@ class ClearAdminTest(ConfluxTestFrameworkForContract):
         # Clear admin by non-admin (fail)
         self.log.info("Test unable to clear admin by non-admin.")
         self.adminControl.functions.setAdmin(create2factory_addr, ZERO_ADDRESS).cfx_transact(priv_key=test_account_key)
-        assert_equal(self.client.get_admin(create2factory_addr), genesis_addr)
+        assert_equal(self.client.get_admin(create2factory_addr), genesis_addr.lower())
 
 
         self.log.info("Test contract creation by itself")
@@ -40,7 +40,7 @@ class ClearAdminTest(ConfluxTestFrameworkForContract):
         assert_equal(self.client.get_admin(clear_admin_test_contract2.address), ZERO_ADDRESS)
         # The owner of create2factory_addr isn't hijacked.
         self.log.info("Test unable to hijack set admin.")
-        assert_equal(self.client.get_admin(create2factory_addr), genesis_addr)
+        assert_equal(self.client.get_admin(create2factory_addr), genesis_addr.lower())
 
         self.log.info("Test unable to hijack owner through deployAndHijackAdmin")
         # Create a new contract through deployAndHijackAdmin.
@@ -49,7 +49,7 @@ class ClearAdminTest(ConfluxTestFrameworkForContract):
         fn_call = clear_admin_test_contract.functions.deployAndHijackAdmin(create_data)
         created_address = fn_call.cfx_call(sender = test_account_addr)
         fn_call.cfx_transact(priv_key = test_account_key, value = 123, decimals = 1)
-        assert_equal(self.client.get_admin(created_address), test_account_addr)
+        assert_equal(self.client.get_admin(created_address), test_account_addr.lower())
 
         self.log.info("Pass")
 
