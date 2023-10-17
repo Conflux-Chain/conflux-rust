@@ -76,7 +76,7 @@ impl OverlayAccount {
     }
 
     pub fn delete_storage_range(
-        &mut self, deletion_log: impl Iterator<Item = (Vec<u8>, Box<[u8]>)>,
+        &mut self, db_deletion_log: impl Iterator<Item = (Vec<u8>, Box<[u8]>)>,
         key_prefix: &[u8], substate: &mut Substate,
     ) -> DbResult<()>
     {
@@ -98,7 +98,8 @@ impl OverlayAccount {
             }
         }
 
-        for (key, raw_value) in deletion_log
+        let read_cache = self.storage_read_cache.read();
+        for (key, raw_value) in db_deletion_log
             .into_iter()
             .filter_map(|(k, v)| Some((decode_storage_key(&k)?, v)))
         {
@@ -109,6 +110,14 @@ impl OverlayAccount {
                     // cache since it will be cleared later.
                     if !delete_all {
                         entry.insert(StorageValue::default());
+                    }
+
+                    if !delete_all && !read_cache.contains_key(&key) {
+                        // Backward compatible with an existing bug
+                        // When remove whitelist entries, if the entry does not
+                        // appear in the cache, the collateral is not refunded
+                        // correctly.
+                        continue;
                     }
                 }
                 Occupied(_) => {
@@ -128,6 +137,8 @@ impl OverlayAccount {
                 COLLATERAL_UNITS_PER_STORAGE_KEY,
             );
         }
+
+        std::mem::drop(read_cache);
 
         if delete_all {
             write_cache.clear();

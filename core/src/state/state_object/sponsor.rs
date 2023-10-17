@@ -236,12 +236,12 @@ fn storage_range_deletion_for_account(
         StorageKey::new_storage_key(&address, key_prefix)
     }
     .with_native_space();
-    let deletion_log = state
+    let db_deletion_log = state
         .db
-        .delete_all::<access_mode::Write>(storage_key_prefix, None)?
+        .delete_all::<access_mode::Read>(storage_key_prefix, None)?
         .into_iter();
     state
         .write_native_account_lock(address)?
-        .delete_storage_range(deletion_log, address.as_ref(), substate)?;
+        .delete_storage_range(db_deletion_log, key_prefix, substate)?;
     Ok(())
 }

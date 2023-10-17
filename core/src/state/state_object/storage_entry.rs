@@ -42,6 +42,13 @@ impl State {
             .set_storage(&self.db, key, value, owner, substate)?;
         Ok(())
     }
+
+    pub fn is_fresh_storage(
+        &self, address: &AddressWithSpace,
+    ) -> DbResult<bool> {
+        let acc = try_loaded!(self.read_account_lock(address));
+        Ok(acc.fresh_storage())
+    }
 }
 
 impl State {
