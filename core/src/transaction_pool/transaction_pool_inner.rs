@@ -218,7 +218,7 @@ impl Eq for PriceOrderedTransaction {}
 
 impl PartialOrd for PriceOrderedTransaction {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.0.gas_price().partial_cmp(other.0.gas_price())
+        Some(self.cmp(other))
     }
 }
 
