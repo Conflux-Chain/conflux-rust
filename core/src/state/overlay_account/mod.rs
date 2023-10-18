@@ -13,14 +13,13 @@ mod sponsor;
 mod staking;
 mod storage;
 
-use super::{
-    account_entry::AccountEntry, substate::Substate,
-    AccountEntryProtectedMethods,
-};
+use super::{substate::Substate, AccountEntryProtectedMethods};
 
 use crate::{bytes::Bytes, hash::KECCAK_EMPTY};
 
-use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric};
+use cfx_statedb::{
+    ErrorKind as DbErrorKind, Result as DbResult, StateDbExt, StateDbGeneric,
+};
 #[cfg(test)]
 use cfx_types::AddressSpaceUtil;
 use cfx_types::{
@@ -111,26 +110,26 @@ impl OverlayAccount {
     #[cfg(test)]
     pub fn is_basic(&self) -> bool { self.code_hash == KECCAK_EMPTY }
 
-    pub fn cache_code(&mut self, db: &StateDbGeneric) -> DbResult<bool> {
+    pub fn cache_code(&mut self, db: &StateDbGeneric) -> DbResult<()> {
         trace!(
             "OverlayAccount::cache_code: ic={}; self.code_hash={:?}, self.code_cache={:?}",
                self.is_code_loaded(), self.code_hash, self.code);
 
         if self.is_code_loaded() {
-            return Ok(true);
+            return Ok(());
         }
 
         self.code = db.get_code(&self.address, &self.code_hash)?;
-        match &self.code {
-            Some(_) => Ok(true),
-            _ => {
-                warn!(
-                    "Failed to get code {:?} for address {:?}",
-                    self.code_hash, self.address
-                );
-                Ok(false)
-            }
+        if self.code.is_none() {
+            warn!(
+                "Failed to get code {:?} for address {:?}",
+                self.code_hash, self.address
+            );
+
+            bail!(DbErrorKind::IncompleteDatabase(self.address.address));
         }
+
+        Ok(())
     }
 
     pub fn fresh_storage(&self) -> bool {
@@ -145,7 +144,7 @@ impl OverlayAccount {
     pub fn cache_ext_fields(
         &mut self, cache_deposit_list: bool, cache_vote_list: bool,
         db: &StateDbGeneric,
-    ) -> DbResult<bool>
+    ) -> DbResult<()>
     {
         self.address.assert_native();
         if cache_deposit_list && self.deposit_list.is_none() {
@@ -164,7 +163,7 @@ impl OverlayAccount {
             };
             self.vote_stake_list = Some(vote_list_opt.unwrap_or_default());
         }
-        Ok(true)
+        Ok(())
     }
 }
 

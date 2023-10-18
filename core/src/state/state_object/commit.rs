@@ -1,4 +1,4 @@
-use super::{AccountState, State};
+use super::State;
 use cfx_internal_common::{
     debug::ComputeEpochDebugRecord, StateRootWithAuxInfo,
 };
@@ -15,39 +15,38 @@ impl State {
         debug!("state.compute_state_root");
 
         assert!(self.checkpoints.get_mut().is_empty());
-        assert!(self.global_stat_checkpoints.get_mut().is_empty());
 
         let mut sorted_dirty_accounts =
             self.cache.get_mut().drain().collect::<Vec<_>>();
         sorted_dirty_accounts.sort_by(|a, b| a.0.cmp(&b.0));
 
-        let mut killed_addresses = Vec::new();
-        for (address, entry) in sorted_dirty_accounts.iter_mut() {
-            entry.state = AccountState::Committed;
-            match &mut entry.account {
-                None => {}
-                Some(account) if account.removed_without_update() => {
-                    killed_addresses.push(*address);
-                    // TODO: seems useless
-                    self.accounts_to_notify.push(Err(*address));
-                }
-                Some(account) => {
-                    if account.invalidated_storage() {
-                        self.recycle_storage(
-                            vec![*account.address()],
-                            debug_record.as_deref_mut(),
-                        )?;
-                    }
-                    account.commit(
-                        &mut self.db,
-                        address,
-                        debug_record.as_deref_mut(),
-                    )?;
-                    self.accounts_to_notify.push(Ok(account.as_account()));
-                }
+        for (address, entry) in sorted_dirty_accounts.into_iter() {
+            let account = if let Some(account) = entry.into_account() {
+                account
+            } else {
+                continue;
+            };
+
+            if account.invalidated_storage() {
+                self.recycle_storage(
+                    vec![address],
+                    debug_record.as_deref_mut(),
+                )?;
+            }
+
+            if account.removed_without_update() {
+                // TODO: seems useless
+                self.accounts_to_notify.push(Err(address));
+            } else {
+                self.accounts_to_notify.push(Ok(account.as_account()));
+                account.commit(
+                    &mut self.db,
+                    &address,
+                    debug_record.as_deref_mut(),
+                )?;
             }
         }
-        self.recycle_storage(killed_addresses, debug_record.as_deref_mut())?;
+
         self.global_stat
             .commit(&mut self.db, debug_record.as_deref_mut())?;
         self.db.compute_state_root(debug_record)

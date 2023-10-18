@@ -2,7 +2,7 @@ use crate::hash::KECCAK_EMPTY;
 use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, Space, U256};
 use primitives::{Account, SponsorInfo, StorageLayout};
 
-use super::{AccountEntry, OverlayAccount};
+use super::OverlayAccount;
 
 impl Default for OverlayAccount {
     fn default() -> Self {
@@ -141,25 +141,6 @@ impl OverlayAccount {
         account.storage_layout_change = self.storage_layout_change.clone();
         account
     }
-
-    pub fn overwrite_with(&mut self, other: OverlayAccount) {
-        self.balance = other.balance;
-        self.nonce = other.nonce;
-        self.admin = other.admin;
-        self.sponsor_info = other.sponsor_info;
-        self.code_hash = other.code_hash;
-        self.code = other.code;
-        self.storage_read_cache = other.storage_read_cache;
-        self.storage_write_cache = other.storage_write_cache;
-        self.storage_layout_change = other.storage_layout_change;
-        self.staking_balance = other.staking_balance;
-        self.collateral_for_storage = other.collateral_for_storage;
-        self.accumulated_interest_return = other.accumulated_interest_return;
-        self.deposit_list = other.deposit_list;
-        self.vote_stake_list = other.vote_stake_list;
-        self.is_newly_created_contract = other.is_newly_created_contract;
-        self.invalidated_storage = other.invalidated_storage;
-    }
 }
 
 impl OverlayAccount {
@@ -176,9 +157,5 @@ impl OverlayAccount {
         account.sponsor_info = self.sponsor_info.clone();
         account.set_address(self.address);
         account
-    }
-
-    pub fn into_dirty_entry(self) -> AccountEntry {
-        AccountEntry::new_dirty(Some(self))
     }
 }

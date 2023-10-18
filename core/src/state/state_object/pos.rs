@@ -23,7 +23,7 @@ impl State {
     pub fn inc_distributable_pos_interest(
         &mut self, current_block_number: u64,
     ) -> DbResult<()> {
-        assert!(self.global_stat_checkpoints.get_mut().is_empty());
+        assert!(self.checkpoints.get_mut().is_empty());
 
         let next_distribute_block =
             self.global_stat.refr::<LastDistributeBlock>().as_u64()
@@ -87,7 +87,7 @@ pub fn distribute_pos_interest<'a, I>(
     state: &mut State, pos_points: I, current_block_number: u64,
 ) -> DbResult<Vec<(Address, H256, U256)>>
 where I: Iterator<Item = (&'a H256, u64)> + 'a {
-    assert!(state.global_stat_checkpoints.get_mut().is_empty());
+    assert!(state.checkpoints.get_mut().is_empty());
 
     let distributable_pos_interest = state.distributable_pos_interest();
 

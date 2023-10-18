@@ -1,4 +1,4 @@
-use super::{AccountEntry, OverlayAccount, State};
+use super::{OverlayAccount, State};
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
     Address, AddressSpaceUtil, AddressWithSpace, Space, H256, U256,
@@ -19,26 +19,22 @@ impl State {
         let invalidated_storage = self
             .read_account_lock(contract)?
             .map_or(false, |overlay| overlay.invalidated_storage());
-        let account_entry = OverlayAccount::new_contract_with_admin(
+        let account = OverlayAccount::new_contract_with_admin(
             contract,
             balance,
             admin,
             invalidated_storage,
             storage_layout,
             cip107,
-        )
-        .into_dirty_entry();
-        self.update_cache(contract, account_entry);
+        );
+        self.insert_to_cache(account);
         Ok(())
     }
 
     pub fn remove_contract(
         &mut self, address: &AddressWithSpace,
     ) -> DbResult<()> {
-        self.update_cache(
-            address,
-            OverlayAccount::new_removed(address).into_dirty_entry(),
-        );
+        self.insert_to_cache(OverlayAccount::new_removed(address));
 
         Ok(())
     }
@@ -54,20 +50,6 @@ impl State {
         *&mut *self.write_account_or_new_lock(&address)? =
             OverlayAccount::from_loaded(&address, account);
         Ok(())
-    }
-
-    fn update_cache(
-        &mut self, address: &AddressWithSpace, account: AccountEntry,
-    ) {
-        let is_dirty = account.is_dirty();
-        let old_value = self.cache.get_mut().insert(*address, account);
-        if is_dirty {
-            if let Some(ref mut checkpoint) =
-                self.checkpoints.get_mut().last_mut()
-            {
-                checkpoint.entry(*address).or_insert(old_value);
-            }
-        }
     }
 }
 
@@ -88,14 +70,13 @@ impl State {
         let invalidated_storage = self
             .read_account_lock(contract)?
             .map_or(false, |acc| acc.invalidated_storage());
-        let account_entry = OverlayAccount::new_contract(
+        let account = OverlayAccount::new_contract(
             &contract.address,
             balance,
             invalidated_storage,
             Some(STORAGE_LAYOUT_REGULAR_V0),
-        )
-        .into_dirty_entry();
-        self.update_cache(contract, account_entry);
+        );
+        self.insert_to_cache(account);
         Ok(())
     }
 }
