@@ -54,6 +54,8 @@ pub struct ConsensusParam {
     // Only if we see problem dealing with attacks, consider rules like the
     // size of delta trie.
     pub snapshot_epoch_count: u32,
+
+    pub era_epoch_count: u64,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -110,6 +112,9 @@ pub struct StorageConfiguration {
     pub delta_mpts_cache_size: u32,
     pub delta_mpts_node_map_vec_size: u32,
     pub delta_mpts_slab_idle_size: u32,
+    pub single_mpt_cache_start_size: u32,
+    pub single_mpt_cache_size: u32,
+    pub single_mpt_slab_idle_size: u32,
     pub max_open_snapshots: u16,
     pub path_delta_mpts_dir: PathBuf,
     pub path_storage_dir: PathBuf,
@@ -121,17 +126,20 @@ pub struct StorageConfiguration {
     pub single_mpt_space: Option<Space>,
     pub cip90a: u64,
     pub keep_snapshot_before_stable_checkpoint: bool,
+    pub use_isolated_db_for_mpt_table: bool,
+    pub use_isolated_db_for_mpt_table_height: Option<u64>,
 }
 
 impl StorageConfiguration {
     pub fn new_default(
-        conflux_data_dir: &str, snapshot_epoch_count: u32,
+        conflux_data_dir: &str, snapshot_epoch_count: u32, era_epoch_count: u64,
     ) -> Self {
         let conflux_data_path = Path::new(conflux_data_dir);
         StorageConfiguration {
             additional_maintained_snapshot_count: 0,
             consensus_param: ConsensusParam {
                 snapshot_epoch_count,
+                era_epoch_count,
             },
             debug_snapshot_checker_threads:
                 defaults::DEFAULT_DEBUG_SNAPSHOT_CHECKER_THREADS,
@@ -143,6 +151,11 @@ impl StorageConfiguration {
             delta_mpts_node_map_vec_size: defaults::DEFAULT_NODE_MAP_SIZE,
             delta_mpts_slab_idle_size:
                 defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE,
+            single_mpt_cache_start_size:
+                defaults::DEFAULT_DELTA_MPTS_CACHE_START_SIZE * 2,
+            single_mpt_cache_size: defaults::DEFAULT_DELTA_MPTS_CACHE_SIZE * 2,
+            single_mpt_slab_idle_size:
+                defaults::DEFAULT_DELTA_MPTS_SLAB_IDLE_SIZE * 2,
             max_open_snapshots: defaults::DEFAULT_MAX_OPEN_SNAPSHOTS,
             path_delta_mpts_dir: conflux_data_path
                 .join(&*storage_dir::DELTA_MPTS_DIR),
@@ -160,6 +173,8 @@ impl StorageConfiguration {
             single_mpt_space: None,
             cip90a: 0,
             keep_snapshot_before_stable_checkpoint: true,
+            use_isolated_db_for_mpt_table: false,
+            use_isolated_db_for_mpt_table_height: None,
         }
     }
 

@@ -264,6 +264,26 @@ impl KeyValueDbTraitSingleWriter for Arc<Mutex<FakeSnapshotDb>> {
     }
 }
 
+impl SnapshotDbWriteableTrait for Arc<Mutex<FakeSnapshotDb>> {
+    type SnapshotDbBorrowMutType = Arc<Mutex<FakeSnapshotMptDb>>;
+
+    fn start_transaction(&mut self) -> Result<()> { Ok(()) }
+
+    fn commit_transaction(&mut self) -> Result<()> { Ok(()) }
+
+    fn put_kv(
+        &mut self, key: &[u8], value: &<Self::ValueType as DbValueType>::Type,
+    ) -> Result<Option<Option<Self::ValueType>>> {
+        Ok(Some(self.lock().kv.insert(key.into(), value.into())))
+    }
+
+    fn open_snapshot_mpt_owned(
+        &mut self,
+    ) -> Result<Self::SnapshotDbBorrowMutType> {
+        Ok(self.lock().mpt_db.clone())
+    }
+}
+
 impl SnapshotMptTraitRead for Arc<Mutex<FakeSnapshotMptDb>> {
     fn get_merkle_root(&self) -> MerkleHash { self.lock().get_merkle_root() }
 
@@ -429,23 +449,33 @@ impl SnapshotDbTrait for Arc<Mutex<FakeSnapshotDb>> {
     fn create(
         _snapshot_path: &Path,
         _already_open_snapshots: &AlreadyOpenSnapshots<Self>,
-        _open_semaphore: &Arc<Semaphore>,
+        _open_semaphore: &Arc<Semaphore>, _old_version: bool,
     ) -> Result<Self>
     {
         unreachable!()
     }
 
-    fn direct_merge(&mut self) -> Result<MerkleHash> { unreachable!() }
+    fn direct_merge(
+        &mut self, _old_snapshot_db: Option<&Arc<Self>>,
+        _mpt_snapshot: &mut Option<SnapshotMptDbSqlite>,
+    ) -> Result<MerkleHash>
+    {
+        unreachable!()
+    }
 
     fn copy_and_merge(
-        &mut self, _old_snapshot_db: &Self,
-    ) -> Result<MerkleHash> {
+        &mut self, _old_snapshot_db: &Arc<Self>,
+        _mpt_snapshot_db: &mut Option<SnapshotMptDbSqlite>,
+    ) -> Result<MerkleHash>
+    {
         unreachable!()
     }
 
     fn start_transaction(&mut self) -> Result<()> { Ok(()) }
 
     fn commit_transaction(&mut self) -> Result<()> { Ok(()) }
+
+    fn is_mpt_table_in_current_db(&self) -> bool { unreachable!() }
 
     fn snapshot_kv_iterator(
         &self,
@@ -466,6 +496,7 @@ struct FakeSnapshotDbManager {
 
 impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
     type SnapshotDb = Arc<Mutex<FakeSnapshotDb>>;
+    type SnapshotDbWrite = Arc<Mutex<FakeSnapshotDb>>;
 
     fn get_snapshot_dir(&self) -> &Path { unreachable!() }
 
@@ -477,9 +508,29 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
         unreachable!()
     }
 
+    fn get_mpt_snapshot_dir(&self) -> &Path { unreachable!() }
+
+    fn get_latest_mpt_snapshot_db_name(&self) -> String { unreachable!() }
+
+    fn recovery_lastest_mpt_snapshot(
+        &self, _snapshot_epoch_id: &EpochId,
+    ) -> Result<()> {
+        unreachable!()
+    }
+
+    fn get_epoch_id_from_snapshot_db_name(
+        &self, _snapshot_db_name: &str,
+    ) -> Result<EpochId> {
+        unreachable!()
+    }
+
+    fn is_temp_snapshot_db_path(&self, _dir_name: &str) -> bool {
+        unreachable!()
+    }
+
     fn scan_persist_state(
         &self, _snapshot_info_map: &HashMap<EpochId, SnapshotInfo>,
-    ) -> Result<Vec<EpochId>> {
+    ) -> Result<SnapshotPersistState> {
         unreachable!()
     }
 
@@ -487,14 +538,15 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
         &self, _old_snapshot_epoch_id: &EpochId, _snapshot_epoch_id: EpochId,
         _delta_mpt: DeltaMptIterator, _in_progress_snapshot_info: SnapshotInfo,
         _snapshot_info_map: &'m RwLock<PersistedSnapshotInfoMap>,
+        _new_epoch_height: u64,
     ) -> Result<(RwLockWriteGuard<'m, PersistedSnapshotInfoMap>, SnapshotInfo)>
     {
         unreachable!()
     }
 
     fn get_snapshot_by_epoch_id(
-        &self, _epoch_id: &EpochId, _try_open: bool,
-    ) -> Result<Option<Arc<Self::SnapshotDb>>> {
+        &self, _epoch_id: &EpochId, _try_open: bool, _open_mpt_snapshot: bool,
+    ) -> Result<Option<Self::SnapshotDb>> {
         unreachable!()
     }
 
@@ -504,7 +556,9 @@ impl SnapshotDbManagerTrait for FakeSnapshotDbManager {
 
     fn new_temp_snapshot_for_full_sync(
         &self, _snapshot_epoch_id: &EpochId, _merkle_root: &EpochId,
-    ) -> Result<Self::SnapshotDb> {
+        _epoch_height: u64,
+    ) -> Result<Self::SnapshotDbWrite>
+    {
         Ok(self.temp_snapshot.clone())
     }
 
@@ -550,6 +604,7 @@ fn test_full_sync_verifier_one_chunk() {
         merkle_root,
         &snapshot_db_manager,
         &NULL_EPOCH,
+        0,
     )
     .unwrap();
 
@@ -650,6 +705,7 @@ fn test_full_sync_verifier() {
         merkle_root,
         &snapshot_db_manager,
         &NULL_EPOCH,
+        0,
     )
     .unwrap();
 
@@ -698,16 +754,20 @@ use crate::{
             full_sync_verifier::FullSyncVerifier,
             mpt_slice_verifier::MptSliceVerifier,
         },
-        storage_db::snapshot_db_manager_sqlite::AlreadyOpenSnapshots,
+        storage_db::{
+            snapshot_db_manager_sqlite::AlreadyOpenSnapshots,
+            snapshot_mpt_db_sqlite::SnapshotMptDbSqlite,
+        },
         storage_manager::PersistedSnapshotInfoMap,
     },
     storage_db::{
         DbValueType, KeyValueDbIterableTrait, KeyValueDbTraitOwnedRead,
         KeyValueDbTraitRead, KeyValueDbTraitSingleWriter, KeyValueDbTypes,
         KvdbIterIterator, OpenSnapshotMptTrait, SnapshotDbManagerTrait,
-        SnapshotDbTrait, SnapshotInfo, SnapshotMptIteraterTrait,
-        SnapshotMptNode, SnapshotMptTraitRead, SnapshotMptTraitReadAndIterate,
-        SnapshotMptTraitRw,
+        SnapshotDbTrait, SnapshotDbWriteableTrait, SnapshotInfo,
+        SnapshotMptIteraterTrait, SnapshotMptNode, SnapshotMptTraitRead,
+        SnapshotMptTraitReadAndIterate, SnapshotMptTraitRw,
+        SnapshotPersistState,
     },
     tests::{
         generate_keys, get_rng_for_test, snapshot::FakeSnapshotMptDb,

@@ -262,6 +262,14 @@ pub struct SponsorInfo {
     pub storage_points: Option<StoragePoints>,
 }
 
+impl SponsorInfo {
+    pub fn unused_storage_points(&self) -> U256 {
+        self.storage_points
+            .as_ref()
+            .map_or(U256::zero(), |x| x.unused)
+    }
+}
+
 impl Encodable for SponsorInfo {
     fn rlp_append(&self, s: &mut RlpStream) {
         match &self.storage_points {

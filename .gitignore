@@ -16,3 +16,4 @@ build/
 **/testnet.toml
 *~
 .DS_Store
+tests/artifacts/**/*.dbg.json

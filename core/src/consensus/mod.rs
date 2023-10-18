@@ -1503,6 +1503,7 @@ impl ConsensusGraph {
                 .get_state_no_commit_inner(
                     state_readonly_index,
                     /* try_open = */ true,
+                    true,
                 )
                 .map_err(|e| format!("Error to get state, err={:?}", e))?,
             None => None,

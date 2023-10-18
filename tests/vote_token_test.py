@@ -5,51 +5,50 @@ from eth_utils import decode_hex
 from conflux.rpc import RpcClient
 from conflux.transactions import CONTRACT_DEFAULT_GAS
 from test_framework.blocktools import create_transaction, encode_hex_0x
-from test_framework.smart_contract_bench_base import SmartContractBenchBase
+from test_framework.contracts import ConfluxTestFrameworkForContract
+from test_framework.block_gen_thread import BlockGenThread
 from test_framework.mininode import *
 from test_framework.util import *
 
 from web3 import Web3
-import os
+from web3.contract import Contract
 import random
 
 
-class VoteTokenTest(SmartContractBenchBase):
-
+class VoteTokenTest(ConfluxTestFrameworkForContract):
     def __init__(self):
         super().__init__()
         self.vote_address = ""
         self.token_address = ""
-        self.token_contract = None
-        self.vote_contract = None
+        self.token_contract: Contract = None
+        self.vote_contract: Contract = None
         self.accounts = []
         self.num_of_options = 5
         self.gas_price = 1
         self.gas = CONTRACT_DEFAULT_GAS
         self.tx_conf = {"gas":int_to_hex(self.gas), "gasPrice":int_to_hex(self.gas_price)}
 
-    def setup_contract(self):
-        file_dir = os.path.dirname(os.path.realpath(__file__))
+    def set_test_params(self):
+        self.num_nodes = 1
 
-        self.token_contract = get_contract_instance(source=os.path.join(file_dir, "contracts/vote.sol"),
-                                                         contract_name="DummyErc20")
-        self.vote_contract = get_contract_instance(source=os.path.join(file_dir, "contracts/vote.sol"),
-                                                        contract_name="AdvancedTokenVote1202")
+    def setup_contract(self):
+        self.token_contract = self.cfx_contract("DummyErc20").deploy()
+        self.vote_contract = self.cfx_contract("AdvancedTokenVote1202").deploy()
         self.log.info("Initializing contract")
-        transaction = self.call_contract_function(self.token_contract, "constructor", [], self.default_account_key, storage_limit=20000)
-        self.token_address = self.wait_for_tx([transaction], True)[0]['contractCreated']
-        transaction = self.call_contract_function(self.vote_contract, "constructor", [], self.default_account_key, storage_limit=20000)
-        self.vote_address = self.wait_for_tx([transaction], True)[0]['contractCreated']
         self.accounts = [a[0] for a in self.new_address_and_transfer(5)]
 
-    def generate_transactions(self, i):
-        self.call_contract_function(self.vote_contract, "createIssue",
-                                    [i, Web3.toChecksumAddress(self.token_address), [j for j in range(self.num_of_options)],
-                                     [Web3.toChecksumAddress(priv_to_addr(acc)) for acc in self.accounts], "v"],
-                                    self.default_account_key, self.vote_address, True, True, storage_limit=5120)
-        for _ in range(self.num_of_options):
-            self.call_contract_function(self.vote_contract, "vote", [i, random.randint(0, self.num_of_options-1)],
-                                        self.default_account_key, self.vote_address, True, True, storage_limit=5120)
+    def run_test(self):
+        self.token_contract = self.cfx_contract("DummyErc20").deploy()
+        self.vote_contract = self.cfx_contract("AdvancedTokenVote1202").deploy()
+        self.log.info("Initializing contract")
+        self.accounts = self.initialize_accounts(5)
+
+        for i in range(1):
+            self.vote_contract.functions.createIssue(i, self.token_contract.address, list(range(self.num_of_options)), [acc[0] for acc in self.accounts], "v").cfx_transact(storage_limit = 5120)
+            for _ in range(self.num_of_options):
+                vote_choice = random.randint(0, self.num_of_options - 1)
+                self.vote_contract.functions.vote(i, vote_choice).cfx_transact(storage_limit = 5120)
+            
 
 
 if __name__ == "__main__":

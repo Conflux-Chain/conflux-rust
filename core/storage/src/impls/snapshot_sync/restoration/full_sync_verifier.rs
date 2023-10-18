@@ -14,7 +14,7 @@ pub struct FullSyncVerifier<SnapshotDbManager: SnapshotDbManagerTrait> {
     boundary_subtree_total_size: HashMap<BoundarySubtreeIndex, u64>,
     chunk_index_by_upper_key: HashMap<Vec<u8>, usize>,
 
-    temp_snapshot_db: SnapshotDbManager::SnapshotDb,
+    temp_snapshot_db: SnapshotDbManager::SnapshotDbWrite,
 }
 
 impl<SnapshotDbManager: SnapshotDbManagerTrait>
@@ -24,6 +24,7 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
         number_chunks: usize, chunk_boundaries: Vec<Vec<u8>>,
         chunk_boundary_proofs: Vec<TrieProof>, merkle_root: MerkleHash,
         snapshot_db_manager: &SnapshotDbManager, epoch_id: &EpochId,
+        epoch_height: u64,
     ) -> Result<Self>
     {
         if number_chunks != chunk_boundaries.len() + 1 {
@@ -65,7 +66,11 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
             boundary_subtree_total_size: Default::default(),
             chunk_index_by_upper_key,
             temp_snapshot_db: snapshot_db_manager
-                .new_temp_snapshot_for_full_sync(epoch_id, &merkle_root)?,
+                .new_temp_snapshot_for_full_sync(
+                    epoch_id,
+                    &merkle_root,
+                    epoch_height,
+                )?,
         })
     }
 
@@ -163,7 +168,7 @@ impl<SnapshotDbManager: SnapshotDbManagerTrait>
             self.temp_snapshot_db.start_transaction()?;
             // Commit key-values.
             for (key, value) in keys.into_iter().zip(values.into_iter()) {
-                self.temp_snapshot_db.put(key.borrow(), &*value)?;
+                self.temp_snapshot_db.put_kv(key.borrow(), &*value)?;
             }
 
             // Commit inner nodes.
@@ -268,8 +273,7 @@ use crate::{
         },
     },
     storage_db::{
-        key_value_db::KeyValueDbTraitSingleWriter, OpenSnapshotMptTrait,
-        SnapshotDbManagerTrait, SnapshotDbTrait, SnapshotMptNode,
+        SnapshotDbManagerTrait, SnapshotDbWriteableTrait, SnapshotMptNode,
         SnapshotMptTraitRw, SubtreeMerkleWithSize,
     },
     TrieProof,

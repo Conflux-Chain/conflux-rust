@@ -88,6 +88,8 @@ pub struct ConsensusInnerConfig {
     pub debug_dump_dir_invalid_state_root: Option<String>,
     pub debug_invalid_state_root_epoch: Option<H256>,
     pub force_recompute_height_during_construct_pivot: Option<u64>,
+    pub recovery_latest_mpt_snapshot: bool,
+    pub use_isolated_db_for_mpt_table: bool,
 }
 
 impl ConsensusInnerConfig {

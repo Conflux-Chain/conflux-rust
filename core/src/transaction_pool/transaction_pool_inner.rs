@@ -1523,7 +1523,7 @@ impl TransactionPoolInner {
                                 U256::from(utx.storage_limit)
                                     * *DRIPS_PER_STORAGE_COLLATERAL_UNIT;
                             if estimated_collateral
-                                <= sponsor_info.sponsor_balance_for_collateral
+                                <= sponsor_info.sponsor_balance_for_collateral + sponsor_info.unused_storage_points()
                             {
                                 sponsored_storage = utx.storage_limit;
                             }
