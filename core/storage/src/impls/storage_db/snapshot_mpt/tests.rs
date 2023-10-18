@@ -105,7 +105,6 @@ impl<'a> MptIter<'a> {
                 // Unwrap is fine because the child is guaranteed to exist.
                 .unwrap();
 
-                drop(current_node);
                 down = true;
                 self.cursor.push_node(child_node);
                 break;
@@ -162,7 +161,6 @@ where KvdbIterIterator<
         }
         mpt_kvs.push((key, value));
     }
-    drop(kv_iter);
 
     let mut mpt = snapshot_db.open_snapshot_mpt_shared().unwrap();
     let mut mpt_iter = MptIter::new(&mut mpt).unwrap();
