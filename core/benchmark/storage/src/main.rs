@@ -986,7 +986,7 @@ pub struct EthTxExtractor<EthTxT: EthTxTypeTrait> {
     nonce_dir_path: String,
     counters: Arc<Mutex<EthTxExtractorCounters>>,
 
-    shared_self: Option<Arc<EthTxExtractor<EthTxT>>>,
+    shared_self: UnsafeCell<Option<Arc<EthTxExtractor<EthTxT>>>>,
 
     tx_maker: Arc<Box<dyn TxMaker<TxType = EthTxT> + Send + Sync>>,
 }
@@ -999,7 +999,7 @@ impl<EthTxT: EthTxTypeTrait> Drop for EthTxExtractorStopper<EthTxT> {
     fn drop(&mut self) {
         println!("stopping eth tx extractor.");
 
-        let mut tx_basic_verifiers = self.0.stop_from_ref();
+        let mut tx_basic_verifiers = self.0.stop();
         tx_basic_verifiers.drain(..);
 
         for i in 0..EthTxVerifier::<EthTxT>::N_TX_VERIFIERS {
@@ -1020,24 +1020,11 @@ impl<EthTxT: EthTxTypeTrait> Drop for EthTxExtractorStopper<EthTxT> {
 
 impl<EthTxT: EthTxTypeTrait> EthTxExtractor<EthTxT> {
     const N_TX_BASIC_VERIFIERS: usize = 8;
-
-    pub fn stop_from_ref(
-        &self,
-    ) -> Vec<Arc<Mutex<FIFOConsumerThread<EthTxBasicVerifierRequest<EthTxT>>>>>
-    {
-        unsafe {
-            EthTxExtractor::stop(
-                &mut *(self as *const EthTxExtractor<EthTxT>
-                    as *mut EthTxExtractor<EthTxT>),
-            )
-        }
-    }
-
     pub fn stop(
         &mut self,
     ) -> Vec<Arc<Mutex<FIFOConsumerThread<EthTxBasicVerifierRequest<EthTxT>>>>>
     {
-        self.shared_self.take();
+        self.shared_self.get_mut().take();
         mem::replace(&mut self.tx_basic_verifiers, vec![])
     }
 
@@ -1143,17 +1130,13 @@ impl<EthTxT: EthTxTypeTrait> EthTxExtractor<EthTxT> {
                 tx_maker.clone(),
             )?,
             nonce_dir_path: nonce_dir_path.clone(),
-            shared_self: None,
+            shared_self: UnsafeCell::new(None),
             tx_maker: tx_maker.clone(),
         }));
 
         let extractor_arc = result.as_ref().unwrap().clone();
         // FIXME: remove unsafes.
-        unsafe {
-            &mut *(extractor_arc.as_ref() as *const EthTxExtractor<EthTxT>
-                as *mut EthTxExtractor<EthTxT>)
-        }
-        .shared_self = Some(extractor_arc.clone());
+        unsafe{ *extractor_arc.shared_self.get() = Some(extractor_arc.clone()); }
 
         if start_block_number == 0 {
             let spec = EthSpec::load(File::open(path)?)?;
@@ -1199,7 +1182,7 @@ impl<EthTxT: EthTxTypeTrait> EthTxExtractor<EthTxT> {
     fn verify_tx_then_stream_out(
         &self, tx_verify_request: EthTxNonceVerifierRequest<EthTxT>,
     ) {
-        let thread = (tx_verify_request.sender.low_u64() & 7) as usize;
+        let thread = (tx_verify_request.sender.low_u64_be() & 7) as usize;
 
         self.nonce_verifier.workers[thread]
             .lock()
@@ -1286,7 +1269,7 @@ impl<EthTxT: EthTxTypeTrait> EthTxExtractor<EthTxT> {
             chain_id,
             allow_empty_signature,
 
-            tx_extractor: self.shared_self.as_ref().unwrap().clone(),
+            tx_extractor: self.shared_self.get_mut().unwrap().clone(),
         };
         self.tx_basic_verifiers[worker]
             .lock()
@@ -1534,7 +1517,6 @@ fn tx_extract<U: TxExtractor, T: Deref<Target = U> + Sync + Send + 'static>(
                             let mut buffer_new =
                                 Vec::<u8>::with_capacity(BUFFER_SIZE);
                             buffer_new.extend_from_slice(to_parse);
-                            drop(to_parse);
                             buffer = buffer_new;
                             // Reset the buffer.
                             if buffer.len() == buffer.capacity() {
@@ -1997,7 +1979,6 @@ fn tx_replay(matches: ArgMatches) -> errors::Result<()> {
                             let mut buffer_new =
                                 Vec::<u8>::with_capacity(BUFFER_SIZE);
                             buffer_new.extend_from_slice(to_parse);
-                            drop(to_parse);
                             buffer = buffer_new;
                             // Reset the buffer.
                             if buffer.len() == buffer.capacity() {
@@ -2228,3 +2209,4 @@ use std::{
     time::Duration,
     vec::Vec,
 };
+use std::cell::UnsafeCell;
