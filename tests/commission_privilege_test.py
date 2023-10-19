@@ -8,6 +8,7 @@ from test_framework.util import *
 
 class CommissionPrivilegeTest(ConfluxTestFrameworkForContract):
     def set_test_params(self):
+        super().set_test_params()
         self.num_nodes = 1
 
     def run_test(self):
@@ -60,7 +61,7 @@ class CommissionPrivilegeTest(ConfluxTestFrameworkForContract):
         b0 = client.get_balance(genesis_addr)
         self.sponsorControl.functions.setSponsorForGas(contract_addr, tx_gas_upper_bound).cfx_transact(value = 1, gas = gas)
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), 10 ** 18)
-        assert_equal(client.get_sponsor_for_gas(contract_addr), genesis_addr)
+        assert_equal(client.get_sponsor_for_gas(contract_addr), genesis_addr.lower())
         assert_equal(client.get_sponsor_gas_bound(contract_addr), tx_gas_upper_bound)
         assert_equal(client.get_balance(genesis_addr), b0 - 10 ** 18 - charged_of_huge_gas(gas))
 
@@ -155,7 +156,7 @@ class CommissionPrivilegeTest(ConfluxTestFrameworkForContract):
         self.sponsorControl.functions.setSponsorForGas(contract_addr, tx_gas_upper_bound).cfx_transact(
             value = 0.5, storage_limit = 0, priv_key = priv_key3, err_msg = 'VmError(InternalContract("sponsor_balance is not exceed previous sponsor"))')
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sb)
-        assert_equal(client.get_sponsor_for_gas(contract_addr), genesis_addr)
+        assert_equal(client.get_sponsor_for_gas(contract_addr), genesis_addr.lower())
         assert_equal(client.get_balance(addr3), b3 - gas)
 
         # new sponsor failed due to small upper bound
@@ -164,7 +165,7 @@ class CommissionPrivilegeTest(ConfluxTestFrameworkForContract):
         self.sponsorControl.functions.setSponsorForGas(contract_addr, tx_gas_upper_bound - 1).cfx_transact(
             value = 1, storage_limit = 0, priv_key = priv_key3, err_msg = 'VmError(InternalContract("upper_bound is not exceed previous sponsor"))')
         assert_equal(client.get_sponsor_balance_for_gas(contract_addr), sb)
-        assert_equal(client.get_sponsor_for_gas(contract_addr), genesis_addr)
+        assert_equal(client.get_sponsor_for_gas(contract_addr), genesis_addr.lower())
         assert_equal(client.get_balance(addr3), b3 - gas)
 
         # new sponsor succeed
@@ -318,7 +319,7 @@ class CommissionPrivilegeTest(ConfluxTestFrameworkForContract):
         self.sponsorControl.functions.setSponsorForCollateral(contract_addr).cfx_transact(value = sb + cfs + 1, decimals = 0)
         assert_equal(client.get_collateral_for_storage(contract_addr), cfs)
         assert_equal(client.get_sponsor_balance_for_collateral(contract_addr), sb + 1)
-        assert_equal(client.get_sponsor_for_collateral(contract_addr), genesis_addr)
+        assert_equal(client.get_sponsor_for_collateral(contract_addr), genesis_addr.lower())
         assert_equal(client.get_balance(genesis_addr), b0 - charged_of_huge_gas(gas) - sb - cfs - 1)
         assert_equal(client.get_balance(addr3), b3 + sb + cfs)
         

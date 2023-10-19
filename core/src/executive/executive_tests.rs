@@ -16,10 +16,7 @@ use crate::{
 };
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
 use cfx_parameters::{
-    internal_contract_addresses::{
-        SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS,
-        STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
-    },
+    internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
     staking::*,
 };
 use cfx_state::{CleanupMode, CollateralCheckResult};
@@ -131,7 +128,7 @@ fn test_sender_balance() {
             .expect("no db error")
             .expect("no vm error");
         state
-            .collect_and_settle_collateral(
+            .settle_collateral_and_check(
                 &params.storage_owner,
                 &storage_limit_in_drip,
                 &mut substate,
@@ -391,7 +388,7 @@ fn test_call_to_create() {
             .expect("no db error")
             .expect("no vm error");
         state
-            .collect_and_settle_collateral(
+            .settle_collateral_and_check(
                 &params.storage_owner,
                 &storage_limit_in_drip,
                 &mut substate,
@@ -985,6 +982,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
     .0;
 
     state.checkpoint();
+    let mut substate = Substate::new();
     state
         .new_contract_with_admin(
             &address,
@@ -1004,14 +1002,19 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
         .unwrap();
 
     state
-        .add_to_contract_whitelist(address.address, sender, Default::default())
+        .add_to_contract_whitelist(
+            address.address,
+            sender,
+            Default::default(),
+            &mut substate,
+        )
         .unwrap();
     let epoch_id = EpochId::from_uint(&U256::from(1));
     state
-        .collect_and_settle_collateral(
+        .settle_collateral_and_check(
             &Address::default(),
             &0.into(),
-            &mut Substate::new(),
+            &mut substate,
             &mut (),
             &spec,
             false,
@@ -1033,6 +1036,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
     .expect("Failed to initialize state");
 
     state.checkpoint();
+    let mut substate = Substate::new();
     assert_eq!(
         true,
         state
@@ -1048,6 +1052,23 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
     let epoch_id = EpochId::from_uint(&U256::from(2));
     // Destroy the contract, then create again.
     state.remove_contract(&address).unwrap();
+    state.discard_checkpoint();
+    state
+        .settle_collateral_and_check(
+            &sender,
+            &U256::MAX,
+            &mut substate,
+            &mut (),
+            &spec,
+            false,
+        )
+        .unwrap();
+    state
+        .clear_contract_whitelist(&address.address, &mut substate)
+        .unwrap();
+
+    state.checkpoint();
+    let mut substate = Substate::new();
     state
         .new_contract_with_admin(
             &address,
@@ -1067,7 +1088,12 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
         .unwrap();
     let whitelisted_caller = Address::random();
     state
-        .add_to_contract_whitelist(address.address, sender, whitelisted_caller)
+        .add_to_contract_whitelist(
+            address.address,
+            sender,
+            whitelisted_caller,
+            &mut substate,
+        )
         .unwrap();
     assert_eq!(
         true,
@@ -1082,10 +1108,10 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             .unwrap()
     );
     state
-        .collect_and_settle_collateral(
+        .settle_collateral_and_check(
             &Address::default(),
             &0.into(),
-            &mut Substate::new(),
+            &mut substate,
             &mut (),
             &spec,
             false,
@@ -1228,10 +1254,20 @@ fn test_commission_privilege() {
         .unwrap();
     // add commission privilege to caller1 and caller2
     state
-        .add_to_contract_whitelist(address.address, sender, caller1.address())
+        .add_to_contract_whitelist(
+            address.address,
+            sender,
+            caller1.address(),
+            &mut Substate::new(),
+        )
         .unwrap();
     state
-        .add_to_contract_whitelist(address.address, sender, caller2.address())
+        .add_to_contract_whitelist(
+            address.address,
+            sender,
+            caller2.address(),
+            &mut Substate::new(),
+        )
         .unwrap();
     assert!(state
         .check_contract_whitelist(&address.address, &caller1.address())
@@ -1451,7 +1487,12 @@ fn test_commission_privilege() {
 
     // add commission privilege to caller3
     state
-        .add_to_contract_whitelist(address.address, sender, caller3.address())
+        .add_to_contract_whitelist(
+            address.address,
+            sender,
+            caller3.address(),
+            &mut Substate::new(),
+        )
         .unwrap();
     assert!(state
         .check_contract_whitelist(&address.address, &caller3.address())
@@ -1512,7 +1553,8 @@ fn test_storage_commission_privilege() {
     // 60 01 - push 1
     // 55 sstore
 
-    let privilege_control_address = &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
+    // let privilege_control_address =
+    // &SPONSOR_WHITELIST_CONTROL_CONTRACT_ADDRESS;
     let code = "7c601080600c6000396000f3006000355415600957005b6020356000355560005233600155".from_hex().unwrap();
 
     let storage_manager = new_state_manager_for_unit_test();
@@ -1650,6 +1692,7 @@ fn test_storage_commission_privilege() {
             address.address,
             sender.address(),
             caller1.address(),
+            &mut substate,
         )
         .unwrap();
     state
@@ -1657,12 +1700,13 @@ fn test_storage_commission_privilege() {
             address.address,
             sender.address(),
             caller2.address(),
+            &mut substate,
         )
         .unwrap();
     assert_eq!(
         state
-            .collect_and_settle_collateral(
-                &privilege_control_address,
+            .settle_collateral_and_check(
+                &sender.address(),
                 &U256::MAX,
                 &mut substate,
                 &mut (),
@@ -1987,18 +2031,19 @@ fn test_storage_commission_privilege() {
 
     // remove privilege from caller1
     state.checkpoint();
+    let mut substate = Substate::new();
     state
         .remove_from_contract_whitelist(
             address.address,
             sender.address(),
             caller1.address(),
+            &mut substate,
         )
         .unwrap();
-    let mut substate = Substate::new();
     assert_eq!(
         state
-            .collect_and_settle_collateral(
-                &privilege_control_address,
+            .settle_collateral_and_check(
+                &sender.address(),
                 &U256::MAX,
                 &mut substate,
                 &mut (),

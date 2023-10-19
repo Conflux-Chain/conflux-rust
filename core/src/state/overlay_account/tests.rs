@@ -752,24 +752,20 @@ fn test_clone_overwrite() {
     assert_eq!(account1, overlay_account1.as_account());
     assert_eq!(account2, overlay_account2.as_account());
 
-    overlay_account1.set_storage(vec![0; 32], U256::zero(), address);
+    overlay_account1.set_storage_simple(vec![0; 32], U256::zero());
     assert_eq!(account1, overlay_account1.as_account());
-    assert_eq!(overlay_account1.storage_value_write_cache.len(), 1);
-    assert_eq!(overlay_account1.storage_owner_lv1_write_cache.len(), 1);
+    assert_eq!(overlay_account1.storage_write_cache.len(), 1);
     let overlay_account = overlay_account1.clone_basic();
     assert_eq!(account1, overlay_account.as_account());
-    assert_eq!(overlay_account.storage_value_write_cache.len(), 0);
-    assert_eq!(overlay_account.storage_owner_lv1_write_cache.len(), 0);
+    assert_eq!(overlay_account.storage_write_cache.len(), 0);
     let overlay_account = overlay_account1.clone_dirty();
     assert_eq!(account1, overlay_account.as_account());
-    assert_eq!(overlay_account.storage_value_write_cache.len(), 1);
-    assert_eq!(overlay_account.storage_owner_lv1_write_cache.len(), 1);
+    assert_eq!(overlay_account.storage_write_cache.len(), 1);
 
-    overlay_account2.set_storage(vec![0; 32], U256::zero(), address);
-    overlay_account2.set_storage(vec![1; 32], U256::zero(), address);
+    overlay_account2.set_storage_simple(vec![0; 32], U256::zero());
+    overlay_account2.set_storage_simple(vec![1; 32], U256::zero());
     overlay_account1.overwrite_with(overlay_account2);
     assert_ne!(account1, overlay_account1.as_account());
     assert_eq!(account2, overlay_account1.as_account());
-    assert_eq!(overlay_account1.storage_value_write_cache.len(), 2);
-    assert_eq!(overlay_account1.storage_owner_lv1_write_cache.len(), 2);
+    assert_eq!(overlay_account1.storage_write_cache.len(), 2);
 }

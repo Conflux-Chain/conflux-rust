@@ -1,6 +1,7 @@
 from os.path import dirname, join
 from pathlib import Path
 import json
+from dataclasses import dataclass
 
 from typing import Literal, Dict
 import types
@@ -204,13 +205,21 @@ setattr(ContractConstructor, 'cfx_call', _cfx_call)
 setattr(ContractConstructor, 'data', _cfx_data)
 
 
+@dataclass
+class Account:
+    address: str
+    key: str
+
 class ConfluxTestFrameworkForContract(ConfluxTestFramework):
     def __init__(self):
         super().__init__()
+
+    def set_test_params(self):
+        self.num_nodes = 1
         self.conf_parameters["executive_trace"] = "true"  
 
     def before_test(self):
-        if not bool(self.conf_parameters["executive_trace"]):
+        if "executive_trace" not in self.conf_parameters or not bool(self.conf_parameters["executive_trace"]):
             raise AssertionError(
                 "Trace should be enabled for contract toolkit")
         super().before_test()
@@ -223,9 +232,9 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
         self.deploy_create2()
 
         self.genesis_key = default_config["GENESIS_PRI_KEY"]
-        self.genesis_addr = encode_hex_0x(priv_to_addr(self.genesis_key))
+        self.genesis_addr = Web3.toChecksumAddress(encode_hex_0x(priv_to_addr(self.genesis_key)))
         self.genesis_key2 = default_config["GENESIS_PRI_KEY_2"]
-        self.genesis_addr2 = encode_hex_0x(priv_to_addr(self.genesis_key2))
+        self.genesis_addr2 = Web3.toChecksumAddress(encode_hex_0x(priv_to_addr(self.genesis_key2)))
 
     def cfx_contract(self, name):
         return cfx_contract(name, self)
@@ -252,7 +261,7 @@ class ConfluxTestFrameworkForContract(ConfluxTestFramework):
             (address, priv) = self.client.rand_account()
             if value > 0:
                 self.cfx_transfer(address, value = value)
-            return (address, priv)
+            return Account(address, priv)
         
         return [initialize_new_account() for _ in range(number)]
 
