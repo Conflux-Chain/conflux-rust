@@ -1,12 +1,12 @@
 use crate::{
-    observer::VmObserve,
+    observer::TracerTrait,
     state::{CallStackInfo, State},
 };
 
 pub struct RuntimeRes<'a> {
     pub state: &'a mut State,
     pub callstack: &'a mut CallStackInfo,
-    pub tracer: &'a mut dyn VmObserve,
+    pub tracer: &'a mut dyn TracerTrait,
 }
 
 #[cfg(test)]

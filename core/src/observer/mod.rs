@@ -2,91 +2,61 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use crate::{
-    executive::FrameReturn,
-    vm::{ActionParams, Result as VmResult},
-};
-pub use cfx_state::tracer::{AddressPocket, StateTracer};
-
 pub mod error_unwind;
 pub mod gasman;
+pub mod internal_transfer;
 pub mod trace;
 pub mod trace_filter;
 pub mod tracer;
+mod traits;
 
+use cfx_vm_tracer_derive::AsTracer;
 pub use error_unwind::ErrorUnwind;
 pub use gasman::GasMan;
+pub use internal_transfer::AddressPocket;
+use internal_transfer::InternalTransferTracer;
 pub use tracer::ExecutiveTracer;
+use traits::{CallTracer, CheckpointTracer};
 
-// FIXME(cx): Can the observer do not rely on the tracer?
-/// This trait is used by executive to build traces.
-pub trait VmObserve: StateTracer {
-    /// Prepares call trace for given params.
-    fn record_call(&mut self, params: &ActionParams);
-
-    /// Prepares call result trace
-    fn record_call_result(&mut self, result: &VmResult<FrameReturn>);
-
-    /// Prepares create trace for given params.
-    fn record_create(&mut self, params: &ActionParams);
-
-    /// Prepares create result trace
-    fn record_create_result(&mut self, result: &VmResult<FrameReturn>);
-}
-
-/// Nonoperative observer. Does not trace anything.
-impl VmObserve for () {
-    fn record_call(&mut self, _: &ActionParams) {}
-
-    fn record_call_result(&mut self, _: &VmResult<FrameReturn>) {}
-
-    fn record_create(&mut self, _: &ActionParams) {}
-
-    fn record_create_result(&mut self, _: &VmResult<FrameReturn>) {}
-}
-
-impl<T> VmObserve for &mut T
-where T: VmObserve
+pub trait TracerTrait:
+    CheckpointTracer + CallTracer + InternalTransferTracer
 {
-    fn record_call(&mut self, params: &ActionParams) {
-        (*self).record_call(params);
-    }
-
-    fn record_call_result(&mut self, result: &VmResult<FrameReturn>) {
-        (*self).record_call_result(result);
-    }
-
-    fn record_create(&mut self, params: &ActionParams) {
-        (*self).record_create(params);
-    }
-
-    fn record_create_result(&mut self, result: &VmResult<FrameReturn>) {
-        (*self).record_create_result(result);
-    }
 }
 
-impl<S, T> VmObserve for (&mut S, &mut T)
-where
-    S: VmObserve,
-    T: VmObserve,
+impl<T: CheckpointTracer + CallTracer + InternalTransferTracer> TracerTrait
+    for T
 {
-    fn record_call(&mut self, params: &ActionParams) {
-        self.0.record_call(params);
-        self.1.record_call(params);
+}
+
+pub trait AsTracer {
+    fn as_tracer<'a>(&'a mut self) -> Box<dyn 'a + TracerTrait>;
+}
+
+#[derive(AsTracer)]
+pub struct Observer {
+    pub tracer: Option<ExecutiveTracer>,
+    pub gas_man: Option<GasMan>,
+}
+
+impl Observer {
+    pub fn with_tracing() -> Self {
+        Observer {
+            tracer: Some(ExecutiveTracer::default()),
+            gas_man: None,
+        }
     }
 
-    fn record_call_result(&mut self, result: &VmResult<FrameReturn>) {
-        self.0.record_call_result(result);
-        self.1.record_call_result(result);
+    pub fn with_no_tracing() -> Self {
+        Observer {
+            tracer: None,
+            gas_man: None,
+        }
     }
 
-    fn record_create(&mut self, params: &ActionParams) {
-        self.0.record_create(params);
-        self.1.record_create(params);
-    }
-
-    fn record_create_result(&mut self, result: &VmResult<FrameReturn>) {
-        self.0.record_create_result(result);
-        self.1.record_create_result(result);
+    pub fn virtual_call() -> Self {
+        Observer {
+            tracer: Some(ExecutiveTracer::default()),
+            gas_man: Some(GasMan::default()),
+        }
     }
 }

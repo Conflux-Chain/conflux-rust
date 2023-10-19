@@ -8,6 +8,7 @@ pub(self) mod cache_object;
 pub mod state;
 #[cfg(feature = "new_state_impl")]
 pub(self) mod state_object_cache;
+#[cfg(feature = "new_state_impl")]
 pub mod tracer;
 
 /// Mode of dealing with null accounts.

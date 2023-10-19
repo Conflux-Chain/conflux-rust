@@ -1,84 +1,77 @@
-// The tracer should not be here. But StateTrait expose too much details about
-// VM execution. So I have to move the definition of state parameters here.
-// I don't know why we have such a trait, which define almost all the
-// implementation details of state access as trait functions.
-
-use cfx_types::{Address, AddressSpaceUtil, AddressWithSpace, Space, U256};
+use cfx_types::{
+    address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
+    Space, U256,
+};
 use rlp::{Decodable, DecoderError, Encodable, Rlp, RlpStream};
 
+use self::AddressPocket::*;
+use super::TracerTrait;
+
+use impl_tools::autoimpl;
+use impl_trait_for_tuples::impl_for_tuples;
+
+#[impl_for_tuples(3)]
+#[autoimpl(for<T: trait + ?Sized> &mut T)]
+#[allow(unused_variables)]
 /// This trait is used by executive to build traces.
-pub trait StateTracer: Send {
+pub trait InternalTransferTracer {
     /// Prepares internal transfer action
     fn trace_internal_transfer(
         &mut self, from: AddressPocket, to: AddressPocket, value: U256,
-    );
-
-    /// Make a checkpoint for validity mark
-    fn trace_checkpoint(&mut self);
-
-    /// Discard the top checkpoint for validity mark
-    fn trace_checkpoint_discard(&mut self);
-
-    /// Mark the traces to the top checkpoint as "valid = false"
-    fn trace_checkpoint_revert(&mut self);
-}
-
-impl StateTracer for () {
-    fn trace_internal_transfer(
-        &mut self, _: AddressPocket, _: AddressPocket, _: U256,
     ) {
     }
-
-    fn trace_checkpoint(&mut self) {}
-
-    fn trace_checkpoint_discard(&mut self) {}
-
-    fn trace_checkpoint_revert(&mut self) {}
 }
 
-impl<T> StateTracer for &mut T
-where T: StateTracer
+pub fn trace_convert_stroage_points(
+    tracer: &mut dyn TracerTrait, addr: Address, from_balance: U256,
+    from_collateral: U256,
+)
 {
-    fn trace_internal_transfer(
-        &mut self, from: AddressPocket, to: AddressPocket, value: U256,
-    ) {
-        (*self).trace_internal_transfer(from, to, value);
+    if !from_balance.is_zero() {
+        tracer.trace_internal_transfer(
+            SponsorBalanceForStorage(addr),
+            MintBurn,
+            from_balance,
+        );
     }
-
-    fn trace_checkpoint(&mut self) { (*self).trace_checkpoint(); }
-
-    fn trace_checkpoint_discard(&mut self) {
-        (*self).trace_checkpoint_discard();
+    if !from_collateral.is_zero() {
+        tracer.trace_internal_transfer(
+            StorageCollateral(addr),
+            MintBurn,
+            from_collateral,
+        );
     }
-
-    fn trace_checkpoint_revert(&mut self) { (*self).trace_checkpoint_revert(); }
 }
 
-impl<S, T> StateTracer for (&mut S, &mut T)
-where
-    S: StateTracer,
-    T: StateTracer,
-{
-    fn trace_internal_transfer(
-        &mut self, from: AddressPocket, to: AddressPocket, value: U256,
-    ) {
-        self.0.trace_internal_transfer(from, to, value);
-        self.1.trace_internal_transfer(from, to, value);
+pub fn trace_refund_collateral(
+    tracer: &mut dyn TracerTrait, addr: Address, by: U256,
+) {
+    if !by.is_zero() {
+        tracer.trace_internal_transfer(
+            StorageCollateral(addr),
+            if addr.is_contract_address() {
+                SponsorBalanceForStorage(addr)
+            } else {
+                Balance(addr.with_native_space())
+            },
+            by,
+        );
     }
+}
 
-    fn trace_checkpoint(&mut self) {
-        self.0.trace_checkpoint();
-        self.1.trace_checkpoint();
-    }
-
-    fn trace_checkpoint_discard(&mut self) {
-        self.0.trace_checkpoint_discard();
-        self.1.trace_checkpoint_discard();
-    }
-
-    fn trace_checkpoint_revert(&mut self) {
-        self.0.trace_checkpoint_revert();
-        self.1.trace_checkpoint_revert();
+pub fn trace_occupy_collateral(
+    tracer: &mut dyn TracerTrait, addr: Address, by: U256,
+) {
+    if !by.is_zero() {
+        tracer.trace_internal_transfer(
+            if addr.is_contract_address() {
+                SponsorBalanceForStorage(addr)
+            } else {
+                Balance(addr.with_native_space())
+            },
+            StorageCollateral(addr),
+            by,
+        );
     }
 }
 

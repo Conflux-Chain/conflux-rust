@@ -1,4 +1,4 @@
-use super::VmObserve;
+use super::*;
 use crate::{
     executive::FrameReturn,
     vm::{ActionParams, Result as VmResult},
@@ -7,7 +7,6 @@ use cfx_parameters::{
     block::CROSS_SPACE_GAS_RATIO,
     internal_contract_addresses::CROSS_SPACE_CONTRACT_ADDRESS,
 };
-use cfx_state::tracer::{AddressPocket, StateTracer};
 use cfx_types::U256;
 
 const EVM_RATIO: (u64, u64) = (64, 63);
@@ -85,20 +84,7 @@ impl GasMan {
     }
 }
 
-impl StateTracer for GasMan {
-    fn trace_internal_transfer(
-        &mut self, _: AddressPocket, _: AddressPocket, _: U256,
-    ) {
-    }
-
-    fn checkpoint(&mut self) {}
-
-    fn discard_checkpoint(&mut self) {}
-
-    fn revert_to_checkpoint(&mut self) {}
-}
-
-impl VmObserve for GasMan {
+impl CallTracer for GasMan {
     fn record_call(&mut self, params: &ActionParams) {
         let cross_space_internal =
             params.code_address == CROSS_SPACE_CONTRACT_ADDRESS;
@@ -121,3 +107,6 @@ impl VmObserve for GasMan {
         self.record_return(&gas_left);
     }
 }
+
+impl CheckpointTracer for GasMan {}
+impl InternalTransferTracer for GasMan {}

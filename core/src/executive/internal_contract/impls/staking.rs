@@ -6,7 +6,7 @@ use crate::{
     consensus_internal_parameters::MINED_BLOCK_COUNT_PER_QUARTER,
     evm::Spec,
     internal_bail,
-    observer::{AddressPocket, VmObserve},
+    observer::{AddressPocket, TracerTrait},
     state::State,
     vm::{self, ActionParams, Env},
 };
@@ -16,7 +16,7 @@ use cfx_types::{Address, AddressSpaceUtil, U256};
 /// Implementation of `deposit(uint256)`.
 pub fn deposit(
     amount: U256, params: &ActionParams, env: &Env, spec: &Spec,
-    state: &mut State, tracer: &mut dyn VmObserve,
+    state: &mut State, tracer: &mut dyn TracerTrait,
 ) -> vm::Result<()>
 {
     if amount < U256::from(ONE_CFX_IN_DRIP) {
@@ -39,7 +39,7 @@ pub fn deposit(
 /// Implementation of `withdraw(uint256)`.
 pub fn withdraw(
     amount: U256, params: &ActionParams, env: &Env, spec: &Spec,
-    state: &mut State, tracer: &mut dyn VmObserve,
+    state: &mut State, tracer: &mut dyn TracerTrait,
 ) -> vm::Result<()>
 {
     state.remove_expired_vote_stake_info(&params.sender, env.number)?;
