@@ -28,9 +28,7 @@ use super::{
     spec::Spec,
     Error,
 };
-use crate::{
-    executive::internal_contract::InternalRefContext, observer::VmObserve,
-};
+use crate::executive::internal_contract::InternalRefContext;
 use cfx_bytes::Bytes;
 use cfx_types::{Address, AddressWithSpace, Space, H256, U256};
 use std::sync::Arc;
@@ -145,9 +143,7 @@ pub trait Context {
 
     /// Should be called when contract commits suicide.
     /// Address to which funds should be refunded.
-    fn suicide(
-        &mut self, refund_address: &Address, tracer: &mut dyn VmObserve,
-    ) -> Result<()>;
+    fn suicide(&mut self, refund_address: &Address) -> Result<()>;
 
     /// Returns specification.
     fn spec(&self) -> &Spec;

@@ -5,7 +5,7 @@ use crate::{
     },
     executive::{contract_address, executive::gas_required_for},
     internal_bail,
-    observer::{AddressPocket, VmObserve},
+    observer::AddressPocket,
     state::cleanup_mode,
     vm::{
         self, ActionValue, CreateType, Exec, ExecTrapError as ExecTrap,
@@ -222,9 +222,7 @@ pub struct PassResult {
 impl Exec for PassResult {
     fn exec(
         mut self: Box<Self>, context: &mut dyn Context,
-        _tracer: &mut dyn VmObserve,
-    ) -> ExecTrapResult<GasLeft>
-    {
+    ) -> ExecTrapResult<GasLeft> {
         let context = &mut context.internal_ref();
         let static_flag = context.static_flag;
 
@@ -281,7 +279,6 @@ pub fn process_trap<T>(
 pub fn call_to_evmcore(
     receiver: Address, data: Vec<u8>, call_type: CallType,
     params: &ActionParams, gas_left: U256, context: &mut InternalRefContext,
-    tracer: &mut dyn VmObserve,
 ) -> Result<ExecTrap, vm::Error>
 {
     if context.depth >= context.spec.max_depth {
@@ -308,7 +305,7 @@ pub fn call_to_evmcore(
         cleanup_mode(context.substate, context.spec),
     )?;
     context.state.add_total_evm_tokens(value);
-    tracer.trace_internal_transfer(
+    context.tracer.trace_internal_transfer(
         AddressPocket::Balance(params.address.with_native_space()),
         AddressPocket::Balance(mapped_sender),
         params.value.value(),
@@ -359,7 +356,7 @@ pub fn call_to_evmcore(
 
 pub fn create_to_evmcore(
     init: Vec<u8>, salt: Option<H256>, params: &ActionParams, gas_left: U256,
-    context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
+    context: &mut InternalRefContext,
 ) -> Result<ExecTrap, vm::Error>
 {
     if context.depth >= context.spec.max_depth {
@@ -385,7 +382,7 @@ pub fn create_to_evmcore(
         cleanup_mode(context.substate, context.spec),
     )?;
     context.state.add_total_evm_tokens(value);
-    tracer.trace_internal_transfer(
+    context.tracer.trace_internal_transfer(
         AddressPocket::Balance(params.address.with_native_space()),
         AddressPocket::Balance(mapped_sender),
         params.value.value(),
@@ -445,7 +442,7 @@ pub fn create_to_evmcore(
 
 pub fn withdraw_from_evmcore(
     sender: Address, value: U256, params: &ActionParams,
-    context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
+    context: &mut InternalRefContext,
 ) -> vm::Result<()>
 {
     let mapped_address = evm_map(sender);
@@ -462,7 +459,7 @@ pub fn withdraw_from_evmcore(
         cleanup_mode(context.substate, context.spec),
     )?;
     context.state.sub_total_evm_tokens(value);
-    tracer.trace_internal_transfer(
+    context.tracer.trace_internal_transfer(
         AddressPocket::Balance(mapped_address),
         AddressPocket::Balance(sender.with_native_space()),
         value,

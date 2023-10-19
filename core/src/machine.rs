@@ -75,6 +75,8 @@ impl Machine {
 
     /// Get a VM factory that can execute on this state.
     pub fn vm_factory(&self) -> VmFactory { self.vm.clone() }
+
+    pub fn vm_factory_ref(&self) -> &VmFactory { &self.vm }
 }
 
 pub fn new_machine(params: CommonParams, vm: VmFactory) -> Machine {

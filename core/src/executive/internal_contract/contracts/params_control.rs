@@ -57,7 +57,7 @@ impl UpfrontPaymentTrait for CastVote {
 impl SimpleExecutionTrait for CastVote {
     fn execute_inner(
         &self, inputs: (u64, Vec<Vote>), params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
+        context: &mut InternalRefContext,
     ) -> vm::Result<()>
     {
         cast_vote(params.sender, inputs.0, inputs.1, params, context)
@@ -73,7 +73,7 @@ impl_function_type!(ReadVote, "query", gas: |spec: &Spec| params_index_max(spec)
 impl SimpleExecutionTrait for ReadVote {
     fn execute_inner(
         &self, input: Address, params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
+        context: &mut InternalRefContext,
     ) -> vm::Result<Vec<Vote>>
     {
         read_vote(input, params, context)
@@ -87,7 +87,7 @@ impl_function_type!(CurrentRound, "query", gas: |spec:&Spec| spec.tier_step_gas[
 impl SimpleExecutionTrait for CurrentRound {
     fn execute_inner(
         &self, _input: (), _params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
+        context: &mut InternalRefContext,
     ) -> vm::Result<u64>
     {
         Ok(
@@ -106,7 +106,7 @@ impl_function_type!(TotalVotes, "query", gas: |spec: &Spec| params_index_max(spe
 impl SimpleExecutionTrait for TotalVotes {
     fn execute_inner(
         &self, input: u64, _params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
+        context: &mut InternalRefContext,
     ) -> vm::Result<Vec<Vote>>
     {
         total_votes(input, context)
@@ -121,7 +121,7 @@ impl_function_type!(PosStakeForVotes, "query", gas: |spec: &Spec| 2 * spec.sload
 impl SimpleExecutionTrait for PosStakeForVotes {
     fn execute_inner(
         &self, input: u64, _params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
+        context: &mut InternalRefContext,
     ) -> vm::Result<U256>
     {
         pos_stake_for_votes(input, context)

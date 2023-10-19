@@ -23,9 +23,7 @@ use super::{
     CreateContractAddress, Env, Error, GasLeft, MessageCallResult, Result,
     ReturnData, Spec,
 };
-use crate::{
-    executive::internal_contract::InternalRefContext, observer::VmObserve,
-};
+use crate::executive::internal_contract::InternalRefContext;
 use cfx_bytes::Bytes;
 use cfx_types::{address_util::AddressUtil, Address, Space, H256, U256};
 use hash::keccak;
@@ -213,9 +211,7 @@ impl Context for MockContext {
         unimplemented!();
     }
 
-    fn suicide(
-        &mut self, refund_address: &Address, _: &mut dyn VmObserve,
-    ) -> Result<()> {
+    fn suicide(&mut self, refund_address: &Address) -> Result<()> {
         if !refund_address.is_genesis_valid_address() {
             return Err(Error::InvalidAddress(*refund_address));
         }

@@ -7,7 +7,6 @@ use cfx_types::U256;
 use solidity_abi::{ABIDecodable, ABIEncodable};
 
 use crate::{
-    observer::VmObserve,
     state::CallStackInfo,
     vm::{
         self, ActionParams, CallType, ExecTrapResult, GasLeft, ReturnData,
@@ -21,7 +20,7 @@ use super::{InternalRefContext, IsActive};
 pub trait SolidityFunctionTrait: Send + Sync + IsActive {
     fn execute(
         &self, input: &[u8], params: &ActionParams,
-        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
+        context: &mut InternalRefContext,
     ) -> ExecTrapResult<GasLeft>;
 
     /// The string for function sig
@@ -57,7 +56,7 @@ impl<T: SolidityFunctionConfigTrait + ExecutionTrait + IsActive>
 {
     fn execute(
         &self, input: &[u8], params: &ActionParams,
-        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
+        context: &mut InternalRefContext,
     ) -> ExecTrapResult<GasLeft>
     {
         let (solidity_params, cost) =
@@ -76,7 +75,6 @@ impl<T: SolidityFunctionConfigTrait + ExecutionTrait + IsActive>
             params,
             gas_left,
             context,
-            tracer,
         ) {
             TrapResult::Return(output) => {
                 let vm_result = output.and_then(|output| {
@@ -139,7 +137,7 @@ pub trait PreExecCheckTrait: Send + Sync {
 pub trait ExecutionTrait: Send + Sync + InterfaceTrait {
     fn execute_inner(
         &self, input: Self::Input, params: &ActionParams, gas_left: U256,
-        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
+        context: &mut InternalRefContext,
     ) -> ExecTrapResult<<Self as InterfaceTrait>::Output>;
 }
 
@@ -147,7 +145,7 @@ pub trait ExecutionTrait: Send + Sync + InterfaceTrait {
 pub trait SimpleExecutionTrait: Send + Sync + InterfaceTrait {
     fn execute_inner(
         &self, input: Self::Input, params: &ActionParams,
-        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
+        context: &mut InternalRefContext,
     ) -> vm::Result<<Self as InterfaceTrait>::Output>;
 }
 
@@ -156,12 +154,11 @@ where T: SimpleExecutionTrait
 {
     fn execute_inner(
         &self, input: Self::Input, params: &ActionParams, _gas_left: U256,
-        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
+        context: &mut InternalRefContext,
     ) -> ExecTrapResult<<Self as InterfaceTrait>::Output>
     {
-        let result = SimpleExecutionTrait::execute_inner(
-            self, input, params, context, tracer,
-        );
+        let result =
+            SimpleExecutionTrait::execute_inner(self, input, params, context);
         TrapResult::Return(result)
     }
 }

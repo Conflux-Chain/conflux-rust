@@ -27,7 +27,6 @@ pub use self::{
     return_data::{GasLeft, ReturnData},
     spec::{CleanDustMode, Spec, WasmCosts},
 };
-use crate::observer::VmObserve;
 
 /// Virtual Machine interface
 pub trait Exec: Send {
@@ -35,7 +34,7 @@ pub trait Exec: Send {
     /// It returns either an error, a known amount of gas left, or parameters
     /// to be used to compute the final gas left.
     fn exec(
-        self: Box<Self>, context: &mut dyn Context, tracer: &mut dyn VmObserve,
+        self: Box<Self>, context: &mut dyn Context,
     ) -> ExecTrapResult<GasLeft>;
 }
 

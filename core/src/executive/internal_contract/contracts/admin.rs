@@ -24,7 +24,7 @@ impl_function_type!(SetAdmin, "non_payable_write", gas: |spec: &Spec| spec.sstor
 impl SimpleExecutionTrait for SetAdmin {
     fn execute_inner(
         &self, inputs: (Address, Address), params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
+        context: &mut InternalRefContext,
     ) -> vm::Result<()>
     {
         set_admin(inputs.0, inputs.1, params, context)
@@ -39,7 +39,7 @@ impl_function_type!(Destroy, "non_payable_write", gas: |spec: &Spec| spec.sstore
 impl SimpleExecutionTrait for Destroy {
     fn execute_inner(
         &self, input: Address, params: &ActionParams,
-        context: &mut InternalRefContext, tracer: &mut dyn VmObserve,
+        context: &mut InternalRefContext,
     ) -> vm::Result<()>
     {
         destroy(
@@ -48,7 +48,7 @@ impl SimpleExecutionTrait for Destroy {
             context.state,
             context.spec,
             context.substate,
-            tracer,
+            context.tracer,
         )
     }
 }
@@ -61,7 +61,7 @@ impl_function_type!(GetAdmin, "query_with_default_gas");
 impl SimpleExecutionTrait for GetAdmin {
     fn execute_inner(
         &self, input: Address, _params: &ActionParams,
-        context: &mut InternalRefContext, _tracer: &mut dyn VmObserve,
+        context: &mut InternalRefContext,
     ) -> vm::Result<Address>
     {
         Ok(context.state.admin(&input)?)
