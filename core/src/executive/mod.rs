@@ -3,39 +3,22 @@
 // See http://www.gnu.org/licenses/
 
 mod context;
+mod estimation;
 mod executed;
 mod executive;
 #[cfg(test)]
 mod executive_tests;
+mod frame;
 pub mod internal_contract;
 mod vm_exec;
 
-trait CollateralCheckResultToVmResult {
-    fn into_vm_result(self) -> Result<(), vmError>;
-}
-
-impl CollateralCheckResultToVmResult for CollateralCheckResult {
-    fn into_vm_result(self) -> Result<(), vmError> {
-        match self {
-            CollateralCheckResult::ExceedStorageLimit { .. } => {
-                Err(vmError::ExceedStorageLimit)
-            }
-            CollateralCheckResult::NotEnoughBalance { required, got } => {
-                Err(vmError::NotEnoughBalanceForStorage { required, got })
-            }
-            CollateralCheckResult::Valid => Ok(()),
-        }
-    }
-}
-
 pub use self::{
+    estimation::{EstimateRequest, TransactCheckSettings, TransactOptions},
     executed::*,
     executive::{
-        contract_address, gas_required_for, EstimateRequest, Executive,
-        ExecutiveGeneric, ExecutiveResult, Observer, TransactCheckSettings,
-        TransactOptions,
+        contract_address, gas_required_for, CollateralCheckError,
+        CollateralCheckResult, Executive, ExecutiveGeneric, Observer,
     },
+    frame::FrameReturn,
     internal_contract::{InternalContractMap, InternalContractTrait},
 };
-use crate::vm::Error as vmError;
-use cfx_state::CollateralCheckResult;

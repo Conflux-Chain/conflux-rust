@@ -3,16 +3,15 @@
 // See http://www.gnu.org/licenses/
 
 use super::{
-    context::{Context, OriginInfo},
-    Executed, ExecutionError,
+    estimation::{ChargeCollateral, TransactCheckSettings, TransactOptions},
+    frame::{exec_main_frame, FrameResult, FreshFrame, RuntimeRes},
+    Executed, ExecutionError, FrameReturn,
 };
 use crate::{
     bytes::Bytes,
-    evm::{FinalizationResult, Finalize},
     executive::{
         executed::{ExecutionOutcome, ToRepackError, TxDropError},
-        vm_exec::{BuiltinExec, InternalContractExec, NoopExec},
-        CollateralCheckResultToVmResult,
+        frame::accrue_substate,
     },
     hash::keccak,
     machine::Machine,
@@ -25,28 +24,23 @@ use crate::{
     verification::VerificationConfig,
     vm::{
         self, ActionParams, ActionValue, CallType, CreateContractAddress,
-        CreateType, Env, Exec, ExecTrapError, GasLeft, ResumeCall,
-        ResumeCreate, ReturnData, Spec, TrapError, TrapResult,
+        CreateType, Env, Spec,
     },
 };
-use cfx_parameters::{consensus::ONE_CFX_IN_DRIP, staking::*};
-use cfx_state::{CleanupMode, CollateralCheckResult};
+use cfx_parameters::staking::*;
+
 use cfx_statedb::Result as DbResult;
 use cfx_types::{
     address_util::AddressUtil, Address, AddressSpaceUtil, AddressWithSpace,
     Space, H256, U256, U512, U64,
 };
 use primitives::{
-    receipt::StorageChange, storage::STORAGE_LAYOUT_REGULAR_V0,
-    transaction::Action, NativeTransaction, SignedTransaction, StorageLayout,
-    Transaction,
+    receipt::StorageChange, transaction::Action, SignedTransaction, Transaction,
 };
 use rlp::RlpStream;
 use std::{
-    cmp::{max, min},
     collections::HashSet,
     convert::{TryFrom, TryInto},
-    ops::Shl,
     sync::Arc,
 };
 
@@ -125,152 +119,6 @@ pub fn contract_address(
     return (address.with_space(sender.space), code_hash);
 }
 
-/// Convert a finalization result into a VM message call result.
-pub fn into_message_call_result(
-    result: vm::Result<ExecutiveResult>,
-) -> vm::MessageCallResult {
-    match result {
-        Ok(ExecutiveResult {
-            gas_left,
-            return_data,
-            apply_state: true,
-            ..
-        }) => vm::MessageCallResult::Success(gas_left, return_data),
-        Ok(ExecutiveResult {
-            gas_left,
-            return_data,
-            apply_state: false,
-            ..
-        }) => vm::MessageCallResult::Reverted(gas_left, return_data),
-        Err(err) => vm::MessageCallResult::Failed(err),
-    }
-}
-
-/// Convert a finalization result into a VM contract create result.
-pub fn into_contract_create_result(
-    result: vm::Result<ExecutiveResult>,
-) -> vm::ContractCreateResult {
-    match result {
-        Ok(ExecutiveResult {
-            space,
-            gas_left,
-            apply_state: true,
-            create_address,
-            ..
-        }) => {
-            // Move the change of contracts_created in substate to
-            // process_return.
-            let address = create_address
-                .expect("ExecutiveResult for Create executive should be some.");
-            let address = AddressWithSpace { address, space };
-            vm::ContractCreateResult::Created(address, gas_left)
-        }
-        Ok(ExecutiveResult {
-            gas_left,
-            apply_state: false,
-            return_data,
-            ..
-        }) => vm::ContractCreateResult::Reverted(gas_left, return_data),
-        Err(err) => vm::ContractCreateResult::Failed(err),
-    }
-}
-
-/// Transaction execution options.
-pub struct TransactOptions {
-    pub observer: Observer,
-    pub check_settings: TransactCheckSettings,
-}
-
-impl TransactOptions {
-    pub fn exec_with_tracing() -> Self {
-        Self {
-            observer: Observer::with_tracing(),
-            check_settings: TransactCheckSettings::all_checks(),
-        }
-    }
-
-    pub fn exec_with_no_tracing() -> Self {
-        Self {
-            observer: Observer::with_no_tracing(),
-            check_settings: TransactCheckSettings::all_checks(),
-        }
-    }
-
-    pub fn estimate_first_pass(request: EstimateRequest) -> Self {
-        Self {
-            observer: Observer::virtual_call(),
-            check_settings: TransactCheckSettings::from_estimate_request(
-                request,
-                ChargeCollateral::EstimateSender,
-            ),
-        }
-    }
-
-    pub fn estimate_second_pass(request: EstimateRequest) -> Self {
-        Self {
-            observer: Observer::virtual_call(),
-            check_settings: TransactCheckSettings::from_estimate_request(
-                request,
-                ChargeCollateral::EstimateSponsor,
-            ),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum ChargeCollateral {
-    Normal,
-    EstimateSender,
-    EstimateSponsor,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct EstimateRequest {
-    pub has_sender: bool,
-    pub has_gas_limit: bool,
-    pub has_gas_price: bool,
-    pub has_nonce: bool,
-    pub has_storage_limit: bool,
-}
-
-impl EstimateRequest {
-    fn recheck_gas_fee(&self) -> bool { self.has_sender && self.has_gas_price }
-
-    fn charge_gas(&self) -> bool {
-        self.has_sender && self.has_gas_limit && self.has_gas_price
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct TransactCheckSettings {
-    pub charge_collateral: ChargeCollateral,
-    pub charge_gas: bool,
-    pub real_execution: bool,
-    pub check_epoch_height: bool,
-}
-
-impl TransactCheckSettings {
-    fn all_checks() -> Self {
-        Self {
-            charge_collateral: ChargeCollateral::Normal,
-            charge_gas: true,
-            real_execution: true,
-            check_epoch_height: true,
-        }
-    }
-
-    fn from_estimate_request(
-        request: EstimateRequest, charge_collateral: ChargeCollateral,
-    ) -> Self {
-        Self {
-            charge_collateral,
-            charge_gas: request.charge_gas(),
-            real_execution: false,
-            check_epoch_height: false,
-        }
-    }
-}
-
 pub struct Observer {
     pub tracer: Option<ExecutiveTracer>,
     pub gas_man: Option<GasMan>,
@@ -294,7 +142,7 @@ impl Observer {
         }
     }
 
-    fn with_tracing() -> Self {
+    pub fn with_tracing() -> Self {
         Observer {
             tracer: Some(ExecutiveTracer::default()),
             gas_man: None,
@@ -302,7 +150,7 @@ impl Observer {
         }
     }
 
-    fn with_no_tracing() -> Self {
+    pub fn with_no_tracing() -> Self {
         Observer {
             tracer: None,
             gas_man: None,
@@ -310,582 +158,11 @@ impl Observer {
         }
     }
 
-    fn virtual_call() -> Self {
+    pub fn virtual_call() -> Self {
         Observer {
             tracer: Some(ExecutiveTracer::default()),
             gas_man: Some(GasMan::default()),
             _noop: (),
-        }
-    }
-}
-
-pub struct FreshFrame<'a> {
-    params: ActionParams,
-    context: FrameContext<'a>,
-}
-
-pub struct SuspendedFrame<'a> {
-    resumer: FrameResumer,
-    context: FrameContext<'a>,
-}
-
-pub struct RuntimeRes<'a> {
-    pub state: &'a mut State,
-    pub callstack: &'a mut CallStackInfo,
-    pub tracer: &'a mut dyn VmObserve,
-}
-
-#[cfg(test)]
-mod runtime_res_test {
-    use super::RuntimeRes;
-    use crate::state::CallStackInfo;
-
-    use super::State;
-
-    pub struct OwnedRuntimeRes<'a> {
-        state: &'a mut State,
-        callstack: CallStackInfo,
-        tracer: (),
-    }
-
-    impl<'a> From<&'a mut State> for OwnedRuntimeRes<'a> {
-        fn from(state: &'a mut State) -> Self {
-            OwnedRuntimeRes {
-                state,
-                callstack: CallStackInfo::new(),
-                tracer: (),
-            }
-        }
-    }
-
-    impl<'a> OwnedRuntimeRes<'a> {
-        pub fn as_res<'b>(&'b mut self) -> RuntimeRes<'b> {
-            RuntimeRes {
-                state: &mut self.state,
-                callstack: &mut self.callstack,
-                tracer: &mut self.tracer,
-            }
-        }
-    }
-}
-#[cfg(test)]
-pub use runtime_res_test::OwnedRuntimeRes;
-
-/// The `LocalContext` only contains the parameters can be owned by an
-/// executive. It will be never change during the lifetime of its corresponding
-/// executive.
-pub struct FrameContext<'a> {
-    pub space: Space,
-    pub env: &'a Env,
-    pub depth: usize,
-    pub create_address: Option<Address>,
-    pub origin: OriginInfo,
-    pub substate: Substate,
-    pub machine: &'a Machine,
-    pub spec: &'a Spec,
-    pub static_flag: bool,
-}
-
-impl<'a> FrameContext<'a> {
-    pub fn new(
-        space: Space, env: &'a Env, machine: &'a Machine, spec: &'a Spec,
-        depth: usize, origin: OriginInfo, substate: Substate,
-        create_address: Option<Address>, static_flag: bool,
-    ) -> Self
-    {
-        FrameContext {
-            space,
-            env,
-            depth,
-            origin,
-            substate,
-            machine,
-            spec,
-            create_address,
-            static_flag,
-        }
-    }
-
-    /// The `LocalContext` only contains the parameters can be owned by an
-    /// executive. For the parameters shared between executives (like `&mut
-    /// State`), the executive should activate `LocalContext` by passing in
-    /// these parameters.
-    pub fn make_vm_context<'b, 'c>(
-        &'b mut self, resources: &'b mut RuntimeRes<'c>,
-    ) -> Context<'b> {
-        Context::new(self, resources)
-    }
-}
-
-pub enum FrameResumer {
-    ResumeFromCall(Box<dyn ResumeCall>),
-    ResumeFromCreate(Box<dyn ResumeCreate>),
-}
-
-pub struct InvokeInfo<'a> {
-    callee: FreshFrame<'a>,
-    caller: SuspendedFrame<'a>,
-}
-
-pub enum ExecResult<'a> {
-    Return(vm::Result<ExecutiveResult>),
-    Invoke(InvokeInfo<'a>),
-}
-
-impl<'a> FreshFrame<'a> {
-    /// Create a new call executive using raw data.
-    pub fn new(
-        params: ActionParams, env: &'a Env, machine: &'a Machine,
-        spec: &'a Spec, depth: usize, parent_static_flag: bool,
-    ) -> Self
-    {
-        let is_create = params.create_type != CreateType::None;
-        let create_address = is_create.then_some(params.code_address);
-        trace!(
-            "Executive::{:?}(params={:?}) self.env={:?}, parent_static={}",
-            if is_create { "create" } else { "call" },
-            params,
-            env,
-            parent_static_flag,
-        );
-
-        let static_flag =
-            parent_static_flag || params.call_type == CallType::StaticCall;
-
-        let substate = Substate::new();
-        // This logic is moved from function exec.
-        let origin = OriginInfo::from(&params);
-
-        let context = FrameContext::new(
-            params.space,
-            env,
-            machine,
-            spec,
-            depth,
-            origin,
-            substate,
-            create_address,
-            static_flag,
-        );
-        FreshFrame { context, params }
-    }
-}
-
-impl<'a> FrameContext<'a> {
-    /// This executive always contain an unconfirmed substate, returns a mutable
-    /// reference to it.
-    pub fn unconfirmed_substate(&mut self) -> &mut Substate {
-        &mut self.substate
-    }
-
-    /// Get the recipient of this executive. The recipient is the address whose
-    /// state will change.
-    pub fn get_recipient(&self) -> &Address { &self.origin.recipient() }
-}
-
-fn check_static_flag(
-    params: &ActionParams, static_flag: bool, is_create: bool,
-) -> vm::Result<()> {
-    // This is the function check whether contract creation or value
-    // transferring happens in static context at callee executive. However,
-    // it is meaningless because the caller has checked this constraint
-    // before message call. Currently, if we panic when this
-    // function returns error, all the tests can still pass.
-    // So we no longer check the logic for reentrancy here,
-    // TODO: and later we will check if we can safely remove this function.
-    if is_create {
-        if static_flag {
-            return Err(vm::Error::MutableCallInStaticContext);
-        }
-    } else {
-        if static_flag
-            && (params.call_type == CallType::StaticCall
-                || params.call_type == CallType::Call)
-            && params.value.value() > U256::zero()
-        {
-            return Err(vm::Error::MutableCallInStaticContext);
-        }
-    }
-
-    Ok(())
-}
-
-fn transfer_exec_balance(
-    params: &ActionParams, spec: &Spec, state: &mut State,
-    substate: &mut Substate,
-) -> DbResult<()>
-{
-    let sender = AddressWithSpace {
-        address: params.sender,
-        space: params.space,
-    };
-    let receiver = AddressWithSpace {
-        address: params.address,
-        space: params.space,
-    };
-    if let ActionValue::Transfer(val) = params.value {
-        state.transfer_balance(
-            &sender,
-            &receiver,
-            &val,
-            cleanup_mode(substate, &spec),
-        )?;
-    }
-
-    Ok(())
-}
-
-fn transfer_exec_balance_and_init_contract(
-    params: &ActionParams, spec: &Spec, state: &mut State,
-    substate: &mut Substate, storage_layout: Option<StorageLayout>,
-) -> DbResult<()>
-{
-    let sender = AddressWithSpace {
-        address: params.sender,
-        space: params.space,
-    };
-    let receiver = AddressWithSpace {
-        address: params.address,
-        space: params.space,
-    };
-    if let ActionValue::Transfer(val) = params.value {
-        // It is possible to first send money to a pre-calculated
-        // contract address.
-        let prev_balance = state.balance(&receiver)?;
-        state.sub_balance(&sender, &val, &mut cleanup_mode(substate, &spec))?;
-        let admin = if params.space == Space::Native {
-            params.original_sender
-        } else {
-            Address::zero()
-        };
-        state.new_contract_with_admin(
-            &receiver,
-            &admin,
-            val.saturating_add(prev_balance),
-            storage_layout,
-            spec.cip107,
-        )?;
-    } else {
-        // In contract creation, the `params.value` should never be
-        // `Apparent`.
-        unreachable!();
-    }
-
-    Ok(())
-}
-
-impl<'a> FrameContext<'a> {
-    /// When the executive (the inner EVM) returns, this function will process
-    /// the rest tasks: If the execution successes, this function collects
-    /// storage collateral change from the cache to substate, merge substate to
-    /// its parent and settles down bytecode for newly created contract. If the
-    /// execution fails, this function reverts state and drops substate.
-    fn process_return(
-        mut self, result: vm::Result<GasLeft>, resources: &mut RuntimeRes<'a>,
-    ) -> DbResult<vm::Result<ExecutiveResult>> {
-        let context = self.make_vm_context(resources);
-        // The post execution task in spec is completed here.
-        let finalized_result = result.finalize(context);
-        let finalized_result = vm::separate_out_db_error(finalized_result)?;
-
-        let apply_state =
-            finalized_result.as_ref().map_or(false, |r| r.apply_state);
-        let maybe_substate;
-        if apply_state {
-            let mut substate = self.substate;
-            if let Some(create_address) = self.create_address {
-                substate
-                    .contracts_created
-                    .push(create_address.with_space(self.space));
-            }
-            maybe_substate = Some(substate);
-            resources.state.discard_checkpoint();
-        } else {
-            maybe_substate = None;
-            resources.state.revert_to_checkpoint();
-        }
-
-        let create_address = self.create_address;
-        let executive_result = finalized_result.map(|result| {
-            ExecutiveResult::new(result, create_address, maybe_substate)
-        });
-        if self.create_address.is_some() {
-            resources.tracer.record_create_result(&executive_result);
-        } else {
-            resources.tracer.record_call_result(&executive_result);
-        }
-
-        resources.callstack.pop();
-
-        Ok(executive_result)
-    }
-
-    /// If the executive triggers a sub-call during execution, this function
-    /// outputs a trap error with sub-call parameters and return point.
-    fn process_invoke(self, trap_err: ExecTrapError) -> InvokeInfo<'a> {
-        let (params, resumer) = match trap_err {
-            TrapError::Call(subparams, resume) => {
-                (subparams, FrameResumer::ResumeFromCall(resume))
-            }
-            TrapError::Create(subparams, resume) => {
-                (subparams, FrameResumer::ResumeFromCreate(resume))
-            }
-        };
-        let callee = FreshFrame::new(
-            params,
-            self.env,
-            self.machine,
-            self.spec,
-            self.depth + 1,
-            self.static_flag,
-        );
-        let caller = self.suspend(resumer);
-        InvokeInfo { callee, caller }
-    }
-
-    fn suspend(self, resumer: FrameResumer) -> SuspendedFrame<'a> {
-        SuspendedFrame {
-            context: self,
-            resumer,
-        }
-    }
-}
-
-impl<'a> FreshFrame<'a> {
-    /// Execute the executive. If a sub-call/create action is required, a
-    /// resume trap error is returned. The caller is then expected to call
-    /// `resume` to continue the execution.
-    pub fn exec(
-        self, resources: &mut RuntimeRes<'a>,
-    ) -> DbResult<ExecResult<'a>> {
-        let FreshFrame {
-            mut context,
-            params,
-        } = self;
-        let is_create = context.create_address.is_some();
-
-        // By technical specification and current implementation, the EVM should
-        // guarantee the current executive satisfies static_flag.
-        check_static_flag(&params, context.static_flag, is_create)
-            .expect("check_static_flag should always success because EVM has checked it.");
-
-        // Trace task
-        if is_create {
-            debug!(
-                "CallCreateExecutiveKind::ExecCreate: contract_addr = {:?}",
-                params.address
-            );
-            resources.tracer.record_create(&params);
-        } else {
-            resources.tracer.record_call(&params);
-        }
-
-        // Make checkpoint for this executive, callstack is always maintained
-        // with checkpoint.
-        resources.state.checkpoint();
-
-        let contract_address = context.get_recipient().clone();
-        resources
-            .callstack
-            .push(contract_address.with_space(context.space), is_create);
-
-        // Pre execution: transfer value and init contract.
-        let spec = &context.spec;
-        if is_create {
-            transfer_exec_balance_and_init_contract(
-                &params,
-                spec,
-                resources.state,
-                // It is a bug in the Parity version.
-                &mut context.substate,
-                Some(STORAGE_LAYOUT_REGULAR_V0),
-            )?
-        } else {
-            transfer_exec_balance(
-                &params,
-                spec,
-                resources.state,
-                &mut context.substate,
-            )?
-        };
-
-        let exec = context.make_exec(params);
-        context.run(exec, resources)
-    }
-}
-
-impl<'a> FrameContext<'a> {
-    fn make_exec(&self, params: ActionParams) -> Box<dyn 'a + Exec> {
-        let is_create = self.create_address.is_some();
-        let code_address = params.code_address.with_space(params.space);
-        let internal_contract_map = self.machine.internal_contracts();
-
-        // Builtin is located for both Conflux Space and EVM Space.
-        if let Some(builtin) =
-            self.machine.builtin(&code_address, self.env.number)
-        {
-            trace!("CallBuiltin");
-            return Box::new(BuiltinExec { builtin, params });
-        }
-
-        if let Some(internal) =
-            internal_contract_map.contract(&code_address, &self.spec)
-        {
-            debug!(
-                "CallInternalContract: address={:?} data={:?}",
-                code_address, params.data
-            );
-            return Box::new(InternalContractExec { internal, params });
-        }
-
-        if is_create || params.code.is_some() {
-            trace!("CallCreate");
-            let factory = self.machine.vm_factory_ref();
-            factory.create(params, self.spec, self.depth)
-        } else {
-            trace!("Transfer");
-            Box::new(NoopExec { gas: params.gas })
-        }
-    }
-}
-
-impl<'a> SuspendedFrame<'a> {
-    pub fn resume(
-        self, mut result: vm::Result<ExecutiveResult>,
-        resources: &mut RuntimeRes<'a>,
-    ) -> DbResult<ExecResult<'a>>
-    {
-        let SuspendedFrame {
-            mut context,
-            resumer,
-        } = self;
-        accrue_substate(context.unconfirmed_substate(), &mut result);
-
-        // Process resume tasks, which is defined in Instruction Set
-        // Specification of tech-specification.
-        let exec = match resumer {
-            FrameResumer::ResumeFromCreate(resume) => {
-                let result = into_contract_create_result(result);
-                resume.resume_create(result)
-            }
-            FrameResumer::ResumeFromCall(resume) => {
-                let result = into_message_call_result(result);
-                resume.resume_call(result)
-            }
-        };
-
-        // Post execution.
-        context.run(exec, resources)
-    }
-}
-
-impl<'a> FrameContext<'a> {
-    #[inline]
-    fn run(
-        mut self, exec: Box<dyn 'a + Exec>, resources: &mut RuntimeRes<'a>,
-    ) -> DbResult<ExecResult<'a>> {
-        let mut vm_context = self.make_vm_context(resources);
-        let output = exec.exec(&mut vm_context);
-
-        // Convert the `ExecTrapResult` (result of evm) to `ExecutiveTrapResult`
-        // (result of self).
-        let exec_result = match output {
-            TrapResult::Return(result) => {
-                ExecResult::Return(self.process_return(result, resources)?)
-            }
-
-            TrapResult::SubCallCreate(trap_err) => {
-                ExecResult::Invoke(self.process_invoke(trap_err))
-            }
-        };
-        Ok(exec_result)
-    }
-}
-
-/// Execute the top call-create executive. This function handles resume
-/// traps and sub-level tracing. The caller is expected to handle
-/// current-level tracing.
-pub fn consume<'a>(
-    main_frame: FreshFrame<'a>, mut resources: RuntimeRes<'a>,
-    top_substate: &mut Substate,
-) -> DbResult<vm::Result<FinalizationResult>>
-{
-    let mut frame_stack: Vec<SuspendedFrame> = Vec::new();
-
-    let mut last_result = main_frame.exec(&mut resources)?;
-
-    loop {
-        last_result = match last_result {
-            ExecResult::Return(mut result) => {
-                let frame = match frame_stack.pop() {
-                    Some(x) => x,
-                    None => {
-                        accrue_substate(top_substate, &mut result);
-                        return Ok(result.map(Into::into));
-                    }
-                };
-
-                frame.resume(result, &mut resources)?
-            }
-            ExecResult::Invoke(InvokeInfo { callee, caller }) => {
-                frame_stack.push(caller);
-                callee.exec(&mut resources)?
-            }
-        }
-    }
-}
-
-pub fn accrue_substate(
-    parent_substate: &mut Substate, result: &mut vm::Result<ExecutiveResult>,
-) {
-    if let Ok(frame_return) = result {
-        if let Some(substate) = std::mem::take(&mut frame_return.substate) {
-            parent_substate.accrue(substate);
-        }
-    }
-}
-
-/// The result contains more data than finalization result.
-#[derive(Debug)]
-pub struct ExecutiveResult {
-    /// Space
-    pub space: Space,
-    /// Final amount of gas left.
-    pub gas_left: U256,
-    /// Apply execution state changes or revert them.
-    pub apply_state: bool,
-    /// Return data buffer.
-    pub return_data: ReturnData,
-    /// Create address.
-    pub create_address: Option<Address>,
-    /// Substate.
-    pub substate: Option<Substate>,
-}
-
-impl Into<FinalizationResult> for ExecutiveResult {
-    fn into(self) -> FinalizationResult {
-        FinalizationResult {
-            space: self.space,
-            gas_left: self.gas_left,
-            apply_state: self.apply_state,
-            return_data: self.return_data,
-        }
-    }
-}
-
-impl ExecutiveResult {
-    fn new(
-        result: FinalizationResult, create_address: Option<Address>,
-        substate: Option<Substate>,
-    ) -> Self
-    {
-        ExecutiveResult {
-            space: result.space,
-            gas_left: result.gas_left,
-            apply_state: result.apply_state,
-            return_data: result.return_data,
-            create_address,
-            substate,
         }
     }
 }
@@ -950,11 +227,74 @@ impl<'a> ExecutiveGeneric<'a> {
         }
     }
 
-    pub fn call(
-        &mut self, params: ActionParams, substate: &mut Substate,
-        tracer: &mut dyn VmObserve,
-    ) -> DbResult<vm::Result<FinalizationResult>>
+    pub fn exec_tx(
+        &mut self, params: ActionParams, tracer: &mut dyn VmObserve,
+        total_storage_limit: U256, check_settings: &TransactCheckSettings,
+    ) -> DbResult<(FrameResult, Bytes)>
     {
+        // Initialize the checkpoint for transaction execution. This checkpoint
+        // can be reverted by "not enough balance for storage".
+        self.state.checkpoint();
+        tracer.checkpoint();
+
+        let sender = params.sender.with_space(params.space);
+
+        let mut res = self.exec_vm(params, tracer)?;
+        if let Ok(FrameReturn {
+            apply_state: true,
+            substate: Some(ref substate),
+            ..
+        }) = res
+        {
+            let dry_run = !matches!(
+                check_settings.charge_collateral,
+                ChargeCollateral::Normal
+            );
+
+            // For a ethereum space tx, this function has no op.
+            let mut collateral_check_result = settle_collateral_for_all(
+                &mut self.state,
+                substate,
+                tracer,
+                &self.spec,
+                dry_run,
+            )?;
+
+            if collateral_check_result.is_ok() {
+                collateral_check_result = self.state.check_storage_limit(
+                    &sender.address,
+                    &total_storage_limit,
+                    dry_run,
+                )?;
+            }
+
+            if let Err(err) = collateral_check_result {
+                res = Err(err.into_vm_error());
+            }
+        }
+        // Charge collateral and process the checkpoint.
+        let out = match &res {
+            Ok(res) => {
+                tracer.discard_checkpoint();
+                self.state.discard_checkpoint();
+                res.return_data.to_vec()
+            }
+            Err(vm::Error::StateDbError(_)) => {
+                // The whole epoch execution fails. No need to revert state.
+                Vec::new()
+            }
+            Err(_) => {
+                tracer.revert_to_checkpoint();
+                self.state.revert_to_checkpoint();
+                Vec::new()
+            }
+        };
+        Ok((res, out))
+    }
+
+    fn exec_vm(
+        &mut self, params: ActionParams, tracer: &mut dyn VmObserve,
+    ) -> DbResult<FrameResult> {
         let main_frame = FreshFrame::new(
             params,
             self.env,
@@ -969,252 +309,19 @@ impl<'a> ExecutiveGeneric<'a> {
             callstack: &mut callstack,
             tracer,
         };
-        consume(main_frame, resources, substate)
+        exec_main_frame(main_frame, resources)
     }
 
-    pub fn transact_virtual(
-        &mut self, mut tx: SignedTransaction, request: EstimateRequest,
-    ) -> DbResult<ExecutionOutcome> {
-        let is_native_tx = tx.space() == Space::Native;
-        let request_storage_limit = tx.storage_limit();
+    #[cfg(test)]
+    pub fn call_for_test(
+        &mut self, params: ActionParams, substate: &mut Substate,
+        tracer: &mut dyn VmObserve,
+    ) -> DbResult<vm::Result<crate::evm::FinalizationResult>>
+    {
+        let mut frame_result = self.exec_vm(params, tracer)?;
+        accrue_substate(substate, &mut frame_result);
 
-        if !request.has_sender {
-            let mut random_hex = Address::random();
-            if is_native_tx {
-                random_hex.set_user_account_type_bits();
-            }
-            tx.sender = random_hex;
-            tx.public = None;
-
-            // If the sender is not specified, give it enough balance: 1 billion
-            // CFX.
-            let balance_inc = min(
-                tx.value().saturating_add(
-                    U256::from(1_000_000_000) * ONE_CFX_IN_DRIP,
-                ),
-                U256::one().shl(128),
-            );
-
-            self.state.add_balance(
-                &random_hex.with_space(tx.space()),
-                &balance_inc,
-                CleanupMode::NoEmpty,
-            )?;
-            // Make sure statistics are also correct and will not violate any
-            // underlying assumptions.
-            self.state.add_total_issued(balance_inc);
-            if tx.space() == Space::Ethereum {
-                self.state.add_total_evm_tokens(balance_inc);
-            }
-        }
-
-        if request.has_nonce {
-            self.state.set_nonce(&tx.sender(), &tx.nonce())?;
-        } else {
-            *tx.nonce_mut() = self.state.nonce(&tx.sender())?;
-        }
-
-        let balance = self.state.balance(&tx.sender())?;
-
-        // For the same transaction, the storage limit paid by user and the
-        // storage limit paid by the sponsor are different values. So
-        // this function will
-        //
-        // 1. First Pass: Assuming the sponsor pays for storage collateral,
-        // check if the transaction will fail for
-        // NotEnoughBalanceForStorage.
-        //
-        // 2. Second Pass: If it does, executes the transaction again assuming
-        // the user pays for the storage collateral. The resultant
-        // storage limit must be larger than the maximum storage limit
-        // can be afford by the sponsor, to guarantee the user pays for
-        // the storage limit.
-
-        // First pass
-        self.state.checkpoint();
-        let sender_pay_executed = match self
-            .transact(&tx, TransactOptions::estimate_first_pass(request))?
-        {
-            ExecutionOutcome::Finished(executed) => executed,
-            res => {
-                return Ok(res);
-            }
-        };
-        debug!(
-            "Transaction estimate first pass outcome {:?}",
-            sender_pay_executed
-        );
-        self.state.revert_to_checkpoint();
-
-        // Second pass
-        let mut contract_pay_executed: Option<Executed> = None;
-        let mut native_to_contract: Option<Address> = None;
-        let mut sponsor_for_collateral_eligible = false;
-        if let Transaction::Native(NativeTransaction {
-            action: Action::Call(ref to),
-            ..
-        }) = tx.unsigned
-        {
-            if to.is_contract_address() {
-                native_to_contract = Some(*to);
-                let has_sponsor = self
-                    .state
-                    .sponsor_for_collateral(&to)?
-                    .map_or(false, |x| !x.is_zero());
-
-                if has_sponsor
-                    && (self
-                        .state
-                        .check_contract_whitelist(&to, &tx.sender().address)?
-                        || self
-                            .state
-                            .check_contract_whitelist(&to, &Address::zero())?)
-                {
-                    sponsor_for_collateral_eligible = true;
-
-                    self.state.checkpoint();
-                    let res = self.transact(
-                        &tx,
-                        TransactOptions::estimate_second_pass(request),
-                    )?;
-                    self.state.revert_to_checkpoint();
-
-                    contract_pay_executed = match res {
-                        ExecutionOutcome::Finished(executed) => Some(executed),
-                        res => {
-                            warn!("Should unreachable because two pass estimations should have the same output. \
-                                Now we have: first pass success {:?}, second pass fail {:?}", sender_pay_executed, res);
-                            None
-                        }
-                    };
-                    debug!(
-                        "Transaction estimate second pass outcome {:?}",
-                        contract_pay_executed
-                    );
-                }
-            }
-        };
-
-        let overwrite_storage_limit =
-            |mut executed: Executed, max_sponsor_storage_limit: u64| {
-                debug!("Transaction estimate overwrite the storage limit to overcome sponsor_balance_for_collateral.");
-                executed.estimated_storage_limit = max(
-                    executed.estimated_storage_limit,
-                    max_sponsor_storage_limit + 64,
-                );
-                executed
-            };
-
-        let mut executed = if !sponsor_for_collateral_eligible {
-            sender_pay_executed
-        } else {
-            let contract_address = native_to_contract.as_ref().unwrap();
-            let sponsor_balance_for_collateral = self
-                .state
-                .sponsor_balance_for_collateral(contract_address)?
-                + self.state.available_storage_points_for_collateral(
-                    contract_address,
-                )?;
-            let max_sponsor_storage_limit = (sponsor_balance_for_collateral
-                / *DRIPS_PER_STORAGE_COLLATERAL_UNIT)
-                .as_u64();
-            if let Some(contract_pay_executed) = contract_pay_executed {
-                if max_sponsor_storage_limit
-                    >= contract_pay_executed.estimated_storage_limit
-                {
-                    contract_pay_executed
-                } else {
-                    overwrite_storage_limit(
-                        sender_pay_executed,
-                        max_sponsor_storage_limit,
-                    )
-                }
-            } else {
-                overwrite_storage_limit(
-                    sender_pay_executed,
-                    max_sponsor_storage_limit,
-                )
-            }
-        };
-
-        // Revise the gas used in result, if we estimate the transaction with a
-        // default large enough gas.
-        if !request.has_gas_limit {
-            let estimated_gas_limit = executed.estimated_gas_limit.unwrap();
-            executed.gas_charged = max(
-                estimated_gas_limit - estimated_gas_limit / 4,
-                executed.gas_used,
-            );
-            executed.fee = executed.gas_charged.saturating_mul(*tx.gas_price());
-        }
-
-        // If we don't charge gas, recheck the current gas_fee is ok for
-        // sponsorship.
-        if !request.charge_gas()
-            && request.has_gas_price
-            && executed.gas_sponsor_paid
-        {
-            let enough_balance = executed.fee
-                <= self
-                    .state
-                    .sponsor_balance_for_gas(&native_to_contract.unwrap())?;
-            let enough_bound = executed.fee
-                <= self
-                    .state
-                    .sponsor_gas_bound(&native_to_contract.unwrap())?;
-            if !(enough_balance && enough_bound) {
-                debug!("Transaction estimate unset \"sponsor_paid\" because of not enough sponsor balance / gas bound.");
-                executed.gas_sponsor_paid = false;
-            }
-        }
-
-        // If the request has a sender, recheck the balance requirement matched.
-        if request.has_sender {
-            // Unwrap safety: in given TransactOptions, this value must be
-            // `Some(_)`.
-            let gas_fee =
-                if request.recheck_gas_fee() && !executed.gas_sponsor_paid {
-                    executed
-                        .estimated_gas_limit
-                        .unwrap()
-                        .saturating_mul(*tx.gas_price())
-                } else {
-                    0.into()
-                };
-            let storage_collateral = if !executed.storage_sponsor_paid {
-                U256::from(executed.estimated_storage_limit)
-                    * *DRIPS_PER_STORAGE_COLLATERAL_UNIT
-            } else {
-                0.into()
-            };
-            let value_and_fee = tx
-                .value()
-                .saturating_add(gas_fee)
-                .saturating_add(storage_collateral);
-            if balance < value_and_fee {
-                return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
-                    ExecutionError::NotEnoughCash {
-                        required: value_and_fee.into(),
-                        got: balance.into(),
-                        actual_gas_cost: min(balance, gas_fee),
-                        max_storage_limit_cost: storage_collateral,
-                    },
-                    executed,
-                ));
-            }
-        }
-
-        if request.has_storage_limit {
-            let storage_limit = request_storage_limit.unwrap();
-            if storage_limit < executed.estimated_storage_limit {
-                return Ok(ExecutionOutcome::ExecutionErrorBumpNonce(
-                    ExecutionError::VmError(vm::Error::ExceedStorageLimit),
-                    executed,
-                ));
-            }
-        }
-
-        return Ok(ExecutionOutcome::Finished(executed));
+        Ok(frame_result.map(Into::into))
     }
 
     fn sponsor_check(
@@ -1551,7 +658,6 @@ impl<'a> ExecutiveGeneric<'a> {
         let total_storage_limit =
             self.state.collateral_for_storage(&sender.address)? + storage_cost;
 
-        let mut substate = Substate::new();
         let params = self.make_action_params(tx, storage_owner, init_gas)?;
 
         if !self.check_create_address(&params)? {
@@ -1569,57 +675,13 @@ impl<'a> ExecutiveGeneric<'a> {
             ));
         }
 
-        // Initialize the checkpoint for transaction execution. This checkpoint
-        // can be reverted by "not enough balance for storage".
-        self.state.checkpoint();
-        observer.as_state_tracer().checkpoint();
-
-        let res =
-            self.call(params, &mut substate, &mut *observer.as_vm_observe())?;
-        // Charge collateral and process the checkpoint.
-        let (result, output) = {
-            let res = res.and_then(|finalize_res| {
-                let dry_run = !matches!(
-                    check_settings.charge_collateral,
-                    ChargeCollateral::Normal
-                );
-
-                // For a ethereum space tx, this function has no op.
-                let mut res = settle_collateral_for_all(
-                    &mut self.state,
-                    &substate,
-                    observer.as_state_tracer(),
-                    &self.spec,
-                    dry_run,
-                )?;
-                if res.ok() {
-                    res = self.state.check_storage_limit(
-                        &sender.address,
-                        &total_storage_limit,
-                        dry_run,
-                    )?;
-                }
-                res.into_vm_result().and(Ok(finalize_res))
-            });
-            let out = match &res {
-                Ok(res) => {
-                    observer.as_state_tracer().discard_checkpoint();
-                    self.state.discard_checkpoint();
-                    tx_substate.accrue(substate);
-                    res.return_data.to_vec()
-                }
-                Err(vm::Error::StateDbError(_)) => {
-                    // The whole epoch execution fails. No need to revert state.
-                    Vec::new()
-                }
-                Err(_) => {
-                    observer.as_state_tracer().revert_to_checkpoint();
-                    self.state.revert_to_checkpoint();
-                    Vec::new()
-                }
-            };
-            (res, out)
-        };
+        let (mut result, output) = self.exec_tx(
+            params,
+            &mut *observer.as_vm_observe(),
+            total_storage_limit,
+            &check_settings,
+        )?;
+        accrue_substate(&mut tx_substate, &mut result);
 
         let refund_receiver = if gas_sponsored {
             Some(code_address)
@@ -1731,7 +793,7 @@ impl<'a> ExecutiveGeneric<'a> {
     // post-processing.
     fn kill_process(
         &mut self, suicides: &HashSet<AddressWithSpace>,
-        tracer: &mut dyn StateTracer, spec: &Spec,
+        tracer: &mut dyn VmObserve, spec: &Spec,
     ) -> DbResult<Substate>
     {
         let mut substate = Substate::new();
@@ -1762,16 +824,16 @@ impl<'a> ExecutiveGeneric<'a> {
             assert!(self.state.is_fresh_storage(address)?);
         }
 
-        let res = settle_collateral_for_all(
+        // Kill process does not occupy new storage entries.
+        // The storage recycling process should never occupy new collateral.
+        settle_collateral_for_all(
             &mut self.state,
             &substate,
             tracer,
             spec,
             false,
-        )?;
-        // Kill process does not occupy new storage entries.
-        // The storage recycling process should never occupy new collateral.
-        assert_eq!(res, CollateralCheckResult::Valid);
+        )?
+        .expect("Should success");
 
         for contract_address in suicides
             .iter()
@@ -1856,13 +918,13 @@ impl<'a> ExecutiveGeneric<'a> {
     /// Finalizes the transaction (does refunds and suicides).
     fn finalize(
         &mut self, tx: &SignedTransaction, mut substate: Substate,
-        result: vm::Result<FinalizationResult>, output: Bytes,
+        result: vm::Result<FrameReturn>, output: Bytes,
         refund_receiver: Option<Address>, storage_sponsor_paid: bool,
         mut observer: Observer, estimated_gas_limit: Option<U256>,
     ) -> DbResult<ExecutionOutcome>
     {
         let gas_left = match result {
-            Ok(FinalizationResult { gas_left, .. }) => gas_left,
+            Ok(FrameReturn { gas_left, .. }) => gas_left,
             _ => 0.into(),
         };
 
@@ -1915,7 +977,7 @@ impl<'a> ExecutiveGeneric<'a> {
 
         let subsubstate = self.kill_process(
             &substate.suicides,
-            observer.as_state_tracer(),
+            &mut *observer.as_vm_observe(),
             &self.spec,
         )?;
         substate.accrue(subsubstate);
@@ -2016,6 +1078,27 @@ impl<'a> ExecutiveGeneric<'a> {
                         executed,
                     ))
                 }
+            }
+        }
+    }
+}
+
+pub type CollateralCheckResult = std::result::Result<(), CollateralCheckError>;
+
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum CollateralCheckError {
+    ExceedStorageLimit { limit: U256, required: U256 },
+    NotEnoughBalance { required: U256, got: U256 },
+}
+
+impl CollateralCheckError {
+    pub fn into_vm_error(self) -> vm::Error {
+        match self {
+            CollateralCheckError::ExceedStorageLimit { .. } => {
+                vm::Error::ExceedStorageLimit
+            }
+            CollateralCheckError::NotEnoughBalance { required, got } => {
+                vm::Error::NotEnoughBalanceForStorage { required, got }
             }
         }
     }

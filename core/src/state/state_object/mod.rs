@@ -20,6 +20,7 @@ macro_rules! noop_if {
     };
 }
 
+#[macro_export]
 macro_rules! unwrap_or_return {
     ($option:expr) => {
         match $option {
@@ -55,7 +56,6 @@ use super::{
     overlay_account::OverlayAccount, substate, AccountEntryProtectedMethods,
 };
 use crate::{executive::internal_contract, vm::Spec};
-use cfx_state::tracer::StateTracer;
 use cfx_statedb::{Result as DbResult, StateDbExt, StateDbGeneric as StateDb};
 use cfx_types::AddressWithSpace;
 use parking_lot::RwLock;

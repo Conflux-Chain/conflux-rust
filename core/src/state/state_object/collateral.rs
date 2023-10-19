@@ -1,13 +1,16 @@
-use super::{substate::Substate, Spec, State, StateTracer};
+use super::{substate::Substate, Spec, State};
 use crate::{
-    executive::internal_contract::storage_point_prop,
+    executive::{
+        internal_contract::storage_point_prop, CollateralCheckError,
+        CollateralCheckResult,
+    },
+    observer::VmObserve,
     state::trace::{
         trace_convert_stroage_points, trace_occupy_collateral,
         trace_refund_collateral,
     },
 };
 use cfx_parameters::staking::DRIPS_PER_STORAGE_COLLATERAL_UNIT;
-use cfx_state::CollateralCheckResult;
 use cfx_statedb::{global_params::*, Result as DbResult};
 use cfx_types::{address_util::AddressUtil, Address, AddressSpaceUtil, U256};
 
@@ -78,14 +81,14 @@ impl State {
     ) -> DbResult<CollateralCheckResult> {
         let collateral_for_storage =
             self.collateral_for_storage(original_sender)?;
-        if collateral_for_storage > *storage_limit && !dry_run {
-            Ok(CollateralCheckResult::ExceedStorageLimit {
+        Ok(if collateral_for_storage > *storage_limit && !dry_run {
+            Err(CollateralCheckError::ExceedStorageLimit {
                 limit: *storage_limit,
                 required: collateral_for_storage,
             })
         } else {
-            Ok(CollateralCheckResult::Valid)
-        }
+            Ok(())
+        })
     }
 
     // TODO: This function can only be called after VM execution. There are some
@@ -93,13 +96,13 @@ impl State {
     #[cfg(test)]
     pub fn settle_collateral_and_check(
         &mut self, storage_owner: &Address, storage_limit: &U256,
-        substate: &mut Substate, tracer: &mut dyn StateTracer, spec: &Spec,
+        substate: &mut Substate, tracer: &mut dyn VmObserve, spec: &Spec,
         dry_run: bool,
     ) -> DbResult<CollateralCheckResult>
     {
         let res =
             settle_collateral_for_all(self, substate, tracer, spec, dry_run)?;
-        Ok(if res.ok() {
+        Ok(if res.is_ok() {
             self.check_storage_limit(storage_owner, storage_limit, dry_run)?
         } else {
             res
@@ -122,9 +125,9 @@ impl State {
         )?;
 
         if should_success {
-            assert_eq!(res, CollateralCheckResult::Valid);
+            res.unwrap();
         } else {
-            assert_ne!(res, CollateralCheckResult::Valid);
+            res.unwrap_err();
         }
 
         Ok(())
@@ -151,7 +154,7 @@ impl State {
 /// Charges or refund storage collateral and update `total_storage_tokens`.
 fn settle_collateral_for_address(
     state: &mut State, addr: &Address, substate: &Substate,
-    tracer: &mut dyn StateTracer, spec: &Spec, dry_run: bool,
+    tracer: &mut dyn VmObserve, spec: &Spec, dry_run: bool,
 ) -> DbResult<CollateralCheckResult>
 {
     let addr_with_space = addr.with_native_space();
@@ -192,17 +195,17 @@ fn settle_collateral_for_address(
         };
         // sponsor_balance is not enough to cover storage incremental.
         if inc > balance {
-            return Ok(CollateralCheckResult::NotEnoughBalance {
+            return Ok(Err(CollateralCheckError::NotEnoughBalance {
                 required: inc,
                 got: balance,
-            });
+            }));
         }
 
         let storage_points_used =
             state.add_collateral_for_storage(addr, &inc)?;
         trace_occupy_collateral(tracer, *addr, inc - storage_points_used);
     }
-    Ok(CollateralCheckResult::Valid)
+    Ok(Ok(()))
 }
 
 /// Charge and refund all the storage collaterals.
@@ -210,7 +213,7 @@ fn settle_collateral_for_address(
 /// checked out. This function should only be called in post-processing
 /// of a transaction.
 pub fn settle_collateral_for_all(
-    state: &mut State, substate: &Substate, tracer: &mut dyn StateTracer,
+    state: &mut State, substate: &Substate, tracer: &mut dyn VmObserve,
     spec: &Spec, dry_run: bool,
 ) -> DbResult<CollateralCheckResult>
 {
@@ -218,9 +221,9 @@ pub fn settle_collateral_for_all(
         let res = settle_collateral_for_address(
             state, &address, substate, tracer, spec, dry_run,
         )?;
-        if !res.ok() {
+        if res.is_err() {
             return Ok(res);
         }
     }
-    Ok(CollateralCheckResult::Valid)
+    Ok(Ok(()))
 }

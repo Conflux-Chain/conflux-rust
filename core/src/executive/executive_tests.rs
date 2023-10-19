@@ -2,10 +2,10 @@
 // Conflux is free software and distributed under GNU General Public License.
 // See http://www.gnu.org/licenses/
 
-use super::{executive::*, Executed, ExecutionError};
+use super::{estimation::*, executive::*, Executed, ExecutionError};
 use crate::{
     evm::{FinalizationResult, GasPriceTier},
-    executive::{CollateralCheckResultToVmResult, ExecutionOutcome},
+    executive::ExecutionOutcome,
     machine::Machine,
     state::{State, Substate},
     test_helpers::get_state_for_genesis_write,
@@ -20,7 +20,7 @@ use cfx_parameters::{
     internal_contract_addresses::STORAGE_INTEREST_STAKING_CONTRACT_ADDRESS,
     staking::*,
 };
-use cfx_state::{CleanupMode, CollateralCheckResult};
+use cfx_state::CleanupMode;
 use cfx_statedb::StateDb;
 use cfx_storage::{
     state_manager::StateManagerTrait, tests::new_state_manager_for_unit_test,
@@ -126,7 +126,7 @@ fn test_sender_balance() {
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let mut tracer = ();
         let res = ex
-            .call(params.clone(), &mut substate, &mut tracer)
+            .call_for_test(params.clone(), &mut substate, &mut tracer)
             .expect("no db error")
             .expect("no vm error");
         state
@@ -139,7 +139,6 @@ fn test_sender_balance() {
                 false,
             )
             .unwrap()
-            .into_vm_result()
             .unwrap();
         state.discard_checkpoint();
         res
@@ -227,7 +226,7 @@ fn test_create_contract_out_of_depth() {
     let FinalizationResult { gas_left, .. } = {
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let mut tracer = ();
-        ex.call(params, &mut substate, &mut tracer)
+        ex.call_for_test(params, &mut substate, &mut tracer)
             .expect("no db error")
             .expect("no vm error")
     };
@@ -291,7 +290,7 @@ fn test_suicide_when_creation() {
         return_data: _,
         ..
     } = ex
-        .call(params, &mut substate, &mut tracer)
+        .call_for_test(params, &mut substate, &mut tracer)
         .expect("no db error")
         .expect("no vm error");
 
@@ -387,7 +386,7 @@ fn test_call_to_create() {
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let mut tracer = ();
         let res = ex
-            .call(params.clone(), &mut substate, &mut tracer)
+            .call_for_test(params.clone(), &mut substate, &mut tracer)
             .expect("no db error")
             .expect("no vm error");
         state
@@ -400,7 +399,6 @@ fn test_call_to_create() {
                 false,
             )
             .unwrap()
-            .into_vm_result()
             .unwrap();
         state.discard_checkpoint();
         res
@@ -464,7 +462,7 @@ fn test_revert() {
     } = {
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let mut tracer = ();
-        ex.call(params, &mut substate, &mut tracer)
+        ex.call_for_test(params, &mut substate, &mut tracer)
             .expect("no db error")
             .expect("no vm error")
     };
@@ -526,7 +524,7 @@ fn test_keccak() {
     let mut tracer = ();
     let result = {
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
-        ex.call(params, &mut substate, &mut tracer)
+        ex.call_for_test(params, &mut substate, &mut tracer)
             .expect("no db error")
     };
 
@@ -634,7 +632,7 @@ fn test_deposit_withdraw_lock() {
     // wrong call type
     let mut tracer = ();
     let result = Executive::new(&mut state, &env, &machine, &spec)
-        .call(params.clone(), &mut substate, &mut tracer)
+        .call_for_test(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
     assert!(result.is_err());
     assert_eq!(
@@ -657,7 +655,7 @@ fn test_deposit_withdraw_lock() {
     params.data = Some("b6b55f250000000000000000000000000000000000000000000000000de0b6b3a763ffff".from_hex().unwrap());
 
     let result = Executive::new(&mut state, &env, &machine, &spec)
-        .call(params.clone(), &mut substate, &mut tracer)
+        .call_for_test(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
     assert!(result.is_err());
     assert_eq!(
@@ -668,11 +666,8 @@ fn test_deposit_withdraw_lock() {
     // deposit 10^18, it should work fine
     params.data = Some("b6b55f250000000000000000000000000000000000000000000000000de0b6b3a7640000".from_hex().unwrap());
     let mut tracer = ();
-    let result = Executive::new(&mut state, &env, &machine, &spec).call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    let result = Executive::new(&mut state, &env, &machine, &spec)
+        .call_for_test(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender_with_space).unwrap(),
@@ -695,7 +690,7 @@ fn test_deposit_withdraw_lock() {
     params.data = None;
     let mut tracer = ();
     let result = Executive::new(&mut state, &env, &machine, &spec)
-        .call(params.clone(), &mut substate, &mut tracer)
+        .call_for_test(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
     assert!(result.is_err());
     assert_eq!(
@@ -723,7 +718,7 @@ fn test_deposit_withdraw_lock() {
     params.data = Some("b6b55f25000000000000000000000000000000000000000000000000000000174876e8".from_hex().unwrap());
     let mut tracer = ();
     let result = Executive::new(&mut state, &env, &machine, &spec)
-        .call(params.clone(), &mut substate, &mut tracer)
+        .call_for_test(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
     assert!(result.is_err());
     assert_eq!(
@@ -752,11 +747,8 @@ fn test_deposit_withdraw_lock() {
     // withdraw
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000000000ba43b7400".from_hex().unwrap());
     let mut tracer = ();
-    let result = Executive::new(&mut state, &env, &machine, &spec).call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    let result = Executive::new(&mut state, &env, &machine, &spec)
+        .call_for_test(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender_with_space).unwrap(),
@@ -778,7 +770,7 @@ fn test_deposit_withdraw_lock() {
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000de0b6a803288c01".from_hex().unwrap());
 
     let result = Executive::new(&mut state, &env, &machine, &spec)
-        .call(params.clone(), &mut substate, &mut tracer)
+        .call_for_test(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
     assert!(result.is_err());
     assert_eq!(
@@ -808,7 +800,7 @@ fn test_deposit_withdraw_lock() {
     params.data = Some("44a51d6d00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000".from_hex().unwrap());
     let mut tracer = ();
     let result = Executive::new(&mut state, &env, &machine, &spec)
-        .call(params.clone(), &mut substate, &mut tracer)
+        .call_for_test(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
     assert!(result.is_err());
     assert_eq!(
@@ -840,11 +832,8 @@ fn test_deposit_withdraw_lock() {
     // lock 1 until 106751991167301 blocks, should succeed
     params.data = Some("44a51d6d00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000611722833944".from_hex().unwrap());
     let mut tracer = ();
-    let result = Executive::new(&mut state, &env, &machine, &spec).call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    let result = Executive::new(&mut state, &env, &machine, &spec)
+        .call_for_test(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender_with_space).unwrap(),
@@ -871,11 +860,8 @@ fn test_deposit_withdraw_lock() {
     // lock 2 until block_number=2
     params.data = Some("44a51d6d00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000002".from_hex().unwrap());
     let mut tracer = ();
-    let result = Executive::new(&mut state, &env, &machine, &spec).call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    let result = Executive::new(&mut state, &env, &machine, &spec)
+        .call_for_test(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender_with_space).unwrap(),
@@ -903,7 +889,7 @@ fn test_deposit_withdraw_lock() {
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000de0b6a803288bff".from_hex().unwrap());
     let mut tracer = ();
     let result = Executive::new(&mut state, &env, &machine, &spec)
-        .call(params.clone(), &mut substate, &mut tracer)
+        .call_for_test(params.clone(), &mut substate, &mut tracer)
         .expect("no db error");
     assert!(result.is_err());
     assert_eq!(
@@ -938,11 +924,8 @@ fn test_deposit_withdraw_lock() {
     // withdraw exact withdrawable staking balance
     params.data = Some("2e1a7d4d0000000000000000000000000000000000000000000000000de0b6a803288bfe".from_hex().unwrap());
     let mut tracer = ();
-    let result = Executive::new(&mut state, &env, &machine, &spec).call(
-        params.clone(),
-        &mut substate,
-        &mut tracer,
-    );
+    let result = Executive::new(&mut state, &env, &machine, &spec)
+        .call_for_test(params.clone(), &mut substate, &mut tracer);
     assert!(result.is_ok());
     assert_eq!(
         state.balance(&sender_with_space).unwrap(),
@@ -1022,6 +1005,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &spec,
             false,
         )
+        .unwrap()
         .unwrap();
     state.discard_checkpoint();
     let mut debug_record = ComputeEpochDebugRecord::default();
@@ -1065,6 +1049,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &spec,
             false,
         )
+        .unwrap()
         .unwrap();
     state
         .clear_contract_whitelist(&address.address, &mut substate)
@@ -1119,6 +1104,7 @@ fn test_commission_privilege_all_whitelisted_across_epochs() {
             &spec,
             false,
         )
+        .unwrap()
         .unwrap();
     state.discard_checkpoint();
     state.commit(epoch_id, None).unwrap();
@@ -1706,19 +1692,19 @@ fn test_storage_commission_privilege() {
             &mut substate,
         )
         .unwrap();
-    assert_eq!(
-        state
-            .settle_collateral_and_check(
-                &sender.address(),
-                &U256::MAX,
-                &mut substate,
-                &mut (),
-                &spec,
-                false,
-            )
-            .unwrap(),
-        CollateralCheckResult::Valid
-    );
+
+    state
+        .settle_collateral_and_check(
+            &sender.address(),
+            &U256::MAX,
+            &mut substate,
+            &mut (),
+            &spec,
+            false,
+        )
+        .unwrap()
+        .unwrap();
+
     state.discard_checkpoint();
     assert_eq!(substate.storage_collateralized.len(), 1);
     assert_eq!(
@@ -2043,19 +2029,18 @@ fn test_storage_commission_privilege() {
             &mut substate,
         )
         .unwrap();
-    assert_eq!(
-        state
-            .settle_collateral_and_check(
-                &sender.address(),
-                &U256::MAX,
-                &mut substate,
-                &mut (),
-                &spec,
-                false
-            )
-            .unwrap(),
-        CollateralCheckResult::Valid
-    );
+    state
+        .settle_collateral_and_check(
+            &sender.address(),
+            &U256::MAX,
+            &mut substate,
+            &mut (),
+            &spec,
+            false,
+        )
+        .unwrap()
+        .unwrap();
+
     assert_eq!(
         state.balance(&sender_with_space).unwrap(),
         U256::from(1_875_000_000_000_000_000u64)
@@ -2217,7 +2202,7 @@ fn test_push0() {
             return_data: _,
             ..
         } = ex
-            .call(params, &mut Substate::new(), &mut ())
+            .call_for_test(params, &mut Substate::new(), &mut ())
             .expect("no db error")
             .expect("no vm error");
 
@@ -2244,7 +2229,7 @@ fn test_push0() {
             return_data: _,
             ..
         } = ex
-            .call(params, &mut Substate::new(), &mut ())
+            .call_for_test(params, &mut Substate::new(), &mut ())
             .expect("no db error")
             .expect("no vm error");
 
@@ -2266,7 +2251,7 @@ fn test_push0() {
 
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let error = ex
-            .call(params, &mut Substate::new(), &mut ())
+            .call_for_test(params, &mut Substate::new(), &mut ())
             .expect("no db error")
             .expect_err("should fail");
 
@@ -2286,7 +2271,7 @@ fn test_push0() {
 
         let mut ex = Executive::new(&mut state, &env, &machine, &spec);
         let error = ex
-            .call(params, &mut Substate::new(), &mut ())
+            .call_for_test(params, &mut Substate::new(), &mut ())
             .expect("no db error")
             .expect_err("should fail");
 
