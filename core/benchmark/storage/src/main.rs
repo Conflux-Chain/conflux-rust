@@ -986,7 +986,7 @@ pub struct EthTxExtractor<EthTxT: EthTxTypeTrait> {
     nonce_dir_path: String,
     counters: Arc<Mutex<EthTxExtractorCounters>>,
 
-    shared_self: UnsafeCell<Option<Arc<EthTxExtractor<EthTxT>>>>,
+    shared_self: SyncUnsafeCell<Option<Arc<EthTxExtractor<EthTxT>>>>,
 
     tx_maker: Arc<Box<dyn TxMaker<TxType = EthTxT> + Send + Sync>>,
 }
@@ -1130,7 +1130,7 @@ impl<EthTxT: EthTxTypeTrait> EthTxExtractor<EthTxT> {
                 tx_maker.clone(),
             )?,
             nonce_dir_path: nonce_dir_path.clone(),
-            shared_self: UnsafeCell::new(None),
+            shared_self: SyncUnsafeCell::new(None),
             tx_maker: tx_maker.clone(),
         }));
 
@@ -2209,4 +2209,4 @@ use std::{
     time::Duration,
     vec::Vec,
 };
-use std::cell::UnsafeCell;
+use bevy::utils::syncunsafecell::SyncUnsafeCell;
