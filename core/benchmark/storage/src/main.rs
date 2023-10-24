@@ -1182,7 +1182,7 @@ impl<EthTxT: EthTxTypeTrait> EthTxExtractor<EthTxT> {
     fn verify_tx_then_stream_out(
         &self, tx_verify_request: EthTxNonceVerifierRequest<EthTxT>,
     ) {
-        let thread = (tx_verify_request.sender.low_u64_be() & 7) as usize;
+        let thread = (tx_verify_request.sender.low_u64() & 7) as usize;
 
         self.nonce_verifier.workers[thread]
             .lock()
