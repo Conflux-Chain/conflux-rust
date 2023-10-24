@@ -1,8 +1,10 @@
 #!/bin/bash
 
-export folder="osdi23"
+export folder="tos23"
 export common_features='--features client/metric-goodput --features cfxcore/bypass-txpool'
-alias cgrun=""
+function cgenv {
+  $@
+}
 
 function build {
   # LVMT
@@ -18,42 +20,44 @@ function build {
 }
 
 function clear_caches {
-  if ! alias cgrun 2>/dev/null | grep -q "^alias cgrun=''"; then
+  if ! alias cgenv 2>/dev/null | grep -q "^alias cgenv=''"; then
     sudo sysctl -w vm.drop_caches=3
   fi
 }
 
 function run {
   clear_caches
-  cgrun python3 tests/asb-e2e/main.py --port-min 23000 --bench-keys $1 --bench-txs $2 --bench-token native --metric-folder $folder
+  cgenv python3 tests/asb-e2e/main.py --port-min 23000 --bench-keys $1 --bench-txs $2 --bench-token native --metric-folder $folder
   clear_caches
-  cgrun python3 tests/asb-e2e/main.py --port-min 23000 --bench-keys $1 --bench-txs $2 --bench-token erc20 --metric-folder $folder
+  cgenv python3 tests/asb-e2e/main.py --port-min 23000 --bench-keys $1 --bench-txs $2 --bench-token erc20 --metric-folder $folder
+  clear_caches
+  cgenv python3 tests/asb-e2e/main.py --port-min 23000 --bench-keys $1 --bench-txs $1 --bench-token erc20 --bench-mode uniswap --metric-folder $folder
 }
 
 
 function main {
   export CONFLUX_DEV_STORAGE=rain
-  run $1 $2
+  run "$@"
 
   export CONFLUX_DEV_STORAGE=lvmt
-  run $1 $2
+  run "$@"
 
   export LVMT_SHARD_SIZE=64
-  run $1 $2
+  run "$@"
   unset LVMT_SHARD_SIZE
 
   export LVMT_SHARD_SIZE=16
-  run $1 $2
+  run "$@"
   unset LVMT_SHARD_SIZE
 
   export CONFLUX_DEV_STORAGE=lmpts
-  run $1 $2
+  run "$@"
 
   export CONFLUX_DEV_STORAGE=mpt
-  run $1 $2
+  run "$@"
 
   export CONFLUX_DEV_STORAGE=raw
-  run $1 $2
+  run "$@"
 }
 
 unset http_proxy

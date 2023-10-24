@@ -22,6 +22,8 @@ def make_transaction(input: TxParam, sig) -> Transaction:
     unsigned_tx = UnsignedTransaction(**input.tx_args)
     tx = Transaction(transaction=unsigned_tx, **sig)
     tx._sender = input.sender
+    if input.tag is not None:
+        log.notice(f"Make transaction for '{input.tag}'. {tx.hash_hex()}")
     return tx
 
 

@@ -13,7 +13,6 @@ This is the state root for pre-generated genesis accounts in `genesis_secrets.tx
 STORAGE = os.environ.get("CONFLUX_DEV_STORAGE", "dmpt")
 SHARD_SIZE = os.environ.get("LVMT_SHARD_SIZE")
 LIGHT_HASH = os.environ.get("LIGHT_HASH")
-
 SECRET = "seq_secrets.txt"
 
 if LIGHT_HASH is not None:
@@ -21,22 +20,22 @@ if LIGHT_HASH is not None:
     conflux.config.default_config["GENESIS_TRANSACTION_ROOT"] = decode_hex("0x195d43bc6ecc742b2d7134156617bf96e018b6f84daf8d0ca9812d44edd9e361")
 
     if STORAGE == "lvmt":
-        GENESIS_ROOT = "0x2656c8cf5e759be06784c0cb950500598b6ca3078ed6e0a9c3a3ad8583cbae2f"
+        GENESIS_ROOT = "0x7123b48787df02f27cfc23be4b56129004820201e087735968d8a463ffc65f09"
     elif STORAGE == "mpt" or STORAGE == "rain":
-        GENESIS_ROOT = "0x56c994b4077b9316235adff36b460400e605b26f324fa03fb24d32176bfa0162"
+        GENESIS_ROOT = "0x0c2be5a914deae2f7b421d155ed26480dc0aab236d42e7e4b1699a2027f6c621"
     elif STORAGE == "raw":
         GENESIS_ROOT = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
     else:
-        GENESIS_ROOT = "0xf7d1918d912bb8d47d34c48297735bcef3220e16efec980ca4a9cb47e90905a9"
+        GENESIS_ROOT = "0x1d1e39c7083d3962249ddd2ea46c2ec55e6209c33aa462885d7aa999fd77e16a"
 else:
     if STORAGE == "lvmt":
-        GENESIS_ROOT = "0x7127c2c33112eb83a3b01668026381ced16a42ae6e7a94a31b7e6b732ba78b08"
+        GENESIS_ROOT = "0x2656c8cf5e759be06784c0cb950500598b6ca3078ed6e0a9c3a3ad8583cbae2f"
     elif STORAGE == "mpt" or STORAGE == "rain":
-        GENESIS_ROOT = "0x05b1ba2c15838e58b054ced4497db8bca54053a018f54a5ae5283bcf6a34d5cb"
+        GENESIS_ROOT = "0x4fc2fca496fcbab3a34ac370138c9c15d3af36b738ee655ca6a90dbf213c0338"
     elif STORAGE == "raw":
         GENESIS_ROOT = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
     else:
-        GENESIS_ROOT = "0xf7d1918d912bb8d47d34c48297735bcef3220e16efec980ca4a9cb47e90905a9"
+        GENESIS_ROOT = "0x1d1e39c7083d3962249ddd2ea46c2ec55e6209c33aa462885d7aa999fd77e16a"
 
 conflux.config.default_config["GENESIS_STATE_ROOT"] = decode_hex(GENESIS_ROOT)
 
@@ -83,17 +82,18 @@ class SingleBench(ConfluxTestFramework):
             heartbeat_timeout_ms=10000000000,
             record_tx_index="false",
             node_type="'archive'",
-            executive_trace="true",
+            executive_trace="false",
             genesis_secrets=f"\"{genesis_file_path}\"",
             amt_public_params=f"'{amt_public_params_path}'",
-            log_level="'debug'",
+            log_level="'info'",
             # log_conf=f"'{log_config}'",
             storage_delta_mpts_cache_size=4_000_000,
             storage_delta_mpts_cache_start_size=2_000_000,
             storage_delta_mpts_slab_idle_size=2_000_000,
             persist_tx_index="false",
             persist_block_number_index="false",
-            target_block_gas_limit=4_000_000_000
+            target_block_gas_limit=4_000_000_000,
+            jsonrpc_http_threads = 4,
         )
         if SHARD_SIZE is not None:
             self.conf_parameters["amt_shard_size"] = SHARD_SIZE

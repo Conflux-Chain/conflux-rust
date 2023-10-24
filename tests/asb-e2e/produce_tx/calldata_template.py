@@ -101,5 +101,7 @@ class CalldataTemplate:
             start = pos.start
             end = pos.start + pos.length
             output = output[:start] + formalize_input(data, pos.length) + output[end:]
+
+        # log.critical(output)
             
         return output

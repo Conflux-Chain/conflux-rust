@@ -453,7 +453,7 @@ impl BlockGenerator {
             num_txs,
             difficulty,
             adaptive,
-            4_000_000_000,
+            800_000_000,
         )?;
         Ok(self.generate_block_impl(block))
     }

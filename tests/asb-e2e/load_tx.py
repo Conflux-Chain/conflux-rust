@@ -72,7 +72,7 @@ class Erc20LessSender(LoadTask):
         return load(path, self.tx_n)
 
 
-def load(path, tx_n):
+def load(path, tx_n = None):
     if tx_n == 0:
         return []
 
@@ -93,22 +93,48 @@ def load(path, tx_n):
     return encoded_transactions
 
 
+class Uniswap(LoadTask):
+    def warmup_transaction(self):
+        path = lambda x: os.path.join(TRANSACTION_PATH, f"uniswap/{x}")
+
+        print("Deploy contract group 1")
+        yield load(path("deploy_1"), 4)
+
+        print("Deploy contract group 2")
+        yield load(path("deploy_2"), 4)
+
+        for tx in load(path("add_liquidity"), 3):
+            print("Add liquidity in step")
+            yield [tx]
+        
+        print("Distribute toke A")
+        yield load(path("distribute_token_a"), self.accounts_n)
+        print("Distribute toke B")
+        yield load(path("distribute_token_b"), self.accounts_n)
+        print("Distribute native")
+        yield load(path("distribute_native"), self.accounts_n)
+        print("Approval")
+        yield load(path("approval"), self.accounts_n * 2)
+
+    def bench_transaction(self):
+        path = lambda x: os.path.join(TRANSACTION_PATH, f"uniswap/{x}")
+        return load(path(f"swap_token_{self.accounts_n}"), self.tx_n)
+        
+
 def get_loader(options):
-    if options.bench_token == "native":
-        if options.bench_mode == "normal":
-            loader = Native(options)
-        elif options.bench_mode == "less-sender":
-            loader = NativeLessSender(options)
-        else:
-            raise Exception("Unrecognized bench mode")
-    elif options.bench_token == "erc20":
-        if options.bench_mode == "normal":
-            loader = Erc20(options)
-        elif options.bench_mode == "less-sender":
-            loader = Erc20LessSender(options)
-        else:
-            raise Exception("Unrecognized bench mode")
+    if options.bench_token == "erc20":
+        is_erc20 = True
+    elif options.bench_token == "normal":
+        is_erc20 = False
     else:
         raise Exception("Unrecognized bench token")
 
-    return loader
+
+    if options.bench_mode == "normal":
+        return Erc20(options) if is_erc20 else Native(options)
+    elif options.bench_mode == "less-sender":
+        return Erc20LessSender(options) if is_erc20 else NativeLessSender(options)
+    elif options.bench_mode == "uniswap":
+        return Uniswap(options)
+    else:
+        raise Exception("Unrecognized bench mode")

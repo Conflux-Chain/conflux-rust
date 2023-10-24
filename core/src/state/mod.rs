@@ -142,9 +142,21 @@ impl<StateDbStorage: StorageStateTrait> StateTrait
         for address in addresses {
             if let Some(AccountEntry {
                 account: Some(acc), ..
-            }) = cache.get_mut(&address).filter(|x| x.is_dirty())
+            }) = cache.get_mut(&address)
             {
                 acc.merge();
+            }
+        }
+    }
+
+    fn revert_storage_changes(&mut self, addresses: Vec<Address>) {
+        let cache = self.cache.get_mut();
+        for address in addresses {
+            if let Some(AccountEntry {
+                account: Some(acc), ..
+            }) = cache.get_mut(&address).filter(|x| x.is_dirty())
+            {
+                acc.revert();
             }
         }
     }
@@ -913,7 +925,7 @@ impl<StateDbStorage: StorageStateTrait> CheckpointTrait
     /// this function.
     fn discard_checkpoint(&mut self) {
         // merge with previous checkpoint
-        let accounts = self.dirty_accounts_in_top_checkpoint();
+        let mut accounts = vec![];
         let last = self.checkpoints.get_mut().pop();
         if let Some(mut checkpoint) = last {
             self.staking_state_checkpoints.get_mut().pop();
@@ -922,9 +934,20 @@ impl<StateDbStorage: StorageStateTrait> CheckpointTrait
                     **prev = checkpoint;
                 } else {
                     for (k, v) in checkpoint.drain() {
-                        prev.entry(k).or_insert(v);
+                        match prev.entry(k) {
+                            Entry::Occupied(entry) => {
+                                accounts.push(k);
+                            }
+                            Entry::Vacant(entry) => {
+                                entry.insert(v);
+                            }
+                        }
                     }
                 }
+            } else {
+                accounts.extend(checkpoint.drain().map(|x| {
+                    x.0
+                }));
             }
         }
         self.merge_storage_changes(accounts);
@@ -932,6 +955,8 @@ impl<StateDbStorage: StorageStateTrait> CheckpointTrait
 
     /// Revert to the last checkpoint and discard it.
     fn revert_to_checkpoint(&mut self) {
+        todo!("Support revert later");
+        let accounts = self.dirty_accounts_in_top_checkpoint();
         if let Some(mut checkpoint) = self.checkpoints.get_mut().pop() {
             self.staking_state = self
                 .staking_state_checkpoints
@@ -960,6 +985,7 @@ impl<StateDbStorage: StorageStateTrait> CheckpointTrait
                 }
             }
         }
+        self.revert_storage_changes(accounts);
     }
 }
 

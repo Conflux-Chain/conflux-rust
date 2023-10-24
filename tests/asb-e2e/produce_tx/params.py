@@ -4,3 +4,4 @@ LESS_SENDER = 10_000
 
 
 def RANDOM_TXS(x): return x * 5
+def SWAP_TXS(x): return x

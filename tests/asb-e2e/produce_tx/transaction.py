@@ -4,7 +4,7 @@ import rlp
 import sha3
 
 from .framework import DEFAULT_PY_TEST_CHAIN_ID, Transactions
-from .account import get_account
+from .account import get_account, AccountIndex
 
 class CallType(Enum):
     Transfer = 0
@@ -12,7 +12,7 @@ class CallType(Enum):
     Create = 2
 
 class TxParam:
-    def __init__(self, sender_index, action=b'', value=0, gas_price=1, gas = None, data=b'', storage_limit = None,
+    def __init__(self, sender_index: AccountIndex, action=b'', value=0, gas_price=1, gas = None, data=b'', storage_limit = None,
                  epoch_height=0,
                  chain_id=DEFAULT_PY_TEST_CHAIN_ID):
         if type(data) is str:
@@ -31,7 +31,7 @@ class TxParam:
             if call_type == CallType.Transfer:
                 gas = 21_000
             elif call_type == CallType.Call:
-                gas = 300_000
+                gas = 800_000
             elif call_type == CallType.Create:
                 gas = 13_000_000
 
@@ -56,6 +56,10 @@ class TxParam:
         sender_account = get_account(self.sender_index)
         self.sender = sender_account.address
         self.privkey = sender_account.privkey
+        self.tag = None
+
+    def set_tag(self, tag):
+        self.tag = tag
 
     def set_gas(self, gas = None, storage_limit = None):
         if gas is not None:

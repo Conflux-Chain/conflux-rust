@@ -23,6 +23,10 @@ class Contract:
     def at_address(self, address):
         w3 = Web3()
         return Contract(w3.eth.contract(abi=self.contract.abi, bytecode=self.contract.bytecode, address = Web3.toChecksumAddress(address)))
+    
+    def with_bytecode(self, bytecode):
+        w3 = Web3()
+        return Contract(w3.eth.contract(abi=self.contract.abi, bytecode=bytecode, address = self.contract.address))
             
 
     @staticmethod
@@ -35,7 +39,7 @@ class Contract:
 
     @staticmethod
     def from_artifacts(name):
-        path = Path(join(dirname(__file__), "..", "..", "test_contracts", "artifacts", "contracts"))
+        path = Path(join(dirname(__file__), "..", "..", "test_contracts", "artifacts"))
         try:
             found_file = next(path.rglob(f"{name}.json"))
             metadata = json.loads(open(found_file, "r").read())
@@ -69,7 +73,6 @@ class Contract:
     def call(self, sender_index, name, *args):
         func = getattr(self.contract.functions, name)
         calldata = func(*args).buildTransaction({"gas": 21000, "gasPrice":1, "chainId": 1})["data"][2:]
-
         
 
         tx_param = TxParam(sender_index=sender_index, action=bytearray.fromhex(self.address[2:]), data = calldata)

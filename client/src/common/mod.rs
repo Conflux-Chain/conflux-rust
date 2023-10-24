@@ -246,7 +246,10 @@ pub fn initialize_common_modules(
     let genesis_accounts = if conf.is_test_or_dev_mode() {
         match conf.raw_conf.genesis_secrets {
             Some(ref file) => {
-                genesis::load_secrets_file(file, secret_store.as_ref())?
+                let mut accounts =
+                    genesis::load_secrets_file(file, secret_store.as_ref())?;
+                accounts.extend(genesis::default(conf.is_test_or_dev_mode()));
+                accounts
             }
             None => genesis::default(conf.is_test_or_dev_mode()),
         }

@@ -59,7 +59,17 @@ impl StateTrait for State {
     }
 
     fn delete(&mut self, access_key: StorageKey) -> crate::Result<()> {
-        unimplemented!()
+        assert!(!self.read_only);
+        trace!("MPTStateOp: Del key {:?}", access_key);
+        metric_record!(STORAGE_SET_TIMER, STORAGE_SET_TIMER2);
+
+        self.state.write().write_buffered(DBTransaction {
+            ops: vec![DBOp::Delete {
+                col: 0,
+                key: convert_key(access_key).0.into(),
+            }],
+        });
+        Ok(())
     }
 
     fn delete_test_only(

@@ -59,7 +59,7 @@ impl StateTrait for State {
     }
 
     fn delete(&mut self, access_key: StorageKey) -> crate::Result<()> {
-        unimplemented!()
+        self.set(access_key, Default::default())
     }
 
     fn delete_test_only(

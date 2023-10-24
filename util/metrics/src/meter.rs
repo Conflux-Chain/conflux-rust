@@ -131,12 +131,12 @@ impl Meter for StandardMeter {
             return;
         }
 
-        let mut snapshot = self.snapshot.write();
-        snapshot.count += n;
-
         self.ewmas[0].update(n);
         self.ewmas[1].update(n);
         self.ewmas[2].update(n);
+
+        let mut snapshot = self.snapshot.write();
+        snapshot.count += n;
 
         let rate_mean_nano =
             snapshot.count as f64 / self.start_time.elapsed().as_nanos() as f64;
