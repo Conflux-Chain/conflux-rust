@@ -20,6 +20,21 @@ macro_rules! noop_if {
     };
 }
 
+macro_rules! unwrap_or_return {
+    ($option:expr) => {
+        match $option {
+            Some(val) => val,
+            None => return,
+        }
+    };
+    ($option:expr, $ret:expr) => {
+        match $option {
+            Some(val) => val,
+            None => return $ret,
+        }
+    };
+}
+
 mod account_controller;
 mod basic_fields;
 mod cache_layer;
@@ -34,12 +49,10 @@ mod storage_entry;
 #[cfg(test)]
 mod tests;
 
-use self::cache_layer::RequireCache;
+use self::{cache_layer::RequireCache, checkpoints::CheckpointLayer};
 use super::{
-    account_entry::{AccountEntry, AccountState},
-    global_stat::GlobalStat,
-    overlay_account::OverlayAccount,
-    substate, AccountEntryProtectedMethods,
+    account_entry::AccountEntry, global_stat::GlobalStat,
+    overlay_account::OverlayAccount, substate, AccountEntryProtectedMethods,
 };
 use crate::{executive::internal_contract, vm::Spec};
 use cfx_state::tracer::StateTracer;
@@ -64,13 +77,13 @@ pub struct State {
     accounts_to_notify: Vec<Result<Account, AddressWithSpace>>,
 
     // Contains the changes to the states and some unchanged state entries.
+    // Don't remove cache entries outside state commit, unless you are familiar
+    // with checkpoint maintenance.
     cache: RwLock<HashMap<AddressWithSpace, AccountEntry>>,
     // TODO: try not to make it special?
     global_stat: GlobalStat,
 
-    // Checkpoint to the changes.
-    global_stat_checkpoints: RwLock<Vec<GlobalStat>>,
-    checkpoints: RwLock<Vec<HashMap<AddressWithSpace, Option<AccountEntry>>>>,
+    checkpoints: RwLock<Vec<CheckpointLayer>>,
 }
 
 impl State {
@@ -87,7 +100,6 @@ impl State {
         Ok(State {
             db,
             cache: Default::default(),
-            global_stat_checkpoints: Default::default(),
             checkpoints: Default::default(),
             global_stat: world_stat,
             accounts_to_notify: Default::default(),

@@ -8,7 +8,7 @@ use cfx_types::{Address, AddressSpaceUtil, U256};
 impl State {
     /// Calculate the secondary reward for the next block number.
     pub fn bump_block_number_accumulate_interest(&mut self) {
-        assert!(self.global_stat_checkpoints.get_mut().is_empty());
+        assert!(self.checkpoints.get_mut().is_empty());
         let interset_rate_per_block = self.global_stat.get::<InterestRate>();
         let accumulate_interest_rate =
             self.global_stat.val::<AccumulateInterestRate>();
@@ -18,7 +18,7 @@ impl State {
     }
 
     pub fn secondary_reward(&self) -> U256 {
-        assert!(self.global_stat_checkpoints.read().is_empty());
+        assert!(self.checkpoints.read().is_empty());
         let secondary_reward = *self.global_stat.refr::<TotalStorage>()
             * *self.global_stat.refr::<InterestRate>()
             / *INTEREST_RATE_PER_BLOCK_SCALE;

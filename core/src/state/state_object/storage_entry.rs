@@ -59,7 +59,7 @@ impl State {
         key: &Vec<u8>,
     ) -> DbResult<Option<U256>>
     {
-        use super::AccountEntry;
+        use super::{checkpoints::CheckpointEntry::*, AccountEntry};
         use cfx_statedb::StateDbExt;
         use primitives::{StorageKey, StorageValue};
 
@@ -79,11 +79,8 @@ impl State {
             let mut kind = None;
 
             for checkpoint in checkpoints.iter().skip(start_checkpoint_index) {
-                match checkpoint.get(address) {
-                    Some(Some(AccountEntry {
-                        account: Some(ref account),
-                        ..
-                    })) => {
+                match checkpoint.entries().get(address) {
+                    Some(Recorded(AccountEntry::Cached(ref account, _))) => {
                         if let Some(value) = account.cached_value_at(key) {
                             return Ok(Some(value));
                         } else if account.is_newly_created_contract() {
@@ -93,10 +90,10 @@ impl State {
                             break;
                         }
                     }
-                    Some(Some(AccountEntry { account: None, .. })) => {
+                    Some(Recorded(AccountEntry::DbAbsent)) => {
                         return Ok(Some(U256::zero()));
                     }
-                    Some(None) => {
+                    Some(Unchanged) => {
                         kind = Some(ReturnKind::OriginalAt);
                         break;
                     }

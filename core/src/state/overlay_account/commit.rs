@@ -10,7 +10,7 @@ use super::OverlayAccount;
 
 impl OverlayAccount {
     pub fn commit(
-        &mut self, db: &mut StateDb, address: &AddressWithSpace,
+        mut self, db: &mut StateDb, address: &AddressWithSpace,
         mut debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> DbResult<()>
     {
