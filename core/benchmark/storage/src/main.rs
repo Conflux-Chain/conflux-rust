@@ -1024,7 +1024,7 @@ impl<EthTxT: EthTxTypeTrait> EthTxExtractor<EthTxT> {
         &mut self,
     ) -> Vec<Arc<Mutex<FIFOConsumerThread<EthTxBasicVerifierRequest<EthTxT>>>>>
     {
-        self.shared_self.get_mut().take();
+        self.shared_self.get().take();
         mem::replace(&mut self.tx_basic_verifiers, vec![])
     }
 
