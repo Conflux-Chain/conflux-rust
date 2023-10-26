@@ -7,7 +7,7 @@ use crate::{
     bytes::Bytes,
     executive::{
         internal_contract::{is_call_create_sig, is_withdraw_sig},
-        ExecutiveResult,
+        FrameReturn,
     },
     observer::trace_filter::TraceFilter,
     vm::{ActionParams, CallType, CreateType, Result as vmResult},
@@ -156,10 +156,10 @@ pub struct CallResult {
     pub return_data: Bytes,
 }
 
-impl From<&vmResult<ExecutiveResult>> for CallResult {
-    fn from(r: &vmResult<ExecutiveResult>) -> Self {
+impl From<&vmResult<FrameReturn>> for CallResult {
+    fn from(r: &vmResult<FrameReturn>) -> Self {
         match r {
-            Ok(ExecutiveResult {
+            Ok(FrameReturn {
                 gas_left,
                 return_data,
                 apply_state: true,
@@ -169,7 +169,7 @@ impl From<&vmResult<ExecutiveResult>> for CallResult {
                 gas_left: gas_left.clone(),
                 return_data: return_data.to_vec(),
             },
-            Ok(ExecutiveResult {
+            Ok(FrameReturn {
                 gas_left,
                 return_data,
                 apply_state: false,
@@ -266,10 +266,10 @@ pub struct CreateResult {
     pub return_data: Bytes,
 }
 
-impl From<&vmResult<ExecutiveResult>> for CreateResult {
-    fn from(r: &vmResult<ExecutiveResult>) -> Self {
+impl From<&vmResult<FrameReturn>> for CreateResult {
+    fn from(r: &vmResult<FrameReturn>) -> Self {
         match r {
-            Ok(ExecutiveResult {
+            Ok(FrameReturn {
                 gas_left,
                 return_data,
                 apply_state: true,
@@ -283,7 +283,7 @@ impl From<&vmResult<ExecutiveResult>> for CreateResult {
                 gas_left: gas_left.clone(),
                 return_data: return_data.to_vec(),
             },
-            Ok(ExecutiveResult {
+            Ok(FrameReturn {
                 gas_left,
                 return_data,
                 apply_state: false,

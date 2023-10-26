@@ -10,17 +10,6 @@ pub mod state;
 pub(self) mod state_object_cache;
 pub mod tracer;
 
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub enum CollateralCheckResult {
-    ExceedStorageLimit { limit: U256, required: U256 },
-    NotEnoughBalance { required: U256, got: U256 },
-    Valid,
-}
-
-impl CollateralCheckResult {
-    pub fn ok(&self) -> bool { *self == CollateralCheckResult::Valid }
-}
-
 /// Mode of dealing with null accounts.
 #[derive(PartialEq)]
 pub enum CleanupMode<'a> {
@@ -43,6 +32,7 @@ pub fn maybe_address(address: &Address) -> Option<Address> {
 }
 
 // TODO: Deprecate the StateDbExt in StateDb and replace it with StateDbOps.
+#[cfg(feature = "new_state_impl")]
 pub trait StateDbOps {
     fn get_raw(&self, key: StorageKeyWithSpace) -> Result<Option<Arc<[u8]>>>;
 
@@ -61,7 +51,7 @@ pub trait StateDbOps {
         debug_record: Option<&mut ComputeEpochDebugRecord>,
     ) -> Result<()>;
 }
-
+#[cfg(feature = "new_state_impl")]
 impl StateDbOps for StateDbGeneric {
     fn get_raw(&self, key: StorageKeyWithSpace) -> Result<Option<Arc<[u8]>>> {
         Self::get_raw(self, key)
@@ -90,9 +80,13 @@ impl StateDbOps for StateDbGeneric {
         Self::delete(self, key, debug_record)
     }
 }
-
+#[cfg(feature = "new_state_impl")]
 use cfx_internal_common::debug::ComputeEpochDebugRecord;
+#[cfg(feature = "new_state_impl")]
 use cfx_statedb::{Result, StateDbExt, StateDbGeneric};
-use cfx_types::{Address, AddressWithSpace, U256};
+use cfx_types::{Address, AddressWithSpace};
+#[cfg(feature = "new_state_impl")]
 use primitives::{is_default::IsDefault, StorageKeyWithSpace};
-use std::{collections::HashSet, sync::Arc};
+use std::collections::HashSet;
+#[cfg(feature = "new_state_impl")]
+use std::sync::Arc;
